@@ -467,20 +467,47 @@ export function SettingsSlider({
   label: string;
 }) {
   const [width, setWidth] = useState(0);
+  const box = useRef<View>(null);
+  // The slider's left edge on screen: touches are measured against it, never against whichever
+  // child (knob or track) the finger landed on.
+  const left = useRef(0);
+  const dragging = useRef(false);
   const latest = useRef({ width, onChange, onRelease, value });
   latest.current = { width, onChange, onRelease, value };
-  const fromX = (x: number) => {
-    const ratio = Math.min(1, Math.max(0, x / Math.max(1, latest.current.width)));
+  const fromPageX = (pageX: number) => {
+    const usable = Math.max(1, latest.current.width - KNOB);
+    const ratio = Math.min(1, Math.max(0, (pageX - left.current - KNOB / 2) / usable));
     return Math.round((min + ratio * (max - min)) / step) * step;
   };
   const responder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: (event) => latest.current.onChange(fromX(event.nativeEvent.locationX)),
-      onPanResponderMove: (event) => latest.current.onChange(fromX(event.nativeEvent.locationX)),
-      onPanResponderRelease: () => latest.current.onRelease?.(latest.current.value),
+      // Only a sideways drag is the slider's; an up or down swipe scrolls the page.
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > Math.abs(gesture.dy),
+      onPanResponderTerminationRequest: (_, gesture) =>
+        !dragging.current && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderGrant: () => {
+        dragging.current = false;
+      },
+      onPanResponderMove: (event, gesture) => {
+        if (!dragging.current && Math.abs(gesture.dx) < 4) return;
+        dragging.current = true;
+        const next = fromPageX(event.nativeEvent.pageX);
+        if (next !== latest.current.value) latest.current.onChange(next);
+      },
+      // A tap sets the value where it landed; either way the value is committed once, on release.
+      onPanResponderRelease: (event, gesture) => {
+        const wasDragging = dragging.current;
+        dragging.current = false;
+        // A swipe that never became a sideways drag (an up or down flick) changes nothing.
+        if (!wasDragging && Math.hypot(gesture.dx, gesture.dy) > 8) return;
+        const next = fromPageX(event.nativeEvent.pageX);
+        if (next !== latest.current.value) latest.current.onChange(next);
+        latest.current.onRelease?.(next);
+      },
+      onPanResponderTerminate: () => {
+        dragging.current = false;
+      },
     }),
   ).current;
   const ratio = (value - min) / (max - min);
@@ -491,6 +518,7 @@ export function SettingsSlider({
   };
   return (
     <View
+      ref={box}
       accessible
       accessibilityRole="adjustable"
       accessibilityLabel={label}
@@ -499,11 +527,25 @@ export function SettingsSlider({
       onAccessibilityAction={(event) =>
         nudge(event.nativeEvent.actionName === 'increment' ? 1 : -1)
       }
-      onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}
-      style={{ flex: 1, height: 24, justifyContent: 'center' }}
+      onLayout={({ nativeEvent }) => {
+        setWidth(nativeEvent.layout.width);
+        box.current?.measureInWindow((x) => {
+          left.current = x;
+        });
+      }}
+      // Taller than it looks, so the finger finds it.
+      style={{ flex: 1, height: 44, justifyContent: 'center' }}
       {...responder.panHandlers}
     >
-      <View pointerEvents="none" style={{ height: 4, borderRadius: 2, backgroundColor: home.fill }}>
+      <View
+        pointerEvents="none"
+        style={{
+          height: 4,
+          marginHorizontal: KNOB / 2,
+          borderRadius: 2,
+          backgroundColor: home.fill,
+        }}
+      >
         <View
           style={{
             width: `${ratio * 100}%`,
@@ -517,10 +559,10 @@ export function SettingsSlider({
         pointerEvents="none"
         style={{
           position: 'absolute',
-          left: Math.max(0, ratio * width - 12),
-          width: 24,
-          height: 24,
-          borderRadius: 12,
+          left: ratio * Math.max(0, width - KNOB),
+          width: KNOB,
+          height: KNOB,
+          borderRadius: KNOB / 2,
           backgroundColor: home.surface,
           borderWidth: 1,
           borderColor: home.borderSubtle,
@@ -530,6 +572,7 @@ export function SettingsSlider({
     </View>
   );
 }
+const KNOB = 24;
 
 type ToastTone = 'success' | 'error' | 'neutral';
 /** A snackbar's action. `onClose` runs once it closes without the action: timed out or replaced. */

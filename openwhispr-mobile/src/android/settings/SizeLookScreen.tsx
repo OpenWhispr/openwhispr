@@ -135,9 +135,12 @@ export default function SizeLookScreen() {
           onChange={(value) => {
             setPreviewDot(false);
             setSize(value);
-            applyBubbleLook({ size: value });
           }}
-          onRelease={saveBubbleSize}
+          // The live bubble and the saved size change once, when the finger lifts.
+          onRelease={(value) => {
+            applyBubbleLook({ size: value });
+            saveBubbleSize(value);
+          }}
         />
       </SliderCard>
       <SliderCard
@@ -154,8 +157,8 @@ export default function SizeLookScreen() {
           onChange={(value) => {
             setPreviewDot(false);
             setOpacity(value / 100);
-            applyBubbleLook({ opacity: value / 100, size });
           }}
+          onRelease={(value) => applyBubbleLook({ opacity: value / 100, size })}
         />
       </SliderCard>
       <Group title={t('whenItShrinks')} inset={16}>
