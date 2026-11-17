@@ -401,9 +401,9 @@ export async function logAppsFlyerEventConfirmed(
     const ready = await readiness;
     if (!ready || readiness !== sdkReady || !collectionAllowed()) return false;
     return await Promise.race([
-      invokeSdk(() => getAppsFlyer().logEvent({ eventName, eventValues, awaitResponse: true })).then(
-        (): boolean => true,
-      ),
+      invokeSdk(() =>
+        getAppsFlyer().logEvent({ eventName, eventValues, awaitResponse: true }),
+      ).then((): boolean => true),
       new Promise<boolean>((resolve) => {
         timeout = setTimeout(() => resolve(false), CONFIRMED_EVENT_TIMEOUT_MS);
       }),
