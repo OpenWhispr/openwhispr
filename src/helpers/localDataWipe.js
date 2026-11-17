@@ -22,6 +22,8 @@ const USER_DATA_ENTRIES = [
   "secure-keys",
   "auth-token.bin",
   "account-scope-binding.json",
+  "affiliate-candidate.json",
+  "affiliate-candidate.json.tmp",
   "workspace-policy.json",
   "managed-enterprise-config.json",
   "globe-preference-state.json",
