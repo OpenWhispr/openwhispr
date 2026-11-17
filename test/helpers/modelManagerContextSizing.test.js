@@ -38,8 +38,12 @@ function loadModelManager() {
     return originalLoad.call(this, request, parent, isMain);
   };
   try {
-    require("../../src/helpers/modelDirUtils.js");
-    return require("../../src/helpers/modelManagerBridge.js").default;
+    const modelManager = require("../../src/helpers/modelManagerBridge.js").default;
+    // Pin modelsDir to the temp home. getCacheRoot() prefers OPENWHISPR_CACHE_ROOT,
+    // XDG_CACHE_HOME (linux) and USERPROFILE (win32) over the stubbed home, and
+    // migrates model folders when they differ, so it must not run here (#3244).
+    modelManager.getModelsDir = () => path.join(electronHome, ".cache", "openwhispr", "models");
+    return modelManager;
   } finally {
     Module._load = originalLoad;
   }
@@ -56,17 +60,6 @@ async function setup(
 ) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-ctx-sizing-"));
   electronHome = home;
-  // #3244: the electron home stub alone does not contain the cache root —
-  // getPreferredCacheRoot() prefers OPENWHISPR_CACHE_ROOT, then USERPROFILE
-  // (win32) / XDG_CACHE_HOME (linux), over the stubbed home, so without this
-  // pin the fake model below lands in the user's real cache. Pin it to the
-  // temp home's own cache dir and restore it afterwards.
-  const previousCacheRoot = process.env.OPENWHISPR_CACHE_ROOT;
-  process.env.OPENWHISPR_CACHE_ROOT = path.join(home, ".cache", "openwhispr");
-  t.after(() => {
-    if (previousCacheRoot === undefined) delete process.env.OPENWHISPR_CACHE_ROOT;
-    else process.env.OPENWHISPR_CACHE_ROOT = previousCacheRoot;
-  });
   t.after(() => fs.rm(home, { recursive: true, force: true }));
 
   const calls = { tokenize: 0, props: 0, completions: 0, template: 0 };
@@ -110,13 +103,6 @@ async function setup(
   const modelManager = loadModelManager();
   const model = modelRegistryData.localProviders[0].models[0];
   modelManager.ensureInitialized();
-  // #3244 regression: modelsDir must stay inside the temp home — on base,
-  // XDG_CACHE_HOME (linux) / USERPROFILE (win32) redirects it into the
-  // user's real cache instead.
-  assert.ok(
-    modelManager.modelsDir.startsWith(`${home}${path.sep}`),
-    `modelsDir escaped the temp home: ${modelManager.modelsDir}`
-  );
   await fs.mkdir(modelManager.modelsDir, { recursive: true });
 
   // A valid GGUF header, padded past the minimum-size check.

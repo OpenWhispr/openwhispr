@@ -6,7 +6,6 @@ const os = require("node:os");
 const path = require("node:path");
 
 const modelManagerModulePath = require.resolve("../../src/helpers/modelManagerBridge.js");
-const modelDirUtilsModulePath = require.resolve("../../src/helpers/modelDirUtils.js");
 const originalLoad = Module._load;
 let electronHome = os.tmpdir();
 
@@ -15,7 +14,6 @@ const NON_QAT_ID = "gemma-4-e2b-it-q4_k_m";
 
 function loadModelManager() {
   delete require.cache[modelManagerModulePath];
-  delete require.cache[modelDirUtilsModulePath];
 
   Module._load = function loadWithMocks(request) {
     if (request === "electron") {
@@ -32,12 +30,12 @@ function loadModelManager() {
   };
 
   try {
-    // modelManagerBridge requires modelDirUtils lazily (inside getModelsDir),
-    // after this mock is uninstalled — load it now so its electron binding is
-    // the stub and modelsDir resolves inside the per-test temp home instead of
-    // the real ~/.cache/openwhispr (where deleteModel would touch real files).
-    require("../../src/helpers/modelDirUtils.js");
-    return require("../../src/helpers/modelManagerBridge.js").default;
+    const modelManager = require("../../src/helpers/modelManagerBridge.js").default;
+    // Pin modelsDir to the temp home. getCacheRoot() prefers OPENWHISPR_CACHE_ROOT,
+    // XDG_CACHE_HOME (linux) and USERPROFILE (win32) over the stubbed home, and
+    // migrates model folders when they differ, so it must not run here (#3244).
+    modelManager.getModelsDir = () => path.join(electronHome, ".cache", "openwhispr", "models");
+    return modelManager;
   } finally {
     Module._load = originalLoad;
   }
@@ -46,19 +44,9 @@ function loadModelManager() {
 async function withHome(prefix, fn) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   electronHome = home;
-  // #3244: the electron home stub alone does not contain the cache root —
-  // getPreferredCacheRoot() prefers OPENWHISPR_CACHE_ROOT, then USERPROFILE
-  // (win32) / XDG_CACHE_HOME (linux), over the stubbed home, so without this
-  // pin the fake model below lands in the user's real cache (where
-  // deleteModel would touch real files). Pin it to the temp home's own
-  // cache dir and restore it afterwards.
-  const previousCacheRoot = process.env.OPENWHISPR_CACHE_ROOT;
-  process.env.OPENWHISPR_CACHE_ROOT = path.join(home, ".cache", "openwhispr");
   try {
     return await fn(home);
   } finally {
-    if (previousCacheRoot === undefined) delete process.env.OPENWHISPR_CACHE_ROOT;
-    else process.env.OPENWHISPR_CACHE_ROOT = previousCacheRoot;
     await fs.rm(home, { recursive: true, force: true });
   }
 }
@@ -85,16 +73,9 @@ test("getDraftDownloadUrl mirrors the main URL shape", () => {
 });
 
 test("resolveDraftPath returns the path only when a valid drafter file exists", async () => {
-  await withHome("openwhispr-draft-resolve-", async (home) => {
+  await withHome("openwhispr-draft-resolve-", async () => {
     const mm = loadModelManager();
     mm.ensureInitialized();
-    // #3244 regression: modelsDir must stay inside the temp home — on base,
-    // XDG_CACHE_HOME (linux) / USERPROFILE (win32) redirects it into the
-    // user's real cache instead.
-    assert.ok(
-      mm.modelsDir.startsWith(`${home}${path.sep}`),
-      `modelsDir escaped the temp home: ${mm.modelsDir}`
-    );
     await fs.mkdir(mm.modelsDir, { recursive: true });
 
     const model = mm.findModelById(QAT_ID).model;
@@ -117,16 +98,9 @@ test("resolveDraftPath returns the path only when a valid drafter file exists", 
 });
 
 test("deleteModel removes the drafter alongside the main file, ignoring a missing drafter", async () => {
-  await withHome("openwhispr-draft-delete-", async (home) => {
+  await withHome("openwhispr-draft-delete-", async () => {
     const mm = loadModelManager();
     mm.ensureInitialized();
-    // #3244 regression: modelsDir must stay inside the temp home — on base,
-    // XDG_CACHE_HOME (linux) / USERPROFILE (win32) redirects it into the
-    // user's real cache instead.
-    assert.ok(
-      mm.modelsDir.startsWith(`${home}${path.sep}`),
-      `modelsDir escaped the temp home: ${mm.modelsDir}`
-    );
     await fs.mkdir(mm.modelsDir, { recursive: true });
 
     const model = mm.findModelById(QAT_ID).model;
