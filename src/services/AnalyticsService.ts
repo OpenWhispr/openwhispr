@@ -169,6 +169,19 @@ async function pushAnalyticsClear(context?: AnalyticsSyncContext): Promise<void>
   await window.electronAPI.completeAnalyticsClear(pending.cleared_through, context);
 }
 
+/**
+ * Whether a clear or delete for the account has not reached the cloud yet. A
+ * pass logs a failed erasure and carries on, so this is how a reader learns the
+ * account totals may still include what the user erased.
+ */
+export async function hasPendingAnalyticsErasures(context: AnalyticsSyncContext): Promise<boolean> {
+  const [clear, deletes] = await Promise.all([
+    window.electronAPI.getPendingAnalyticsClear(context),
+    window.electronAPI.getPendingAnalyticsDeletes(1, context),
+  ]);
+  return clear != null || deletes.length > 0;
+}
+
 // Erasures and uploads are independent work that happens to share a pass. A
 // clear the server keeps refusing must not stop queued deletes from draining,
 // and neither may block an upload — running them in one try block meant a

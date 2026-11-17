@@ -1575,3 +1575,37 @@ test("opening work adopts a sourceless choice even before its first list", async
   assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
   assert.equal(storage.getItem(SOURCE_KEY), "user");
 });
+
+test("creating a workspace drops the kept leaderboards and tells mounted views", async (t) => {
+  installBrowserGlobals(t, { window: { location: CONTROL_PANEL_LOCATION } });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-workspace-store-create-",
+    mockModules: {
+      "/services/WorkspacesService": `
+        export const WorkspacesService = {
+          list: async () => [],
+          create: async (name) => ({ id: "created", name, plan: "free", status: "active" }),
+        };
+      `,
+      "/policyStore": `
+        export const usePolicyStore = {
+          getState: () => ({ accountId: null, authGeneration: null }),
+        };
+      `,
+      "/enterpriseIdentityStore": `
+        export const useEnterpriseIdentityStore = { getState: () => ({ clear() {} }) };
+      `,
+    },
+  });
+  const { useWorkspaceStore } = await vite.ssrLoadModule("/stores/workspaceStore.ts");
+  const cache = await vite.ssrLoadModule("/lib/insightsCache.ts");
+  cache.cacheLeaderboardAccess("acct-1", { scopes: [] });
+  const invalidations = [];
+  t.after(cache.subscribeToInsightsCacheInvalidation((scope) => invalidations.push(scope)));
+
+  await useWorkspaceStore.getState().createWorkspace("Acme");
+
+  assert.equal(cache.readCachedLeaderboardAccess("acct-1"), null, "a new workspace is a new board");
+  // The leaderboard's create flow relies on this to re-read access.
+  assert.deepEqual(invalidations, ["leaderboards"]);
+});

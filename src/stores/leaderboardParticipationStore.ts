@@ -58,7 +58,8 @@ interface LeaderboardParticipationState {
 let readId = 0;
 // Keep write invalidation separate so an older account cannot clear a newer account's pending state.
 let writeId = 0;
-let activeRefresh: { key: string; promise: Promise<void>; keepAnswer: boolean } | null = null;
+let activeRefresh: { key: string; promise: Promise<void>; keepCurrentAnswer: boolean } | null =
+  null;
 
 export const useLeaderboardParticipationStore = create<LeaderboardParticipationState>(
   (set, get) => ({
@@ -103,7 +104,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
       const key = `${context.userId}:${context.authGeneration}`;
       const keepCurrentAnswer = keepAnswer && get().answeredUserId === context.userId;
       // Recovery retires a mount check: its older answer cannot settle a board refusal.
-      if (activeRefresh?.key === key && (keepAnswer || !activeRefresh.keepAnswer)) {
+      if (activeRefresh?.key === key && (keepAnswer || !activeRefresh.keepCurrentAnswer)) {
         await activeRefresh.promise;
         return;
       }
@@ -152,7 +153,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
           if (currentReadId === readId) set({ ready: true });
         }
       })();
-      activeRefresh = { key, promise, keepAnswer: keepCurrentAnswer };
+      activeRefresh = { key, promise, keepCurrentAnswer };
       try {
         await promise;
       } finally {
@@ -161,6 +162,9 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     },
 
     join: async (context) => {
+      // Cleared before the write, so a board read already in flight can't keep the
+      // roster this write changes. The view already shows the change, so nothing
+      // needs telling.
       clearCachedLeaderboards({ revalidate: false });
       const generation = readId;
       const currentWriteId = ++writeId;
@@ -191,6 +195,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     },
 
     leave: async (context) => {
+      // Cleared before the write, as in join.
       clearCachedLeaderboards({ revalidate: false });
       const generation = readId;
       const currentWriteId = ++writeId;

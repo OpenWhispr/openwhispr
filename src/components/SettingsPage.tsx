@@ -4589,7 +4589,8 @@ EOF`,
                       disabled={!effectiveDataRetentionEnabled}
                       onChange={(e) => {
                         setTranscriptRetentionDays(parseInt(e.target.value, 10));
-                        // Retention can remove counters while Settings overlays Insights.
+                        // A shorter period may remove counters, and Insights would otherwise
+                        // open on the kept totals that still count them.
                         clearInsightsCache();
                       }}
                       className={RETENTION_SELECT_CLASS}
