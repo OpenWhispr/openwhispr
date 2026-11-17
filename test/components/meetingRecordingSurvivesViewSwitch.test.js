@@ -130,7 +130,15 @@ async function setup(t) {
   globalThis.__editorLog = [];
   globalThis.__notes = structuredClone(NOTES);
 
-  const calls = { start: 0, stop: 0, send: [], updateNote: [], trackStops: 0, noteOnly: [] };
+  const calls = {
+    start: 0,
+    startSources: [],
+    stop: 0,
+    send: [],
+    updateNote: [],
+    trackStops: 0,
+    noteOnly: [],
+  };
   const listeners = {};
   const capture = (name) => (callback) => {
     listeners[name] = callback;
@@ -145,8 +153,9 @@ async function setup(t) {
       mode: "native",
       strategy: "native",
     }),
-    meetingTranscriptionStart: async () => {
+    meetingTranscriptionStart: async (options) => {
       calls.start += 1;
+      calls.startSources.push(options.startSource);
       return { success: true, systemAudioMode: "native", systemAudioStrategy: "native" };
     },
     meetingNoteOpenedWithoutRecording: async (id) => calls.noteOnly.push(id),
@@ -355,16 +364,23 @@ test("a meeting request records under automatic policy, and under manual only fr
   await openNote(11);
   assert.equal(calls.start, 0, "a suppressed request is not replayed");
 
-  await show("personal-notes", request({ trigger: "calendar-join", noteSessionId: "next" }));
+  await show(
+    "personal-notes",
+    request({ trigger: "calendar-join", startSource: "calendar-join", noteSessionId: "next" })
+  );
   assert.equal(calls.start, 1, "automatic policy still records");
   assert.equal(isRecording(), true);
   await React.act(async () => store.stopRecording());
 
   await setStartMode("manual");
-  await show("personal-notes", request({ trigger: "hotkey", noteSessionId: "hotkey" }));
+  await show(
+    "personal-notes",
+    request({ trigger: "hotkey", startSource: "hotkey", noteSessionId: "hotkey" })
+  );
   assert.equal(calls.start, 2, "the hotkey is an explicit start");
   assert.equal(isRecording(), true);
   assert.deepEqual(calls.noteOnly, ["join"]);
+  assert.deepEqual(calls.startSources, ["calendar-join", "hotkey"]);
 });
 
 test("a pending automatic start is consumed before a notes-view remount and cannot replay after suppression", async (t) => {

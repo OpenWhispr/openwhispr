@@ -174,7 +174,7 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
     '"Policy"=dword:00000001',
     '"Policy"=hex(7):7b,00,00,00,00,00',
   ])
-    await assert.rejects(registryExport([line])(), /Invalid registry value type/);
+    assert.deepEqual(Object.values(await registryExport([line])()), [null], line);
   // One reg.exe run when no key is deployed, which is every read on most machines.
   let runs = 0;
   const missing = registryWithoutPolicy();
@@ -245,9 +245,10 @@ test("WipeLocalDataIncludesModels is a strict boolean that defaults to keeping m
     ])(),
     { WipeLocalDataOnLaunch: "offboard-1", WipeLocalDataIncludesModels: true }
   );
-  await assert.rejects(registryExport(['"WipeLocalDataIncludesModels"="1"'])(), {
-    code: "DEVICE_POLICY_INVALID",
-  });
+  // A REG_SZ is read as null, which leaves the deployment invalid.
+  const wrongType = await registryExport(['"WipeLocalDataIncludesModels"="1"'])();
+  assert.deepEqual(wrongType, { WipeLocalDataIncludesModels: null });
+  assert.throws(() => normalizeDeviceValues(wrongType));
 });
 
 test("a Policy REG_SZ holding line breaks reads as one value", async () => {
@@ -260,7 +261,7 @@ test("a Policy REG_SZ holding line breaks reads as one value", async () => {
   ])();
   assert.deepEqual(JSON.parse(values.Policy), defaultDevicePolicy());
   assert.equal(values.RequireSignIn, false);
-  await assert.rejects(registryExport(['"Policy"="{', '  \\"version\\": 1'])(), /Invalid registry/);
+  assert.deepEqual(await registryExport(['"Policy"="{', '  \\"version\\": 1'])(), { Policy: null });
 });
 
 test("a REG_EXPAND_SZ value reads expanded, as PowerShell reads it", async (t) => {
@@ -309,10 +310,7 @@ test("with reg.exe blocked, PowerShell reads the deployment", async () => {
   assert.deepEqual(calls, ["reg.exe", "powershell.exe"]);
   assert.deepEqual(await readWindowsValues(powershellRegistry(null)), {});
   for (const entries of [{ RequireSignIn: "0" }, { Policy: 1 }, { RequireSignIn: [1] }])
-    await assert.rejects(
-      readWindowsValues(powershellRegistry(entries)),
-      /Invalid registry value type/
-    );
+    assert.deepEqual(Object.values(await readWindowsValues(powershellRegistry(entries))), [null]);
 });
 
 test("a failed PowerShell read isn't run again to look for evidence", async () => {
@@ -450,9 +448,13 @@ test("Linux reads raw policy and separate device metadata", async () => {
         fileSystem: linuxFileSystem({ "policy.json": defaultDevicePolicy() }, options),
       })
     );
-  await assert.rejects(
-    readLinuxValues({ fileSystem: linuxFileSystem({ "device.json": { Policy: "{}" } }) })
-  );
+  const misplaced = await readLinuxValues({
+    fileSystem: linuxFileSystem({
+      "policy.json": defaultDevicePolicy(),
+      "device.json": { Policy: "{}" },
+    }),
+  });
+  assert.equal(misplaced.Policy, null);
 });
 
 function deviceReader({ evidence = false } = {}) {
@@ -498,10 +500,23 @@ test("a reader that can't tell whether a policy is deployed reads as absent, and
 
 test("an invalid policy keeps its audit folder, so its refusals reach IT", async () => {
   const reader = deviceReader();
-  reader.next = async () => ({ Policy: "{not json", AuditLogPath: "/var/log/openwhispr" });
-  await reader.manager.refresh();
-  assert.equal(reader.manager.getSnapshot().status, "invalid");
-  assert.equal(reader.manager.getSnapshot().auditLogPath, "/var/log/openwhispr");
+  const auditLogPath = "/var/log/openwhispr";
+  for (const invalid of [
+    async () => ({ Policy: "{not json", AuditLogPath: auditLogPath }),
+    // A registry value of the wrong type, and a Policy placed in device.json.
+    () => registryExport(['"RequireSignIn"="1"', `"AuditLogPath"="${auditLogPath}"`])(),
+    () =>
+      readLinuxValues({
+        fileSystem: linuxFileSystem({
+          "device.json": { Policy: "{}", AuditLogPath: auditLogPath },
+        }),
+      }),
+  ]) {
+    reader.next = invalid;
+    await reader.manager.refresh();
+    assert.equal(reader.manager.getSnapshot().status, "invalid");
+    assert.equal(reader.manager.getSnapshot().auditLogPath, auditLogPath);
+  }
   reader.next = async () => ({ Policy: "{not json" });
   await reader.manager.refresh();
   assert.equal(reader.manager.getSnapshot().auditLogPath, undefined);

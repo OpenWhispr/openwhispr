@@ -81,8 +81,8 @@ const ABSENT_SNAPSHOT = {
   requireSignIn: false,
   localOnly: false,
 };
-// A deployment a reader found and this build rejects (a wrong type or
-// shape), as opposed to a reader that couldn't read one.
+// A deployment a reader found and this build rejects (a wrong shape), as
+// opposed to a reader that couldn't read one.
 const invalidDeployment = (message) =>
   Object.assign(new Error(message), { code: "DEVICE_POLICY_INVALID" });
 const INVALID_SNAPSHOT = {
@@ -194,10 +194,16 @@ async function readLinuxValues({
     readTrustedJson(path.join(directory, "policy.json"), { fileSystem, ownerId }),
     readTrustedJson(path.join(directory, "device.json"), { fileSystem, ownerId }),
   ]);
-  if (device !== undefined && (!isPlainObject(device) || Object.hasOwn(device, "Policy"))) {
+  if (device !== undefined && !isPlainObject(device)) {
     throw invalidDeployment("Invalid Linux device settings");
   }
-  return { ...device, ...(policy === undefined ? {} : { Policy: JSON.stringify(policy) }) };
+  return {
+    ...device,
+    ...(policy === undefined ? {} : { Policy: JSON.stringify(policy) }),
+    // Policy belongs in policy.json. One in device.json is kept as null, which
+    // normalizeDeviceValues refuses, so the deployment is invalid but keeps its AuditLogPath.
+    ...(device && Object.hasOwn(device, "Policy") && { Policy: null }),
+  };
 }
 
 function runRegistryTool(run, args) {
@@ -220,14 +226,16 @@ const REGISTRY_STRING = /^"((?:[^"\\]|\\.)*)"$/;
 const unescapeRegistryString = (value) => value.replace(/\\(.)/g, "$1");
 
 // A device value from either reader: REG_SZ for text, a 0 or 1 REG_DWORD for
-// a switch. Value names are case-insensitive in the registry.
+// a switch. Value names are case-insensitive in the registry. A value of
+// another type is kept as null, which normalizeDeviceValues refuses, so the
+// deployment is invalid but keeps its AuditLogPath.
 function addRegistryValue(values, rawName, type, data) {
   const name = DEVICE_KEYS.find((key) => key.toLowerCase() === rawName.toLowerCase());
   if (!name) return;
   const boolean = BOOLEAN_DEVICE_KEYS.includes(name);
   if (boolean ? type !== "dword" || (data !== 0 && data !== 1) : type !== "string")
-    throw invalidDeployment("Invalid registry value type");
-  values[name] = boolean ? data === 1 : data;
+    values[name] = null;
+  else values[name] = boolean ? data === 1 : data;
 }
 
 // A REG_EXPAND_SZ export, hex(2): UTF-16LE bytes, expanded as Windows would

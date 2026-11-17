@@ -91,6 +91,7 @@ function createMeetingAuditLog({
   // The recording that started, kept on disk so a crash or power cut
   // mid-meeting can still be closed on the next launch.
   const markerPath = path.join(userDataPath, "meeting-audit-session.json");
+  const defaultDir = path.join(userDataPath, "audit");
   // AuditLogPath is device-wide, so OS users sharing a device each append to
   // and rotate only files named for them.
   const filePrefix = `meeting-audit-${(deviceUser || "unknown").replace(/[\\/:*?"<>|\x00-\x1f]/g, "_")}-`;
@@ -117,7 +118,7 @@ function createMeetingAuditLog({
     const configured = getConfiguredPath();
     if (configured && path.isAbsolute(configured)) return configured;
     if (configured) warnOnce("AuditLogPath is not an absolute path; using the default", {});
-    return path.join(userDataPath, "audit");
+    return defaultDir;
   }
 
   // Counts only this user's own files up to today's, so names another user
@@ -156,30 +157,41 @@ function createMeetingAuditLog({
     }
   }
 
+  // A line AuditLogPath refuses (another user planted the daily file, or the
+  // folder can't be written) goes to the default folder, which only this user
+  // can write, so it isn't lost.
   async function append(dir, at, entry) {
     const ts = new Date(at).toISOString();
     const file = path.join(dir, `${filePrefix}${ts.slice(0, 10)}.jsonl`);
-    await fs.promises.mkdir(dir, { recursive: true });
-    await appendLine(
-      file,
-      `${JSON.stringify({
-        ts,
-        event: entry.event,
-        // The renderer names the session, so only an id-shaped value is kept.
-        sessionId: /^[\w-]{1,64}$/.test(entry.sessionId ?? "") ? entry.sessionId : null,
-        noteId: entry.noteId ?? null,
-        trigger: entry.trigger ?? null,
-        reason: entry.reason ?? null,
-        durationSec: entry.durationSec ?? null,
-        // Filled in by participant notification (#3031) and the outside-guest
-        // policy (#3025), which define them.
-        participantsNotified: null,
-        notificationMethod: null,
-        externalAttendees: null,
-        appVersion,
-        deviceUser,
-      })}\n`
-    );
+    try {
+      await fs.promises.mkdir(dir, { recursive: true });
+      await appendLine(
+        file,
+        `${JSON.stringify({
+          ts,
+          event: entry.event,
+          // The renderer names the session, so only an id-shaped value is kept.
+          sessionId: /^[\w-]{1,64}$/.test(entry.sessionId ?? "") ? entry.sessionId : null,
+          noteId: entry.noteId ?? null,
+          trigger: entry.trigger ?? null,
+          reason: entry.reason ?? null,
+          durationSec: entry.durationSec ?? null,
+          // Filled in by participant notification (#3031) and the outside-guest
+          // policy (#3025), which define them.
+          participantsNotified: null,
+          notificationMethod: null,
+          externalAttendees: null,
+          appVersion,
+          deviceUser,
+        })}\n`
+      );
+    } catch (error) {
+      if (dir === defaultDir) throw error;
+      warnOnce("Meeting audit log can't write to AuditLogPath; using the default", {
+        error: error.message,
+      });
+      return append(defaultDir, at, entry);
+    }
     if (file === lastFile) return;
     lastFile = file;
     await rotate(dir, path.basename(file));

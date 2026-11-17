@@ -190,15 +190,23 @@ test("a meeting prompt only opens the note under manual policy", async (t) => {
   assert.equal(globalThis.__createNoteCheck(), false, "New note follows the policy too");
 });
 
-test("a pending navigation hands its trigger and session to the notes view", async (t) => {
+test("a pending navigation hands its trigger, start source and session to the notes view", async (t) => {
   await mount(
     t,
-    { noteId: 9, folderId: null, event: null, trigger: "hotkey", noteSessionId: "session" },
+    {
+      noteId: 9,
+      folderId: null,
+      event: null,
+      trigger: "hotkey",
+      startSource: "tray",
+      noteSessionId: "session",
+    },
     "manual"
   );
   await until(() => globalThis.__notesProps?.meetingRecordingRequest);
   const request = globalThis.__notesProps.meetingRecordingRequest;
   assert.equal(request.trigger, "hotkey");
+  assert.equal(request.startSource, "tray");
   assert.equal(request.noteSessionId, "session");
   assert.equal(globalThis.__notesProps.canAutoStartMeeting, globalThis.__createNoteCheck);
 });
