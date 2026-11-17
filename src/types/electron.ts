@@ -4381,6 +4381,12 @@ declare global {
         id: number,
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** Queues a linked chat whose cloud copy is missing messages for the next push. */
+      markConversationPending?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      hasSyncedLinkedConversations?: () => Promise<boolean>;
       clearConversationCreateAttempted?: (id: number) => Promise<void>;
       acknowledgeConversationCreate?: (
         id: number,

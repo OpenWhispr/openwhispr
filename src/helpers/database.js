@@ -7839,7 +7839,7 @@ class DatabaseManager {
       const scope = this._ownedRowScope("agent_conversations");
       const result = this.db
         .prepare(
-          `UPDATE agent_conversations SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL AND ${scope.sql}`
+          `UPDATE agent_conversations SET title = ?, updated_at = CURRENT_TIMESTAMP, sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL AND ${scope.sql}`
         )
         .run(title, id, ...scope.params);
       return { success: result.changes > 0 };
@@ -7916,9 +7916,11 @@ class DatabaseManager {
             "INSERT INTO agent_messages (conversation_id, role, content, metadata) VALUES (?, ?, ?, ?)"
           )
           .run(conversationId, role, content, metadataStr);
+        // Pending again, even after the chat synced: the next push sends the
+        // cloud what it is missing (SyncService's pushPendingConversations).
         this.db
           .prepare(
-            "UPDATE agent_conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL"
+            "UPDATE agent_conversations SET updated_at = CURRENT_TIMESTAMP, sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
           )
           .run(conversationId);
         return this.db
@@ -7949,8 +7951,11 @@ class DatabaseManager {
         this.db
           .prepare("UPDATE agent_messages SET content = ?, metadata = ? WHERE id = ?")
           .run(content, metadata ? JSON.stringify(metadata) : null, id);
+        // A reply the push skipped while it had no text goes up once it has some.
         this.db
-          .prepare("UPDATE agent_conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .prepare(
+            "UPDATE agent_conversations SET updated_at = CURRENT_TIMESTAMP, sync_status = 'pending' WHERE id = ?"
+          )
           .run(message.conversation_id);
         return this.db.prepare("SELECT * FROM agent_messages WHERE id = ?").get(id);
       })();
@@ -12143,6 +12148,44 @@ class DatabaseManager {
       );
       throw error;
     }
+  }
+
+  // A linked chat whose cloud copy the pull found missing some of its messages
+  // goes up on the next push. Builds before this were the cause: they settled
+  // a chat as synced after its first upload, and nothing queued it again. Its
+  // place in the chat list stays until that push lands.
+  markConversationPending(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const scope = this._syncRowScope("agent_conversations");
+      const result = this.db
+        .prepare(
+          `UPDATE agent_conversations SET sync_status = 'pending'
+           WHERE id = ? AND cloud_id IS NOT NULL AND deleted_at IS NULL AND device_only = 0
+             AND ${scope.sql}`
+        )
+        .run(id, ...scope.params);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error("Error marking conversation pending", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Whether this account has a chat that settled as synced, the only kind
+  // whose cloud copy can be missing messages without the push knowing.
+  hasSyncedLinkedConversations() {
+    const scope = this._syncRowScope("agent_conversations");
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1 FROM agent_conversations
+           WHERE cloud_id IS NOT NULL AND sync_status = 'synced' AND deleted_at IS NULL
+             AND device_only = 0 AND ${scope.sql}
+           LIMIT 1`
+        )
+        .get(...scope.params)
+    );
   }
 
   // Main refused the create before it left, so no cloud copy can exist. The row

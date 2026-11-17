@@ -4394,6 +4394,14 @@ class IPCHandlers {
         ? STALE_SYNC_ACK
         : this.databaseManager.markConversationCreateAttempted(id)
     );
+    ipcMain.handle("db-mark-conversation-pending", (_, id, expectedAuthGeneration) =>
+      isStaleSyncAck(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : this.databaseManager.markConversationPending(id)
+    );
+    ipcMain.handle("db-has-synced-linked-conversations", () =>
+      this.databaseManager.hasSyncedLinkedConversations()
+    );
     ipcMain.handle("db-clear-conversation-create-attempted", (_, id) =>
       this.databaseManager.clearConversationCreateAttempted(id)
     );

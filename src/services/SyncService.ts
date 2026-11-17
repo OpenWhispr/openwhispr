@@ -313,6 +313,11 @@ const UNOWNED_CURSORS_ACCOUNT_KEY = "syncCursors.unownedClaimedBy";
 const UNOWNED_CLAIM_PROGRESS_KEY = "syncCursors.unownedClaimProgress";
 const UNOWNED_CLAIM_RETRY_MS = 5 * 60 * 1000;
 const UNOWNED_CLAIM_MAX_RETRY_MS = 60 * 60 * 1000;
+// Per account: "done" once a pull has checked every chat for messages its cloud
+// copy is missing (repairUnsentChatMessages), else when a failed check may next
+// run, so one that keeps failing doesn't walk every chat on every pass.
+const CHAT_MESSAGE_REPAIR_PREFIX = "syncCursors.chatMessages:";
+const CHAT_MESSAGE_REPAIR_RETRY_MS = 5 * 60 * 1000;
 // localStorage keys gating what a pass may sync; a change in another window
 // means sync may have just become possible (sign-in, subscription, backup
 // enabled, Insights opt-in).
@@ -666,6 +671,20 @@ function missingConversationMessages<Message extends { role: string; content: st
   });
 }
 
+// Whether a linked chat's cloud copy lacks messages this device holds. The
+// matcher alone can't settle it: an empty reply kept here can take the place
+// of a later reply the copy already holds, and a reply completed here can sit
+// in the place of one the copy holds empty. A copy that is missing messages
+// also holds fewer messages with text than this device does.
+function cloudCopyIsMissingMessages(
+  local: ReadonlyArray<{ role: string; content: string }>,
+  cloud: ReadonlyArray<{ role: string; content: string }>
+): boolean {
+  const withText = (messages: ReadonlyArray<{ content: string }>) =>
+    messages.filter((message) => message.content.length > 0).length;
+  return withText(local) > withText(cloud) && missingConversationMessages(local, cloud).length > 0;
+}
+
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   try {
     const raw = localStorage.getItem(PURGED_SPACE_GUARD_KEY);
@@ -958,6 +977,7 @@ export class SyncService {
       "syncCursors.privateBackup:",
       "syncCursors.privatePlacement:",
       "syncCursors.privatePlacementCandidates:",
+      CHAT_MESSAGE_REPAIR_PREFIX,
     ])
       localStorage.removeItem(`${prefix}${accountId}`);
     // While it is the cursor owner its cursors are the live ones, and the next
@@ -1259,7 +1279,7 @@ export class SyncService {
           if (!this.passIsCurrent()) return;
           await this.relocatePulledPrivateWorkspaces(accountId, authGeneration);
           if (!this.passIsCurrent()) return;
-          if (this.canSync()) await this.syncConversations();
+          if (this.canSync()) await this.syncConversations(accountId);
           if (!this.passIsCurrent()) return;
           if (this.canSync()) await this.syncTranscriptions();
           if (!this.passIsCurrent()) return;
@@ -4075,12 +4095,34 @@ export class SyncService {
     }
   }
 
-  private async syncConversations(): Promise<void> {
+  private async syncConversations(accountId: string): Promise<void> {
+    await this.repairUnsentChatMessages(accountId);
+    if (!this.passIsCurrent()) return;
     await this.pushPendingConversations();
     if (!this.passIsCurrent()) return;
     await this.pushConversationDeletes();
     if (!this.passIsCurrent()) return;
     await this.pullConversations();
+  }
+
+  // Builds before this one settled a chat as synced after its first upload and
+  // never queued it again, so its later messages stayed on the device. The pull
+  // queues a chat whose cloud copy is missing messages, but a delta pull only
+  // sees copies changed since its cursor, so each account gets one snapshot
+  // pull first and this pass's push sends what it found. Without a cursor, this
+  // pass's own pull already reads every chat, and without a synced chat there is
+  // nothing to find.
+  private async repairUnsentChatMessages(accountId: string): Promise<void> {
+    const key = `${CHAT_MESSAGE_REPAIR_PREFIX}${accountId}`;
+    const state = localStorage.getItem(key);
+    if (state === "done" || Date.now() < Number(state)) return;
+    const needsSnapshot =
+      localStorage.getItem("lastSyncedAt.conversations") !== null &&
+      (await window.electronAPI.hasSyncedLinkedConversations?.()) === true;
+    const checked = !needsSnapshot || (await this.pullConversations(true));
+    // A pull the sign-in ended under says nothing about this account's chats.
+    if (!this.passIsCurrent()) return;
+    localStorage.setItem(key, checked ? "done" : String(Date.now() + CHAT_MESSAGE_REPAIR_RETRY_MS));
   }
 
   private async pushPendingConversations(): Promise<void> {
@@ -4196,6 +4238,24 @@ export class SyncService {
 
           // The next push sends what this row is still missing from the cloud.
           if (local?.cloud_id && local.sync_status === "pending") continue;
+
+          // A linked chat the cloud is missing messages of was settled as synced
+          // by an older build, which never queued a chat again after its first
+          // upload; queued now, the next push sends only what's missing. The
+          // counts come first, so a complete chat costs no lookup.
+          if (
+            local?.cloud_id === cloudConv.id &&
+            local.message_count > (cloudConv.messages?.length ?? 0)
+          ) {
+            const full = await window.electronAPI.getAgentConversation?.(local.id);
+            stopIfSignInReplaced(authGeneration);
+            if (full && cloudCopyIsMissingMessages(full.messages, cloudConv.messages ?? [])) {
+              stopIfPullStale(
+                await window.electronAPI.markConversationPending?.(local.id, authGeneration)
+              );
+              continue;
+            }
+          }
 
           // Applying a cloud copy replaces every local message, and messages added
           // after a chat's first create exist only on this device.
