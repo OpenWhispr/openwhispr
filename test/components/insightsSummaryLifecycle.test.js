@@ -247,4 +247,11 @@ test("focus recovery shows uploaded totals instead of the API's older copy", asy
   assert.equal(container.textContent, "101");
   assert.equal(syncError, false);
   assert.deepEqual(modes, ["refresh", "refresh"]);
+  const now = Date.now();
+  t.mock.method(Date, "now", () => now + 61_000);
+  await act(async () => {
+    focus();
+    timer();
+  });
+  assert.deepEqual(modes, ["refresh", "refresh", "allow"]);
 });
