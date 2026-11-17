@@ -24,9 +24,9 @@ Contacted by every install unless turned off in Settings → Privacy → Model l
 updates, or with `OPENWHISPR_MODEL_REGISTRY_MODE=bundled` in the app's `.env`.
 Blocking it is safe: the app keeps its bundled and last verified model list.
 
-| Host                        | Protocol | Port | Purpose                                                                                                                                                                         |
-| --------------------------- | -------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `raw.githubusercontent.com` | HTTPS    | 443  | Signed model list (`OpenWhispr/model-registry`), fetched at launch and checked every 15 minutes; later checks in a session answer 304 with no body while the list is unchanged. |
+| Host                        | Protocol | Port | Purpose                                                                                                                                                                                                                                                                                          |
+| --------------------------- | -------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `raw.githubusercontent.com` | HTTPS    | 443  | Signed model list (the `model-registry-published` branch of `OpenWhispr/openwhispr`; apps released before the list moved there read `OpenWhispr/model-registry`), fetched at launch and checked every 15 minutes; later checks in a session answer 304 with no body while the list is unchanged. |
 
 ## Required for streaming transcription
 
