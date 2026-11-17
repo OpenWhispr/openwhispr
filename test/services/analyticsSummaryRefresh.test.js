@@ -115,3 +115,17 @@ test("a summary reply cannot acknowledge a later write or dirty another account"
   await getAccountAnalyticsSummary("a", "allow");
   assert.deepEqual(state.modes, ["refresh", "refresh", "allow", "refresh", "allow"]);
 });
+
+// Each window runs its own sync passes; only the shared mark tells Insights
+// that another window's upload may be missing from the API's copy.
+test("a write another window started keeps this window's check fresh", async (t) => {
+  const { state, getAccountAnalyticsSummary } = await setup(t);
+  const otherWindow = await createRendererServer(t);
+  const { syncPendingAnalytics } = await otherWindow.ssrLoadModule("/services/AnalyticsService.ts");
+  await getAccountAnalyticsSummary("a");
+  state.pending = true;
+  await syncPendingAnalytics({ context: { accountId: "a", authGeneration: 7 } });
+  assert.equal((await getAccountAnalyticsSummary("a", "allow")).totalWords, 101);
+  await getAccountAnalyticsSummary("a", "allow");
+  assert.deepEqual(state.modes, ["refresh", "refresh", "allow"]);
+});

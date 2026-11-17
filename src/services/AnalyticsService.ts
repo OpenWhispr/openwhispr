@@ -32,8 +32,38 @@ let historicalRetryBlockedUntil = 0;
 export const ANALYTICS_SUMMARY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS = 250;
 const requestedHistoryBackfillAccounts = new Set<string>();
-const pendingSummaryChanges = new Map<string | null, number>();
-let summaryChangeGeneration = 0;
+// Every window runs its own sync passes, so the write a summary read must not
+// miss lives in shared localStorage, one key per account.
+const SUMMARY_WRITE_PREFIX = "analyticsSummaryWrite:";
+
+function summaryWriteKey(accountId: string | null): string {
+  return `${SUMMARY_WRITE_PREFIX}${encodeURIComponent(accountId ?? "")}`;
+}
+
+function readSummaryWrite(accountId: string | null): string | null {
+  try {
+    return localStorage.getItem(summaryWriteKey(accountId));
+  } catch {
+    return null;
+  }
+}
+
+function markSummaryWrite(context?: AnalyticsSyncContext): void {
+  try {
+    localStorage.setItem(summaryWriteKey(context?.accountId ?? null), crypto.randomUUID());
+  } catch {
+    // Losing the mark only lets a check read the API's copy until it expires.
+  }
+}
+
+function acknowledgeSummaryWrite(accountId: string | null, write: string | null): void {
+  if (write === null || readSummaryWrite(accountId) !== write) return;
+  try {
+    localStorage.removeItem(summaryWriteKey(accountId));
+  } catch {
+    // A kept mark only costs one more fresh read.
+  }
+}
 
 /** `refresh` is told whether local data changed, or whether it is only checking for remote changes. */
 export function subscribeToAnalyticsRefresh(
@@ -127,7 +157,7 @@ async function deleteFromCloud(
   body: unknown,
   context?: AnalyticsSyncContext
 ): Promise<void> {
-  pendingSummaryChanges.set(context?.accountId ?? null, ++summaryChangeGeneration);
+  markSummaryWrite(context);
   if (context) {
     await cloudDeleteForAuthGeneration(path, body, context.authGeneration);
     return;
@@ -140,7 +170,7 @@ async function postToCloud<T>(
   body: unknown,
   context?: AnalyticsSyncContext
 ): Promise<T> {
-  pendingSummaryChanges.set(context?.accountId ?? null, ++summaryChangeGeneration);
+  markSummaryWrite(context);
   return context
     ? cloudPostForAuthGeneration<T>(path, body, context.authGeneration)
     : cloudPost<T>(path, body);
@@ -359,9 +389,9 @@ export async function getAccountAnalyticsSummary(
   accountId: string | null = null,
   cache: AccountSummaryCache = "refresh"
 ): Promise<AnalyticsSummary> {
-  // A background check's sync pass can re-send pending rows. Even an uncertain
-  // write may have landed, so keep reads fresh until one acknowledges it.
-  const changeGeneration = pendingSummaryChanges.get(accountId);
+  // Writes are marked when they start, since even an uncertain one may land.
+  // Reads stay fresh until one that began after the latest write succeeds.
+  const write = readSummaryWrite(accountId);
   const requestHistoryBackfill = Boolean(
     accountId && !requestedHistoryBackfillAccounts.has(accountId)
   );
@@ -370,7 +400,7 @@ export async function getAccountAnalyticsSummary(
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   });
   if (requestHistoryBackfill) params.set("backfill", "true");
-  params.set("cache", changeGeneration === undefined ? cache : "refresh");
+  params.set("cache", write === null ? cache : "refresh");
 
   let summary: unknown;
   try {
@@ -393,8 +423,6 @@ export async function getAccountAnalyticsSummary(
   if (requestHistoryBackfill && accountId && summary.historyBackfillRetryRequired === true) {
     requestedHistoryBackfillAccounts.delete(accountId);
   }
-  if (pendingSummaryChanges.get(accountId) === changeGeneration) {
-    pendingSummaryChanges.delete(accountId);
-  }
+  acknowledgeSummaryWrite(accountId, write);
   return summary;
 }
