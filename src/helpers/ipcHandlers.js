@@ -35,9 +35,10 @@ const { BYOK_API_KEYS } = require("../config/secretKeys");
 const { dictionaryWordKey } = require("../utils/dictionaryWordKey");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
+const affiliateLinks = require("./affiliateLinks");
 const { createNoteFilesSync } = require("./noteFilesSync");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
-const { createCloudApiRequestHandler } = require("./cloudApiRequest");
+const { captureAuthFence, createCloudApiRequestHandler } = require("./cloudApiRequest");
 const { MetaActivation } = require("./metaActivation");
 const { ProductEvents, createFileStore: createProductEventsStore } = require("./productEvents");
 const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
@@ -156,6 +157,11 @@ function spaceIdsArgument(value) {
 function isForOtherAccount(accountId, activeAccountId) {
   return accountId !== undefined && accountId !== activeAccountId;
 }
+const INVALID_DEVICE_NOTES_REQUEST = {
+  success: false,
+  code: "invalid_request",
+  error: "The request is malformed",
+};
 const ACCOUNT_CHANGED_RESULT = {
   success: false,
   code: "ACCOUNT_CHANGED",
@@ -1212,6 +1218,10 @@ class IPCHandlers {
     try {
       const claimed = this.databaseManager.claimSignedOutPrivateNotes();
       if (claimed.notes > 0 || claimed.folders > 0) this.notifyVectorChanges();
+      if (claimed.notes > 0) {
+        this.noteFiles.notesMoved();
+        broadcastToWindows("device-notes-changed");
+      }
       return true;
     } catch (error) {
       debugLogger.error(
@@ -2068,8 +2078,8 @@ class IPCHandlers {
         productOperationAllowed(policy, app.getVersion(), operation.channel, operation.args)
       );
     };
-    const handleProduct = (channel, handler, remote = false) =>
-      ipcMain.handle(channel, async (event, ...args) => {
+    const createProductHandler = (channel, handler, remote = false) => {
+      return async (event, ...args) => {
         const startedPolicy = this.effectivePolicyManager.getCurrent();
         const operation = { channel, args, remote, accountId: startedPolicy.accountId };
         if (channel === "cloud-api-request")
@@ -2195,7 +2205,10 @@ class IPCHandlers {
               this._remoteStreamPolicies.delete(streamProperty);
           }
         }
-      });
+      };
+    };
+    const handleProduct = (channel, handler, remote = false) =>
+      ipcMain.handle(channel, createProductHandler(channel, handler, remote));
     const handleRemoteProduct = (channel, handler) => handleProduct(channel, handler, true);
     const ownProductStream = (streaming) => {
       const operation = this._productRequestContext.getStore();
@@ -3407,6 +3420,79 @@ class IPCHandlers {
       return this.databaseManager.getFolders(spaceId);
     });
 
+    // Notes that left the device-only list are filed, indexed and visible in
+    // every window, and the list itself changed.
+    const publishDeviceNoteChange = (movedNotes) => {
+      this.notifyVectorChanges();
+      this.noteFiles.notesMoved();
+      setImmediate(() => {
+        // A claimed tombstone syncs but must not appear in the renderer's list.
+        for (const note of movedNotes) {
+          if (!note.deleted_at) broadcastToWindows("note-updated", note);
+        }
+        broadcastToWindows("device-notes-changed");
+      });
+    };
+
+    ipcMain.handle("db-get-device-notes", async () => this.databaseManager.getDeviceNotes());
+
+    ipcMain.handle("db-get-device-note", async (_event, id) =>
+      isRowIdArgument(id) ? this.databaseManager.getDeviceNote(id) : null
+    );
+
+    ipcMain.handle("db-move-device-notes", async (_event, request) => {
+      const { noteIds, folderId, workspaceId = null, targetFolderId, accountId } = request ?? {};
+      const namesNotes = Array.isArray(noteIds) && noteIds.length > 0;
+      // The database reads a request naming neither as "move everything".
+      if (
+        !(namesNotes || isRowIdArgument(folderId)) ||
+        (noteIds !== undefined && !(namesNotes && noteIds.every(isRowIdArgument))) ||
+        (folderId !== undefined && !isRowIdArgument(folderId)) ||
+        (targetFolderId !== undefined && !isRowIdArgument(targetFolderId)) ||
+        !isWorkspaceIdArgument(workspaceId)
+      ) {
+        return INVALID_DEVICE_NOTES_REQUEST;
+      }
+      if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
+        return ACCOUNT_CHANGED_RESULT;
+      }
+      const { moved, skipped, code } = this.databaseManager.moveDeviceNotesToPrivate({
+        noteIds,
+        folderId,
+        workspaceId,
+        targetFolderId,
+      });
+      if (code) return { success: false, code, error: "The folder is no longer available" };
+      if (moved.length > 0) publishDeviceNoteChange(moved);
+      return { success: true, moved, skipped };
+    });
+
+    ipcMain.handle("db-get-stand-in-ownership-candidates", async () =>
+      this.databaseManager.getStandInOwnershipCandidates()
+    );
+
+    ipcMain.handle("db-resolve-stand-in-ownership", async (_event, request) => {
+      const { noteId, cloudId, owned, accountId } = request ?? {};
+      if (
+        !isRowIdArgument(noteId) ||
+        typeof cloudId !== "string" ||
+        !cloudId ||
+        typeof owned !== "boolean"
+      ) {
+        return INVALID_DEVICE_NOTES_REQUEST;
+      }
+      if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
+        return ACCOUNT_CHANGED_RESULT;
+      }
+      const { claimed, note } = this.databaseManager.resolveStandInOwnership(
+        noteId,
+        cloudId,
+        owned
+      );
+      if (claimed) publishDeviceNoteChange(note ? [note] : []);
+      return { claimed };
+    });
+
     ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard) =>
       isStaleNoteWrite(writeGuard)
         ? { success: false, error: "Account changed" }
@@ -3580,6 +3666,7 @@ class IPCHandlers {
         ...state,
         binding: accountScopeBinding.read(),
       });
+      affiliateLinks.setAccountScope(accountId, state.generation);
       const accountChanged = this.databaseManager.activeAccountId !== accountId;
       // Every window asks again whenever its auth state moves, so most calls repeat the scope
       // this process last applied. A repeat changes nothing below: the claims only find rows
@@ -5918,6 +6005,8 @@ class IPCHandlers {
           "globe-preference-state.json",
           ".system-audio-permission",
           "account-scope-binding.json",
+          "affiliate-candidate.json",
+          "affiliate-candidate.json.tmp",
           "installed-models.json",
           "model-registry.json",
           "model-registry.json.backup",
@@ -8143,6 +8232,37 @@ class IPCHandlers {
       tokenStore,
       logger: debugLogger,
     });
+    const backgroundCloudApiRequest = createCloudApiRequestHandler({
+      getApiUrl,
+      getAppVersion: () => app.getVersion(),
+      tokenStore,
+      proxyFetch: (url, init) => proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
+    });
+    // Collectors have no renderer IPC operation to own their policy checks or
+    // cancellation, but their uploads follow the same backup rules as sync.
+    const requestBackgroundCloudApi = createProductHandler(
+      "cloud-api-request",
+      (_event, opts) => backgroundCloudApiRequest(opts),
+      true
+    );
+    const handleBackgroundCloudApiRequest = async (opts) => {
+      const origin = this.effectivePolicyManager.getCurrent();
+      const result = await requestBackgroundCloudApi(undefined, opts);
+      if (result?.code !== "DEVICE_POLICY_BLOCKED") return result;
+      const current = this.effectivePolicyManager.getCurrent();
+      // A settled backup denial has the API's discard semantics. Loading or a
+      // replacement identity only delays the original account's pending facts.
+      if (
+        current.success &&
+        current.policy?.dataRetention.cloudBackupAllowed === false &&
+        current.accountId === origin.accountId &&
+        current.authGeneration === opts.expectedAuthGeneration &&
+        origin.authGeneration === opts.expectedAuthGeneration
+      ) {
+        return { ...result, status: 403, code: "POLICY_CLOUD_BACKUP_BLOCKED" };
+      }
+      return result;
+    };
     try {
       const ActivationDatabase = require("better-sqlite3");
       const activationDb = new ActivationDatabase(
@@ -8156,13 +8276,7 @@ class IPCHandlers {
             ...tokenStore.getState(),
             binding: accountScopeBinding.read(),
           }),
-        request: createCloudApiRequestHandler({
-          getApiUrl,
-          getAppVersion: () => app.getVersion(),
-          tokenStore,
-          proxyFetch: (url, init) =>
-            proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
-        }),
+        request: handleBackgroundCloudApiRequest,
         logger: debugLogger,
       });
       this.metaActivation.start();
@@ -8183,13 +8297,7 @@ class IPCHandlers {
             ...tokenStore.getState(),
             binding: accountScopeBinding.read(),
           }),
-        request: createCloudApiRequestHandler({
-          getApiUrl,
-          getAppVersion: () => app.getVersion(),
-          tokenStore,
-          proxyFetch: (url, init) =>
-            proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
-        }),
+        request: handleBackgroundCloudApiRequest,
         getAppVersion: () => app.getVersion(),
         logger: debugLogger,
       });
@@ -8203,6 +8311,28 @@ class IPCHandlers {
     ipcMain.handle("product-events-record-onboarding-completed", (_event, completion) =>
       this.productEvents?.recordOnboardingCompleted(completion)
     );
+    ipcMain.handle("product-events-record-dictation", (_event, dictation) => {
+      const startedAt = Date.parse(dictation?.startedAt);
+      // History's recovery fallback uses the current account. A funnel fact
+      // needs a proven live origin instead, including an explicitly guest one.
+      if (
+        !Number.isFinite(startedAt) ||
+        startedAt < this.databaseManager._accountTrackedSince ||
+        startedAt > Date.now()
+      ) {
+        return;
+      }
+      const accountId = this.databaseManager._accountSpokenUnder(dictation.startedAt);
+      if (!accountId) return;
+      return this.productEvents?.recordDictationCompleted(
+        {
+          ...dictation,
+          // While onboarding holds the app only its try-it dictation can run.
+          practice: this.windowManager?.isOnboardingActive() !== false,
+        },
+        { accountId, authGeneration: null }
+      );
+    });
     ipcMain.handle("activation-close", async () => {
       await Promise.race([
         this.metaActivation?.close(),
@@ -13114,12 +13244,18 @@ class IPCHandlers {
       }
     });
 
-    const fetchStripeUrl = async (event, endpoint, errorPrefix, body) => {
+    const fetchStripeUrl = async (event, endpoint, errorPrefix, body, expectedAuthGeneration) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const authHeader = await getAuthHeader(event);
+        const fence =
+          expectedAuthGeneration === undefined
+            ? null
+            : captureAuthFence(tokenStore, expectedAuthGeneration);
+        const authHeader = fence
+          ? { Authorization: fence.authorization }
+          : await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const headers = { ...authHeader };
@@ -13129,7 +13265,9 @@ class IPCHandlers {
           fetchOpts.body = JSON.stringify(body);
         }
 
-        const response = await proxyFetch(`${apiUrl}${endpoint}`, fetchOpts);
+        const response = fence
+          ? await fence.awaitBound(() => proxyFetch(`${apiUrl}${endpoint}`, fetchOpts))
+          : await proxyFetch(`${apiUrl}${endpoint}`, fetchOpts);
 
         if (!response.ok) {
           if (response.status === 401) {
@@ -13144,16 +13282,26 @@ class IPCHandlers {
           return { success: false, error: message, code: errorData.code };
         }
 
-        const data = await response.json();
+        const data = fence ? await fence.awaitBound(() => response.json()) : await response.json();
         return { success: true, url: data.url };
       } catch (error) {
         debugLogger.error(`${errorPrefix}: ${error.message}`);
-        return { success: false, error: error.message };
+        return {
+          success: false,
+          error: error.message,
+          ...(error.code ? { code: error.code } : {}),
+        };
       }
     };
 
-    ipcMain.handle("cloud-checkout", (event, opts) =>
-      fetchStripeUrl(event, "/api/stripe/checkout", "Cloud checkout error", opts || undefined)
+    ipcMain.handle("cloud-checkout", (event, opts, expectedAuthGeneration) =>
+      fetchStripeUrl(
+        event,
+        "/api/stripe/checkout",
+        "Cloud checkout error",
+        opts || undefined,
+        expectedAuthGeneration
+      )
     );
 
     ipcMain.handle("cloud-billing-portal", (event) =>
@@ -13252,6 +13400,17 @@ class IPCHandlers {
       }
       return handleCloudApiRequest(opts);
     });
+    ipcMain.handle("affiliate-get-candidate", () => ({
+      config: affiliateLinks.configuration(),
+      candidate: affiliateLinks.candidateForCurrentAccount(),
+      generation: tokenStore.getState().generation,
+    }));
+    ipcMain.handle("affiliate-save-candidate", (_event, input) =>
+      affiliateLinks.saveCandidate(input)
+    );
+    ipcMain.handle("affiliate-resolve-link", (_event, link, generation) =>
+      affiliateLinks.resolveLink(link, generation)
+    );
 
     ipcMain.handle("get-stt-config", handleSttConfigRequest);
 

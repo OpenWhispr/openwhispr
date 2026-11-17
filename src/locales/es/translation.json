@@ -3612,6 +3612,24 @@
         "loadError": "No se pudieron cargar los equipos."
       }
     },
+    "deviceNotes": {
+      "title": "En este dispositivo",
+      "info": "Estas notas no están asignadas a ninguna cuenta. Mueve una nota para conservarla y editarla.",
+      "infoLabel": "Acerca de las notas en este dispositivo",
+      "moveNote": "Mover a mi Privado",
+      "moveFolder": "Mover carpeta a mi Privado",
+      "moveAll": "Mover todo a mi Privado",
+      "moveAllTo": "Mover todo a una carpeta",
+      "moved": "Movida a tu Privado",
+      "movedCount_one": "Se movió {{count}} nota a tu Privado",
+      "movedCount_other": "Se movieron {{count}} notas a tu Privado",
+      "moveFailed": "No se pudo mover esta nota",
+      "moveFolderFailed": "No se pudieron mover estas notas",
+      "banner": "Esta nota aún no está asignada a ninguna cuenta.",
+      "notesHeading": "Notas",
+      "summaryHeading": "Resumen con IA",
+      "transcriptHeading": "Transcripción"
+    },
     "structureIntro": {
       "title": "Dónde están tus notas",
       "description": "OpenWhispr separa las ideas privadas del trabajo compartido para que las notas lleguen a las personas adecuadas.",
@@ -3721,6 +3739,117 @@
         "taskList": "Lista de verificación",
         "blockquote": "Cita",
         "table": "Insertar tabla"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Básico",
+          "blocks": "Bloques",
+          "style": "Estilo",
+          "tools": "Herramientas"
+        },
+        "slash": {
+          "heading": "Encabezado {{level}}",
+          "bulletList": "Lista con viñetas",
+          "orderedList": "Lista numerada",
+          "taskList": "Tarea con casilla",
+          "quote": "Cita",
+          "divider": "Separador",
+          "table": "Tabla",
+          "codeBlock": "Bloque de código",
+          "codeHint": "Colores de sintaxis",
+          "noteLink": "Enlazar nota",
+          "noteLinkHint": "o escribe [[",
+          "toggle": "Desplegable",
+          "callout": "Aviso: {{type}}",
+          "toc": "Índice",
+          "mathBlock": "Bloque matemático",
+          "inlineMath": "Fórmula en línea",
+          "inlineMathHint": "o escribe $$x^2$$",
+          "emoji": "Emoji",
+          "emojiHint": "o escribe :smile:",
+          "highlight": "Resaltar",
+          "subscript": "Subíndice",
+          "superscript": "Superíndice",
+          "color": "Color del texto: {{name}}",
+          "font": "Fuente: {{name}}",
+          "ruby": "Anotación ruby",
+          "rubyHint": "Lectura sobre el texto",
+          "align": "Alinear: {{dir}}",
+          "find": "Buscar y reemplazar",
+          "invisible": "Mostrar/ocultar caracteres invisibles"
+        },
+        "callout": {
+          "note": "Nota",
+          "tip": "Consejo",
+          "important": "Importante",
+          "warning": "Advertencia",
+          "caution": "Precaución"
+        },
+        "colors": {
+          "default": "Predeterminado",
+          "red": "Rojo",
+          "orange": "Naranja",
+          "yellow": "Amarillo",
+          "green": "Verde",
+          "blue": "Azul",
+          "purple": "Morado",
+          "gray": "Gris"
+        },
+        "fonts": {
+          "default": "Predeterminada",
+          "serif": "Serif",
+          "monospace": "Monoespaciada"
+        },
+        "align": {
+          "left": "Izquierda",
+          "center": "Centro",
+          "right": "Derecha",
+          "justify": "Justificado"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, p. ej. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, p. ej. x^2",
+          "emoji": "Nombre del emoji, p. ej. rocket",
+          "reading": "Lectura, p. ej. かんじ",
+          "textReading": "Texto|lectura, p. ej. 漢字|かんじ",
+          "apply": "Intro para aplicar · Esc para cancelar",
+          "mathEdit": "Intro para guardar · Esc para cancelar · vacío lo borra"
+        },
+        "toolbar": {
+          "highlight": "Resaltar",
+          "subscript": "Subíndice",
+          "superscript": "Superíndice",
+          "color": "Color del texto",
+          "font": "Fuente",
+          "alignment": "Alineación",
+          "ruby": "Texto ruby (lectura sobre los caracteres)"
+        },
+        "find": {
+          "find": "Buscar",
+          "replace": "Reemplazar",
+          "all": "Todo",
+          "previous": "Anterior",
+          "next": "Siguiente",
+          "matchCase": "Coincidir mayúsculas",
+          "close": "Cerrar"
+        },
+        "count": "Palabras: {{words}} · Caracteres: {{chars}}",
+        "link": {
+          "header": "Enlazar nota",
+          "empty": "Escribe el título de una nota…",
+          "create": "Enlazar a «{{title}}» (aún no existe)",
+          "open": "Abrir «{{title}}»",
+          "missing": "No hay ninguna nota titulada «{{title}}»"
+        },
+        "backlinks": {
+          "label": "Enlazada desde",
+          "more": "+{{count}} más",
+          "untitled": "Sin título"
+        },
+        "toc": {
+          "title": "Contenido",
+          "empty": "Añade encabezados para crear el índice."
+        }
       }
     },
     "participants": {
@@ -6389,6 +6518,7 @@
       "saveChanges": "Guardar cambios",
       "saved": "Tono y estilo guardados",
       "cleanupOff": "La corrección de texto está desactivada, así que estos tonos no se aplican a tu dictado. El asistente y los chats sí los usan.",
+      "customPrompt": "Estás usando un prompt personalizado para la corrección de texto, así que estos tonos no se aplican a tu dictado. El asistente y los chats sí los usan.",
       "turnOnCleanup": "Activar corrección de texto",
       "enabled": "Tonos y voces activados",
       "enabledDescription": "La corrección de texto, el asistente y los chats usan tu tono para cada tipo de app. Si está desactivado, usan el tono estándar."
@@ -6489,5 +6619,16 @@
       "bootstrapMismatch": "El archivo de arranque no coincide con tu cuenta, este espacio de trabajo o sus credenciales configuradas.",
       "testLinkOtherWorkspace": "Este enlace de prueba es para otro espacio de trabajo. Cambia a ese espacio de trabajo y vuelve a abrir el enlace."
     }
+  },
+  "affiliate": {
+    "remove": "Eliminar enlace de creador",
+    "haveLink": "¿Tienes un enlace de un creador?",
+    "label": "Enlace del creador (opcional)",
+    "placeholder": "Pega el enlace de tu creador",
+    "saved": "Enlace del creador guardado.",
+    "checking": "Comprobando tu enlace…",
+    "unavailable": "No pudimos comprobar tu enlace. Inténtalo de nuevo o borra el campo para continuar.",
+    "privacy": "Los enlaces de creadores no están disponibles con tus ajustes de seguimiento actuales. Borra el campo para continuar.",
+    "review": "Tu enlace se ha guardado para su revisión."
   }
 }

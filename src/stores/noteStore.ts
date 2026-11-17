@@ -260,7 +260,7 @@ function reconcileWorkspaceScope(
         revealContainer(context.spaceId, context.folderId);
       } else {
         // Never left on a container the workspace hides while its Private is on its way.
-        useNoteStore.setState({ activeContext: null, notes: [] });
+        clearActiveContext();
       }
     }
     if (decision.context !== "keep") pickedContext = useNoteStore.getState().activeContext;
@@ -844,6 +844,11 @@ export function setActiveContext(spaceId: number, folderId: number | null): void
   void ensureContainerLoaded(key);
 }
 
+// Nothing open in the tree: the pane shows whatever replaces it (the device note view).
+export function clearActiveContext(): void {
+  useNoteStore.setState({ activeContext: null, notes: [] });
+}
+
 // The active workspace's Private, on its default folder.
 function activePrivateContext(spaces: SpaceItem[], folders: FolderItem[]): ActiveContext | null {
   const { activeWorkspaceId, workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
@@ -1267,6 +1272,22 @@ export async function purgeSpace(
 export function setActiveNoteId(id: number | null): void {
   if (useNoteStore.getState().activeNoteId === id) return;
   useNoteStore.setState({ activeNoteId: id });
+}
+
+type NoteView = Pick<NoteState, "activeNoteId" | "activeContext">;
+
+/** Calls `listener` whenever the open note or container changes. */
+export function subscribeNoteView(
+  listener: (view: NoteView, previous: NoteView) => void
+): () => void {
+  return useNoteStore.subscribe((state, previous) => {
+    if (
+      state.activeNoteId !== previous.activeNoteId ||
+      state.activeContext !== previous.activeContext
+    ) {
+      listener(state, previous);
+    }
+  });
 }
 
 /**

@@ -42,6 +42,9 @@ const MOCKS = {
   `,
   "/hooks/useTeamSpacesCapability": `export const useTeamSpacesCapability = () => false;`,
   "/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: null });`,
+  "/stores/deviceNotesStore": `
+    export const useDeviceNotesStore = (select) => select({ viewNoteId: null });
+  `,
   "/stores/noteStore": `
     import { useSyncExternalStore } from "react";
     const state = { activeNoteId: null };

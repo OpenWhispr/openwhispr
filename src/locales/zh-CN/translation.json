@@ -3560,6 +3560,24 @@
         "loadError": "无法加载团队。"
       }
     },
+    "deviceNotes": {
+      "title": "在此设备上",
+      "info": "这些笔记尚未分配给任何账户。移动笔记即可保留并编辑。",
+      "infoLabel": "关于此设备上的笔记",
+      "moveNote": "移动到我的私密",
+      "moveFolder": "将文件夹移动到我的私密",
+      "moveAll": "全部移动到我的私密",
+      "moveAllTo": "全部移动到文件夹",
+      "moved": "已移动到你的私密",
+      "movedCount_one": "已将 {{count}} 条笔记移动到你的私密",
+      "movedCount_other": "已将 {{count}} 条笔记移动到你的私密",
+      "moveFailed": "无法移动此笔记",
+      "moveFolderFailed": "无法移动这些笔记",
+      "banner": "此笔记尚未分配给任何账户。",
+      "notesHeading": "笔记",
+      "summaryHeading": "AI 摘要",
+      "transcriptHeading": "转录"
+    },
     "structureIntro": {
       "title": "笔记存放在哪里",
       "description": "OpenWhispr 将个人想法与协作内容分开，让合适的人看到合适的笔记。",
@@ -3669,6 +3687,117 @@
         "taskList": "清单",
         "blockquote": "引用",
         "table": "插入表格"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "基础",
+          "blocks": "区块",
+          "style": "样式",
+          "tools": "工具"
+        },
+        "slash": {
+          "heading": "标题 {{level}}",
+          "bulletList": "项目符号列表",
+          "orderedList": "编号列表",
+          "taskList": "复选框任务",
+          "quote": "引用",
+          "divider": "分隔线",
+          "table": "表格",
+          "codeBlock": "代码块",
+          "codeHint": "语法着色",
+          "noteLink": "链接笔记",
+          "noteLinkHint": "或输入 [[",
+          "toggle": "折叠块",
+          "callout": "标注：{{type}}",
+          "toc": "目录",
+          "mathBlock": "数学公式块",
+          "inlineMath": "行内公式",
+          "inlineMathHint": "或输入 $$x^2$$",
+          "emoji": "表情",
+          "emojiHint": "或输入 :smile:",
+          "highlight": "高亮",
+          "subscript": "下标",
+          "superscript": "上标",
+          "color": "文字颜色：{{name}}",
+          "font": "字体：{{name}}",
+          "ruby": "注音",
+          "rubyHint": "在文字上方显示读音",
+          "align": "对齐：{{dir}}",
+          "find": "查找和替换",
+          "invisible": "显示/隐藏不可见字符"
+        },
+        "callout": {
+          "note": "注意",
+          "tip": "提示",
+          "important": "重要",
+          "warning": "警告",
+          "caution": "小心"
+        },
+        "colors": {
+          "default": "默认",
+          "red": "红色",
+          "orange": "橙色",
+          "yellow": "黄色",
+          "green": "绿色",
+          "blue": "蓝色",
+          "purple": "紫色",
+          "gray": "灰色"
+        },
+        "fonts": {
+          "default": "默认",
+          "serif": "衬线",
+          "monospace": "等宽"
+        },
+        "align": {
+          "left": "左对齐",
+          "center": "居中",
+          "right": "右对齐",
+          "justify": "两端对齐"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX，例如 \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX，例如 x^2",
+          "emoji": "表情名称，例如 rocket",
+          "reading": "读音，例如 かんじ",
+          "textReading": "文字|读音，例如 漢字|かんじ",
+          "apply": "Enter 应用 · Esc 取消",
+          "mathEdit": "Enter 保存 · Esc 取消 · 留空则删除"
+        },
+        "toolbar": {
+          "highlight": "高亮",
+          "subscript": "下标",
+          "superscript": "上标",
+          "color": "文字颜色",
+          "font": "字体",
+          "alignment": "对齐",
+          "ruby": "注音（在文字上方显示读音）"
+        },
+        "find": {
+          "find": "查找",
+          "replace": "替换",
+          "all": "全部",
+          "previous": "上一个",
+          "next": "下一个",
+          "matchCase": "区分大小写",
+          "close": "关闭"
+        },
+        "count": "字词：{{words}} · 字符：{{chars}}",
+        "link": {
+          "header": "链接笔记",
+          "empty": "输入笔记标题…",
+          "create": "链接到“{{title}}”（尚无此笔记）",
+          "open": "打开“{{title}}”",
+          "missing": "没有标题为“{{title}}”的笔记"
+        },
+        "backlinks": {
+          "label": "被以下笔记链接",
+          "more": "另外 {{count}} 条",
+          "untitled": "无标题"
+        },
+        "toc": {
+          "title": "目录",
+          "empty": "添加标题以生成目录。"
+        }
       }
     },
     "participants": {
@@ -6368,6 +6497,7 @@
       "saveChanges": "保存更改",
       "saved": "语气与风格已保存",
       "cleanupOff": "文本整理已关闭，因此这些语气不会应用到你的听写中。助手和聊天仍会使用它们。",
+      "customPrompt": "你正在为文本整理使用自定义提示词，因此这些语气不会应用到你的听写中。助手和聊天仍会使用它们。",
       "turnOnCleanup": "开启文本整理",
       "enabled": "启用语气与声音",
       "enabledDescription": "文本整理、助手和聊天会为每类应用使用你的语气。关闭时使用标准语气。"
@@ -6468,5 +6598,16 @@
       "bootstrapMismatch": "引导文件与您的账号、此工作区或其配置的凭据不匹配。",
       "testLinkOtherWorkspace": "此测试链接对应的是其他工作区。请切换到该工作区，然后重新打开链接。"
     }
+  },
+  "affiliate": {
+    "remove": "移除创作者链接",
+    "haveLink": "有创作者链接吗？",
+    "label": "创作者链接（可选）",
+    "placeholder": "粘贴创作者的链接",
+    "saved": "创作者链接已保存。",
+    "checking": "正在检查链接…",
+    "unavailable": "无法检查此链接。请重试，或清空输入框以继续。",
+    "privacy": "当前跟踪设置不支持创作者链接。请清空输入框以继续。",
+    "review": "您的链接已保存，等待审核。"
   }
 }

@@ -4119,6 +4119,24 @@
         "loadError": "Couldn't load teams."
       }
     },
+    "deviceNotes": {
+      "title": "On this device",
+      "info": "These notes have not been assigned to an account. Move a note to keep it and edit.",
+      "infoLabel": "About notes on this device",
+      "moveNote": "Move to my Private",
+      "moveFolder": "Move folder to my Private",
+      "moveAll": "Move all to my Private",
+      "moveAllTo": "Move all to folder",
+      "moved": "Moved to your Private",
+      "movedCount_one": "Moved {{count}} note to your Private",
+      "movedCount_other": "Moved {{count}} notes to your Private",
+      "moveFailed": "Couldn't move this note",
+      "moveFolderFailed": "Couldn't move these notes",
+      "banner": "This note isn't assigned to an account yet.",
+      "notesHeading": "Notes",
+      "summaryHeading": "AI summary",
+      "transcriptHeading": "Transcript"
+    },
     "structureIntro": {
       "title": "Where your notes live",
       "description": "OpenWhispr separates private thoughts from shared work so the right people see the right notes.",
@@ -4228,6 +4246,117 @@
         "taskList": "Checklist",
         "blockquote": "Quote",
         "table": "Insert table"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Basic",
+          "blocks": "Blocks",
+          "style": "Style",
+          "tools": "Tools"
+        },
+        "slash": {
+          "heading": "Heading {{level}}",
+          "bulletList": "Bulleted list",
+          "orderedList": "Numbered list",
+          "taskList": "Checkbox task",
+          "quote": "Quote",
+          "divider": "Divider",
+          "table": "Table",
+          "codeBlock": "Code block",
+          "codeHint": "Syntax colours",
+          "noteLink": "Link to note",
+          "noteLinkHint": "or type [[",
+          "toggle": "Toggle",
+          "callout": "Callout: {{type}}",
+          "toc": "Table of contents",
+          "mathBlock": "Math block",
+          "inlineMath": "Inline math",
+          "inlineMathHint": "or type $$x^2$$",
+          "emoji": "Emoji",
+          "emojiHint": "or type :smile:",
+          "highlight": "Highlight",
+          "subscript": "Subscript",
+          "superscript": "Superscript",
+          "color": "Text colour: {{name}}",
+          "font": "Font: {{name}}",
+          "ruby": "Ruby annotation",
+          "rubyHint": "Reading above text",
+          "align": "Align: {{dir}}",
+          "find": "Find and replace",
+          "invisible": "Show/hide invisible characters"
+        },
+        "callout": {
+          "note": "Note",
+          "tip": "Tip",
+          "important": "Important",
+          "warning": "Warning",
+          "caution": "Caution"
+        },
+        "colors": {
+          "default": "Default",
+          "red": "Red",
+          "orange": "Orange",
+          "yellow": "Yellow",
+          "green": "Green",
+          "blue": "Blue",
+          "purple": "Purple",
+          "gray": "Gray"
+        },
+        "fonts": {
+          "default": "Default",
+          "serif": "Serif",
+          "monospace": "Monospace"
+        },
+        "align": {
+          "left": "Left",
+          "center": "Center",
+          "right": "Right",
+          "justify": "Justify"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, e.g. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, e.g. x^2",
+          "emoji": "Emoji name, e.g. rocket",
+          "reading": "Reading, e.g. かんじ",
+          "textReading": "Text|reading, e.g. 漢字|かんじ",
+          "apply": "Enter to apply · Esc to cancel",
+          "mathEdit": "Enter to save · Esc to cancel · empty deletes"
+        },
+        "toolbar": {
+          "highlight": "Highlight",
+          "subscript": "Subscript",
+          "superscript": "Superscript",
+          "color": "Text colour",
+          "font": "Font",
+          "alignment": "Alignment",
+          "ruby": "Ruby text (reading above characters)"
+        },
+        "find": {
+          "find": "Find",
+          "replace": "Replace",
+          "all": "All",
+          "previous": "Previous",
+          "next": "Next",
+          "matchCase": "Match case",
+          "close": "Close"
+        },
+        "count": "Words: {{words}} · Characters: {{chars}}",
+        "link": {
+          "header": "Link to note",
+          "empty": "Type a note title…",
+          "create": "Link to “{{title}}” (no note yet)",
+          "open": "Open “{{title}}”",
+          "missing": "No note titled “{{title}}”"
+        },
+        "backlinks": {
+          "label": "Linked from",
+          "more": "+{{count}} more",
+          "untitled": "Untitled"
+        },
+        "toc": {
+          "title": "Contents",
+          "empty": "Add headings to build the table of contents."
+        }
       }
     },
     "participants": {
@@ -6368,6 +6497,7 @@
       "saveChanges": "Save Changes",
       "saved": "Tone & Style saved",
       "cleanupOff": "AI cleanup is off, so these tones aren't applied to your dictation. The assistant and chats still use them.",
+      "customPrompt": "You're using a custom cleanup prompt, so these tones aren't applied to your dictation. The assistant and chats still use them.",
       "turnOnCleanup": "Turn on AI cleanup",
       "enabled": "Tones & voices enabled",
       "enabledDescription": "AI cleanup, the assistant and chats use your tone for each kind of app. When this is off, they use the standard tone."
@@ -6468,5 +6598,16 @@
       "bootstrapMismatch": "The bootstrap file doesn't match your account, this workspace or its configured credentials.",
       "testLinkOtherWorkspace": "This test link is for a different workspace. Switch to that workspace and open the link again."
     }
+  },
+  "affiliate": {
+    "remove": "Remove creator link",
+    "haveLink": "Have a creator link?",
+    "label": "Creator link (optional)",
+    "placeholder": "Paste your creator’s link",
+    "saved": "Creator link saved.",
+    "checking": "Checking your link…",
+    "unavailable": "We couldn’t check your link. Try again, or clear the field to continue.",
+    "privacy": "Creator links are unavailable with your current tracking settings. Clear the field to continue.",
+    "review": "Your referral is saved for review."
   }
 }

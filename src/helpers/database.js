@@ -696,6 +696,19 @@ class DatabaseManager {
     `);
   }
 
+  // Which accounts the cloud already answered "not yours" for, per backed-up
+  // stand-in note, so each account asks once.
+  _initStandInOwnershipChecks() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS stand_in_ownership_checks (
+        note_id INTEGER NOT NULL,
+        account_id TEXT NOT NULL,
+        checked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (note_id, account_id)
+      )
+    `);
+  }
+
   // Signed-out rows normally join an account when they sync. These never sync
   // (failed or empty dictations, container chats), so they join at sign-in or
   // they'd stay visible to every later account.
@@ -2411,6 +2424,7 @@ class DatabaseManager {
       );
       this._initDeviceAccounts();
       this._initWorkspaceScopes();
+      this._initStandInOwnershipChecks();
 
       // Cloud-backed rows that just LEFT a team must keep pushing their scope
       // retraction (D6) even in the backup-off team-only pass, where the
@@ -5743,6 +5757,7 @@ class DatabaseManager {
       }
       this.db.prepare("DELETE FROM device_accounts WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM account_workspace_scopes WHERE account_id = ?").run(accountId);
+      this.db.prepare("DELETE FROM stand_in_ownership_checks WHERE account_id = ?").run(accountId);
       this.db
         .prepare(
           `DELETE FROM workspace_names WHERE workspace_id NOT IN
@@ -6556,11 +6571,12 @@ class DatabaseManager {
       if (standInId == null) return claimed;
       const claimsNotes = !this.hasOtherAccountRows();
       this.db.transaction(() => {
-        const notesToClaim =
-          claimsNotes &&
-          this.db
-            .prepare("SELECT 1 FROM notes WHERE space_id = ? AND account_id IS NULL LIMIT 1")
-            .get(standInId);
+        const notesToClaim = this.db
+          .prepare(
+            `SELECT 1 FROM notes WHERE space_id = ? AND account_id IS NULL
+               ${claimsNotes ? "" : "AND owner_user_id = ?"} LIMIT 1`
+          )
+          .get(...(claimsNotes ? [standInId] : [standInId, accountId]));
         const strayChats = this.db
           .prepare(
             `SELECT 1 FROM agent_conversations
@@ -6574,9 +6590,13 @@ class DatabaseManager {
         // Stand-in folders that stay, and the account's folder their rows joined.
         const joined = new Map();
         if (notesToClaim) {
-          const moved = this._claimStandInNotes(standInId, homeId, accountId, joined);
-          claimed.notes = moved.notes;
-          claimed.folders = moved.folders;
+          if (claimsNotes) {
+            const moved = this._claimStandInNotes(standInId, homeId, accountId, joined);
+            claimed.notes = moved.notes;
+            claimed.folders = moved.folders;
+          } else {
+            claimed.notes = this._claimProvenStandInNotes(standInId, homeId, accountId);
+          }
         }
         const moveFolderChats = this.db.prepare(
           "UPDATE agent_conversations SET space_id = ?, folder_id = ? WHERE account_id = ? AND folder_id = ?"
@@ -6601,6 +6621,19 @@ class DatabaseManager {
       );
       throw error;
     }
+  }
+
+  // On a shared device only notes the cloud named this account as owner of leave
+  // the stand-in; deleted ones go too, so their tombstones still sync.
+  _claimProvenStandInNotes(standInId, homeId, accountId) {
+    const ids = this.db
+      .prepare(
+        "SELECT id FROM notes WHERE space_id = ? AND account_id IS NULL AND owner_user_id = ?"
+      )
+      .all(standInId, accountId);
+    const joined = new Map();
+    for (const { id } of ids) this._placeStandInNote(id, homeId, accountId, joined);
+    return ids.length;
   }
 
   // The notes half of claimSignedOutPrivateNotes. Moves are local: sync
@@ -6636,9 +6669,22 @@ class DatabaseManager {
          ORDER BY f.id`
       )
       .all(standInId, standInId);
+    // The account's live folder in its home Private linked to the same cloud
+    // folder (one a pull stored under a key of its own while the stand-in's
+    // copy held the cloud key): the stand-in folder's rows join it, so two of
+    // the account's folders never stand for one cloud folder.
+    const linkedFolder = this.db.prepare(
+      `SELECT id FROM folders WHERE space_id = ? AND cloud_id = ? AND deleted_at IS NULL
+         AND (account_id IS NULL OR account_id IS ?) ORDER BY id LIMIT 1`
+    );
     for (const folder of standInFolders) {
-      if (folder.is_default) {
+      const linked =
+        folder.cloud_id == null
+          ? null
+          : (linkedFolder.get(homeId, folder.cloud_id, accountId)?.id ?? null);
+      if (linked != null || folder.is_default) {
         const target =
+          linked ??
           this._privateFolderNamed(homeId, accountId, folder.name) ??
           Number(
             insertFolder.run(
@@ -6671,6 +6717,245 @@ class DatabaseManager {
       )
       .run(homeId, accountId, standInId).changes;
     return { notes, folders };
+  }
+
+  // Notes written signed out stay in the stand-in on a device other accounts
+  // have used, since no account owns them. They are listed and moved to an
+  // account's Private only while nothing has put them in a cloud (a cloud id,
+  // another owner, a create that may have reached it).
+  _deviceNotesApply() {
+    return Boolean(
+      this.activeAccountId && this.hasOtherAccountRows() && this._standInPrivateSpaceId() != null
+    );
+  }
+
+  _deviceNoteEligibleSql(alias) {
+    return `${alias}.space_id = (SELECT id FROM spaces WHERE kind = 'private' AND account_id IS NULL AND workspace_id IS NULL AND deleted_at IS NULL ORDER BY id LIMIT 1)
+      AND ${alias}.account_id IS NULL AND ${alias}.deleted_at IS NULL AND ${alias}.cloud_id IS NULL
+      AND ${alias}.owner_user_id IS NULL AND ${alias}.cloud_create_attempted = 0
+      AND ${alias}.cloud_create_pending IS NULL`;
+  }
+
+  getDeviceNotes() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this._deviceNotesApply()) return { folders: [], notes: [] };
+      const notes = this.db
+        .prepare(
+          `SELECT n.id, n.title, n.folder_id, n.created_at, n.updated_at, n.note_type FROM notes n
+           WHERE ${this._deviceNoteEligibleSql("n")} ORDER BY n.updated_at DESC, n.id DESC`
+        )
+        .all();
+      const folders = this.db
+        .prepare(
+          `SELECT f.id, f.name, f.is_default, COUNT(n.id) AS noteCount FROM folders f
+           JOIN notes n ON n.folder_id = f.id AND ${this._deviceNoteEligibleSql("n")}
+           WHERE f.deleted_at IS NULL GROUP BY f.id ORDER BY f.sort_order, f.id`
+        )
+        .all();
+      return { folders, notes };
+    } catch (error) {
+      debugLogger.error("Error getting device notes", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  // Backed-up stand-in notes no owner is recorded for, which only the cloud
+  // can place; each account is asked once per note.
+  getStandInOwnershipCandidates() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this._deviceNotesApply()) return [];
+      return this.db
+        .prepare(
+          `SELECT n.id, n.cloud_id FROM notes n
+           WHERE ${this._standInOwnershipCandidateSql("n")}
+             AND NOT EXISTS (SELECT 1 FROM stand_in_ownership_checks c
+                             WHERE c.note_id = n.id AND c.account_id = ?)
+           ORDER BY n.id`
+        )
+        .all(this.activeAccountId);
+    } catch (error) {
+      debugLogger.error(
+        "Error getting stand-in ownership candidates",
+        { error: error.message },
+        "notes"
+      );
+      throw error;
+    }
+  }
+
+  _standInOwnershipCandidateSql(alias) {
+    return `${alias}.space_id = (SELECT id FROM spaces WHERE kind = 'private' AND account_id IS NULL AND workspace_id IS NULL AND deleted_at IS NULL ORDER BY id LIMIT 1)
+      AND ${alias}.account_id IS NULL AND ${alias}.cloud_id IS NOT NULL AND ${alias}.owner_user_id IS NULL`;
+  }
+
+  // Records the cloud's answer for a candidate: an owned note joins the
+  // account's default Private (returned, for the windows to show it), any
+  // other is not asked about again.
+  resolveStandInOwnership(noteId, cloudId, owned) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this._deviceNotesApply()) return { claimed: false };
+      const accountId = this.activeAccountId;
+      return this.db.transaction(() => {
+        const candidate = this.db
+          .prepare(
+            `SELECT 1 FROM notes n WHERE n.id = ? AND n.cloud_id = ?
+               AND ${this._standInOwnershipCandidateSql("n")}`
+          )
+          .get(noteId, cloudId);
+        if (!candidate) return { claimed: false };
+        if (!owned) {
+          this.db
+            .prepare(
+              "INSERT OR IGNORE INTO stand_in_ownership_checks (note_id, account_id) VALUES (?, ?)"
+            )
+            .run(noteId, accountId);
+          return { claimed: false };
+        }
+        this._placeStandInNote(noteId, this.getDefaultPrivateSpaceId(), accountId);
+        this.db.prepare("UPDATE notes SET owner_user_id = ? WHERE id = ?").run(accountId, noteId);
+        return {
+          claimed: true,
+          note: this.db.prepare("SELECT * FROM notes WHERE id = ?").get(noteId),
+        };
+      })();
+    } catch (error) {
+      debugLogger.error("Error resolving stand-in ownership", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  getDeviceNote(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this._deviceNotesApply()) return null;
+      return (
+        this.db
+          .prepare(`SELECT * FROM notes n WHERE n.id = ? AND ${this._deviceNoteEligibleSql("n")}`)
+          .get(id) ?? null
+      );
+    } catch (error) {
+      debugLogger.error("Error getting device note", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  // Moves eligible device notes (the named ones, or those in the named
+  // folder) into the signed-in account's Private: all into `targetFolderId`
+  // when given, which must be a live folder of one of the account's Private
+  // spaces (else `code: "folder_unavailable"` and nothing moves), otherwise
+  // each into its folder of the same name in the workspace's Private. Cloud
+  // identity and sync state stay as they are, so each note is queued by the
+  // sync it was already in.
+  moveDeviceNotesToPrivate({ noteIds, folderId, workspaceId = null, targetFolderId = null } = {}) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const requested = noteIds ? new Set(noteIds) : null;
+      if (!this._deviceNotesApply()) return { moved: [], skipped: requested?.size ?? 0 };
+      const accountId = this.activeAccountId;
+      const filters = [];
+      const params = [];
+      if (requested) {
+        filters.push("n.id IN (SELECT value FROM json_each(?))");
+        params.push(JSON.stringify([...requested]));
+      }
+      if (folderId != null) {
+        filters.push("n.folder_id = ?");
+        params.push(folderId);
+      }
+      const moved = this.db.transaction(() => {
+        const target =
+          targetFolderId == null
+            ? null
+            : this.db
+                .prepare(
+                  `SELECT f.id, f.space_id FROM folders f JOIN spaces s ON s.id = f.space_id
+                   WHERE f.id = ? AND f.deleted_at IS NULL AND s.deleted_at IS NULL
+                     AND s.kind = 'private' AND s.account_id = ?`
+                )
+                .get(targetFolderId, accountId);
+        if (targetFolderId != null && !target) return null;
+        const ids = this.db
+          .prepare(
+            `SELECT n.id FROM notes n WHERE ${[this._deviceNoteEligibleSql("n"), ...filters].join(" AND ")} ORDER BY n.id`
+          )
+          .all(...params)
+          .map((row) => row.id);
+        const idList = JSON.stringify(ids);
+        if (target) {
+          this.db
+            .prepare(
+              `UPDATE notes SET space_id = ?, folder_id = ?, account_id = ?
+               WHERE id IN (SELECT value FROM json_each(?))`
+            )
+            .run(target.space_id, target.id, accountId, idList);
+        } else {
+          const targetSpaceId = this._forkPrivateSpaceId(workspaceId, accountId);
+          const joined = new Map();
+          for (const id of ids) this._placeStandInNote(id, targetSpaceId, accountId, joined);
+        }
+        return this.db
+          .prepare("SELECT * FROM notes WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id")
+          .all(idList);
+      })();
+      if (!moved) {
+        return { moved: [], skipped: requested?.size ?? 0, code: "folder_unavailable" };
+      }
+      return { moved, skipped: requested ? requested.size - moved.length : 0 };
+    } catch (error) {
+      debugLogger.error("Error moving device notes", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  // Files a stand-in note in the account's Private space, in its folder of
+  // the same name (made with the stand-in folder's settings, under a free
+  // name, when the account has none); a root note, or one whose stand-in
+  // folder is deleted, stays at the root. A deleted note only joins a folder
+  // that exists, since a tombstone never makes one. The stand-in's folders
+  // stay where they are, since signed-out notes may still use them. Callers
+  // check eligibility. A caller placing several notes passes `joined`, so
+  // notes of one stand-in folder share one target even while a namesake's
+  // delete is pending (its name is taken, but it is not found live).
+  _placeStandInNote(noteId, targetSpaceId, accountId, joined = new Map()) {
+    const source = this.db
+      .prepare(
+        `SELECT n.deleted_at AS note_deleted_at, f.id AS folder_id, f.name, f.is_default, f.sort_order FROM notes n
+         LEFT JOIN folders f ON f.id = n.folder_id AND f.deleted_at IS NULL WHERE n.id = ?`
+      )
+      .get(noteId);
+    const existingFolderId =
+      source?.name != null
+        ? (joined.get(source.folder_id) ??
+          this._privateFolderNamed(targetSpaceId, accountId, source.name))
+        : null;
+    const targetFolderId =
+      existingFolderId ??
+      (source?.name != null && !source.note_deleted_at
+        ? Number(
+            this.db
+              .prepare(
+                `INSERT INTO folders (name, is_default, sort_order, client_folder_id, sync_status, space_id, account_id)
+                 VALUES (?, ?, ?, ?, 'synced', ?, ?)`
+              )
+              .run(
+                this._uniqueFolderName(targetSpaceId, accountId, source.name),
+                source.is_default,
+                source.sort_order,
+                randomUUID(),
+                targetSpaceId,
+                accountId
+              ).lastInsertRowid
+          )
+        : null);
+    if (targetFolderId != null && source?.folder_id != null) {
+      joined.set(source.folder_id, targetFolderId);
+    }
+    this.db
+      .prepare("UPDATE notes SET space_id = ?, folder_id = ?, account_id = ? WHERE id = ?")
+      .run(targetSpaceId, targetFolderId, accountId, noteId);
   }
 
   // The private row with no account and no workspace: what a signed-out user
@@ -11413,31 +11698,69 @@ class DatabaseManager {
   // newKeyIfTaken: a cloud folder
   // whose client key another account's folder holds here is stored under a
   // key of its own, where the upsert would otherwise take that folder over.
+  // A private folder with no account that the signed-in account can't see
+  // holding the key (the signed-out stand-in's copy of a folder backed up
+  // before the split) is left that way too while the account already has its
+  // own copy, linked by cloud id under its own key (taking the holder over
+  // would collide with it on the key), or while the holder still has notes or
+  // chats (they would be left in the stand-in under a folder that moved out).
+  // An empty one is taken over, as is a team folder of a teamspace the
+  // account isn't in (a folder another member moved between teamspaces).
   upsertFolderFromCloud(cloudFolder, localSpaceId = null, { newKeyIfTaken = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       // A cloud row with no space is a personal folder: the default's Private.
       let spaceId = localSpaceId ?? this.getDefaultPrivateSpaceId();
       const current = this.db
-        .prepare("SELECT space_id, account_id FROM folders WHERE client_folder_id = ?")
+        .prepare(
+          `SELECT f.id, f.space_id, f.account_id, s.kind AS space_kind FROM folders f
+           LEFT JOIN spaces s ON s.id = f.space_id WHERE f.client_folder_id = ?`
+        )
         .get(cloudFolder.client_folder_id);
+      const accountScope = this._accountScopeCondition("folders");
+      const ownCopy = () =>
+        this.db
+          .prepare(
+            `SELECT client_folder_id FROM folders WHERE cloud_id = ? AND ${accountScope.sql}
+             ORDER BY deleted_at IS NOT NULL, id LIMIT 1`
+          )
+          .get(cloudFolder.id, ...accountScope.params);
+      const hiddenPrivateHolder =
+        current != null &&
+        current.account_id == null &&
+        current.space_kind === "private" &&
+        this.activeAccountId != null &&
+        !this.db
+          .prepare(`SELECT 1 FROM folders WHERE id = ? AND ${accountScope.sql}`)
+          .get(current.id, ...accountScope.params);
+      const own = hiddenPrivateHolder ? ownCopy() : undefined;
+      const keepsHolder =
+        hiddenPrivateHolder &&
+        (own != null ||
+          Boolean(
+            this.db
+              .prepare(
+                `SELECT 1 FROM notes WHERE folder_id = ?
+                 UNION ALL SELECT 1 FROM agent_conversations WHERE folder_id = ? LIMIT 1`
+              )
+              .get(current.id, current.id)
+          ));
       if (
         cloudFolder.private_workspace_id == null &&
+        !keepsHolder &&
         this._keepsPrivatePlacement(current?.space_id, spaceId)
       )
         spaceId = current.space_id;
       const accountId = this._accountIdForSpace(spaceId);
-      if (newKeyIfTaken && current?.account_id && accountId && current.account_id !== accountId) {
+      if (
+        keepsHolder ||
+        (newKeyIfTaken && current?.account_id && accountId && current.account_id !== accountId)
+      ) {
         // That folder is left as it is. This account's own copy of the cloud
         // folder keeps its key; otherwise the folder gets a new one.
-        const accountScope = this._accountScopeCondition("folders");
-        const own = this.db
-          .prepare(
-            `SELECT client_folder_id FROM folders WHERE cloud_id = ? AND ${accountScope.sql}`
-          )
-          .get(cloudFolder.id, ...accountScope.params);
+        const copy = keepsHolder ? own : ownCopy();
         return this.upsertFolderFromCloud(
-          { ...cloudFolder, client_folder_id: own?.client_folder_id ?? randomUUID() },
+          { ...cloudFolder, client_folder_id: copy?.client_folder_id ?? randomUUID() },
           localSpaceId
         );
       }

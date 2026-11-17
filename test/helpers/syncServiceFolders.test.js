@@ -18,7 +18,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
-const { TEAM_SPACE, joinTeamSpace } = require("./harness/teamSpace.js");
+const { TEAM_ACCOUNT, TEAM_SPACE, joinTeamSpace } = require("./harness/teamSpace.js");
 
 installBrowserGlobals();
 
@@ -516,4 +516,134 @@ test("a folder tombstone arriving in the delta pull hard-deletes the local folde
     undefined,
     "a remote delete must remove the local folder"
   );
+});
+
+// A new Private "Ideas" whose create the API answers with the account's own
+// "Ideas" (lib/folders-service.ts adoptExistingFolder), under the client key
+// `holderKey` already holds here. The pull never sees that cloud row again
+// (its cursor is past it), so only the push can link the folder.
+async function pushConvergedIdeas(t, placeHolder) {
+  const ctx = await setup(t);
+  if (!ctx) return null;
+  const { db, cloud } = ctx;
+  browserLocalStorage.setItem("cloudBackupEnabled", "true");
+  const remote = cloud.seedFolder({
+    client_folder_id: "cf-ideas",
+    name: "Ideas",
+    is_default: false,
+    sort_order: 4,
+    space_id: null,
+    workspace_id: null,
+  });
+  browserLocalStorage.setItem("lastSyncedAt.accountId", TEAM_ACCOUNT);
+  browserLocalStorage.setItem(`syncCursors.privateBackup:${TEAM_ACCOUNT}`, "1");
+  browserLocalStorage.setItem("lastSyncedAt.folders", remote.updated_at);
+  placeHolder(db, remote);
+  const ideas = db.createFolder("Ideas", db.getPrivateSpaceId()).folder;
+  const saved = db.saveNote("Plan", "body", "personal", null, null, ideas.id);
+
+  const request = browserWindow.electronAPI.cloudApiRequest;
+  browserWindow.electronAPI.cloudApiRequest = async (opts) => {
+    const converges = (input) => input?.name === "Ideas" && !input.space_id;
+    if (opts?.path === "/api/folders/batch-create" && opts.body?.folders?.every(converges)) {
+      cloud.log.push({ method: "POST", path: opts.path, body: structuredClone(opts.body) });
+      return { success: true, data: { created: opts.body.folders.map(() => remote) } };
+    }
+    return request(opts);
+  };
+
+  await (await newSyncService(t)).syncAll(true);
+  return { db, cloud, remote, ideas, saved };
+}
+
+// The signed-out stand-in's copy of the folder this account backed up before the split.
+function placeStandInIdeas(db, remote) {
+  const standInId = db._standInPrivateSpaceId() ?? db._insertPrivateSpace(null, null);
+  db.db
+    .prepare(
+      `INSERT INTO folders (name, is_default, sort_order, client_folder_id, cloud_id, sync_status, space_id)
+       VALUES ('Ideas', 0, 4, 'cf-ideas', ?, 'synced', ?)`
+    )
+    .run(remote.id, standInId);
+}
+
+test("a Private folder whose converged key a folder out of view holds links under its own key", async (t) => {
+  const result = await pushConvergedIdeas(t, placeStandInIdeas);
+  if (!result) return;
+  const { db, cloud, remote, ideas, saved } = result;
+
+  const linked = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(ideas.id);
+  assert.equal(linked.cloud_id, remote.id);
+  assert.equal(linked.client_folder_id, ideas.client_folder_id, "it keeps its own key");
+  assert.equal(linked.sync_status, "synced");
+  const uploaded = cloud.notes().find((note) => note.client_note_id === saved.note.client_note_id);
+  assert.ok(uploaded, "the note in it uploads");
+  assert.equal(uploaded.folder_id, remote.id);
+});
+
+test("a Private folder whose converged key a folder in view holds stays unlinked", async (t) => {
+  const result = await pushConvergedIdeas(t, (db, remote) => {
+    // The account's "Ideas" in another workspace's Private, already linked.
+    const otherPrivate = db._insertPrivateSpace(TEAM_ACCOUNT, "workspace-2");
+    const holder = db.createFolder("Ideas", otherPrivate).folder;
+    setFolderRow(db, holder.id, {
+      client_folder_id: "cf-ideas",
+      cloud_id: remote.id,
+      sync_status: "synced",
+    });
+  });
+  if (!result) return;
+  const { db, ideas } = result;
+
+  const unlinked = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(ideas.id);
+  assert.equal(unlinked.cloud_id, null, "two visible folders never stand for one cloud folder");
+  assert.equal(unlinked.sync_status, "pending");
+});
+
+test("a Private folder whose converged key an unlinked folder in view holds stays unlinked", async (t) => {
+  const result = await pushConvergedIdeas(t, (db) => {
+    // Linked to nothing yet, so only the key shows it stands for that cloud folder.
+    const otherPrivate = db._insertPrivateSpace(TEAM_ACCOUNT, "workspace-2");
+    const holder = db.createFolder("Old ideas", otherPrivate).folder;
+    setFolderRow(db, holder.id, { client_folder_id: "cf-ideas", sync_status: "synced" });
+  });
+  if (!result) return;
+  const { db, ideas } = result;
+
+  const unlinked = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(ideas.id);
+  assert.equal(unlinked.cloud_id, null);
+  assert.equal(unlinked.sync_status, "pending");
+});
+
+test("a linked folder whose key the stand-in holds keeps pulling its cloud changes", async (t) => {
+  for (const change of [{ sort_order: 9 }, { name: "Ideas renamed" }]) {
+    await t.test(Object.keys(change)[0], async (st) => {
+      const result = await pushConvergedIdeas(st, placeStandInIdeas);
+      if (!result) return;
+      const { db, cloud, remote, ideas } = result;
+      const standInCopy = () => folderByClientId(db, "cf-ideas");
+      const standInBefore = standInCopy();
+      const cursorBefore = browserLocalStorage.getItem("lastSyncedAt.folders");
+
+      // Another device changes the folder after this device's cursor.
+      cloud.setClock(() => shift(new Date().toISOString(), 1));
+      const patched = await cloud.request({
+        method: "PATCH",
+        path: "/api/folders/update",
+        body: { id: remote.id, ...change },
+      });
+      assert.equal(patched.success, true);
+      await (await newSyncService(st)).syncAll(true);
+
+      assert.notEqual(
+        browserLocalStorage.getItem("lastSyncedAt.folders"),
+        cursorBefore,
+        "the pull settles, so the folders cursor moves on"
+      );
+      const own = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(ideas.id);
+      assert.equal(own.cloud_id, remote.id);
+      for (const [field, value] of Object.entries(change)) assert.equal(own[field], value);
+      assert.deepEqual(standInCopy(), standInBefore, "the stand-in's copy is never taken over");
+    });
+  }
 });
