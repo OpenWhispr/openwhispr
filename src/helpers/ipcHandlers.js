@@ -7551,11 +7551,6 @@ class IPCHandlers {
       if (requestId) this.llamaServerStartAborts.set(requestId, abortController);
       try {
         const modelManager = require("./modelManagerBridge").default;
-        modelManager.ensureInitialized();
-        if (!modelManager.findModelById(modelId)) {
-          return { success: false, error: `Model "${modelId}" not found` };
-        }
-
         const server = await modelManager.serverForModel(modelId, {
           signal: abortController.signal,
         });
