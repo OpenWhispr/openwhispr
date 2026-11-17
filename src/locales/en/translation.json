@@ -212,11 +212,18 @@
     "policyAccountChanged": "Your account changed, so this answer was stopped.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
     "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
+    "policyBlocked": "Your organization doesn't allow this on this device.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
     "managedConfigAmbiguous": "Your organization's managed setup is inconsistent. Contact your administrator.",
     "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator.",
-    "resizePanel": "Resize panel"
+    "resizePanel": "Resize panel",
+    "managedDevice": "Managed device",
+    "managedDeviceAndWorkspace": "Managed device and workspace",
+    "deviceLocalOnly": "This device uses local processing only. Cloud features are unavailable, including for previously signed-in accounts.",
+    "deviceSignInRequired": "Your organization requires sign-in on this device.",
+    "devicePolicyInvalid": "The device policy could not be read or is invalid. Contact your administrator. OpenWhispr can't be used until the policy is corrected.",
+    "deviceWorkspaceUnavailable": "This device requires local processing, but the saved account's workspace policy is unavailable. Log out to continue without that account, or contact your administrator."
   },
   "onboarding": {
     "rehaul": {
@@ -657,7 +664,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Update required",
-      "description": "Your organization requires OpenWhispr {{version}} or newer. Please update the app."
+      "description": "Your organization requires OpenWhispr {{version}} or newer. Please update the app.",
+      "contactIT": "Your organization requires OpenWhispr {{version}} or newer. Contact IT to install an approved version."
     },
     "update": {
       "readyTitle": "Update ready to install",
@@ -1237,7 +1245,8 @@
       "failedUserCheck": "Failed to check user account",
       "generic": "Something went wrong. Please try again.",
       "invalidCredentials": "Invalid email or password",
-      "invalidEmail": "Enter a valid email address"
+      "invalidEmail": "Enter a valid email address",
+      "signInDisabledByDevice": "Sign-in is turned off on this device by your organization."
     },
     "getStarted": "Get Started",
     "legal": {
@@ -1754,13 +1763,7 @@
       "title": "Workspace",
       "description": "Collaborate with teammates, share notes, and manage workspace access in one place.",
       "empty": {
-        "title": "Create your first workspace",
-        "description": "Workspaces let you collaborate with teammates and share notes.",
         "create": "Create workspace"
-      },
-      "personal": {
-        "title": "You're in Personal",
-        "description": "Choose a workspace to manage its settings."
       },
       "loadError": {
         "title": "Couldn't load workspaces",
@@ -2038,8 +2041,8 @@
           "leaveBodyLoses": "You'll lose access to {{space}} and its notes.",
           "leaveBodyAdmins": "Another admin will continue managing this teamspace.",
           "deleteNotAllowed": "You don't have permission to delete {{space}}.",
-          "movedToPersonal_one": "{{count}} note that hadn't synced was moved to your Personal space.",
-          "movedToPersonal_other": "{{count}} notes that hadn't synced were moved to your Personal space."
+          "movedToPersonal_one": "{{count}} note that hadn't synced was moved to Private.",
+          "movedToPersonal_other": "{{count}} notes that hadn't synced were moved to Private."
         },
         "addPeople": {
           "loading": "Loading teamspaces…",
@@ -3031,7 +3034,14 @@
         "restarting": "Restarting...",
         "title": "Updates",
         "versionPlaceholder": "—",
-        "whatsNew": "What's new in v{{version}}"
+        "whatsNew": "What's new in v{{version}}",
+        "managedByOrganization": "Managed by your organization.",
+        "itManaged": "Your organization manages updates.",
+        "policyLoading": "Loading update settings…",
+        "policyUnavailable": "Update settings couldn’t be loaded. Check for updates to try again.",
+        "policyChanged": "Update policy changed. Check for updates again.",
+        "managedBadge": "Managed",
+        "stagedBeforePolicy": "An update was staged before this policy applied and may install when the app quits. Contact IT before quitting or restarting."
       },
       "translationHotkey": {
         "title": "Translation Hotkey",
@@ -3063,9 +3073,8 @@
     "privacy": {
       "cloudBackup": "Cloud backup",
       "cloudBackupDescription": "Back up your transcriptions and notes to the cloud for seamless access across devices.",
-      "cloudBackupTeamCaveat": "Notes in teamspaces and notes you've shared always sync, regardless of this setting.",
+      "cloudBackupTeamCaveat": "Notes in teamspaces and notes you've shared always sync, regardless of this setting. Chats that use Private content stay on this device. Chats from earlier versions and chats restored from Backup are also excluded.",
       "cloudNotesMigration": "Backing up notes… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "All notes backed up",
       "description": "Control what data leaves your device. Everything is off by default.",
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
@@ -3640,10 +3649,13 @@
     }
   },
   "workspaces": {
+    "defaultName": "{{name}}'s workspace",
+    "defaultNameFallback": "My workspace",
     "switcher": {
       "workspaces": "Workspaces",
       "add": "Add workspace",
-      "invitePeople": "Invite people"
+      "invitePeople": "Invite people",
+      "unavailable": "Workspaces aren't available right now."
     },
     "create": {
       "title": "Create workspace",
@@ -3773,16 +3785,17 @@
       "leave": {
         "title": "Leave {{name}}?",
         "body": "You'll lose access to this workspace, its teams, and its teamspaces. The workspace Owner or an Admin can invite you back.",
+        "privateNotes": "Your private notes in this workspace will move to {{workspace}}.",
         "failed": "Couldn't leave {{name}}. Check your connection and try again."
       },
       "left": {
         "title": "You left {{name}}"
       },
-      "chooseAnother": "Choose another workspace to continue.",
-      "chooseWorkspace": "Choose workspace",
+      "nowIn": "You're now in {{workspace}}.",
       "delete": {
         "title": "Delete {{name}}?",
-        "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone."
+        "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone.",
+        "privateNotes": "Your private notes in this workspace will move to {{workspace}}."
       },
       "deleting": {
         "title": "Deleting {{name}}…",
@@ -4029,7 +4042,7 @@
       "defaultFolderImmutable": "Default folders cannot be changed.",
       "spaceNameRequired": "Enter a space name.",
       "spaceNotFound": "That space could not be found.",
-      "privateSpaceImmutable": "Your Personal space cannot be changed.",
+      "privateSpaceImmutable": "Private can't be changed.",
       "generic": "The change could not be completed. Please try again."
     },
     "sidebar": {
@@ -4038,10 +4051,10 @@
       "templatesAndActions": "Templates & Actions"
     },
     "spaces": {
-      "privateSpaces": "Private notes",
+      "privateSpaces": "Private",
       "teamSpaces": "Teamspaces",
-      "personal": "Personal",
-      "privateTooltip": "Only you can see your Personal space",
+      "personal": "Private",
+      "privateTooltip": "Only you can see the folders and notes here.",
       "newSpace": "New teamspace",
       "nameAndIconLabel": "Name and icon",
       "changeEmoji": "Change emoji",
@@ -4063,6 +4076,18 @@
       "noSpacesFound": "No spaces found",
       "spaceRoot": "Space root",
       "moveConfirm": "Move",
+      "copyToPrivate": "Copy to Private",
+      "moveToWorkspacePrivate": "Move to {{workspace}} › Private",
+      "workspacePrivate": "{{workspace}} › Private",
+      "confirmCopyTitle": "Copy to Private?",
+      "confirmCopy": "The note stays in {{space}}.",
+      "copiedToPrivate": "Copied to Private",
+      "couldNotCopyNote": "Couldn't copy note",
+      "openCopy": "Open",
+      "noteAlreadyInTeam": "“{{title}}” is already in {{space}}. Use Copy to Private to keep a private copy.",
+      "folderAlreadyInTeam": "“{{name}}” is already in {{space}}. Use Copy to Private on its notes to keep private copies.",
+      "workspacesLoading": "Your workspaces are still loading. Try again in a moment.",
+      "cantMoveIntoLegacy": "Notes can't move into {{space}}: it isn't part of a workspace.",
       "confirmMoveInTitle": "Move to {{space}}?",
       "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note. Notes can't be moved back out of a teamspace later.",
       "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes. Folders and notes can't be moved back out of a teamspace later.",
@@ -4080,10 +4105,10 @@
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",
       "accessRevokedActiveNote": "You no longer have access to {{space}} — \"{{title}}\" is no longer available on this device",
-      "movedToPersonal": "You no longer have access to {{space}} — “{{title}}” was moved to your Personal space",
-      "updateDeniedNote": "You don't have permission to change “{{title}}” — your unsynced edits were saved as a copy in your Personal space",
+      "movedToPersonal": "You no longer have access to {{space}} — “{{title}}” was moved to Private",
+      "updateDeniedNote": "You don't have permission to change “{{title}}” — your unsynced edits were saved as a copy in Private",
       "deleteDeniedNote": "“{{title}}” wasn't deleted — only the note's owner or an admin can delete it",
-      "updateDeniedFolder": "You don't have permission to change “{{name}}” — your unsynced work was saved to your Personal space",
+      "updateDeniedFolder": "You don't have permission to change “{{name}}” — your unsynced work was saved to Private",
       "deleteDeniedFolder": "“{{name}}” wasn't deleted — only an admin can delete a space folder",
       "conflictBanner": "A newer version of this note exists.",
       "conflictRefresh": "Refresh",
@@ -4109,11 +4134,29 @@
         "loadError": "Couldn't load teams."
       }
     },
+    "deviceNotes": {
+      "title": "On this device",
+      "info": "These notes have not been assigned to an account. Move a note to keep it and edit.",
+      "infoLabel": "About notes on this device",
+      "moveNote": "Move to my Private",
+      "moveFolder": "Move folder to my Private",
+      "moveAll": "Move all to my Private",
+      "moveAllTo": "Move all to folder",
+      "moved": "Moved to your Private",
+      "movedCount_one": "Moved {{count}} note to your Private",
+      "movedCount_other": "Moved {{count}} notes to your Private",
+      "moveFailed": "Couldn't move this note",
+      "moveFolderFailed": "Couldn't move these notes",
+      "banner": "This note isn't assigned to an account yet.",
+      "notesHeading": "Notes",
+      "summaryHeading": "AI summary",
+      "transcriptHeading": "Transcript"
+    },
     "structureIntro": {
       "title": "Where your notes live",
       "description": "OpenWhispr separates private thoughts from shared work so the right people see the right notes.",
       "personal": {
-        "title": "Personal space",
+        "title": "Private",
         "description": "Only you can see the folders and notes here."
       },
       "workspace": {
@@ -4218,6 +4261,117 @@
         "taskList": "Checklist",
         "blockquote": "Quote",
         "table": "Insert table"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Basic",
+          "blocks": "Blocks",
+          "style": "Style",
+          "tools": "Tools"
+        },
+        "slash": {
+          "heading": "Heading {{level}}",
+          "bulletList": "Bulleted list",
+          "orderedList": "Numbered list",
+          "taskList": "Checkbox task",
+          "quote": "Quote",
+          "divider": "Divider",
+          "table": "Table",
+          "codeBlock": "Code block",
+          "codeHint": "Syntax colours",
+          "noteLink": "Link to note",
+          "noteLinkHint": "or type [[",
+          "toggle": "Toggle",
+          "callout": "Callout: {{type}}",
+          "toc": "Table of contents",
+          "mathBlock": "Math block",
+          "inlineMath": "Inline math",
+          "inlineMathHint": "or type $$x^2$$",
+          "emoji": "Emoji",
+          "emojiHint": "or type :smile:",
+          "highlight": "Highlight",
+          "subscript": "Subscript",
+          "superscript": "Superscript",
+          "color": "Text colour: {{name}}",
+          "font": "Font: {{name}}",
+          "ruby": "Ruby annotation",
+          "rubyHint": "Reading above text",
+          "align": "Align: {{dir}}",
+          "find": "Find and replace",
+          "invisible": "Show/hide invisible characters"
+        },
+        "callout": {
+          "note": "Note",
+          "tip": "Tip",
+          "important": "Important",
+          "warning": "Warning",
+          "caution": "Caution"
+        },
+        "colors": {
+          "default": "Default",
+          "red": "Red",
+          "orange": "Orange",
+          "yellow": "Yellow",
+          "green": "Green",
+          "blue": "Blue",
+          "purple": "Purple",
+          "gray": "Gray"
+        },
+        "fonts": {
+          "default": "Default",
+          "serif": "Serif",
+          "monospace": "Monospace"
+        },
+        "align": {
+          "left": "Left",
+          "center": "Center",
+          "right": "Right",
+          "justify": "Justify"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, e.g. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, e.g. x^2",
+          "emoji": "Emoji name, e.g. rocket",
+          "reading": "Reading, e.g. かんじ",
+          "textReading": "Text|reading, e.g. 漢字|かんじ",
+          "apply": "Enter to apply · Esc to cancel",
+          "mathEdit": "Enter to save · Esc to cancel · empty deletes"
+        },
+        "toolbar": {
+          "highlight": "Highlight",
+          "subscript": "Subscript",
+          "superscript": "Superscript",
+          "color": "Text colour",
+          "font": "Font",
+          "alignment": "Alignment",
+          "ruby": "Ruby text (reading above characters)"
+        },
+        "find": {
+          "find": "Find",
+          "replace": "Replace",
+          "all": "All",
+          "previous": "Previous",
+          "next": "Next",
+          "matchCase": "Match case",
+          "close": "Close"
+        },
+        "count": "Words: {{words}} · Characters: {{chars}}",
+        "link": {
+          "header": "Link to note",
+          "empty": "Type a note title…",
+          "create": "Link to “{{title}}” (no note yet)",
+          "open": "Open “{{title}}”",
+          "missing": "No note titled “{{title}}”"
+        },
+        "backlinks": {
+          "label": "Linked from",
+          "more": "+{{count}} more",
+          "untitled": "Untitled"
+        },
+        "toc": {
+          "title": "Contents",
+          "empty": "Add headings to build the table of contents."
+        }
       }
     },
     "participants": {
@@ -4381,7 +4535,9 @@
       "addExisting": "Add existing",
       "addCount": "Add {{count}} notes",
       "noResults": "No matching notes",
-      "noNotesAvailable": "No other notes available"
+      "noNotesAvailable": "No other notes available",
+      "notAdded_one": "{{count}} note couldn't be added",
+      "notAdded_other": "{{count}} notes couldn't be added"
     },
     "context": {
       "moveToFolder": "Move to folder",
@@ -4820,7 +4976,6 @@
       },
       "locked": {
         "noWorkspace": "Shared dictionaries are included with Business. Share your team's jargon, product names and acronyms with everyone.",
-        "chooseWorkspace": "You're in Personal. Switch to a workspace to use its shared words.",
         "upgradeAdmin": "Shared dictionaries are included with Business. Upgrade {{workspace}} so everyone gets the same words.",
         "upgradeMember": "Shared dictionaries are included with Business. Ask an admin to upgrade {{workspace}}.",
         "paused_one": "{{workspace}}'s {{count}} shared word is paused. Upgrade to Business to use it in dictation again.",
@@ -5073,8 +5228,6 @@
       "request_accessStatus": "Asking for access...",
       "look_at_screenName": "Look at screen",
       "look_at_screenStatus": "Looking at your screen...",
-      "look_at_screenSuccess": "Read the screen.",
-      "look_at_screenFailed": "The screen couldn't be read.",
       "request_api_keyName": "API key",
       "request_api_keyStatus": "Asking for an API key...",
       "open_settingsName": "Settings",
@@ -6361,6 +6514,7 @@
       "saveChanges": "Save Changes",
       "saved": "Tone & Style saved",
       "cleanupOff": "AI cleanup is off, so these tones aren't applied to your dictation. The assistant and chats still use them.",
+      "customPrompt": "You're using a custom cleanup prompt, so these tones aren't applied to your dictation. The assistant and chats still use them.",
       "turnOnCleanup": "Turn on AI cleanup",
       "enabled": "Tones & voices enabled",
       "enabledDescription": "AI cleanup, the assistant and chats use your tone for each kind of app. When this is off, they use the standard tone."
@@ -6461,5 +6615,16 @@
       "bootstrapMismatch": "The bootstrap file doesn't match your account, this workspace or its configured credentials.",
       "testLinkOtherWorkspace": "This test link is for a different workspace. Switch to that workspace and open the link again."
     }
+  },
+  "affiliate": {
+    "remove": "Remove creator link",
+    "haveLink": "Have a creator link?",
+    "label": "Creator link (optional)",
+    "placeholder": "Paste your creator’s link",
+    "saved": "Creator link saved.",
+    "checking": "Checking your link…",
+    "unavailable": "We couldn’t check your link. Try again, or clear the field to continue.",
+    "privacy": "Creator links are unavailable with your current tracking settings. Clear the field to continue.",
+    "review": "Your referral is saved for review."
   }
 }

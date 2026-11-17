@@ -1,6 +1,10 @@
 import { WorkspacesService } from "./WorkspacesService";
 import { syncService } from "./SyncService";
-import { useWorkspaceStore } from "../stores/workspaceStore";
+import {
+  captureWorkspaceAccountGuard,
+  relocateLostWorkspaces,
+  useWorkspaceStore,
+} from "../stores/workspaceStore";
 import { createWorkspaceActions } from "./workspaceActionsCore";
 import { rosterFor } from "../lib/peopleRoster";
 
@@ -8,6 +12,7 @@ import { rosterFor } from "../lib/peopleRoster";
 // → workspace store refresh → sync request. The orchestration lives in an
 // injectable core so ordering and failure behavior stay testable.
 const actions = createWorkspaceActions({
+  captureAccountGuard: captureWorkspaceAccountGuard,
   api: WorkspacesService,
   store: {
     forgetWorkspace: (id) => useWorkspaceStore.getState().forgetWorkspace(id),
@@ -21,6 +26,9 @@ const actions = createWorkspaceActions({
     memberRole: (workspaceId, userId) =>
       rosterFor(useWorkspaceStore.getState(), workspaceId).find((m) => m.user_id === userId)
         ?.role ?? null,
+  },
+  privateNotes: {
+    relocateLostWorkspace: (workspaceId) => relocateLostWorkspaces([workspaceId]),
   },
   sync: syncService,
   notifyUsageChanged: () => window.dispatchEvent(new Event("usage-changed")),

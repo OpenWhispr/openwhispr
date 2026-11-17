@@ -12,6 +12,20 @@ import {
   subscribeAuthRequestContext,
 } from "./authRequestContext";
 import { clearOfflineAccountProfile } from "./offlineAccountProfile";
+import { refreshEffectivePolicy, usePolicyStore } from "../stores/policyStore";
+import i18n from "../i18n";
+
+async function deviceAwareAuthFetch(...args: Parameters<typeof fetch>): Promise<Response> {
+  if (window.electronAPI?.getEffectivePolicy && !usePolicyStore.getState().deviceReady)
+    await refreshEffectivePolicy();
+  const policy = usePolicyStore.getState();
+  if (policy.localOnly || policy.code === "DEVICE_POLICY_INVALID") {
+    throw Object.assign(new Error(i18n.t("auth.errors.signInDisabledByDevice")), {
+      code: "DEVICE_POLICY_BLOCKED",
+    });
+  }
+  return authContextFetch(...args);
+}
 
 export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
 // Recorded by the API as the origin of an account created here; sent only when
@@ -24,7 +38,7 @@ export const authClient = createAuthClient({
   plugins: [ssoClient()],
   fetchOptions: {
     credentials: "omit",
-    customFetchImpl: authContextFetch,
+    customFetchImpl: deviceAwareAuthFetch,
     headers: {
       "x-openwhispr-source": "desktop",
       ...(REGISTRATION_OS ? { "x-openwhispr-os": REGISTRATION_OS } : {}),
@@ -225,6 +239,8 @@ const DESKTOP_OAUTH_CALLBACK_URL = "https://openwhispr.com/auth/desktop-callback
 
 export async function signInWithSocial(provider: SocialProvider): Promise<{ error?: Error }> {
   try {
+    if (usePolicyStore.getState().localOnly)
+      throw new Error(i18n.t("auth.errors.signInDisabledByDevice"));
     const isElectron = Boolean((window as any).electronAPI);
 
     if (isElectron) {
@@ -251,6 +267,8 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
 
 export async function signInWithSSO(email: string): Promise<{ error?: Error }> {
   try {
+    if (usePolicyStore.getState().localOnly)
+      throw new Error(i18n.t("auth.errors.signInDisabledByDevice"));
     const isElectron = Boolean((window as any).electronAPI);
 
     if (isElectron) {
@@ -341,6 +359,7 @@ export const ADMIN_URL = import.meta.env.VITE_ADMIN_URL || "https://admin.openwh
  * reason, fall back to the bare console URL and let the user sign in there.
  */
 export async function openAdminConsole(): Promise<void> {
+  if (usePolicyStore.getState().localOnly) return;
   let url = ADMIN_URL;
   try {
     // The generated $fetch types don't discriminate on `throw`, and the

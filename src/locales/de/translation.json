@@ -212,11 +212,18 @@
     "policyAccountChanged": "Ihr Konto hat sich geändert, daher wurde diese Antwort abgebrochen.",
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
     "policyUnresolved": "Die Einstellungen Ihrer Organisation wurden noch nicht geladen. Versuchen Sie es gleich noch einmal.",
+    "policyBlocked": "Ihre Organisation erlaubt dies auf diesem Gerät nicht.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
     "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
     "managedConfigAmbiguous": "Die verwaltete Einrichtung Ihrer Organisation ist widersprüchlich. Wenden Sie sich an Ihren Administrator.",
     "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator.",
-    "resizePanel": "Bereichsgröße ändern"
+    "resizePanel": "Bereichsgröße ändern",
+    "managedDevice": "Verwaltetes Gerät",
+    "managedDeviceAndWorkspace": "Verwaltetes Gerät und Arbeitsbereich",
+    "deviceLocalOnly": "Dieses Gerät verarbeitet Daten nur lokal. Cloud-Funktionen sind auch für zuvor angemeldete Konten nicht verfügbar.",
+    "deviceSignInRequired": "Ihre Organisation verlangt die Anmeldung auf diesem Gerät.",
+    "devicePolicyInvalid": "Die Geräterichtlinie konnte nicht gelesen werden oder ist ungültig. Wenden Sie sich an die Administration. OpenWhispr bleibt bis zur Korrektur gesperrt.",
+    "deviceWorkspaceUnavailable": "Dieses Gerät verlangt lokale Verarbeitung, aber die Arbeitsbereichsrichtlinie des gespeicherten Kontos ist nicht verfügbar. Melden Sie sich ab, um ohne dieses Konto fortzufahren, oder wenden Sie sich an die Administration."
   },
   "onboarding": {
     "rehaul": {
@@ -657,7 +664,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Update erforderlich",
-      "description": "Ihre Organisation erfordert OpenWhispr {{version}} oder neuer. Bitte aktualisieren Sie die App."
+      "description": "Ihre Organisation erfordert OpenWhispr {{version}} oder neuer. Bitte aktualisieren Sie die App.",
+      "contactIT": "Ihre Organisation erfordert OpenWhispr {{version}} oder neuer. Wenden Sie sich an die IT, um eine freigegebene Version zu installieren."
     },
     "update": {
       "readyTitle": "Update bereit zur Installation",
@@ -1237,7 +1245,8 @@
       "failedUserCheck": "Kontostatus konnte nicht überprüft werden",
       "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "invalidCredentials": "Ungültige E-Mail-Adresse oder ungültiges Passwort",
-      "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein"
+      "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein",
+      "signInDisabledByDevice": "Ihre Organisation hat die Anmeldung auf diesem Gerät deaktiviert."
     },
     "getStarted": "Jetzt starten",
     "legal": {
@@ -1754,13 +1763,7 @@
       "title": "Workspace",
       "description": "Arbeiten Sie zusammen, teilen Sie Notizen und verwalten Sie den Workspace-Zugriff an einem Ort.",
       "empty": {
-        "title": "Ersten Workspace erstellen",
-        "description": "Workspaces ermöglichen die Zusammenarbeit und das Teilen von Notizen.",
         "create": "Workspace erstellen"
-      },
-      "personal": {
-        "title": "Du bist in „Persönlich“",
-        "description": "Wähle einen Workspace aus, um seine Einstellungen zu verwalten."
       },
       "loadError": {
         "title": "Workspaces konnten nicht geladen werden",
@@ -2038,8 +2041,8 @@
           "leaveBodyLoses": "Sie verlieren den Zugriff auf {{space}} und seine Notizen.",
           "leaveBodyAdmins": "Ein anderer Admin verwaltet diesen Teamspace weiter.",
           "deleteNotAllowed": "Sie haben keine Berechtigung, {{space}} zu löschen.",
-          "movedToPersonal_one": "{{count}} nicht synchronisierte Notiz wurde in Ihren persönlichen Bereich verschoben.",
-          "movedToPersonal_other": "{{count}} nicht synchronisierte Notizen wurden in Ihren persönlichen Bereich verschoben."
+          "movedToPersonal_one": "{{count}} nicht synchronisierte Notiz wurde nach „Privat“ verschoben.",
+          "movedToPersonal_other": "{{count}} nicht synchronisierte Notizen wurden nach „Privat“ verschoben."
         },
         "addPeople": {
           "loading": "Teamspaces werden geladen…",
@@ -3031,7 +3034,14 @@
         "restarting": "Wird neu gestartet...",
         "title": "Updates",
         "versionPlaceholder": "—",
-        "whatsNew": "Neu in v{{version}}"
+        "whatsNew": "Neu in v{{version}}",
+        "managedByOrganization": "Von Ihrer Organisation verwaltet.",
+        "itManaged": "Ihre Organisation verwaltet Updates.",
+        "policyLoading": "Update-Einstellungen werden geladen…",
+        "policyUnavailable": "Die Update-Einstellungen konnten nicht geladen werden. Suchen Sie nach Updates, um es erneut zu versuchen.",
+        "policyChanged": "Die Update-Richtlinie hat sich geändert. Suchen Sie erneut nach Updates.",
+        "managedBadge": "Verwaltet",
+        "stagedBeforePolicy": "Ein Update wurde vor Anwendung dieser Richtlinie bereitgestellt und kann beim Beenden der App installiert werden. Wenden Sie sich an die IT, bevor Sie die App beenden oder neu starten."
       },
       "translationHotkey": {
         "title": "Übersetzungs-Hotkey",
@@ -3063,9 +3073,8 @@
     "privacy": {
       "cloudBackup": "Cloud-Backup",
       "cloudBackupDescription": "Sichern Sie Ihre Transkriptionen und Notizen in der Cloud für nahtlosen Zugriff auf allen Geräten.",
-      "cloudBackupTeamCaveat": "Notizen in Teamspaces und geteilte Notizen werden unabhängig von dieser Einstellung immer synchronisiert.",
+      "cloudBackupTeamCaveat": "Notizen in Teamspaces und geteilte Notizen werden unabhängig von dieser Einstellung immer synchronisiert. Chats, die private Inhalte verwenden, bleiben auf diesem Gerät. Chats aus früheren Versionen und aus einem Backup wiederhergestellte Chats sind ebenfalls ausgeschlossen.",
       "cloudNotesMigration": "Notizen werden gesichert… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "Alle Notizen gesichert",
       "description": "Steuern Sie, welche Daten Ihr Gerät verlassen. Standardmäßig ist alles deaktiviert.",
       "title": "Datenschutz",
       "insightsSync": "Persönliche Statistiken synchronisieren",
@@ -3640,10 +3649,13 @@
     "expand": "Seitenleiste ausklappen"
   },
   "workspaces": {
+    "defaultName": "Workspace von {{name}}",
+    "defaultNameFallback": "Mein Workspace",
     "switcher": {
       "workspaces": "Workspaces",
       "add": "Workspace hinzufügen",
-      "invitePeople": "Personen einladen"
+      "invitePeople": "Personen einladen",
+      "unavailable": "Workspaces sind gerade nicht verfügbar."
     },
     "create": {
       "title": "Workspace erstellen",
@@ -3773,16 +3785,17 @@
       "leave": {
         "title": "{{name}} verlassen?",
         "body": "Sie verlieren den Zugriff auf diesen Workspace, seine Teams und seine Teamspaces. Der Workspace-Inhaber oder ein Admin kann Sie wieder einladen.",
+        "privateNotes": "Ihre privaten Notizen in diesem Workspace werden nach {{workspace}} verschoben.",
         "failed": "{{name}} konnte nicht verlassen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
       },
       "left": {
         "title": "Sie haben {{name}} verlassen"
       },
-      "chooseAnother": "Wählen Sie einen anderen Workspace, um fortzufahren.",
-      "chooseWorkspace": "Workspace auswählen",
+      "nowIn": "Sie sind jetzt in {{workspace}}.",
       "delete": {
         "title": "{{name}} löschen?",
-        "body": "Dadurch werden der Workspace, seine Notizen, Dateien, Teams und Teamspaces für alle dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden."
+        "body": "Dadurch werden der Workspace, seine Notizen, Dateien, Teams und Teamspaces für alle dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden.",
+        "privateNotes": "Ihre privaten Notizen in diesem Workspace werden nach {{workspace}} verschoben."
       },
       "deleting": {
         "title": "{{name}} wird gelöscht…",
@@ -4029,7 +4042,7 @@
       "defaultFolderImmutable": "Standardordner können nicht geändert werden.",
       "spaceNameRequired": "Gib einen Bereichsnamen ein.",
       "spaceNotFound": "Dieser Bereich wurde nicht gefunden.",
-      "privateSpaceImmutable": "Dein persönlicher Bereich kann nicht geändert werden.",
+      "privateSpaceImmutable": "„Privat“ kann nicht geändert werden.",
       "generic": "Die Änderung konnte nicht abgeschlossen werden. Bitte versuche es erneut."
     },
     "sidebar": {
@@ -4038,10 +4051,10 @@
       "templatesAndActions": "Vorlagen & Aktionen"
     },
     "spaces": {
-      "privateSpaces": "Private Notizen",
+      "privateSpaces": "Privat",
       "teamSpaces": "Teamspaces",
-      "personal": "Persönlich",
-      "privateTooltip": "Nur du kannst deinen persönlichen Bereich sehen",
+      "personal": "Privat",
+      "privateTooltip": "Nur Sie können die Ordner und Notizen hier sehen.",
       "newSpace": "Neuer Teamspace",
       "nameAndIconLabel": "Name und Symbol",
       "changeEmoji": "Emoji ändern",
@@ -4063,6 +4076,18 @@
       "noSpacesFound": "Keine Bereiche gefunden",
       "spaceRoot": "Oberste Ebene",
       "moveConfirm": "Verschieben",
+      "copyToPrivate": "Nach Privat kopieren",
+      "moveToWorkspacePrivate": "Nach {{workspace}} › Privat verschieben",
+      "workspacePrivate": "{{workspace}} › Privat",
+      "confirmCopyTitle": "Nach Privat kopieren?",
+      "confirmCopy": "Die Notiz bleibt in {{space}}.",
+      "copiedToPrivate": "Nach „Privat“ kopiert",
+      "couldNotCopyNote": "Notiz konnte nicht kopiert werden",
+      "openCopy": "Öffnen",
+      "noteAlreadyInTeam": "„{{title}}“ ist bereits in {{space}}. Für eine private Kopie „Nach Privat kopieren“ verwenden.",
+      "folderAlreadyInTeam": "„{{name}}“ ist bereits in {{space}}. Für private Kopien „Nach Privat kopieren“ bei den Notizen darin verwenden.",
+      "workspacesLoading": "Die Workspaces werden noch geladen. Bitte gleich noch einmal versuchen.",
+      "cantMoveIntoLegacy": "Notizen können nicht nach {{space}} verschoben werden, da es zu keinem Workspace gehört.",
       "confirmMoveInTitle": "Nach {{space}} verschieben?",
       "confirmMoveIn": "Alle in {{space}} können diese Notiz sehen und bearbeiten. Notizen können später nicht wieder aus einem Teamspace herausbewegt werden.",
       "confirmMoveInFolder": "Alle in {{space}} können diesen Ordner und seine Notizen sehen und bearbeiten. Ordner und Notizen können später nicht wieder aus einem Teamspace herausbewegt werden.",
@@ -4080,10 +4105,10 @@
       "noteCount_other": "{{count}} Notizen",
       "accessRevoked": "Du hast keinen Zugriff mehr auf {{space}}",
       "accessRevokedActiveNote": "Du hast keinen Zugriff mehr auf {{space}} — „{{title}}“ ist auf diesem Gerät nicht mehr verfügbar",
-      "movedToPersonal": "Du hast keinen Zugriff mehr auf {{space}} — „{{title}}“ wurde in deinen persönlichen Bereich verschoben",
-      "updateDeniedNote": "Du darfst „{{title}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden als Kopie in deinem persönlichen Bereich gespeichert",
+      "movedToPersonal": "Du hast keinen Zugriff mehr auf {{space}} — „{{title}}“ wurde nach „Privat“ verschoben",
+      "updateDeniedNote": "Du darfst „{{title}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden als Kopie in „Privat“ gespeichert",
       "deleteDeniedNote": "„{{title}}“ wurde nicht gelöscht — nur der Besitzer der Notiz oder ein Admin kann sie löschen",
-      "updateDeniedFolder": "Du darfst „{{name}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden in deinem persönlichen Bereich gespeichert",
+      "updateDeniedFolder": "Du darfst „{{name}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden in „Privat“ gespeichert",
       "deleteDeniedFolder": "„{{name}}“ wurde nicht gelöscht — nur ein Admin kann einen Bereichs-Ordner löschen",
       "conflictBanner": "Es existiert eine neuere Version dieser Notiz.",
       "conflictRefresh": "Aktualisieren",
@@ -4109,11 +4134,29 @@
         "loadError": "Teams konnten nicht geladen werden."
       }
     },
+    "deviceNotes": {
+      "title": "Auf diesem Gerät",
+      "info": "Diese Notizen sind keinem Konto zugeordnet. Verschieben Sie eine Notiz, um sie zu behalten und zu bearbeiten.",
+      "infoLabel": "Über Notizen auf diesem Gerät",
+      "moveNote": "Nach Privat verschieben",
+      "moveFolder": "Ordner nach Privat verschieben",
+      "moveAll": "Alle nach Privat verschieben",
+      "moveAllTo": "Alle in Ordner verschieben",
+      "moved": "Nach „Privat“ verschoben",
+      "movedCount_one": "{{count}} Notiz nach „Privat“ verschoben",
+      "movedCount_other": "{{count}} Notizen nach „Privat“ verschoben",
+      "moveFailed": "Diese Notiz konnte nicht verschoben werden",
+      "moveFolderFailed": "Diese Notizen konnten nicht verschoben werden",
+      "banner": "Diese Notiz ist noch keinem Konto zugeordnet.",
+      "notesHeading": "Notizen",
+      "summaryHeading": "KI-Zusammenfassung",
+      "transcriptHeading": "Transkript"
+    },
     "structureIntro": {
       "title": "Wo Ihre Notizen gespeichert sind",
       "description": "OpenWhispr trennt private Gedanken von gemeinsamer Arbeit, damit nur die richtigen Personen Ihre Notizen sehen.",
       "personal": {
-        "title": "Persönlicher Bereich",
+        "title": "Privat",
         "description": "Nur Sie können die Ordner und Notizen hier sehen."
       },
       "workspace": {
@@ -4218,6 +4261,117 @@
         "taskList": "Checkliste",
         "blockquote": "Zitat",
         "table": "Tabelle einfügen"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Grundlagen",
+          "blocks": "Blöcke",
+          "style": "Stil",
+          "tools": "Werkzeuge"
+        },
+        "slash": {
+          "heading": "Überschrift {{level}}",
+          "bulletList": "Aufzählung",
+          "orderedList": "Nummerierte Liste",
+          "taskList": "Aufgabe mit Kästchen",
+          "quote": "Zitat",
+          "divider": "Trennlinie",
+          "table": "Tabelle",
+          "codeBlock": "Codeblock",
+          "codeHint": "Syntaxfarben",
+          "noteLink": "Notiz verlinken",
+          "noteLinkHint": "oder [[ tippen",
+          "toggle": "Aufklappbereich",
+          "callout": "Hinweisbox: {{type}}",
+          "toc": "Inhaltsverzeichnis",
+          "mathBlock": "Formelblock",
+          "inlineMath": "Formel im Text",
+          "inlineMathHint": "oder $$x^2$$ tippen",
+          "emoji": "Emoji",
+          "emojiHint": "oder :smile: tippen",
+          "highlight": "Hervorheben",
+          "subscript": "Tiefgestellt",
+          "superscript": "Hochgestellt",
+          "color": "Textfarbe: {{name}}",
+          "font": "Schrift: {{name}}",
+          "ruby": "Ruby-Annotation",
+          "rubyHint": "Lesung über dem Text",
+          "align": "Ausrichten: {{dir}}",
+          "find": "Suchen und ersetzen",
+          "invisible": "Unsichtbare Zeichen ein-/ausblenden"
+        },
+        "callout": {
+          "note": "Hinweis",
+          "tip": "Tipp",
+          "important": "Wichtig",
+          "warning": "Warnung",
+          "caution": "Vorsicht"
+        },
+        "colors": {
+          "default": "Standard",
+          "red": "Rot",
+          "orange": "Orange",
+          "yellow": "Gelb",
+          "green": "Grün",
+          "blue": "Blau",
+          "purple": "Lila",
+          "gray": "Grau"
+        },
+        "fonts": {
+          "default": "Standard",
+          "serif": "Serifen",
+          "monospace": "Festbreite"
+        },
+        "align": {
+          "left": "Links",
+          "center": "Zentriert",
+          "right": "Rechts",
+          "justify": "Blocksatz"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, z. B. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, z. B. x^2",
+          "emoji": "Emoji-Name, z. B. rocket",
+          "reading": "Lesung, z. B. かんじ",
+          "textReading": "Text|Lesung, z. B. 漢字|かんじ",
+          "apply": "Eingabe zum Übernehmen · Esc zum Abbrechen",
+          "mathEdit": "Eingabe zum Speichern · Esc zum Abbrechen · leer löscht"
+        },
+        "toolbar": {
+          "highlight": "Hervorheben",
+          "subscript": "Tiefgestellt",
+          "superscript": "Hochgestellt",
+          "color": "Textfarbe",
+          "font": "Schrift",
+          "alignment": "Ausrichtung",
+          "ruby": "Ruby-Text (Lesung über den Zeichen)"
+        },
+        "find": {
+          "find": "Suchen",
+          "replace": "Ersetzen",
+          "all": "Alle",
+          "previous": "Zurück",
+          "next": "Weiter",
+          "matchCase": "Groß-/Kleinschreibung",
+          "close": "Schließen"
+        },
+        "count": "Wörter: {{words}} · Zeichen: {{chars}}",
+        "link": {
+          "header": "Notiz verlinken",
+          "empty": "Notiztitel eingeben…",
+          "create": "Auf „{{title}}“ verlinken (noch keine Notiz)",
+          "open": "„{{title}}“ öffnen",
+          "missing": "Keine Notiz mit dem Titel „{{title}}“"
+        },
+        "backlinks": {
+          "label": "Verlinkt von",
+          "more": "+{{count}} weitere",
+          "untitled": "Ohne Titel"
+        },
+        "toc": {
+          "title": "Inhalt",
+          "empty": "Füge Überschriften hinzu, um das Inhaltsverzeichnis zu erstellen."
+        }
       }
     },
     "participants": {
@@ -4381,7 +4535,9 @@
       "addExisting": "Vorhandene hinzufügen",
       "addCount": "{{count}} Notizen hinzufügen",
       "noResults": "Keine passenden Notizen",
-      "noNotesAvailable": "Keine weiteren Notizen verfügbar"
+      "noNotesAvailable": "Keine weiteren Notizen verfügbar",
+      "notAdded_one": "{{count}} Notiz konnte nicht hinzugefügt werden",
+      "notAdded_other": "{{count}} Notizen konnten nicht hinzugefügt werden"
     },
     "context": {
       "moveToFolder": "In Ordner verschieben",
@@ -4820,7 +4976,6 @@
       },
       "locked": {
         "noWorkspace": "Geteilte Wörterbücher sind in Business enthalten. Teile Fachbegriffe, Produktnamen und Abkürzungen deines Teams mit allen.",
-        "chooseWorkspace": "Du bist in „Persönlich“. Wechsle zu einem Workspace, um seine geteilten Wörter zu nutzen.",
         "upgradeAdmin": "Geteilte Wörterbücher sind in Business enthalten. Upgrade {{workspace}}, damit alle dieselben Wörter bekommen.",
         "upgradeMember": "Geteilte Wörterbücher sind in Business enthalten. Bitte einen Admin, {{workspace}} upzugraden.",
         "paused_one": "Das {{count}} geteilte Wort von {{workspace}} ist pausiert. Upgrade auf Business, um es wieder beim Diktieren zu nutzen.",
@@ -5073,8 +5228,6 @@
       "request_accessStatus": "Bitte um Zugriff...",
       "look_at_screenName": "Bildschirm ansehen",
       "look_at_screenStatus": "Bildschirm wird angesehen...",
-      "look_at_screenSuccess": "Bildschirm gelesen.",
-      "look_at_screenFailed": "Der Bildschirm konnte nicht gelesen werden.",
       "request_api_keyName": "API-Schlüssel",
       "request_api_keyStatus": "Bitte um einen API-Schlüssel...",
       "open_settingsName": "Einstellungen",
@@ -6361,6 +6514,7 @@
       "saveChanges": "Änderungen speichern",
       "saved": "Ton & Stil gespeichert",
       "cleanupOff": "Die Textbereinigung ist deaktiviert, daher werden diese Einstellungen nicht auf Ihre Diktate angewendet. Der Assistent und Chats verwenden sie weiterhin.",
+      "customPrompt": "Sie verwenden einen benutzerdefinierten Prompt für die Textbereinigung, daher werden diese Einstellungen nicht auf Ihre Diktate angewendet. Der Assistent und Chats verwenden sie weiterhin.",
       "turnOnCleanup": "Textbereinigung aktivieren",
       "enabled": "Ton & Stimme aktiviert",
       "enabledDescription": "Die Textbereinigung, der Assistent und Chats verwenden Ihren Ton für jede Art von App. Wenn deaktiviert, gilt der Standardton."
@@ -6461,5 +6615,16 @@
       "bootstrapMismatch": "Die Bootstrap-Datei passt nicht zu Ihrem Konto, diesem Workspace oder seinen konfigurierten Zugangsdaten.",
       "testLinkOtherWorkspace": "Dieser Testlink gilt für einen anderen Workspace. Wechseln Sie zu diesem Workspace und öffnen Sie den Link erneut."
     }
+  },
+  "affiliate": {
+    "remove": "Creator-Link entfernen",
+    "haveLink": "Hast du einen Creator-Link?",
+    "label": "Creator-Link (optional)",
+    "placeholder": "Link deines Creators einfügen",
+    "saved": "Creator-Link gespeichert.",
+    "checking": "Link wird geprüft…",
+    "unavailable": "Dein Link konnte nicht geprüft werden. Versuche es erneut oder leere das Feld, um fortzufahren.",
+    "privacy": "Creator-Links sind mit deinen aktuellen Tracking-Einstellungen nicht verfügbar. Leere das Feld, um fortzufahren.",
+    "review": "Dein Link ist zur Prüfung gespeichert."
   }
 }

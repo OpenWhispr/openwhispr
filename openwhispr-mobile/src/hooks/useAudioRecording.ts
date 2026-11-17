@@ -21,6 +21,12 @@ import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors'
 import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '../lib/transcriptAudio';
 import { isUsageLimitError, type UsageLimitError } from '../lib/usageLimitError';
 import { randomUUID } from '../lib/uuid';
+import {
+  captureDictationContext,
+  recordDictationCompleted,
+  type ProductEventsCaptureContext,
+} from '../lib/productEvents';
+import { countSpokenWords } from '../lib/wordCount';
 import type { TranscriptionProvider } from '../types';
 import {
   getExpoAudioModule,
@@ -55,6 +61,10 @@ export interface UseAudioRecordingOptions {
   // Polled from the moment the recording stops. Once it returns true, transcription retries and
   // cleanup stop and the recording is discarded without reaching history, onComplete or onError.
   shouldCancel?: () => boolean;
+  // Defaults to false. True for original dictation (the home screen, a note), which reports its
+  // word count, never its words, toward the dashboard's first 200 words. A question to the chat,
+  // a meeting or a voice sample is not dictation.
+  recordsDictation?: boolean;
 }
 
 type RetainedRecordingAudio = {
@@ -88,6 +98,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const addTranscript = useTranscriptStore((state) => state.addTranscript);
   const addFailedTranscript = useTranscriptStore((state) => state.addFailedTranscript);
   const jobRouteRef = useRef<TranscriptionJobRoute>({ provider: 'cloud' });
+  const captureContextRef = useRef<ProductEventsCaptureContext | null>(null);
   // Held only across a native stop: whichever stop or cancel claims it owns the recording, so a
   // second one never stops it again or deletes the file the first is transcribing.
   const stoppingRef = useRef(false);
@@ -170,6 +181,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         ? snapshotTranscriptionJob('dictation')
         : { ...snapshotTranscriptionJob('dictation', []), cleanupUnavailable: CLEANUP_OFF };
       await recorder.prepareToRecordAsync(recorderOptions);
+      captureContextRef.current = options.recordsDictation ? captureDictationContext() : null;
       await recorder.record();
       openRef.current = true;
 
@@ -197,6 +209,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         return;
       }
 
+      // Keep this capture's owner even if another session or recording starts while it processes.
+      const captureContext = captureContextRef.current;
       stoppingRef.current = true;
       try {
         await recorder.stop();
@@ -243,7 +257,13 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       sourceUriToDiscard = null;
       const transcriptionProvider = jobRouteRef.current.provider;
       try {
-        await finalizeRecording(retained, transcriptionProvider, clientTranscriptionId);
+        await finalizeRecording(
+          retained,
+          transcriptionProvider,
+          clientTranscriptionId,
+          false,
+          captureContext,
+        );
       } catch (transcribeError) {
         if (isCancelled()) {
           await discardRetainedAudio(retained);
@@ -266,7 +286,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
           }
           options.onLocalModelMissing(
             () => {
-              retryWithCloud(retained, clientTranscriptionId);
+              retryWithCloud(retained, clientTranscriptionId, captureContext);
             },
             () => (saveToHistory ? Promise.resolve() : discardRetainedAudio(retained)),
           );
@@ -279,7 +299,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
             await addFailedRecording(retained, transcriptionProvider, transcribeError);
           }
           await options.onUsageLimitReached(transcribeError, () =>
-            retryWithCloud(retained, clientTranscriptionId),
+            retryWithCloud(retained, clientTranscriptionId, captureContext),
           );
           // Recovery is over, retried or declined; a retry already removed it.
           if (!saveToHistory) await discardRetainedAudio(retained);
@@ -355,6 +375,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     retained: RetainedRecordingAudio,
     provider: TranscriptionProvider,
     clientTranscriptionId: string,
+    retranscribe: boolean,
+    captureContext: ProductEventsCaptureContext | null,
   ) => {
     if (isCancelled()) {
       await discardRetainedAudio(retained);
@@ -391,6 +413,16 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     const finalText = cleanup ? processedResult.text : processedResult.originalText;
     if (!finalText.trim()) {
       throw new Error(NO_SPEECH_ERROR_MESSAGE);
+    }
+    if (options.recordsDictation && captureContext) {
+      recordDictationCompleted({
+        context: captureContext,
+        captureId: clientTranscriptionId,
+        words: countSpokenWords(processedResult.originalText),
+        provider: processedResult.transcription.provider,
+        source: 'dictation',
+        retranscribe,
+      });
     }
 
     if (!saveToHistory) {
@@ -430,6 +462,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const retryWithCloud = async (
     retained: RetainedRecordingAudio,
     clientTranscriptionId: string,
+    captureContext: ProductEventsCaptureContext | null,
   ) => {
     setIsProcessing(true);
     try {
@@ -438,7 +471,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       jobRouteRef.current = cleanup
         ? { provider: 'cloud', ...snapshotTextInference('cloud') }
         : { provider: 'cloud', cleanupUnavailable: CLEANUP_OFF };
-      await finalizeRecording(retained, 'cloud', clientTranscriptionId);
+      await finalizeRecording(retained, 'cloud', clientTranscriptionId, true, captureContext);
     } catch (error) {
       if (isCancelled()) {
         await discardRetainedAudio(retained);
@@ -446,7 +479,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       }
       if (isUsageLimitError(error) && options.onUsageLimitReached) {
         await options.onUsageLimitReached(error, () =>
-          retryWithCloud(retained, clientTranscriptionId),
+          retryWithCloud(retained, clientTranscriptionId, captureContext),
         );
         if (!saveToHistory) await discardRetainedAudio(retained);
         return;

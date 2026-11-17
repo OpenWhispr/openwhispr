@@ -6,8 +6,16 @@ function loadIndex() {
   const originalLoad = Module._load;
   let collectionError;
   let writeError;
+  let searchResults = [];
   const calls = [];
   const client = {
+    async search(_name, request) {
+      calls.push(["search", request]);
+      const allowed = request.filter?.must?.[0]?.match?.any;
+      return searchResults
+        .filter((hit) => !allowed || allowed.includes(hit.payload.conversation_id))
+        .slice(0, request.limit);
+    },
     async getCollection() {
       if (collectionError) throw collectionError;
     },
@@ -42,6 +50,9 @@ function loadIndex() {
     return {
       index: require(modulePath),
       calls,
+      setSearchResults: (results) => {
+        searchResults = results;
+      },
       failCollection(error) {
         collectionError = error;
       },
@@ -83,4 +94,23 @@ test("reset invalidates readiness and prevents acknowledging writes", async () =
   h.index.reset();
   assert.equal(await h.index.upsertNote(1, "test"), false);
   assert.equal(await h.index.deleteNote(1), false);
+});
+
+test("conversation vectors apply allowed IDs before ranking and preserve unscoped searches", async () => {
+  const h = loadIndex();
+  h.index.init(6333);
+  h.setSearchResults([
+    ...Array.from({ length: 200 }, (_, index) => ({
+      score: 0.99,
+      payload: { conversation_id: index + 2 },
+    })),
+    { score: 0.8, payload: { conversation_id: 1 } },
+  ]);
+  assert.deepEqual(await h.index.searchConversations("query", 1, [1]), [
+    { conversationId: 1, score: 0.8 },
+  ]);
+  assert.deepEqual(await h.index.searchConversations("query", 1), [
+    { conversationId: 2, score: 0.99 },
+  ]);
+  assert.deepEqual(await h.index.searchConversations("query", 1, []), []);
 });

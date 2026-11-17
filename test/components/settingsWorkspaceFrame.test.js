@@ -22,34 +22,58 @@ async function loadServer(t) {
         export const useWorkspaceStore = (selector) => selector(globalThis.__workspaceState);
       `,
       "/hooks/useAuth": "export const useAuth = () => ({ isSignedIn: true });",
+      "/hooks/useWorkspace": `
+        export const useRetryDefaultWorkspace = () => ({
+          retry: () => {
+            globalThis.__workspaceState.defaultRetries += 1;
+          },
+          retrying: false,
+        });
+      `,
     },
   });
 }
 
-const personalState = {
-  status: "personal",
-  workspace: null,
-  workspaces: [WORKSPACE],
-  retry: () => {},
-};
+const LOCALES = ["ar", "de", "en", "es", "fr", "it", "ja", "pt", "ru", "zh-CN", "zh-TW"];
 
-test("in Personal the frame asks to choose a workspace instead of creating one", async (t) => {
+test("Settings shows the active workspace, never a Personal card", async (t) => {
   const vite = await loadServer(t);
+  const { useSettingsWorkspace } = await vite.ssrLoadModule(
+    "/components/settings/useSettingsWorkspace.ts"
+  );
   const { default: Frame } = await vite.ssrLoadModule(
     "/components/settings/SettingsWorkspaceFrame.tsx"
   );
+  const own = { id: "mine", name: "Ada's workspace", role: "owner", is_default: true };
+  const beta = { id: "beta", name: "Beta", role: "member", is_default: false };
+  globalThis.__workspaceState = {
+    workspaces: [own, beta],
+    activeWorkspaceId: "beta",
+    loaded: true,
+    loading: false,
+    error: false,
+    refresh: async () => {},
+  };
+  let state;
+  const Page = () => {
+    state = useSettingsWorkspace();
+    return createElement(Frame, { state }, (workspace) => `page:${workspace.id}`);
+  };
 
-  const markup = renderToStaticMarkup(
-    createElement(Frame, { state: personalState, onChooseWorkspace: () => {} }, () => "page")
-  );
+  const markup = renderToStaticMarkup(createElement(Page));
 
-  assert.ok(markup.includes("settingsPage.workspace.personal.title"));
-  assert.ok(markup.includes("workspaces.exit.chooseWorkspace"));
-  assert.ok(!markup.includes("settingsPage.workspace.empty.create"));
-  assert.ok(!markup.includes("page"));
+  assert.equal(state.status, "ready");
+  assert.equal(state.workspace, beta);
+  assert.ok(markup.includes("page:beta"));
+  assert.ok(!markup.includes("settingsPage.workspace.personal"));
+  // The Personal card's copy is gone from every locale.
+  for (const locale of LOCALES) {
+    const { settingsPage } = require(`../../src/locales/${locale}/translation.json`);
+    assert.equal(settingsPage.workspace.personal, undefined, locale);
+  }
 });
 
-test("useSettingsWorkspace reports Personal and no workspace while it's chosen", async (t) => {
+test("useSettingsWorkspace shows a workspace even with none active, never Personal", async (t) => {
   const vite = await loadServer(t);
   const { useSettingsWorkspace } = await vite.ssrLoadModule(
     "/components/settings/useSettingsWorkspace.ts"
@@ -57,7 +81,6 @@ test("useSettingsWorkspace reports Personal and no workspace while it's chosen",
   globalThis.__workspaceState = {
     workspaces: [WORKSPACE],
     activeWorkspaceId: null,
-    personalSelected: true,
     loaded: true,
     loading: false,
     error: false,
@@ -71,6 +94,45 @@ test("useSettingsWorkspace reports Personal and no workspace while it's chosen",
 
   renderToStaticMarkup(createElement(Probe));
 
-  assert.equal(state.status, "personal");
-  assert.equal(state.workspace, null);
+  assert.equal(state.status, "ready");
+  assert.equal(state.workspace, WORKSPACE);
+});
+
+test("an empty list offers Retry for the default workspace, not Create", async (t) => {
+  const vite = await loadServer(t);
+  const { useSettingsWorkspace } = await vite.ssrLoadModule(
+    "/components/settings/useSettingsWorkspace.ts"
+  );
+  const { default: Frame } = await vite.ssrLoadModule(
+    "/components/settings/SettingsWorkspaceFrame.tsx"
+  );
+  globalThis.__workspaceState = {
+    // Listed, but the default workspace isn't there yet.
+    workspaces: [],
+    activeWorkspaceId: null,
+    loaded: true,
+    loading: false,
+    error: false,
+    refresh: async () => {
+      globalThis.__workspaceState.refreshes += 1;
+    },
+    refreshes: 0,
+    defaultRetries: 0,
+  };
+  let state;
+  const Page = () => {
+    state = useSettingsWorkspace();
+    return createElement(Frame, { state }, () => "page");
+  };
+
+  const markup = renderToStaticMarkup(createElement(Page));
+
+  assert.equal(state.status, "unavailable");
+  assert.ok(markup.includes("workspaces.switcher.unavailable"));
+  assert.ok(markup.includes("settingsPage.workspace.loadError.retry"));
+  assert.ok(!markup.includes("settingsPage.workspace.empty"));
+  assert.ok(!markup.includes("page"));
+  state.retry();
+  assert.equal(globalThis.__workspaceState.defaultRetries, 1);
+  assert.equal(globalThis.__workspaceState.refreshes, 0);
 });

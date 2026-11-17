@@ -115,11 +115,12 @@ export interface ReasoningRequest {
   // data. Omitted when empty, so a personal-only request is what it always was.
   sharedDictionary?: string[];
   // Keyboard dictation tone. Sent only for keyboard cleanup with a non-default
-  // tone; the API appends a matching instruction in cleanup mode.
+  // tone; the API appends a matching instruction in cleanup mode unless a
+  // custom prompt is set.
   tone?: KeyboardTone;
   // User's custom cleanup prompt, sent as a TEMPLATE: the API substitutes
-  // {{agentName}} and still appends language, dictionary and tone. Ignored when
-  // systemPrompt is set.
+  // {{agentName}} and still appends language and dictionary, but no tone.
+  // Ignored when systemPrompt is set.
   customPrompt?: string;
   // Fills {{agentName}} in the cleanup prompt, which keeps the assistant's name
   // as dictated words.

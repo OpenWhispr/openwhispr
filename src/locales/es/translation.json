@@ -212,11 +212,18 @@
     "policyAccountChanged": "Tu cuenta cambió, por lo que se detuvo esta respuesta.",
     "policyTranscriptionRestricted": "La transcripción está restringida por tu organización.",
     "policyUnresolved": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento.",
+    "policyBlocked": "Tu organización no permite esto en este dispositivo.",
     "managedConfigLoading": "Comprobando la configuración gestionada de tu organización. Inténtalo de nuevo en un momento.",
     "managedConfigUnavailable": "El acceso empresarial gestionado no está disponible. Vuelve a iniciar sesión o contacta a tu administrador.",
     "managedConfigAmbiguous": "La configuración gestionada de tu organización es incoherente. Contacta a tu administrador.",
     "managedPolicyConflict": "El acceso gestionado está bloqueado por la política de tu espacio de trabajo. Contacta a tu administrador.",
-    "resizePanel": "Cambiar el tamaño del panel"
+    "resizePanel": "Cambiar el tamaño del panel",
+    "managedDevice": "Dispositivo administrado",
+    "managedDeviceAndWorkspace": "Dispositivo y espacio de trabajo administrados",
+    "deviceLocalOnly": "Este dispositivo solo usa procesamiento local. Las funciones en la nube no están disponibles, tampoco para cuentas que ya habían iniciado sesión.",
+    "deviceSignInRequired": "Tu organización exige iniciar sesión en este dispositivo.",
+    "devicePolicyInvalid": "No se pudo leer la política del dispositivo o no es válida. Contacta con tu administrador. OpenWhispr no se puede usar hasta que se corrija la política.",
+    "deviceWorkspaceUnavailable": "Este dispositivo requiere procesamiento local, pero la política del espacio de trabajo de la cuenta guardada no está disponible. Cierra sesión para continuar sin esa cuenta o contacta con tu administrador."
   },
   "onboarding": {
     "rehaul": {
@@ -657,7 +664,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Actualización obligatoria",
-      "description": "Tu organización requiere OpenWhispr {{version}} o una versión más reciente. Actualiza la aplicación."
+      "description": "Tu organización requiere OpenWhispr {{version}} o una versión más reciente. Actualiza la aplicación.",
+      "contactIT": "Tu organización requiere OpenWhispr {{version}} o posterior. Contacta con TI para instalar una versión aprobada."
     },
     "update": {
       "readyTitle": "Actualización lista para instalar",
@@ -1237,7 +1245,8 @@
       "failedUserCheck": "No se pudo verificar la cuenta de usuario",
       "generic": "Algo salió mal. Inténtalo de nuevo.",
       "invalidCredentials": "Correo o contraseña incorrectos",
-      "invalidEmail": "Introduce un correo válido"
+      "invalidEmail": "Introduce un correo válido",
+      "signInDisabledByDevice": "Tu organización desactivó el inicio de sesión en este dispositivo."
     },
     "getStarted": "Comenzar",
     "legal": {
@@ -2323,7 +2332,14 @@
         "restarting": "Reiniciando...",
         "title": "Actualizaciones",
         "versionPlaceholder": "—",
-        "whatsNew": "Novedades en v{{version}}"
+        "whatsNew": "Novedades en v{{version}}",
+        "managedByOrganization": "Administrado por tu organización.",
+        "itManaged": "Tu organización administra las actualizaciones.",
+        "policyLoading": "Cargando los ajustes de actualización…",
+        "policyUnavailable": "No se pudieron cargar los ajustes de actualización. Busca actualizaciones para volver a intentarlo.",
+        "policyChanged": "La política de actualizaciones cambió. Vuelve a buscar actualizaciones.",
+        "managedBadge": "Administrado",
+        "stagedBeforePolicy": "Se preparó una actualización antes de que se aplicara esta política y puede instalarse al cerrar la aplicación. Contacta con TI antes de cerrar o reiniciar."
       },
       "translationHotkey": {
         "title": "Atajo de Traducción",
@@ -2355,9 +2371,8 @@
     "privacy": {
       "cloudBackup": "Respaldo en la nube",
       "cloudBackupDescription": "Respalda tus transcripciones y notas en la nube para acceder desde cualquier dispositivo.",
-      "cloudBackupTeamCaveat": "Las notas en teamspaces y las notas que has compartido siempre se sincronizan, independientemente de este ajuste.",
+      "cloudBackupTeamCaveat": "Las notas en teamspaces y las notas que has compartido siempre se sincronizan, independientemente de este ajuste. Los chats que usan contenido privado se quedan en este dispositivo. También se excluyen los chats de versiones anteriores y los restaurados desde un respaldo.",
       "cloudNotesMigration": "Respaldando notas… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "Todas las notas respaldadas",
       "description": "Controla qué datos salen de tu dispositivo. Todo está desactivado por defecto.",
       "title": "Privacidad",
       "insightsSync": "Sincronizar Estadísticas personales",
@@ -2561,13 +2576,7 @@
       "title": "Espacio de trabajo",
       "description": "Colabora con compañeros, comparte notas y administra el acceso al espacio de trabajo en un solo lugar.",
       "empty": {
-        "title": "Crea tu primer espacio de trabajo",
-        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
         "create": "Crear espacio de trabajo"
-      },
-      "personal": {
-        "title": "Estás en Personal",
-        "description": "Elige un espacio de trabajo para gestionar su configuración."
       },
       "loadError": {
         "title": "No se pudieron cargar los espacios de trabajo",
@@ -2845,8 +2854,8 @@
           "leaveBodyLoses": "Perderás el acceso a {{space}} y a sus notas.",
           "leaveBodyAdmins": "Otro administrador seguirá gestionando este Teamspace.",
           "deleteNotAllowed": "No tienes permiso para eliminar {{space}}.",
-          "movedToPersonal_one": "{{count}} nota sin sincronizar se movió a tu espacio personal.",
-          "movedToPersonal_other": "{{count}} notas sin sincronizar se movieron a tu espacio personal."
+          "movedToPersonal_one": "{{count}} nota sin sincronizar se movió a Privado.",
+          "movedToPersonal_other": "{{count}} notas sin sincronizar se movieron a Privado."
         },
         "addPeople": {
           "loading": "Cargando teamspaces…",
@@ -3526,7 +3535,7 @@
       "defaultFolderImmutable": "Las carpetas predeterminadas no se pueden modificar.",
       "spaceNameRequired": "Introduce un nombre para el espacio.",
       "spaceNotFound": "No se pudo encontrar ese espacio.",
-      "privateSpaceImmutable": "Tu espacio Personal no se puede modificar.",
+      "privateSpaceImmutable": "Privado no se puede modificar.",
       "generic": "No se pudo completar el cambio. Inténtalo de nuevo."
     },
     "sidebar": {
@@ -3535,10 +3544,10 @@
       "templatesAndActions": "Plantillas y acciones"
     },
     "spaces": {
-      "privateSpaces": "Notas privadas",
+      "privateSpaces": "Privado",
       "teamSpaces": "Teamspaces",
-      "personal": "Personal",
-      "privateTooltip": "Solo tú puedes ver tu espacio personal",
+      "personal": "Privado",
+      "privateTooltip": "Solo tú puedes ver las carpetas y notas de este espacio.",
       "newSpace": "Nuevo teamspace",
       "nameAndIconLabel": "Nombre e icono",
       "changeEmoji": "Cambiar emoji",
@@ -3560,6 +3569,18 @@
       "noSpacesFound": "No se encontraron espacios",
       "spaceRoot": "Raíz del espacio",
       "moveConfirm": "Mover",
+      "copyToPrivate": "Copiar a Privado",
+      "moveToWorkspacePrivate": "Mover a {{workspace}} › Privado",
+      "workspacePrivate": "{{workspace}} › Privado",
+      "confirmCopyTitle": "¿Copiar a Privado?",
+      "confirmCopy": "La nota se queda en {{space}}.",
+      "copiedToPrivate": "Copiada a Privado",
+      "couldNotCopyNote": "No se pudo copiar la nota",
+      "openCopy": "Abrir",
+      "noteAlreadyInTeam": "«{{title}}» ya está en {{space}}. Usa «Copiar a Privado» para conservar una copia privada.",
+      "folderAlreadyInTeam": "«{{name}}» ya está en {{space}}. Usa «Copiar a Privado» en sus notas para conservar copias privadas.",
+      "workspacesLoading": "Tus workspaces aún se están cargando. Inténtalo de nuevo en un momento.",
+      "cantMoveIntoLegacy": "Las notas no se pueden mover a {{space}} porque no forma parte de un workspace.",
       "confirmMoveInTitle": "¿Mover a {{space}}?",
       "confirmMoveIn": "Todos en {{space}} podrán ver y editar esta nota. Las notas no se pueden sacar de un teamspace más tarde.",
       "confirmMoveInFolder": "Todos en {{space}} podrán ver y editar esta carpeta y sus notas. Las carpetas y notas no se pueden sacar de un teamspace más tarde.",
@@ -3577,10 +3598,10 @@
       "noteCount_other": "{{count}} notas",
       "accessRevoked": "Ya no tienes acceso a {{space}}",
       "accessRevokedActiveNote": "Ya no tienes acceso a {{space}} — \"{{title}}\" ya no está disponible en este dispositivo",
-      "movedToPersonal": "Ya no tienes acceso a {{space}} — “{{title}}” se movió a tu espacio personal",
-      "updateDeniedNote": "No tienes permiso para modificar “{{title}}” — tus cambios sin sincronizar se guardaron como una copia en tu espacio personal",
+      "movedToPersonal": "Ya no tienes acceso a {{space}} — “{{title}}” se movió a Privado",
+      "updateDeniedNote": "No tienes permiso para modificar “{{title}}” — tus cambios sin sincronizar se guardaron como una copia en Privado",
       "deleteDeniedNote": "“{{title}}” no se eliminó — solo el propietario de la nota o un administrador pueden eliminarla",
-      "updateDeniedFolder": "No tienes permiso para modificar “{{name}}” — tu trabajo sin sincronizar se guardó en tu espacio personal",
+      "updateDeniedFolder": "No tienes permiso para modificar “{{name}}” — tu trabajo sin sincronizar se guardó en Privado",
       "deleteDeniedFolder": "“{{name}}” no se eliminó — solo un administrador puede eliminar una carpeta del espacio",
       "conflictBanner": "Existe una versión más reciente de esta nota.",
       "conflictRefresh": "Actualizar",
@@ -3606,11 +3627,29 @@
         "loadError": "No se pudieron cargar los equipos."
       }
     },
+    "deviceNotes": {
+      "title": "En este dispositivo",
+      "info": "Estas notas no están asignadas a ninguna cuenta. Mueve una nota para conservarla y editarla.",
+      "infoLabel": "Acerca de las notas en este dispositivo",
+      "moveNote": "Mover a mi Privado",
+      "moveFolder": "Mover carpeta a mi Privado",
+      "moveAll": "Mover todo a mi Privado",
+      "moveAllTo": "Mover todo a una carpeta",
+      "moved": "Movida a tu Privado",
+      "movedCount_one": "Se movió {{count}} nota a tu Privado",
+      "movedCount_other": "Se movieron {{count}} notas a tu Privado",
+      "moveFailed": "No se pudo mover esta nota",
+      "moveFolderFailed": "No se pudieron mover estas notas",
+      "banner": "Esta nota aún no está asignada a ninguna cuenta.",
+      "notesHeading": "Notas",
+      "summaryHeading": "Resumen con IA",
+      "transcriptHeading": "Transcripción"
+    },
     "structureIntro": {
       "title": "Dónde están tus notas",
       "description": "OpenWhispr separa las ideas privadas del trabajo compartido para que las notas lleguen a las personas adecuadas.",
       "personal": {
-        "title": "Espacio personal",
+        "title": "Privado",
         "description": "Solo tú puedes ver las carpetas y notas de este espacio."
       },
       "workspace": {
@@ -3715,6 +3754,117 @@
         "taskList": "Lista de verificación",
         "blockquote": "Cita",
         "table": "Insertar tabla"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Básico",
+          "blocks": "Bloques",
+          "style": "Estilo",
+          "tools": "Herramientas"
+        },
+        "slash": {
+          "heading": "Encabezado {{level}}",
+          "bulletList": "Lista con viñetas",
+          "orderedList": "Lista numerada",
+          "taskList": "Tarea con casilla",
+          "quote": "Cita",
+          "divider": "Separador",
+          "table": "Tabla",
+          "codeBlock": "Bloque de código",
+          "codeHint": "Colores de sintaxis",
+          "noteLink": "Enlazar nota",
+          "noteLinkHint": "o escribe [[",
+          "toggle": "Desplegable",
+          "callout": "Aviso: {{type}}",
+          "toc": "Índice",
+          "mathBlock": "Bloque matemático",
+          "inlineMath": "Fórmula en línea",
+          "inlineMathHint": "o escribe $$x^2$$",
+          "emoji": "Emoji",
+          "emojiHint": "o escribe :smile:",
+          "highlight": "Resaltar",
+          "subscript": "Subíndice",
+          "superscript": "Superíndice",
+          "color": "Color del texto: {{name}}",
+          "font": "Fuente: {{name}}",
+          "ruby": "Anotación ruby",
+          "rubyHint": "Lectura sobre el texto",
+          "align": "Alinear: {{dir}}",
+          "find": "Buscar y reemplazar",
+          "invisible": "Mostrar/ocultar caracteres invisibles"
+        },
+        "callout": {
+          "note": "Nota",
+          "tip": "Consejo",
+          "important": "Importante",
+          "warning": "Advertencia",
+          "caution": "Precaución"
+        },
+        "colors": {
+          "default": "Predeterminado",
+          "red": "Rojo",
+          "orange": "Naranja",
+          "yellow": "Amarillo",
+          "green": "Verde",
+          "blue": "Azul",
+          "purple": "Morado",
+          "gray": "Gris"
+        },
+        "fonts": {
+          "default": "Predeterminada",
+          "serif": "Serif",
+          "monospace": "Monoespaciada"
+        },
+        "align": {
+          "left": "Izquierda",
+          "center": "Centro",
+          "right": "Derecha",
+          "justify": "Justificado"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, p. ej. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, p. ej. x^2",
+          "emoji": "Nombre del emoji, p. ej. rocket",
+          "reading": "Lectura, p. ej. かんじ",
+          "textReading": "Texto|lectura, p. ej. 漢字|かんじ",
+          "apply": "Intro para aplicar · Esc para cancelar",
+          "mathEdit": "Intro para guardar · Esc para cancelar · vacío lo borra"
+        },
+        "toolbar": {
+          "highlight": "Resaltar",
+          "subscript": "Subíndice",
+          "superscript": "Superíndice",
+          "color": "Color del texto",
+          "font": "Fuente",
+          "alignment": "Alineación",
+          "ruby": "Texto ruby (lectura sobre los caracteres)"
+        },
+        "find": {
+          "find": "Buscar",
+          "replace": "Reemplazar",
+          "all": "Todo",
+          "previous": "Anterior",
+          "next": "Siguiente",
+          "matchCase": "Coincidir mayúsculas",
+          "close": "Cerrar"
+        },
+        "count": "Palabras: {{words}} · Caracteres: {{chars}}",
+        "link": {
+          "header": "Enlazar nota",
+          "empty": "Escribe el título de una nota…",
+          "create": "Enlazar a «{{title}}» (aún no existe)",
+          "open": "Abrir «{{title}}»",
+          "missing": "No hay ninguna nota titulada «{{title}}»"
+        },
+        "backlinks": {
+          "label": "Enlazada desde",
+          "more": "+{{count}} más",
+          "untitled": "Sin título"
+        },
+        "toc": {
+          "title": "Contenido",
+          "empty": "Añade encabezados para crear el índice."
+        }
       }
     },
     "participants": {
@@ -4015,7 +4165,9 @@
       "addExisting": "Añadir existentes",
       "addCount": "Añadir {{count}} notas",
       "noResults": "No hay notas coincidentes",
-      "noNotesAvailable": "No hay otras notas disponibles"
+      "noNotesAvailable": "No hay otras notas disponibles",
+      "notAdded_one": "No se pudo añadir {{count}} nota",
+      "notAdded_other": "No se pudieron añadir {{count}} notas"
     },
     "onboarding": {
       "llm": {
@@ -4329,7 +4481,6 @@
       },
       "locked": {
         "noWorkspace": "Los diccionarios compartidos están incluidos en Business. Comparte con todos la jerga, los nombres de productos y las siglas de tu equipo.",
-        "chooseWorkspace": "Estás en Personal. Cambia a un espacio de trabajo para usar sus palabras compartidas.",
         "upgradeAdmin": "Los diccionarios compartidos están incluidos en Business. Mejora el plan de {{workspace}} para que todos tengan las mismas palabras.",
         "upgradeMember": "Los diccionarios compartidos están incluidos en Business. Pide a un administrador que mejore el plan de {{workspace}}.",
         "paused_one": "La {{count}} palabra compartida de {{workspace}} está en pausa. Cámbiate a Business para volver a usarla al dictar.",
@@ -4790,8 +4941,6 @@
       "request_accessStatus": "Pidiendo acceso...",
       "look_at_screenName": "Mirar la pantalla",
       "look_at_screenStatus": "Mirando tu pantalla...",
-      "look_at_screenSuccess": "Se ha leído la pantalla.",
-      "look_at_screenFailed": "No se ha podido leer la pantalla.",
       "request_api_keyName": "Clave de API",
       "request_api_keyStatus": "Pidiendo una clave de API...",
       "open_settingsName": "Ajustes",
@@ -5926,10 +6075,13 @@
     "missingAudio": "[audio faltante {{from}}-{{to}}]"
   },
   "workspaces": {
+    "defaultName": "Espacio de trabajo de {{name}}",
+    "defaultNameFallback": "Mi espacio de trabajo",
     "switcher": {
       "workspaces": "Espacios de trabajo",
       "add": "Añadir espacio de trabajo",
-      "invitePeople": "Invitar personas"
+      "invitePeople": "Invitar personas",
+      "unavailable": "Los espacios de trabajo no están disponibles en este momento."
     },
     "create": {
       "title": "Crear espacio de trabajo",
@@ -6059,16 +6211,17 @@
       "leave": {
         "title": "¿Salir de {{name}}?",
         "body": "Perderás el acceso a este espacio de trabajo, a sus equipos y a sus teamspaces. El propietario o un administrador del espacio de trabajo puede volver a invitarte.",
+        "privateNotes": "Tus notas privadas de este espacio de trabajo se moverán a {{workspace}}.",
         "failed": "No se pudo salir de {{name}}. Comprueba tu conexión e inténtalo de nuevo."
       },
       "left": {
         "title": "Saliste de {{name}}"
       },
-      "chooseAnother": "Elige otro espacio de trabajo para continuar.",
-      "chooseWorkspace": "Elegir espacio de trabajo",
+      "nowIn": "Ahora estás en {{workspace}}.",
       "delete": {
         "title": "¿Eliminar {{name}}?",
-        "body": "Esto elimina de forma permanente el espacio de trabajo, sus notas, archivos, equipos y teamspaces para todos. No se puede deshacer."
+        "body": "Esto elimina de forma permanente el espacio de trabajo, sus notas, archivos, equipos y teamspaces para todos. No se puede deshacer.",
+        "privateNotes": "Tus notas privadas de este espacio de trabajo se moverán a {{workspace}}."
       },
       "deleting": {
         "title": "Eliminando {{name}}…",
@@ -6382,6 +6535,7 @@
       "saveChanges": "Guardar cambios",
       "saved": "Tono y estilo guardados",
       "cleanupOff": "La corrección de texto está desactivada, así que estos tonos no se aplican a tu dictado. El asistente y los chats sí los usan.",
+      "customPrompt": "Estás usando un prompt personalizado para la corrección de texto, así que estos tonos no se aplican a tu dictado. El asistente y los chats sí los usan.",
       "turnOnCleanup": "Activar corrección de texto",
       "enabled": "Tonos y voces activados",
       "enabledDescription": "La corrección de texto, el asistente y los chats usan tu tono para cada tipo de app. Si está desactivado, usan el tono estándar."
@@ -6482,5 +6636,16 @@
       "bootstrapMismatch": "El archivo de arranque no coincide con tu cuenta, este espacio de trabajo o sus credenciales configuradas.",
       "testLinkOtherWorkspace": "Este enlace de prueba es para otro espacio de trabajo. Cambia a ese espacio de trabajo y vuelve a abrir el enlace."
     }
+  },
+  "affiliate": {
+    "remove": "Eliminar enlace de creador",
+    "haveLink": "¿Tienes un enlace de un creador?",
+    "label": "Enlace del creador (opcional)",
+    "placeholder": "Pega el enlace de tu creador",
+    "saved": "Enlace del creador guardado.",
+    "checking": "Comprobando tu enlace…",
+    "unavailable": "No pudimos comprobar tu enlace. Inténtalo de nuevo o borra el campo para continuar.",
+    "privacy": "Los enlaces de creadores no están disponibles con tus ajustes de seguimiento actuales. Borra el campo para continuar.",
+    "review": "Tu enlace se ha guardado para su revisión."
   }
 }
