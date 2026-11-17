@@ -6631,7 +6631,8 @@ class DatabaseManager {
         "SELECT id FROM notes WHERE space_id = ? AND account_id IS NULL AND owner_user_id = ?"
       )
       .all(standInId, accountId);
-    for (const { id } of ids) this._placeStandInNote(id, homeId, accountId);
+    const joined = new Map();
+    for (const { id } of ids) this._placeStandInNote(id, homeId, accountId, joined);
     return ids.length;
   }
 
@@ -6856,7 +6857,8 @@ class DatabaseManager {
           .all(...params)
           .map((row) => row.id);
         const targetSpaceId = this._forkPrivateSpaceId(workspaceId, accountId);
-        for (const id of ids) this._placeStandInNote(id, targetSpaceId, accountId);
+        const joined = new Map();
+        for (const id of ids) this._placeStandInNote(id, targetSpaceId, accountId, joined);
         return ids.length
           ? this.db
               .prepare(
@@ -6878,16 +6880,21 @@ class DatabaseManager {
   // folder is deleted, stays at the root. A deleted note only joins a folder
   // that exists, since a tombstone never makes one. The stand-in's folders
   // stay where they are, since signed-out notes may still use them. Callers
-  // check eligibility.
-  _placeStandInNote(noteId, targetSpaceId, accountId) {
+  // check eligibility. A caller placing several notes passes `joined`, so
+  // notes of one stand-in folder share one target even while a namesake's
+  // delete is pending (its name is taken, but it is not found live).
+  _placeStandInNote(noteId, targetSpaceId, accountId, joined = new Map()) {
     const source = this.db
       .prepare(
-        `SELECT n.deleted_at AS note_deleted_at, f.name, f.is_default, f.sort_order FROM notes n
+        `SELECT n.deleted_at AS note_deleted_at, f.id AS folder_id, f.name, f.is_default, f.sort_order FROM notes n
          LEFT JOIN folders f ON f.id = n.folder_id AND f.deleted_at IS NULL WHERE n.id = ?`
       )
       .get(noteId);
     const existingFolderId =
-      source?.name != null ? this._privateFolderNamed(targetSpaceId, accountId, source.name) : null;
+      source?.name != null
+        ? (joined.get(source.folder_id) ??
+          this._privateFolderNamed(targetSpaceId, accountId, source.name))
+        : null;
     const targetFolderId =
       existingFolderId ??
       (source?.name != null && !source.note_deleted_at
@@ -6907,6 +6914,9 @@ class DatabaseManager {
               ).lastInsertRowid
           )
         : null);
+    if (targetFolderId != null && source?.folder_id != null) {
+      joined.set(source.folder_id, targetFolderId);
+    }
     this.db
       .prepare("UPDATE notes SET space_id = ?, folder_id = ?, account_id = ? WHERE id = ?")
       .run(targetSpaceId, targetFolderId, accountId, noteId);

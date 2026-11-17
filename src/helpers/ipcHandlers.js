@@ -3420,7 +3420,10 @@ class IPCHandlers {
       this.notifyVectorChanges();
       this.noteFiles.notesMoved();
       setImmediate(() => {
-        for (const note of movedNotes) broadcastToWindows("note-updated", note);
+        // A claimed tombstone syncs but must not appear in the renderer's list.
+        for (const note of movedNotes) {
+          if (!note.deleted_at) broadcastToWindows("note-updated", note);
+        }
         broadcastToWindows("device-notes-changed");
       });
     };

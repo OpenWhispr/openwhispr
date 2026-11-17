@@ -211,6 +211,15 @@ test("db-resolve-stand-in-ownership broadcasts only when claimed", async () => {
   assert.equal(calls.vectors, 1);
 });
 
+test("db-resolve-stand-in-ownership keeps a claimed tombstone out of note-updated", async () => {
+  const request = { noteId: 4, cloudId: "cloud-4", owned: true, accountId: "account-1" };
+  claimResult = { claimed: true, note: { ...MOVED_ROW, deleted_at: "2026-01-02 03:04:05" } };
+  await invoke("db-resolve-stand-in-ownership", request);
+  assert.deepEqual(sent, [["device-notes-changed", undefined]]);
+  assert.equal(calls.notesMoved, 1);
+  assert.equal(calls.vectors, 1);
+});
+
 test("db-resolve-stand-in-ownership refuses another account and malformed arguments", async () => {
   const valid = { noteId: 4, cloudId: "cloud-4", owned: true, accountId: "account-1" };
   const other = await invoke("db-resolve-stand-in-ownership", { ...valid, accountId: "account-2" });

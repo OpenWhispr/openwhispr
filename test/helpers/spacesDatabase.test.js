@@ -5308,6 +5308,83 @@ test("a folder made for a moved note steps around a namesake whose delete is pen
   assert.equal(folderRow(db.db, moved[0].folder_id).name, "Ideas (2)");
 });
 
+// A stand-in "Ideas" holding `count` notes, with the account's own "Ideas"
+// in its Private waiting on a delete: its name is taken but nothing live has it.
+function seedIdeasBehindPendingDelete(db, { count, ownerUserId = null }) {
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  const noteIds = Array.from({ length: count }, (_, index) =>
+    seedNote(db.db, standInId, { title: `n${index}`, folderId: ideas, ownerUserId })
+  );
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const held = seedFolder(db.db, home, { name: "Ideas", accountId: "a", deletedAt: SEEDED_AT });
+  db.db
+    .prepare(
+      `INSERT INTO optimistic_folder_delete_rows
+         (folder_id, entity_type, entity_id, original_sync_status, original_deleted_at, original_updated_at)
+       VALUES (?, 'folder', ?, 'synced', NULL, ?)`
+    )
+    .run(held, held, SEEDED_AT);
+  return { ideas, noteIds, home, held };
+}
+
+function assertOneFolderHoldsAll(db, { noteIds, home, held }) {
+  const created = db.db
+    .prepare("SELECT * FROM folders WHERE space_id = ? AND account_id = 'a' AND id != ?")
+    .all(home, held);
+  assert.deepEqual(
+    created.map((folder) => folder.name),
+    ["Ideas (2)"]
+  );
+  for (const id of noteIds) assert.equal(noteRow(db.db, id).folder_id, created[0].id);
+}
+
+test("a folder move of several notes makes one folder while a namesake's delete is pending", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const seeded = seedIdeasBehindPendingDelete(db, { count: 3 });
+
+  db.moveDeviceNotesToPrivate({ folderId: seeded.ideas });
+
+  assertOneFolderHoldsAll(db, seeded);
+});
+
+test("a multi-note move makes one folder while a namesake's delete is pending", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const seeded = seedIdeasBehindPendingDelete(db, { count: 3 });
+
+  db.moveDeviceNotesToPrivate({ noteIds: seeded.noteIds });
+
+  assertOneFolderHoldsAll(db, seeded);
+});
+
+test("the shared-Mac sign-in claim makes one folder while a namesake's delete is pending", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  // Seeded after sign-in so the claim runs once the pending delete exists.
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  const noteIds = [0, 1].map((index) =>
+    seedNote(db.db, standInId, { title: `n${index}`, folderId: ideas, ownerUserId: "a" })
+  );
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const held = seedFolder(db.db, home, { name: "Ideas", accountId: "a", deletedAt: SEEDED_AT });
+  db.db
+    .prepare(
+      `INSERT INTO optimistic_folder_delete_rows
+         (folder_id, entity_type, entity_id, original_sync_status, original_deleted_at, original_updated_at)
+       VALUES (?, 'folder', ?, 'synced', NULL, ?)`
+    )
+    .run(held, held, SEEDED_AT);
+
+  db.claimSignedOutPrivateNotes();
+
+  assertOneFolderHoldsAll(db, { noteIds, home, held });
+});
+
 test("ownership checks are empty signed out and on a single-account Mac", (t) => {
   const db = createSharedMacDb(t);
   if (!db) return;
