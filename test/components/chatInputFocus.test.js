@@ -144,7 +144,7 @@ test("a host that cannot send yet keeps the draft by writing it back", async (t)
   await React.act(async () =>
     send.dispatchEvent({ type: "click", bubbles: true, button: 0, preventDefault() {} })
   );
-  assert.equal(drafts.at(-1), "Next question");
+  assert.deepEqual(drafts, ["", "Next question"]);
 });
 
 test("the assistant send button reads as active only once there is a draft", async (t) => {

@@ -24,9 +24,13 @@ export interface CalendarEvent {
   organizer_email: string | null;
   attendees_count: number;
   attendees: string | null;
+  /** The event's page in Google Calendar or Outlook on the web; null for Apple. */
+  web_link: string | null;
   availability_status: CalendarAvailabilityStatus;
   self_response_status: CalendarResponseStatus | "unknown";
 }
+
+export type LinkableCalendarEvent = CalendarEvent & { calendar_color: string | null };
 
 export type CalendarAvailabilityStatus = "free" | "tentative" | "busy" | "unavailable" | "unknown";
 
@@ -79,6 +83,8 @@ export interface CalendarAttendee {
   responseStatus: CalendarResponseStatus | null;
   self: boolean;
   resource?: boolean;
+  /** The calendar event that put this attendee on a note; removing that event removes them. */
+  addedByEvent?: string;
 }
 
 export interface Contact {

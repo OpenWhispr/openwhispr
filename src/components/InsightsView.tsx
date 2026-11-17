@@ -506,12 +506,12 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
   return (
     <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex min-h-full flex-col px-6 py-6")}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-1 flex-col">
-        <div className="flex min-h-8 items-center justify-between gap-4">
-          <TabsList className="h-7 p-0.5 rounded-[7px]">
-            <TabsTrigger value="usage" className="h-6 px-2.5 text-xs rounded-[5px]">
+        <div className="flex min-h-10 flex-wrap items-center justify-between gap-4">
+          <TabsList variant="pill">
+            <TabsTrigger value="usage" variant="pill">
               {t("insights.yourUsage")}
             </TabsTrigger>
-            <TabsTrigger value="leaderboard" className="h-6 px-2.5 text-xs rounded-[5px]">
+            <TabsTrigger value="leaderboard" variant="pill">
               {t("insights.leaderboard.title")}
             </TabsTrigger>
           </TabsList>

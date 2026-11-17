@@ -105,7 +105,7 @@ test("cleanup validates completed provider output using the request's prompt set
     }
   );
 
-  await t.test("history retry keeps the raw row and reports rejected cleanup", async () => {
+  await t.test("history retry keeps the raw row on rejected cleanup, flags partials", async () => {
     setCustomPrompt("");
     useSettingsStore.setState({
       cleanupMode: "local",
@@ -142,6 +142,9 @@ test("cleanup validates completed provider output using the request's prompt set
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
     }).outputText;
     const settingsModule = await vite.ssrLoadModule("/stores/settingsStore.ts");
+    // The retry callback closes over this module-scope import (not a dynamic
+    // `import()`), so it must be supplied as a global rather than via `require`.
+    const { providerErrorToastProps } = await vite.ssrLoadModule("/utils/describeProviderError.ts");
     const toasts = [];
     let displayedRow;
     const retry = vm.runInNewContext(`${code}\nretry`, {
@@ -165,6 +168,7 @@ test("cleanup validates completed provider output using the request's prompt set
       },
       toast: (value) => toasts.push(value),
       t: (key) => key,
+      providerErrorToastProps,
     });
     await retry(row.id);
     assert.strictEqual(displayedRow, row);
@@ -174,5 +178,33 @@ test("cleanup validates completed provider output using the request's prompt set
       ),
       JSON.stringify(toasts)
     );
+
+    // A clean retry confirms without a description.
+    toasts.length = 0;
+    window.electronAPI.processLocalReasoning = async () => ({ success: true, text: RAW });
+    await retry(row.id);
+    // Toasts are built in the vm's realm; copy them so deepEqual compares values.
+    const shown = () => toasts.map((toast) => ({ ...toast }));
+    assert.deepEqual(shown(), [{ title: "controlPanel.history.retrySuccess" }]);
+
+    // A partial result must say so, as dictation does, while still confirming the
+    // retry or recovery the user asked for.
+    window.electronAPI.retryTranscription = async () => ({
+      success: true,
+      transcription: row,
+      warning: "truncated",
+    });
+    for (const [options, title] of [
+      [undefined, "controlPanel.history.retrySuccess"],
+      [{ isRecover: true }, "controlPanel.history.discarded.recovered"],
+    ]) {
+      toasts.length = 0;
+      await retry(row.id, options);
+      assert.deepEqual(
+        shown(),
+        [{ title, description: "hooks.audioRecording.partialTranscription.description" }],
+        JSON.stringify(options)
+      );
+    }
   });
 });

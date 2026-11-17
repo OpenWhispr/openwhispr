@@ -1,3 +1,4 @@
+jest.mock('@/lib/authClient', () => ({ getCachedSession: () => null }));
 jest.mock('@/lib/keyboardInferenceRoute', () => ({
   snapshotKeyboardInferenceRoute: jest.fn(),
   readKeyboardInferenceRoute: jest.fn(() => ({ provider: 'cloud' })),
@@ -163,6 +164,22 @@ jest.mock('@/lib/transcriptAudio', () => ({
 jest.mock('@/lib/permissions', () => ({ isNoSpeechError: () => false }));
 jest.mock('expo-application', () => ({ applicationId: 'com.gizmolabs.openwhispr' }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
+let mockProductEvents: ReturnType<typeof createProductEventsCaptureRig>;
+jest.mock('@/lib/productEvents', () => ({
+  ...jest.requireActual('@/lib/productEvents'),
+  captureDictationContext: () => mockProductEvents.events.captureDictationContext(),
+  recordDictationCompleted: jest.fn(
+    (dictation: Parameters<typeof recordDictationCompleted>[0]): void => {
+      mockProductEvents.pending.push(mockProductEvents.events.recordDictationCompleted(dictation));
+    },
+  ),
+}));
+jest.mock('expo-crypto', () => ({
+  CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+  digestStringAsync: async (_algorithm: string, value: string): Promise<string> =>
+    jest.requireActual('node:crypto').createHash('sha256').update(value).digest('hex'),
+  randomUUID: jest.requireActual('node:crypto').randomUUID,
+}));
 
 import { AppGroupStorage } from '../../../modules/app-group-storage/src';
 import {
@@ -173,7 +190,13 @@ import {
 } from '@/lib/keyboardInferenceRoute';
 import { readKeyboardAgentJob, snapshotKeyboardAgentRequest } from '@/lib/keyboardAgentSync';
 import { withActiveProviderJob } from '@/lib/providerJobActivity';
+import { recordDictationCompleted } from '@/lib/productEvents';
 import { useKeyboardHandoff } from '../useKeyboardHandoff';
+import {
+  CAPTURE_ACCOUNT,
+  NEXT_ACCOUNT,
+  createProductEventsCaptureRig,
+} from './helpers/productEventsCaptureRig';
 
 const storage = AppGroupStorage as unknown as {
   getItem: jest.Mock;
@@ -201,6 +224,8 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 beforeEach(() => {
+  mockProductEvents = createProductEventsCaptureRig();
+  mockAddTranscript.mockResolvedValue(undefined);
   jest.clearAllMocks();
   // clearAllMocks keeps mockReturnValue overrides; reset the ones tests override.
   (readKeyboardProviderResult as jest.Mock).mockReset();
@@ -223,7 +248,8 @@ beforeEach(() => {
   mockAuthListeners.clear();
 });
 
-afterEach(() => {
+afterEach(async (): Promise<void> => {
+  await mockProductEvents.settle();
   jest.restoreAllMocks();
 });
 
@@ -523,7 +549,10 @@ it('discards interrupted provider data when keyboard cancellation rejects transc
       recordingDurationMs: 1000,
     });
   });
-  expect(mockTranscribeAndCleanup).toHaveBeenCalled();
+  expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+    expect.objectContaining({ requestContext: 'keyboard', purpose: 'dictation' }),
+    expect.anything(),
+  );
   expect(mockAddFailedTranscript).not.toHaveBeenCalled();
   expect(mockAddTranscript).not.toHaveBeenCalled();
   expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('100-job');
@@ -561,6 +590,9 @@ describe('keyboard agent job', () => {
       });
     });
     expect(mockTranscribe).toHaveBeenCalledWith(expect.not.objectContaining({ jobId: '100-job' }));
+    expect(mockTranscribe).toHaveBeenCalledWith(
+      expect.objectContaining({ requestContext: 'keyboard', purpose: 'dictation' }),
+    );
     expect(generateForJob).toHaveBeenCalledWith(
       agentJob,
       'write an email to Bob',
@@ -830,5 +862,182 @@ describe('useKeyboardHandoff — hotkey readiness', () => {
     const { unmount } = mountWithInitialUrl('');
     unmount();
     expect(storage.removeItem).toHaveBeenCalledWith('hotkey_js_ready_at_ms');
+  });
+});
+
+describe('useKeyboardHandoff — dictation fact', () => {
+  const recordDictation = jest.mocked(recordDictationCompleted);
+
+  async function finishJob(jobId = '100-job') {
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? jobId : null,
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      mockBackgroundStartedListener?.();
+      await mockRecordingStoppedListener?.(stopEvent(jobId));
+    });
+  }
+
+  it('reports a delivered keyboard dictation by its words as heard and its job', async () => {
+    mockTranscribeAndCleanup.mockResolvedValueOnce({
+      text: 'Raw transcript, cleaned and much longer than it was spoken.',
+      originalText: 'raw transcript',
+      transcription: { text: 'raw transcript', duration: 1, provider: 'byok' },
+    });
+    await finishJob();
+
+    expect(recordDictation).toHaveBeenCalledTimes(1);
+    expect(recordDictation).toHaveBeenCalledWith({
+      context: expect.any(Object),
+      captureId: '100-job',
+      words: 2,
+      provider: 'byok',
+      source: 'keyboard',
+      retranscribe: false,
+    });
+  });
+
+  it('reports nothing the keyboard never received', async () => {
+    storage.setItem.mockImplementation((key: string) => key !== 'keyboard_pending_transcript');
+    await finishJob();
+
+    expect(recordDictation).not.toHaveBeenCalled();
+  });
+
+  it('reports nothing for a job a newer recording superseded', async () => {
+    let activeJobId = '100-job';
+    mockTranscribeAndCleanup.mockImplementationOnce(async () => {
+      activeJobId = '200-job';
+      return {
+        text: 'clean transcript',
+        originalText: 'raw transcript',
+        transcription: { text: 'raw transcript', duration: 1, provider: 'cloud' },
+      };
+    });
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? activeJobId : null,
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener?.(stopEvent('100-job'));
+    });
+
+    expect(recordDictation).not.toHaveBeenCalled();
+  });
+
+  it('reports nothing for a spoken instruction to the voice agent', async () => {
+    (readKeyboardInferenceRoute as jest.Mock).mockReturnValue({
+      provider: 'byok',
+      agentRoute: { mode: 'providers', scope: 'agent', providerId: 'openai', modelId: 'm' },
+    });
+    (readKeyboardAgentJob as jest.Mock).mockImplementation((id: string) =>
+      id === '100-job' ? { jobId: '100-job', sessionId: 's', kind: 'compose' } : null,
+    );
+    mockTranscribe.mockResolvedValue({ text: 'write an email to Bob', provider: 'byok' });
+    await finishJob();
+
+    expect(recordDictation).not.toHaveBeenCalled();
+  });
+});
+
+describe('keyboard capture identity through the real product-event queue', () => {
+  async function startKeyboardRecording(kind: 'handoff' | 'native'): Promise<string> {
+    const items = new Map<string, string>();
+    storage.getItem.mockImplementation((key: string) => items.get(key) ?? null);
+    storage.setItem.mockImplementation((key: string, value: string) => {
+      items.set(key, value);
+      return true;
+    });
+    storage.removeItem.mockImplementation((key: string) => items.delete(key));
+    if (kind === 'handoff') {
+      mountWithInitialUrl('openwhispr://keyboard-dictation');
+      await waitFor(() => expect(storage.startNativeRecording).toHaveBeenCalled());
+    } else {
+      items.set('keyboard_recording_job_id', '100-job');
+      mountWithInitialUrl('openwhispr://ignored');
+      await act(async () => {
+        mockBackgroundStartedListener?.();
+      });
+    }
+    return items.get('keyboard_recording_job_id')!;
+  }
+
+  it.each(['handoff', 'native'] as const)(
+    'does not count an anonymous %s recording that finishes after signup',
+    async (kind): Promise<void> => {
+      await mockProductEvents.signInAs({
+        userId: 'anonymous',
+        isAnonymous: true,
+        cookie: 'anonymous-cookie',
+      });
+      const jobId = await startKeyboardRecording(kind);
+      const transcription = deferred<{
+        text: string;
+        originalText: string;
+        transcription: { text: string; duration: number; provider: string };
+      }>();
+      mockTranscribeAndCleanup.mockReturnValueOnce(transcription.promise);
+      let stopped!: Promise<void>;
+      await act(async () => {
+        stopped = mockRecordingStoppedListener!(stopEvent(jobId));
+      });
+      await mockProductEvents.signInAs(NEXT_ACCOUNT);
+      await act(async () => {
+        transcription.resolve({
+          text: 'Delivered.',
+          originalText: 'spoken before signup',
+          transcription: { text: 'spoken before signup', duration: 1, provider: 'cloud' },
+        });
+        await stopped;
+      });
+      await mockProductEvents.settle();
+
+      expect(storage.getItem('keyboard_pending_transcript')).toBe('Delivered.');
+      expect(mockProductEvents.dictations()).toEqual([]);
+      expect(mockProductEvents.countedWords()).toEqual({});
+    },
+  );
+
+  it.each(['handoff', 'native'] as const)(
+    'keeps the original %s account through a switch before the recording stops',
+    async (kind): Promise<void> => {
+      const jobId = await startKeyboardRecording(kind);
+      await mockProductEvents.signInAs(NEXT_ACCOUNT);
+      await act(async () => {
+        await mockRecordingStoppedListener!(stopEvent(jobId));
+      });
+      await mockProductEvents.settle();
+
+      expect(storage.getItem('keyboard_pending_transcript')).toBe('clean transcript');
+      expect(mockProductEvents.dictations()).toEqual([]);
+      expect(mockProductEvents.queuedDictations()).toEqual([
+        expect.objectContaining({ owner_user_id: 'capture-account' }),
+      ]);
+      expect(mockProductEvents.countedWords()).toEqual({ 'capture-account': 2 });
+      await mockProductEvents.signInAs(CAPTURE_ACCOUNT);
+      await mockProductEvents.settle();
+      expect(mockProductEvents.dictations()).toEqual([
+        {
+          owner: 'capture-account',
+          cookie: 'capture-cookie',
+          properties: expect.objectContaining({ source: 'keyboard', word_count: 2 }),
+        },
+      ]);
+    },
+  );
+
+  it('delivers a native job without inventing an owner when its start was not observed', async (): Promise<void> => {
+    storage.getItem.mockImplementation((key: string) =>
+      key === 'keyboard_recording_job_id' ? '100-job' : null,
+    );
+    mountWithInitialUrl('openwhispr://ignored');
+    await act(async () => {
+      await mockRecordingStoppedListener!(stopEvent('100-job'));
+    });
+    await mockProductEvents.settle();
+
+    expect(storage.setItem).toHaveBeenCalledWith('keyboard_pending_transcript', 'clean transcript');
+    expect(mockProductEvents.dictations()).toEqual([]);
   });
 });

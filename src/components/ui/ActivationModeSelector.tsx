@@ -23,7 +23,7 @@ const STYLES = {
     button: "gap-1.5 rounded px-3.5 py-1.5 text-xs",
     icon: "size-3.5",
     selected: "text-foreground",
-    unselected: "text-muted-foreground hover:text-foreground",
+    unselected: "text-muted-foreground enabled:hover:text-foreground",
   },
   onboarding: {
     track: "rounded-full p-1 bg-[var(--onboarding-surface-tertiary)]",
@@ -32,7 +32,7 @@ const STYLES = {
     icon: "size-4",
     selected: "text-[var(--onboarding-text-primary)]",
     unselected:
-      "text-[var(--onboarding-text-secondary)] hover:text-[var(--onboarding-text-primary)]",
+      "text-[var(--onboarding-text-secondary)] enabled:hover:text-[var(--onboarding-text-primary)]",
   },
 } as const;
 

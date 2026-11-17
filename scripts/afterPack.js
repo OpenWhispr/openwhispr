@@ -19,6 +19,10 @@ const { execFileSync } = require("child_process");
 const { Arch } = require("app-builder-lib");
 const { buildLinuxWrapperScript } = require("./lib/linux-launcher");
 const {
+  shouldVerifyLinuxSqliteBaseline,
+  verifyLinuxSqliteBaseline,
+} = require("./verify-linux-sqlite");
+const {
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
 } = require("./download-sherpa-onnx");
@@ -254,6 +258,18 @@ function verifyWindowsOnnxRuntimePrivatized(binDir) {
   }
 }
 
+// compile:winkeys and download:windows-key-listener only warn when they can't
+// produce the key listener, so without this check a build ships where Hold and
+// modifier-only hotkeys (the default Control+Super) never fire (#2005).
+function verifyWindowsKeyListener(binDir) {
+  const listenerPath = path.join(binDir, "windows-key-listener.exe");
+  if (!fs.existsSync(listenerPath)) {
+    throw new Error(
+      `afterPack: missing ${listenerPath} — run npm run compile:winkeys on Windows (compiles with MSVC, MinGW or Clang, or downloads the prebuilt binary); Push-to-Talk and modifier-only hotkeys would never fire on Windows`
+    );
+  }
+}
+
 function verifyUnpackedBinaries(context) {
   const unpackedDir = path.join(resolveResourcesDir(context), "app.asar.unpacked");
   const unpackedModulesDir = path.join(unpackedDir, "node_modules");
@@ -290,7 +306,9 @@ function verifyUnpackedBinaries(context) {
         `afterPack: no fastlist-*.exe in ${psListVendorDir} — ps-list vendor executable was not unpacked from app.asar (asarUnpack/packaging failure); Windows process detection would break`
       );
     }
-    verifyWindowsOnnxRuntimePrivatized(path.join(resolveResourcesDir(context), "bin"));
+    const binDir = path.join(resolveResourcesDir(context), "bin");
+    verifyWindowsOnnxRuntimePrivatized(binDir);
+    verifyWindowsKeyListener(binDir);
   }
 
   console.log("  afterPack: verified unpacked bundled binaries");
@@ -305,7 +323,11 @@ exports.default = async function (context) {
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
   verifyUnpackedBinaries(context);
+  if (shouldVerifyLinuxSqliteBaseline(context.electronPlatformName, Arch[context.arch])) {
+    verifyLinuxSqliteBaseline(context.appOutDir, `${context.packager.executableName}-app`);
+  }
   registerMacResourceBinariesForSigning(context);
 };
 
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
+exports.verifyWindowsKeyListener = verifyWindowsKeyListener;

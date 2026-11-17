@@ -3,8 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Lock } from "../icons";
 import { Button } from "../ui/button";
 import { SettingsPanelRow } from "../ui/SettingsSection";
-import { RecentActions } from "./RecentActions";
-import { BetaBadge } from "./BetaBadge";
 import { ensureConnectorStatus, useConnectorStatusStore } from "../../stores/connectorStatusStore";
 import type { ConnectorRowSpec } from "./connectorRows";
 
@@ -46,7 +44,7 @@ export interface ConnectorLoginRowProps {
 
 /**
  * One connector's login in Settings → Connectors: Connect, Reconnect,
- * Disconnect, the locked state on a free plan and its recent actions. Copy
+ * Disconnect and the locked state on a free plan. Copy
  * lives under `connectors.<connectorId>.*`.
  */
 export function ConnectorLoginRow({
@@ -224,10 +222,7 @@ export function ConnectorLoginRow({
         </div>
         <div className="flex-1 min-w-0">
           <div className={dimmed}>
-            <div className="flex items-center gap-1.5">
-              <p className="text-xs font-semibold text-foreground">{copy("title")}</p>
-              <BetaBadge />
-            </div>
+            <p className="text-xs font-semibold text-foreground">{copy("title")}</p>
             <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed" dir="auto">
               {summary}
             </p>
@@ -285,12 +280,6 @@ export function ConnectorLoginRow({
           )}
         </div>
       </div>
-      {connected && (
-        <RecentActions
-          connectorId={connectorId}
-          refreshKey={`${status?.accountLabel ?? ""}:${status?.workspaceLabel ?? ""}`}
-        />
-      )}
     </SettingsPanelRow>
   );
 }

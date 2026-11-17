@@ -28,10 +28,11 @@ The first transcription will download the model automatically.
 Local Whisper can run on your GPU for much faster transcription:
 
 - **macOS**: Metal acceleration is built in — no setup needed on Apple Silicon
-- **NVIDIA (Windows/Linux)**: one-click CUDA runtime download from the GPU card in the transcription model picker
-- **AMD / Intel (Windows/Linux)**: one-click Vulkan runtime download from the same GPU card — covers Radeon and Arc/integrated GPUs
+- **NVIDIA (Windows/Linux)**: CUDA acceleration; Linux requires a current compatible NVIDIA driver, but not the CUDA Toolkit
+- **AMD / Intel (Windows/Linux)**: Vulkan acceleration for Radeon, Arc, and integrated GPUs
+- **NVIDIA alternative**: Vulkan is also supported and is used automatically when its runtime is installed and CUDA fails
 
-The GPU runtime is downloaded on demand with SHA-256-verified checksums. If the GPU server crashes or fails to start (unsupported GPU, out of VRAM), OpenWhispr automatically falls back to CPU transcription and shows a notice — dictation keeps working.
+GPU runtimes are downloaded on demand with SHA-256-verified checksums. If one fails, OpenWhispr uses the next available backend and finally CPU, so dictation keeps working.
 
 ## How It Works
 
@@ -45,7 +46,7 @@ OpenWhispr uses whisper.cpp, a high-performance C++ implementation of OpenAI's W
 
 - **Disk Space**: 75MB–3GB depending on model
 - **RAM**: 1GB–10GB depending on model
-- **No additional dependencies required** - whisper.cpp is bundled in packaged builds
+- **GPU driver**: required for GPU acceleration; the CUDA Toolkit is not required
 
 ## Running From Source
 
@@ -95,3 +96,16 @@ npm run download:whisper-cpp:all
 | ----- | ------------------- | ----------------------- | --------- |
 | Local | No                  | Only for model download | Free      |
 | Cloud | Yes (to OpenAI)     | Yes                     | API usage |
+
+## Optional local model residency
+
+Turn on **Keep model loaded** (Settings → Language Models, shown for any
+feature set to Local) to keep whichever local language model is loaded in
+memory after idle periods. The default remains the five-minute idle unload.
+
+Residency avoids the next model reload but keeps the model's RAM/VRAM allocated
+and does not speed up token generation. Explicit shutdown, model changes,
+and context growth still release/restart the server normally. This option
+leaves the Local inference timeout, context sizing and cleanup controls
+unchanged. It also applies when other local-language-model features share the
+same server. Turn it off to restore the five-minute idle unload.

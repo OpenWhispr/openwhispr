@@ -1,14 +1,15 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { OnboardingProgressState } from "./flow";
-import { Copy, Minus, Square, Undo2, X } from "../icons";
+import { ArrowLeft, Copy, Minus, Square, X } from "../icons";
 import { Button } from "../ui/button";
 import { BRAND_GLASS_SURFACE } from "../ui/gradientCircle";
 import { cn } from "../lib/utils";
 import { useTranslation } from "react-i18next";
 import { getPlatform } from "../../utils/platform";
 import { useWindowControls } from "../../hooks/useWindowControls";
+import { DitheredHero } from "./DitheredHero";
 // Imported (not referenced by path) so Vite fingerprints it and it resolves
-// under the packaged app's file:// origin. See .onboarding-compact-hero.
+// under the packaged app's file:// origin. See .onboarding-canvas.
 import onboardingBackgroundLight from "@/assets/onboarding-bg-light.svg";
 import onboardingBackgroundDark from "@/assets/onboarding-bg-dark.svg";
 
@@ -16,6 +17,7 @@ interface OnboardingShellProps {
   compact?: boolean;
   children: ReactNode;
   onBack?: () => void;
+  backDisabled?: boolean;
   onContinue?: () => void;
   onSkip?: () => void;
   continueLabel?: string;
@@ -189,6 +191,7 @@ export default function OnboardingShell({
   compact = false,
   children,
   onBack,
+  backDisabled = false,
   onContinue,
   onSkip,
   continueLabel,
@@ -251,11 +254,11 @@ export default function OnboardingShell({
         // Normally nothing scrolls here: each step sizes itself to the window and
         // anything long (e.g. the language list) scrolls inside its own container.
         // auto rather than hidden is the short-display fallback — the expanded
-        // window wants 910px of work area and centeredBounds clamps below that on
-        // a 1366x768-class screen, where a step built from fixed heights would
-        // otherwise clip with its controls unreachable. The bar itself is hidden
-        // (.onboarding-shell-scroll), so on a tall display this is invisible and
-        // cannot double up with an inner scroller.
+        // window wants 740px of work area (local setup's 880px) and centeredBounds
+        // clamps below that on a short screen, where a step built from fixed
+        // heights would otherwise clip with its controls unreachable. The bar
+        // itself is hidden (.onboarding-shell-scroll), so on a tall display this is
+        // invisible and cannot double up with an inner scroller.
         className={`onboarding-shell-scroll min-h-0 flex-1 overflow-y-auto ${compact ? "px-0 pb-0" : "px-5 pb-5 pt-8 md:px-8"}`}
       >
         <div
@@ -286,6 +289,7 @@ export default function OnboardingShell({
                   // box, which would leave nothing for the collapse to animate.
                   size="default"
                   onClick={onBack}
+                  disabled={backDisabled}
                   // One duration and curve for the pill and the label, so the
                   // min-width/padding collapse and the label collapse read as a
                   // single motion instead of two.
@@ -295,7 +299,7 @@ export default function OnboardingShell({
                   }`}
                   aria-label={t("common.back")}
                 >
-                  <Undo2 className="size-4" />
+                  <ArrowLeft className="size-4 rtl:rotate-180" />
                   {/* The label collapses on a 0fr/1fr grid track rather than through
                       TextMorph. Morphing to "" sends torph down its collapse path,
                       which pins the span at its previous width for the full duration
@@ -354,7 +358,7 @@ export function CompactOnboardingFrame({
 
   return (
     <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]">
-      <div className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-33" />
+      <DitheredHero className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-33 w-full" />
       {showBrandMark && (
         <div
           className={cn(

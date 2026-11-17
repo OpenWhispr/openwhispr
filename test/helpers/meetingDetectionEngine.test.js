@@ -5,13 +5,14 @@ const { EventEmitter } = require("node:events");
 
 const enginePath = require.resolve("../../src/helpers/meetingDetectionEngine");
 const originalLoad = Module._load;
+const openedUrls = [];
 
 function loadEngine() {
   delete require.cache[enginePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron") {
-      return { shell: { openExternal: async () => {} } };
+      return { shell: { openExternal: async (url) => openedUrls.push(url) } };
     }
     if (request === "./debugLogger") {
       return { info() {}, warn() {}, debug() {}, error() {} };
@@ -33,7 +34,7 @@ function loadEngine() {
   }
 }
 
-function createEngine() {
+function createEngine(engineOptions) {
   const MeetingDetectionEngine = loadEngine();
 
   const reminderScheduler = {
@@ -68,12 +69,14 @@ function createEngine() {
   const shown = [];
   const meetingNavigations = [];
   const noteNavigations = [];
+  const refusals = [];
   const windowManager = {
     notificationPrefs: {},
     showMeetingNotification: (data) => shown.push(data),
     dismissMeetingNotification: () => {},
     queueMeetingNoteNavigation: async (payload) => meetingNavigations.push(payload),
     queueNoteNavigation: async (payload) => noteNavigations.push(payload),
+    sendMeetingStartRefused: (code) => refusals.push(code),
   };
 
   const engine = new MeetingDetectionEngine(
@@ -81,7 +84,8 @@ function createEngine() {
     processDetector,
     audioDetector,
     windowManager,
-    {}
+    {},
+    engineOptions
   );
 
   return {
@@ -92,6 +96,7 @@ function createEngine() {
     shown,
     meetingNavigations,
     noteNavigations,
+    refusals,
   };
 }
 
@@ -113,7 +118,8 @@ test("explicitly dismissing an audio prompt still starts the mic cooldown", asyn
 
   engine.setPreferences({ audioDetection: true, processDetection: true });
   audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0 });
-  await engine.handleNotificationResponse(shown[0].detectionId, "dismiss");
+  const owner = { prompt: shown[0], detection: engine.activeDetections.get(shown[0].detectionId) };
+  await engine.handleNotificationResponse(shown[0].detectionId, "dismiss", {}, owner);
 
   assert.equal(audioDetector.dismissals, 1, "an explicit decline must keep its cooldown");
 });
@@ -184,6 +190,125 @@ function createJoinDatabase(ownNote) {
   return { databaseManager, lookups, saved };
 }
 
+test("a note-only meeting releases detection at once without restoring layout", async () => {
+  const { engine, meetingNavigations, shown, windowManager } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  windowManager.restoreFromMeetingMode = () => assert.fail("note-only cleanup changed layout");
+  await engine.joinCalendarMeeting("event-1");
+  const id = meetingNavigations[0].noteSessionId;
+  assert.equal(typeof id, "string");
+  assert.equal(engine._meetingModeActive, true);
+  engine.markMeetingNoteOnly(id);
+  assert.equal(engine._meetingModeActive, false);
+  engine.handleCalendarReminder({ id: "next", summary: "Next" });
+  assert.equal(shown.length, 1);
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingNoteSession, null);
+  engine.stop();
+});
+
+test("a note left open with no calendar event never silences later meetings", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, shown } = createEngine();
+  engine.preferences.audioDetection = true;
+  const id = engine._beginMeetingNoteSession(null);
+  engine._meetingModeActive = true;
+  engine.markMeetingNoteOnly(id);
+  t.mock.timers.tick(3 * 24 * 60 * 60 * 1000);
+  engine.handleCalendarReminder({ id: "tomorrow", summary: "Tomorrow" });
+  assert.equal(shown.length, 1);
+  engine.activeDetections.clear();
+  engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(shown.length, 2);
+  engine.stop();
+});
+
+test("the next meeting's reminder prompts while the last one's note-only event runs", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 60_000).toISOString(),
+  });
+  await engine.joinCalendarMeeting("current");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  engine.handleCalendarReminder({ id: "current", summary: "Current" });
+  assert.equal(shown.length, 0, "the open note's own event does not prompt");
+  engine.handleCalendarReminder({ id: "next", summary: "Next" });
+  assert.equal(shown.length, 1);
+  engine.stop();
+});
+
+test("a joined event's call is claimed once and a later call still prompts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.preferences.audioDetection = true;
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 60_000).toISOString(),
+  });
+  await engine.joinCalendarMeeting("event");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(shown.length, 0, "the mic of the meeting just joined is not news");
+  engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(shown.length, 1, "a second detection is a different call");
+  engine.stop();
+});
+
+test("a joined event stops claiming detections once it ends", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.preferences.audioDetection = true;
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 1000).toISOString(),
+  });
+  await engine.joinCalendarMeeting("event");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  t.mock.timers.tick(1000);
+  engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(shown.length, 1);
+  engine.stop();
+});
+
+test("a stale close cannot release a newer meeting note", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  await engine.joinCalendarMeeting("first");
+  const first = meetingNavigations[0].noteSessionId;
+  await engine.joinCalendarMeeting("second");
+  const second = meetingNavigations[1].noteSessionId;
+  engine.markMeetingNoteOnly(first);
+  engine.closeMeetingNote(first);
+  assert.equal(engine._meetingModeActive, true);
+  assert.equal(engine._meetingNoteSession.id, second);
+  engine.stop();
+});
+
+test("recording from a note-only meeting holds detection until Stop", async () => {
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  let promptResets = 0;
+  engine.audioActivityDetector.resetPrompt = () => (promptResets += 1);
+  await engine.joinCalendarMeeting("event");
+  const id = meetingNavigations[0].noteSessionId;
+  engine.markMeetingNoteOnly(id);
+  await engine.beginRecordingSession({ sessionId: "live", autoEndEligible: false, noteId: 41 });
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingModeActive, true);
+  assert.equal(engine._recordingSession.sessionId, "live");
+  engine.handleCalendarReminder({ id: "during", summary: "During" });
+  assert.equal(shown.length, 0);
+  assert.equal(engine.endRecordingSession("live"), true);
+  assert.equal(engine._meetingModeActive, false);
+  assert.equal(promptResets, 1, "Stop releases the prompt identity as after an automatic start");
+  engine.stop();
+});
+
 test("joining a calendar meeting resumes the user's own note for the event", async () => {
   const { engine, meetingNavigations } = createEngine();
   const db = createJoinDatabase({ id: 5, folder_id: 3 });
@@ -198,6 +323,37 @@ test("joining a calendar meeting resumes the user's own note for the event", asy
   assert.equal(meetingNavigations[0].folderId, 3);
 });
 
+test("a joined meeting's new note tags the event's guests, keeps the user and skips rooms and declines", async () => {
+  const { engine } = createEngine();
+  const db = createJoinDatabase(null);
+  const updates = [];
+  const me = { email: "me@x.com", displayName: "Me", self: true };
+  db.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    summary: "Weekly sync",
+    attendees: JSON.stringify([
+      { email: "dana@x.com", displayName: "Dana", self: false },
+      me,
+      { email: "room@x.com", displayName: "Room 4", self: false, resource: true },
+      { email: "kim@x.com", displayName: "Kim", responseStatus: "declined", self: false },
+    ]),
+  });
+  db.databaseManager.updateNote = (id, update) => {
+    updates.push(update);
+    return { note: { id, ...update } };
+  };
+  engine.databaseManager = db.databaseManager;
+
+  await engine.joinCalendarMeeting("event-1");
+
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].calendar_event_id, "event-1");
+  assert.deepEqual(JSON.parse(updates[0].participants), [
+    { email: "dana@x.com", displayName: "Dana", self: false, addedByEvent: "event-1" },
+    me,
+  ]);
+});
+
 test("joining a calendar meeting with no note of the user's own creates one", async () => {
   const { engine, meetingNavigations } = createEngine();
   const db = createJoinDatabase(null);
@@ -209,6 +365,125 @@ test("joining a calendar meeting with no note of the user's own creates one", as
   assert.equal(meetingNavigations.length, 1);
   assert.equal(meetingNavigations[0].noteId, 99);
   assert.equal(meetingNavigations[0].folderId, 7);
+});
+
+test("a manual meeting passes its options to whichever note it opens", async () => {
+  // The meeting hotkey asks for an open panel to stay behind the call.
+  const { engine, windowManager } = createEngine();
+  const options = { activate: false };
+  const received = [];
+  windowManager.queueNoteNavigation = async (_payload, opts) => received.push(opts);
+  windowManager.queueMeetingNoteNavigation = async (_payload, opts) => received.push(opts);
+
+  engine._recordingSession = { sessionId: "s1", noteId: 42 };
+  await engine.startManualMeeting(options);
+  engine._recordingSession = null;
+
+  const db = createJoinDatabase({ id: 5, folder_id: 3 });
+  engine.databaseManager = { ...db.databaseManager, getActiveEvents: () => [{ id: "event-1" }] };
+  await engine.startManualMeeting(options);
+  engine.databaseManager = createJoinDatabase(null).databaseManager;
+  await engine.joinCalendarMeeting("event-1", "hotkey", options);
+  engine.databaseManager = {
+    ...createJoinDatabase(null).databaseManager,
+    getActiveEvents: () => [],
+  };
+  await engine.startManualMeeting(options);
+
+  assert.deepEqual(received, [options, options, options, options]);
+});
+
+// With meeting recording off by policy, a manual start or a calendar join used to
+// create an empty "meeting" note before the control panel refused to record.
+test("a meeting start the org refuses creates no note and explains the refusal", async () => {
+  const { engine, windowManager, meetingNavigations, noteNavigations } = createEngine();
+  const refusal = { success: false, code: "POLICY_MEETING_RECORDING_DISABLED", error: "off" };
+  const pillRefusals = [];
+  windowManager.resolveMeetingRecordingRefusal = async () => refusal;
+  windowManager.sendMeetingStartRefused = (code) => pillRefusals.push(code);
+  const db = createJoinDatabase(null);
+  engine.databaseManager = { ...db.databaseManager, getActiveEvents: () => [{ id: "event-1" }] };
+
+  await engine.startManualMeeting({ activate: false });
+  engine.databaseManager.getActiveEvents = () => [];
+  await engine.startManualMeeting();
+  // The panel's Join explains its own refusal, so the pill stays out of it.
+  assert.equal(await engine.joinCalendarMeeting("event-1"), refusal);
+
+  assert.deepEqual(db.saved, []);
+  assert.deepEqual(db.lookups, []);
+  assert.deepEqual(meetingNavigations, []);
+  assert.deepEqual(noteNavigations, []);
+  assert.equal(engine._meetingModeActive, false);
+  assert.deepEqual(pillRefusals, Array(2).fill("POLICY_MEETING_RECORDING_DISABLED"));
+});
+
+test("with meeting recording off, only a reminder with a link shows, and only to join", () => {
+  const { engine, windowManager, shown } = createEngine();
+  let refusal = { code: "POLICY_MEETING_RECORDING_DISABLED" };
+  windowManager.getMeetingRecordingRefusal = () => refusal;
+  engine.setPreferences({ audioDetection: true, processDetection: true });
+
+  engine.handleCalendarReminder({ id: "standup" });
+  engine._userRecording = true;
+  engine._handleDetection("audio", "sustained-audio", {});
+  engine._userRecording = false;
+  engine._flushNotificationQueue();
+  assert.deepEqual(shown, []);
+  assert.equal(engine.activeDetections.size, 0);
+
+  engine.handleCalendarReminder({ id: "retro", hangout_link: "https://meet.example/retro" });
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0].joinUrl, "https://meet.example/retro");
+  assert.equal(shown[0].recordingRefusal, "POLICY_MEETING_RECORDING_DISABLED");
+  engine.handleDetectionNotificationClosed(shown[0].detectionId);
+
+  refusal = null;
+  engine.handleCalendarReminder({ id: "standup" });
+  assert.equal(shown.length, 2);
+  assert.equal("recordingRefusal" in shown[1], false);
+});
+
+test("a reminder that beats the first policy load waits for the policy instead of being judged", async () => {
+  const { engine, windowManager, shown } = createEngine();
+  let refusal = { code: "POLICY_UNRESOLVABLE" };
+  windowManager.getMeetingRecordingRefusal = () => refusal;
+  windowManager.resolveMeetingRecordingRefusal = async () => {
+    refusal = null;
+    return refusal;
+  };
+
+  engine.handleCalendarReminder({ id: "standup" });
+  assert.deepEqual(shown, []);
+  await new Promise(setImmediate);
+  assert.equal(shown.length, 1);
+  assert.equal("recordingRefusal" in shown[0], false);
+});
+
+test("a join-only card opens the meeting without recording or cooling the mic down", async () => {
+  const { engine, audioDetector, windowManager, meetingNavigations } = createEngine();
+  let dismissed = 0;
+  windowManager.dismissMeetingNotification = () => dismissed++;
+  openedUrls.length = 0;
+  const detection = {
+    source: "calendar",
+    key: "event",
+    event: { id: "event", summary: "Weekly", hangout_link: "https://meet.example/join-only" },
+  };
+  engine.activeDetections.set("calendar:event", detection);
+  const owner = { prompt: { detectionId: "calendar:event" }, detection };
+
+  const result = await engine.handleNotificationResponse("calendar:event", "open", {}, owner);
+  assert.deepEqual(result, { success: true, value: null });
+  assert.deepEqual(openedUrls, ["https://meet.example/join-only"]);
+  assert.deepEqual(meetingNavigations, []);
+  assert.equal(audioDetector.dismissals, 0);
+  assert.equal(dismissed, 1);
+  assert.equal(engine.activeDetections.has("calendar:event"), false);
+
+  // Join opens the call once per card, however it gets there.
+  engine.openNotificationJoinUrl(owner);
+  assert.equal(openedUrls.length, 1);
 });
 
 // The IPC adapter derives detector preferences through this policy; the engine
@@ -225,6 +500,48 @@ const ENABLED_SNAPSHOT = {
 function applySnapshot(engine, snapshot) {
   engine.setPreferences(deriveDetectorPreferences(snapshot));
 }
+
+// The bare {} databaseManager is the assertion that nothing reaches the note path.
+test("an administrator-disabled build never runs detectors, prompts, or starts a meeting", async () => {
+  let disabled = true;
+  const {
+    engine,
+    audioDetector,
+    processDetector,
+    shown,
+    meetingNavigations,
+    noteNavigations,
+    refusals,
+    windowManager,
+  } = createEngine({ isMeetingRecordingDisabled: () => disabled });
+
+  engine.start();
+  applySnapshot(engine, ENABLED_SNAPSHOT);
+  assert.equal(audioDetector.running, false);
+  assert.equal(processDetector.running, false);
+
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0 });
+  engine.handleCalendarReminder({ id: "event-1" });
+  assert.deepEqual(shown, []);
+
+  // Both starts say why, rather than doing nothing, naming the device's ban even
+  // when the effective verdict has its own reason.
+  windowManager.resolveMeetingRecordingRefusal = async () => ({ code: "POLICY_UNRESOLVABLE" });
+  await engine.startManualMeeting();
+  assert.deepEqual(refusals, ["POLICY_MEETING_RECORDING_DISABLED"]);
+  assert.equal(
+    (await engine.joinCalendarMeeting("event-1"))?.code,
+    "POLICY_MEETING_RECORDING_DISABLED"
+  );
+  assert.deepEqual(meetingNavigations, []);
+  assert.deepEqual(noteNavigations, []);
+
+  // Removing the profile takes effect on the next preference sync.
+  disabled = false;
+  applySnapshot(engine, ENABLED_SNAPSHOT);
+  assert.equal(audioDetector.running, true);
+  assert.equal(processDetector.running, true);
+});
 
 test("startup waits for saved notification preferences before starting prompt detectors", () => {
   const { engine, audioDetector, processDetector } = createEngine();
@@ -282,4 +599,540 @@ test("disabling notifications preserves active auto-end and releases both detect
   assert.equal(engine.endRecordingSession("active-meeting"), true);
   assert.equal(audioDetector.running, false);
   assert.equal(processDetector.running, false);
+});
+
+function ownedNotification(t, detectionOverrides = {}) {
+  const ctx = createEngine();
+  const { createDb } = require("./harness/db");
+  const db = createDb(t);
+  if (!db) return null;
+  ctx.engine.databaseManager = db;
+  const detection = {
+    source: "calendar",
+    key: "event",
+    event: { id: "event", calendar_id: "test-calendar", summary: "Weekly" },
+    ...detectionOverrides,
+  };
+  const detectionId = `${detection.source}:${detection.key}`;
+  ctx.engine.activeDetections.set(detectionId, detection);
+  const owner = {
+    prompt: { detectionId },
+    detection,
+    selectedDestination: null,
+  };
+  let current = true;
+  Object.assign(ctx.windowManager, {
+    meetingRecentDestinations: [],
+    isMeetingNotificationOwner: (o) => current && o === owner,
+    updateMeetingNotificationPause() {},
+    dismissMeetingNotification() {
+      current = false;
+    },
+    queueMeetingNoteNavigation: async (payload) => {
+      ctx.meetingNavigations.push(payload);
+      return { success: true, value: db.getNote(payload.noteId) };
+    },
+  });
+  return {
+    ...ctx,
+    db,
+    owner,
+    respond: (options) =>
+      ctx.engine.handleNotificationResponse(detectionId, "start", options, owner),
+  };
+}
+
+test("notification Start saves directly in selected folder and duplicate clicks share navigation", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  const folder = c.db.createFolder("Chosen").folder;
+  c.owner.selectedDestination = { folderId: folder.id, spaceId: folder.space_id };
+  let finish;
+  let navigationOptions;
+  c.windowManager.queueMeetingNoteNavigation = (payload, options) => {
+    c.meetingNavigations.push(payload);
+    navigationOptions = options;
+    return new Promise((r) => (finish = r));
+  };
+  const one = c.respond();
+  const two = c.respond();
+  await new Promise(setImmediate);
+  assert.equal(c.meetingNavigations.length, 1);
+  assert.equal(navigationOptions.activate, true, "Start brings the panel forward");
+  const note = c.db.getNote(c.meetingNavigations[0].noteId);
+  assert.equal(note.folder_id, folder.id);
+  assert.equal(note.space_id, folder.space_id);
+  finish({ success: true, value: note });
+  assert.equal((await one).success, true);
+  assert.equal((await two).success, true);
+  assert.equal(c.db.getNotes().length, 1);
+});
+
+test("notification Start's new note tags the event's attendees", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  const dana = { email: "dana@x.com", displayName: "Dana", self: false };
+  const me = { email: "me@x.com", displayName: "Me", self: true };
+  const room = { email: "room@x.com", displayName: "Room 4", self: false, resource: true };
+  c.db.upsertCalendarEvents([
+    {
+      id: "event",
+      calendar_id: "test-calendar",
+      provider: "google",
+      summary: "Weekly",
+      start_time: "2026-07-22T10:00:00Z",
+      end_time: "2026-07-22T11:00:00Z",
+      is_all_day: false,
+      status: "confirmed",
+      attendees: JSON.stringify([dana, me, room]),
+    },
+  ]);
+
+  assert.equal((await c.respond()).success, true);
+
+  const note = c.db.getNote(c.meetingNavigations[0].noteId);
+  assert.equal(note.calendar_event_id, "event");
+  assert.deepEqual(
+    JSON.parse(note.participants),
+    [{ ...dana, addedByEvent: "event" }, me],
+    "the user's own row survives removing the event, and the room never joins"
+  );
+});
+
+test("a linked root note requires current acknowledgment and is never moved or copied", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  const note = c.db.saveNote("Linked", "", "meeting").note;
+  c.db.updateNote(note.id, { calendar_event_id: "event", folder_id: null });
+  const first = await c.respond();
+  assert.equal(first.code, "LINKED_NOTE_CHANGED");
+  assert.equal(first.context.existingNote.folderId, null);
+  assert.equal(c.meetingNavigations.length, 0);
+  assert.equal(c.db.getNotes().length, 1);
+  const second = await c.respond({
+    existingNote: { noteId: note.id, spaceId: note.space_id, folderId: null },
+  });
+  assert.equal(second.success, true);
+  assert.equal(c.meetingNavigations[0].folderId, null);
+  assert.equal(c.db.getNotes().length, 1);
+});
+
+test("unavailable explicit destination never falls back to Meetings", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  c.owner.selectedDestination = { folderId: 999, spaceId: c.db.getPrivateSpaceId() };
+  assert.equal((await c.respond()).code, "FOLDER_UNAVAILABLE");
+  assert.equal(c.db.getNotes().length, 0);
+  assert.equal(c.meetingNavigations.length, 0);
+});
+
+test("strict lookup failure and vanished acknowledged note never create a replacement", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  const lookup = c.db.getOwnNoteByCalendarEventId;
+  c.db.getOwnNoteByCalendarEventId = () => {
+    throw Error("database busy");
+  };
+  assert.equal((await c.respond()).success, false);
+  assert.equal(c.db.getNotes().length, 0);
+  c.db.getOwnNoteByCalendarEventId = lookup;
+  assert.equal(
+    (await c.respond({ existingNote: { noteId: 999, spaceId: 1, folderId: null } })).code,
+    "NOTE_UNAVAILABLE"
+  );
+  assert.equal(c.db.getNotes().length, 0);
+});
+
+test("navigation failure retains committed note and retries without duplicate writes", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  let calls = 0;
+  let promptResets = 0;
+  c.engine.audioActivityDetector.resetPrompt = () => (promptResets += 1);
+  c.windowManager.queueMeetingNoteNavigation = async (payload) => {
+    calls++;
+    return calls === 1
+      ? { success: false, code: "START_FAILED" }
+      : { success: true, value: c.db.getNote(payload.noteId) };
+  };
+  assert.equal((await c.respond()).code, "START_FAILED");
+  assert.equal(promptResets, 0, "the same live call must not prompt again");
+  c.engine.handleCalendarReminder({ id: "next" });
+  assert.equal(c.shown.length, 1, "a failed Start must not leave prompts suppressed");
+  assert.equal(c.db.getNotes().length, 1);
+  assert.equal((await c.respond()).success, true);
+  assert.equal(c.db.getNotes().length, 1);
+  assert.equal(calls, 2);
+});
+
+const eventEndingIn = (ms) => ({
+  id: "event",
+  calendar_id: "test-calendar",
+  summary: "Weekly",
+  end_time: new Date(Date.now() + ms).toISOString(),
+});
+
+test("Take notes on a reminder keeps that event quiet and later meetings prompting", async (t) => {
+  const c = ownedNotification(t, { event: eventEndingIn(3_600_000) });
+  if (!c) return;
+  t.after(() => c.engine.stop());
+  c.engine.preferences.audioDetection = true;
+  assert.equal((await c.respond()).success, true);
+  c.engine.markMeetingNoteOnly(c.meetingNavigations[0].noteSessionId);
+  assert.equal(c.engine._meetingModeActive, false);
+
+  c.engine.handleCalendarReminder({ id: "event", summary: "Weekly" });
+  assert.equal(c.shown.length, 0, "the note's own event is not a new meeting");
+  c.engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(c.shown.length, 0, "the call it was opened for is not a new meeting");
+
+  c.engine.handleCalendarReminder({ id: "next", summary: "Next" });
+  assert.equal(c.shown.length, 1);
+});
+
+test("Take notes on a mic prompt claims no later call", async (t) => {
+  const c = ownedNotification(t, {
+    source: "audio",
+    key: "sustained-audio",
+    event: eventEndingIn(3_600_000),
+  });
+  if (!c) return;
+  t.after(() => c.engine.stop());
+  c.engine.preferences.audioDetection = true;
+  c.engine.audioActivityDetector.hasPrompted = true;
+  assert.equal((await c.respond()).success, true);
+  c.engine.markMeetingNoteOnly(c.meetingNavigations[0].noteSessionId);
+  c.engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  assert.equal(c.shown.length, 1, "the prompted call is already this note's; a new one prompts");
+});
+
+test("Take notes on a mic prompt doesn't prompt that live call again", async (t) => {
+  const c = ownedNotification(t, { source: "audio", key: "sustained-audio" });
+  if (!c) return;
+  t.after(() => c.engine.stop());
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._isMicActive = async () => true;
+  detector.on("sustained-audio-detected", (data) =>
+    c.engine._handleDetection("audio", "sustained-audio", data)
+  );
+  c.engine.audioActivityDetector = detector;
+  c.engine.preferences.audioDetection = true;
+  c.engine.activeDetections.clear();
+  await detector._check();
+  await detector._check();
+  assert.equal(c.shown.length, 1);
+  c.owner.detection = c.engine.activeDetections.get(c.owner.prompt.detectionId);
+
+  assert.equal((await c.respond()).success, true);
+  const id = c.meetingNavigations[0].noteSessionId;
+  c.engine.markMeetingNoteOnly(id);
+  await detector._check();
+  await detector._check();
+  assert.equal(c.shown.length, 1, "accepting the prompt must not re-arm it");
+  c.engine.closeMeetingNote(id);
+  await detector._check();
+  await detector._check();
+  assert.equal(c.shown.length, 1, "nor closing the note it opened");
+});
+
+test("Join opens the link and suppresses new prompts while navigation is pending", async (t) => {
+  const c = ownedNotification(t);
+  if (!c) return;
+  openedUrls.length = 0;
+  c.owner.detection.event.hangout_link = "https://meet.example/join?pwd=1";
+  let finish;
+  let navigationOptions;
+  c.windowManager.queueMeetingNoteNavigation = (_payload, options) => {
+    navigationOptions = options;
+    return new Promise((r) => (finish = r));
+  };
+  const joining = c.engine.handleNotificationResponse("calendar:event", "join", {}, c.owner);
+  await new Promise(setImmediate);
+  assert.deepEqual(openedUrls, ["https://meet.example/join?pwd=1"]);
+  assert.equal(navigationOptions.activate, false, "the meeting just opened stays in front");
+  c.engine.handleCalendarReminder({ id: "next" });
+  assert.equal(c.shown.length, 0);
+  finish({ success: true });
+  assert.equal((await joining).success, true);
+});
+
+test("coalesced audio detections cannot suppress the next meeting after a queued calendar prompt", () => {
+  const { engine, shown } = createEngine();
+  engine.setPreferences({ audioDetection: true, processDetection: true });
+  engine._userRecording = true;
+  engine._handleDetection("calendar", "event", { event: { summary: "Queued calendar" } });
+  engine._handleDetection("audio", "sustained-audio", {});
+  assert.equal(engine.activeDetections.size, 2);
+  engine._userRecording = false;
+  engine._flushNotificationQueue();
+  assert.equal(shown.length, 1);
+  assert.equal(engine.activeDetections.has("audio:sustained-audio"), false);
+  engine.handleDetectionNotificationClosed("calendar:event");
+  engine._handleDetection("audio", "sustained-audio", {});
+  assert.equal(shown.length, 2);
+});
+
+test("a dictation's end cooldown cannot show a queued prompt during the next dictation", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { engine, shown } = createEngine();
+  engine.setPreferences({ audioDetection: true, processDetection: true });
+
+  engine.setUserRecording(true);
+  engine.handleCalendarReminder({ id: "standup", summary: "Standup" });
+  // The dictation lifecycle reports recording -> processing -> idle ->
+  // preparing -> recording, and all three states between mean "not recording".
+  engine.setUserRecording(false);
+  t.mock.timers.tick(500);
+  engine.setUserRecording(false);
+  t.mock.timers.tick(500);
+  engine.setUserRecording(false);
+  t.mock.timers.tick(500);
+  engine.setUserRecording(true);
+  t.mock.timers.tick(5000);
+
+  assert.equal(shown.length, 0, "the reminder must wait until the next dictation ends");
+  engine.setUserRecording(false);
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 1);
+});
+
+test("a card closing on its own during a dictation holds the queue until the dictation ends", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { engine, audioDetector, shown } = createEngine();
+  engine.setPreferences({ audioDetection: true, processDetection: true });
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0 });
+  assert.equal(shown.length, 1);
+
+  engine.setUserRecording(true);
+  engine.handleCalendarReminder({ id: "standup", summary: "Standup" });
+  engine.handleDetectionNotificationClosed(shown[0].detectionId);
+  assert.equal(shown.length, 1, "the reminder must not appear mid-dictation");
+
+  engine.setUserRecording(false);
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 2);
+});
+
+test("a live recording keeps detection held whatever a note opened beside it reports", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  await engine.beginRecordingSession({ sessionId: "live", autoEndEligible: false, noteId: 40 });
+  await engine.joinCalendarMeeting("other");
+  const id = meetingNavigations[0].noteSessionId;
+  engine.markMeetingNoteOnly(id);
+  assert.equal(engine._meetingModeActive, true, "the note opened, but the recording still runs");
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingModeActive, true, "closing it doesn't end the recording's hold");
+  assert.equal(engine._recordingSession.sessionId, "live");
+  engine.stop();
+});
+
+// The earlier call's prompt can outlive it, so it says nothing about the joined event's call.
+for (const [order, joinWhileEarlierCallLive] of [
+  ["after the earlier call ended", false],
+  ["while the earlier call was still on", true],
+]) {
+  test(`a back-to-back meeting joined ${order} stays quiet`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+    const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+    const detector = new AudioActivityDetector(() => []);
+    let micOn = true;
+    detector._isMicActive = async () => micOn;
+    const { engine, meetingNavigations, shown } = createEngine();
+    engine.preferences.audioDetection = true;
+    engine.audioActivityDetector = detector;
+    engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+    engine.databaseManager.getCalendarEventById = (id) => ({
+      id,
+      end_time: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+    detector.on("sustained-audio-detected", (data) =>
+      engine._handleDetection("audio", "sustained-audio", data)
+    );
+    await detector._check();
+    await detector._check();
+    assert.equal(shown.length, 1, "the earlier call prompted");
+    engine.handleNotificationTimeout();
+
+    const joinNextMeeting = async () => {
+      await engine.joinCalendarMeeting("next");
+      engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+    };
+    if (joinWhileEarlierCallLive) await joinNextMeeting();
+    micOn = false;
+    await detector._check();
+    if (!joinWhileEarlierCallLive) await joinNextMeeting();
+    t.mock.timers.tick(60000);
+
+    micOn = true;
+    await detector._check();
+    await detector._check();
+    assert.equal(shown.length, 1, "the joined meeting's own call is not a new meeting");
+    engine.stop();
+  });
+}
+
+test("recording ownership outlives a note-only event's end and stale closes", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(2000).toISOString(),
+  });
+  await engine.joinCalendarMeeting("event");
+  const id = meetingNavigations[0].noteSessionId;
+  engine.markMeetingNoteOnly(id);
+  await engine.beginRecordingSession({
+    sessionId: "recording",
+    autoEndEligible: false,
+    noteId: 41,
+  });
+  t.mock.timers.tick(1000);
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingModeActive, true);
+  assert.equal(engine._recordingSession.sessionId, "recording");
+  assert.equal(engine._meetingNoteSession, null);
+  engine.stop();
+});
+
+test("an ended note-only calendar event claims nothing and shutdown clears the session", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(500).toISOString(),
+  });
+  await engine.joinCalendarMeeting("past");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  assert.equal(engine._meetingModeActive, false);
+  engine.handleCalendarReminder({ id: "past", summary: "Past" });
+  assert.equal(shown.length, 1);
+  engine.stop();
+  assert.equal(engine._meetingNoteSession, null);
+});
+
+test("closing a note-only meeting preserves the current audio prompt until a later call", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  let active = true;
+  detector._isMicActive = async () => active;
+  const { engine, shown } = createEngine();
+  engine.preferences.audioDetection = true;
+  engine.audioActivityDetector = detector;
+  detector.on("sustained-audio-detected", (data) =>
+    engine._handleDetection("audio", "sustained-audio", data)
+  );
+  await detector._check();
+  await detector._check();
+  assert.equal(shown.length, 1);
+  // The member opened this prompt's note; no recording takes ownership.
+  const id = engine._beginMeetingNoteSession(null);
+  engine._meetingModeActive = true;
+  engine.activeDetections.delete("audio:sustained-audio");
+  engine.markMeetingNoteOnly(id);
+  engine.closeMeetingNote(id);
+  await detector._check();
+  assert.equal(shown.length, 1, "the same live call must not prompt again");
+  active = false;
+  await detector._check();
+  t.mock.timers.tick(60000);
+  active = true;
+  await detector._check();
+  await detector._check();
+  assert.equal(shown.length, 2, "a later call still prompts without a dismissal cooldown");
+  engine.stop();
+});
+
+test("a failed navigation keeps the prompt identity; a closed note's start resets it", async () => {
+  const { engine } = createEngine();
+  let promptResets = 0;
+  engine.audioActivityDetector.resetPrompt = () => (promptResets += 1);
+  let id = engine._beginMeetingNoteSession(null);
+  engine._meetingModeActive = true;
+  engine.abandonMeetingNote(id);
+  assert.equal(engine._meetingModeActive, false);
+  assert.equal(promptResets, 0, "the note never opened, so the mic was never ours");
+  id = engine._beginMeetingNoteSession(null);
+  engine._meetingModeActive = true;
+  engine.closeMeetingNote(id);
+  assert.equal(engine._meetingModeActive, false);
+  assert.equal(promptResets, 1);
+  engine.stop();
+});
+
+test("a replaced document keeps a session whose navigation is still queued", async () => {
+  const { engine, windowManager } = createEngine();
+  const id = engine._beginMeetingNoteSession(null);
+  engine._meetingModeActive = true;
+  windowManager.isMeetingNoteNavigationPending = (sessionId) => sessionId === id;
+  engine.closeCurrentMeetingNote();
+  assert.equal(engine._meetingModeActive, true);
+  assert.equal(engine._meetingNoteSession.id, id);
+  windowManager.isMeetingNoteNavigationPending = () => false;
+  engine.closeCurrentMeetingNote();
+  assert.equal(engine._meetingModeActive, false);
+  engine.stop();
+});
+
+test("a detection queued before its note opened doesn't prompt when the queue flushes", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 60_000).toISOString(),
+  });
+  engine.setUserRecording(true);
+  engine.handleCalendarReminder({ id: "event", summary: "Joined" });
+  engine.setUserRecording(false);
+  await engine.joinCalendarMeeting("event");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 0);
+  assert.equal(engine.activeDetections.has("calendar:event"), false);
+  engine.stop();
+});
+
+test("the rest of the queue still prompts past a detection its note claims", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 60_000).toISOString(),
+  });
+  engine.setUserRecording(true);
+  engine.handleCalendarReminder({ id: "event", summary: "Joined" });
+  engine.handleCalendarReminder({ id: "other", summary: "Other" });
+  engine.setUserRecording(false);
+  await engine.joinCalendarMeeting("event");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 1);
+  engine.stop();
+});
+
+test("a mic detection queued before its note opened doesn't prompt either", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const { engine, meetingNavigations, shown } = createEngine();
+  engine.preferences.audioDetection = true;
+  engine.databaseManager = createJoinDatabase({ id: 41, folder_id: 7 }).databaseManager;
+  engine.databaseManager.getCalendarEventById = (id) => ({
+    id,
+    end_time: new Date(Date.now() + 60_000).toISOString(),
+  });
+  engine.setUserRecording(true);
+  // The real detector marks itself prompted before it emits.
+  engine.audioActivityDetector.hasPrompted = true;
+  engine._handleDetection("audio", "sustained-audio", { attributed: true });
+  engine.setUserRecording(false);
+  await engine.joinCalendarMeeting("event");
+  engine.markMeetingNoteOnly(meetingNavigations[0].noteSessionId);
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 0);
+  engine.stop();
 });

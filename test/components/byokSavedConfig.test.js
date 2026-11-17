@@ -503,6 +503,27 @@ test("policy removing self-hosting mid-step keeps the hosted half and loads its 
   assert.equal(step.value(PLACEHOLDER.hostedKey), "gsk-saved-key");
 });
 
+test("a policy that ends self-hosting mid-edit still checks the hosted half", async (t) => {
+  const step = await mountByokStep(t, {
+    settings: HOSTED_GROQ,
+    secrets: { groqApiKey: "gsk-saved-key" },
+  });
+  await step.toggleSelfHosted();
+  await step.type(PLACEHOLDER.endpoint, "http://127.0.0.1:8791/v1");
+  await step.type(PLACEHOLDER.modelId, "local-model");
+  await step.focusEndpoint();
+
+  await applyTranscriptionPolicy(step, {
+    allowedModes: ["providers"],
+    allowedByokProviders: ["groq"],
+  });
+  await step.wait(500);
+  assert.deepEqual(
+    step.connectionRequests().map((config) => config.provider),
+    ["groq"]
+  );
+});
+
 test("a seeded provider that policy removes after mount cannot be saved", async (t) => {
   for (const [name, settings, secrets] of [
     ["an API-key provider", HOSTED_GROQ, { groqApiKey: "gsk-saved-key" }],

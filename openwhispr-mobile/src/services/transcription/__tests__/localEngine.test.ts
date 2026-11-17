@@ -68,26 +68,40 @@ describe('selectLocalEngine', () => {
     expect(selectLocalEngine(['de'], all())).toEqual({ engine: 'parakeet', version: 'v3' });
   });
 
-  it('falls back to Whisper when the preferred Parakeet is not downloaded', () => {
+  it('falls back to the next downloaded model that covers the languages', () => {
     expect(selectLocalEngine(['en'], all({ parakeetV2Downloaded: false }))).toEqual({
-      engine: 'whisper',
+      engine: 'parakeet',
+      version: 'v3',
     });
+    expect(
+      selectLocalEngine(['en'], all({ parakeetV2Downloaded: false, parakeetV3Downloaded: false })),
+    ).toEqual({ engine: 'whisper' });
     expect(selectLocalEngine(['de'], all({ parakeetV3Downloaded: false }))).toEqual({
       engine: 'whisper',
     });
   });
 
-  it('reports the missing preferred model when nothing is downloaded', () => {
+  it('uses Parakeet v3 for English when it is the only model downloaded', () => {
     expect(
       selectLocalEngine(['en'], all({ parakeetV2Downloaded: false, whisperDownloaded: false })),
-    ).toEqual({ engine: 'none', preferred: 'parakeet-v2' });
-    expect(
-      selectLocalEngine(['de'], all({ parakeetV3Downloaded: false, whisperDownloaded: false })),
-    ).toEqual({ engine: 'none', preferred: 'parakeet-v3' });
-    expect(selectLocalEngine([], all({ whisperDownloaded: false }))).toEqual({
+    ).toEqual({ engine: 'parakeet', version: 'v3' });
+  });
+
+  it('reports the missing preferred model when nothing is downloaded', () => {
+    const nothing = {
+      parakeetV2Downloaded: false,
+      parakeetV3Downloaded: false,
+      whisperDownloaded: false,
+    };
+    expect(selectLocalEngine(['en'], all(nothing))).toEqual({
       engine: 'none',
-      preferred: 'whisper',
+      preferred: 'parakeet-v2',
     });
+    expect(selectLocalEngine(['de'], all(nothing))).toEqual({
+      engine: 'none',
+      preferred: 'parakeet-v3',
+    });
+    expect(selectLocalEngine([], all(nothing))).toEqual({ engine: 'none', preferred: 'whisper' });
   });
 
   it('always routes to Whisper when the native module is unsupported (Android/Expo Go)', () => {
@@ -99,11 +113,17 @@ describe('selectLocalEngine', () => {
     ).toEqual({ engine: 'none', preferred: 'whisper' });
   });
 
-  it('never falls "up" to Parakeet for Whisper-bound selections', () => {
+  it('uses a downloaded model that misses a language rather than none at all', () => {
     expect(selectLocalEngine(['ja'], all({ whisperDownloaded: false }))).toEqual({
-      engine: 'none',
-      preferred: 'whisper',
+      engine: 'parakeet',
+      version: 'v3',
     });
+    expect(
+      selectLocalEngine([], all({ parakeetV2Downloaded: false, whisperDownloaded: false })),
+    ).toEqual({ engine: 'parakeet', version: 'v3' });
+    expect(
+      selectLocalEngine(['de'], all({ parakeetV3Downloaded: false, whisperDownloaded: false })),
+    ).toEqual({ engine: 'parakeet', version: 'v2' });
   });
 });
 

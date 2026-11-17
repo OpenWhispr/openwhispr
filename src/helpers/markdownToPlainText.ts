@@ -8,10 +8,9 @@
 // bullet, a `1.` number, `2 * 3`, snake_case, `#hashtag` and `x > y` are all
 // left exactly as written.
 //
-// The inline rules are applied per line, so emphasis that spans a line break
-// and setext (underlined) headings are out of scope: the prompt suffix that
-// asks the model for plain prose is the primary defence, and this helper is
-// the floor under a model that drifts back to markdown.
+// Inline rules span prose lines within a block, so emphasis around a hard
+// break is removed without matching across paragraphs, tables or code.
+// Setext (underlined) headings remain out of scope.
 
 const FENCE_LINE = /^\s*(`{3,}|~{3,})(.*)$/;
 const HORIZONTAL_RULE = /^\s*([-*_])(\s*\1){2,}\s*$/;
@@ -105,7 +104,7 @@ function stripInline(text: string): string {
     return `${placeholderPrefix}${literals.length - 1}`;
   };
   const withPlaceholders = text.replace(
-    /(?<![\\`])(`+)(?!`)(.*?)(?<!`)\1(?!`)/g,
+    /(?<![\\`])(`+)(?!`)(.*?)(?<!`)\1(?!`)/gs,
     (_match, _delimiter: string, content: string): string =>
       // Markdown permits padding a code span with one space at either end
       // so literal backticks do not merge with the delimiters.
@@ -146,15 +145,15 @@ function stripInline(text: string): string {
     // non-word close that is also not `(`, so dunder identifiers such as
     // `__init__` (immediately followed by a call's `(`) are never mistaken
     // for emphasis, while `__bold__ word` still strips.
-    .replace(/(?<!\\)\*\*(\S(?:.*?\S)??)\*\*/g, "$1")
-    .replace(/(?<![\w\\])__(\S(?:.*?\S)??)__(?![\w(])/g, "$1")
-    .replace(/(?<!\\)~~(\S(?:.*?\S)??)~~/g, "$1")
+    .replace(/(?<!\\)\*\*(\S(?:.*?\S)??)\*\*/gs, "$1")
+    .replace(/(?<![\w\\])__(\S(?:.*?\S)??)__(?![\w(])/gs, "$1")
+    .replace(/(?<!\\)~~(\S(?:.*?\S)??)~~/gs, "$1")
     // Markers must hug non-space on the inside, not sit inside a word on the
     // outside, and not be escaped — so `2 * 3`, snake_case and `\*` survive.
     // The single-underscore content also may not start or end with `_` itself,
     // so a dunder like `__init__` is never absorbed as `_` + `_init_` + `_`.
-    .replace(/(?<![\w*\\])\*(\S(?:.*?\S)??)\*(?![\w*])/g, "$1")
-    .replace(/(?<![\w_\\])_(?!_)(\S(?:.*?[^\s_])??)_(?![\w_])/g, "$1");
+    .replace(/(?<![\w*\\])\*(\S(?:.*?\S)??)\*(?![\w*])/gs, "$1")
+    .replace(/(?<![\w_\\])_(?!_)(\S(?:.*?[^\s_])??)_(?![\w_])/gs, "$1");
 
   // A literal can itself hold placeholders (a code span inside a link destination).
   const placeholder = new RegExp(`${placeholderPrefix}(\\d+)`, "g");
@@ -185,9 +184,20 @@ function splitTableCells(row: string): string[] {
 export function markdownToPlainText(markdown: string): string {
   const lines: string[] = [];
   const codeLines = new Set<number>();
+  const sourceLines = markdown.split(/\r?\n/);
+  const proseLines: string[] = [];
   let openingFence: string | null = null;
 
-  for (const line of markdown.split(/\r?\n/)) {
+  const flushProse = (): void => {
+    if (!proseLines.length) return;
+    for (const line of stripInline(proseLines.join("\n")).split("\n")) {
+      lines.push(line.replace(/[ \t]+$/, ""));
+    }
+    proseLines.length = 0;
+  };
+
+  for (let index = 0; index < sourceLines.length; index += 1) {
+    const line = sourceLines[index];
     const fence = line.match(FENCE_LINE);
     if (openingFence) {
       if (
@@ -204,24 +214,53 @@ export function markdownToPlainText(markdown: string): string {
       continue;
     }
     if (fence && (fence[1][0] === "~" || !fence[2].includes("`"))) {
+      flushProse();
       openingFence = fence[1];
       continue;
     }
-    if (HORIZONTAL_RULE.test(line)) continue;
-
-    if (TABLE_ROW.test(line)) {
-      const cells = splitTableCells(line);
-      if (cells.every((cell) => TABLE_ALIGNMENT_CELL.test(cell))) continue;
-      lines.push(cells.map(stripInline).join("\t"));
+    if (HORIZONTAL_RULE.test(line)) {
+      flushProse();
       continue;
     }
 
+    const nextLine = sourceLines[index + 1] ?? "";
+    if (TABLE_ROW.test(line) && TABLE_ROW.test(nextLine)) {
+      const cells = splitTableCells(line);
+      const alignment = splitTableCells(nextLine);
+      if (
+        cells.length === alignment.length &&
+        alignment.every((cell) => TABLE_ALIGNMENT_CELL.test(cell))
+      ) {
+        flushProse();
+        lines.push(cells.map(stripInline).join("\t"));
+        index += 2;
+        // Only the separator immediately after the header is syntax; later
+        // hyphen-only rows are data, such as missing values.
+        while (index < sourceLines.length && TABLE_ROW.test(sourceLines[index])) {
+          lines.push(splitTableCells(sourceLines[index]).map(stripInline).join("\t"));
+          index += 1;
+        }
+        index -= 1;
+        continue;
+      }
+    }
+
+    if (/^\s*$/.test(line)) {
+      flushProse();
+      lines.push("");
+      continue;
+    }
+
+    const startsBlock = /^\s{0,3}(?:>|#{1,6}\s|[-+*]\s|\d+[.)]\s)/.test(line);
+    if (startsBlock) flushProse();
     const block = line
       .replace(/^(\s{0,3}>\s?)+/, "")
       .replace(/^\s{0,3}#{1,6}\s+/, "")
       .replace(/^(\s*)\*\s+/, "$1- ");
-    lines.push(stripInline(block).replace(/[ \t]+$/, ""));
+    proseLines.push(block);
+    if (/^\s{0,3}(?:>|#{1,6}\s)/.test(line)) flushProse();
   }
+  flushProse();
 
   // Trim only prose padding: code whitespace and table edge cells are data.
   let start = 0;

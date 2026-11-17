@@ -1,8 +1,16 @@
 import type { ModelDefinition } from "../models/ModelRegistry";
+import type { ReasoningConfig } from "../services/BaseReasoningService";
 import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
-import type { OrgPolicy } from "./policy";
+import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
+import type { EffectivePolicySnapshot } from "./policy";
+import type { SplitLiveSpeakers } from "../utils/transcriptSpeakerState";
+import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
+import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
+import type { ProviderSettingsTarget } from "../utils/describeProviderError";
+import type { RemovedTranscriptSegment } from "../utils/diarizationCompletion";
+import type { SettingsTarget } from "./agentInteractions";
 import type {
   ManagedEnterpriseConfig,
   ManagedEnterpriseRequestContext,
@@ -10,6 +18,8 @@ import type {
 import type {
   CalendarAvailabilityRequest,
   CalendarAvailabilityResult,
+  CalendarEvent,
+  LinkableCalendarEvent,
   MicrosoftCalendarAccount,
 } from "./calendar";
 import type {
@@ -29,6 +39,31 @@ import type {
   NoteAttendee,
   NoteAttendeesRequest,
 } from "./connectors";
+import type {
+  SkillCommitResult,
+  SkillCreateInput,
+  SkillDetail,
+  SkillForModel,
+  SkillInvalidRequest,
+  SkillProposal,
+  SkillProposalCheck,
+  SkillRef,
+  SkillSaveResult,
+  SkillSummary,
+  SkillUpdate,
+  SkillUploadItem,
+  SkillUploadPreview,
+  SkillWriteError,
+} from "./skills";
+import type {
+  CloudSharedEntry,
+  SharedDictionaryHideRecord,
+  SharedDictionaryMeta,
+  SharedDictionarySnapshot,
+} from "./sharedDictionary";
+import type { ScopedSharedHintWords, SharedHintWords } from "../utils/sharedDictionaryHints";
+
+export type { SharedDictionarySnapshot } from "./sharedDictionary";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
@@ -72,6 +107,8 @@ export interface PolicyFailureMetadata {
   status?: number;
   minAppVersion?: string;
   details?: unknown;
+  messageKey?: string;
+  messageParams?: Record<string, unknown>;
 }
 
 export interface NoteRecordingProviderModel {
@@ -93,6 +130,16 @@ export interface NoteRecordingProvider {
 // main process defaults a missing value to "openai-realtime" for pre-1.8.4
 // renderers (#1624).
 export interface DictationRealtimeSessionOptions {
+  pipelineOptions?: {
+    agentName?: string;
+    customDictionary?: string[];
+    sharedDictionary?: string[];
+    customPrompt?: string;
+    tone?: DictationTone;
+    appCategory?: ToneAppCategory;
+    language?: string;
+    locale?: string;
+  };
   provider: string;
   baseUrl?: string;
   model?: string;
@@ -108,6 +155,8 @@ export interface DictationRealtimeSessionOptions {
 export interface DictationLanguageMetadata {
   language: string | null;
   languageConfidence: number | null;
+  // Sum of detector scores for Orukeet's 25 languages, not a calibrated probability.
+  languageSupportedScore?: number;
   languageAudioSeconds?: number;
 }
 
@@ -125,10 +174,23 @@ export type TranscriptionErrorCode =
   | "AUTH_REQUIRED"
   | "LIMIT_REACHED"
   | "PROVIDER_RATE_LIMITED"
+  | "OPENROUTER_OUT_OF_CREDITS"
   | "API_KEY_MISSING"
   | "INVALID_KEY"
   | "MODEL_NOT_AVAILABLE"
   | "CUSTOM_ENDPOINT_INVALID"
+  | "PROVIDER_AUTH_FAILED"
+  | "PROVIDER_ACCESS_DENIED"
+  | "PROVIDER_QUOTA_EXHAUSTED"
+  | "PROVIDER_MODEL_NOT_FOUND"
+  | "PROVIDER_PAYLOAD_TOO_LARGE"
+  | "PROVIDER_BAD_REQUEST"
+  | "PROVIDER_UNAVAILABLE"
+  | "PROVIDER_TIMEOUT"
+  | "PROVIDER_UNREACHABLE"
+  | "PROVIDER_NO_RESPONSE"
+  | "PROVIDER_ERROR"
+  | "CRASH_RECOVERY"
   | null;
 
 export type MeetingPromptVariant = "detected" | "starting" | "underway";
@@ -140,7 +202,63 @@ export interface MeetingNotificationData {
   event: { summary?: string | null } | null;
   variant: MeetingPromptVariant;
   joinUrl: string | null;
+  /** Set while the org refuses meeting recording: the card can only join. */
+  recordingRefusal?: Extract<
+    MeetingError,
+    "POLICY_MEETING_RECORDING_DISABLED" | "POLICY_UNRESOLVABLE"
+  >;
 }
+
+export interface MeetingFolderRef {
+  folderId: number;
+  spaceId: number;
+}
+export interface MeetingExistingNote {
+  noteId: number;
+  spaceId: number;
+  folderId: number | null;
+  spaceName: string;
+  folderName: string | null;
+  shared: boolean;
+}
+export interface MeetingDestinationContext {
+  folders: FolderItem[];
+  // The active workspace's Private and its teamspaces.
+  spaces: SpaceItem[];
+  // The active workspace's Private, where a new folder goes unless the user picks another space.
+  privateSpaceId: number | null;
+  defaultDestination: MeetingFolderRef | null;
+  selectedDestination: MeetingFolderRef | null;
+  recentDestinations: MeetingFolderRef[];
+  existingNote: MeetingExistingNote | null;
+}
+
+export interface MeetingSurfaceState {
+  revision: number;
+  mode: "closed" | "list" | "form";
+  contentHeight: number;
+  regions: { x: number; y: number; width: number; height: number }[];
+  focus: "request" | "release" | "keep";
+}
+
+export type MeetingError =
+  | "STALE_NOTIFICATION"
+  | "INVALID_REQUEST"
+  | "FOLDERS_UNAVAILABLE"
+  | "FOLDER_UNAVAILABLE"
+  | "SPACE_UNAVAILABLE"
+  | "FOLDER_NAME_REQUIRED"
+  | "FOLDER_NAME_TAKEN"
+  | "CREATE_FAILED"
+  | "LINKED_NOTE_CHANGED"
+  | "NOTE_UNAVAILABLE"
+  | "START_FAILED"
+  | "POLICY_MEETING_RECORDING_DISABLED"
+  | "POLICY_UNRESOLVABLE";
+
+export type MeetingResult<T> =
+  | { success: true; value: T }
+  | { success: false; code: MeetingError; context?: MeetingDestinationContext };
 
 /** Why auto-end concluded the meeting is over. */
 export type MeetingAutoEndReason = "mic-released" | "silence" | "process-exit";
@@ -150,13 +268,24 @@ export interface MeetingAutoEndRequest {
   reason?: MeetingAutoEndReason;
 }
 
+/** Fields a main-process handler resolves with in place of a rejected Error. */
+export interface IpcErrorFields {
+  error: string;
+  code?: string;
+  messageKey?: string;
+  messageParams?: Record<string, string | number>;
+  settingsTarget?: string;
+  technicalDetails?: TechnicalErrorDetailsData;
+  status?: number;
+  surface?: "transcription" | "llm";
+}
+
 /**
  * Proxied-transcription IPC results. `ipcMain.handle` drops custom error props on
  * rejection, so these handlers resolve with a serialized error instead of throwing.
  */
 export type ProxyTranscriptionResult =
-  | { text: string; model?: string; error?: undefined }
-  | { error: string; code?: string; messageKey?: string; text?: undefined };
+  { text: string; model?: string; error?: undefined } | (IpcErrorFields & { text?: undefined });
 
 export interface AuthTokenState {
   token: string | null;
@@ -174,6 +303,18 @@ export interface ActiveAccountScope {
   authGeneration: number;
 }
 
+export interface NoteWriteGuard {
+  accountId: string | null;
+  authGeneration: number;
+}
+
+// What main's database is scoped to: the signed-in account (null signed out),
+// and whose rows are in view (signed out, the device's only account, if any).
+export interface DatabaseAccountScope {
+  accountId: string | null;
+  visibleAccountId: string | null;
+}
+
 export interface TranscriptionItem {
   id: number;
   text: string;
@@ -189,6 +330,7 @@ export interface TranscriptionItem {
   error_code: TranscriptionErrorCode;
   route_kind?: string | null;
   client_transcription_id: string;
+  account_id?: string | null;
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
@@ -326,6 +468,48 @@ export interface Leaderboard {
   refreshAfterSeconds: number;
 }
 
+export interface DeviceNoteFolder {
+  id: number;
+  name: string;
+  is_default: number;
+  noteCount: number;
+}
+
+export interface DeviceNoteSummary {
+  id: number;
+  title: string;
+  folder_id: number | null;
+  created_at: string;
+  updated_at: string;
+  note_type: NoteItem["note_type"];
+}
+
+export interface DeviceNotesList {
+  folders: DeviceNoteFolder[];
+  notes: DeviceNoteSummary[];
+}
+
+export type DeviceNote = Pick<
+  NoteItem,
+  | "id"
+  | "title"
+  | "content"
+  | "enhanced_content"
+  | "transcript"
+  | "participants"
+  | "note_type"
+  | "created_at"
+  | "updated_at"
+  | "audio_duration_seconds"
+  | "folder_id"
+>;
+
+export interface DeviceNotesFailure {
+  success: false;
+  code: string;
+  error: string;
+}
+
 export interface NoteItem {
   id: number;
   title: string;
@@ -359,13 +543,22 @@ export interface NoteItem {
   // Server updated_at this device last acked (push response or pull); echoed
   // as base_updated_at on the next PATCH. Null = pre-guard row, pushes LWW.
   cloud_updated_at?: string | null;
+  cloud_revision?: number | null;
+  cloud_create_rejected?: number;
+  cloud_create_pending?: string | null;
+  content_sync_operation?: "set" | "clear" | null;
+  enhanced_content_sync_operation?: "set" | "clear" | null;
+  // Local-only counters distinguish later edits/Undo from an in-flight snapshot.
+  content_edit_generation?: number;
+  enhanced_content_edit_generation?: number;
   created_at: string;
   updated_at: string;
   client_note_id: string;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
-  // Computed by getNoteByClientId while a parent folder DELETE awaits its
-  // server result. Held notes stay hidden and must not be pulled/queued alone.
+  // Computed by getNoteByClientId and getNoteForCloudRow while a parent folder
+  // DELETE awaits its server result. Held notes stay hidden and must not be
+  // pulled/queued alone.
   folder_delete_pending?: number;
   // 1 while a cloud-backed row that left a team space still owes its scope
   // retraction push (D6); cleared when the row settles.
@@ -399,6 +592,11 @@ export type NotePushSnapshot = Pick<
   | "sync_status"
   | "deleted_at"
   | "cloud_updated_at"
+  | "cloud_revision"
+  | "content_sync_operation"
+  | "enhanced_content_sync_operation"
+  | "content_edit_generation"
+  | "enhanced_content_edit_generation"
   | "left_team"
 >;
 
@@ -407,20 +605,63 @@ export type NoteUpdateSnapshot = NotePushSnapshot;
 
 export interface NoteCreateAckResult {
   success: boolean;
-  outcome: "synced" | "pending" | "already-linked" | "orphaned" | "unresolved";
+  outcome:
+    | "synced"
+    | "pending"
+    | "already-linked"
+    | "orphaned"
+    | "unresolved"
+    | "awaiting-cloud"
+    | "conflict";
+  note?: NoteItem;
+}
+
+export interface NoteCreateAckWriteOptions {
+  expectedAuthGeneration?: number;
+  settleIfUnchanged?: boolean;
+  cloudRevision?: number | null;
+  // The server refused the create without writing it (write_applied: false).
+  writeRejected?: boolean;
+  cloudNote?: NoteCloudText;
+  requiresReconciliation?: boolean;
+  reconcilePending?: boolean;
+  localFolderId?: number | null;
+  localSpaceId?: number;
+}
+
+// A cloud note row's text fields, as a pull or a write response carries them.
+export interface NoteCloudText {
+  content?: string | null;
+  enhanced_content?: string | null;
+  enhancement_prompt?: string | null;
+  enhanced_at_content_hash?: string | null;
+  enhancement_template_id?: string | null;
+  content_state?: "set" | "clear" | null;
+  enhanced_content_state?: "set" | "clear" | null;
+}
+
+export interface NoteCloudBaseOptions {
+  // The user chose Keep on the conflict banner.
+  keepLocal?: boolean;
+  // The conflicting cloud copy Keep merges against: fields this device never
+  // edited take its values.
+  cloudNote?: NoteCloudText;
 }
 
 export interface NoteUpdateAckResult {
   success: boolean;
   outcome: "synced" | "pending" | "identity-changed";
   changes: number;
+  // Present when the ack took the server's copy of a text field.
+  note?: NoteItem;
 }
 
 export type ShareVisibility = "private" | "link" | "domain" | "invited";
 
 export type NotePermission = "owner" | "editor" | "viewer";
 
-export type NoteAccessPrincipalType = "user" | "email" | "team" | "folder" | "workspace";
+// "space" only appears as the implicit grant of a teamspace note's members.
+export type NoteAccessPrincipalType = "user" | "email" | "team" | "space" | "folder" | "workspace";
 
 export interface NoteAccessPrincipal {
   type: NoteAccessPrincipalType;
@@ -435,7 +676,7 @@ export interface NoteAccessGrant {
   id: string;
   principal: NoteAccessPrincipal;
   permission: Exclude<NotePermission, "owner">;
-  source: "direct" | "team" | "folder" | "workspace";
+  source: "direct" | "team" | "space" | "folder" | "workspace";
   inherited: boolean;
   pending: boolean;
   created_at: string;
@@ -524,6 +765,12 @@ export interface SpaceItem {
   // Retained only for unambiguous adoption of pre-spaces team rows.
   cloud_team_id?: string | null;
   workspace_id: string | null;
+  // A private space's account: one per account and workspace. Null on team
+  // spaces and on the signed-out stand-in.
+  account_id?: string | null;
+  // 1 on the account's default private space once its default workspace is
+  // bound. Not the API's is_default on workspaces or teamspaces.
+  is_default_private?: number;
   kind: "private" | "team";
   name: string;
   emoji: string | null;
@@ -534,6 +781,9 @@ export interface SpaceItem {
   // Direct space_members grant, null when access comes only via teams or the
   // workspace role. Absent on mirrors written before the API shipped it.
   my_direct_role?: TeamRole | null;
+  // Server-computed permissions for the caller. Absent on mirrors written
+  // before the API shipped it; read through spaceCan() so the role fallback applies.
+  capabilities?: SpaceCapabilities | null;
   // Server-computed deduped union of direct members and assigned team rosters.
   member_count: number | null;
   teams: SpaceTeamRef[];
@@ -543,8 +793,25 @@ export interface SpaceItem {
   updated_at: string;
 }
 
+// Why main refused a move: a teamspace note or folder the cloud already has stays there (D31).
+export type MoveRefusalCode = "team_row_synced";
+
+export interface NoteMutationResult {
+  success: boolean;
+  note?: NoteItem;
+  error?: string;
+  code?: MoveRefusalCode;
+}
+
+export interface WorkspaceScope {
+  activeWorkspaceId: string | null;
+  defaultWorkspaceId: string | null;
+  accountId?: string | null;
+}
+
 export interface DictionaryEntryItem {
   id: number;
+  account_id?: string | null;
   word: string;
   source: "manual" | "learned";
   created_at: string;
@@ -553,10 +820,17 @@ export interface DictionaryEntryItem {
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  // Set once the word was shared into a team list; the row stays live.
+  shared_at: string | null;
+  // 1 while a local set or clear of shared_at awaits its push.
+  shared_at_dirty?: number;
+  // 1 on a local tombstone of a moved word whose shared copy went.
+  fallback_retired?: number;
 }
 
 export interface SnippetEntryItem {
   id: number;
+  account_id?: string | null;
   trigger: string;
   replacement: string;
   created_at: string;
@@ -568,6 +842,67 @@ export interface SnippetEntryItem {
 }
 
 export type WorkspaceRole = "owner" | "admin" | "member";
+
+// Server-computed permissions, snake_case as sent by the API.
+export interface WorkspaceCapabilities {
+  manage_members: boolean;
+  manage_teams: boolean;
+  create_spaces: boolean;
+  manage_settings: boolean;
+  manage_billing: boolean;
+  delete_workspace: boolean;
+  transfer_ownership: boolean;
+  leave: boolean;
+  // The one plan gate a capability reflects: it tells a paywall from a missing permission.
+  // Absent from an older API or a cache written before it, which reads as allowed.
+  create_teams?: boolean;
+}
+
+export interface SpaceCapabilities {
+  edit_notes: boolean;
+  manage_members: boolean;
+  manage_settings: boolean;
+  leave: boolean;
+}
+
+// Who to ask for access to a space: its admins, as GET /api/workspaces/:id/spaces lists them.
+export interface SpaceAdminContact {
+  user_id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+}
+
+// A row of the workspace's space directory, which lists spaces the caller may not be in (yet).
+export interface WorkspaceSpace {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  emoji: string | null;
+  member_count: number;
+  teams: { id: string; name: string; access?: TeamRole }[];
+  // Everything below is absent from an older API.
+  is_default?: boolean;
+  is_open?: boolean;
+  admins?: SpaceAdminContact[];
+  my_role?: TeamRole | null;
+  my_direct_role?: TeamRole | null;
+  capabilities?: SpaceCapabilities | null;
+  can_join?: boolean;
+  // The caller is the only admin, so leaving or demoting themselves is refused.
+  sole_admin?: boolean;
+}
+
+export interface SpaceInvitation {
+  id: string;
+  email: string;
+  role: TeamRole;
+  /** The role accepting gives across the workspace. An older API leaves it out. */
+  workspace_role?: TeamRole;
+  expires_at: string;
+  created_at: string;
+}
 
 export interface Workspace {
   id: string;
@@ -584,11 +919,56 @@ export interface Workspace {
   seats: number;
   // Optional: absent from API responses that predate unified billing.
   seats_used?: number;
+  // Absent before API release 4.
+  seat_limit?: number;
   created_at: string;
   updated_at: string;
   role: WorkspaceRole;
   is_billable?: boolean;
   billing_manager?: string | null;
+  // Absent on API responses that predate capabilities; read through workspaceCan().
+  capabilities?: WorkspaceCapabilities;
+  has_subscription?: boolean;
+  // The caller's own default workspace (only the account it was made for sees true).
+  is_default: boolean;
+  // Some account's default workspace, the caller's or another member's.
+  is_account_default: boolean;
+}
+
+export interface OwnedMemberContent {
+  user_id: string;
+  owned_notes: number;
+  owned_spaces: number;
+}
+
+export interface MemberRemovalPreview {
+  members: OwnedMemberContent[];
+  already_removed: string[];
+  transfer_required: boolean;
+}
+
+export interface MemberRemovalResult {
+  removed: string[];
+  already_removed: string[];
+  transferred: { to: string; notes: number; spaces: number } | null;
+}
+
+export type InvitationBatchStatus =
+  "invited" | "invalid_email" | "already_member" | "already_invited" | "directory_required";
+
+export interface InvitationBatchResult {
+  results: Array<{
+    email: string;
+    status: InvitationBatchStatus;
+    email_sent?: boolean;
+    /** With already_invited: that invitation now carries what the request named. Older APIs leave it out. */
+    grants_added?: boolean;
+  }>;
+}
+
+export interface MemberTeamRef {
+  id: string;
+  name: string;
 }
 
 export interface WorkspaceMember {
@@ -599,9 +979,16 @@ export interface WorkspaceMember {
   email: string;
   name: string | null;
   image: string | null;
+  teams?: MemberTeamRef[]; // absent from APIs before release 3
 }
 
 export type TeamRole = "admin" | "member";
+
+export interface TeamCapabilities {
+  manage_members: boolean;
+  manage_settings: boolean;
+  leave: boolean;
+}
 
 export interface Team {
   id: string;
@@ -613,6 +1000,43 @@ export interface Team {
   created_at: string;
   updated_at: string;
   member_count?: number;
+  // Everything below is absent from an older API.
+  directory_synced?: boolean;
+  my_role?: TeamRole | null;
+  my_direct_role?: TeamRole | null;
+  capabilities?: TeamCapabilities;
+  // The caller is the only admin, so leaving or stepping down is refused.
+  sole_admin?: boolean;
+  spaces?: { id: string; name: string; emoji: string | null; access: TeamRole }[];
+}
+
+export interface TeamInvitation {
+  id: string;
+  email: string;
+  workspace_role: "admin" | "member";
+  expires_at: string;
+  created_at: string;
+}
+
+export interface WorkspaceGuestNote {
+  id: string;
+  title: string | null;
+  permission: "viewer" | "editor";
+  visibility: "link" | "domain" | "invited";
+}
+
+export interface WorkspaceGuest {
+  email: string;
+  name: string | null;
+  image: string | null;
+  notes: WorkspaceGuestNote[];
+}
+
+export interface GuestRemoval {
+  removed: string[];
+  not_found: string[];
+  skipped_members: string[];
+  link_shared_note_ids: string[];
 }
 
 export interface TeamMember {
@@ -755,6 +1179,15 @@ export interface CudaWhisperStatus {
   gpuInfo: GpuInfo;
   /** CUDA fell back to CPU on this machine and stays off until retried. */
   gpuFailed?: boolean;
+  /** The whisper-server error line saved with that failure; null when none was readable. */
+  gpuFailReason?: string | null;
+  /** The pack the GPU card describes: the one every whisper start picks, else
+   * an installed pack that failed (#1736). At most one pack reports true. */
+  inUse?: boolean;
+  /** An older release installed the pack and this version can't use it. */
+  needsUpdate?: boolean;
+  /** The bundled whisper-server is itself a GPU build and runs on the GPU, so no pack is offered. */
+  bundledGpu?: boolean;
 }
 
 export interface VulkanWhisperStatus {
@@ -764,6 +1197,15 @@ export interface VulkanWhisperStatus {
   hasNvidiaGpu: boolean;
   /** Vulkan fell back to CPU on this machine and stays off until retried. */
   gpuFailed?: boolean;
+  /** The whisper-server error line saved with that failure; null when none was readable. */
+  gpuFailReason?: string | null;
+  /** The pack the GPU card describes: the one every whisper start picks, else
+   * an installed pack that failed (#1736). At most one pack reports true. */
+  inUse?: boolean;
+  /** An older release installed the pack and this version can't use it. */
+  needsUpdate?: boolean;
+  /** The bundled whisper-server is itself a GPU build and runs on the GPU, so no pack is offered. */
+  bundledGpu?: boolean;
 }
 
 export interface WhisperServerStatus {
@@ -867,6 +1309,36 @@ export interface ScreenRecordingAccessResult {
 export type CloudReasonPurpose = "cleanup" | "assistant" | "translation" | "noteFormatting";
 
 // Orukeet's audio language estimate, reported for the backend's per-user gate.
+export interface OrukeetLanguageRoutingTelemetry {
+  version: 1;
+  mode: "shadow" | "supported-0.30" | "supported-0.10";
+  auto: boolean;
+  eligible: boolean;
+  analyzedSeconds: number | null;
+  topLanguage: string | null;
+  topScore: number | null;
+  supportedScore: number | null;
+  legacyFallback: boolean;
+  top05Fallback: boolean;
+  candidate030: boolean | null;
+  candidate010: boolean | null;
+  selectedFallback: boolean;
+  fallbackAvailable: boolean;
+}
+export interface OrukeetCleanupTelemetry {
+  status: "complete" | "fallback" | "skipped";
+  model?: "gemma-4-12b";
+  processingMs?: number;
+  queueMs?: number;
+  firstTextMs?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+export interface OrukeetTelemetry {
+  orukeetLanguageRouting?: OrukeetLanguageRoutingTelemetry;
+  orukeetCleanup?: OrukeetCleanupTelemetry;
+}
+
 export interface SttDetectedLanguageFields {
   sttDetectedLanguage?: string;
   sttDetectedLanguageConfidence?: number;
@@ -881,6 +1353,7 @@ export interface ScreenContextImage {
 }
 
 export interface UpdateCheckResult {
+  code?: string;
   updateAvailable: boolean;
   version?: string;
   releaseDate?: string;
@@ -890,6 +1363,13 @@ export interface UpdateCheckResult {
 }
 
 export interface UpdateStatusResult {
+  /** null while no verdict allows updates. */
+  updateMode?: import("./policy").UpdateMode | null;
+  policyReady?: boolean;
+  /** The policy lookup failed with no verdict held; a check retries it. */
+  policyUnavailable?: boolean;
+  effectiveAutoUpdatesEnabled?: boolean;
+  stagedUpdate?: boolean;
   updateAvailable: boolean;
   updateDownloaded: boolean;
   isDevelopment: boolean;
@@ -904,6 +1384,7 @@ export interface UpdateInfoResult {
 }
 
 export interface UpdateResult {
+  code?: string;
   success: boolean;
   message: string;
 }
@@ -913,7 +1394,7 @@ export interface AppVersionResult {
 }
 
 export interface WhisperDownloadProgressData {
-  type: "progress" | "installing" | "complete" | "error";
+  type: "progress" | "verifying" | "installing" | "complete" | "error";
   model: string;
   percentage?: number;
   downloaded_bytes?: number;
@@ -927,7 +1408,7 @@ export interface WhisperDownloadProgressData {
 export interface LocalModelDownloadStatus {
   modelType: "whisper" | "parakeet" | "llm";
   modelId: string;
-  phase: "downloading" | "installing";
+  phase: "downloading" | "verifying" | "installing";
   progress: number;
   downloadedBytes: number;
   totalBytes: number;
@@ -976,7 +1457,7 @@ export interface ParakeetModelsListResult {
 }
 
 export interface ParakeetDownloadProgressData {
-  type: "progress" | "installing" | "complete" | "error";
+  type: "progress" | "verifying" | "installing" | "complete" | "error";
   model: string;
   percentage?: number;
   downloaded_bytes?: number;
@@ -1015,6 +1496,8 @@ export interface PasteToolsResult {
   hasUinput?: boolean;
   hasWtype?: boolean;
   isWlroots?: boolean;
+  isCosmic?: boolean;
+  wlCopyMissing?: boolean;
   tools?: string[];
   recommendedInstall?: string;
 }
@@ -1036,6 +1519,30 @@ export interface VulkanGpuResult {
   deviceName?: string;
   reason?: string;
   error?: string;
+}
+
+export interface ComputerProfile {
+  platform: "darwin" | "win32" | "linux";
+  arch: string; // process.arch
+  name: string | null; // "MacBook Pro", "Dell XPS 13 9310"; null = use the generic name
+  formFactor: "laptop" | "desktop";
+  processorName: string; // "Apple M5 Pro", "Intel Core i5-1235U"
+  appleChip: { generation: number; tier: "" | "Pro" | "Max" | "Ultra" } | null;
+  memoryGb: number; // installed GB: a Mac's own figure, Windows' modules, else snapped from usable; 0 = unread
+  graphicsName: string | null; // null on Apple chips (UI shows "Built into chip")
+  nvidia: { name: string; vramMb: number | null } | null;
+  parakeetSupported: boolean; // getParakeetCapability().supported (macOS 15.5 rule)
+  systemLanguages: string[]; // preferred system languages, as tags, e.g. ["pt-BR", "en-US"]
+}
+
+/** What onboarding's local setup downloads: a speech model, a text model or the graphics pack. */
+export type LocalSetupDownloadKind = "whisper" | "parakeet" | "llm" | "llamaVulkan";
+
+/** Free space where local models download, and the room each download kind reserves. */
+export interface LocalSetupSpace {
+  availableBytes: number;
+  /** The room each kind reserves while it downloads and unpacks (main's disk checks). */
+  factors: Record<LocalSetupDownloadKind, number>;
 }
 
 export interface LlamaVulkanStatus {
@@ -1089,7 +1596,9 @@ export type LocalLLMDownloadProgressEvent =
     };
 
 export interface ConversationPreview {
+  device_only?: number;
   id: number;
+  account_id?: string | null;
   title: string;
   created_at: string;
   updated_at: string;
@@ -1103,6 +1612,52 @@ export interface ConversationPreview {
   message_count: number;
   last_message?: string | null;
   last_message_role?: "user" | "assistant" | "system" | null;
+  /** Set on a fork once the chat it was copied from is on this device. */
+  parent_conversation_id?: number | null;
+  /** The note the chat was started from, joined in by the Chat list queries. */
+  note_id?: number | null;
+  note_title?: string | null;
+  note_deleted_at?: string | null;
+  /** That note's space, for the Chat list's workspace scope. */
+  note_space_id?: number | null;
+}
+
+export interface AgentMessageRow {
+  id: number;
+  conversation_id: number;
+  role: "user" | "assistant" | "system";
+  content: string;
+  metadata?: string;
+  created_at: string;
+}
+
+export interface AgentConversationWithMessages {
+  device_only?: number;
+  space_id?: number | null;
+  folder_id?: number | null;
+  note_space_id?: number | null;
+  note_deleted_at?: string | null;
+  id: number;
+  title: string;
+  note_id?: number | null;
+  /** Main's live ownership claim; never stored or uploaded. */
+  has_active_turn?: boolean;
+  archived_at?: string;
+  cloud_id?: string | null;
+  client_conversation_id?: string | null;
+  cloud_create_attempted?: number;
+  created_at: string;
+  updated_at: string;
+  parent_conversation_id?: number | null;
+  /** The parent's client id, which every device shares. */
+  parent_client_conversation_id?: string | null;
+  /** Text the fork was made from, sent as context with its next request. */
+  fork_context?: string | null;
+  /** The parent's title, while the parent still exists. */
+  parent_title?: string | null;
+  /** How many of a fork's first messages it copied from its parent. */
+  fork_message_count?: number | null;
+  messages: AgentMessageRow[];
 }
 
 export interface ConversationCreateSnapshot {
@@ -1116,6 +1671,30 @@ export interface ConversationCreateAckResult {
   success: boolean;
   outcome: "synced" | "changed" | "already-linked" | "delete-pending" | "orphaned" | "unresolved";
   cloud_id?: string | null;
+}
+
+export interface CloudRowWriteOptions {
+  newKeyIfTaken?: boolean;
+}
+
+// Main refused a sync write because the sign-in that read or fetched it was
+// replaced.
+export interface StaleSyncWrite {
+  success: false;
+  changes: 0;
+  stale: true;
+}
+
+export interface PrivatePlacementBackupCandidates {
+  notes: string[];
+  folders: string[];
+}
+
+export interface PrivatePlacementBackupRow {
+  id: number;
+  cloud_id: string;
+  client_id: string;
+  workspace_id: string;
 }
 
 export type OnboardingDemoKind = "dictation" | "assistant";
@@ -1138,6 +1717,26 @@ export interface OnboardingDemoEvent {
   level?: number;
 }
 
+/**
+ * What the agent window shows: the pill, the composer above it, the modal, or
+ * (standalone) a card the turn waits on, above the compact pill.
+ */
+export type AgentWindowLayout = "pill" | "typing" | "standalone" | "modal";
+
+/** The agent window's voice take, which keeps dictation off the microphone while recording. */
+export type AgentVoiceState = "idle" | "recording" | "transcribing";
+
+/** A conversational wake-word command, sent from the dictation window to the agent window. */
+export interface AgentWindowCommand {
+  text: string;
+  /** Base64 screenshot without a data-URL prefix. */
+  attachment: { image: string; mediaType: string } | null;
+  /** Text selected in another app when the command was spoken. */
+  selectedContext: { text: string; source: "external" } | null;
+  /** When the command was spoken (ISO), so main can refuse it after an account change. */
+  spokenAt?: string;
+}
+
 export interface ReferralItem {
   id: string;
   email: string;
@@ -1149,9 +1748,12 @@ export interface ReferralItem {
 
 declare global {
   interface Window {
+    commitHeldSpaceDeletes?: () => Promise<void>;
     electronAPI: {
       // Basic window operations
-      setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
+      setOnboardingWindowMode?: (
+        mode: "compact" | "expanded" | "local-setup" | "restore"
+      ) => Promise<boolean>;
       setOnboardingActive?: (active: boolean) => Promise<boolean>;
       openPermissionGuide?: (state: PermissionGuideState) => Promise<boolean>;
       closePermissionGuide?: () => Promise<boolean>;
@@ -1162,6 +1764,35 @@ declare global {
       ) => void;
       onPermissionGuideState?: (callback: (state: PermissionGuideState) => void) => () => void;
       onPermissionGuideAction?: (callback: (action: PermissionGuideAction) => void) => () => void;
+      agentWindowReady?: () => void;
+      /** Bounds for a layout, and keyboard focus for typing in it. */
+      agentWindowSetLayout?: (request: {
+        layout: AgentWindowLayout;
+        focus: boolean;
+        /** standalone only: the card's measured height. */
+        contentHeight?: number;
+        /** pill only: the wider pill that reads "Waiting for answer". */
+        wide?: boolean;
+      }) => Promise<boolean>;
+      agentWindowHide?: () => Promise<boolean>;
+      agentWindowSetDragging?: (dragging: boolean) => void;
+      /** False refuses a recording while dictation is using the microphone. */
+      agentWindowSetVoiceState?: (state: AgentVoiceState, attempt: string) => Promise<boolean>;
+      openAgentWindow?: () => Promise<boolean>;
+      submitAgentCommand?: (command: AgentWindowCommand) => Promise<boolean>;
+      /** `external`: the press came from another app, whose selection may be captured. */
+      onAgentWindowHotkey?: (callback: (payload: { external: boolean }) => void) => () => void;
+      onAgentWindowOpen?: (
+        callback: (payload: { layout: AgentWindowLayout }) => void
+      ) => () => void;
+      onAgentWindowCommand?: (callback: (command: AgentWindowCommand) => void) => () => void;
+      onAgentWindowDismiss?: (callback: () => void) => () => void;
+      /** The dictation window's view of the agent's microphone: no dictation starts while it records. */
+      onAgentRecordingChanged?: (callback: (recording: boolean) => void) => () => void;
+      /** A global Esc for the window that registered it, while it records. */
+      registerCancelHotkey?: (key: string) => Promise<unknown>;
+      unregisterCancelHotkey?: () => Promise<{ success: boolean }>;
+      onCancelHotkeyPressed?: (callback: () => void) => () => void;
       verifySystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
       beginOnboardingDemo?: (session: { id: string; kind: OnboardingDemoKind }) => Promise<boolean>;
       endOnboardingDemo?: (id: string) => Promise<boolean>;
@@ -1178,16 +1809,30 @@ declare global {
         clientSecret?: string;
         environment?: string;
         tenant?: string;
-      }) => Promise<{ success: boolean; error?: string; errorCode?: string; status?: number }>;
+      }) => Promise<{
+        success: boolean;
+        error?: string;
+        errorCode?: string;
+        status?: number;
+        /** The provider gave no verdict (busy, down, unreachable); the setup may be used. */
+        unverified?: boolean;
+      }>;
       pasteText: (
         text: string,
         options?: {
           fromStreaming?: boolean;
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
+          /** Paste exactly this text: no smart spacing, no AutoLearn. */
+          raw?: boolean;
         }
       ) => Promise<
-        | { success: true; pasted: boolean; reason?: "modifiers-held" }
+        | {
+            success: true;
+            pasted: boolean;
+            reason?:
+              "modifiers-held" | "accessibility-missing" | "wl-copy-missing" | "wl-copy-failed";
+          }
         | {
             success: false;
             pasted: false;
@@ -1203,10 +1848,9 @@ declare global {
             characterCount: number;
           }
         | {
+            /** A writable field has the caret, with nothing selected: an answer can be typed there. */
             status: "editable";
             sessionId: string;
-            /** True when the captured app keeps markdown (spec Appendix A); false means plain text. */
-            acceptsMarkdown: boolean;
           }
         | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
@@ -1215,6 +1859,7 @@ declare global {
             maxCharacters?: number;
           }
       >;
+      cancelSelectionEdit?: (sessionId: string) => Promise<void>;
       replaceSelectedText?: (
         sessionId: string,
         text: string,
@@ -1224,76 +1869,44 @@ declare global {
         code?:
           | "invalid_replacement"
           | "session_expired"
+          | "cancelled"
           | "target_changed"
           | "selection_unavailable"
           | "selection_changed"
           | "paste_failed"
           | "modifiers_held"
+          | "wl_copy_missing"
+          | "wl_copy_failed"
           | "selection_manager_unavailable";
         error?: string;
       }>;
       pasteAtCapturedTarget?: (
         sessionId: string,
-        text: string,
-        options?: { restoreClipboard?: boolean; allowClipboardFallback?: boolean }
-      ) => Promise<{
-        success: boolean;
-        code?:
-          | "invalid_replacement"
-          | "session_expired"
-          | "target_changed"
-          | "paste_failed"
-          | "modifiers_held"
-          | "selection_manager_unavailable";
-        error?: string;
-      }>;
+        text: string
+      ) => Promise<{ success: boolean; code?: string }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
+      openSettingsSection?: (
+        section: SettingsTarget | ProviderSettingsTarget | "plansBilling"
+      ) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
+      captureDictationAppCategory?: () => Promise<ToneAppCategory>;
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
-      onOpenAssistantPanel?: (callback: () => void) => () => void;
+      onMeetingStartRefused?: (callback: (code: string) => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
-      onPrepareDictation?: (
-        callback: (options?: { inputKind?: "dictation" | "assistant" | "translation" }) => void
-      ) => () => void;
+      onPrepareDictation?: (callback: () => void) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
-      onCancelDictation?: (callback: () => void) => () => void;
       onDictationForceStopped?: (
         callback: (payload?: { reason?: "timeout" | "reset" | "manual" }) => void
       ) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
         state: "idle" | "preparing" | "recording" | "processing",
-        inputKind?: "dictation" | "assistant" | "translation"
-      ) => void;
-      dictationAudioLevelChanged?: (level: number) => void;
-      toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
-      cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;
-      getAgentDictationPillState?: () => Promise<{
-        lifecycle: "idle" | "preparing" | "recording" | "processing";
-        interactive: boolean;
-        horizontalDirection: "left" | "right";
-      }>;
-      resizeAgentDictationPillToContent?: (surfaceHeight: number | null) => Promise<{
-        success: boolean;
-        changed?: boolean;
-        bounds?: { x: number; y: number; width: number; height: number };
-        message?: string;
-      }>;
-      setAgentDictationPillInteractivity?: (interactive: boolean) => Promise<{ success: boolean }>;
-      onAgentDictationPillStateChanged?: (
-        callback: (state: {
-          lifecycle: "idle" | "preparing" | "recording" | "processing";
-          interactive: boolean;
-          horizontalDirection: "left" | "right";
-        }) => void
-      ) => () => void;
-      onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
-      showAgentDictationFinalTranscript?: (text: string) => void;
-      onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
+        attempt: string
+      ) => Promise<boolean>;
 
       // STT config
       getSttConfig?: () => Promise<
@@ -1302,52 +1915,16 @@ declare global {
             dictation?: { mode: string };
             notes?: { mode: string };
             streamingProvider?: string;
+            orukeetPipeline?: "gemma12";
+            orukeetLanguageRouting?: "off" | "shadow" | "supported-0.30" | "supported-0.10";
           } & PolicyFailureMetadata)
         | null
       >;
 
       // Org policy (see src/types/policy.ts)
-      getWorkspacePolicy?: (
-        accountId?: string,
-        expectedAuthGeneration?: number
-      ) => Promise<{
-        success: boolean;
-        status?: "network" | "cached" | "current" | "unsupported" | "restricted" | "error";
-        revision?: number;
-        accountId?: string | null;
-        authGeneration?: number | null;
-        managed?: boolean;
-        policy?: OrgPolicy | null;
-        policyUpdatedAt?: string | null;
-        endpointSupported?: boolean;
-        code?: string;
-        error?: string;
-        enforcementRequired?: boolean;
-      }>;
-      onWorkspacePolicyChanged?: (
-        callback: (
-          snapshot:
-            | {
-                success: true;
-                status: "network" | "cached" | "current" | "unsupported";
-                revision: number;
-                accountId: string | null;
-                authGeneration: number;
-                managed: boolean;
-                policy: OrgPolicy | null;
-                policyUpdatedAt: string | null;
-                endpointSupported: boolean;
-              }
-            | {
-                success: false;
-                status: "error";
-                revision: number;
-                accountId: string | null;
-                authGeneration: number;
-                code: "POLICY_UNRESOLVABLE";
-                error: string;
-              }
-        ) => void
+      getEffectivePolicy?: () => Promise<EffectivePolicySnapshot>;
+      onEffectivePolicyChanged?: (
+        callback: (snapshot: EffectivePolicySnapshot) => void
       ) => () => void;
 
       getNoteRecordingConfig?: () => Promise<NoteRecordingConfigResult | null>;
@@ -1450,7 +2027,7 @@ declare global {
           remoteTranscriptionModel?: string;
           managed?: {
             kind: "managed";
-            provider: "azure";
+            provider: "azure" | "openai-compatible";
             deployment: string;
             context: ManagedEnterpriseRequestContext;
           };
@@ -1458,8 +2035,9 @@ declare global {
       ) => Promise<{
         success: boolean;
         transcription?: TranscriptionItem;
+        warning?: string;
         error?: string;
-        code?: TranscriptionErrorCode;
+        code?: string;
         messageKey?: string;
       }>;
       updateTranscriptionText: (
@@ -1471,19 +2049,71 @@ declare global {
       // Dictionary operations
       getDictionary: () => Promise<string[]>;
       /** Replaces the whole dictionary — omitted words are deleted. Prefer applyDictionaryChanges. */
-      setDictionary: (words: string[]) => Promise<{ success: boolean }>;
-      applyDictionaryChanges?: (changes: {
-        add?: string[];
-        remove?: string[];
-      }) => Promise<{ success: boolean; added: number; removed: number }>;
+      setDictionary: (
+        words: string[],
+        listsAccountId?: string | null
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** Writes the cached list only into a database that has never held one. */
+      seedDictionary?: (words: string[]) => Promise<{ success: boolean; seeded: boolean }>;
+      applyDictionaryChanges?: (
+        changes: { add?: string[]; remove?: string[] },
+        listsAccountId?: string | null
+      ) => Promise<{ success: boolean; added: number; removed: number; stale?: boolean }>;
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
       getSnippets?: () => Promise<Array<{ trigger: string; replacement: string }>>;
       setSnippets?: (
+        snippets: Array<{ trigger: string; replacement: string }>,
+        listsAccountId?: string | null
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      seedSnippets?: (
         snippets: Array<{ trigger: string; replacement: string }>
-      ) => Promise<{ success: boolean }>;
+      ) => Promise<{ success: boolean; seeded: boolean }>;
       onSnippetsUpdated?: (
         callback: (snippets: Array<{ trigger: string; replacement: string }>) => void
       ) => () => void;
+      skillsList?: () => Promise<{ skills: SkillSummary[] }>;
+      skillsGet?: (name: string) => Promise<SkillDetail | null>;
+      /** A text file inside the skill, or null for anything else. */
+      skillsReadFile?: (name: string, path: string) => Promise<{ text: string } | null>;
+      skillsSetEnabled?: (
+        name: string,
+        enabled: boolean
+      ) => Promise<{ ok: true } | SkillInvalidRequest>;
+      skillsUninstall?: (
+        name: string
+      ) => Promise<{ ok: true } | { ok: false; error: SkillWriteError } | SkillInvalidRequest>;
+      skillsReveal?: (name: string) => Promise<{ ok: boolean }>;
+      skillsPreviewUpload?: (
+        items: SkillUploadItem[]
+      ) => Promise<{ items: SkillUploadPreview[] } | SkillInvalidRequest>;
+      skillsCommitUpload?: (request: {
+        tokens: string[];
+        replace: string[];
+      }) => Promise<SkillCommitResult | SkillInvalidRequest>;
+      /** Frees previewed uploads that will not be installed. */
+      skillsDiscardUploads?: (tokens: string[]) => Promise<{ ok: true } | SkillInvalidRequest>;
+      skillsCreate?: (input: SkillCreateInput) => Promise<SkillSaveResult>;
+      skillsAddRecommended?: (
+        id: string,
+        copy: { title: string; description: string }
+      ) => Promise<SkillSaveResult>;
+      /** The built-in creator, or a skill that is on and valid; null for anything else. */
+      skillsReadForModel?: (
+        ref: SkillRef & { file?: string; withFiles?: boolean }
+      ) => Promise<SkillForModel | null>;
+      skillsCheckProposal?: (
+        request:
+          { kind: "create"; proposal: SkillProposal } | { kind: "update"; update: SkillUpdate }
+      ) => Promise<SkillProposalCheck | SkillInvalidRequest>;
+      skillsSaveProposal?: (proposal: SkillProposal) => Promise<SkillSaveResult>;
+      skillsApplyUpdate?: (update: SkillUpdate) => Promise<SkillSaveResult>;
+      skillsMarkUsed?: (name: string) => Promise<void>;
+      /** Puts back the copy a save or update kept, then forgets it. */
+      skillsUndo?: (
+        name: string,
+        versionId: string
+      ) => Promise<{ ok: true } | { ok: false; error: SkillWriteError } | SkillInvalidRequest>;
+      onSkillsChanged?: (callback: () => void) => () => void;
       setAutoLearnEnabled?: (enabled: boolean) => void;
       onCorrectionsLearned?: (callback: (words: string[]) => void) => () => void;
       undoLearnedCorrections?: (words: string[]) => Promise<{ success: boolean }>;
@@ -1496,19 +2126,23 @@ declare global {
         sourceFile?: string | null,
         audioDuration?: number | null,
         folderId?: number | null,
-        spaceId?: number | null
+        spaceId?: number | null,
+        transcript?: string | null,
+        writeGuard?: NoteWriteGuard
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       getNote: (id: number) => Promise<NoteItem | null>;
       getNotes: (
         noteType?: string | null,
         limit?: number,
         folderId?: number | null,
-        spaceId?: number | null
+        spaceId?: number | null,
+        spaceIds?: number[] | null
       ) => Promise<NoteItem[]>;
       getSpaceNotes: (spaceId: number, limit?: number) => Promise<NoteItem[]>;
       updateNote: (
         id: number,
         updates: {
+          clear_fields?: Array<"content" | "enhanced_content">;
           title?: string;
           content?: string;
           enhanced_content?: string | null;
@@ -1528,8 +2162,15 @@ declare global {
           owner_user_id?: string | null;
           updated_by_user_id?: string | null;
           left_team?: number;
-        }
+        },
+        options?: { undoable: true; expected: NoteItem; turn?: string; writeGuard?: NoteWriteGuard }
+      ) => Promise<NoteMutationResult>;
+      getNoteUndos: () => Promise<Array<{ token: string; noteId: number; title: string }>>;
+      claimNoteUndo: (token: string) => Promise<boolean>;
+      undoNoteUpdate: (
+        token: string
       ) => Promise<{ success: boolean; note?: NoteItem; error?: string }>;
+      discardNoteUndo: (id: number, token?: string) => Promise<void>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
       exportNote: (
         noteId: number,
@@ -1544,13 +2185,16 @@ declare global {
         query: string,
         limit?: number,
         spaceId?: number | null,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceIds?: number[] | null
       ) => Promise<NoteItem[]>;
+      // spaceIds: the spaces the assistant may read; an empty list reads nothing.
       semanticSearchNotes: (
         query: string,
         limit?: number,
         spaceId?: number | null,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceIds?: readonly number[] | null
       ) => Promise<NoteItem[]>;
       updateNoteCloudId: (id: number, cloudId: string) => Promise<NoteItem>;
       updateNoteShareState: (
@@ -1560,9 +2204,28 @@ declare global {
 
       // Folder operations
       getFolders: (spaceId?: number | null) => Promise<FolderItem[]>;
+      getDeviceNotes?: () => Promise<DeviceNotesList>;
+      getDeviceNote?: (id: number) => Promise<DeviceNote | null>;
+      moveDeviceNotes?: (request: {
+        noteIds?: number[];
+        folderId?: number;
+        workspaceId?: string | null;
+        /** One of the account's Private folders to file every note in. */
+        targetFolderId?: number;
+        accountId?: string | null;
+      }) => Promise<{ success: true; moved: NoteItem[]; skipped: number } | DeviceNotesFailure>;
+      getStandInOwnershipCandidates?: () => Promise<Array<{ id: number; cloud_id: string }>>;
+      resolveStandInOwnership?: (request: {
+        noteId: number;
+        cloudId: string;
+        owned: boolean;
+        accountId?: string | null;
+      }) => Promise<{ claimed: boolean } | DeviceNotesFailure>;
+      onDeviceNotesChanged?: (callback: () => void) => () => void;
       createFolder: (
         name: string,
-        spaceId?: number | null
+        spaceId?: number | null,
+        writeGuard?: NoteWriteGuard
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
       deleteFolder: (id: number) => Promise<{ success: boolean; error?: string }>;
       renameFolder: (
@@ -1572,18 +2235,94 @@ declare global {
       moveFolderToSpace: (
         id: number,
         spaceId: number
-      ) => Promise<{ success: boolean; folder?: FolderItem; notes?: NoteItem[]; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        folder?: FolderItem;
+        notes?: NoteItem[];
+        error?: string;
+        code?: MoveRefusalCode;
+      }>;
       getFolderNoteCounts: () => Promise<
         Array<{ space_id: number; folder_id: number | null; count: number }>
       >;
 
       // Space operations
       getSpaces?: () => Promise<SpaceItem[]>;
+      hasOtherAccountRows?: () => Promise<boolean>;
+      accountChangedSince?: (occurredAt?: string) => Promise<boolean>;
+      hasUnclaimedLegacyRows?: () => Promise<boolean>;
+      // Main resolves where new private notes go from this. A call naming an
+      // account is refused (ACCOUNT_CHANGED) once another one has signed in.
+      setActiveWorkspaceScope?: (
+        scope: WorkspaceScope
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      // The active workspace's private space, or the named workspace's. Null
+      // for an invalid id.
+      getPrivateSpaceId?: (
+        workspaceId?: string | null,
+        expectedAuthGeneration?: number
+      ) => Promise<number | null>;
+      // The account's default workspace's private space (its pending row
+      // while that workspace isn't known yet); the stand-in signed out.
+      getDefaultPrivateSpaceId?: {
+        (): Promise<number>;
+        (expectedAuthGeneration: number | undefined): Promise<number | null>;
+      };
+      bindDefaultPrivateSpace?: (
+        defaultWorkspaceId: string,
+        accountId?: string | null
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      // Copy to Private: a new local note in one of the account's private
+      // spaces (in the folder given, else where a new note of its type goes).
+      // The source keeps its cloud identity and sharing; the copy has neither.
+      // Null when the note, space or folder isn't the account's to use.
+      copyNoteToSpace?: (
+        noteId: number,
+        targetSpaceId: number,
+        folderId?: number | null
+      ) => Promise<NoteItem | null>;
+      // Moves a lost workspace's Private into the default's (null) or the named
+      // workspace's, locally. The default's own Private never moves.
+      relocatePrivateSpace?: (
+        fromWorkspaceId: string,
+        toWorkspaceId: string | null,
+        accountId?: string | null
+      ) => Promise<{
+        success: boolean;
+        notes?: number;
+        folders?: number;
+        code?: string;
+        error?: string;
+      }>;
       setActiveAccountScope?: (
         accountId: string | null,
         expectedAuthGeneration?: number
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      closeActivationStream?: () => Promise<void>;
+      beginActivationCapture?: () => Promise<string | null>;
+      stopActivationCapture?: (id: string) => Promise<void>;
+      finishActivationCapture?: (id: string, words: number) => Promise<void>;
+      cancelActivationCapture?: (id: string) => Promise<void>;
       getActiveAccountScope?: () => Promise<ActiveAccountScope | null>;
+      /** Dashboard funnel: binds a session the renderer just validated (app sign-in). */
+      recordProductEventAppSession?: (context: AnalyticsSyncContext) => Promise<void>;
+      /** Dashboard funnel: the final onboarding completion was persisted. */
+      recordOnboardingCompleted?: (completion: {
+        setupMode: string | null;
+        flowVersion: string;
+      }) => Promise<void>;
+      /** Dashboard funnel: an original dictation finished, as its word count only. */
+      recordDictationCompleted?: (dictation: {
+        captureId: string;
+        words: number;
+        mode: string;
+        startedAt?: string;
+      }) => Promise<void>;
+      getNoteWriteGuard?: () => Promise<NoteWriteGuard>;
+      getDatabaseAccountScope?: () => Promise<DatabaseAccountScope>;
+      onDatabaseAccountScopeChanged?: (
+        callback: (scope: DatabaseAccountScope) => void
+      ) => () => void;
       onActiveAccountScopeChanged?: (
         callback: (scope: ActiveAccountScope | null) => void
       ) => () => void;
@@ -1613,7 +2352,6 @@ declare global {
         code?: string;
         error?: string;
         noteIds?: number[];
-        folderNames?: string[];
         spaceId?: number;
         relocatedNotes?: NoteItem[];
         relocatedCount?: number;
@@ -1636,6 +2374,9 @@ declare global {
       ) => Promise<{ success: boolean; error?: string }>;
       noteFilesSetPath?: (path: string) => Promise<{ success: boolean; error?: string }>;
       noteFilesRebuild?: () => Promise<{ success: boolean; error?: string }>;
+      noteFilesSetWorkspaceNames?: (
+        workspaces: Array<{ id: string; name: string }>
+      ) => Promise<{ success: boolean }>;
       noteFilesGetDefaultPath?: () => Promise<string>;
       noteFilesPickFolder?: () => Promise<{ canceled: boolean; path?: string }>;
       granolaImportPickAndPreview?: () => Promise<{
@@ -1656,8 +2397,15 @@ declare global {
         skipped?: number;
         errors?: Array<{ clientNoteId: string; error: string }>;
       }>;
+      dragonImportPickFile?: () => Promise<{
+        canceled: boolean;
+        success?: boolean;
+        error?: string;
+        fileName?: string;
+        bytes?: Uint8Array;
+      }>;
       showNoteFile?: (noteId: number) => Promise<{ success: boolean }>;
-      showFolderInExplorer?: (folderName: string) => Promise<{ success: boolean }>;
+      showFolderInExplorer?: (folderId: number) => Promise<{ success: boolean }>;
 
       // Action operations
       getActions: () => Promise<ActionItem[]>;
@@ -1702,6 +2450,7 @@ declare global {
           model?: string;
           language?: string;
           requestId?: string;
+          purpose?: "dictation" | "upload";
           [key: string]: unknown;
         }
       ) => Promise<{ success: boolean; text?: string; error?: string; code?: string }>;
@@ -1766,6 +2515,7 @@ declare global {
           localTranscriptionProvider: LocalTranscriptionProvider;
           model?: string;
           language?: string;
+          keepLocalModelLoaded: boolean;
           policySettled: boolean;
         }
       ) => Promise<void>;
@@ -1774,7 +2524,7 @@ declare global {
       checkAccessibilityPermission: (silent?: boolean) => Promise<boolean>;
       promptAccessibilityPermission: () => Promise<boolean>;
       readClipboard: () => Promise<string>;
-      writeClipboard: (text: string) => Promise<{ success: boolean }>;
+      writeClipboard: (text: string) => Promise<{ success: boolean; xwaylandOnly?: boolean }>;
       copyLeaderboardImage: (dataUrl: string) => Promise<{ success: boolean; error?: string }>;
       saveLeaderboardImage: (
         dataUrl: string,
@@ -1853,10 +2603,11 @@ declare global {
         }) => void
       ) => () => void;
       onGpuFallbackNotification: (callback: () => void) => () => void;
+      onWhisperGpuStatusChanged: (callback: () => void) => () => void;
 
-      // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
-      getGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
-      dismissGpuPackMigrationNotice: () => Promise<{ success: boolean }>;
+      // One-time "GPU pack needs re-downloading" notice, taken by the window that shows it
+      takeGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
+      onGpuPackMigrationNoticeReady: (callback: () => void) => () => void;
 
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
@@ -1897,6 +2648,8 @@ declare global {
         code?: string;
         details?: string;
       }>;
+      listRetiredLocalModels?: (inUse: string[]) => Promise<Array<{ id: string; name: string }>>;
+      deleteRetiredLocalModels?: (inUse: string[]) => Promise<{ success: boolean }>;
       modelDelete: (modelId: string) => Promise<{
         success: boolean;
         error?: string;
@@ -1925,7 +2678,7 @@ declare global {
         text: string,
         modelId: string,
         agentName: string | null,
-        config: any
+        config: ReasoningConfig
       ) => Promise<{
         success: boolean;
         text?: string;
@@ -1950,7 +2703,7 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string; messageKey?: string }>;
+      ) => Promise<{ success: boolean; text?: string } & Partial<IpcErrorFields>>;
 
       // Enterprise reasoning (Bedrock, Azure, Vertex)
       processEnterpriseReasoning: (
@@ -2005,11 +2758,16 @@ declare global {
 
       // llama-server
       llamaServerStart: (
-        modelId: string
-      ) => Promise<{ success: boolean; port?: number; error?: string }>;
+        modelId: string,
+        requestId?: string
+      ) => Promise<{ success: boolean; port?: number; error?: string; code?: string }>;
+      /** Stops the llamaServerStart tagged `requestId` from waiting, and from swapping its model in. */
+      llamaServerCancelStart: (requestId: string) => Promise<void>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
+      getComputerProfile: () => Promise<ComputerProfile>;
+      getLocalSetupSpace: () => Promise<LocalSetupSpace>;
       getLlamaVulkanStatus?: () => Promise<LlamaVulkanStatus>;
       downloadLlamaVulkanBinary?: () => Promise<{
         success: boolean;
@@ -2051,7 +2809,6 @@ declare global {
           | "WITH_MENU"
           | "WITH_TOAST"
           | "EXPANDED"
-          | "ASSISTANT"
       ) => Promise<{
         success: boolean;
         bounds?: Electron.Rectangle;
@@ -2067,8 +2824,6 @@ declare global {
       resizeDictationErrorWindowToContent: (
         surfaceHeight: number
       ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
-      setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
-      setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
 
       // App management
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
@@ -2078,6 +2833,11 @@ declare global {
       checkForUpdates: () => Promise<UpdateCheckResult>;
       downloadUpdate: () => Promise<UpdateResult>;
       installUpdate: () => Promise<UpdateResult>;
+      initialModelRegistrySnapshot: import("../models/registryData").RegistrySnapshot;
+      getModelRegistry: () => Promise<import("../models/registryData").RegistrySnapshot>;
+      onModelRegistryUpdated: (
+        callback: (snapshot: import("../models/registryData").RegistrySnapshot) => void
+      ) => () => void;
       getAppVersion: () => Promise<AppVersionResult>;
       getPostMigrationState: () => Promise<{ justMigrated: boolean }>;
       getOAuthProtocolRegistered: () => Promise<boolean>;
@@ -2089,6 +2849,7 @@ declare global {
       setAutoUpdatesEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
 
       // Update event listeners
+      onUpdateStatusChanged?: (callback: (status: UpdateStatusResult) => void) => () => void;
       onUpdateAvailable: (callback: (event: any, info: any) => void) => () => void;
       onUpdateNotAvailable: (callback: (event: any, info: any) => void) => () => void;
       onUpdateDownloaded: (callback: (event: any, info: any) => void) => () => void;
@@ -2118,6 +2879,7 @@ declare global {
         hasYdotool: boolean;
         hasYdotoold: boolean;
         hasWtype: boolean;
+        hasWlCopy: boolean;
         daemonRunning: boolean;
         hasService: boolean;
         hasUinput: boolean;
@@ -2126,8 +2888,8 @@ declare global {
         isNixOS: boolean;
         isKde: boolean;
         isWlroots: boolean;
-        hasXclip: boolean;
-        hasXsel: boolean;
+        isCosmic: boolean;
+        requiresWlCopy: boolean;
       }>;
 
       // Globe key listener for hotkey capture (macOS only)
@@ -2141,12 +2903,14 @@ declare global {
       onHotkeyRegistrationFailed?: (
         callback: (data: { hotkey: string; error: string; suggestions: string[] }) => void
       ) => () => void;
+      onApiKeyUpdated?: (callback: (storeKey: string) => void) => () => void;
       onSettingUpdated?: (callback: (data: { key: string; value: unknown }) => void) => () => void;
       onDictationKeyActive?: (callback: (key: string) => void) => () => void;
       onLinuxPttPermissionDenied?: (callback: () => void) => () => void;
 
       // Settings shortcut (Cmd+, / Ctrl+,)
       onShowSettings?: (callback: () => void) => () => void;
+      getPendingSettingsSection?: () => Promise<string | null>;
 
       // Accessibility permission events (macOS)
       markMacAccessibilityFeaturesReady?: (expectedAccountScope?: ActiveAccountScope) => void;
@@ -2289,6 +3053,7 @@ declare global {
         error?: string;
         enforcementRequired?: boolean;
         enforcedScopes?: string[];
+        enforcedAudioOperations?: string[];
       }>;
       onManagedEnterpriseConfigChanged?: (
         callback: (snapshot: {
@@ -2299,17 +3064,61 @@ declare global {
           code: string | null;
           enforcementRequired?: boolean;
           enforcedScopes?: string[];
+          enforcedAudioOperations?: string[];
         }) => void
       ) => () => void;
-      clearManagedEnterpriseIdentity?: () => Promise<void>;
+      clearManagedEnterpriseIdentity?: (options?: {
+        next?: { accountId: string; workspaceId: string | null };
+      }) => Promise<void>;
+      getPendingEnterpriseAudioTest?: (
+        consume?: boolean
+      ) => Promise<EnterpriseAudioTestLink | null>;
+      claimEnterpriseAudioTest?: () => Promise<EnterpriseAudioTestLink | null>;
+      onEnterpriseAudioTestRequested?: (callback: () => void) => () => void;
+      enterpriseAudioImportBootstrap?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+      }) => Promise<{ success: boolean; imported?: boolean; messageKey?: string }>;
+      enterpriseAudioStatus?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+      }) => Promise<{
+        success: boolean;
+        slots?: { slot: string; present: boolean }[];
+        operations?: ("batch" | "realtime")[];
+        configFingerprint?: string;
+        messageKey?: string;
+      }>;
+      enterpriseAudioSaveCredential?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+        slot: string;
+        secret?: string;
+        remove?: boolean;
+      }) => Promise<{ success: boolean; messageKey?: string }>;
+      enterpriseAudioTest?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+        operation: "batch" | "realtime";
+        allowInferenceValidation: boolean;
+      }) => Promise<{ success: boolean; passed?: boolean; code?: string; messageKey?: string }>;
       managedTranscribe?: (data: {
         audioBuffer: ArrayBuffer;
         fileName: string;
         mimeType: string;
         language?: string;
         prompt?: string;
-        managed: { provider: "azure"; context: ManagedEnterpriseRequestContext };
-      }) => Promise<{ text?: string; error?: string; code?: string; messageKey?: string }>;
+        managed: {
+          provider: "azure" | "openai-compatible";
+          context: ManagedEnterpriseRequestContext;
+        };
+      }) => Promise<{
+        text?: string;
+        warning?: string;
+        error?: string;
+        code?: string;
+        messageKey?: string;
+      }>;
 
       // Dictation key persistence (file-based for reliable startup)
       getDictationKey?: () => Promise<string | null>;
@@ -2323,6 +3132,7 @@ declare global {
 
       // Debug logging
       getLogLevel?: () => Promise<string>;
+      onLogLevelChanged?: (callback: () => void) => () => void;
       log?: (entry: {
         level: string;
         message: string;
@@ -2342,6 +3152,8 @@ declare global {
         error?: string;
       }>;
       openLogsFolder: () => Promise<{ success: boolean; error?: string }>;
+      getModelRegistryUpdates: () => Promise<boolean>;
+      setModelRegistryUpdates: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
 
       // FFmpeg availability
       checkFFmpegAvailability: () => Promise<FFmpegAvailabilityResult>;
@@ -2350,7 +3162,7 @@ declare global {
       // System settings helpers
       requestMicrophoneAccess?: () => Promise<{ granted: boolean }>;
       checkMicrophoneAccess?: () => Promise<{ granted: boolean; status: string }>;
-      getSystemDefaultMicrophone?: (options?: { refresh?: boolean }) => Promise<{
+      getSystemDefaultMicrophone?: (options?: { refresh?: boolean; wait?: boolean }) => Promise<{
         name: string;
         nativeId?: string;
         platform: string;
@@ -2427,7 +3239,8 @@ declare global {
           analyticsOccurredAt?: string;
           // Why a managed-streaming user's dictation went batch (rollout metric).
           streamingFallbackReason?: string;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<
         {
           success: boolean;
@@ -2446,16 +3259,20 @@ declare global {
           model?: string;
           agentName?: string;
           customDictionary?: string[];
+          sharedDictionary?: string[];
           customPrompt?: string;
           systemPrompt?: string;
           requestPurpose?: "agent";
           promptMode?: "cleanup" | "agent";
           purpose?: CloudReasonPurpose;
           screenContext?: ScreenContextImage;
+          tone?: DictationTone;
+          appCategory?: ToneAppCategory;
           language?: string;
           locale?: string;
           streamingFallbackReason?: string;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<{
         success: boolean;
         text?: string;
@@ -2485,7 +3302,8 @@ declare global {
           analyticsOccurredAt?: string;
           analyticsWordCount?: number;
           analyticsCounterVersion?: number;
-        } & SttDetectedLanguageFields
+        } & SttDetectedLanguageFields &
+          OrukeetTelemetry
       ) => Promise<{
         success: boolean;
         wordsUsed?: number;
@@ -2507,10 +3325,13 @@ declare global {
           code?: string;
         }
       >;
-      cloudCheckout?: (opts?: {
-        plan?: "monthly" | "annual";
-        tier?: "pro" | "business";
-      }) => Promise<{
+      cloudCheckout?: (
+        opts?: {
+          plan?: "monthly" | "annual";
+          tier?: "pro" | "business";
+        },
+        expectedAuthGeneration?: number
+      ) => Promise<{
         success: boolean;
         url?: string;
         error?: string;
@@ -2547,23 +3368,42 @@ declare global {
       }>;
 
       // Authenticated cloud API proxy (`public: true` skips the auth requirement)
+      getAffiliateCandidate?: () => Promise<{
+        config: { domain: string } | null;
+        candidate: { link: string; clickId: string | null; saved: boolean } | null;
+        generation: number;
+      }>;
+      saveAffiliateCandidate?: (input: {
+        link: string;
+        clickId?: string | null;
+        saved?: boolean;
+        generation: number;
+        expectedCandidate?: { link: string; clickId: string | null; saved: boolean };
+      }) => Promise<void>;
+      resolveAffiliateLink?: (
+        link: string,
+        generation: number
+      ) => Promise<{ link: string; clickId: string }>;
+      onAffiliateLink?: (callback: () => void) => () => void;
       cloudApiRequest?: (opts: {
         method?: string;
         path: string;
         body?: unknown;
         public?: boolean;
         expectedAuthGeneration?: number;
+        cache?: "no-store";
       }) => Promise<
         {
           success: boolean;
           data?: unknown;
+          serverDate?: string;
         } & PolicyFailureMetadata
       >;
 
       // Cloud audio file transcription
       transcribeAudioFileCloud?: (
         filePath: string,
-        options?: { requestId?: string }
+        options?: { requestId?: string; purpose?: "dictation" | "upload" }
       ) => Promise<
         {
           success: boolean;
@@ -2583,6 +3423,8 @@ declare global {
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;
+        requestId?: string;
+        purpose?: "dictation" | "upload";
         apiKey: string;
         baseUrl: string;
         model: string;
@@ -2597,7 +3439,7 @@ declare global {
         remoteTranscriptionModel?: string;
         managed?: {
           kind: "managed";
-          provider: "azure";
+          provider: "azure" | "openai-compatible";
           deployment: string;
           context: ManagedEnterpriseRequestContext;
         };
@@ -2605,8 +3447,13 @@ declare global {
         success: boolean;
         text?: string;
         error?: string;
+        code?: string;
+        messageKey?: string;
         diarized?: boolean;
         segments?: Array<{ text: string; start: number; end: number; speaker?: string }>;
+        warning?: string;
+        failedChunks?: number;
+        totalChunks?: number;
       }>;
 
       // Usage limit events
@@ -2745,23 +3592,24 @@ declare global {
           updated_at: string;
         }>
       >;
-      getAgentConversation?: (id: number) => Promise<{
-        id: number;
-        title: string;
-        archived_at?: string;
-        cloud_id?: string | null;
-        client_conversation_id?: string | null;
-        created_at: string;
-        updated_at: string;
-        messages: Array<{
-          id: number;
-          conversation_id: number;
-          role: "user" | "assistant" | "system";
-          content: string;
-          metadata?: string;
-          created_at: string;
-        }>;
-      } | null>;
+      claimAgentConversation?: (
+        id: number,
+        ownerId: string
+      ) => Promise<{
+        owned: boolean;
+        conversation: AgentConversationWithMessages | null;
+      }>;
+      releaseAgentConversation?: (id: number, ownerId: string) => Promise<void>;
+      onAgentConversationReleased?: (
+        callback: (event: { conversationId: number }) => void
+      ) => () => void;
+      protectConversation?: (
+        id: number,
+        notes: ReadonlyArray<Pick<NoteItem, "id" | "space_id">>,
+        deviceOnly: boolean,
+        expectedAccountId: string | null
+      ) => Promise<{ success: boolean }>;
+      getAgentConversation?: (id: number) => Promise<AgentConversationWithMessages | null>;
       deleteAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       updateAgentConversationTitle?: (id: number, title: string) => Promise<{ success: boolean }>;
       addAgentMessage?: (
@@ -2769,30 +3617,30 @@ declare global {
         role: "user" | "assistant" | "system",
         content: string,
         metadata?: Record<string, unknown>
-      ) => Promise<{
-        id: number;
-        conversation_id: number;
-        role: string;
-        content: string;
-        metadata?: string;
-        created_at: string;
-      } | null>;
-      getAgentMessages?: (conversationId: number) => Promise<
-        Array<{
-          id: number;
-          conversation_id: number;
-          role: "user" | "assistant" | "system";
-          content: string;
-          metadata?: string;
-          created_at: string;
-        }>
-      >;
+      ) => Promise<AgentMessageRow | null>;
+      updateAgentMessage?: (
+        id: number,
+        content: string,
+        metadata?: Record<string, unknown>
+      ) => Promise<AgentMessageRow | null>;
+      /** Null when the conversation is gone or the message isn't in it. */
+      forkAgentConversation?: (
+        conversationId: number,
+        throughMessageId: number,
+        forkContext?: string | null
+      ) => Promise<AgentConversationWithMessages | null>;
+      getAgentMessages?: (conversationId: number) => Promise<AgentMessageRow[]>;
       getAgentConversationsWithPreview?: (
         limit?: number,
         offset?: number,
-        includeArchived?: boolean
+        includeArchived?: boolean,
+        spaceIds?: number[]
       ) => Promise<ConversationPreview[]>;
-      searchAgentConversations?: (query: string, limit?: number) => Promise<ConversationPreview[]>;
+      searchAgentConversations?: (
+        query: string,
+        limit?: number,
+        spaceIds?: number[]
+      ) => Promise<ConversationPreview[]>;
       archiveAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       unarchiveAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       updateAgentConversationCloudId?: (
@@ -2801,7 +3649,8 @@ declare global {
       ) => Promise<{ success: boolean }>;
       semanticSearchConversations?: (
         query: string,
-        limit?: number
+        limit?: number,
+        spaceIds?: number[]
       ) => Promise<ConversationPreview[]>;
 
       // Deepgram Streaming
@@ -2908,12 +3757,13 @@ declare global {
         callback: (payload: {
           requestId: string;
           chunk: {
-            type: "content" | "tool_call" | "done";
+            type: "content" | "tool_call" | "done" | "error";
             text?: string;
             id?: string;
             name?: string;
             arguments?: string;
             finishReason?: string;
+            message?: string;
           };
         }) => void
       ) => () => void;
@@ -2921,6 +3771,13 @@ declare global {
         callback: (payload: PolicyFailureMetadata & { requestId: string; error: string }) => void
       ) => () => void;
       onAgentStreamEnd?: (callback: (payload: { requestId: string }) => void) => () => void;
+
+      productHelp: (
+        id: string,
+        input: { topic: string; page?: string }
+      ) => Promise<import("../services/help/productHelp").HelpResult>;
+      cancelProductHelp: (id: string) => void;
+      productHelpBasics: () => Promise<import("../services/help/productHelp").HelpBasics>;
 
       // Agent cloud tools
       agentOpenNote?: (noteId: number) => Promise<{ success: boolean; error?: string }>;
@@ -2940,7 +3797,10 @@ declare global {
       >;
 
       // Google Calendar
-      gcalStartOAuth?: () => Promise<{ success: boolean; email?: string; error?: string }>;
+      gcalStartOAuth?: (
+        requestId?: string
+      ) => Promise<{ success: boolean; email?: string; error?: string }>;
+      calendarCancelConnect?: (requestId: string) => Promise<boolean>;
       gcalDisconnect?: (email?: string) => Promise<{ success: boolean; error?: string }>;
       gcalGetConnectionStatus?: () => Promise<{
         connected: boolean;
@@ -2955,7 +3815,8 @@ declare global {
       gcalSetPrimaryOnly?: (value: boolean) => Promise<{ success: boolean; error?: string }>;
       gcalSyncEvents?: () => Promise<{ success: boolean; error?: string }>;
       gcalGetUpcomingEvents?: (
-        windowMinutes?: number
+        windowMinutes?: number,
+        options?: { includeAllDay?: boolean }
       ) => Promise<{ success: boolean; events: any[] }>;
       connectorStatus?: () => Promise<ConnectorStatus[]>;
       connectorPrepare?: (
@@ -3014,20 +3875,25 @@ declare global {
       >;
       gcalGetEvent?: (eventId: string) => Promise<{
         success: boolean;
-        event: {
-          id: string;
-          summary: string | null;
-          start_time: string;
-          end_time: string;
-          attendees_count: number;
-          attendees: string | null;
-        } | null;
+        event: CalendarEvent | null;
+      }>;
+      calendarGetLinkableEvents?: () => Promise<{
+        success: boolean;
+        events: LinkableCalendarEvent[];
       }>;
 
       // Contacts
       searchContacts: (query: string) => Promise<{
         success: boolean;
         contacts: Array<{ email: string; display_name: string | null }>;
+      }>;
+      /** People to invite: the same calendars and contacts the assistant's find_contact reads. */
+      searchInviteContacts: (
+        query: string,
+        exclude: string[]
+      ) => Promise<{
+        success: boolean;
+        contacts: Array<{ email: string; name: string | null }>;
       }>;
       upsertContact: (contact: {
         email: string;
@@ -3037,11 +3903,21 @@ declare global {
 
       // Meeting transcription (streaming, dual-channel)
       meetingTranscriptionPrepare?: (options: {
+        enterpriseSetupMode?: ManagedEnterpriseRequestContext["setupMode"];
+        enterpriseIdentity?: Pick<
+          ManagedEnterpriseRequestContext,
+          "accountId" | "workspaceId" | "authGeneration"
+        >;
         provider?: string;
         model?: string;
         language?: string;
       }) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
       meetingTranscriptionStart?: (options: {
+        enterpriseSetupMode?: ManagedEnterpriseRequestContext["setupMode"];
+        enterpriseIdentity?: Pick<
+          ManagedEnterpriseRequestContext,
+          "accountId" | "workspaceId" | "authGeneration"
+        >;
         provider?: string;
         model?: string;
         language?: string;
@@ -3049,6 +3925,7 @@ declare global {
         sessionId: string;
         autoEndEligible: boolean;
         aecEnabled?: boolean;
+        speakerIndexBase?: number;
       }) => Promise<
         {
           success: boolean;
@@ -3057,9 +3934,15 @@ declare global {
           systemAudioMode?: SystemAudioMode;
           systemAudioStrategy?: SystemAudioStrategy;
           oneOnOneAttendee?: { displayName: string; email: string | null } | null;
+          speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
-      meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
+      isMeetingRecordingDisabled?: () => Promise<boolean>;
+      meetingTranscriptionSend?: (
+        buffer: ArrayBuffer,
+        source: "mic" | "system",
+        capturedAt?: number
+      ) => void;
       meetingTranscriptionSetSystemAudioAvailable?: (
         sessionId: string,
         available: boolean
@@ -3131,7 +4014,12 @@ declare global {
         segments: Array<{ start: number; end: number; speaker: string }>,
         text: string,
         duration: number
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        segments?: Array<{ text: string; start: number; end: number; speaker: string }>;
+        error?: string;
+      }>;
       diarizeAudioFile?: (
         filePath: string,
         options?: { numSpeakers?: number; threshold?: number; requestId?: string }
@@ -3162,6 +4050,8 @@ declare global {
             speakerLockSource?: "user" | "diarization" | "suggestion";
           }>;
           speakerEmbeddings?: Record<string, number[]> | null;
+          removedSegments?: RemovedTranscriptSegment[];
+          splitLiveSpeakers?: SplitLiveSpeakers;
         }) => void
       ) => () => void;
 
@@ -3239,7 +4129,7 @@ declare global {
       onGcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
       // Microsoft Calendar
-      mcalStartOAuth?: () => Promise<{
+      mcalStartOAuth?: (requestId?: string) => Promise<{
         success: boolean;
         email?: string;
         tenantId?: string | null;
@@ -3255,7 +4145,9 @@ declare global {
       onMcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
       // Apple Calendar (macOS EventKit)
-      acalConnect?: () => Promise<{ success: boolean; reason?: string; error?: string }>;
+      acalConnect?: (
+        requestId?: string
+      ) => Promise<{ success: boolean; reason?: string; error?: string }>;
       acalDisconnect?: () => Promise<{ success: boolean; error?: string }>;
       acalGetConnectionStatus?: () => Promise<{ connected: boolean; sourceNames: string[] }>;
       openCalendarPrivacySettings?: () => Promise<{ success: boolean; error?: string }>;
@@ -3308,21 +4200,57 @@ declare global {
       onMeetingAutoEndRequested?: (
         callback: (request: MeetingAutoEndRequest) => void
       ) => () => void;
+      getMeetingNotificationDestination: () => Promise<MeetingResult<MeetingDestinationContext>>;
+      selectMeetingNotificationFolder: (
+        folder: MeetingFolderRef
+      ) => Promise<MeetingResult<MeetingDestinationContext>>;
+      createMeetingNotificationFolder: (request: {
+        requestId: string;
+        name: string;
+        spaceId: number;
+      }) => Promise<MeetingResult<MeetingDestinationContext & { createdFolder: MeetingFolderRef }>>;
+      onMeetingNotificationFolderCreated: (
+        callback: (hint: { folderId: number }) => void
+      ) => () => void;
+      setMeetingNotificationSurface: (
+        state: MeetingSurfaceState
+      ) => Promise<MeetingResult<{ width: number; height: number; maxHeight: number }>>;
+      onMeetingNotificationSurfaceClosed: (
+        callback: (data: { revision: number }) => void
+      ) => () => void;
+      onMeetingNotificationSurfaceResized: (
+        callback: (data: { revision: number }) => void
+      ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (
         detectionId: string,
-        action: string
-      ) => Promise<{ success: boolean }>;
-      joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
-      startManualMeeting?: () => Promise<void>;
+        action: string,
+        options?: {
+          existingNote?: Pick<MeetingExistingNote, "noteId" | "spaceId" | "folderId">;
+        }
+      ) => Promise<MeetingResult<null>>;
+      confirmMeetingNoteNavigation: (
+        navigationId: string,
+        status?: "ready" | "cancel"
+      ) => Promise<MeetingResult<NoteItem>>;
+      joinCalendarMeeting?: (
+        eventId: string
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      // Resolves with nothing once started, or with why it could not start.
+      startManualMeeting?: () => Promise<{ success: false; code?: string; error: string } | void>;
       getPendingMeetingNoteNavigation?: () => Promise<{
+        navigationId?: string;
+        noteSessionId?: string;
+        spaceId?: number;
         noteId: number;
-        folderId: number;
+        folderId: number | null;
         event: any;
         trigger?: "hotkey" | "manual" | "calendar-join";
       } | null>;
       onMeetingNoteNavigationPending?: (callback: () => void) => () => void;
+      meetingNoteOpenedWithoutRecording?: (noteSessionId: string) => Promise<void>;
+      meetingNoteClosed?: (noteSessionId: string) => Promise<void>;
       getPendingNoteNavigation?: () => Promise<{
         noteId: number;
         folderId: number | null;
@@ -3338,11 +4266,14 @@ declare global {
         model: string;
         language?: string;
         display?: boolean;
-      }) => Promise<{ success: boolean }>;
-      stopDictationPreview?: (opts?: {
-        showCleanup?: boolean;
-        flushed?: boolean;
-      }) => Promise<{ success: boolean; streamed?: boolean; text?: string }>;
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      stopDictationPreview?: (opts?: { showCleanup?: boolean; flushed?: boolean }) => Promise<{
+        success: boolean;
+        streamed?: boolean;
+        text?: string;
+        error?: string;
+        code?: string;
+      }>;
       dismissDictationPreview?: () => Promise<{ success: boolean }>;
       updateDictationPreview?: (text: string) => Promise<{ success: boolean }>;
       completeDictationPreview?: (payload: { text?: string }) => Promise<{ success: boolean }>;
@@ -3350,55 +4281,119 @@ declare global {
       sendDictationPreviewAudio?: (data: ArrayBuffer) => void;
 
       // Sync operations
-      getPendingNotes?: (spaceKind?: "private" | "team") => Promise<NoteItem[]>;
+      // A sync pass's upload queue: team rows (and rows that left a team), plus
+      // shared private notes for "syncable". An omitted scope includes personal Backup.
+      getPendingNotes?: (scope?: "private" | "team" | "syncable" | null) => Promise<NoteItem[]>;
       getPendingNoteDeletes?: () => Promise<NoteItem[]>;
       getNoteByClientId?: (clientNoteId: string) => Promise<NoteItem | null>;
-      upsertNoteFromCloud?: (
-        cloudNote: Record<string, unknown>,
-        localFolderId: number | null,
-        localSpaceId?: number | null
-      ) => Promise<NoteItem>;
+      getNoteForCloudRow?: (
+        clientNoteId: string | null | undefined,
+        cloudId: string
+      ) => Promise<NoteItem | null>;
+      upsertNoteFromCloud?: {
+        (
+          cloudNote: Record<string, unknown>,
+          localFolderId: number | null,
+          localSpaceId?: number | null
+        ): Promise<NoteItem | null>;
+        // A pull pinned to a sign-in: refused once that sign-in is replaced.
+        // newKeyIfTaken stores a cloud row whose key is taken under a key of
+        // its own without taking over another account's local row.
+        (
+          cloudNote: Record<string, unknown>,
+          localFolderId: number | null,
+          localSpaceId: number | null | undefined,
+          expectedAuthGeneration: number | undefined,
+          options?: CloudRowWriteOptions
+        ): Promise<NoteItem | StaleSyncWrite | null>;
+      };
+      markNoteCreatesAttempted?: (
+        clientNoteIds: string[],
+        expectedAuthGeneration?: number
+      ) => Promise<string[]>;
+      renewNoteCloudIdentity?: (
+        id: number,
+        expectedClientNoteId: string,
+        expectedCloudId: string | null,
+        expectedSpaceId: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; note?: NoteItem }>;
+      getPrivatePlacementBackupCandidates?: (
+        expectedAuthGeneration: number
+      ) => Promise<PrivatePlacementBackupCandidates | StaleSyncWrite>;
+      getPrivatePlacementBackupRows?: (
+        expectedAuthGeneration: number,
+        candidates: PrivatePlacementBackupCandidates
+      ) => Promise<{
+        success: boolean;
+        notes?: PrivatePlacementBackupRow[];
+        folders?: PrivatePlacementBackupRow[];
+      }>;
+      queueUnlinkedPrivateFolders?: (
+        expectedAuthGeneration: number
+      ) => Promise<number | StaleSyncWrite>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
         cloudId: string,
         cloudUpdatedAt?: string | null,
         ownerUserId?: string | null,
-        settleIfUnchanged?: boolean
-      ) => Promise<NoteCreateAckResult>;
+        options?: NoteCreateAckWriteOptions
+      ) => Promise<NoteCreateAckResult | StaleSyncWrite>;
       markNoteSyncedIfUnchanged?: (
         id: number,
         snapshot: NoteUpdateSnapshot,
         expectedCloudId: string,
         cloudUpdatedAt?: string | null,
-        ownerUserId?: string | null
-      ) => Promise<NoteUpdateAckResult>;
-      setNoteCloudBase?: (id: number, cloudUpdatedAt: string | null) => Promise<void>;
+        ownerUserId?: string | null,
+        cloudRevision?: number | null,
+        cloudNote?: NoteCloudText | null,
+        expectedAuthGeneration?: number
+      ) => Promise<NoteUpdateAckResult | StaleSyncWrite>;
+      setNoteCloudBase?: (
+        id: number,
+        cloudUpdatedAt: string | null,
+        cloudRevision?: number | null,
+        options?: NoteCloudBaseOptions
+      ) => Promise<{ success: boolean; note?: NoteItem }>;
       setNoteOwnerFromCloud?: (id: number, ownerUserId: string) => Promise<void>;
       countTeamNotesMissingOwner?: () => Promise<number>;
+      countNotesMissingRevision?: (scope?: "private" | "team" | null) => Promise<number>;
       markNoteSyncError?: (id: number) => Promise<void>;
       restoreNoteAfterDeniedDelete?: (id: number) => Promise<{ success: boolean; id: number }>;
-      hardDeleteNote?: (id: number) => Promise<void>;
+      hardDeleteNote?: (
+        id: number,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
 
-      getPendingFolders?: (spaceKind?: "private" | "team") => Promise<FolderItem[]>;
+      // An omitted scope includes personal folders for consented Backup.
+      getPendingFolders?: (scope?: "private" | "team" | null) => Promise<FolderItem[]>;
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
+      // The active account's folder bound to that cloud folder, under any key.
+      getFolderByCloudId?: (cloudId: string) => Promise<FolderItem | null>;
+      // Given an auth generation (a pull pinned to a sign-in), refused once
+      // that sign-in is replaced. Options as for upsertNoteFromCloud.
       upsertFolderFromCloud?: (
         cloudFolder: Record<string, unknown>,
-        localSpaceId?: number | null
-      ) => Promise<FolderItem>;
+        localSpaceId?: number | null,
+        expectedAuthGeneration?: number,
+        options?: CloudRowWriteOptions
+      ) => Promise<FolderItem | StaleSyncWrite>;
       acknowledgeFolderCreate?: (
         id: number,
         snapshot: FolderPushSnapshot,
         expectedCloudId: string | null,
         responseClientFolderId: string,
         cloudId: string,
-        cloudUpdatedAt?: string | null
-      ) => Promise<FolderAckResult>;
+        cloudUpdatedAt?: string | null,
+        expectedAuthGeneration?: number
+      ) => Promise<FolderAckResult | StaleSyncWrite>;
       markFolderSyncedIfUnchanged?: (
         id: number,
         snapshot: FolderPushSnapshot,
-        expectedCloudId: string
-      ) => Promise<FolderAckResult>;
+        expectedCloudId: string,
+        expectedAuthGeneration?: number
+      ) => Promise<FolderAckResult | StaleSyncWrite>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       restoreFolderAfterDeniedDelete?: (id: number) => Promise<{
@@ -3410,7 +4405,13 @@ declare global {
         reason?: "name-taken";
         error?: string;
       }>;
-      hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
+      hardDeleteFolder?: (
+        id: number,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
+      // A new client identity and no cloud link: the folder's cloud row is
+      // left to whoever still has it.
+      forkFolderIdentity?: (id: number) => Promise<{ success: boolean }>;
       relocateRevokedFolder?: (
         id: number,
         privateSpaceId: number,
@@ -3418,7 +4419,6 @@ declare global {
       ) => Promise<{
         success: boolean;
         folder?: FolderItem | null;
-        folderName?: string;
         relocatedNotes?: NoteItem[];
         deletedNoteIds?: number[];
         error?: string;
@@ -3427,61 +4427,187 @@ declare global {
       getPendingConversations?: () => Promise<ConversationPreview[]>;
       getPendingConversationDeletes?: () => Promise<ConversationPreview[]>;
       getConversationByClientId?: (clientId: string) => Promise<ConversationPreview | null>;
+      /** Hands an unattributed chat to the account whose cloud returned it; its messages stay. */
+      claimConversationFromCloud?: (
+        cloudConv: Record<string, unknown>,
+        expectedAuthGeneration: number
+      ) => Promise<ConversationPreview | StaleSyncWrite | null>;
       upsertConversationFromCloud?: (
         cloudConv: Record<string, unknown>,
-        messages: Array<Record<string, unknown>>
-      ) => Promise<void>;
+        messages: Array<Record<string, unknown>>,
+        snapshot: ConversationPreview | null,
+        expectedAuthGeneration: number
+      ) => Promise<ConversationPreview | StaleSyncWrite | null>;
+      markConversationCreateAttempted?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      clearConversationCreateAttempted?: (id: number) => Promise<void>;
       acknowledgeConversationCreate?: (
         id: number,
         snapshot: ConversationCreateSnapshot,
-        cloudId: string
+        cloudId: string,
+        accountId: string,
+        authGeneration: number
       ) => Promise<ConversationCreateAckResult | undefined>;
       markConversationSynced?: (
         id: number,
-        cloudId: string
+        cloudId: string,
+        snapshot: ConversationCreateSnapshot | null,
+        cloudUpdatedAt: string | null,
+        accountId: string,
+        authGeneration: number
       ) => Promise<{ success: boolean } | undefined>;
-      hardDeleteConversation?: (id: number) => Promise<void>;
+      replaceConversationClientId?: (
+        id: number,
+        expectedClientId: string | null,
+        accountId: string,
+        authGeneration: number
+      ) => Promise<{ success: boolean }>;
+      hardDeleteConversation?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean } | StaleSyncWrite>;
 
       getPendingTranscriptions?: () => Promise<TranscriptionItem[]>;
       getTranscriptionByClientId?: (clientId: string) => Promise<TranscriptionItem | null>;
       upsertTranscriptionFromCloud?: (
-        cloudTranscription: Record<string, unknown>
-      ) => Promise<TranscriptionItem>;
-      markTranscriptionSynced?: (id: number, cloudId: string) => Promise<void>;
+        cloudTranscription: Record<string, unknown>,
+        expectedAuthGeneration: number
+      ) => Promise<TranscriptionItem | StaleSyncWrite | null>;
+      markTranscriptionSynced?: (
+        id: number,
+        cloudId: string,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
       getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
-      hardDeleteTranscription?: (id: number) => Promise<{ success: boolean; id: number }>;
+      hardDeleteTranscription?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
 
       getPendingDictionary?: () => Promise<DictionaryEntryItem[]>;
       getPendingDictionaryDeletes?: () => Promise<DictionaryEntryItem[]>;
       getDictionaryByClientId?: (clientDictId: string) => Promise<DictionaryEntryItem | null>;
       upsertDictionaryFromCloud?: (
-        cloudEntry: Record<string, unknown>
-      ) => Promise<DictionaryEntryItem | null>;
+        cloudEntry: Record<string, unknown>,
+        expectedAuthGeneration: number
+      ) => Promise<DictionaryEntryItem | StaleSyncWrite | null>;
+      /** `pushed` (the row as pushed) keeps a row edited since then pending. */
       markDictionarySynced?: (
         id: number,
-        cloudId: string
-      ) => Promise<{ success: boolean; changes: number }>;
-      hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
-      clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
+        cloudId: string,
+        serverUpdatedAt: string | undefined,
+        expectedWord: string | undefined,
+        expectedSource: DictionaryEntryItem["source"] | undefined,
+        serverSource: DictionaryEntryItem["source"] | undefined,
+        pushed: Pick<DictionaryEntryItem, "word" | "shared_at" | "updated_at"> | undefined,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; changes: number; stale?: boolean }>;
+      hardDeleteDictionary?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
+      clearDictionaryCloudId?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** Claims a pending word whose edit outlives its cloud tombstone, for re-creation. */
+      keepNewerDictionaryEdit?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
+      /**
+       * Live personal words matching `words` case-insensitively, in their stored
+       * spelling. `accountId` is null on an unattributed row, whose cloud id may
+       * be another account's.
+       */
+      getDictionaryEntriesByWords?: (
+        words: string[]
+      ) => Promise<Array<{ word: string; cloudId: string | null; accountId: string | null }>>;
+      /**
+       * Records a share the server accepted; sync state is left unchanged, except
+       * for `pendingWords`, which went as plain words and still need shared_at pushed.
+       */
+      markDictionaryWordsShared?: (
+        words: string[],
+        sharedAt: string,
+        options: { pendingWords?: string[]; expectedAuthGeneration: number | null }
+      ) => Promise<{ marked: string[]; stale?: boolean }>;
+      /** Live personal words that were shared into a team list. */
+      getMovedDictionaryWords?: () => Promise<string[]>;
+      /** Removes moved personal words whose shared copy is gone for the sharer. */
+      /** `includeSynced: false` leaves rows the cloud has to the personal pull. */
+      retireMovedDictionaryWords?: (
+        words: string[],
+        options: { includeSynced?: boolean; expectedAuthGeneration: number | null }
+      ) => Promise<{ retired: string[]; stale?: boolean }>;
+      /** Brings back fallbacks retired for these words, once their shared copy returns. */
+      reviveRetiredDictionaryWords?: (
+        words: string[],
+        options: { expectedAuthGeneration: number | null }
+      ) => Promise<{ revived: string[]; stale?: boolean }>;
+
+      getSharedDictionary?: (workspaceId: string) => Promise<SharedDictionarySnapshot>;
+      applySharedDictionaryPull?: (
+        workspaceId: string,
+        change: { upserts: CloudSharedEntry[]; deletedIds: string[]; meta?: SharedDictionaryMeta }
+      ) => Promise<{ changed: number }>;
+      /** Snapshot write: the workspace's entries become exactly `full.entries`. */
+      replaceSharedDictionary?: (
+        workspaceId: string,
+        full: { entries: CloudSharedEntry[]; meta: SharedDictionaryMeta }
+      ) => Promise<{ changed: number }>;
+      applySharedDictionaryHides?: (
+        workspaceId: string,
+        change: { hidden: SharedDictionaryHideRecord[]; unhidden: string[] }
+      ) => Promise<{ changed: number }>;
+      replaceSharedDictionaryHides?: (
+        workspaceId: string,
+        hidden: SharedDictionaryHideRecord[]
+      ) => Promise<{ changed: number }>;
+      /** With no workspace, clears every workspace's shared words. `changed` counts rows removed. */
+      clearSharedDictionary?: (workspaceId?: string) => Promise<{ changed: number }>;
+      /** Clears every workspace's shared words except these workspaces'. */
+      pruneSharedDictionary?: (keepWorkspaceIds: string[]) => Promise<{ changed: number }>;
+      /** Sends capped prompt hints for auto-learn and eligible shared hints for local hotwords. */
+      setSharedDictionaryHints?: (
+        promptHints: SharedHintWords,
+        hotwordHints: ScopedSharedHintWords
+      ) => Promise<void>;
 
       getPendingSnippets?: () => Promise<SnippetEntryItem[]>;
       getPendingSnippetDeletes?: () => Promise<SnippetEntryItem[]>;
       getSnippetForCloudMerge?: (
-        cloudEntry: Record<string, unknown>
-      ) => Promise<SnippetEntryItem | null>;
+        cloudEntry: Record<string, unknown>,
+        expectedAuthGeneration: number
+      ) => Promise<SnippetEntryItem | StaleSyncWrite | null>;
       upsertSnippetFromCloud?: (
-        cloudEntry: Record<string, unknown>
-      ) => Promise<SnippetEntryItem | null>;
+        cloudEntry: Record<string, unknown>,
+        expectedAuthGeneration: number
+      ) => Promise<SnippetEntryItem | StaleSyncWrite | null>;
       markSnippetSynced?: (
         id: number,
         cloudId: string,
-        serverUpdatedAt?: string,
-        expectedTrigger?: string,
-        expectedReplacement?: string
-      ) => Promise<{ success: boolean; changes: number }>;
-      hardDeleteSnippet?: (id: number) => Promise<{ success: boolean; id: number }>;
-      clearSnippetCloudId?: (id: number) => Promise<{ success: boolean }>;
+        serverUpdatedAt: string | undefined,
+        expectedTrigger: string | undefined,
+        expectedReplacement: string | undefined,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; changes: number; stale?: boolean }>;
+      hardDeleteSnippet?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
+      clearSnippetCloudId?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** As keepNewerDictionaryEdit, for a snippet. */
+      keepNewerSnippetEdit?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
     };
 

@@ -1,3 +1,4 @@
+import { resolveRetiredCloudModel } from "../../../config/retiredCloudModelPolicy.js";
 import type { InferenceProvider } from "./types";
 import { TOKEN_LIMITS } from "../../../config/constants";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
@@ -9,6 +10,7 @@ import {
   truncatedOutputError,
 } from "../chatRequestBody";
 import { getTinfoilChatClient } from "../tinfoilClient";
+import { isRequestCancelled, requestCancelledError, requestSignal } from "../requestCancellation";
 import {
   getLlmRequestTimeoutSeconds,
   llmRequestTimeoutError,
@@ -18,6 +20,7 @@ import { wrapCleanupTranscript } from "../../../config/prompts";
 export const tinfoilProvider: InferenceProvider = {
   id: "tinfoil",
   async call({ text, model, agentName, config, ctx }) {
+    model = resolveRetiredCloudModel("tinfoil", model);
     logger.logReasoning("TINFOIL_START", { model, agentName });
 
     const apiKey = await ctx.getApiKey("tinfoil");
@@ -25,7 +28,7 @@ export const tinfoilProvider: InferenceProvider = {
     // refuses to send anything over an unverified transport.
     const client = await getTinfoilChatClient(apiKey);
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.toneStyle);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const messages = [
       { role: "system", content: systemPrompt },
@@ -54,8 +57,11 @@ export const tinfoilProvider: InferenceProvider = {
         return await client.chat.completions.create(requestBody as any, {
           timeout: timeoutSeconds * 1000,
           maxRetries: 0,
+          signal: requestSignal(config.requestId),
         });
       } catch (error) {
+        // The SDK's abort error has no status, which withRetry would re-send.
+        if (isRequestCancelled(config.requestId)) throw requestCancelledError();
         // The SDK reports an expired deadline as a connection error, which
         // withRetry would otherwise treat as a network drop and re-send.
         if ((error as Error).name === "APIConnectionTimeoutError") {

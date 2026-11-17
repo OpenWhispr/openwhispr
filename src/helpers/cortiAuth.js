@@ -57,7 +57,10 @@ async function getCortiToken({ environment, tenant, clientId, clientSecret }, fe
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
-      throw new Error(`Corti authentication failed: ${response.status} ${errorText}`.trim());
+      throw Object.assign(
+        new Error(`Corti authentication failed: ${response.status} ${errorText}`.trim()),
+        { status: response.status }
+      );
     }
 
     const data = await response.json();

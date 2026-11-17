@@ -1,5 +1,12 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, TextInput, type TextInputProps } from 'react-native';
+import {
+  View,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  type TextInputProps,
+  type AccessibilityState,
+} from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from './SystemIcon';
 import { BRAND, iosColor } from '@/config/colors';
@@ -18,8 +25,11 @@ type SettingsRowProps = {
   destructive?: boolean;
   showChevron?: boolean;
   selected?: boolean;
+  accessibilityState?: AccessibilityState;
   // Shown right after the description, such as a help button.
   descriptionAccessory?: React.ReactNode;
+  // Dims the icon and title and ignores taps; the description stays legible to say why.
+  disabled?: boolean;
 };
 
 export function SettingsRow({
@@ -35,14 +45,22 @@ export function SettingsRow({
   destructive = false,
   showChevron = true,
   selected = false,
+  accessibilityState,
   descriptionAccessory,
+  disabled = false,
 }: SettingsRowProps) {
   const isLine = iconStyle === 'line';
+  const dimmed = disabled ? 'opacity-40' : '';
   return (
     <Pressable
-      onPress={onPress}
-      disabled={!onPress && !rightElement}
-      accessibilityState={{ selected }}
+      onPress={disabled ? undefined : onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      disabled={disabled || (!onPress && !rightElement)}
+      accessibilityState={{
+        selected,
+        ...accessibilityState,
+        disabled: disabled || accessibilityState?.disabled,
+      }}
       className={selected ? 'bg-brand/10 active:bg-brand/20' : 'active:bg-tertiarySystemFill'}
     >
       <View
@@ -53,7 +71,7 @@ export function SettingsRow({
         }
       >
         {isLine ? (
-          <View className="h-6 w-6 items-center justify-center">
+          <View className={`h-6 w-6 items-center justify-center ${dimmed}`}>
             <SystemIcon
               name={icon}
               mdName={mdIcon}
@@ -73,7 +91,7 @@ export function SettingsRow({
         <View className="flex-1">
           <Text
             numberOfLines={1}
-            className={destructive ? 'text-[17px] text-systemRed' : 'text-[17px] text-label'}
+            className={`${destructive ? 'text-[17px] text-systemRed' : 'text-[17px] text-label'} ${dimmed}`}
           >
             {title}
           </Text>

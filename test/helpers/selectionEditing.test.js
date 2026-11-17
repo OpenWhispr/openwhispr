@@ -28,9 +28,10 @@ test("builds a structured prompt that keeps instruction and selection separate",
   assert.match(systemPrompt, new RegExp(marker));
 
   assert.equal(extractSelectionEditReplacement(`Improved text${marker}`, marker), "Improved text");
-  assert.throws(() => extractSelectionEditReplacement("Truncated text", marker), /incomplete/);
+  assert.throws(() => extractSelectionEditReplacement("Missing marker", marker), {
+    code: "SELECTION_EDIT_INVALID_RESPONSE",
+  });
 
-  assert.equal(getSelectionCaptureDisposition({ status: "editable" }), "caret");
   assert.equal(getSelectionCaptureDisposition({ status: "none" }), "standalone");
   assert.equal(
     getSelectionCaptureDisposition({ status: "unavailable", code: "copy_helper_unavailable" }),
@@ -78,5 +79,181 @@ test("extractSelectionEditReplacement supports empty or omitted completionMarker
   );
 
   assert.throws(() => extractSelectionEditReplacement("   ", ""), /empty selection edit/);
-  assert.throws(() => extractSelectionEditReplacement(123, ""), /incomplete/);
+  assert.throws(() => extractSelectionEditReplacement(123, ""), {
+    code: "SELECTION_EDIT_INVALID_RESPONSE",
+  });
+});
+
+test("the marker contract is exact, unique, and never demonstrated with a trailing period", async () => {
+  const { buildSelectionEditSystemPrompt, extractSelectionEditReplacement } = await load();
+  const marker = "__OPENWHISPR_SELECTION_COMPLETE_test__";
+  const prompt = buildSelectionEditSystemPrompt("", marker);
+  assert.ok(prompt.endsWith(`: ${marker}`));
+  assert.ok(!prompt.includes(`\n${marker}`));
+  assert.ok(!prompt.includes(`${marker}.`));
+  for (const output of [
+    `edit${marker}.`,
+    `edit${marker} junk`,
+    `edit${marker}\n`,
+    `edit${marker.slice(0, -1)}`,
+    "edit__wrong__",
+    `edit${marker}${marker}`,
+  ]) {
+    assert.throws(() => extractSelectionEditReplacement(output, marker), {
+      code: "SELECTION_EDIT_INVALID_RESPONSE",
+    });
+  }
+  assert.equal(extractSelectionEditReplacement(`  edit\n${marker}`, marker), "  edit\n");
+  for (const output of [marker, ` \n${marker}`]) {
+    assert.throws(() => extractSelectionEditReplacement(output, marker), {
+      code: "SELECTION_EDIT_EMPTY_RESPONSE",
+    });
+  }
+});
+
+test("an unmarked edit is rejected even with the former optional-marker option", async () => {
+  const { SELECTION_QUESTION_MARKER, extractSelectionEditReplacement } = await load();
+  const marker = "__OPENWHISPR_SELECTION_COMPLETE_test";
+  const cloud = { markerOptional: true };
+  for (const output of [
+    "edit",
+    '{"replacement":"unfinished',
+    "edit__OPENWHISPR_SELECTION_COMPL",
+    `edit${marker.slice(2)}`,
+    `${SELECTION_QUESTION_MARKER}.`,
+    `\`${SELECTION_QUESTION_MARKER}\``,
+  ]) {
+    assert.throws(() => extractSelectionEditReplacement(output, marker, cloud), {
+      code: "SELECTION_EDIT_INVALID_RESPONSE",
+    });
+  }
+});
+
+test("local JSON replacement preserves document bytes and rejects ambiguous envelopes", async () => {
+  const { extractLocalSelectionEditReplacement } = await load();
+  const replacement = '  "quoted" \\path\n<think>literal document</think> ☕\t\r\n';
+  assert.equal(
+    extractLocalSelectionEditReplacement(` \n${JSON.stringify({ replacement })}\t`),
+    replacement
+  );
+  for (const response of [
+    null,
+    123,
+    "null",
+    "[]",
+    '"text"',
+    "{}",
+    '{"replacement":null}',
+    '{"replacement":123}',
+    '{"replacement":[]}',
+    '{"replacement":"first","replacement":"second"}',
+    '{"replacement":"first","replace\\u006dent":"second"}',
+    '{"replacement":"ok","extra":true}',
+    '{"replacement":"ok"}junk',
+    '```json\n{"replacement":"ok"}\n```',
+    '<think>reason</think>{"replacement":"ok"}',
+    '{"replacement":"unfinished}',
+    '{"replacement":"bad\\q"}',
+  ]) {
+    assert.throws(() => extractLocalSelectionEditReplacement(response), {
+      code: "SELECTION_EDIT_INVALID_RESPONSE",
+    });
+  }
+  for (const response of ["", " \n", '{"replacement":""}', '{"replacement":" \\t\\n"}']) {
+    assert.throws(() => extractLocalSelectionEditReplacement(response), {
+      code: "SELECTION_EDIT_EMPTY_RESPONSE",
+    });
+  }
+});
+
+test("JSON edits reject leading question control markers instead of replacing document text", async () => {
+  const { extractLocalSelectionEditReplacement } = await load();
+  for (const replacement of [
+    "__OPENWHISPR_SELECTION_QUESTION",
+    "__OPENWHISPR_SELECTION_QUESTION_",
+    "  \n__OPENWHISPR_SELECTION_QUESTION",
+    "__OPENWHISPR_SELECTION_QUESTION.",
+    "__OPENWHISPR_SELECTION_QUESTION_ What should I explain?",
+    "__OPENWHISPR_SELECTION_QUESTION__\nWhat change do you want?",
+    "__OPENWHISPR_SELECTION_QUESTION__Please clarify.",
+  ]) {
+    assert.throws(
+      () => extractLocalSelectionEditReplacement(JSON.stringify({ replacement })),
+      { code: "SELECTION_EDIT_INVALID_RESPONSE" },
+      replacement
+    );
+  }
+});
+
+test("JSON edits preserve literal question-marker mentions and longer identifiers", async () => {
+  const { extractLocalSelectionEditReplacement } = await load();
+  for (const replacement of [
+    "Keep __OPENWHISPR_SELECTION_QUESTION__ as literal text.",
+    '"__OPENWHISPR_SELECTION_QUESTION"',
+    "`__OPENWHISPR_SELECTION_QUESTION__`",
+    "  __OPENWHISPR_SELECTION_QUESTIONNAIRE\n",
+    "__OPENWHISPR_SELECTION_QUESTION_SUFFIX",
+  ]) {
+    assert.equal(
+      extractLocalSelectionEditReplacement(JSON.stringify({ replacement })),
+      replacement
+    );
+  }
+});
+
+test("both edit prompts tell the model to hand a question about the selection back", async () => {
+  const {
+    SELECTION_QUESTION_MARKER,
+    buildSelectionEditSystemPrompt,
+    buildLocalSelectionEditSystemPrompt,
+  } = await load();
+  const cloud = buildSelectionEditSystemPrompt("", "__OPENWHISPR_SELECTION_COMPLETE_test__");
+  const local = buildLocalSelectionEditSystemPrompt();
+  for (const prompt of [cloud, local]) {
+    assert.ok(prompt.includes(SELECTION_QUESTION_MARKER));
+    assert.match(prompt, /explain/);
+  }
+  assert.ok(local.includes(JSON.stringify({ replacement: SELECTION_QUESTION_MARKER })));
+});
+
+test("a question verdict is recognised in every shape the edit paths return it", async () => {
+  const { SELECTION_QUESTION_MARKER: question, isSelectionQuestionResponse } = await load();
+  const marker = "__OPENWHISPR_SELECTION_COMPLETE_test__";
+  for (const response of [
+    `${question}${marker}`,
+    ` ${question}\n${marker}`,
+    // A model that forgets the completion marker still means the same thing.
+    question,
+    JSON.stringify({ replacement: question }),
+    ` ${JSON.stringify({ replacement: ` ${question} ` })}\n`,
+  ]) {
+    assert.equal(isSelectionQuestionResponse(response, marker), true, response);
+  }
+  for (const response of [
+    `An edit that mentions ${question} in passing${marker}`,
+    `Improved text${marker}`,
+    JSON.stringify({ replacement: `Keep ${question}` }),
+    `{"replacement":"${question}","extra":true}`,
+    "",
+    null,
+    123,
+  ]) {
+    assert.equal(isSelectionQuestionResponse(response, marker), false, String(response));
+  }
+});
+
+test("a local edit takes a tone sentence as a style preference beside the custom prompt", async () => {
+  const { buildLocalSelectionEditSystemPrompt } = await load();
+  const prompt = buildLocalSelectionEditSystemPrompt({
+    customPrompt: "Keep it short.",
+    toneSentence: "If the instruction asks you to rewrite, use the Work messages style.",
+  });
+  assert.match(
+    prompt,
+    /style preferences[^\n]*:\nKeep it short\.\nIf the instruction asks you to rewrite, use the Work messages style\.\n/
+  );
+  assert.equal(
+    buildLocalSelectionEditSystemPrompt({ toneSentence: "" }),
+    buildLocalSelectionEditSystemPrompt()
+  );
 });

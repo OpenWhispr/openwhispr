@@ -1,20 +1,27 @@
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
-import AgentDictationPillOverlay from "./components/dictation/AgentDictationPillOverlay.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
 import { PermissionGuideOverlay } from "./components/onboarding/PermissionGuideOverlay";
 import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
-import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
+import {
+  createOnboardingSession,
+  keepsOnboardingStepThroughPolicyRefetch,
+  LEGACY_ONBOARDING_STEP_KEY,
+  ONBOARDING_FLOW_VERSION,
+  ONBOARDING_SESSION_KEY,
+} from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
 import { useControlPanelWindowDrag } from "./hooks/useControlPanelWindowDrag";
 import { useTheme } from "./hooks/useTheme";
 import { mirrorActiveAccountScope } from "./lib/accountScopeMirror";
 import { usePolicyStore } from "./stores/policyStore";
+import { signOut } from "./lib/auth";
+import { Button } from "./components/ui/button";
 import { resolveSettledControlPanelWindowMode } from "./utils/controlPanelWindowMode.ts";
 import { resolveMacAccessibilityReadiness } from "./utils/macAccessibilityReadiness.ts";
-import { isControlPanelWindow } from "./utils/windowContext.ts";
+import { isAgentWindow, isControlPanelWindow } from "./utils/windowContext.ts";
 
 // Either marker means the flow is mid-way: the legacy step key is kept for
 // back-compat, the v2 session is what the rebuilt flow actually persists.
@@ -24,9 +31,46 @@ const isOnboardingInProgress = () =>
 
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
+const AgentWindow = React.lazy(() => import("./components/agent/AgentWindow.tsx"));
 
 export default function AppRouter() {
   useTheme();
+  const { t } = useTranslation();
+  const deviceReady = usePolicyStore((state) => state.deviceReady);
+  const policyCode = usePolicyStore((state) => state.code);
+  const policyStatus = usePolicyStore((state) => state.status);
+  const localOnly = usePolicyStore((state) => state.localOnly);
+  const workspaceRequired = usePolicyStore((state) => state.workspaceRequired);
+  useEffect(() => {
+    void usePolicyStore.getState().bootstrap();
+  }, []);
+  useEffect(() => {
+    if (
+      deviceReady &&
+      isControlPanelWindow() &&
+      (policyCode === "DEVICE_POLICY_INVALID" || (localOnly && policyStatus === "error"))
+    )
+      void window.electronAPI?.setOnboardingWindowMode?.("restore");
+  }, [deviceReady, policyCode, localOnly, policyStatus]);
+  if (!deviceReady) return <LoadingFallback />;
+  if (policyCode === "DEVICE_POLICY_INVALID") {
+    return <LoadingFallback message={t("common.devicePolicyInvalid")} error />;
+  }
+  if (localOnly && policyStatus === "error") {
+    return (
+      <LoadingFallback
+        error
+        message={t(
+          workspaceRequired ? "common.deviceWorkspaceUnavailable" : "common.managedPolicyConflict"
+        )}
+        action={
+          workspaceRequired ? (
+            <Button onClick={() => void signOut()}>{t("common.logout")}</Button>
+          ) : undefined
+        }
+      />
+    );
+  }
   const params = window.location.search;
 
   if (params.includes("permission-guide=true")) return <PermissionGuideOverlay />;
@@ -35,8 +79,14 @@ export default function AppRouter() {
     return <MeetingNotificationOverlay />;
   }
 
-  if (params.includes("agent-dictation-pill=true")) {
-    return <AgentDictationPillOverlay />;
+  // Before MainApp: it reports the onboarding state, which only the dictation
+  // window and the control panel may do.
+  if (isAgentWindow()) {
+    return (
+      <Suspense fallback={null}>
+        <AgentWindow />
+      </Suspense>
+    );
   }
 
   return <MainApp />;
@@ -45,15 +95,30 @@ export default function AppRouter() {
 function MainApp() {
   const { isSignedIn, isGracePeriodOnly, isLoaded: authLoaded } = useAuth();
   const policyStatus = usePolicyStore((state) => state.status);
+  const localOnly = usePolicyStore((state) => state.localOnly);
+  const requireSignIn = usePolicyStore((state) => state.requireSignIn);
   const policyResolved =
     !isSignedIn ||
     policyStatus === "managed" ||
     policyStatus === "unmanaged" ||
     policyStatus === "error";
-  const isWaitingForPolicyStart = isSignedIn && !policyResolved;
-  const autoSyncReady = authLoaded && policyResolved;
+  const autoSyncReady = authLoaded && policyResolved && !localOnly;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const policyAccountId = usePolicyStore((state) => state.accountId);
+  const lastResolvedPolicyAccount = useRef(null);
+  useEffect(() => {
+    if (policyResolved && isSignedIn) lastResolvedPolicyAccount.current = policyAccountId;
+  }, [isSignedIn, policyAccountId, policyResolved]);
+  const isWaitingForPolicyStart =
+    isSignedIn &&
+    !policyResolved &&
+    !keepsOnboardingStepThroughPolicyRefetch({
+      showOnboarding,
+      sessionValue: localStorage.getItem(ONBOARDING_SESSION_KEY),
+      policyAccountId,
+      lastResolvedAccountId: lastResolvedPolicyAccount.current,
+    });
   const [needsReauth, setNeedsReauth] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [postOnboardingSettingsSection, setPostOnboardingSettingsSection] = useState(undefined);
@@ -109,9 +174,15 @@ function MainApp() {
 
     if (isControlPanel) {
       if (!resolved) {
+        // Required sign-in mounts before the flow, but OAuth reloads still need its progress marker.
+        if (requireSignIn && !onboardingInProgress) {
+          localStorage.setItem(ONBOARDING_SESSION_KEY, JSON.stringify(createOnboardingSession()));
+        }
         setShowOnboarding(true);
-      } else if (!isSignedIn && !authSkipped) {
+      } else if (!isSignedIn && !localOnly && (requireSignIn || !authSkipped)) {
         setNeedsReauth(true);
+      } else {
+        setNeedsReauth(false);
       }
     }
 
@@ -122,7 +193,15 @@ function MainApp() {
     }
 
     setIsLoading(false);
-  }, [authLoaded, isControlPanel, isDictationPanel, isGracePeriodOnly, isSignedIn]);
+  }, [
+    authLoaded,
+    isControlPanel,
+    isDictationPanel,
+    isGracePeriodOnly,
+    isSignedIn,
+    localOnly,
+    requireSignIn,
+  ]);
 
   useEffect(() => {
     if (!isControlPanel || !authLoaded) return;
@@ -193,6 +272,12 @@ function MainApp() {
     }
     setShowOnboarding(false);
     localStorage.setItem("onboardingCompleted", "true");
+    // The onboarding milestone: only this real completion records it, never the
+    // returning-user assignment above or a resumed session.
+    void window.electronAPI?.recordOnboardingCompleted?.({
+      setupMode: options?.setupMode ?? null,
+      flowVersion: `desktop-onboarding-${ONBOARDING_FLOW_VERSION}`,
+    });
   };
 
   // isLoading clears once the onboarding effect has run, which itself waits
@@ -200,6 +285,10 @@ function MainApp() {
   // resolve (guest/offline presents as signed out).
   if (isLoading || isWaitingForPolicyStart) {
     return <LoadingFallback />;
+  }
+
+  if (isControlPanel && requireSignIn && !isSignedIn) {
+    return <ReauthenticationScreen requiredByDevice onAuthComplete={() => setNeedsReauth(false)} />;
   }
 
   if (isControlPanel && showOnboarding) {
@@ -234,7 +323,7 @@ function MainApp() {
   );
 }
 
-function LoadingFallback({ message }) {
+function LoadingFallback({ message, error = false, action }) {
   const { t } = useTranslation();
   const fallbackMessage = message || t("common.loading");
 
@@ -252,12 +341,15 @@ function LoadingFallback({ message }) {
           <path d="M627 457V568" stroke="white" strokeWidth="74" strokeLinecap="round" />
           <path d="M397 457V568" stroke="white" strokeWidth="74" strokeLinecap="round" />
         </svg>
-        <div className="w-7 h-7 rounded-full border-[2.5px] border-transparent border-t-primary animate-[spinner-rotate_0.8s_cubic-bezier(0.4,0,0.2,1)_infinite] motion-reduce:animate-none motion-reduce:border-t-muted-foreground motion-reduce:opacity-50" />
+        {!error && (
+          <div className="w-7 h-7 rounded-full border-[2.5px] border-transparent border-t-primary animate-[spinner-rotate_0.8s_cubic-bezier(0.4,0,0.2,1)_infinite] motion-reduce:animate-none motion-reduce:border-t-muted-foreground motion-reduce:opacity-50" />
+        )}
         {fallbackMessage && (
           <p className="text-[13px] font-medium text-muted-foreground dark:text-foreground/60 tracking-[-0.01em]">
             {fallbackMessage}
           </p>
         )}
+        {action}
       </div>
     </div>
   );

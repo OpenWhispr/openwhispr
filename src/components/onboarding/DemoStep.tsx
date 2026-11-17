@@ -20,50 +20,26 @@ import founderAvatar from "../../assets/onboarding-founder.webp";
 import gmailMark from "../../assets/icons/gmail.svg";
 
 /**
- * The dictation success celebration: canvas-confetti's "school pride" effect —
- * two cannons firing continuously from the left and right edges while the middle
- * of the screen stays readable.
+ * The dictation success celebration: one soft burst from each side edge, angled
+ * inward and up so the middle of the screen stays readable.
  *
- * Differences from the upstream demo, all deliberate. It runs for under two
- * seconds instead of thirty, because this fires on a success state and not a
- * permanent page decoration. The per-frame particle count tapers with the
- * remaining time so the streams thin out instead of stopping mid-air. The loop is
- * cancelled on unmount — the demo is a bare IIFE with no teardown, which in React
- * would keep firing into a detached canvas. And reduced motion skips the loop
- * outright rather than scheduling ~100 frames of no-ops.
- *
- * Colours are sampled from the reference artwork; `scalar` sizes the pieces (1 is
- * canvas-confetti's default).
+ * One volley of ~70 small pieces in the onboarding blues plus one warm accent,
+ * settling in about a second: an acknowledgement, not a continuous stream.
  */
 const CONFETTI_BASE = {
-  // Sampled from the reference artwork: gold and yellow through orange, then teal,
-  // blue, magenta, purple and green.
-  colors: [
-    "#f5d400",
-    "#f5c518",
-    "#f07800",
-    "#f04800",
-    "#00d0bc",
-    "#2e6be6",
-    "#d8005f",
-    "#8e1a78",
-    "#5fa82a",
-  ],
+  // --color-primary and two lighter tints of it, plus one warm accent.
+  colors: ["#4577e9", "#7da2f2", "#b9cdf8", "#f5c518"],
   shapes: ["circle", "square"] as ("circle" | "square")[],
-  scalar: 1.3,
-  spread: 55,
-  startVelocity: 45,
-  gravity: 1,
-  decay: 0.9,
-  ticks: 200,
+  particleCount: 36,
+  scalar: 0.85,
+  spread: 50,
+  startVelocity: 38,
+  gravity: 0.9,
+  decay: 0.91,
+  ticks: 140,
   // canvas-confetti opts out natively; the CSS in index.css cannot reach a canvas.
   disableForReducedMotion: true,
 };
-
-/** Long enough to register as a celebration, short enough not to be decoration. */
-const STREAM_DURATION_MS = 1800;
-/** Per side, per frame, at full strength; tapers to 1 as the streams wind down. */
-const STREAM_PARTICLES = 7;
 
 function ConfettiLayer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -74,34 +50,14 @@ function ConfettiLayer() {
 
     // useWorker: false on purpose. The worker path hands the canvas to an
     // OffscreenCanvas, which can only be transferred once, and StrictMode mounts
-    // effects twice in dev — the second pass throws. ~90 particles for 1.5s on the
-    // main thread costs nothing next to that.
+    // effects twice in dev — the second pass throws.
     const fire = confetti.create(canvas, { resize: true, useWorker: false });
 
-    // canvas-confetti already no-ops per call under reduced motion, but bail
-    // before the loop so we don't schedule ~100 frames of nothing.
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    // 60 from the left edge and 120 from the right both angle inward and up.
+    void fire({ ...CONFETTI_BASE, angle: 60, origin: { x: 0, y: 0.7 } });
+    void fire({ ...CONFETTI_BASE, angle: 120, origin: { x: 1, y: 0.7 } });
 
-    const end = performance.now() + STREAM_DURATION_MS;
-    let frameId = 0;
-
-    const frame = (now: number) => {
-      const remaining = Math.max(0, (end - now) / STREAM_DURATION_MS);
-      const shared = {
-        ...CONFETTI_BASE,
-        particleCount: Math.max(1, Math.round(STREAM_PARTICLES * remaining)),
-      };
-      // 60 from the left edge and 120 from the right both angle inward and up.
-      void fire({ ...shared, angle: 60, origin: { x: 0 } });
-      void fire({ ...shared, angle: 120, origin: { x: 1 } });
-      if (now < end) frameId = requestAnimationFrame(frame);
-    };
-    frameId = requestAnimationFrame(frame);
-
-    return () => {
-      cancelAnimationFrame(frameId);
-      fire.reset();
-    };
+    return () => fire.reset();
   }, []);
 
   // Escape the transformed onboarding step so the fixed canvas spans the full
@@ -134,12 +90,13 @@ function FounderAvatar() {
   );
 }
 
-// Figma "Frame 25"/"Frame 27": pill on surface/brand, radius 38, 10/20 padding,
-// Inter Medium 14/140% in light/surface-primary.
+// Figma "Frame 25"/"Frame 27": bubble on surface/brand, 10/20 padding, Inter
+// Medium 14/140% in light/surface-primary. Radius 16 rather than the spec's 38:
+// the second message wraps, and a full pill radius turned two lines into a blob.
 function FounderBubble({ children }: { children: ReactNode }) {
   return (
     <p
-      className="w-fit rounded-[38px] bg-[var(--onboarding-accent)] px-4 py-2 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)]"
+      className="w-fit rounded-2xl bg-[var(--onboarding-accent)] px-4 py-2 text-sm font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)]"
       style={BUBBLE_IN}
     >
       {children}
@@ -235,10 +192,10 @@ function TypingBubble() {
   const { t } = useTranslation();
 
   return (
-    // Figma "Onboarding / Frame 25": pill on light/surface-stroke, radius 38,
-    // 10/20 padding, hugging the dots row.
+    // Figma "Onboarding / Frame 25": on light/surface-stroke, 10/20 padding,
+    // hugging the dots row. Radius matches FounderBubble.
     <div
-      className="flex items-center rounded-[38px] bg-[var(--onboarding-control-border)] px-4 py-2"
+      className="flex items-center rounded-2xl bg-[var(--onboarding-control-border)] px-4 py-2"
       style={BUBBLE_IN}
       aria-label={t("onboarding.rehaul.demo.typing")}
     >

@@ -1,24 +1,39 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const Module = require("node:module");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 const handlers = new Map();
+const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "local-server-sync-ipc-"));
 
 const MODEL = "qwen3.5-4b-q4_k_m";
 const modelManager = {
   currentServerModelId: null,
   stops: 0,
   getServerStatus: () => ({ running: true }),
-  stopServer: async () => {
+  stopServerWhenIdle: async () => {
     modelManager.stops += 1;
+  },
+  serverManager: {
+    cancelledStops: 0,
+    cancelDeferredStop: () => {
+      modelManager.serverManager.cancelledStops += 1;
+    },
+    keepResident: null,
+    setKeepResident: (keepResident) => {
+      modelManager.serverManager.keepResident = keepResident;
+    },
   },
 };
 
 const electronStub = {
   app: {
-    getPath: () => "",
+    getPath: () => userDataDirectory,
     getName: () => "test",
     getVersion: () => "0.0.0",
     isPackaged: false,
@@ -85,15 +100,19 @@ test.before(() => {
   };
   target._hasActiveAccountScope = () => target.signedIn;
   Ctor.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
   assert.ok(handlers.get("sync-startup-preferences"), "sync handler must be registered");
 });
 
 test.after(() => {
+  target.metaActivation?.dispose();
   Module._load = originalLoad;
+  fs.rmSync(userDataDirectory, { recursive: true, force: true });
 });
 
 function sync({ loaded, signedIn = false, policySettled = true, ...scopes }) {
@@ -119,8 +138,14 @@ function sync({ loaded, signedIn = false, policySettled = true, ...scopes }) {
 }
 
 test("a window sync keeps the server while another scope still needs its model", async () => {
+  const cancelled = modelManager.serverManager.cancelledStops;
   await sync({ loaded: MODEL, chatAgentMode: "local", chatAgentModel: MODEL });
   assert.equal(modelManager.stops, 0);
+  assert.equal(
+    modelManager.serverManager.cancelledStops,
+    cancelled + 1,
+    "a stop deferred by an earlier sync no longer applies"
+  );
 });
 
 test("a window sync stops the server once no scope needs its model", async () => {
@@ -140,4 +165,36 @@ test("a signed-in window waits for its workspace policy before touching the serv
 test("signed out, the policy never loads, so an unresolved policy does not block the stop", async () => {
   await sync({ loaded: MODEL, signedIn: false, policySettled: false });
   assert.equal(modelManager.stops, 1);
+});
+
+test("Keep model loaded applies before the workspace policy settles", async () => {
+  await sync({ loaded: MODEL, signedIn: true, policySettled: false, keepLocalModelLoaded: true });
+  assert.equal(modelManager.serverManager.keepResident, true);
+
+  await sync({ loaded: MODEL, signedIn: true, policySettled: false });
+  assert.equal(modelManager.serverManager.keepResident, false, "missing means off");
+});
+
+test("a downloaded GPU binary requests an idle stop that preferences cannot cancel", async (t) => {
+  const previousEnabled = process.env.LLAMA_VULKAN_ENABLED;
+  const previousBackend = process.env.LLAMA_GPU_BACKEND;
+  t.after(() => {
+    if (previousEnabled === undefined) delete process.env.LLAMA_VULKAN_ENABLED;
+    else process.env.LLAMA_VULKAN_ENABLED = previousEnabled;
+    if (previousBackend === undefined) delete process.env.LLAMA_GPU_BACKEND;
+    else process.env.LLAMA_GPU_BACKEND = previousBackend;
+    delete target._llamaVulkanManager;
+    delete target.environmentManager;
+  });
+  target._llamaVulkanManager = { download: async () => ({ success: true }) };
+  target.environmentManager = { saveAllKeysToEnvFile: async () => {} };
+  const stop = t.mock.method(modelManager, "stopServerWhenIdle", async () => {});
+
+  const result = await handlers.get("download-llama-vulkan-binary")({
+    sender: { isDestroyed: () => true },
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(stop.mock.callCount(), 1);
+  assert.deepEqual(stop.mock.calls[0].arguments, [{ cancelOnReuse: false }]);
 });

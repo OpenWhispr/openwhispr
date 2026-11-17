@@ -92,12 +92,22 @@ describe('CleanupPromptScreen — guidance', () => {
     expect(screen.queryByText(/requires Cloud mode/)).not.toBeOnTheScreen();
   });
 
-  it('says the prompt has no effect while On-Device mode skips cleanup', () => {
+  // Local Mode cleans on this phone, so the prompt applies with nothing saved.
+  it('treats unsaved cleanup in Local Mode as using the prompt', () => {
     mockActiveMode = 'private';
     render(<CleanupPromptScreen />);
-    expect(
-      screen.getByText(/On-Device mode skips cleanup unless it is set to On-Device/),
-    ).toBeTruthy();
+    expect(screen.queryByText(/Your prompt is saved and applies/)).toBeNull();
+  });
+
+  it('treats provider cleanup in On-Device mode as using the prompt', () => {
+    mockActiveMode = 'private';
+    mockConfig = {
+      defaultMode: 'private',
+      cleanupEnabled: true,
+      inference: { cleanup: { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' } },
+    };
+    render(<CleanupPromptScreen />);
+    expect(screen.queryByText(NOTICE)).not.toBeOnTheScreen();
   });
 
   it('treats On-Device cleanup in On-Device mode as using the prompt', () => {

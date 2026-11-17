@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react";
 import type { ChatPersistence } from "./useChatPersistence";
 import type { ChatStreaming, SendToAIOptions } from "./useChatStreaming";
 import type { Message } from "./types";
+import { normalizeAgentSelectionContext } from "../../utils/agentSelectionContext";
 
 interface PersistedMessageContext {
   conversationId: number;
@@ -54,30 +55,64 @@ export function useChatMessageSender({
 
   return useCallback(
     async (text: string, options?: SendToAIOptions) => {
-      return await submissionLockRef.current!.run(async () => {
+      const version = persistence.getSessionVersion?.();
+      const isCurrent = () => version === persistence.getSessionVersion?.();
+      let submitted = false;
+      const accepted = await submissionLockRef.current!.run(async () => {
         onSendingChange?.(true);
+        let claimedId: number | null = null;
+        let streamStarted = false;
         try {
-          const convId = conversationId ?? (await createConversation(text));
-          const previousMessages = persistence.messages;
+          const convId =
+            (conversationId === persistence.conversationId ? conversationId : null) ??
+            (await createConversation(text));
+          if (!isCurrent()) return;
+          const claim = await persistence.claimConversation?.(convId);
+          if (claim === false) return;
+          claimedId = convId;
+          if (!isCurrent()) return;
+          const previousMessages = claim?.messages ?? persistence.messages;
+          const context = normalizeAgentSelectionContext(options?.selectedContext);
+          const selectedContext = context?.text;
+          const selectedContextSource = context?.source === "external" ? "external" : undefined;
           const userMessage: Message = {
             id: crypto.randomUUID(),
             role: "user",
             content: text,
             isStreaming: false,
+            ...(selectedContext ? { selectedContext } : {}),
+            ...(selectedContextSource ? { selectedContextSource } : {}),
           };
 
           persistence.setMessages((messages) => [...messages, userMessage]);
-          await persistence.saveUserMessage(text);
+          await persistence.saveUserMessage(text, {
+            messageId: userMessage.id,
+            selectedContext,
+            ...(selectedContextSource ? { selectedContextSource } : {}),
+          });
+          if (!isCurrent()) return;
           await onMessagePersisted?.({
             conversationId: convId,
             text,
             isFirstMessage: previousMessages.length === 0,
           });
-          await streaming.sendToAI(text, [...previousMessages, userMessage], options);
+          if (!isCurrent()) return;
+          submitted = true;
+          streamStarted = true;
+          await streaming.sendToAI(text, [...previousMessages, userMessage], {
+            ...options,
+            conversationId: convId,
+            persistAssistantMessage: persistence.saveAssistantMessage,
+          });
+        } catch (error) {
+          if (isCurrent()) throw error;
         } finally {
+          if (claimedId != null && !streamStarted)
+            await persistence.releaseConversation?.(claimedId);
           onSendingChange?.(false);
         }
       });
+      return accepted && submitted;
     },
     [
       conversationId,

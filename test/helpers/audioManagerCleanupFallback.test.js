@@ -280,3 +280,74 @@ test("translation cleanup failures survive successful and skipped translation fo
     assert.deepEqual(manager._takePendingResultExtras(), {});
   }
 });
+
+test("a classified provider cleanup failure keeps the fields its toast needs", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-classified-cleanup-failure-",
+    settingsKey: "__classifiedCleanupFailureSettings",
+  });
+  const failure = Object.assign(new Error("OpenAI rejected your API key."), {
+    code: "PROVIDER_AUTH_FAILED",
+    messageKey: "providerErrors.authFailed",
+    messageParams: { provider: "OpenAI" },
+    settingsTarget: "llms",
+    surface: "llm",
+    technicalDetails: { provider: "OpenAI", status: 401 },
+  });
+  const manager = createManager({
+    pendingCleanupFailure: null,
+    processWithReasoningModel: async () => {
+      throw failure;
+    },
+  });
+
+  await manager.runTranslationChain({
+    text: "raw dictation",
+    settings: { translationSourceLanguage: "en", translationTargetLanguage: "en" },
+    agentName: null,
+    route: { model: "translation-model", cleanupReachable: true, cleanupConfig: {}, config: {} },
+    cleanup: { mode: "model", model: "cleanup-model" },
+  });
+
+  assert.deepEqual(manager._takePendingResultExtras(), {
+    cleanupFailure: {
+      message: failure.message,
+      messageKey: failure.messageKey,
+      messageParams: failure.messageParams,
+      surface: failure.surface,
+      settingsTarget: failure.settingsTarget,
+      technicalDetails: failure.technicalDetails,
+    },
+  });
+});
+
+// A cleanup held up by another model's answer goes in raw on the same path, with
+// the wait bounded here, so dictation never sits on a long answer.
+test("dictation asks the local model for a bounded wait", async (t) => {
+  globalThis.__cleanupFallbackImmediateNotifications = [];
+  t.after(() => delete globalThis.__cleanupFallbackImmediateNotifications);
+  const received = [];
+  globalThis.__cleanupFallbackReceived = received;
+  t.after(() => delete globalThis.__cleanupFallbackReceived);
+
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-audio-cleanup-busy-wait-",
+    settingsKey: "__audioCleanupBusyWaitSettings",
+    settings: { useCleanupModel: true, useDictationAgent: false, preferredLanguage: "en" },
+    mockModules: {
+      "/services/ReasoningService": `
+        export default {
+          processText: async (_text, _model, _agent, config) => {
+            globalThis.__cleanupFallbackReceived.push(config.busyWaitMs);
+            return "cleaned";
+          },
+        };
+      `,
+    },
+  });
+  const manager = createManager({});
+
+  assert.equal(await manager.processWithReasoningModel("text", "model", "Agent", {}), "cleaned");
+  assert.equal(received.length, 1);
+  assert.ok(received[0] > 0 && received[0] <= 3000, `waits ${received[0]} ms`);
+});

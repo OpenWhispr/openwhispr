@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getTinfoilModels, type CloudModelDefinition } from "../models/ModelRegistry";
 import { isTinfoilListFresh, refreshTinfoilModels } from "../models/tinfoilModels";
 import logger from "../utils/logger";
+import { useRegistryVersion } from "./useRegistryVersion";
 
 interface UseTinfoilModelsResult {
   models: CloudModelDefinition[];
@@ -17,10 +18,17 @@ interface UseTinfoilModelsResult {
  * fails, so the picker stays usable offline.
  */
 export function useTinfoilModels(enabled: boolean): UseTinfoilModelsResult {
+  const registryVersion = useRegistryVersion();
   const [models, setModels] = useState<CloudModelDefinition[]>(() => getTinfoilModels());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    // Canonical additions remain visible offline; the getter gives any
+    // confirmed live Tinfoil overlay precedence over the signed catalog.
+    setModels(getTinfoilModels());
+  }, [registryVersion]);
 
   useEffect(() => {
     isMountedRef.current = true;

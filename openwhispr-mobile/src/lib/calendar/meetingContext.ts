@@ -97,13 +97,19 @@ const withOrganizer = (
   ]);
 };
 
-const isRoomLikeParticipant = (participant: CalendarParticipant): boolean => {
+export const isRoomLikeParticipant = (participant: CalendarParticipant): boolean => {
   if (participant.resource) return true;
   const email = participant.email ?? '';
   const displayName = participant.displayName?.trim().toLowerCase() ?? '';
   if (email.endsWith('@resource.calendar.google.com')) return true;
   return /\b(boardroom|conference room|huddle room|meeting room|room)\b/.test(displayName);
 };
+
+/** Whether the user declined the event, so it isn't on their schedule. */
+export const isDeclinedByUser = (event: GoogleCalendarEvent): boolean =>
+  parseCalendarParticipants(event.attendeesJson)?.some(
+    (participant) => participant.self && participant.responseStatus === 'declined',
+  ) ?? false;
 
 export const getHumanParticipants = (participants: CalendarParticipant[]): CalendarParticipant[] =>
   dedupeParticipants(

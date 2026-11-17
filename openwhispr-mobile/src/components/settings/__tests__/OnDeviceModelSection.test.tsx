@@ -69,6 +69,17 @@ it('picks a downloaded model for the workflow', async () => {
   expect(mockPickLocalModel).toHaveBeenCalledWith('upload', 'parakeet-v3');
 });
 
+// Private mode shows a workflow saved to Cloud or Bring Your Own Key as Automatic; tapping that
+// row must not quietly replace the saved choice, which applies again when Private mode is off.
+it('keeps a locked choice when Automatic is tapped, but still picks a model', async () => {
+  render(<OnDeviceModelSection scope="upload" picked={undefined} lockedChoice />);
+  fireEvent.press(await screen.findByText('Automatic'));
+  expect(mockPickLocalModel).not.toHaveBeenCalled();
+  expect(isSelected('Automatic')).toBe(true);
+  fireEvent.press(screen.getByText('Parakeet v3'));
+  expect(mockPickLocalModel).toHaveBeenCalledWith('upload', 'parakeet-v3');
+});
+
 it('shows the picked model as selected and can go back to Automatic', async () => {
   render(<OnDeviceModelSection scope="dictation" picked="parakeet-v3" />);
   await screen.findByText('Parakeet v3');
@@ -92,4 +103,13 @@ it('does not let a model that misses a language be picked, and falls back to Aut
   fireEvent.press(screen.getByText('Parakeet v2'));
   expect(mockPickLocalModel).not.toHaveBeenCalled();
   expect(isSelected('Automatic')).toBe(true);
+});
+
+it('says when the model Automatic falls back to misses the languages', async () => {
+  mockLanguages = ['ja'];
+  mockAvailability = { ...mockAvailability, parakeetV2Downloaded: false };
+  render(<OnDeviceModelSection scope="dictation" picked={undefined} />);
+  expect(
+    await screen.findByText(/Using Parakeet v3\. It doesn't cover your languages\./),
+  ).toBeTruthy();
 });

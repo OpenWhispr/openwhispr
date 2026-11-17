@@ -114,7 +114,7 @@ test("a missing listener binary reports the push-to-talk unavailable message", a
 
   assert.equal(result.success, false);
   // setupShortcuts appends "Try: <suggestions>" to whatever the failure carried.
-  assert.equal(result.error.startsWith("Push-to-Talk native listener not available"), true);
+  assert.equal(result.error.startsWith("OpenWhispr's key listener isn't available."), true);
 });
 
 // Windows answers through its own probe (windows-key-listener.exe); macOS watches

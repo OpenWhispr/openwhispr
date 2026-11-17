@@ -84,6 +84,26 @@ static BOOL GetExeName(HWND hwnd, char* exeName, DWORD exeNameSize) {
     return TRUE;
 }
 
+/* The window title as one UTF-8 line, for the Tone & Style app classifier: a
+   browser's title names the site it shows. Control characters and the
+   Unicode line separators become spaces, so a title can't start a line of
+   its own in this output. */
+static BOOL GetWindowTitleUtf8(HWND hwnd, char* title, int titleSize) {
+    wchar_t wideTitle[512];
+    int wideLen = GetWindowTextW(hwnd, wideTitle, 512);
+    if (wideLen <= 0) return FALSE;
+    for (int i = 0; i < wideLen; i++) {
+        if (wideTitle[i] < 0x20 || wideTitle[i] == 0x2028 || wideTitle[i] == 0x2029) {
+            wideTitle[i] = L' ';
+        }
+    }
+
+    int len = WideCharToMultiByte(CP_UTF8, 0, wideTitle, wideLen, title, titleSize - 1, NULL, NULL);
+    if (len <= 0) return FALSE;
+    title[len] = '\0';
+    return TRUE;
+}
+
 static BOOL IsTerminalExe(const char* exeName) {
     for (int i = 0; TERMINAL_EXES[i] != NULL; i++) {
         if (_stricmp(exeName, TERMINAL_EXES[i]) == 0) {
@@ -295,6 +315,11 @@ int main(int argc, char* argv[]) {
         printf("WINDOW_CLASS %s\n", className);
         if (gotExeName) {
             printf("EXE_NAME %s\n", exeName);
+        }
+        /* 511 UTF-16 units take at most 1533 UTF-8 bytes. */
+        char title[1536];
+        if (GetWindowTitleUtf8(hwnd, title, sizeof(title))) {
+            printf("WINDOW_TITLE %s\n", title);
         }
         printf("IS_TERMINAL %s\n", isTerminal ? "true" : "false");
         fflush(stdout);

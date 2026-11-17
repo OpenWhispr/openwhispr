@@ -47,6 +47,8 @@ function setup(t, options = {}) {
     },
     "./modelDirUtils": { getModelsDirForService: () => root },
     "./parakeetCapability": { assertParakeetSupported() {} },
+    // The fixture isn't a real archive; these tests are about the manifest around it.
+    "./modelArchiveIntegrity": { async validateModelArchive() {} },
     "./parakeetServer": class {
       isModelDownloaded(name) {
         return fs.existsSync(path.join(root, name, "tokens.txt"));

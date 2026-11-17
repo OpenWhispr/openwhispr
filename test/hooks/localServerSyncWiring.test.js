@@ -19,7 +19,12 @@ async function mountSettings(t) {
   });
 
   const syncs = [];
-  const listeners = {};
+  const scopeListeners = new Set();
+  const listeners = {
+    scope: (scope) => {
+      for (const callback of scopeListeners) callback(scope);
+    },
+  };
   const known = {
     syncStartupPreferences: async (prefs) => {
       syncs.push(prefs);
@@ -27,11 +32,10 @@ async function mountSettings(t) {
     // Startup seeds the agent name into the dictionary. Left pending, the write
     // never reaches its cloud push, which imports a module after teardown.
     applyDictionaryChanges: () => new Promise(() => {}),
+    // Several hooks and stores listen, as with the real preload.
     onActiveAccountScopeChanged: (callback) => {
-      listeners.scope = callback;
-      return () => {
-        delete listeners.scope;
-      };
+      scopeListeners.add(callback);
+      return () => scopeListeners.delete(callback);
     },
   };
   // Every other bridge call the provider makes is irrelevant here.

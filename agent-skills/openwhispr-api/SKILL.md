@@ -91,16 +91,17 @@ Wrap all responses in a consistent envelope.
 
 ### Error Codes
 
-| HTTP Status | Code                 | Meaning                                            |
-| ----------- | -------------------- | -------------------------------------------------- |
-| 400         | `validation_error`   | Invalid request body or query params               |
-| 401         | `invalid_api_key`    | Missing, malformed, expired, or revoked key        |
-| 403         | `forbidden`          | Key lacks required scope                           |
-| 404         | `not_found`          | Resource does not exist or belongs to another user |
-| 405         | `method_not_allowed` | Wrong HTTP method                                  |
-| 409         | `conflict`           | Duplicate resource (e.g. folder name)              |
-| 429         | `rate_limited`       | Rate limit exceeded — check `Retry-After` header   |
-| 500         | `internal_error`     | Server error                                       |
+| HTTP Status | Code                    | Meaning                                                               |
+| ----------- | ----------------------- | --------------------------------------------------------------------- |
+| 400         | `validation_error`      | Invalid request body or query params                                  |
+| 401         | `invalid_api_key`       | Missing, malformed, expired, or revoked key                           |
+| 403         | `forbidden`             | Key lacks required scope                                              |
+| 404         | `not_found`             | Resource does not exist or belongs to another user                    |
+| 405         | `method_not_allowed`    | Wrong HTTP method                                                     |
+| 409         | `conflict`              | Duplicate resource (e.g. folder name)                                 |
+| 409         | `note_version_conflict` | Note changed since `base_revision`; body's `data` is the current note |
+| 429         | `rate_limited`          | Rate limit exceeded — check `Retry-After` header                      |
+| 500         | `internal_error`        | Server error                                                          |
 
 ## Rate Limits
 
@@ -150,6 +151,8 @@ Scope: `notes:read` (personal) / `workspace:notes:read` (workspace)
 **Get Note** — `GET /notes/{id}`
 Scope: `notes:read` / `workspace:notes:read`. Returns 404 if the note does not exist or is deleted. A workspace key may fetch any note in its workspace's spaces.
 
+Note responses include `revision` (integer, advances on every change), `content_state` and `enhanced_content_state` (`set`, `clear`, or `null` for a field never written with an intent), and `enhancement_template_id` (the template the summary was built from).
+
 **Create Note** — `POST /notes/create`
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -168,7 +171,14 @@ Scope: `notes:write` / `workspace:notes:write`. Returns `201` with the created n
 | `content` | string | No | New content |
 | `enhanced_content` | string | No | New enhanced content |
 | `folder_id` | UUID | No | Move to folder |
+| `base_revision` | integer | No | The note's `revision` you last read; the write applies only at that revision |
+| `field_updates` | object | No | `{ "content"?: "set" \| "clear", "enhanced_content"?: "set" \| "clear" }`. Requires `base_revision` |
 Scope: `notes:write` / `workspace:notes:write`. All fields optional — only provided fields are updated. Cannot change a note's space.
+
+- Without `base_revision`, a provided blank `content` or `enhanced_content` clears that field.
+- With `base_revision`, state each change in `field_updates`: `set` needs nonblank text, `clear` takes an omitted, null or blank value (`400 validation_error` otherwise). A stale `base_revision` answers `409 note_version_conflict` with `{ "error": { "code", "message" }, "data": <current note> }`; rebase on `data` and retry.
+- Clearing `enhanced_content` also removes its prompt and content hash but keeps `enhancement_template_id`.
+- A nonblank legacy v1 write restores the field even when it matches text removed by a clear. Exact stale resends are suppressed only for released desktop sync endpoints; mobile and v1 restores remain edits.
 
 **Delete Note** — `DELETE /notes/{id}`
 Scope: `notes:write` / `workspace:notes:write`. Soft-deletes the note. Returns `204 No Content`.

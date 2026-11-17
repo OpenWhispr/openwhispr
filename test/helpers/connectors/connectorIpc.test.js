@@ -232,7 +232,7 @@ test("the auth generation is read before the header lookup", async () => {
   assert.deepEqual(expected, [1]);
 });
 
-test("a slow refresh still falls back to the cached verdict for the same request", async () => {
+test("an auth change during lookup cannot reuse the previous account cached verdict", async () => {
   const { createConnectorPolicyResolver } = await load();
   let generation = 4;
   const peeked = [];
@@ -250,8 +250,8 @@ test("a slow refresh still falls back to the cached verdict for the same request
     timeoutMs: 20,
   });
 
-  assert.equal(await resolver({}), "allowed");
-  assert.deepEqual(peeked, [4]);
+  assert.equal(await resolver({}), "unavailable");
+  assert.deepEqual(peeked, []);
 });
 
 test("the auth lookup never reads a destroyed window as signed out", async () => {

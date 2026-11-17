@@ -5,9 +5,21 @@
 // dictationStreamingRouting.js respectively. Dependencies are injected so the
 // table is unit-testable without Electron.
 
+const { readPolicyResponseError } = require("./policyResponseError");
+
 const dual = (streams, factory) =>
   streams === 2 ? Promise.all([factory(), factory()]) : factory();
 const duplicate = (streams, value) => (streams === 2 ? [value, value] : value);
+
+// The server gates managed tokens by purpose, so a default would let a meeting
+// mint as dictation. Every managed mint must say which one it is.
+const AUDIO_PURPOSES = new Set(["dictation", "meeting"]);
+function requirePurpose({ purpose }) {
+  if (AUDIO_PURPOSES.has(purpose)) return purpose;
+  throw Object.assign(new Error("Realtime token request has no audio purpose"), {
+    code: "AUDIO_PURPOSE_REQUIRED",
+  });
+}
 
 const REALTIME_TOKEN_PROVIDERS = {
   "assemblyai-realtime": async (
@@ -35,7 +47,9 @@ const REALTIME_TOKEN_PROVIDERS = {
       });
     }
     return dual(streams, async () => {
-      const data = await postServerToken("/api/streaming-token");
+      const data = await postServerToken("/api/streaming-token", {
+        purpose: requirePurpose(options),
+      });
       if (!data.token) throw new Error("No AssemblyAI token received");
       return data.token;
     });
@@ -50,7 +64,9 @@ const REALTIME_TOKEN_PROVIDERS = {
       return duplicate(streams, apiKey);
     }
     return dual(streams, async () => {
-      const data = await postServerToken("/api/deepgram-streaming-token");
+      const data = await postServerToken("/api/deepgram-streaming-token", {
+        purpose: requirePurpose(options),
+      });
       if (!data.token) throw new Error("No Deepgram token received");
       return data.token;
     });
@@ -68,7 +84,9 @@ const REALTIME_TOKEN_PROVIDERS = {
     }
     // Managed tokens are minted with uses:1, so N sockets need N mints.
     return dual(streams, async () => {
-      const data = await postServerToken("/api/gemini-live-token");
+      const data = await postServerToken("/api/gemini-live-token", {
+        purpose: requirePurpose(options),
+      });
       if (!data.token) throw new Error("No Gemini token received");
       return data.token;
     });
@@ -97,6 +115,7 @@ const REALTIME_TOKEN_PROVIDERS = {
       return duplicate(streams, apiKey);
     }
     const data = await postServerToken("/api/openai-realtime-token", {
+      purpose: requirePurpose(options),
       model: options.model,
       language: options.language,
       streams: streams || 1,
@@ -120,7 +139,64 @@ async function fetchRealtimeTokenForProvider(provider, deps, options, { streams 
   return acquire(deps, options, streams);
 }
 
+// Managed tokens are minted by the OpenWhispr API. The API answers a stale session
+// with a code-less 401 ("Invalid session"), so refusals are tagged with the codes
+// the renderer offers sign-in for: AUTH_REQUIRED (no credential) and AUTH_EXPIRED.
+function createServerTokenPoster({
+  getApiUrl,
+  getAuthHeader,
+  proxyFetch,
+  withPolicyHeaders,
+  classifyAndLog,
+}) {
+  return async (path, body = {}) => {
+    const apiUrl = getApiUrl();
+    if (!apiUrl) {
+      const err = new Error("OpenWhispr API URL not configured");
+      err.code = "NO_API";
+      throw err;
+    }
+    const authHeader = await getAuthHeader();
+    if (!Object.keys(authHeader).length) {
+      throw Object.assign(new Error("Not authenticated"), { code: "AUTH_REQUIRED" });
+    }
+    const url = `${apiUrl}${path}`;
+    let response;
+    try {
+      response = await proxyFetch(url, {
+        method: "POST",
+        headers: withPolicyHeaders({ "Content-Type": "application/json", ...authHeader }),
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      const classified = classifyAndLog(err, url);
+      if (classified.isNetworkError) {
+        throw Object.assign(new Error(err.message || "Network request failed"), {
+          code: "NETWORK_ERROR",
+          networkCode: classified.code,
+          messageKey: classified.messageKey,
+        });
+      }
+      throw err;
+    }
+    if (!response.ok) {
+      const error = await readPolicyResponseError(
+        response,
+        `Token request failed: ${response.status}`
+      );
+      if (response.status === 401 && !error.code) error.code = "AUTH_EXPIRED";
+      throw error;
+    }
+    return response.json();
+  };
+}
+
+const isSignInRefusal = (error) =>
+  error?.code === "AUTH_EXPIRED" || error?.code === "AUTH_REQUIRED";
+
 module.exports = {
   REALTIME_TOKEN_PROVIDERS,
+  createServerTokenPoster,
   fetchRealtimeTokenForProvider,
+  isSignInRefusal,
 };

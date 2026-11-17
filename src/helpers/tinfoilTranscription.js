@@ -1,6 +1,12 @@
 const debugLogger = require("./debugLogger");
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { registryData: modelRegistryData } = require("../models/registryData.js");
 const { tinfoilSecureFetch } = require("./tinfoilSecureClient");
+const {
+  PROVIDER_ERROR_CODES,
+  providerHttpError,
+  providerError,
+  redactProviderBody,
+} = require("./providerHttpErrors");
 
 const TINFOIL_TRANSCRIPTION_PATH = "/v1/audio/transcriptions";
 
@@ -24,11 +30,13 @@ async function transcribeWithTinfoil({
   language,
   prompt,
   apiKey,
+  signal,
 }) {
   if (!apiKey?.trim()) {
-    const error = new Error("Tinfoil API key not configured. Add your key in Settings.");
-    error.code = "API_KEY_MISSING";
-    throw error;
+    throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+      provider: "Tinfoil",
+      surface: "transcription",
+    });
   }
 
   const model = getBatchModel();
@@ -48,23 +56,23 @@ async function transcribeWithTinfoil({
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}` },
     body: formData,
+    ...(signal ? { signal } : {}),
   });
 
-  if (response.status === 401) {
-    const error = new Error("Invalid Tinfoil API key. Check your key in Settings.");
-    error.code = "INVALID_KEY";
-    throw error;
-  }
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    const error = new Error(`Tinfoil API Error: ${response.status} ${errorText}`.trim());
-    if (response.status === 429) {
-      error.code = "PROVIDER_RATE_LIMITED";
-      error.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";
-    } else if (response.status >= 500) {
-      error.code = "SERVER_ERROR";
-    }
-    throw error;
+    debugLogger.warn("Tinfoil transcription failed", {
+      status: response.status,
+      body: redactProviderBody(errorText),
+    });
+    throw providerHttpError({
+      provider: "Tinfoil",
+      model,
+      status: response.status,
+      body: errorText,
+      headers: response.headers,
+      surface: "transcription",
+    });
   }
 
   const data = await response.json();

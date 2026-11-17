@@ -24,6 +24,11 @@ function startupManager(t, outcomes) {
   manager.getFFmpegPath = () => null;
   manager.waitForReady = async () => {
     if (!outcomes.shift()) throw new Error("whisper-server process died during startup");
+    // What a real GPU server logs once its backend is up; a GPU start without
+    // it counts as a failure
+    if (manager.useCuda) {
+      manager.process.stderr.emit("data", "whisper_backend_init_gpu: using CUDA0 backend\n");
+    }
     manager.ready = true;
   };
   const payloads = [];
@@ -45,7 +50,10 @@ test("a startup failure is proven once the same GPU setup has started this sessi
 
   await manager._doStart(tiny, { useCuda: true });
 
-  assert.deepEqual(payloads, [{ proven: true }]);
+  assert.deepEqual(
+    payloads.map(({ proven }) => proven),
+    [true]
+  );
   assert.equal(manager.useCuda, false);
   assert.equal(manager.gpuFallbackActive, true);
 });
@@ -55,7 +63,10 @@ test("a startup failure of a GPU setup that never started is not proven", async 
 
   await manager._doStart(model("tiny"), { useCuda: true });
 
-  assert.deepEqual(payloads, [{ proven: false }]);
+  assert.deepEqual(
+    payloads.map(({ proven }) => proven),
+    [false]
+  );
   // The CPU server that took over is not a GPU start
   assert.equal(manager.startedGpuKeys.size, 0);
 });
@@ -67,5 +78,8 @@ test("a model that never started on the GPU is not proven by another one that di
   await manager._doStart(model("tiny"), { useCuda: true });
   await manager._doStart(model("large"), { useCuda: true });
 
-  assert.deepEqual(payloads, [{ proven: false }]);
+  assert.deepEqual(
+    payloads.map(({ proven }) => proven),
+    [false]
+  );
 });

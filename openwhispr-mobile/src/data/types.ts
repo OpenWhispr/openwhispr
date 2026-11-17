@@ -70,6 +70,7 @@ export interface RemoteFolder {
   deleted_at: string | null;
   updated_at: string;
   // Scope fields declared for a later task; not yet populated by pull/apply.
+  private_workspace_id?: string | null;
   space_id?: string | null;
   workspace_id?: string | null;
   previous_space_id?: string | null;
@@ -103,6 +104,7 @@ export interface RemoteNote {
   created_at?: string;
   updated_at: string;
   // Scope fields declared for a later task; not yet populated by pull/apply.
+  private_workspace_id?: string | null;
   space_id?: string | null;
   workspace_id?: string | null;
   previous_space_id?: string | null;
@@ -147,6 +149,27 @@ export interface ConflictedNote {
   title: string | null;
   /** null when the stashed JSON fails to parse (defensive — should not happen in practice); keep-mine still resolves such a row with no dependency on this. */
   conflictServerNote: RemoteNote | null;
+}
+
+/** The notes picked to answer a chat question, and how many matched before the cap. */
+export interface ChatCandidateNotes {
+  notes: Note[];
+  total: number;
+  /** The returned notes whose transcript matches a term, so their matching lines can be sent. */
+  transcriptMatchIds?: number[];
+}
+
+/** A period a chat question names: the notes created from `start` up to (not including) `end`. */
+export interface ChatNoteWindow {
+  start: Date;
+  end: Date;
+  meetingsOnly: boolean;
+}
+
+export interface ChatCandidateOptions {
+  includePrivate: boolean;
+  limit: number;
+  window?: ChatNoteWindow;
 }
 
 export interface NotesRepository {
@@ -215,6 +238,14 @@ export interface NotesRepository {
    */
   moveNoteToSpace(noteId: number, spaceId: number): void;
   searchNotes(query: string, folderId?: number): Note[];
+  /**
+   * Notes for answering a chat question: a term matches title, content, AI summary or transcript,
+   * and a term held by fewer of the notes searched weighs more. Only notes scoring at least half
+   * as well as the best one count, the best first, then the newest. With a window, only notes
+   * created in it are searched. With no terms, the most recent notes. Capped at `limit`; `total`
+   * counts them all before the cap.
+   */
+  getChatCandidateNotes(terms: string[], options: ChatCandidateOptions): ChatCandidateNotes;
   getActions(): Action[];
   getActionById(id: number): Action | null;
   createAction(name: string, description: string, prompt: string): Action;

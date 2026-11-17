@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +15,7 @@
 #include <fcntl.h>
 #include <linux/input.h>
 #include <math.h>
+#include <poll.h>
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
@@ -69,7 +71,34 @@ typedef struct {
     guint            signal_id;
     paste_mode_t     mode;
     int              copy_mode;
+    int              cancel_on_stdin_close;
+    int              await_paste_approval;
 } PortalData;
+
+/* The parent closes stdin to cancel a guarded request. Never interrupt a
+ * chord once it starts: all pressed modifiers must still be released. */
+static int portal_input_cancelled(const PortalData *app)
+{
+    if (!app->cancel_on_stdin_close) return 0;
+    struct pollfd input = { .fd = STDIN_FILENO, .events = POLLIN | POLLHUP };
+    if (poll(&input, 1, 0) <= 0) return 0;
+    if (input.revents & (POLLHUP | POLLERR | POLLNVAL)) return 1;
+    if (input.revents & POLLIN) {
+        char ignored;
+        return read(STDIN_FILENO, &ignored, 1) == 0;
+    }
+    return 0;
+}
+
+static gboolean on_portal_cancelled(gpointer user_data)
+{
+    PortalData *app = user_data;
+    if (portal_input_cancelled(app)) {
+        portal_exit_code = 7;
+        g_main_loop_quit(app->loop);
+    }
+    return G_SOURCE_CONTINUE;
+}
 
 static char *get_sender_path(GDBusConnection *conn)
 {
@@ -178,6 +207,27 @@ static void on_start_response(GDBusConnection *conn, const char *sender,
     }
 
     g_variant_unref(results);
+    if (portal_input_cancelled(app)) {
+        portal_exit_code = 7;
+        g_main_loop_quit(app->loop);
+        return;
+    }
+    if (app->await_paste_approval) {
+        /* Consent can outlast a focus change. The parent checks the target
+         * after READY and authorizes this one chord; EOF refuses it safely. */
+        printf("PASTE_READY\n");
+        fflush(stdout);
+        struct pollfd input = { .fd = STDIN_FILENO, .events = POLLIN | POLLHUP };
+        char approval = 0;
+        if (poll(&input, 1, 5000) <= 0 ||
+            !(input.revents & POLLIN) ||
+            (input.revents & (POLLHUP | POLLERR | POLLNVAL)) ||
+            read(STDIN_FILENO, &approval, 1) != 1 || approval != '1') {
+            portal_exit_code = 7;
+            g_main_loop_quit(app->loop);
+            return;
+        }
+    }
     portal_send_paste(app);
 }
 
@@ -301,11 +351,14 @@ static gboolean on_portal_timeout(gpointer user_data)
     return G_SOURCE_REMOVE;
 }
 
-static int paste_via_portal(paste_mode_t mode, const char *restore_token, int copy_mode)
+static int paste_via_portal(paste_mode_t mode, const char *restore_token, int copy_mode,
+                            int cancel_on_stdin_close, int await_paste_approval)
 {
     PortalData app = { 0 };
     app.mode = mode;
     app.copy_mode = copy_mode;
+    app.cancel_on_stdin_close = cancel_on_stdin_close;
+    app.await_paste_approval = await_paste_approval;
     if (restore_token) app.restore_token = g_strdup(restore_token);
 
     GError *err = NULL;
@@ -318,6 +371,7 @@ static int paste_via_portal(paste_mode_t mode, const char *restore_token, int co
     }
 
     app.loop = g_main_loop_new(NULL, FALSE);
+    guint cancel_source = cancel_on_stdin_close ? g_timeout_add(25, on_portal_cancelled, &app) : 0;
     g_timeout_add_seconds(10, on_portal_timeout, &app);
 
     char *sender_path = get_sender_path(app.conn);
@@ -345,6 +399,7 @@ static int paste_via_portal(paste_mode_t mode, const char *restore_token, int co
     if (err) {
         fprintf(stderr, "CreateSession failed: %s\n", err->message);
         g_error_free(err);
+        if (cancel_source) g_source_remove(cancel_source);
         g_main_loop_unref(app.loop);
         g_free(app.restore_token);
         g_object_unref(app.conn);
@@ -352,6 +407,7 @@ static int paste_via_portal(paste_mode_t mode, const char *restore_token, int co
     }
 
     g_main_loop_run(app.loop);
+    if (cancel_source) g_source_remove(cancel_source);
 
     g_main_loop_unref(app.loop);
     g_free(app.session_handle);
@@ -367,13 +423,30 @@ static const char *terminal_classes[] = {
     "terminator", "xterm", "urxvt", "rxvt", "tilix", "terminology",
     "wezterm", "foot", "st", "yakuake", "ghostty", "guake", "tilda",
     "hyper", "tabby", "sakura", "warp", "termius", "waveterm",
-    "ptyxis", "kgx", "org.gnome.console", NULL
+    "ptyxis", "kgx", "org.gnome.console", "cosmicterm", "xst", "stterm", NULL
 };
+
+/* A short name like "st" would match inside unrelated names
+ * ("com.system76.CosmicEdit"), so it must be a whole word. */
+static int contains_terminal_name(const char *wm_class, const char *name) {
+    size_t len = strlen(name);
+    if (len > 2) return strcasestr(wm_class, name) != NULL;
+    for (const char *p = wm_class; (p = strcasestr(p, name)); p++) {
+        if ((p == wm_class || !isalnum((unsigned char)p[-1])) && !isalnum((unsigned char)p[len]))
+            return 1;
+    }
+    return 0;
+}
 
 static int is_terminal(const char *wm_class) {
     if (!wm_class) return 0;
+    /* Omarchy assigns terminal-launched apps their own IDs. Keep in sync with
+     * OMARCHY_TERMINAL_PREFIXES in src/helpers/clipboard.js. */
+    if (strncasecmp(wm_class, "org.omarchy.", strlen("org.omarchy.")) == 0 ||
+        strncasecmp(wm_class, "tui.", strlen("tui.")) == 0)
+        return 1;
     for (int i = 0; terminal_classes[i]; i++) {
-        if (strcasestr(wm_class, terminal_classes[i]))
+        if (contains_terminal_name(wm_class, terminal_classes[i]))
             return 1;
     }
     return 0;
@@ -430,20 +503,22 @@ static int detect_terminal_atspi(void) {
             AtspiAccessible *win = atspi_accessible_get_child_at_index(app, j, NULL);
             if (!win) continue;
             AtspiStateSet *states = atspi_accessible_get_state_set(win);
-            gboolean active = atspi_state_set_contains(states, ATSPI_STATE_ACTIVE);
-            g_object_unref(states);
+            gboolean active = states && atspi_state_set_contains(states, ATSPI_STATE_ACTIVE);
+            if (states) g_object_unref(states);
             if (active) {
                 char *name = atspi_accessible_get_name(app, NULL);
                 int result = name ? is_terminal(name) : 0;
                 g_free(name);
                 g_object_unref(win);
                 g_object_unref(app);
+                g_object_unref(desktop);
                 return result;
             }
             g_object_unref(win);
         }
         g_object_unref(app);
     }
+    g_object_unref(desktop);
     return -1;
 }
 
@@ -512,10 +587,20 @@ static int print_atspi_target(void) {
     AtspiAccessible *app = NULL;
     AtspiAccessible *win = find_active_atspi_window(&app);
     int pid = app ? atspi_active_pid(app) : 0;
+    char *title = pid && win ? atspi_accessible_get_name(win, NULL) : NULL;
     if (win) g_object_unref(win);
     if (app) g_object_unref(app);
     if (!pid) return 1;
     printf("TARGET ATSPI %d\n", pid);
+    /* The window's name is its title ("Inbox - Gmail - Google Chrome"), which
+     * Tone & Style reads to tell a browser's sites apart. Base64 keeps a title
+     * from forging a line. */
+    if (title && *title) {
+        gchar *encoded = g_base64_encode((const guchar *)title, strlen(title));
+        printf("WINDOW_TITLE_B64 %s\n", encoded);
+        g_free(encoded);
+    }
+    g_free(title);
     return 0;
 }
 
@@ -806,9 +891,44 @@ static paste_mode_t resolve_paste_mode(int force_terminal, int force_shift_inser
     return is_term ? PASTE_MODE_CTRL_SHIFT_V : PASTE_MODE_CTRL_V;
 }
 
+#define WM_ROUND_TRIP_TIMEOUT_MS 100
+
+/* Mutter only follows a client's focus change once it has made an X request
+ * of its own since its last focus change. Converting the window manager's
+ * WM_Sn selection makes it answer with requests, and waiting for the answer
+ * orders them before ours. With no window manager, the X server answers. */
+static void round_trip_window_manager(Display *display, Window requestor)
+{
+    char selection[16];
+    snprintf(selection, sizeof(selection), "WM_S%d", DefaultScreen(display));
+    Atom property = XInternAtom(display, "_OPENWHISPR_WM_ROUND_TRIP", False);
+    XEvent event;
+    /* Drop replies that came after an earlier round trip gave up, so they can't
+     * stand in for this one (a reply later than this drain still can). */
+    while (XCheckTypedWindowEvent(display, requestor, SelectionNotify, &event)) {}
+    XConvertSelection(display, XInternAtom(display, selection, False),
+                      XInternAtom(display, "TARGETS", False), property, requestor,
+                      CurrentTime);
+    XFlush(display);
+    struct pollfd connection = { .fd = ConnectionNumber(display), .events = POLLIN };
+    while (!XCheckTypedWindowEvent(display, requestor, SelectionNotify, &event)) {
+        if (poll(&connection, 1, WM_ROUND_TRIP_TIMEOUT_MS) <= 0) return;
+    }
+    XDeleteProperty(display, requestor, property);
+}
+
+static int ignore_x_error(Display *display, XErrorEvent *error)
+{
+    (void)display;
+    (void)error;
+    return 0;
+}
+
 /* Shape only input, leaving transparent shadows/tooltips free to render.
  * Keeping the visible pill in the compositor's input region also works over
- * native Wayland apps, where XWayland cannot query a fresh global cursor. */
+ * native Wayland apps, where XWayland cannot query a fresh global cursor.
+ * "focus" takes keyboard focus: the window is override-redirect, so no window
+ * manager hands it focus on a click or an activation request. */
 static int serve_input_region(Window window)
 {
     if (window == None) return 1;
@@ -821,11 +941,29 @@ static int serve_input_region(Window window)
         XCloseDisplay(display);
         return 1;
     }
+    Window requestor = XCreateSimpleWindow(display, DefaultRootWindow(display),
+                                           0, 0, 1, 1, 0, 0, 0);
 
     char request[512];
     while (fgets(request, sizeof(request), stdin)) {
         if (strcmp(request, "full\n") == 0) {
             XShapeCombineMask(display, window, ShapeInput, 0, 0, None, ShapeSet);
+        } else if (strcmp(request, "focus\n") == 0) {
+            round_trip_window_manager(display, requestor);
+            XWindowAttributes attributes;
+            XErrorHandler previous = XSetErrorHandler(ignore_x_error);
+            if (XGetWindowAttributes(display, window, &attributes) &&
+                attributes.map_state == IsViewable) {
+                /* Leave first: a compositor can move keyboard focus to a native
+                 * Wayland app without moving X focus off this window, and
+                 * focusing it again then produces no FocusIn to follow. */
+                XSetInputFocus(display, PointerRoot, RevertToPointerRoot, CurrentTime);
+                XSetInputFocus(display, window, RevertToParent, CurrentTime);
+            }
+            /* An unmap racing the check must not end the server that owns the
+             * window's input region. */
+            XSync(display, False);
+            XSetErrorHandler(previous);
         } else {
             double viewport_width, viewport_height, x, y, width, height;
             if (sscanf(request, "%lf %lf %lf %lf %lf %lf", &viewport_width,
@@ -990,6 +1128,8 @@ int main(int argc, char *argv[]) {
     int force_shift_insert = 0;
     int use_uinput = 0;
     int use_portal = 0;
+    int cancel_on_stdin_close = 0;
+    int await_paste_approval = 0;
     int media_play_pause = 0;
     int copy_mode = 0;
     int capabilities_only = 0;
@@ -1009,6 +1149,10 @@ int main(int argc, char *argv[]) {
             use_uinput = 1;
         } else if (strcmp(argv[i], "--portal") == 0) {
             use_portal = 1;
+        } else if (strcmp(argv[i], "--await-paste-approval") == 0) {
+            await_paste_approval = 1;
+        } else if (strcmp(argv[i], "--cancel-on-stdin-close") == 0) {
+            cancel_on_stdin_close = 1;
         } else if (strcmp(argv[i], "--media-play-pause") == 0) {
             media_play_pause = 1;
         } else if (strcmp(argv[i], "--copy") == 0) {
@@ -1045,7 +1189,7 @@ int main(int argc, char *argv[]) {
     if (capabilities_only) {
         printf("paste-v1 selection-copy-v1 target-window-v1 modifier-wait-v1");
 #ifdef HAVE_GIO
-        printf(" portal-keysym-v1");
+        printf(" portal-keysym-v1 portal-cancel-v1 portal-approval-v1");
 #endif
 #ifdef HAVE_ATSPI
         printf(" atspi-selection-v1");
@@ -1077,7 +1221,8 @@ int main(int argc, char *argv[]) {
     if (use_portal) {
 #ifdef HAVE_GIO
         paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
-        return paste_via_portal(mode, restore_token, copy_mode);
+        return paste_via_portal(mode, restore_token, copy_mode, cancel_on_stdin_close,
+                                await_paste_approval);
 #else
         fprintf(stderr, "portal support not compiled in\n");
         return 5;

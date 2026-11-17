@@ -1,17 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { AppState, Platform, View } from 'react-native';
 import { router } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
 import type { LucideIconName } from '@/components/ui/SystemIcon';
-import { Text } from '@/components/ui/Text';
 import { Toast } from '@/components/ui/Toast';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { useToast } from '@/hooks/useToast';
 import { confirmDestructive } from '@/lib/alerts';
-import { WORKFLOW_LABELS, WORKFLOWS, workflowSummary } from '@/lib/aiWorkflows';
+import { WORKFLOW_LABELS, WORKFLOWS, cloudAccessFor, workflowSummary } from '@/lib/aiWorkflows';
 import { getLocalReasoningReadiness } from '@/lib/localReasoning';
 import type { InferenceSelection, MobileInferenceScope } from '@/lib/mobileProviders';
 import {
@@ -20,6 +19,7 @@ import {
   getProviderCredentialStatus,
   subscribeProviderCredentialChanges,
 } from '@/services/providers/ProviderCredentials';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { LocalReasoningReadiness } from '@/types';
@@ -29,7 +29,8 @@ const WORKFLOW_ICONS: Record<MobileInferenceScope, { icon: string; mdIcon: Lucid
   upload: { icon: 'square.and.arrow.up', mdIcon: 'Upload' },
   cleanup: { icon: 'sparkles', mdIcon: 'Sparkles' },
   notes: { icon: 'doc.text', mdIcon: 'FileText' },
-  agent: { icon: 'bubble.left.and.bubble.right', mdIcon: 'MessagesSquare' },
+  noteChat: { icon: 'bubble.left.and.bubble.right', mdIcon: 'MessagesSquare' },
+  agent: { icon: 'person.wave.2', mdIcon: 'UserRoundCog' },
 };
 
 function localReasoningStatusLabel(readiness: LocalReasoningReadiness | null): string {
@@ -41,9 +42,15 @@ function localReasoningStatusLabel(readiness: LocalReasoningReadiness | null): s
     case 'appleIntelligenceOff':
       return 'Apple Intelligence off';
     case 'modelNotReady':
-      return 'Model not ready';
+      return 'Downloading model';
+    case 'unsupportedLanguage':
+      return 'Language not supported';
     case 'unavailable':
       return 'Not eligible';
+    case 'unsupportedDevice':
+      return 'Not supported on this iPhone';
+    case 'unsupportedOS':
+      return 'Needs iOS 26';
     default:
       return 'Checking...';
   }
@@ -71,6 +78,7 @@ async function isKeyMissing(selection: InferenceSelection | undefined): Promise<
 export default function AIModelsScreen(): React.JSX.Element {
   const config = useConfigStore((state) => state.config);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
+  const cloudAccess = useAuthStore((state) => cloudAccessFor(state.user));
   const [localReadiness, setLocalReadiness] = useState<LocalReasoningReadiness | null>(null);
   const localIntelligenceEnabled = config?.appleLocalIntelligenceEnabled ?? true;
   const handleToggleLocalIntelligence = useConfigToggle('appleLocalIntelligenceEnabled');
@@ -107,11 +115,19 @@ export default function AIModelsScreen(): React.JSX.Element {
         cancelled = true;
       };
     }
-    getLocalReasoningReadiness({ refresh: true }).then((readiness) => {
-      if (!cancelled) setLocalReadiness(readiness);
+    const check = (): void => {
+      getLocalReasoningReadiness({ refresh: true }).then((readiness) => {
+        if (!cancelled) setLocalReadiness(readiness);
+      });
+    };
+    check();
+    // Apple Intelligence is turned on, or finishes its model, outside the app.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') check();
     });
     return () => {
       cancelled = true;
+      subscription.remove();
     };
   }, [localIntelligenceEnabled]);
 
@@ -142,9 +158,6 @@ export default function AIModelsScreen(): React.JSX.Element {
   return (
     <View className="flex-1 bg-systemBackground">
       <SettingsScreen>
-        <Text className="mb-4 px-8 text-[13px] text-secondaryLabel">
-          Each workflow picks its own mode.
-        </Text>
         <SettingsSection title="Workflows">
           {WORKFLOWS.map((scope) => (
             <SettingsRow
@@ -155,6 +168,7 @@ export default function AIModelsScreen(): React.JSX.Element {
               subtitle={workflowSummary(config, scope, activeMode, {
                 keyMissing: missingKeys.includes(scope),
                 onDeviceUnavailable,
+                cloudAccess,
               })}
               onPress={() => router.push({ pathname: '/(account)/ai-workflow', params: { scope } })}
             />
@@ -166,7 +180,7 @@ export default function AIModelsScreen(): React.JSX.Element {
             icon="sparkles"
             mdIcon="Sparkles"
             title="Local Apple Intelligence"
-            description={`Status: ${localReasoningStatusLabel(localReadiness)}. Runs On-Device text workflows, and private and signed-out note generation.`}
+            description={`Status: ${localReasoningStatusLabel(localReadiness)}\nRuns On-Device text workflows, and private and signed-out note generation.`}
             rightElement={
               <SettingsSwitch
                 value={localIntelligenceEnabled}

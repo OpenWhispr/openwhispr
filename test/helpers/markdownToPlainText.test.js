@@ -30,6 +30,39 @@ test("headings lose their marks", async () => {
   assert.equal(markdownToPlainText("## Title\nBody"), "Title\nBody");
 });
 
+test("emphasis spans consecutive prose lines but not separate blocks", async () => {
+  const { markdownToPlainText } = await helperModule;
+  for (const marker of ["**", "*", "__", "_", "~~"]) {
+    assert.equal(markdownToPlainText(`${marker}first\nsecond${marker}`), "first\nsecond");
+    assert.equal(markdownToPlainText(`${marker}first\\\nsecond${marker}`), "first\\\nsecond");
+  }
+  for (const [content, expected] of [
+    ["**first\n\nsecond**", "**first\n\nsecond**"],
+    ["**first\n# second**", "**first\nsecond**"],
+    ["**first\n- second**", "**first\n- second**"],
+    ["**first\n```\nsecond**\n```", "**first\nsecond**"],
+    ["**first\n---\nsecond**", "**first\nsecond**"],
+    ["**first\n| A |\n| - |\nsecond**", "**first\nA\nsecond**"],
+  ]) {
+    assert.equal(markdownToPlainText(content), expected);
+  }
+});
+
+test("pipe-delimited prose stays literal unless followed by a matching table separator", async () => {
+  const { markdownToPlainText } = await helperModule;
+  for (const content of ["|x|", "| a | b |", "| A | B |\n| --- |", "| - | - |", "| | | |"]) {
+    assert.equal(markdownToPlainText(content), content);
+  }
+});
+
+test("only the table separator is removed, not hyphen-only headers or data rows", async () => {
+  const { markdownToPlainText } = await helperModule;
+  assert.equal(
+    markdownToPlainText("| - | - |\n| --- | --- |\n| - | - |\n| a | b |\n\n|x|"),
+    "-\t-\n-\t-\na\tb\n\n|x|"
+  );
+});
+
 test("inline code and fenced blocks keep their content verbatim", async () => {
   const { markdownToPlainText } = await helperModule;
   assert.equal(
@@ -108,6 +141,7 @@ test("inline code content is verbatim, never run through other inline rules", as
   assert.equal(markdownToPlainText("use `__init__` here"), "use __init__ here");
   assert.equal(markdownToPlainText("inline `**not bold**` code"), "inline **not bold** code");
   assert.equal(markdownToPlainText("`C:\\Users\\me`"), "C:\\Users\\me");
+  assert.equal(markdownToPlainText("Run `**first\nsecond**`."), "Run **first\nsecond**.");
 });
 
 test("a literal placeholder sequence in the input survives the restore step", async () => {
@@ -200,9 +234,10 @@ test("escaped table pipes remain inside their cell and preserve empty cells", as
     markdownToPlainText("| Choice | Meaning |\n| --- | --- |\n| A \\| B | either choice |"),
     "Choice\tMeaning\nA | B\teither choice"
   );
-  assert.equal(markdownToPlainText(String.raw`| A\\| B |`), "A\\\tB");
-  assert.equal(markdownToPlainText(String.raw`| A\\\|B | C |`), "A\\|B\tC");
-  assert.equal(markdownToPlainText("| A | | C |"), "A\t\tC");
+  const header = "| Left | Right |\n| --- | --- |\n";
+  assert.equal(markdownToPlainText(header + String.raw`| A\\| B |`), "Left\tRight\nA\\\tB");
+  assert.equal(markdownToPlainText(header + String.raw`| A\\\|B | C |`), "Left\tRight\nA\\|B\tC");
+  assert.equal(markdownToPlainText("| A | | C |\n| --- | --- | --- |"), "A\t\tC");
 });
 
 test("POSIX paths retain literal underscores alongside surrounding emphasis", async () => {
@@ -275,7 +310,7 @@ test("table conversion preserves empty edge cells and column alignment", async (
     markdownToPlainText("\n| A | B | |\n|---|---|---|\n| | value | |\n\n"),
     "A\tB\t\n\tvalue\t"
   );
-  assert.equal(markdownToPlainText("| | | |"), "\t\t");
+  assert.equal(markdownToPlainText("| | | |\n| --- | --- | --- |"), "\t\t");
   assert.equal(markdownToPlainText("  Prose.  \n\nMore prose. \n"), "Prose.\n\nMore prose.");
 });
 

@@ -66,7 +66,6 @@ it('cleans a consented Cloud fallback in private mode without a privacy hint', a
     provider: 'cloud',
     requestContext: 'recording',
     cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
-    agentRoute: { mode: 'openwhispr', scope: 'agent' },
   });
 
   expect(mockReason).toHaveBeenCalledTimes(1);

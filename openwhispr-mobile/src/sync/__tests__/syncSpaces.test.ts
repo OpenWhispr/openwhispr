@@ -26,6 +26,7 @@ jest.mock('@/lib/apiClient', () => {
 });
 jest.mock('../teamSpacesCapability', () => ({
   setTeamSpacesCapability: jest.fn(),
+  setDefaultPrivateWorkspaceId: jest.fn(),
 }));
 
 import { syncSpaces } from '../syncSpaces';
@@ -33,7 +34,7 @@ import { spacesRepository } from '@/data';
 import { fetchMySpaces } from '@/data/remote/spacesApi';
 import { fetchMyWorkspaces } from '@/data/remote/workspacesApi';
 import { ApiError } from '@/lib/apiClient';
-import { setTeamSpacesCapability } from '../teamSpacesCapability';
+import { setDefaultPrivateWorkspaceId, setTeamSpacesCapability } from '../teamSpacesCapability';
 import type { Space } from '@/data/spacesTypes';
 
 const mockRepo = spacesRepository as jest.Mocked<typeof spacesRepository>;
@@ -76,7 +77,7 @@ describe('syncSpaces', () => {
 
     const result = await syncSpaces();
 
-    expect(result).toEqual({ capable: false, activeSpaces: [] });
+    expect(result).toEqual({ capable: false, activeSpaces: [], workspaces: null });
     expect(mockSetCapability).toHaveBeenCalledWith(false);
     expect(mockRepo.upsertFromRemote).not.toHaveBeenCalled();
     expect(mockRepo.softDeleteByCloudId).not.toHaveBeenCalled();
@@ -87,7 +88,7 @@ describe('syncSpaces', () => {
 
     const result = await syncSpaces();
 
-    expect(result).toEqual({ capable: false, activeSpaces: [] });
+    expect(result).toEqual({ capable: false, activeSpaces: [], workspaces: null });
     expect(mockSetCapability).toHaveBeenCalledWith(false);
     expect(mockRepo.upsertFromRemote).not.toHaveBeenCalled();
   });
@@ -118,7 +119,21 @@ describe('syncSpaces', () => {
     expect(mockRepo.upsertFromRemote).toHaveBeenCalledWith(remoteSpaces[0], 'Acme');
     expect(mockRepo.softDeleteByCloudId).toHaveBeenCalledTimes(1);
     expect(mockRepo.softDeleteByCloudId).toHaveBeenCalledWith('stale-1');
-    expect(result).toEqual({ capable: true, activeSpaces: [privateSpace, keptTeamSpace] });
+    expect(result).toEqual({
+      capable: true,
+      activeSpaces: [privateSpace, keptTeamSpace],
+      workspaces: [{ id: 'w1', name: 'Acme' }],
+    });
+  });
+
+  it('reports no workspaces when that read fails, without failing the pass', async () => {
+    mockFetchMySpaces.mockResolvedValue({ data: [] });
+    mockFetchMyWorkspaces.mockRejectedValue(new Error('offline'));
+
+    const result = await syncSpaces();
+
+    expect(result.capable).toBe(true);
+    expect(result.workspaces).toBeNull();
   });
 
   it('never soft-deletes the private space, even when the response is empty', async () => {
@@ -147,4 +162,19 @@ describe('syncSpaces', () => {
     await expect(syncSpaces()).rejects.toThrow('network down');
     expect(mockSetCapability).not.toHaveBeenCalled();
   });
+});
+
+test('refreshes default Private placement from this account’s spaces response', async () => {
+  mockFetchMySpaces.mockResolvedValue({
+    data: [],
+    private_workspace_placement: true,
+    default_workspace_id: 'workspace-default',
+  });
+  mockFetchMyWorkspaces.mockResolvedValue({ data: [] });
+  mockRepo.listSpaces.mockReturnValue([]);
+  await syncSpaces();
+  expect(setDefaultPrivateWorkspaceId).toHaveBeenCalledWith('workspace-default');
+  mockFetchMySpaces.mockResolvedValue({ data: [] });
+  await syncSpaces();
+  expect(setDefaultPrivateWorkspaceId).toHaveBeenLastCalledWith(null);
 });

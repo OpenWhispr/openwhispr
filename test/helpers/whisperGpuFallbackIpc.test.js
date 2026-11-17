@@ -40,48 +40,62 @@ function setup() {
       for (const key of clearVars) delete process.env[key];
     },
   });
-  handlers._setupWhisperGpuFallbackListeners();
+  handlers._attachWhisperServerListeners(whisperManager.serverManager);
   return { whisperManager, handlers, synced };
 }
 
 test("an unproven failure is remembered across launches and announced", () => {
   const { whisperManager, synced } = setup();
 
-  whisperManager.serverManager.emit("gpu-fallback", { proven: false });
+  whisperManager.serverManager.emit("gpu-fallback", { fallbackBackend: "cpu", proven: false });
 
-  assert.deepEqual(synced, [{ setVars: { WHISPER_GPU_FAILED: "vulkan" }, clearVars: [] }]);
+  assert.deepEqual(synced, [
+    { setVars: { WHISPER_GPU_FAILED: "vulkan" }, clearVars: ["WHISPER_GPU_FAILED_REASON_VULKAN"] },
+  ]);
   assert.deepEqual(sent, ["gpu-fallback-notification"]);
 });
 
 test("a proven failure at dictation time is kept for the session and announced", () => {
   const { whisperManager, synced } = setup();
 
-  whisperManager.serverManager.emit("cuda-fallback", { proven: true });
+  whisperManager.serverManager.emit("cuda-fallback", { fallbackBackend: "cpu", proven: true });
 
   assert.deepEqual(synced, []);
   assert.deepEqual(whisperManager.getFailedGpuBackends(), ["cuda"]);
   assert.deepEqual(sent, ["cuda-fallback-notification"]);
 });
 
-test("a proven failure in a wake re-warm is kept for the session without an announcement", () => {
+test("a proven failure in a wake re-warm is kept for the session and only re-read by the cards", () => {
   const { whisperManager, synced } = setup();
   whisperManager._rewarmInFlight = true;
 
-  whisperManager.serverManager.emit("cuda-fallback", { proven: true });
+  whisperManager.serverManager.emit("cuda-fallback", { fallbackBackend: "cpu", proven: true });
 
   assert.deepEqual(synced, []);
   assert.deepEqual(whisperManager.getFailedGpuBackends(), ["cuda"]);
-  assert.deepEqual(sent, []);
+  assert.deepEqual(sent, ["whisper-gpu-status-changed"]);
 });
 
 test("an unproven failure in a wake re-warm is still remembered and announced", () => {
   const { whisperManager, synced } = setup();
   whisperManager._rewarmInFlight = true;
 
-  whisperManager.serverManager.emit("cuda-fallback", { proven: false });
+  whisperManager.serverManager.emit("cuda-fallback", { fallbackBackend: "cpu", proven: false });
 
-  assert.deepEqual(synced, [{ setVars: { WHISPER_GPU_FAILED: "cuda" }, clearVars: [] }]);
+  assert.deepEqual(synced, [
+    { setVars: { WHISPER_GPU_FAILED: "cuda" }, clearVars: ["WHISPER_GPU_FAILED_REASON_CUDA"] },
+  ]);
   assert.deepEqual(sent, ["cuda-fallback-notification"]);
+});
+
+test("a proven CUDA failure that lands on Vulkan is kept for the session, not remembered", () => {
+  const { whisperManager, synced } = setup();
+
+  whisperManager.serverManager.emit("cuda-fallback", { fallbackBackend: "vulkan", proven: true });
+
+  assert.deepEqual(synced, []);
+  assert.deepEqual(whisperManager.getFailedGpuBackends(), ["cuda"]);
+  assert.deepEqual(sent, ["whisper-gpu-status-changed"]);
 });
 
 test("a pack change clears that backend's failure and what its old binary proved", () => {
