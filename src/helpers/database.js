@@ -11685,24 +11685,40 @@ class DatabaseManager {
   // newKeyIfTaken: a cloud folder
   // whose client key another account's folder holds here is stored under a
   // key of its own, where the upsert would otherwise take that folder over.
+  // A folder with no account that the signed-in account can't see holding the
+  // key (the signed-out stand-in's copy of a folder backed up before the
+  // split) is always left that way: taking it over would move it out of the
+  // stand-in under its ownerless notes, and the account's own copy, linked by
+  // cloud id under its own key, would collide with it on the key.
   upsertFolderFromCloud(cloudFolder, localSpaceId = null, { newKeyIfTaken = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       // A cloud row with no space is a personal folder: the default's Private.
       let spaceId = localSpaceId ?? this.getDefaultPrivateSpaceId();
       const current = this.db
-        .prepare("SELECT space_id, account_id FROM folders WHERE client_folder_id = ?")
+        .prepare("SELECT id, space_id, account_id FROM folders WHERE client_folder_id = ?")
         .get(cloudFolder.client_folder_id);
+      const accountScope = this._accountScopeCondition("folders");
+      const heldOutOfView =
+        current != null &&
+        current.account_id == null &&
+        this.activeAccountId != null &&
+        !this.db
+          .prepare(`SELECT 1 FROM folders WHERE id = ? AND ${accountScope.sql}`)
+          .get(current.id, ...accountScope.params);
       if (
         cloudFolder.private_workspace_id == null &&
+        !heldOutOfView &&
         this._keepsPrivatePlacement(current?.space_id, spaceId)
       )
         spaceId = current.space_id;
       const accountId = this._accountIdForSpace(spaceId);
-      if (newKeyIfTaken && current?.account_id && accountId && current.account_id !== accountId) {
+      if (
+        heldOutOfView ||
+        (newKeyIfTaken && current?.account_id && accountId && current.account_id !== accountId)
+      ) {
         // That folder is left as it is. This account's own copy of the cloud
         // folder keeps its key; otherwise the folder gets a new one.
-        const accountScope = this._accountScopeCondition("folders");
         const own = this.db
           .prepare(
             `SELECT client_folder_id FROM folders WHERE cloud_id = ? AND ${accountScope.sql}`
