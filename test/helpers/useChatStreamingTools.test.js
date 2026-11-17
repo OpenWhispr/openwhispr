@@ -98,6 +98,135 @@ async function renderChatStreaming(
 
 // Typed chat, the voice panel and a note's chat opt in; container chat leaves it off.
 const CONNECTOR_SURFACE = { allowConnectors: true };
+
+for (const provider of ["Cloud", "BYOK"]) {
+  for (const presentFindings of [false, true]) {
+    test(`${provider} saves the rendered Salesforce briefing even when the model ${presentFindings ? "rewrites it" : "skips analysis"}`, async (t) => {
+      const saved = [];
+      const { captured, reasoningService, getMessages } = await renderChatStreaming(
+        t,
+        {
+          ...CONNECTOR_SURFACE,
+          openNoteId: 7,
+          onStreamComplete: (_id, content) => saved.push(content),
+        },
+        {
+          settings: provider === "BYOK" ? BYOK_SETTINGS : {},
+          electronAPI: {
+            connectorStatus: async () => [
+              { id: "salesforce", connected: true, needsReconnect: false },
+            ],
+            getNote: async () => ({
+              id: 7,
+              space_id: 1,
+              title: "Pilot discussion",
+              content:
+                "Proposed pilot:\n8 reps for two weeks.\n\nUnselected detail:\nRAW_NOTE_SENTINEL",
+              transcript: "",
+              created_at: "2026-11-17 11:07:00",
+            }),
+            connectorQuery: async () => ({
+              status: "ok",
+              truncated: false,
+              items: [
+                {
+                  kind: "record",
+                  Name: "Test 2",
+                  objectType: "Opportunity",
+                  recordId: "006000000000001AAA",
+                  retrievedAt: "2026-11-17T12:09:35.016Z",
+                  Amount: null,
+                  unavailableFields: [],
+                },
+                { kind: "note", noteId: 7 },
+              ],
+            }),
+          },
+        }
+      );
+      async function* stream(execute) {
+        const args = { objectType: "Opportunity", recordId: "006000000000001AAA" };
+        yield {
+          type: "tool_calls",
+          calls: [
+            { id: "sf-read", name: "salesforce_get_briefing", arguments: JSON.stringify(args) },
+          ],
+        };
+        const read = await execute("salesforce_get_briefing", args, "sf-read");
+        yield {
+          type: "tool_result",
+          callId: "sf-read",
+          toolName: "salesforce_get_briefing",
+          ...read,
+        };
+        if (presentFindings) {
+          const data = typeof read.data === "string" ? JSON.parse(read.data) : read.data;
+          const presentation = {
+            briefingId: data.briefingId,
+            findings: [
+              {
+                passageId: data.sources[0].passages[0].id,
+                status: "proposed",
+                category: "proposal",
+              },
+            ],
+            conflicts: [],
+          };
+          yield {
+            type: "tool_calls",
+            calls: [
+              {
+                id: "sf-present",
+                name: "salesforce_present_briefing",
+                arguments: JSON.stringify(presentation),
+              },
+            ],
+          };
+          const presented = await execute(
+            "salesforce_present_briefing",
+            presentation,
+            "sf-present"
+          );
+          yield {
+            type: "tool_result",
+            callId: "sf-present",
+            toolName: "salesforce_present_briefing",
+            ...presented,
+          };
+        }
+        yield { type: "content", text: "UNSUPPORTED: 40 reps approved for the pilot." };
+        yield { type: "done", finishReason: "stop" };
+      }
+      if (provider === "Cloud") {
+        reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+          stream((name, args, id) => config.executeToolCall(name, JSON.stringify(args), id))
+        );
+      } else {
+        reasoningService.processTextStreamingAI.mock.mockImplementation(
+          (_messages, _model, _provider, _config, tools) =>
+            stream(async (name, args, id) => {
+              const data = await tools[name].execute(args, { toolCallId: id, messages: [] });
+              return { data, metadata: data, displayText: "Retrieved" };
+            })
+        );
+      }
+      await captured.sendToAI("Brief me on the selected Opportunity", []);
+      const reply = getMessages().at(-1);
+      assert.match(reply.content, /Amount: not recorded/);
+      assert.match(reply.content, /2026-11-17T12:09:35\.016Z/);
+      assert.doesNotMatch(reply.content, /UNSUPPORTED|40 reps|RAW_NOTE_SENTINEL/);
+      assert.match(
+        reply.content,
+        presentFindings ? /Proposed.*8 reps for two weeks/s : /Meeting findings were not prepared/
+      );
+      assert.doesNotMatch(
+        JSON.stringify(reply.toolCalls),
+        /RAW_NOTE_SENTINEL|renderedAnswer|sources/
+      );
+      assert.equal(saved.at(-1), reply.content);
+    });
+  }
+}
 const BYOK_SETTINGS = {
   chatAgentMode: "providers",
   chatAgentProvider: "openai",

@@ -17,6 +17,13 @@ test("real connector pipeline exports, reviews field edits, briefs linked notes 
   const record = {
     Id: recordId,
     Name: "Acme renewal",
+    StageName: "Needs Analysis",
+    Amount: null,
+    CurrencyIsoCode: "USD",
+    CloseDate: "2026-11-25",
+    NextStep: null,
+    AccountId: null,
+    OwnerId: "005000000000001AAA",
     LastModifiedDate: modified,
     Summary__c: "Old summary",
     Needs__c: "Old needs",
@@ -41,6 +48,15 @@ test("real connector pipeline exports, reviews field edits, briefs linked notes 
         field("Id"),
         field("Name"),
         field("LastModifiedDate"),
+        ...[
+          "StageName",
+          "Amount",
+          "CurrencyIsoCode",
+          "CloseDate",
+          "NextStep",
+          "AccountId",
+          "OwnerId",
+        ].map((name) => field(name)),
         field("Summary__c", { custom: true }),
         field("Needs__c", { custom: true }),
       ],
@@ -78,6 +94,7 @@ test("real connector pipeline exports, reviews field edits, briefs linked notes 
             account_id: owner,
             title: "Renewal call",
             created_at: "2026-11-02 09:00:00",
+            updated_at: "2026-11-03 09:00:00",
             deleted_at: null,
           }
         : null,
@@ -184,10 +201,30 @@ test("real connector pipeline exports, reviews field edits, briefs linked notes 
   const briefing = await manager.query("salesforce", "get_briefing", destination, permission);
   assert.equal(briefing.status, "ok");
   assert.equal(briefing.items[0].Name, "Acme renewal");
+  assert.equal(
+    briefing.items[0].url,
+    "https://example.my.salesforce.com/lightning/r/Opportunity/006000000000001AAA/view"
+  );
+  assert.ok(Number.isFinite(Date.parse(briefing.items[0].retrievedAt)));
+  assert.equal(briefing.items[0].Amount, null);
+  assert.equal(briefing.items[0].NextStep, null);
+  assert.equal(briefing.items[0].AccountId, null);
+  assert.deepEqual(briefing.items[0].unavailableFields, []);
+  assert.equal(briefing.items[0].unavailableNotes, 0);
+  assert.equal(briefing.truncated, false, "source metadata survives the bounded query result");
   assert.deepEqual(
     briefing.items.filter((item) => item.kind === "note").map((item) => item.noteId),
     [7]
   );
+  const sourceNote = briefing.items.find((item) => item.kind === "note");
+  assert.equal(sourceNote.title, "Renewal call");
+  assert.equal(sourceNote.createdAt, "2026-11-02 09:00:00");
+  assert.equal(sourceNote.updatedAt, "2026-11-03 09:00:00");
+  assert.equal(
+    sourceNote.activityUrl,
+    "https://example.my.salesforce.com/lightning/r/Task/00T000000000001EAA/view"
+  );
+  assert.ok(sourceNote.exportedAt);
   assert.equal(writes.length, 2, "briefing never writes");
   const correction = await manager.prepare(
     "salesforce",

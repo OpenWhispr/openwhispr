@@ -62,7 +62,7 @@ function createSalesforceExports(databaseManager) {
     list(key, limit = 11) {
       return database()
         .prepare(
-          `SELECT note_id, confirmed_at FROM salesforce_exports
+          `SELECT note_id, activity_id, confirmed_at FROM salesforce_exports
         WHERE account_id = ? AND organization_id = ? AND instance_url = ? AND object_type = ? AND record_id = ?
           AND activity_id IS NOT NULL AND confirmed_at IS NOT NULL
         ORDER BY confirmed_at DESC LIMIT ?`

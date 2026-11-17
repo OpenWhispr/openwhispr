@@ -58,9 +58,19 @@ If a network interruption leaves the outcome uncertain, check Salesforce. OpenWh
 
 ## Prepare a briefing
 
-Ask for a briefing on a particular customer or deal and select its record. The assistant reads current Salesforce details and the accessible notes associated with that exact record on this device. It uses existing note tools to read supporting conversation evidence and cites its sources. You can explicitly provide another note as context.
+Ask for a briefing on a particular customer or deal and select its record. The briefing tool reads current Salesforce details and automatically retrieves accessible notes associated with that exact record on this device. Retrieval uses the existing workspace-scoped note reader and note protection. Other notes, search snippets and previous briefing answers are not evidence for this briefing.
 
-If there are no linked notes, the assistant can give a CRM-only briefing. It does not automatically search all your notes, traverse every related customer/deal, or predict pipeline-wide outcomes.
+The assistant selects and classifies source passages; the application renders the CRM facts and quoted passages with citations. The assistant cannot supply rewritten evidence, replacement CRM values or invented source links. Status labels remain assistant classifications: "confirmed" means reported in the note, not independently verified. Explicit proposal and conditional wording stays proposed. Potential conflicts show the selected contradictory passages without choosing a winner.
+
+The briefing links the selected CRM record and shows when it was retrieved. Meeting claims use footnotes identifying the note, its date and supporting section or transcript passage. A "Saved Salesforce activity" link opens the exported summary; it is not a link to the current local note, which may have changed since export. Note creation dates are not assumed to be meeting dates.
+
+Blank CRM fields are reported as not recorded; fields absent from the response are reported as not returned. Neither establishes whether a budget or decision was approved. Linked exports establish the selected destination, not a verified customer identity. Commitments retain their stated owners, deadlines and conditions; proposals remain proposals. Account and owner names are not resolved from IDs, so missing names are stated plainly.
+
+Retrieval is limited to five linked notes, 14,000 source characters overall, 7,000 characters per note and 60 passages per note. The existing note reader also limits transcript retrieval. Limited or unavailable context is stated in the answer; a cut paragraph is omitted rather than quoted without its remaining conditions. Missing content does not establish that a meeting had no commitments or conflicts.
+
+If no accessible meeting content is retrieved, the result explicitly says it is a CRM-only briefing. If the assistant skips presentation or supplies invalid evidence selections, the answer retains CRM facts and available source references and states that meeting findings were not prepared. Raw retrieved sources remain transient; selected excerpts in the visible answer are saved with the chat.
+
+A response containing a Salesforce briefing is reserved for those briefings. Ask unrelated questions in a separate message. The workflow does not automatically search all your notes, traverse every related customer/deal, or predict pipeline-wide outcomes.
 
 ## Limits
 
@@ -83,3 +93,28 @@ If there are no linked notes, the assistant can give a CRM-only briefing. It doe
 - Generate a briefing with linked notes, no linked notes, and inaccessible/deleted notes; verify evidence links and missing-context wording.
 - Interrupt a write and restart the app; confirm it does not automatically retry an uncertain operation.
 - Switch OpenWhispr accounts or Salesforce organizations; confirm pending approvals and note associations cannot cross those boundaries.
+
+### Briefing quality regression
+
+Use a test Opportunity named `Test 2` with no Amount, Next Step or Account. Export a synthetic note titled `Acme — Pilot discovery` containing:
+
+> Meeting date: 17 Nov 2026. Daniel coordinates the pilot and will send sample Opportunities and participants by 20 Nov. OpenWhispr will send security documentation by 19 Nov. Priya will review the material before the proposed kickoff; approval is still pending. Sarah will confirm success criteria and the budget approval process; no deadline was stated. Proposed kickoff: 24 Nov, subject to security approval. Proposed pilot: 8 reps for 2 weeks. Daniel proposed 50% less admin time and 90% note completeness; Sarah has not approved these targets. The $24,000 annual budget is only a planning estimate. The final budget approver is unknown.
+
+Ask: "Brief me on this Opportunity using its linked meeting notes." Check the generated answer against the note and the actual CRM response:
+
+- The record name links to Salesforce, with a retrieval timestamp. Meeting claims have note footnotes and the saved-activity link; the dates and evidence locations are real.
+- Empty CRM fields remain missing data, not confirmation of the note's budget status or a blanket claim of agreement.
+- The note names Acme, but the briefing states that the customer identity cannot be verified against `Test 2` with no Account link.
+- Sarah's deadline is not invented. Priya committed to review, not to approve. Kickoff, pilot size/duration, success targets and budget remain conditional or proposed.
+- Names are used where supported. An unresolved owner ID is described as a name unavailable, without guessing an owner from the meeting participants.
+- Repeat with the note inaccessible or deleted, and with a CRM field not returned. State the resulting limits; do not claim to have reviewed missing evidence.
+
+Automated tests cover scoped source retrieval, note protection, missing-field distinctions, source limits, stale/cancelled requests, evidence selection, proposal qualifiers, citations and read-only behavior. Chat-engine tests exercise the Cloud and BYOK execution paths and ensure model prose cannot replace the rendered briefing. Classification and selection still require live review; tests do not certify every model's interpretation.
+
+Live dev-build checks, 17 Nov 2026, using OpenWhispr Cloud (underlying model not independently identified):
+
+- Earlier prompt-only attempts failed: the assistant skipped reading the note, confused the 40-person sales team with the proposed 8-person pilot, omitted citations and missed commitments. Those failures led to mandatory source retrieval and application-rendered evidence.
+- The revised normal-case briefing passed at `2026-11-17T12:35:49.743Z`. It showed exact CRM retrieval time, correct missing-field labels, cited source excerpts and source timestamps. The pilot, kickoff and budget retained their proposed/conditional wording; no deadline was invented for Sarah.
+- The empty-context case passed at `2026-11-17T12:57:08.770Z` using a newly created synthetic QA Opportunity before any note export. It explicitly returned a CRM-only briefing without meeting conclusions.
+- The conflicting-evidence case passed at `2026-11-17T13:15:17.174Z`. Its synthetic note contains an 8-representative/two-week decision and a 12-representative/four-week decision with no stated supersession. The answer cited both passages, marked the conflict unresolved and preserved the open question without choosing a winner. Chrome verification also confirmed the completed activity was linked to the intended QA Opportunity.
+- An earlier conflicting-evidence attempt returned the safe facts/source-reference fallback because the provider supplied one conflict as an object instead of an array. The tool now accepts that equivalent single-conflict form while retaining strict schema, source-ID and duplicate-ID validation; a regression test covers both accepted and rejected inputs.

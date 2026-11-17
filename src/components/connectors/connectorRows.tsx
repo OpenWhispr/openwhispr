@@ -1,9 +1,9 @@
 import type { ComponentType, ReactNode } from "react";
-import { Cloud } from "../icons";
 import gmailMark from "../../assets/icons/gmail.svg";
 import slackMark from "../../assets/icons/slack.svg";
 import linearMark from "../../assets/icons/linear.svg";
 import githubMark from "../../assets/icons/github.svg";
+import salesforceMark from "../../assets/icons/salesforce.svg";
 import type { ConnectorStatus } from "../../types/connectors";
 import { GithubDeviceCode } from "./GithubDeviceCode";
 import { GithubRepositoriesButton } from "./GithubRepositoriesButton";
@@ -108,7 +108,8 @@ export const CONNECTOR_ROWS: readonly ConnectorRowSpec[] = [
   githubRow,
   {
     id: "salesforce",
-    icon: <Cloud className="h-4 w-4" aria-hidden="true" />,
+    brandIcon: true,
+    icon: brandMark(salesforceMark, 20, 14, "h-[14px] w-5"),
     accountSummary: accountWorkspaceSummary,
   },
 ];

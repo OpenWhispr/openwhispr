@@ -343,18 +343,32 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
     let unavailableNotes = 0;
     for (const id of ids.slice(0, 18)) {
       const note = await source(id, binding);
-      if (note)
+      if (note) {
+        const association = linked.find((row) => row.note_id === id);
         notes.push({
           kind: "note",
           noteId: id,
           title: note.title ?? "",
-          context: linked.some((row) => row.note_id === id) ? "linked" : "explicit",
+          createdAt: note.created_at ?? null,
+          updatedAt: note.updated_at ?? null,
+          context: association ? "linked" : "explicit",
+          activityUrl: association ? recordUrl(binding, "Task", association.activity_id) : null,
+          exportedAt: association?.confirmed_at ?? null,
         });
-      else unavailableNotes += 1;
+      } else unavailableNotes += 1;
     }
     return {
       status: "ok",
-      items: [{ ...facts, unavailableNotes }, ...notes],
+      items: [
+        {
+          ...facts,
+          unavailableNotes,
+          unavailableFields: FACT_FIELDS[args.objectType].filter(
+            (name) => !Object.hasOwn(resolved.data, name)
+          ),
+        },
+        ...notes,
+      ],
       truncated: linked.length > 10 || ids.length > 18,
     };
   }

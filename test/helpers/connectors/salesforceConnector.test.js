@@ -322,6 +322,49 @@ test("briefing excludes inaccessible linked notes and exposes only explicitly se
   assert.equal(writes(fixtureState).length, 1);
 });
 
+test("briefing distinguishes an empty CRM field from a field not returned", async (t) => {
+  const fixtureState = fixture();
+  t.after(() => fixtureState.db.close());
+  fixtureState.metadata.Opportunity.fields.push(field("Amount"), field("NextStep"));
+  fixtureState.record.Amount = null;
+  fixtureState.record.NextStep = "";
+  const result = await fixtureState.connector.query("get_briefing", args, { binding });
+  assert.equal(result.status, "ok");
+  assert.equal(result.items[0].Amount, null);
+  assert.equal(result.items[0].NextStep, "");
+  assert.equal(Object.hasOwn(result.items[0], "AccountId"), false);
+  assert.deepEqual(result.items[0].unavailableFields, [
+    "CurrencyIsoCode",
+    "CloseDate",
+    "AccountId",
+    "OwnerId",
+  ]);
+  assert.equal(result.items.length, 1, "no note context is invented without an association");
+  assert.equal(writes(fixtureState).length, 0);
+});
+
+test("explicit additional notes do not inherit another note's activity link or dates", async (t) => {
+  const fixtureState = fixture();
+  t.after(() => fixtureState.db.close());
+  await commit(fixtureState, await prepare(fixtureState));
+  const result = await fixtureState.connector.query(
+    "get_briefing",
+    { objectType: "Opportunity", recordId, noteIds: [2] },
+    { binding }
+  );
+  const linkedNote = result.items.find((item) => item.noteId === 1);
+  assert.equal(
+    linkedNote.activityUrl,
+    "https://tenant.my.salesforce.com/lightning/r/Task/00T000000000001/view"
+  );
+  const extraNote = result.items.find((item) => item.noteId === 2);
+  assert.equal(extraNote.context, "explicit");
+  assert.equal(extraNote.createdAt, null);
+  assert.equal(extraNote.updatedAt, null);
+  assert.equal(extraNote.activityUrl, null);
+  assert.equal(extraNote.exportedAt, null);
+});
+
 test("15- and 18-character destination IDs share one association and read Salesforce's canonical response", async () => {
   const fixtureState = fixture();
   fixtureState.record.Id = `${recordId}AAA`;

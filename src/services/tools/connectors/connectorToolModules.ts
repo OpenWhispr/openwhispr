@@ -16,6 +16,7 @@ export interface ConnectorToolEnv {
   currentEmailDraftTarget?: () => EmailDraftTarget;
   /** The chat can ask the user on a card (it offers interactions). */
   asksUser?: boolean;
+  readNote?: ToolDefinition["execute"];
 }
 
 /** One connector's tools. Each connector's own file exports its module. */
@@ -47,11 +48,12 @@ export function registerConnectorTools(
   settings: ConnectorToolSettings,
   modules: readonly ConnectorToolModule[] = CONNECTOR_TOOL_MODULES
 ): void {
-  const { emailDraftTarget, currentEmailDraftTarget, asksUser } = settings;
+  const { emailDraftTarget, currentEmailDraftTarget, asksUser, readNote } = settings;
   const env: ConnectorToolEnv = {
     emailDraftTarget,
     ...(currentEmailDraftTarget ? { currentEmailDraftTarget } : {}),
     ...(asksUser ? { asksUser } : {}),
+    ...(readNote ? { readNote } : {}),
   };
   for (const toolModule of modules) {
     const { connectorId } = toolModule;

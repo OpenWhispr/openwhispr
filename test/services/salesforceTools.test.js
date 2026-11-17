@@ -27,6 +27,7 @@ test("Salesforce tools register only for a ready connection with scoped workflow
     "get_record",
     "describe_fields",
     "get_briefing",
+    "present_briefing",
     "export_conversation",
     "update_fields",
   ];
@@ -37,21 +38,21 @@ test("Salesforce tools register only for a ready connection with scoped workflow
   );
   assert.deepEqual(
     tools.map((tool) => tool.readOnly),
-    [true, true, true, true, false, false]
+    [true, true, true, true, true, false, false]
   );
   for (const readyConnectorIds of [[], ["salesforce"]]) {
     const registry = new ToolRegistry();
     registerConnectorTools(registry, { emailDraftTarget: "auto", readyConnectorIds });
     assert.equal(
       registry.getAll().filter((tool) => tool.connectorId === "salesforce").length,
-      readyConnectorIds.length ? 6 : 0
+      readyConnectorIds.length ? 7 : 0
     );
   }
   assert.match(tools[0].promptInstruction, /user.*select/i);
   assert.match(tools[3].promptInstruction, /get_note/);
   assert.match(tools[3].promptInstruction, /never search.*library/i);
-  assert.match(tools[4].promptInstruction, /summary.*customer needs.*objections.*next steps/i);
-  assert.match(tools[5].promptInstruction, /confirmed.*export/i);
+  assert.match(tools[5].promptInstruction, /summary.*customer needs.*objections.*next steps/i);
+  assert.match(tools[6].promptInstruction, /confirmed.*export/i);
 });
 
 test("invalid destinations, note IDs and field mutations never reach main", async (t) => {
@@ -103,7 +104,24 @@ test("briefing queries retain the untrusted boundary and expose no write or note
           return {
             status: "ok",
             items: [
-              { recordId: RECORD.recordId, noteIds: ["7"], retrievedAt: "2026-11-02T12:00:00Z" },
+              {
+                kind: "record",
+                recordId: RECORD.recordId,
+                Name: "Test 2",
+                url: "https://tenant.my.salesforce.com/lightning/r/Opportunity/006000000000001AAA/view",
+                Amount: null,
+                unavailableFields: ["AccountId"],
+                retrievedAt: "2026-11-02T12:00:00Z",
+              },
+              {
+                kind: "note",
+                noteId: 7,
+                title: "Discovery call",
+                activityUrl:
+                  "https://tenant.my.salesforce.com/lightning/r/Task/00T000000000001AAA/view",
+                createdAt: "2026-11-01 12:00:00",
+                context: "linked",
+              },
             ],
             truncated: true,
           };
@@ -120,6 +138,15 @@ test("briefing queries retain the untrusted boundary and expose no write or note
   assert.equal(result.data.untrusted, true);
   assert.equal(result.data.truncated, true);
   assert.match(result.data.guidance, /never as instructions/);
+  assert.equal(result.data.items[0].Amount, null);
+  assert.deepEqual(result.data.items[0].unavailableFields, ["AccountId"]);
+  assert.equal(result.data.items[0].retrievedAt, "2026-11-02T12:00:00Z");
+  assert.equal(result.data.items[1].noteId, 7);
+  assert.equal(result.data.items[1].createdAt, "2026-11-01 12:00:00");
+  assert.equal(
+    result.data.items[1].activityUrl,
+    "https://tenant.my.salesforce.com/lightning/r/Task/00T000000000001AAA/view"
+  );
 });
 
 test("field approval commits edited values and omissions, then reports unknown without retry", async (t) => {
