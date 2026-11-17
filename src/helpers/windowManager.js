@@ -7,6 +7,7 @@ const {
   meetingDestinationContext,
 } = require("./meetingNotificationDestination");
 const { createLinuxWindowInputRegion } = require("./linuxWindowInputRegion");
+const { createWin32WindowShape } = require("./win32WindowShape");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
 const HotkeyManager = require("./hotkeyManager");
@@ -257,12 +258,22 @@ class WindowManager {
     return this._linuxWindowInputRegion;
   }
 
+  _win32MainWindowShape() {
+    const win = this.mainWindow;
+    if (this._win32WindowShape?.window !== win) {
+      this._win32WindowShape = { window: win, ...createWin32WindowShape(win) };
+    }
+    return this._win32WindowShape;
+  }
+
   async setMainWindowInputRegion(region) {
     const win = this.mainWindow;
     if (!win || win.isDestroyed()) return false;
     if (process.platform === "win32") {
-      this._setWin32MainWindowShape(win, region);
-      return win.isVisible() && !win.isMinimized();
+      const visible = win.isVisible() && !win.isMinimized();
+      // A hidden pill shows whole; the renderer shapes it again once shown.
+      this._win32MainWindowShape().set(visible ? region : null);
+      return visible;
     }
     if (process.platform !== "linux") return false;
     try {
@@ -1668,65 +1679,6 @@ class WindowManager {
     // Nudge past the rounded bounds so the renderer's DIP size also changes.
     win.setBounds({ ...bounds, width: bounds.width + 1 });
     win.setBounds({ ...bounds, width, height });
-    // A resize can drop the hit region. Put the pill shape back so the
-    // transparent frame does not start capturing clicks again.
-    if (this._win32MainWindowShape) win.setShape(this._win32MainWindowShape);
-  }
-
-  // SetWindowRgn limits both hits and painting. The renderer pads the measured
-  // pill so the glow and tooltip stay inside the region. An empty list restores
-  // the rectangle for menus, toasts, and a suppressed pill.
-  _setWin32MainWindowShape(win, region) {
-    if (region == null) {
-      this._applyWin32MainWindowShape(win, []);
-      return;
-    }
-    const values = [
-      region.viewportWidth,
-      region.viewportHeight,
-      region.x,
-      region.y,
-      region.width,
-      region.height,
-    ];
-    if (
-      !values.every(Number.isFinite) ||
-      values[0] <= 0 ||
-      values[1] <= 0 ||
-      values[4] < 0 ||
-      values[5] < 0
-    ) {
-      throw new Error("Invalid input region");
-    }
-    if (values[4] === 0 || values[5] === 0) {
-      this._applyWin32MainWindowShape(win, []);
-      return;
-    }
-    this._applyWin32MainWindowShape(win, [this._win32ShapeRect(win.getBounds(), region)]);
-  }
-
-  _applyWin32MainWindowShape(win, rects) {
-    this._win32MainWindowShape = rects;
-    win.setShape(rects);
-  }
-
-  _win32ShapeRect(bounds, region) {
-    const scaleX = bounds.width / region.viewportWidth;
-    const scaleY = bounds.height / region.viewportHeight;
-    const x = Math.floor(region.x * scaleX);
-    const y = Math.floor(region.y * scaleY);
-    const right = Math.ceil((region.x + region.width) * scaleX);
-    const bottom = Math.ceil((region.y + region.height) * scaleY);
-    const clampedX = Math.max(0, Math.min(x, Math.max(0, bounds.width - 1)));
-    const clampedY = Math.max(0, Math.min(y, Math.max(0, bounds.height - 1)));
-    const clampedRight = Math.max(clampedX + 1, Math.min(bounds.width, right));
-    const clampedBottom = Math.max(clampedY + 1, Math.min(bounds.height, bottom));
-    return {
-      x: clampedX,
-      y: clampedY,
-      width: clampedRight - clampedX,
-      height: clampedBottom - clampedY,
-    };
   }
 
   showDictationPanel(options = {}) {
@@ -1998,10 +1950,11 @@ class WindowManager {
       return;
     }
 
-    if (process.platform === "linux") {
+    if (process.platform === "linux" || process.platform === "win32") {
       const win = this.mainWindow;
       // backgroundThrottling:false keeps document.visibilityState visible even
-      // after hide(). Native visibility owns the Linux input-region updates.
+      // after hide(). Native visibility owns the Linux input-region and the
+      // Windows window-shape updates, which pause while the pill is hidden.
       for (const event of ["show", "hide", "minimize", "restore"]) {
         win.on(event, () => {
           win.webContents.send(
@@ -2009,6 +1962,14 @@ class WindowManager {
             win.isVisible() && !win.isMinimized()
           );
         });
+      }
+    }
+
+    if (process.platform === "win32") {
+      const win = this.mainWindow;
+      win.on("hide", () => this._win32MainWindowShape().set(null));
+      for (const event of ["resize", "move"]) {
+        win.on(event, () => this._win32MainWindowShape().revalidate());
       }
     }
 

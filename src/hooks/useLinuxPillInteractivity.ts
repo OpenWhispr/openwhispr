@@ -8,58 +8,6 @@ interface LinuxPillInteractivityOptions {
 
 // Native input shaping leaves hover delivery to the compositor, including
 // when the pointer crosses between XWayland and native Wayland applications.
-// Windows uses the same samples as a window shape. Click-through forwarding
-// drops button presses on this panel, and SetWindowRgn also clips painting,
-// so the glow and tooltip are included in the measured box.
-const WINDOWS_SHAPE_PAD_PX = 12;
-
-function boxOf(rect: {
-  left?: number;
-  top?: number;
-  right?: number;
-  bottom?: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}) {
-  const left = Number.isFinite(rect.left) ? rect.left : rect.x;
-  const top = Number.isFinite(rect.top) ? rect.top : rect.y;
-  const right = Number.isFinite(rect.right) ? rect.right : left + rect.width;
-  const bottom = Number.isFinite(rect.bottom) ? rect.bottom : top + rect.height;
-  return { left, top, right, bottom };
-}
-
-function measuredPillRect(
-  element: HTMLElement | null,
-  platform: string | undefined
-): { x: number; y: number; width: number; height: number } | null {
-  if (!element) return null;
-  const boxes = [boxOf(element.getBoundingClientRect())];
-  if (platform === "win32") {
-    for (const node of element.querySelectorAll("*")) {
-      boxes.push(boxOf(node.getBoundingClientRect()));
-    }
-  }
-  const visible = boxes.filter((box) => box.right > box.left && box.bottom > box.top);
-  if (!visible.length) return null;
-  let left = Math.min(...visible.map((box) => box.left));
-  let top = Math.min(...visible.map((box) => box.top));
-  let right = Math.max(...visible.map((box) => box.right));
-  let bottom = Math.max(...visible.map((box) => box.bottom));
-  if (platform === "win32") {
-    left -= WINDOWS_SHAPE_PAD_PX;
-    top -= WINDOWS_SHAPE_PAD_PX;
-    right += WINDOWS_SHAPE_PAD_PX;
-    bottom += WINDOWS_SHAPE_PAD_PX;
-    left = Math.max(0, left);
-    top = Math.max(0, top);
-    right = Math.min(window.innerWidth, right);
-    bottom = Math.min(window.innerHeight, bottom);
-  }
-  return { x: left, y: top, width: right - left, height: bottom - top };
-}
-
 export function useLinuxPillInteractivity({
   pillRef,
   captureWindow,
@@ -68,8 +16,7 @@ export function useLinuxPillInteractivity({
   const nativeVisibleRef = useRef(true);
   useLayoutEffect(() => {
     const api = window.electronAPI;
-    const platform = api?.getPlatform?.();
-    if (platform !== "linux" && platform !== "win32") return;
+    if (api?.getPlatform?.() !== "linux") return;
     let disposed = false;
     let generation = 0;
     let pending = false;
@@ -101,7 +48,7 @@ export function useLinuxPillInteractivity({
       if (disposed || pending || !nativeVisibleRef.current || document.hidden) return;
       pending = true;
       try {
-        const rect = pillInteractive ? measuredPillRect(pillRef.current, platform) : null;
+        const rect = pillInteractive ? pillRef.current?.getBoundingClientRect() : null;
         await applyRegion({
           x: rect?.x ?? 0,
           y: rect?.y ?? 0,

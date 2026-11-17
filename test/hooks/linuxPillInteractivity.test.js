@@ -12,7 +12,7 @@ const PILL_RECT = { x: 156, y: 68, width: 40, height: 40 };
 const VIEWPORT = { viewportWidth: 208, viewportHeight: 120 };
 const EMPTY_REGION = { x: 0, y: 0, width: 0, height: 0, ...VIEWPORT };
 
-async function mountPill(t, { platform = "linux", visible = true, descendants = [] } = {}) {
+async function mountPill(t, { platform = "linux", visible = true } = {}) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -27,7 +27,6 @@ async function mountPill(t, { platform = "linux", visible = true, descendants = 
       measurements += 1;
       return rect;
     },
-    querySelectorAll: () => descendants,
   };
   const pillRef = { current: pill };
   installBrowserGlobals(t, {
@@ -93,29 +92,6 @@ async function mountPill(t, { platform = "linux", visible = true, descendants = 
     },
   };
 }
-
-test("Windows pads the pill and its tooltip into a shape smaller than the window", async (t) => {
-  const mounted = await mountPill(t, {
-    platform: "win32",
-    descendants: [
-      {
-        getBoundingClientRect: () => ({
-          left: 150,
-          top: 46,
-          right: 200,
-          bottom: 64,
-          x: 150,
-          y: 46,
-          width: 50,
-          height: 18,
-        }),
-      },
-    ],
-  });
-  assert.deepEqual(mounted.regions, [
-    { x: 138, y: 34, width: 70, height: 86, viewportWidth: 208, viewportHeight: 120 },
-  ]);
-});
 
 test("Linux measures the rendered pill and follows cancel emergence, docking and viewport changes", async (t) => {
   const mounted = await mountPill(t);
@@ -310,25 +286,13 @@ test("unmount queues full input after a pending narrow region and silences later
   assert.equal(mounted.regions.length, writes);
 });
 
-test("darwin keeps its native interactivity implementation", async (t) => {
-  const mounted = await mountPill(t, { platform: "darwin" });
-  await mounted.render({ captureWindow: true });
-  await mounted.tick();
-  await mounted.unmount();
-  assert.deepEqual(mounted.regions, []);
-  assert.equal(mounted.measurements(), 0);
-});
-
-test("win32 shapes the measured pill and restores the full window for overlays", async (t) => {
-  const mounted = await mountPill(t, { platform: "win32" });
-  await mounted.render({ captureWindow: true });
-  await mounted.tick();
-  await mounted.unmount();
-  assert.deepEqual(mounted.regions, [
-    { x: 144, y: 56, width: 64, height: 64, ...VIEWPORT },
-    null,
-    null,
-    null,
-  ]);
-  assert.equal(mounted.measurements(), 1);
-});
+for (const platform of ["darwin", "win32"]) {
+  test(`${platform} keeps its native interactivity implementation`, async (t) => {
+    const mounted = await mountPill(t, { platform });
+    await mounted.render({ captureWindow: true });
+    await mounted.tick();
+    await mounted.unmount();
+    assert.deepEqual(mounted.regions, []);
+    assert.equal(mounted.measurements(), 0);
+  });
+}
