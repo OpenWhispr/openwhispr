@@ -97,8 +97,10 @@ if ($running) {
   $running | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
 }
 
-if (-not $UserProfile) {
-  $UserProfile = Get-CimInstance Win32_UserProfile |
+# Assigning to $UserProfile would run its ValidateScript again, and a profile
+# whose folder is gone would then stop the run.
+$profilePaths = if ($UserProfile) { $UserProfile } else {
+  Get-CimInstance Win32_UserProfile |
     Where-Object { -not $_.Special -and $_.LocalPath } |
     ForEach-Object { $_.LocalPath }
 }
@@ -123,7 +125,7 @@ Get-CimInstance Win32_UserProfile | Where-Object { -not $_.Special -and $_.Local
   ForEach-Object { $profileSids[(& $fullPath $_.LocalPath)] = $_.SID }
 $someoneSignedIn = @($signedIn | Where-Object { $profileSids.Values -contains $_ }).Count -gt 0
 
-foreach ($profilePath in $UserProfile) {
+foreach ($profilePath in $profilePaths) {
   $sid = $profileSids[(& $fullPath $profilePath)]
   if ($sid -and $signedIn -contains $sid) {
     Write-Warning "Skipped $($profilePath): its user is signed in. Run again after they sign out."
