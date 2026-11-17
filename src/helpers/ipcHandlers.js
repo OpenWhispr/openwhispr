@@ -5269,15 +5269,17 @@ class IPCHandlers {
           }
           if (purpose === "intelligence") {
             const modelManager = require("./modelManagerBridge").default;
-            const modelIds = modelManager.loadedModelIds();
-            if (modelIds.length > 0) {
+            if (modelManager.serverManager?.process) {
               debugLogger.info(
                 "Restarting llama-server for GPU change",
                 { from: oldUuid, to: uuid },
                 "gpu"
               );
-              await modelManager.stopServer();
-              for (const modelId of modelIds) await modelManager.prewarmServer(modelId);
+              const modelId = modelManager.currentServerModelId;
+              await modelManager.serverManager.stop();
+              if (modelId) {
+                await modelManager.prewarmServer(modelId);
+              }
             }
           }
         } catch (err) {
