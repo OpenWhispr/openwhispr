@@ -70,11 +70,17 @@ inside_home() {
   [[ "$real" == "$home_real"/* ]]
 }
 
-# Removes everything in a folder of the home except the names given.
+# Removes everything in a folder of the home except the names given. One that
+# is a link, or leads out of the home, is skipped and reported.
 remove_all_except() {
   local dir="$1" entry
   shift
-  [[ -d "$dir" && ! -L "$dir" ]] && inside_home "$dir" || return 0
+  [[ -e "$dir" || -L "$dir" ]] || return 0
+  if [[ ! -d "$dir" || -L "$dir" ]] || ! inside_home "$dir"; then
+    echo "Skipped $dir: it is a link or leads out of $home" >&2
+    failed=1
+    return 0
+  fi
   for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
     [[ -e "$entry" || -L "$entry" ]] || continue
     contains "$(basename "$entry")" "$@" || remove "$entry"
@@ -186,16 +192,19 @@ for home in "${homes[@]}"; do
     # anyone may write in it.
     if [[ "$owner_uid" == 0 ]]; then
       echo "Skipped $home: it belongs to root, not to a user" >&2
+      failed=1
       continue
     fi
     id -un "$owner_uid" >/dev/null 2>&1 && run_as="#$owner_uid"
   fi
+  # Counted per home, so "Removed" names only homes where nothing failed.
+  failed_before="$failed"
+  failed=0
   user_data="$home/Library/Application Support/OpenWhispr"
   remove_mirrored_files
   remove_all_except "$user_data" "${kept[@]}"
   remove_all_except "$home/.cache/openwhispr" "${cache_kept[@]}"
   inside_home "$home/.openwhispr" && remove "$home/.openwhispr/cli-bridge.json"
-  echo "Removed OpenWhispr local data from $home"
 
   # The keychain item and the per-user temp folder are reachable only as the
   # signed-in user.
@@ -205,6 +214,8 @@ for home in "${homes[@]}"; do
       security delete-generic-password -s OpenWhispr -a secrets-master-key >/dev/null 2>&1 || true
     remove_temp_files "$(launchctl asuser "$uid" sudo -u "$console_user" getconf DARWIN_USER_TEMP_DIR)"
   fi
+  [[ "$failed" == 1 ]] || echo "Removed OpenWhispr local data from $home"
+  [[ "$failed_before" == 0 ]] || failed=1
 done
 
 exit "$failed"

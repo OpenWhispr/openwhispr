@@ -197,11 +197,7 @@ function createWorkspacePolicyManager({
     if (typeof removal?.workspaceId !== "string" || !validTimestamp(removal.removedAt)) return;
     const verdicts = [
       readWorkspacePolicyCache(cachePath, cacheIdentity(identity)),
-      identity.accountId &&
-        readAccountPolicyCache(cachePath, {
-          apiOrigin: identity.apiOrigin,
-          accountId: identity.accountId,
-        }),
+      isValidatedAccount(identity) && readAccountPolicyCache(cachePath, identity),
     ];
     const managedBy = verdicts.flatMap((verdict) =>
       verdict?.managed && Array.isArray(verdict.managedBy) ? verdict.managedBy : []

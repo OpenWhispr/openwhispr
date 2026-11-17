@@ -65,9 +65,16 @@ function Remove-Entry([IO.FileSystemInfo]$Item) {
   }
 }
 
-# Removes everything in a folder under Root except the names given.
+# Removes everything in a folder under Root except the names given. One reached
+# through a junction or link is skipped and reported.
 function Remove-AllExcept([string]$Dir, [string]$Root, [string[]]$Keep) {
-  if (-not (Test-RealFolder $Dir $Root)) { return }
+  if (-not (Test-RealFolder $Dir $Root)) {
+    if (Test-Path -LiteralPath $Dir) {
+      Write-Warning "Skipped $($Dir): it is reached through a junction or link"
+      $script:failed = $true
+    }
+    return
+  }
   Get-ChildItem -LiteralPath $Dir -Force |
     Where-Object { $Keep -notcontains $_.Name } |
     ForEach-Object { Remove-Entry $_ }
@@ -122,6 +129,9 @@ foreach ($profilePath in $UserProfile) {
     $script:failed = $true
     continue
   }
+  # Counted per profile, so "Removed" names only profiles where nothing failed.
+  $failedBefore = $failed
+  $failed = $false
   $userData = Join-Path $profilePath "AppData\Roaming\OpenWhispr"
   # A notes folder the user chose is left to the app's own wipe (the
   # WipeLocalDataOnLaunch key): only its database says which files there are
@@ -134,7 +144,8 @@ foreach ($profilePath in $UserProfile) {
     Remove-Entry (Get-Item -LiteralPath $bridgeFile -Force)
   }
   Remove-TempFiles (Join-Path $profilePath "AppData\Local\Temp") $profilePath
-  Write-Output "Removed OpenWhispr local data from $profilePath"
+  if (-not $failed) { Write-Output "Removed OpenWhispr local data from $profilePath" }
+  $failed = $failed -or $failedBefore
 }
 
 # The ASCII-only fallbacks the app uses when a profile path has spaces or

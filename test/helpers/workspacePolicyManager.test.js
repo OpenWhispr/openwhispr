@@ -1407,7 +1407,8 @@ function removalSetup(responses) {
       return responses[Math.min(call++, responses.length - 1)]();
     },
     {
-      getValidatedAccountId: () => "account-a",
+      // The binding vouches for account-a's own bearer only.
+      getValidatedAccountId: () => (context.tokenState.token === "token-a" ? "account-a" : null),
       onWorkspaceRemoval: (reported) => removals.push(reported),
     }
   );
@@ -1454,6 +1455,20 @@ test("the revoked session's own verdict still hears its removal without an accou
   await context.lookup();
   await context.lookup(null);
   assert.deepEqual(context.removals, [{ accountId: null, ...removal }]);
+});
+
+// Account labels can lag a new bearer: B's removal must not read A's verdict.
+test("another account's removal, under a label still naming the last account, wipes nothing", async (t) => {
+  const context = removalSetup([
+    managedBy("workspace-1"),
+    () => unmanagedWith({ workspaceRemoval: removal }),
+  ]);
+  t.after(context.cleanup);
+  await context.lookup();
+  context.tokenState.token = "token-b";
+  context.tokenState.generation = 2;
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 2 });
+  assert.deepEqual(context.removals, []);
 });
 
 test("a removal never reaches a device the workspace didn't manage, nor an ordinary 401", async (t) => {

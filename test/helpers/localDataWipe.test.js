@@ -552,13 +552,20 @@ test(
     assert.deepEqual(fs.readdirSync(beside), ["3-plan.md"]);
     assert.deepEqual(fs.readdirSync(path.join(outside, "Team")), ["3-plan.md"]);
 
-    // A folder the user replaced with a symlink is not followed out of the home.
+    // A folder the user replaced with a symlink is not followed out of the home,
+    // and the skip fails the device so the MDM tool doesn't show it as wiped.
     const linked = path.join(root, "linked-home");
     const elsewhere = path.join(root, "elsewhere");
     seed(path.join(linked, "Library", "Application Support", "OpenWhispr", "audio", "1.webm"));
     seed(path.join(elsewhere, "openwhispr", "qdrant-data", "item"));
     fs.symlinkSync(elsewhere, path.join(linked, ".cache"));
-    run(linked);
+    assert.throws(
+      () => run(linked),
+      (error) =>
+        error.status === 1 &&
+        error.stderr.includes("Skipped") &&
+        !error.stdout.includes("Removed OpenWhispr local data")
+    );
     assert.equal(fs.existsSync(path.join(elsewhere, "openwhispr", "qdrant-data", "item")), true);
     assert.deepEqual(
       fs.readdirSync(path.join(linked, "Library", "Application Support", "OpenWhispr")),
