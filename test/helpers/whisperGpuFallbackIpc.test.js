@@ -19,14 +19,17 @@ const WhisperManager = require("../../src/helpers/whisper");
 // WHISPER_GPU_FAILED (a GPU that may never work, #1578); a proven one is kept
 // for the session only, and isn't announced when a wake re-warm, which retries
 // it on its own, hit it. #2265
-const saved = process.env.WHISPER_GPU_FAILED;
+const ENV_KEYS = ["WHISPER_GPU_FAILED", "WHISPER_GPU_FAILED_REASON_CUDA"];
+const saved = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 test.beforeEach(() => {
-  delete process.env.WHISPER_GPU_FAILED;
+  for (const key of ENV_KEYS) delete process.env[key];
   sent.length = 0;
 });
 test.after(() => {
-  if (saved === undefined) delete process.env.WHISPER_GPU_FAILED;
-  else process.env.WHISPER_GPU_FAILED = saved;
+  for (const key of ENV_KEYS) {
+    if (saved[key] === undefined) delete process.env[key];
+    else process.env[key] = saved[key];
+  }
 });
 
 function setup() {
@@ -111,4 +114,28 @@ test("a pack change clears that backend's failure and what its old binary proved
   assert.deepEqual(whisperManager.getFailedGpuBackends(), []);
   assert.deepEqual([...sm.startedGpuKeys], ["gpu:vulkan:default||/m/tiny.bin"]);
   assert.deepEqual([...sm.transcribedGpuKeys], []);
+});
+
+test("the GPU card shows a session failure's reason over an older saved one", () => {
+  const { whisperManager, handlers } = setup();
+  process.env.WHISPER_GPU_FAILED_REASON_CUDA = "an older reason";
+
+  whisperManager.serverManager.emit("cuda-fallback", {
+    fallbackBackend: "cpu",
+    proven: true,
+    reason: "CUDA error: out of memory",
+  });
+
+  assert.deepEqual(handlers._whisperGpuFailureStatus("cuda"), {
+    gpuFailed: true,
+    gpuFailReason: "CUDA error: out of memory",
+  });
+});
+
+test("a wake retry of a session failure makes every GPU card re-read", () => {
+  const { whisperManager } = setup();
+
+  whisperManager.emit("gpu-status-changed");
+
+  assert.deepEqual(sent, ["whisper-gpu-status-changed"]);
 });

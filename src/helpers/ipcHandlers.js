@@ -1844,6 +1844,11 @@ class IPCHandlers {
     });
     // The GPU card and banner stop offering a pack (see _whisperBundledGpu)
     serverManager.on("bundled-gpu", () => broadcastToWindows("whisper-gpu-status-changed"));
+    // A wake re-warm retried a GPU that failed this session: only main knows
+    // whether a saved failure still holds, so the cards re-read
+    this.whisperManager.on("gpu-status-changed", () =>
+      broadcastToWindows("whisper-gpu-status-changed")
+    );
   }
 
   // A bundled whisper-server built for the GPU runs on it with no pack (#2168),
@@ -1892,10 +1897,14 @@ class IPCHandlers {
     return null;
   }
 
-  // Includes a proven backend's failure kept for the session only (#2265)
+  // Includes a proven backend's failure kept for the session only (#2265),
+  // whose reason is newer than a saved one
   _whisperGpuFailureStatus(backend) {
     const gpuFailed = this.whisperManager.getFailedGpuBackends().includes(backend);
-    const reason = gpuFailed ? process.env[WHISPER_GPU_FAILURE_REASON_KEYS[backend]] : null;
+    const reason = gpuFailed
+      ? this.whisperManager.getSessionGpuFailureReason(backend) ||
+        process.env[WHISPER_GPU_FAILURE_REASON_KEYS[backend]]
+      : null;
     return { gpuFailed, gpuFailReason: reason || null };
   }
 

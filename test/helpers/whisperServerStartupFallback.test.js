@@ -26,19 +26,22 @@ function startupManager(t, outcomes) {
     if (!outcomes.shift()) throw new Error("whisper-server process died during startup");
     // What a real GPU server logs once its backend is up; a GPU start without
     // it counts as a failure
-    if (manager.useCuda) {
-      manager.process.stderr.emit("data", "whisper_backend_init_gpu: using CUDA0 backend\n");
+    if (manager.useCuda || manager.useVulkan) {
+      const backend = manager.useCuda ? "CUDA0" : "Vulkan0";
+      manager.process.stderr.emit("data", `whisper_backend_init_gpu: using ${backend} backend\n`);
     }
     manager.ready = true;
   };
   const payloads = [];
   manager.on("cuda-fallback", (payload) => payloads.push(payload));
+  const vulkanPayloads = [];
+  manager.on("gpu-fallback", (payload) => vulkanPayloads.push(payload));
 
   t.after(async () => {
     await manager.stop();
     fs.rmSync(dir, { recursive: true, force: true });
   });
-  return { manager, model, payloads };
+  return { manager, model, payloads, vulkanPayloads };
 }
 
 test("a startup failure is proven once the same GPU setup has started this session", async (t) => {
@@ -48,6 +51,8 @@ test("a startup failure is proven once the same GPU setup has started this sessi
   await manager._doStart(tiny, { useCuda: true });
   assert.equal(manager.startedGpuKeys.size, 1);
 
+  // A wake re-warm stops the server before starting it again
+  await manager.stop();
   await manager._doStart(tiny, { useCuda: true });
 
   assert.deepEqual(
@@ -82,4 +87,53 @@ test("a model that never started on the GPU is not proven by another one that di
     payloads.map(({ proven }) => proven),
     [false]
   );
+});
+
+test("the Vulkan step after a proven CUDA failure is proven too", async (t) => {
+  // Both packs installed: Vulkan only runs when CUDA fails, so it never
+  // started on its own, but it shares the GPU that is still waking up
+  const { manager, model, payloads, vulkanPayloads } = startupManager(t, [
+    true,
+    false,
+    false,
+    true,
+  ]);
+  const tiny = model("tiny");
+
+  await manager._doStart(tiny, { useCuda: true, fallbackToVulkan: true });
+  await manager.stop();
+  await manager._doStart(tiny, { useCuda: true, fallbackToVulkan: true });
+
+  assert.deepEqual(
+    payloads.map(({ fallbackBackend, proven }) => ({ fallbackBackend, proven })),
+    [{ fallbackBackend: "vulkan", proven: true }]
+  );
+  assert.deepEqual(
+    vulkanPayloads.map(({ fallbackBackend, proven }) => ({ fallbackBackend, proven })),
+    [{ fallbackBackend: "cpu", proven: true }]
+  );
+});
+
+test("the Vulkan step after an unproven CUDA failure is judged on its own", async (t) => {
+  const { manager, model, payloads, vulkanPayloads } = startupManager(t, [false, false, true]);
+
+  await manager._doStart(model("tiny"), { useCuda: true, fallbackToVulkan: true });
+
+  assert.deepEqual(
+    payloads.map(({ proven }) => proven),
+    [false]
+  );
+  assert.deepEqual(
+    vulkanPayloads.map(({ proven }) => proven),
+    [false]
+  );
+});
+
+test("a later start does not inherit a fallback's proof", async (t) => {
+  const { manager, model } = startupManager(t, [true]);
+
+  await manager._policyAllowedStart(model("tiny"), { useVulkan: true, cascadeProven: true });
+
+  assert.equal(manager.useVulkan, true);
+  assert.equal("cascadeProven" in manager.lastStartOptions, false);
 });

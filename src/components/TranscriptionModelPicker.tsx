@@ -967,8 +967,6 @@ export default function TranscriptionModelPicker({
   // actually running on, not just that a pack is on disk (a crashed GPU server
   // silently falls back to CPU). Faster poll while an activation is in flight.
   // Polls again at once when a re-read switches the card to another pack.
-  // Main retries a GPU that failed after working (e.g. on wake), so this
-  // backend running again also ends its failed state.
   useEffect(() => {
     if (!effectiveLocal || internalLocalProvider !== "whisper" || !gpuDownloaded) return;
     const poll = () => {
@@ -977,7 +975,6 @@ export default function TranscriptionModelPicker({
         .then((status) => {
           setGpuActive(!!status?.gpuAccelerated);
           if (status?.gpuAccelerated) setGpuActivating(false);
-          if (status?.gpuAccelerated && status.gpuBackend === gpuBackend) setGpuFailed(false);
         })
         .catch(() => {});
     };

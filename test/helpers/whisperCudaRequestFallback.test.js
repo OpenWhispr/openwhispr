@@ -1001,3 +1001,37 @@ test("reports a crash as not proven when the setup started but never transcribed
   // The CPU retry that answered is not a GPU success.
   assert.deepEqual([...manager.transcribedGpuKeys], []);
 });
+
+test("a proven CUDA crash passes its proof to the Vulkan start that follows", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 2) {
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: true, fallbackToVulkan: true });
+  manager.gpuProofKey = "gpu:cuda||/tmp/model.bin";
+  const startOptions = [];
+  manager.start = async (modelPath, options) => {
+    startOptions.push(options);
+    manager.useCuda = false;
+    manager.useVulkan = true;
+    manager.ready = true;
+  };
+
+  await manager.transcribe(Buffer.from("audio"));
+  await manager.transcribe(Buffer.from("audio"));
+
+  assert.equal(startOptions.length, 1);
+  assert.equal(startOptions[0].useVulkan, true);
+  assert.equal(startOptions[0].cascadeProven, true);
+});

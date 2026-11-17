@@ -483,3 +483,19 @@ test("_warnIfGpuFallback ignores an outdated Vulkan pack while CUDA runs", (t) =
   });
   assert.deepEqual(fallbackWarnings(t, manager), []);
 });
+
+test("_warnIfGpuFallback names a session failure and its reason (#2265)", (t) => {
+  const manager = managerWith({ cudaDownloaded: true });
+  manager.serverManager.emit("cuda-fallback", {
+    proven: true,
+    reason: "CUDA error: out of memory",
+  });
+
+  assert.deepEqual(fallbackWarnings(t, manager), [
+    {
+      message: "Whisper CUDA enabled but cannot be used, falling back to CPU",
+      pack: "CUDA whisper",
+      reason: "failed this session, tried again after wake: CUDA error: out of memory",
+    },
+  ]);
+});

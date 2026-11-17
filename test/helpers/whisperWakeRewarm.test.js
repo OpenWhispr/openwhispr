@@ -221,26 +221,143 @@ test("a delayed retry due during a dictation waits for it to finish", async (t) 
 
   await manager.onWakeFromSleep();
   gpuUp = true;
-  manager._transcribing = true;
+  manager._activeTranscriptions = 1;
   t.mock.timers.tick(30000);
   await flush();
   assert.deepEqual(starts, [true]);
 
-  manager._transcribing = false;
+  manager._activeTranscriptions = 0;
   t.mock.timers.tick(30000);
   await flush();
   assert.deepEqual(starts, [true, true]);
   assert.equal(manager.serverManager.useCuda, true);
 });
 
-test("a wake during a dictation keeps the session failure for the next wake", async () => {
+test("a wake during a dictation tries the GPU again once the dictation is done", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const { manager, starts } = fellBackManager({ gpuUp: () => true });
-  manager._transcribing = true;
+  manager._activeTranscriptions = 1;
+
+  assert.equal(await manager.onWakeFromSleep(), false);
+  assert.deepEqual(starts, []);
+  assert.deepEqual(manager.getFailedGpuBackends(), ["cuda"]);
+
+  manager._activeTranscriptions = 0;
+  t.mock.timers.tick(30000);
+  await flush();
+
+  assert.deepEqual(starts, [true]);
+  assert.equal(manager.serverManager.useCuda, true);
+  assert.deepEqual(manager.getFailedGpuBackends(), []);
+});
+
+test("a wake with no local server lets its next start try the GPU", async () => {
+  const { manager, starts } = fellBackManager({ gpuUp: () => true });
+  manager.currentServerModel = null;
+  let statusChanges = 0;
+  manager.on("gpu-status-changed", () => statusChanges++);
 
   assert.equal(await manager.onWakeFromSleep(), false);
 
   assert.deepEqual(starts, []);
-  assert.deepEqual(manager.getFailedGpuBackends(), ["cuda"]);
+  assert.deepEqual(manager.getFailedGpuBackends(), []);
+  assert.equal(manager.resolveGpuStartOptions().useCuda, true);
+  assert.equal(statusChanges, 1);
+});
+
+test("the GPU cards re-read after a wake re-warm retried a session failure", async () => {
+  const { manager } = fellBackManager({ gpuUp: () => true });
+  let statusChanges = 0;
+  manager.on("gpu-status-changed", () => statusChanges++);
+
+  await manager.onWakeFromSleep();
+
+  assert.equal(statusChanges, 1);
+});
+
+test("a wake re-warm with no session failure does not make the cards re-read", async () => {
+  const { manager } = fellBackManager({ gpuUp: () => true });
+  manager.forgetSessionGpuFailures();
+  manager.serverManager.useCuda = true;
+  let statusChanges = 0;
+  manager.on("gpu-status-changed", () => statusChanges++);
+
+  assert.equal(await manager.onWakeFromSleep(), true);
+
+  assert.equal(statusChanges, 0);
+});
+
+// Both packs installed: CUDA worked, failed at the wake re-warm and landed on
+// Vulkan. CUDA comes back by the delayed retry.
+test("the delayed retry brings CUDA back from Vulkan", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let cudaUp = false;
+  const manager = new WhisperManager();
+  const pack = { isDownloaded: () => true };
+  manager.setGpuBinaryManagers({ cuda: pack, vulkan: pack });
+  const sm = manager.serverManager;
+  const landOnVulkan = () => {
+    sm.useCuda = false;
+    sm.useVulkan = true;
+    sm.emit("cuda-fallback", { proven: true, fallbackBackend: "vulkan" });
+  };
+  const starts = [];
+  manager.stopServer = async () => {
+    manager.currentServerModel = null;
+  };
+  manager.startServer = async (modelName, options) => {
+    starts.push(options.useCuda ? "cuda" : options.useVulkan ? "vulkan" : "cpu");
+    if (options.useCuda && !cudaUp) {
+      landOnVulkan();
+    } else {
+      sm.useCuda = options.useCuda;
+      sm.useVulkan = options.useVulkan;
+    }
+    manager.currentServerModel = modelName;
+    return { success: true };
+  };
+  landOnVulkan();
+  manager.currentServerModel = "tiny";
+
+  assert.equal(await manager.onWakeFromSleep(), true);
+  assert.deepEqual(starts, ["cuda"]);
+  assert.equal(sm.useVulkan, true);
+
+  cudaUp = true;
+  t.mock.timers.tick(30000);
+  await flush();
+
+  assert.deepEqual(starts, ["cuda", "cuda"]);
+  assert.equal(sm.useCuda, true);
+  assert.deepEqual(manager.getFailedGpuBackends(), []);
+});
+
+test("overlapping transcriptions keep the server busy until the last one ends", async () => {
+  const manager = new WhisperManager();
+  const pending = [];
+  manager._runServerTranscription = () =>
+    new Promise((resolve) => pending.push(() => resolve({ text: "ok" })));
+
+  const first = manager.transcribeViaServer(Buffer.from("a"), "tiny", null);
+  const second = manager.transcribeViaServer(Buffer.from("b"), "tiny", null);
+  pending[0]();
+  await first;
+  assert.equal(manager._activeTranscriptions, 1);
+
+  pending[1]();
+  await second;
+  assert.equal(manager._activeTranscriptions, 0);
+});
+
+test("a session failure keeps its reason", () => {
+  const manager = new WhisperManager();
+  manager.serverManager.emit("cuda-fallback", {
+    proven: true,
+    reason: "CUDA error: out of memory",
+  });
+
+  assert.equal(manager.getSessionGpuFailureReason("cuda"), "CUDA error: out of memory");
+  assert.equal(manager.getSessionGpuFailureReason("vulkan"), null);
 });
 
 test("a remembered failure (the backend never worked) is not retried on wake", async () => {

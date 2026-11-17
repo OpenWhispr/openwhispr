@@ -560,6 +560,8 @@ class WhisperServerManager extends EventEmitter {
     // signature and survive start()'s no-op guard on the next dictation. See #766.
     this.lastStartOptions = { ...options };
     delete this.lastStartOptions.policyMemoryOnly;
+    // Belongs to this one fallback: a later start judges its GPU afresh
+    delete this.lastStartOptions.cascadeProven;
 
     const threadResolution = resolveWhisperThreads(options);
     const nextThreadSignature = getThreadSignature(threadResolution);
@@ -773,7 +775,7 @@ class WhisperServerManager extends EventEmitter {
             : `${backend} whisper-server failed, falling back to CPU`,
           { error: err.message, exitCode, reason }
         );
-        const proven = this.startedGpuKeys.has(gpuProofKey);
+        const proven = this.startedGpuKeys.has(gpuProofKey) || options.cascadeProven === true;
         if (fallbackToVulkan) {
           this.emit("cuda-fallback", { reason, fallbackBackend: "vulkan", proven });
         }
@@ -781,6 +783,10 @@ class WhisperServerManager extends EventEmitter {
         this.gpuFallbackActive = !fallbackToVulkan;
         const fallbackOptions = { ...options, useCuda: false, useVulkan: fallbackToVulkan };
         delete fallbackOptions.fallbackToVulkan;
+        // Vulkan is only tried when CUDA fails, so on a machine where CUDA
+        // works it never starts on its own. When the CUDA that failed had
+        // worked, Vulkan on the same GPU failing next shares the cause.
+        if (fallbackToVulkan) fallbackOptions.cascadeProven = proven;
         try {
           return await this._doStart(modelPath, fallbackOptions);
         } finally {
@@ -1253,6 +1259,7 @@ class WhisperServerManager extends EventEmitter {
       useVulkan: fallbackToVulkan,
     };
     delete fallbackOptions.fallbackToVulkan;
+    if (fallbackToVulkan) fallbackOptions.cascadeProven = proven;
     await this.start(modelPath, fallbackOptions);
     this.gpuFallbackActive = !this.useVulkan;
     // Emit only once the server is up: it tells whether CPU is in use, or a
