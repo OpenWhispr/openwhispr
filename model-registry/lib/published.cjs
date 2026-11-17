@@ -2,7 +2,7 @@ const { verifyEnvelope, MAX_ENVELOPE_BYTES } = require("./envelope.cjs");
 const { readPreviousManifest } = require("./publication.cjs");
 const trusted = require("../trusted-keys.json");
 
-const BASE = "https://raw.githubusercontent.com/OpenWhispr/model-registry/published";
+const BASE = "https://raw.githubusercontent.com/OpenWhispr/openwhispr/model-registry-published";
 
 async function readBounded(response) {
   const chunks = [];

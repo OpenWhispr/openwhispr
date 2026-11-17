@@ -1,7 +1,0 @@
-# Every change publishes to installed apps, so each needs a second person's review.
-* @greatcoat @Chadpiha
-# Publishing, signing and the shared reader also need an engineering owner.
-/.github/ @greatcoat @Chadpiha @gabrielste1n
-/lib/ @greatcoat @Chadpiha @gabrielste1n
-/scripts/ @greatcoat @Chadpiha @gabrielste1n
-/trusted-keys.json @greatcoat @gabrielste1n

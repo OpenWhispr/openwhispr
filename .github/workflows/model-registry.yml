@@ -1,0 +1,83 @@
+name: Model registry
+
+# Checks every change to model-registry/. Nothing here can publish: the dry run signs with
+# a key made for the run and pushes nothing.
+on:
+  pull_request:
+    # labeled/unlabeled re-run the capability-change gate when a maintainer adds the label.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
+  validate:
+    name: Validate catalog
+    needs: changes
+    if: needs.changes.outputs.registry == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: model-registry
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The registry's source commit is the last one that changed its folder.
+          fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: model-registry-published
+          path: publication
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: model-registry/.nvmrc
+          cache: npm
+          cache-dependency-path: model-registry/package-lock.json
+      # Validate before installing packages from the contributor's lockfile.
+      - name: Validate dependency sources and integrity
+        run: npx --yes --ignore-scripts --package=lockfile-lint@5.0.1 lockfile-lint --path package-lock.json --type npm --validate-https --allowed-hosts npm --validate-integrity
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run validate
+      - name: Every released app reader accepts the catalog
+        run: node scripts/check-compat.cjs
+      - name: Compatible with the live publication; request-setting changes are labelled
+        run: node scripts/check-previous.cjs
+      - name: New and changed downloads match their real files
+        run: node scripts/check-artifacts.cjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Publishing dry run (signs with a throwaway key, pushes nothing)
+        run: node scripts/publish.cjs
+        env:
+          REGISTRY_DRY_RUN: "1"
+          PUBLICATION_DIR: ${{ github.workspace }}/publication
+
+  status:
+    name: Model registry CI
+    needs: [changes, validate]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require the registry checks to pass or be skipped as unaffected
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          REGISTRY: ${{ needs.changes.outputs.registry }}
+          VALIDATE: ${{ needs.validate.result }}
+        run: |
+          [ "$CHANGES" = "success" ] || exit 1
+          if [ "$REGISTRY" = "true" ]; then [ "$VALIDATE" = "success" ]; else [ "$VALIDATE" = "skipped" ]; fi

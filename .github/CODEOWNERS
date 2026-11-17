@@ -1,0 +1,8 @@
+# The model registry publishes to installed apps, so each change needs a second person's review.
+/model-registry/ @greatcoat @Chadpiha
+# Publishing, signing and the shared reader also need an engineering owner.
+/model-registry/lib/ @greatcoat @Chadpiha @gabrielste1n
+/model-registry/scripts/ @greatcoat @Chadpiha @gabrielste1n
+/model-registry/trusted-keys.json @greatcoat @gabrielste1n
+/.github/workflows/model-registry*.yml @greatcoat @Chadpiha @gabrielste1n
+/.github/CODEOWNERS @greatcoat @Chadpiha @gabrielste1n
