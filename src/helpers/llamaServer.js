@@ -1150,6 +1150,7 @@ class LlamaServerManager {
 
     this.process = null;
     this.ready = false;
+    claimedPorts.delete(this.port);
     this.port = null;
     this.modelPath = null;
     this.draftModelPath = null;

@@ -382,12 +382,6 @@ class ModelManager {
     return Boolean(server.process || server.startupPromise);
   }
 
-  // The model a server holds or is starting, by file, so it is known before
-  // the start that records modelId has finished.
-  _serverModelPath(server) {
-    return server.startingRequest?.modelPath ?? server.modelPath;
-  }
-
   _holdsModel(server, modelId, modelPath) {
     if (server.startingRequest) return server.startingRequest.modelPath === modelPath;
     return (
@@ -400,16 +394,12 @@ class ModelManager {
     let total = 0;
     for (const other of this.servers) {
       if (other === server || !this._isOccupied(other)) continue;
-      const otherPath = this._serverModelPath(other);
-      const otherInfo =
-        (otherPath && this._findModelByFileName(path.basename(otherPath))) ||
-        (other.modelId && this.findModelById(other.modelId));
+      // By file, so a server still starting is known before it records modelId.
+      const otherPath = other.startingRequest?.modelPath ?? other.modelPath;
+      const otherInfo = this._findModelByFileName(path.basename(otherPath));
       // A server whose model can't be named can't be priced: leave no room.
       if (!otherInfo) return Infinity;
-      const profile = await this._memoryProfile(
-        otherInfo,
-        otherPath || this._modelPathFor(otherInfo)
-      );
+      const profile = await this._memoryProfile(otherInfo, otherPath);
       const window = Math.max(other.contextSize || 0, other.startingRequest?.contextSize || 0);
       total += residentServerBytes(profile, window);
     }
@@ -425,21 +415,10 @@ class ModelManager {
   }
 
   async _fitsBeside(server, modelInfo, modelPath, contextSize) {
-    try {
-      return fitsBesideResidentServers(
-        await this._memoryProfile(modelInfo, modelPath),
-        contextSize,
-        {
-          totalMemoryBytes: this._systemMemoryBytes(),
-          residentBytes: await this._otherServersBytes(server),
-        }
-      );
-    } catch (error) {
-      debugLogger.warn("Could not price a second llama-server; keeping one", {
-        error: error.message,
-      });
-      return false;
-    }
+    return fitsBesideResidentServers(await this._memoryProfile(modelInfo, modelPath), contextSize, {
+      totalMemoryBytes: this._systemMemoryBytes(),
+      residentBytes: await this._otherServersBytes(server),
+    });
   }
 
   /**
@@ -456,16 +435,14 @@ class ModelManager {
 
       const [primary] = this.servers;
       const occupied = this.servers.filter((server) => this._isOccupied(server));
-      if (
-        occupied.length === 0 ||
-        !this._unifiedMemory() ||
-        this._secondServerRefusedPaths.has(modelPath)
-      ) {
+      if (occupied.length === 0 || !this._unifiedMemory()) {
         return occupied.length === 1 ? occupied[0] : primary;
       }
 
+      // A model whose second server would not start runs alone.
+      const refused = this._secondServerRefusedPaths.has(modelPath);
       const free = this.servers.find((server) => !this._isOccupied(server));
-      if (free && (await this._fitsBeside(free, modelInfo, modelPath, window))) {
+      if (!refused && free && (await this._fitsBeside(free, modelInfo, modelPath, window))) {
         debugLogger.info("Starting a second llama-server beside the running one", {
           model: modelId,
           running: occupied.map((server) => server.modelId),
@@ -475,7 +452,7 @@ class ModelManager {
 
       const target = [...occupied].sort((a, b) => a.lastUsedAt - b.lastUsedAt)[0];
       if (
-        !(await this._fitsBeside(target, modelInfo, modelPath, window)) &&
+        (refused || !(await this._fitsBeside(target, modelInfo, modelPath, window))) &&
         !(await this._releaseOtherServers(target, busyWaitMs, signal))
       ) {
         // Loading beside a server still answering would overrun the budget.
@@ -1114,6 +1091,11 @@ class ModelManager {
         // be stepped down again.
         if (server.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
+        // The running server was left alone, which says nothing about this window.
+        if (isLocalModelPolicyRefusal(error) || SERVER_LEFT_ALONE_CODES.has(error.code)) {
+          throw error;
+        }
+        options.signal?.throwIfAborted();
         if (
           await this._secondServerRefused(server, error, {
             freshStart: !restorableContextSize,
@@ -1122,11 +1104,6 @@ class ModelManager {
         ) {
           throw Object.assign(new Error(error.message), { code: SECOND_SERVER_REFUSED });
         }
-        // The running server was left alone, which says nothing about this window.
-        if (isLocalModelPolicyRefusal(error) || SERVER_LEFT_ALONE_CODES.has(error.code)) {
-          throw error;
-        }
-        options.signal?.throwIfAborted();
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
         // dies has already taken a working window with it. Come back at the

@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const Module = require("node:module");
 const fs = require("node:fs/promises");
 const http = require("node:http");
@@ -153,6 +154,24 @@ const assistantStream = (modelManager) => modelManager.serverForModel(ASSISTANT)
 
 const startedModels = (starts) => starts.map((start) => `${start.server}:${start.model}`);
 
+// A third model that 24 GB can hold beside the 2B but not beside the 4B.
+async function addThirdModel(t, modelManager) {
+  const third = modelRegistryData.localProviders
+    .flatMap((provider) => provider.models)
+    .find((model) => model.id === "gemma-4-e4b-it-q4_k_m");
+  assert.ok(third, "fixture model missing from the registry");
+  PROFILES[third.id] = {
+    weightsBytes: 5_405_170_144,
+    draftWeightsBytes: 0,
+    kvBytesPerToken: 98304,
+    hasRecurrentState: false,
+    trainedContextTokens: 131072,
+  };
+  t.after(() => delete PROFILES[third.id]);
+  await fs.writeFile(path.join(modelManager.modelsDir, third.fileName), Buffer.alloc(1_000_001, 1));
+  return third;
+}
+
 test("alternating cleanup and the assistant loads each model once, on its own server", async (t) => {
   const { modelManager, starts } = await setup(t);
 
@@ -229,6 +248,38 @@ test("a model whose second server will not start swaps on one, and only that mod
   );
 });
 
+test("a model refused a second server runs alone while both servers hold others", async (t) => {
+  const { modelManager } = await setup(t);
+  const third = await addThirdModel(t, modelManager);
+  await cleanup(modelManager);
+  modelManager.servers[1].failNextStart = true;
+  await modelManager.serverForModel(third.id);
+  await cleanup(modelManager);
+  await assistantStream(modelManager);
+  assert.deepEqual(modelManager.loadedModelIds().sort(), [CLEANUP, ASSISTANT].sort());
+
+  await modelManager.serverForModel(third.id);
+  assert.deepEqual(modelManager.loadedModelIds(), [third.id]);
+});
+
+test("a request cancelled before its second server starts leaves that server available", async (t) => {
+  const { modelManager, starts } = await setup(t);
+  await assistantStream(modelManager);
+  const abortController = new AbortController();
+  const serverStartOptions = modelManager.serverStartOptions;
+  modelManager.serverStartOptions = async (...args) => {
+    abortController.abort();
+    return serverStartOptions.apply(modelManager, args);
+  };
+
+  await assert.rejects(() =>
+    modelManager.runInference(CLEANUP, "hi", { signal: abortController.signal })
+  );
+  delete modelManager.serverStartOptions;
+  await cleanup(modelManager);
+  assert.equal(starts.at(-1).server, 1, "the cleanup model still gets its own server");
+});
+
 test("a failed second server retries the inference on one server too", async (t) => {
   const { modelManager, starts } = await setup(t);
   await assistantStream(modelManager);
@@ -282,19 +333,7 @@ test("a request too long to fit beside the other server frees it once it is idle
 test("a swap that needs the other server's memory waits for it, then reports busy", async (t) => {
   // 24 GB holds 2B + 4B but not 4B + Gemma 4 E4B, so a third model must evict both.
   const { modelManager } = await setup(t, { totalMemoryBytes: 24 * GIB });
-  const third = modelRegistryData.localProviders
-    .flatMap((provider) => provider.models)
-    .find((model) => model.id === "gemma-4-e4b-it-q4_k_m");
-  assert.ok(third, "fixture model missing from the registry");
-  PROFILES[third.id] = {
-    weightsBytes: 5_405_170_144,
-    draftWeightsBytes: 0,
-    kvBytesPerToken: 98304,
-    hasRecurrentState: false,
-    trainedContextTokens: 131072,
-  };
-  t.after(() => delete PROFILES[third.id]);
-  await fs.writeFile(path.join(modelManager.modelsDir, third.fileName), Buffer.alloc(1_000_001, 1));
+  const third = await addThirdModel(t, modelManager);
 
   await cleanup(modelManager);
   const assistantServer = await assistantStream(modelManager);
@@ -395,4 +434,18 @@ test("a port one server picked is not handed to the other before it binds", asyn
   const [first, second] = modelManager.servers;
   const port = await first.findAvailablePort();
   assert.notEqual(await second.findAvailablePort(), port);
+});
+
+test("a stopped server's port can be picked again", async (t) => {
+  const { modelManager } = await setup(t);
+  const LlamaServerManager = modelManager.servers[0].constructor;
+  const server = new LlamaServerManager();
+  const port = (server.port = await server.findAvailablePort());
+  server.process = Object.assign(new EventEmitter(), {
+    exitCode: null,
+    kill: () => setImmediate(() => server.process?.emit("close")),
+  });
+
+  await server.stop();
+  assert.equal(await modelManager.servers[1].findAvailablePort(), port);
 });
