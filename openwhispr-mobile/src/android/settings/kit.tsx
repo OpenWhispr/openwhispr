@@ -18,6 +18,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { home, type } from '../home/kit';
 import { noOrphan, useSettingsT } from './strings';
+import { useNavigationBar, useNavigationBarCanvas } from '../navigationBar';
 
 /** Figma "Android · Settings" tokens on top of the shared Home tokens. */
 export const settings = {
@@ -59,10 +60,14 @@ export function SettingsPage({
   scroll?: boolean;
 }) {
   const t = useSettingsT();
+  // Gestures: edge to edge, the list scrolls under the handle. Buttons: the bar is part of the
+  // page (canvas colour) and nothing scrolls under it.
+  const { buttons, inset } = useNavigationBar();
+  useNavigationBarCanvas(home.canvas);
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: home.canvas }}
-      edges={['top', 'left', 'right', 'bottom']}
+      edges={buttons ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}
     >
       <View
         style={{
@@ -125,7 +130,7 @@ export function SettingsPage({
           contentContainerStyle={{
             paddingHorizontal: 16,
             paddingTop: 16,
-            paddingBottom: 32,
+            paddingBottom: 32 + (buttons ? 0 : inset),
             gap: 20,
           }}
           keyboardShouldPersistTaps="handled"
@@ -547,6 +552,7 @@ export function showToast(message: string, tone: ToastTone = 'success', action?:
 /** Mounted once at the root, so a toast survives the screen that raised it going away. */
 export function SettingsToastHost() {
   const { message, tone, id, action } = useSettingsToast();
+  const { inset } = useNavigationBar();
   const reduceMotion = useReduceMotion();
   const opacity = useRef(new Animated.Value(0)).current;
   const lift = useRef(new Animated.Value(16)).current;
@@ -579,17 +585,17 @@ export function SettingsToastHost() {
   }, [id, message, reduceMotion, opacity, lift]);
   if (!id) return null;
   return (
-    <SafeAreaView
-      edges={['bottom']}
+    // 16 dp above the gesture handle or the button bar, whichever the phone has.
+    <View
       pointerEvents="box-none"
-      style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center' }}
+      style={{ position: 'absolute', left: 0, right: 0, bottom: inset, alignItems: 'center' }}
     >
       <Animated.View
         pointerEvents={action ? 'auto' : 'none'}
         importantForAccessibility={action ? 'auto' : 'no-hide-descendants'}
         style={[
           {
-            marginBottom: 24,
+            marginBottom: 16,
             marginHorizontal: action ? 16 : 24,
             opacity,
             transform: [{ translateY: lift }],
@@ -670,7 +676,7 @@ export function SettingsToastHost() {
           </Pressable>
         )}
       </Animated.View>
-    </SafeAreaView>
+    </View>
   );
 }
 

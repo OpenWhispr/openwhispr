@@ -15,6 +15,10 @@ import { useSettingsToast } from '../settings/kit';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+jest.mock('@/android/navigationBar', () => ({
+  useNavigationBar: () => ({ buttons: true, inset: 0 }),
+  useNavigationBarCanvas: () => undefined,
+}));
 jest.mock('expo-router', () => ({
   router: {
     push: (...args: unknown[]) => mockPush(...args),

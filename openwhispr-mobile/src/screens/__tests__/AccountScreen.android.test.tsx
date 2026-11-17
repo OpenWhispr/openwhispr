@@ -8,6 +8,10 @@ import SettingsScreen from '../AccountScreen.android';
 const mockPush = jest.fn();
 const mockSignOut = jest.fn();
 let mockUser: { id: string; name?: string; email?: string; isAnonymous: boolean } | null;
+jest.mock('@/android/navigationBar', () => ({
+  useNavigationBar: () => ({ buttons: true, inset: 0 }),
+  useNavigationBarCanvas: () => undefined,
+}));
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args), canGoBack: () => true },
 }));

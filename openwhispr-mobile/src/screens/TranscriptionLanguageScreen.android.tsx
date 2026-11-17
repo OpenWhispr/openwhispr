@@ -13,6 +13,7 @@ import type { AndroidSpeechModelId } from '@/android/speechSelection';
 import { Badge, ListRow, SettingsPage, cardStyle, settings } from '@/android/settings/kit';
 import { MODEL_ROWS, modelName } from '@/android/settings/modelCatalog';
 import { useSettingsT } from '@/android/settings/strings';
+import { useNavigationBar } from '@/android/navigationBar';
 
 /** Settings → Language: one searchable list; a tap saves and goes straight back. */
 export default function LanguageScreen() {
@@ -20,6 +21,8 @@ export default function LanguageScreen() {
   const config = useConfigStore((s) => s.config);
   const local = useProcessingModeStore((s) => s.activeMode === 'private');
   const [query, setQuery] = useState('');
+  // Under the gesture handle the list keeps scrolling; above a button bar it stops at the bar.
+  const { buttons, inset } = useNavigationBar();
   const selected = config?.preferredLanguage ?? 'auto';
   const search = query.trim().toLowerCase();
   const languages = registry.languages.filter(
@@ -101,7 +104,7 @@ export default function LanguageScreen() {
         data={languages}
         keyExtractor={(item) => item.code}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingBottom: 32 + (buttons ? 0 : inset) }}
         style={{ flex: 1 }}
         ListEmptyComponent={
           <Text style={[settings.subtitle, { paddingHorizontal: 4 }]}>

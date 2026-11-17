@@ -61,11 +61,13 @@ class AndroidDictationModule : Module() {
       } catch (error: Exception) { promise.reject("MICROPHONE", error.message, error) }
     }.start()
   }
+  private val navigationBar = NavigationBar { sendEvent("onNavigationBarChange", it) }
   override fun definition() = ModuleDefinition {
     Name("AndroidDictation")
-    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error")
+    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange")
     OnCreate { DictationService.emit = { event, data -> sendEvent(event, data) } }
     OnActivityEntersForeground {
+      navigationBar.attach(appContext.currentActivity)
       DictationService.appVisible = true
       DictationService.instance?.unhide()
       DictationService.instance?.updateVisibility()
@@ -75,6 +77,7 @@ class AndroidDictationModule : Module() {
       DictationService.instance?.updateVisibility()
     }
     OnDestroy {
+      android.os.Handler(android.os.Looper.getMainLooper()).post { navigationBar.detach() }
       sampleDecodes.values.forEach { it.set(true) }
       sampleDecodes.clear()
       cloudAudioJobs.values.forEach { it.set(true) }
@@ -178,6 +181,14 @@ class AndroidDictationModule : Module() {
       DictationService.writeAppearance(context.getSharedPreferences(DictationService.PREFERENCES, android.content.Context.MODE_PRIVATE), value)
       android.os.Handler(android.os.Looper.getMainLooper()).post { DictationService.instance?.applyAppearance(value) }
     }
+    AsyncFunction("getNavigationBar") {
+      navigationBar.attach(appContext.currentActivity)
+      navigationBar.state()
+    }.runOnQueue(Queues.MAIN)
+    AsyncFunction("setNavigationBarColor") { color: Int? ->
+      navigationBar.attach(appContext.currentActivity)
+      navigationBar.style(color)
+    }.runOnQueue(Queues.MAIN)
     AsyncFunction("setPractice") { visible: Boolean ->
       DictationService.practiceVisible = visible
       DictationService.instance?.let { service ->
