@@ -3,6 +3,7 @@ import type { HomeKey } from './strings';
 // Missing keys fall back to English.
 export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> = {
   es: {
+    tabNotes: 'Notas',
     tabPosition: '{{index}} de {{count}}',
     writingItUp: 'Transcribiendo…',
     uploadingPercent: 'Subiendo {{percent}} %',
@@ -64,6 +65,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Permite el micrófono para probar el dictado.',
   },
   fr: {
+    tabNotes: 'Notes',
     tabPosition: '{{index}} sur {{count}}',
     writingItUp: 'Transcription…',
     uploadingPercent: 'Envoi {{percent}} %',
@@ -125,6 +127,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Autorisez le micro pour essayer la dictée.',
   },
   de: {
+    tabNotes: 'Notizen',
     tabPosition: '{{index}} von {{count}}',
     writingItUp: 'Wird geschrieben…',
     uploadingPercent: 'Hochladen {{percent}} %',
@@ -186,6 +189,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Erlaube das Mikrofon, um das Diktieren auszuprobieren.',
   },
   pt: {
+    tabNotes: 'Notas',
     tabPosition: '{{index}} de {{count}}',
     writingItUp: 'Transcrevendo…',
     uploadingPercent: 'Enviando {{percent}}%',
@@ -247,6 +251,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Permita o microfone para experimentar o ditado.',
   },
   it: {
+    tabNotes: 'Note',
     tabPosition: '{{index}} di {{count}}',
     writingItUp: 'Trascrizione…',
     uploadingPercent: 'Caricamento {{percent}}%',
@@ -308,6 +313,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Consenti il microfono per provare la dettatura.',
   },
   ru: {
+    tabNotes: 'Заметки',
     tabPosition: '{{index}} из {{count}}',
     writingItUp: 'Расшифровка…',
     uploadingPercent: 'Загрузка {{percent}}%',
@@ -369,6 +375,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Разрешите микрофон, чтобы попробовать диктовку.',
   },
   'zh-CN': {
+    tabNotes: '笔记',
     tabPosition: '第 {{index}} 个，共 {{count}} 个',
     writingItUp: '正在转写…',
     uploadingPercent: '正在上传 {{percent}}%',
@@ -430,6 +437,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '请允许使用麦克风以试用听写。',
   },
   'zh-TW': {
+    tabNotes: '筆記',
     tabPosition: '第 {{index}} 個，共 {{count}} 個',
     writingItUp: '正在轉寫…',
     uploadingPercent: '正在上傳 {{percent}}%',
@@ -491,6 +499,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '請允許使用麥克風以試用聽寫。',
   },
   ja: {
+    tabNotes: 'ノート',
     tabPosition: '{{count}} 件中 {{index}} 件目',
     writingItUp: '文字起こし中…',
     uploadingPercent: 'アップロード中 {{percent}}%',
@@ -552,6 +561,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '音声入力を試すにはマイクを許可してください。',
   },
   ar: {
+    tabNotes: 'الملاحظات',
     tabPosition: '{{index}} من {{count}}',
     writingItUp: 'جارٍ التفريغ…',
     uploadingPercent: 'جارٍ الرفع ‎{{percent}}%',

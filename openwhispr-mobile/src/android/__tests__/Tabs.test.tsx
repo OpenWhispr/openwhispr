@@ -1,7 +1,8 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { Keyboard } from 'react-native';
+import { Keyboard, StyleSheet } from 'react-native';
 import { AndroidTabBar } from '../Tabs';
+import { useNavigationBarCanvas } from '../navigationBar';
 
 jest.mock('expo-router', () => ({ Tabs: () => null }));
 jest.mock('@react-navigation/native', () => ({
@@ -19,6 +20,8 @@ jest.mock('../home/strings', () => ({
 jest.mock('../home/kit', () => ({
   home: {
     canvas: 'canvas',
+    surface: 'surface',
+    divider: 'divider',
     text: 'primary',
     secondary: 'secondary',
     tint: 'tint',
@@ -64,16 +67,25 @@ it('shows four tabs, Chat hidden, each a TalkBack tab with its place and selecti
   expect(screen.getByTestId('tab-(record)').props.accessibilityState).toEqual({ selected: false });
 });
 
-it('sits on the page colour with no top line, 80 dp above the system inset', () => {
+it('is white with a hairline on top, 80 dp above the system inset', () => {
   render(<AndroidTabBar {...props(1)} />);
   const bar = screen.getByTestId('tab-bar');
   expect(bar.props.style).toMatchObject({
-    backgroundColor: 'canvas',
+    backgroundColor: 'surface',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'divider',
     minHeight: 104,
     paddingBottom: 24,
   });
-  expect(bar.props.style.borderTopWidth).toBeUndefined();
-  expect(bar.props.style.borderTopColor).toBeUndefined();
+  expect(bar.props.style.boxShadow).toBeUndefined();
+  expect(bar.props.style.elevation).toBeUndefined();
+});
+
+it('paints the system bar white under the bar and the page colour where the bar hides', () => {
+  render(<AndroidTabBar {...props(1)} />);
+  expect(useNavigationBarCanvas).toHaveBeenLastCalledWith('surface');
+  render(<AndroidTabBar {...props(1, ['index', '[id]'])} />);
+  expect(useNavigationBarCanvas).toHaveBeenLastCalledWith('canvas');
 });
 
 it('hides on a pushed screen', () => {

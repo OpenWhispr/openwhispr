@@ -47,8 +47,11 @@ export function AndroidTabBar({ state, descriptors, navigation }: BottomTabBarPr
   const hiddenByOptions =
     (StyleSheet.flatten(descriptors[focused.key]?.options.tabBarStyle) as ViewStyle | undefined)
       ?.display === 'none';
-  if (!shouldShowTabBar({ route: focused as TabRoute, keyboardShown, hiddenByOptions }))
-    return null;
+  const visible = shouldShowTabBar({ route: focused as TabRoute, keyboardShown, hiddenByOptions });
+  // The system bar takes the colour of the surface it touches: white under the bar, the page
+  // colour on pushed screens and with the keyboard up.
+  useNavigationBarCanvas(visible ? tabColors.bar : home.canvas);
+  if (!visible) return null;
 
   const tabs = state.routes.filter((route) => ICONS[route.name]);
   return (
@@ -62,6 +65,8 @@ export function AndroidTabBar({ state, descriptors, navigation }: BottomTabBarPr
         paddingLeft: insets.left,
         paddingRight: insets.right,
         backgroundColor: tabColors.bar,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: tabColors.hairline,
       }}
     >
       {tabs.map((route, position) => {
@@ -132,12 +137,11 @@ export function AndroidTabBar({ state, descriptors, navigation }: BottomTabBarPr
 
 export default function AndroidTabs() {
   const { t } = useTranslation();
-  // The system bar takes the colour of the surface it touches: the page, under the tabs too.
-  useNavigationBarCanvas(home.canvas);
+  const h = useHomeT();
   return (
     <Tabs tabBar={(props) => <AndroidTabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="(record)" options={{ title: t('home') }} />
-      <Tabs.Screen name="(notes)" options={{ title: t('notes') }} />
+      <Tabs.Screen name="(notes)" options={{ title: h('tabNotes') }} />
       {/* Chat isn't part of the Android beta. The route stays registered for iOS, so hide it. */}
       <Tabs.Screen name="(chat)" options={{ href: null }} />
       <Tabs.Screen name="(dictionary)" options={{ title: t('dictionary') }} />
