@@ -47,8 +47,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: registry-publish
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,7 +54,8 @@ jobs:
           persist-credentials: false
           # The registry's source commit is the last one that changed its folder.
           fetch-depth: 0
-      # No stored credentials: the write token is given only to the commands that push.
+      # The job has no token that can write. Only the environment's deploy key may update
+      # the published branch, and only the steps that push are given it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: model-registry-published
@@ -76,7 +75,7 @@ jobs:
       - name: Take in anything the old repository published
         working-directory: publication
         env:
-          PUSH_TOKEN: ${{ github.token }}
+          REGISTRY_PUBLISH_DEPLOY_KEY: ${{ secrets.REGISTRY_PUBLISH_DEPLOY_KEY }}
         run: |
           git fetch --quiet https://github.com/OpenWhispr/model-registry.git published
           if git merge-base --is-ancestor FETCH_HEAD HEAD; then
@@ -87,22 +86,35 @@ jobs:
           (cd "$GITHUB_WORKSPACE/source/model-registry" &&
             node scripts/verify-publication.cjs "$RUNNER_TEMP/incoming" "$GITHUB_WORKSPACE/publication")
           git merge --ff-only FETCH_HEAD
-          header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
-          echo "::add-mask::$header"
-          git -c "http.https://github.com/.extraheader=$header" push origin HEAD:model-registry-published
+          if [ -z "$REGISTRY_PUBLISH_DEPLOY_KEY" ]; then
+            echo "::error::REGISTRY_PUBLISH_DEPLOY_KEY is not set; nothing else may update model-registry-published"
+            exit 1
+          fi
+          key="$RUNNER_TEMP/registry-publish-key"
+          hosts="$RUNNER_TEMP/registry-publish-hosts"
+          (umask 077 && printf '%s\n' "$REGISTRY_PUBLISH_DEPLOY_KEY" > "$key")
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$hosts"
+          trap 'rm -f "$key"' EXIT
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts"
+          git push "git@github.com:$GITHUB_REPOSITORY.git" HEAD:model-registry-published
       - name: Sign and publish the registry at main
         working-directory: source/model-registry
         env:
           PUBLICATION_DIR: ${{ github.workspace }}/publication
           REGISTRY_SIGNING_KEY: ${{ secrets.REGISTRY_SIGNING_KEY }}
-          PUSH_TOKEN: ${{ github.token }}
+          REGISTRY_PUBLISH_DEPLOY_KEY: ${{ secrets.REGISTRY_PUBLISH_DEPLOY_KEY }}
         run: |
-          header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
-          echo "::add-mask::$header"
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
-          export GIT_CONFIG_VALUE_0="$header"
-          unset PUSH_TOKEN
+          if [ -z "$REGISTRY_PUBLISH_DEPLOY_KEY" ]; then
+            echo "::error::REGISTRY_PUBLISH_DEPLOY_KEY is not set; nothing else may update model-registry-published"
+            exit 1
+          fi
+          key="$RUNNER_TEMP/registry-publish-key"
+          hosts="$RUNNER_TEMP/registry-publish-hosts"
+          (umask 077 && printf '%s\n' "$REGISTRY_PUBLISH_DEPLOY_KEY" > "$key")
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$hosts"
+          trap 'rm -f "$key"' EXIT
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts"
+          git -C "$PUBLICATION_DIR" remote set-url --push origin "git@github.com:$GITHUB_REPOSITORY.git"
           node scripts/publish.cjs
       # Apps released before the move read OpenWhispr/model-registry's `published` branch.
       # It gets exactly the commit this repository serves, whether or not this run published,

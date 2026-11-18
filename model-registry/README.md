@@ -59,7 +59,7 @@ The desktop checks run on the same pull request: they prove the app's bundled co
 
 Apps read leniently: a field they do not know is dropped, an entry they cannot understand is skipped on its own (the bundled copy stands in if there is one), and the rest still applies. Provider endpoints and membership always come from the app. Each publication signs `testedClientContracts`, the readers CI ran it through. An app applies a publication only when its own reader is listed, otherwise it keeps its bundled catalog and last good cache.
 
-When a change alters the reader (`lib/schema.cjs`, `lib/envelope.cjs` or `lib/registrySelection.js`), add the new reader under `compat/clients/` in the same pull request (see CONTRIBUTING.md). A release build refuses to start without it.
+When a change alters the reader (`lib/schema.cjs`, `lib/envelope.cjs` or `lib/registrySelection.js`), add the new reader under `compat/clients/` in the same pull request (see CONTRIBUTING.md). `npm run model-registry:verify` fails without it, so the pull request cannot merge.
 
 ## Publication and recovery
 
@@ -71,7 +71,7 @@ When a change alters the reader (`lib/schema.cjs`, `lib/envelope.cjs` or `lib/re
 
 A publication's source is the last commit that changed this folder, so an app merge neither republishes the catalog nor makes a waiting publication stale. A serialized, non-cancelling queue and a final "is this still the registry at the latest main?" check stop an older run from overwriting a newer publication.
 
-Apps released before the move read `OpenWhispr/model-registry`'s `published` branch. The last step of every run pushes the commit this repository serves to that branch, and the run fails if it cannot. Before publishing, a run also takes in any version that repository published itself, so there is one version sequence while both exist.
+Apps released before the move read `OpenWhispr/model-registry`'s `published` branch. The last step of every run pushes the commit this repository serves to that branch, and the run fails if it cannot. Before publishing, a run also takes in any version that repository published itself, so there is one version sequence while both exist. Neither branch is copied on trust: before each push the run checks that the publication is signed by a pinned key, is the newest entry of its own history, is not older than what it replaces, and was signed from a registry commit on `main`.
 
 An app release bundles the signed publication of the catalog at its commit (`npm run model-registry:pin-release`). A release cut while a registry change is merged but not yet published fails with a message to approve the waiting publication first.
 
@@ -81,6 +81,6 @@ A publication must keep testing every reader the last one was tested with. To st
 
 ## Keys
 
-`REGISTRY_SIGNING_KEY` and the deploy key for the mirror live only in the `registry-publish` environment, which is limited to `main` and needs a reviewer's approval for every run; pull requests and other workflows never see them. Only public keys are checked in (`trusted-keys.json`). A second, offline recovery key is held separately by the maintainer; switching the signer to it, or recovering from a stolen key, needs an app release that trusts the new key. Apps refuse a version number more than 10,000 above the one they hold, so a stolen key cannot lock them out with one huge number.
+`REGISTRY_SIGNING_KEY` and the two deploy keys (one that may update `model-registry-published`, one for the mirror) live only in the `registry-publish` environment, which is limited to `main` and needs a reviewer's approval for every run; pull requests and other workflows never see them. Only public keys are checked in (`trusted-keys.json`). A second, offline recovery key is held separately by the maintainer; switching the signer to it, or recovering from a stolen key, needs an app release that trusts the new key. Apps refuse a version number more than 10,000 above the one they hold, so a stolen key cannot lock them out with one huge number.
 
 This registry does not replace API inference routing, organisation policy catalogs, admin required-model choices, mobile catalogs or credential storage.
