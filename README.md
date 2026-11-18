@@ -65,16 +65,16 @@ brew install --cask openwhispr
 
 OpenWhispr is MIT-licensed. Everything that runs on your device is free, with no account and no word limit:
 
-| Free forever | Requires OpenWhispr Cloud (free allowance, then paid) |
-| --- | --- |
-| Local transcription (Whisper, Parakeet, Cohere, Orukeet) | Hosted OpenWhispr Cloud transcription |
-| Local AI models and the local AI agent | Cloud AI and hosted inference |
-| Local speaker diarization | Sync across devices |
-| Local notes, folders, and semantic search | Public note sharing and hosted team features |
-| Custom dictionary and 100+ languages | Hosted API and MCP access |
-| Bring-your-own-key cloud providers | Meeting-recording hours beyond the free allowance |
+| Free forever (on-device or your own keys) | Free OpenWhispr Cloud allowance | Paid Cloud plans |
+| --- | --- | --- |
+| Local transcription (Whisper, Parakeet, Cohere, Orukeet) | 2,000 hosted words/week | Unlimited cloud transcription |
+| Local AI models and the local AI agent | 5 hours of meeting recordings/month | 20 hours/month (Pro) or unlimited (Business) meeting recordings |
+| Local speaker diarization | | Sync across devices |
+| Local notes, folders, and semantic search | | Public note links and hosted team features |
+| Custom dictionary and 100+ languages | | Personal API access and MCP integration |
+| Unlimited cloud transcription with your own API keys | | Mobile app, workspace roles, and SSO |
 
-The hosted plan includes a free allowance (currently 2,000 words/week and 5 hours of meeting recordings/month). Paid plans raise or remove those Cloud limits. Teamspaces are free for signed-in users; creating a team inside a workspace requires the Business plan. See **Settings → Plans** in the app for current pricing.
+The free Cloud allowance is 2,000 words/week and 5 hours of meeting recordings/month; the remaining Cloud features in the third column require a paid plan. Teamspaces are free for signed-in users; creating a team inside a workspace requires the Business plan. See **Settings → Plans** in the app for current pricing.
 
 ## Quick start
 
