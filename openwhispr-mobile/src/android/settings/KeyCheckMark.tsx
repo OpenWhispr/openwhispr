@@ -123,62 +123,78 @@ export function KeyCheckMark({
   const line = { stroke: color, strokeWidth: 2.4, strokeLinecap: 'round', fill: 'none' } as const;
   return (
     <View style={{ width: SIZE, height: SIZE }} accessible={false} importantForAccessibility="no">
-      <Animated.View
-        style={{
-          position: 'absolute',
-          width: SIZE,
-          height: SIZE,
-          opacity: ringOpacity,
-          transform: [
-            { rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
-            { scale: ringScale },
-          ],
-        }}
-      >
-        <Svg width={SIZE} height={SIZE} viewBox="0 0 24 24">
-          <AnimatedCircle
-            cx={12}
-            cy={12}
-            r={9}
-            stroke={color}
-            strokeWidth={2.2}
-            strokeLinecap="round"
-            fill="none"
-            strokeDasharray={[RING, RING]}
-            strokeDashoffset={arc}
-            // The arc starts at the top, as on desktop.
-            rotation={-90}
-            origin="12, 12"
-          />
-        </Svg>
-      </Animated.View>
+      {/* A settled tick has no ring; a value set on a native-driven view before it is drawn can
+          leave a trace of it. */}
+      {!(instant && state === 'connected') && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            width: SIZE,
+            height: SIZE,
+            opacity: ringOpacity,
+            transform: [
+              { rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+              { scale: ringScale },
+            ],
+          }}
+        >
+          <Svg width={SIZE} height={SIZE} viewBox="0 0 24 24">
+            <AnimatedCircle
+              cx={12}
+              cy={12}
+              r={9}
+              stroke={color}
+              strokeWidth={2.2}
+              strokeLinecap="round"
+              fill="none"
+              strokeDasharray={[RING, RING]}
+              strokeDashoffset={arc}
+              // The arc starts at the top, as on desktop.
+              rotation={-90}
+              origin="12, 12"
+            />
+          </Svg>
+        </Animated.View>
+      )}
       <Svg width={SIZE} height={SIZE} viewBox="0 0 24 24" style={{ position: 'absolute' }}>
-        <AnimatedPath
-          d="M6.8 12.6l3.4 3.4 7-7.4"
-          {...line}
-          strokeLinejoin="round"
-          strokeDasharray={[TICK, TICK]}
-          strokeDashoffset={tick}
-        />
-        <AnimatedPath
-          d="M8.5 8.5l7 7"
-          {...line}
-          strokeDasharray={[STROKE_X, STROKE_X]}
-          strokeDashoffset={crossA}
-        />
-        <AnimatedPath
-          d="M15.5 8.5l-7 7"
-          {...line}
-          strokeDasharray={[STROKE_X, STROKE_X]}
-          strokeDashoffset={crossB}
-        />
-        <AnimatedPath
-          d="M12 7.6v5.2"
-          {...line}
-          strokeDasharray={[BANG, BANG]}
-          strokeDashoffset={bang}
-        />
-        <AnimatedCircle cx={12} cy={16.3} r={1.25} fill={color} opacity={dot} />
+        {/* Only the current state's shape is drawn: a round line end still shows as a dot
+            even when its stroke is hidden by the dash offset. */}
+        {state === 'connected' && (
+          <AnimatedPath
+            d="M6.8 12.6l3.4 3.4 7-7.4"
+            {...line}
+            strokeLinejoin="round"
+            strokeDasharray={[TICK, TICK]}
+            strokeDashoffset={tick}
+          />
+        )}
+        {state === 'failed' && (
+          <>
+            <AnimatedPath
+              d="M8.5 8.5l7 7"
+              {...line}
+              strokeDasharray={[STROKE_X, STROKE_X]}
+              strokeDashoffset={crossA}
+            />
+            <AnimatedPath
+              d="M15.5 8.5l-7 7"
+              {...line}
+              strokeDasharray={[STROKE_X, STROKE_X]}
+              strokeDashoffset={crossB}
+            />
+          </>
+        )}
+        {state === 'unverified' && (
+          <>
+            <AnimatedPath
+              d="M12 7.6v5.2"
+              {...line}
+              strokeDasharray={[BANG, BANG]}
+              strokeDashoffset={bang}
+            />
+            <AnimatedCircle cx={12} cy={16.3} r={1.25} fill={color} opacity={dot} />
+          </>
+        )}
       </Svg>
     </View>
   );

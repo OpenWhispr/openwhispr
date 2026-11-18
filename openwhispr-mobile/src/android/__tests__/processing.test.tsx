@@ -222,7 +222,7 @@ describe('Use your own key', () => {
     expect(screen.getByText('dictation')).toBeTruthy();
     expect(screen.getByText('audioUploads')).toBeTruthy();
     expect(screen.getByText('meetings')).toBeTruthy();
-    expect(screen.getByText('liveModel')).toBeTruthy();
+    expect(screen.getAllByText('nova-3')).toHaveLength(3);
     expect(screen.queryByText('textCleanup')).toBeNull();
     expect(screen.getByText('textCleanupAndNotes')).toBeTruthy();
   });
@@ -234,6 +234,21 @@ describe('Use your own key', () => {
       expect(screen.getByText(name)).toBeTruthy();
     expect(screen.queryByText('Groq')).toBeNull();
     expect(screen.queryByText('OpenRouter')).toBeNull();
+  });
+
+  it('keeps each provider’s ticks, and an accepted key, when moving between chips', async () => {
+    mockSaved['provider.deepgram'] = 'dg_abcdefghijklmnop9c1e';
+    render(<KeySheet visible onClose={jest.fn()} initialProvider="deepgram" />);
+    await act(async () => {});
+    fireEvent.press(screen.getAllByRole('checkbox', { checked: true })[0]);
+    const tickedBefore = screen.getAllByRole('checkbox', { checked: true }).length;
+    fireEvent.press(screen.getByText('Groq'));
+    await act(async () => {});
+    fireEvent.press(screen.getByText('Deepgram'));
+    await act(async () => {});
+    // The saved key is still locked in, and the untick survived.
+    expect(screen.getByText('dg_••••••••9c1e')).toBeTruthy();
+    expect(screen.getAllByRole('checkbox', { checked: true })).toHaveLength(tickedBefore);
   });
 
   it('offers OpenRouter only the text tasks', async () => {

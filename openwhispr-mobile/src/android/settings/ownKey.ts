@@ -133,15 +133,20 @@ export async function clearMeetingKey(): Promise<void> {
   await updateConfig({ inference: rest });
 }
 
+/** Saves a key that passed its check, so every task page can offer it. */
+export async function saveKey(provider: KeyProviderId, apiKey: string): Promise<void> {
+  await setProviderCredential(await getProviderCredentialReference(provider), {
+    apiKey: apiKey.trim(),
+  });
+}
+
 /** Saves the key once, then runs each ticked task on it. Dictation goes first: it sets the mode. */
 export async function applyKeyToTasks(
   provider: KeyProviderId,
   apiKey: string,
   tasks: SheetTask[],
 ): Promise<void> {
-  await setProviderCredential(await getProviderCredentialReference(provider), {
-    apiKey: apiKey.trim(),
-  });
+  await saveKey(provider, apiKey);
   const ordered = SHEET_TASKS.filter((task) => tasks.includes(task));
   for (const task of ordered) await runTaskOnKey(provider, task);
 }
