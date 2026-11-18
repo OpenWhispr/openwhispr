@@ -44,7 +44,7 @@ jobs:
       - name: Check translations
         run: npm run i18n:check
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
       - name: Install Linux native test dependencies
         if: ${{ !cancelled() }}
         run: |

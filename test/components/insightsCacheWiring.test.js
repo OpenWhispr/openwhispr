@@ -25,12 +25,6 @@ test("the leaderboard paints a kept board first and never keeps one a gate refus
   );
   assert.ok(load.includes("cacheLeaderboard(accountId, responseRequestKey, nextLeaderboard)"));
   assert.ok(
-    load.includes(
-      "loadError.status >= 400 && loadError.status < 500)\n        clearCachedLeaderboards({ revalidate: false });"
-    ),
-    "a refused board clears every kept board and access answer"
-  );
-  assert.ok(
     section.includes(
       "clearCachedLeaderboards({ revalidate: false });\n                  void load();"
     ),
@@ -46,7 +40,11 @@ test("the leaderboard paints a kept board first and never keeps one a gate refus
 
 test("joining, leaving or deleting a workspace drops the kept leaderboards", () => {
   assert.ok(read("src/services/workspaceActions.ts").includes("clearCachedLeaderboards();"));
-  assert.ok(read("src/services/membershipActions.ts").includes("clearCachedLeaderboards();"));
+  assert.ok(
+    read("src/services/membershipActions.ts").includes(
+      "clearCachedLeaderboards({ revalidate: revalidateLeaderboards });"
+    )
+  );
   assert.ok(read("src/stores/workspaceStore.ts").includes("clearCachedLeaderboards();"));
   const section = read("src/components/LeaderboardSection.tsx");
   const requestJoin = section.slice(section.indexOf("const requestJoin = async"));
@@ -68,7 +66,7 @@ test("Your usage skips only a check for remote changes while its summary is fres
       ),
     "a dictation always reloads; focus and the interval wait out a fresh summary, not a failure"
   );
-  assert.ok(view.includes("if (accountId) cacheInsightsSummary(accountId, account);"));
+  assert.ok(view.includes("else cacheInsightsSummary(accountId, account);"));
   assert.ok(
     view.includes('return load(dataChanged ? "refresh" : "allow");'),
     "only a check may be answered from the API's copy"

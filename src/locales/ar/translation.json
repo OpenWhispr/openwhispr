@@ -3227,6 +3227,117 @@
         "taskList": "قائمة مهام",
         "blockquote": "اقتباس",
         "table": "إدراج جدول"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "أساسي",
+          "blocks": "كتل",
+          "style": "النمط",
+          "tools": "أدوات"
+        },
+        "slash": {
+          "heading": "عنوان {{level}}",
+          "bulletList": "قائمة نقطية",
+          "orderedList": "قائمة مرقمة",
+          "taskList": "مهمة بمربع اختيار",
+          "quote": "اقتباس",
+          "divider": "فاصل",
+          "table": "جدول",
+          "codeBlock": "كتلة تعليمات برمجية",
+          "codeHint": "تلوين الصيغة",
+          "noteLink": "ربط ملاحظة",
+          "noteLinkHint": "أو اكتب [[",
+          "toggle": "كتلة قابلة للطي",
+          "callout": "تنبيه: {{type}}",
+          "toc": "جدول المحتويات",
+          "mathBlock": "كتلة رياضية",
+          "inlineMath": "معادلة ضمن السطر",
+          "inlineMathHint": "أو اكتب $$x^2$$",
+          "emoji": "رمز تعبيري",
+          "emojiHint": "أو اكتب :smile:",
+          "highlight": "تمييز",
+          "subscript": "نص سفلي",
+          "superscript": "نص علوي",
+          "color": "لون النص: {{name}}",
+          "font": "الخط: {{name}}",
+          "ruby": "تعليق روبي",
+          "rubyHint": "القراءة فوق النص",
+          "align": "محاذاة: {{dir}}",
+          "find": "بحث واستبدال",
+          "invisible": "إظهار/إخفاء الأحرف غير المرئية"
+        },
+        "callout": {
+          "note": "ملاحظة",
+          "tip": "نصيحة",
+          "important": "مهم",
+          "warning": "تحذير",
+          "caution": "تنبيه"
+        },
+        "colors": {
+          "default": "افتراضي",
+          "red": "أحمر",
+          "orange": "برتقالي",
+          "yellow": "أصفر",
+          "green": "أخضر",
+          "blue": "أزرق",
+          "purple": "بنفسجي",
+          "gray": "رمادي"
+        },
+        "fonts": {
+          "default": "افتراضي",
+          "serif": "مذيّل",
+          "monospace": "ثابت العرض"
+        },
+        "align": {
+          "left": "يسار",
+          "center": "وسط",
+          "right": "يمين",
+          "justify": "ضبط"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX، مثل \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX، مثل x^2",
+          "emoji": "اسم الرمز التعبيري، مثل rocket",
+          "reading": "القراءة، مثل かんじ",
+          "textReading": "النص|القراءة، مثل 漢字|かんじ",
+          "apply": "Enter للتطبيق · Esc للإلغاء",
+          "mathEdit": "Enter للحفظ · Esc للإلغاء · الفراغ يحذف"
+        },
+        "toolbar": {
+          "highlight": "تمييز",
+          "subscript": "نص سفلي",
+          "superscript": "نص علوي",
+          "color": "لون النص",
+          "font": "الخط",
+          "alignment": "المحاذاة",
+          "ruby": "نص روبي (القراءة فوق الأحرف)"
+        },
+        "find": {
+          "find": "بحث",
+          "replace": "استبدال",
+          "all": "الكل",
+          "previous": "السابق",
+          "next": "التالي",
+          "matchCase": "مطابقة حالة الأحرف",
+          "close": "إغلاق"
+        },
+        "count": "الكلمات: {{words}} · الأحرف: {{chars}}",
+        "link": {
+          "header": "ربط ملاحظة",
+          "empty": "اكتب عنوان ملاحظة…",
+          "create": "ربط بـ «{{title}}» (لا توجد ملاحظة بعد)",
+          "open": "فتح «{{title}}»",
+          "missing": "لا توجد ملاحظة بعنوان «{{title}}»"
+        },
+        "backlinks": {
+          "label": "مرتبطة من",
+          "more": "+{{count}} أخرى",
+          "untitled": "بلا عنوان"
+        },
+        "toc": {
+          "title": "المحتويات",
+          "empty": "أضف عناوين لإنشاء جدول المحتويات."
+        }
       }
     },
     "participants": {
@@ -3866,7 +3977,9 @@
           "modelNotFound": "النموذج المحدد غير متوفر من هذا المزود.",
           "providerStatus": "أعاد المزود رمز الحالة {{status}}.",
           "timeout": "انتهت مهلة اختبار الاتصال.",
-          "network": "تعذر الوصول إلى المزود."
+          "network": "تعذر الوصول إلى المزود.",
+          "invalidHeaders": "ترويسة HTTP غير صالحة. تحقق من الاسم والقيمة؛ لا يمكن تخصيص Content-Type وترويسات النقل.",
+          "redirected": "أعاد الخادم توجيه الطلب. أدخل العنوان الذي يُعيد التوجيه إليه."
         }
       },
       "local": {
@@ -5801,7 +5914,20 @@
     "selfHosted": {
       "endpointUrl": "عنوان URL لنقطة النهاية",
       "serverUrl": "عنوان URL للخادم",
-      "apiKeyOptional": "مفتاح API (اختياري)"
+      "apiKeyOptional": "مفتاح API (اختياري)",
+      "headers": "ترويسات HTTP",
+      "headersHelp": "تُرسَل مع كل طلب إلى هذا الخادم، مثل مفتاح API تطلبه بوابة.",
+      "headerName": "اسم الترويسة",
+      "headerValue": "قيمة الترويسة",
+      "removeHeader": "إزالة",
+      "addHeader": "إضافة ترويسة",
+      "unauthorized": "رفض خادمك الطلب (401/403). تحقّق من الترويسات أدناه أو من إعدادات المصادقة في الخادم.",
+      "headerErrors": {
+        "missingName": "أدخل اسم الترويسة.",
+        "invalidName": "لا يمكن أن يحتوي اسم الترويسة على مسافات أو نقطتين أو فواصل أخرى.",
+        "reserved": "يضبط OpenWhispr هذه الترويسة بنفسه.",
+        "invalidValue": "تحتوي هذه القيمة على حرف لا يمكن أن تحمله الترويسة، مثل علامة اقتباس منحنية."
+      }
     },
     "enterpriseCheckout": {
       "title": "الترقية إلى Enterprise",
@@ -6803,7 +6929,9 @@
       "timeout": "استغرق خادمك وقتًا طويلاً للاستجابة.",
       "unreachable": "تعذّر الوصول إلى خادمك. تحقق من أنه قيد التشغيل.",
       "noResponse": "تعذّر الحصول على رد من خادمك. تحقق من مفتاح API الخاص به ومن أنه قيد التشغيل.",
-      "unknown": "أعاد خادمك خطأ غير متوقع."
+      "unknown": "أعاد خادمك خطأ غير متوقع.",
+      "invalidHeaders": "إحدى الترويسات المخصّصة لخادمك غير صالحة.",
+      "redirected": "أعاد خادمك توجيه الطلب. أدخل العنوان الذي يُعيد التوجيه إليه."
     },
     "openSettings": "فتح الإعدادات",
     "copyDetails": "نسخ التفاصيل",

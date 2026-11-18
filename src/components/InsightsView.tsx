@@ -5,9 +5,10 @@ import { useAuth } from "../hooks/useAuth";
 import { useHotkey } from "../hooks/useHotkey";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
-import { hasValidatedAuthContext } from "../lib/authRequestContext";
+import { getValidatedAuthGeneration, hasValidatedAuthContext } from "../lib/authRequestContext";
 import {
   cacheInsightsSummary,
+  forgetCachedInsightsSummary,
   getInsightsCacheVersion,
   isInsightFresh,
   isInsightsCacheCurrent,
@@ -16,6 +17,7 @@ import {
 } from "../lib/insightsCache";
 import {
   getAccountAnalyticsSummary,
+  hasPendingAnalyticsErasures,
   subscribeToAnalyticsRefresh,
   type AccountSummaryCache,
 } from "../services/AnalyticsService";
@@ -437,10 +439,25 @@ function YourUsage({
           if (!(await syncService.syncAnalyticsNow())) {
             throw new Error("Insights uploads are not enabled for this account");
           }
+          // Asked before the read: when nothing is owed now, the totals read next
+          // reflect every erasure. Not knowing counts as owed, since keeping the
+          // totals is only a shortcut.
+          const authGeneration = getValidatedAuthGeneration();
+          const erasuresPending =
+            accountId && authGeneration != null
+              ? await hasPendingAnalyticsErasures({ accountId, authGeneration }).catch(() => true)
+              : true;
+          if (requestId !== requestIdRef.current) return;
           const account = await getAccountAnalyticsSummary(accountId, cache);
           if (requestId !== requestIdRef.current) return;
-          if (accountId && !isInsightsCacheCurrent(accountId, cacheVersion!)) return;
-          if (accountId) cacheInsightsSummary(accountId, account);
+          if (accountId && cacheVersion != null) {
+            if (!isInsightsCacheCurrent(accountId, cacheVersion)) return;
+            // Totals the cloud may not have erased yet are shown but never kept, so
+            // a remount doesn't repaint them and the next focus check, which retries
+            // the erasure, isn't skipped.
+            if (erasuresPending) forgetCachedInsightsSummary(accountId);
+            else cacheInsightsSummary(accountId, account);
+          }
           accountReadFailedRef.current = false;
           setSummary(account);
         } else {

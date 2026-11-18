@@ -416,7 +416,9 @@
           "modelNotFound": "選択したモデルはこのプロバイダーでは利用できません。",
           "providerStatus": "プロバイダーがステータス {{status}} を返しました。",
           "timeout": "接続テストがタイムアウトしました。",
-          "network": "プロバイダーに接続できませんでした。"
+          "network": "プロバイダーに接続できませんでした。",
+          "invalidHeaders": "HTTP ヘッダーが無効です。名前と値を確認してください。Content-Type と転送用ヘッダーは変更できません。",
+          "redirected": "サーバーがリクエストをリダイレクトしました。リダイレクト先のアドレスを入力してください。"
         }
       },
       "local": {
@@ -2503,7 +2505,20 @@
     "selfHosted": {
       "endpointUrl": "エンドポイント URL",
       "serverUrl": "サーバー URL",
-      "apiKeyOptional": "API キー（任意）"
+      "apiKeyOptional": "API キー（任意）",
+      "headers": "HTTP ヘッダー",
+      "headersHelp": "このサーバーへのすべてのリクエストに付けて送信します。たとえばゲートウェイが求める API キーなどです。",
+      "headerName": "ヘッダー名",
+      "headerValue": "ヘッダー値",
+      "removeHeader": "削除",
+      "addHeader": "ヘッダーを追加",
+      "unauthorized": "サーバーがリクエストを拒否しました（401/403）。下のヘッダーか、サーバーの認証設定を確認してください。",
+      "headerErrors": {
+        "missingName": "ヘッダー名を入力してください。",
+        "invalidName": "ヘッダー名にスペース、コロン、その他の区切り文字は使えません。",
+        "reserved": "このヘッダーは OpenWhispr が自動で設定します。",
+        "invalidValue": "この値には、ヘッダーで送れない文字（曲がった引用符など）が含まれています。"
+      }
     },
     "workspace": {
       "title": "ワークスペース",
@@ -3582,6 +3597,117 @@
         "taskList": "チェックリスト",
         "blockquote": "引用",
         "table": "表を挿入"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "基本",
+          "blocks": "ブロック",
+          "style": "スタイル",
+          "tools": "ツール"
+        },
+        "slash": {
+          "heading": "見出し {{level}}",
+          "bulletList": "箇条書き",
+          "orderedList": "番号付きリスト",
+          "taskList": "チェックボックスのタスク",
+          "quote": "引用",
+          "divider": "区切り線",
+          "table": "表",
+          "codeBlock": "コードブロック",
+          "codeHint": "シンタックスカラー",
+          "noteLink": "ノートへのリンク",
+          "noteLinkHint": "または [[ と入力",
+          "toggle": "折りたたみ",
+          "callout": "コールアウト: {{type}}",
+          "toc": "目次",
+          "mathBlock": "数式ブロック",
+          "inlineMath": "インライン数式",
+          "inlineMathHint": "または $$x^2$$ と入力",
+          "emoji": "絵文字",
+          "emojiHint": "または :smile: と入力",
+          "highlight": "ハイライト",
+          "subscript": "下付き",
+          "superscript": "上付き",
+          "color": "文字色: {{name}}",
+          "font": "フォント: {{name}}",
+          "ruby": "ルビ",
+          "rubyHint": "文字の上に読みを表示",
+          "align": "配置: {{dir}}",
+          "find": "検索と置換",
+          "invisible": "不可視文字の表示/非表示"
+        },
+        "callout": {
+          "note": "メモ",
+          "tip": "ヒント",
+          "important": "重要",
+          "warning": "警告",
+          "caution": "注意"
+        },
+        "colors": {
+          "default": "デフォルト",
+          "red": "赤",
+          "orange": "オレンジ",
+          "yellow": "黄",
+          "green": "緑",
+          "blue": "青",
+          "purple": "紫",
+          "gray": "グレー"
+        },
+        "fonts": {
+          "default": "デフォルト",
+          "serif": "明朝体",
+          "monospace": "等幅"
+        },
+        "align": {
+          "left": "左",
+          "center": "中央",
+          "right": "右",
+          "justify": "両端揃え"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX（例: \\sum_{i=1}^n x_i）",
+          "latexInline": "LaTeX（例: x^2）",
+          "emoji": "絵文字名（例: rocket）",
+          "reading": "読み（例: かんじ）",
+          "textReading": "文字|読み（例: 漢字|かんじ）",
+          "apply": "Enter で適用 · Esc でキャンセル",
+          "mathEdit": "Enter で保存 · Esc でキャンセル · 空にすると削除"
+        },
+        "toolbar": {
+          "highlight": "ハイライト",
+          "subscript": "下付き",
+          "superscript": "上付き",
+          "color": "文字色",
+          "font": "フォント",
+          "alignment": "配置",
+          "ruby": "ルビ（文字の上に読み）"
+        },
+        "find": {
+          "find": "検索",
+          "replace": "置換",
+          "all": "すべて",
+          "previous": "前へ",
+          "next": "次へ",
+          "matchCase": "大文字と小文字を区別",
+          "close": "閉じる"
+        },
+        "count": "単語: {{words}} · 文字: {{chars}}",
+        "link": {
+          "header": "ノートへのリンク",
+          "empty": "ノートのタイトルを入力…",
+          "create": "「{{title}}」へのリンク（ノートはまだありません）",
+          "open": "「{{title}}」を開く",
+          "missing": "「{{title}}」というノートはありません"
+        },
+        "backlinks": {
+          "label": "リンク元",
+          "more": "ほか {{count}} 件",
+          "untitled": "無題"
+        },
+        "toc": {
+          "title": "目次",
+          "empty": "見出しを追加すると目次が作成されます。"
+        }
       }
     },
     "participants": {
@@ -6293,7 +6419,9 @@
       "timeout": "サーバーからの応答に時間がかかりすぎました。",
       "unreachable": "サーバーに接続できませんでした。サーバーが起動しているか確認してください。",
       "noResponse": "サーバーから応答がありませんでした。APIキーとサーバーが起動しているかを確認してください。",
-      "unknown": "サーバーから予期しないエラーが返されました。"
+      "unknown": "サーバーから予期しないエラーが返されました。",
+      "invalidHeaders": "サーバー用のカスタムヘッダーが無効です。",
+      "redirected": "サーバーがリクエストをリダイレクトしました。リダイレクト先のアドレスを入力してください。"
     },
     "openSettings": "設定を開く",
     "copyDetails": "詳細をコピー",

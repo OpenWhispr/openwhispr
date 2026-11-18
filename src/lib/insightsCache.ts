@@ -8,7 +8,7 @@ import type { LeaderboardWeekStartsCacheEntry } from "../helpers/leaderboard";
 const INSIGHTS_CACHE_FRESH_MS = 60_000;
 const MAX_CACHED_LEADERBOARDS = 30;
 
-interface CachedInsight<T> {
+export interface CachedInsight<T> {
   value: T;
   fetchedAt: number;
 }
@@ -24,10 +24,12 @@ interface AccountInsights {
 let current: AccountInsights | null = null;
 let insightsCacheVersion = 0;
 let leaderboardCacheVersion = 0;
-type CacheInvalidation = "all" | "leaderboards";
-const invalidationListeners = new Set<(scope: CacheInvalidation) => void>();
+export type InsightsCacheInvalidation = "all" | "leaderboards";
+const invalidationListeners = new Set<(scope: InsightsCacheInvalidation) => void>();
 
-export function subscribeToInsightsCacheInvalidation(listener: (scope: CacheInvalidation) => void) {
+export function subscribeToInsightsCacheInvalidation(
+  listener: (scope: InsightsCacheInvalidation) => void
+): () => void {
   invalidationListeners.add(listener);
   return () => {
     invalidationListeners.delete(listener);
@@ -76,7 +78,9 @@ export function isInsightFresh(
   return entry != null && now - entry.fetchedAt < INSIGHTS_CACHE_FRESH_MS;
 }
 
-export function readCachedInsightsSummary(accountId: string) {
+export function readCachedInsightsSummary(
+  accountId: string
+): CachedInsight<AnalyticsSummary> | null {
   return forAccount(accountId).summary;
 }
 
@@ -84,7 +88,14 @@ export function cacheInsightsSummary(accountId: string, summary: AnalyticsSummar
   forAccount(accountId).summary = cached(summary);
 }
 
-export function readCachedLeaderboardAccess(accountId: string) {
+/** Drops only the summary and tells no mounted view: for a reader showing totals it must not keep. */
+export function forgetCachedInsightsSummary(accountId: string): void {
+  forAccount(accountId).summary = null;
+}
+
+export function readCachedLeaderboardAccess(
+  accountId: string
+): CachedInsight<LeaderboardAccess> | null {
   return forAccount(accountId).access;
 }
 
@@ -92,7 +103,10 @@ export function cacheLeaderboardAccess(accountId: string, access: LeaderboardAcc
   forAccount(accountId).access = cached(access);
 }
 
-export function readCachedLeaderboard(accountId: string, requestKey: string) {
+export function readCachedLeaderboard(
+  accountId: string,
+  requestKey: string
+): CachedInsight<Leaderboard> | undefined {
   return forAccount(accountId).leaderboards.get(requestKey);
 }
 
@@ -110,7 +124,9 @@ export function cacheLeaderboard(
   }
 }
 
-export function cachedLeaderboardWeekStarts(accountId: string) {
+export function cachedLeaderboardWeekStarts(
+  accountId: string
+): Map<string, LeaderboardWeekStartsCacheEntry> {
   return forAccount(accountId).weekStarts;
 }
 

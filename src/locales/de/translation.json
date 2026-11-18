@@ -416,7 +416,9 @@
           "modelNotFound": "Das ausgewählte Modell ist bei diesem Anbieter nicht verfügbar.",
           "providerStatus": "Der Anbieter hat den Status {{status}} zurückgegeben.",
           "timeout": "Der Verbindungstest hat das Zeitlimit überschritten.",
-          "network": "Der Anbieter ist nicht erreichbar."
+          "network": "Der Anbieter ist nicht erreichbar.",
+          "invalidHeaders": "Ungültiger HTTP-Header. Name und Wert prüfen; Content-Type und Transport-Header können nicht angepasst werden.",
+          "redirected": "Der Server hat die Anfrage umgeleitet. Geben Sie die Adresse ein, auf die er umleitet."
         }
       },
       "local": {
@@ -3257,7 +3259,20 @@
     "selfHosted": {
       "endpointUrl": "Endpunkt-URL",
       "serverUrl": "Server-URL",
-      "apiKeyOptional": "API-Schlüssel (optional)"
+      "apiKeyOptional": "API-Schlüssel (optional)",
+      "headers": "HTTP-Header",
+      "headersHelp": "Werden mit jeder Anfrage an diesen Server gesendet, etwa ein API-Schlüssel, den ein Gateway verlangt.",
+      "headerName": "Headername",
+      "headerValue": "Headerwert",
+      "removeHeader": "Entfernen",
+      "addHeader": "Header hinzufügen",
+      "unauthorized": "Ihr Server hat die Anfrage abgelehnt (401/403). Prüfen Sie die Header unten oder die Authentifizierungseinstellungen des Servers.",
+      "headerErrors": {
+        "missingName": "Geben Sie einen Headernamen ein.",
+        "invalidName": "Headernamen dürfen keine Leerzeichen, Doppelpunkte oder andere Trennzeichen enthalten.",
+        "reserved": "Diesen Header setzt OpenWhispr selbst.",
+        "invalidValue": "Dieser Wert enthält ein Zeichen, das ein Header nicht übertragen kann, etwa ein typografisches Anführungszeichen."
+      }
     },
     "enterpriseCheckout": {
       "title": "Auf Enterprise upgraden",
@@ -4246,6 +4261,117 @@
         "taskList": "Checkliste",
         "blockquote": "Zitat",
         "table": "Tabelle einfügen"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Grundlagen",
+          "blocks": "Blöcke",
+          "style": "Stil",
+          "tools": "Werkzeuge"
+        },
+        "slash": {
+          "heading": "Überschrift {{level}}",
+          "bulletList": "Aufzählung",
+          "orderedList": "Nummerierte Liste",
+          "taskList": "Aufgabe mit Kästchen",
+          "quote": "Zitat",
+          "divider": "Trennlinie",
+          "table": "Tabelle",
+          "codeBlock": "Codeblock",
+          "codeHint": "Syntaxfarben",
+          "noteLink": "Notiz verlinken",
+          "noteLinkHint": "oder [[ tippen",
+          "toggle": "Aufklappbereich",
+          "callout": "Hinweisbox: {{type}}",
+          "toc": "Inhaltsverzeichnis",
+          "mathBlock": "Formelblock",
+          "inlineMath": "Formel im Text",
+          "inlineMathHint": "oder $$x^2$$ tippen",
+          "emoji": "Emoji",
+          "emojiHint": "oder :smile: tippen",
+          "highlight": "Hervorheben",
+          "subscript": "Tiefgestellt",
+          "superscript": "Hochgestellt",
+          "color": "Textfarbe: {{name}}",
+          "font": "Schrift: {{name}}",
+          "ruby": "Ruby-Annotation",
+          "rubyHint": "Lesung über dem Text",
+          "align": "Ausrichten: {{dir}}",
+          "find": "Suchen und ersetzen",
+          "invisible": "Unsichtbare Zeichen ein-/ausblenden"
+        },
+        "callout": {
+          "note": "Hinweis",
+          "tip": "Tipp",
+          "important": "Wichtig",
+          "warning": "Warnung",
+          "caution": "Vorsicht"
+        },
+        "colors": {
+          "default": "Standard",
+          "red": "Rot",
+          "orange": "Orange",
+          "yellow": "Gelb",
+          "green": "Grün",
+          "blue": "Blau",
+          "purple": "Lila",
+          "gray": "Grau"
+        },
+        "fonts": {
+          "default": "Standard",
+          "serif": "Serifen",
+          "monospace": "Festbreite"
+        },
+        "align": {
+          "left": "Links",
+          "center": "Zentriert",
+          "right": "Rechts",
+          "justify": "Blocksatz"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, z. B. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, z. B. x^2",
+          "emoji": "Emoji-Name, z. B. rocket",
+          "reading": "Lesung, z. B. かんじ",
+          "textReading": "Text|Lesung, z. B. 漢字|かんじ",
+          "apply": "Eingabe zum Übernehmen · Esc zum Abbrechen",
+          "mathEdit": "Eingabe zum Speichern · Esc zum Abbrechen · leer löscht"
+        },
+        "toolbar": {
+          "highlight": "Hervorheben",
+          "subscript": "Tiefgestellt",
+          "superscript": "Hochgestellt",
+          "color": "Textfarbe",
+          "font": "Schrift",
+          "alignment": "Ausrichtung",
+          "ruby": "Ruby-Text (Lesung über den Zeichen)"
+        },
+        "find": {
+          "find": "Suchen",
+          "replace": "Ersetzen",
+          "all": "Alle",
+          "previous": "Zurück",
+          "next": "Weiter",
+          "matchCase": "Groß-/Kleinschreibung",
+          "close": "Schließen"
+        },
+        "count": "Wörter: {{words}} · Zeichen: {{chars}}",
+        "link": {
+          "header": "Notiz verlinken",
+          "empty": "Notiztitel eingeben…",
+          "create": "Auf „{{title}}“ verlinken (noch keine Notiz)",
+          "open": "„{{title}}“ öffnen",
+          "missing": "Keine Notiz mit dem Titel „{{title}}“"
+        },
+        "backlinks": {
+          "label": "Verlinkt von",
+          "more": "+{{count}} weitere",
+          "untitled": "Ohne Titel"
+        },
+        "toc": {
+          "title": "Inhalt",
+          "empty": "Füge Überschriften hinzu, um das Inhaltsverzeichnis zu erstellen."
+        }
       }
     },
     "participants": {
@@ -6293,7 +6419,9 @@
       "timeout": "Ihr Server hat zu lange zum Antworten gebraucht.",
       "unreachable": "Ihr Server konnte nicht erreicht werden. Überprüfen Sie, ob er läuft.",
       "noResponse": "Keine Antwort von Ihrem Server erhalten. Überprüfen Sie seinen API-Schlüssel und ob er läuft.",
-      "unknown": "Ihr Server hat einen unerwarteten Fehler zurückgegeben."
+      "unknown": "Ihr Server hat einen unerwarteten Fehler zurückgegeben.",
+      "invalidHeaders": "Ein benutzerdefinierter Header für Ihren Server ist ungültig.",
+      "redirected": "Ihr Server hat die Anfrage umgeleitet. Geben Sie die Adresse ein, auf die er umleitet."
     },
     "openSettings": "Einstellungen öffnen",
     "copyDetails": "Details kopieren",

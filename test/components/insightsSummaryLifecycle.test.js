@@ -8,11 +8,11 @@ const { createRoot } = require("react-dom/client");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 
-async function loadUsage(
+// Exercise the private production component's lifecycle with lightweight presentation.
+async function loadYourUsage(
   t,
   syncModule = "export const syncService = { syncAnalyticsNow: async () => true };"
 ) {
-  // Exercise the private production component's lifecycle with lightweight presentation.
   const source = readFileSync(join(__dirname, "../../src/components/InsightsView.tsx"), "utf8");
   const usage = source.slice(
     source.indexOf("function YourUsage("),
@@ -22,23 +22,24 @@ async function loadUsage(
     mockModules: {
       "/services/SyncService": syncModule,
       "/lib/authRequestContext": `
-          export const getValidatedAuthGeneration = () => 7;
-          export const invalidateValidatedAuthContext = () => {};
-          export const readAuthTokenState = async () => ({ generation: 7 });
-        `,
+        export const getValidatedAuthGeneration = () => 7;
+        export const invalidateValidatedAuthContext = () => {};
+        export const readAuthTokenState = async () => ({ generation: 7 });
+      `,
       "/YourUsage": transpileModule(
         `
-          import React, { useCallback, useEffect, useRef, useState } from 'react';
-          import * as cache from '/lib/insightsCache';
-          import { getAccountAnalyticsSummary, subscribeToAnalyticsRefresh } from '/services/AnalyticsService';
-          import { syncService } from '/services/SyncService';
-          const { cacheInsightsSummary, isInsightFresh, readCachedInsightsSummary,
-            getInsightsCacheVersion, isInsightsCacheCurrent, subscribeToInsightsCacheInvalidation } = cache;
-          const useTranslation = () => ({ t: key => key });
-          const UsageDashboard = ({ summary }) => React.createElement('div', null, summary?.totalWords);
-          const UsagePreview = () => React.createElement('div', null, 'empty');
-          export ${usage}
-        `,
+        import React, { useCallback, useEffect, useRef, useState } from 'react';
+        import * as cache from '/lib/insightsCache';
+        import { getAccountAnalyticsSummary, hasPendingAnalyticsErasures, subscribeToAnalyticsRefresh } from '/services/AnalyticsService';
+        import { syncService } from '/services/SyncService';
+        import { getValidatedAuthGeneration } from '/lib/authRequestContext';
+        const { cacheInsightsSummary, forgetCachedInsightsSummary, isInsightFresh, readCachedInsightsSummary,
+          getInsightsCacheVersion, isInsightsCacheCurrent, subscribeToInsightsCacheInvalidation } = cache;
+        const useTranslation = () => ({ t: key => key });
+        const UsageDashboard = ({ summary }) => React.createElement('div', null, summary?.totalWords);
+        const UsagePreview = () => React.createElement('div', null, 'empty');
+        export ${usage}
+      `,
         {
           compilerOptions: {
             jsx: JsxEmit.React,
@@ -50,14 +51,24 @@ async function loadUsage(
     },
   });
   const { YourUsage } = await vite.ssrLoadModule("/YourUsage");
-  return { vite, YourUsage };
+  const cache = await vite.ssrLoadModule("/lib/insightsCache.ts");
+  return { YourUsage, cache };
 }
+
+const USAGE_PROPS = {
+  accountId: "user-a",
+  dataRetentionEnabled: true,
+  isLoaded: true,
+  syncActive: true,
+  onSyncErrorChange() {},
+};
 
 for (const { unmount, rejectionTicks } of [
   { unmount: false },
   { unmount: true },
-  { unmount: false, rejectionTicks: 3 },
-  { unmount: false, rejectionTicks: 4 },
+  // A spread of ticks, so the clear lands on either side of the catch whatever
+  // the exact number of awaits in between.
+  ...[3, 4, 5, 6, 7].map((rejectionTicks) => ({ unmount: false, rejectionTicks })),
 ]) {
   test(`a late summary cannot restore cleared history ${unmount ? "after unmount" : rejectionTicks ? `during rejection at tick ${rejectionTicks}` : "while mounted"}`, async (t) => {
     let root;
@@ -87,6 +98,8 @@ for (const { unmount, rejectionTicks } of [
             return localReads === 1 ? summary : replacementLocal.promise;
           },
           onAnalyticsChanged: () => () => {},
+          getPendingAnalyticsClear: async () => null,
+          getPendingAnalyticsDeletes: async () => [],
           cloudApiRequest: async () =>
             ++reads === 1 ? pending.promise : { success: true, data: empty },
         },
@@ -94,20 +107,9 @@ for (const { unmount, rejectionTicks } of [
     });
     const container = installInteractiveDom(t);
     globalThis.window.document.visibilityState = "visible";
-    const { vite, YourUsage } = await loadUsage(t);
-    const cache = await vite.ssrLoadModule("/lib/insightsCache.ts");
+    const { YourUsage, cache } = await loadYourUsage(t);
     root = createRoot(container);
-    await act(async () =>
-      root.render(
-        createElement(YourUsage, {
-          accountId: "user-a",
-          dataRetentionEnabled: true,
-          isLoaded: true,
-          syncActive: true,
-          onSyncErrorChange() {},
-        })
-      )
-    );
+    await act(async () => root.render(createElement(YourUsage, USAGE_PROPS)));
     assert.equal(reads, 1);
     if (rejectionTicks) {
       await act(async () => {
@@ -136,6 +138,72 @@ for (const { unmount, rejectionTicks } of [
       assert.equal(kept.value.totalWords, 0);
       assert.equal(container.textContent, "empty");
     }
+  });
+}
+
+for (const erasurePending of [false, true]) {
+  test(`a summary read ${erasurePending ? "while an erasure is still owed is shown but not kept" : "with nothing owed is kept and spares the next focus check"}`, async (t) => {
+    let root;
+    t.after(() => act(() => root?.unmount()));
+    const summary = {
+      totalWords: 999,
+      totalDictations: 5,
+      totalSpokenDurationMs: 1000,
+      averageWpm: null,
+      currentStreakDays: 1,
+      longestStreakDays: 1,
+      wpmCoveragePercent: 0,
+      daily: [],
+    };
+    const focusListeners = [];
+    let reads = 0;
+    installBrowserGlobals(t, {
+      window: {
+        clearInterval() {},
+        clearTimeout() {},
+        setTimeout(callback) {
+          callback();
+          return 1;
+        },
+        addEventListener(type, listener) {
+          if (type === "focus") focusListeners.push(listener);
+        },
+        electronAPI: {
+          getAnalyticsSummary: async () => ({ ...summary, totalWords: 1 }),
+          onAnalyticsChanged: () => () => {},
+          // The clear the user asked for has not reached the cloud yet.
+          getPendingAnalyticsClear: async () =>
+            erasurePending ? { cleared_through: "2026-11-17T10:00:00.000Z" } : null,
+          getPendingAnalyticsDeletes: async () => [],
+          cloudApiRequest: async () => {
+            reads += 1;
+            return { success: true, data: summary };
+          },
+        },
+      },
+    });
+    const container = installInteractiveDom(t);
+    globalThis.window.document.visibilityState = "visible";
+    const { YourUsage, cache } = await loadYourUsage(t);
+    // A summary kept from a minute ago, before the erasure was asked for.
+    cache.cacheInsightsSummary("user-a", { ...summary, totalWords: 5 });
+    root = createRoot(container);
+    await act(async () => root.render(createElement(YourUsage, USAGE_PROPS)));
+    assert.equal(reads, 1);
+    assert.equal(container.textContent, "999", "the account summary is shown either way");
+    assert.equal(
+      cache.readCachedInsightsSummary("user-a")?.value.totalWords ?? null,
+      erasurePending ? null : 999
+    );
+
+    await act(async () => focusListeners.forEach((listener) => listener()));
+    assert.equal(
+      reads,
+      erasurePending ? 2 : 1,
+      erasurePending
+        ? "focus re-reads, so the pass that retries the erasure runs"
+        : "focus waits out a fresh summary"
+    );
   });
 }
 
@@ -204,7 +272,7 @@ test("focus recovery shows uploaded totals instead of the API's older copy, and 
   });
   const container = installInteractiveDom(t);
   globalThis.window.document.visibilityState = "visible";
-  const { YourUsage } = await loadUsage(
+  const { YourUsage } = await loadYourUsage(
     t,
     `
     import { syncPendingAnalytics } from '/services/AnalyticsService';

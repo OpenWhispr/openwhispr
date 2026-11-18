@@ -552,6 +552,8 @@ function TranscriptionSection({
   const setEnterpriseTranscriptionSetupMode = useSettingsStore(
     (s) => s.setEnterpriseTranscriptionSetupMode
   );
+  const selfHostedHeaders = useSettingsStore((s) => s.selfHostedSttHeaders.dictation);
+  const setSelfHostedSttHeaders = useSettingsStore((s) => s.setSelfHostedSttHeaders);
   const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
   const managedAvailable = useManagedScopeResolution("transcription", "managed");
   const {
@@ -811,6 +813,8 @@ function TranscriptionSection({
               onUrlChange={setRemoteTranscriptionUrl}
               model={remoteTranscriptionModel}
               onModelChange={setRemoteTranscriptionModel}
+              headers={selfHostedHeaders}
+              onHeadersChange={(rows) => setSelfHostedSttHeaders("dictation", rows)}
             />
           )}
         </>
@@ -4589,7 +4593,8 @@ EOF`,
                       disabled={!effectiveDataRetentionEnabled}
                       onChange={(e) => {
                         setTranscriptRetentionDays(parseInt(e.target.value, 10));
-                        // Retention can remove counters while Settings overlays Insights.
+                        // A shorter period may remove counters, and Insights would otherwise
+                        // open on the kept totals that still count them.
                         clearInsightsCache();
                       }}
                       className={RETENTION_SELECT_CLASS}

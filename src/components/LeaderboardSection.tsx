@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import {
   ArrowUpDown,
   Building2,
@@ -50,6 +58,7 @@ import {
   readCachedLeaderboard,
   readCachedLeaderboardAccess,
   subscribeToInsightsCacheInvalidation,
+  type CachedInsight,
 } from "../lib/insightsCache";
 import { CloudApiError } from "../services/cloudApi";
 import { LeaderboardService } from "../services/LeaderboardService";
@@ -155,6 +164,28 @@ function LeaderboardRetryCard({
   );
 }
 
+// The server stopped accepting this account's credential.
+function isAccountRefusal(error: unknown): boolean {
+  return (
+    error instanceof CloudApiError &&
+    (error.code === "ACCOUNT_REQUIRED" || error.code === "AUTH_EXPIRED" || error.status === 401)
+  );
+}
+
+// Refusals that mean a gate moved. Throttling and malformed requests don't.
+const GATE_REFUSAL_STATUSES = new Set([401, 403, 404]);
+
+// Only a validated session gets this session's kept answer: an unvalidated one
+// must reach its Sign-in card.
+function readValidatedCachedAccess(
+  accountId: string | null,
+  authGeneration: number | null
+): CachedInsight<LeaderboardAccess> | null {
+  return accountId && authGeneration != null && getValidatedAuthGeneration() === authGeneration
+    ? readCachedLeaderboardAccess(accountId)
+    : null;
+}
+
 function scrollToRank(rank: number) {
   requestAnimationFrame(() =>
     document.getElementById(`leaderboard-rank-${rank}`)?.scrollIntoView({
@@ -194,11 +225,8 @@ export default function LeaderboardSection({
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   // Reopening Insights shows this session's last answer while the next one loads.
-  // Only a validated session gets it: an unvalidated one must reach its Sign-in card.
-  const [access, setAccess] = useState<LeaderboardAccess | null>(() =>
-    accountId && authGeneration != null && getValidatedAuthGeneration() === authGeneration
-      ? (readCachedLeaderboardAccess(accountId)?.value ?? null)
-      : null
+  const [access, setAccess] = useState<LeaderboardAccess | null>(
+    () => readValidatedCachedAccess(accountId, authGeneration)?.value ?? null
   );
   const [accessLoading, setAccessLoading] = useState(access == null);
   const [accessError, setAccessError] = useState<"auth" | "generic" | null>(null);
@@ -293,7 +321,10 @@ export default function LeaderboardSection({
   );
 
   const loadAccess = useCallback(
-    async (preferredScopeKey?: string) => {
+    async (
+      preferredScopeKey?: string,
+      { dropKeptOnFailure = false }: { dropKeptOnFailure?: boolean } = {}
+    ) => {
       const requestId = ++accessRequestIdRef.current;
       if (!accountId) {
         setAccess(null);
@@ -318,31 +349,31 @@ export default function LeaderboardSection({
       const superseded = (): boolean => {
         if (requestId !== accessRequestIdRef.current) return true;
         if (isLeaderboardCacheCurrent(accountId, cacheVersion)) return false;
-        void loadAccess(preferredScopeKey);
+        void loadAccess(preferredScopeKey, { dropKeptOnFailure });
         return true;
       };
       try {
         const response = await LeaderboardService.getAccess();
         if (superseded()) return;
         cacheLeaderboardAccess(accountId, response);
-        setAccess(response);
+        // An unchanged answer keeps its object: the selected scope comes from it,
+        // and a new one would restart the board read already running on it.
+        setAccess((current) =>
+          current && JSON.stringify(current) === JSON.stringify(response) ? current : response
+        );
         setScopeKey((current) =>
           resolveLeaderboardScopeKey(response.scopes, current, preferredScopeKey)
         );
       } catch (loadError) {
         if (superseded()) return;
         console.error("Loading leaderboard access failed:", loadError);
-        const requiresAccount =
-          loadError instanceof CloudApiError &&
-          (loadError.code === "ACCOUNT_REQUIRED" ||
-            loadError.code === "AUTH_EXPIRED" ||
-            loadError.status === 401);
+        const requiresAccount = isAccountRefusal(loadError);
         if (requiresAccount) {
           // The server refused the account, so the kept answer goes and Sign in shows.
           // A session still revalidating keeps the board, as before this cache.
           clearCachedLeaderboards({ revalidate: false });
-          setAccess(null);
         }
+        if (requiresAccount || dropKeptOnFailure) setAccess(null);
         setAccessError(requiresAccount ? "auth" : "generic");
       } finally {
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
@@ -386,10 +417,7 @@ export default function LeaderboardSection({
   }, [isSignedIn, loaded, refresh]);
 
   useEffect(() => {
-    const cached =
-      accountId && authGeneration != null && getValidatedAuthGeneration() === authGeneration
-        ? readCachedLeaderboardAccess(accountId)
-        : null;
+    const cached = readValidatedCachedAccess(accountId, authGeneration);
     if (cached && isInsightFresh(cached)) {
       // The session may have validated after mount, so the answer goes on screen here too.
       accessRequestIdRef.current += 1;
@@ -506,8 +534,8 @@ export default function LeaderboardSection({
       if (requestId !== requestIdRef.current || !isLeaderboardCacheCurrent(accountId, cacheVersion))
         return;
       console.error("Loading leaderboard failed:", loadError);
-      // A refusal means a gate moved, so no board this session kept still holds.
-      if (loadError instanceof CloudApiError && loadError.status >= 400 && loadError.status < 500)
+      // A gate moved, so no board this session kept still holds.
+      if (loadError instanceof CloudApiError && GATE_REFUSAL_STATUSES.has(loadError.status))
         clearCachedLeaderboards({ revalidate: false });
       // A 403 names the gate that moved under us, and retrying the same call
       // can never clear it. Re-read exactly that gate so the surface settles on
@@ -541,11 +569,7 @@ export default function LeaderboardSection({
         setFailure({ kind: "policy", requestKey: selectedRequestKey });
         return;
       }
-      if (
-        code === "ACCOUNT_REQUIRED" ||
-        code === "AUTH_EXPIRED" ||
-        (loadError instanceof CloudApiError && loadError.status === 401)
-      ) {
+      if (isAccountRefusal(loadError)) {
         setLeaderboard(null);
         setLoadedRequestKey(null);
         setFailure({ kind: "auth", requestKey: selectedRequestKey });
@@ -686,8 +710,11 @@ export default function LeaderboardSection({
     setJoiningInvitation(true);
     try {
       await WorkspacesService.join(invitation.workspaceId);
-      await afterWorkspaceJoined();
-      await loadAccess(`workspace:${invitation.workspaceId}`);
+      // This card reloads access itself, so "Joining…" stays up until the new answer lands.
+      await afterWorkspaceJoined({ revalidateLeaderboards: false });
+      // The answer on screen still offers the invitation just accepted, so a failed
+      // read shows the access error rather than falling back to it.
+      await loadAccess(`workspace:${invitation.workspaceId}`, { dropKeptOnFailure: true });
       toast({
         title: t("insights.leaderboard.inviteAcceptedTitle"),
         description: t("insights.leaderboard.inviteAcceptedDescription", {
@@ -716,8 +743,8 @@ export default function LeaderboardSection({
           const created = useWorkspaceStore
             .getState()
             .workspaces.find((workspace) => workspace.id === workspaceId);
+          // Creating the workspace already started an access re-read.
           setInviteWorkspace({ id: workspaceId, name: created?.name ?? t("common.unknown") });
-          void loadAccess();
         }}
       />
       {inviteWorkspace && (
@@ -734,6 +761,14 @@ export default function LeaderboardSection({
           }}
         />
       )}
+    </>
+  );
+  // Every surface puts the dialogs in the same place, so one open across a surface
+  // change, such as the invite dialog a new workspace opens, stays mounted.
+  const withDialogs = (body: ReactNode): ReactElement => (
+    <>
+      {body}
+      {dialogs}
     </>
   );
 
@@ -757,9 +792,9 @@ export default function LeaderboardSection({
   const funnelCardClassName = funnelScopeSelect ? "mt-4" : "mt-6";
 
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
-  if (accessLoading && !access) return <LeaderboardSkeleton />;
+  if (accessLoading && !access) return withDialogs(<LeaderboardSkeleton />);
   if (accessError && (!access || accountOffline)) {
-    return (
+    return withDialogs(
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}
         actionLabel={accessError === "auth" ? t("auth.passwordForm.signInLink") : undefined}
@@ -778,7 +813,7 @@ export default function LeaderboardSection({
       />
     );
   }
-  if (!access) return null;
+  if (!access) return withDialogs(null);
 
   const surface = resolveLeaderboardSurface({
     access,
@@ -789,7 +824,7 @@ export default function LeaderboardSection({
   });
 
   if (surface === "request_join" && access.joinableWorkspace) {
-    return (
+    return withDialogs(
       <>
         {funnelScopeSelect}
         <LeaderboardRequestJoinPreview
@@ -804,7 +839,7 @@ export default function LeaderboardSection({
     );
   }
   if (surface === "accept_invite" && access.invitation) {
-    return (
+    return withDialogs(
       <>
         {funnelScopeSelect}
         <LeaderboardAcceptInvitePreview
@@ -818,7 +853,7 @@ export default function LeaderboardSection({
     );
   }
   if (!selectedScope) {
-    return (
+    return withDialogs(
       <>
         {funnelScopeSelect}
         <LeaderboardSetupCard
@@ -827,13 +862,12 @@ export default function LeaderboardSection({
           domain={access.domain}
           onCreate={() => setCreateWorkspaceOpen(true)}
         />
-        {dialogs}
       </>
     );
   }
 
   if (surface === "participation_error") {
-    return (
+    return withDialogs(
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}
         message={t("insights.leaderboard.activationError")}
@@ -841,9 +875,9 @@ export default function LeaderboardSection({
       />
     );
   }
-  if (surface === "participation_loading") return <LeaderboardSkeleton />;
+  if (surface === "participation_loading") return withDialogs(<LeaderboardSkeleton />);
   if (surface === "join") {
-    return (
+    return withDialogs(
       <LeaderboardJoinPreview
         canJoin={canJoin}
         error={participationError === "write"}
@@ -949,7 +983,7 @@ export default function LeaderboardSection({
   // and period picker a loaded board adds.
   const boardLoading = !visibleLeaderboard && !visibleFailure && !isSoloScope && cloudAccessAllowed;
 
-  return (
+  return withDialogs(
     <section
       data-leaderboard-state="board"
       className="mt-6 overflow-hidden rounded-2xl border border-border/70 bg-card/70 dark:border-white/10"
@@ -1360,7 +1394,6 @@ export default function LeaderboardSection({
           onOpenChange={setShareOpen}
         />
       )}
-      {dialogs}
     </section>
   );
 }

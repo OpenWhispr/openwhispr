@@ -416,7 +416,9 @@
           "modelNotFound": "Le modèle sélectionné n’est pas disponible auprès de ce fournisseur.",
           "providerStatus": "Le fournisseur a renvoyé le statut {{status}}.",
           "timeout": "Le test de connexion a expiré.",
-          "network": "Le fournisseur est injoignable."
+          "network": "Le fournisseur est injoignable.",
+          "invalidHeaders": "En-tête HTTP invalide. Vérifiez le nom et la valeur ; Content-Type et les en-têtes de transport ne peuvent pas être modifiés.",
+          "redirected": "Le serveur a redirigé la requête. Saisissez l’adresse vers laquelle il redirige."
         }
       },
       "local": {
@@ -3263,7 +3265,20 @@
     "selfHosted": {
       "endpointUrl": "URL du point d'accès",
       "serverUrl": "URL du serveur",
-      "apiKeyOptional": "Clé API (facultative)"
+      "apiKeyOptional": "Clé API (facultative)",
+      "headers": "En-têtes HTTP",
+      "headersHelp": "Envoyés avec chaque requête à ce serveur, par exemple une clé API demandée par une passerelle.",
+      "headerName": "Nom de l’en-tête",
+      "headerValue": "Valeur de l’en-tête",
+      "removeHeader": "Supprimer",
+      "addHeader": "Ajouter un en-tête",
+      "unauthorized": "Votre serveur a refusé la requête (401/403). Vérifiez les en-têtes ci-dessous ou les réglages d’authentification du serveur.",
+      "headerErrors": {
+        "missingName": "Saisissez un nom d’en-tête.",
+        "invalidName": "Un nom d’en-tête ne peut contenir ni espaces, ni deux-points, ni autres séparateurs.",
+        "reserved": "OpenWhispr définit lui-même cet en-tête.",
+        "invalidValue": "Cette valeur contient un caractère qu’un en-tête ne peut pas transmettre, comme un guillemet typographique."
+      }
     },
     "enterpriseCheckout": {
       "title": "Passer à Enterprise",
@@ -4252,6 +4267,117 @@
         "taskList": "Liste de tâches",
         "blockquote": "Citation",
         "table": "Insérer un tableau"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "De base",
+          "blocks": "Blocs",
+          "style": "Style",
+          "tools": "Outils"
+        },
+        "slash": {
+          "heading": "Titre {{level}}",
+          "bulletList": "Liste à puces",
+          "orderedList": "Liste numérotée",
+          "taskList": "Tâche à cocher",
+          "quote": "Citation",
+          "divider": "Séparateur",
+          "table": "Tableau",
+          "codeBlock": "Bloc de code",
+          "codeHint": "Coloration syntaxique",
+          "noteLink": "Lier une note",
+          "noteLinkHint": "ou tapez [[",
+          "toggle": "Bloc repliable",
+          "callout": "Encadré : {{type}}",
+          "toc": "Table des matières",
+          "mathBlock": "Bloc mathématique",
+          "inlineMath": "Formule en ligne",
+          "inlineMathHint": "ou tapez $$x^2$$",
+          "emoji": "Emoji",
+          "emojiHint": "ou tapez :smile:",
+          "highlight": "Surligner",
+          "subscript": "Indice",
+          "superscript": "Exposant",
+          "color": "Couleur du texte : {{name}}",
+          "font": "Police : {{name}}",
+          "ruby": "Annotation ruby",
+          "rubyHint": "Lecture au-dessus du texte",
+          "align": "Aligner : {{dir}}",
+          "find": "Rechercher et remplacer",
+          "invisible": "Afficher/masquer les caractères invisibles"
+        },
+        "callout": {
+          "note": "Remarque",
+          "tip": "Astuce",
+          "important": "Important",
+          "warning": "Avertissement",
+          "caution": "Attention"
+        },
+        "colors": {
+          "default": "Par défaut",
+          "red": "Rouge",
+          "orange": "Orange",
+          "yellow": "Jaune",
+          "green": "Vert",
+          "blue": "Bleu",
+          "purple": "Violet",
+          "gray": "Gris"
+        },
+        "fonts": {
+          "default": "Par défaut",
+          "serif": "Serif",
+          "monospace": "Chasse fixe"
+        },
+        "align": {
+          "left": "Gauche",
+          "center": "Centre",
+          "right": "Droite",
+          "justify": "Justifié"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, ex. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, ex. x^2",
+          "emoji": "Nom de l'emoji, ex. rocket",
+          "reading": "Lecture, ex. かんじ",
+          "textReading": "Texte|lecture, ex. 漢字|かんじ",
+          "apply": "Entrée pour appliquer · Échap pour annuler",
+          "mathEdit": "Entrée pour enregistrer · Échap pour annuler · vide supprime"
+        },
+        "toolbar": {
+          "highlight": "Surligner",
+          "subscript": "Indice",
+          "superscript": "Exposant",
+          "color": "Couleur du texte",
+          "font": "Police",
+          "alignment": "Alignement",
+          "ruby": "Texte ruby (lecture au-dessus des caractères)"
+        },
+        "find": {
+          "find": "Rechercher",
+          "replace": "Remplacer",
+          "all": "Tout",
+          "previous": "Précédent",
+          "next": "Suivant",
+          "matchCase": "Respecter la casse",
+          "close": "Fermer"
+        },
+        "count": "Mots : {{words}} · Caractères : {{chars}}",
+        "link": {
+          "header": "Lier une note",
+          "empty": "Tapez le titre d'une note…",
+          "create": "Lier à « {{title}} » (pas encore de note)",
+          "open": "Ouvrir « {{title}} »",
+          "missing": "Aucune note intitulée « {{title}} »"
+        },
+        "backlinks": {
+          "label": "Liée depuis",
+          "more": "+{{count}} de plus",
+          "untitled": "Sans titre"
+        },
+        "toc": {
+          "title": "Sommaire",
+          "empty": "Ajoutez des titres pour créer la table des matières."
+        }
       }
     },
     "participants": {
@@ -6320,7 +6446,9 @@
       "timeout": "Votre serveur a pris trop de temps à répondre.",
       "unreachable": "Impossible de contacter votre serveur. Vérifiez qu’il est en cours d’exécution.",
       "noResponse": "Aucune réponse de votre serveur. Vérifiez sa clé API et qu’il est en cours d’exécution.",
-      "unknown": "Votre serveur a renvoyé une erreur inattendue."
+      "unknown": "Votre serveur a renvoyé une erreur inattendue.",
+      "invalidHeaders": "Un en-tête personnalisé de votre serveur n’est pas valide.",
+      "redirected": "Votre serveur a redirigé la requête. Saisissez l’adresse vers laquelle il redirige."
     },
     "openSettings": "Ouvrir les réglages",
     "copyDetails": "Copier les détails",

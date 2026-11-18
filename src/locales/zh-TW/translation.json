@@ -416,7 +416,9 @@
           "modelNotFound": "所選模型無法從此服務商取得。",
           "providerStatus": "服務商回傳了狀態碼 {{status}}。",
           "timeout": "連線測試逾時。",
-          "network": "無法連上服務商。"
+          "network": "無法連上服務商。",
+          "invalidHeaders": "HTTP 標頭無效。請檢查名稱和值；無法自訂 Content-Type 和傳輸標頭。",
+          "redirected": "伺服器重新導向了請求。請輸入它重新導向的位址。"
         }
       },
       "local": {
@@ -2503,7 +2505,20 @@
     "selfHosted": {
       "endpointUrl": "端點 URL",
       "serverUrl": "伺服器 URL",
-      "apiKeyOptional": "API Key（選填）"
+      "apiKeyOptional": "API Key（選填）",
+      "headers": "HTTP 標頭",
+      "headersHelp": "隨每個傳送到此伺服器的請求一起送出，例如閘道要求的 API 金鑰。",
+      "headerName": "標頭名稱",
+      "headerValue": "標頭值",
+      "removeHeader": "刪除",
+      "addHeader": "新增標頭",
+      "unauthorized": "你的伺服器拒絕了請求（401/403）。請檢查下方的標頭或伺服器的驗證設定。",
+      "headerErrors": {
+        "missingName": "請輸入標頭名稱。",
+        "invalidName": "標頭名稱不能包含空格、冒號或其他分隔符號。",
+        "reserved": "OpenWhispr 會自行設定此標頭。",
+        "invalidValue": "此值包含標頭無法攜帶的字元，例如彎引號。"
+      }
     },
     "workspace": {
       "title": "工作區",
@@ -3687,6 +3702,117 @@
         "taskList": "核取清單",
         "blockquote": "引用",
         "table": "插入表格"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "基本",
+          "blocks": "區塊",
+          "style": "樣式",
+          "tools": "工具"
+        },
+        "slash": {
+          "heading": "標題 {{level}}",
+          "bulletList": "項目符號清單",
+          "orderedList": "編號清單",
+          "taskList": "核取方塊任務",
+          "quote": "引言",
+          "divider": "分隔線",
+          "table": "表格",
+          "codeBlock": "程式碼區塊",
+          "codeHint": "語法著色",
+          "noteLink": "連結筆記",
+          "noteLinkHint": "或輸入 [[",
+          "toggle": "摺疊區塊",
+          "callout": "標註：{{type}}",
+          "toc": "目錄",
+          "mathBlock": "數學公式區塊",
+          "inlineMath": "行內公式",
+          "inlineMathHint": "或輸入 $$x^2$$",
+          "emoji": "表情符號",
+          "emojiHint": "或輸入 :smile:",
+          "highlight": "醒目提示",
+          "subscript": "下標",
+          "superscript": "上標",
+          "color": "文字顏色：{{name}}",
+          "font": "字型：{{name}}",
+          "ruby": "注音",
+          "rubyHint": "在文字上方顯示讀音",
+          "align": "對齊：{{dir}}",
+          "find": "尋找與取代",
+          "invisible": "顯示/隱藏不可見字元"
+        },
+        "callout": {
+          "note": "注意",
+          "tip": "提示",
+          "important": "重要",
+          "warning": "警告",
+          "caution": "小心"
+        },
+        "colors": {
+          "default": "預設",
+          "red": "紅色",
+          "orange": "橘色",
+          "yellow": "黃色",
+          "green": "綠色",
+          "blue": "藍色",
+          "purple": "紫色",
+          "gray": "灰色"
+        },
+        "fonts": {
+          "default": "預設",
+          "serif": "襯線",
+          "monospace": "等寬"
+        },
+        "align": {
+          "left": "靠左",
+          "center": "置中",
+          "right": "靠右",
+          "justify": "左右對齊"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX，例如 \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX，例如 x^2",
+          "emoji": "表情符號名稱，例如 rocket",
+          "reading": "讀音，例如 かんじ",
+          "textReading": "文字|讀音，例如 漢字|かんじ",
+          "apply": "Enter 套用 · Esc 取消",
+          "mathEdit": "Enter 儲存 · Esc 取消 · 留空則刪除"
+        },
+        "toolbar": {
+          "highlight": "醒目提示",
+          "subscript": "下標",
+          "superscript": "上標",
+          "color": "文字顏色",
+          "font": "字型",
+          "alignment": "對齊",
+          "ruby": "注音（在文字上方顯示讀音）"
+        },
+        "find": {
+          "find": "尋找",
+          "replace": "取代",
+          "all": "全部",
+          "previous": "上一個",
+          "next": "下一個",
+          "matchCase": "區分大小寫",
+          "close": "關閉"
+        },
+        "count": "字詞：{{words}} · 字元：{{chars}}",
+        "link": {
+          "header": "連結筆記",
+          "empty": "輸入筆記標題…",
+          "create": "連結到「{{title}}」（尚無此筆記）",
+          "open": "開啟「{{title}}」",
+          "missing": "沒有標題為「{{title}}」的筆記"
+        },
+        "backlinks": {
+          "label": "被以下筆記連結",
+          "more": "另外 {{count}} 則",
+          "untitled": "無標題"
+        },
+        "toc": {
+          "title": "目錄",
+          "empty": "新增標題以產生目錄。"
+        }
       }
     },
     "participants": {
@@ -6293,7 +6419,9 @@
       "timeout": "你的伺服器回應逾時。",
       "unreachable": "無法連線到你的伺服器。請確認它正在執行。",
       "noResponse": "未能收到你的伺服器的回應。請檢查它的 API 金鑰，並確認它正在執行。",
-      "unknown": "你的伺服器回傳了意外的錯誤。"
+      "unknown": "你的伺服器回傳了意外的錯誤。",
+      "invalidHeaders": "你的伺服器的某個自訂標頭無效。",
+      "redirected": "你的伺服器重新導向了請求。請輸入它重新導向的位址。"
     },
     "openSettings": "開啟設定",
     "copyDetails": "複製詳細資訊",

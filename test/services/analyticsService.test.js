@@ -1236,3 +1236,52 @@ test("a capable API can permanently retire invalid version-zero history", async 
   assert.equal(await syncPendingAnalytics(), 1);
   assert.equal(retired.has(event.event_id), true);
 });
+
+for (const { name, clear, deletes, pending } of [
+  { name: "nothing is owed", clear: null, deletes: [], pending: false },
+  {
+    name: "an account clear is owed",
+    clear: { cleared_through: "2026-11-17T10:00:00.000Z" },
+    deletes: [],
+    pending: true,
+  },
+  {
+    name: "a delete is owed",
+    clear: null,
+    deletes: [{ event_id: "deleted-event" }],
+    pending: true,
+  },
+]) {
+  test(`pending erasures report ${pending} when ${name}`, async (t) => {
+    const calls = [];
+    installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          getPendingAnalyticsClear: async (context) => {
+            calls.push(["clear", context]);
+            return clear;
+          },
+          getPendingAnalyticsDeletes: async (limit, context) => {
+            calls.push(["deletes", limit, context]);
+            return deletes;
+          },
+        },
+      },
+    });
+    const vite = await createRendererServer(t);
+    const { hasPendingAnalyticsErasures } = await vite.ssrLoadModule(
+      "/services/AnalyticsService.ts"
+    );
+
+    const context = { accountId: "acct-1", authGeneration: 7 };
+    assert.equal(await hasPendingAnalyticsErasures(context), pending);
+    assert.deepEqual(
+      calls,
+      [
+        ["clear", context],
+        ["deletes", 1, context],
+      ],
+      "both reads are pinned to the account, and one row answers the question"
+    );
+  });
+}
