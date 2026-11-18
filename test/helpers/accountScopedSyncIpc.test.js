@@ -1417,6 +1417,7 @@ test("relocate-private-space checks its arguments and the account it was sent fo
   await invoke("bind-default-private-space", "w1", "account-a");
   const home = db.getDefaultPrivateSpaceId();
   const note = db.saveNote("In w2", "").note;
+  const homeFolderIds = db.getFolders(home).map((folder) => folder.id);
   const w2 = note.space_id;
   assert.notEqual(w2, home);
 
@@ -1432,9 +1433,14 @@ test("relocate-private-space checks its arguments and the account it was sent fo
   assert.deepEqual(await invoke("relocate-private-space", "w2", null, "account-a"), {
     success: true,
     notes: 1,
-    folders: 2,
+    folders: 0,
   });
   assert.equal(db.getNote(note.id).space_id, home);
+  assert.deepEqual(
+    db.getFolders(home).map((folder) => folder.id),
+    homeFolderIds,
+    "the moved defaults fold into the account's already seeded defaults"
+  );
   assert.ok(
     broadcasts.some(([channel, space]) => channel === "space-synced" && space.id === home),
     "relocation announces final private scope"

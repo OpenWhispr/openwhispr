@@ -103,6 +103,9 @@ test("transcribes audible mono 16 kHz WAV input", async (t) => {
 
     let receivedSamples;
     const manager = new ParakeetServerManager();
+    // Keep the fixture model out of getCacheRoot(), which would migrate it into a
+    // host-redirected cache root (#3244).
+    manager.getModelsDir = () => path.dirname(modelDir);
     Object.assign(manager.wsServer, {
       start: async () => {},
       transcribe: async (samples) => {

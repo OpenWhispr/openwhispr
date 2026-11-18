@@ -9,6 +9,7 @@ const CHECK_FIELDS = [
   "scope",
   "provider",
   "apiKey",
+  "headers",
   "baseUrl",
   "model",
   "clientId",

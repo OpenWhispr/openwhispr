@@ -28,6 +28,10 @@
 //                      that differs is refused (a batch create drops the folder);
 //                      an explicit null is the account's defaultWorkspaceId
 
+// `userId` models one account's note ownership and separates its cloud ids.
+// `adoptDefaultFolders` models the server returning an existing personal
+// default when another device creates the same name in the same workspace.
+
 // The server compares timestamps itself; it must not borrow the client's guard,
 // or a client-side regression would be invisible here.
 function normalizeTimestamp(value) {
@@ -127,6 +131,8 @@ function createFakeCloud(config = {}) {
     coalesceOnConflict: true,
     staleWriteGuard: true,
     updatedAtClamp: true,
+    userId: null,
+    adoptDefaultFolders: false,
     revisionGuard: false,
     serverDate: false,
     ...config,
@@ -145,11 +151,12 @@ function createFakeCloud(config = {}) {
   let clock = () => new Date().toISOString();
   // Where a note or folder no write scoped lands, and whose it is.
   let homeSpace = null;
-  let ownerId = null;
+  let ownerId = cfg.userId;
 
   // Real cloud ids are UUIDs; `idSpace` keeps two fake accounts' ids apart too
   // (see createAccountCloud).
-  const nextId = (prefix) => `${cfg.idSpace ?? ""}${prefix}-${String(++seq).padStart(4, "0")}`;
+  const idPrefix = cfg.idSpace ?? (cfg.userId ? `${cfg.userId}-` : "");
+  const nextId = (prefix) => `${idPrefix}${prefix}-${String(++seq).padStart(4, "0")}`;
 
   // The server stores timestamps and serves them back as ISO, whatever format
   // the client sent. Local rows carry SQLite's "YYYY-MM-DD HH:MM:SS", so echoing
@@ -264,6 +271,22 @@ function createFakeCloud(config = {}) {
     }
     if (dropFolder) return { ...input, folder_id: null };
     throw new HttpError(400, "Folder not found");
+  }
+
+  function createFolder(input) {
+    if (cfg.adoptDefaultFolders && input.is_default && !input.space_id) {
+      for (const row of folders.values()) {
+        if (
+          row.is_default &&
+          !row.space_id &&
+          !row.deleted_at &&
+          row.name === input.name &&
+          sameValue(row.private_workspace_id, input.private_workspace_id)
+        )
+          return row;
+      }
+    }
+    return upsertRow(folderCollection, input);
   }
 
   function findByClientId(collection, clientId) {
@@ -499,6 +522,15 @@ function createFakeCloud(config = {}) {
   }
 
   function handle(method, pathname, query, body) {
+    if (method === "GET" && pathname.startsWith("/api/notes/") && pathname.endsWith("/access")) {
+      const cloudId = decodeURIComponent(pathname.slice("/api/notes/".length, -"/access".length));
+      const note = requireLive(noteCollection, cloudId);
+      return {
+        my_permission: "owner",
+        owner: { id: note.user_id ?? ownerId },
+        grants: note.space_id ? [{ source: "space" }] : [],
+      };
+    }
     // Only a cloud configured with `workspaces` lists them, as /api/workspaces and
     // /api/workspaces/:id do (a 404 for a workspace the account isn't in).
     if (method === "GET" && cfg.workspaces && pathname.startsWith("/api/workspaces")) {
@@ -545,9 +577,15 @@ function createFakeCloud(config = {}) {
         const created = [];
         for (const input of inputs) {
           const existing = findByClientId(noteCollection, input.client_note_id);
+          const folder = folders.get(input.folder_id);
+          const folderInScope = !input.folder_id || (folder && !folder.deleted_at);
           const row = upsertRow(
             noteCollection,
-            placeInFolder(input, existing, { dropFolder: true })
+            placeInFolder(
+              cfg.userId && !folderInScope ? { ...input, folder_id: null } : input,
+              existing,
+              { dropFolder: true }
+            )
           );
           created.push({ ...row, row_created: !existing, write_applied: !existing?.deleted_at });
         }
@@ -588,13 +626,13 @@ function createFakeCloud(config = {}) {
         return { notes: [] };
 
       case "POST /api/folders/create": {
-        return upsertRow(folderCollection, body ?? {});
+        return createFolder(body ?? {});
       }
       case "POST /api/folders/batch-create": {
         const inputs = Array.isArray(body?.folders) ? body.folders : [];
         const created = [];
         for (const input of inputs) {
-          created.push(upsertRow(folderCollection, input));
+          created.push(createFolder(input));
         }
         return { created };
       }

@@ -144,6 +144,7 @@ export interface DictationRealtimeSessionOptions {
   baseUrl?: string;
   model?: string;
   mode?: "byok" | "openwhispr";
+  transcriptionMode?: string;
   language?: string;
   sampleRate?: number;
   keyterms?: string[];
@@ -721,6 +722,9 @@ export interface FolderItem {
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  // The local account that owns a private folder; NULL for team folders and
+  // device-owned ones not yet bound to an account's cloud.
+  account_id?: string | null;
   // 1 while a cloud-backed row that left a team space still owes its scope
   // retraction push (D6); cleared when the row settles.
   left_team?: number;
@@ -1808,6 +1812,7 @@ declare global {
         scope: "transcription" | "reasoning";
         provider: string;
         apiKey?: string;
+        headers?: { name: string; value: string }[];
         baseUrl?: string;
         model?: string;
         clientId?: string;
@@ -2984,6 +2989,8 @@ declare global {
       saveAssemblyAIKey?: (key: string) => Promise<void>;
 
       // Custom endpoint API keys
+      getSelfHostedSttHeaders?: () => Promise<string | null>;
+      saveSelfHostedSttHeaders?: (value: string) => Promise<void>;
       getCustomTranscriptionKey?: () => Promise<string | null>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;
       getCleanupCustomKey?: () => Promise<string | null>;
@@ -4409,6 +4416,10 @@ declare global {
         expectedCloudId: string,
         expectedAuthGeneration?: number
       ) => Promise<FolderAckResult | StaleSyncWrite>;
+      ensureAccountDefaultFolders?: (
+        foreignCloudIds: string[],
+        expectedScope: ActiveAccountScope
+      ) => Promise<void>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       restoreFolderAfterDeniedDelete?: (id: number) => Promise<{

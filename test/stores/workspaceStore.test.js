@@ -412,7 +412,7 @@ test("the default workspace is listed first and chosen when nothing is saved", a
 });
 
 test("ensureDefaultWorkspace posts the localized name once and refreshes", async (t) => {
-  const { useWorkspaceStore, ensureDefaultWorkspace } = await loadPrivateNotesStore(t, {
+  const { useWorkspaceStore, ensureDefaultWorkspace, vite } = await loadPrivateNotesStore(t, {
     list: async () => [TEAM],
     ensureDefault: async () => {
       globalThis.__ws.list = async () => [TEAM, OWN];
@@ -429,6 +429,8 @@ test("ensureDefaultWorkspace posts the localized name once and refreshes", async
   const t9n = i18n.t.bind(i18n);
   await useWorkspaceStore.getState().refresh();
   assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, null);
+  const cache = await vite.ssrLoadModule("/lib/insightsCache.ts");
+  cache.cacheLeaderboardAccess("acct-1", { scopes: [] });
 
   await Promise.all([
     ensureDefaultWorkspace(defaultWorkspaceName("Ada", t9n)),
@@ -440,6 +442,7 @@ test("ensureDefaultWorkspace posts the localized name once and refreshes", async
   assert.equal(globalThis.__ws.listCalls, 2);
   assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "own");
   assert.equal(useWorkspaceStore.getState().workspaces[0].id, "own");
+  assert.equal(cache.readCachedLeaderboardAccess("acct-1"), null, "a new default is a new board");
 
   // Each account session asks once.
   useWorkspaceStore.getState().resetForAccountChange();
@@ -560,7 +563,7 @@ test("a list cached for another account relocates nothing", async (t) => {
 });
 
 test("a successful list missing a workspace relocates its Private to the default", async (t) => {
-  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+  const { useWorkspaceStore, calls, vite } = await loadPrivateNotesStore(t, {
     list: async () => [TEAM, OWN],
     storage: {
       activeWorkspaceId: "lost",
@@ -572,6 +575,8 @@ test("a successful list missing a workspace relocates its Private to the default
       }),
     },
   });
+  const cache = await vite.ssrLoadModule("/lib/insightsCache.ts");
+  cache.cacheLeaderboardAccess("acct-1", { scopes: [] });
 
   await useWorkspaceStore.getState().refresh();
 
@@ -586,6 +591,7 @@ test("a successful list missing a workspace relocates its Private to the default
     { activeWorkspaceId: "own", defaultWorkspaceId: "own", accountId: "acct-1" },
   ]);
   assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "own");
+  assert.equal(cache.readCachedLeaderboardAccess("acct-1"), null, "the lost board is dropped");
 });
 
 for (const [windowName, search] of [
@@ -1568,4 +1574,38 @@ test("opening work adopts a sourceless choice even before its first list", async
   await useWorkspaceStore.getState().refresh();
   assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
   assert.equal(storage.getItem(SOURCE_KEY), "user");
+});
+
+test("creating a workspace drops the kept leaderboards and tells mounted views", async (t) => {
+  installBrowserGlobals(t, { window: { location: CONTROL_PANEL_LOCATION } });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-workspace-store-create-",
+    mockModules: {
+      "/services/WorkspacesService": `
+        export const WorkspacesService = {
+          list: async () => [],
+          create: async (name) => ({ id: "created", name, plan: "free", status: "active" }),
+        };
+      `,
+      "/policyStore": `
+        export const usePolicyStore = {
+          getState: () => ({ accountId: null, authGeneration: null }),
+        };
+      `,
+      "/enterpriseIdentityStore": `
+        export const useEnterpriseIdentityStore = { getState: () => ({ clear() {} }) };
+      `,
+    },
+  });
+  const { useWorkspaceStore } = await vite.ssrLoadModule("/stores/workspaceStore.ts");
+  const cache = await vite.ssrLoadModule("/lib/insightsCache.ts");
+  cache.cacheLeaderboardAccess("acct-1", { scopes: [] });
+  const invalidations = [];
+  t.after(cache.subscribeToInsightsCacheInvalidation((scope) => invalidations.push(scope)));
+
+  await useWorkspaceStore.getState().createWorkspace("Acme");
+
+  assert.equal(cache.readCachedLeaderboardAccess("acct-1"), null, "a new workspace is a new board");
+  // The leaderboard's create flow relies on this to re-read access.
+  assert.deepEqual(invalidations, ["leaderboards"]);
 });

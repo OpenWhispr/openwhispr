@@ -383,6 +383,44 @@ test("a meeting request records under automatic policy, and under manual only fr
   assert.deepEqual(calls.startSources, ["calendar-join", "hotkey"]);
 });
 
+test("a resumed meeting waits for its saved transcript before starting capture", async (t) => {
+  const { show, openNote, calls, setStartMode, store, say } = await setup(t);
+  const savedNote = { ...globalThis.__notes[11], transcript: "Saved before resuming." };
+  delete globalThis.__notes[11];
+  await setStartMode("automatic");
+  const handled = [];
+  await show("personal-notes", {
+    meetingRecordingRequest: {
+      noteId: 11,
+      folderId: null,
+      event: null,
+      trigger: "calendar-join",
+    },
+    onMeetingRecordingRequestHandled: () => handled.push(true),
+  });
+  assert.equal(calls.start, 0, "capture cannot start from an unloaded note");
+  assert.deepEqual(
+    handled,
+    [],
+    "the request waits for the note instead of consuming an empty seed"
+  );
+
+  globalThis.__notes[11] = savedNote;
+  await openNote(11);
+
+  assert.equal(calls.start, 1);
+  assert.deepEqual(handled, [true]);
+  assert.equal(
+    store.useMeetingRecordingStore.getState().segments[0].text,
+    "Saved before resuming."
+  );
+  await say("Words after resuming.");
+  await React.act(async () => store.stopRecording());
+  const finalWrite = calls.updateNote.filter(([, updates]) => updates.transcript).at(-1);
+  assert.match(finalWrite[1].transcript, /Saved before resuming\./);
+  assert.match(finalWrite[1].transcript, /Words after resuming\./);
+});
+
 test("a pending automatic start is consumed before a notes-view remount and cannot replay after suppression", async (t) => {
   const access = Promise.withResolvers();
   const nativeAccess = { granted: true, status: "granted", mode: "native", strategy: "native" };

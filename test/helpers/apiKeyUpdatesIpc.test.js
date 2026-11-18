@@ -1574,6 +1574,7 @@ test("a sign-out or account switch during a meeting prepare leaves no warm conne
         setActiveAccountId() {},
         claimSignedOutLocalRows() {},
         claimLegacyRowsOfOnlyAccount() {},
+        ensureAccountDefaultFolders() {},
       };
       await handlers.get("set-active-account-scope")({}, "another-account", authGeneration);
       delete target.databaseManager;

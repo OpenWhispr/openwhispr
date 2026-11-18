@@ -13,6 +13,10 @@ const originalLoad = Module._load;
 const handlers = new Map();
 const fetches = [];
 let tinfoilBehavior = async () => ({ text: "tinfoil text", model: "tinfoil-model" });
+let selfHostedHeaders = JSON.stringify({
+  dictation: [{ name: "X-API-Key", value: "dictation-key" }],
+  upload: [{ name: "X-API-Key", value: "upload-key" }],
+});
 let policySnapshot = { success: true, managed: false };
 // A lookup that doesn't answer until the test lets it.
 let policyLookupGate = null;
@@ -272,6 +276,7 @@ function buildFakeThis() {
       getTinfoilKey: () => "tk-tinfoil",
       getOpenrouterKey: () => "ork-openrouter",
       getCustomTranscriptionKey: () => "ck-custom",
+      getSelfHostedSttHeaders: () => selfHostedHeaders,
       getCortiClientId: () => "corti-id",
       getCortiClientSecret: () => "corti-secret",
     },
@@ -2125,5 +2130,129 @@ test("shared local file decoding aborts both native decoders when local inferenc
     const result = await fakeThis.transcribeLocalFile(__filename, { provider });
     assert.equal(result.code, "DEVICE_POLICY_BLOCKED", provider);
     assert.equal(fakeThis._productRequests.size, 0);
+  }
+});
+
+const selfHostedRetry = {
+  transcriptionMode: "self-hosted",
+  remoteTranscriptionUrl: "http://127.0.0.1:8178/v1",
+  remoteTranscriptionModel: "orukeet-v0.1.0",
+  cloudTranscriptionProvider: "custom",
+};
+const selfHostedUpload = {
+  ...selfHostedRetry,
+  provider: "custom",
+  apiKey: "",
+  baseUrl: "",
+  model: "",
+  language: "",
+};
+
+async function withSelfHostedHeaders(value, run) {
+  const previous = selfHostedHeaders;
+  selfHostedHeaders = value;
+  try {
+    await run();
+  } finally {
+    selfHostedHeaders = previous;
+  }
+}
+
+test("self-hosted retry sends dictation's headers and keeps Orukeet authentication", async () => {
+  fetches.length = 0;
+  assert.equal((await invoke(selfHostedRetry)).success, true);
+  assert.equal(fetches[0].init.redirect, "error");
+  assert.equal(fetches[0].init.headers["x-api-key"], "dictation-key");
+  assert.equal(fetches[0].init.headers.authorization, "Bearer ck-custom");
+  fetches.length = 0;
+  assert.equal(
+    (await invoke({ cloudTranscriptionMode: "byok", cloudTranscriptionProvider: "openai" }))
+      .success,
+    true
+  );
+  assert.equal(new Headers(fetches[0].init.headers).get("x-api-key"), null);
+});
+
+test("a self-hosted upload sends the Upload tab's headers, a voice draft dictation's", async () => {
+  fetches.length = 0;
+  assert.equal((await invokeUpload(selfHostedUpload)).success, true);
+  assert.equal(fetches[0].init.redirect, "error");
+  assert.equal(fetches[0].init.headers["x-api-key"], "upload-key");
+  assert.equal(fetches[0].init.headers.authorization, "Bearer ck-custom");
+  assert.match(fetches[0].init.headers["Content-Type"], /^multipart\/form-data; boundary=/);
+
+  // A renderer's word alone does not make a file a voice draft.
+  fetches.length = 0;
+  assert.equal((await invokeUpload({ ...selfHostedUpload, purpose: "dictation" })).success, true);
+  assert.equal(fetches[0].init.headers["x-api-key"], "upload-key");
+
+  const draft = await handlers.get("save-temp-audio")({}, Buffer.from([1, 2, 3, 4]));
+  try {
+    fetches.length = 0;
+    const result = await handlers.get("transcribe-audio-file-byok")(
+      { sender: { send: () => {} } },
+      { ...selfHostedUpload, filePath: draft.path, purpose: "dictation" }
+    );
+    assert.equal(result.success, true);
+    assert.equal(fetches[0].init.headers["x-api-key"], "dictation-key");
+  } finally {
+    await handlers.get("delete-temp-audio")({}, draft.path);
+  }
+});
+
+test("self-hosted retry and upload without effective custom headers keep redirect follow", async () => {
+  await withSelfHostedHeaders(
+    JSON.stringify({ dictation: [{ name: "", value: "" }], upload: [{ name: " ", value: "" }] }),
+    async () => {
+      const settings = { ...selfHostedRetry, remoteTranscriptionModel: "whisper-1" };
+      fetches.length = 0;
+      assert.equal((await invoke(settings)).success, true);
+      assert.equal(fetches[0].init.redirect, "follow");
+      assert.equal(new Headers(fetches[0].init.headers).has("authorization"), false);
+      fetches.length = 0;
+      assert.equal(
+        (await invokeUpload({ ...selfHostedUpload, remoteTranscriptionModel: "whisper-1" }))
+          .success,
+        true
+      );
+      assert.equal(fetches[0].init.redirect, "follow");
+    }
+  );
+});
+
+test("an invalid stored header fails retry and upload with a Settings link and sends nothing", async () => {
+  await withSelfHostedHeaders(
+    JSON.stringify({
+      dictation: [{ name: "Content-Type", value: "text/plain" }],
+      upload: [{ name: "X-Key", value: "“curly”" }],
+    }),
+    async () => {
+      fetches.length = 0;
+      for (const result of [await invoke(selfHostedRetry), await invokeUpload(selfHostedUpload)]) {
+        assert.equal(result.success, false);
+        assert.equal(result.code, "PROVIDER_INVALID_HEADERS");
+        assert.equal(result.messageKey, "providerErrors.selfHosted.invalidHeaders");
+        assert.equal(result.settingsTarget, "speechToText");
+      }
+      assert.equal(fetches.length, 0);
+    }
+  );
+});
+
+test("a redirect refused for custom headers is named on retry and upload", async () => {
+  const originalFetchResponse = fetchResponse;
+  fetchResponse = () => {
+    // Electron's net.fetch under redirect: "error".
+    throw new Error("Attempted to redirect, but redirect policy was 'error'");
+  };
+  try {
+    for (const result of [await invoke(selfHostedRetry), await invokeUpload(selfHostedUpload)]) {
+      assert.equal(result.success, false);
+      assert.equal(result.code, "PROVIDER_REDIRECTED");
+      assert.equal(result.messageKey, "providerErrors.selfHosted.redirected");
+      assert.equal(result.settingsTarget, "speechToText");
+    }
+  } finally {
+    fetchResponse = originalFetchResponse;
   }
 });
