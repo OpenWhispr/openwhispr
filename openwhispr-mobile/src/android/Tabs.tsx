@@ -100,17 +100,19 @@ export function AndroidTabBar({ state, descriptors, navigation }: BottomTabBarPr
               gap: 4,
             }}
           >
-            <View
-              testID={selected ? 'tab-pill' : undefined}
-              style={{
-                width: 56,
-                height: 32,
-                borderRadius: 16,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: selected ? tabColors.pill : 'transparent',
-              }}
-            >
+            <View style={{ width: 56, height: 32, alignItems: 'center', justifyContent: 'center' }}>
+              {/* Mounted rather than recoloured: Android drops the rounding when a view's
+                  background changes from transparent to a colour. */}
+              {selected && (
+                <View
+                  testID="tab-pill"
+                  style={{
+                    ...StyleSheet.absoluteFillObject,
+                    borderRadius: 16,
+                    backgroundColor: tabColors.pill,
+                  }}
+                />
+              )}
               <SystemIcon
                 name={icon.sf}
                 mdName={icon.md}
