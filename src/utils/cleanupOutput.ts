@@ -12,7 +12,7 @@ const MAX_UNSPOKEN_WORDS = 2;
 const MAX_UNSPOKEN_LONG_WORDS = 1;
 const LONG_WORD_LENGTH = 4;
 
-export interface CleanupInstructions {
+interface CleanupInstructions {
   prompt: string;
   dictionary: string[];
 }
