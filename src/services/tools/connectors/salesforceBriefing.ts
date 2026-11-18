@@ -212,6 +212,15 @@ function notePassages(
       const section = headings.map((heading) => heading.title).join(" / ") || label;
       if (!addPassage(passages, sourceId, section, passageText)) truncated = true;
     };
+    // A bold or "Label:" line with nothing under it is the note's own statement.
+    let emptyLabel = "";
+    const flushEmptyLabel = (): void => {
+      if (!emptyLabel) return;
+      headings.pop();
+      paragraph = [emptyLabel];
+      emptyLabel = "";
+      flush();
+    };
     // Heading ancestry and wrapped bullet lines carry conditions that must travel with the claim.
     for (const line of bounded.split(/\r?\n/)) {
       const clean = line.trim();
@@ -222,16 +231,22 @@ function notePassages(
       const heading = /^(?:(#{1,6})\s+(.+)|\*\*(.+?)\*\*:?|([^:]{1,90}):)$/.exec(clean);
       if (heading) {
         flush();
+        flushEmptyLabel();
         const level = heading[1]?.length ?? LABEL_LEVEL;
         while (headings.length && headings[headings.length - 1].level >= level) headings.pop();
         headings.push({ level, title: (heading[2] ?? heading[3] ?? heading[4]).replace(/:$/, "") });
+        emptyLabel = level === LABEL_LEVEL ? clean : "";
       } else {
         if (/^[-*+]\s|^\d+[.)]\s/.test(clean)) flush();
         paragraph.push(clean);
+        emptyLabel = "";
       }
     }
     // A cut paragraph may hide the condition that follows it. Do not publish that fragment.
-    if (bounded.length === original.length) flush();
+    if (bounded.length === original.length) {
+      flush();
+      flushEmptyLabel();
+    }
   }
   return { passages, truncated, used };
 }

@@ -36,8 +36,6 @@ const when = (value) =>
 const source = (noteId) => ({
   kind: "note",
   noteId,
-  title: "Discovery",
-  context: "linked",
   activityUrl,
 });
 const context = (messageId = "briefing", controller = new AbortController()) => ({
@@ -508,6 +506,29 @@ test("a bold or labelled line keeps the heading above it, so proposed terms stay
   assert.doesNotMatch(result.renderedAnswer.content, /Confirmed:\*\* 8 reps/);
 });
 
+test("a bold or labelled line with nothing under it reaches the briefing as a passage", async (t) => {
+  const registry = await setup(t, {
+    notes: [
+      note(7, "**We agreed to sign by Friday**"),
+      note(8, "## Proposed pilot\n**Eight reps for two weeks**\n**Terms:**\nPaid monthly."),
+    ],
+    items: [facts, source(7), source(8)],
+  });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const [alone, pilot] = fetched.data.sources;
+  assert.deepEqual(
+    alone.passages.map((passage) => passage.text),
+    ["**We agreed to sign by Friday**"]
+  );
+  const [empty, terms] = pilot.passages;
+  assert.equal(empty.text, "**Eight reps for two weeks**");
+  assert.equal(empty.section, "Proposed pilot");
+  assert.equal(empty.proposed, true);
+  assert.equal(terms.text, "Paid monthly.");
+  assert.equal(terms.section, "Proposed pilot / Terms");
+  assert.doesNotMatch(fetched.renderedAnswer.content, /CRM-only/);
+});
+
 test("the transcript is read past its first page, whole speaker lines grouped into passages", async (t) => {
   const lines = Array.from({ length: 40 }, (_, index) => `Dana: Point ${index + 1} was covered.`);
   lines.push("Lee: We sign by Friday if legal approves.");
@@ -609,7 +630,7 @@ test("notes the user chose for a briefing are passed on, read first and marked a
   const queries = [];
   const registry = await setup(t, {
     queries,
-    items: [facts, source(7), { kind: "note", noteId: 8, context: "explicit" }],
+    items: [facts, source(7), { kind: "note", noteId: 8 }],
     notes: [note(7, "Linked decision."), note(8, "Chosen decision.")],
   });
   const fetched = await registry

@@ -263,15 +263,14 @@ function withSourceNoteInScope(
   tool: ToolDefinition,
   readNote?: ToolDefinition["execute"]
 ): ToolDefinition {
-  if (!readNote) return tool;
   return {
     ...tool,
     async execute(args: Record<string, unknown>, context?: ToolExecutionContext) {
       if (Number.isSafeInteger(args.noteId) && (args.noteId as number) > 0) {
-        const note = await readNote({ id: args.noteId }, context);
+        const note = await readNote?.({ id: args.noteId }, context);
         // A cancelled read says nothing about the note.
-        if (context?.signal.aborted) return note;
-        if (!note.success)
+        if (note && context?.signal.aborted) return note;
+        if (!note?.success)
           return failedResult(
             "source_unavailable",
             "That note couldn't be read here: it may be in another workspace, deleted, or briefly unavailable. Ask the user which saved note to use.",

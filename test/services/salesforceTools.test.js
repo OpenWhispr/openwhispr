@@ -67,7 +67,12 @@ test("invalid destinations, note IDs and field mutations never reach main", asyn
   });
   const { salesforceToolModule } = await load();
   const tools = Object.fromEntries(
-    salesforceToolModule.createTools({ emailDraftTarget: "auto" }).map((tool) => [tool.name, tool])
+    salesforceToolModule
+      .createTools({
+        emailDraftTarget: "auto",
+        readNote: async () => ({ success: true, data: {}, displayText: "Retrieved" }),
+      })
+      .map((tool) => [tool.name, tool])
   );
   for (const [action, args] of [
     ["search_records", { query: "x".repeat(201) }],
@@ -116,11 +121,8 @@ test("briefing queries retain the untrusted boundary and expose no write or note
               {
                 kind: "note",
                 noteId: 7,
-                title: "Discovery call",
                 activityUrl:
                   "https://tenant.my.salesforce.com/lightning/r/Task/00T000000000001AAA/view",
-                createdAt: "2026-11-01 12:00:00",
-                context: "linked",
               },
             ],
             truncated: true,
@@ -142,7 +144,6 @@ test("briefing queries retain the untrusted boundary and expose no write or note
   assert.deepEqual(result.data.items[0].unavailableFields, ["AccountId"]);
   assert.equal(result.data.items[0].retrievedAt, "2026-11-02T12:00:00Z");
   assert.equal(result.data.items[1].noteId, 7);
-  assert.equal(result.data.items[1].createdAt, "2026-11-01 12:00:00");
   assert.equal(
     result.data.items[1].activityUrl,
     "https://tenant.my.salesforce.com/lightning/r/Task/00T000000000001AAA/view"
@@ -448,6 +449,12 @@ test("an export's source note must be one this chat's workspace can read", async
   await exportTool.execute({ ...exportArgs, noteId: 7 }, context());
   assert.equal(prepared.length, 1);
   assert.deepEqual(read, [8, 8, 7]);
+  const unreadable = salesforceToolModule
+    .createTools({ emailDraftTarget: "auto" })
+    .find((tool) => tool.name === "salesforce_export_conversation");
+  const noReader = await unreadable.execute({ ...exportArgs, noteId: 7 }, context());
+  assert.equal(noReader.data.errorCode, "source_unavailable");
+  assert.equal(prepared.length, 1, "without a note reader nothing reaches main");
   // A read cut short by Stop says nothing about the note, so it isn't called unavailable.
   const controller = new AbortController();
   controller.abort();

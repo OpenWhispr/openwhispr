@@ -218,9 +218,6 @@ test("real connector pipeline exports, reviews field edits, briefs linked notes 
     [7]
   );
   const sourceNote = briefing.items.find((item) => item.kind === "note");
-  assert.equal(sourceNote.title, "Renewal call");
-  assert.equal(sourceNote.createdAt, "2026-11-02 09:00:00");
-  assert.equal(sourceNote.updatedAt, "2026-11-03 09:00:00");
   assert.equal(
     sourceNote.activityUrl,
     "https://example.my.salesforce.com/lightning/r/Task/00T000000000001EAA/view"

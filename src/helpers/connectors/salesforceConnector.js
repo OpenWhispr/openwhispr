@@ -438,10 +438,6 @@ function createSalesforceConnector({
         notes.push({
           kind: "note",
           noteId: id,
-          title: note.title ?? "",
-          createdAt: note.created_at ?? null,
-          updatedAt: note.updated_at ?? null,
-          context: association ? "linked" : "explicit",
           activityUrl: association ? recordUrl(binding, "Task", association.activity_id) : null,
           exportedAt: association?.confirmed_at ?? null,
         });

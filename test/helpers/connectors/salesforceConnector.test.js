@@ -383,9 +383,6 @@ test("explicit additional notes do not inherit another note's activity link or d
     "https://tenant.my.salesforce.com/lightning/r/Task/00T000000000001/view"
   );
   const extraNote = result.items.find((item) => item.noteId === 2);
-  assert.equal(extraNote.context, "explicit");
-  assert.equal(extraNote.createdAt, null);
-  assert.equal(extraNote.updatedAt, null);
   assert.equal(extraNote.activityUrl, null);
   assert.equal(extraNote.exportedAt, null);
 });
