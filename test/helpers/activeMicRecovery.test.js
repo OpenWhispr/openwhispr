@@ -38,10 +38,21 @@ class FakeMediaDevices extends EventTarget {
   constructor(devices) {
     super();
     this.devices = devices;
+    this.gate = null;
   }
 
   async enumerateDevices() {
+    // A one-shot hold on the next enumeration, to land events mid-recovery.
+    const gate = this.gate;
+    this.gate = null;
+    if (gate) await gate;
     return this.devices;
+  }
+
+  holdNextEnumeration() {
+    let release;
+    this.gate = new Promise((resolve) => (release = resolve));
+    return release;
   }
 
   change(devices) {
@@ -237,4 +248,229 @@ test("stop invalidates an in-flight acquisition and stops its late stream", asyn
   await delay(1);
   assert.equal(recovered, false);
   assert.equal(replacementTrack.stopped, true);
+});
+
+// What Chromium does when the OS source behind a track goes away.
+const endTrack = (track) => {
+  track.readyState = "ended";
+  track.dispatchEvent(new Event("ended"));
+};
+
+test("a replacement that ends during the final enumeration retries instead of reporting active (#2743)", async () => {
+  const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
+  const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
+  const original = new FakeTrack();
+  const replacements = [];
+  const statuses = [];
+  let release;
+  const controller = new ActiveMicRecoveryController({
+    mediaDevices,
+    acquire: async () => {
+      const track = new FakeTrack({ deviceId: "mic-1" });
+      replacements.push(track);
+      return new FakeStream(track);
+    },
+    onRecovered: async () => {
+      if (replacements.length === 1) release = mediaDevices.holdNextEnumeration();
+    },
+    onStatusChange: (status) => statuses.push(status),
+    retryMs: 5,
+  });
+  await controller.start(new FakeStream(original));
+  endTrack(original);
+  await delay(1);
+  // Its listener is attached, so this `ended` reaches recover(), which folds it
+  // into the attempt still waiting on enumeration.
+  endTrack(replacements[0]);
+  release();
+  await delay(30);
+  assert.equal(replacements.length, 2);
+  assert.ok(statuses.includes("unavailable"));
+  assert.equal(statuses.at(-1), "active");
+  assert.equal(controller.track, replacements[1]);
+  assert.equal(controller.track.readyState, "live");
+  controller.stop();
+});
+
+test("a replacement whose recorder stops on a dead track before recovery settles retries", async () => {
+  const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
+  const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
+  const original = new FakeTrack();
+  const replacements = [];
+  const statuses = [];
+  let controller;
+  controller = new ActiveMicRecoveryController({
+    mediaDevices,
+    acquire: async () => {
+      const track = new FakeTrack({ deviceId: "mic-1" });
+      replacements.push(track);
+      return new FakeStream(track);
+    },
+    // Like audioManager.replaceBatchMic: the replacement's recorder exists before
+    // recovery settles. Its track dies before the controller listens to it, and
+    // the recorder's onstop asks for recovery, which folds into this attempt.
+    onRecovered: async () => {
+      if (replacements.length !== 1) return;
+      endTrack(replacements[0]);
+      controller.recover("recorder-stopped");
+    },
+    onStatusChange: (status) => statuses.push(status),
+    retryMs: 5,
+  });
+  await controller.start(new FakeStream(original));
+  endTrack(original);
+  await delay(30);
+  assert.equal(replacements.length, 2);
+  assert.ok(statuses.includes("unavailable"));
+  assert.equal(statuses.at(-1), "active");
+  assert.equal(controller.track.readyState, "live");
+  controller.stop();
+});
+
+test("the old recorder stopping during recovery does not start a second recovery", async () => {
+  const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
+  const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
+  const original = new FakeTrack();
+  let acquired = 0;
+  const statuses = [];
+  const controller = new ActiveMicRecoveryController({
+    mediaDevices,
+    acquire: async () => {
+      acquired += 1;
+      return new FakeStream(new FakeTrack({ deviceId: "mic-1" }));
+    },
+    onRecovered: async () => {},
+    onStatusChange: (status) => statuses.push(status),
+    retryMs: 5,
+  });
+  await controller.start(new FakeStream(original));
+  endTrack(original);
+  controller.recover("recorder-stopped");
+  await delay(30);
+  assert.equal(acquired, 1);
+  assert.deepEqual(statuses, ["active", "reconnecting", "active"]);
+  controller.stop();
+});
+
+test("a recording restarted during the final enumeration keeps its own status", async () => {
+  const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
+  const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
+  const first = new FakeTrack();
+  const second = new FakeTrack();
+  let acquired = 0;
+  let release;
+  const controller = new ActiveMicRecoveryController({
+    mediaDevices,
+    acquire: async () => {
+      acquired += 1;
+      if (acquired === 2) throw new Error("no mic");
+      return new FakeStream(new FakeTrack({ deviceId: "mic-1" }));
+    },
+    onRecovered: async () => {
+      if (acquired === 1) release = mediaDevices.holdNextEnumeration();
+    },
+    retryMs: 10000,
+  });
+  await controller.start(new FakeStream(first));
+  endTrack(first);
+  await delay(1);
+  controller.stop();
+  await controller.start(new FakeStream(second));
+  endTrack(second);
+  await delay(1);
+  assert.equal(controller.status, "unavailable");
+  release();
+  await delay(5);
+  assert.equal(controller.status, "unavailable");
+  assert.equal(controller.track, second);
+  controller.stop();
+});
+
+test("a replacement that opens muted is recovered once its grace expires", async () => {
+  const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
+  const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
+  const original = new FakeTrack();
+  const reasons = [];
+  const controller = new ActiveMicRecoveryController({
+    mediaDevices,
+    acquire: async (reason) => {
+      reasons.push(reason);
+      return new FakeStream(new FakeTrack({ deviceId: "mic-1", muted: reasons.length === 1 }));
+    },
+    onRecovered: async () => {},
+    muteGraceMs: 5,
+  });
+  await controller.start(new FakeStream(original));
+  endTrack(original);
+  await delay(30);
+  assert.deepEqual(reasons, ["ended", "muted"]);
+  assert.equal(controller.track.muted, false);
+  assert.equal(controller.status, "active");
+  controller.stop();
+});
+
+test("a microphone muted at the OS level is not reopened in a loop", async () => {
+  const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
+  const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
+  const original = new FakeTrack();
+  const reasons = [];
+  const controller = new ActiveMicRecoveryController({
+    mediaDevices,
+    acquire: async (reason) => {
+      reasons.push(reason);
+      return new FakeStream(new FakeTrack({ deviceId: "mic-1", muted: true }));
+    },
+    onRecovered: async () => {},
+    muteGraceMs: 5,
+  });
+  await controller.start(new FakeStream(original));
+  original.muted = true;
+  original.dispatchEvent(new Event("mute"));
+  await delay(40);
+  assert.deepEqual(reasons, ["muted"]);
+  assert.equal(controller.status, "active");
+  controller.stop();
+});
+
+test("logs a recovery's start, its first failure, and the recovery", async () => {
+  const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
+  const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
+  const original = new FakeTrack();
+  const lines = [];
+  const record = (level) => (message, meta, scope) => lines.push({ level, message, meta, scope });
+  let attempts = 0;
+  const controller = new ActiveMicRecoveryController({
+    mediaDevices,
+    acquire: async () => {
+      attempts += 1;
+      if (attempts < 3) throw new Error("no mic");
+      return new FakeStream(new FakeTrack({ deviceId: "mic-1" }));
+    },
+    onRecovered: async () => {},
+    retryMs: 5,
+    logger: { debug: record("debug"), info: record("info"), warn: record("warn") },
+    logScope: "meeting",
+  });
+  await controller.start(new FakeStream(original));
+  endTrack(original);
+  await delay(40);
+  assert.equal(attempts, 3);
+  const notable = lines.filter((line) => line.level !== "debug");
+  assert.deepEqual(
+    notable.map((line) => [line.level, line.message]),
+    [
+      ["info", "Microphone recovery started"],
+      ["warn", "Microphone recovery failed"],
+      ["info", "Microphone recovered"],
+    ]
+  );
+  assert.equal(notable[0].meta.reason, "ended");
+  assert.equal(notable[1].meta.error, "no mic");
+  assert.equal(notable[2].meta.failedAttempts, 2);
+  assert.ok(lines.every((line) => line.scope === "meeting"));
+  // The second failure in the same outage stays at debug.
+  assert.ok(
+    lines.some((line) => line.level === "debug" && line.message === "Microphone recovery failed")
+  );
+  controller.stop();
 });

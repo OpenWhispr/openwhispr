@@ -825,6 +825,8 @@ class AudioManager {
       },
       onRecovered: (replacement, previous) => this.replaceActiveMic(replacement, previous),
       onStatusChange: (status) => this.setMicCaptureStatus(status),
+      logger,
+      logScope: "audio",
     });
   }
 
