@@ -3,7 +3,6 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
-  KeyboardAvoidingView,
   Modal,
   PanResponder,
   Pressable,
@@ -20,6 +19,7 @@ import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { home, type } from '../home/kit';
 import { noOrphan, useSettingsT } from './strings';
 import { useNavigationBar, useNavigationBarCanvas } from '../navigationBar';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 
 /** Figma "Android · Settings" tokens on top of the shared Home tokens. */
 export const settings = {
@@ -750,7 +750,11 @@ export function SettingsToastHost() {
   );
 }
 
-/** A bottom sheet over a dimmed screen; Android back and a tap on the dim close it. */
+/**
+ * A bottom sheet over a dimmed screen; Android back and a tap on the dim close it. The dim
+ * fades in on its own while the sheet slides up, and both play out again before the sheet
+ * goes away. The keyboard pushes the sheet up by its own height, never by a guess.
+ */
 export function BottomSheet({
   visible,
   onClose,
@@ -765,59 +769,91 @@ export function BottomSheet({
   children: React.ReactNode;
 }) {
   const t = useSettingsT();
+  const reduceMotion = useReduceMotion();
+  const keyboard = useKeyboardHeight(visible);
+  // Stays mounted through the closing animation.
+  const [mounted, setMounted] = useState(visible);
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (visible) setMounted(true);
+    const animation = Animated.timing(progress, {
+      toValue: visible ? 1 : 0,
+      duration: reduceMotion ? 0 : visible ? 280 : 200,
+      easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished && !visible) setMounted(false);
+    });
+    return () => animation.stop();
+  }, [visible, reduceMotion, progress]);
+  if (!mounted) return null;
   return (
     <Modal
-      visible={visible}
+      visible
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+      <Animated.View
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: progress }}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('cancel')}
           onPress={onClose}
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.32)' }}
         />
-        <SafeAreaView
-          edges={['bottom']}
+      </Animated.View>
+      <View style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
+        <Animated.View
           style={{
             backgroundColor: home.canvas,
+            // The safe-area view below can't round its own corners, so this view does.
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
-            paddingHorizontal: 16,
-            paddingTop: 8,
-            paddingBottom: 16,
-            gap: 16,
+            overflow: 'hidden',
+            paddingBottom: keyboard,
+            transform: [
+              { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [600, 0] }) },
+            ],
           }}
         >
-          <View
-            style={{
-              alignSelf: 'center',
-              width: 36,
-              height: 5,
-              borderRadius: 3,
-              backgroundColor: home.borderDefault,
-            }}
-          />
-          <View style={{ gap: 6 }}>
-            <Text
-              accessibilityRole="header"
-              style={[settings.title, { fontSize: 20, lineHeight: 26 }]}
-            >
-              {title}
-            </Text>
-            {body && (
-              <Text textBreakStrategy="balanced" style={[type.subhead, { color: home.secondary }]}>
-                {noOrphan(body)}
+          <SafeAreaView
+            edges={['bottom']}
+            style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, gap: 16 }}
+          >
+            <View
+              style={{
+                alignSelf: 'center',
+                width: 36,
+                height: 5,
+                borderRadius: 3,
+                backgroundColor: home.borderDefault,
+              }}
+            />
+            <View style={{ gap: 6 }}>
+              <Text
+                accessibilityRole="header"
+                style={[settings.title, { fontSize: 20, lineHeight: 26 }]}
+              >
+                {title}
               </Text>
-            )}
-          </View>
-          {children}
-        </SafeAreaView>
-      </KeyboardAvoidingView>
+              {body && (
+                <Text
+                  textBreakStrategy="balanced"
+                  style={[type.subhead, { color: home.secondary }]}
+                >
+                  {noOrphan(body)}
+                </Text>
+              )}
+            </View>
+            {children}
+          </SafeAreaView>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
