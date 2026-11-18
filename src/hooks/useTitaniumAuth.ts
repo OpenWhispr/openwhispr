@@ -9,6 +9,7 @@ import type { TitaniumAuthState } from "../types/electron";
 const SIGNED_OUT: TitaniumAuthState = {
   configured: false,
   signedIn: false,
+  accountBound: false,
   email: null,
   signedInAt: null,
   licensed: false,

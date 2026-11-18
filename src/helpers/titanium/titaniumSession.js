@@ -4,8 +4,11 @@
 //   1. startSignIn() opens the Titanium hosted login in the browser with
 //      return_url = <scheme>://auth/callback?state=..&code_challenge=..&code_challenge_method=S256
 //   2. The portal redirects to that URL with ?act=<one-time token>.
-//   3. handleCallback() checks state, then POST <portal>/api/exchange {act, code_verifier}
-//      -> { licenseKey | null, email, appSlug }.
+//   3. handleCallback() checks state, then POST <portal>/api/exchange
+//      {act, app_slug, code_verifier} -> { licenseKey | null, email, appSlug, accountId? }.
+//      The response is rejected unless appSlug equals ours (tauri.md MANDATORY). The
+//      stable accountId (IDP-32) is the key connector logins are filed under; a login
+//      without one is "signed in but unbound" and must sign in again (no email key).
 //   4. A non-null licenseKey is verified offline (licenseKey.js); null means signed in
 //      without a license for this app (AUTH_ONLY), which is a normal state.
 // The session (email + license key) is stored encrypted with Electron safeStorage and
@@ -21,6 +24,11 @@ const EXCHANGE_TIMEOUT_MS = 15_000;
 
 function base64url(buffer) {
   return buffer.toString("base64url");
+}
+
+// The portal omits accountId when it can't resolve one; only a non-empty string counts.
+function cleanAccountId(value) {
+  return typeof value === "string" && value ? value : null;
 }
 
 class TitaniumSession extends EventEmitter {
@@ -125,7 +133,11 @@ class TitaniumSession extends EventEmitter {
       const response = await this.fetchImpl(new URL("/api/exchange", this.config.portalUrl), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ act, code_verifier: pending.verifier }),
+        body: JSON.stringify({
+          act,
+          app_slug: this.config.appSlug,
+          code_verifier: pending.verifier,
+        }),
         signal: AbortSignal.timeout(EXCHANGE_TIMEOUT_MS),
       });
       body = await response.json().catch(() => null);
@@ -137,13 +149,15 @@ class TitaniumSession extends EventEmitter {
     if (!body || typeof body.email !== "string" || !body.email) {
       return this.fail("exchange_malformed");
     }
-    if (body.appSlug && body.appSlug !== this.config.appSlug) {
+    // Fail closed: a missing appSlug counts as a mismatch (an act for another app).
+    if (body.appSlug !== this.config.appSlug) {
       return this.fail("app_mismatch");
     }
 
     const session = {
       email: body.email,
       licenseKey: typeof body.licenseKey === "string" ? body.licenseKey : null,
+      accountId: cleanAccountId(body.accountId),
       signedInAt: new Date(this.now()).toISOString(),
     };
     this.session = session;
@@ -189,6 +203,8 @@ class TitaniumSession extends EventEmitter {
     return {
       configured: this.isConfigured(),
       signedIn: Boolean(this.session),
+      // The raw account id never reaches the renderer, only whether one is held.
+      accountBound: Boolean(this.session?.accountId),
       email: this.session?.email ?? null,
       signedInAt: this.session?.signedInAt ?? null,
       licensed: status.licensed,
@@ -197,6 +213,12 @@ class TitaniumSession extends EventEmitter {
       pending: Boolean(this.pending && this.pending.expiresAt > this.now()),
       error: this.lastError,
     };
+  }
+
+  /** The Titanium account scope connectors are keyed on, or null when none is bound. */
+  getAccountScope() {
+    const accountId = this.session?.accountId;
+    return accountId ? { accountId, authGeneration: this.generation } : null;
   }
 
   /** The verified license key for our servers (stt-api, search), or null. */
@@ -236,6 +258,7 @@ class TitaniumSession extends EventEmitter {
         this.session = {
           email: session.email,
           licenseKey: typeof session.licenseKey === "string" ? session.licenseKey : null,
+          accountId: cleanAccountId(session.accountId),
           signedInAt: session.signedInAt ?? null,
         };
       }
