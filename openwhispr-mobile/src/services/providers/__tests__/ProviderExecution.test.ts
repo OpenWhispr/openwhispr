@@ -888,3 +888,46 @@ test.each(['provider.openai', 'custom.another-endpoint'])(
     expect(request).not.toHaveBeenCalled();
   },
 );
+
+describe('ProviderExecution platform transcription providers', () => {
+  test('hands the file and the saved key to a provider the platform registered', async () => {
+    const { registerTranscriptionProvider } =
+      jest.requireActual<typeof import('@/lib/mobileProviders')>('@/lib/mobileProviders');
+    const transcribe = jest.fn(async () => ({ text: 'fixture transcript', duration: 3 }));
+    registerTranscriptionProvider({
+      id: 'fixture-asr',
+      name: 'Fixture ASR',
+      endpoint: 'https://asr.example/v1',
+      models: [{ id: 'fixture-model', name: 'Fixture model' }],
+      transcribe,
+    });
+    const fileRequests: FileRequest[] = [];
+    const execution = createProviderExecution(makeDependencies([], [], fileRequests));
+
+    await expect(
+      execution.transcribeWithProvider({
+        route: route({
+          scope: 'dictation',
+          providerId: 'fixture-asr',
+          modelId: 'fixture-model',
+          endpoint: 'https://asr.example/v1',
+        }),
+        audioUri: 'file:///recording.wav',
+        mimeType: 'audio/wav',
+        language: 'en',
+        prompt: 'OpenWhispr',
+      }),
+    ).resolves.toEqual({ text: 'fixture transcript', duration: 3 });
+    expect(transcribe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: 'fixture-key',
+        modelId: 'fixture-model',
+        audioUri: 'file:///recording.wav',
+        language: 'en',
+        prompt: 'OpenWhispr',
+      }),
+    );
+    // Its own client sends the audio: no OpenAI-compatible multipart request.
+    expect(fileRequests).toHaveLength(0);
+  });
+});

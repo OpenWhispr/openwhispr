@@ -205,7 +205,7 @@
     "dictionaryWords": "単語",
     "dictionarySnippets": "スニペット",
     "examplePreview": "表示例",
-    "styleNeedsCleanup": "モデルと処理で文章の整形を有効にすると、トーンが適用されます。",
+    "styleNeedsCleanup": "設定の「音声入力」で文章の整形を有効にすると、トーンが適用されます。",
     "tonePreview_default": "明日会えますか？共有したいアイデアがいくつかあります。",
     "tonePreview_formal": "明日お時間をいただけますでしょうか。いくつかの案についてご相談したいです。",
     "tonePreview_casual": "明日空いてる？話したいアイデアがあるんだ。",

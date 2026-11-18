@@ -208,7 +208,7 @@
     "dictionaryWords": "Words",
     "dictionarySnippets": "Snippets",
     "examplePreview": "Example preview",
-    "styleNeedsCleanup": "Turn on text cleanup in Models & processing to apply your tone.",
+    "styleNeedsCleanup": "Turn on text cleanup in Settings, under Dictation, to apply your tone.",
     "tonePreview_default": "Can we meet tomorrow? I have a few ideas to share.",
     "tonePreview_formal": "Would you be available to meet tomorrow? I have several ideas to discuss.",
     "tonePreview_casual": "Are you free tomorrow? I have a few ideas to share.",

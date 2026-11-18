@@ -205,7 +205,7 @@
     "dictionaryWords": "詞語",
     "dictionarySnippets": "快捷片語",
     "examplePreview": "範例預覽",
-    "styleNeedsCleanup": "在模型與處理中啟用文字潤飾，以套用語氣。",
+    "styleNeedsCleanup": "在設定的「聽寫」中啟用文字潤飾，以套用語氣。",
     "tonePreview_default": "明天可以見面嗎？我有幾個想法想分享。",
     "tonePreview_formal": "請問您明天方便見面嗎？我想與您討論幾個想法。",
     "tonePreview_casual": "明天有空嗎？有幾個想法想聊聊。",

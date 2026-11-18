@@ -205,7 +205,7 @@
     "dictionaryWords": "词语",
     "dictionarySnippets": "快捷短语",
     "examplePreview": "示例预览",
-    "styleNeedsCleanup": "在模型与处理中启用文本润色，以应用语气。",
+    "styleNeedsCleanup": "在设置的“听写”中启用文本润色，以应用语气。",
     "tonePreview_default": "明天可以见面吗？我有几个想法想分享。",
     "tonePreview_formal": "请问您明天方便见面吗？我想与您讨论几个想法。",
     "tonePreview_casual": "明天有空吗？有几个想法想聊聊。",
