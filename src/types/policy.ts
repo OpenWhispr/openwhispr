@@ -9,12 +9,15 @@ import type { InferenceMode } from "./electron";
  * `allowedByokProviders`) so the server enum can grow ahead of this build.
  */
 
+export type UpdateMode = "user_choice" | "always_on" | "it_managed";
 export type LocalHistoryMode = "user_choice" | "always_on" | "always_off";
 export type ExternalSharingMode = "allowed" | "domain_only" | "disabled";
 
 export interface OrgPolicy {
   version: number;
   transcription: {
+    /** Absent/null is unrestricted; an empty intersection permits no local model. */
+    allowedLocalModels?: string[] | null;
     allowedModes: InferenceMode[];
     /**
      * Registry provider ids plus "custom". Validated shape-only so a provider
@@ -26,6 +29,7 @@ export interface OrgPolicy {
     allowedEnterpriseProviders?: string[];
   };
   llm: {
+    allowedLocalModels?: string[] | null;
     allowedModes: InferenceMode[];
     /** Registry provider ids plus "custom" and "openrouter"; same forward-compat rule as transcription. */
     allowedByokProviders: string[];
@@ -34,6 +38,8 @@ export interface OrgPolicy {
   features: {
     agentEnabled: boolean;
     webSearchEnabled: boolean;
+    meetingRecordingEnabled?: boolean;
+    audioUploadEnabled?: boolean;
     /** Absent on servers that predate the field; absent means allowed. */
     screenContextEnabled?: boolean;
     /**
@@ -48,6 +54,8 @@ export interface OrgPolicy {
      */
     memoryEnabled?: boolean;
   };
+  /** Absent on older servers; absent means automatic. Unknown strings suppress auto-start. */
+  meetings?: { transcriptionStart?: string };
   sharing: {
     externalLinkSharing: ExternalSharingMode;
   };
@@ -63,8 +71,28 @@ export interface OrgPolicy {
    * policy — unknown ids are filtered at enforcement time.
    */
   requiredLocalModels?: string[];
+  /** Optional for older servers; unknown future strings behave as user_choice. */
+  updates?: { mode?: string };
   minAppVersion: string | null;
 }
 
 /** Which allowlist a mode/provider check applies to. */
 export type PolicyScope = "transcription" | "llm";
+
+export interface EffectivePolicySnapshot {
+  success: boolean;
+  status: "loading" | "managed" | "unmanaged" | "error";
+  revision: number;
+  accountId: string | null;
+  authGeneration: number;
+  managed: boolean;
+  policy: OrgPolicy | null;
+  deviceReady: boolean;
+  deviceManaged: boolean;
+  workspaceManaged: boolean;
+  workspaceRequired: boolean;
+  localOnly: boolean;
+  requireSignIn: boolean;
+  code?: string;
+  policyUpdatedAt?: string | null;
+}

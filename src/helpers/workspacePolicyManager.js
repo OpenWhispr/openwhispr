@@ -6,7 +6,11 @@ const crypto = require("crypto");
 const { AuthContextError } = require("./cloudApiRequest");
 const { isValidPolicyShape } = require("./policyValidation");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
-const { readWorkspacePolicyCache, writeWorkspacePolicyCache } = require("./workspacePolicyCache");
+const {
+  readWorkspacePolicyCache,
+  readAccountPolicyCache,
+  writeWorkspacePolicyCache,
+} = require("./workspacePolicyCache");
 
 function unresolvablePolicyError(message) {
   return Object.assign(new Error(message), { code: "POLICY_UNRESOLVABLE" });
@@ -51,6 +55,7 @@ function createWorkspacePolicyManager({
   getAppVersion,
   proxyFetch,
   tokenStore,
+  getValidatedAccountId = () => null,
   broadcast,
   logger,
   requestTimeoutMs = 10_000,
@@ -91,7 +96,9 @@ function createWorkspacePolicyManager({
     const apiOrigin = new URL(apiUrl).origin;
     const accountId = normalizeAccountId(request.accountId);
     const credentialMaterial = JSON.stringify(
-      Object.entries(authHeaders).sort(([left], [right]) => left.localeCompare(right))
+      Object.entries(authHeaders).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0
+      )
     );
     const credentialHash = crypto.createHash("sha256").update(credentialMaterial).digest("hex");
     return {
@@ -119,17 +126,33 @@ function createWorkspacePolicyManager({
     return `${identity.apiOrigin}\n${identity.credentialHash}`;
   }
 
+  // Request account ids are labels (a renderer names them, and one can lag a
+  // new bearer), so only this bearer's validated binding can vouch for one.
+  function isValidatedAccount(identity) {
+    return (
+      identity.accountId !== null &&
+      identity.authHeaders.Authorization === `Bearer ${identity.token}` &&
+      identity.accountId === getValidatedAccountId()
+    );
+  }
+
   function cacheIdentity(identity) {
     return {
       apiOrigin: identity.apiOrigin,
       credentialHash: identity.credentialHash,
       accountId: identity.accountId,
+      ...(isValidatedAccount(identity) && { accountValidated: true }),
     };
   }
 
+  // A rotated credential has no entry of its own yet, and inherits its
+  // account's last validated verdict rather than losing it.
   function rawCachedData(identity) {
     const cached = readWorkspacePolicyCache(cachePath, cacheIdentity(identity));
-    return validatePolicyData(cached) ? cached : null;
+    if (validatePolicyData(cached)) return cached;
+    if (!isValidatedAccount(identity)) return null;
+    const inherited = readAccountPolicyCache(cachePath, identity);
+    return validatePolicyData(inherited) ? inherited : null;
   }
 
   function cachedData(identity) {
@@ -140,10 +163,28 @@ function createWorkspacePolicyManager({
   function requiresManagedPolicy(identity) {
     if (managedPolicyRequired.has(identityKey(identity))) return true;
     const cached = rawCachedData(identity);
-    return cached?.managed === false && cached.requiresManagedPolicy === true;
+    if (cached?.managed === false && cached.requiresManagedPolicy === true) return true;
+    return (
+      readAccountPolicyCache(cachePath, identity)?.requiresManagedPolicy === true &&
+      (!isValidatedAccount(identity) || !cached || cached.endpointSupported === false)
+    );
   }
 
-  function errorSnapshot(identity, code, error) {
+  // Whether the account's last validated verdict requires managed policy. A
+  // failed lookup carries it, so a credential that can't inherit it yet (a rotated
+  // token before its binding) still fails closed. It never grants anything,
+  // so a renderer's account label is enough to read it by.
+  function accountWasManaged(accountId) {
+    const apiUrl = getApiUrl();
+    if (!accountId || !URL.canParse(apiUrl)) return false;
+    const cached = readAccountPolicyCache(cachePath, {
+      apiOrigin: new URL(apiUrl).origin,
+      accountId,
+    });
+    return cached?.managed === true || cached?.requiresManagedPolicy === true;
+  }
+
+  function errorSnapshot(identity, code, error, httpStatus) {
     const current = snapshots.get(identityKey(identity));
     return {
       success: false,
@@ -151,8 +192,10 @@ function createWorkspacePolicyManager({
       revision: current?.revision ?? revision,
       accountId: identity.accountId,
       authGeneration: identity.authGeneration,
+      managed: accountWasManaged(identity.accountId),
       code,
       error,
+      httpStatus,
     };
   }
 
@@ -180,6 +223,30 @@ function createWorkspacePolicyManager({
   }
 
   function publicSnapshot(identity, data, status, snapshotRevision) {
+    if (
+      !data.managed &&
+      accountWasManaged(identity.accountId) &&
+      (data.endpointSupported === false || !isValidatedAccount(identity))
+    )
+      return errorSnapshot(
+        identity,
+        requiresManagedPolicy(identity) ? "POLICY_UNRESOLVABLE" : "POLICY_UNAVAILABLE",
+        "Organization policy was previously required"
+      );
+    // A policy can arrive before its bearer is bound. Its first validated
+    // read must replace the account's older restrictive evidence too.
+    if (
+      !data.managed &&
+      data.endpointSupported !== false &&
+      isValidatedAccount(identity) &&
+      accountWasManaged(identity.accountId)
+    ) {
+      try {
+        writeWorkspacePolicyCache(cachePath, cacheIdentity(identity), data);
+      } catch (error) {
+        logger?.error?.("Policy cache write failed", error);
+      }
+    }
     return {
       success: true,
       status,
@@ -239,9 +306,13 @@ function createWorkspacePolicyManager({
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
       try {
+        // This manager keeps its own freshness window; a Chromium-cached copy
+        // (the endpoint allows max-age=300) would answer a refresh after a
+        // server refusal with the verdict the server just contradicted.
         const response = await proxyFetch(`${identity.apiUrl}/api/workspace-policy`, {
           method: "GET",
           headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion()),
+          cache: "no-store",
           signal: controller.signal,
         });
         assertIdentityCurrent(identity);
@@ -298,23 +369,24 @@ function createWorkspacePolicyManager({
         return errorSnapshot(identity, authContextError.code, authContextError.message);
       }
 
-      const requiresManagedFallback = error?.code === "POLICY_UNRESOLVABLE";
-      if (requiresManagedFallback) markManagedPolicyRequired(identity, error.message);
+      if (error?.code === "POLICY_UNRESOLVABLE") markManagedPolicyRequired(identity, error.message);
+      // Once the server has called this identity unresolvable, only a managed
+      // verdict stands in, whatever failed this time: a dropped connection
+      // mustn't bring back the unmanaged one.
+      const managedOnly = requiresManagedPolicy(identity);
       // Prefer the in-memory verdict; the disk cache only backs it up, so an
       // unreadable cache file must not discard a valid session snapshot.
       const current = snapshots.get(identityKey(identity));
-      if (current && (!requiresManagedFallback || current.data.managed)) {
+      if (current && (!managedOnly || current.data.managed)) {
         return publicSnapshot(identity, current.data, "cached", current.revision);
       }
       const cached = cachedData(identity);
-      if (cached && (!requiresManagedFallback || cached.managed)) {
+      if (cached && (!managedOnly || cached.managed)) {
         return accept(identity, cached, "cached");
       }
       logger?.warn?.("Workspace policy unavailable", { error: error?.message });
-      const code = requiresManagedPolicy(identity)
-        ? "POLICY_UNRESOLVABLE"
-        : error?.code || "POLICY_UNAVAILABLE";
-      return errorSnapshot(identity, code, error?.message || String(error));
+      const code = managedOnly ? "POLICY_UNRESOLVABLE" : error?.code || "POLICY_UNAVAILABLE";
+      return errorSnapshot(identity, code, error?.message || String(error), error?.status);
     }
   }
 
@@ -323,12 +395,14 @@ function createWorkspacePolicyManager({
     try {
       identity = captureIdentity(request ?? {});
     } catch (error) {
+      const accountId = normalizeAccountId(request?.accountId);
       return {
         success: false,
         status: "error",
         revision,
-        accountId: normalizeAccountId(request?.accountId),
+        accountId,
         authGeneration: tokenStore.getState()?.generation ?? null,
+        managed: accountWasManaged(accountId),
         code: error.code || "POLICY_UNAVAILABLE",
         error: error.message,
       };
@@ -338,7 +412,10 @@ function createWorkspacePolicyManager({
     const lastSuccessfulRefresh = successfulRefreshes.get(key);
     const successfulRefreshAge =
       lastSuccessfulRefresh === undefined ? null : now() - lastSuccessfulRefresh;
+    // `refresh` is for a caller the server just refused: the fresh verdict it
+    // holds is the one in question. The attempt throttle below still applies.
     if (
+      !request.refresh &&
       current &&
       !(current.data.managed === false && requiresManagedPolicy(identity)) &&
       successfulRefreshAge !== null &&
@@ -348,18 +425,14 @@ function createWorkspacePolicyManager({
       return publicSnapshot(identity, current.data, "current", current.revision);
     }
     if (inFlight.has(key)) {
-      return inFlight.get(key).then((result) =>
-        result.success
-          ? {
-              ...result,
-              accountId: identity.accountId,
-              authGeneration: identity.authGeneration,
-            }
-          : result
-      );
+      return inFlight
+        .get(key)
+        .then((result) =>
+          result.success ? publicSnapshot(identity, result, result.status, result.revision) : result
+        );
     }
     const lastAttempt = lastAttempts.get(key);
-    const attemptAge = lastAttempt === undefined ? null : now() - lastAttempt;
+    const attemptAge = lastAttempt === undefined ? null : now() - lastAttempt.startedAt;
     const attemptIsThrottled =
       attemptAge !== null && attemptAge >= 0 && attemptAge < minimumAttemptIntervalMs;
     if (attemptIsThrottled) {
@@ -376,13 +449,20 @@ function createWorkspacePolicyManager({
       return errorSnapshot(
         identity,
         "POLICY_RETRY_THROTTLED",
-        "Workspace policy refresh is rate limited"
+        "Workspace policy refresh is rate limited",
+        lastAttempt.httpStatus
       );
     }
-    lastAttempts.set(key, now());
-    const pending = fetchPolicy(identity).finally(() => {
-      if (inFlight.get(key) === pending) inFlight.delete(key);
-    });
+    const attempt = { startedAt: now() };
+    lastAttempts.set(key, attempt);
+    const pending = fetchPolicy(identity)
+      .then((result) => {
+        attempt.httpStatus = result.httpStatus;
+        return result;
+      })
+      .finally(() => {
+        if (inFlight.get(key) === pending) inFlight.delete(key);
+      });
     inFlight.set(key, pending);
     return pending;
   }
@@ -403,7 +483,25 @@ function createWorkspacePolicyManager({
     return publicSnapshot(identity, current.data, "cached", current.revision);
   }
 
-  return { getPolicy, peekPolicy };
+  // What this identity last had, in memory or on disk, for a caller that can't
+  // wait on the network. It decides nothing about freshness: the caller refreshes.
+  function heldPolicy(request) {
+    let identity;
+    try {
+      identity = captureIdentity(request ?? {});
+    } catch {
+      return null;
+    }
+    const managedOnly = requiresManagedPolicy(identity);
+    const current = snapshots.get(identityKey(identity));
+    if (current && (!managedOnly || current.data.managed)) {
+      return publicSnapshot(identity, current.data, "cached", current.revision);
+    }
+    const cached = cachedData(identity);
+    return cached && (!managedOnly || cached.managed) ? accept(identity, cached, "cached") : null;
+  }
+
+  return { getPolicy, peekPolicy, heldPolicy, accountWasManaged };
 }
 
 // Main-process capture gate: block an explicit managed denial or an
@@ -411,11 +509,7 @@ function createWorkspacePolicyManager({
 function isScreenContextBlocked(snapshot) {
   return (
     snapshot.code === "POLICY_UNRESOLVABLE" ||
-    Boolean(
-      snapshot.success &&
-      snapshot.managed &&
-      snapshot.policy?.features?.screenContextEnabled === false
-    )
+    Boolean(snapshot.managed && snapshot.policy?.features?.screenContextEnabled === false)
   );
 }
 

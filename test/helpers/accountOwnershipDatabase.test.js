@@ -17,11 +17,22 @@ function createDatabaseManager() {
     PRAGMA foreign_keys = ON;
     CREATE TABLE spaces (
       id INTEGER PRIMARY KEY,
+      client_space_id TEXT,
       kind TEXT NOT NULL,
       name TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
       sync_status TEXT NOT NULL DEFAULT 'synced',
+      account_id TEXT,
+      workspace_id TEXT,
+      is_default_private INTEGER NOT NULL DEFAULT 0,
       deleted_at TEXT
+    );
+    CREATE TABLE private_note_import_history (
+      account_id TEXT NOT NULL,
+      client_note_id TEXT NOT NULL,
+      cloud_id TEXT,
+      note_id INTEGER NOT NULL,
+      PRIMARY KEY (account_id, client_note_id)
     );
     CREATE TABLE space_accounts (
       space_id INTEGER NOT NULL,
@@ -66,12 +77,18 @@ function createDatabaseManager() {
     CREATE TABLE agent_conversations (
       id INTEGER PRIMARY KEY,
       note_id INTEGER,
+      space_id INTEGER,
       folder_id INTEGER,
       cloud_id TEXT,
+      cloud_create_attempted INTEGER NOT NULL DEFAULT 0,
       sync_status TEXT NOT NULL DEFAULT 'synced',
+      account_id TEXT,
       deleted_at TEXT,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE transcriptions (id INTEGER PRIMARY KEY, text TEXT, account_id TEXT);
+    CREATE TABLE custom_dictionary (id INTEGER PRIMARY KEY, word TEXT, account_id TEXT);
+    CREATE TABLE snippets (id INTEGER PRIMARY KEY, trigger TEXT, account_id TEXT);
     CREATE TABLE agent_messages (
       id INTEGER PRIMARY KEY,
       conversation_id INTEGER NOT NULL REFERENCES agent_conversations(id) ON DELETE CASCADE
@@ -95,11 +112,20 @@ function createDatabaseManager() {
       account_id TEXT PRIMARY KEY,
       cleared_through TEXT NOT NULL
     );
+    CREATE TABLE analytics_account_clear_state (
+      account_scope TEXT PRIMARY KEY,
+      cleared_through TEXT NOT NULL
+    );
     CREATE TABLE connector_actions (
       id TEXT PRIMARY KEY,
       account_id TEXT
     );
-    INSERT INTO spaces (id, kind) VALUES (1, 'private'), (2, 'team'), (3, 'team');
+    CREATE TABLE workspace_names (workspace_id TEXT PRIMARY KEY, name TEXT NOT NULL);
+    INSERT INTO spaces (id, kind, account_id) VALUES
+      (1, 'private', NULL),
+      (2, 'team', NULL),
+      (3, 'team', NULL),
+      (4, 'private', 'account-a');
     INSERT INTO space_accounts (space_id, account_id) VALUES
       (2, 'account-a'),
       (3, 'account-b');
@@ -118,6 +144,11 @@ function createDatabaseManager() {
   const manager = Object.create(DatabaseManager.prototype);
   manager.db = sqlite;
   manager.activeAccountId = null;
+  manager._accountChanges = [];
+  manager._registerKeyFolding();
+  manager._initDeviceAccounts();
+  manager._initWorkspaceScopes();
+  manager._initStandInOwnershipChecks();
   return { manager, sqlite };
 }
 
@@ -139,7 +170,7 @@ function installTransactionShim(sqlite) {
     };
 }
 
-test("account scope shows legacy and active personal rows plus every workspace row", (t) => {
+test("account scope shows the account's own personal rows and workspace rows, legacy rows only signed out", (t) => {
   const { manager, sqlite } = createDatabaseManager();
   t.after(() => sqlite.close());
 
@@ -165,14 +196,14 @@ test("account scope shows legacy and active personal rows plus every workspace r
       .getNotes(null, 100)
       .map((note) => note.title)
       .sort(),
-    ["Legacy", "Personal A", "Workspace A"]
+    ["Personal A", "Workspace A"]
   );
   assert.deepEqual(
     manager
       .getFolders()
       .map((folder) => folder.name)
       .sort(),
-    ["Legacy", "Personal A", "Workspace A"]
+    ["Personal A", "Workspace A"]
   );
 
   manager.setActiveAccountId("account-b");
@@ -181,7 +212,7 @@ test("account scope shows legacy and active personal rows plus every workspace r
       .getNotes(null, 100)
       .map((note) => note.title)
       .sort(),
-    ["Legacy", "Personal B", "Workspace B"]
+    ["Personal B", "Workspace B"]
   );
   assert.deepEqual(
     manager
@@ -190,6 +221,22 @@ test("account scope shows legacy and active personal rows plus every workspace r
       .map((space) => space.id),
     [3]
   );
+
+  manager.setActiveAccountId(null);
+  assert.deepEqual(
+    manager
+      .getNotes(null, 100)
+      .map((note) => note.title)
+      .sort(),
+    ["Legacy"]
+  );
+  assert.deepEqual(
+    manager
+      .getFolders()
+      .map((folder) => folder.name)
+      .sort(),
+    ["Legacy"]
+  );
 });
 
 test("new personal content is attributed to the active account but workspace content is not", (t) => {
@@ -197,13 +244,15 @@ test("new personal content is attributed to the active account but workspace con
   t.after(() => sqlite.close());
   manager.setActiveAccountId("account-a");
 
-  const personalFolder = manager.createFolder("Personal A", 1).folder;
+  const personalFolder = manager.createFolder("Personal A").folder;
   const workspaceFolder = manager.createFolder("Workspace", 2).folder;
-  const personalNote = manager.saveNote("Personal A", "", "personal", null, null, null, 1).note;
+  const personalNote = manager.saveNote("Personal A", "", "personal").note;
   const workspaceNote = manager.saveNote("Workspace", "", "personal", null, null, null, 2).note;
 
   assert.equal(personalFolder.account_id, "account-a");
+  assert.equal(personalFolder.space_id, 4, "the account's own private space");
   assert.equal(personalNote.account_id, "account-a");
+  assert.equal(personalNote.space_id, 4);
   assert.equal(workspaceFolder.account_id, null);
   assert.equal(workspaceNote.account_id, null);
 });
@@ -222,19 +271,38 @@ test("deleting one account removes only its personal rows and dependent private 
       (2, 'Personal A', '', 2, 1, 'account-a'),
       (3, 'Personal B', '', 3, 1, 'account-b'),
       (4, 'Workspace A', '', 4, 2, 'account-a');
-    INSERT INTO agent_conversations (id, note_id, folder_id) VALUES (1, 2, 2);
-    INSERT INTO agent_messages (id, conversation_id) VALUES (1, 1);
+    INSERT INTO agent_conversations (id, note_id, folder_id, account_id) VALUES
+      (1, 2, 2, NULL),
+      (2, NULL, NULL, 'account-a'),
+      (3, NULL, NULL, 'account-b');
+    INSERT INTO agent_messages (id, conversation_id) VALUES (1, 1), (2, 2), (3, 3);
+    INSERT INTO transcriptions (id, text, account_id) VALUES
+      (1, 'legacy', NULL), (2, 'a', 'account-a'), (3, 'b', 'account-b');
+    INSERT INTO custom_dictionary (id, word, account_id) VALUES
+      (1, 'legacy', NULL), (2, 'a', 'account-a'), (3, 'b', 'account-b');
+    INSERT INTO snippets (id, trigger, account_id) VALUES
+      (1, 'legacy', NULL), (2, 'a', 'account-a'), (3, 'b', 'account-b');
     INSERT INTO speaker_mappings (note_id) VALUES (2);
     INSERT INTO note_speaker_embeddings (note_id) VALUES (2);
     INSERT INTO optimistic_folder_delete_rows (folder_id, entity_type, entity_id)
     VALUES (2, 'note', 2);
+    INSERT INTO private_note_import_history (account_id, client_note_id, note_id) VALUES
+      ('account-a', 'note-a', 2), ('account-b', 'note-b', 3);
   `);
   manager.setActiveAccountId("account-a");
 
   const result = manager.deleteAccountData("account-a");
 
+  assert.deepEqual(
+    sqlite
+      .prepare("SELECT account_id FROM private_note_import_history ORDER BY account_id")
+      .all()
+      .map((row) => row.account_id),
+    ["account-b"]
+  );
   assert.deepEqual(result.deletedNoteIds, [2]);
   assert.deepEqual(result.deletedFolderIds, [2]);
+  assert.deepEqual(result.deletedTranscriptionIds, [2]);
   assert.deepEqual(
     sqlite
       .prepare("SELECT title FROM notes ORDER BY id")
@@ -249,8 +317,31 @@ test("deleting one account removes only its personal rows and dependent private 
       .map((row) => row.name),
     ["Legacy", "Personal B", "Workspace A"]
   );
-  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_conversations").get().count, 0);
-  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_messages").get().count, 0);
+  assert.deepEqual(
+    sqlite
+      .prepare("SELECT id FROM agent_conversations ORDER BY id")
+      .all()
+      .map((row) => row.id),
+    [3],
+    "the deleted note's chat and A's own chat go; B's stays"
+  );
+  assert.deepEqual(
+    sqlite
+      .prepare("SELECT conversation_id FROM agent_messages ORDER BY id")
+      .all()
+      .map((row) => row.conversation_id),
+    [3]
+  );
+  for (const table of ["transcriptions", "custom_dictionary", "snippets"]) {
+    assert.deepEqual(
+      sqlite
+        .prepare(`SELECT id FROM ${table} ORDER BY id`)
+        .all()
+        .map((row) => row.id),
+      [1, 3],
+      `${table}: unattributed and B's rows remain`
+    );
+  }
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM speaker_mappings").get().count, 0);
   assert.equal(
     sqlite.prepare("SELECT COUNT(*) AS count FROM note_speaker_embeddings").get().count,
@@ -271,6 +362,14 @@ test("deleting one account removes only its personal rows and dependent private 
       .prepare("SELECT COUNT(*) AS count FROM space_accounts WHERE account_id = 'account-a'")
       .get().count,
     0
+  );
+  assert.deepEqual(
+    sqlite
+      .prepare("SELECT id FROM spaces WHERE kind = 'private' ORDER BY id")
+      .all()
+      .map((row) => row.id),
+    [1],
+    "A's own private space goes; the stand-in stays"
   );
   assert.deepEqual(
     sqlite
@@ -366,11 +465,11 @@ test("deleting a folder releases other accounts' notes to the space root instead
   t.after(() => sqlite.close());
   installTransactionShim(sqlite);
   sqlite.exec(`
-    INSERT INTO folders (id, name, space_id, account_id) VALUES (10, 'Projects', 1, NULL);
+    INSERT INTO folders (id, name, space_id, account_id) VALUES (10, 'Projects', 4, NULL);
     INSERT INTO notes (id, title, content, folder_id, space_id, account_id) VALUES
-      (1, 'A note', '', 10, 1, 'account-a'),
-      (2, 'Legacy note', '', 10, 1, NULL),
-      (3, 'B note', '', 10, 1, 'account-b');
+      (1, 'A note', '', 10, 4, 'account-a'),
+      (2, 'Legacy note', '', 10, 4, NULL),
+      (3, 'B note', '', 10, 4, 'account-b');
     INSERT INTO agent_conversations (id, note_id) VALUES (1, 1), (2, 3);
     INSERT INTO agent_messages (id, conversation_id) VALUES (1, 1), (2, 2);
     INSERT INTO speaker_mappings (note_id) VALUES (1), (3);
@@ -391,7 +490,7 @@ test("deleting a folder releases other accounts' notes to the space root instead
       .prepare("SELECT id, folder_id, space_id, deleted_at, sync_status FROM notes")
       .all()
       .map((row) => ({ ...row })),
-    [{ id: 3, folder_id: null, space_id: 1, deleted_at: null, sync_status: "pending" }]
+    [{ id: 3, folder_id: null, space_id: 4, deleted_at: null, sync_status: "pending" }]
   );
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM folders").get().count, 0);
   assert.deepEqual(
@@ -430,10 +529,10 @@ test("an optimistic cloud folder delete never journals or hides other accounts' 
   installTransactionShim(sqlite);
   sqlite.exec(`
     INSERT INTO folders (id, name, space_id, account_id, cloud_id) VALUES
-      (10, 'Projects', 1, NULL, 'cf-1');
+      (10, 'Projects', 4, NULL, 'cf-1');
     INSERT INTO notes (id, title, content, folder_id, space_id, account_id, cloud_id) VALUES
-      (1, 'A note', '', 10, 1, 'account-a', 'cn-a'),
-      (3, 'B note', '', 10, 1, 'account-b', 'cn-b');
+      (1, 'A note', '', 10, 4, 'account-a', 'cn-a'),
+      (3, 'B note', '', 10, 4, 'account-b', 'cn-b');
   `);
   manager.setActiveAccountId("account-a");
 
@@ -471,11 +570,11 @@ test("hard folder deletion preserves other accounts' notes, tombstones included"
   installTransactionShim(sqlite);
   sqlite.exec(`
     INSERT INTO folders (id, name, space_id, account_id, cloud_id) VALUES
-      (10, 'Projects', 1, NULL, 'cf-1');
+      (10, 'Projects', 4, NULL, 'cf-1');
     INSERT INTO notes (id, title, content, folder_id, space_id, account_id, cloud_id, sync_status, deleted_at) VALUES
-      (1, 'A note', '', 10, 1, 'account-a', 'cn-a', 'synced', NULL),
-      (3, 'B note', '', 10, 1, 'account-b', 'cn-b', 'synced', NULL),
-      (4, 'B tombstone', '', 10, 1, 'account-b', 'cn-b2', 'pending', '2026-08-01 00:00:00');
+      (1, 'A note', '', 10, 4, 'account-a', 'cn-a', 'synced', NULL),
+      (3, 'B note', '', 10, 4, 'account-b', 'cn-b', 'synced', NULL),
+      (4, 'B tombstone', '', 10, 4, 'account-b', 'cn-b2', 'pending', '2026-08-01 00:00:00');
   `);
   manager.setActiveAccountId("account-a");
 
@@ -526,7 +625,7 @@ test("imported notes carry the active account and never land in another account'
     .prepare("SELECT account_id, folder_id, space_id FROM notes WHERE client_note_id = 'import-1'")
     .get();
   assert.equal(note.account_id, "account-a");
-  assert.equal(note.space_id, 1);
+  assert.equal(note.space_id, 4, "the account's own private space");
   assert.notEqual(note.folder_id, 20);
   const folder = sqlite
     .prepare("SELECT name, account_id FROM folders WHERE id = ?")

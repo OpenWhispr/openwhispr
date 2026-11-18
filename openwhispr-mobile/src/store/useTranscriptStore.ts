@@ -407,6 +407,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           mimeType,
           jobId: retryJobId,
           requestContext: current.requestContext ?? 'recording',
+          // History holds dictations and uploads only; meetings are notes.
+          purpose: scope,
           keyboardTone: current.requestContext === 'keyboard' ? current.keyboardTone : undefined,
         });
 

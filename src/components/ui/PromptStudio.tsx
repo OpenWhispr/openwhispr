@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -20,7 +21,7 @@ import {
 } from "../../stores/settingsStore";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import { getLanguageLabel } from "../../utils/languageSupport";
-import { getDictionaryHintWords } from "../../utils/snippets";
+import { getLlmDictionaryWords } from "../../utils/snippets";
 import { resolveDictationAgentInference } from "../../helpers/dictationAgentInference";
 import { resolveDictationTranslationInference } from "../../helpers/dictationTranslationInference";
 
@@ -52,6 +53,7 @@ const PROVIDER_CONFIG: Record<string, ProviderConfig> = {
 };
 
 export default function PromptStudio({ className = "", kind = "cleanup" }: PromptStudioProps) {
+  useRegistryVersion();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"current" | "edit" | "test">("current");
   const [testText, setTestText] = useState(() =>
@@ -165,7 +167,9 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
               systemPrompt: resolvePrompt("translate", {
                 agentName,
                 targetLanguageLabel: getLanguageLabel(translationTargetLanguage),
-                customDictionary: getDictionaryHintWords(effectiveSettings),
+                customDictionary: getLlmDictionaryWords(effectiveSettings, {
+                  includeTriggers: true,
+                }),
                 uiLanguage,
               }),
             }
@@ -205,7 +209,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
             systemPrompt: resolvePrompt("dictationAgent", {
               agentName,
               language: settings.preferredLanguage,
-              customDictionary: getDictionaryHintWords(settings),
+              customDictionary: getLlmDictionaryWords(settings, { includeTriggers: true }),
               uiLanguage,
             }),
           });

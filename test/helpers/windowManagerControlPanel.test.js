@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 
 const dockVisibilityCalls = [];
+let workArea = { x: 0, y: 0, width: 1440, height: 900 };
 
 const originalLoad = Module._load;
 Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
@@ -10,9 +11,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       app: { on: () => undefined },
       screen: {
-        getDisplayMatching: () => ({
-          workArea: { x: 0, y: 0, width: 1440, height: 900 },
-        }),
+        getDisplayMatching: () => ({ workArea: { ...workArea } }),
       },
     };
   }
@@ -34,6 +33,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       ONBOARDING_WINDOW_SIZES: {
         COMPACT: { width: 480, height: 624 },
         EXPANDED: { width: 1000, height: 740 },
+        LOCAL_SETUP: { width: 1000, height: 880 },
       },
     };
   }
@@ -47,11 +47,15 @@ function createControlPanelWindow({
   bounds = { x: 120, y: 90, width: 1200, height: 800 },
 }) {
   const calls = [];
+  const resizes = [];
+  const minimumSizes = [];
   let currentBounds = { ...bounds };
   let isVisible = visible;
 
   return {
     calls,
+    resizes,
+    minimumSizes,
     isVisible: () => isVisible,
     window: {
       isDestroyed: () => false,
@@ -61,9 +65,10 @@ function createControlPanelWindow({
       isMinimized: () => false,
       getBounds: () => ({ ...currentBounds }),
       getContentBounds: () => ({ ...currentBounds }),
-      setContentBounds: (nextBounds) => {
+      setContentBounds: (nextBounds, animate) => {
         currentBounds = { ...nextBounds };
         calls.push("setContentBounds");
+        resizes.push({ bounds: { ...nextBounds }, animate });
       },
       isResizable: () => true,
       isMinimizable: () => true,
@@ -76,7 +81,7 @@ function createControlPanelWindow({
       setMaximizable: () => undefined,
       setClosable: () => undefined,
       setFullScreenable: () => undefined,
-      setMinimumSize: () => undefined,
+      setMinimumSize: (width, height) => minimumSizes.push([width, height]),
       setWindowButtonVisibility: () => undefined,
       show: () => {
         isVisible = true;
@@ -100,6 +105,7 @@ function createManager(windowOptions) {
 
 test.beforeEach(() => {
   dockVisibilityCalls.length = 0;
+  workArea = { x: 0, y: 0, width: 1440, height: 900 };
 });
 
 test("initial restore still reveals the renderer-sized control panel", () => {
@@ -163,4 +169,66 @@ test("repeated compact resends keep a tray-hidden panel hidden", () => {
   assert.equal(isVisible(), false);
   assert.deepEqual(calls, []);
   assert.deepEqual(dockVisibilityCalls, []);
+});
+
+test("local setup grows the window smoothly to its own size and back", () => {
+  const { manager, resizes, minimumSizes } = createManager({ visible: true });
+
+  assert.equal(manager.setOnboardingWindowMode("expanded"), true);
+  assert.equal(manager.setOnboardingWindowMode("local-setup"), true);
+  assert.equal(manager.setOnboardingWindowMode("expanded"), true);
+
+  // Each step keeps the window's centre, and every change animates on macOS.
+  assert.deepEqual(resizes, [
+    { bounds: { x: 220, y: 120, width: 1000, height: 740 }, animate: true },
+    // Centred would put the top at y=50; the 900px work area holds it at y=20.
+    { bounds: { x: 220, y: 20, width: 1000, height: 880 }, animate: true },
+    { bounds: { x: 220, y: 90, width: 1000, height: 740 }, animate: true },
+  ]);
+  // The floor follows the step, so leaving local setup can shrink the window.
+  assert.deepEqual(minimumSizes, [
+    [1000, 740],
+    [1000, 880],
+    [1000, 740],
+  ]);
+});
+
+test("local setup clamps to a short work area, where the step scrolls instead", () => {
+  // Tall enough for the other steps' 740, too short for local setup's 880.
+  workArea = { x: 0, y: 25, width: 1280, height: 800 };
+  const { manager, resizes, minimumSizes } = createManager({
+    visible: true,
+    bounds: { x: 140, y: 55, width: 1000, height: 740 },
+  });
+
+  assert.equal(manager.setOnboardingWindowMode("local-setup"), true);
+
+  assert.deepEqual(resizes, [
+    { bounds: { x: 140, y: 25, width: 1000, height: 800 }, animate: true },
+  ]);
+  assert.deepEqual(minimumSizes, [[1000, 800]]);
+});
+
+test("restore after local setup returns the pre-onboarding bounds", () => {
+  const { manager, resizes, minimumSizes } = createManager({ visible: true });
+
+  assert.equal(manager.setOnboardingWindowMode("local-setup"), true);
+  assert.equal(manager.setOnboardingWindowMode("restore"), true);
+
+  assert.deepEqual(resizes.at(-1), {
+    bounds: { x: 120, y: 90, width: 1200, height: 800 },
+    animate: true,
+  });
+  // The control panel's own minimum size comes back with it.
+  assert.deepEqual(minimumSizes.at(-1), [400, 300]);
+});
+
+test("an unknown onboarding window mode is refused without touching the window", () => {
+  const { manager, calls, minimumSizes } = createManager({ visible: true });
+
+  assert.equal(manager.setOnboardingWindowMode("local"), false);
+  assert.equal(manager.setOnboardingWindowMode("LOCAL_SETUP"), false);
+
+  assert.deepEqual(calls, []);
+  assert.deepEqual(minimumSizes, []);
 });

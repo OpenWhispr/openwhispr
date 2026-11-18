@@ -46,16 +46,33 @@ class AppleCalendarManager {
 
   // User-initiated: spawns the helper with --request so the TCC prompt shows.
   // Resolves after the first snapshot lands (success) or access is denied.
-  connect() {
+  connect({ signal } = {}) {
     if (process.platform !== "darwin") {
       return Promise.resolve({ success: false, reason: "unsupported" });
     }
+    if (signal?.aborted) return Promise.resolve({ success: false, reason: "cancelled" });
+    this._pendingConnect?.cancel();
     this._restartAttempts = 0;
     return new Promise((resolve) => {
-      this._pendingConnect = { resolve, awaitingSnapshot: false };
+      const cancel = () => {
+        if (this._pendingConnect !== pending) return;
+        this._pendingConnect = null;
+        this.stop();
+        pending.resolve({ success: false, reason: "cancelled" });
+      };
+      const pending = {
+        resolve: (result) => {
+          signal?.removeEventListener("abort", cancel);
+          resolve(result);
+        },
+        cancel,
+        awaitingSnapshot: false,
+      };
+      this._pendingConnect = pending;
+      signal?.addEventListener("abort", cancel, { once: true });
       if (!this._spawnHelper(true)) {
         this._pendingConnect = null;
-        resolve({ success: false, reason: "helper-missing" });
+        pending.resolve({ success: false, reason: "helper-missing" });
       }
     });
   }
@@ -158,6 +175,7 @@ class AppleCalendarManager {
 
       let buffer = "";
       child.stdout.on("data", (data) => {
+        if (this._helperProcess !== child) return;
         buffer += data.toString();
         let newlineIdx;
         while ((newlineIdx = buffer.indexOf("\n")) !== -1) {

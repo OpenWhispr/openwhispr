@@ -54,7 +54,7 @@ test("a raw cleanup fallback is reported with whether the dictation was pasted",
         completeDictationPreview: async () => {},
         writeClipboard: async () => ({ success: true }),
         hideDictationPreview: async () => {},
-        dictationLifecycleStateChanged: () => {},
+        dictationLifecycleStateChanged: async () => true,
       },
     },
   });

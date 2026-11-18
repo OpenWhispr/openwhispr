@@ -1,3 +1,8 @@
+const {
+  runLocalModelOperation,
+  assertLocalModelOperation,
+  localModelOperationSignal,
+} = require("./localModelPolicyGate");
 const { spawn } = require("child_process");
 const EventEmitter = require("events");
 const fs = require("fs");
@@ -147,6 +152,13 @@ function getGpuSignature(options = {}) {
   if (!useVulkan) return "gpu:cpu";
   const deviceIndex = resolveVulkanDeviceIndex(options);
   return `gpu:vulkan:${Number.isInteger(deviceIndex) && deviceIndex >= 0 ? deviceIndex : "default"}`;
+}
+
+// What "this GPU worked before" means for a fallback's `proven` flag: the same
+// backend, device and model. A bigger model can run out of VRAM, and another
+// card can be below the CUDA build's kernel floor, where this one worked.
+function getGpuProofKey(gpuSignature, modelPath) {
+  return `${gpuSignature}|${process.env.TRANSCRIPTION_GPU_UUID || ""}|${modelPath}`;
 }
 
 function parseWhisperGpuBackend(output) {
@@ -317,6 +329,25 @@ class WhisperServerManager extends EventEmitter {
     // Output and exit of the last spawned server, read when a GPU server that
     // started fine dies mid-transcription (_fallbackAndRetry). See #1736.
     this._lastProcessInfo = null;
+    // GPU setups (getGpuProofKey) that started, and that completed a
+    // transcription, since launch. A later failure at the same stage is passing
+    // (sleep, a driver reset), not a GPU that can never work, so the fallback
+    // events report it as `proven`. The stages are kept apart because a CUDA
+    // build below the card's kernel floor starts fine and only crashes at its
+    // first inference. See #2265.
+    this.gpuProofKey = null;
+    this.startedGpuKeys = new Set();
+    this.transcribedGpuKeys = new Set();
+  }
+
+  // A re-downloaded or removed pack is a different binary: what the old one
+  // proved no longer counts.
+  forgetGpuProofs(backend) {
+    for (const keys of [this.startedGpuKeys, this.transcribedGpuKeys]) {
+      for (const key of keys) {
+        if (key.startsWith(`gpu:${backend}`)) keys.delete(key);
+      }
+    }
   }
 
   getFFmpegPath() {
@@ -513,11 +544,24 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async start(modelPath, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      this.localModelIdForPath?.(modelPath),
+      () => this._policyAllowedStart(modelPath, options),
+      { memoryOnly: options.policyMemoryOnly === true, onAbort: () => this.stop() }
+    );
+  }
+
+  async _policyAllowedStart(modelPath, options = {}) {
     if (this.startupPromise) return this.startupPromise;
 
     // Remember the options so a wake re-warm can reload with the same VAD/thread
     // signature and survive start()'s no-op guard on the next dictation. See #766.
     this.lastStartOptions = { ...options };
+    delete this.lastStartOptions.policyMemoryOnly;
+    // Belongs to this one fallback: a later start judges its GPU afresh
+    delete this.lastStartOptions.cascadeProven;
 
     const threadResolution = resolveWhisperThreads(options);
     const nextThreadSignature = getThreadSignature(threadResolution);
@@ -586,6 +630,9 @@ class WhisperServerManager extends EventEmitter {
       useVulkan: usingVulkan,
       vulkanDeviceIndex: vulkanDeviceIndex ?? -1,
     });
+    const gpuProofKey =
+      usingCuda || usingVulkan ? getGpuProofKey(this.gpuSignature, modelPath) : null;
+    this.gpuProofKey = gpuProofKey;
 
     // Check for FFmpeg first - only use --convert flag if FFmpeg is available
     const ffmpegPath = this.getFFmpegPath();
@@ -645,6 +692,7 @@ class WhisperServerManager extends EventEmitter {
       threads: threadResolution,
     });
 
+    assertLocalModelOperation(this);
     this.process = spawn(serverBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -727,11 +775,18 @@ class WhisperServerManager extends EventEmitter {
             : `${backend} whisper-server failed, falling back to CPU`,
           { error: err.message, exitCode, reason }
         );
-        if (fallbackToVulkan) this.emit("cuda-fallback", { reason, fallbackBackend: "vulkan" });
+        const proven = this.startedGpuKeys.has(gpuProofKey) || options.cascadeProven === true;
+        if (fallbackToVulkan) {
+          this.emit("cuda-fallback", { reason, fallbackBackend: "vulkan", proven });
+        }
         await this.stop();
         this.gpuFallbackActive = !fallbackToVulkan;
         const fallbackOptions = { ...options, useCuda: false, useVulkan: fallbackToVulkan };
         delete fallbackOptions.fallbackToVulkan;
+        // Vulkan is only tried when CUDA fails, so on a machine where CUDA
+        // works it never starts on its own. When the CUDA that failed had
+        // worked, Vulkan on the same GPU failing next shares the cause.
+        if (fallbackToVulkan) fallbackOptions.cascadeProven = proven;
         try {
           return await this._doStart(modelPath, fallbackOptions);
         } finally {
@@ -739,6 +794,7 @@ class WhisperServerManager extends EventEmitter {
             this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback", {
               reason,
               fallbackBackend: this.activeGpuBackend ?? "cpu",
+              proven,
             });
           }
         }
@@ -794,6 +850,7 @@ class WhisperServerManager extends EventEmitter {
       });
     }
 
+    if (gpuProofKey) this.startedGpuKeys.add(gpuProofKey);
     this.startHealthCheck();
 
     debugLogger.info("whisper-server started successfully", {
@@ -898,6 +955,24 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async transcribe(audioBuffer, options = {}) {
+    // Nothing to authorize once stopped, which clears the model: that's the
+    // ordinary not-running error, not a refusal of a model nobody named.
+    if (this.isRemote || !this.ready || !this.process)
+      return this._policyAllowedTranscribe(audioBuffer, options);
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      this.localModelIdForPath?.(this.modelPath),
+      () =>
+        this._policyAllowedTranscribe(audioBuffer, {
+          ...options,
+          signal: localModelOperationSignal(this, options.signal),
+        }),
+      { onAbort: () => this.stop() }
+    );
+  }
+
+  async _policyAllowedTranscribe(audioBuffer, options = {}) {
     if (!this.ready || (!this.process && !this.isRemote)) {
       throw new Error("whisper-server is not running");
     }
@@ -963,7 +1038,12 @@ class WhisperServerManager extends EventEmitter {
           `Content-Disposition: form-data; name="prompt"\r\n\r\n` +
           `${initialPrompt}\r\n`
       );
-      debugLogger.info("Using custom dictionary prompt", { prompt: initialPrompt });
+      // The prompt carries teammates' words, so only its size is logged at info.
+      debugLogger.info("Using custom dictionary prompt", {
+        promptLength: initialPrompt.length,
+        promptTerms: initialPrompt.split(",").filter((term) => term.trim()).length,
+      });
+      debugLogger.debug("Custom dictionary prompt", { prompt: initialPrompt });
     }
 
     parts.push(
@@ -978,6 +1058,7 @@ class WhisperServerManager extends EventEmitter {
 
     const generation = this.startGeneration;
     const modelPath = this.modelPath;
+    const gpuProofKey = this.useCuda || this.useVulkan ? this.gpuProofKey : null;
     // Where this request's output starts in the server's stderr: a crash is
     // explained by what the failing request printed, not by earlier requests
     const stderrMark = {
@@ -986,7 +1067,9 @@ class WhisperServerManager extends EventEmitter {
     };
 
     try {
-      return await this._postInference(body, boundary, signal);
+      const result = await this._postInference(body, boundary, signal);
+      if (gpuProofKey) this.transcribedGpuKeys.add(gpuProofKey);
+      return result;
     } catch (err) {
       // A cancel is not a server failure: rethrow before the retry/CPU-fallback
       // logic so it never triggers a server restart.
@@ -997,12 +1080,14 @@ class WhisperServerManager extends EventEmitter {
         boundary,
         generation,
         modelPath,
-        stderrMark
+        stderrMark,
+        signal
       );
     }
   }
 
   _postInference(body, boundary, signal) {
+    if (!this.isRemote) signal = localModelOperationSignal(this, signal);
     // Multipart boilerplate adds under a kilobyte, so body length tracks audio length.
     const timeoutMs = computeTranscriptionTimeoutMs(body.length / PCM16_MONO_16K_BYTES_PER_SECOND);
 
@@ -1082,7 +1167,7 @@ class WhisperServerManager extends EventEmitter {
     });
   }
 
-  async _retryAfterRequestFailure(err, body, boundary, generation, modelPath, stderrMark) {
+  async _retryAfterRequestFailure(err, body, boundary, generation, modelPath, stderrMark, signal) {
     if (!err?.isConnectionError || this.isRemote || this._stopRequested) throw err;
 
     if (this.startGeneration === generation) {
@@ -1102,7 +1187,7 @@ class WhisperServerManager extends EventEmitter {
           processExited,
         })
       ) {
-        return await this._fallbackAndRetry(body, boundary, modelPath, stderrMark);
+        return await this._fallbackAndRetry(body, boundary, modelPath, stderrMark, signal);
       }
       if (this.startGeneration === generation) throw err;
     }
@@ -1123,7 +1208,7 @@ class WhisperServerManager extends EventEmitter {
       throw err;
     }
     try {
-      return await this._postInference(body, boundary);
+      return await this._postInference(body, boundary, signal);
     } catch (retryErr) {
       // The replacement can be another doomed GPU server (a peer restarted with the
       // GPU flags still set): give it the same one-shot crash check before giving up.
@@ -1136,12 +1221,15 @@ class WhisperServerManager extends EventEmitter {
       }
       const exited = await this._waitForProcessExit(PROCESS_EXIT_WAIT_MS);
       if (!exited || this._stopRequested) throw retryErr;
-      return await this._fallbackAndRetry(body, boundary, modelPath, stderrMark);
+      return await this._fallbackAndRetry(body, boundary, modelPath, stderrMark, signal);
     }
   }
 
-  async _fallbackAndRetry(body, boundary, modelPath, stderrMark) {
+  async _fallbackAndRetry(body, boundary, modelPath, stderrMark, signal) {
+    signal?.throwIfAborted();
+    assertLocalModelOperation(this);
     const backend = this.useCuda ? "cuda" : "vulkan";
+    const proven = this.transcribedGpuKeys.has(this.gpuProofKey);
     const fallbackToVulkan = backend === "cuda" && this.lastStartOptions.fallbackToVulkan === true;
     // Read the crashed server's output now (the start below replaces it),
     // from where the failing request began. A peer's replacement server is a
@@ -1163,7 +1251,7 @@ class WhisperServerManager extends EventEmitter {
       }
     );
     if (fallbackToVulkan) {
-      this.emit("cuda-fallback", { reason, fallbackBackend: "vulkan" });
+      this.emit("cuda-fallback", { reason, fallbackBackend: "vulkan", proven });
     }
     const fallbackOptions = {
       ...this.lastStartOptions,
@@ -1171,6 +1259,7 @@ class WhisperServerManager extends EventEmitter {
       useVulkan: fallbackToVulkan,
     };
     delete fallbackOptions.fallbackToVulkan;
+    if (fallbackToVulkan) fallbackOptions.cascadeProven = proven;
     await this.start(modelPath, fallbackOptions);
     this.gpuFallbackActive = !this.useVulkan;
     // Emit only once the server is up: it tells whether CPU is in use, or a
@@ -1179,9 +1268,10 @@ class WhisperServerManager extends EventEmitter {
       this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback", {
         reason,
         fallbackBackend: this.activeGpuBackend ?? "cpu",
+        proven,
       });
     }
-    return await this._postInference(body, boundary);
+    return await this._postInference(body, boundary, signal);
   }
 
   async _waitForProcessExit(timeoutMs) {

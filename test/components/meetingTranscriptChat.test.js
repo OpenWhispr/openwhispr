@@ -164,3 +164,112 @@ test("a You the viewer set in their own mappings still reads You", async () => {
   assert.ok(/>You</.test(html));
   assert.ok(!html.includes("Alice Owner"));
 });
+
+test("a local self mapping wins over an unlocked stored self name, but not a locked correction", async () => {
+  const segment = {
+    id: "p1",
+    text: "My commitment",
+    source: "mic",
+    timestamp: 1,
+    speaker: "speaker_0",
+    speakerName: "You",
+    recorderName: "Alice Recorder",
+  };
+  const props = { speakerMappings: { speaker_0: "You" }, recorderLabel: "Original Recorder" };
+  const mapped = await renderChat({ ...props, segments: [segment] });
+  assert.match(mapped, />You</);
+  assert.ok(!mapped.includes("Alice Recorder"));
+
+  const locked = await renderChat({
+    ...props,
+    segments: [{ ...segment, speakerLocked: true }],
+  });
+  assert.ok(locked.includes("Alice Recorder"));
+  assert.doesNotMatch(locked, />You</);
+
+  const adjacent = await renderChat({
+    ...props,
+    segments: [segment, { ...segment, id: "p2", timestamp: 2, speakerLocked: true }],
+  });
+  assert.match(adjacent, />You</);
+  assert.ok(adjacent.includes("Alice Recorder"));
+  assert.ok(
+    !adjacent.includes("grid-rows-[0fr]"),
+    "the recorder's label stays visible after the viewer's line"
+  );
+});
+
+for (const [recorderName, expectedLabel] of [
+  [undefined, "Alice Recorder"],
+  ["Carol Recorder", "Carol Recorder"],
+  ["ليلى", "ليلى"],
+]) {
+  test(`stored self suggestions display ${expectedLabel} on a teammate's note`, async () => {
+    const html = await renderChat({
+      recorderLabel: "Alice Recorder",
+      segments: [
+        {
+          id: "suggested",
+          source: "mic",
+          speaker: "speaker_0",
+          suggestedName: "You",
+          suggestedProfileId: 7,
+          recorderName,
+          text: "Recorder's words",
+        },
+      ],
+    });
+    assert.match(html, new RegExp(`<span dir="auto"[^>]*>${expectedLabel}</span>`));
+    assert.doesNotMatch(html, />You</);
+  });
+}
+
+test("a later recorder's mic lines retain their name in the shared transcript", async () => {
+  const html = await renderChat({
+    recorderLabel: "Alice Owner",
+    segments: [
+      {
+        id: "bob",
+        source: "mic",
+        text: "My new recording",
+        timestamp: 1,
+        recorderName: "Bob Viewer",
+      },
+    ],
+  });
+  assert.ok(html.includes("Bob Viewer"));
+  assert.ok(!html.includes("Alice Owner"));
+});
+
+test("a correction of an unnumbered recorder line overrides its session identity", async () => {
+  const html = await renderChat({
+    recorderLabel: "Alice Owner",
+    segments: [
+      {
+        id: "bob",
+        source: "mic",
+        text: "Corrected",
+        timestamp: 1,
+        recorderName: "Bob Viewer",
+        speakerName: "Alice Owner",
+        speakerLocked: true,
+      },
+    ],
+  });
+  assert.ok(html.includes("Alice Owner"));
+  assert.ok(!html.includes("Bob Viewer"));
+});
+
+test("original unnumbered mic rows show the resolved recorder and preserve named corrections", async () => {
+  const segments = [{ id: "original", source: "mic", text: "Original words", timestamp: 1 }];
+  const shared = await renderChat({ segments, recorderLabel: "Alice Recorder" });
+  assert.ok(shared.includes("Alice Recorder"));
+  const own = await renderChat({ segments });
+  assert.match(own, />You</);
+  const corrected = await renderChat({
+    segments: [{ ...segments[0], speakerName: "Corrected", speakerLocked: true }],
+    recorderLabel: "Alice Recorder",
+  });
+  assert.ok(corrected.includes("Corrected"));
+  assert.ok(!corrected.includes("Alice Recorder"));
+});

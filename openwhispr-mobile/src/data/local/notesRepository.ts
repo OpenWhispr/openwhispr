@@ -947,6 +947,7 @@ export class LocalNotesRepository implements NotesRepository {
           isDefault: remote.is_default ? 1 : 0,
           sortOrder: remote.sort_order,
           clientFolderId: remote.client_folder_id,
+          privateWorkspaceId: remote.private_workspace_id ?? null,
           remoteId: remote.id,
           deletedAt: remote.deleted_at,
           pendingSync: 0,
@@ -959,6 +960,14 @@ export class LocalNotesRepository implements NotesRepository {
       return;
     }
 
+    // Placement is remote metadata; learning it must not overwrite a pending rename.
+    if (remote.private_workspace_id !== undefined) {
+      this.database
+        .update(folders)
+        .set({ privateWorkspaceId: remote.private_workspace_id })
+        .where(eq(folders.id, local.id))
+        .run();
+    }
     if (local.pendingSync === 1) return;
 
     if (remote.deleted_at) {
@@ -1605,7 +1614,8 @@ export class LocalNotesRepository implements NotesRepository {
     this.database.delete(dictionaryEntries).run();
     this.database.delete(snippets).run();
     // Wholesale, not per-key: also clears the team cursors/capability flag/park
-    // keys (teamCursors.ts, teamSpacesCapability.ts, pullParkTracker.ts) —
+    // keys (teamCursors.ts, teamSpacesCapability.ts, pullParkTracker.ts) and
+    // the shared dictionary state and cursors (`shared_dictionary.*`) —
     // every sync_state row is per-account bookkeeping with no reason to
     // survive a user switch. The caller re-seeds sync.user_id right after.
     this.database.delete(syncState).run();

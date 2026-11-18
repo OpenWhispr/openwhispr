@@ -3,6 +3,8 @@ import {
   invalidateValidatedAuthContext,
   readAuthTokenState,
 } from "../lib/authRequestContext";
+import { recordServerDate } from "../lib/serverClock";
+import i18n from "../i18n";
 
 interface CloudApiResponse<T = unknown> {
   success: boolean;
@@ -10,6 +12,8 @@ interface CloudApiResponse<T = unknown> {
   error?: string;
   code?: string;
   status?: number;
+  serverDate?: string;
+  requestSent?: boolean;
 }
 
 // Common `{ data: T }` envelope returned by the cloud API.
@@ -21,13 +25,33 @@ export class CloudApiError extends Error {
   status: number;
   code?: string;
   details?: unknown;
-  constructor(message: string, status: number, code?: string, details?: unknown) {
+  /** False when main refused the request before anything left this device. */
+  requestSent?: boolean;
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+    details?: unknown,
+    requestSent?: boolean
+  ) {
     super(message);
     this.name = "CloudApiError";
     this.status = status;
     this.code = code;
     this.details = details;
+    this.requestSent = requestSent;
   }
+}
+
+/**
+ * The server's own reason when it refused a request (a 4xx with a message), or null otherwise:
+ * the connection, an expired session, or a bare status the main process filled in.
+ */
+export function serverRefusalMessage(error: unknown): string | null {
+  if (!(error instanceof CloudApiError)) return null;
+  const { status, message } = error;
+  if (status < 400 || status >= 500 || status === 401) return null;
+  return message === `API error: ${status}` ? null : message;
 }
 
 async function cloudRequest<T = unknown>(
@@ -35,7 +59,8 @@ async function cloudRequest<T = unknown>(
   path: string,
   body?: unknown,
   isPublic?: boolean,
-  authGenerationOverride?: number
+  authGenerationOverride?: number,
+  cache?: "no-store"
 ): Promise<T> {
   const expectedAuthGeneration = isPublic
     ? undefined
@@ -46,26 +71,36 @@ async function cloudRequest<T = unknown>(
     body,
     public: isPublic,
     expectedAuthGeneration,
+    ...(cache ? { cache } : {}),
   })) as (CloudApiResponse<T> & { details?: unknown }) | undefined;
+  recordServerDate(result?.serverDate, Date.now());
 
   if (!result?.success) {
     if (result?.code === "AUTH_CONTEXT_CHANGED" || result?.code === "AUTH_CONTEXT_UNVALIDATED") {
       await readAuthTokenState().catch(() => undefined);
-      invalidateValidatedAuthContext();
+      // A request pinned to a replaced sign-in says nothing about the sign-in
+      // that replaced it.
+      if (expectedAuthGeneration === getValidatedAuthGeneration()) {
+        invalidateValidatedAuthContext();
+      }
     }
     throw new CloudApiError(
-      result?.error ?? "Cloud API request failed",
+      // Main's own wording is for logs; this one reaches error toasts.
+      result?.code === "AUTH_CONTEXT_UNVALIDATED"
+        ? i18n.t("auth.unconfirmedSession")
+        : (result?.error ?? "Cloud API request failed"),
       result?.status ?? 0,
       result?.code,
-      result?.details
+      result?.details,
+      result?.requestSent
     );
   }
 
   return result.data as T;
 }
 
-export async function cloudGet<T = unknown>(path: string): Promise<T> {
-  return cloudRequest<T>("GET", path);
+export async function cloudGet<T = unknown>(path: string, cache?: "no-store"): Promise<T> {
+  return cloudRequest<T>("GET", path, undefined, undefined, undefined, cache);
 }
 
 // Account-scoped work may wait behind another renderer operation. Preserve the
@@ -73,9 +108,10 @@ export async function cloudGet<T = unknown>(path: string): Promise<T> {
 // replacement account's token when it eventually reaches the main process.
 export async function cloudGetForAuthGeneration<T = unknown>(
   path: string,
-  authGeneration: number
+  authGeneration: number,
+  cache?: "no-store"
 ): Promise<T> {
-  return cloudRequest<T>("GET", path, undefined, false, authGeneration);
+  return cloudRequest<T>("GET", path, undefined, false, authGeneration, cache);
 }
 
 // Account-scope bootstrap is the only authenticated call allowed before the
@@ -126,6 +162,12 @@ export async function cloudDeleteForAuthGeneration<T = unknown>(
   authGeneration: number
 ): Promise<T> {
   return cloudRequest<T>("DELETE", path, body, false, authGeneration);
+}
+
+// An auth refusal raised after the request left says nothing about whether the
+// server acted on it.
+export function wasRefusedBeforeSending(error: unknown): boolean {
+  return error instanceof CloudApiError && isAuthContextError(error) && error.requestSent === false;
 }
 
 export function isAuthContextError(error: unknown): boolean {

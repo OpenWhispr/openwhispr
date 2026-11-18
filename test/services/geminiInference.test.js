@@ -72,6 +72,9 @@ test("Gemini cleanup uses native instructions and metadata-only logs", async (t)
 test("thinking suppression uses controls supported by each registered Gemini model", async (t) => {
   const { call, requests } = await setup(t);
   for (const [model, control] of [
+    ["gemini-3.6-flash", { thinkingLevel: "minimal" }],
+    ["gemini-3.8-flash", { thinkingLevel: "low" }],
+    ["gemini-4-argon", { thinkingLevel: "low" }],
     ["gemini-3.5-flash", { thinkingLevel: "minimal" }],
     ["gemini-3.5-flash-lite", { thinkingLevel: "minimal" }],
     ["gemini-3.1-flash-lite", { thinkingLevel: "minimal" }],
@@ -149,4 +152,61 @@ test("screenshots remain attached but are never included in request logs", async
     inlineData: { mimeType: "image/jpeg", data: "private-base64" },
   });
   assert.equal(JSON.stringify(logs).includes("private-base64"), false);
+});
+
+test("a Gemini model added through the catalog brings its own thinking floor", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const data = structuredClone(old.data);
+  const gemini = data.cloudProviders.find((p) => p.id === "gemini");
+  gemini.models.push({
+    id: "gemini-9-flash",
+    name: "Gemini 9 Flash",
+    description: "Fixture",
+    supportsThinking: true,
+    thinkingFloor: { level: "low" },
+  });
+  store.replaceRegistryData({ data, manifestVersion: old.manifestVersion + 1 });
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
+  const { requests, call } = await setup(t);
+  await call({ model: "gemini-9-flash" });
+  assert.deepEqual(requests.at(-1).generationConfig.thinkingConfig, {
+    thinkingLevel: "low",
+    includeThoughts: false,
+  });
+});
+
+test("a catalog thinking floor also reaches the streaming and compatible paths", async () => {
+  const { registryData } = await import("../../src/models/registryData.js");
+  const store = await import("../../src/models/registryData.js");
+  const data = structuredClone(registryData);
+  const gemini = data.cloudProviders.find((provider) => provider.id === "gemini");
+  const base = { ...gemini.models[0], supportsThinking: true };
+  gemini.models.push(
+    { ...base, id: "gemini-remote-level", thinkingFloor: { level: "low" } },
+    { ...base, id: "gemini-remote-budget", thinkingFloor: { budget: 128 } }
+  );
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  const { geminiCatalogThinkingFloor, suppressThinking } =
+    await import("../../src/services/ai/thinkingSuppressionDialects.ts");
+
+  assert.deepEqual(geminiCatalogThinkingFloor("gemini-remote-level"), {
+    thinkingLevel: "low",
+    includeThoughts: false,
+  });
+  assert.deepEqual(geminiCatalogThinkingFloor("gemini-remote-budget"), {
+    thinkingBudget: 128,
+    includeThoughts: false,
+  });
+  assert.equal(geminiCatalogThinkingFloor("gemini-no-floor"), undefined);
+  const effort = (model) => {
+    const body = {};
+    suppressThinking(body, "gemini", model);
+    return body.reasoning_effort;
+  };
+  assert.equal(effort("gemini-remote-level"), "low");
+  assert.equal(effort("gemini-remote-budget"), "low");
+  assert.equal(effort("gemini-no-floor"), "minimal");
 });

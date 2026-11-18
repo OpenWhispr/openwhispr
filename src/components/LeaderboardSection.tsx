@@ -28,6 +28,7 @@ import {
   normalizeLeaderboardSelection,
   pageCount,
   pageForRank,
+  leaderboardInviteScope,
   resolveLeaderboardScopeKey,
   resolveLeaderboardSurface,
   shouldFetchLeaderboardWeekStarts,
@@ -38,6 +39,7 @@ import {
   type LeaderboardWeekStartsCacheEntry,
 } from "../helpers/leaderboard";
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
+import { workspaceCan } from "../lib/capabilities";
 import { CloudApiError } from "../services/cloudApi";
 import { LeaderboardService } from "../services/LeaderboardService";
 import { InvitationsService } from "../services/InvitationsService";
@@ -47,6 +49,7 @@ import { useWorkspaceStore } from "../stores/workspaceStore";
 import type {
   Leaderboard,
   LeaderboardAccess,
+  LeaderboardAccessScope,
   LeaderboardMember,
   LeaderboardMetric,
   LeaderboardRange,
@@ -85,6 +88,8 @@ interface LeaderboardSectionProps {
   authGeneration: number | null;
   /** The session has settled, so a missing credential will not arrive on its own. */
   authSettled: boolean;
+  /** Presented from this device while the server can't confirm it: signing in won't help. */
+  accountOffline: boolean;
   isSignedIn: boolean;
   /** The account row says joined — what the roster and Leave hang on, not the device toggle. */
   participating: boolean;
@@ -99,6 +104,7 @@ interface LeaderboardSectionProps {
   onLeave: () => Promise<boolean>;
   onJoin: () => Promise<boolean>;
   onRefreshParticipation: () => void;
+  onSessionRefresh: () => void;
   onSignIn: () => void;
   onSsoSignIn: () => void;
   ssoActionDisabled: boolean;
@@ -151,6 +157,7 @@ export default function LeaderboardSection({
   accountId,
   authGeneration,
   authSettled,
+  accountOffline,
   isSignedIn,
   participating,
   cloudAccessAllowed,
@@ -162,6 +169,7 @@ export default function LeaderboardSection({
   onJoin,
   onLeave,
   onRefreshParticipation,
+  onSessionRefresh,
   onSignIn,
   onSsoSignIn,
   ssoActionDisabled,
@@ -172,6 +180,8 @@ export default function LeaderboardSection({
   const { toast } = useToast();
   const loaded = useWorkspaceStore((state) => state.loaded);
   const refresh = useWorkspaceStore((state) => state.refresh);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [access, setAccess] = useState<LeaderboardAccess | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessError, setAccessError] = useState<"auth" | "generic" | null>(null);
@@ -208,6 +218,17 @@ export default function LeaderboardSection({
   const weekStartsCacheRef = useRef(new Map<string, LeaderboardWeekStartsCacheEntry>());
   const scopes = useMemo(() => access?.scopes ?? [], [access]);
   const selectedScope = scopes.find((scope) => scope.key === scopeKey);
+  // Scopes carry only the role. The workspace list carries the server's capabilities, so it
+  // decides whenever the workspace is in it.
+  const canInviteToScope = (scope: LeaderboardAccessScope): boolean => {
+    if (scope.kind !== "workspace") return false;
+    const workspace =
+      workspaces.find((candidate) => candidate.id === scope.id) ??
+      (scope.role ? { role: scope.role } : null);
+    return workspaceCan(workspace, "manage_members");
+  };
+  const canListSelectedInvites =
+    selectedScope?.state === "invite" && canInviteToScope(selectedScope);
   const selectedRequestKey = leaderboardRequestKey(
     selectedScope?.key ?? null,
     metric,
@@ -246,7 +267,7 @@ export default function LeaderboardSection({
         // presenting a session whose refetch failed, so this would otherwise
         // be a spinner with no message and no way out.
         setAccessLoading(!authSettled);
-        setAccessError(authSettled ? "auth" : null);
+        setAccessError(authSettled ? (accountOffline ? "generic" : "auth") : null);
         return;
       }
       setAccessLoading(true);
@@ -269,15 +290,11 @@ export default function LeaderboardSection({
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
       }
     },
-    [accountId, authGeneration, authSettled]
+    [accountId, accountOffline, authGeneration, authSettled]
   );
 
   useEffect(() => {
-    const canListInvites =
-      selectedScope?.kind === "workspace" &&
-      selectedScope.state === "invite" &&
-      (selectedScope.role === "owner" || selectedScope.role === "admin");
-    if (!canListInvites) {
+    if (!selectedScope || !canListSelectedInvites) {
       setPendingInvites([]);
       return;
     }
@@ -304,7 +321,7 @@ export default function LeaderboardSection({
     return () => {
       cancelled = true;
     };
-  }, [pendingInviteRevision, selectedScope]);
+  }, [canListSelectedInvites, pendingInviteRevision, selectedScope]);
 
   useEffect(() => {
     if (isSignedIn && !loaded) void refresh();
@@ -644,7 +661,7 @@ export default function LeaderboardSection({
 
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
   if (accessLoading && !access) return <LeaderboardSkeleton />;
-  if (accessError && !access) {
+  if (accessError && (!access || accountOffline)) {
     return (
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}
@@ -654,7 +671,13 @@ export default function LeaderboardSection({
             ? t("insights.leaderboard.signInDescription")
             : t("insights.leaderboard.accessError")
         }
-        onRetry={accessError === "auth" ? onSignIn : () => void loadAccess()}
+        onRetry={
+          accessError === "auth"
+            ? onSignIn
+            : accountOffline
+              ? onSessionRefresh
+              : () => void loadAccess()
+        }
       />
     );
   }
@@ -784,16 +807,12 @@ export default function LeaderboardSection({
   };
   const domainNeedsWorkspace =
     selectedScope.kind === "domain" && !scopes.some((scope) => scope.kind === "workspace");
-  const inviteableWorkspace =
-    selectedScope.kind === "workspace" &&
-    (selectedScope.role === "owner" || selectedScope.role === "admin")
-      ? selectedScope
-      : selectedScope.kind === "domain"
-        ? scopes.find(
-            (scope) =>
-              scope.kind === "workspace" && (scope.role === "owner" || scope.role === "admin")
-          )
-        : undefined;
+  const inviteableWorkspace = leaderboardInviteScope(
+    selectedScope,
+    scopes,
+    activeWorkspaceId,
+    canInviteToScope
+  );
   const canGrowLeaderboard = domainNeedsWorkspace || Boolean(inviteableWorkspace);
   const openLeaderboardGrowthAction = () => {
     if (domainNeedsWorkspace) {
@@ -1008,7 +1027,9 @@ export default function LeaderboardSection({
               ? onSsoSignIn
               : visibleFailure === "auth"
                 ? onSignIn
-                : () => void load()
+                : accountOffline
+                  ? onSessionRefresh
+                  : () => void load()
           }
         />
       ) : !visibleLeaderboard ? (

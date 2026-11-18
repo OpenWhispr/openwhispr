@@ -1,4 +1,5 @@
 import { uncheckedSync, type SyncCheckpoint } from './syncContext';
+import * as Sentry from '@sentry/react-native';
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { dictionaryEntries } from '@/db/schema';
@@ -8,7 +9,11 @@ import {
   type RemoteDictionaryEntry,
 } from '@/data/remote/dictionaryApi';
 import { notesRepository } from '@/data';
-import { DICTIONARY_CURSOR_KEY, DICTIONARY_CURSOR_ID_KEY } from './pullCursors';
+import {
+  DICTIONARY_CURSOR_KEY,
+  DICTIONARY_CURSOR_ID_KEY,
+  DICTIONARY_SHARED_AT_BACKFILL_KEY,
+} from './pullCursors';
 
 const PAGE_SIZE = 200;
 
@@ -65,6 +70,7 @@ function applyRemote(remote: RemoteDictionaryEntry): void {
         clientDictId: remote.client_dict_id,
         remoteId: remote.id,
         deletedAt: remote.deleted_at,
+        sharedAt: remote.shared_at ?? null,
         pendingSync: 0,
         createdAt: remote.created_at,
         updatedAt: remote.updated_at,
@@ -80,12 +86,38 @@ function applyRemote(remote: RemoteDictionaryEntry): void {
   // shouldn't wipe the new one. The fresh create will push and resurrect.
   if (remote.deleted_at) {
     if (!local.remoteId && local.pendingSync === 1) return;
+    // A take-back (the user re-added a word moved into a shared list) is newer
+    // intent too: the server retires a moved word's personal row, and this pull
+    // runs before the take-back's push. Without the remoteId the push sends a
+    // create, which revives the tombstone with shared_at cleared.
+    if (local.pendingSync === 1 && local.sharedAtCleared === 1 && !local.deletedAt) {
+      db.update(dictionaryEntries)
+        .set({ remoteId: null })
+        .where(eq(dictionaryEntries.id, local.id))
+        .run();
+      return;
+    }
     db.delete(dictionaryEntries).where(eq(dictionaryEntries.id, local.id)).run();
     return;
   }
 
-  // For non-tombstone updates, a local pending write wins until pushed.
-  if (local.pendingSync === 1) return;
+  // shared_at is server-owned metadata, not a user edit: an absent field (older
+  // API) keeps the local value, an explicit null clears it.
+  const sharedAt = remote.shared_at === undefined ? local.sharedAt : remote.shared_at;
+
+  // For non-tombstone updates, a local pending write wins until pushed. Only
+  // shared_at is recorded meanwhile, since the one-time backfill never revisits
+  // the row once its cursor has passed. A create the server hasn't seen and a
+  // clear still to be pushed keep their own marker: the push decides those.
+  if (local.pendingSync === 1) {
+    if (local.remoteId && !local.sharedAtCleared && sharedAt !== local.sharedAt) {
+      db.update(dictionaryEntries)
+        .set({ sharedAt })
+        .where(eq(dictionaryEntries.id, local.id))
+        .run();
+    }
+    return;
+  }
 
   db.update(dictionaryEntries)
     .set({
@@ -94,6 +126,8 @@ function applyRemote(remote: RemoteDictionaryEntry): void {
       clientDictId: remote.client_dict_id ?? local.clientDictId,
       remoteId: remote.id,
       deletedAt: null,
+      sharedAt,
+      sharedAtCleared: 0,
       pendingSync: 0,
       updatedAt: remote.updated_at,
     })
@@ -111,8 +145,11 @@ type Fetcher = (
 // supplies the field that drives cursor advancement — `created_at` for
 // snapshot pulls (which order by created_at) and `updated_at` for delta pulls
 // (ordered by updated_at). Either way the (cursor, id) pair is a strict
-// keyset; stale-cursor short-circuit guards against an infinite loop if the
-// server ever returned a page without advancing the boundary.
+// keyset. An API whose timestamps are finer than the cursor it accepts repeats
+// a batch written at one instant, so a page that doesn't advance the boundary
+// ends the walk (returning false) and keeps what the applied pages reached:
+// failing instead would save nothing, and every run would start over. Mirrors
+// desktop SyncService's dictionary pull.
 async function walkPages(
   fetcher: Fetcher,
   cursorField: 'created_at' | 'updated_at',
@@ -120,7 +157,7 @@ async function walkPages(
   initialCursorId: string | null,
   maxes: { updatedAt: string; id: string },
   checkpoint: SyncCheckpoint,
-): Promise<void> {
+): Promise<boolean> {
   let cursor = initialCursor;
   let cursorId = initialCursorId;
 
@@ -128,7 +165,7 @@ async function walkPages(
     checkpoint();
     const { entries, hasMore } = await fetcher(cursor, PAGE_SIZE, cursorId);
     checkpoint();
-    if (entries.length === 0) break;
+    if (entries.length === 0) return true;
 
     for (const remote of entries) {
       applyRemote(remote);
@@ -140,10 +177,18 @@ async function walkPages(
       }
     }
 
-    if (!hasMore) break;
+    if (!hasMore) return true;
     const last = entries[entries.length - 1];
     const lastCursor = last[cursorField];
-    if (lastCursor === cursor && last.id === cursorId) break;
+    if (lastCursor === cursor && last.id === cursorId) {
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: `Dictionary ${cursorField} pull stopped advancing; resuming next run`,
+        level: 'warning',
+        data: { cursor, cursorId },
+      });
+      return false;
+    }
     cursor = lastCursor;
     cursorId = last.id;
   }
@@ -165,17 +210,42 @@ export async function pullDictionary(checkpoint: SyncCheckpoint = uncheckedSync)
   const since = notesRepository.getSyncState(DICTIONARY_CURSOR_KEY);
   const sinceId = notesRepository.getSyncState(DICTIONARY_CURSOR_ID_KEY);
   const maxes = { updatedAt: since ?? '', id: sinceId ?? '' };
+  // Rows pulled before shared_at existed never carry it, and a cursor that
+  // already passed them never revisits. Once, a snapshot refreshes the live
+  // rows, then the usual delta from the stored cursor applies what a live-only
+  // snapshot can't show: deletions and retirements since that cursor. Nothing
+  // is saved until both finish, so an interrupted backfill simply runs again;
+  // one that stopped advancing is not marked done either, so it is retried.
+  const backfill = !notesRepository.getSyncState(DICTIONARY_SHARED_AT_BACKFILL_KEY);
+  let complete = true;
 
-  if (!since) {
+  if (!since || backfill) {
     checkpoint();
-    await walkPages(fetchDictionarySnapshot, 'created_at', null, null, maxes, checkpoint);
+    complete = await walkPages(
+      fetchDictionarySnapshot,
+      'created_at',
+      null,
+      null,
+      maxes,
+      checkpoint,
+    );
     checkpoint();
-  } else {
+  }
+  if (since) {
     checkpoint();
-    await walkPages(fetchDictionary, 'updated_at', since, sinceId, maxes, checkpoint);
+    const deltaComplete = await walkPages(
+      fetchDictionary,
+      'updated_at',
+      since,
+      sinceId,
+      maxes,
+      checkpoint,
+    );
+    complete &&= deltaComplete;
     checkpoint();
   }
 
   if (maxes.updatedAt) notesRepository.setSyncState(DICTIONARY_CURSOR_KEY, maxes.updatedAt);
   if (maxes.id) notesRepository.setSyncState(DICTIONARY_CURSOR_ID_KEY, maxes.id);
+  if (backfill && complete) notesRepository.setSyncState(DICTIONARY_SHARED_AT_BACKFILL_KEY, '1');
 }

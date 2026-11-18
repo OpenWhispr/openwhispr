@@ -68,6 +68,7 @@ export interface TranscriptionApiKeys {
   tinfoilApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
+  openrouterApiKey: string;
   customTranscriptionApiKey?: string;
 }
 
@@ -89,6 +90,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.deepgramApiKey;
     case "assemblyai":
       return keys.assemblyaiApiKey;
+    case "openrouter":
+      return keys.openrouterApiKey;
     case "custom":
       return keys.customTranscriptionApiKey || "";
     default:
@@ -127,7 +130,7 @@ export async function transcribeFile(
   filePath: string,
   cfg: FileTranscriptionConfig,
   diarize: boolean,
-  opts: { requestId?: string; timestamps?: boolean } = {}
+  opts: { requestId?: string; timestamps?: boolean; purpose?: "dictation" | "upload" } = {}
 ): Promise<FileTranscriptionResult> {
   // Managed enterprise STT outranks every personal lane, OpenWhispr Cloud and
   // local included: under managed_required no audio may leave the tenant.
@@ -167,6 +170,7 @@ export async function transcribeFile(
       // override its auto language detection.
       ...(provider === "cohere" && cfg.language ? { language: cfg.language } : {}),
       requestId: opts.requestId,
+      purpose: opts.purpose,
     });
   }
 
@@ -184,6 +188,8 @@ export async function transcribeFile(
   // (fail-closed on misconfiguration) instead of stale BYOK settings.
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
+    requestId: opts.requestId,
+    purpose: opts.purpose,
     managed: managed?.kind === "managed" ? managed : undefined,
     apiKey: cfg.getApiKey(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,

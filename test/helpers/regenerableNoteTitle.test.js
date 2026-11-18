@@ -25,14 +25,12 @@ test("localized placeholder labels are regenerable", async () => {
   assert.equal(isRegenerableNoteTitle("Neue Notiz", ["Neue Notiz"]), true);
 });
 
-test("unedited calendar event name is regenerable", async () => {
+test("a calendar event name is preserved (not regenerable)", async () => {
   const { isRegenerableNoteTitle } = await load();
-  assert.equal(isRegenerableNoteTitle("Weekly Team Sync", LABELS, "Weekly Team Sync"), true);
+  assert.equal(isRegenerableNoteTitle("Weekly Team Sync", LABELS), false);
 });
 
 test("a manually-typed title is preserved (not regenerable)", async () => {
   const { isRegenerableNoteTitle } = await load();
   assert.equal(isRegenerableNoteTitle("Q3 Roadmap Decisions", LABELS), false);
-  // even if a calendar event exists, a title that differs from it is user-set
-  assert.equal(isRegenerableNoteTitle("My own title", LABELS, "Weekly Team Sync"), false);
 });

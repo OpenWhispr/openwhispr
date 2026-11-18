@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const { execFile, spawn } = require("child_process");
 const debugLogger = require("./debugLogger");
-const { isMarkdownTargetSignature } = require("./markdownTargets");
+const { parseWindowHandle } = require("./windowsPasteTarget");
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
 const MAX_SELECTION_EDIT_CODE_POINTS = 6000;
@@ -99,6 +99,8 @@ const HELD_BACK_CODES = {
   "modifiers-held": "modifiers_held",
   "wl-copy-missing": "wl_copy_missing",
   "wl-copy-failed": "wl_copy_failed",
+  cancelled: "cancelled",
+  "target-changed": "target_changed",
 };
 
 function heldBackCode(fallback, { code, reason } = {}) {
@@ -187,6 +189,22 @@ class SelectionManager {
     return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget : null;
   }
 
+  // Brings a captured Windows window forward and says whether it is in front now. The paste
+  // helper falls back to whatever is in front when its restore fails, so a paste that may
+  // only land in this window asks first. A helper without --restore-window reports the window
+  // in front unchanged, which reads as not restored.
+  async restoreWinTarget(target) {
+    if (target?.kind !== "win-hwnd") return false;
+    const binary = this.clipboardManager.resolveWindowsFastPasteBinary();
+    if (!binary) return false;
+    const result = await runSpawn(binary, ["--restore-window", target.id, "--detect-only"], {
+      timeout: 700,
+    });
+    const front = result.success ? result.stdout.match(/TARGET\s+(\S+)/)?.[1] : null;
+    const wanted = parseWindowHandle(target.id);
+    return wanted !== null && front != null && parseWindowHandle(front) === wanted;
+  }
+
   // The dictation target as the Tone & Style classifier reads it: the app's
   // identity, its window title and, for a macOS browser page, the URL's host.
   // Titles stay in the main process; only the resulting category leaves it.
@@ -237,6 +255,11 @@ class SelectionManager {
       while (this._captureTargetPromise) {
         await this._captureTargetPromise;
       }
+      if (this.platform === "darwin") {
+        while (this.textEditMonitor?._captureTargetPromise) {
+          await this.textEditMonitor._captureTargetPromise;
+        }
+      }
       this._pruneSessions();
       const expectedTarget =
         this.platform === "darwin" && this.textEditMonitor?.lastTargetPid
@@ -248,15 +271,13 @@ class SelectionManager {
       const capture = await this._readCurrentSelection(expectedTarget, { probeEditable });
       if (capture.status === "editable") {
         const sessionId = crypto.randomUUID();
-        // The renderer asks for plain prose and strips markdown only when the
-        // target is not a markdown-friendly app.
-        const acceptsMarkdown = await this._targetAcceptsMarkdown(capture.target);
         this.sessions.set(sessionId, {
           kind: "caret",
           target: capture.target,
+          windowTitle: await this._macWindowTitle(capture.target),
           expiresAt: this.now() + SESSION_TTL_MS,
         });
-        return { status: "editable", sessionId, acceptsMarkdown };
+        return { status: "editable", sessionId };
       }
       if (capture.status !== "selected") return capture;
 
@@ -285,6 +306,11 @@ class SelectionManager {
     });
   }
 
+  cancelSelectionEdit(sessionId) {
+    this.sessions.get(sessionId)?.deliveryController?.abort();
+    this.sessions.delete(sessionId);
+  }
+
   async replaceSelectedText(sessionId, replacement, options = {}) {
     if (typeof replacement !== "string" || replacement.length === 0) {
       return { success: false, code: "invalid_replacement" };
@@ -293,12 +319,13 @@ class SelectionManager {
     return this.clipboardManager.runClipboardOperation(async () => {
       this._pruneSessions();
       const session = this.sessions.get(sessionId);
-      this.sessions.delete(sessionId);
       if (!session || session.kind !== "selection") {
         return { success: false, code: "session_expired" };
       }
 
       const current = await this._readCurrentSelection(session.target, { activate: true });
+      if (this.sessions.get(sessionId) !== session) return { success: false, code: "cancelled" };
+      this.sessions.delete(sessionId);
       if (current.status === "target_changed") {
         return { success: false, code: "target_changed" };
       }
@@ -330,6 +357,8 @@ class SelectionManager {
     });
   }
 
+  // Types an answer at the caret a capture found. The field must still be
+  // writable, with nothing selected, and in front, or nothing is pasted.
   async pasteAtCapturedTarget(sessionId, text, options = {}) {
     if (typeof text !== "string" || text.length === 0) {
       return this._declineAssistantPaste("invalid_replacement", {
@@ -340,8 +369,7 @@ class SelectionManager {
     return this.clipboardManager.runClipboardOperation(async () => {
       this._pruneSessions();
       const session = this.sessions.get(sessionId);
-      this.sessions.delete(sessionId);
-      if (!session || session.kind !== "caret") {
+      if (!session || session.kind !== "caret" || session.delivering) {
         return this._declineAssistantPaste("session_expired", {
           sessionFound: Boolean(session),
           sessionKind: session?.kind ?? null,
@@ -349,39 +377,89 @@ class SelectionManager {
       }
 
       const current = await this._readCurrentSelection(session.target, { probeEditable: true });
+      const windowTitle =
+        current.status === "editable" ? await this._macWindowTitle(session.target) : undefined;
+      if (this.sessions.get(sessionId) !== session || session.delivering) {
+        return this._declineAssistantPaste("cancelled");
+      }
       if (current.status !== "editable") {
+        this.sessions.delete(sessionId);
         return this._declineAssistantPaste(heldBackCode("target_changed", current), {
-          sessionFound: true,
-          sessionKind: "caret",
           probeStatus: current.status,
           probeCode: current.code ?? null,
         });
       }
+      // A macOS target is the app, so another of its windows (a document, a
+      // tab) would pass the probe; and the agent window, a non-activating
+      // panel, can hold the keys while the app stays in front, so ⌘V would
+      // land there.
+      if (windowTitle !== session.windowTitle || options.webContents?.isFocused()) {
+        this.sessions.delete(sessionId);
+        return this._declineAssistantPaste("target_changed");
+      }
 
+      // Keep cancellation live through the clipboard dispatcher's waits and
+      // retries, while preventing another request from reusing this session.
+      session.delivering = true;
+      session.deliveryController = new AbortController();
       try {
         const pasteResult = await this.clipboardManager._pasteText(text, {
           ...options,
-          restoreClipboard: options.restoreClipboard !== false,
+          isCancelled: () => this.sessions.get(sessionId) !== session,
+          signal: session.deliveryController.signal,
+          validateTarget: () => this._isCapturedCaretTarget(session, options.webContents),
           ...(session.target?.kind === "win-hwnd" ? { targetWindow: session.target.id } : {}),
         });
         await pasteResult?.restoreComplete;
         if (pasteResult?.pasted === false) {
-          return this._declineAssistantPaste(heldBackCode("paste_failed", pasteResult), {
-            sessionFound: true,
-            sessionKind: "caret",
-            probeStatus: "editable",
-          });
+          return this._declineAssistantPaste(heldBackCode("paste_failed", pasteResult));
         }
         return { success: true };
       } catch (error) {
         debugLogger.warn("Assistant response paste failed", { error: error.message }, "clipboard");
         return { success: false, code: "paste_failed", error: error.message };
+      } finally {
+        if (this.sessions.get(sessionId) === session) this.sessions.delete(sessionId);
       }
     });
   }
 
-  // One line per refusal. The renderer discards the code it receives, so the
-  // debug log is the only place a declined assistant paste can be diagnosed.
+  // Dispatch runs after the answer is on the clipboard. Use read-only probes:
+  // another synthetic copy here would replace the answer about to be pasted.
+  async _isCapturedCaretTarget(session, webContents) {
+    try {
+      if (webContents?.isDestroyed?.() || webContents?.isFocused()) return false;
+      const target = session.target;
+      const pid = target.kind === "mac-pid" ? target.pid : await this._linuxTargetPid(target);
+      if (
+        (await this.textEditMonitor?.isFocusedEditable?.(pid ? { ...target, pid } : target)) !==
+        "editable"
+      ) {
+        return false;
+      }
+      if ((await this._macWindowTitle(target)) !== session.windowTitle) return false;
+      const current =
+        this.platform === "darwin"
+          ? { kind: "mac-pid", pid: await this.textEditMonitor._readFrontmostPid() }
+          : await this._probeTarget();
+      return (
+        this._sameTarget(current, target) &&
+        !webContents?.isDestroyed?.() &&
+        !webContents?.isFocused()
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  // The focused window's title for a macOS target; undefined for other targets.
+  async _macWindowTitle(target) {
+    if (target?.kind !== "mac-pid") return undefined;
+    return (await this.textEditMonitor.getAppContext?.(target.pid))?.windowTitle;
+  }
+
+  // One line per refusal: the renderer keeps the answer in the window either
+  // way, so the debug log is where a declined paste is diagnosed.
   _declineAssistantPaste(code, details = {}) {
     debugLogger.info(
       "Assistant response paste declined",
@@ -394,7 +472,7 @@ class SelectionManager {
   _pruneSessions() {
     const now = this.now();
     for (const [id, session] of this.sessions) {
-      if (session.expiresAt <= now) this.sessions.delete(id);
+      if (session.expiresAt <= now) this.cancelSelectionEdit(id);
     }
   }
 
@@ -609,7 +687,12 @@ class SelectionManager {
     // Generated text pasted into a shell executes on its embedded newlines, so
     // a terminal target never becomes a caret destination — the same rule the
     // selection paths apply.
-    if (this._isTerminalTarget(capture.target, target)) return capture;
+    if (
+      target.isTerminal === true ||
+      this.clipboardManager.isTerminalSignature?.(this._targetSignature(target))
+    ) {
+      return capture;
+    }
     // AT-SPI targets carry only a pid — nothing for the signature check above
     // to match — so resolve the executable name before a Wayland terminal's
     // empty prompt can read as a writable caret.
@@ -657,14 +740,6 @@ class SelectionManager {
     return /^[1-9]\d*$/.test(pid) ? pid : null;
   }
 
-  _isTerminalTarget(...targets) {
-    return targets.some(
-      (target) =>
-        target?.isTerminal === true ||
-        this.clipboardManager.isTerminalSignature?.(this._targetSignature(target))
-    );
-  }
-
   // macOS AX and Linux AT-SPI targets carry only a pid; resolve the executable
   // so terminal apps can be recognized before their empty prompt reads as a
   // writable caret. macOS `ps` reports a full path, Linux the bare comm name —
@@ -685,22 +760,6 @@ class SelectionManager {
     const bundleName = executablePath.match(/\/([^/]+)\.app\//)?.[1] ?? "";
     const executableName = executablePath.split("/").pop() ?? "";
     return `${bundleName} ${executableName}`.trim();
-  }
-
-  // Windows and Linux X11 targets name their app on the target; macOS AX and
-  // Linux AT-SPI targets carry only a pid, so resolve the executable exactly
-  // as the terminal check does. A miss or an error means plain text.
-  async _targetAcceptsMarkdown(target) {
-    if (!target) return false;
-    try {
-      const parts = [this._targetSignature(target)];
-      const pid =
-        target.kind === "mac-pid" ? target.pid : target.kind === "atspi-pid" ? target.id : null;
-      if (pid) parts.push(await this._readTargetNames(pid));
-      return isMarkdownTargetSignature(parts.join(" ").trim());
-    } catch {
-      return false;
-    }
   }
 
   async _readExecutablePath(pid) {
@@ -826,13 +885,15 @@ class SelectionManager {
     const beforeWrite = this.clipboardManager._readClipboardTextAll();
     const sentinel = `__OPENWHISPR_SELECTION_${crypto.randomUUID()}__`;
     this.clipboardManager._writeClipboardTextAll(sentinel);
-    // A clipboard side the sentinel write didn't reach (KDE desyncs X11 from
-    // Wayland) still holds pre-copy content; snapshot it so stale text can't
-    // be mistaken for the copied selection. Known limitation: a clipboard that
-    // already held exactly the selected text reads as "no selection". The
-    // editable probe must independently verify an empty writable field before
-    // caret delivery; a live selection or unknown accessibility keeps the panel.
-    const baseline = new Set([...beforeWrite, ...this.clipboardManager._readClipboardTextAll()]);
+    const afterWrite = this.clipboardManager._readClipboardTextAll();
+    // macOS and Windows have one clipboard backend: observing the sentinel
+    // proves that a later copy of the original text is a fresh selection.
+    // Linux can expose a stale X11/Wayland side again after this snapshot.
+    const baseline = new Set(
+      this.platform !== "linux" && afterWrite.includes(sentinel)
+        ? afterWrite
+        : [...beforeWrite, ...afterWrite]
+    );
 
     const copyResult = await sendCopy();
     if (!copyResult?.success || !copyResult.target) {

@@ -9,9 +9,10 @@ import { SIZE_RANK, resolveMainWindowSizeKey } from "../utils/windowSizeLadder";
 const PANEL_RETURN_FADE_MS = 180;
 
 /**
- * Single owner of the main window size: panel > menu > toast > compact pill >
- * base. Grows apply immediately so content never clips; shrinks wait for the
- * content collapse animation to finish before the window snaps down. Also owns
+ * Single owner of the main window size: the Live Transcript panel, then the
+ * ladder (error > menu > toast > compact pill > base). Grows apply immediately
+ * so content never clips; shrinks wait for the content collapse animation to
+ * finish before the window snaps down. Also owns
  * the two pill-visibility handoffs around risky native resizes: the
  * dictation-error handoff (pill hidden until the window leaves the error
  * footprint) and the panel-return handoff (pill faded out across the
@@ -24,9 +25,6 @@ export function useMainWindowSizeOwner({
   isCommandMenuOpen,
   isCompactPill,
   isDictationActive,
-  assistantOpen,
-  assistantMounted,
-  assistantOpenRef,
   liveTranscriptOpen,
   liveTranscriptMounted,
   liveTranscriptOpenRef,
@@ -85,11 +83,7 @@ export function useMainWindowSizeOwner({
   const lastSizeKeyRef = useRef(null);
   const panelSizeReservationRef = useRef(false);
   useEffect(() => {
-    const panelOwnsWindow =
-      assistantOpenRef.current ||
-      liveTranscriptOpenRef.current ||
-      assistantMounted ||
-      liveTranscriptMounted;
+    const panelOwnsWindow = liveTranscriptOpenRef.current || liveTranscriptMounted;
     if (panelOwnsWindow) {
       panelSizeReservationRef.current = true;
       if (panelReturnSuppressedRef.current) {
@@ -103,7 +97,6 @@ export function useMainWindowSizeOwner({
     const returningFromPanel = panelSizeReservationRef.current;
     panelSizeReservationRef.current = false;
     const target = resolveMainWindowSizeKey({
-      panelOpen: false,
       menuOpen: isCommandMenuOpen,
       toastCount,
       compactPill: isCompactPill,
@@ -174,9 +167,6 @@ export function useMainWindowSizeOwner({
     const timeout = setTimeout(() => void requestMainWindowSize(target), 340);
     return () => clearTimeout(timeout);
   }, [
-    assistantOpen,
-    assistantMounted,
-    assistantOpenRef,
     liveTranscriptOpen,
     liveTranscriptMounted,
     liveTranscriptOpenRef,
@@ -188,18 +178,14 @@ export function useMainWindowSizeOwner({
   ]);
 
   useEffect(() => {
-    if (
-      dictationErrorActionCount > 0 ||
-      !handoffActive ||
-      (!assistantMounted && !liveTranscriptMounted)
-    ) {
+    if (dictationErrorActionCount > 0 || !handoffActive || !liveTranscriptMounted) {
       return;
     }
 
     // A panel already owns stable native bounds, so an error displayed inside
     // it has no compact resize to await. Release only the visual suppression.
     void handoffRef.current?.releaseAfter(async () => {});
-  }, [assistantMounted, dictationErrorActionCount, handoffActive, liveTranscriptMounted]);
+  }, [dictationErrorActionCount, handoffActive, liveTranscriptMounted]);
 
   return { dictationErrorPillHandoffActive: handoffActive, panelReturnResizeActive };
 }

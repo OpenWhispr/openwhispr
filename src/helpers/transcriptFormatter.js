@@ -1,29 +1,26 @@
 const { i18nMain } = require("./i18nMain");
+const { isSpeakerLocked } = require("./speakerAssignmentPolicy");
 
-// Naming a speaker "You" marks the recorder's voice; the name is stored in the
-// language it was saved in, so English "You" counts alongside the current one
-// (transcriptSpeakerState.ts's isYouSpeakerName).
-function isYouSpeakerName(name) {
-  const normalized = name.trim().toLowerCase();
-  return normalized === "you" || normalized === i18nMain.t("notes.speaker.you").toLowerCase();
-}
-
-// recorderLabel names whoever recorded the note when it isn't the user's own
-// (the renderer resolves it from the space roster); without one the recorder's
-// lines read "You". Like the transcript view, a "You" from this device's speaker
-// mappings stays: it names the viewer, not the recorder.
 function resolveSpeaker(seg, speakerMappings, recorderLabel) {
-  const recorder = recorderLabel || i18nMain.t("transcript.speaker.you");
+  // Appended recordings keep their own identity; the export label fills legacy segments.
+  const recorderName = seg.recorderName || recorderLabel;
+  const mappedName =
+    seg.speaker && !(seg.speaker === "you" && seg.recorderName)
+      ? speakerMappings[seg.speaker]
+      : undefined;
+  if (mappedName && !(seg.speakerName && isSpeakerLocked(seg))) return mappedName;
   if (seg.speakerName && !seg.speakerIsPlaceholder) {
-    return recorderLabel && isYouSpeakerName(seg.speakerName) ? recorderLabel : seg.speakerName;
+    const name = seg.speakerName.trim().toLowerCase();
+    const isSelfName =
+      name === "you" || name === i18nMain.t("transcript.speaker.you").toLowerCase();
+    return isSelfName && recorderName ? recorderName : seg.speakerName;
   }
-  if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
-  if (seg.speaker === "you") return recorder;
+  if (seg.speaker === "you") return recorderName || i18nMain.t("transcript.speaker.you");
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
     if (!isNaN(num)) return i18nMain.t("notes.speaker.label", { n: num + 1 });
   }
-  if (seg.source === "mic") return recorder;
+  if (seg.source === "mic") return recorderName || i18nMain.t("transcript.speaker.you");
   if (seg.source === "system") return i18nMain.t("transcript.speaker.others");
   return i18nMain.t("notes.speaker.unknown");
 }
@@ -33,7 +30,13 @@ function resolveSpeaker(seg, speakerMappings, recorderLabel) {
 // otherwise absorb the un-named one beside it.
 function speakerKey(seg) {
   const named = seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : "";
-  return [seg.speaker || "", named, seg.speaker ? "" : seg.source || ""].join("\u0000");
+  return [
+    seg.speaker || "",
+    named,
+    seg.speaker ? "" : seg.source || "",
+    seg.recorderName || "",
+    isSpeakerLocked(seg),
+  ].join("\u0000");
 }
 
 function parseNoteDate(createdAt) {

@@ -7,6 +7,8 @@ const debugLogger = require("./debugLogger");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { NOTE_TEXT_FIELDS } = require("./noteFieldSync");
+const { isAudioPolicyRefusal } = require("./audioPolicyRefusals");
+const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -102,6 +104,68 @@ function unwrapMutationResult(result, label) {
     throw new Error(result?.error || `Failed to write ${label}`);
   }
   return result[label];
+}
+
+// What a CLI edit may change: a note's own content and its folder. Its space,
+// identity and sync state belong to sync and main's move rules (D31, D39), which
+// a raw cloud_id or client_note_id from a local caller would get around. Those
+// are dropped, as the cloud v1 PATCH drops keys it doesn't take, so a CLI that
+// sends back the whole row it read still saves its edit (D44). Only a space_id
+// naming another space is refused: a move goes through folder_id and the rules,
+// and must never look like it worked. Anything else is dropped, as updateNote
+// always ignored it.
+const CLI_NOTE_EDIT_FIELDS = [
+  "title",
+  "content",
+  "enhanced_content",
+  "enhancement_prompt",
+  "enhancement_template_id",
+  "enhanced_at_content_hash",
+  "transcript",
+  "calendar_event_id",
+  "participants",
+  "diarization_enabled",
+  "expected_speaker_count",
+  "folder_id",
+  "clear_fields",
+];
+const SYNC_OWNED_NOTE_FIELDS = new Set([
+  "space_id",
+  "cloud_id",
+  "client_note_id",
+  "sync_status",
+  "left_team",
+  "account_id",
+  "deleted_at",
+  "cloud_updated_at",
+  "cloud_revision",
+  "cloud_create_rejected",
+  "cloud_create_pending",
+  "cloud_create_attempted",
+  "owner_user_id",
+  "updated_by_user_id",
+  "content_sync_operation",
+  "enhanced_content_sync_operation",
+]);
+
+function cliNoteEdit(body, note) {
+  if ("space_id" in body && String(body.space_id ?? "") !== String(note.space_id ?? "")) {
+    const err = new Error("space_id can't be changed; move the note with folder_id");
+    err.code = "VALIDATION";
+    throw err;
+  }
+  const dropped = Object.keys(body).filter((field) => SYNC_OWNED_NOTE_FIELDS.has(field));
+  if (dropped.length > 0) {
+    debugLogger.debug(
+      "CLI bridge dropped sync-owned note fields",
+      { noteId: note.id, fields: dropped },
+      "cli-bridge"
+    );
+  }
+  const edit = Object.fromEntries(
+    CLI_NOTE_EDIT_FIELDS.filter((field) => field in body).map((field) => [field, body[field]])
+  );
+  return withProvidedBlanksCleared(edit);
 }
 
 // The public v1 contract: a provided blank content or enhanced_content clears
@@ -254,6 +318,15 @@ class CliBridge {
       sendV1Error(res, 400, "validation_error", err.message);
       return;
     }
+    // The cloud /v1 API answers every organization policy denial this way.
+    if (
+      isAudioPolicyRefusal(err) ||
+      isLocalModelPolicyRefusal(err) ||
+      err.code === "DEVICE_POLICY_BLOCKED"
+    ) {
+      sendV1Error(res, 403, "forbidden", err.message);
+      return;
+    }
     debugLogger.error("CLI bridge route error", { error: err.message }, "cli-bridge");
     sendV1Error(res, 500, "internal_error", err.message || "Internal server error");
   }
@@ -359,7 +432,7 @@ class CliBridge {
 
     // Picks the requested model, or the one the app is set to use, and refuses
     // anything not on disk so the engines' own errors stay genuine failures.
-    const requireLocalModel = (models, requested) => {
+    const requireLocalModel = async (models, requested) => {
       if (requested !== undefined && typeof requested !== "string") {
         const err = new Error("'model' must be a string");
         err.code = "VALIDATION";
@@ -371,15 +444,17 @@ class CliBridge {
       if (!match) {
         const err = new Error(
           requested
-            ? `Unknown model '${requested}'. Available: ${models.map((m) => m.model).join(", ")}`
-            : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Transcription, or pass 'model'."
+            ? `Unknown model '${requested}'. Known models: ${models.map((m) => m.model).join(", ")}`
+            : "No local transcription model is selected. Choose one in OpenWhispr under Settings → Speech to Text, or pass 'model'."
         );
         err.code = "VALIDATION";
         throw err;
       }
+      const lease = await ipc._localModelPolicy.authorize("transcription", match.model);
+      ipc._localModelPolicy.release(lease);
       if (!match.downloaded) {
         const err = new Error(
-          `Model '${match.model}' is not downloaded. Open OpenWhispr and download it under Settings → Transcription.`
+          `Model '${match.model}' is not downloaded. Open OpenWhispr and download it under Settings → Speech to Text.`
         );
         err.code = "VALIDATION";
         throw err;
@@ -453,7 +528,7 @@ class CliBridge {
           err.code = "NOT_FOUND";
           throw err;
         }
-        const result = db.updateNote(id, withProvidedBlanksCleared(body || {}));
+        const result = db.updateNote(id, cliNoteEdit(body || {}, existing));
         // The note exists, so a remaining error names a folder or space that doesn't.
         if (result.error) {
           const err = new Error(result.error);
@@ -539,25 +614,43 @@ class CliBridge {
           },
         };
       }),
-      exact("GET", "/v1/transcribe/models", () => ({ data: ipc.listLocalTranscriptionModels() })),
+      exact("GET", "/v1/transcribe/models", async () => {
+        await ipc._localModelPolicy.resolve();
+        return {
+          data: ipc.listLocalTranscriptionModels().filter((model) => {
+            const denied = ipc._localModelPolicy.failure("transcription", model.model);
+            if (
+              denied &&
+              !["POLICY_MODEL_BLOCKED", "POLICY_LOCAL_MODE_BLOCKED"].includes(denied.code)
+            )
+              throw denied;
+            return !denied;
+          }),
+        };
+      }),
       // The CLI runs on this machine, so it sends a path and the app reads the
       // file itself: no audio crosses the bridge and the user's downloaded
       // models do the work.
       exact("POST", "/v1/transcribe", async ({ body }) => {
         const real = requireAudioFile(body?.path);
-        const { provider, model } = requireLocalModel(
+        const { provider, model } = await requireLocalModel(
           ipc.listLocalTranscriptionModels(),
           body?.model
         );
         const language =
           typeof body?.language === "string" && body.language ? body.language : undefined;
-        ipc.approveAudioPath(real);
-        const result = await ipc.transcribeLocalFile(real, { provider, model, language });
+        const result = await ipc._audioFeaturePolicy.run({}, "upload", (signal) => {
+          ipc.approveAudioPath(real);
+          return ipc.transcribeLocalFile(real, { provider, model, language, signal });
+        });
         if (!result?.success) {
           if (result?.code === "NO_SPEECH_DETECTED" || result?.message === "No audio detected") {
             return { data: { text: "", provider, model, warning: "No speech detected" } };
           }
-          throw new Error(result?.error || result?.message || "Local transcription failed");
+          throw Object.assign(
+            new Error(result?.error || result?.message || "Local transcription failed"),
+            { code: result?.code }
+          );
         }
         return { data: { text: result.text, provider, model } };
       }),
@@ -587,6 +680,11 @@ class CliBridge {
       }),
       param("DELETE", "/v1/transcriptions/", "/audio", "id", ({ params }) => {
         const id = requireId(params, "transcription");
+        if (!db.getTranscriptionById(id)) {
+          const err = new Error(`Transcription ${id} not found`);
+          err.code = "NOT_FOUND";
+          throw err;
+        }
         const result = ipc.audioStorageManager.deleteAudio(id);
         if (!result?.success) {
           throw new Error(`Failed to delete audio for transcription ${id}`);

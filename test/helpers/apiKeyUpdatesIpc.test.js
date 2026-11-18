@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const { once } = require("node:events");
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const { deferred } = require("./harness/deferred");
 
@@ -24,15 +25,33 @@ const bindings = [
   })),
 ];
 const handlers = new Map();
+const eventHandlers = new Map();
 const keys = new Map();
 const notifications = [];
 const editor = { id: 1 };
 const windows = [1, 2, 3].map((id) => ({
+  id,
   isDestroyed: () => id === 3,
   webContents: { id, send: (...args) => notifications.push([id, ...args]) },
 }));
 const mintToken = async (key) => `token-${key}`;
 let fetchToken = mintToken;
+let authGeneration = 1;
+// The org's current verdict, as the policy manager would answer it: each
+// change carries a newer revision, so a lookup answered earlier can't undo it.
+const UNMANAGED_POLICY = { success: true, managed: false, accountId: "personal-account" };
+let policyRevision = 0;
+let workspacePolicy = { ...UNMANAGED_POLICY, authGeneration, revision: policyRevision };
+const {
+  normalizeDeviceValues,
+  defaultDevicePolicy,
+} = require("../../src/helpers/managedDevicePolicy");
+let deviceSnapshot = normalizeDeviceValues({});
+const deviceListeners = new Set();
+function setDeviceValues(values) {
+  deviceSnapshot = normalizeDeviceValues(values);
+  for (const listener of deviceListeners) listener(deviceSnapshot);
+}
 const environmentManager = Object.fromEntries(
   bindings.flatMap(({ get, save, storeKey }) => [
     [get, () => keys.get(storeKey) || ""],
@@ -59,7 +78,9 @@ class FakeStreaming {
   disconnects = 0;
   adoptMode() {}
   beginConnecting() {}
-  setTokenRefreshFn() {}
+  setTokenRefreshFn(fn) {
+    this.tokenRefreshFn = fn;
+  }
   getCachedToken() {
     return this.cachedToken;
   }
@@ -75,6 +96,9 @@ class FakeStreaming {
   }
   cleanupAll() {
     this.cleanupWarmConnection();
+  }
+  cleanup() {
+    this.isConnected = false;
   }
   async warmup(options) {
     if (this.warmToken !== null) return;
@@ -116,16 +140,22 @@ const electron = {
     on() {},
     isPackaged: false,
   },
-  ipcMain: { handle: (name, fn) => handlers.set(name, fn), on() {}, removeHandler() {} },
+  ipcMain: {
+    handle: (name, fn) => handlers.set(name, fn),
+    on: (name, fn) => eventHandlers.set(name, fn),
+    removeHandler() {},
+  },
   BrowserWindow: {
     getAllWindows: () => windows,
     fromWebContents: () => windows[1],
+    fromId: (id) => windows.find((win) => win.id === id),
   },
   net: {
     // BYOK mints present the saved key; managed ones present the account session.
-    fetch: async (_url, init) => ({
+    fetch: async (url, init) => ({
       ok: true,
       json: async () => {
+        if (url.endsWith("/api/workspaces")) return { data: [] };
         const token = await fetchToken(init.headers.Authorization);
         return { token, clientSecret: token, clientSecrets: [token, token] };
       },
@@ -135,7 +165,7 @@ const electron = {
   dialog: {},
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
   systemPreferences: { getMediaAccessStatus: () => "granted" },
-  session: { fromPartition: () => ({}) },
+  session: { fromPartition: () => ({}), defaultSession: { webRequest: { onBeforeRequest() {} } } },
 };
 Module._load = function (request, parent, isMain) {
   if (request === "electron") return electron;
@@ -149,13 +179,33 @@ Module._load = function (request, parent, isMain) {
     if (request === "./orukeetStreaming")
       return { OrukeetStreaming: FakeOrukeet, MANAGED_STREAM_OPTIONS: {} };
     if (request === "./geminiLiveStreaming")
-      return { GeminiLiveStreaming: FakeStreaming, GEMINI_LIVE_MODEL: "gemini-live" };
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        GeminiLiveStreaming: FakeStreaming,
+      };
     if (request === "./debugLogger") return new Proxy({}, { get: () => () => {} });
+    if (request === "./workspacePolicyManager")
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        createWorkspacePolicyManager: () => ({
+          getPolicy: async () => workspacePolicy,
+          heldPolicy: () => workspacePolicy,
+        }),
+      };
     if (request === "./tokenStore")
       return {
         get: () => "account",
-        getState: () => ({ token: "account", generation: 1 }),
+        getState: () => ({ token: "account", generation: authGeneration }),
         subscribe: () => () => {},
+      };
+    if (request === "./accountScopeBinding")
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        read: () => null,
+        resolveActiveAccountScope: ({ generation }) => ({
+          accountId: "personal-account",
+          authGeneration: generation,
+        }),
       };
   }
   return originalLoad.call(this, request, parent, isMain);
@@ -166,6 +216,7 @@ test.after(() => {
 
 // Loaded after the electron stub above, and shared with ipcHandlers so tests can mock it.
 const liveSpeakerIdentifier = require("../../src/helpers/liveSpeakerIdentifier");
+const { i18nMain } = require("../../src/helpers/i18nMain");
 const MeetingEchoLeakDetector = require("../../src/helpers/meetingEchoLeakDetector");
 
 function anything() {
@@ -179,6 +230,16 @@ function anything() {
   });
 }
 const target = {
+  _remoteProductRetirement: new AbortController(),
+  _remoteCalendarsReady: false,
+  _remoteCalendarsStarted: false,
+  managedDevicePolicy: {
+    getSnapshot: () => deviceSnapshot,
+    subscribe: (listener) => {
+      deviceListeners.add(listener);
+      return () => deviceListeners.delete(listener);
+    },
+  },
   environmentManager,
   assemblyAiStreaming: null,
   deepgramStreaming: null,
@@ -189,6 +250,10 @@ const target = {
   _dictationIdleTimer: null,
   _meetingMicStreaming: null,
   _meetingSystemStreaming: null,
+  managedMeetingPolicy: { isMeetingRecordingDisabled: () => false },
+  _enterpriseAudioBinding: null,
+  _enterpriseAudioScope: null,
+  _enterpriseAudioScopeRevision: 0,
   // A system audio tap on every platform, so each meeting opens two streams.
   audioTapManager: { isSupported: () => true, start: async () => {}, stop: async () => {} },
   _mintStoredCortiToken: async () => ({
@@ -197,15 +262,501 @@ const target = {
     tenant: "base",
   }),
 };
-test.before(() => {
+const handlersThis = new Proxy(target, {
+  get: (value, property) => (property in value ? value[property] : anything()),
+});
+test.beforeEach(() => {
+  setDeviceValues({});
+  setWorkspacePolicy(UNMANAGED_POLICY);
+});
+
+test.before(async () => {
   const IPCHandlers = require(modulePath);
-  IPCHandlers.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
-  );
+  target._agentStreamRequests = new (require("../../src/helpers/agentStreamRequestRegistry"))();
+  target._stopRemoteProductWork = IPCHandlers.prototype._stopRemoteProductWork.bind(handlersThis);
+  target._startRemoteProductWork = IPCHandlers.prototype._startRemoteProductWork.bind(handlersThis);
+  target._retireDisallowedProductWork =
+    IPCHandlers.prototype._retireDisallowedProductWork.bind(handlersThis);
+  IPCHandlers.prototype.setupHandlers.call(handlersThis);
+  await target.refreshEffectivePolicy();
 });
 const invoke = (channel, ...args) => handlers.get(channel)({ sender: editor }, ...args);
+
+function revokeTranscription(restriction) {
+  if (restriction === "local-only") setDeviceValues({ RequireSignIn: false });
+  else {
+    const policy = defaultDevicePolicy();
+    policy.transcription.allowedByokProviders = ["openai"];
+    setDeviceValues({ Policy: JSON.stringify(policy) });
+  }
+}
+
+for (const restriction of ["local-only", "provider"]) {
+  test(`native ${restriction} retirement closes realtime without committing buffered audio`, async (t) => {
+    const { WebSocket, WebSocketServer } = require("ws");
+    const Streaming = require("../../src/helpers/openaiRealtimeStreaming");
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const frames = [];
+    const audio = deferred();
+    const closed = deferred();
+    t.after(() => {
+      for (const client of server.clients) client.terminate();
+      server.close();
+    });
+    server.on("connection", (socket) => {
+      socket.on("close", () => closed.resolve());
+      socket.on("message", (message) => {
+        const frame = JSON.parse(message);
+        frames.push(frame.type);
+        if (frame.type === "session.update")
+          socket.send(JSON.stringify({ type: "session.updated" }));
+        if (frame.type === "input_audio_buffer.append") audio.resolve();
+        if (frame.type === "input_audio_buffer.commit") socket.close();
+      });
+      socket.send(JSON.stringify({ type: "session.created" }));
+    });
+    const streaming = new Streaming();
+    t.after(() => streaming.cleanup());
+    await streaming.connect({
+      model: "test-model",
+      createSocket: () => new WebSocket(`ws://127.0.0.1:${server.address().port}`),
+    });
+    streaming.sendAudio(Buffer.alloc(960));
+    await audio.promise;
+    target._dictationStreaming = streaming;
+    target._remoteStreamPolicies.set("_dictationStreaming", {
+      channel: "dictation-realtime-start",
+      args: [{ mode: "byok", provider: "tinfoil-realtime" }],
+    });
+    revokeTranscription(restriction);
+    await closed.promise;
+    assert.ok(frames.includes("input_audio_buffer.append"));
+    assert.equal(frames.includes("input_audio_buffer.commit"), false);
+  });
+
+  test(`native ${restriction} retirement closes Gemini Live without ending the turn`, async (t) => {
+    const { WebSocketServer } = require("ws");
+    const { GeminiLiveStreaming } = require("../../src/helpers/geminiLiveStreaming");
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const received = [];
+    const audio = deferred();
+    const closed = deferred();
+    t.after(() => server.close());
+    server.on("connection", (socket) => {
+      socket.on("close", () => closed.resolve());
+      socket.on("message", (data) => {
+        const message = JSON.parse(data);
+        received.push(Object.keys(message.realtimeInput ?? message)[0]);
+        if (message.setup) socket.send(JSON.stringify({ setupComplete: {} }));
+        if (message.realtimeInput?.audio) audio.resolve();
+        if (message.realtimeInput?.audioStreamEnd)
+          socket.send(
+            JSON.stringify({
+              serverContent: { inputTranscription: { text: "revoked" }, generationComplete: true },
+            })
+          );
+      });
+    });
+    const streaming = new GeminiLiveStreaming();
+    t.after(() => streaming.cleanup());
+    streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+    const finals = [];
+    streaming.onFinalTranscript = (text) => finals.push(text);
+    await streaming.connect({ token: "saved-provider-key", mode: "byok" });
+    streaming.sendAudio(Buffer.alloc(1600));
+    await audio.promise;
+    target.geminiStreaming = streaming;
+    target._remoteStreamPolicies.set("geminiStreaming", {
+      channel: "gemini-streaming-start",
+      args: [{ mode: "byok" }],
+    });
+    revokeTranscription(restriction);
+    await closed.promise;
+    assert.deepEqual(received, ["setup", "audio"]);
+    assert.deepEqual(finals, []);
+  });
+
+  test(`native ${restriction} retirement closes Corti without flushing`, async (t) => {
+    const { WebSocketServer } = require("ws");
+    const CortiStreaming = require("../../src/helpers/cortiStreaming");
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const received = [];
+    const audio = deferred();
+    const closed = deferred();
+    t.after(() => server.close());
+    server.on("connection", (socket) => {
+      socket.on("close", () => closed.resolve());
+      socket.on("message", (data, isBinary) => {
+        if (isBinary) return audio.resolve();
+        const { type } = JSON.parse(data);
+        received.push(type);
+        if (type === "config") socket.send(JSON.stringify({ type: "CONFIG_ACCEPTED" }));
+        if (type === "flush") socket.send(JSON.stringify({ type: "flushed" }));
+      });
+    });
+    const streaming = new CortiStreaming();
+    t.after(() => streaming.cleanup());
+    streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+    const sessionEnds = [];
+    streaming.onSessionEnd = (result) => sessionEnds.push(result);
+    await streaming.connect({ token: "saved-provider-key", environment: "us", tenant: "base" });
+    streaming.sendAudio(Buffer.alloc(1600));
+    await audio.promise;
+    target.cortiStreaming = streaming;
+    target._remoteStreamPolicies.set("cortiStreaming", {
+      channel: "corti-streaming-start",
+      args: [{}],
+    });
+    revokeTranscription(restriction);
+    await closed.promise;
+    assert.deepEqual(received, ["config"]);
+    assert.deepEqual(sessionEnds, []);
+  });
+
+  test(`native ${restriction} retirement tells the realtime dictation renderer and hides its preview`, async (t) => {
+    const errors = [];
+    const sender = {
+      id: 1,
+      send: (channel, message) => channel === "dictation-realtime-error" && errors.push(message),
+    };
+    let hidden = 0;
+    target.windowManager = new Proxy(
+      { hideTranscriptionPreview: () => hidden++ },
+      { get: (value, property) => (property in value ? value[property] : anything()) }
+    );
+    t.after(() => {
+      delete target.windowManager;
+      return invoke("dictation-realtime-stop");
+    });
+    invoke("save-tinfoil-key", "saved-provider-key");
+    const started = await handlers.get("dictation-realtime-start")(
+      { sender },
+      { mode: "byok", provider: "tinfoil-realtime", preview: true }
+    );
+    assert.equal(started.success, true);
+    revokeTranscription(restriction);
+    assert.equal(target._dictationStreaming, null);
+    assert.deepEqual(errors, [i18nMain.t("common.policyTranscriptionRestricted")]);
+    assert.equal(hidden, 1);
+  });
+
+  test(`native ${restriction} retirement still closes a dictation stream whose renderer is gone`, async (t) => {
+    let destroyed = false;
+    const sender = {
+      id: 1,
+      isDestroyed: () => destroyed,
+      send() {
+        if (destroyed) throw new TypeError("Object has been destroyed");
+      },
+    };
+    t.after(() => invoke("dictation-realtime-stop"));
+    invoke("save-tinfoil-key", "saved-provider-key");
+    const started = await handlers.get("dictation-realtime-start")(
+      { sender },
+      { mode: "byok", provider: "tinfoil-realtime" }
+    );
+    assert.equal(started.success, true);
+    const stream = target._dictationStreaming;
+    destroyed = true;
+    revokeTranscription(restriction);
+    assert.equal(target._dictationStreaming, null);
+    assert.equal(stream.disconnects, 1);
+  });
+}
+
+test("local-only device policy refuses direct remote IPC despite saved keys and closes warm streams", async () => {
+  invoke("save-assemblyai-key", "saved-provider-key");
+  assert.equal((await invoke("assemblyai-streaming-warmup", { mode: "byok" })).success, true);
+  const warmed = target.assemblyAiStreaming;
+  const enterprise = new AbortController();
+  const download = new AbortController();
+  target.enterpriseStreamAborts.set("policy-probe", enterprise);
+  target.activeUrlDownloads.set("policy-probe", download);
+  setDeviceValues({ RequireSignIn: false });
+  assert.equal(enterprise.signal.aborted, true);
+  assert.equal(download.signal.aborted, true);
+  target.enterpriseStreamAborts.delete("policy-probe");
+  target.activeUrlDownloads.delete("policy-probe");
+  assert.ok(warmed.disconnects > 0);
+  assert.equal(target.assemblyAiStreaming, null);
+  for (const channel of [
+    "assemblyai-streaming-start",
+    "cloud-health-check",
+    "agent-web-search",
+    "process-anthropic-reasoning",
+    "process-enterprise-reasoning",
+    "gcal-start-oauth",
+    "proxy-tinfoil-transcription",
+    "proxy-corti-transcription",
+    "proxy-gemini-transcription",
+    "proxy-xai-transcription",
+    "proxy-mistral-transcription",
+  ]) {
+    assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED", channel);
+  }
+  assert.equal(
+    (await invoke("meeting-transcription-prepare", { provider: "deepgram-realtime", mode: "byok" }))
+      .success,
+    false
+  );
+  assert.equal(
+    (await invoke("meeting-transcription-prepare", { provider: "local" })).success,
+    true
+  );
+  const effective = await invoke("get-effective-policy");
+  assert.equal(effective.localOnly, true);
+  assert.deepEqual(effective.policy.transcription.allowedModes, ["local"]);
+});
+
+test("calendar background sync resumes after removing local-only device policy", (t) => {
+  const originalGoogle = target.googleCalendarManager;
+  const originalMicrosoft = target.microsoftCalendarManager;
+  let starts = 0;
+  let stops = 0;
+  const manager = {
+    start() {
+      starts++;
+    },
+    stop() {
+      stops++;
+    },
+  };
+  target.googleCalendarManager = manager;
+  target.microsoftCalendarManager = manager;
+  t.after(() => {
+    target.googleCalendarManager = originalGoogle;
+    target.microsoftCalendarManager = originalMicrosoft;
+    target._remoteCalendarsReady = false;
+    target._remoteCalendarsStarted = false;
+  });
+  require(modulePath).prototype.startPolicyCalendars.call(handlersThis);
+  assert.equal(starts, 2);
+  setDeviceValues({ RequireSignIn: false });
+  assert.equal(stops, 2);
+  setDeviceValues({});
+  assert.equal(starts, 4);
+});
+
+test("device backup restrictions stop backup-only uploads while note sharing preparation and team work remain allowed", async (t) => {
+  withManagedApi(t);
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.cloudBackupAllowed = false;
+  policy.sharing.externalLinkSharing = "disabled";
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  const sent = [];
+  t.mock.method(electron.net, "fetch", async (url) => {
+    sent.push(url);
+    return new Response(JSON.stringify({ data: {} }));
+  });
+  const request = (path, body, method = "POST") =>
+    invoke(
+      "cloud-api-request",
+      {
+        path,
+        method,
+        body,
+        expectedAuthGeneration: 1,
+      },
+      { sharedContent: true }
+    );
+  assert.equal(
+    (await request("/api/transcriptions/batch-create", { transcriptions: [{ text: "private" }] }))
+      .code,
+    "DEVICE_POLICY_BLOCKED"
+  );
+  assert.equal(
+    (await request("/api/notes/note/share", { visibility: "link" }, "PATCH")).code,
+    "DEVICE_POLICY_BLOCKED"
+  );
+  assert.equal(sent.length, 0);
+  // A user may prepare a private cloud copy before choosing its audience.
+  assert.equal(
+    (
+      await request("/api/notes/create", {
+        client_note_id: "new-share",
+        content: "share preparation",
+      })
+    ).success,
+    true
+  );
+  assert.equal(
+    (await request("/api/notes/update", { id: "private-note", content: "private" }, "PATCH"))
+      .success,
+    true
+  );
+  for (const id of ["shared-note", "team-note", "retracted-note"])
+    assert.equal(
+      (
+        await request(
+          "/api/notes/update",
+          { id, content: "shared", ...(id === "retracted-note" ? { space_id: null } : {}) },
+          "PATCH"
+        )
+      ).success,
+      true,
+      id
+    );
+  assert.equal(
+    (await request("/api/notes/create", { space_id: "team", content: "team" })).success,
+    true
+  );
+  assert.equal(
+    (await request("/api/folders/update", { id: "team-folder", name: "team" }, "PATCH")).success,
+    true
+  );
+  assert.equal(
+    (await request("/api/notes/delete", { id: "private-note" }, "DELETE")).success,
+    true
+  );
+  assert.equal(sent.length, 8);
+});
+
+test("a policy revocation reaches calendar OAuth before credentials can be saved", async (t) => {
+  const previousManagers = [target.googleCalendarManager, target.microsoftCalendarManager];
+  const previousRegistry = target._calendarAuthorizationRequests;
+  t.after(() => {
+    [target.googleCalendarManager, target.microsoftCalendarManager] = previousManagers;
+    target._calendarAuthorizationRequests = previousRegistry;
+  });
+  for (const [channel, property] of [
+    ["gcal-start-oauth", "googleCalendarManager"],
+    ["mcal-start-oauth", "microsoftCalendarManager"],
+  ]) {
+    setDeviceValues({ RequireSignIn: true });
+    const previous = target[property];
+    const previousRegistry = target._calendarAuthorizationRequests;
+    target._calendarAuthorizationRequests =
+      new (require("../../src/helpers/agentStreamRequestRegistry"))();
+    const entered = deferred(),
+      finish = deferred();
+    let oauthSignal,
+      saved = false;
+    target[property] = {
+      stop() {},
+      startOAuth: async ({ signal }) => {
+        oauthSignal = signal;
+        entered.resolve();
+        await finish.promise;
+        if (!signal.aborted) saved = true;
+        return { success: true };
+      },
+    };
+    const sender = { id: 1, once() {}, removeListener() {} };
+    const pending = handlers.get(channel)({ sender }, "revoked-calendar");
+    await entered.promise;
+    const policy = defaultDevicePolicy();
+    policy.minAppVersion = "99.0.0";
+    setDeviceValues({ Policy: JSON.stringify(policy) });
+    finish.resolve();
+    const result = await pending;
+    assert.equal(oauthSignal.aborted, true, channel);
+    assert.equal(saved, false, channel);
+    assert.equal(result.success, false, channel);
+    target[property] = previous;
+    target._calendarAuthorizationRequests = previousRegistry;
+  }
+});
+
+test("backup revocation aborts a private upload while allowing an in-flight shared note update", async (t) => {
+  withManagedApi(t);
+  setDeviceValues({ RequireSignIn: true });
+  const requests = new Map();
+  t.mock.method(
+    electron.net,
+    "fetch",
+    (url, init) =>
+      new Promise((resolve, reject) => {
+        requests.set(new URL(url).pathname, { signal: init.signal, resolve });
+        init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+      })
+  );
+  const upload = invoke("cloud-api-request", {
+    path: "/api/transcriptions/batch-create",
+    method: "POST",
+    expectedAuthGeneration: 1,
+    body: { transcriptions: [{ text: "private" }] },
+  });
+  const shared = invoke("cloud-api-request", {
+    path: "/api/notes/update",
+    method: "PATCH",
+    expectedAuthGeneration: 1,
+    body: { id: "shared-note", content: "shared" },
+  });
+  for (let turn = 0; turn < 100 && requests.size < 2; turn++) await new Promise(setImmediate);
+  assert.equal(requests.size, 2);
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.cloudBackupAllowed = false;
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  assert.equal(requests.get("/api/transcriptions/batch-create").signal.aborted, true);
+  assert.equal(requests.get("/api/notes/update").signal.aborted, false);
+  requests.get("/api/notes/update").resolve(new Response(JSON.stringify({ data: {} })));
+  assert.equal((await upload).code, "DEVICE_POLICY_BLOCKED");
+  assert.equal((await shared).success, true);
+});
+
+test("share token rotation uses server visibility and ignores renderer provenance", async (t) => {
+  withManagedApi(t);
+  const policy = defaultDevicePolicy();
+  policy.sharing.externalLinkSharing = "domain_only";
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  const methods = [];
+  let visibility = "link";
+  const fetch = t.mock.method(electron.net, "fetch", async (_url, init) => {
+    methods.push(init.method);
+    return new Response(JSON.stringify({ share: { visibility } }));
+  });
+  const rotate = () =>
+    invoke(
+      "cloud-api-request",
+      {
+        path: "/api/notes/note/share/rotate-token",
+        method: "POST",
+        expectedAuthGeneration: 1,
+      },
+      { shareVisibility: "domain" }
+    );
+  assert.equal((await rotate()).code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(methods, ["GET"]);
+  visibility = "domain";
+  assert.equal((await rotate()).success, true);
+  assert.deepEqual(methods, ["GET", "GET", "POST"]);
+  visibility = undefined;
+  assert.equal((await rotate()).code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(methods, ["GET", "GET", "POST", "GET"]);
+  const entered = deferred(),
+    finish = deferred();
+  let signal;
+  fetch.mock.mockImplementation(async (_url, init) => {
+    methods.push(init.method);
+    signal = init.signal;
+    entered.resolve();
+    await finish.promise;
+    return new Response(JSON.stringify({ share: { visibility: "domain" } }));
+  });
+  const pending = rotate();
+  await entered.promise;
+  policy.sharing.externalLinkSharing = "disabled";
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  assert.equal(signal.aborted, true);
+  finish.resolve();
+  assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(methods, ["GET", "GET", "POST", "GET", "GET"]);
+});
+
+test("an invalid trusted device policy blocks remote work", async () => {
+  deviceSnapshot = {
+    status: "invalid",
+    managed: true,
+    policy: null,
+    code: "DEVICE_POLICY_INVALID",
+  };
+  for (const listener of deviceListeners) listener(deviceSnapshot);
+  assert.equal(target.effectivePolicyManager.getCurrent().code, "DEVICE_POLICY_INVALID");
+  assert.equal((await invoke("cloud-health-check")).code, "DEVICE_POLICY_BLOCKED");
+});
 
 // Managed starts mint from the account, which needs an API URL.
 function withManagedApi(t) {
@@ -327,6 +878,52 @@ for (const [provider, property, saveChannel] of STREAMING.filter(([name]) => nam
   });
 }
 
+test("managed AssemblyAI and Deepgram dictation identify their purpose for start, warmup and refresh", async (t) => {
+  withManagedApi(t);
+  const requests = [];
+  t.mock.method(electron.net, "fetch", async (url, init) => {
+    assert.equal(init.headers["Content-Type"], "application/json");
+    const purpose = init.body ? JSON.parse(init.body).purpose : undefined;
+    requests.push({ url, purpose });
+    const allowed = purpose === "dictation";
+    return {
+      ok: allowed,
+      status: allowed ? 200 : 403,
+      json: async () =>
+        allowed
+          ? { token: "dictation-token" }
+          : { code: "AUDIO_PURPOSE_REQUIRED", error: "An audio purpose is required." },
+    };
+  });
+  for (const [provider, property] of [
+    ["assemblyai", "assemblyAiStreaming"],
+    ["deepgram", "deepgramStreaming"],
+  ]) {
+    target[property] = null;
+    assert.equal(
+      (await invoke(`${provider}-streaming-warmup`, { mode: "openwhispr" })).success,
+      true
+    );
+    target[property] = null;
+    assert.equal(
+      (await invoke(`${provider}-streaming-start`, { mode: "openwhispr" })).success,
+      true
+    );
+  }
+  assert.equal(await target.deepgramStreaming.tokenRefreshFn(), "dictation-token");
+  assert.deepEqual(
+    requests.map(({ url }) => new URL(url).pathname),
+    [
+      "/api/streaming-token",
+      "/api/streaming-token",
+      "/api/deepgram-streaming-token",
+      "/api/deepgram-streaming-token",
+      "/api/deepgram-streaming-token",
+    ]
+  );
+  assert.ok(requests.every(({ purpose }) => purpose === "dictation"));
+});
+
 for (const [provider, property, saveChannel] of STREAMING.filter(([name]) =>
   ["assemblyai", "corti"].includes(name)
 )) {
@@ -395,6 +992,39 @@ test("assemblyai: a socket opened on the old key loses to the save, even when it
   assert.equal(target.assemblyAiStreaming.token, "token-B");
 });
 
+test("gemini: live registry IDs reach the selected connection without a prefix requirement", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const next = structuredClone(old.data);
+  next.transcriptionProviders
+    .find((p) => p.id === "gemini")
+    .models.push({
+      id: "registry-google-live",
+      name: "New Google model",
+      description: "Fixture",
+      streaming: true,
+    });
+  store.replaceRegistryData({ data: next, manifestVersion: old.manifestVersion + 1 });
+  const originalConnect = FakeStreaming.prototype.connect;
+  t.after(() => {
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 });
+    FakeStreaming.prototype.connect = originalConnect;
+  });
+  FakeStreaming.prototype.connect = async function (options) {
+    this.currentModel = options.model;
+    return originalConnect.call(this, options);
+  };
+  target.geminiStreaming = null;
+  invoke("save-gemini-key", "A");
+  const result = await invoke("gemini-streaming-start", {
+    mode: "byok",
+    model: "registry-google-live",
+  });
+  assert.equal(result.success, true);
+  assert.equal(target.geminiStreaming.currentModel, "registry-google-live");
+  await invoke("gemini-streaming-stop");
+});
+
 test("gemini: a warm socket never crosses between managed and BYOK", async (t) => {
   withManagedApi(t);
   target.geminiStreaming = null;
@@ -408,6 +1038,77 @@ test("gemini: a warm socket never crosses between managed and BYOK", async (t) =
   result = await invoke("gemini-streaming-start", { mode: "openwhispr" });
   assert.equal(result.usedWarmConnection, false);
   assert.equal(target.geminiStreaming.token, "token-Bearer account");
+});
+
+for (const inFlight of [false, true]) {
+  test(`gemini: changing the live model replaces a ${inFlight ? "connecting" : "ready"} warm socket`, async (t) => {
+    target.geminiStreaming = null;
+    invoke("save-gemini-key", "A");
+    const originalConnect = FakeStreaming.prototype.connect;
+    const entered = deferred();
+    const gate = deferred();
+    t.after(() => {
+      FakeStreaming.prototype.connect = originalConnect;
+      gate.resolve();
+    });
+    FakeStreaming.prototype.connect = async function (options) {
+      this.currentModel = options.model;
+      if (options.model === "gemini-old-live") {
+        entered.resolve();
+        if (inFlight) await gate.promise;
+      }
+      return originalConnect.call(this, options);
+    };
+    const warmup = invoke("gemini-streaming-warmup", { mode: "byok", model: "gemini-old-live" });
+    await entered.promise;
+    if (!inFlight) await warmup;
+    const start = invoke("gemini-streaming-start", { mode: "byok", model: "gemini-next-live" });
+    gate.resolve();
+    await warmup;
+    const result = await start;
+    assert.equal(result.success, true);
+    assert.equal(result.usedWarmConnection, false);
+    assert.equal(target.geminiStreaming.currentModel, "gemini-next-live");
+    await invoke("gemini-streaming-stop");
+  });
+}
+
+test("gemini: microphone frames during a model switch reach only the requested model", async (t) => {
+  target.geminiStreaming = null;
+  invoke("save-gemini-key", "A");
+  const originalConnect = FakeStreaming.prototype.connect;
+  const entered = deferred();
+  const gate = deferred();
+  const received = new Map();
+  t.after(() => {
+    FakeStreaming.prototype.connect = originalConnect;
+    gate.resolve();
+  });
+  FakeStreaming.prototype.connect = async function (options) {
+    this.currentModel = options.model;
+    received.set(options.model, []);
+    this.sendAudio = (bytes) => {
+      received.get(this.currentModel).push(Buffer.from(bytes));
+      return true;
+    };
+    if (options.model === "gemini-old-live") {
+      entered.resolve();
+      await gate.promise;
+    }
+    return originalConnect.call(this, options);
+  };
+  const warmup = invoke("gemini-streaming-warmup", { mode: "byok", model: "gemini-old-live" });
+  await entered.promise;
+  const starting = invoke("gemini-streaming-start", { mode: "byok", model: "gemini-next-live" });
+  const send = (bytes) => eventHandlers.get("gemini-streaming-send")({ sender: editor }, bytes);
+  send(Buffer.from([1, 2]));
+  gate.resolve();
+  await warmup;
+  assert.equal((await starting).success, true);
+  send(Buffer.from([3, 4]));
+  assert.deepEqual(received.get("gemini-old-live"), []);
+  assert.deepEqual(Buffer.concat(received.get("gemini-next-live")), Buffer.from([1, 2, 3, 4]));
+  await invoke("gemini-streaming-stop");
 });
 
 // Tinfoil reads the saved key whatever the transcription mode says.
@@ -491,8 +1192,91 @@ const assertMeetingStreams = ([mic, system]) => {
   assert.equal(target._meetingMicStreaming, mic);
   assert.equal(target._meetingSystemStreaming, system);
 };
+const setWorkspacePolicy = (snapshot) => {
+  workspacePolicy = {
+    ...snapshot,
+    accountId: "personal-account",
+    authGeneration,
+    revision: ++policyRevision,
+  };
+  target.effectivePolicyManager.updateWorkspace(workspacePolicy);
+};
+
+test("a pending workspace decision applies new device denials selectively to main requests and sockets", (t) => {
+  const previousWorkspace = workspacePolicy;
+  const denied = new AbortController();
+  const allowed = new AbortController();
+  const blockedStream = new FakeStreaming();
+  const allowedStream = new FakeStreaming();
+  blockedStream.isConnected = true;
+  allowedStream.isConnected = true;
+  t.after(() => {
+    target._productRequests.delete(denied);
+    target._productRequests.delete(allowed);
+    target.assemblyAiStreaming = null;
+    target.deepgramStreaming = null;
+    target._remoteStreamPolicies.delete("assemblyAiStreaming");
+    target._remoteStreamPolicies.delete("deepgramStreaming");
+    workspacePolicy = previousWorkspace;
+    target.effectivePolicyManager.updateWorkspace(previousWorkspace);
+  });
+  target._productRequests.set(denied, {
+    channel: "cloud-reason",
+    args: [],
+    accountId: "personal-account",
+    remote: true,
+  });
+  target._productRequests.set(allowed, {
+    channel: "cloud-transcribe",
+    args: [],
+    accountId: "personal-account",
+    remote: true,
+  });
+  for (const [property, streaming, channel] of [
+    ["assemblyAiStreaming", blockedStream, "assemblyai-streaming-start"],
+    ["deepgramStreaming", allowedStream, "deepgram-streaming-start"],
+  ]) {
+    target[property] = streaming;
+    target._remoteStreamPolicies.set(property, {
+      channel,
+      args: [{ mode: "byok" }],
+      accountId: "personal-account",
+    });
+  }
+  workspacePolicy = null;
+  target.effectivePolicyManager.invalidate();
+  assert.equal(denied.signal.aborted, false);
+  assert.equal(allowed.signal.aborted, false);
+  const policy = defaultDevicePolicy();
+  policy.llm.allowedModes = ["local"];
+  policy.transcription.allowedByokProviders = ["deepgram"];
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  assert.equal(target.effectivePolicyManager.getCurrent().status, "loading");
+  assert.equal(denied.signal.aborted, true);
+  assert.equal(allowed.signal.aborted, false);
+  assert.equal(blockedStream.isConnected, false);
+  assert.equal(target.assemblyAiStreaming, null);
+  assert.equal(allowedStream.isConnected, true);
+  assert.equal(target.deepgramStreaming, allowedStream);
+});
+const REVOKED_MEETINGS = {
+  success: true,
+  managed: true,
+  policy: {
+    ...defaultDevicePolicy(),
+    features: {
+      ...defaultDevicePolicy().features,
+      meetingRecordingEnabled: false,
+      audioUploadEnabled: true,
+    },
+  },
+};
+
 const resetMeeting = (t) => {
-  t.after(() => invoke("meeting-transcription-stop"));
+  t.after(() => {
+    setWorkspacePolicy(UNMANAGED_POLICY);
+    return invoke("meeting-transcription-stop");
+  });
   target._meetingMicStreaming = null;
   target._meetingSystemStreaming = null;
 };
@@ -659,4 +1443,457 @@ test("a mic row retracted during a meeting reaches that meeting's diarization on
     ),
     [[["mic", text, timestamp]], []]
   );
+});
+
+test("meeting policy revocation closes live streams and prevents a late warmup from opening sockets", async (t) => {
+  resetMeeting(t);
+  invoke("save-deepgram-key", "A");
+  const options = { provider: "deepgram-realtime", mode: "byok" };
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  const streams = meetingStreams();
+  setWorkspacePolicy(REVOKED_MEETINGS);
+  for (const stream of streams) assert.equal(stream.isConnected, false);
+  assert.equal(target._audioFeaturePolicy.failure("upload"), null);
+  await invoke("meeting-transcription-stop");
+  setWorkspacePolicy(UNMANAGED_POLICY);
+
+  const mintStarted = deferred();
+  const minted = deferred();
+  const previousFetch = fetchToken;
+  fetchToken = async () => {
+    mintStarted.resolve();
+    return minted.promise;
+  };
+  t.after(() => {
+    fetchToken = previousFetch;
+  });
+  invoke("save-assemblyai-key", "A");
+  const preparing = invoke("meeting-transcription-prepare", {
+    provider: "assemblyai-realtime",
+    mode: "byok",
+  });
+  await mintStarted.promise;
+  setWorkspacePolicy(REVOKED_MEETINGS);
+  minted.resolve("late-token");
+  const result = await preparing;
+  assert.equal(result.success, false);
+  assert.equal(result.code, "POLICY_MEETING_RECORDING_DISABLED");
+  assert.ok(meetingStreams().every((stream) => !stream?.isConnected));
+});
+
+test("a completed policy stop preserves its result for only its renderer, session and auth generation", async (t) => {
+  resetMeeting(t);
+  const stopped = deferred();
+  target._startOrSkipDiarization = (sessionId) => stopped.resolve(sessionId);
+  t.after(() => {
+    delete target._startOrSkipDiarization;
+    authGeneration = 1;
+  });
+  invoke("save-deepgram-key", "A");
+  const options = { provider: "deepgram-realtime", mode: "byok", sessionId: "policy-stopped" };
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  meetingStreams()[1].onFinalTranscript("Already recorded.", Date.now());
+  setWorkspacePolicy(REVOKED_MEETINGS);
+  const diarizationSessionId = await stopped.promise;
+  await new Promise(setImmediate);
+
+  assert.deepEqual(await invoke("meeting-transcription-stop", "other-session"), {
+    success: false,
+    reason: "stale-session",
+  });
+  assert.deepEqual(
+    await handlers.get("meeting-transcription-stop")({ sender: {} }, options.sessionId),
+    { success: false, reason: "stale-session" }
+  );
+  assert.deepEqual(await invoke("meeting-transcription-stop", options.sessionId), {
+    success: true,
+    transcript: "Already recorded.",
+    diarizationSessionId,
+  });
+
+  authGeneration++;
+  assert.deepEqual(await invoke("meeting-transcription-stop", options.sessionId), {
+    success: false,
+    reason: "stale-session",
+  });
+  setWorkspacePolicy(UNMANAGED_POLICY);
+  assert.equal(
+    (await invoke("meeting-transcription-start", { ...options, sessionId: "next-session" }))
+      .success,
+    true
+  );
+  assert.deepEqual(await invoke("meeting-transcription-stop", options.sessionId), {
+    success: false,
+    reason: "stale-session",
+  });
+  assert.ok(meetingStreams().every((stream) => stream.isConnected));
+});
+
+test("an in-flight policy stop rejects another renderer and an auth change before delivery", async (t) => {
+  const finishStop = deferred();
+  t.after(() => {
+    finishStop.resolve();
+    authGeneration = 1;
+  });
+  resetMeeting(t);
+  t.mock.method(target.audioTapManager, "stop", () => finishStop.promise);
+  invoke("save-deepgram-key", "A");
+  const options = { provider: "deepgram-realtime", mode: "byok", sessionId: "pending-policy-stop" };
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  setWorkspacePolicy(REVOKED_MEETINGS);
+  const foreign = handlers.get("meeting-transcription-stop")({ sender: {} }, options.sessionId);
+  const pending = invoke("meeting-transcription-stop", options.sessionId);
+  authGeneration++;
+  const changed = invoke("meeting-transcription-stop", options.sessionId);
+  finishStop.resolve();
+  for (const result of await Promise.all([foreign, pending, changed])) {
+    assert.deepEqual(result, { success: false, reason: "stale-session" });
+  }
+});
+
+test("a sign-out or account switch during a meeting prepare leaves no warm connection behind", async (t) => {
+  const IPCHandlers = require(modulePath);
+  const accountScopeBinding = require("../../src/helpers/accountScopeBinding");
+  for (const method of ["read", "persist", "clear"])
+    t.mock.method(accountScopeBinding, method, () => null);
+  const previousFetch = fetchToken;
+  t.after(() => {
+    fetchToken = previousFetch;
+  });
+
+  for (const leave of [
+    () =>
+      IPCHandlers.prototype._handleAuthTokenChange.call(handlersThis, {
+        token: null,
+        generation: authGeneration,
+      }),
+    async () => {
+      // A switch leaves a real account; a guest signing in keeps its work.
+      target.databaseManager = {
+        activeAccountId: "personal-account",
+        setActiveAccountId() {},
+        claimSignedOutLocalRows() {},
+        claimLegacyRowsOfOnlyAccount() {},
+      };
+      await handlers.get("set-active-account-scope")({}, "another-account", authGeneration);
+      delete target.databaseManager;
+    },
+  ]) {
+    resetMeeting(t);
+    setWorkspacePolicy(UNMANAGED_POLICY);
+    const mintStarted = deferred();
+    const minted = deferred();
+    fetchToken = async () => {
+      mintStarted.resolve();
+      return minted.promise;
+    };
+    invoke("save-assemblyai-key", "A");
+    const preparing = invoke("meeting-transcription-prepare", {
+      provider: "assemblyai-realtime",
+      mode: "byok",
+    });
+    await mintStarted.promise;
+    await leave();
+    minted.resolve("token-for-the-previous-account");
+
+    const result = await preparing;
+    assert.equal(result.code, "AUDIO_OPERATION_CANCELLED");
+    assert.ok(meetingStreams().every((stream) => !stream?.isConnected));
+  }
+});
+
+test("valid inference restrictions retire active provider streams without disabling independent remote features", async () => {
+  invoke("save-assemblyai-key", "saved-provider-key");
+  assert.equal((await invoke("assemblyai-streaming-start", { mode: "byok" })).success, true);
+  const streaming = target.assemblyAiStreaming;
+  const policy = defaultDevicePolicy();
+  policy.transcription.allowedModes = ["local"];
+  policy.llm.allowedModes = ["local"];
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  assert.ok(streaming.disconnects > 0);
+  assert.equal(target.assemblyAiStreaming, null);
+  const current = target.effectivePolicyManager.getCurrent();
+  assert.equal(current.success, true);
+  assert.equal(current.localOnly, false);
+  assert.equal(current.policy.features.webSearchEnabled, true);
+  assert.equal(current.policy.features.connectorsEnabled, true);
+  assert.equal(current.policy.dataRetention.cloudBackupAllowed, true);
+  for (const channel of [
+    "proxy-xai-transcription",
+    "proxy-mistral-transcription",
+    "proxy-corti-transcription",
+    "proxy-tinfoil-transcription",
+    "proxy-gemini-transcription",
+  ])
+    assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED");
+  for (const path of [
+    "/api/reason",
+    "/api/transcribe",
+    "/api/agent/stream",
+    "/api/stt/orukeet/session",
+  ])
+    assert.equal(
+      (
+        await invoke("cloud-api-request", {
+          path,
+          method: "POST",
+          expectedAuthGeneration: 1,
+          body: { text: "private" },
+        })
+      ).code,
+      "DEVICE_POLICY_BLOCKED"
+    );
+  const messages = [];
+  const sender = {
+    id: 1,
+    isDestroyed: () => false,
+    send: (...args) => messages.push(args),
+    once() {},
+    removeListener() {},
+  };
+  await eventHandlers.get("cloud-agent-stream-start")({ sender }, "blocked-agent", [
+    { role: "user", content: "private" },
+  ]);
+  assert.equal(messages[0][0], "cloud-agent-stream-error");
+  assert.equal(messages[0][1].code, "DEVICE_POLICY_BLOCKED");
+});
+
+// A token rotation leaves the verdict loading, and with a device policy the
+// verdict on its way is managed: work it allowed must still finish.
+test("a token rotation on a managed device lets a request already in flight finish", async (t) => {
+  withManagedApi(t);
+  t.after(() => {
+    authGeneration = 1;
+  });
+  setDeviceValues({ RequireSignIn: true });
+  const sent = deferred();
+  const answer = deferred();
+  t.mock.method(electron.net, "fetch", () => {
+    sent.resolve();
+    return answer.promise;
+  });
+  const pending = invoke("cloud-health-check");
+  await sent.promise;
+  authGeneration++;
+  assert.equal(target.effectivePolicyManager.getCurrent().status, "loading");
+  assert.equal(target.effectivePolicyManager.getCurrent().managed, true);
+  answer.resolve({ ok: true, status: 200 });
+  assert.deepEqual(await pending, { ok: true, status: 200 });
+});
+
+test("a token rotation on a managed device doesn't cut off an agent answer", async (t) => {
+  withManagedApi(t);
+  t.after(() => {
+    authGeneration = 1;
+  });
+  setDeviceValues({ RequireSignIn: true });
+  const sent = deferred();
+  let body;
+  t.mock.method(electron.net, "fetch", async () => {
+    sent.resolve();
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          body = controller;
+        },
+      })
+    );
+  });
+  const messages = [];
+  const sender = {
+    id: 1,
+    isDestroyed: () => false,
+    send: (channel) => messages.push(channel),
+    once() {},
+    removeListener() {},
+  };
+  const streaming = eventHandlers.get("cloud-agent-stream-start")({ sender }, "rotating-agent", [
+    { role: "user", content: "hello" },
+  ]);
+  await sent.promise;
+  authGeneration++;
+  body.enqueue(new TextEncoder().encode('{"type":"text","text":"answer"}\n'));
+  body.close();
+  await streaming;
+  assert.deepEqual(messages, ["cloud-agent-stream-chunk", "cloud-agent-stream-end"]);
+});
+
+test("a local prepare cannot replace the policy identity of an active remote meeting", async (t) => {
+  resetMeeting(t);
+  invoke("save-deepgram-key", "saved-provider-key");
+  assert.equal(
+    (await invoke("meeting-transcription-start", { provider: "deepgram-realtime", mode: "byok" }))
+      .success,
+    true
+  );
+  const streams = meetingStreams();
+  assert.equal(
+    (await invoke("meeting-transcription-prepare", { provider: "local" })).success,
+    true
+  );
+  const policy = defaultDevicePolicy();
+  policy.transcription.allowedModes = ["local"];
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  await new Promise(setImmediate);
+  assert.ok(streams.every((stream) => !stream.isConnected));
+});
+
+// The end-of-stream frame makes the server finalize what it holds; it answers
+// with that final the way the provider does.
+for (const [provider, saveChannel, clientModule, endFrame, finalFrames] of [
+  [
+    "assemblyai-realtime",
+    "save-assemblyai-key",
+    "assemblyAiStreaming",
+    "Terminate",
+    [
+      { type: "Turn", transcript: "revoked audio", end_of_turn: true, turn_is_formatted: true },
+      { type: "Termination" },
+    ],
+  ],
+  [
+    "deepgram-realtime",
+    "save-deepgram-key",
+    "deepgramStreaming",
+    "CloseStream",
+    [
+      {
+        type: "Results",
+        is_final: true,
+        channel: { alternatives: [{ transcript: "revoked audio" }] },
+      },
+    ],
+  ],
+]) {
+  for (const restriction of ["local-only", "provider"]) {
+    test(`${restriction} revocation closes a real ${provider} meeting without finalizing its audio`, async (t) => {
+      const { WebSocketServer } = require("ws");
+      const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+      await once(server, "listening");
+      t.after(() => server.close());
+      const received = [];
+      const audio = deferred();
+      const closed = deferred();
+      let open = 0;
+      server.on("connection", (socket) => {
+        open++;
+        socket.on("close", () => --open === 0 && closed.resolve());
+        socket.on("message", (data, isBinary) => {
+          if (isBinary) return audio.resolve();
+          const { type } = JSON.parse(data);
+          received.push(type);
+          if (type !== endFrame) return;
+          for (const frame of finalFrames) socket.send(JSON.stringify(frame));
+          socket.close();
+        });
+        if (provider === "assemblyai-realtime")
+          socket.send(JSON.stringify({ type: "Begin", id: "session" }));
+      });
+      const clients = require(meetingProvidersPath).STREAMING_CLIENT_BY_PROVIDER;
+      const original = clients[provider];
+      clients[provider] = class extends require(`../../src/helpers/${clientModule}`) {
+        buildWebSocketUrl() {
+          return `ws://127.0.0.1:${server.address().port}`;
+        }
+      };
+      t.after(() => (clients[provider] = original));
+      resetMeeting(t);
+      invoke(saveChannel, "saved-provider-key");
+      assert.equal(
+        (await invoke("meeting-transcription-start", { provider, mode: "byok" })).success,
+        true
+      );
+      const notified = notifications.length;
+      target._meetingMicStreaming.sendAudio(Buffer.alloc(9600));
+      await audio.promise;
+      revokeTranscription(restriction);
+      await closed.promise;
+      assert.equal(received.includes(endFrame), false);
+      assert.deepEqual(
+        notifications
+          .slice(notified)
+          .filter(
+            ([, channel, segment]) => channel === "meeting-transcription-segment" && segment.text
+          ),
+        []
+      );
+    });
+  }
+}
+
+test("valid local-only policy refreshes retain permitted local work", () => {
+  setDeviceValues({ RequireSignIn: false });
+  const local = new AbortController();
+  const remote = new AbortController();
+  target._productRequests.set(local, { channel: "transcribe-audio-file", args: [], remote: false });
+  target._productRequests.set(remote, { channel: "cloud-transcribe", args: [], remote: true });
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.audioRetentionMaxDays = 7;
+  setDeviceValues({ RequireSignIn: false, Policy: JSON.stringify(policy) });
+  assert.equal(local.signal.aborted, false);
+  assert.equal(remote.signal.aborted, true);
+  target._productRequests.delete(local);
+  target._productRequests.delete(remote);
+});
+
+for (const [provider, property] of [
+  ["AssemblyAI", "assemblyAiStreaming"],
+  ["Deepgram", "deepgramStreaming"],
+  ["Corti", "cortiStreaming"],
+]) {
+  for (const restriction of ["mode", "local-only"]) {
+    test(`policy retirement closes real warm ${provider} clients under ${restriction}`, (t) => {
+      const Streaming = require(`../../src/helpers/${property}`);
+      const streaming = new Streaming();
+      const close = t.mock.fn();
+      streaming.warmConnection = { readyState: 1, close, ping() {}, send() {} };
+      streaming.warmConnectionReady = true;
+      streaming.warmConnectionOptions = { mode: "byok" };
+      streaming.cacheToken?.("test-token");
+      streaming.startKeepAlive();
+      streaming.scheduleRewarm?.();
+      streaming.scheduleProactiveRefresh?.();
+      t.after(() => {
+        if (streaming.cleanupAll) streaming.cleanupAll();
+        else streaming.cleanupWarmConnection();
+      });
+      target[property] = streaming;
+      target._remoteStreamPolicies.set(property, {
+        channel: `${provider.toLowerCase()}-streaming-warmup`,
+        args: [{ mode: "byok" }],
+      });
+      const policy = defaultDevicePolicy();
+      policy.transcription.allowedModes = ["local"];
+      setDeviceValues({
+        Policy: JSON.stringify(policy),
+        ...(restriction === "local-only" ? { RequireSignIn: false } : {}),
+      });
+      assert.equal(target[property], null);
+      assert.equal(close.mock.callCount(), 1);
+      assert.equal(streaming.warmConnection, null);
+      assert.equal(streaming.keepAliveInterval, null);
+      assert.equal(streaming.rewarmTimer ?? null, null);
+      assert.equal(streaming.proactiveRefreshTimer ?? null, null);
+    });
+  }
+}
+
+test("provider connection revocation aborts its probe and prevents fallback transmission", async (t) => {
+  const requests = [];
+  const probe = async (url, init) => {
+    requests.push({ url, signal: init.signal });
+    setDeviceValues({ RequireSignIn: false });
+    return Response.json({}, { status: 404 });
+  };
+  t.mock.method(globalThis, "fetch", probe);
+  t.mock.method(electron.net, "fetch", probe);
+  const result = await invoke("test-provider-connection", {
+    scope: "transcription",
+    provider: "custom",
+    baseUrl: "https://revoked-speech.example.test",
+    apiKey: "saved-key",
+  });
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].signal.aborted, true);
 });

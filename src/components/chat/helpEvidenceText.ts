@@ -1,4 +1,4 @@
-import registry from "../../models/modelRegistryData.json";
+import { bundledRegistryData as registry } from "../../models/registryData.js";
 import type { TFunction } from "i18next";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
 import type { HelpEvidenceData } from "./helpEvidence";

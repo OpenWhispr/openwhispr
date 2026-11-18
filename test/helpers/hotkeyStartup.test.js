@@ -8,7 +8,12 @@ const GnomeShortcutManager = require("../../src/helpers/gnomeShortcut");
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/hotkeyManager.js"), "utf8");
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true) {
+function fixture(
+  backend,
+  savedHotkey = "Scrolllock",
+  registrationResult = true,
+  platform = "linux"
+) {
   const timers = [];
   const registrations = [];
   const register = async (hotkey, push) => {
@@ -52,7 +57,7 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
   };
   const context = {
     module: { exports: {} },
-    process: { platform: "linux", env: {} },
+    process: { platform, env: {} },
     setTimeout: (callback, delay) => timers.push({ callback, delay }),
     require(name) {
       assert.ok(name in mocks, name);
@@ -102,6 +107,7 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
     timers,
     registrations,
     gnome,
+    env: context.process.env,
     window: { isDestroyed: () => false, webContents },
   };
 }
@@ -154,6 +160,29 @@ async function startWithSavedHold(f, mode) {
 }
 
 for (const backend of ["Hyprland", "GNOME", "KDE"]) {
+  test(`${backend} registration readiness waits for the actual binding`, async () => {
+    let finishRegistration;
+    const binding = new Promise((resolve) => {
+      finishRegistration = resolve;
+    });
+    const f = fixture(backend, "Scrolllock", binding);
+    await f.cache.setActivationModeCache("push");
+    await f.manager.initializeHotkey(f.window, () => {});
+    assert.equal(typeof f.manager.registrationReady?.then, "function");
+    let ready = false;
+    f.manager.registrationReady.then(() => {
+      ready = true;
+    });
+    await tick();
+    assert.equal(ready, false, "the registration timer has not fired");
+    f.timers.shift().callback();
+    await tick();
+    assert.equal(ready, false, "the backend has not answered");
+    finishRegistration(true);
+    await f.manager.registrationReady;
+    assert.equal(f.manager.currentHotkey, "Scrolllock");
+  });
+
   for (const hotkey of ["Scrolllock", "Control+Shift+Space"]) {
     test(`${backend} startup keeps a saved Hold for saved ${hotkey}`, async () => {
       const f = fixture(backend, hotkey);
@@ -215,6 +244,118 @@ for (const backend of ["GNOME", "Hyprland"]) {
     assert.deepEqual(f.registrations, [{ hotkey: registered, push: false }]);
   });
 }
+
+for (const backend of ["GNOME", "Hyprland", "KDE"]) {
+  test(`${backend} readiness includes a slow globalShortcut fallback`, async () => {
+    const f = fixture(backend, "Scrolllock", false);
+    let finishFallback;
+    const fallback = new Promise((resolve) => {
+      finishFallback = resolve;
+    });
+    f.manager.loadSavedHotkeyOrDefault = async () => {
+      await fallback;
+      f.manager.currentHotkey = "F8";
+    };
+    await f.manager.initializeHotkey(f.window, () => {});
+    let ready = false;
+    f.manager.registrationReady.then(() => {
+      ready = true;
+    });
+    f.timers.shift().callback();
+    for (let i = 0; i < 5; i++) await tick();
+    assert.equal(f.manager.isUsingNativeShortcut(), false);
+    assert.equal(ready, false, "do not start listeners with the abandoned backend's key");
+    finishFallback();
+    await f.manager.registrationReady;
+    assert.equal(f.manager.currentHotkey, "F8");
+  });
+}
+
+for (const platform of ["darwin", "win32", "linux"]) {
+  test(`${platform} globalShortcut readiness waits for the saved renderer hotkey`, async () => {
+    const f = fixture(null, "Control+Space", true, platform);
+    let finishRead;
+    f.window.webContents.isLoading = () => false;
+    f.window.webContents.executeJavaScript = () =>
+      new Promise((resolve) => {
+        finishRead = resolve;
+      });
+    f.manager.setupShortcuts = (hotkey) => {
+      f.manager.currentHotkey = hotkey;
+      return { success: true };
+    };
+    await f.manager.initializeHotkey(f.window, () => {});
+    let ready = false;
+    f.manager.registrationReady.then(() => {
+      ready = true;
+    });
+    await tick();
+    assert.equal(ready, false);
+    finishRead("Control+Space");
+    await f.manager.registrationReady;
+    assert.equal(f.manager.currentHotkey, "Control+Space");
+  });
+
+  test(`${platform} readiness includes an env registration failure's fallback`, async () => {
+    const f = fixture(null, "", true, platform);
+    f.env.DICTATION_KEY = "F13";
+    f.manager.setupShortcuts = () => ({ success: false });
+    let finishFallback;
+    f.manager.loadSavedHotkeyOrDefault = () =>
+      new Promise((resolve) => {
+        finishFallback = resolve;
+      });
+    await f.manager.initializeHotkey(f.window, () => {});
+    let ready = false;
+    f.manager.registrationReady.then(() => {
+      ready = true;
+    });
+    await tick();
+    assert.equal(ready, false);
+    finishFallback();
+    await f.manager.registrationReady;
+    assert.equal(ready, true);
+  });
+
+  test(`${platform} env registration is ready without waiting for a document`, async () => {
+    const f = fixture(null, "", true, platform);
+    f.env.DICTATION_KEY = "Control+Space";
+    f.window.webContents.executeJavaScript = () => {
+      throw new Error("unexpected renderer read");
+    };
+    f.manager.setupShortcuts = (hotkey) => {
+      f.manager.currentHotkey = hotkey;
+      return { success: true };
+    };
+    await f.manager.initializeHotkey(f.window, () => {});
+    await f.manager.registrationReady;
+    assert.equal(f.manager.currentHotkey, "Control+Space");
+  });
+}
+
+test("globalShortcut readiness includes document load before a renderer lookup", async () => {
+  const f = fixture(null);
+  let documentLoaded;
+  f.window.webContents.isLoading = () => true;
+  f.window.webContents.once = (event, callback) => {
+    assert.equal(event, "did-finish-load");
+    documentLoaded = callback;
+  };
+  f.manager.setupShortcuts = (hotkey) => {
+    f.manager.currentHotkey = hotkey;
+    return { success: true };
+  };
+  await f.manager.initializeHotkey(f.window, () => {});
+  let ready = false;
+  f.manager.registrationReady.then(() => {
+    ready = true;
+  });
+  await tick();
+  assert.equal(ready, false);
+  documentLoaded();
+  await f.manager.registrationReady;
+  assert.equal(f.manager.currentHotkey, "Scrolllock");
+});
 
 // gnomeShortcut.js answers with a reason when the keymap leaves GNOME nothing to grab.
 test("GNOME startup falls back to F8 when GNOME can't grab the saved key", async () => {

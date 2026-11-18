@@ -3,7 +3,7 @@ import { Plus, UserPlus } from "../../icons";
 import { useTranslation } from "react-i18next";
 import InviteTeammateDialog from "../../InviteTeammateDialog";
 import { useWorkspaceStore } from "../../../stores/workspaceStore";
-import { canManageSpace } from "../../../lib/spacePermissions";
+import { workspaceCan } from "../../../lib/capabilities";
 import {
   useNotes,
   useNotesByContainer,
@@ -106,11 +106,13 @@ export function ContainerOverview({
   const workspace = space.workspace_id
     ? workspaces.find((w) => w.id === space.workspace_id)
     : undefined;
+  // The invite dialog sends a workspace invitation, which the API refuses
+  // without manage_members, so being a space admin is not enough.
   const canInvite =
     space.kind === "team" &&
     !!space.cloud_space_id &&
     !!workspace &&
-    canManageSpace(space, workspace.role ?? null);
+    workspaceCan(workspace, "manage_members");
 
   const spaceFolders = useMemo(
     () => folders.filter((f) => f.space_id === space.id),
@@ -183,7 +185,11 @@ export function ContainerOverview({
             <ContainerIcon space={space} folder={folder} size={20} />
           </div>
           <h1 className="text-xl font-semibold text-foreground tracking-tight">
-            {folder ? defaultFolderDisplayName(folder, t) : space.name}
+            {folder
+              ? defaultFolderDisplayName(folder, t)
+              : space.kind === "private"
+                ? t("meetingNotification.folders.private")
+                : space.name}
           </h1>
           <p className="text-[13px] text-foreground/50 dark:text-foreground/45">
             {t(`notes.overview.subtitle.${space.kind === "team" ? "team" : "private"}`)}

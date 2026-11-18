@@ -80,6 +80,20 @@ private final class PendingUpload {
 
 private final class UploadDelegate: NSObject, URLSessionDataDelegate, URLSessionTaskDelegate {
   static let shared = UploadDelegate()
+  // Background relaunches can precede React Native. Both entry points must
+  // retain the same session so pending transfers keep their delegate.
+  static let session: URLSession = {
+    let config = URLSessionConfiguration.background(
+      withIdentifier: BackgroundUploaderConstants.sessionIdentifier
+    )
+    config.sessionSendsLaunchEvents = true
+    config.isDiscretionary = false
+    config.waitsForConnectivity = true
+    config.allowsCellularAccess = true
+    config.timeoutIntervalForRequest = 45
+    config.timeoutIntervalForResource = 60
+    return URLSession(configuration: config, delegate: shared, delegateQueue: nil)
+  }()
   private let lock = NSLock()
   private var pending: [Int: PendingUpload] = [:]
   // Buffers response bytes for tasks not tracked by an in-process promise
@@ -116,7 +130,7 @@ private final class UploadDelegate: NSObject, URLSessionDataDelegate, URLSession
 
   func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
     DispatchQueue.main.async {
-      BackgroundUploaderAppDelegate.invokeCompletionHandler()
+      BackgroundUploadRecovery.invokeCompletionHandler()
     }
   }
 
@@ -255,15 +269,12 @@ private final class UploadDelegate: NSObject, URLSessionDataDelegate, URLSession
   }
 }
 
-public class BackgroundUploaderAppDelegate: ExpoAppDelegateSubscriber {
+public enum BackgroundUploadRecovery {
   private static let lock = NSLock()
   private static var pendingCompletionHandler: (() -> Void)?
 
-  public required init() {}
-
-  public func application(
-    _ application: UIApplication,
-    handleEventsForBackgroundURLSession identifier: String,
+  public static func handleEvents(
+    for identifier: String,
     completionHandler: @escaping () -> Void
   ) -> Bool {
     guard identifier == BackgroundUploaderConstants.sessionIdentifier else {
@@ -272,6 +283,8 @@ public class BackgroundUploaderAppDelegate: ExpoAppDelegateSubscriber {
     Self.lock.lock()
     Self.pendingCompletionHandler = completionHandler
     Self.lock.unlock()
+    // UIKit may relaunch us without connecting a scene or initializing Expo modules.
+    _ = UploadDelegate.session
     return true
   }
 
@@ -285,28 +298,11 @@ public class BackgroundUploaderAppDelegate: ExpoAppDelegateSubscriber {
 }
 
 public class BackgroundUploaderModule: Module {
-  private var session: URLSession!
+  private let session = UploadDelegate.session
   private let providerTransport = ProviderRequestTransport()
 
   public func definition() -> ModuleDefinition {
     Name("BackgroundUploader")
-
-    OnCreate {
-      let config = URLSessionConfiguration.background(
-        withIdentifier: BackgroundUploaderConstants.sessionIdentifier
-      )
-      config.sessionSendsLaunchEvents = true
-      config.isDiscretionary = false
-      config.waitsForConnectivity = true
-      config.allowsCellularAccess = true
-      config.timeoutIntervalForRequest = 45
-      config.timeoutIntervalForResource = 60
-      self.session = URLSession(
-        configuration: config,
-        delegate: UploadDelegate.shared,
-        delegateQueue: nil
-      )
-    }
 
     AsyncFunction("upload") { (request: UploadRequest, promise: Promise) in
       self.startUpload(request: request, promise: promise)

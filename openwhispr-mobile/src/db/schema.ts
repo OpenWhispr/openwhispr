@@ -63,6 +63,7 @@ export const folders = sqliteTable('folders', {
   isDefault: integer('is_default').default(0),
   sortOrder: integer('sort_order').default(0),
   clientFolderId: text('client_folder_id'),
+  privateWorkspaceId: text('private_workspace_id'),
   remoteId: text('remote_id'),
   deletedAt: text('deleted_at'),
   pendingSync: integer('pending_sync').notNull().default(0),
@@ -134,6 +135,9 @@ export const dictionaryEntries = sqliteTable('dictionary_entries', {
   clientDictId: text('client_dict_id'),
   remoteId: text('remote_id'),
   deletedAt: text('deleted_at'),
+  sharedAt: text('shared_at'),
+  // 1 while an explicit re-add's clear of shared_at still has to reach the server.
+  sharedAtCleared: integer('shared_at_cleared').notNull().default(0),
   pendingSync: integer('pending_sync').notNull().default(0),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
   updatedAt: text('updated_at').default(sql`(datetime('now'))`),

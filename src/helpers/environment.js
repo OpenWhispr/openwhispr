@@ -59,6 +59,10 @@ const PERSISTED_KEYS = [
   "AZURE_OPENAI_API_VERSION",
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
+  // Written by the Settings debug toggle (set-debug-logging)
+  "OPENWHISPR_LOG_LEVEL",
+  // "bundled" turns off model catalog updates (Settings privacy toggle, or managed installs)
+  "OPENWHISPR_MODEL_REGISTRY_MODE",
 ];
 
 // Module-level so writes are serialized across all instances — hotkeyManager
@@ -488,6 +492,50 @@ class EnvironmentManager {
     return { success: true, path: envPath };
   }
 
+  saveDebugLogging(enabled) {
+    const logLevel = enabled ? "debug" : "info";
+    const envPath = path.join(app.getPath("userData"), ".env");
+    // Queue the entire read-modify-write so other saves cannot restore a stale level.
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(async () => {
+        let content = "";
+        try {
+          content = await fsPromises.readFile(envPath, "utf8");
+        } catch (error) {
+          if (error.code !== "ENOENT") throw error;
+        }
+
+        const lines = content.split("\n");
+        const logLevelIndex = lines.findIndex((line) =>
+          line.trim().startsWith("OPENWHISPR_LOG_LEVEL=")
+        );
+        const logLevelLine = `OPENWHISPR_LOG_LEVEL=${logLevel}`;
+        if (logLevelIndex !== -1) {
+          lines[logLevelIndex] = logLevelLine;
+        } else {
+          if (lines[lines.length - 1] !== "") lines.push("");
+          lines.push(logLevelLine);
+        }
+
+        const tmpPath = `${envPath}.tmp`;
+        await fsPromises.writeFile(tmpPath, lines.join("\n"), "utf8");
+        await fsPromises.rename(tmpPath, envPath);
+        process.env.OPENWHISPR_LOG_LEVEL = logLevel;
+      });
+    return envWriteQueue;
+  }
+
+  // Off keeps the app on its bundled model catalog: no cached update, no network check.
+  saveModelRegistryUpdates(enabled) {
+    if (enabled) {
+      delete process.env.OPENWHISPR_MODEL_REGISTRY_MODE;
+      return this.removeKeyFromEnvFile("OPENWHISPR_MODEL_REGISTRY_MODE");
+    }
+    process.env.OPENWHISPR_MODEL_REGISTRY_MODE = "bundled";
+    return this._writeEnvFileAtomic(path.join(app.getPath("userData"), ".env"));
+  }
+
   async clearAllPersistedData() {
     for (const envVarName of PERSISTED_KEYS) {
       delete process.env[envVarName];
@@ -503,8 +551,8 @@ class EnvironmentManager {
 
   // Removes a single key's line from .env, preserving every other line
   // verbatim. saveAllKeysToEnvFile() would instead regenerate the file from
-  // PERSISTED_KEYS, dropping hand-added lines (e.g. OPENWHISPR_LOG_LEVEL) and
-  // materializing session/shell env values into the file.
+  // PERSISTED_KEYS, dropping hand-added lines and materializing session/shell
+  // env values into the file.
   removeKeyFromEnvFile(key) {
     const envPath = path.join(app.getPath("userData"), ".env");
     envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._removeKeyLine(envPath, key));
