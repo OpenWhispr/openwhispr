@@ -1565,7 +1565,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCloudMode: FORK_DEFAULTS.coerceCloudMode(
     readString("cleanupCloudMode", FORK_DEFAULTS.cloudMode)
   ),
-  cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
+  cleanupCloudBaseUrl: readString(
+    "cleanupCloudBaseUrl",
+    FORK_DEFAULTS.cleanupBaseUrl ?? API_ENDPOINTS.OPENAI_BASE
+  ),
   cortiEnvironment: readString("cortiEnvironment", "us"),
   cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
@@ -1582,8 +1585,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
   useCleanupModel: readBoolean("useCleanupModel", true),
   useDictationAgent: readBoolean("useDictationAgent", true),
-  cleanupModel: readString("cleanupModel", ""),
-  cleanupProvider: readString("cleanupProvider", "openai"),
+  cleanupModel: readString("cleanupModel", FORK_DEFAULTS.cleanupModel ?? ""),
+  cleanupProvider: readString("cleanupProvider", FORK_DEFAULTS.cleanupProvider ?? "openai"),
 
   // Secrets hydrate from main process in initializeSettings, never from localStorage.
   openaiApiKey: "",
