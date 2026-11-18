@@ -60,13 +60,9 @@ test("auth reconciliation prepares chat ownership before changing main's account
     }),
     assertAuthGenerationCurrent: async () => {},
     getAuthRequestContextSnapshot: () => ({ observedGeneration: 4 }),
-    window: {
-      electronAPI: {
-        setActiveAccountScope: async () => {
-          calls.push("scope changed");
-          return { success: false };
-        },
-      },
+    requestActiveAccountScope: async () => {
+      calls.push("scope changed");
+      return { success: false };
     },
     resolvedUserId: "bob",
     boundGeneration: 4,

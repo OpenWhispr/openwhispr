@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-const MARKER_RE = /__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+__/;
+const MARKER_RE = /__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+/;
 
 // audioManager pulls in the whole renderer graph; ReasoningService is routed
 // through a globalThis slot so each test can script its responses.
@@ -125,6 +125,112 @@ test("the text-only retry swaps in the pre-built prompt verbatim", async (t) => 
 
   assert.equal(result, "done");
   assert.deepEqual(prompts, ["BASE PROMPT WITH SUFFIX", "BASE PROMPT"]);
+});
+
+test("a Cloud selection screenshot retry validates the same JSON contract", async (t) => {
+  const { setProcessText, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-cloud-selection-retry-",
+    settingsKey: "__cloudSelectionRetrySettings",
+    reasoningKey: "__cloudSelectionRetryProcessText",
+  });
+  for (const [name, response, expected] of [
+    ["complete JSON", '{"replacement":"Complete replacement."}', "Complete replacement."],
+    [
+      "literal document formatting",
+      '{"replacement":"  \\"quoted\\"\\n```ts\\nconst value = \\"literal\\";\\n```\\n"}',
+      '  "quoted"\n```ts\nconst value = "literal";\n```\n',
+    ],
+    ["raw refusal", "I cannot see your screen. Please provide context.", null],
+    ["partial JSON", '{"replacement":"Only the first paragraph', null],
+    ["unclosed JSON object", '{"replacement":"Only the first paragraph"', null],
+    [
+      "question marker missing underscores",
+      '{"replacement":"__OPENWHISPR_SELECTION_QUESTION"}',
+      null,
+    ],
+    [
+      "question marker followed by clarification",
+      JSON.stringify({
+        replacement: "__OPENWHISPR_SELECTION_QUESTION__\nWhat change should I make?",
+      }),
+      null,
+    ],
+    [
+      "literal question marker in document text",
+      JSON.stringify({ replacement: "The document mentions __OPENWHISPR_SELECTION_QUESTION__." }),
+      "The document mentions __OPENWHISPR_SELECTION_QUESTION__.",
+    ],
+  ]) {
+    await t.test(name, async () => {
+      const calls = [];
+      setProcessText(async (text, _model, _agent, config) => {
+        calls.push({ text, config });
+        if (config.screenContext) throw new Error("image rejected");
+        return response;
+      });
+      const manager = createManager({
+        isProcessing: true,
+        consumeSelectionCapture: async () => ({
+          status: "selected",
+          text: "Two original paragraphs.",
+          sessionId: "cloud-selection",
+        }),
+        onError: () => {},
+      });
+      const run = () =>
+        manager.processAgentCommand("Elaborate this", "", "Assistant", {
+          provider: "openwhispr",
+          systemPrompt: "BASE SCREEN_SUFFIX_SENTINEL",
+          textOnlySystemPrompt: "BASE",
+          screenContext: { mediaType: "image/jpeg", data: "image" },
+          selectionEditReachable: true,
+        });
+      if (expected) {
+        assert.equal(await run(), expected);
+        assert.deepEqual(manager.pendingSelectionEdit, { sessionId: "cloud-selection" });
+      } else {
+        await assert.rejects(run(), { code: "SELECTION_EDIT_INVALID_RESPONSE" });
+        assert.ok(!manager.pendingSelectionEdit);
+      }
+      assert.equal(calls.length, 2);
+      assert.equal(calls[1].config.screenContext, undefined);
+      assert.doesNotMatch(calls[1].config.systemPrompt, /SCREEN_SUFFIX_SENTINEL/);
+      assert.equal(calls[1].text, calls[0].text);
+      assert.ok(calls[0].text.includes('"Two original paragraphs."'));
+      for (const call of calls)
+        assert.match(call.config.systemPrompt, /Return exactly one JSON object/);
+    });
+  }
+  await t.test("a JSON question verdict after retry leaves the selection untouched", async () => {
+    setProcessText(async (_text, _model, _agent, config) => {
+      if (config.screenContext) throw new Error("image rejected");
+      return '{"replacement":"__OPENWHISPR_SELECTION_QUESTION__"}';
+    });
+    const manager = createManager({
+      isProcessing: true,
+      consumeSelectionCapture: async () => ({
+        status: "selected",
+        text: "Two original paragraphs.",
+        sessionId: "cloud-selection",
+      }),
+      onError: () => {},
+    });
+    assert.equal(
+      await manager.processAgentCommand("Explain this", "", "Assistant", {
+        provider: "openwhispr",
+        systemPrompt: "BASE SCREEN_SUFFIX_SENTINEL",
+        textOnlySystemPrompt: "BASE",
+        screenContext: { mediaType: "image/jpeg", data: "image" },
+        selectionEditReachable: true,
+      }),
+      "Explain this"
+    );
+    assert.ok(!manager.pendingSelectionEdit);
+    assert.equal(
+      manager.pendingAssistantConversation.selectedContext.text,
+      "Two original paragraphs."
+    );
+  });
 });
 
 test("a non-voice-agent recording clears a stale screen capture", async (t) => {

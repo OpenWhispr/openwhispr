@@ -21,9 +21,10 @@ import {
   getLlmStreamingFirstByteTimeoutSeconds,
   llmRequestTimeoutError,
 } from "../helpers/llmRequestTimeout.js";
-import { streamText, stepCountIs } from "ai";
+import { streamText, stepCountIs, type LanguageModel } from "ai";
 import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
+import { localServerFetch, startLocalServer } from "./ai/localServerFetch";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import type { InferenceScope } from "../config/inferenceScopes";
@@ -47,7 +48,14 @@ import {
   detectEndpointDialect,
   geminiCatalogThinkingFloor,
 } from "./ai/thinkingSuppressionDialects";
-import { abortOnCancel, isRequestCancelled, requestCancelledError } from "./ai/requestCancellation";
+import {
+  abortOnCancel,
+  cancelRequest,
+  isRequestCancelled,
+  requestCancelledError,
+  requestSignal,
+  trackRequest,
+} from "./ai/requestCancellation";
 import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
@@ -60,7 +68,12 @@ import {
 } from "../helpers/providerHttpErrors.js";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
-import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
+import {
+  assertAgentAllowedByPolicy,
+  assertReasoningAllowedByPolicy,
+  onPolicyRestriction,
+  runningPolicyCheck,
+} from "./reasoningPolicy";
 import type { InferenceMode } from "../types/electron";
 import { usePolicyStore } from "../stores/policyStore";
 import i18n from "../i18n";
@@ -181,8 +194,7 @@ function createAgentStreamPolicyCheck(
   let running = false;
   const assertAllowed = (): void => {
     const state = usePolicyStore.getState();
-    const unresolved =
-      state.status === "error" || state.status === "loading" || state.status === "idle";
+    const unresolved = state.status === "loading" || state.status === "idle";
     // By account, not credential: a rotated token keeps the account's verdict.
     // A suspended policy blanks the account without naming another one, and a
     // guest who signs in had no account to lose: its verdict decides from here.
@@ -193,7 +205,8 @@ function createAgentStreamPolicyCheck(
         messageKey: "common.policyAccountChanged",
       });
     }
-    // An unresolved verdict says nothing new about work already running.
+    // An unresolved verdict says nothing new about work already running; a
+    // settled error, as in runningPolicyCheck, is a denial.
     if (running && unresolved) return;
     assertAgentSessionAllowedByPolicy(provider, mode, model);
     running = true;
@@ -215,6 +228,20 @@ async function resolveStreamSetup<T>(pending: Promise<T>, assertAllowed: () => v
     return result;
   } catch (error) {
     assertAllowed();
+    throw error;
+  }
+}
+
+// Null when the turn was cancelled while main waited out another model's answer.
+async function startLocalStreamServer(
+  model: string,
+  abortController: AbortController,
+  assertAllowed: () => void
+): Promise<number | null> {
+  try {
+    return await resolveStreamSetup(startLocalServer(model, abortController.signal), assertAllowed);
+  } catch (error) {
+    if (abortController.signal.aborted && (error as Error).name === "AbortError") return null;
     throw error;
   }
 }
@@ -625,12 +652,15 @@ class ReasoningService extends BaseReasoningService {
     if (!providerId) {
       throw new Error("No reasoning provider selected");
     }
-    if (dispatchConfig.requiresAgent) assertAgentAllowedByPolicy();
-    assertReasoningAllowedByPolicy(
-      providerId,
-      resolveLlmDispatchMode(providerId, dispatchConfig),
-      trimmedModel
-    );
+    const assertAllowed = () => {
+      if (dispatchConfig.requiresAgent) assertAgentAllowedByPolicy();
+      assertReasoningAllowedByPolicy(
+        providerId,
+        resolveLlmDispatchMode(providerId, dispatchConfig),
+        trimmedModel
+      );
+    };
+    assertAllowed();
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");
@@ -650,24 +680,21 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const startTime = Date.now();
+    const requestId = dispatchConfig.requestId ?? crypto.randomUUID();
+    const release = requestSignal(requestId) ? () => {} : trackRequest(requestId);
+    const assertStillAllowed = runningPolicyCheck(assertAllowed);
+    const unsubscribe = onPolicyRestriction(assertStillAllowed, () => cancelRequest(requestId));
     try {
       const result = await handler.call({
         text,
         // A saved selection the catalog has retired must not reach the provider.
         model: resolveRetiredCloudModel(providerId, trimmedModel),
         agentName,
-        config: dispatchConfig,
+        config: { ...dispatchConfig, requestId },
         ctx: this.providerContext,
       });
-
-      // An unresolved verdict says nothing new about an answer that has finished.
-      if (usePolicyStore.getState().status === "managed") {
-        assertReasoningAllowedByPolicy(
-          providerId,
-          resolveLlmDispatchMode(providerId, dispatchConfig),
-          trimmedModel
-        );
-      }
+      assertStillAllowed();
+      if (isRequestCancelled(requestId)) throw requestCancelledError();
       if (validateCleanup) assertValidCleanupOutput(text, result);
 
       logger.logReasoning("PROVIDER_SUCCESS", {
@@ -685,6 +712,9 @@ class ReasoningService extends BaseReasoningService {
         error: (error as Error).message,
       });
       throw error;
+    } finally {
+      unsubscribe();
+      release();
     }
   }
 
@@ -728,7 +758,7 @@ class ReasoningService extends BaseReasoningService {
     provider: string,
     config: ReasoningConfig & { systemPrompt: string },
     abortController: AbortController
-  ): AsyncGenerator<string, void, unknown> {
+  ): AsyncGenerator<string, string | undefined, unknown> {
     const route = resolveChatRoute({
       provider,
       lanUrl: config.lanUrl,
@@ -743,6 +773,31 @@ class ReasoningService extends BaseReasoningService {
       abortController
     );
     assertStreamAllowed();
+    const unsubscribe = onPolicyRestriction(assertStreamAllowed, () => abortController.abort());
+    try {
+      return yield* this.streamTextFromEndpoint(
+        messages,
+        model,
+        provider,
+        config,
+        abortController,
+        route,
+        assertStreamAllowed
+      );
+    } finally {
+      unsubscribe();
+    }
+  }
+
+  private async *streamTextFromEndpoint(
+    messages: Array<{ role: string; content: string }>,
+    model: string,
+    provider: string,
+    config: ReasoningConfig & { systemPrompt: string },
+    abortController: AbortController,
+    route: ReturnType<typeof resolveChatRoute>,
+    assertStreamAllowed: () => void
+  ): AsyncGenerator<string, string | undefined, unknown> {
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
 
@@ -754,16 +809,9 @@ class ReasoningService extends BaseReasoningService {
       endpoint = buildApiUrl(baseUrl, "/chat/completions");
       apiKey = route.apiKey;
     } else if (isLocalProvider) {
-      const serverResult = await resolveStreamSetup(
-        window.electronAPI.llamaServerStart(model),
-        assertStreamAllowed
-      );
-      if (!serverResult.success || !serverResult.port) {
-        throw Object.assign(new Error(serverResult.error || "Failed to start local model server"), {
-          code: serverResult.code,
-        });
-      }
-      endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
+      const port = await startLocalStreamServer(model, abortController, assertStreamAllowed);
+      if (port === null) return;
+      endpoint = `http://127.0.0.1:${port}/v1/chat/completions`;
     } else {
       const access = await resolveStreamSetup(
         this.resolveByokAccess(provider, config),
@@ -922,6 +970,7 @@ class ReasoningService extends BaseReasoningService {
 
     const decoder = new TextDecoder();
     let buffer = "";
+    let finishReason: string | undefined;
     const stripThinking = (isLocalProvider || isLanChat) && config.disableThinking !== false;
     const filterThinkTags = stripThinking ? createStreamingThinkFilter() : null;
 
@@ -929,15 +978,14 @@ class ReasoningService extends BaseReasoningService {
       while (true) {
         const { done, value } = await reader.read();
         assertStreamAllowed();
-        if (done) break;
 
         // Reset on bytes, including keepalives, partial SSE frames and hidden
         // reasoning. A reply may stream for much longer than the idle timeout.
-        if (value.byteLength > 0) resetTimeout(timeoutSeconds);
+        if (!done && value.byteLength > 0) resetTimeout(timeoutSeconds);
 
-        buffer += decoder.decode(value, { stream: true });
+        buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        buffer = done ? "" : lines.pop() || "";
 
         for (const line of lines) {
           assertStreamAllowed();
@@ -949,13 +997,17 @@ class ReasoningService extends BaseReasoningService {
             const trailing = filterThinkTags?.finish();
             if (trailing) yield trailing;
             assertStreamAllowed();
-            return;
+            return finishReason;
           }
 
           let content: string | undefined;
           try {
-            const parsed = JSON.parse(data);
-            content = parsed.choices?.[0]?.delta?.content;
+            const parsed: {
+              choices?: Array<{ delta?: { content?: string }; finish_reason?: unknown }>;
+            } = JSON.parse(data);
+            const choice = parsed.choices?.[0];
+            if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
+            content = choice?.delta?.content;
           } catch {
             // skip malformed SSE chunks
             continue;
@@ -967,11 +1019,13 @@ class ReasoningService extends BaseReasoningService {
           yield content;
           assertStreamAllowed();
         }
+        if (done) break;
       }
 
       const trailing = filterThinkTags?.finish();
       if (trailing) yield trailing;
       assertStreamAllowed();
+      return finishReason;
     } catch (error) {
       assertStreamAllowed();
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
@@ -1049,13 +1103,28 @@ class ReasoningService extends BaseReasoningService {
             config,
             abortController
           );
-          for await (const text of contentGen) {
-            assertStreamAllowed();
-            yield { type: "content", text };
+          let finishReason: string | undefined;
+          try {
+            while (true) {
+              const chunk = await contentGen.next();
+              if (chunk.done) {
+                finishReason = chunk.value;
+                break;
+              }
+              assertStreamAllowed();
+              yield { type: "content", text: chunk.value };
+            }
+          } finally {
+            // Manual iteration retains the final provider metadata, and must
+            // still release the reader when the consumer stops mid-response.
+            await contentGen.return(undefined);
           }
           assertStreamAllowed();
           transportComplete = true;
-          yield { type: "done", finishReason: abortController.signal.aborted ? "abort" : "stop" };
+          yield {
+            type: "done",
+            finishReason: abortController.signal.aborted ? "abort" : (finishReason ?? "unknown"),
+          };
         } catch (error) {
           if (abortController.signal.aborted && (error as Error).name === "AbortError") return;
           throw error;
@@ -1077,19 +1146,12 @@ class ReasoningService extends BaseReasoningService {
         apiKey = route.apiKey;
         baseURL = resolveSelfHostedOpenAIBase(route.baseUrl);
       } else if (isLocalProvider) {
-        const serverResult = await resolveStreamSetup(
-          window.electronAPI.llamaServerStart(model),
-          assertStreamAllowed
-        );
-        if (!serverResult.success || !serverResult.port) {
-          throw Object.assign(
-            new Error(serverResult.error || "Failed to start local model server"),
-            {
-              code: serverResult.code,
-            }
-          );
+        const port = await startLocalStreamServer(model, abortController, assertStreamAllowed);
+        if (port === null) {
+          yield { type: "done", finishReason: "abort" };
+          return;
         }
-        baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
+        baseURL = `http://127.0.0.1:${port}/v1`;
       } else {
         ({ apiKey, baseURL } = await resolveStreamSetup(
           this.resolveByokAccess(provider, config),
@@ -1112,15 +1174,27 @@ class ReasoningService extends BaseReasoningService {
       // No Tinfoil model offers a level, so this needn't wait for the registry refresh below.
       const reasoningEffort = chosenReasoningEffort(aiProvider, model, config, baseURL);
       // Resolving a Tinfoil model refreshes the registry, so read model config after it.
-      const aiModel = isEnterprise
-        ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
-        : await resolveStreamSetup(
-            getAIModel(aiProvider, model, apiKey, baseURL, {
-              disableThinking: openrouterDisableThinking,
-              reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
-            }),
-            assertStreamAllowed
-          );
+      let aiModel: LanguageModel;
+      try {
+        aiModel = isEnterprise
+          ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
+          : await resolveStreamSetup(
+              getAIModel(aiProvider, model, apiKey, baseURL, {
+                mode,
+                signal: abortController.signal,
+                requiresAgent: true,
+                disableThinking: openrouterDisableThinking,
+                reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+                ...(isLocalProvider ? { fetch: localServerFetch(model) } : {}),
+              }),
+              assertStreamAllowed
+            );
+      } catch (error) {
+        assertStreamAllowed();
+        if (!abortController.signal.aborted) throw error;
+        yield { type: "done", finishReason: "abort" };
+        return;
+      }
 
       assertStreamAllowed();
       if (abortController.signal.aborted) {
@@ -1450,6 +1524,7 @@ class ReasoningService extends BaseReasoningService {
         name?: string;
         arguments?: string;
         finishReason?: string;
+        message?: string;
       },
       void,
       unknown
@@ -1463,6 +1538,7 @@ class ReasoningService extends BaseReasoningService {
       name?: string;
       arguments?: string;
       finishReason?: string;
+      message?: string;
     };
     const queue: Array<StreamEvent | { type: "__error"; error: string } | { type: "__end" }> = [];
     let resolve: (() => void) | null = null;
@@ -1524,6 +1600,9 @@ class ReasoningService extends BaseReasoningService {
             const item = queue.shift()!;
             if (item.type === "__end") return;
             if (item.type === "__error") throw new Error((item as { error: string }).error);
+            if (item.type === "error") {
+              throw new Error((item as StreamEvent).message || "Stream interrupted");
+            }
             yield item as StreamEvent;
           }
         }
@@ -1534,28 +1613,6 @@ class ReasoningService extends BaseReasoningService {
     })();
 
     return { stream: generator, wasCancelled: () => cancelled };
-  }
-
-  /** One Cloud request about a screenshot, with no tools: the vision chain's answer as text. */
-  async askAboutScreen(
-    question: string,
-    screenContext: { data: string; mediaType: string },
-    systemPrompt: string,
-    signal?: AbortSignal
-  ): Promise<string> {
-    const { controller, release } = this.createStreamOperation(signal);
-    try {
-      const { stream } = this.streamFromIPC(
-        [{ role: "user", content: question }],
-        { systemPrompt, screenContext },
-        controller.signal
-      );
-      let answer = "";
-      for await (const ev of stream) if (ev.type === "content") answer += ev.text as string;
-      return answer;
-    } finally {
-      release();
-    }
   }
 
   async *processTextStreamingCloud(
@@ -1569,6 +1626,8 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      /** The same instructions without screenshot grounding, for a failed first image request. */
+      textOnlySystemPrompt?: string;
       /** Whether a final answer claims an action no tool call in its turn did. */
       isUnbackedClaim?: (text: string) => boolean;
     },
@@ -1588,42 +1647,66 @@ class ReasoningService extends BaseReasoningService {
       // hasn't seen yet start where the last step's pairs do.
       let latestStepStart = currentMessages.length;
       let claimRetried = false;
+      let screenContext = config.screenContext;
+      let systemPrompt = config.systemPrompt;
 
       for (let step = 0; step < maxSteps; step++) {
         if (operationWasCancelled()) return;
         currentMessages = compactTranscriptHistory(currentMessages, latestStepStart);
-        // The screenshot rides every step of the tool loop so the model keeps
-        // its vision after tool results come back.
-        const ipcStream = this.streamFromIPC(
-          currentMessages,
-          {
-            systemPrompt: config.systemPrompt,
-            tools: config.tools,
-            screenContext: config.screenContext,
-          },
-          controller.signal
-        );
-
         const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
         let stepText = "";
+        let finishReason = "unknown";
+        let emittedOutput = false;
 
-        for await (const ev of ipcStream.stream) {
-          if (ev.type === "content") {
-            stepText += ev.text as string;
-            yield { type: "content", text: ev.text as string };
-          } else if (ev.type === "tool_call") {
-            const call = {
-              id: ev.id as string,
-              name: ev.name as string,
-              arguments: ev.arguments as string,
-            };
-            pendingToolCalls.push(call);
-            yield { type: "tool_calls", calls: [call] };
+        // A rejected optional image must not lose the command. Retry only before
+        // the first visible output or tool call; later retries could replay an action.
+        while (true) {
+          const ipcStream = this.streamFromIPC(
+            currentMessages,
+            { systemPrompt, tools: config.tools, screenContext },
+            controller.signal
+          );
+          try {
+            for await (const ev of ipcStream.stream) {
+              if (ev.type === "content") {
+                emittedOutput = true;
+                stepText += ev.text as string;
+                yield { type: "content", text: ev.text as string };
+              } else if (ev.type === "tool_call") {
+                emittedOutput = true;
+                const call = {
+                  id: ev.id as string,
+                  name: ev.name as string,
+                  arguments: ev.arguments as string,
+                };
+                pendingToolCalls.push(call);
+                yield { type: "tool_calls", calls: [call] };
+              } else if (ev.type === "done") {
+                finishReason = ev.finishReason || "unknown";
+              }
+            }
+          } catch (error) {
+            if (!operationWasCancelled() && step === 0 && screenContext && !emittedOutput) {
+              screenContext = undefined;
+              systemPrompt = config.textOnlySystemPrompt ?? config.systemPrompt;
+              finishReason = "unknown";
+              continue;
+            }
+            throw error;
           }
+          if (ipcStream.wasCancelled() || operationWasCancelled()) {
+            yield { type: "done", finishReason: "abort" };
+            return;
+          }
+          break;
         }
 
-        if (ipcStream.wasCancelled() || operationWasCancelled()) {
-          yield { type: "done", finishReason: "abort" };
+        // EOF and truncation do not authorize either delivery or tool execution.
+        if (finishReason !== "stop" && finishReason !== "tool-calls") {
+          if (pendingToolCalls.length > 0) {
+            throw new Error("Cloud stream ended before tool calls completed");
+          }
+          yield { type: "done", finishReason };
           return;
         }
 
@@ -1641,7 +1724,7 @@ class ReasoningService extends BaseReasoningService {
               continue;
             }
           }
-          yield { type: "done", finishReason: "stop" };
+          yield { type: "done", finishReason };
           return;
         }
 
@@ -1706,7 +1789,7 @@ class ReasoningService extends BaseReasoningService {
       // One more step, with no tools, answers with what it has.
       const answer = this.streamFromIPC(
         [...currentMessages, { role: "user", content: STEP_LIMIT_NOTE }],
-        { systemPrompt: config.systemPrompt, screenContext: config.screenContext },
+        { systemPrompt, screenContext },
         controller.signal
       );
       let answerText = "";

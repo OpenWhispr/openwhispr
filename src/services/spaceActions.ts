@@ -9,6 +9,8 @@ import {
   updateSpaceMeta,
 } from "../stores/noteStore";
 import { holdSpace, markHeldSpaceDeleted, releaseSpace } from "../lib/heldSpaceDeletes";
+import { holdTeam, releaseTeam } from "../lib/heldTeamDeletes";
+import { useWorkspaceStore } from "../stores/workspaceStore";
 import { invalidateSpaceRoster } from "../lib/spaceRosterCache";
 import { createSpaceActions } from "./spaceActionsCore";
 
@@ -35,6 +37,13 @@ const actions = createSpaceActions({
   markSpacePurged,
   releasePurgedSpace,
   invalidateSpaceRoster,
+  refreshWorkspaceRoster: async (workspaceId) => {
+    // The store holds one workspace's roster. A delete that commits after a switch would replace
+    // the one now showing, and that workspace's roster is read again when it is opened.
+    const store = useWorkspaceStore.getState();
+    if (store.activeWorkspaceId !== workspaceId) return;
+    await store.refreshMembers(workspaceId);
+  },
   deleteHold: {
     accountGeneration: getAccountGeneration,
     hide: (space, cloudSpaceId) => {
@@ -44,6 +53,7 @@ const actions = createSpaceActions({
     release: (space, cloudSpaceId) => releaseSpace(space.id, cloudSpaceId),
     markDeleted: (space) => markHeldSpaceDeleted(space.id),
   },
+  teamDeleteHold: { hide: holdTeam, release: releaseTeam },
 });
 
 export const {
@@ -52,7 +62,12 @@ export const {
   deleteSpace,
   holdSpaceDelete,
   commitHeldDeletes,
+  createTeam,
+  addPeopleToTeam,
+  renameTeam,
+  holdTeamDelete,
   assignTeamToSpace,
+  assignTeamToSpaces,
   setSpaceTeamAccess,
   unassignTeamFromSpace,
   joinSpace,
@@ -63,11 +78,9 @@ export const {
   removeSpaceMember,
   leaveSpace,
   requestSpacesResync,
-  addTeamMembers,
   removeTeamMember,
   setTeamMemberRole,
   leaveTeam,
-  deleteTeam,
 } = actions;
 
 // Never return a value from this listener: Electron treats one as refusing the unload.

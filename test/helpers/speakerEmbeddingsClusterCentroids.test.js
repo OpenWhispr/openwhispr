@@ -181,3 +181,13 @@ test("a cancelled upload stops before extracting voices", async () => {
   assert.equal(centroids.size, 0);
   assert.equal(extracted.length, 0);
 });
+
+// A voice stored by an earlier embedding model has another length; comparing
+// the two would read past the shorter one's end.
+test("voices of different lengths are never similar", () => {
+  const current = new Float32Array(192).fill(1);
+
+  assert.equal(speakerEmbeddings.cosineSimilarity(current, new Float32Array(512).fill(1)), 0);
+  assert.equal(speakerEmbeddings.cosineSimilarity(new Float32Array(512).fill(1), current), 0);
+  assert.ok(Math.abs(speakerEmbeddings.cosineSimilarity(current, current) - 1) < 1e-6);
+});

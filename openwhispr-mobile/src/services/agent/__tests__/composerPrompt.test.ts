@@ -137,7 +137,7 @@ describe('context block', () => {
 // that the plan requires us to reuse verbatim.
 const EXPECTED_TONE_SENTENCES: Record<string, string> = {
   formal:
-    "Apply this tone: formal and polished. Use complete sentences with standard capitalization and full punctuation, spell out informal contractions (in English: I will, do not) but keep any the language's grammar requires, and leave out slang, filler, texting shorthand, emoji and em dashes. Restyle only; do not add or remove information.",
+    "Apply this tone: formal and polished. Use complete sentences with standard capitalization and full punctuation, spell out informal contractions where the result still reads as natural written language (in English: I will, do not), but keep a contraction in a question or fixed phrase where spelling it out would be ungrammatical or stilted (in English: Don't you think?, Let's go), and keep any the language's grammar requires, and leave out slang, filler, texting shorthand, emoji and em dashes. Restyle only; do not add or remove information.",
   casual:
     "Apply this tone: casual and friendly, like a quick note to a colleague. Use the language's everyday contractions (in English: I'll, it's, don't) and everyday wording, standard capitalization and light punctuation with no semicolons or em dashes; a final period can be dropped. Restyle only; do not add or remove information.",
   very_casual:

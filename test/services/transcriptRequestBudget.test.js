@@ -42,6 +42,7 @@ for (const provider of ["local SDK", "cloud", "local SDK with standard tools"]) 
         electronAPI: {
           getNote: async () => ({
             id: 7,
+            space_id: 1,
             title: "Launch",
             content: "Personal notes.",
             enhanced_content: "Agenda summary.",
@@ -67,6 +68,10 @@ for (const provider of ["local SDK", "cloud", "local SDK with standard tools"]) 
                   ? { type: "tool_call", ...call }
                   : { type: "content", text: "violet heron" },
               });
+              onChunk({
+                requestId,
+                chunk: { type: "done", finishReason: call ? "tool-calls" : "stop" },
+              });
               onEnd({ requestId });
             });
           },
@@ -79,13 +84,16 @@ for (const provider of ["local SDK", "cloud", "local SDK with standard tools"]) 
     const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
     usePolicyStore.setState({ status: "unmanaged", policy: null });
     const { ToolRegistry } = await vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
-    const { getNoteTool } = await vite.ssrLoadModule("/services/tools/getNoteTool.ts");
+    const getNoteTool = (
+      await vite.ssrLoadModule("/services/tools/getNoteTool.ts")
+    ).createGetNoteTool({ spaceIds: [1] });
     const { getAgentSystemPrompt } = await vite.ssrLoadModule("/config/prompts.ts");
     const { estimateNoteTokens } = await vite.ssrLoadModule("/helpers/noteChunking.js");
     const standardTools = provider === "local SDK with standard tools";
     const { createToolRegistry } = await vite.ssrLoadModule("/services/tools/index.ts");
     const registry = standardTools
       ? createToolRegistry({
+          scopeSpaceIds: [1],
           isSignedIn: false,
           calendarConnected: false,
           cloudBackupEnabled: false,
@@ -237,7 +245,7 @@ for (const provider of ["local SDK", "cloud"]) {
     installBrowserGlobals(t, {
       window: {
         electronAPI: {
-          getNote: async () => ({ id: 7, title: "Launch", transcript: TRANSCRIPT }),
+          getNote: async () => ({ id: 7, space_id: 1, title: "Launch", transcript: TRANSCRIPT }),
           llamaServerStart: async () => ({ success: true, port: 12345 }),
           onAgentStreamChunk: (listener) => {
             onChunk = listener;
@@ -256,6 +264,10 @@ for (const provider of ["local SDK", "cloud"]) {
                 ? parallel.map((call) => ({ type: "tool_call", ...call }))
                 : [{ type: "content", text: "done" }])
                 onChunk({ requestId, chunk });
+              onChunk({
+                requestId,
+                chunk: { type: "done", finishReason: first ? "tool-calls" : "stop" },
+              });
               onEnd({ requestId });
             });
           },
@@ -268,7 +280,9 @@ for (const provider of ["local SDK", "cloud"]) {
     const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
     usePolicyStore.setState({ status: "unmanaged", policy: null });
     const { ToolRegistry } = await vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
-    const { getNoteTool } = await vite.ssrLoadModule("/services/tools/getNoteTool.ts");
+    const getNoteTool = (
+      await vite.ssrLoadModule("/services/tools/getNoteTool.ts")
+    ).createGetNoteTool({ spaceIds: [1] });
     const registry = new ToolRegistry();
     registry.register(getNoteTool);
     const originalFetch = global.fetch;

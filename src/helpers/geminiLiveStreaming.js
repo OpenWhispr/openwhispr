@@ -424,7 +424,7 @@ class GeminiLiveStreaming {
     return true;
   }
 
-  async disconnect(closeStream = true) {
+  async disconnect({ commit = true } = {}) {
     debugLogger.debug("Gemini Live disconnect", {
       audioBytesSent: this.audioBytesSent,
       segments: this.completedSegments.length,
@@ -436,11 +436,11 @@ class GeminiLiveStreaming {
 
     this.isDisconnecting = true;
 
-    if (closeStream && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
+    if (commit && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
       this._flushColdStartBuffer();
     }
 
-    if (closeStream && this.ws.readyState === WebSocket.OPEN && this.audioBytesSent > 0) {
+    if (commit && this.ws.readyState === WebSocket.OPEN && this.audioBytesSent > 0) {
       this.finalize();
       if (!this._turnEnded) await this._awaitTurnEnd();
     }

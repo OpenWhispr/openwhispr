@@ -33,8 +33,9 @@ export const ANALYTICS_SUMMARY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS = 250;
 const requestedHistoryBackfillAccounts = new Set<string>();
 
+/** `refresh` is told whether local data changed, or whether it is only checking for remote changes. */
 export function subscribeToAnalyticsRefresh(
-  refresh: () => void | Promise<void>,
+  refresh: (dataChanged: boolean) => void | Promise<void>,
   cloudInsightsActive: boolean
 ): () => void {
   let disposed = false;
@@ -53,7 +54,7 @@ export function subscribeToAnalyticsRefresh(
 
     refreshRunning = true;
     try {
-      await refresh();
+      await refresh(!remoteOnly);
     } catch (error) {
       console.error("Refreshing analytics failed:", error);
     } finally {
@@ -166,6 +167,19 @@ async function pushAnalyticsClear(context?: AnalyticsSyncContext): Promise<void>
     context
   );
   await window.electronAPI.completeAnalyticsClear(pending.cleared_through, context);
+}
+
+/**
+ * Whether a clear or delete for the account has not reached the cloud yet. A
+ * pass logs a failed erasure and carries on, so this is how a reader learns the
+ * account totals may still include what the user erased.
+ */
+export async function hasPendingAnalyticsErasures(context: AnalyticsSyncContext): Promise<boolean> {
+  const [clear, deletes] = await Promise.all([
+    window.electronAPI.getPendingAnalyticsClear(context),
+    window.electronAPI.getPendingAnalyticsDeletes(1, context),
+  ]);
+  return clear != null || deletes.length > 0;
 }
 
 // Erasures and uploads are independent work that happens to share a pass. A

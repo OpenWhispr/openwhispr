@@ -34,7 +34,7 @@ function loadEngine() {
   }
 }
 
-function createEngine() {
+function createEngine(engineOptions) {
   const MeetingDetectionEngine = loadEngine();
 
   const reminderScheduler = {
@@ -69,12 +69,14 @@ function createEngine() {
   const shown = [];
   const meetingNavigations = [];
   const noteNavigations = [];
+  const refusals = [];
   const windowManager = {
     notificationPrefs: {},
     showMeetingNotification: (data) => shown.push(data),
     dismissMeetingNotification: () => {},
     queueMeetingNoteNavigation: async (payload) => meetingNavigations.push(payload),
     queueNoteNavigation: async (payload) => noteNavigations.push(payload),
+    sendMeetingStartRefused: (code) => refusals.push(code),
   };
 
   const engine = new MeetingDetectionEngine(
@@ -82,7 +84,8 @@ function createEngine() {
     processDetector,
     audioDetector,
     windowManager,
-    {}
+    {},
+    engineOptions
   );
 
   return {
@@ -93,6 +96,7 @@ function createEngine() {
     shown,
     meetingNavigations,
     noteNavigations,
+    refusals,
   };
 }
 
@@ -496,6 +500,48 @@ const ENABLED_SNAPSHOT = {
 function applySnapshot(engine, snapshot) {
   engine.setPreferences(deriveDetectorPreferences(snapshot));
 }
+
+// The bare {} databaseManager is the assertion that nothing reaches the note path.
+test("an administrator-disabled build never runs detectors, prompts, or starts a meeting", async () => {
+  let disabled = true;
+  const {
+    engine,
+    audioDetector,
+    processDetector,
+    shown,
+    meetingNavigations,
+    noteNavigations,
+    refusals,
+    windowManager,
+  } = createEngine({ isMeetingRecordingDisabled: () => disabled });
+
+  engine.start();
+  applySnapshot(engine, ENABLED_SNAPSHOT);
+  assert.equal(audioDetector.running, false);
+  assert.equal(processDetector.running, false);
+
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0 });
+  engine.handleCalendarReminder({ id: "event-1" });
+  assert.deepEqual(shown, []);
+
+  // Both starts say why, rather than doing nothing, naming the device's ban even
+  // when the effective verdict has its own reason.
+  windowManager.resolveMeetingRecordingRefusal = async () => ({ code: "POLICY_UNRESOLVABLE" });
+  await engine.startManualMeeting();
+  assert.deepEqual(refusals, ["POLICY_MEETING_RECORDING_DISABLED"]);
+  assert.equal(
+    (await engine.joinCalendarMeeting("event-1"))?.code,
+    "POLICY_MEETING_RECORDING_DISABLED"
+  );
+  assert.deepEqual(meetingNavigations, []);
+  assert.deepEqual(noteNavigations, []);
+
+  // Removing the profile takes effect on the next preference sync.
+  disabled = false;
+  applySnapshot(engine, ENABLED_SNAPSHOT);
+  assert.equal(audioDetector.running, true);
+  assert.equal(processDetector.running, true);
+});
 
 test("startup waits for saved notification preferences before starting prompt detectors", () => {
   const { engine, audioDetector, processDetector } = createEngine();
