@@ -1,5 +1,9 @@
 import { observeAndroidLanguage } from './strings';
 import './providers/register';
+import { watchLocalMode } from './settings/processingDefault';
+
+// Local Mode no longer ties the tasks together: anything that enters it becomes On device.
+watchLocalMode();
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack, router } from 'expo-router';

@@ -6,12 +6,13 @@ import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import type { MeetingLifecycle } from '@/store/createNotesStore';
 import { createLocalMeetingContext } from './localMeetingContext';
 import { createCloudMeetingContext } from './cloudMeetingContext';
+import { meetingOnDevice } from './meetingRouting';
 
 const latestRetryAttempts = new Map<string, symbol>();
 
 export const androidMeetingLifecycle: MeetingLifecycle = {
   createContext: createLocalMeetingContext,
-  canUseCloud: () => useProcessingModeStore.getState().activeMode !== 'private',
+  canUseCloud: () => !meetingOnDevice(),
   canUseLocalAsr: () => {
     const { selectedSpeechModel } =
       require('@/android/speechSelection') as typeof import('@/android/speechSelection');
@@ -26,7 +27,7 @@ export const androidMeetingLifecycle: MeetingLifecycle = {
     const attempt = Symbol();
     // A newer Local or Cloud retry invalidates callbacks from older uploads.
     latestRetryAttempts.set(attemptKey, attempt);
-    if (note.isPrivate || useProcessingModeStore.getState().activeMode === 'private') {
+    if (note.isPrivate || meetingOnDevice()) {
       await get().runMeetingPipeline(
         noteId,
         note.sourceFile,

@@ -1,5 +1,4 @@
 import { useConfigStore } from '@/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { InferenceSelection } from '@/lib/mobileProviders';
 import {
   getProviderCredential,
@@ -31,12 +30,8 @@ export function isLiveProvider(id: string | undefined): id is LiveProviderId {
   return LIVE_PROVIDERS.includes(id as LiveProviderId);
 }
 
-/**
- * The key a live meeting runs on: one saved for meetings, unless On device is the default,
- * which keeps meetings on the phone.
- */
+/** The key a live meeting runs on, when one is saved for meetings. */
 export function meetingKey(): (InferenceSelection & { providerId: LiveProviderId }) | null {
-  if (useProcessingModeStore.getState().activeMode === 'private') return null;
   const selection = useConfigStore.getState().config?.inference?.meeting;
   return selection?.mode === 'providers' && isLiveProvider(selection.providerId)
     ? (selection as InferenceSelection & { providerId: LiveProviderId })

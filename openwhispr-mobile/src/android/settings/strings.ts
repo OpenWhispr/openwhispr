@@ -180,8 +180,8 @@ export const settingsEnglish = {
   tasks: 'Tasks',
   meetings: 'Meetings',
   changed: 'Changed',
+  allOnDevice: 'Everything stays on this phone',
   offInSettings: 'Off in Settings',
-  cleanupSkipped: 'Skipped until you choose where it runs',
   providerConnected: '{{provider}} · connected',
   yourKeyConnected: 'Your key · connected',
   addAnotherKey: 'Add another key',
@@ -191,7 +191,6 @@ export const settingsEnglish = {
   chooseModel: 'Choose a model',
   modelId: 'Model ID',
   done: 'Done',
-  notWithPhoneDefault: 'Not while On device is the default',
   meetingCloudValue: 'OpenWhispr Cloud',
   meetingPhoneValue: 'On device',
   meetingsIntro:

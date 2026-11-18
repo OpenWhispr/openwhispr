@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+jest.mock('../settings/processingDefault', () => ({ watchLocalMode: jest.fn() }));
 jest.mock('../accountData', () => ({
   useAccountData: Object.assign(
     (select: (state: unknown) => unknown) => select({ revision: 1, blocked: false, error: null }),

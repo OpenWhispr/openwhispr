@@ -1,4 +1,6 @@
 const mockSelectedMeetingSpeech = jest.fn(() => 'parakeet-v3');
+let mockMeetingOnDevice = false;
+jest.mock('@/android/meetingRouting', () => ({ meetingOnDevice: () => mockMeetingOnDevice }));
 jest.mock('@/lib/meetingAudioStorage', () => ({
   meetingAudioDirectory: () => 'file:///app/documents/',
   meetingAudioContext: () => ({ namespace: '', key: 'test', isCurrent: () => true }),
@@ -2058,6 +2060,8 @@ describe('Android Cloud meeting ownership', () => {
       .catch((error) => error);
     mockProcessingModeState.activeMode = 'private';
     mockModeListeners.forEach((fn) => fn(mockProcessingModeState));
+    // Meetings are now set to run on the phone, so the newer retry runs locally.
+    mockMeetingOnDevice = true;
     useNotesStore.getState().transitionStatus(7, 'failed');
     const original = useNotesStore.getState().runMeetingPipeline;
     let finishLocal!: () => void;
@@ -2084,6 +2088,7 @@ describe('Android Cloud meeting ownership', () => {
       expect(mockAuthListeners.size).toBe(0);
     } finally {
       useNotesStore.setState({ runMeetingPipeline: original });
+      mockMeetingOnDevice = false;
     }
   });
 
