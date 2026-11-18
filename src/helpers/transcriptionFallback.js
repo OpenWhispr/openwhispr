@@ -22,6 +22,11 @@ const USER_ACTIONABLE_START_FAILURES = new Set([
   "LIMIT_REACHED",
 ]);
 
+// A device policy's refusal is as final as a workspace's.
+export function isTranscriptionPolicyRefusal(error) {
+  return typeof error?.code === "string" && /^(DEVICE_)?POLICY_/.test(error.code);
+}
+
 // Orukeet over OpenWhispr Cloud sessions, as opposed to a self-hosted server.
 export function isManagedOrukeetStream({ providerName, cloudTranscriptionMode }) {
   return providerName === "orukeet" && cloudTranscriptionMode === "openwhispr";
@@ -34,7 +39,7 @@ export function isManagedOrukeetStream({ providerName, cloudTranscriptionMode })
 // provider's start-failure behavior changes.
 export function resolveStreamingStartFallback({ providerName, cloudTranscriptionMode, result }) {
   if (!isManagedOrukeetStream({ providerName, cloudTranscriptionMode })) return null;
-  if (USER_ACTIONABLE_START_FAILURES.has(result.code) || result.code?.startsWith("POLICY_")) {
+  if (USER_ACTIONABLE_START_FAILURES.has(result.code) || isTranscriptionPolicyRefusal(result)) {
     return null;
   }
   if (result.code === "FEATURE_NOT_ENABLED") return "feature_disabled";

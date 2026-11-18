@@ -1266,3 +1266,133 @@ test("the empty-line toolbar stays on the caret when Enter scrolls the note, abo
   assert.ok(top() + height <= caret().top, `above the caret, not under the bar (top ${top()})`);
   assert.deepEqual(notes.errors, []);
 });
+
+test("the formatting toolbar's style controls apply Markdown-safe styles", async (t) => {
+  const notes = await mountNotes(t, "Hello world here");
+  await notes.act(() => notes.editor().commands.setTextSelection({ from: 1, to: 6 }), 300);
+  const label = (key) => `notes.editor.blocks.toolbar.${key}`;
+  for (const key of ["color", "font", "alignment", "ruby"]) assert.ok(isShown(label(key)), key);
+  for (const key of ["highlight", "subscript", "superscript"]) {
+    assert.ok(happyWindow.document.querySelector(`[aria-label^="${label(key)}"]`), key);
+  }
+  await notes.act(
+    () => clickButton(happyWindow.document.querySelector(`[aria-label^="${label("highlight")}"]`)),
+    50
+  );
+  assert.match(notes.saved(), /==Hello== world here/);
+  await notes.act(() => pointerDown(byLabel(label("color"))), 50);
+  await notes.act(() => menuItem("notes.editor.blocks.colors.red").click(), 50);
+  assert.match(notes.saved(), /\{color:#e11d48\}/);
+  assert.deepEqual(notes.errors, []);
+});
+
+test("typing [[ links a note, saved as [[Title]], and clicking it opens the note", async (t) => {
+  const opened = [];
+  happyWindow.electronAPI = {
+    ...happyWindow.electronAPI,
+    getNotes: async () => [
+      {
+        id: 7,
+        title: "[Team] Weekly sync",
+        content: "",
+        enhanced_content: "",
+        updated_at: "2026-11-04",
+      },
+    ],
+    agentOpenNote: async (id) => opened.push(id),
+  };
+  const notes = await mountNotes(t, "Start");
+  await notes.act(() => notes.editor().commands.setTextSelection(6));
+  await notes.act(() => notes.editor().commands.insertContent(" [[Week"), 120);
+  await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
+  // Brackets in the title are dropped from the link, which still resolves.
+  assert.match(notes.saved(), /Start \[\[Team Weekly sync\]\]/);
+  await notes.act(() => happyWindow.document.querySelector(".note-link").click(), 60);
+  assert.deepEqual(opened, [7]);
+});
+
+test("Enter after a closed [[ in the text is a new line, not a note link", async (t) => {
+  happyWindow.electronAPI = { ...happyWindow.electronAPI, getNotes: async () => [] };
+  const notes = await mountNotes(t, "matrix [[1, 2], [3, 4]] in numpy");
+  await notes.act(
+    () => notes.editor().commands.setTextSelection(notes.editor().state.doc.content.size - 1),
+    120
+  );
+  await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
+  assert.equal(notes.saved().trim(), "matrix \\[\\[1, 2\\], \\[3, 4\\]\\] in numpy");
+  assert.equal(happyWindow.document.querySelector(".note-link"), null);
+});
+
+test("Mod-, is left to the app's Settings shortcut, not subscript", () => {
+  const editor = createEditor("Hello world");
+  editor.commands.setTextSelection({ from: 1, to: 6 });
+  const mod = /Mac|iP(hone|[oa]d)/.test(happyWindow.navigator.platform)
+    ? { metaKey: true }
+    : { ctrlKey: true };
+  pressKey(editor, ",", mod);
+  assert.equal(markdownOf(editor), "Hello world");
+});
+
+test("[[ and / in a code block stay code: Enter is a new line", async (t) => {
+  happyWindow.electronAPI = {
+    ...happyWindow.electronAPI,
+    getNotes: async () => [
+      { id: 7, title: "Weekly sync", content: "", enhanced_content: "", updated_at: "2026-11-04" },
+    ],
+  };
+  const notes = await mountNotes(t, "```\ncode\n```");
+  await notes.act(() => notes.editor().commands.setTextSelection(5));
+  for (const typed of [" [[", " /"]) {
+    await notes.act(() => notes.editor().commands.insertContent(typed), 120);
+    await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
+  }
+  assert.equal(notes.saved(), "```\ncode [[\n /\n```");
+});
+
+test("a toggle title stays plain text: emoji, [[ and / add no nodes, Enter moves into the body", async (t) => {
+  happyWindow.electronAPI = {
+    ...happyWindow.electronAPI,
+    getNotes: async () => [
+      { id: 7, title: "Weekly sync", content: "", enhanced_content: "", updated_at: "2026-11-04" },
+    ],
+  };
+  const notes = await mountNotes(t, ":::toggle Title\n\nBody\n\n:::");
+  // The end of "Title": inside the toggle (1) and its title (2).
+  await notes.act(() => notes.editor().commands.setTextSelection(2 + "Title".length));
+  await notes.act(() => notes.editor().commands.insertContent(" 🚀 [[Week /"), 120);
+  assert.equal(happyWindow.document.querySelector(".rte-slash-menu"), null);
+  await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
+  await notes.act(() => notes.editor().commands.insertContent("Next"), 50);
+  assert.equal(notes.saved(), ":::toggle Title 🚀 \\[\\[Week /\n\nNext\n\nBody\n\n:::");
+  assert.deepEqual(notes.errors, []);
+});
+
+test("/ in a table cell opens no menu: its blocks would split the table", async (t) => {
+  const notes = await mountNotes(t);
+  await notes.act(() => caretInCell(notes.editor(), "Budget", "Budget".length));
+  await notes.act(() => notes.editor().commands.insertContent(" /"), 120);
+  assert.equal(happyWindow.document.querySelector(".rte-slash-menu"), null);
+});
+
+test("find counts matches, and clicking its fields keeps focus out of the note", async (t) => {
+  const { OPEN_FIND_EVENT } = await import("../../src/components/ui/editorBlocks/events.ts");
+  const notes = await mountNotes(t, "Hello world hello");
+  await notes.act(() => notes.editor().commands.setTextSelection({ from: 1, to: 6 }));
+  await notes.act(() =>
+    happyWindow.dispatchEvent(
+      new happyWindow.CustomEvent(OPEN_FIND_EVENT, { detail: { editor: notes.editor() } })
+    )
+  );
+  // The search runs 250 ms after the term is set.
+  await notes.act(() => {}, 300);
+  assert.equal(happyWindow.document.querySelector(".rte-find-count").textContent, "1/2");
+  const replace = happyWindow.document.querySelector(
+    'input[aria-label="notes.editor.blocks.find.replace"]'
+  );
+  await notes.act(() => {
+    replace.focus();
+    replace.click();
+  });
+  assert.equal(happyWindow.document.activeElement, replace);
+  assert.deepEqual(notes.errors, []);
+});

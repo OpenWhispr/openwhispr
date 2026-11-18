@@ -4,6 +4,7 @@ const { spawnSync } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { linuxBaselineFlags } = require("./lib/linux-baseline-flags");
 
 if (process.platform !== "linux") process.exit(0);
 
@@ -132,6 +133,7 @@ function tryCompile() {
 
   const compileArgs = [
     "-O2",
+    ...linuxBaselineFlags(),
     ...(pipewireFlags ? ["-DHAVE_PIPEWIRE"] : []),
     cSource,
     "-o",

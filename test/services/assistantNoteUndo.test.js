@@ -43,7 +43,9 @@ test("safe assistant edits and atomic Undo", async (t) => {
   const { syncService } = await vite.ssrLoadModule("/services/SyncService.ts");
   const pushes = [];
   t.mock.method(syncService, "debouncedPush", (...args) => pushes.push(args));
-  const { updateNoteTool } = await vite.ssrLoadModule("/services/tools/updateNoteTool.ts");
+  const { createUpdateNoteTool } = await vite.ssrLoadModule("/services/tools/updateNoteTool.ts");
+  // Made for each edit, as a turn makes it: its scope is the Private of whoever is signed in.
+  const updateNoteTool = () => createUpdateNoteTool({ spaceIds: [database.getPrivateSpaceId()] });
   const { executeTool } = await vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
   const fresh = () => {
     const note = database.saveNote("Workshop", "Private notes", "meeting").note;
@@ -57,7 +59,7 @@ test("safe assistant edits and atomic Undo", async (t) => {
   };
   const tokenFor = (id) => database.getNoteUndos().find((edit) => edit.noteId === id)?.token;
   const edit = (note, updates, turn) =>
-    updateNoteTool.execute(
+    updateNoteTool().execute(
       { id: note.id, ...updates },
       turn && { messageId: turn, signal: new AbortController().signal }
     );
@@ -312,7 +314,7 @@ test("safe assistant edits and atomic Undo", async (t) => {
       // later edit would wait on it forever.
       try {
         const pending = executeTool(
-          updateNoteTool,
+          updateNoteTool(),
           { id: note.id, content: "Assistant replacement" },
           { signal: controller.signal }
         );
@@ -584,14 +586,14 @@ test("safe assistant edits and atomic Undo", async (t) => {
   });
 
   await t.test(
-    "recovery remains bound to the originating account even for a shared local note",
+    "recovery remains bound to the originating account even for a signed-out note",
     async () => {
       database.setActiveAccountId(null);
       const note = fresh();
       await edit(note, { title: "Signed-out edit" });
       const token = tokenFor(note.id);
       database.setActiveAccountId("another-account");
-      assert.ok(database.getNote(note.id), "legacy local note remains readable by design");
+      assert.equal(database.getNote(note.id), null, "a signed-out note is seen only signed out");
       assert.equal(tokenFor(note.id), undefined);
       assert.equal(database.undoNoteUpdate(token).success, false);
       database.setActiveAccountId(null);

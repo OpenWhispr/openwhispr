@@ -131,7 +131,7 @@ export function RichTextEditorTableMenu({ editor }: { editor: Editor }) {
       options={options}
       className="pl-1.5 pb-1.5"
     >
-      <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenu open={open === "table"} onOpenChange={(next) => setOpen(next ? "table" : null)}>
         <DropdownMenuTrigger asChild>
           <Button
             size="icon"

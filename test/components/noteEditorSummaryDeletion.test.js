@@ -140,13 +140,28 @@ function baseProps(enhancement) {
   };
 }
 
-async function loadNoteEditor(t, permission) {
+async function loadNoteEditor(t, permission, options = {}) {
+  const events = {};
   installBrowserGlobals(t, {
+    initialStorage: { customDictionary: '["OpenWhispr"]', ...options.initialStorage },
     window: {
+      addEventListener: (name, callback) => {
+        events[name] = callback;
+      },
       electronAPI: {
+        getOpenAIKey: async () => "",
         getSpeakerProfiles: async () => [],
         getSpeakerMappings: async () => [],
-        getActions: async () => [TEMPLATE, DEFAULT_TEMPLATE, ...(globalThis.__noteActions ?? [])],
+        getActions: async () =>
+          options.actions ?? [TEMPLATE, DEFAULT_TEMPLATE, ...(globalThis.__noteActions ?? [])],
+        onActionUpdated: (callback) => {
+          events.actionUpdated = callback;
+          return () => {};
+        },
+        onActionDeleted: (callback) => {
+          events.actionDeleted = callback;
+          return () => {};
+        },
       },
     },
   });
@@ -169,7 +184,8 @@ async function loadNoteEditor(t, permission) {
     noExternal: ["react-i18next"],
     mockModules: {
       "react-i18next": `
-        const t = (key) => key;
+        const t = (key, options) => key === "notes.editor.generateWithTemplate"
+          ? "Generate with " + options.template : key;
         const i18n = { resolvedLanguage: "en", language: "en" };
         export function useTranslation() { return { t, i18n }; }
         export const initReactI18next = { type: "3rdParty", init() {} };
@@ -182,7 +198,7 @@ async function loadNoteEditor(t, permission) {
         export function SelectionBar() { return null; }
       `,
       "/EmbeddedChat": `export default function EmbeddedChat() { return null; }`,
-      "/hooks/useAuth": `
+      "/useAuth": `
         export function useAuth() {
           return globalThis.__noteEditorAuth ?? { isSignedIn: false, user: null };
         }
@@ -207,8 +223,11 @@ async function loadNoteEditor(t, permission) {
       "/services/NoteSharingService": `
         export const NoteSharingService = {
           fetchAcl: async () => null,
-          // A signed-in cloud note loads its sharing state; never answered here.
-          getShareSettings: () => new Promise(() => {}),
+          // A signed-in cloud note loads its sharing state; unanswered unless a test answers.
+          getShareSettings: (cloudId) =>
+            globalThis.__noteEditorShareSettings?.[cloudId]
+              ? Promise.resolve(globalThis.__noteEditorShareSettings[cloudId])
+              : new Promise(() => {}),
         };
       `,
       "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }
@@ -216,6 +235,7 @@ export function useSpaceRoster(cloudSpaceId) {
   globalThis.__noteEditorRosterId = cloudSpaceId;
   return globalThis.__noteEditorRoster ? new Map(globalThis.__noteEditorRoster.map(member => [member.user_id, member])) : null;
 }`,
+      ...options.mockModules,
     },
   });
 
@@ -256,8 +276,113 @@ export function useSpaceRoster(cloudSpaceId) {
     });
   const latest = () => renders.at(-1);
   const unmount = () => React.act(async () => root.unmount());
-  return { render, click, latest, unmount, resizeCallbacks, vite };
+  return { render, click, latest, unmount, resizeCallbacks, vite, events };
 }
+
+function summaryCallout(tree) {
+  let callout = null;
+  walk(tree, (node) => {
+    if (!callout && "onAskSubmit" in node.props) callout = node.props.callout;
+  });
+  return callout;
+}
+
+const CUSTOM_TEMPLATE = {
+  ...TEMPLATE,
+  id: 3,
+  client_id: "custom-template",
+  translation_key: undefined,
+  name: "My meeting recap",
+};
+
+test("summary pill follows preference changes, renames and deletion without generating automatically", async (t) => {
+  let ui;
+  t.after(() => ui?.unmount());
+  ui = await loadNoteEditor(t, undefined, { actions: [DEFAULT_TEMPLATE, CUSTOM_TEMPLATE] });
+  const { useSettingsStore, initializeSettings } = await ui.vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  await initializeSettings();
+  const ran = [];
+  await ui.render(undefined, { onRunNoteAction: (action) => ran.push(action) });
+  assert.equal(summaryCallout(ui.latest()).props["aria-label"], "notes.editor.generateSummary");
+  await React.act(async () =>
+    useSettingsStore.getState().setDefaultSummaryTemplateId("custom-template")
+  );
+  assert.deepEqual(ran, []);
+  assert.equal(summaryCallout(ui.latest()).props["aria-label"], "Generate with My meeting recap");
+  summaryCallout(ui.latest()).props.onClick();
+  assert.equal(ran.at(-1), CUSTOM_TEMPLATE);
+  const renamed = { ...CUSTOM_TEMPLATE, name: "ملخص الاجتماع " + "long name ".repeat(20) };
+  await React.act(async () => ui.events.actionUpdated(renamed));
+  assert.equal(summaryCallout(ui.latest()).props["aria-label"], `Generate with ${renamed.name}`);
+  summaryCallout(ui.latest()).props.onClick();
+  assert.equal(ran.at(-1), renamed);
+  await React.act(async () =>
+    ui.events.storage({
+      key: "defaultSummaryTemplateId",
+      newValue: DEFAULT_TEMPLATE.client_id,
+      storageArea: localStorage,
+    })
+  );
+  assert.equal(summaryCallout(ui.latest()).props["aria-label"], "notes.editor.generateSummary");
+  await React.act(async () =>
+    useSettingsStore.getState().setDefaultSummaryTemplateId("custom-template")
+  );
+  await React.act(async () => ui.events.actionDeleted({ id: CUSTOM_TEMPLATE.id }));
+  assert.equal(summaryCallout(ui.latest()).props["aria-label"], "notes.editor.generateSummary");
+  summaryCallout(ui.latest()).props.onClick();
+  assert.equal(ran.at(-1), DEFAULT_TEMPLATE);
+  assert.equal(ran.length, 3);
+});
+
+for (const templateId of [TEMPLATE.client_id, null, "unavailable-template"]) {
+  test(`deleting a summary offers the current default while regeneration retains the note template (${templateId ?? "null"})`, async (t) => {
+    let ui;
+    t.after(() => ui?.unmount());
+    ui = await loadNoteEditor(t, undefined, {
+      actions: [TEMPLATE, DEFAULT_TEMPLATE, CUSTOM_TEMPLATE],
+      initialStorage: { defaultSummaryTemplateId: CUSTOM_TEMPLATE.client_id },
+    });
+    const ran = [];
+    const note = { ...NOTE, enhancement_template_id: templateId };
+    const expectedTemplate = templateId === TEMPLATE.client_id ? TEMPLATE : DEFAULT_TEMPLATE;
+    await ui.render(ENHANCEMENT, { note, onRunNoteAction: (action) => ran.push(action) });
+    assert.ok(!summaryCallout(ui.latest()));
+    let picker;
+    walk(ui.latest(), (node) => {
+      if (node.props.templates) picker = node;
+    });
+    assert.equal(picker.props.current, expectedTemplate);
+    assert.deepEqual(ran, []);
+    assert.ok(collectEditorValues(ui.latest()).includes(ENHANCEMENT.content));
+    picker.props.onRun(picker.props.current);
+    assert.deepEqual(ran, [expectedTemplate]);
+    await ui.render(undefined, {
+      note: { ...note, enhanced_content: null },
+      onRunNoteAction: (action) => ran.push(action),
+    });
+    assert.equal(summaryCallout(ui.latest()).props["aria-label"], "Generate with My meeting recap");
+    summaryCallout(ui.latest()).props.onClick();
+    assert.equal(ran.at(-1), CUSTOM_TEMPLATE);
+  });
+}
+
+test("an empty template catalog hides the pill and retains the saved default", async (t) => {
+  let ui;
+  t.after(() => ui?.unmount());
+  ui = await loadNoteEditor(t, undefined, {
+    actions: [],
+    initialStorage: { defaultSummaryTemplateId: CUSTOM_TEMPLATE.client_id },
+  });
+  await ui.render(undefined, {
+    onRunNoteAction() {
+      assert.fail("must not run");
+    },
+  });
+  assert.ok(!summaryCallout(ui.latest()));
+  assert.equal(localStorage.getItem("defaultSummaryTemplateId"), CUSTOM_TEMPLATE.client_id);
+});
 
 test("deleting the AI summary moves the selection to Your notes", async (t) => {
   const { render, latest, unmount } = await loadNoteEditor(t);
@@ -1282,6 +1407,7 @@ test("diarization keeps stored recorder labels separate from viewer-local self m
 test("only the org's meeting switch shows a banner; other restrictions explain themselves on the record button", async (t) => {
   const { render, latest, unmount, vite } = await loadNoteEditor(t);
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const messages = () => {
     const out = [];
     walk(latest(), (node) => {
@@ -1289,11 +1415,18 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     });
     return out;
   };
+  // The editor reads the policy-effective selection, which needs both sections.
+  const scope = {
+    allowedModes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"],
+    allowedByokProviders: [],
+    allowedEnterpriseProviders: [],
+  };
+  const sections = { transcription: scope, llm: scope };
   for (const audioUploadEnabled of [true, false]) {
     await React.act(async () => {
       usePolicyStore.setState({
         status: "managed",
-        policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled } },
+        policy: { ...sections, features: { meetingRecordingEnabled: false, audioUploadEnabled } },
       });
     });
     await render(undefined, { recordingAllowed: false });
@@ -1301,7 +1434,7 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     assert.ok(collectEditorValues(latest()).includes(NOTE.content), "saved notes remain readable");
     await React.act(async () => {
       usePolicyStore.setState({
-        policy: { features: { meetingRecordingEnabled: true, audioUploadEnabled } },
+        policy: { ...sections, features: { meetingRecordingEnabled: true, audioUploadEnabled } },
       });
     });
     await render(undefined, { recordingAllowed: true });
@@ -1317,7 +1450,7 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
   for (const [policy, expected] of [
     [{ status: "loading", policy: null }, "common.policyUnresolved"],
     [
-      { status: "managed", policy: { features: { meetingRecordingEnabled: true } } },
+      { status: "managed", policy: { ...sections, features: { meetingRecordingEnabled: true } } },
       "notes.meeting.restrictedByOrg",
     ],
   ]) {
@@ -1326,5 +1459,162 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     assert.deepEqual(messages(), [], `${policy.status}: no banner`);
     assert.equal(recordReason(), expected);
   }
+
+  // A refused local model is fixed in Settings, so it says so and links there.
+  await React.act(async () => {
+    useSettingsStore.setState({
+      meetingTranscriptionMode: "local",
+      meetingLocalTranscriptionProvider: "whisper",
+      meetingWhisperModel: "small",
+    });
+    usePolicyStore.setState({
+      status: "managed",
+      policy: {
+        ...sections,
+        transcription: { ...scope, allowedLocalModels: ["base"] },
+        features: { meetingRecordingEnabled: true },
+      },
+    });
+  });
+  await render(undefined, { recordingAllowed: false });
+  assert.deepEqual(messages(), ["models.policy.modelBlocked"]);
+  assert.equal(recordReason(), "models.policy.modelBlocked");
+  const links = [];
+  walk(latest(), (node) => {
+    if (node.props.children === "providerErrors.openSettings") links.push(node);
+  });
+  assert.equal(links.length, 1);
   await unmount();
+});
+
+test("the copy-link segment opens sharing in place for Private and team notes", async (t) => {
+  const { render, latest, unmount, vite } = await loadNoteEditor(t);
+  const { loadSpaces } = await vite.ssrLoadModule("/stores/noteStore.ts");
+  globalThis.window.electronAPI.getSpaces = async () => [
+    { id: 1, kind: "team", cloud_space_id: "team", workspace_id: "ws-1", teams: [] },
+    { id: 2, kind: "private", cloud_space_id: null, workspace_id: "ws-1", teams: [] },
+  ];
+  await loadSpaces();
+  const linkSegment = () => {
+    let found = null;
+    walk(latest(), (node) => {
+      if (node.props["aria-label"] === "noteEditor.share.dialog.copyLink") found = node;
+    });
+    return found;
+  };
+
+  for (const note of [
+    { space_id: 2, cloud_id: null, is_shared: 0 },
+    { space_id: 2, cloud_id: "backup-copy", is_shared: 0 },
+    { space_id: 2, cloud_id: "shared-note", is_shared: 1 },
+    { space_id: 1, cloud_id: null, is_shared: 0 },
+  ]) {
+    await render(undefined, { note: { ...NOTE, ...note } });
+    assert.ok(linkSegment(), JSON.stringify(note));
+    await React.act(async () => linkSegment().props.onClick());
+    let dialog = null;
+    walk(latest(), (node) => {
+      if ("copyLinkOnOpen" in node.props) dialog = node;
+    });
+    assert.equal(dialog.props.open, true);
+    assert.equal(dialog.props.copyLinkOnOpen, true);
+    assert.equal(dialog.props.note.space_id, note.space_id);
+    assert.equal(dialog.props.note.cloud_id, note.cloud_id);
+  }
+  await unmount();
+});
+
+test("a Private note's share flag follows server visibility independently of its audience", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "me", name: "Me", email: "me@example.com" },
+  };
+  const invited = { visibility: "invited", token_prefix: "ow_share_abc1234" };
+  const owner = { my_permission: "owner", can_manage_access: true, grants: [] };
+  globalThis.__noteEditorShareSettings = {
+    "nobody-left": { share: invited, invitations: [], access: owner },
+    "shared-elsewhere": {
+      share: invited,
+      invitations: [{ id: "inv-1", email: "guest@example.com" }],
+      access: owner,
+    },
+    "sharing-stopped": {
+      share: { visibility: "private", token_prefix: null },
+      invitations: [],
+      access: owner,
+    },
+  };
+  t.after(() => {
+    delete globalThis.__noteEditorAuth;
+    delete globalThis.__noteEditorShareSettings;
+  });
+  const { render, unmount, vite } = await loadNoteEditor(t);
+  const { loadSpaces } = await vite.ssrLoadModule("/stores/noteStore.ts");
+  globalThis.window.electronAPI.getSpaces = async () => [
+    { id: 2, kind: "private", cloud_space_id: null, workspace_id: "ws-1", teams: [] },
+  ];
+  await loadSpaces();
+  const written = [];
+  globalThis.window.electronAPI.updateNoteShareState = async (id, state) =>
+    written.push({ id, state });
+  const settle = () => React.act(() => new Promise((resolve) => setImmediate(resolve)));
+
+  for (const [cloudId, isShared] of [
+    ["nobody-left", 0],
+    ["shared-elsewhere", 0],
+    ["sharing-stopped", 1],
+  ]) {
+    await render(undefined, {
+      note: { ...NOTE, space_id: 2, cloud_id: cloudId, owner_user_id: "me", is_shared: isShared },
+    });
+    await settle();
+  }
+
+  assert.deepEqual(written, [
+    { id: NOTE.id, state: { is_shared: 1 } },
+    { id: NOTE.id, state: { is_shared: 1 } },
+    { id: NOTE.id, state: { is_shared: 0, share_token: null } },
+  ]);
+  await unmount();
+});
+
+test("speaker corrections and recording protect the open note before asynchronous work", async (t) => {
+  const edits = [];
+  globalThis.__noteUserEdits = edits;
+  t.after(() => delete globalThis.__noteUserEdits);
+  const { render, click, latest, unmount } = await loadNoteEditor(t, undefined, {
+    mockModules: {
+      "/stores/noteStore": `export * from "/stores/noteStore.ts";
+        export const markNoteEdited = (id) => globalThis.__noteUserEdits.push(id);`,
+    },
+  });
+  let release;
+  globalThis.window.electronAPI.setSpeakerMapping = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  globalThis.window.electronAPI.updateNote = async () => ({ success: true });
+  try {
+    await render(undefined, {
+      note: { ...NOTE, transcript: JSON.stringify([{ speaker: "speaker_0", text: "Hello" }]) },
+      onStartRecording: () => assert.deepEqual(edits, [NOTE.id, NOTE.id]),
+    });
+    await click("transcript");
+    let chat;
+    let recording;
+    walk(latest(), (node) => {
+      if (node.props.onMapSpeaker) chat = node;
+      if (node.props.onStart) recording = node;
+    });
+    assert.deepEqual(edits, [], "background loads do not adopt a tree pick");
+    await React.act(async () => {
+      const saving = chat.props.onMapSpeaker("speaker_0", "Dana");
+      assert.deepEqual(edits, [NOTE.id], "adopted before awaiting speaker mapping");
+      release();
+      await saving;
+    });
+    await React.act(async () => recording.props.onStart());
+  } finally {
+    await unmount();
+  }
 });

@@ -25,10 +25,10 @@ const { createFakeCloud } = require("./harness/fakeCloud.js");
 installBrowserGlobals();
 
 const loadSync = () => import("../../src/services/SyncService.ts");
-const DEFAULT_NAMES = ["Personal", "Meetings", "Videos"];
+const DEFAULT_NAMES = ["Personal", "Meetings"];
 
 function accountCloud(userId, { serverDefaults }) {
-  const cloud = createFakeCloud({ userId, adoptDefaultFolders: true });
+  const cloud = createFakeCloud({ userId, adoptDefaultFolders: true, revisionGuard: true });
   if (serverDefaults) {
     DEFAULT_NAMES.forEach((name, index) =>
       cloud.seedFolder({
@@ -43,11 +43,15 @@ function accountCloud(userId, { serverDefaults }) {
   return cloud;
 }
 
-async function signIn(t, db, accountId, cloud) {
+async function signIn(t, db, accountId, cloud, { backup = true } = {}) {
   db.setActiveAccountId(accountId);
+  db.claimSignedOutLocalRows();
+  db.claimLegacyRowsOfOnlyAccount();
+  db.claimSignedOutPrivateNotes();
   db.ensureAccountDefaultFolders();
   browserWindow.electronAPI = createElectronApi(db, { cloud });
   enableSync();
+  if (!backup) browserLocalStorage.setItem("cloudBackupEnabled", "false");
   await establishValidatedAuth(accountId);
   return sync(t);
 }
@@ -65,7 +69,9 @@ async function sync(t) {
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
   await service.syncAll(true);
-  assert.ok(useSharedDictionaryStore.getState().lastSyncedAt, "the full sync pass succeeds");
+  if (browserLocalStorage.getItem("cloudBackupEnabled") === "true") {
+    assert.ok(useSharedDictionaryStore.getState().lastSyncedAt, "the full sync pass succeeds");
+  }
   return service;
 }
 
@@ -86,7 +92,8 @@ function visibleDefaults(db) {
 }
 
 function ownDefaults(accountId) {
-  return DEFAULT_NAMES.map((name) => `${name}:${accountId}`).sort();
+  const names = accountId == null ? [...DEFAULT_NAMES, "Videos"] : DEFAULT_NAMES;
+  return names.map((name) => `${name}:${accountId}`).sort();
 }
 
 function folderOf(db, accountId, name) {
@@ -113,7 +120,7 @@ function cloudNote(cloud, title) {
 // B's account was created after A last synced on this device, so B's cloud rows
 // are newer than the pull cursor A left behind and a delta pull delivers them.
 function seedLaterAccount(userId) {
-  const cloud = createFakeCloud({ userId, adoptDefaultFolders: true });
+  const cloud = createFakeCloud({ userId, adoptDefaultFolders: true, revisionGuard: true });
   DEFAULT_NAMES.forEach((name, index) =>
     cloud.seedFolder({
       client_folder_id: `${userId}-${name.toLowerCase()}`,
@@ -137,12 +144,16 @@ for (const serverDefaults of [true, false]) {
 
     await signIn(t, db, "account-a", cloudA);
     assert.deepEqual(visibleDefaults(db), ownDefaults("account-a"));
-    assert.equal(cloudA.folders().length, 3, "A's cloud gets exactly one copy of each default");
     db.saveNote("A note", "a", "personal");
     db.saveNote("A meeting", "a", "meeting");
     await sync(t);
     assert.equal(cloudNote(cloudA, "Guest note").folder_id, cloudFolderId(cloudA, "Personal"));
     assert.equal(cloudNote(cloudA, "A meeting").folder_id, cloudFolderId(cloudA, "Meetings"));
+    assert.equal(
+      cloudA.folders().length,
+      DEFAULT_NAMES.length,
+      "A's cloud gets one copy of each used default"
+    );
 
     signOut(db);
     assert.deepEqual(visibleDefaults(db), ownDefaults(null), "a signed-out guest gets its own");
@@ -163,7 +174,7 @@ for (const serverDefaults of [true, false]) {
     await sync(t);
     assert.equal(cloudNote(cloudB, "B note").folder_id, cloudFolderId(cloudB, "Personal"));
     assert.equal(cloudNote(cloudB, "B meeting").folder_id, cloudFolderId(cloudB, "Meetings"));
-    assert.equal(cloudB.folders().length, 3, "B pushes none of A's folders");
+    assert.equal(cloudB.folders().length, DEFAULT_NAMES.length, "B pushes none of A's folders");
     assert.deepEqual(
       cloudB
         .notes()
@@ -200,85 +211,113 @@ for (const serverDefaults of [true, false]) {
   });
 }
 
-test("a device synced by a pre-fix build is repaired and both accounts converge", async (t) => {
+test("a pre-fix shared folder is repaired without giving either account the other's notes", async (t) => {
   resetBrowserGlobals();
   const db = createDb(t);
   if (!db) return;
   const cloudA = accountCloud("account-a", { serverDefaults: true });
-
-  // Reproduce the pre-fix data through real sync: nothing claims bound rows
-  // and no scope seeds its own defaults.
-  db._claimLegacyPrivateRow = () => {};
-  db.ensureAccountDefaultFolders = () => {};
-  db.setActiveAccountId(null);
-  db.saveNote("Guest note", "before signing in", "personal");
-  await signIn(t, db, "account-a", cloudA);
-  db.saveNote("A note", "a", "personal");
-  await sync(t);
-  // A's second pass ran this build's bound-folder claim, which takes the
-  // defaults and the notes inside; a pre-fix build never did, so undo it.
-  db.db
-    .prepare(
-      "UPDATE folders SET account_id = NULL WHERE account_id = 'account-a' AND is_default = 1"
-    )
-    .run();
-  db.db.prepare("UPDATE notes SET account_id = NULL WHERE title = 'Guest note'").run();
-  signOut(db);
-  await new Promise((resolve) => setTimeout(resolve, 5));
-  const cloudB = seedLaterAccount("account-b");
-  await signIn(t, db, "account-b", cloudB);
-  // The pre-fix default-folder lookup took the lowest id: A's seeded Personal.
-  db.saveNote("B misrouted", "b", "personal", null, null, folderOf(db, null, "Personal").id);
-  await sync(t);
-
-  assert.equal(
+  const cloudB = accountCloud("account-b", { serverDefaults: true });
+  const legacyPersonal = folderOf(db, null, "Personal");
+  for (const folder of cloudA.folders()) {
+    bindLegacyFolder(db, folder.name, folder, `legacy-${folder.name}`);
+  }
+  const localA = db.saveNote("A legacy note", "a", "personal").note;
+  const localB = db.saveNote("B misrouted", "b", "personal").note;
+  for (const [local, cloud, owner] of [
+    [localA, cloudA, "account-a"],
+    [localB, cloudB, "account-b"],
+  ]) {
+    const remote = cloud.seedNote({
+      client_note_id: local.client_note_id,
+      title: local.title,
+      content: local.content,
+      created_at: "2026-01-02T00:00:00.000Z",
+      folder_id: owner === "account-a" ? cloudFolderId(cloudA, "Personal") : null,
+    });
     db.db
-      .prepare("SELECT COUNT(*) AS count FROM folders WHERE is_default = 1 AND name = 'Personal'")
-      .get().count,
-    2,
-    "pre-fix storage contains A's Personal beside B's"
-  );
-  const misrouted = db.db.prepare("SELECT * FROM notes WHERE title = 'B misrouted'").get();
-  assert.equal(
-    misrouted.folder_id,
-    folderOf(db, null, "Personal").id,
-    "pre-fix: B's note lands in A's"
-  );
+      .prepare(
+        "UPDATE notes SET cloud_id = ?, owner_user_id = ?, sync_status = 'synced' WHERE id = ?"
+      )
+      .run(remote.id, owner, local.id);
+  }
+  assert.equal(localA.folder_id, legacyPersonal.id);
+  assert.equal(localB.folder_id, legacyPersonal.id);
 
-  // Upgrade: the launch repair runs, then each account syncs again.
-  delete db._claimLegacyPrivateRow;
-  delete db.ensureAccountDefaultFolders;
-  signOut(db);
   db._repairCloudBoundLegacyRows();
-
+  db._splitPrivateSpaceByAccount();
   await signIn(t, db, "account-b", cloudB);
-  // A's unproven defaults stay available for A to claim, but B sees its own.
   assert.deepEqual(visibleDefaults(db), ownDefaults("account-b"));
   assert.deepEqual(notesFor(db), ["B misrouted"]);
-  const rehomed = db.db.prepare("SELECT * FROM notes WHERE title = 'B misrouted'").get();
-  assert.equal(rehomed.folder_id, folderOf(db, "account-b", "Personal").id);
-  assert.equal(rehomed.sync_status, "synced", "the move reaches B's cloud");
+  assert.equal(db.getNote(localB.id).folder_id, folderOf(db, "account-b", "Personal").id);
+  await sync(t);
   assert.equal(cloudNote(cloudB, "B misrouted").folder_id, cloudFolderId(cloudB, "Personal"));
-  assert.equal(db.saveNote("B new", "b", "personal").note.folder_id, rehomed.folder_id);
+  assert.equal(folderOf(db, null, "Personal").cloud_id, cloudFolderId(cloudA, "Personal"));
+  assert.equal(cloudB.folders().length, DEFAULT_NAMES.length);
 
   signOut(db);
   await signIn(t, db, "account-a", cloudA);
   assert.deepEqual(visibleDefaults(db), ownDefaults("account-a"));
-  assert.deepEqual(notesFor(db), ["A note", "Guest note"]);
-  assert.deepEqual(
-    cloudA
-      .notes()
-      .map((note) => note.title)
-      .sort(),
-    ["A note", "Guest note"]
-  );
-  assert.equal(cloudNote(cloudA, "Guest note").folder_id, cloudFolderId(cloudA, "Personal"));
-
+  assert.deepEqual(notesFor(db), ["A legacy note"]);
+  assert.equal(db.getNote(localA.id).content, "a");
+  assert.equal(db.getNote(localA.id).folder_id, folderOf(db, "account-a", "Personal").id);
+  assert.equal(cloudNote(cloudA, "A legacy note").folder_id, cloudFolderId(cloudA, "Personal"));
+  assert.equal(cloudA.notes().length, 1);
+  assert.equal(cloudA.folders().length, DEFAULT_NAMES.length);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count, 2);
   signOut(db);
-  await signIn(t, db, "account-b", cloudB);
-  assert.deepEqual(visibleDefaults(db), ownDefaults("account-b"));
   assertRelaunches(t);
 });
+
+for (const backup of [true, false]) {
+  test(`an unknown legacy note owner is proved before recovery (backup: ${backup})`, async (t) => {
+    resetBrowserGlobals();
+    const db = createDb(t);
+    if (!db) return;
+    const cloudA = accountCloud("account-a", { serverDefaults: true });
+    const cloudB = accountCloud("account-b", { serverDefaults: true });
+    // A used an older build, leaving a cloud-linked note and folder without attribution.
+    db.setActiveAccountId("account-a");
+    signOut(db);
+    const local = db.saveNote("Unattributed A note", "only A owns this", "meeting").note;
+    const remote = cloudA.seedNote({
+      client_note_id: local.client_note_id,
+      title: local.title,
+      content: local.content,
+      folder_id: cloudFolderId(cloudA, "Meetings"),
+      created_at: "2026-01-02T00:00:00.000Z",
+    });
+    const cloudFolder = cloudA.folders().find((folder) => folder.name === "Meetings");
+    bindLegacyFolder(db, "Meetings", cloudFolder, "legacy-local-meetings");
+    db.db
+      .prepare("UPDATE notes SET cloud_id = ?, sync_status = 'synced' WHERE id = ?")
+      .run(remote.id, local.id);
+    db._repairCloudBoundLegacyRows();
+    db._splitPrivateSpaceByAccount();
+
+    await signIn(t, db, "account-b", cloudB, { backup });
+    assert.deepEqual(notesFor(db), []);
+    assert.deepEqual(visibleDefaults(db), ownDefaults("account-b"));
+    assert.equal(
+      db.db.prepare("SELECT account_id FROM notes WHERE id = ?").get(local.id).account_id,
+      null
+    );
+    assert.equal(cloudB.notes().length, 0);
+    signOut(db);
+    await signIn(t, db, "account-a", cloudA, { backup });
+    assert.deepEqual(notesFor(db), [local.title]);
+    const recovered = db.getNote(local.id);
+    assert.equal(recovered.account_id, "account-a");
+    assert.equal(recovered.owner_user_id, "account-a");
+    assert.equal(recovered.cloud_id, remote.id);
+    assert.equal(recovered.content, local.content);
+    assert.equal(recovered.folder_id, folderOf(db, "account-a", "Meetings").id);
+    assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count, 1);
+    assert.equal(cloudA.notes().length, 1);
+    assert.equal(cloudA.folders().length, DEFAULT_NAMES.length);
+    signOut(db);
+    assertRelaunches(t);
+  });
+}
 
 test("a second account older than the device's last pull still gets its own rows", async (t) => {
   resetBrowserGlobals();
@@ -308,7 +347,11 @@ test("a second account older than the device's last pull still gets its own rows
     db.db.prepare("SELECT folder_id FROM notes WHERE title = 'B old note'").get().folder_id,
     folderOf(db, "account-b", "Personal").id
   );
-  assert.equal(cloudB.folders().length, 3, "B adopts its cloud defaults instead of pushing more");
+  assert.equal(
+    cloudB.folders().length,
+    DEFAULT_NAMES.length,
+    "B adopts its cloud defaults instead of pushing more"
+  );
 
   // Each account's delta resumes from its own last pull, so a delete made
   // elsewhere while A was signed in still reaches B.
@@ -338,58 +381,39 @@ function bindLegacyFolder(db, name, cloudFolder, clientFolderId) {
     .run(cloudFolder.id, clientFolderId, cloudFolder.updated_at, name);
 }
 
-test("a second account's synced note never takes the first account's legacy folder", async (t) => {
+test("an unpushed device note stays separate while accounts use their own defaults", async (t) => {
   resetBrowserGlobals();
   const db = createDb(t);
   if (!db) return;
-
-  // The pre-fix data through real sync: C's defaults stay device-owned, and only
-  // D files a note in Meetings.
-  db._claimLegacyPrivateRow = () => {};
-  db.ensureAccountDefaultFolders = () => {};
-  const cloudC = accountCloud("account-c", { serverDefaults: true });
-  for (const folder of cloudC.folders()) {
-    bindLegacyFolder(db, folder.name, folder, folder.client_folder_id);
-  }
+  const cloudA = accountCloud("account-a", { serverDefaults: true });
+  await signIn(t, db, "account-a", cloudA);
   signOut(db);
-  const cloudD = accountCloud("account-d", { serverDefaults: false });
-  await signIn(t, db, "account-d", cloudD);
-  const dMeeting = db.saveNote("D meeting", "d", "meeting").note;
+  const guest = db.saveNote("Device meeting", "unpublished", "meeting").note;
+  const guestFolder = folderOf(db, null, "Meetings");
+  const cloudB = accountCloud("account-b", { serverDefaults: true });
+  await signIn(t, db, "account-b", cloudB);
+  assert.deepEqual(notesFor(db), []);
+  assert.equal(cloudB.notes().length, 0);
+  assert.deepEqual(
+    db.getDeviceNotes().notes.map((note) => note.id),
+    [guest.id]
+  );
+  const untouched = db.db.prepare("SELECT * FROM notes WHERE id = ?").get(guest.id);
+  assert.equal(untouched.account_id, null);
+  assert.equal(untouched.cloud_id, null);
+  assert.equal(untouched.folder_id, guestFolder.id);
+  const own = db.saveNote("B meeting", "b", "meeting").note;
   await sync(t);
-  const legacyMeetings = folderOf(db, null, "Meetings");
-  assert.equal(db.getNote(dMeeting.id).folder_id, legacyMeetings.id);
-  assert.equal(db.getNote(dMeeting.id).sync_status, "synced");
-  assert.equal(cloudNote(cloudD, "D meeting").folder_id, null, "the server clears C's folder");
-
-  // Upgrade: the launch repair runs, and D's synced note proves nothing.
-  delete db._claimLegacyPrivateRow;
-  delete db.ensureAccountDefaultFolders;
+  assert.equal(db.getNote(own.id).folder_id, folderOf(db, "account-b", "Meetings").id);
+  assert.equal(cloudNote(cloudB, "B meeting").folder_id, cloudFolderId(cloudB, "Meetings"));
   signOut(db);
-  db._repairCloudBoundLegacyRows();
-  assert.equal(folderOf(db, null, "Meetings").id, legacyMeetings.id);
-
-  // D's own folder list proves these aren't D's, and D gets its own.
-  await signIn(t, db, "account-d", cloudD);
-  assert.deepEqual(visibleDefaults(db), ownDefaults("account-d"));
-  assert.equal(db.getNote(dMeeting.id).folder_id, folderOf(db, "account-d", "Meetings").id);
-  await sync(t);
-  assert.equal(cloudNote(cloudD, "D meeting").folder_id, cloudFolderId(cloudD, "Meetings"));
-
-  // C returns to its own cloud folder, nothing stuck.
-  signOut(db);
-  await signIn(t, db, "account-c", cloudC);
-  assert.deepEqual(visibleDefaults(db), ownDefaults("account-c"));
-  const meetingsC = folderOf(db, "account-c", "Meetings");
-  assert.equal(meetingsC.id, legacyMeetings.id);
-  assert.equal(meetingsC.cloud_id, cloudFolderId(cloudC, "Meetings"));
-  assert.equal(meetingsC.sync_status, "synced");
-  db.saveNote("C meeting", "c", "meeting");
-  await sync(t);
-  assert.equal(cloudNote(cloudC, "C meeting").folder_id, meetingsC.cloud_id);
-  assertRelaunches(t);
+  assert.deepEqual(notesFor(db), ["Device meeting"]);
+  await signIn(t, db, "account-a", cloudA);
+  assert.deepEqual(notesFor(db), []);
+  assert.equal(cloudA.notes().length, 0);
 });
 
-test("an upgraded account claims its legacy folder in place, whatever its client id", async (t) => {
+test("an upgraded account recovers one visible copy of its legacy folder, whatever its client id", async (t) => {
   resetBrowserGlobals();
   const db = createDb(t);
   if (!db) return;
@@ -407,12 +431,12 @@ test("an upgraded account claims its legacy folder in place, whatever its client
 
   await signIn(t, db, "account-a", cloudA);
 
-  const works = db.db.prepare("SELECT * FROM folders WHERE name = 'Work'").all();
+  const works = db.getFolders().filter((folder) => folder.name === "Work");
   assert.equal(works.length, 1);
   assert.equal(works[0].account_id, "account-a");
   assert.equal(works[0].cloud_id, work.id);
   assert.deepEqual(visibleDefaults(db), ownDefaults("account-a"));
-  assert.equal(cloudA.folders().length, 4, "nothing is pushed twice");
+  assert.equal(cloudA.folders().length, DEFAULT_NAMES.length + 1, "nothing is pushed twice");
   assertRelaunches(t);
 });
 
@@ -420,84 +444,30 @@ test("another account's unclaimed legacy default never stands in for a new accou
   resetBrowserGlobals();
   const db = createDb(t);
   if (!db) return;
-  // A synced Videos on an older build, then never synced on this device again.
   const cloudA = accountCloud("account-a", { serverDefaults: true });
-  const videosA = cloudA.folders().find((folder) => folder.name === "Videos");
-  bindLegacyFolder(db, "Videos", videosA, videosA.client_folder_id);
-
+  const meetingsA = cloudA.folders().find((folder) => folder.name === "Meetings");
+  bindLegacyFolder(db, "Meetings", meetingsA, meetingsA.client_folder_id);
+  const legacyId = folderOf(db, null, "Meetings").id;
   const cloudB = accountCloud("account-b", { serverDefaults: false });
   await signIn(t, db, "account-b", cloudB);
-
-  const videosB = folderOf(db, "account-b", "Videos");
-  assert.ok(videosB, "B gets its own Videos");
+  const meetingsB = folderOf(db, "account-b", "Meetings");
+  assert.ok(meetingsB);
+  assert.notEqual(meetingsB.id, legacyId);
   assert.deepEqual(visibleDefaults(db), ownDefaults("account-b"));
-  assert.deepEqual(
-    cloudB
-      .folders()
-      .map((folder) => folder.name)
-      .sort(),
-    ["Meetings", "Personal", "Videos"]
-  );
-  const note = db.saveNote("B video", "b", "personal", null, null, videosB.id).note;
+  const note = db.saveNote("B meeting", "b", "meeting").note;
   await sync(t);
-  assert.equal(cloudNote(cloudB, "B video").folder_id, cloudFolderId(cloudB, "Videos"));
+  assert.equal(cloudNote(cloudB, "B meeting").folder_id, cloudFolderId(cloudB, "Meetings"));
   assert.equal(db.getNote(note.id).sync_status, "synced");
+  assert.equal(folderOf(db, null, "Meetings").cloud_id, meetingsA.id);
+
+  signOut(db);
+  await signIn(t, db, "account-a", cloudA);
+  assert.deepEqual(visibleDefaults(db), ownDefaults("account-a"));
+  assert.equal(folderOf(db, "account-a", "Meetings").cloud_id, meetingsA.id);
+  assert.equal(db.getFolders().filter((folder) => folder.cloud_id === meetingsA.id).length, 1);
+  assert.equal(cloudA.folders().length, DEFAULT_NAMES.length);
   assertRelaunches(t);
 });
-
-for (const operation of ["markFolderSyncedIfUnchanged", "ensureAccountDefaultFolders"]) {
-  test(`queued ${operation} does not apply a departing account's ownership evidence`, async (t) => {
-    resetBrowserGlobals();
-    const db = createDb(t);
-    if (!db) return;
-    const cloudA = accountCloud("account-a", { serverDefaults: true });
-    const cloudB = accountCloud("account-b", { serverDefaults: true });
-    const videosA = cloudA.folders().find((folder) => folder.name === "Videos");
-    bindLegacyFolder(db, "Videos", videosA, videosA.client_folder_id);
-    const claimingOwnFolder = operation === "markFolderSyncedIfUnchanged";
-    const outgoingAccount = claimingOwnFolder ? "account-a" : "account-b";
-    const incomingAccount = claimingOwnFolder ? "account-b" : "account-a";
-    db.setActiveAccountId(outgoingAccount);
-    db.ensureAccountDefaultFolders();
-    browserWindow.electronAPI = createElectronApi(db, {
-      cloud: claimingOwnFolder ? cloudA : cloudB,
-    });
-    enableSync();
-    await establishValidatedAuth(outgoingAccount);
-    const originalOperation = browserWindow.electronAPI[operation];
-    let interrupted = false;
-    browserWindow.electronAPI[operation] = async (...args) => {
-      interrupted = true;
-      const { invalidateValidatedAuthContext } =
-        await import("../../src/lib/authRequestContext.ts");
-      invalidateValidatedAuthContext();
-      browserWindow.electronAPI.cloudApiRequest = async () => ({
-        success: false,
-        code: "AUTH_CONTEXT_CHANGED",
-        error: "Authentication context changed during request",
-      });
-      // useAuth establishes the incoming DB scope before awaiting the sync lock.
-      db.setActiveAccountId(incomingAccount);
-      db.ensureAccountDefaultFolders();
-      return originalOperation(...args);
-    };
-    const { SyncService } = await loadSync();
-    const service = new SyncService();
-    t.after(() => stopSyncTimers(service));
-    await service.syncAll(true);
-    assert.equal(interrupted, true);
-    assert.equal(folderOf(db, null, "Videos").cloud_id, videosA.id);
-    assert.equal(folderOf(db, incomingAccount, "Videos"), undefined);
-
-    // The same service must retry the interrupted claim when A returns.
-    db.setActiveAccountId("account-a");
-    db.ensureAccountDefaultFolders();
-    browserWindow.electronAPI = createElectronApi(db, { cloud: cloudA });
-    await establishValidatedAuth("account-a");
-    await service.syncAll(true);
-    assert.equal(folderOf(db, "account-a", "Videos").cloud_id, videosA.id);
-  });
-}
 
 test("an unowned upgrade cursor cannot hide an older second account's notes", async (t) => {
   resetBrowserGlobals();
@@ -505,7 +475,8 @@ test("an unowned upgrade cursor cannot hide an older second account's notes", as
   if (!db) return;
   const cloudA = accountCloud("account-a", { serverDefaults: true });
   await signIn(t, db, "account-a", cloudA);
-  browserLocalStorage.removeItem("lastSyncedAt.personalAccountId");
+  assert.equal(browserLocalStorage.getItem("lastSyncedAt.accountId"), "account-a");
+  browserLocalStorage.removeItem("lastSyncedAt.accountId");
   signOut(db);
   const cloudB = accountCloud("account-b", { serverDefaults: true });
   cloudB.seedNote({
@@ -533,13 +504,44 @@ test("replaying an unowned upgrade cursor still applies remote tombstones", asyn
     path: "/api/notes/delete",
     body: { id: cloudNote(cloudA, "Deleted elsewhere").id },
   });
-  browserLocalStorage.removeItem("lastSyncedAt.personalAccountId");
+  assert.equal(browserLocalStorage.getItem("lastSyncedAt.accountId"), "account-a");
+  browserLocalStorage.removeItem("lastSyncedAt.accountId");
+  // An unattributed cursor may have advanced under another account after the delete.
+  browserLocalStorage.setItem(
+    "lastSyncedAt.notes",
+    new Date(Date.parse(cloudNote(cloudA, "Deleted elsewhere").updated_at) + 1).toISOString()
+  );
   await sync(t);
   assert.deepEqual(notesFor(db), []);
 });
 
+test("replaying an unowned upgrade folder cursor still applies remote tombstones", async (t) => {
+  resetBrowserGlobals();
+  const db = createDb(t);
+  if (!db) return;
+  const cloud = accountCloud("account-a", { serverDefaults: true });
+  await signIn(t, db, "account-a", cloud);
+  const folder = db.createFolder("Work").folder;
+  await sync(t);
+  const remote = cloud.folders().find((entry) => entry.name === "Work");
+  await cloud.request({ method: "DELETE", path: "/api/folders/delete", body: { id: remote.id } });
+  assert.equal(browserLocalStorage.getItem("lastSyncedAt.accountId"), "account-a");
+  browserLocalStorage.removeItem("lastSyncedAt.accountId");
+  const tombstone = cloud.folders().find((entry) => entry.id === remote.id);
+  browserLocalStorage.setItem(
+    "lastSyncedAt.folders",
+    new Date(Date.parse(tombstone.updated_at) + 1).toISOString()
+  );
+  await sync(t);
+  assert.equal(
+    db.getFolders().some((entry) => entry.id === folder.id),
+    false
+  );
+  assert.equal(db.getFolderByCloudId(remote.id), null);
+});
+
 for (const kind of ["folder", "note"]) {
-  test(`a queued ${kind} create acknowledgement cannot bind a guest row to the incoming account`, async (t) => {
+  test(`a queued ${kind} create acknowledgement cannot bind the outgoing row to the incoming account`, async (t) => {
     resetBrowserGlobals();
     const db = createDb(t);
     if (!db) return;
@@ -552,7 +554,14 @@ for (const kind of ["folder", "note"]) {
       db.db.prepare("UPDATE notes SET folder_id = NULL WHERE id = ?").run(rowId);
     }
     db.setActiveAccountId("account-a");
+    db.claimSignedOutPrivateNotes();
     db.ensureAccountDefaultFolders();
+    if (kind === "folder") {
+      const row = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(rowId);
+      db.db
+        .prepare("UPDATE folders SET space_id = ?, account_id = ? WHERE id = ?")
+        .run(db.getPrivateSpaceId(), "account-a", row.id);
+    }
     browserWindow.electronAPI = createElectronApi(db, { cloud: cloudA });
     enableSync();
     await establishValidatedAuth("account-a");
@@ -583,7 +592,61 @@ for (const kind of ["folder", "note"]) {
     const row = db.db
       .prepare(`SELECT * FROM ${kind === "folder" ? "folders" : "notes"} WHERE id = ?`)
       .get(rowId);
-    assert.equal(row.account_id, null);
+    assert.equal(row.account_id, "account-a");
     assert.equal(row.cloud_id, null);
+  });
+}
+
+for (const operation of ["markFolderSyncedIfUnchanged", "ensureAccountDefaultFolders"]) {
+  test(`queued ${operation} does not apply a departing account's ownership evidence`, async (t) => {
+    resetBrowserGlobals();
+    const db = createDb(t);
+    if (!db) return;
+    const ownFolder = operation === "markFolderSyncedIfUnchanged";
+    const outgoingAccount = ownFolder ? "account-a" : "account-b";
+    const incomingAccount = ownFolder ? "account-b" : "account-a";
+    const cloudA = accountCloud("account-a", { serverDefaults: true });
+    const outgoingCloud = ownFolder ? cloudA : accountCloud("account-b", { serverDefaults: true });
+    db.setActiveAccountId(outgoingAccount);
+    db.ensureAccountDefaultFolders();
+    const folder = folderOf(db, outgoingAccount, "Meetings");
+    // A legacy bound folder left inside a private space before attribution.
+    db.db
+      .prepare(
+        "UPDATE folders SET account_id = NULL, cloud_id = ?, sync_status = 'synced' WHERE id = ?"
+      )
+      .run(cloudFolderId(cloudA, "Meetings"), folder.id);
+    browserWindow.electronAPI = createElectronApi(db, { cloud: outgoingCloud });
+    enableSync();
+    await establishValidatedAuth(outgoingAccount);
+    const original = browserWindow.electronAPI[operation];
+    let interrupted = false;
+    browserWindow.electronAPI[operation] = async (...args) => {
+      interrupted = true;
+      const { invalidateValidatedAuthContext } =
+        await import("../../src/lib/authRequestContext.ts");
+      invalidateValidatedAuthContext();
+      db.setActiveAccountId(incomingAccount);
+      db.ensureAccountDefaultFolders();
+      return original(...args);
+    };
+    const { SyncService } = await loadSync();
+    const service = new SyncService();
+    t.after(() => stopSyncTimers(service));
+    await service.syncAll(true);
+    assert.equal(interrupted, true);
+    const untouched = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(folder.id);
+    assert.equal(untouched.account_id, null);
+    assert.equal(untouched.cloud_id, cloudFolderId(cloudA, "Meetings"));
+
+    db.setActiveAccountId(outgoingAccount);
+    browserWindow.electronAPI = createElectronApi(db, { cloud: outgoingCloud });
+    await establishValidatedAuth(outgoingAccount);
+    await service.syncAll(true);
+    assert.equal(
+      folderOf(db, outgoingAccount, "Meetings").cloud_id,
+      cloudFolderId(outgoingCloud, "Meetings")
+    );
+    assert.equal(db.getFolders().filter((candidate) => candidate.name === "Meetings").length, 1);
   });
 }

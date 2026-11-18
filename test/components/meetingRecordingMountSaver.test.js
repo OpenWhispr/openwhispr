@@ -271,20 +271,22 @@ test("an org's meeting switch refuses a start with its own reason", async (t) =>
   assert.equal(toasts.at(-1)?.description, "Meeting recording is disabled by your organization.");
 });
 
-test("a policy this window can't resolve mid-meeting stops the recording and says so once", async (t) => {
-  const { start, store, toasts, setPolicy } = await setup(t);
-  await start();
-  const before = toasts.length;
+for (const [label, unresolved] of [
+  ["an error", { status: "error", policy: null }],
+  ["a reload", { status: "loading", policy: null }],
+]) {
+  test(`${label} in this window's policy leaves a running meeting recording`, async (t) => {
+    const { start, store, toasts, setPolicy } = await setup(t);
+    await start();
+    const before = toasts.length;
 
-  await setPolicy({ status: "error", policy: null });
-  await settle(store);
+    await setPolicy(unresolved);
+    await settle(store);
 
-  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
-  assert.deepEqual(
-    toasts.slice(before).map((toast) => toast.description),
-    ["Recording stopped because your organization's settings couldn't be checked."]
-  );
-});
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
+    assert.equal(toasts.length, before);
+  });
+}
 
 test("main's refusal and this window's policy stop explain the same recording once", async (t) => {
   const { start, store, streamError, toasts, setPolicy } = await setup(t);
@@ -357,14 +359,105 @@ test("a policy flip that cancels a start still in progress says why", async (t) 
     "the start is under way"
   );
 
-  await setPolicy({ status: "error", policy: null });
+  await setPolicy(managedPolicy({ meetingRecordingEnabled: false }));
   reply.resolve();
   await React.act(() => starting);
   await settle(store);
 
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
-  assert.equal(
-    toasts.at(-1)?.description,
-    "Recording stopped because your organization's settings couldn't be checked."
-  );
+  assert.equal(toasts.at(-1)?.description, "Meeting recording is disabled by your organization.");
 });
+
+// A start waiting on main's reply, so the policy can change while it is under way.
+const startHeldAtMain = async (t, store, api) => {
+  const reply = deferred();
+  const startMain = api.meetingTranscriptionStart;
+  api.meetingTranscriptionStart = async (...args) => {
+    await reply.promise;
+    return startMain(...args);
+  };
+  t.after(() => reply.resolve());
+  let starting;
+  await React.act(async () => {
+    starting = store.startRecording(START_ARGS);
+    for (let i = 0; i < 20 && !store.useMeetingRecordingStore.getState().isRecording; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  });
+  return () => {
+    reply.resolve();
+    return React.act(() => starting);
+  };
+};
+
+for (const [label, unresolved] of [
+  ["an error", { status: "error", policy: null }],
+  ["a reload", { status: "loading", policy: null }],
+]) {
+  test(`${label} in this window's policy during a start leaves that start running`, async (t) => {
+    const { store, api, setPolicy } = await setup(t);
+    let mainStops = 0;
+    const stopMain = api.meetingTranscriptionStop;
+    api.meetingTranscriptionStop = async (...args) => {
+      mainStops++;
+      return stopMain(...args);
+    };
+    const finishStart = await startHeldAtMain(t, store, api);
+
+    await setPolicy(unresolved);
+    await finishStart();
+
+    assert.equal(mainStops, 0);
+    assert.ok(store.getActiveRecordingSessionId(), "the session is still live");
+
+    let stop;
+    await React.act(async () => {
+      stop = await store.stopRecording();
+    });
+    assert.equal(stop.stopped, true, "the user's Stop ends it");
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  });
+}
+
+test("a model refused during a start ends it with main's reason", async (t) => {
+  const { store, api, toasts, setPolicy } = await setup(t);
+  api.meetingTranscriptionStart = async () => ({
+    success: false,
+    error: "raw server text",
+    code: "POLICY_MODEL_BLOCKED",
+  });
+  const finishStart = await startHeldAtMain(t, store, api);
+
+  const allowed = managedPolicy({ meetingRecordingEnabled: true });
+  await setPolicy({
+    ...allowed,
+    policy: {
+      ...allowed.policy,
+      transcription: { ...MANAGED_SCOPE, allowedModes: ["local"], allowedLocalModels: [] },
+    },
+  });
+  await finishStart();
+  await settle(store);
+
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(toasts.at(-1)?.description, "Choose a local model your organization has approved.");
+});
+
+for (const [code, message] of [
+  ["POLICY_MODEL_BLOCKED", "Choose a local model your organization has approved."],
+  ["POLICY_LOCAL_MODE_BLOCKED", "Your organization has disabled local processing."],
+  ["POLICY_APP_VERSION_BLOCKED", "Update OpenWhispr to use your organization’s approved models."],
+]) {
+  test(`${code} stops meeting capture and explains the local policy refusal`, async (t) => {
+    const { start, store, streamError, toasts } = await setup(t);
+    await start();
+    await streamError(code);
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+    assert.equal(toasts.at(-1)?.description, message);
+    // Another model fixes the first two; an update fixes the third.
+    assert.equal(
+      toasts.at(-1)?.actions?.some((action) => action.icon === "settings") ?? false,
+      code !== "POLICY_APP_VERSION_BLOCKED"
+    );
+  });
+}

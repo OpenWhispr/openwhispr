@@ -1,0 +1,252 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const load = () => import("../../src/services/invitePeople.ts");
+const { CloudApiError } = require("../../src/services/cloudApi.ts");
+
+// Records every batch request; an answer per address (a status, or an Error to reject the
+// whole request) defaults to a sent invitation.
+function makeSendBatch(answers = {}) {
+  const calls = [];
+  const sendBatch = async (workspaceId, input, authGeneration) => {
+    calls.push({ workspaceId, input, authGeneration });
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    const failing = input.emails.map((email) => answers[email]).find((a) => a instanceof Error);
+    if (failing) throw failing;
+    return {
+      results: input.emails
+        .filter((email) => answers[email] !== "missing")
+        .map((email) => {
+          const answer = answers[email];
+          const status = typeof answer === "string" ? answer : (answer?.status ?? "invited");
+          return {
+            email,
+            status,
+            ...(status === "invited" ? { email_sent: answer?.email_sent ?? true } : {}),
+          };
+        }),
+      seats_used: 1,
+      seat_limit: 500,
+    };
+  };
+  return { sendBatch, calls };
+}
+
+async function run(answers, input, authGeneration = () => 7) {
+  const { createInvitePeople } = await load();
+  const harness = makeSendBatch(answers);
+  const results = [];
+  await createInvitePeople({ sendBatch: harness.sendBatch, authGeneration }).sendInvitations({
+    workspaceId: "ws-1",
+    role: "member",
+    onResult: (email, outcome) => results.push([email, outcome]),
+    ...input,
+  });
+  return { ...harness, results };
+}
+
+const addresses = (count) => Array.from({ length: count }, (_, index) => `p${index}@x.com`);
+
+test("one request carries every address", async () => {
+  const emails = addresses(30);
+  const { calls, results } = await run({}, { emails });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].input.emails, emails);
+  assert.deepEqual(
+    results.map(([email]) => email),
+    emails
+  );
+});
+
+test("teams and spaces are forwarded only when present", async () => {
+  const withBoth = await run({}, { emails: ["a@x.com"], teamIds: ["t1"], spaceIds: ["s1"] });
+  assert.deepEqual(withBoth.calls[0], {
+    workspaceId: "ws-1",
+    input: { emails: ["a@x.com"], role: "member", team_ids: ["t1"], space_ids: ["s1"] },
+    authGeneration: 7,
+  });
+  const empty = await run({}, { emails: ["a@x.com"], teamIds: [], spaceIds: [] });
+  assert.deepEqual(empty.calls[0].input, { emails: ["a@x.com"], role: "member" });
+  assert.ok(!("team_ids" in empty.calls[0].input));
+  assert.ok(!("space_ids" in empty.calls[0].input));
+});
+
+test("each address gets its own outcome", async () => {
+  const emails = ["a@x.com", "b@x.com", "c@x.com", "d@x.com", "e@x.com", "f@x.com"];
+  const { results } = await run(
+    {
+      "a@x.com": "invited",
+      "b@x.com": { status: "invited", email_sent: false },
+      "c@x.com": "invalid_email",
+      "d@x.com": "already_member",
+      "e@x.com": "already_invited",
+      "f@x.com": "directory_required",
+    },
+    { emails }
+  );
+  assert.deepEqual(
+    results.map(([, outcome]) => outcome),
+    [
+      { ok: true, emailSent: true },
+      { ok: true, emailSent: false },
+      { ok: false, kind: "invalid" },
+      { ok: false, kind: "alreadyMember" },
+      { ok: false, kind: "alreadyInvited" },
+      { ok: false, kind: "directoryRequired" },
+    ]
+  );
+});
+
+test("an invitation that took the teamspace says so, and an older API's answer doesn't", async () => {
+  const { createInvitePeople } = await load();
+  const results = [];
+  await createInvitePeople({
+    sendBatch: async () => ({
+      results: [
+        { email: "a@x.com", status: "already_invited", grants_added: true },
+        { email: "b@x.com", status: "already_invited" },
+      ],
+      seats_used: 1,
+      seat_limit: 500,
+    }),
+    authGeneration: () => 7,
+  }).sendInvitations({
+    workspaceId: "ws-1",
+    role: "member",
+    emails: ["a@x.com", "b@x.com"],
+    spaceIds: ["s1"],
+    onResult: (email, outcome) => results.push([email, outcome]),
+  });
+  assert.deepEqual(results, [
+    ["a@x.com", { ok: false, kind: "alreadyInvited", grantsAdded: true }],
+    ["b@x.com", { ok: false, kind: "alreadyInvited" }],
+  ]);
+});
+
+test("results match addresses regardless of case", async () => {
+  const { createInvitePeople } = await load();
+  const results = [];
+  await createInvitePeople({
+    sendBatch: async () => ({
+      results: [{ email: "SAM@X.com", status: "invited", email_sent: true }],
+      seats_used: 1,
+      seat_limit: 500,
+    }),
+    authGeneration: () => 7,
+  }).sendInvitations({
+    workspaceId: "ws-1",
+    role: "member",
+    emails: ["sam@x.com"],
+    onResult: (email, outcome) => results.push([email, outcome]),
+  });
+  assert.deepEqual(results, [["sam@x.com", { ok: true, emailSent: true }]]);
+});
+
+test("email_sent missing is a sent result with emailSent false", async () => {
+  const { createInvitePeople } = await load();
+  const results = [];
+  await createInvitePeople({
+    sendBatch: async () => ({
+      results: [{ email: "a@x.com", status: "invited" }],
+      seats_used: 1,
+      seat_limit: 500,
+    }),
+    authGeneration: () => 7,
+  }).sendInvitations({
+    workspaceId: "ws-1",
+    role: "member",
+    emails: ["a@x.com"],
+    onResult: (email, outcome) => results.push([email, outcome]),
+  });
+  assert.deepEqual(results, [["a@x.com", { ok: true, emailSent: false }]]);
+});
+
+test("an address missing from the answer is a failed request", async () => {
+  const { results } = await run({ "b@x.com": "missing" }, { emails: ["a@x.com", "b@x.com"] });
+  assert.deepEqual(
+    results.map(([, outcome]) => outcome),
+    [
+      { ok: true, emailSent: true },
+      { ok: false, kind: "requestFailed" },
+    ]
+  );
+});
+
+test("a seat refusal marks every address and carries available", async () => {
+  const error = new CloudApiError("No seats", 400, "seat_limit_reached", { available: 4 });
+  const { results, calls } = await run({ "a@x.com": error }, { emails: ["a@x.com", "b@x.com"] });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(
+    results.map(([, outcome]) => outcome),
+    Array(2).fill({ ok: false, kind: "seatLimit", available: 4 })
+  );
+});
+
+test("a dropped connection fails the chunk, retryable", async () => {
+  const { results } = await run(
+    { "a@x.com": new CloudApiError("Network down", 0) },
+    { emails: ["a@x.com", "b@x.com"] }
+  );
+  assert.deepEqual(
+    results.map(([, outcome]) => outcome),
+    Array(2).fill({ ok: false, kind: "requestFailed" })
+  );
+  const { isRetryableFailure } = await import("../../src/lib/inviteFlow.ts");
+  assert.equal(isRetryableFailure({ kind: "requestFailed" }), true);
+});
+
+test("a rate limit answers for every address and is retryable", async () => {
+  const emails = addresses(3);
+  const { results, calls } = await run(
+    { "p0@x.com": new CloudApiError("Too many", 429, "rate_limited") },
+    { emails }
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(results.length, 3);
+  assert.ok(results.every(([, outcome]) => !outcome.ok && outcome.kind === "rateLimited"));
+  const { isRetryableFailure } = await import("../../src/lib/inviteFlow.ts");
+  assert.equal(isRetryableFailure({ kind: "rateLimited" }), true);
+});
+
+test("abort before sending sends nothing", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const { calls, results } = await run({}, { emails: ["a@x.com"], signal: controller.signal });
+  assert.equal(calls.length, 0);
+  assert.deepEqual(results, []);
+});
+
+test("an expired or replaced sign-in answers for every address", async () => {
+  for (const error of [
+    new CloudApiError("Unauthorized", 401, "AUTH_EXPIRED"),
+    new CloudApiError("Account changed", 409, "AUTH_CONTEXT_CHANGED"),
+  ]) {
+    const { results, calls } = await run({ "p0@x.com": error }, { emails: addresses(3) });
+    assert.equal(calls.length, 1);
+    assert.equal(results.length, 3);
+    assert.ok(results.every(([, outcome]) => !outcome.ok && outcome.kind === "sessionExpired"));
+  }
+});
+
+test("an abort during the request reports nothing", async () => {
+  const controller = new AbortController();
+  const { createInvitePeople } = await load();
+  const harness = makeSendBatch();
+  const results = [];
+  await createInvitePeople({
+    sendBatch: async (...args) => {
+      const answer = await harness.sendBatch(...args);
+      controller.abort();
+      return answer;
+    },
+    authGeneration: () => 7,
+  }).sendInvitations({
+    workspaceId: "ws-1",
+    role: "member",
+    emails: addresses(3),
+    signal: controller.signal,
+    onResult: (email, outcome) => results.push([email, outcome]),
+  });
+  assert.equal(harness.calls.length, 1);
+  assert.deepEqual(results, []);
+});

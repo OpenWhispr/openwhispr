@@ -18,6 +18,16 @@ onboarding).
 | `auth.openwhispr.com`                         | HTTPS    | 443  | Account sign-in and session refresh (Better Auth).                                 |
 | `github.com`, `objects.githubusercontent.com` | HTTPS    | 443  | Application auto-update (release artifacts via electron-updater, GitHub provider). |
 
+## Model catalog updates (on by default)
+
+Contacted by every install unless turned off in Settings → Privacy → Model list
+updates, or with `OPENWHISPR_MODEL_REGISTRY_MODE=bundled` in the app's `.env`.
+Blocking it is safe: the app keeps its bundled and last verified model list.
+
+| Host                        | Protocol | Port | Purpose                                                                                                                                                                         |
+| --------------------------- | -------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `raw.githubusercontent.com` | HTTPS    | 443  | Signed model list (`OpenWhispr/model-registry`), fetched at launch and checked every 15 minutes; later checks in a session answer 304 with no body while the list is unchanged. |
+
 ## Required for streaming transcription
 
 OpenWhispr Cloud routes streaming sessions through one of four providers.
@@ -95,7 +105,7 @@ provider. Skip any provider not in use.
 | `api.deepgram.com`                                                               | WSS, HTTPS | 443  | Deepgram API key configured. Realtime-only: dictation and note recording open a WSS session (there is no file-upload or retry path); the key check calls `/v1/auth/token` over HTTPS.                                                                                                                                                                    |
 | `streaming.assemblyai.com`                                                       | WSS, HTTPS | 443  | AssemblyAI API key configured. `/v3/token` mints the short-lived session token over HTTPS; the live session is WSS. Realtime-only, like Deepgram.                                                                                                                                                                                                        |
 | `api.assemblyai.com`                                                             | HTTPS      | 443  | AssemblyAI API key configured. Credential check when onboarding or Settings checks the key (`/v2/transcript`).                                                                                                                                                                                                                                           |
-| `openrouter.ai`                                                                  | HTTPS      | 443  | OpenRouter selected as a reasoning provider (`/api/v1/models` is fetched even without a key; the key check calls `/api/v1/key`).                                                                                                                                                                                                                         |
+| `openrouter.ai`                                                                  | HTTPS      | 443  | OpenRouter selected as a reasoning or transcription provider (`/api/v1/models` is fetched even without a key; the key check calls `/api/v1/key`).                                                                                                                                                                                                        |
 
 ## Organization-managed audio (only if configured)
 

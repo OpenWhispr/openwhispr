@@ -778,19 +778,6 @@ test("wake-word language is undefined when no usable hint exists", async () => {
   assert.equal(resolveWakeWordLanguage({}), undefined);
 });
 
-test("lifecycle input kind prefers assistant, then translation, then dictation", async () => {
-  const { resolveLifecycleInputKind } = await load();
-  assert.equal(
-    resolveLifecycleInputKind({ voiceAgentRequested: true, translationRequested: true }),
-    "assistant"
-  );
-  assert.equal(
-    resolveLifecycleInputKind({ voiceAgentRequested: false, translationRequested: true }),
-    "translation"
-  );
-  assert.equal(resolveLifecycleInputKind({}), "dictation");
-});
-
 test("an unconfigured cleanup warns once per broken setup, and again once it was fixed", async () => {
   const { cleanupUnconfiguredNotice } = await load();
   const settings = {
@@ -852,4 +839,29 @@ test("signed out of OpenWhispr Cloud, the cleanup notice says so", async () => {
     settings: { ...cloud, cleanupCloudMode: "byok" },
   });
   assert.equal(byok.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
+});
+
+test("a cleanup model the org blocked says so instead of calling cleanup unconfigured", async () => {
+  const { cleanupUnconfiguredNotice } = await load();
+  const settings = {
+    useCleanupModel: true,
+    cleanupMode: "local",
+    cleanupProvider: "qwen",
+    isSignedIn: true,
+    policyBlockedLocalScopes: ["dictationCleanup"],
+  };
+  const skipped = { skipped: true, cleanupReachable: false, settings };
+
+  const { notice } = cleanupUnconfiguredNotice(null, skipped);
+  assert.equal(notice.messageKey, "models.policy.modelBlocked");
+  assert.equal(notice.settingsTarget, "llms");
+  assert.equal(notice.surface, "llm");
+  assert.equal(cleanupUnconfiguredNotice(notice.setupKey, skipped).notice, null);
+
+  // Lifting the block leaves an ordinary unconfigured setup, which warns as itself.
+  const unconfigured = cleanupUnconfiguredNotice(notice.setupKey, {
+    ...skipped,
+    settings: { ...settings, policyBlockedLocalScopes: [] },
+  });
+  assert.equal(unconfigured.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
 });

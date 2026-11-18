@@ -5,6 +5,7 @@ import { Plus, Sparkles } from "../icons";
 import { useToast } from "../ui/useToast";
 import { PanelResizeHandle } from "../ui/PanelResizeHandle";
 import NoteEditor from "./NoteEditor";
+import { DeviceNoteView } from "./DeviceNoteView";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
 import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
@@ -13,7 +14,7 @@ import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
-import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
+import type { ActionItem, ActionKind, NoteItem, NoteMutationResult } from "../../types/electron";
 import { buildNoteRunInput } from "../../helpers/templatePrompts";
 import {
   useSettingsStore,
@@ -62,7 +63,12 @@ import {
   revealContainer,
   createFolder,
   getNoteFromStore,
+  getSpacesValue,
+  markNoteEdited,
 } from "../../stores/noteStore";
+import { useDeviceNotesStore } from "../../stores/deviceNotesStore";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { isSpaceInWorkspaceScope } from "../../lib/workspaceSelection";
 import {
   useMeetingRecordingStore,
   useIsMeetingMode,
@@ -84,6 +90,7 @@ import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
 import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
+import { useModalGate } from "../../stores/modalGateStore";
 import type { InvitationNotesEntry } from "../../hooks/useInvitationNotesEntry";
 import {
   applyNoteDraftMutation,
@@ -137,10 +144,16 @@ interface PersonalNotesViewProps {
     noteId: number;
     folderId: number | null;
     event: any;
+    trigger?: string;
+    noteSessionId?: string;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
   invitationEntry?: InvitationNotesEntry | null;
   onInvitationEntryHandled?: () => void;
+  canAutoStartMeeting: () => boolean;
+  /** ControlPanel holds the workspace intro until this view has mounted after a join. */
+  notesHandOff?: boolean;
+  onNotesHandOffDone?: () => void;
 }
 
 // The list's CSS cap: 30% of the view it shares with the note.
@@ -155,6 +168,9 @@ export default function PersonalNotesView({
   onMeetingRecordingRequestHandled,
   invitationEntry,
   onInvitationEntryHandled,
+  canAutoStartMeeting,
+  notesHandOff = false,
+  onNotesHandOffDone,
 }: PersonalNotesViewProps) {
   const isMeetingMode = useIsMeetingMode();
   const isNarrowWindow = useIsNarrowWindow();
@@ -301,6 +317,7 @@ export default function PersonalNotesView({
   const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
 
   const spaces = useSpaces();
+  const viewNoteId = useDeviceNotesStore((s) => s.viewNoteId);
   const folders = useFolders();
   const activeContext = useActiveContext();
   const overviewSpace = useMemo(
@@ -319,38 +336,38 @@ export default function PersonalNotesView({
     initializeNotesTree();
   }, []);
 
-  useEffect(() => {
-    if (
-      structureIntroPending &&
-      isOnboardingComplete &&
-      isSignedIn &&
-      teamSpacesAvailable &&
-      !isTreeLoading &&
-      !isSidePanelLayout
-    ) {
-      setShowStructureIntro(true);
-    }
-  }, [
-    structureIntroPending,
-    isOnboardingComplete,
-    isSignedIn,
-    teamSpacesAvailable,
-    isTreeLoading,
-    isSidePanelLayout,
-  ]);
-
+  // Due once only the notes tree is still loading; the workspace intro waits for it from then on.
+  const structureIntroDue =
+    structureIntroPending &&
+    isOnboardingComplete &&
+    isSignedIn &&
+    teamSpacesAvailable &&
+    !isSidePanelLayout;
   // Arriving via an accepted invitation reopens the structure intro even when
   // this device has already seen it, and even before notes onboarding is done
-  // (the dialog also renders in the onboarding branch below). Once per
-  // invitation: the entry outlives the dialog while its space syncs, and a
-  // layout change in that time must not bring the dialog back.
-  const structureIntroShownForRef = useRef<InvitationNotesEntry | null>(null);
+  // (the dialog also renders in the onboarding branch below). It opens once per
+  // invitation, when no side panel is in the way, and holds the gate until then.
+  const [invitationIntroShownFor, setInvitationIntroShownFor] =
+    useState<PersonalNotesViewProps["invitationEntry"]>(null);
+  const invitationIntroDue =
+    invitationEntry != null && !isSidePanelLayout && invitationIntroShownFor !== invitationEntry;
+  useModalGate("notesStructureIntroPending", structureIntroDue || invitationIntroDue);
+
   useEffect(() => {
-    if (!invitationEntry || isSidePanelLayout) return;
-    if (structureIntroShownForRef.current === invitationEntry) return;
-    structureIntroShownForRef.current = invitationEntry;
+    if (structureIntroDue && !isTreeLoading) setShowStructureIntro(true);
+  }, [structureIntroDue, isTreeLoading]);
+
+  useEffect(() => {
+    if (!invitationIntroDue) return;
     setShowStructureIntro(true);
-  }, [invitationEntry, isSidePanelLayout]);
+    setInvitationIntroShownFor(invitationEntry);
+  }, [invitationIntroDue, invitationEntry]);
+
+  // Releases ControlPanel's hand-off gate in the same render that opens the structure intro just
+  // above; a due intro already holds its own gate, so the workspace intro never slips in between.
+  useEffect(() => {
+    if (notesHandOff) onNotesHandOffDone?.();
+  }, [notesHandOff, onNotesHandOffDone]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
   // space the invitation granted (directly or via a team) appears in the local
@@ -429,7 +446,6 @@ export default function PersonalNotesView({
     : linkedEventLookup?.id === linkedEventId
       ? linkedEventLookup.event
       : undefined;
-  const calendarEventName = linkedEvent?.summary ?? null;
 
   const startRecording = useCallback(
     () =>
@@ -493,6 +509,7 @@ export default function PersonalNotesView({
       edits: Pick<PendingDocumentSnapshot, "contentEdited" | "clearContent">
     ) => {
       void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
+      markNoteEdited(snapshot.noteId);
       const current = pendingDocumentRef.current;
       if (current) clearTimeout(current.timer);
 
@@ -526,6 +543,7 @@ export default function PersonalNotesView({
   const scheduleEnhancedSave = useCallback(
     (snapshot: NoteEditorDraft) => {
       void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
+      markNoteEdited(snapshot.noteId);
       const current = pendingEnhancedRef.current;
       if (current) clearTimeout(current.timer);
 
@@ -611,12 +629,7 @@ export default function PersonalNotesView({
     return () => flushPendingSaves("unmount");
   }, [flushPendingSaves]);
 
-  const { createNote, createNoteIn } = useCreateNote();
-
-  const privateSpaceId = useMemo(
-    () => spaces.find((s) => s.kind === "private")?.id ?? null,
-    [spaces]
-  );
+  const { createNote, createNoteIn } = useCreateNote(canAutoStartMeeting);
 
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {
@@ -635,16 +648,29 @@ export default function PersonalNotesView({
     [cancelPendingSaves]
   );
 
+  // Answers with main's result: the tree tells a refused move (success false) from a done one.
   const handleMoveNote = useCallback(
-    async (noteId: number, target: NoteMoveTarget) => {
-      await window.electronAPI.updateNote(noteId, {
+    async (noteId: number, target: NoteMoveTarget): Promise<NoteMutationResult> => {
+      const result = await window.electronAPI.updateNote(noteId, {
         folder_id: target.folderId,
         space_id: target.spaceId,
       });
-      if (noteId === activeNoteId) {
+      // A refused move leaves the open note where it is.
+      if (noteId !== activeNoteId || result?.success === false) return result;
+      // The view follows the open note within the workspace. Moved to another workspace's
+      // Private, the note closes: following it there would switch workspace.
+      const { activeWorkspaceId, workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
+      const space = getSpacesValue().find((s) => s.id === target.spaceId);
+      if (
+        space &&
+        isSpaceInWorkspaceScope(space, activeWorkspaceId, workspaces, defaultWorkspaceId)
+      ) {
         setActiveContext(target.spaceId, target.folderId);
         revealContainer(target.spaceId, target.folderId);
+      } else {
+        setActiveNoteId(null);
       }
+      return result;
     },
     [activeNoteId]
   );
@@ -660,7 +686,10 @@ export default function PersonalNotesView({
 
   const handleCreateFolderAndMove = useCallback(
     async (noteId: number, folderName: string) => {
-      const spaceId = getNoteFromStore(noteId)?.space_id ?? privateSpaceId;
+      const spaceId =
+        getNoteFromStore(noteId)?.space_id ??
+        (await window.electronAPI.getPrivateSpaceId?.()) ??
+        null;
       if (spaceId == null) return;
       const result = await createFolder(folderName, spaceId);
       if (result.success && result.folder) {
@@ -673,7 +702,7 @@ export default function PersonalNotesView({
         });
       }
     },
-    [privateSpaceId, handleMoveToFolder, toast, t]
+    [handleMoveToFolder, toast, t]
   );
 
   const {
@@ -725,8 +754,15 @@ export default function PersonalNotesView({
     [activeNoteId]
   );
 
+  const handledMeetingRequest = useRef<typeof meetingRecordingRequest>(null);
   useEffect(() => {
-    if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
+    if (
+      !meetingRecordingRequest ||
+      activeNoteId !== meetingRecordingRequest.noteId ||
+      handledMeetingRequest.current === meetingRecordingRequest
+    )
+      return;
+    handledMeetingRequest.current = meetingRecordingRequest;
     const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
     const seedSegments = parseSeedSegments(note?.transcript);
     void handleMeetingRecordingRequest({
@@ -744,6 +780,14 @@ export default function PersonalNotesView({
         // yet is still a meeting note.
         autoEndEligible: note ? isMeetingAutoEndEligible(note) : true,
       },
+      trigger: meetingRecordingRequest.trigger,
+      canAutoStart: canAutoStartMeeting,
+      onSuppressed: () =>
+        meetingRecordingRequest.noteSessionId
+          ? window.electronAPI?.meetingNoteOpenedWithoutRecording?.(
+              meetingRecordingRequest.noteSessionId
+            )
+          : undefined,
       startRecording: storeStartRecording,
       restoreFromMeetingMode: async () => {
         await window.electronAPI?.restoreFromMeetingMode?.();
@@ -758,6 +802,7 @@ export default function PersonalNotesView({
     });
   }, [
     meetingRecordingRequest,
+    canAutoStartMeeting,
     activeNoteId,
     activeNote,
     onMeetingRecordingRequestHandled,
@@ -856,11 +901,11 @@ export default function PersonalNotesView({
       knownPeople,
       fromSummary,
       material,
-      allowTitleGeneration: isRegenerableNoteTitle(
-        editorNote.title,
-        [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
-        calendarEventName
-      ),
+      allowTitleGeneration: isRegenerableNoteTitle(editorNote.title, [
+        t("notes.list.untitledNote"),
+        t("notes.list.newNote"),
+        t("notes.sidebar.newNote"),
+      ]),
     });
   };
 
@@ -913,6 +958,7 @@ export default function PersonalNotesView({
           </div>
 
           <SpacesTree
+            onFlushPendingSaves={savePendingNow}
             onDeleteNote={handleDelete}
             onMoveNote={handleMoveNote}
             onCreateFolderAndMove={handleCreateFolderAndMove}
@@ -923,7 +969,9 @@ export default function PersonalNotesView({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {editorNote ? (
+        {viewNoteId != null ? (
+          <DeviceNoteView id={viewNoteId} />
+        ) : editorNote ? (
           <>
             <NoteEditor
               key={editorNote.id}

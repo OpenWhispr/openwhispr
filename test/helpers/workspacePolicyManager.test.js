@@ -609,6 +609,34 @@ test("a positive managed-unresolvable signal cannot reuse an unmanaged cache", a
   }
 });
 
+test("an unresolvable session can't fall back to its unmanaged verdict on a later failure", async (t) => {
+  for (const laterFailure of [
+    () => {
+      throw new Error("offline");
+    },
+    () => response(503, { error: "Service unavailable" }),
+  ]) {
+    const responses = [
+      () => response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } }),
+      () =>
+        response(503, {
+          error: "Organization policy could not be resolved.",
+          code: "POLICY_UNRESOLVABLE",
+        }),
+      laterFailure,
+    ];
+    const context = setup(async () => responses.shift()());
+    t.after(context.cleanup);
+    const request = { accountId: "account-a", expectedAuthGeneration: 1, refresh: true };
+
+    assert.equal((await context.manager.getPolicy(request)).success, true);
+    assert.equal((await context.manager.getPolicy(request)).code, "POLICY_UNRESOLVABLE");
+    const later = await context.manager.getPolicy(request);
+    assert.equal(later.success, false);
+    assert.equal(later.code, "POLICY_UNRESOLVABLE");
+  }
+});
+
 test("a managed cache remains fail-closed during an unresolvable refresh", async (t) => {
   const responses = [
     response(200, validPolicy()),
@@ -907,6 +935,62 @@ test("throttled errors carry the snapshot identity fields", async (t) => {
   assert.equal(throttled.authGeneration, 1);
 });
 
+test("throttled failures retain only the latest attempt's HTTP status", async (t) => {
+  let currentTime = 0;
+  let httpStatus = 401;
+  let requests = 0;
+  const context = setup(
+    async () => {
+      requests++;
+      if (httpStatus === undefined) throw new Error("offline");
+      return response(httpStatus, {});
+    },
+    { minimumAttemptIntervalMs: 5_000, now: () => currentTime }
+  );
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+
+  for (const [index, status] of [401, 403, 503, undefined].entries()) {
+    currentTime = index * 5_000;
+    httpStatus = status;
+    const failed = await context.manager.getPolicy(request);
+    assert.equal(failed.success, false);
+    assert.equal(failed.httpStatus, status);
+    const throttled = await context.manager.getPolicy(request);
+    assert.equal(throttled.code, "POLICY_RETRY_THROTTLED");
+    assert.equal(throttled.httpStatus, status);
+    assert.equal(requests, index + 1);
+  }
+});
+
+test("throttled HTTP status stays with its credential and current auth generation", async (t) => {
+  let requests = 0;
+  const context = setup(
+    async (_url, init) => {
+      requests++;
+      return response(init.headers.Authorization === "Bearer token-a" ? 401 : 503, {});
+    },
+    { minimumAttemptIntervalMs: 5_000, now: () => 0 }
+  );
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+  await context.manager.getPolicy(request);
+  context.tokenState.token = "token-b";
+  context.tokenState.generation = 2;
+  const otherRequest = { accountId: "account-b", expectedAuthGeneration: 2 };
+  assert.equal((await context.manager.getPolicy(otherRequest)).httpStatus, 503);
+  assert.equal((await context.manager.getPolicy(otherRequest)).httpStatus, 503);
+
+  context.tokenState.token = "token-a";
+  context.tokenState.generation = 3;
+  const throttled = await context.manager.getPolicy({ ...request, expectedAuthGeneration: 3 });
+  assert.equal(throttled.code, "POLICY_RETRY_THROTTLED");
+  assert.equal(throttled.httpStatus, 401);
+  assert.equal(throttled.accountId, "account-a");
+  assert.equal(throttled.authGeneration, 3);
+  assert.equal(requests, 2);
+});
+
 test("screen-context capture blocks on managed denial or an unresolved managed policy", async (t) => {
   const denyingPolicy = () => {
     const body = validPolicy();
@@ -953,3 +1037,476 @@ test("screen-context capture fails closed while a managed policy is unresolvable
   assert.equal(snapshot.code, "POLICY_UNRESOLVABLE");
   assert.equal(isScreenContextBlocked(snapshot), true);
 });
+
+function rotationSetup(overrides = {}) {
+  const network = { online: true, policy: validPolicy() };
+  const validated = { accountId: "account-a" };
+  const context = setup(
+    async () => {
+      if (!network.online) throw new Error("offline");
+      return response(200, network.policy);
+    },
+    { getValidatedAccountId: () => validated.accountId, ...overrides }
+  );
+  const rotate = (token, generation) => {
+    context.tokenState.token = token;
+    context.tokenState.generation = generation;
+  };
+  return { ...context, network, validated, rotate };
+}
+
+test("a rotated credential inherits its validated account's verdict offline", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  context.network.online = false;
+  context.rotate("token-b", 2);
+  const inherited = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 2,
+  });
+
+  assert.equal(inherited.success, true);
+  assert.equal(inherited.status, "cached");
+  assert.equal(inherited.managed, true);
+  assert.equal(inherited.policy.minAppVersion, "1.8.1");
+  assert.equal(inherited.authGeneration, 2);
+});
+
+test("a failed lookup for an account last seen managed says so, whatever the credential", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  // A rotated bearer its binding doesn't vouch for yet, then no credential.
+  context.network.online = false;
+  context.rotate("token-b", 2);
+  context.validated.accountId = null;
+  const unbound = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 2,
+  });
+  context.rotate(null, 3);
+  const uncredentialed = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 3,
+  });
+  for (const failed of [unbound, uncredentialed]) {
+    assert.equal(failed.success, false);
+    assert.equal(failed.managed, true);
+  }
+  assert.equal(uncredentialed.code, "AUTH_CONTEXT_UNVALIDATED");
+});
+
+test("unbound rotations retain account policy markers and permitted recovery stays clear offline", async (t) => {
+  const { resolveEffectivePolicy } = require("../../src/helpers/effectivePolicyManager");
+  let phase = "unresolvable";
+  const context = rotationSetup({
+    successfulRefreshMs: 5 * 60 * 1000,
+    proxyFetch: async () => {
+      if (phase === "offline") throw new Error("offline");
+      if (phase === "unsupported") return response(404, {});
+      return phase === "unresolvable"
+        ? response(403, { code: "POLICY_UNRESOLVABLE" })
+        : response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } });
+    },
+  });
+  t.after(context.cleanup);
+  const read = (accountId) =>
+    context.manager.getPolicy({ accountId, expectedAuthGeneration: context.tokenState.generation });
+  const effective = (snapshot) =>
+    resolveEffectivePolicy({ status: "absent", managed: false, policy: null }, snapshot, {
+      accountId: snapshot.accountId,
+      authGeneration: snapshot.authGeneration,
+      authenticated: true,
+    });
+  assert.equal((await read("account-a")).code, "POLICY_UNRESOLVABLE");
+  context.validated.accountId = null;
+  phase = "offline";
+  for (const generation of [2, 3]) {
+    context.rotate(`unbound-${generation}`, generation);
+    const restricted = await read("account-a");
+    assert.equal(restricted.managed, true);
+    assert.equal(effective(restricted).success, false);
+  }
+  context.rotate("unsupported-before-binding", 4);
+  phase = "unsupported";
+  assert.equal(effective(await read("account-a")).success, false);
+  context.validated.accountId = "account-a";
+  await read("account-a");
+  assert.equal(
+    context.manager.accountWasManaged("account-a"),
+    true,
+    "an unsupported endpoint is not an authoritative recovery"
+  );
+  context.validated.accountId = null;
+  phase = "offline";
+  context.rotate("other-account", 5);
+  assert.equal(effective(await read("account-b")).status, "unmanaged");
+  phase = "permitted";
+  assert.equal((await read("account-b")).managed, false);
+  context.validated.accountId = "account-b";
+  await read("account-b");
+  assert.equal(
+    context.manager.accountWasManaged("account-a"),
+    true,
+    "another account's recovery cannot clear the marker"
+  );
+  context.validated.accountId = null;
+  context.rotate("permitted-recovery", 6);
+  assert.equal(effective(await read("account-a")).success, false);
+  assert.equal(
+    context.manager.accountWasManaged("account-a"),
+    true,
+    "an unbound reply cannot clear account evidence"
+  );
+  // The policy answer can precede session validation of this new bearer.
+  context.validated.accountId = "account-a";
+  assert.equal((await read("account-a")).status, "current");
+  phase = "offline";
+  context.validated.accountId = null;
+  context.rotate("after-recovery", 7);
+  assert.equal(effective(await read("account-a")).status, "unmanaged");
+});
+
+test("a malformed API URL still answers a lookup that names an account", async (t) => {
+  const context = setup(async () => response(200, validPolicy()), {
+    getApiUrl: () => "not a url",
+  });
+  t.after(context.cleanup);
+  const failed = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 1,
+  });
+  assert.equal(failed.success, false);
+  assert.equal(failed.managed, false);
+});
+
+test("a rotated credential keeps inheriting across another rotation and a restart", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+  context.network.online = false;
+  context.rotate("token-b", 2);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 2 });
+
+  const restarted = createWorkspacePolicyManager({
+    cachePath: context.cachePath,
+    getApiUrl: () => "https://api.openwhispr.test",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => {
+      throw new Error("offline");
+    },
+    tokenStore: { getState: () => ({ token: "token-c", generation: 3 }) },
+    getValidatedAccountId: () => "account-a",
+    logger: { error() {}, warn() {} },
+    minimumAttemptIntervalMs: 0,
+  });
+  const inherited = await restarted.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 3,
+  });
+  assert.equal(inherited.success, true);
+  assert.equal(inherited.managed, true);
+});
+
+test("a refresh by a caller that names no account doesn't lose what the binding vouched for", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+  await context.manager.getPolicy({ expectedAuthGeneration: 1 });
+
+  context.network.online = false;
+  context.rotate("token-b", 2);
+  const inherited = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 2,
+  });
+  assert.equal(inherited.success, true);
+  assert.equal(inherited.managed, true);
+});
+
+test("another account never inherits a verdict, even with its own validated binding", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  context.network.online = false;
+  context.rotate("token-b", 2);
+  context.validated.accountId = "account-b";
+  const other = await context.manager.getPolicy({
+    accountId: "account-b",
+    expectedAuthGeneration: 2,
+  });
+  assert.equal(other.success, false);
+  assert.equal(other.code, "POLICY_UNAVAILABLE");
+});
+
+test("a new credential naming an account its binding doesn't vouch for inherits nothing", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  // Mid-switch: account B's bearer, with the old account still in scope, and a
+  // binding that hasn't matched this bearer yet.
+  context.network.online = false;
+  context.rotate("token-of-account-b", 2);
+  context.validated.accountId = null;
+  const unbound = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 2,
+  });
+  assert.equal(unbound.success, false);
+});
+
+test("a verdict fetched before the binding vouched for the account passes to no other credential", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  context.validated.accountId = null;
+  // Fetched under account B's bearer while the scope still names account A.
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  context.network.online = false;
+  context.rotate("token-b", 2);
+  context.validated.accountId = "account-a";
+  const inherited = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 2,
+  });
+  assert.equal(inherited.success, false);
+});
+
+test("a cookie identity never inherits through the bearer's binding", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  context.network.online = false;
+  const cookie = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 1,
+    authHeaders: { Cookie: "session=someone" },
+  });
+  assert.equal(cookie.success, false);
+});
+
+test("an account with no fetch ever stays unresolved", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  context.network.online = false;
+  const none = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 1,
+  });
+  assert.equal(none.success, false);
+});
+
+test("a fresh answer for the rotated credential replaces what it inherited", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  context.rotate("token-b", 2);
+  context.network.policy = { data: { managed: false, policy: null, policyUpdatedAt: null } };
+  const fresh = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 2,
+  });
+  assert.equal(fresh.status, "network");
+  assert.equal(fresh.managed, false);
+});
+
+test("a rotated credential keeps the account's fail-closed marker", async (t) => {
+  let status = 200;
+  const context = rotationSetup({
+    proxyFetch: async () =>
+      status === 200
+        ? response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } })
+        : response(status, { code: "POLICY_UNRESOLVABLE", error: "unresolvable" }),
+  });
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+  status = 503;
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  context.rotate("token-b", 2);
+  status = 404;
+  const rotated = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 2,
+  });
+  assert.equal(rotated.success, false);
+  assert.equal(rotated.code, "POLICY_UNRESOLVABLE");
+});
+
+test("the held verdict comes from disk without touching the network", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+  const restarted = createWorkspacePolicyManager({
+    cachePath: context.cachePath,
+    getApiUrl: () => "https://api.openwhispr.test",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => {
+      throw new Error("a held verdict needs no request");
+    },
+    tokenStore: { getState: () => ({ token: "token-a", generation: 1 }) },
+    getValidatedAccountId: () => "account-a",
+    logger: { error() {}, warn() {} },
+  });
+
+  const held = restarted.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  assert.equal(held.success, true);
+  assert.equal(held.managed, true);
+  assert.equal(held.authGeneration, 1);
+});
+
+test("a rotated credential holds its account's verdict, and another account holds nothing", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+  context.rotate("token-b", 2);
+
+  assert.equal(
+    context.manager.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 2 }).managed,
+    true
+  );
+
+  context.rotate("token-c", 3);
+  context.validated.accountId = "account-b";
+  assert.equal(
+    context.manager.heldPolicy({ accountId: "account-b", expectedAuthGeneration: 3 }),
+    null
+  );
+});
+
+test("nothing is held for an identity that never fetched a policy", () => {
+  const { manager } = setup(async () => response(500, {}));
+
+  assert.equal(manager.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 1 }), null);
+});
+
+test("known pending screen-context denial blocks capture before the workspace settles", () => {
+  const { isScreenContextBlocked } = require("../../src/helpers/workspacePolicyManager");
+  const snapshot = {
+    success: false,
+    status: "loading",
+    managed: true,
+    policy: { features: { screenContextEnabled: false } },
+  };
+  assert.equal(isScreenContextBlocked(snapshot), true);
+  assert.equal(
+    isScreenContextBlocked({ ...snapshot, policy: { features: { screenContextEnabled: true } } }),
+    false
+  );
+});
+
+for (const status of [404, 501]) {
+  for (const source of ["live", "cached", "joined"]) {
+    for (const bound of [false, true]) {
+      test(`required account rejects ${source} HTTP ${status} ${bound ? "after" : "before"} binding through effective admission until validated recovery`, async (t) => {
+        const { resolveEffectivePolicy } = require("../../src/helpers/effectivePolicyManager");
+        const { productOperationAllowed } = require("../../src/helpers/productPolicy");
+        const { deferred } = require("./harness/deferred");
+        const entered = deferred(),
+          finish = deferred();
+        let phase = "required";
+        const context = rotationSetup({
+          successfulRefreshMs: 5 * 60 * 1000,
+          proxyFetch: async () => {
+            if (phase === "required") return response(403, { code: "POLICY_UNRESOLVABLE" });
+            if (phase === "offline") throw new Error("offline");
+            if (phase === "permitted")
+              return response(200, {
+                data: { managed: false, policy: null, policyUpdatedAt: null },
+              });
+            if (source === "joined") {
+              entered.resolve();
+              await finish.promise;
+            }
+            return response(status, {});
+          },
+        });
+        t.after(() => {
+          finish.resolve();
+          context.cleanup();
+        });
+        const request = (accountId = "account-a") => ({
+          accountId,
+          expectedAuthGeneration: context.tokenState.generation,
+        });
+        const admitted = (snapshot) => {
+          const effective = resolveEffectivePolicy(
+            { status: "absent", managed: false, policy: null },
+            snapshot,
+            {
+              accountId: snapshot.accountId,
+              authGeneration: snapshot.authGeneration,
+              authenticated: true,
+            }
+          );
+          return (
+            effective.success &&
+            productOperationAllowed(effective, "1.11.2", "transcribe-local-whisper")
+          );
+        };
+        assert.equal(admitted(await context.manager.getPolicy(request())), false);
+        context.validated.accountId = bound ? "account-a" : null;
+        context.rotate("unsupported-rotated-token", 2);
+        phase = "unsupported";
+        if (source !== "live") {
+          const other = context.manager.getPolicy(request("other-account"));
+          if (source === "joined") {
+            await entered.promise;
+            const joined = context.manager.getPolicy(request());
+            finish.resolve();
+            assert.equal(admitted(await joined), false, "joined results retain account evidence");
+          }
+          assert.equal(
+            admitted(await other),
+            true,
+            "unmanaged unsupported callers remain permitted"
+          );
+        }
+        for (const validated of [false, true]) {
+          context.validated.accountId = validated ? "account-a" : null;
+          assert.equal(admitted(await context.manager.getPolicy(request())), false);
+          assert.equal(context.manager.peekPolicy(request()), null);
+          assert.equal(context.manager.heldPolicy(request()), null);
+        }
+        phase = "offline";
+        assert.equal(
+          admitted(await context.manager.getPolicy({ ...request(), refresh: true })),
+          false
+        );
+        assert.equal(context.manager.accountWasManaged("account-a"), true);
+
+        phase = "permitted";
+        context.validated.accountId = "other-account";
+        context.rotate("other-permitted-token", 3);
+        assert.equal(admitted(await context.manager.getPolicy(request("other-account"))), true);
+        assert.equal(
+          context.manager.accountWasManaged("account-a"),
+          true,
+          "recovery is account-scoped"
+        );
+        context.validated.accountId = null;
+        context.rotate("supported-recovery-token", 4);
+        assert.equal(
+          admitted(await context.manager.getPolicy(request())),
+          false,
+          "a supported answer still awaits its account binding"
+        );
+        context.validated.accountId = "account-a";
+        assert.equal(admitted(await context.manager.getPolicy(request())), true);
+        assert.equal(context.manager.accountWasManaged("account-a"), false);
+        phase = "offline";
+        context.validated.accountId = null;
+        context.rotate("recovered-offline-token", 5);
+        assert.equal(admitted(await context.manager.getPolicy(request())), true);
+      });
+    }
+  }
+}

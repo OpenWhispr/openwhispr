@@ -118,8 +118,24 @@ function projectAvailability(value: unknown): CalendarAvailabilityResult | null 
   };
 }
 
-function localizeInstant(
-  instant: string,
+/** Reads instants in `timeZone` for localizeInstant. */
+export function localDateFormatter(timeZone: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "long",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "shortOffset",
+  });
+}
+
+/** An instant's local date, weekday, time and offset, so the model never works them out. */
+export function localizeInstant(
+  instant: string | number,
   formatter: Intl.DateTimeFormat
 ): { date: string; weekday: string; time: string; timeZoneName: string } {
   const parts = Object.fromEntries(
@@ -140,17 +156,7 @@ function toModelFacts(
   availability: CalendarAvailabilityResult,
   request: CalendarAvailabilityRequest
 ): Record<string, unknown> {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: availability.timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "long",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZoneName: "shortOffset",
-  });
+  const formatter = localDateFormatter(availability.timezone);
 
   return {
     type: "calendar_availability_facts",

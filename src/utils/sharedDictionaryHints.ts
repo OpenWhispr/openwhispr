@@ -21,6 +21,10 @@ export interface SharedHintWords {
   readonly suppressedPersonal?: readonly string[];
 }
 
+export interface ScopedSharedHintWords extends SharedHintWords {
+  readonly accountId?: string;
+}
+
 // Shared by every "no shared words" answer, so frozen: a caller that pushed into
 // it would leak words into every later fallback.
 export const EMPTY_SHARED_HINTS: SharedHintWords = Object.freeze({

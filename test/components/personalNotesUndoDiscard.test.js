@@ -33,7 +33,7 @@ const MOCKS = {
       globalThis.__editorProps = props;
       return null;
     }`,
-  "./SpacesTree": `export default () => null;`,
+  "./SpacesTree": `export default (props) => { globalThis.__treeProps = props; return null; };`,
   "/overview/ContainerOverview": `export const ContainerOverview = () => null;`,
   "./NotesStructureIntroDialog": `export default () => null;`,
   "./ActionManagerDialog": `export default () => null;`,
@@ -47,9 +47,12 @@ const MOCKS = {
     export const useNotesOnboarding = () => ({ isComplete: true, complete() {} });
   `,
   "/hooks/useTeamSpacesCapability": `export const useTeamSpacesCapability = () => false;`,
-  "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: false, user: globalThis.__user ?? null });`,
+  "/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: globalThis.__user ?? null });`,
   "/hooks/useSpaceRoster": `
     export const fetchSpaceRoster = async () => globalThis.__roster ?? [];
+  `,
+  "/stores/deviceNotesStore": `
+    export const useDeviceNotesStore = (select) => select({ viewNoteId: null });
   `,
   "/stores/noteStore": `
     const note = () => globalThis.__note;
@@ -69,6 +72,7 @@ const MOCKS = {
     export const revealContainer = () => {};
     export const createFolder = async () => ({ success: false });
     export const getNoteFromStore = () => note();
+    export const markNoteEdited = (id) => globalThis.__editedNotes?.push(id);
   `,
 };
 
@@ -118,6 +122,8 @@ const saves = (calls) => calls.filter(([kind]) => kind === "save");
 // editor's delayed save: an Undo clicked in that second would restore the
 // assistant's previous text over what the user just typed.
 test("editing either document retires the assistant's Undo before the delayed save", async (t) => {
+  globalThis.__editedNotes = [];
+  t.after(() => delete globalThis.__editedNotes);
   const calls = await mountView(t);
 
   await React.act(async () => globalThis.__editorProps.onContentChange(NOTE.id, "Typed"));
@@ -127,6 +133,8 @@ test("editing either document retires the assistant's Undo before the delayed sa
   );
   assert.deepEqual(calls.at(-1), ["discard", NOTE.id]);
   assert.equal(saves(calls).length, 0);
+  // The note store hears of the edit too: a note the tree picked is the user's once edited (D46).
+  assert.deepEqual(globalThis.__editedNotes, [NOTE.id, NOTE.id]);
 });
 
 // Keep on the conflict banner saves the draft first: a delayed save landing
@@ -316,6 +324,36 @@ async function runSummaryOn(t, note, speakerMappings = [], { user, spaces, roste
   const [, input, , options] = globalThis.__noteActionCalls[0];
   return { input, options };
 }
+
+test("a calendar-linked summary preserves named titles and only regenerates placeholders", async (t) => {
+  const calls = await mountView(t);
+  const event = { id: "calendar-title-regression", summary: "Weekly Team Sync" };
+  globalThis.window.electronAPI.gcalGetEvent = async () => ({ success: true, event });
+  globalThis.__noteActionCalls = [];
+  t.after(() => {
+    delete globalThis.__noteActionCalls;
+  });
+
+  for (const [title, allowTitleGeneration] of [
+    ["Weekly Team Sync", false],
+    ["My renamed meeting", false],
+    ["New note", true],
+    ["Untitled Note", true],
+    ["", true],
+  ]) {
+    globalThis.__note = { ...NOTE, title, calendar_event_id: event.id };
+    await calls.rerender();
+    // The old rule only renamed the note after its linked event had loaded.
+    assert.equal(globalThis.__editorProps.linkedEvent?.summary, event.summary);
+    globalThis.__noteActionCalls.length = 0;
+    await React.act(async () => {
+      await globalThis.__editorProps.onRunNoteAction(AI_SUMMARY);
+    });
+    assert.equal(globalThis.__noteActionCalls.length, 1);
+    const [, , , options] = globalThis.__noteActionCalls[0];
+    assert.equal(options.allowTitleGeneration, allowTitleGeneration, title);
+  }
+});
 
 test("a transcript stored as plain text runs as one, with the user and the invitees for owner mentions", async (t) => {
   const transcript = "Alice, can you fix the build by Friday? Sure, I'll do it.";
@@ -536,4 +574,21 @@ test("an upload whose transcript is the note's text runs as a plain transcript",
   assert.equal(input, `## Meeting Transcript\n${content}`, "not the user's own notes");
   assert.deepEqual(options.material, { notes: "", meetingContext: "", transcript: content });
   assert.deepEqual(options.knownPeople, [{ name: "Sam Rivera", email: "sam@example.com" }]);
+});
+
+test("the tree copy flush writes all pending title, text and summary edits", async (t) => {
+  const calls = await mountView(t);
+  await React.act(async () => globalThis.__editorProps.onTitleChange(NOTE.id, "Latest title"));
+  await React.act(async () => globalThis.__editorProps.onContentChange(NOTE.id, "Latest text"));
+  await React.act(async () =>
+    globalThis.__editorProps.enhancement.onChange(NOTE.id, "Latest summary")
+  );
+  await React.act(async () => globalThis.__treeProps.onFlushPendingSaves(NOTE.id));
+  assert.deepEqual(saves(calls), [
+    [
+      "save",
+      NOTE.id,
+      { title: "Latest title", content: "Latest text", enhanced_content: "Latest summary" },
+    ],
+  ]);
 });

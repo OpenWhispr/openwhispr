@@ -35,12 +35,12 @@ async function fixture(t) {
     store,
     navigateMeetingNote,
     navigateAndLoadMeetingNote,
-    run: (isCurrent = () => true) =>
+    run: (isCurrent = () => true, requestRecording = (note) => calls.push(["record", note])) =>
       navigateMeetingNotification(
         { navigationId: "nav", noteId: 9, spaceId: 2, folderId: null },
         isCurrent,
         prepare,
-        (note) => calls.push(["record", note])
+        requestRecording
       ),
     release: () => release(),
   };
@@ -142,4 +142,43 @@ test("manual root meetings refresh a cached root without loading other container
   assert.equal(f.store.getActiveFolderIdValue(), null);
   assert.equal(f.store.getActiveNoteIdValue(), 9);
   assert.equal(f.store.getNoteFromStore(9).content, "Fresh meeting");
+});
+
+test("notification navigation rechecks automatic consent after confirmation without losing the note", async (t) => {
+  const f = await fixture(t);
+  const { handleMeetingRecordingRequest } =
+    await import("../../src/helpers/meetingRecordingRequest.ts");
+  let allowed = true;
+  let handled;
+  const pending = f.run(
+    () => true,
+    (note) => {
+      handled = handleMeetingRecordingRequest({
+        args: {
+          noteId: note.id,
+          noteTitle: note.title,
+          folderId: note.folder_id,
+          autoEndEligible: true,
+        },
+        canAutoStart: () => allowed,
+        startRecording: async () => {
+          f.calls.push(["capture"]);
+          return true;
+        },
+        restoreFromMeetingMode: () => assert.fail("suppression must preserve layout"),
+        onSuppressed: () => f.calls.push(["note-only"]),
+        onHandled: () => f.calls.push(["handled"]),
+      });
+    }
+  );
+  await new Promise(setImmediate);
+  allowed = false;
+  f.release();
+  await pending;
+  await handled;
+  assert.equal(f.store.getActiveNoteIdValue(), 9);
+  assert.deepEqual(f.calls, [["confirm", "nav", "ready"], ["handled"], ["note-only"]]);
+  allowed = true;
+  await new Promise(setImmediate);
+  assert.equal(f.calls.length, 3, "policy recovery cannot replay navigation");
 });
