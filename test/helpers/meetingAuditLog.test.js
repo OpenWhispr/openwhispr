@@ -131,6 +131,13 @@ test("a refused local model choice keeps its policy code", async () => {
   );
 });
 
+test("a start the device or product policy blocks keeps its code", async () => {
+  const { log } = harness();
+  log.recordingRefused({ noteId: 4, trigger: "hotkey", reason: "DEVICE_POLICY_BLOCKED" });
+  await log.flush();
+  assert.equal(lines()[0].reason, "DEVICE_POLICY_BLOCKED");
+});
+
 test("a stop is written beside its start after the policy or AuditLogPath changes", async () => {
   const custom = path.join(userData, "it-collector");
   const { log, state } = harness({ configuredPath: custom });

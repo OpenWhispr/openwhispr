@@ -164,7 +164,11 @@ function createAudioFeaturePolicy({
     // stopped by the policy was not refused.
     async run(event, purpose, handler, { signal: cancelSignal, onRefused } = {}) {
       const refused = (outcome) => {
-        if (isAudioPolicyRefusal(outcome) || isLocalModelPolicyRefusal(outcome))
+        if (
+          isAudioPolicyRefusal(outcome) ||
+          isLocalModelPolicyRefusal(outcome) ||
+          outcome?.code === "DEVICE_POLICY_BLOCKED"
+        )
           onRefused?.(outcome);
         return outcome;
       };

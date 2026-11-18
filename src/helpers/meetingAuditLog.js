@@ -39,10 +39,11 @@ const STOP_REASONS = new Set([
   "window-lost",
   "app-quit",
 ]);
-// Plus the renderer's own "restricted" refusal.
+// Plus main's device or product policy block and the renderer's own "restricted" refusal.
 const REFUSAL_REASONS = new Set([
   ...AUDIO_POLICY_REFUSAL_CODES,
   ...LOCAL_POLICY_CODES,
+  "DEVICE_POLICY_BLOCKED",
   "policyRestricted",
 ]);
 
