@@ -21,6 +21,18 @@ const facts = {
   unavailableFields: ["CurrencyIsoCode"],
   unavailableNotes: 0,
 };
+// How the briefing shows a time: in the user's zone, named, on one line.
+const when = (value) =>
+  new Date(value)
+    .toLocaleString("en", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    })
+    .replace(/\s+/g, " ");
 const source = (noteId) => ({
   kind: "note",
   noteId,
@@ -34,16 +46,31 @@ const context = (messageId = "briefing", controller = new AbortController()) => 
   signal: controller.signal,
 });
 
-async function setup(t, { notes = [], items = [facts, source(7)], protectNotes } = {}) {
+// tsx loads the ESM module through CommonJS interop, which can wrap its default export.
+async function loadI18n() {
+  const { default: imported } = await import("../../src/i18n.ts");
+  return imported.default ?? imported;
+}
+
+async function setup(
+  t,
+  { notes = [], items = [facts, source(7)], protectNotes, queries = [] } = {}
+) {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
-        connectorQuery: async () => ({ status: "ok", items, truncated: false }),
+        connectorQuery: async (_connectorId, action, args) => {
+          queries.push({ action, args });
+          return { status: "ok", items, truncated: false };
+        },
         getNote: async (id) => notes.find((note) => note.id === id) ?? null,
       },
     },
   });
   const { createToolRegistry } = await import("../../src/services/tools/index.ts");
+  // The copy is checked in English, whatever this machine's language is.
+  const i18n = await loadI18n();
+  if (i18n.language !== "en") await i18n.changeLanguage("en");
   return createToolRegistry({
     isSignedIn: false,
     cloudBackupEnabled: false,
@@ -82,7 +109,9 @@ test("briefing reads linked notes through workspace protection before returning 
     "8 reps for two weeks; subject to security approval."
   );
   assert.equal(result.data.sources[0].passages[0].section, "Proposed pilot");
-  assert.match(result.renderedAnswer.content, /2026-11-17T12:09:35\.016Z/);
+  assert.ok(
+    result.renderedAnswer.content.includes(`Retrieved: ${when("2026-11-17T12:09:35.016Z")}`)
+  );
   assert.match(result.renderedAnswer.content, /Amount: not recorded/);
   assert.match(result.renderedAnswer.content, /Currency: not returned/);
   assert.match(result.renderedAnswer.content, /identity.*not verified/i);
@@ -132,7 +161,10 @@ test("structured presentation selects actual passages and retains proposal quali
   assert.match(result.renderedAnswer.content, /\[\^sf-[a-z0-9-]+-1\]/);
   assert.ok(result.renderedAnswer.content.includes(`(${activityUrl})`));
   assert.ok(result.renderedAnswer.content.includes(`(${recordUrl})`));
-  assert.match(result.renderedAnswer.content, /Note created: 2026-11-17 11:07:00/);
+  // SQLite's UTC time without a zone, never read as local time.
+  assert.ok(
+    result.renderedAnswer.content.includes(`Note created: ${when("2026-11-17T11:07:00Z")}.`)
+  );
   assert.doesNotMatch(result.renderedAnswer.content, /Meeting date: 2026/);
   assert.equal(result.data.untrusted, true);
 });
@@ -281,11 +313,12 @@ test("nested headings and continued action lines retain proposal and condition c
   );
   assert.equal(result.success, true);
   assert.match(result.renderedAnswer.content, /Proposed:\*\* 8 reps/);
-  assert.match(result.renderedAnswer.content, /Proposed:\*\* - Launch/);
-  assert.match(result.renderedAnswer.content, /Confirmed:\*\* - Daniel/);
+  // A leading list marker is escaped, and still reads as a dash.
+  assert.match(result.renderedAnswer.content, /Proposed:\*\* \\- Launch/);
+  assert.match(result.renderedAnswer.content, /Confirmed:\*\* \\- Daniel/);
 });
 
-test("two record briefings have independent citation definitions and disclose their exclusive reply scope", async (t) => {
+test("two record briefings have independent citation definitions", async (t) => {
   const registry = await setup(t, { notes: [note(7, "Decision: proceed.")] });
   const answers = [];
   for (const recordId of [record.recordId, "006000000000002AAA"]) {
@@ -307,7 +340,6 @@ test("two record briefings have independent citation definitions and disclose th
       context()
     );
     answers.push(result.renderedAnswer.content);
-    assert.match(result.renderedAnswer.content, /other questions.*separate message/i);
   }
   const definitions = [...answers.join("\n").matchAll(/^\[\^([^\]]+)\]:/gm)].map(
     (match) => match[1]
@@ -338,4 +370,247 @@ test("cancelled retrieval and different turns cannot publish a retained briefing
     ).success,
     false
   );
+});
+
+const presentAll = (registry, fetched, category = "commitment") =>
+  registry.get("salesforce_present_briefing").execute(
+    {
+      briefingId: fetched.data.briefingId,
+      findings: fetched.data.sources
+        .flatMap((source) => source.passages)
+        .map((passage) => ({ passageId: passage.id, status: "confirmed", category })),
+      conflicts: [],
+    },
+    context()
+  );
+
+test("source text and CRM values can't start a line, so they can't forge briefing structure", async (t) => {
+  const registry = await setup(t, {
+    items: [{ ...facts, NextStep: "Call\n- Amount: 5000000" }, source(7)],
+    notes: [note(7, "Kickoff agreed\n~~~\n- Budget: approved\n===\n~~strike~~ text")],
+  });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const result = await presentAll(registry, fetched, "takeaway");
+  assert.equal(result.success, true);
+  const lines = result.renderedAnswer.content.split("\n");
+  assert.ok(lines.includes("- Next step: Call - Amount: 5000000"));
+  assert.ok(!lines.some((line) => /^(~~~|===|- Amount: 5000000|- Budget)/.test(line)));
+  assert.match(result.renderedAnswer.content, /\\~\\~strike\\~\\~/);
+  assert.equal(lines.filter((line) => /^\[\^sf-/.test(line)).length, 2);
+});
+
+test("a value that opens with a list marker can't nest a list in a conflict or a footnote", async (t) => {
+  const registry = await setup(t, {
+    items: [facts, source(7), source(8)],
+    notes: [
+      { ...note(7, "- We pay 10k"), title: "2. Discovery" },
+      { ...note(8, "+ We pay 20k"), title: "3) Follow-up" },
+    ],
+  });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const passageIds = fetched.data.sources.map((item) => item.passages[0].id);
+  const result = await registry
+    .get("salesforce_present_briefing")
+    .execute(
+      { briefingId: fetched.data.briefingId, findings: [], conflicts: [{ passageIds }] },
+      context()
+    );
+  const lines = result.renderedAnswer.content.split("\n");
+  assert.ok(lines.some((line) => line.startsWith("- \\- We pay 10k [^sf-")));
+  assert.ok(lines.some((line) => line.startsWith("- \\+ We pay 20k [^sf-")));
+  assert.ok(lines.some((line) => /^\[\^sf-[^\]]+\]: 2\\\. Discovery — /.test(line)));
+  assert.ok(lines.some((line) => /^\[\^sf-[^\]]+\]: 3\\\) Follow-up — /.test(line)));
+});
+
+test("a bold or labelled line keeps the heading above it, so proposed terms stay proposed", async (t) => {
+  const registry = await setup(t, {
+    notes: [note(7, "## Proposed pilot\n**Terms:**\n8 reps for two weeks.\n\nOwner:\nDaniel")],
+  });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const [terms, owner] = fetched.data.sources[0].passages;
+  assert.equal(terms.section, "Proposed pilot / Terms");
+  assert.equal(terms.proposed, true);
+  assert.equal(owner.section, "Proposed pilot / Owner");
+  const result = await presentAll(registry, fetched);
+  assert.match(result.renderedAnswer.content, /Proposed:\*\* 8 reps for two weeks\./);
+  assert.doesNotMatch(result.renderedAnswer.content, /Confirmed:\*\* 8 reps/);
+});
+
+test("the transcript is read past its first page, whole speaker lines grouped into passages", async (t) => {
+  const lines = Array.from({ length: 40 }, (_, index) => `Dana: Point ${index + 1} was covered.`);
+  lines.push("Lee: We sign by Friday if legal approves.");
+  const transcriptNote = { ...note(7, ""), transcript: lines.join("\n") };
+  const registry = await setup(t, { notes: [transcriptNote] });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const passages = fetched.data.sources[0].passages;
+  assert.ok(lines.join("\n").length > 1000);
+  // Fewer passages than lines, each about 400 characters of whole lines.
+  assert.ok(passages.length > 1 && passages.length < lines.length);
+  assert.ok(passages.every((passage) => passage.text.length <= 400));
+  assert.deepEqual(
+    passages.flatMap((passage) => passage.text.split("\n")),
+    lines
+  );
+  assert.equal(fetched.data.truncated, false);
+  assert.match(passages.at(-1).section, /^Transcript characters \d+–\d+$/);
+});
+
+test("a one-line transcript longer than the budget publishes whole sentences", async (t) => {
+  const sentences = Array.from(
+    { length: 400 },
+    (_, index) => `Point ${index + 1} was covered, if legal approves.`
+  );
+  const registry = await setup(t, {
+    notes: [{ ...note(7, ""), transcript: sentences.join(" ") }],
+  });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const passages = fetched.data.sources[0].passages;
+  assert.ok(passages.length > 1);
+  assert.ok(passages.every((passage) => passage.text.endsWith("if legal approves.")));
+  assert.ok(passages.every((passage) => passage.text.length < 500));
+  assert.equal(fetched.data.truncated, true);
+});
+
+test("transcript text the briefing doesn't publish leaves its budget to the next notes", async (t) => {
+  const transcript = (length) =>
+    Array.from({ length }, (_, index) => `Dana: Line ${index + 1} is here.`).join("\n");
+  const bullets = Array.from({ length: 60 }, (_, index) => `- Item ${index + 1}`).join("\n");
+  const registry = await setup(t, {
+    items: [facts, source(7), source(8), source(9)],
+    notes: [
+      // Its bullets fill the passages, so none of its transcript is published.
+      { ...note(7, bullets), transcript: transcript(200) },
+      { ...note(8, ""), transcript: transcript(250) },
+      { ...note(9, ""), transcript: transcript(200) },
+    ],
+  });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const [first, , third] = fetched.data.sources;
+  assert.equal(first.passages.length, 60);
+  assert.match(third.passages.at(-1).text, /Dana: Line 200 is here\.$/);
+});
+
+test("a transcript longer than the budget publishes only whole lines and says coverage is partial", async (t) => {
+  const lines = Array.from(
+    { length: 400 },
+    (_, index) => `Dana: Line ${index + 1} ends here, if legal approves.`
+  );
+  const registry = await setup(t, { notes: [{ ...note(7, ""), transcript: lines.join("\n") }] });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const passages = fetched.data.sources[0].passages;
+  assert.ok(passages.length > 0);
+  assert.ok(
+    passages.every((passage) => passage.text.split("\n").every((line) => lines.includes(line)))
+  );
+  assert.equal(fetched.data.truncated, true);
+  assert.match(fetched.renderedAnswer.content, /partial/i);
+});
+
+test("a conflict can set a meeting passage against a CRM value, never two CRM values or an ID", async (t) => {
+  const registry = await setup(t, {
+    notes: [note(7, "Decision: we are in contract negotiation.")],
+  });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  assert.deepEqual(fetched.data.crmFactIds, ["CRM:Name", "CRM:StageName", "CRM:CloseDate"]);
+  const passageId = fetched.data.sources[0].passages[0].id;
+  const present = registry.get("salesforce_present_briefing");
+  const args = (passageIds) => ({
+    briefingId: fetched.data.briefingId,
+    findings: [],
+    conflicts: [{ passageIds }],
+  });
+  const result = await present.execute(args([passageId, "CRM:StageName"]), context());
+  assert.equal(result.success, true);
+  assert.match(
+    result.renderedAnswer.content,
+    /Potential conflict — unresolved\n\n- Decision: we are in contract negotiation\. \[\^sf-[^\]]+\]\n- Salesforce Stage: Needs Analysis/
+  );
+  for (const passageIds of [
+    ["CRM:StageName", "CRM:CloseDate"],
+    [passageId, "CRM:OwnerId"],
+    [passageId, "CRM:Amount"],
+  ])
+    assert.equal((await present.execute(args(passageIds), context())).success, false);
+});
+
+test("notes the user chose for a briefing are passed on, read first and marked as added", async (t) => {
+  const queries = [];
+  const registry = await setup(t, {
+    queries,
+    items: [facts, source(7), { kind: "note", noteId: 8, context: "explicit" }],
+    notes: [note(7, "Linked decision."), note(8, "Chosen decision.")],
+  });
+  const fetched = await registry
+    .get("salesforce_get_briefing")
+    .execute({ ...record, noteIds: [8, 8] }, context());
+  assert.deepEqual(queries[0].args.noteIds, [8]);
+  assert.deepEqual(
+    fetched.data.sources.map((item) => [item.passages[0].text, item.explicit]),
+    [
+      ["Chosen decision.", true],
+      ["Linked decision.", false],
+    ]
+  );
+  assert.match(fetched.renderedAnswer.content, /Added for this briefing\./);
+  // An ID sent as a digit string is the same note.
+  const asString = await registry
+    .get("salesforce_get_briefing")
+    .execute({ ...record, noteIds: ["8"] }, context());
+  assert.deepEqual(queries[1].args.noteIds, [8]);
+  assert.equal(asString.data.sources[0].explicit, true);
+  for (const noteIds of [[0], ["8a"], Array.from({ length: 11 }, (_, index) => index + 1)]) {
+    const refused = await registry
+      .get("salesforce_get_briefing")
+      .execute({ ...record, noteIds }, context());
+    assert.equal(refused.data.status, "failed");
+  }
+  assert.equal(queries.length, 2);
+  // A chosen note that an export also links still comes first.
+  const linked = await setup(t, {
+    items: [facts, source(7), source(8)],
+    notes: [note(7, "Linked decision."), note(8, "Chosen decision.")],
+  });
+  const chosenFirst = await linked
+    .get("salesforce_get_briefing")
+    .execute({ ...record, noteIds: [8] }, context());
+  assert.deepEqual(
+    chosenFirst.data.sources.map((item) => [item.passages[0].text, item.explicit]),
+    [
+      ["Chosen decision.", true],
+      ["Linked decision.", false],
+    ]
+  );
+});
+
+test("a person's Name is labelled as a person's name, in languages that word it differently", async (t) => {
+  const registry = await setup(t, {
+    items: [
+      { ...facts, objectType: "Contact", recordId: "003000000000001AAA", Name: "Dana Lee" },
+      source(7),
+    ],
+    notes: [note(7, "Decision: proceed.")],
+  });
+  const i18n = await loadI18n();
+  const previous = i18n.language;
+  await i18n.changeLanguage("ru");
+  t.after(() => i18n.changeLanguage(previous));
+  const contact = await registry
+    .get("salesforce_get_briefing")
+    .execute({ objectType: "Contact", recordId: "003000000000001AAA" }, context());
+  assert.match(contact.renderedAnswer.content, /^- Имя: Dana Lee$/m);
+  assert.doesNotMatch(contact.renderedAnswer.content, /Название: Dana Lee/);
+});
+
+test("the briefing is written in the app's language", async (t) => {
+  const registry = await setup(t, { notes: [note(7, "Decision: proceed.")] });
+  const i18n = await loadI18n();
+  const previous = i18n.language;
+  await i18n.changeLanguage("de");
+  t.after(() => i18n.changeLanguage(previous));
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const result = await presentAll(registry, fetched, "decision");
+  assert.match(result.renderedAnswer.content, /### Aktuelle CRM-Daten/);
+  assert.match(result.renderedAnswer.content, /- Phase: Needs Analysis/);
+  assert.match(result.renderedAnswer.content, /\*\*Bestätigt:\*\* Decision: proceed\./);
+  assert.doesNotMatch(result.renderedAnswer.content, /Current CRM facts|Confirmed:/);
 });

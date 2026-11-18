@@ -273,15 +273,19 @@ test("Salesforce tool labels, receipt copy, review instructions and errors exist
       "get_briefing",
       "export_conversation",
       "update_fields",
+      "present_briefing",
     ]) {
       assert.ok(doc.agentMode.tools[`salesforce_${action}Name`], `${locale} ${action} name`);
       assert.ok(doc.agentMode.tools[`salesforce_${action}Status`], `${locale} ${action} status`);
     }
-    assert.ok(doc.connectors.salesforce.notes.updateExisting);
+    for (const note of ["updateExisting", "earlierAttemptUncertain", "replacesMissing"])
+      assert.ok(doc.connectors.salesforce.notes[note], `${locale} ${note}`);
     for (const scope of ["approval", "toolStatus"]) {
       for (const code of [
         "stale_record",
-        "uncertain_operation",
+        "not_found",
+        "record_locked",
+        "validation_failed",
         "export_required",
         "source_unavailable",
         "invalid_field",
@@ -406,4 +410,52 @@ test("Opportunity field discovery can narrow truncated metadata by name or label
     assert.equal(result.data.status, "failed");
   }
   assert.equal(calls.length, queryCount, "invalid filters never reach main");
+});
+
+test("an export's source note must be one this chat's workspace can read", async (t) => {
+  const prepared = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (...args) => {
+          prepared.push(args);
+          return { status: "failed", errorCode: "stale_record", message: "Changed" };
+        },
+      },
+    },
+  });
+  const { salesforceToolModule } = await load();
+  const readable = new Set([7]);
+  const read = [];
+  const tools = salesforceToolModule.createTools({
+    emailDraftTarget: "auto",
+    readNote: async (args) => {
+      read.push(args.id);
+      return readable.has(args.id)
+        ? { success: true, data: { id: args.id }, displayText: "Retrieved" }
+        : { success: false, data: null, displayText: "Note not found" };
+    },
+  });
+  const exportTool = tools.find((tool) => tool.name === "salesforce_export_conversation");
+  const updateTool = tools.find((tool) => tool.name === "salesforce_update_fields");
+  const exportArgs = { ...RECORD, title: "Meeting", body: "Summary" };
+  const outside = await exportTool.execute({ ...exportArgs, noteId: 8 }, context());
+  assert.equal(outside.data.status, "failed");
+  assert.equal(outside.data.errorCode, "source_unavailable");
+  const fields = { ...RECORD, noteId: 8, fields: [{ name: "Notes__c", value: "After" }] };
+  assert.equal((await updateTool.execute(fields, context())).data.errorCode, "source_unavailable");
+  assert.deepEqual(prepared, [], "nothing reaches main for a note outside the workspace");
+  await exportTool.execute({ ...exportArgs, noteId: 7 }, context());
+  assert.equal(prepared.length, 1);
+  assert.deepEqual(read, [8, 8, 7]);
+  // A read cut short by Stop says nothing about the note, so it isn't called unavailable.
+  const controller = new AbortController();
+  controller.abort();
+  const stopped = await exportTool.execute(
+    { ...exportArgs, noteId: 8 },
+    { ...context(), signal: controller.signal }
+  );
+  assert.equal(stopped.success, false);
+  assert.equal(stopped.data, null);
+  assert.equal(prepared.length, 1);
 });

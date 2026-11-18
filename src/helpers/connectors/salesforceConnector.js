@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { parseDbTimestamp } = require("../dbTimestamp");
 const { createSalesforceExports } = require("./salesforceExports");
 const { SALESFORCE_API_BASE } = require("./salesforceApi");
 const { connectorResultPage } = require("./oauthResultPage");
@@ -34,6 +35,54 @@ const FACT_FIELDS = {
     "OwnerId",
   ],
 };
+// Salesforce's own error codes, mapped onto the codes the card and tool step
+// word (connectors.<scope>.errors.salesforce.*). Any other upper-case code is
+// a Salesforce refusal with no copy of its own.
+const SALESFORCE_ERRORS = new Map([
+  ["NOT_FOUND", "not_found"],
+  ["ENTITY_IS_DELETED", "not_found"],
+  ["INVALID_CROSS_REFERENCE_KEY", "not_found"],
+  ["MALFORMED_ID", "not_found"],
+  ["http_404", "not_found"],
+  ["ENTITY_IS_LOCKED", "record_locked"],
+  ["INSUFFICIENT_ACCESS", "forbidden"],
+  ["INSUFFICIENT_ACCESS_OR_READONLY", "forbidden"],
+  ["INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY", "forbidden"],
+  ["INVALID_TYPE", "forbidden"],
+  ["API_DISABLED_FOR_ORG", "forbidden"],
+  ["API_CURRENTLY_DISABLED", "forbidden"],
+  ["http_403", "forbidden"],
+  ["FIELD_CUSTOM_VALIDATION_EXCEPTION", "validation_failed"],
+  ["FIELD_FILTER_VALIDATION_EXCEPTION", "validation_failed"],
+  ["FIELD_INTEGRITY_EXCEPTION", "validation_failed"],
+  ["REQUIRED_FIELD_MISSING", "validation_failed"],
+  ["INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST", "validation_failed"],
+  ["DUPLICATES_DETECTED", "validation_failed"],
+  ["DUPLICATE_VALUE", "validation_failed"],
+  ["STRING_TOO_LONG", "too_long"],
+  ["REQUEST_LIMIT_EXCEEDED", "rate_limited"],
+  ["UNABLE_TO_LOCK_ROW", "rate_limited"],
+  ["http_429", "rate_limited"],
+  ["SERVER_UNAVAILABLE", "network"],
+  ["INVALID_SESSION_ID", "reconnect_needed"],
+  ["PRECONDITION_FAILED", "stale_record"],
+  ["http_412", "stale_record"],
+]);
+function copyCode(errorCode) {
+  return (
+    SALESFORCE_ERRORS.get(errorCode) ??
+    (/^[A-Z][A-Z0-9_]*$/.test(errorCode ?? "") ? "refused" : errorCode)
+  );
+}
+// A saved Task that's gone, now on another record, or no longer visible to
+// the user (Salesforce answers NOT_FOUND for a record shared away too).
+const TASK_GONE = new Set([
+  "NOT_FOUND",
+  "ENTITY_IS_DELETED",
+  "http_404",
+  "not_found",
+  "task_moved",
+]);
 const MESSAGES = {
   invalid_input: "Use a supported object, an exact record ID, and a saved source note.",
   invalid_reference:
@@ -47,9 +96,16 @@ const MESSAGES = {
   export_required:
     "First save this note's activity to this Opportunity, then review field updates separately.",
   duplicate_operation:
-    "This note's export changed or another approval is in progress. Prepare a fresh review.",
-  uncertain_operation:
-    "An earlier write may have reached Salesforce. Check Salesforce before proceeding; it will not be retried automatically.",
+    "This note's export was saved again since this review, or a save is still in progress. Prepare a fresh review.",
+  not_found:
+    "The Salesforce record no longer exists or the user can't access it. Search again and have the user choose an exact record.",
+  record_locked:
+    "The Salesforce record is locked, for example by an approval process. Nothing was written.",
+  validation_failed:
+    "A Salesforce validation rule, duplicate rule or required field blocked this write. Ask the user to check the record in Salesforce.",
+  rate_limited: "Salesforce is busy or reached its API limit. Try again later.",
+  reconnect_needed: "Salesforce needs to be reconnected in Settings.",
+  network: "Salesforce couldn't be reached.",
   invalid_field:
     "Select up to three writable custom plain-text Opportunity fields from describe_fields.",
   too_long:
@@ -58,7 +114,8 @@ const MESSAGES = {
     "No usable closed Task status was found in this Salesforce organization.",
   forbidden: "Salesforce does not allow this operation for the connected user or record.",
 };
-function failed(errorCode, commit = false) {
+function failed(salesforceCode, commit = false) {
+  const errorCode = copyCode(salesforceCode);
   return {
     [commit ? "state" : "status"]: "failed",
     errorCode,
@@ -113,6 +170,26 @@ function recordUrl(binding, objectType, recordId) {
 function sameSnapshot(before, after, names) {
   return names.every((name) => (before[name] ?? null) === (after[name] ?? null));
 }
+// The note's day where the user is: SQLite stores UTC without a zone, which
+// Date.parse would read as local time.
+function localDate(timestamp) {
+  const date = parseDbTimestamp(timestamp);
+  if (!date) return "";
+  const pad = (value) => String(value).padStart(2, "0");
+  return ` (${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())})`;
+}
+// Salesforce may store line breaks as CRLF and trims text fields, so neither
+// counts as an edit.
+function activityHash(subject, description) {
+  const normalize = (value) =>
+    String(value ?? "")
+      .replace(/\r\n?/g, "\n")
+      .trim();
+  return crypto
+    .createHash("sha256")
+    .update(`${normalize(subject)}\n${normalize(description)}`)
+    .digest("hex");
+}
 function conditionFor(record) {
   const date = Date.parse(record?.LastModifiedDate);
   return Number.isFinite(date) ? { "If-Unmodified-Since": new Date(date).toUTCString() } : null;
@@ -156,6 +233,8 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
       if (!access.ok) return { ...access, outcome: "failed" };
       if (!bound(binding)) return { ok: false, errorCode: "connection_changed", outcome: "failed" };
       result = await run();
+      // Salesforce refused a token it just issued: only signing in again helps.
+      if (!result.ok && result.errorCode === "INVALID_SESSION_ID") auth.markReconnect(binding);
     }
     if (!options.method && !bound(binding))
       return { ok: false, errorCode: "connection_changed", outcome: "failed" };
@@ -336,8 +415,9 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
     )
       return failed("invalid_input");
     const linked = exportStore.list(keyFor(args, binding));
+    // Notes the user chose come first, so the cap never drops one of them.
     const ids = [
-      ...new Set([...linked.slice(0, 10).map((row) => row.note_id), ...(args.noteIds ?? [])]),
+      ...new Set([...(args.noteIds ?? []), ...linked.slice(0, 10).map((row) => row.note_id)]),
     ];
     const notes = [];
     let unavailableNotes = 0;
@@ -428,7 +508,7 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
     ]);
     const relationship = ["Contact", "Lead"].includes(args.objectType) ? "WhoId" : "WhatId";
     if (result.ok && result.data[relationship]?.slice(0, 15) !== args.recordId.slice(0, 15))
-      return { ok: false, errorCode: "stale_record" };
+      return { ok: false, errorCode: "task_moved" };
     if (result.ok && !conditionFor(result.data)) return { ok: false, errorCode: "stale_record" };
     return result;
   }
@@ -441,9 +521,14 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
     const key = keyFor(args, binding);
     const saved = exportStore.get(key);
     const kind = action === "export_conversation" ? "activity" : "fields";
-    if (saved?.[`${kind}_state`] === "unknown") return failed("uncertain_operation");
     if (saved?.activity_state === "committing" || saved?.fields_state === "committing")
       return failed("duplicate_operation");
+    // Salesforce takes no idempotency key, so only the user can tell whether
+    // an unconfirmed earlier write landed. The card warns them before Send.
+    const uncertainNote =
+      saved?.[`${kind}_state`] === "unknown"
+        ? [{ key: "connectors.salesforce.notes.earlierAttemptUncertain" }]
+        : [];
     const selected = await resolveRecord(args, binding);
     if (!selected.ok) return failed(selected.errorCode);
     const credential = bound(binding);
@@ -459,21 +544,44 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
       workspaceLabel: credential.organizationName ?? binding.workspaceId,
       body: "",
     };
+    // The model picks the note, so the card names it: a wrong one would link
+    // another meeting to this record for every later briefing.
+    const sourceNote = [
+      note.title
+        ? { key: "connectors.salesforce.notes.sourceNote", values: { title: note.title } }
+        : { key: "connectors.salesforce.notes.sourceNoteUntitled" },
+    ];
     if (action === "export_conversation") {
+      let before = null;
+      let replacingNote = [];
+      let editedNote = [];
+      if (payload.activityId) {
+        const task = await readTask(binding, payload.activityId, args);
+        if (task.ok) {
+          before = task.data;
+          // Sending replaces the Task's text, including edits made in Salesforce
+          // since. After an unconfirmed attempt the Task may hold that attempt's
+          // text instead, which no hash here describes.
+          if (
+            saved.activity_state !== "unknown" &&
+            saved.activity_hash &&
+            activityHash(before.Subject, before.Description) !== saved.activity_hash
+          )
+            editedNote = [{ key: "connectors.salesforce.notes.editedInSalesforce" }];
+        } else if (TASK_GONE.has(task.errorCode)) {
+          // Deleted, or moved to another record in Salesforce: this record
+          // gets a new Task and the association follows it.
+          payload.activityId = null;
+          replacingNote = [{ key: "connectors.salesforce.notes.replacesMissing" }];
+        } else return failed(task.errorCode);
+      }
       const config = await taskConfiguration(binding, args.objectType, !!payload.activityId);
       if (!config.ok) return failed(config.errorCode);
-      const sourceDate = Date.parse(note.created_at);
-      const provenance = `Source: OpenWhispr — ${note.title || "Untitled note"}${Number.isFinite(sourceDate) ? ` (${new Date(sourceDate).toISOString().slice(0, 10)})` : ""}`;
+      const provenance = `Source: OpenWhispr — ${note.title || "Untitled note"}${localDate(note.created_at)}`;
       const activityBody =
         typeof args.body === "string" ? `${args.body}\n\n${provenance}` : args.body;
       const problem = textProblem(args.title, activityBody, config);
       if (problem) return failed(problem);
-      let before = null;
-      if (payload.activityId) {
-        const task = await readTask(binding, payload.activityId, args);
-        if (!task.ok) return failed(task.errorCode);
-        before = task.data;
-      }
       return {
         status: "ready",
         payload: { ...payload, title: args.title, body: activityBody, before },
@@ -482,16 +590,19 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
           verbKey: "salesforceActivity",
           title: args.title,
           body: activityBody,
-          notes: payload.activityId ? [{ key: "connectors.salesforce.notes.updateExisting" }] : [],
+          notes: [
+            ...sourceNote,
+            ...(payload.activityId ? [{ key: "connectors.salesforce.notes.updateExisting" }] : []),
+            ...editedNote,
+            ...replacingNote,
+            ...uncertainNote,
+          ],
         },
       };
     }
-    if (
-      args.objectType !== "Opportunity" ||
-      !saved?.activity_id ||
-      saved.activity_state !== "succeeded"
-    )
-      return failed("export_required");
+    // A Task saved once is enough: a later re-export that failed or went
+    // unconfirmed leaves that Task in place.
+    if (args.objectType !== "Opportunity" || !saved?.activity_id) return failed("export_required");
     if (
       !Array.isArray(args.fields) ||
       args.fields.length < 1 ||
@@ -528,6 +639,7 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
       preview: {
         ...preview,
         verbKey: "salesforceFields",
+        notes: [...sourceNote, ...uncertainNote],
         salesforceFields: fields.map(({ value: _value, ...field }) => field),
         fields: Object.fromEntries(
           fields.flatMap((field, index) => [
@@ -552,7 +664,6 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
     if (!(await source(payload.noteId, binding))) return failed("source_unavailable", true);
     const saved = exportStore.get(payload);
     const kind = action === "export_conversation" ? "activity" : "fields";
-    if (saved?.[`${kind}_state`] === "unknown") return failed("uncertain_operation", true);
     if ((saved?.version ?? 0) !== payload.version) return failed("duplicate_operation", true);
     const selected = await resolveRecord(payload, binding);
     if (!selected.ok) return failed(selected.errorCode, true);
@@ -570,7 +681,9 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
       path = `/sobjects/Task${payload.activityId ? `/${payload.activityId}` : ""}`;
       if (payload.activityId) {
         const task = await readTask(binding, payload.activityId, payload);
-        if (!task.ok) return failed(task.errorCode, true);
+        // Gone since the review: a fresh review offers a new Task.
+        if (!task.ok)
+          return failed(TASK_GONE.has(task.errorCode) ? "stale_record" : task.errorCode, true);
         if (
           !sameSnapshot(payload.before, task.data, [
             "Subject",
@@ -585,11 +698,7 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
         headers = conditionFor(task.data);
       } else body[config.relationship] = payload.recordId;
     } else {
-      if (
-        payload.objectType !== "Opportunity" ||
-        saved?.activity_state !== "succeeded" ||
-        !saved.activity_id
-      )
+      if (payload.objectType !== "Opportunity" || !saved?.activity_id)
         return failed("export_required", true);
       const allowed = new Map(
         customTextFields(selected.metadata).map((field) => [field.name, field])
@@ -658,11 +767,14 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
     }
     const state = result.ok ? "succeeded" : result.outcome === "unknown" ? "unknown" : "failed";
     try {
-      if (!exportStore.finish(payload, kind, operationId, state, activityId))
+      const writtenHash =
+        kind === "activity" && result.ok ? activityHash(body.Subject, body.Description) : null;
+      if (!exportStore.finish(payload, kind, operationId, state, activityId, writtenHash))
         return { state: "unknown", errorCode: "storage_unavailable", checkUrl };
     } catch {
       return { state: "unknown", errorCode: "storage_unavailable", checkUrl };
     }
+    if (result.ok && kind === "activity") void recordStoredText(payload, binding, activityId);
     if (result.ok)
       return {
         state: "sent",
@@ -672,13 +784,32 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
           kind === "activity" ? activityId : payload.recordId
         ),
       };
-    if (state === "unknown") return { state: "unknown", errorCode: result.errorCode, checkUrl };
-    return failed(
-      result.errorCode === "PRECONDITION_FAILED" || result.errorCode === "http_412"
-        ? "stale_record"
-        : result.errorCode,
-      true
-    );
+    if (state === "unknown")
+      return { state: "unknown", errorCode: copyCode(result.errorCode), checkUrl };
+    // The Task went away between the last check and the write.
+    if (kind === "activity" && payload.activityId && TASK_GONE.has(result.errorCode))
+      return failed("stale_record", true);
+    return failed(result.errorCode, true);
+  }
+  // A Flow or trigger can rewrite a saved Task's text. Hashing what Salesforce
+  // stored keeps that from reading as an edit made in Salesforce at the next
+  // export. Best effort: the hash of what was sent stays otherwise.
+  async function recordStoredText(payload, binding, activityId) {
+    try {
+      const stored = await request(
+        binding,
+        `/sobjects/Task/${activityId}?fields=Subject,Description`
+      );
+      if (stored.ok)
+        exportStore.recordActivityHash(
+          payload,
+          activityId,
+          payload.version + 1,
+          activityHash(stored.data?.Subject, stored.data?.Description)
+        );
+    } catch {
+      // The hash of the text sent stays.
+    }
   }
   async function guarded(run, committing = false) {
     try {
@@ -744,6 +875,8 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
       }),
     commit: (action, payload, edits = {}, { binding } = {}) =>
       guarded(() => commit(action, payload, edits, binding), true),
+    // A sandbox or My Domain typed in Settings (Reconnect reuses the saved one).
+    takesLoginDomain: true,
     authorize: (options) => auth.authorize(options),
     revoke: (credential, options) => auth.revoke(credential, options),
     loginKey: (credential) =>

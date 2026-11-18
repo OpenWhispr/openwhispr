@@ -1,5 +1,7 @@
 // Associations contain identifiers and outcomes only. CRM content and tokens
 // stay out of this table; a receipt never grants access to its source note.
+// activity_hash is a one-way hash of the text last written, so a re-export
+// can tell the Task was edited in Salesforce without keeping that text.
 function createSalesforceExports(databaseManager) {
   let initializedDatabase = null;
   function database() {
@@ -17,6 +19,7 @@ function createSalesforceExports(databaseManager) {
         object_type TEXT NOT NULL,
         record_id TEXT NOT NULL,
         activity_id TEXT,
+        activity_hash TEXT,
         activity_state TEXT NOT NULL DEFAULT 'idle',
         fields_state TEXT NOT NULL DEFAULT 'idle',
         operation_id TEXT,
@@ -24,6 +27,10 @@ function createSalesforceExports(databaseManager) {
         confirmed_at TEXT,
         PRIMARY KEY (account_id, organization_id, instance_url, note_id, object_type, record_id)
       )`);
+      // Tables made by preview builds of this feature predate the column.
+      const columns = db.prepare("PRAGMA table_info(salesforce_exports)").all();
+      if (!columns.some((column) => column.name === "activity_hash"))
+        db.exec("ALTER TABLE salesforce_exports ADD COLUMN activity_hash TEXT");
       // A process can stop after dispatch and before saving its receipt.
       // Only a new store's initialization reconciles, never an active read.
       db.exec(`UPDATE salesforce_exports SET
@@ -76,6 +83,8 @@ function createSalesforceExports(databaseManager) {
           limit
         );
     },
+    // An unknown outcome doesn't block a new write: the card approving it was
+    // prepared after that outcome (the version proves it) and said so.
     begin(key, kind, operationId, expectedVersion) {
       const db = database();
       const stateColumn = column(kind);
@@ -87,19 +96,19 @@ function createSalesforceExports(databaseManager) {
         db
           .prepare(
             `UPDATE salesforce_exports SET ${stateColumn} = 'committing', operation_id = ?, version = version + 1
-        WHERE ${where} AND version = ? AND ${stateColumn} != 'unknown'
+        WHERE ${where} AND version = ?
           AND activity_state != 'committing' AND fields_state != 'committing'`
           )
           .run(operationId, ...values(key), expectedVersion).changes === 1
       );
     },
-    finish(key, kind, operationId, state, activityId = null) {
+    finish(key, kind, operationId, state, activityId = null, activityHash = null) {
       if (!["succeeded", "failed", "unknown"].includes(state))
         throw new Error("Invalid Salesforce outcome");
       const stateColumn = column(kind);
       const activityPatch =
         kind === "activity" && state === "succeeded"
-          ? ", activity_id = ?, confirmed_at = CURRENT_TIMESTAMP"
+          ? ", activity_id = ?, activity_hash = ?, confirmed_at = CURRENT_TIMESTAMP"
           : "";
       return (
         database()
@@ -107,8 +116,23 @@ function createSalesforceExports(databaseManager) {
             `UPDATE salesforce_exports SET ${stateColumn} = ?${activityPatch}
         WHERE ${where} AND operation_id = ? AND ${stateColumn} = 'committing'`
           )
-          .run(state, ...(activityPatch ? [activityId] : []), ...values(key), operationId)
-          .changes === 1
+          .run(
+            state,
+            ...(activityPatch ? [activityId, activityHash] : []),
+            ...values(key),
+            operationId
+          ).changes === 1
+      );
+    },
+    // Only while no later write has begun (each begin bumps the version).
+    recordActivityHash(key, activityId, version, activityHash) {
+      return (
+        database()
+          .prepare(
+            `UPDATE salesforce_exports SET activity_hash = ?
+        WHERE ${where} AND activity_id = ? AND version = ? AND activity_state = 'succeeded'`
+          )
+          .run(activityHash, ...values(key), activityId, version).changes === 1
       );
     },
   };

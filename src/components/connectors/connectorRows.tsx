@@ -30,6 +30,8 @@ export interface ConnectorRowSpec {
    * have typed), and it stops when the row goes away (the user left Settings).
    */
   connectInRow?: boolean;
+  /** Connect can sign in at another host (Salesforce's sandboxes and My Domains). */
+  loginDomain?: boolean;
 }
 
 export function accountLabelSummary(
@@ -109,6 +111,7 @@ export const CONNECTOR_ROWS: readonly ConnectorRowSpec[] = [
   {
     id: "salesforce",
     brandIcon: true,
+    loginDomain: true,
     icon: brandMark(salesforceMark, 20, 14, "h-[14px] w-5"),
     accountSummary: accountWorkspaceSummary,
   },

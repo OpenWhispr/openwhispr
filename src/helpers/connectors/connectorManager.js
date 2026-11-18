@@ -345,6 +345,8 @@ const CONNECT_ERROR_CODES = new Set([
   "email_not_verified",
   // Gmail: a Workspace admin blocked the app, or it's restricted to another org.
   "domain_policy",
+  // Salesforce: the sandbox or My Domain the user typed isn't a Salesforce sign-in host.
+  "invalid_login_domain",
   // GitHub: the device code ran out (15 minutes), or the App has Device Flow off.
   "code_expired",
   "device_flow_disabled",
@@ -504,7 +506,7 @@ function createConnectorManager({
     }
   }
 
-  async function connect(connectorId, policyState) {
+  async function connect(connectorId, policyState, options = {}) {
     const accountId = getAccountId();
     const refusal = actionRefusal(policyState, accountId);
     if (refusal) return { status: "unavailable", reason: refusal };
@@ -523,7 +525,12 @@ function createConnectorManager({
       let credential;
       let replaced = null;
       try {
-        credential = await connector.authorize({ signal: controller.signal });
+        // A sign-in domain reaches only a connector that asks for one.
+        const loginDomain = connector.takesLoginDomain ? options.loginDomain : undefined;
+        credential = await connector.authorize({
+          ...(loginDomain ? { loginDomain } : {}),
+          signal: controller.signal,
+        });
       } catch (error) {
         // Replaced by a newer Connect before the provider answered: nothing
         // was issued, so nothing is saved or revoked.

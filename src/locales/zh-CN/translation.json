@@ -4757,7 +4757,9 @@
       "salesforce_export_conversationName": "Salesforce活动",
       "salesforce_export_conversationStatus": "正在准备Salesforce活动…",
       "salesforce_update_fieldsName": "Salesforce字段更新",
-      "salesforce_update_fieldsStatus": "正在准备Salesforce字段更新…"
+      "salesforce_update_fieldsStatus": "正在准备Salesforce字段更新…",
+      "salesforce_present_briefingName": "简报结论",
+      "salesforce_present_briefingStatus": "正在选择简报依据…"
     },
     "turn": {
       "reasoning": "推理过程",
@@ -4795,7 +4797,7 @@
           "linear": "我可以替你查找和创建 Linear 问题。",
           "github": "我可以替你查找和创建 GitHub Issue。",
           "calendar": "我可以查看你的空闲时间并建议时间。",
-          "salesforce": "To read Salesforce records and save reviewed meeting notes."
+          "salesforce": "我可以读取 Salesforce 记录，并将审核过的会议笔记保存到其中。"
         }
       },
       "access": {
@@ -5126,14 +5128,15 @@
           "stale_record": "审核后Salesforce数据已更改，请刷新并重新审核。",
           "source_unavailable": "来源笔记不存在或无法访问。",
           "export_required": "请先将活动保存到此商机，再更新其字段。",
-          "uncertain_operation": "先前的写入尚未确认。重试前请检查Salesforce。",
-          "duplicate_operation": "先前的写入尚未确认。重试前请检查Salesforce。",
+          "duplicate_operation": "此导出在本次审核后已再次保存，或仍在保存中。未发送任何内容。请重新准备审核。",
           "invalid_field": "请选择最多三个可编辑的商机自定义文本字段。",
           "storage_unavailable": "本地导出历史不可用，尚未开始新的写入。",
           "task_status_unavailable": "Salesforce没有可用的已完成任务状态。请联系Salesforce管理员。",
-          "not_found": "Salesforce 无法接受当前内容，未发送任何内容。",
+          "not_found": "此 Salesforce 记录已不存在，或您无权访问，未发送任何内容。",
           "invalid_reference": "Salesforce 无法接受当前内容，未发送任何内容。",
-          "no_fields_selected": "请至少选择一个字段，或取消。"
+          "no_fields_selected": "请至少选择一个字段，或取消。",
+          "record_locked": "此 Salesforce 记录已被锁定（例如被审批流程锁定），未发送任何内容。",
+          "validation_failed": "Salesforce 的验证规则、重复规则或必填字段阻止了此操作。请在 Salesforce 中检查该记录。未发送任何内容。"
         }
       },
       "email": {
@@ -5219,7 +5222,6 @@
         "before": "当前值",
         "after": "建议替换值",
         "empty": "空",
-        "value": "{{field}}的建议值",
         "limit": "{{count}} / {{max}}个字符",
         "invalidPreview": "字段预览不完整，请重新申请审核。",
         "noneSelected": "请至少选择一个字段，或取消。",
@@ -5231,7 +5233,8 @@
         "salesforceFields": {
           "sent": "已保存{{destination}}的字段。",
           "unknown": "无法确认更改。重试前请在Salesforce中检查{{destination}}。"
-        }
+        },
+        "savedLabel": "已保存"
       }
     },
     "policyOff": "您的组织已关闭连接器。",
@@ -5539,14 +5542,15 @@
           "stale_record": "审核后Salesforce数据已更改，请刷新并重新审核。",
           "source_unavailable": "来源笔记不存在或无法访问。",
           "export_required": "请先将活动保存到此商机，再更新其字段。",
-          "uncertain_operation": "先前的写入尚未确认。重试前请检查Salesforce。",
-          "duplicate_operation": "先前的写入尚未确认。重试前请检查Salesforce。",
+          "duplicate_operation": "此导出在本次审核后已再次保存，或仍在保存中。未发送任何内容。",
           "invalid_field": "请选择最多三个可编辑的商机自定义文本字段。",
           "storage_unavailable": "本地导出历史不可用，尚未开始新的写入。",
           "task_status_unavailable": "Salesforce没有可用的已完成任务状态。请联系Salesforce管理员。",
-          "not_found": "Salesforce 无法接受。",
+          "not_found": "在 Salesforce 中未找到。",
           "invalid_reference": "Salesforce 无法接受。",
-          "no_fields_selected": "请至少选择一个字段，或取消。"
+          "no_fields_selected": "请至少选择一个字段，或取消。",
+          "record_locked": "Salesforce 记录已被锁定。",
+          "validation_failed": "被 Salesforce 规则或必填字段阻止。"
         }
       },
       "unknownSent": {
@@ -5582,7 +5586,8 @@
         "signed_out": "请登录 OpenWhispr 以连接 Salesforce。",
         "policy_blocked": "您的组织已关闭连接器。",
         "policy_unavailable": "无法检查您的组织设置，请重试。",
-        "permission_not_granted": "由于未授予全部权限，Salesforce 未连接。请重新连接并允许所有权限。"
+        "permission_not_granted": "由于未授予全部权限，Salesforce 未连接。请重新连接并允许所有权限。",
+        "invalid_login_domain": "请输入 test.salesforce.com 或贵公司的 My Domain，例如 yourcompany.my.salesforce.com。"
       },
       "browser": {
         "connectedTitle": "Salesforce 已连接",
@@ -5591,7 +5596,84 @@
         "failedBody": "请返回 OpenWhispr 重试。"
       },
       "notes": {
-        "updateExisting": "更新先前保存的活动，不会创建另一个任务。"
+        "updateExisting": "更新先前保存的活动，不会创建另一个任务。",
+        "earlierAttemptUncertain": "之前的尝试可能已将此内容保存到 Salesforce。再次发送前，请先在 Salesforce 中检查该记录。",
+        "replacesMissing": "之前保存的活动已不在 Salesforce 的此记录上，或你已无法查看它，因此将创建一个新活动。",
+        "editedInSalesforce": "OpenWhispr 保存此活动后，有人在 Salesforce 中编辑过它。发送后将替换这些编辑。",
+        "sourceNote": "来自笔记“{{title}}”。",
+        "sourceNoteUntitled": "来自一篇无标题笔记。"
+      },
+      "briefing": {
+        "untitledRecord": "所选 Salesforce 记录",
+        "retrieved": "获取时间：{{time}}",
+        "crmFacts": "当前 CRM 信息",
+        "fields": {
+          "Name": "名称",
+          "PersonName": "姓名",
+          "StageName": "阶段",
+          "CloseDate": "结束日期",
+          "Amount": "金额",
+          "CurrencyIsoCode": "币种",
+          "NextStep": "下一步",
+          "OwnerId": "所有人",
+          "AccountId": "客户",
+          "Type": "类型",
+          "Industry": "行业",
+          "Website": "网站",
+          "Phone": "电话",
+          "FirstName": "名",
+          "LastName": "姓",
+          "Email": "电子邮件",
+          "Title": "职务",
+          "Company": "公司",
+          "Status": "状态"
+        },
+        "notReturned": "未返回",
+        "notRecorded": "未记录",
+        "linkedNameUnavailable": "已关联；名称不可用",
+        "gaps": "缺口与客户身份",
+        "identityNotVerified": "导出关联并不能验证客户身份。这些笔记关联到用户所选的记录；客户名称和客户关系尚未经过独立核对。",
+        "missingFieldsNote": "缺失或未返回的 CRM 字段并不能证明预算已获批准、存在承诺或与会议笔记一致。",
+        "unavailableNotes": "当前工作区中不可用的关联笔记：{{count}}。",
+        "partial": "覆盖不完整：笔记数量、来源文本、转录或 CRM 结果受到限制。这些摘录中没有的内容，并不代表会议中没有提到。",
+        "crmOnly": "未获取到可访问的会议内容。本简报仅基于 CRM。",
+        "notPrepared": "尚未整理会议结论。可用的来源笔记列在下方；未从会议中推断任何结论。",
+        "findings": "会议结论",
+        "findingsExplainer": "下方原文摘录了来源内容。状态标签是助手的分类；“已确认”表示笔记中有此记录，并非经过独立核实。负责人和截止时间仅以各摘录中写明的为准。",
+        "categories": {
+          "takeaway": "要点",
+          "decision": "决定",
+          "commitment": "承诺",
+          "proposal": "提议",
+          "risk": "风险",
+          "question": "待解决问题"
+        },
+        "status": {
+          "confirmed": "已确认",
+          "proposed": "提议中",
+          "unknown": "不明确"
+        },
+        "conflict": "可能存在矛盾 — 未解决",
+        "crmConflictEntry": "Salesforce {{label}}：{{value}}",
+        "sources": "来源",
+        "noteCreated": "笔记创建于：{{time}}。",
+        "lastEdited": "最后编辑：{{time}}。",
+        "addedForBriefing": "为本简报添加。",
+        "exported": "导出于：{{time}}。",
+        "savedActivity": "已保存的 Salesforce 活动",
+        "sourcesExplainer": "创建时间不是会议日期。已保存的 Salesforce 活动包含导出的摘要；笔记在导出后可能已更改。",
+        "sections": {
+          "personalNotes": "个人笔记",
+          "summary": "已保存的 AI 摘要",
+          "transcript": "转录第 {{start}}–{{end}} 个字符"
+        },
+        "prepared": "已准备 Salesforce 简报"
+      },
+      "loginDomain": {
+        "toggle": "使用沙盒或公司域",
+        "label": "Salesforce 登录域",
+        "placeholder": "test.salesforce.com 或 yourcompany.my.salesforce.com",
+        "hint": "留空则登录生产组织。"
       }
     }
   },

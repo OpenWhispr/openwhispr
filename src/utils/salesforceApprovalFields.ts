@@ -32,6 +32,20 @@ export function salesforceFieldProblem(
   return selected ? null : "noneSelected";
 }
 
+/** What Copy takes from a field card: each included field's label and new value. */
+export function salesforceFieldsCopyText(
+  definitions: SalesforcePreviewField[] | undefined,
+  fields: Record<string, string | string[]> | undefined
+): string {
+  return (definitions ?? [])
+    .filter((_definition, index) => fields?.[`include${index}`] === "yes")
+    .map((definition) => {
+      const value = fields?.[definition.key];
+      return `${definition.label}: ${typeof value === "string" ? value : ""}`;
+    })
+    .join("\n\n");
+}
+
 export function salesforceOutcomeKey(
   verbKey: string | undefined,
   outcome: "sent" | "unknown"

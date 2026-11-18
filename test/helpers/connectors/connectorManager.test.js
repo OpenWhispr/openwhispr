@@ -1258,6 +1258,26 @@ test("connect saves under the account that started it, cancels old approvals and
   assert.equal(announced.length, 1);
 });
 
+test("a sign-in domain reaches only a connector that takes one", async () => {
+  for (const takesLoginDomain of [false, true]) {
+    const seen = [];
+    const credentials = memoryCredentials(null, { connectorId: "fake" });
+    const { manager } = await setup(
+      connectable({
+        takesLoginDomain,
+        async authorize(options) {
+          seen.push(Object.keys(options).sort());
+          return { accessToken: "new" };
+        },
+      }),
+      undefined,
+      { credentials }
+    );
+    await manager.connect("fake", "allowed", { loginDomain: "test.salesforce.com" });
+    assert.deepEqual(seen, [takesLoginDomain ? ["loginDomain", "signal"] : ["signal"]]);
+  }
+});
+
 test("connecting another account revokes the login it replaced; the same account keeps it", async () => {
   for (const [previous, revokesOld] of [
     [{ accessToken: "old", user: "someone-else" }, true],

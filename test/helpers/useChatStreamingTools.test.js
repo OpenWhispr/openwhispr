@@ -101,7 +101,7 @@ const CONNECTOR_SURFACE = { allowConnectors: true };
 
 for (const provider of ["Cloud", "BYOK"]) {
   for (const presentFindings of [false, true]) {
-    test(`${provider} saves the rendered Salesforce briefing even when the model ${presentFindings ? "rewrites it" : "skips analysis"}`, async (t) => {
+    test(`${provider} keeps the model's reply and saves the rendered Salesforce briefing after it when the model ${presentFindings ? "rewrites it" : "skips analysis"}`, async (t) => {
       const saved = [];
       const { captured, reasoningService, getMessages } = await renderChatStreaming(
         t,
@@ -146,6 +146,7 @@ for (const provider of ["Cloud", "BYOK"]) {
       );
       async function* stream(execute) {
         const args = { objectType: "Opportunity", recordId: "006000000000001AAA" };
+        yield { type: "content", text: "Pulling up the record." };
         yield {
           type: "tool_calls",
           calls: [
@@ -210,11 +211,33 @@ for (const provider of ["Cloud", "BYOK"]) {
             })
         );
       }
-      await captured.sendToAI("Brief me on the selected Opportunity", []);
+      const completed = [];
+      await captured.sendToAI("Brief me on the selected Opportunity", [], {
+        onComplete: (result) => completed.push(result),
+      });
+      // Only read tools ran, but a briefing is never typed into another app.
+      assert.equal(completed[0].onlyRead, false);
       const reply = getMessages().at(-1);
       assert.match(reply.content, /Amount: not recorded/);
-      assert.match(reply.content, /2026-11-17T12:09:35\.016Z/);
-      assert.doesNotMatch(reply.content, /UNSUPPORTED|40 reps|RAW_NOTE_SENTINEL/);
+      // The day the record was read, in this machine's zone.
+      const retrievedDay = new Date("2026-11-17T12:09:35.016Z").toLocaleDateString("en", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+      assert.ok(reply.content.includes(`Retrieved: ${retrievedDay}`));
+      // The model's own words come first, whole; a rule sets the code-rendered
+      // briefing apart, so a card placed in those words never lands inside it.
+      const briefingStart = reply.content.indexOf("**Test 2**");
+      assert.ok(briefingStart > 0);
+      assert.match(
+        reply.content.slice(0, briefingStart),
+        /^Pulling up the record\.[\s\S]*UNSUPPORTED: 40 reps approved for the pilot\.\n\n---\n\n$/
+      );
+      assert.doesNotMatch(reply.content.slice(briefingStart), /UNSUPPORTED|40 reps/);
+      assert.doesNotMatch(reply.content, /RAW_NOTE_SENTINEL/);
+      assert.ok(reply.toolCalls.every((call) => call.textOffset <= briefingStart));
+      assert.equal(reply.toolCalls[0].textOffset, "Pulling up the record.".length);
       assert.match(
         reply.content,
         presentFindings ? /Proposed.*8 reps for two weeks/s : /Meeting findings were not prepared/

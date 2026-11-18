@@ -951,14 +951,15 @@
           "stale_record": "تغيرت بيانات Salesforce منذ هذه المراجعة. حدّثها وراجعها مجددًا.",
           "source_unavailable": "الملاحظة المصدر مفقودة أو يتعذر الوصول إليها.",
           "export_required": "احفظ النشاط في هذه الفرصة قبل تحديث حقولها.",
-          "uncertain_operation": "لم يتم تأكيد عملية كتابة سابقة. تحقق من Salesforce قبل المحاولة مجددًا.",
-          "duplicate_operation": "لم يتم تأكيد عملية كتابة سابقة. تحقق من Salesforce قبل المحاولة مجددًا.",
+          "duplicate_operation": "حُفظ هذا التصدير مجددًا بعد هذه المراجعة، أو ما زال الحفظ جاريًا. لم يُرسل شيء. جهّز مراجعة جديدة.",
           "invalid_field": "اختر ما يصل إلى ثلاثة حقول نصية مخصصة وقابلة للتعديل للفرصة.",
           "storage_unavailable": "سجل التصدير المحلي غير متاح. لم تبدأ أي عملية كتابة جديدة.",
           "task_status_unavailable": "لا توجد حالة متاحة لمهمة مكتملة في Salesforce. تواصل مع مسؤول Salesforce.",
-          "not_found": "لم يقبل Salesforce هذا بصيغته الحالية. لم يُرسل شيء.",
+          "not_found": "لم يعد سجل Salesforce هذا موجودًا، أو لا يمكنك الوصول إليه. لم يُرسل شيء.",
           "invalid_reference": "لم يقبل Salesforce هذا بصيغته الحالية. لم يُرسل شيء.",
-          "no_fields_selected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية."
+          "no_fields_selected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية.",
+          "record_locked": "سجل Salesforce هذا مقفل، مثلًا بسبب عملية موافقة. لم يُرسل شيء.",
+          "validation_failed": "منعت ذلك قاعدة تحقق أو قاعدة تكرار أو حقل مطلوب في Salesforce. تحقق من السجل في Salesforce. لم يُرسل شيء."
         }
       },
       "email": {
@@ -1044,7 +1045,6 @@
         "before": "القيمة الحالية",
         "after": "البديل المقترح",
         "empty": "فارغ",
-        "value": "القيمة المقترحة للحقل {{field}}",
         "limit": "{{count}} / {{max}} حرف",
         "invalidPreview": "معاينة الحقول غير مكتملة. اطلب مراجعة جديدة.",
         "noneSelected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية.",
@@ -1056,7 +1056,8 @@
         "salesforceFields": {
           "sent": "تم حفظ الحقول في {{destination}}.",
           "unknown": "تعذر تأكيد التغييرات. تحقق من {{destination}} في Salesforce قبل المحاولة مجددًا."
-        }
+        },
+        "savedLabel": "تم الحفظ"
       }
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
@@ -1364,14 +1365,15 @@
           "stale_record": "تغيرت بيانات Salesforce منذ هذه المراجعة. حدّثها وراجعها مجددًا.",
           "source_unavailable": "الملاحظة المصدر مفقودة أو يتعذر الوصول إليها.",
           "export_required": "احفظ النشاط في هذه الفرصة قبل تحديث حقولها.",
-          "uncertain_operation": "لم يتم تأكيد عملية كتابة سابقة. تحقق من Salesforce قبل المحاولة مجددًا.",
-          "duplicate_operation": "لم يتم تأكيد عملية كتابة سابقة. تحقق من Salesforce قبل المحاولة مجددًا.",
+          "duplicate_operation": "حُفظ هذا التصدير مجددًا بعد هذه المراجعة، أو ما زال الحفظ جاريًا. لم يُرسل شيء.",
           "invalid_field": "اختر ما يصل إلى ثلاثة حقول نصية مخصصة وقابلة للتعديل للفرصة.",
           "storage_unavailable": "سجل التصدير المحلي غير متاح. لم تبدأ أي عملية كتابة جديدة.",
           "task_status_unavailable": "لا توجد حالة متاحة لمهمة مكتملة في Salesforce. تواصل مع مسؤول Salesforce.",
-          "not_found": "لم يقبله Salesforce.",
+          "not_found": "غير موجود في Salesforce.",
           "invalid_reference": "لم يقبله Salesforce.",
-          "no_fields_selected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية."
+          "no_fields_selected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية.",
+          "record_locked": "سجل Salesforce مقفل.",
+          "validation_failed": "منعته قاعدة أو حقل مطلوب في Salesforce."
         }
       },
       "unknownSent": {
@@ -1407,7 +1409,8 @@
         "signed_out": "سجّل الدخول إلى OpenWhispr لربط Salesforce.",
         "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
         "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
-        "permission_not_granted": "لم يتم ربط Salesforce لأن بعض الأذونات لم تُمنح. أعد الربط واسمح بها جميعًا."
+        "permission_not_granted": "لم يتم ربط Salesforce لأن بعض الأذونات لم تُمنح. أعد الربط واسمح بها جميعًا.",
+        "invalid_login_domain": "أدخل test.salesforce.com أو My Domain الخاص بشركتك، مثل yourcompany.my.salesforce.com."
       },
       "browser": {
         "connectedTitle": "تم توصيل Salesforce",
@@ -1416,7 +1419,84 @@
         "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
       },
       "notes": {
-        "updateExisting": "تحديث النشاط المحفوظ سابقًا؛ لن يتم إنشاء مهمة أخرى."
+        "updateExisting": "تحديث النشاط المحفوظ سابقًا؛ لن يتم إنشاء مهمة أخرى.",
+        "earlierAttemptUncertain": "ربما حفظت محاولة سابقة هذا في Salesforce بالفعل. تحقق من السجل هناك قبل الإرسال مجددًا.",
+        "replacesMissing": "لم يعد النشاط المحفوظ سابقًا على هذا السجل في Salesforce، أو لم تعد تستطيع رؤيته، لذا سيُنشأ نشاط جديد.",
+        "editedInSalesforce": "عُدّل هذا النشاط في Salesforce بعد أن حفظه OpenWhispr. سيؤدي الإرسال إلى استبدال هذه التعديلات.",
+        "sourceNote": "من الملاحظة «{{title}}».",
+        "sourceNoteUntitled": "من ملاحظة بلا عنوان."
+      },
+      "briefing": {
+        "untitledRecord": "سجل Salesforce المحدد",
+        "retrieved": "وقت الجلب: {{time}}",
+        "crmFacts": "بيانات CRM الحالية",
+        "fields": {
+          "Name": "الاسم",
+          "PersonName": "الاسم",
+          "StageName": "المرحلة",
+          "CloseDate": "تاريخ الإغلاق",
+          "Amount": "المبلغ",
+          "CurrencyIsoCode": "العملة",
+          "NextStep": "الخطوة التالية",
+          "OwnerId": "المالك",
+          "AccountId": "الحساب",
+          "Type": "النوع",
+          "Industry": "القطاع",
+          "Website": "موقع الويب",
+          "Phone": "الهاتف",
+          "FirstName": "الاسم الأول",
+          "LastName": "اسم العائلة",
+          "Email": "البريد الإلكتروني",
+          "Title": "المسمى الوظيفي",
+          "Company": "الشركة",
+          "Status": "الحالة"
+        },
+        "notReturned": "لم يُرجَع",
+        "notRecorded": "غير مسجّل",
+        "linkedNameUnavailable": "مرتبط؛ الاسم غير متاح",
+        "gaps": "الثغرات وهوية العميل",
+        "identityNotVerified": "لا يثبت ارتباط التصدير هوية العميل. رُبطت الملاحظات بالسجل الذي اختاره المستخدم؛ ولم تُطابَق أسماء العملاء وعلاقات الحسابات بشكل مستقل.",
+        "missingFieldsNote": "حقول CRM الفارغة أو التي لم تُرجَع لا تثبت الموافقة على الميزانية أو الالتزامات أو التوافق مع ملاحظات الاجتماع.",
+        "unavailableNotes": "الملاحظات المرتبطة غير المتاحة في مساحة العمل الحالية: {{count}}.",
+        "partial": "التغطية جزئية: تم تقييد عدد الملاحظات أو النص المصدر أو النص المفرغ أو نتائج CRM. غياب أمر ما عن هذه المقتطفات لا يعني غيابه عن الاجتماعات.",
+        "crmOnly": "لم يُجلب أي محتوى اجتماعات يمكن الوصول إليه. هذا الملخص مبني على CRM فقط.",
+        "notPrepared": "لم تُعَدّ نتائج الاجتماعات. الملاحظات المصدر المتاحة مدرجة أدناه؛ ولم تُستنتج أي خلاصات من الاجتماعات.",
+        "findings": "نتائج الاجتماعات",
+        "findingsExplainer": "المقتطفات المصدر منقولة أدناه. تصنيفات الحالة من تقدير المساعد؛ وتعني «مؤكد» أنه مذكور في الملاحظة، لا أنه تم التحقق منه بشكل مستقل. المسؤولون والمواعيد النهائية هي فقط ما ورد في كل مقتطف.",
+        "categories": {
+          "takeaway": "أبرز النقاط",
+          "decision": "القرارات",
+          "commitment": "الالتزامات",
+          "proposal": "المقترحات",
+          "risk": "المخاطر",
+          "question": "أسئلة مفتوحة"
+        },
+        "status": {
+          "confirmed": "مؤكد",
+          "proposed": "مقترح",
+          "unknown": "غير واضح"
+        },
+        "conflict": "تعارض محتمل — لم يُحسم",
+        "crmConflictEntry": "{{label}} في Salesforce: {{value}}",
+        "sources": "المصادر",
+        "noteCreated": "أُنشئت الملاحظة: {{time}}.",
+        "lastEdited": "آخر تعديل: {{time}}.",
+        "addedForBriefing": "أُضيفت لهذا الملخص.",
+        "exported": "صُدّرت: {{time}}.",
+        "savedActivity": "نشاط Salesforce المحفوظ",
+        "sourcesExplainer": "أوقات الإنشاء ليست مواعيد الاجتماعات. تحتوي أنشطة Salesforce المحفوظة على الملخص المُصدَّر؛ وقد تكون الملاحظات تغيّرت منذ التصدير.",
+        "sections": {
+          "personalNotes": "الملاحظات الشخصية",
+          "summary": "ملخص الذكاء الاصطناعي المحفوظ",
+          "transcript": "النص المفرغ، الأحرف {{start}}–{{end}}"
+        },
+        "prepared": "تم إعداد ملخص Salesforce"
+      },
+      "loginDomain": {
+        "toggle": "استخدام بيئة sandbox أو نطاق الشركة",
+        "label": "نطاق تسجيل الدخول إلى Salesforce",
+        "placeholder": "test.salesforce.com أو yourcompany.my.salesforce.com",
+        "hint": "اتركه فارغًا لتسجيل الدخول إلى مؤسسة الإنتاج."
       }
     }
   },
@@ -2817,7 +2897,9 @@
       "salesforce_export_conversationName": "نشاط Salesforce",
       "salesforce_export_conversationStatus": "جارٍ إعداد نشاط Salesforce…",
       "salesforce_update_fieldsName": "تحديثات حقول Salesforce",
-      "salesforce_update_fieldsStatus": "جارٍ إعداد تحديثات حقول Salesforce…"
+      "salesforce_update_fieldsStatus": "جارٍ إعداد تحديثات حقول Salesforce…",
+      "salesforce_present_briefingName": "نتائج الملخص",
+      "salesforce_present_briefingStatus": "جارٍ اختيار أدلة الملخص…"
     },
     "turn": {
       "reasoning": "الاستدلال",
@@ -2855,7 +2937,7 @@
           "linear": "يمكنني البحث عن مشكلات Linear وإنشاؤها نيابةً عنك.",
           "github": "يمكنني البحث عن مشكلات GitHub وإنشاؤها نيابةً عنك.",
           "calendar": "يمكنني التحقق من أوقات فراغك واقتراح مواعيد.",
-          "salesforce": "To read Salesforce records and save reviewed meeting notes."
+          "salesforce": "يمكنني قراءة سجلات Salesforce وحفظ ملاحظات الاجتماعات المراجَعة فيها."
         }
       },
       "access": {

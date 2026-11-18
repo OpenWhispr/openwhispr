@@ -5117,7 +5117,9 @@
       "salesforce_export_conversationName": "Salesforce activity",
       "salesforce_export_conversationStatus": "Preparing Salesforce activity…",
       "salesforce_update_fieldsName": "Salesforce field updates",
-      "salesforce_update_fieldsStatus": "Preparing Salesforce field updates…"
+      "salesforce_update_fieldsStatus": "Preparing Salesforce field updates…",
+      "salesforce_present_briefingName": "Briefing findings",
+      "salesforce_present_briefingStatus": "Selecting briefing evidence…"
     },
     "turn": {
       "reasoning": "Reasoning",
@@ -5155,7 +5157,7 @@
           "linear": "I can find and file Linear issues for you.",
           "github": "I can find and file GitHub issues for you.",
           "calendar": "I can check your availability and suggest times.",
-          "salesforce": "To read Salesforce records and save reviewed meeting notes."
+          "salesforce": "I can read Salesforce records and save reviewed meeting notes to them."
         }
       },
       "access": {
@@ -5486,14 +5488,15 @@
           "stale_record": "Salesforce changed since this review. Refresh and review again.",
           "source_unavailable": "The source note is missing or inaccessible.",
           "export_required": "Save the activity to this Opportunity before updating its fields.",
-          "uncertain_operation": "A previous write is unconfirmed. Check Salesforce before trying again.",
-          "duplicate_operation": "A previous write is unconfirmed. Check Salesforce before trying again.",
+          "duplicate_operation": "This export was saved again since this review, or a save is still in progress. Nothing was sent. Prepare a new review.",
           "invalid_field": "Choose up to three writable custom Opportunity text fields.",
           "storage_unavailable": "Local export history is unavailable. No new write was started.",
           "task_status_unavailable": "Salesforce has no available completed Task status. Ask your Salesforce administrator.",
-          "not_found": "Salesforce couldn't accept this as written. Nothing was sent.",
+          "not_found": "This Salesforce record no longer exists, or you can't access it. Nothing was sent.",
           "invalid_reference": "Salesforce couldn't accept this as written. Nothing was sent.",
-          "no_fields_selected": "Select at least one field, or cancel."
+          "no_fields_selected": "Select at least one field, or cancel.",
+          "record_locked": "This Salesforce record is locked, for example by an approval process. Nothing was sent.",
+          "validation_failed": "A Salesforce validation rule, duplicate rule or required field blocked this. Check the record in Salesforce. Nothing was sent."
         }
       },
       "email": {
@@ -5579,7 +5582,6 @@
         "before": "Current value",
         "after": "Proposed replacement",
         "empty": "Empty",
-        "value": "Proposed value for {{field}}",
         "limit": "{{count}} / {{max}} characters",
         "invalidPreview": "This field preview is incomplete. Request a new review.",
         "noneSelected": "Select at least one field, or cancel.",
@@ -5591,7 +5593,8 @@
         "salesforceFields": {
           "sent": "Fields saved on {{destination}}.",
           "unknown": "Couldn't confirm the changes. Check {{destination}} in Salesforce before trying again."
-        }
+        },
+        "savedLabel": "Saved"
       }
     },
     "policyOff": "Connectors are turned off by your organization.",
@@ -5899,14 +5902,15 @@
           "stale_record": "Salesforce changed since this review. Refresh and review again.",
           "source_unavailable": "The source note is missing or inaccessible.",
           "export_required": "Save the activity to this Opportunity before updating its fields.",
-          "uncertain_operation": "A previous write is unconfirmed. Check Salesforce before trying again.",
-          "duplicate_operation": "A previous write is unconfirmed. Check Salesforce before trying again.",
+          "duplicate_operation": "This export was saved again since this review, or a save is still in progress. Nothing was sent.",
           "invalid_field": "Choose up to three writable custom Opportunity text fields.",
           "storage_unavailable": "Local export history is unavailable. No new write was started.",
           "task_status_unavailable": "Salesforce has no available completed Task status. Ask your Salesforce administrator.",
-          "not_found": "Salesforce couldn't accept it.",
+          "not_found": "Not found in Salesforce.",
           "invalid_reference": "Salesforce couldn't accept it.",
-          "no_fields_selected": "Select at least one field, or cancel."
+          "no_fields_selected": "Select at least one field, or cancel.",
+          "record_locked": "The Salesforce record is locked.",
+          "validation_failed": "Blocked by a Salesforce rule or required field."
         }
       },
       "unknownSent": {
@@ -5942,7 +5946,8 @@
         "signed_out": "Sign in to OpenWhispr to connect Salesforce.",
         "policy_blocked": "Connectors are turned off by your organization.",
         "policy_unavailable": "Couldn't check your organization's settings. Try again.",
-        "permission_not_granted": "Salesforce wasn't connected because not every permission was granted. Connect again and allow all of them."
+        "permission_not_granted": "Salesforce wasn't connected because not every permission was granted. Connect again and allow all of them.",
+        "invalid_login_domain": "Enter test.salesforce.com or your company's My Domain, like yourcompany.my.salesforce.com."
       },
       "browser": {
         "connectedTitle": "Salesforce is connected",
@@ -5951,7 +5956,84 @@
         "failedBody": "Return to OpenWhispr to try again."
       },
       "notes": {
-        "updateExisting": "Update the previously saved activity; this will not create another Task."
+        "updateExisting": "Update the previously saved activity; this will not create another Task.",
+        "earlierAttemptUncertain": "An earlier attempt may already have saved this to Salesforce. Check the record there before sending again.",
+        "replacesMissing": "The activity saved earlier is no longer on this record in Salesforce, or you can no longer see it, so a new one will be created.",
+        "editedInSalesforce": "This activity was edited in Salesforce after OpenWhispr saved it. Sending replaces those edits.",
+        "sourceNote": "From the note “{{title}}”.",
+        "sourceNoteUntitled": "From an untitled note."
+      },
+      "briefing": {
+        "untitledRecord": "Selected Salesforce record",
+        "retrieved": "Retrieved: {{time}}",
+        "crmFacts": "Current CRM facts",
+        "fields": {
+          "Name": "Name",
+          "PersonName": "Name",
+          "StageName": "Stage",
+          "CloseDate": "Close date",
+          "Amount": "Amount",
+          "CurrencyIsoCode": "Currency",
+          "NextStep": "Next step",
+          "OwnerId": "Owner",
+          "AccountId": "Account",
+          "Type": "Type",
+          "Industry": "Industry",
+          "Website": "Website",
+          "Phone": "Phone",
+          "FirstName": "First name",
+          "LastName": "Last name",
+          "Email": "Email",
+          "Title": "Title",
+          "Company": "Company",
+          "Status": "Status"
+        },
+        "notReturned": "not returned",
+        "notRecorded": "not recorded",
+        "linkedNameUnavailable": "linked; name unavailable",
+        "gaps": "Gaps and customer identity",
+        "identityNotVerified": "Customer identity is not verified by an export association. The notes were linked to the record selected by the user; customer names and account relationships have not been independently matched.",
+        "missingFieldsNote": "Missing or unreturned CRM fields do not establish budget approval, commitments, or agreement with meeting notes.",
+        "unavailableNotes": "Linked notes unavailable in the current workspace: {{count}}.",
+        "partial": "Coverage is partial: note count, source text, transcript or CRM results were limited. Absence from these excerpts does not establish absence from the meetings.",
+        "crmOnly": "No accessible meeting content was retrieved. This is a CRM-only briefing.",
+        "notPrepared": "Meeting findings were not prepared. Available source notes are listed below; no meeting conclusions have been inferred.",
+        "findings": "Meeting findings",
+        "findingsExplainer": "Source excerpts are reproduced below. Status labels are the assistant’s classification; confirmed means reported in the note, not independently verified. Owners and deadlines are only those stated in each excerpt.",
+        "categories": {
+          "takeaway": "Takeaways",
+          "decision": "Decisions",
+          "commitment": "Commitments",
+          "proposal": "Proposals",
+          "risk": "Risks",
+          "question": "Open questions"
+        },
+        "status": {
+          "confirmed": "Confirmed",
+          "proposed": "Proposed",
+          "unknown": "Unknown"
+        },
+        "conflict": "Potential conflict — unresolved",
+        "crmConflictEntry": "Salesforce {{label}}: {{value}}",
+        "sources": "Sources",
+        "noteCreated": "Note created: {{time}}.",
+        "lastEdited": "Last edited: {{time}}.",
+        "addedForBriefing": "Added for this briefing.",
+        "exported": "Exported: {{time}}.",
+        "savedActivity": "Saved Salesforce activity",
+        "sourcesExplainer": "Creation timestamps are not meeting dates. Saved Salesforce activities contain the exported summary; current notes may have changed since export.",
+        "sections": {
+          "personalNotes": "Personal notes",
+          "summary": "Saved AI summary",
+          "transcript": "Transcript characters {{start}}–{{end}}"
+        },
+        "prepared": "Prepared Salesforce briefing"
+      },
+      "loginDomain": {
+        "toggle": "Use a sandbox or company domain",
+        "label": "Salesforce sign-in domain",
+        "placeholder": "test.salesforce.com or yourcompany.my.salesforce.com",
+        "hint": "Leave empty to sign in to a production org."
       }
     }
   },

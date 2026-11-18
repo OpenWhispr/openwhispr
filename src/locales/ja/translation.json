@@ -4757,7 +4757,9 @@
       "salesforce_export_conversationName": "Salesforceの活動",
       "salesforce_export_conversationStatus": "Salesforceの活動を準備中…",
       "salesforce_update_fieldsName": "Salesforceの項目更新",
-      "salesforce_update_fieldsStatus": "Salesforceの項目更新を準備中…"
+      "salesforce_update_fieldsStatus": "Salesforceの項目更新を準備中…",
+      "salesforce_present_briefingName": "概要の要点",
+      "salesforce_present_briefingStatus": "概要の根拠を選んでいます…"
     },
     "turn": {
       "reasoning": "推論",
@@ -4795,7 +4797,7 @@
           "linear": "Linear の課題を検索・作成できます。",
           "github": "GitHub の Issue を検索・作成できます。",
           "calendar": "空き時間を確認して、候補の時間を提案できます。",
-          "salesforce": "To read Salesforce records and save reviewed meeting notes."
+          "salesforce": "Salesforce のレコードを読み取り、確認済みの会議メモを保存できます。"
         }
       },
       "access": {
@@ -5126,14 +5128,15 @@
           "stale_record": "確認後にSalesforceのデータが変更されました。更新して再確認してください。",
           "source_unavailable": "元のノートが見つからないか、アクセスできません。",
           "export_required": "項目を更新する前に、この商談に活動を保存してください。",
-          "uncertain_operation": "以前の書き込みが未確認です。再試行する前にSalesforceを確認してください。",
-          "duplicate_operation": "以前の書き込みが未確認です。再試行する前にSalesforceを確認してください。",
+          "duplicate_operation": "このエクスポートはこの確認の後に再度保存されたか、保存がまだ進行中です。何も送信されていません。確認をやり直してください。",
           "invalid_field": "編集可能な商談のカスタムテキスト項目を最大3つ選択してください。",
           "storage_unavailable": "ローカルのエクスポート履歴を利用できません。新しい書き込みは開始されていません。",
           "task_status_unavailable": "Salesforceに利用可能な完了済みタスクの状況がありません。Salesforce管理者にお問い合わせください。",
-          "not_found": "Salesforceはこの内容を受け付けませんでした。何も送信されていません。",
+          "not_found": "このSalesforceレコードは存在しないか、アクセスできません。何も送信されていません。",
           "invalid_reference": "Salesforceはこの内容を受け付けませんでした。何も送信されていません。",
-          "no_fields_selected": "項目を1つ以上選択するか、キャンセルしてください。"
+          "no_fields_selected": "項目を1つ以上選択するか、キャンセルしてください。",
+          "record_locked": "このSalesforceレコードは承認プロセスなどによってロックされています。何も送信されていません。",
+          "validation_failed": "Salesforceの入力規則、重複ルール、または必須項目によってブロックされました。Salesforceでレコードを確認してください。何も送信されていません。"
         }
       },
       "email": {
@@ -5219,7 +5222,6 @@
         "before": "現在の値",
         "after": "変更後の値",
         "empty": "空欄",
-        "value": "{{field}}の変更後の値",
         "limit": "{{count}} / {{max}}文字",
         "invalidPreview": "項目のプレビューが不完全です。再度確認を依頼してください。",
         "noneSelected": "項目を1つ以上選択するか、キャンセルしてください。",
@@ -5231,7 +5233,8 @@
         "salesforceFields": {
           "sent": "{{destination}}の項目を保存しました。",
           "unknown": "変更を確認できませんでした。再試行する前にSalesforceで{{destination}}を確認してください。"
-        }
+        },
+        "savedLabel": "保存済み"
       }
     },
     "policyOff": "組織によってコネクタが無効にされています。",
@@ -5539,14 +5542,15 @@
           "stale_record": "確認後にSalesforceのデータが変更されました。更新して再確認してください。",
           "source_unavailable": "元のノートが見つからないか、アクセスできません。",
           "export_required": "項目を更新する前に、この商談に活動を保存してください。",
-          "uncertain_operation": "以前の書き込みが未確認です。再試行する前にSalesforceを確認してください。",
-          "duplicate_operation": "以前の書き込みが未確認です。再試行する前にSalesforceを確認してください。",
+          "duplicate_operation": "このエクスポートはこの確認の後に再度保存されたか、保存がまだ進行中です。何も送信されていません。",
           "invalid_field": "編集可能な商談のカスタムテキスト項目を最大3つ選択してください。",
           "storage_unavailable": "ローカルのエクスポート履歴を利用できません。新しい書き込みは開始されていません。",
           "task_status_unavailable": "Salesforceに利用可能な完了済みタスクの状況がありません。Salesforce管理者にお問い合わせください。",
-          "not_found": "Salesforceが受け付けませんでした。",
+          "not_found": "Salesforceで見つかりません。",
           "invalid_reference": "Salesforceが受け付けませんでした。",
-          "no_fields_selected": "項目を1つ以上選択するか、キャンセルしてください。"
+          "no_fields_selected": "項目を1つ以上選択するか、キャンセルしてください。",
+          "record_locked": "Salesforceレコードはロックされています。",
+          "validation_failed": "Salesforceのルールまたは必須項目でブロックされました。"
         }
       },
       "unknownSent": {
@@ -5562,7 +5566,7 @@
     "locked": "有料プランに含まれます",
     "salesforce": {
       "title": "Salesforce",
-      "description": "確認済みの会話をエクスポートし、選択した顧客の概要を作成します。 ノートの関連付けはこのデバイスにのみ保存されます。",
+      "description": "確認済みの会話をエクスポートし、選択した顧客の概要を作成します。ノートの関連付けはこのデバイスにのみ保存されます。",
       "connect": "接続",
       "reconnect": "再接続",
       "disconnect": "接続を解除",
@@ -5582,7 +5586,8 @@
         "signed_out": "Salesforceを接続するにはOpenWhisprにサインインしてください。",
         "policy_blocked": "組織によってコネクタが無効にされています。",
         "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
-        "permission_not_granted": "すべての権限が許可されなかったため、Salesforceは接続されませんでした。もう一度接続し、すべて許可してください。"
+        "permission_not_granted": "すべての権限が許可されなかったため、Salesforceは接続されませんでした。もう一度接続し、すべて許可してください。",
+        "invalid_login_domain": "test.salesforce.com、または yourcompany.my.salesforce.com のような会社の My Domain を入力してください。"
       },
       "browser": {
         "connectedTitle": "Salesforceが接続されました",
@@ -5591,7 +5596,84 @@
         "failedBody": "OpenWhisprに戻ってもう一度お試しください。"
       },
       "notes": {
-        "updateExisting": "保存済みの活動を更新します。別のタスクは作成されません。"
+        "updateExisting": "保存済みの活動を更新します。別のタスクは作成されません。",
+        "earlierAttemptUncertain": "以前の試行ですでにSalesforceに保存されている可能性があります。もう一度送信する前に、Salesforceでレコードを確認してください。",
+        "replacesMissing": "以前保存した活動はSalesforceのこのレコードにもうないか、表示できなくなったため、新しい活動が作成されます。",
+        "editedInSalesforce": "この活動は、OpenWhisprが保存した後にSalesforceで編集されました。送信するとその編集は置き換えられます。",
+        "sourceNote": "メモ「{{title}}」から。",
+        "sourceNoteUntitled": "タイトルのないメモから。"
+      },
+      "briefing": {
+        "untitledRecord": "選択したSalesforceレコード",
+        "retrieved": "取得日時: {{time}}",
+        "crmFacts": "現在のCRM情報",
+        "fields": {
+          "Name": "名前",
+          "PersonName": "氏名",
+          "StageName": "フェーズ",
+          "CloseDate": "完了予定日",
+          "Amount": "金額",
+          "CurrencyIsoCode": "通貨",
+          "NextStep": "次のステップ",
+          "OwnerId": "所有者",
+          "AccountId": "取引先",
+          "Type": "種別",
+          "Industry": "業種",
+          "Website": "Web サイト",
+          "Phone": "電話",
+          "FirstName": "名",
+          "LastName": "姓",
+          "Email": "メール",
+          "Title": "役職",
+          "Company": "会社名",
+          "Status": "状況"
+        },
+        "notReturned": "取得されていません",
+        "notRecorded": "未入力",
+        "linkedNameUnavailable": "リンクあり（名前は取得できません）",
+        "gaps": "不足情報と顧客の身元",
+        "identityNotVerified": "エクスポートの関連付けでは顧客の身元は確認されません。メモはユーザーが選んだレコードに関連付けられたもので、顧客名や取引先の関係は個別に照合されていません。",
+        "missingFieldsNote": "CRMの項目が空欄または取得されていなくても、予算承認、約束、会議メモとの一致を示すものではありません。",
+        "unavailableNotes": "現在のワークスペースで利用できない関連メモ: {{count}} 件。",
+        "partial": "対象範囲は一部です。メモの数、元のテキスト、文字起こし、またはCRMの結果が制限されました。これらの抜粋にないことが、会議で話されなかったとは限りません。",
+        "crmOnly": "アクセスできる会議の内容は取得されませんでした。この概要はCRMの情報のみに基づいています。",
+        "notPrepared": "会議の要点はまとめられていません。利用できる元のメモを下に示しています。会議についての結論は導いていません。",
+        "findings": "会議の要点",
+        "findingsExplainer": "元の抜粋を下に示します。ステータスはアシスタントによる分類です。「確認済み」はメモに記載があるという意味で、個別に検証されたものではありません。担当者と期限は各抜粋に書かれているもののみです。",
+        "categories": {
+          "takeaway": "要点",
+          "decision": "決定事項",
+          "commitment": "約束",
+          "proposal": "提案",
+          "risk": "リスク",
+          "question": "未解決の質問"
+        },
+        "status": {
+          "confirmed": "確認済み",
+          "proposed": "提案中",
+          "unknown": "不明"
+        },
+        "conflict": "矛盾の可能性 — 未解決",
+        "crmConflictEntry": "Salesforceの{{label}}: {{value}}",
+        "sources": "出典",
+        "noteCreated": "メモ作成: {{time}}。",
+        "lastEdited": "最終編集: {{time}}。",
+        "addedForBriefing": "この概要用に追加。",
+        "exported": "エクスポート: {{time}}。",
+        "savedActivity": "保存済みのSalesforce活動",
+        "sourcesExplainer": "作成日時は会議の日付ではありません。保存済みのSalesforce活動にはエクスポートした要約が入っています。メモはエクスポート後に変更されている可能性があります。",
+        "sections": {
+          "personalNotes": "個人メモ",
+          "summary": "保存済みの AI 要約",
+          "transcript": "文字起こし {{start}}–{{end}} 文字目"
+        },
+        "prepared": "Salesforceの顧客の概要を作成しました"
+      },
+      "loginDomain": {
+        "toggle": "Sandbox または会社のドメインを使う",
+        "label": "Salesforceのログインドメイン",
+        "placeholder": "test.salesforce.com または yourcompany.my.salesforce.com",
+        "hint": "空欄のままにすると本番組織にログインします。"
       }
     }
   },

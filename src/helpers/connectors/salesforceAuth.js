@@ -7,6 +7,8 @@ const {
 
 const SALESFORCE_SCOPES = "api refresh_token openid";
 const SALESFORCE_CALLBACK_URL = "http://localhost:1718/salesforce/callback";
+// Salesforce allows a plain-http callback only on localhost, so the
+// loopback server answers on both 127.0.0.1 and ::1 (oauthLoopbackFlow).
 const SALESFORCE_LOOPBACK = {
   redirectHost: "localhost",
   ports: [1718],
@@ -14,6 +16,51 @@ const SALESFORCE_LOOPBACK = {
   timeoutMs: 300000,
 };
 const EXPIRY_SKEW_MS = 60000;
+// Salesforce refused the OAuth client, not the user's login: a build fault
+// that signing in again won't fix.
+const CLIENT_REFUSED = new Set(["invalid_client", "invalid_client_id", "unauthorized_client"]);
+// Answers that mean "ask again later", even when they come with a 4xx.
+const TRANSIENT_STATUS = new Set([408, 429]);
+const TRANSIENT_OAUTH_ERRORS = new Set([
+  "temporarily_unavailable",
+  "server_error",
+  "rate_limit_exceeded",
+]);
+
+// A redirect means the host moved (a renamed My Domain, say): asking it
+// again won't help, so it counts as a refusal too.
+function isRefusal(result) {
+  if (result.errorCode === "redirect_refused") return true;
+  return (
+    result.refused === true &&
+    !TRANSIENT_STATUS.has(result.status) &&
+    !TRANSIENT_OAUTH_ERRORS.has(result.errorCode)
+  );
+}
+
+function transientError(result) {
+  return {
+    ok: false,
+    errorCode:
+      result.status === 429 || result.errorCode === "rate_limit_exceeded"
+        ? "rate_limited"
+        : "network",
+  };
+}
+
+function codedError(code) {
+  return Object.assign(new Error(code), { code });
+}
+
+// What a user types for a sandbox or My Domain: a bare host, a URL, or with a
+// trailing slash. Only Salesforce's sign-in hosts and My Domains are accepted.
+function loginOrigin(loginDomain) {
+  const host = loginDomain
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/+$/, "");
+  return normalizeSalesforceOrigin(`https://${host}`, { login: true });
+}
 
 function nonEmptyString(value) {
   return typeof value === "string" && value.length > 0;
@@ -88,10 +135,23 @@ function createSalesforceAuth({
     return api.request({ instanceUrl: loginUrl, accessToken, method: "GET", path: USERINFO_PATH });
   }
 
-  function authorize({ signal } = {}) {
-    const config = configuration();
-    if (!config)
-      return Promise.reject(Object.assign(new Error("not_configured"), { code: "not_configured" }));
+  // A typed sandbox or My Domain wins; a Reconnect keeps the host the login
+  // was made on; anything else signs in at the build's default.
+  function loginUrlFor(loginDomain, config) {
+    if (loginDomain) return loginOrigin(loginDomain);
+    const accountId = credentials.activeAccountId?.();
+    const saved = accountId ? credentials.read(accountId, "salesforce")?.credential : null;
+    return saved && normalizeSalesforceOrigin(saved.loginUrl, { login: true }) === saved.loginUrl
+      ? saved.loginUrl
+      : config.loginUrl;
+  }
+
+  function authorize({ signal, loginDomain } = {}) {
+    const configured = configuration();
+    if (!configured) return Promise.reject(codedError("not_configured"));
+    const loginUrl = loginUrlFor(loginDomain, configured);
+    if (!loginUrl) return Promise.reject(codedError("invalid_login_domain"));
+    const config = { ...configured, loginUrl };
     return runOAuthLoopbackFlow({
       ...SALESFORCE_LOOPBACK,
       errorParam: "salesforce_error",
@@ -106,7 +166,9 @@ function createSalesforceAuth({
           state,
           code_challenge: codeChallenge,
           code_challenge_method: "S256",
-          prompt: "consent",
+          // "login" lets the user pick another Salesforce user than the one
+          // signed in in the browser.
+          prompt: "login consent",
         });
         return `${config.loginUrl}/services/oauth2/authorize?${params}`;
       },
@@ -157,25 +219,26 @@ function createSalesforceAuth({
   async function refresh(binding, credential) {
     const config = configuration();
     if (!config) return { ok: false, errorCode: "salesforce_unavailable" };
+    // Each login refreshes at the host it was made on (production, a sandbox or a My Domain).
     if (
       !credential.refreshToken ||
       credential.clientId !== config.clientId ||
-      credential.loginUrl !== config.loginUrl
+      normalizeSalesforceOrigin(credential.loginUrl, { login: true }) !== credential.loginUrl
     )
       return login.markReconnect(binding);
-    // Rotation can invalidate a refresh token even when its response is lost.
-    // Never retry an uncertain refresh with that same token.
+    // Not retried here. A timeout, a 5xx, a 408 or a 429 keeps the login for
+    // the next action: if Salesforce rotated the refresh token and the answer
+    // was lost, that next refresh gets invalid_grant and flags the login then.
     const result = await api.refreshToken(
       { client_id: credential.clientId, refresh_token: credential.refreshToken },
       credential.loginUrl
     );
     if (!login.stillBound(binding)) return { ok: false, errorCode: "connection_changed" };
     if (!result.ok) {
-      if (["invalid_client", "unauthorized_client"].includes(result.errorCode))
+      if (CLIENT_REFUSED.has(result.errorCode))
         return { ok: false, errorCode: "salesforce_unavailable" };
-      if (result.errorCode === "invalid_grant" || result.refused || result.outcome === "unknown")
-        return login.markReconnect(binding);
-      return { ok: false, errorCode: "network" };
+      // invalid_grant, inactive_user, invalid_request…: none changes on its own.
+      return isRefusal(result) ? login.markReconnect(binding) : transientError(result);
     }
     const tokens = parseTokens(result.data, now());
     if (
@@ -184,10 +247,21 @@ function createSalesforceAuth({
       (tokens.scope !== null && !tokens.scope.split(/\s+/).includes("api"))
     )
       return login.markReconnect(binding);
+    // A rotated refresh token is the only way back in, so it's saved before
+    // the identity check, which can fail on its own. The new access token
+    // waits for that check.
+    if (tokens.refreshToken && tokens.refreshToken !== credential.refreshToken) {
+      const rotated = login.saveRefreshed(binding, {
+        ...credential,
+        refreshToken: tokens.refreshToken,
+      });
+      if (!rotated.ok) return rotated;
+    }
     const identified = await identity(tokens.accessToken, credential.loginUrl);
     if (!login.stillBound(binding)) return { ok: false, errorCode: "connection_changed" };
+    if (!identified.ok)
+      return isRefusal(identified) ? login.markReconnect(binding) : transientError(identified);
     if (
-      !identified.ok ||
       !validIdentity(identified.data) ||
       identified.data.user_id !== credential.userId ||
       identified.data.organization_id !== credential.organizationId

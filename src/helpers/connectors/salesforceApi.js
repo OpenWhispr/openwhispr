@@ -1,9 +1,5 @@
 const { readJson, formBody } = require("./providerHttp");
-const {
-  classifyHttpStatus,
-  classifyTransportError,
-  transportErrorCode,
-} = require("./deliveryClassifier");
+const { classifyHttpStatus, classifyTransportError } = require("./deliveryClassifier");
 
 // Pin the documented Spring '26 API instead of changing behavior with each org upgrade.
 const SALESFORCE_API_VERSION = "v66.0";
@@ -55,7 +51,9 @@ function createSalesforceApi({ fetchImpl }) {
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch (error) {
-      return failure(transportErrorCode(error), classifyTransportError(error));
+      // Salesforce's own codes are upper case too (ENTITY_IS_LOCKED), so a
+      // transport code (ECONNRESET) would read as one of them.
+      return failure("network", classifyTransportError(error));
     }
     if (response.status >= 300 && response.status < 400)
       return failure("redirect_refused", "unknown");
@@ -72,6 +70,7 @@ function createSalesforceApi({ fetchImpl }) {
           : `http_${response.status}`,
         classifyHttpStatus(response.status)
       ),
+      status: response.status,
       refused: response.status >= 400 && response.status < 500,
     };
   }

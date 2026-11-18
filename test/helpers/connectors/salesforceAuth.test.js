@@ -45,6 +45,7 @@ function setup({
   refresh,
   identity = IDENTITY,
   tokens = TOKENS,
+  identityResult = null,
   clientId = "client",
   loginUrl = "https://login.salesforce.com",
 } = {}) {
@@ -66,7 +67,7 @@ function setup({
     },
     request: async (...args) => {
       calls.push(["identity", ...args]);
-      return { ok: true, data: identity };
+      return identityResult ?? { ok: true, data: identity };
     },
   };
   const auth = createSalesforceAuth({
@@ -195,10 +196,12 @@ test("refresh cannot replace a newer login or cross an org or instance boundary"
   }
 });
 
-test("revoked or uncertain rotated refresh tokens require reconnect without automatic retry", async () => {
+test("a refused refresh flags the login for reconnect without an automatic retry", async () => {
   for (const response of [
-    { ok: false, errorCode: "invalid_grant", refused: true, outcome: "failed" },
-    { ok: false, errorCode: "timeout", outcome: "unknown" },
+    { ok: false, errorCode: "invalid_grant", refused: true, status: 400, outcome: "failed" },
+    { ok: false, errorCode: "inactive_user", refused: true, status: 400, outcome: "failed" },
+    // The sign-in host moved (a renamed My Domain): asking again won't help.
+    { ok: false, errorCode: "redirect_refused", outcome: "unknown" },
   ]) {
     const { auth, calls, credentials } = setup({ refresh: async () => response });
     assert.equal(
@@ -208,6 +211,62 @@ test("revoked or uncertain rotated refresh tokens require reconnect without auto
     assert.equal(calls.filter(([kind]) => kind === "refresh").length, 1);
     assert.equal(credentials.read("acct-1", "salesforce").credential.needsReconnect, true);
   }
+});
+
+test("a refresh Salesforce couldn't answer keeps the login for the next action", async () => {
+  for (const [response, errorCode] of [
+    [{ ok: false, errorCode: "network", outcome: "unknown" }, "network"],
+    [{ ok: false, errorCode: "http_503", status: 503, outcome: "unknown" }, "network"],
+    [
+      { ok: false, errorCode: "http_408", status: 408, refused: true, outcome: "failed" },
+      "network",
+    ],
+    [
+      { ok: false, errorCode: "http_429", status: 429, refused: true, outcome: "failed" },
+      "rate_limited",
+    ],
+    [
+      {
+        ok: false,
+        errorCode: "rate_limit_exceeded",
+        status: 400,
+        refused: true,
+        outcome: "failed",
+      },
+      "rate_limited",
+    ],
+  ]) {
+    const { auth, calls, credentials } = setup({ refresh: async () => response });
+    assert.equal((await auth.getAccessToken(BINDING, { forceRefresh: true })).errorCode, errorCode);
+    assert.equal(calls.filter(([kind]) => kind === "refresh").length, 1);
+    const stored = credentials.read("acct-1", "salesforce").credential;
+    assert.equal(stored.needsReconnect, false);
+    assert.equal(stored.refreshToken, "refresh-1");
+  }
+});
+
+test("a rotated refresh token is saved before the identity check, which keeps the login when it can't answer", async () => {
+  const unanswered = setup({
+    identityResult: { ok: false, errorCode: "network", outcome: "unknown" },
+  });
+  assert.equal(
+    (await unanswered.auth.getAccessToken(BINDING, { forceRefresh: true })).errorCode,
+    "network"
+  );
+  const kept = unanswered.credentials.read("acct-1", "salesforce").credential;
+  assert.equal(kept.refreshToken, "refresh-2");
+  assert.equal(kept.accessToken, "access-1", "the unverified access token is never saved");
+  assert.equal(kept.needsReconnect, false);
+  const refused = setup({
+    identityResult: { ok: false, errorCode: "http_403", status: 403, refused: true },
+  });
+  assert.equal(
+    (await refused.auth.getAccessToken(BINDING, { forceRefresh: true })).errorCode,
+    "reconnect_needed"
+  );
+  const flagged = refused.credentials.read("acct-1", "salesforce").credential;
+  assert.equal(flagged.refreshToken, "refresh-2");
+  assert.equal(flagged.needsReconnect, true);
 });
 
 test("simultaneous refreshes share one request and save failure never exposes the new token", async () => {
@@ -238,4 +297,46 @@ test("disconnect revokes at the saved OAuth host and status contains only displa
     workspaceLabel: "acme.my.salesforce.com",
     needsReconnect: false,
   });
+});
+
+test("a sandbox or My Domain typed at connect is where the user signs in, exchanges and refreshes", async () => {
+  for (const [typed, origin] of [
+    ["test.salesforce.com", "https://test.salesforce.com"],
+    [
+      " https://acme--uat.sandbox.my.salesforce.com/ ",
+      "https://acme--uat.sandbox.my.salesforce.com",
+    ],
+  ]) {
+    const { auth, calls, flows } = setup({ credential: null });
+    const credential = await auth.authorize({ loginDomain: typed });
+    const url = new URL(flows[0].buildAuthUrl(SALESFORCE_CALLBACK_URL, "state", "challenge"));
+    assert.equal(url.origin, origin);
+    assert.equal(url.searchParams.get("prompt"), "login consent");
+    assert.equal(calls.find(([kind]) => kind === "exchange")[2], origin);
+    assert.equal(credential.loginUrl, origin);
+    // The login refreshes at its own host, not the build's default.
+    const refreshing = setup({ credential: { ...CONNECTED, loginUrl: origin } });
+    assert.equal(
+      (await refreshing.auth.getAccessToken(BINDING, { forceRefresh: true })).token,
+      "access-2"
+    );
+    assert.equal(refreshing.calls.find(([kind]) => kind === "refresh")[2], origin);
+  }
+});
+
+test("a typed domain that isn't a Salesforce sign-in host opens no browser", async () => {
+  for (const typed of ["evil.test", "acme.lightning.force.com", "acme.my.salesforce.com/path"]) {
+    const { auth, flows } = setup({ credential: null });
+    await assert.rejects(auth.authorize({ loginDomain: typed }), { code: "invalid_login_domain" });
+    assert.equal(flows.length, 0);
+  }
+});
+
+test("Reconnect signs in again at the host the login was made on", async () => {
+  const { auth, flows } = setup({
+    credential: { ...CONNECTED, loginUrl: "https://test.salesforce.com" },
+  });
+  await auth.authorize();
+  const url = new URL(flows[0].buildAuthUrl(SALESFORCE_CALLBACK_URL, "state", "challenge"));
+  assert.equal(url.origin, "https://test.salesforce.com");
 });

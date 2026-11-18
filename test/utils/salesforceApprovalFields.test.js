@@ -36,3 +36,25 @@ test("field approval blocks malformed previews, no selected changes and overleng
     "invalidPreview"
   );
 });
+
+test("Copy on a field card takes each included field's label and new value", async () => {
+  const { salesforceFieldsCopyText } = await load();
+  const two = [
+    ...definitions,
+    { key: "value1", name: "Risks__c", label: "Risks", before: "", maxLength: 50 },
+  ];
+  assert.equal(
+    salesforceFieldsCopyText(two, {
+      value0: "Pilot",
+      include0: "yes",
+      value1: "Budget",
+      include1: "yes",
+    }),
+    "Needs: Pilot\n\nRisks: Budget"
+  );
+  assert.equal(
+    salesforceFieldsCopyText(two, { value0: "Pilot", include0: "no", value1: "", include1: "yes" }),
+    "Risks: "
+  );
+  assert.equal(salesforceFieldsCopyText(undefined, undefined), "");
+});

@@ -165,19 +165,34 @@ test("Salesforce field cards show current values, edit replacements and omit cha
   await React.act(async () => click(button(container, "connectors.approval.send")));
   assert.deepEqual(calls.commit, []);
   await React.act(async () => type(textareas[0], "Reviewed"));
+  // The card's own checkbox, named by the field it includes.
   const omit = findElement(
     container,
-    (element) => element.tagName === "INPUT" && element.type === "checkbox"
+    (element) =>
+      element.getAttribute?.("role") === "checkbox" && /Needs__c/.test(element.textContent)
   );
   assert.ok(omit);
-  // The lightweight DOM dispatches React events but does not implement native checkbox toggling.
-  await React.act(async () => {
-    omit.checked = false;
-    click(omit);
-  });
+  assert.equal(omit.getAttribute("aria-label"), "connectors.approval.salesforce.include");
+  // Each replacement box is named after its own field, not just "Proposed replacement".
+  const labelOf = (textarea) =>
+    textarea
+      .getAttribute("aria-labelledby")
+      .split(" ")
+      .map((id) => findElement(container, (element) => element.getAttribute?.("id") === id))
+      .map((element) => element.textContent)
+      .join(" ");
+  assert.deepEqual(textareas.map(labelOf), [
+    "Needs connectors.approval.salesforce.after",
+    "Next connectors.approval.salesforce.after",
+  ]);
+  assert.equal(omit.getAttribute("aria-checked"), "true");
+  await React.act(async () => click(omit));
+  assert.equal(omit.getAttribute("aria-checked"), "false");
   await React.act(async () => click(button(container, "connectors.approval.send")));
   const result = await toolResult();
   assert.equal(result.data.status, "sent");
+  assert.match(container.textContent, /connectors\.approval\.salesforce\.savedLabel/);
+  assert.doesNotMatch(container.textContent, /connectors\.approval\.sentLabel/);
   assert.deepEqual(calls.commit[0].edits, {
     value0: "Reviewed",
     include0: "no",

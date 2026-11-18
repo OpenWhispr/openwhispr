@@ -4757,7 +4757,9 @@
       "salesforce_export_conversationName": "Salesforce活動",
       "salesforce_export_conversationStatus": "正在準備Salesforce活動…",
       "salesforce_update_fieldsName": "Salesforce欄位更新",
-      "salesforce_update_fieldsStatus": "正在準備Salesforce欄位更新…"
+      "salesforce_update_fieldsStatus": "正在準備Salesforce欄位更新…",
+      "salesforce_present_briefingName": "簡報結論",
+      "salesforce_present_briefingStatus": "正在選擇簡報依據…"
     },
     "turn": {
       "reasoning": "推理過程",
@@ -4795,7 +4797,7 @@
           "linear": "我可以替你搜尋和建立 Linear 問題。",
           "github": "我可以替你搜尋和建立 GitHub Issue。",
           "calendar": "我可以查看你的空閒時間並建議時段。",
-          "salesforce": "To read Salesforce records and save reviewed meeting notes."
+          "salesforce": "我可以讀取 Salesforce 記錄，並將審核過的會議筆記儲存到其中。"
         }
       },
       "access": {
@@ -5126,14 +5128,15 @@
           "stale_record": "審核後Salesforce資料已變更，請重新整理並審核。",
           "source_unavailable": "來源筆記不存在或無法存取。",
           "export_required": "請先將活動儲存至此商機，再更新其欄位。",
-          "uncertain_operation": "先前的寫入尚未確認。重試前請檢查Salesforce。",
-          "duplicate_operation": "先前的寫入尚未確認。重試前請檢查Salesforce。",
+          "duplicate_operation": "此匯出在本次審核後已再次儲存，或仍在儲存中。未傳送任何內容。請重新準備審核。",
           "invalid_field": "請選擇最多三個可編輯的商機自訂文字欄位。",
           "storage_unavailable": "本機匯出歷史無法使用，尚未開始新的寫入。",
           "task_status_unavailable": "Salesforce沒有可用的已完成工作狀態。請聯絡Salesforce管理員。",
-          "not_found": "Salesforce 無法接受目前的內容，未傳送任何內容。",
+          "not_found": "此 Salesforce 記錄已不存在，或您無權存取，未傳送任何內容。",
           "invalid_reference": "Salesforce 無法接受目前的內容，未傳送任何內容。",
-          "no_fields_selected": "請至少選擇一個欄位，或取消。"
+          "no_fields_selected": "請至少選擇一個欄位，或取消。",
+          "record_locked": "此 Salesforce 記錄已被鎖定（例如被核准流程鎖定），未傳送任何內容。",
+          "validation_failed": "Salesforce 的驗證規則、重複規則或必填欄位阻止了此操作。請在 Salesforce 中檢查該記錄。未傳送任何內容。"
         }
       },
       "email": {
@@ -5219,7 +5222,6 @@
         "before": "目前的值",
         "after": "建議替換值",
         "empty": "空白",
-        "value": "{{field}}的建議值",
         "limit": "{{count}} / {{max}}個字元",
         "invalidPreview": "欄位預覽不完整，請重新申請審核。",
         "noneSelected": "請至少選擇一個欄位，或取消。",
@@ -5231,7 +5233,8 @@
         "salesforceFields": {
           "sent": "已儲存{{destination}}的欄位。",
           "unknown": "無法確認變更。重試前請在Salesforce中檢查{{destination}}。"
-        }
+        },
+        "savedLabel": "已儲存"
       }
     },
     "policyOff": "您的組織已關閉連接器。",
@@ -5539,14 +5542,15 @@
           "stale_record": "審核後Salesforce資料已變更，請重新整理並審核。",
           "source_unavailable": "來源筆記不存在或無法存取。",
           "export_required": "請先將活動儲存至此商機，再更新其欄位。",
-          "uncertain_operation": "先前的寫入尚未確認。重試前請檢查Salesforce。",
-          "duplicate_operation": "先前的寫入尚未確認。重試前請檢查Salesforce。",
+          "duplicate_operation": "此匯出在本次審核後已再次儲存，或仍在儲存中。未傳送任何內容。",
           "invalid_field": "請選擇最多三個可編輯的商機自訂文字欄位。",
           "storage_unavailable": "本機匯出歷史無法使用，尚未開始新的寫入。",
           "task_status_unavailable": "Salesforce沒有可用的已完成工作狀態。請聯絡Salesforce管理員。",
-          "not_found": "Salesforce 無法接受。",
+          "not_found": "在 Salesforce 中找不到。",
           "invalid_reference": "Salesforce 無法接受。",
-          "no_fields_selected": "請至少選擇一個欄位，或取消。"
+          "no_fields_selected": "請至少選擇一個欄位，或取消。",
+          "record_locked": "Salesforce 記錄已被鎖定。",
+          "validation_failed": "被 Salesforce 規則或必填欄位阻擋。"
         }
       },
       "unknownSent": {
@@ -5582,7 +5586,8 @@
         "signed_out": "請登入 OpenWhispr 以連接 Salesforce。",
         "policy_blocked": "您的組織已關閉連接器。",
         "policy_unavailable": "無法檢查您的組織設定，請重試。",
-        "permission_not_granted": "由於未授予全部權限，Salesforce 未連接。請重新連接並允許所有權限。"
+        "permission_not_granted": "由於未授予全部權限，Salesforce 未連接。請重新連接並允許所有權限。",
+        "invalid_login_domain": "請輸入 test.salesforce.com 或貴公司的 My Domain，例如 yourcompany.my.salesforce.com。"
       },
       "browser": {
         "connectedTitle": "Salesforce 已連接",
@@ -5591,7 +5596,84 @@
         "failedBody": "請返回 OpenWhispr 重試。"
       },
       "notes": {
-        "updateExisting": "更新先前儲存的活動，不會建立另一個工作。"
+        "updateExisting": "更新先前儲存的活動，不會建立另一個工作。",
+        "earlierAttemptUncertain": "先前的嘗試可能已將此內容儲存到 Salesforce。再次傳送前，請先在 Salesforce 中檢查該記錄。",
+        "replacesMissing": "先前儲存的活動已不在 Salesforce 的此記錄上，或你已無法查看，因此將建立新的活動。",
+        "editedInSalesforce": "OpenWhispr 儲存此活動後，有人在 Salesforce 中編輯過它。傳送後將取代這些編輯。",
+        "sourceNote": "來自筆記「{{title}}」。",
+        "sourceNoteUntitled": "來自一篇無標題筆記。"
+      },
+      "briefing": {
+        "untitledRecord": "所選 Salesforce 記錄",
+        "retrieved": "擷取時間：{{time}}",
+        "crmFacts": "目前的 CRM 資訊",
+        "fields": {
+          "Name": "名稱",
+          "PersonName": "姓名",
+          "StageName": "階段",
+          "CloseDate": "結束日期",
+          "Amount": "金額",
+          "CurrencyIsoCode": "幣別",
+          "NextStep": "下一步",
+          "OwnerId": "擁有者",
+          "AccountId": "客戶",
+          "Type": "類型",
+          "Industry": "產業",
+          "Website": "網站",
+          "Phone": "電話",
+          "FirstName": "名字",
+          "LastName": "姓氏",
+          "Email": "電子郵件",
+          "Title": "職稱",
+          "Company": "公司",
+          "Status": "狀態"
+        },
+        "notReturned": "未傳回",
+        "notRecorded": "未記錄",
+        "linkedNameUnavailable": "已連結；無法取得名稱",
+        "gaps": "缺口與客戶身分",
+        "identityNotVerified": "匯出關聯無法驗證客戶身分。這些筆記連結到使用者所選的記錄；客戶名稱與客戶關係尚未經過獨立核對。",
+        "missingFieldsNote": "缺少或未傳回的 CRM 欄位，無法證明預算已核准、存在承諾或與會議筆記一致。",
+        "unavailableNotes": "目前工作區中無法使用的連結筆記：{{count}}。",
+        "partial": "涵蓋不完整：筆記數量、來源文字、逐字稿或 CRM 結果受到限制。這些摘錄中沒有的內容，不代表會議中沒有提到。",
+        "crmOnly": "未擷取到可存取的會議內容。本簡報僅根據 CRM。",
+        "notPrepared": "尚未整理會議結論。可用的來源筆記列在下方；未從會議推斷任何結論。",
+        "findings": "會議結論",
+        "findingsExplainer": "下方原文摘錄了來源內容。狀態標籤是助理的分類；「已確認」表示筆記中有此記錄，並非經過獨立查證。負責人與期限僅以各摘錄中寫明的為準。",
+        "categories": {
+          "takeaway": "重點",
+          "decision": "決定",
+          "commitment": "承諾",
+          "proposal": "提議",
+          "risk": "風險",
+          "question": "待解決問題"
+        },
+        "status": {
+          "confirmed": "已確認",
+          "proposed": "提議中",
+          "unknown": "不明確"
+        },
+        "conflict": "可能有矛盾 — 未解決",
+        "crmConflictEntry": "Salesforce {{label}}：{{value}}",
+        "sources": "來源",
+        "noteCreated": "筆記建立於：{{time}}。",
+        "lastEdited": "最後編輯：{{time}}。",
+        "addedForBriefing": "為本簡報新增。",
+        "exported": "匯出於：{{time}}。",
+        "savedActivity": "已儲存的 Salesforce 活動",
+        "sourcesExplainer": "建立時間不是會議日期。已儲存的 Salesforce 活動包含匯出的摘要；筆記在匯出後可能已變更。",
+        "sections": {
+          "personalNotes": "個人筆記",
+          "summary": "已儲存的 AI 摘要",
+          "transcript": "逐字稿第 {{start}}–{{end}} 個字元"
+        },
+        "prepared": "已準備 Salesforce 簡報"
+      },
+      "loginDomain": {
+        "toggle": "使用沙箱或公司網域",
+        "label": "Salesforce 登入網域",
+        "placeholder": "test.salesforce.com 或 yourcompany.my.salesforce.com",
+        "hint": "留空則登入正式環境組織。"
       }
     }
   },

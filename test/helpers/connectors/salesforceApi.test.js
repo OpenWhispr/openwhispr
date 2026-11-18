@@ -143,7 +143,10 @@ test("transport failures are never retried and distinguish preconnect from uncer
     ["ECONNRESET", "unknown"],
   ]) {
     const { api, calls } = setup(Object.assign(new Error("private"), { code }));
-    assert.equal((await api.request(REQUEST)).outcome, outcome);
+    const result = await api.request(REQUEST);
+    assert.equal(result.outcome, outcome);
+    // Never an upper-case transport code, which would read as Salesforce's own.
+    assert.equal(result.errorCode, "network");
     assert.equal(calls.length, 1);
   }
 });

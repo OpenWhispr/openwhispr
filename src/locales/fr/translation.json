@@ -5144,7 +5144,9 @@
       "salesforce_export_conversationName": "Activité Salesforce",
       "salesforce_export_conversationStatus": "Préparation de l’activité Salesforce…",
       "salesforce_update_fieldsName": "Mises à jour de champs Salesforce",
-      "salesforce_update_fieldsStatus": "Préparation des mises à jour de champs Salesforce…"
+      "salesforce_update_fieldsStatus": "Préparation des mises à jour de champs Salesforce…",
+      "salesforce_present_briefingName": "Conclusions de la synthèse",
+      "salesforce_present_briefingStatus": "Sélection des éléments de la synthèse…"
     },
     "turn": {
       "reasoning": "Raisonnement",
@@ -5182,7 +5184,7 @@
           "linear": "Je peux trouver et créer des tickets Linear pour vous.",
           "github": "Je peux trouver et créer des issues GitHub pour vous.",
           "calendar": "Je peux vérifier vos disponibilités et proposer des créneaux.",
-          "salesforce": "To read Salesforce records and save reviewed meeting notes."
+          "salesforce": "Je peux lire des enregistrements Salesforce et y enregistrer des notes de réunion vérifiées."
         }
       },
       "access": {
@@ -5513,14 +5515,15 @@
           "stale_record": "Salesforce a changé depuis cette vérification. Actualisez et vérifiez à nouveau.",
           "source_unavailable": "La note source est introuvable ou inaccessible.",
           "export_required": "Enregistrez l’activité dans cette opportunité avant de modifier ses champs.",
-          "uncertain_operation": "Une écriture précédente n’est pas confirmée. Vérifiez Salesforce avant de réessayer.",
-          "duplicate_operation": "Une écriture précédente n’est pas confirmée. Vérifiez Salesforce avant de réessayer.",
+          "duplicate_operation": "Cet export a été enregistré de nouveau depuis cette vérification, ou un enregistrement est encore en cours. Rien n'a été envoyé. Préparez une nouvelle vérification.",
           "invalid_field": "Choisissez jusqu’à trois champs texte personnalisés et modifiables de l’opportunité.",
           "storage_unavailable": "L’historique local des exportations est indisponible. Aucune nouvelle écriture n’a été lancée.",
           "task_status_unavailable": "Aucun statut de tâche terminée n’est disponible dans Salesforce. Contactez votre administrateur Salesforce.",
-          "not_found": "Salesforce n'a pas pu l'accepter tel quel. Rien n'a été envoyé.",
+          "not_found": "Cet enregistrement Salesforce n'existe plus ou vous n'y avez pas accès. Rien n'a été envoyé.",
           "invalid_reference": "Salesforce n'a pas pu l'accepter tel quel. Rien n'a été envoyé.",
-          "no_fields_selected": "Sélectionnez au moins un champ ou annulez."
+          "no_fields_selected": "Sélectionnez au moins un champ ou annulez.",
+          "record_locked": "Cet enregistrement Salesforce est verrouillé, par exemple par un processus d'approbation. Rien n'a été envoyé.",
+          "validation_failed": "Une règle de validation, une règle de doublons ou un champ obligatoire Salesforce l'a bloqué. Vérifiez l'enregistrement dans Salesforce. Rien n'a été envoyé."
         }
       },
       "email": {
@@ -5606,7 +5609,6 @@
         "before": "Valeur actuelle",
         "after": "Remplacement proposé",
         "empty": "Vide",
-        "value": "Valeur proposée pour {{field}}",
         "limit": "{{count}} / {{max}} caractères",
         "invalidPreview": "Cet aperçu est incomplet. Demandez une nouvelle vérification.",
         "noneSelected": "Sélectionnez au moins un champ ou annulez.",
@@ -5618,7 +5620,8 @@
         "salesforceFields": {
           "sent": "Champs enregistrés sur {{destination}}.",
           "unknown": "Impossible de confirmer les modifications. Vérifiez {{destination}} dans Salesforce avant de réessayer."
-        }
+        },
+        "savedLabel": "Enregistré"
       }
     },
     "policyOff": "Votre organisation a désactivé les connecteurs.",
@@ -5926,14 +5929,15 @@
           "stale_record": "Salesforce a changé depuis cette vérification. Actualisez et vérifiez à nouveau.",
           "source_unavailable": "La note source est introuvable ou inaccessible.",
           "export_required": "Enregistrez l’activité dans cette opportunité avant de modifier ses champs.",
-          "uncertain_operation": "Une écriture précédente n’est pas confirmée. Vérifiez Salesforce avant de réessayer.",
-          "duplicate_operation": "Une écriture précédente n’est pas confirmée. Vérifiez Salesforce avant de réessayer.",
+          "duplicate_operation": "Cet export a été enregistré de nouveau depuis cette vérification, ou un enregistrement est encore en cours. Rien n'a été envoyé.",
           "invalid_field": "Choisissez jusqu’à trois champs texte personnalisés et modifiables de l’opportunité.",
           "storage_unavailable": "L’historique local des exportations est indisponible. Aucune nouvelle écriture n’a été lancée.",
           "task_status_unavailable": "Aucun statut de tâche terminée n’est disponible dans Salesforce. Contactez votre administrateur Salesforce.",
-          "not_found": "Salesforce n'a pas pu l'accepter.",
+          "not_found": "Introuvable dans Salesforce.",
           "invalid_reference": "Salesforce n'a pas pu l'accepter.",
-          "no_fields_selected": "Sélectionnez au moins un champ ou annulez."
+          "no_fields_selected": "Sélectionnez au moins un champ ou annulez.",
+          "record_locked": "L'enregistrement Salesforce est verrouillé.",
+          "validation_failed": "Bloqué par une règle ou un champ obligatoire Salesforce."
         }
       },
       "unknownSent": {
@@ -5969,7 +5973,8 @@
         "signed_out": "Connectez-vous à OpenWhispr pour connecter Salesforce.",
         "policy_blocked": "Votre organisation a désactivé les connecteurs.",
         "policy_unavailable": "Impossible de vérifier les paramètres de votre organisation. Réessayez.",
-        "permission_not_granted": "Salesforce n'a pas été connecté car toutes les autorisations n'ont pas été accordées. Reconnectez-vous et autorisez-les toutes."
+        "permission_not_granted": "Salesforce n'a pas été connecté car toutes les autorisations n'ont pas été accordées. Reconnectez-vous et autorisez-les toutes.",
+        "invalid_login_domain": "Saisissez test.salesforce.com ou le My Domain de votre entreprise, par exemple votreentreprise.my.salesforce.com."
       },
       "browser": {
         "connectedTitle": "Salesforce est connecté",
@@ -5978,7 +5983,84 @@
         "failedBody": "Retournez à OpenWhispr pour réessayer."
       },
       "notes": {
-        "updateExisting": "Mettre à jour l’activité déjà enregistrée ; aucune autre tâche ne sera créée."
+        "updateExisting": "Mettre à jour l’activité déjà enregistrée ; aucune autre tâche ne sera créée.",
+        "earlierAttemptUncertain": "Une tentative précédente l'a peut-être déjà enregistré dans Salesforce. Vérifiez l'enregistrement avant de renvoyer.",
+        "replacesMissing": "L'activité enregistrée précédemment n'est plus sur cet enregistrement Salesforce, ou vous ne pouvez plus la voir ; une nouvelle sera donc créée.",
+        "editedInSalesforce": "Cette activité a été modifiée dans Salesforce après son enregistrement par OpenWhispr. L'envoi remplacera ces modifications.",
+        "sourceNote": "D'après la note « {{title}} ».",
+        "sourceNoteUntitled": "D'après une note sans titre."
+      },
+      "briefing": {
+        "untitledRecord": "Enregistrement Salesforce sélectionné",
+        "retrieved": "Récupéré : {{time}}",
+        "crmFacts": "Données CRM actuelles",
+        "fields": {
+          "Name": "Nom",
+          "PersonName": "Nom",
+          "StageName": "Étape",
+          "CloseDate": "Date de clôture",
+          "Amount": "Montant",
+          "CurrencyIsoCode": "Devise",
+          "NextStep": "Étape suivante",
+          "OwnerId": "Propriétaire",
+          "AccountId": "Compte",
+          "Type": "Type",
+          "Industry": "Secteur d'activité",
+          "Website": "Site Web",
+          "Phone": "Téléphone",
+          "FirstName": "Prénom",
+          "LastName": "Nom de famille",
+          "Email": "E-mail",
+          "Title": "Fonction",
+          "Company": "Société",
+          "Status": "Statut"
+        },
+        "notReturned": "non renvoyé",
+        "notRecorded": "non renseigné",
+        "linkedNameUnavailable": "lié ; nom indisponible",
+        "gaps": "Lacunes et identité du client",
+        "identityNotVerified": "Une association d'export ne vérifie pas l'identité du client. Les notes ont été liées à l'enregistrement choisi par l'utilisateur ; les noms de clients et les relations de compte n'ont pas été recoupés de façon indépendante.",
+        "missingFieldsNote": "Des champs CRM manquants ou non renvoyés ne prouvent ni une validation de budget, ni des engagements, ni un accord avec les notes de réunion.",
+        "unavailableNotes": "Notes liées indisponibles dans l'espace de travail actuel : {{count}}.",
+        "partial": "La couverture est partielle : le nombre de notes, le texte source, la transcription ou les résultats CRM ont été limités. Ce qui manque dans ces extraits n'était pas forcément absent des réunions.",
+        "crmOnly": "Aucun contenu de réunion accessible n'a été récupéré. Cette synthèse repose uniquement sur le CRM.",
+        "notPrepared": "Les conclusions des réunions n'ont pas été préparées. Les notes sources disponibles figurent ci-dessous ; aucune conclusion n'a été tirée des réunions.",
+        "findings": "Conclusions des réunions",
+        "findingsExplainer": "Les extraits sources sont reproduits ci-dessous. Les statuts sont la classification de l'assistant ; confirmé signifie mentionné dans la note, pas vérifié de façon indépendante. Les responsables et échéances sont uniquement ceux indiqués dans chaque extrait.",
+        "categories": {
+          "takeaway": "Points clés",
+          "decision": "Décisions",
+          "commitment": "Engagements",
+          "proposal": "Propositions",
+          "risk": "Risques",
+          "question": "Questions ouvertes"
+        },
+        "status": {
+          "confirmed": "Confirmé",
+          "proposed": "Proposé",
+          "unknown": "Incertain"
+        },
+        "conflict": "Contradiction possible — non résolue",
+        "crmConflictEntry": "Salesforce {{label}} : {{value}}",
+        "sources": "Sources",
+        "noteCreated": "Note créée : {{time}}.",
+        "lastEdited": "Dernière modification : {{time}}.",
+        "addedForBriefing": "Ajoutée pour cette synthèse.",
+        "exported": "Exportée : {{time}}.",
+        "savedActivity": "Activité Salesforce enregistrée",
+        "sourcesExplainer": "Les dates de création ne sont pas des dates de réunion. Les activités Salesforce enregistrées contiennent le résumé exporté ; les notes ont pu changer depuis l'export.",
+        "sections": {
+          "personalNotes": "Notes personnelles",
+          "summary": "Résumé IA enregistré",
+          "transcript": "Transcription, caractères {{start}}–{{end}}"
+        },
+        "prepared": "Synthèse client Salesforce préparée"
+      },
+      "loginDomain": {
+        "toggle": "Utiliser une sandbox ou le domaine de l'entreprise",
+        "label": "Domaine de connexion Salesforce",
+        "placeholder": "test.salesforce.com ou votreentreprise.my.salesforce.com",
+        "hint": "Laissez vide pour vous connecter à une organisation de production."
       }
     }
   },

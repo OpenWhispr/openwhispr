@@ -27,12 +27,13 @@ test("durable reservation prevents concurrent exports and keeps outcomes separat
   assert.equal(store.get(key).fields_state, "failed");
   assert.equal(store.begin(key, "activity", "old-card", 0), false);
 });
-test("restart marks dispatched writes unknown and blocks automatic retries", () => {
+test("restart marks dispatched writes unknown; only a card prepared after that can write again", () => {
   const { db, store } = fixture();
   store.begin(key, "activity", "interrupted", 0);
   const restarted = createSalesforceExports({ db });
   assert.equal(restarted.get(key).activity_state, "unknown");
-  assert.equal(restarted.begin(key, "activity", "retry", restarted.get(key).version), false);
+  assert.equal(restarted.begin(key, "activity", "old-card", 0), false);
+  assert.equal(restarted.begin(key, "activity", "retry", restarted.get(key).version), true);
 });
 test("confirmed associations are scoped to owner, org, instance and exact destination", () => {
   const { store } = fixture();
@@ -69,10 +70,52 @@ test("closing and reopening SQLite preserves confirmed activity and interrupted 
     assert.equal(saved.activity_state, "succeeded");
     assert.equal(saved.activity_id, "00T000000000001");
     assert.equal(saved.fields_state, "unknown");
-    assert.equal(restarted.begin(key, "fields", "retry", saved.version), false);
+    assert.equal(restarted.begin(key, "fields", "old-card", saved.version - 1), false);
+    assert.equal(restarted.begin(key, "fields", "retry", saved.version), true);
     assert.equal(restarted.list(key).length, 1);
   } finally {
     db.close();
     unlinkSync(path);
   }
+});
+
+test("a table from before activity_hash gains the column and keeps its rows", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`CREATE TABLE salesforce_exports (
+    account_id TEXT NOT NULL, organization_id TEXT NOT NULL, instance_url TEXT NOT NULL,
+    note_id INTEGER NOT NULL, object_type TEXT NOT NULL, record_id TEXT NOT NULL,
+    activity_id TEXT, activity_state TEXT NOT NULL DEFAULT 'idle',
+    fields_state TEXT NOT NULL DEFAULT 'idle', operation_id TEXT,
+    version INTEGER NOT NULL DEFAULT 0, confirmed_at TEXT,
+    PRIMARY KEY (account_id, organization_id, instance_url, note_id, object_type, record_id)
+  )`);
+  db.prepare(
+    `INSERT INTO salesforce_exports (account_id, organization_id, instance_url, note_id, object_type, record_id, activity_id, activity_state)
+    VALUES (?, ?, ?, ?, ?, ?, '00T000000000001', 'succeeded')`
+  ).run(
+    key.ownerAccountId,
+    key.organizationId,
+    key.instanceUrl,
+    key.noteId,
+    key.objectType,
+    key.recordId
+  );
+  const store = createSalesforceExports({ db });
+  const saved = store.get(key);
+  assert.equal(saved.activity_id, "00T000000000001");
+  assert.equal(saved.activity_hash, null);
+  assert.equal(store.begin(key, "activity", "next", saved.version), true);
+  assert.equal(store.finish(key, "activity", "next", "succeeded", "00T000000000001", "hash"), true);
+  assert.equal(store.get(key).activity_hash, "hash");
+});
+test("the stored text's hash replaces the sent one only until another write begins", () => {
+  const { store } = fixture();
+  store.begin(key, "activity", "one", 0);
+  store.finish(key, "activity", "one", "succeeded", "00T000000000001", "sent");
+  assert.equal(store.recordActivityHash(key, "00T000000000001", 1, "stored"), true);
+  assert.equal(store.get(key).activity_hash, "stored");
+  store.begin(key, "fields", "fields", 1);
+  // A read-back that lands after a later write began changes nothing.
+  assert.equal(store.recordActivityHash(key, "00T000000000001", 1, "late"), false);
+  assert.equal(store.get(key).activity_hash, "stored");
 });

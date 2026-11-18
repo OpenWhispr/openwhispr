@@ -100,18 +100,25 @@ function fixture() {
         ? { ok: true, token: "token", credential }
         : { ok: false, errorCode: "connection_changed" },
     isConfigured: () => true,
+    reconnects: 0,
+    markReconnect() {
+      this.reconnects += 1;
+      return { ok: false, errorCode: "reconnect_needed" };
+    },
   };
   let writeResult = null;
   const api = {
     request: async (request) => {
       calls.push(request);
-      if (request.method && request.method !== "GET")
-        return (
-          writeResult ?? {
-            ok: true,
-            data: request.method === "POST" ? { id: activityId, success: true } : null,
-          }
-        );
+      if (request.method && request.method !== "GET") {
+        if (writeResult) return writeResult;
+        // A saved Task reads back what was written.
+        if (request.path.includes("/sobjects/Task")) Object.assign(task, request.body);
+        return {
+          ok: true,
+          data: request.method === "POST" ? { id: activityId, success: true } : null,
+        };
+      }
       if (request.path.includes("/describe"))
         return { ok: true, data: metadata[request.path.split("/").at(-2)] };
       if (request.path.includes("/query?")) {
@@ -212,9 +219,10 @@ test("prepare reads only; approved save creates one completed Task and links not
     { objectType: "Opportunity", recordId, noteIds: [2] },
     { binding }
   );
+  // A note the user chose comes first, so the note cap never drops it.
   assert.deepEqual(
     briefing.items.filter((item) => item.kind === "note").map((item) => item.noteId),
-    [1, 2]
+    [2, 1]
   );
 });
 test("concurrent approved cards create only one activity", async () => {
@@ -224,19 +232,35 @@ test("concurrent approved cards create only one activity", async () => {
   assert.equal(outcomes.filter((result) => result.state === "sent").length, 1);
   assert.equal(writes(fixtureState).length, 1);
 });
-test("uncertain writes persist and cannot be automatically retried", async () => {
+const SOURCE_NOTE = {
+  key: "connectors.salesforce.notes.sourceNote",
+  values: { title: "Conversation" },
+};
+const UNCERTAIN_NOTE = { key: "connectors.salesforce.notes.earlierAttemptUncertain" };
+test("an uncertain write is never retried on its own; a new card warns before the user sends again", async () => {
   const fixtureState = fixture();
   const preview = await prepare(fixtureState);
   fixtureState.setWriteResult({ ok: false, outcome: "unknown", errorCode: "network" });
   assert.equal((await commit(fixtureState, preview)).state, "unknown");
-  assert.equal((await prepare(fixtureState)).errorCode, "uncertain_operation");
+  assert.equal(writes(fixtureState).length, 1);
   const restarted = createSalesforceExports({ db: fixtureState.db });
   assert.equal(
     restarted.get({ ownerAccountId: "owner", organizationId: "org", instanceUrl, ...args })
       .activity_state,
     "unknown"
   );
-  assert.equal(writes(fixtureState).length, 1);
+  fixtureState.setWriteResult(null);
+  assert.equal((await commit(fixtureState, preview)).errorCode, "duplicate_operation");
+  assert.equal(writes(fixtureState).length, 1, "the card from before the write can't send");
+  const retry = await prepare(fixtureState);
+  assert.equal(retry.status, "ready");
+  assert.deepEqual(retry.preview.notes, [SOURCE_NOTE, UNCERTAIN_NOTE]);
+  assert.equal((await commit(fixtureState, retry)).state, "sent");
+  assert.equal(writes(fixtureState).length, 2);
+  assert.deepEqual((await prepare(fixtureState)).preview.notes, [
+    SOURCE_NOTE,
+    { key: "connectors.salesforce.notes.updateExisting" },
+  ]);
 });
 test("repeat export updates known activity with concurrency condition", async () => {
   const fixtureState = fixture();
@@ -420,11 +444,12 @@ test("field-write failure and uncertainty preserve the saved activity", async ()
     assert.equal(saved.activity_id, activityId);
     assert.equal(saved.activity_state, "succeeded");
     assert.equal(saved.fields_state, outcome);
-    if (outcome === "unknown")
-      assert.equal(
-        (await prepare(fixtureState, "update_fields", input)).errorCode,
-        "uncertain_operation"
-      );
+    const again = await prepare(fixtureState, "update_fields", input);
+    assert.equal(again.status, "ready");
+    assert.deepEqual(
+      again.preview.notes,
+      outcome === "unknown" ? [SOURCE_NOTE, UNCERTAIN_NOTE] : [SOURCE_NOTE]
+    );
   }
 });
 
@@ -573,15 +598,15 @@ test("default search preserves accessible matches and reports unavailable object
     { query: "match", objectType: "Contact" },
     { binding }
   );
-  assert.equal(explicit.errorCode, "INVALID_TYPE");
+  assert.equal(explicit.errorCode, "forbidden");
 });
 
 test("cross-object search skips local query permission errors but preserves auth and network failures", async () => {
-  for (const errorCode of [
-    "INVALID_FIELD",
-    "INVALID_SESSION_ID",
-    "network",
-    "REQUEST_LIMIT_EXCEEDED",
+  for (const [errorCode, copyCode] of [
+    ["INVALID_FIELD"],
+    ["INVALID_SESSION_ID", "reconnect_needed"],
+    ["network", "network"],
+    ["REQUEST_LIMIT_EXCEEDED", "rate_limited"],
   ]) {
     const fixtureState = fixture();
     const request = fixtureState.api.request;
@@ -610,7 +635,8 @@ test("cross-object search skips local query permission errors but preserves auth
       );
     } else {
       assert.equal(result.status, "failed");
-      assert.equal(result.errorCode, errorCode);
+      assert.equal(result.errorCode, copyCode);
+      assert.equal(fixtureState.auth.reconnects, errorCode === "INVALID_SESSION_ID" ? 1 : 0);
     }
   }
 });
@@ -689,4 +715,191 @@ test("search completeness marker survives the twenty-item result bound", async (
     unavailableObjectCount: 1,
   });
   assert.equal(result.truncated, true);
+});
+
+const taskGone = (fixtureState, failure) => {
+  const request = fixtureState.api.request;
+  fixtureState.api.request = async (input) =>
+    input.method === "GET" && /\/sobjects\/Task\/00T/.test(input.path) ? failure : request(input);
+};
+
+test("a saved Task deleted or moved in Salesforce gets a new Task on the next export", async () => {
+  for (const change of [
+    (state) =>
+      taskGone(state, { ok: false, errorCode: "NOT_FOUND", refused: true, outcome: "failed" }),
+    (state) => {
+      state.task.WhatId = "006000000000009";
+    },
+  ]) {
+    const fixtureState = fixture();
+    await commit(fixtureState, await prepare(fixtureState));
+    change(fixtureState);
+    const repeat = await prepare(fixtureState);
+    assert.equal(repeat.status, "ready");
+    assert.equal(repeat.payload.activityId, null);
+    assert.deepEqual(repeat.preview.notes, [
+      SOURCE_NOTE,
+      { key: "connectors.salesforce.notes.replacesMissing" },
+    ]);
+    fixtureState.setWriteResult({ ok: true, data: { id: "00T000000000002", success: true } });
+    assert.equal((await commit(fixtureState, repeat)).state, "sent");
+    const created = writes(fixtureState)[1];
+    assert.equal(created.method, "POST");
+    assert.equal(created.body.WhatId, recordId);
+    const saved = fixtureState.store.get({
+      ownerAccountId: "owner",
+      organizationId: "org",
+      instanceUrl,
+      ...args,
+    });
+    assert.equal(saved.activity_id, "00T000000000002");
+  }
+});
+
+test("a Task deleted after its review asks for a fresh review instead of writing", async () => {
+  const fixtureState = fixture();
+  await commit(fixtureState, await prepare(fixtureState));
+  const repeat = await prepare(fixtureState);
+  taskGone(fixtureState, { ok: false, errorCode: "NOT_FOUND", refused: true, outcome: "failed" });
+  assert.equal((await commit(fixtureState, repeat)).errorCode, "stale_record");
+  assert.equal(writes(fixtureState).length, 1);
+});
+
+test("a Task deleted between the last check and the write asks for a fresh review", async () => {
+  const fixtureState = fixture();
+  await commit(fixtureState, await prepare(fixtureState));
+  const repeat = await prepare(fixtureState);
+  fixtureState.setWriteResult({
+    ok: false,
+    errorCode: "ENTITY_IS_DELETED",
+    refused: true,
+    outcome: "failed",
+  });
+  const result = await commit(fixtureState, repeat);
+  assert.equal(result.state, "failed");
+  assert.equal(result.errorCode, "stale_record");
+});
+
+test("a refused re-export leaves field updates available for the Task already saved", async () => {
+  const fixtureState = fixture();
+  await commit(fixtureState, await prepare(fixtureState));
+  fixtureState.setWriteResult({
+    ok: false,
+    errorCode: "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+    refused: true,
+    outcome: "failed",
+  });
+  const failure = await commit(fixtureState, await prepare(fixtureState));
+  assert.equal(failure.errorCode, "validation_failed");
+  fixtureState.setWriteResult(null);
+  const input = { ...args, fields: [{ name: "Notes__c", value: "After" }] };
+  const fields = await prepare(fixtureState, "update_fields", input);
+  assert.equal(fields.status, "ready");
+  assert.equal((await commit(fixtureState, fields, "update_fields")).state, "sent");
+});
+
+test("Salesforce error codes reach the card as codes it has copy for", async () => {
+  for (const [salesforceCode, copyCode] of [
+    ["ENTITY_IS_LOCKED", "record_locked"],
+    ["ENTITY_IS_DELETED", "not_found"],
+    ["NOT_FOUND", "not_found"],
+    ["REQUIRED_FIELD_MISSING", "validation_failed"],
+    ["INSUFFICIENT_ACCESS_OR_READONLY", "forbidden"],
+    ["STRING_TOO_LONG", "too_long"],
+    ["UNABLE_TO_LOCK_ROW", "rate_limited"],
+    ["SOME_NEW_SALESFORCE_CODE", "refused"],
+  ]) {
+    const fixtureState = fixture();
+    const preview = await prepare(fixtureState);
+    fixtureState.setWriteResult({
+      ok: false,
+      errorCode: salesforceCode,
+      refused: true,
+      outcome: "failed",
+    });
+    const result = await commit(fixtureState, preview);
+    assert.equal(result.state, "failed");
+    assert.equal(result.errorCode, copyCode, salesforceCode);
+    // The fallback wording is for codes with no copy of their own.
+    if (copyCode !== "refused")
+      assert.doesNotMatch(result.message, /^Salesforce refused this request/);
+  }
+});
+
+const EDITED_NOTE = { key: "connectors.salesforce.notes.editedInSalesforce" };
+test("a re-export says when the saved Task was edited in Salesforce since OpenWhispr wrote it", async () => {
+  const fixtureState = fixture();
+  await commit(fixtureState, await prepare(fixtureState));
+  // Salesforce storing CRLF line breaks or trimming isn't an edit.
+  fixtureState.task.Description = `  ${fixtureState.task.Description.replace(/\n/g, "\r\n")}  `;
+  assert.deepEqual((await prepare(fixtureState)).preview.notes, [
+    SOURCE_NOTE,
+    { key: "connectors.salesforce.notes.updateExisting" },
+  ]);
+  fixtureState.task.Description = "Edited by a colleague in Salesforce";
+  const repeat = await prepare(fixtureState);
+  assert.deepEqual(repeat.preview.notes, [
+    SOURCE_NOTE,
+    { key: "connectors.salesforce.notes.updateExisting" },
+    EDITED_NOTE,
+  ]);
+  assert.equal((await commit(fixtureState, repeat)).state, "sent");
+  assert.deepEqual((await prepare(fixtureState)).preview.notes, [
+    SOURCE_NOTE,
+    { key: "connectors.salesforce.notes.updateExisting" },
+  ]);
+});
+
+test("an unconfirmed re-export that landed isn't reported as an edit made in Salesforce", async () => {
+  const fixtureState = fixture();
+  await commit(fixtureState, await prepare(fixtureState));
+  const repeat = await prepare(fixtureState, "export_conversation", {
+    ...args,
+    body: "Revised summary",
+  });
+  fixtureState.setWriteResult({ ok: false, outcome: "unknown", errorCode: "network" });
+  assert.equal((await commit(fixtureState, repeat)).state, "unknown");
+  // The write landed after all.
+  fixtureState.task.Description = repeat.payload.body;
+  fixtureState.setWriteResult(null);
+  assert.deepEqual((await prepare(fixtureState)).preview.notes, [
+    SOURCE_NOTE,
+    { key: "connectors.salesforce.notes.updateExisting" },
+    UNCERTAIN_NOTE,
+  ]);
+});
+
+test("text a Salesforce Flow rewrites on save isn't reported as an edit at the next export", async () => {
+  const fixtureState = fixture();
+  const request = fixtureState.api.request;
+  fixtureState.api.request = async (input) => {
+    const result = await request(input);
+    if (input.method && input.method !== "GET" && input.path.includes("/sobjects/Task"))
+      fixtureState.task.Subject = `[Logged] ${fixtureState.task.Subject}`;
+    return result;
+  };
+  assert.equal((await commit(fixtureState, await prepare(fixtureState))).state, "sent");
+  // The stored text is read back after the result.
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual((await prepare(fixtureState)).preview.notes, [
+    SOURCE_NOTE,
+    { key: "connectors.salesforce.notes.updateExisting" },
+  ]);
+});
+
+test("the card names the source note, and the provenance date is the note's local day", async () => {
+  const fixtureState = fixture();
+  // SQLite's UTC time without a zone: read as UTC, shown as the user's day.
+  fixtureState.notes.get(1).created_at = "2026-11-01 23:30:00";
+  const created = new Date("2026-11-01T23:30:00Z");
+  const day = [created.getFullYear(), created.getMonth() + 1, created.getDate()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join("-");
+  const preview = await prepare(fixtureState);
+  assert.match(preview.preview.body, new RegExp(`Source: OpenWhispr — Conversation \\(${day}\\)$`));
+  assert.deepEqual(preview.preview.notes, [SOURCE_NOTE]);
+  fixtureState.notes.get(1).title = "";
+  assert.deepEqual((await prepare(fixtureState)).preview.notes, [
+    { key: "connectors.salesforce.notes.sourceNoteUntitled" },
+  ]);
 });

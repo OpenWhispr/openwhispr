@@ -52,6 +52,7 @@ export const toolIcons: Record<string, typeof Search> = {
   salesforce_get_record: FileText,
   salesforce_describe_fields: FileText,
   salesforce_get_briefing: BookOpen,
+  salesforce_present_briefing: ClipboardCheck,
   salesforce_export_conversation: CheckCircle,
   salesforce_update_fields: FilePen,
   load_skill: SkillStack,

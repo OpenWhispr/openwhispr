@@ -1091,12 +1091,19 @@ export function createChatTurnEngine(
       let rawContent = "";
       let fullContent = "";
       const renderedAnswers = new Map<string, string>();
-      const responseContent = (): string =>
-        renderedAnswers.size
-          ? [...renderedAnswers.values()].join("\n\n---\n\n")
-          : withoutEchoedToolTrace(
-              requireCaretDisposition ? readCaretResponse(rawContent).content : rawContent
-            );
+      const modelContent = (): string =>
+        withoutEchoedToolTrace(
+          requireCaretDisposition ? readCaretResponse(rawContent).content : rawContent
+        );
+      // A tool's rendered evidence follows the model's own words, kept whole so
+      // a card placed in them (textOffset) never lands inside it. A rule sets
+      // the evidence apart, so nothing the model wrote reads as part of it.
+      const responseContent = (): string => {
+        const text = modelContent();
+        if (!renderedAnswers.size) return text;
+        const answers = [...renderedAnswers.values()].join("\n\n---\n\n");
+        return text.trim() ? `${text}\n\n---\n\n${answers}` : answers;
+      };
       // A tool may report before the stream shows its call (it can ask the
       // user at once), so what it reports waits here for the call.
       const annotations = new Map<string, Partial<ToolCallInfo>>();
@@ -1507,7 +1514,7 @@ export function createChatTurnEngine(
                   arguments: call.arguments,
                   status: "executing",
                   startedAt: Date.now(),
-                  textOffset: fullContent.length,
+                  textOffset: modelContent().length,
                   ...annotations.get(currentToolCallId(call.id)),
                 },
               ];
@@ -1590,7 +1597,10 @@ export function createChatTurnEngine(
             assistantId,
             content: fullContent,
             toolCalls: calls,
+            // A rendered answer (a Salesforce briefing) is Markdown with
+            // citations, made to be read here, never typed into another app.
             onlyRead:
+              renderedAnswers.size === 0 &&
               !stepLimitReached &&
               !unbackedClaim &&
               finishReason === "stop" &&

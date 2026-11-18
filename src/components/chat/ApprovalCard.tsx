@@ -33,7 +33,11 @@ import {
   issueVerb,
   toIssueFields,
 } from "../../utils/issueApprovalFields";
-import { salesforceFieldProblem, salesforceOutcomeKey } from "../../utils/salesforceApprovalFields";
+import {
+  salesforceFieldProblem,
+  salesforceFieldsCopyText,
+  salesforceOutcomeKey,
+} from "../../utils/salesforceApprovalFields";
 import { SalesforceApprovalFields } from "./SalesforceApprovalFields";
 import { EmailApprovalFields } from "./EmailApprovalFields";
 import { IssueApprovalFields } from "./IssueApprovalFields";
@@ -154,9 +158,13 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       ? t("connectors.approval.email.invalidAddressAnnouncement")
       : problemText;
   const hasFieldLayout = Boolean(emailFields || issueFields || isSalesforceFields);
-  // Copy takes the message itself, as the card shows it now.
+  // Copy takes the message itself, as the card shows it now; a field card's
+  // message is its included fields.
   const body = emailFields?.body ?? issueFields?.body ?? draft.body;
-  const { copied, copyText, confirmCopied } = useCopyFeedback(body);
+  const copyBody = isSalesforceFields
+    ? salesforceFieldsCopyText(preview.salesforceFields, draft.fields)
+    : body;
+  const { copied, copyText, confirmCopied } = useCopyFeedback(copyBody);
 
   // Each layout names its own button and outcomes ("Create issue",
   // "Created ENG-124"); every other card keeps Send and "Sent to …".
@@ -317,7 +325,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const copyButton = (
     <button
       type="button"
-      onClick={() => void copyText(body).then((done) => done && confirmCopied(body))}
+      onClick={() => void copyText(copyBody).then((done) => done && confirmCopied(copyBody))}
       className={PILL_BUTTON}
     >
       {copied ? <Check size={14} className="text-success" /> : <CopyRounded size={14} />}
@@ -349,7 +357,11 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       {/* A long message scrolls here; who it goes to and the actions stay put. */}
       <div
         data-approval-body=""
-        className="agent-chat-scroll max-h-44 overflow-y-auto px-4 py-3 text-[14px] agent:text-[15px]"
+        className={cn(
+          "agent-chat-scroll overflow-y-auto px-4 py-3 text-[14px] agent:text-[15px]",
+          // Each field shows its current and new value, so field cards get more room.
+          isSalesforceFields ? "max-h-72" : "max-h-44"
+        )}
       >
         {message}
       </div>
@@ -488,7 +500,11 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
             {entry.state === "sent" && (
               <span className="inline-flex h-8 items-center gap-1.5 px-2 text-[13px] text-muted-foreground agent:text-[14px]">
                 <Check size={14} />
-                {verb ? sentText : t("connectors.approval.sentLabel")}
+                {verb
+                  ? sentText
+                  : salesforceSentKey
+                    ? t("connectors.approval.salesforce.savedLabel")
+                    : t("connectors.approval.sentLabel")}
               </span>
             )}
           </div>

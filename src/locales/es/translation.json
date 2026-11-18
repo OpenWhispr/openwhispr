@@ -4830,7 +4830,9 @@
       "salesforce_export_conversationName": "Actividad de Salesforce",
       "salesforce_export_conversationStatus": "Preparando actividad de Salesforce…",
       "salesforce_update_fieldsName": "Actualizaciones de campos de Salesforce",
-      "salesforce_update_fieldsStatus": "Preparando actualizaciones de campos de Salesforce…"
+      "salesforce_update_fieldsStatus": "Preparando actualizaciones de campos de Salesforce…",
+      "salesforce_present_briefingName": "Conclusiones del informe",
+      "salesforce_present_briefingStatus": "Seleccionando pruebas para el informe…"
     },
     "turn": {
       "reasoning": "Razonamiento",
@@ -4868,7 +4870,7 @@
           "linear": "Puedo buscar y crear incidencias de Linear por ti.",
           "github": "Puedo buscar y crear issues de GitHub por ti.",
           "calendar": "Puedo consultar tu disponibilidad y sugerir horarios.",
-          "salesforce": "To read Salesforce records and save reviewed meeting notes."
+          "salesforce": "Puedo leer registros de Salesforce y guardar en ellos notas de reunión revisadas."
         }
       },
       "access": {
@@ -5199,14 +5201,15 @@
           "stale_record": "Salesforce cambió desde esta revisión. Actualiza y revisa de nuevo.",
           "source_unavailable": "La nota de origen no existe o no es accesible.",
           "export_required": "Guarda la actividad en esta oportunidad antes de actualizar sus campos.",
-          "uncertain_operation": "Una escritura anterior no está confirmada. Revisa Salesforce antes de reintentar.",
-          "duplicate_operation": "Una escritura anterior no está confirmada. Revisa Salesforce antes de reintentar.",
+          "duplicate_operation": "Esta exportación se guardó de nuevo después de esta revisión, o aún se está guardando. No se envió nada. Prepara una revisión nueva.",
           "invalid_field": "Elige hasta tres campos de texto personalizados y editables de oportunidad.",
           "storage_unavailable": "El historial local de exportaciones no está disponible. No se inició ninguna escritura.",
           "task_status_unavailable": "Salesforce no tiene un estado de tarea completada disponible. Consulta a tu administrador de Salesforce.",
-          "not_found": "Salesforce no pudo aceptarlo tal como está escrito. No se envió nada.",
+          "not_found": "Este registro de Salesforce ya no existe o no tienes acceso a él. No se envió nada.",
           "invalid_reference": "Salesforce no pudo aceptarlo tal como está escrito. No se envió nada.",
-          "no_fields_selected": "Selecciona al menos un campo o cancela."
+          "no_fields_selected": "Selecciona al menos un campo o cancela.",
+          "record_locked": "Este registro de Salesforce está bloqueado, por ejemplo por un proceso de aprobación. No se envió nada.",
+          "validation_failed": "Una regla de validación, una regla de duplicados o un campo obligatorio de Salesforce lo impidió. Revisa el registro en Salesforce. No se envió nada."
         }
       },
       "email": {
@@ -5292,7 +5295,6 @@
         "before": "Valor actual",
         "after": "Reemplazo propuesto",
         "empty": "Vacío",
-        "value": "Valor propuesto para {{field}}",
         "limit": "{{count}} / {{max}} caracteres",
         "invalidPreview": "Esta vista previa está incompleta. Solicita una nueva revisión.",
         "noneSelected": "Selecciona al menos un campo o cancela.",
@@ -5304,7 +5306,8 @@
         "salesforceFields": {
           "sent": "Campos guardados en {{destination}}.",
           "unknown": "No se pudieron confirmar los cambios. Revisa {{destination}} en Salesforce antes de volver a intentarlo."
-        }
+        },
+        "savedLabel": "Guardado"
       }
     },
     "policyOff": "Tu organización ha desactivado los conectores.",
@@ -5612,14 +5615,15 @@
           "stale_record": "Salesforce cambió desde esta revisión. Actualiza y revisa de nuevo.",
           "source_unavailable": "La nota de origen no existe o no es accesible.",
           "export_required": "Guarda la actividad en esta oportunidad antes de actualizar sus campos.",
-          "uncertain_operation": "Una escritura anterior no está confirmada. Revisa Salesforce antes de reintentar.",
-          "duplicate_operation": "Una escritura anterior no está confirmada. Revisa Salesforce antes de reintentar.",
+          "duplicate_operation": "Esta exportación se guardó de nuevo después de esta revisión, o aún se está guardando. No se envió nada.",
           "invalid_field": "Elige hasta tres campos de texto personalizados y editables de oportunidad.",
           "storage_unavailable": "El historial local de exportaciones no está disponible. No se inició ninguna escritura.",
           "task_status_unavailable": "Salesforce no tiene un estado de tarea completada disponible. Consulta a tu administrador de Salesforce.",
-          "not_found": "Salesforce no pudo aceptarlo.",
+          "not_found": "No se encontró en Salesforce.",
           "invalid_reference": "Salesforce no pudo aceptarlo.",
-          "no_fields_selected": "Selecciona al menos un campo o cancela."
+          "no_fields_selected": "Selecciona al menos un campo o cancela.",
+          "record_locked": "El registro de Salesforce está bloqueado.",
+          "validation_failed": "Bloqueado por una regla o un campo obligatorio de Salesforce."
         }
       },
       "unknownSent": {
@@ -5655,7 +5659,8 @@
         "signed_out": "Inicia sesión en OpenWhispr para conectar Salesforce.",
         "policy_blocked": "Tu organización ha desactivado los conectores.",
         "policy_unavailable": "No se pudieron comprobar los ajustes de tu organización. Inténtalo de nuevo.",
-        "permission_not_granted": "Salesforce no se conectó porque no se concedieron todos los permisos. Vuelve a conectar y permítelos todos."
+        "permission_not_granted": "Salesforce no se conectó porque no se concedieron todos los permisos. Vuelve a conectar y permítelos todos.",
+        "invalid_login_domain": "Escribe test.salesforce.com o el My Domain de tu empresa, como tuempresa.my.salesforce.com."
       },
       "browser": {
         "connectedTitle": "Salesforce está conectado",
@@ -5664,7 +5669,84 @@
         "failedBody": "Vuelve a OpenWhispr para intentarlo de nuevo."
       },
       "notes": {
-        "updateExisting": "Actualizar la actividad guardada anteriormente; no se creará otra tarea."
+        "updateExisting": "Actualizar la actividad guardada anteriormente; no se creará otra tarea.",
+        "earlierAttemptUncertain": "Es posible que un intento anterior ya lo haya guardado en Salesforce. Revisa el registro allí antes de volver a enviarlo.",
+        "replacesMissing": "La actividad guardada anteriormente ya no está en este registro de Salesforce, o ya no puedes verla, así que se creará una nueva.",
+        "editedInSalesforce": "Esta actividad se editó en Salesforce después de que OpenWhispr la guardara. Al enviar se reemplazarán esos cambios.",
+        "sourceNote": "De la nota «{{title}}».",
+        "sourceNoteUntitled": "De una nota sin título."
+      },
+      "briefing": {
+        "untitledRecord": "Registro de Salesforce seleccionado",
+        "retrieved": "Obtenido: {{time}}",
+        "crmFacts": "Datos actuales del CRM",
+        "fields": {
+          "Name": "Nombre",
+          "PersonName": "Nombre",
+          "StageName": "Etapa",
+          "CloseDate": "Fecha de cierre",
+          "Amount": "Importe",
+          "CurrencyIsoCode": "Divisa",
+          "NextStep": "Próximo paso",
+          "OwnerId": "Propietario",
+          "AccountId": "Cuenta",
+          "Type": "Tipo",
+          "Industry": "Sector",
+          "Website": "Sitio web",
+          "Phone": "Teléfono",
+          "FirstName": "Nombre de pila",
+          "LastName": "Apellidos",
+          "Email": "Correo electrónico",
+          "Title": "Cargo",
+          "Company": "Empresa",
+          "Status": "Estado"
+        },
+        "notReturned": "no devuelto",
+        "notRecorded": "no registrado",
+        "linkedNameUnavailable": "vinculado; nombre no disponible",
+        "gaps": "Lagunas e identidad del cliente",
+        "identityNotVerified": "Una asociación de exportación no verifica la identidad del cliente. Las notas se vincularon al registro que eligió el usuario; los nombres de clientes y las relaciones de cuenta no se han cotejado de forma independiente.",
+        "missingFieldsNote": "Los campos del CRM que faltan o no se devolvieron no demuestran aprobación de presupuesto, compromisos ni coincidencia con las notas de la reunión.",
+        "unavailableNotes": "Notas vinculadas no disponibles en el espacio de trabajo actual: {{count}}.",
+        "partial": "La cobertura es parcial: se limitó el número de notas, el texto de origen, la transcripción o los resultados del CRM. Que algo no aparezca en estos extractos no significa que no se tratara en las reuniones.",
+        "crmOnly": "No se obtuvo contenido de reuniones accesible. Este informe se basa solo en el CRM.",
+        "notPrepared": "No se prepararon conclusiones de las reuniones. Las notas de origen disponibles aparecen abajo; no se ha deducido ninguna conclusión.",
+        "findings": "Conclusiones de las reuniones",
+        "findingsExplainer": "Abajo se reproducen los extractos de origen. Las etiquetas de estado son la clasificación del asistente; confirmado significa que figura en la nota, no que se haya verificado de forma independiente. Los responsables y plazos son solo los que indica cada extracto.",
+        "categories": {
+          "takeaway": "Puntos clave",
+          "decision": "Decisiones",
+          "commitment": "Compromisos",
+          "proposal": "Propuestas",
+          "risk": "Riesgos",
+          "question": "Preguntas abiertas"
+        },
+        "status": {
+          "confirmed": "Confirmado",
+          "proposed": "Propuesto",
+          "unknown": "Sin aclarar"
+        },
+        "conflict": "Posible contradicción — sin resolver",
+        "crmConflictEntry": "Salesforce {{label}}: {{value}}",
+        "sources": "Fuentes",
+        "noteCreated": "Nota creada: {{time}}.",
+        "lastEdited": "Última edición: {{time}}.",
+        "addedForBriefing": "Añadida para este informe.",
+        "exported": "Exportada: {{time}}.",
+        "savedActivity": "Actividad guardada en Salesforce",
+        "sourcesExplainer": "Las fechas de creación no son fechas de reunión. Las actividades guardadas en Salesforce contienen el resumen exportado; las notas pueden haber cambiado desde la exportación.",
+        "sections": {
+          "personalNotes": "Notas personales",
+          "summary": "Resumen de IA guardado",
+          "transcript": "Transcripción, caracteres {{start}}–{{end}}"
+        },
+        "prepared": "Informe de Salesforce preparado"
+      },
+      "loginDomain": {
+        "toggle": "Usar un sandbox o el dominio de la empresa",
+        "label": "Dominio de inicio de sesión de Salesforce",
+        "placeholder": "test.salesforce.com o tuempresa.my.salesforce.com",
+        "hint": "Déjalo vacío para iniciar sesión en una organización de producción."
       }
     }
   },
