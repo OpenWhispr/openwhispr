@@ -253,6 +253,7 @@ export function ConnectorLoginRow({
                   onChange={(event) => setLoginDomain(event.target.value)}
                   aria-label={copy("loginDomain.label")}
                   placeholder={copy("loginDomain.placeholder")}
+                  dir="ltr"
                   spellCheck={false}
                   autoCapitalize="none"
                   autoCorrect="off"
