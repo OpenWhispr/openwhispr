@@ -3,7 +3,8 @@ import {
   useDefaultLibraryBuckets,
   type LibraryScreenPlatform,
 } from './libraryScreenPlatform.android';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
 import { View, ScrollView, Alert, ActionSheetIOS, RefreshControl } from 'react-native';
 import { Text } from '@/components/ui/Text';
 
@@ -54,6 +55,8 @@ export function createFoldersScreen(platform?: LibraryScreenPlatform) {
       deleteNote,
     } = useNotesStore();
     const [searchValue, setSearchValue] = useState('');
+    const scroll = useRef<ScrollView>(null);
+    useScrollToTop(scroll);
     const [newFolderVisible, setNewFolderVisible] = useState(false);
     const rename = useRenameFolder(renameFolder);
     const openRename = rename?.open;
@@ -228,6 +231,7 @@ export function createFoldersScreen(platform?: LibraryScreenPlatform) {
           onSearchChange={setSearchValue}
         />
         <ScrollView
+          ref={scroll}
           contentContainerStyle={{
             padding: SCROLL_PADDING,
             paddingBottom: FAB_BOTTOM_PADDING,

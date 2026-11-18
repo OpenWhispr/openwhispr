@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { router } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +22,8 @@ export default function StyleScreen() {
   const [choosing, setChoosing] = useState(false);
   const [saving, setSaving] = useState(false);
   const savePending = useRef(false);
+  const scroll = useRef<ScrollView>(null);
+  useScrollToTop(scroll);
   const save = async (updates: Partial<UserConfig>): Promise<boolean> => {
     if (savePending.current) return false;
     savePending.current = true;
@@ -46,7 +49,7 @@ export default function StyleScreen() {
     }
   };
   return (
-    <Page title={t('style')}>
+    <Page title={t('style')} scrollRef={scroll}>
       <Text accessibilityRole="header" style={styles.title}>
         {t('styleTitle')}
       </Text>

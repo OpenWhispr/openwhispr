@@ -130,12 +130,15 @@ export function Page({
   back = false,
   showAccount = true,
   footer,
+  scrollRef,
 }: {
   title: string;
   children: React.ReactNode;
   back?: boolean;
   showAccount?: boolean;
   footer?: React.ReactNode;
+  /** A tab's first screen passes one so tapping its tab again scrolls it to the top. */
+  scrollRef?: React.Ref<ScrollView>;
 }) {
   const { t } = useTranslation();
   return (
@@ -164,6 +167,7 @@ export function Page({
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"

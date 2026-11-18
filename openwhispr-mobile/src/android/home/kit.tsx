@@ -242,7 +242,8 @@ export function HomeToast({ message, showId }: { message: string; showId: number
       importantForAccessibility="no-hide-descendants"
       style={{
         position: 'absolute',
-        bottom: 12,
+        // 16 dp above the tab bar, as `TAB_TOAST_GAP` in ../tabBar.
+        bottom: 16,
         alignSelf: 'center',
         maxWidth: 361,
         opacity,

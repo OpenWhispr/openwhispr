@@ -3,6 +3,7 @@ import type { HomeKey } from './strings';
 // Missing keys fall back to English.
 export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> = {
   es: {
+    tabPosition: '{{index}} de {{count}}',
     writingItUp: 'Transcribiendo…',
     uploadingPercent: 'Subiendo {{percent}} %',
     copiedAddedToHistory: 'Copiado · añadido al historial',
@@ -63,6 +64,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Permite el micrófono para probar el dictado.',
   },
   fr: {
+    tabPosition: '{{index}} sur {{count}}',
     writingItUp: 'Transcription…',
     uploadingPercent: 'Envoi {{percent}} %',
     copiedAddedToHistory: 'Copié · ajouté à l’historique',
@@ -123,6 +125,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Autorisez le micro pour essayer la dictée.',
   },
   de: {
+    tabPosition: '{{index}} von {{count}}',
     writingItUp: 'Wird geschrieben…',
     uploadingPercent: 'Hochladen {{percent}} %',
     copiedAddedToHistory: 'Kopiert · zum Verlauf hinzugefügt',
@@ -183,6 +186,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Erlaube das Mikrofon, um das Diktieren auszuprobieren.',
   },
   pt: {
+    tabPosition: '{{index}} de {{count}}',
     writingItUp: 'Transcrevendo…',
     uploadingPercent: 'Enviando {{percent}}%',
     copiedAddedToHistory: 'Copiado · adicionado ao histórico',
@@ -243,6 +247,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Permita o microfone para experimentar o ditado.',
   },
   it: {
+    tabPosition: '{{index}} di {{count}}',
     writingItUp: 'Trascrizione…',
     uploadingPercent: 'Caricamento {{percent}}%',
     copiedAddedToHistory: 'Copiato · aggiunto alla cronologia',
@@ -303,6 +308,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Consenti il microfono per provare la dettatura.',
   },
   ru: {
+    tabPosition: '{{index}} из {{count}}',
     writingItUp: 'Расшифровка…',
     uploadingPercent: 'Загрузка {{percent}}%',
     copiedAddedToHistory: 'Скопировано · добавлено в историю',
@@ -363,6 +369,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Разрешите микрофон, чтобы попробовать диктовку.',
   },
   'zh-CN': {
+    tabPosition: '第 {{index}} 个，共 {{count}} 个',
     writingItUp: '正在转写…',
     uploadingPercent: '正在上传 {{percent}}%',
     copiedAddedToHistory: '已复制 · 已添加到历史记录',
@@ -423,6 +430,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '请允许使用麦克风以试用听写。',
   },
   'zh-TW': {
+    tabPosition: '第 {{index}} 個，共 {{count}} 個',
     writingItUp: '正在轉寫…',
     uploadingPercent: '正在上傳 {{percent}}%',
     copiedAddedToHistory: '已複製 · 已加入歷史記錄',
@@ -483,6 +491,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '請允許使用麥克風以試用聽寫。',
   },
   ja: {
+    tabPosition: '{{count}} 件中 {{index}} 件目',
     writingItUp: '文字起こし中…',
     uploadingPercent: 'アップロード中 {{percent}}%',
     copiedAddedToHistory: 'コピー済み · 履歴に追加',
@@ -543,6 +552,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '音声入力を試すにはマイクを許可してください。',
   },
   ar: {
+    tabPosition: '{{index}} من {{count}}',
     writingItUp: 'جارٍ التفريغ…',
     uploadingPercent: 'جارٍ الرفع ‎{{percent}}%',
     copiedAddedToHistory: 'نُسخ · أُضيف إلى السجل',
