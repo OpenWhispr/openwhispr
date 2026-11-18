@@ -220,6 +220,15 @@ describe('Use your own key', () => {
     expect(screen.getByText('textCleanupAndNotes')).toBeTruthy();
   });
 
+  it('opened for meetings, offers only providers that transcribe live', async () => {
+    render(<KeySheet visible onClose={jest.fn()} onlyTask="meeting" />);
+    await act(async () => {});
+    for (const name of ['OpenAI', 'Deepgram', 'AssemblyAI'])
+      expect(screen.getByText(name)).toBeTruthy();
+    expect(screen.queryByText('Groq')).toBeNull();
+    expect(screen.queryByText('OpenRouter')).toBeNull();
+  });
+
   it('offers OpenRouter only the text tasks', async () => {
     mockSaved['provider.openrouter'] = 'sk-or-v1-abcdefghijkl77b1';
     render(<KeySheet visible onClose={jest.fn()} initialProvider="openrouter" />);

@@ -115,6 +115,10 @@ export function KeySheet({
   const [busy, setBusy] = useState(false);
   const check = useKeyCheck(provider, locked ? '' : draft);
   const name = KEY_PROVIDERS.find((item) => item.id === provider)!.name;
+  // Opened for meetings, only providers that can transcribe live are offered.
+  const chips = KEY_PROVIDERS.filter(
+    (item) => onlyTask !== 'meeting' || providerCanRun(item.id, 'meeting'),
+  );
 
   useEffect(() => {
     if (!visible) return;
@@ -200,7 +204,7 @@ export function KeySheet({
           accessibilityRole="radiogroup"
           accessibilityLabel={t('provider')}
         >
-          {KEY_PROVIDERS.map((item) => (
+          {chips.map((item) => (
             <Chip
               key={item.id}
               label={item.name}
