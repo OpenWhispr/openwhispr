@@ -110,6 +110,13 @@ jobs:
         run: node scripts/check-android-ui-isolation.mjs --base "$BASE_SHA" --export-dir "$RUNNER_TEMP/mobile-export"
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      # A JS bundle is the cheapest Android check: no SDK, emulator, or signing.
+      # Native Android build/release validation stays deferred.
+      - name: Bundle Android
+        if: matrix.check == 'bundles'
+        run: node_modules/.bin/expo export --platform android --max-workers 2 --output-dir "$RUNNER_TEMP/mobile-export-android"
+        env:
+          OPENWHISPR_APP_ENV: production
 
   native-transport:
     name: Mobile native Swift tests
