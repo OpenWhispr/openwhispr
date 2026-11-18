@@ -21,6 +21,7 @@ import {
   applyKeyToTasks,
   maskKey,
   providerCanRun,
+  saveKey,
   savedKey,
   startingModel,
   type KeyTask,
@@ -107,11 +108,17 @@ export function KeySheet({
   const t = useSettingsT();
   const activeMode = useProcessingModeStore((s) => s.activeMode);
   const [provider, setProvider] = useState<KeyProviderId>(initialProvider);
-  const [draft, setDraft] = useState('');
+  // Each provider keeps its half-typed key and its ticks while the sheet is open, so moving
+  // between chips loses nothing.
+  const [drafts, setDrafts] = useState<Partial<Record<KeyProviderId, string>>>({});
+  const [untickedBy, setUntickedBy] = useState<Partial<Record<KeyProviderId, SheetTask[]>>>({});
+  const draft = drafts[provider] ?? '';
+  const setDraft = (value: string) => setDrafts((current) => ({ ...current, [provider]: value }));
+  const startUnticked = onlyTask ? SHEET_TASKS.filter((task) => task !== onlyTask) : [];
+  const unticked = untickedBy[provider] ?? startUnticked;
   // A key that passed the check (or was saved before) is locked in and shown masked.
   const [locked, setLocked] = useState<string | null>(null);
   const [lockedSaved, setLockedSaved] = useState(false);
-  const [unticked, setUnticked] = useState<SheetTask[]>([]);
   const [busy, setBusy] = useState(false);
   const check = useKeyCheck(provider, locked ? '' : draft);
   const name = KEY_PROVIDERS.find((item) => item.id === provider)!.name;
@@ -123,14 +130,14 @@ export function KeySheet({
   useEffect(() => {
     if (!visible) return;
     setProvider(initialProvider);
-    setUnticked(onlyTask ? SHEET_TASKS.filter((task) => task !== onlyTask) : []);
-  }, [visible, initialProvider, onlyTask]);
+    setDrafts({});
+    setUntickedBy({});
+  }, [visible, initialProvider]);
 
   // A provider with a key already saved starts locked in, with nothing to check.
   useEffect(() => {
     if (!visible) return;
     let live = true;
-    setDraft('');
     setLocked(null);
     setLockedSaved(false);
     void savedKey(provider)
@@ -145,12 +152,19 @@ export function KeySheet({
     };
   }, [visible, provider]);
 
-  // The tick rests 620 ms after the answer, then the key locks in.
+  // The tick rests 620 ms after the answer, then the key locks in and is saved at once, so it
+  // stays saved when another chip is chosen or the sheet closes.
   useEffect(() => {
     if (check.state !== 'connected') return;
-    const timer = setTimeout(() => setLocked(draft.trim()), 620);
+    const key = draft.trim();
+    const timer = setTimeout(() => {
+      setLocked(key);
+      void saveKey(provider, key).catch(() => showToast(t('keySaveFailed'), 'error'));
+    }, 620);
     return () => clearTimeout(timer);
-  }, [check.state, draft]);
+    // t is a fresh function each render; the key and provider decide this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [check.state, draft, provider]);
 
   const runnable = SHEET_TASKS.filter((task) => providerCanRun(provider, task));
   // While On device is the default, uploads stay on the phone unless dictation moves too,
@@ -181,9 +195,12 @@ export function KeySheet({
   };
 
   const toggle = (task: SheetTask) =>
-    setUnticked((current) =>
-      current.includes(task) ? current.filter((item) => item !== task) : [...current, task],
-    );
+    setUntickedBy((current) => ({
+      ...current,
+      [provider]: unticked.includes(task)
+        ? unticked.filter((item) => item !== task)
+        : [...unticked, task],
+    }));
 
   const borderColor = failed
     ? KEY_CHECK_COLORS.failed
@@ -359,11 +376,7 @@ export function KeySheet({
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text style={settings.title}>{t(TASK_TITLE[task])}</Text>
                       <Text style={settings.subtitle}>
-                        {off
-                          ? t('notWithPhoneDefault')
-                          : task === 'meeting'
-                            ? t('liveModel', { model: startingModel(provider, task) })
-                            : startingModel(provider, task)}
+                        {off ? t('notWithPhoneDefault') : startingModel(provider, task)}
                       </Text>
                     </View>
                     {on && (
