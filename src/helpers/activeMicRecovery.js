@@ -15,11 +15,25 @@ const stopStream = (stream) => stream?.getTracks?.().forEach((track) => track.st
 export const describeAudioInputs = (devices = []) => {
   const inputs = devices.filter((device) => device.kind === "audioinput");
   return {
+    defaultInput: inputs[0],
     defaultKey: inputs.length > 0 ? deviceKey(inputs[0]) : "",
     keys: new Set(inputs.map(deviceKey)),
     deviceIds: new Set(inputs.map((device) => device.deviceId).filter(Boolean)),
     groupIds: new Set(inputs.map((device) => device.groupId).filter(Boolean)),
   };
+};
+
+const trackMatchesDefault = (track, device) => {
+  const settings = track?.getSettings?.();
+  if (!settings || !device) return null;
+  // Chromium's default device ID is an alias. Only compare physical IDs
+  // directly; fall back to the group when either endpoint exposes the alias.
+  const isPhysicalId = (id) => id && id !== "default" && id !== "communications";
+  if (isPhysicalId(settings.deviceId) && isPhysicalId(device.deviceId)) {
+    return settings.deviceId === device.deviceId;
+  }
+  if (settings.groupId && device.groupId) return settings.groupId === device.groupId;
+  return null;
 };
 
 export const activeTrackIsAvailable = (track, inputs) => {
@@ -58,10 +72,14 @@ export class ActiveMicRecoveryController {
     this.track = null;
     this.followDefault = true;
     this.inputs = describeAudioInputs();
+    this.inputRead = 0;
+    this.appliedInputRead = 0;
+    this.deviceChangeCount = 0;
     this.generation = 0;
     this.recoveryPromise = null;
     this.debounceTimer = null;
     this.muteTimer = null;
+    this.restoreOnUnmute = null;
     this.retryTimer = null;
     this.started = false;
     // Consecutive failed attempts, so a mic that stays gone logs one warning
@@ -72,16 +90,21 @@ export class ActiveMicRecoveryController {
     this.onTrackMute = () => {
       clearTimeout(this.muteTimer);
       this.log("debug", "Microphone track muted", { graceMs: this.muteGraceMs });
-      this.muteTimer = setTimeout(() => {
+      const timer = setTimeout(async () => {
+        // A mute on the replacement gets its own deadline even while the swap
+        // is settling. Unmute, detach or a newer mute cancels this callback.
+        if (this.recoveryPromise) await this.recoveryPromise;
+        if (this.muteTimer !== timer) return;
         this.muteTimer = null;
         if (this.track?.muted) this.recover("muted");
       }, this.muteGraceMs);
+      this.muteTimer = timer;
     };
     this.onTrackUnmute = () => {
-      if (this.muteTimer === null) return;
+      if (this.muteTimer !== null) this.log("debug", "Microphone track unmuted");
       clearTimeout(this.muteTimer);
       this.muteTimer = null;
-      this.log("debug", "Microphone track unmuted within its grace period");
+      if (this.track?.readyState === "live" && !this.track.muted) this.restoreOnUnmute?.();
     };
   }
 
@@ -109,10 +132,12 @@ export class ActiveMicRecoveryController {
     this.generation += 1;
     const generation = this.generation;
     this.followDefault = followDefault;
+    this.inputs = describeAudioInputs();
     this.mediaDevices?.addEventListener?.("devicechange", this.onDeviceChange);
-    this.attachStream(stream);
+    this.stream = stream;
+    this.watchTrack(stream?.getAudioTracks?.()[0]);
     await this.refreshInputs(generation);
-    if (!this.isCurrent(generation)) return;
+    if (!this.isCurrent(generation) || this.status !== "inactive") return;
     // The track may have died (or come up muted) before our listeners attached;
     // those events won't replay, so evaluate the track's state directly.
     const alive = this.track && this.track.readyState !== "ended";
@@ -127,10 +152,9 @@ export class ActiveMicRecoveryController {
     }
   }
 
-  attachStream(stream) {
+  watchTrack(track) {
     this.detachTrack();
-    this.stream = stream || null;
-    this.track = stream?.getAudioTracks?.()[0] || null;
+    this.track = track || null;
     this.track?.addEventListener?.("ended", this.onTrackEnded);
     this.track?.addEventListener?.("mute", this.onTrackMute);
     this.track?.addEventListener?.("unmute", this.onTrackUnmute);
@@ -141,16 +165,19 @@ export class ActiveMicRecoveryController {
     this.track?.removeEventListener?.("mute", this.onTrackMute);
     this.track?.removeEventListener?.("unmute", this.onTrackUnmute);
     this.track = null;
+    this.restoreOnUnmute = null;
     clearTimeout(this.muteTimer);
     this.muteTimer = null;
   }
 
-  // A snapshot read for one recording must not land in the next one's state.
+  // A slow enumeration must not overwrite a newer devicechange or recording.
   async refreshInputs(generation = this.generation) {
+    const read = ++this.inputRead;
     try {
       const inputs = describeAudioInputs(await this.mediaDevices.enumerateDevices());
-      if (generation !== this.generation) return null;
+      if (generation !== this.generation || read < this.appliedInputRead) return null;
       this.inputs = inputs;
+      this.appliedInputRead = read;
       return inputs;
     } catch (error) {
       this.log("debug", "Microphone enumeration failed", { error: error?.message });
@@ -160,6 +187,7 @@ export class ActiveMicRecoveryController {
 
   scheduleEvaluation() {
     if (!this.started) return;
+    this.deviceChangeCount += 1;
     clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => this.evaluateDeviceChange(), this.debounceMs);
   }
@@ -177,7 +205,11 @@ export class ActiveMicRecoveryController {
 
     const defaultChanged = previous.defaultKey !== current.defaultKey;
     const activeMissing = !activeTrackIsAvailable(this.track, current);
-    if ((this.followDefault && defaultChanged) || activeMissing || this.status === "unavailable") {
+    if (
+      (this.followDefault && defaultChanged) ||
+      activeMissing ||
+      (this.status === "unavailable" && !this.restoreOnUnmute)
+    ) {
       this.log("debug", "Microphone device change needs recovery", {
         defaultChanged: this.followDefault && defaultChanged,
         activeMissing,
@@ -187,7 +219,7 @@ export class ActiveMicRecoveryController {
     }
   }
 
-  recover(reason) {
+  recover(reason, recoveringMute = reason === "muted") {
     if (!this.started) return Promise.resolve(false);
     if (this.recoveryPromise) {
       // The attempt in flight rechecks its replacement before it settles, so a
@@ -199,7 +231,14 @@ export class ActiveMicRecoveryController {
     clearTimeout(this.retryTimer);
     this.retryTimer = null;
     const generation = this.generation;
+    this.restoreOnUnmute = null;
     const oldStream = this.stream;
+    const defaultAtAcquire = this.inputs.defaultKey;
+    const changesAtAcquire = this.deviceChangeCount;
+    const selectionMayHaveChanged = () =>
+      this.followDefault &&
+      (defaultAtAcquire !== this.inputs.defaultKey || changesAtAcquire !== this.deviceChangeCount);
+    let followNewDefault = false;
     const startedAt = Date.now();
     this.log(this.failedAttempts === 0 ? "info" : "debug", "Microphone recovery started", {
       reason,
@@ -211,9 +250,11 @@ export class ActiveMicRecoveryController {
 
     const attempt = async () => {
       let replacement = null;
+      let track;
       try {
         replacement = await this.acquire(reason);
-        if (!replacement?.getAudioTracks?.()[0]) throw new Error("No audio track returned");
+        track = replacement?.getAudioTracks?.()[0];
+        if (!track) throw new Error("No audio track returned");
         if (!this.isCurrent(generation)) {
           stopStream(replacement);
           this.log("debug", "Discarded a microphone opened for a recording that ended", {
@@ -221,6 +262,10 @@ export class ActiveMicRecoveryController {
           });
           return false;
         }
+        // Recorder rotation can outlast the mute grace. Watch the candidate
+        // immediately, but keep ownership of the old stream until the swap succeeds.
+        this.watchTrack(track);
+        if (track.muted && !recoveringMute) this.onTrackMute();
         await this.onRecovered(replacement, oldStream, reason);
         if (!this.isCurrent(generation)) {
           stopStream(replacement);
@@ -229,7 +274,7 @@ export class ActiveMicRecoveryController {
           });
           return false;
         }
-        this.attachStream(replacement);
+        this.stream = replacement;
         await this.refreshInputs(generation);
         // stop() already reset the status; a stale attempt must not set it again.
         if (!this.isCurrent(generation)) return false;
@@ -239,23 +284,43 @@ export class ActiveMicRecoveryController {
         if (this.track?.readyState === "ended") {
           throw new Error("Replacement microphone ended before recovery finished");
         }
-        // A mute grace that expired during the attempt was folded in too, and a
-        // replacement that opens muted fires no mute event: arm it again. Not
-        // after a mute-triggered attempt, though: a source muted at the OS level
-        // opens muted every time, and reopening it in a loop would only churn.
-        if (this.track?.muted && reason !== "muted") this.onTrackMute();
-        this.log("info", "Microphone recovered", {
-          reason,
-          durationMs: Date.now() - startedAt,
-          label: this.track?.label || "",
-          muted: Boolean(this.track?.muted),
-          failedAttempts: this.failedAttempts,
-        });
-        this.failedAttempts = 0;
-        this.setStatus("active");
+        // Enumeration can consume the only devicechange for a second default
+        // switch. Re-resolve the selection after releasing this attempt.
+        if (selectionMayHaveChanged()) {
+          const matches = trackMatchesDefault(track, this.inputs.defaultInput);
+          // Coalesced devicechange events can hide an intermediate default.
+          // Without exposed IDs, only a changed default justifies another open.
+          followNewDefault =
+            matches === false || (matches === null && defaultAtAcquire !== this.inputs.defaultKey);
+          if (followNewDefault) return false;
+        }
+
+        const restored = () => {
+          this.restoreOnUnmute = null;
+          this.log("info", "Microphone recovered", {
+            reason,
+            durationMs: Date.now() - startedAt,
+            label: track.label || "",
+            muted: track.muted,
+            failedAttempts: this.failedAttempts,
+          });
+          this.failedAttempts = 0;
+          this.setStatus("active");
+        };
+        if (track.muted) {
+          this.restoreOnUnmute = restored;
+          this.setStatus("unavailable");
+          return false;
+        }
+        restored();
         return true;
       } catch (error) {
-        if (replacement && replacement !== this.stream) stopStream(replacement);
+        if (replacement && replacement !== this.stream) {
+          if (this.isCurrent(generation) && this.track === track) {
+            this.watchTrack(oldStream?.getAudioTracks?.()[0]);
+          }
+          stopStream(replacement);
+        }
         if (this.isCurrent(generation)) {
           this.failedAttempts += 1;
           this.log(this.failedAttempts === 1 ? "warn" : "debug", "Microphone recovery failed", {
@@ -265,7 +330,9 @@ export class ActiveMicRecoveryController {
             retryInMs: this.retryMs,
           });
           this.setStatus("unavailable");
-          this.scheduleRetry();
+          const retryReason =
+            reason === "devicechange" || selectionMayHaveChanged() ? "devicechange" : "retry";
+          this.scheduleRetry(retryReason, recoveringMute);
         }
         return false;
       }
@@ -273,17 +340,19 @@ export class ActiveMicRecoveryController {
     // Only clear our own handle: a stale attempt settling after stop()+start()
     // must not clobber a newer in-flight recovery's dedup handle.
     const promise = attempt().finally(() => {
-      if (this.recoveryPromise === promise) this.recoveryPromise = null;
+      if (this.recoveryPromise !== promise) return;
+      this.recoveryPromise = null;
+      if (followNewDefault) this.recover("devicechange");
     });
     this.recoveryPromise = promise;
     return promise;
   }
 
-  scheduleRetry() {
+  scheduleRetry(reason, recoveringMute) {
     if (!this.started || this.retryTimer) return;
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
-      this.recover("retry");
+      this.recover(reason, recoveringMute);
     }, this.retryMs);
   }
 
