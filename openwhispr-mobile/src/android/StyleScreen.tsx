@@ -86,7 +86,7 @@ export default function StyleScreen() {
       <Row
         title={t('prompt')}
         icon="SlidersHorizontal"
-        onPress={() => router.push({ pathname: '/android-task', params: { task: 'cleanup' } })}
+        onPress={() => router.push({ pathname: '/android-v1-task', params: { task: 'cleanup' } })}
       />
       <Modal
         visible={choosing}
