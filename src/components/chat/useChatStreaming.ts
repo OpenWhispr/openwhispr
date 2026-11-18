@@ -18,6 +18,8 @@ import {
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { useAuth } from "../../hooks/useAuth";
+import { getTitaniumAuthState } from "../../hooks/useTitaniumAuth";
+import { CLOUD_ENABLED } from "../../config/forkRuntime";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
 import { hasConnectorPlan } from "../../utils/connectorEligibility";
@@ -422,6 +424,11 @@ export function useChatStreaming({
         const calendarConnected =
           settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
         const webSearchEnabled = isWebSearchAllowed(policy);
+        // The fork's web search is keyed to the Titanium license, not the cloud session.
+        const titaniumAuth = getTitaniumAuthState();
+        const webSearchSignedIn = CLOUD_ENABLED
+          ? settings.isSignedIn
+          : titaniumAuth.signedIn && titaniumAuth.licensed;
         const connectorPlan = hasConnectorPlan(getUsageState(), readIsSubscribed());
         let registry: ToolRegistry | null = null;
         let connectorsOffered = false;
@@ -444,12 +451,13 @@ export function useChatStreaming({
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
           const keepNotesUnchanged = !!options?.keepNotesUnchanged;
-          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
+          const cacheKey = `${settings.isSignedIn}-${webSearchSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
             registry = createToolRegistry({
               isSignedIn: settings.isSignedIn,
+              webSearchSignedIn,
               calendarConnected,
               cloudBackupEnabled: settings.cloudBackupEnabled,
               searchScope: scope,
@@ -474,7 +482,11 @@ export function useChatStreaming({
         const unavailable = resolveUnavailableCapabilities({
           supportsTools,
           isSignedIn: settings.isSignedIn,
-          webSearch: { allowed: webSearchEnabled, blockedByOrg: isWebSearchBlockedByOrg(policy) },
+          webSearch: {
+            allowed: webSearchEnabled,
+            blockedByOrg: isWebSearchBlockedByOrg(policy),
+            signedIn: webSearchSignedIn,
+          },
           calendarConnected,
           connectors: allowConnectors
             ? {

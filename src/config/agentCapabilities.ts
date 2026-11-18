@@ -43,7 +43,8 @@ export interface UnavailableCapabilityInput {
   /** False when the selected model gets no tools at all (a small local model). */
   supportsTools: boolean;
   isSignedIn: boolean;
-  webSearch: { allowed: boolean; blockedByOrg: boolean };
+  /** signedIn defaults to isSignedIn; a fork build passes its Titanium session. */
+  webSearch: { allowed: boolean; blockedByOrg: boolean; signedIn?: boolean };
   calendarConnected: boolean;
   /** Omitted on surfaces that never offer connectors (container chat, onboarding demo). */
   connectors?: {
@@ -83,7 +84,7 @@ export function resolveUnavailableCapabilities(
 
   const unavailable: UnavailableCapability[] = [];
 
-  if (!input.isSignedIn) {
+  if (!(input.webSearch.signedIn ?? input.isSignedIn)) {
     unavailable.push({ name: "Web search", reason: "signedOut", where: locations.account });
   } else if (!input.webSearch.allowed) {
     unavailable.push({
