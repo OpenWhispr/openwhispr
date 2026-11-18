@@ -416,7 +416,9 @@
           "modelNotFound": "選択したモデルはこのプロバイダーでは利用できません。",
           "providerStatus": "プロバイダーがステータス {{status}} を返しました。",
           "timeout": "接続テストがタイムアウトしました。",
-          "network": "プロバイダーに接続できませんでした。"
+          "network": "プロバイダーに接続できませんでした。",
+          "invalidHeaders": "HTTP ヘッダーが無効です。名前と値を確認してください。Content-Type と転送用ヘッダーは変更できません。",
+          "redirected": "サーバーがリクエストをリダイレクトしました。リダイレクト先のアドレスを入力してください。"
         }
       },
       "local": {
@@ -957,6 +959,9 @@
     "getKey": "キーを取得 ->",
     "endpointUrl": "エンドポイント URL",
     "azureHint": "Azure AI Foundry: リソースのエンドポイント（例: https://your-resource.cognitiveservices.azure.com）を入力し、モデルにデプロイの正確な名前を設定してください。",
+    "browsedProviderHint": "引き続き {{current}} が使用されています。{{provider}} に切り替えるにはモデルを選択してください。",
+    "browsedCustomHint": "引き続き {{current}} が使用されています。カスタムエンドポイントに切り替えるにはモデル名を入力してください。",
+    "customInUseHint": "引き続きカスタムエンドポイントが使用されています。{{provider}} に切り替えるにはモデルを選択してください。",
     "customProvider": "カスタム",
     "fallback": {
       "whisperModelDescription": "モデル",
@@ -2503,7 +2508,20 @@
     "selfHosted": {
       "endpointUrl": "エンドポイント URL",
       "serverUrl": "サーバー URL",
-      "apiKeyOptional": "API キー（任意）"
+      "apiKeyOptional": "API キー（任意）",
+      "headers": "HTTP ヘッダー",
+      "headersHelp": "このサーバーへのすべてのリクエストに付けて送信します。たとえばゲートウェイが求める API キーなどです。",
+      "headerName": "ヘッダー名",
+      "headerValue": "ヘッダー値",
+      "removeHeader": "削除",
+      "addHeader": "ヘッダーを追加",
+      "unauthorized": "サーバーがリクエストを拒否しました（401/403）。下のヘッダーか、サーバーの認証設定を確認してください。",
+      "headerErrors": {
+        "missingName": "ヘッダー名を入力してください。",
+        "invalidName": "ヘッダー名にスペース、コロン、その他の区切り文字は使えません。",
+        "reserved": "このヘッダーは OpenWhispr が自動で設定します。",
+        "invalidValue": "この値には、ヘッダーで送れない文字（曲がった引用符など）が含まれています。"
+      }
     },
     "workspace": {
       "title": "ワークスペース",
@@ -6410,7 +6428,9 @@
       "timeout": "サーバーからの応答に時間がかかりすぎました。",
       "unreachable": "サーバーに接続できませんでした。サーバーが起動しているか確認してください。",
       "noResponse": "サーバーから応答がありませんでした。APIキーとサーバーが起動しているかを確認してください。",
-      "unknown": "サーバーから予期しないエラーが返されました。"
+      "unknown": "サーバーから予期しないエラーが返されました。",
+      "invalidHeaders": "サーバー用のカスタムヘッダーが無効です。",
+      "redirected": "サーバーがリクエストをリダイレクトしました。リダイレクト先のアドレスを入力してください。"
     },
     "openSettings": "設定を開く",
     "copyDetails": "詳細をコピー",

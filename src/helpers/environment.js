@@ -12,6 +12,7 @@ const SECRET_KEYS = [
   "CORTI_CLIENT_ID",
   "CORTI_CLIENT_SECRET",
   "CUSTOM_TRANSCRIPTION_API_KEY",
+  "SELF_HOSTED_STT_HEADERS",
   "CUSTOM_CLEANUP_API_KEY",
   "BEDROCK_ACCESS_KEY_ID",
   "BEDROCK_SECRET_ACCESS_KEY",
@@ -240,7 +241,11 @@ class EnvironmentManager {
     for (const key of PERSISTED_KEYS) {
       if (stripSecrets && SECRET_KEY_SET.has(key)) continue;
       if (process.env[key]) {
-        envContent += `${key}=${process.env[key]}\n`;
+        const value =
+          key === "SELF_HOSTED_STT_HEADERS" && !process.env[key].startsWith("base64:")
+            ? `base64:${Buffer.from(process.env[key], "utf8").toString("base64")}`
+            : process.env[key];
+        envContent += `${key}=${value}\n`;
       }
     }
     const tmpPath = `${envPath}.tmp`;
@@ -283,6 +288,17 @@ class EnvironmentManager {
 
   saveCortiClientSecret(key) {
     return this._saveKey("CORTI_CLIENT_SECRET", key);
+  }
+
+  getSelfHostedSttHeaders() {
+    const value = this._getKey("SELF_HOSTED_STT_HEADERS");
+    return value.startsWith("base64:")
+      ? Buffer.from(value.slice(7), "base64").toString("utf8")
+      : value;
+  }
+
+  saveSelfHostedSttHeaders(value) {
+    return this._saveKey("SELF_HOSTED_STT_HEADERS", value);
   }
 
   getCustomTranscriptionKey() {

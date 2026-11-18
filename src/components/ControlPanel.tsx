@@ -31,6 +31,7 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
+import { clearInsightsCache } from "../lib/insightsCache";
 import {
   getSettings,
   selectPolicyEffectiveSettings,
@@ -72,7 +73,10 @@ import {
   DEFAULT_INTEGRATIONS_SECTION,
   type IntegrationsSection,
 } from "./integrations/integrationsSections";
-import { navigateMeetingNotification } from "./meetingNotificationNavigation";
+import {
+  navigateAndLoadMeetingNote,
+  navigateMeetingNotification,
+} from "./meetingNotificationNavigation";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -88,6 +92,8 @@ import {
   setActiveFolderId,
   navigateToContainer,
   ensureNoteLoaded,
+  getActiveNoteIdValue,
+  getNoteFromStore,
   useActiveNoteId,
   initializeNotes,
   subscribeMeetingNotificationFolders,
@@ -543,9 +549,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       }
       if (data.noteSessionId)
         meetingNoteSession.current = { id: data.noteSessionId, noteId: data.noteId };
-      setActiveFolderId(data.folderId);
-      setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
+      await navigateAndLoadMeetingNote(data.noteId, data.spaceId, data.folderId);
+      if (
+        !isCurrent() ||
+        getActiveNoteIdValue() !== data.noteId ||
+        !getNoteFromStore(data.noteId) ||
+        (data.noteSessionId && meetingNoteSession.current?.id !== data.noteSessionId)
+      ) {
+        if (data.noteSessionId) void window.electronAPI?.meetingNoteClosed?.(data.noteSessionId);
+        return;
+      }
       setMeetingRecordingRequest({
         noteId: data.noteId,
         folderId: data.folderId,
@@ -554,7 +568,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         trigger: data.trigger,
         noteSessionId: data.noteSessionId,
       });
-      void initializeNotes(null, 50, data.folderId);
       if (
         data.trigger === "hotkey" &&
         useSettingsStore.getState().meetingHotkeyLayoutMode === "side-panel"
@@ -750,6 +763,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           const result = await window.electronAPI.clearTranscriptions();
           if (result.success) {
             clearStore();
+            // Insights is unmounted here, and would otherwise paint the cleared totals.
+            clearInsightsCache();
             syncService.requestSyncAll("manual");
             toast({
               title: t("controlPanel.history.clearAllSuccess"),

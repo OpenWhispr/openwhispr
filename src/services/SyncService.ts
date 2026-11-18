@@ -51,6 +51,7 @@ import {
   isCloudBackupAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { findDefaultFolder } from "../components/notes/shared";
 import { useSettingsStore } from "../stores/settingsStore";
 import {
   hasWelcomedSharedDictionary,
@@ -741,6 +742,7 @@ export async function upsertCloudSpaces(cloudSpaces: MySpace[]): Promise<number[
 
 export class SyncService {
   private syncing = false;
+  private boundFoldersClaimedFor: string | null = null;
   private syncAllPending = false;
   // Filled by the placement backfill's pre-pull: each personal cloud row's placement and folder.
   private pulledPlacements: Map<
@@ -1026,6 +1028,12 @@ export class SyncService {
       this.noteFeedReplayTried.clear();
     } else if (SYNC_CURSOR_KEYS.some((key) => localStorage.getItem(key) !== null)) {
       localStorage.setItem(UNOWNED_CURSORS_ACCOUNT_KEY, accountId);
+      // An unowned personal cursor may have advanced under another account.
+      // Replay tombstones too; a live-row snapshot cannot remove stale copies.
+      localStorage.removeItem("lastSyncedAt.notes");
+      if (localStorage.getItem("lastSyncedAt.folders") !== null) {
+        localStorage.setItem("lastSyncedAt.folders", FEED_START);
+      }
     }
     localStorage.setItem(SYNC_CURSOR_ACCOUNT_KEY, accountId);
     return true;
@@ -2938,6 +2946,8 @@ export class SyncService {
   }
 
   private async syncFolders(teamOnly = false): Promise<void> {
+    if (!teamOnly) await this.claimBoundFolders();
+    if (!this.passIsCurrent()) return;
     await this.pushPendingFolders(teamOnly);
     if (!this.passIsCurrent()) return;
     await this.pushFolderDeletes(teamOnly);
@@ -2953,6 +2963,69 @@ export class SyncService {
     if (authGeneration == null) return;
     const queued = await window.electronAPI.queueUnlinkedPrivateFolders?.(authGeneration);
     if (typeof queued === "number" && queued > 0) await this.pushPendingFolders();
+  }
+
+  // A full account folder list proves which cloud-bound legacy folders it owns.
+  // A foreign default cannot stand in for the account's own same-named folder.
+  private async claimBoundFolders(): Promise<void> {
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null || this.boundFoldersClaimedFor === accountId) return;
+    const ctx = await this.buildSpaceContext();
+    const local = (await window.electronAPI.getFolders?.()) ?? [];
+    const unclaimed = local.filter(
+      (folder) =>
+        !folder.account_id &&
+        folder.cloud_id &&
+        !folder.deleted_at &&
+        ctx.byId.get(folder.space_id)?.kind === "private"
+    );
+    if (unclaimed.length > 0) {
+      try {
+        const { folders: cloudFolders } = await FoldersService.list(
+          undefined,
+          undefined,
+          authGeneration,
+          "no-store"
+        );
+        const ownCloudIds = new Set(
+          cloudFolders
+            .filter((folder) => !folder.space_id && !folder.deleted_at)
+            .map((folder) => folder.id)
+        );
+        const foreignDefaults: string[] = [];
+        for (const folder of unclaimed) {
+          stopIfSignInReplaced(authGeneration);
+          const cloudId = folder.cloud_id!;
+          if (!ownCloudIds.has(cloudId)) {
+            if (folder.is_default) foreignDefaults.push(cloudId);
+            continue;
+          }
+          // Settling a pending row would discard an unsent edit; its own push claims it.
+          if (folder.sync_status !== "synced") continue;
+          stopIfPullStale(
+            await window.electronAPI.markFolderSyncedIfUnchanged?.(
+              folder.id,
+              folder,
+              cloudId,
+              authGeneration
+            )
+          );
+        }
+        if (foreignDefaults.length > 0) {
+          await window.electronAPI.ensureAccountDefaultFolders?.(foreignDefaults, {
+            accountId,
+            authGeneration,
+          });
+        }
+      } catch (err) {
+        if (isAuthContextError(err)) throw err;
+        console.error("Bound folder claim failed:", err);
+        return;
+      }
+    }
+    stopIfSignInReplaced(authGeneration);
+    this.boundFoldersClaimedFor = accountId;
   }
 
   private async pushFolderDeletes(teamOnly = false): Promise<void> {
@@ -5421,8 +5494,7 @@ export class SyncService {
         .map((f) => [f.cloud_id!, { id: f.id, space_id: f.space_id }])
     );
     const personalFolderIn = (spaceId: number): number | null =>
-      folders.find((f) => f.is_default && f.name === "Personal" && f.space_id === spaceId)?.id ??
-      null;
+      findDefaultFolder(folders.filter((folder) => folder.space_id === spaceId))?.id ?? null;
     return { cloudToLocal, personalFolderIn };
   }
 }

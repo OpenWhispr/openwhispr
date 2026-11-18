@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { mountSettingsPanel } = require("../lib/settingsPanelHarness");
+const { managedPolicy } = require("../helpers/harness/policyFixtures");
 
 const PICKER = "/components/TranscriptionModelPicker.tsx";
 const KEY = "common.apiKey";
@@ -517,18 +518,13 @@ function localPicker(
     },
   });
 }
-const managedSpeech = (allowedLocalModels) => ({
+const managedTranscription = (transcription) => ({
   status: "managed",
   appVersion: "1.11.1",
-  policy: {
-    transcription: {
-      allowedModes: ["local", "providers"],
-      allowedByokProviders: [],
-      allowedLocalModels,
-    },
-    minAppVersion: null,
-  },
+  policy: managedPolicy({ transcription }),
 });
+const managedSpeech = (allowedLocalModels) =>
+  managedTranscription({ allowedModes: ["local", "providers"], allowedLocalModels });
 const localTabs = (panel) => panel.find((node) => node.props?.selectedId !== undefined)[0];
 const tabIds = (panel) => localTabs(panel).props.providers.map((tab) => tab.id);
 
@@ -604,4 +600,122 @@ test("an unsupported Mac leaves a policy-blocked sherpa selection saved", async 
     },
   });
   assert.deepEqual(selected, []);
+});
+
+// The harness's `t` returns the key followed by its interpolation values.
+const HINT_KEYS = [
+  "transcription.browsedProviderHint",
+  "transcription.browsedCustomHint",
+  "transcription.customInUseHint",
+];
+const hint = (panel) =>
+  panel.find(
+    (node) =>
+      typeof node.props?.children === "string" &&
+      HINT_KEYS.some((key) => node.props.children.startsWith(key))
+  )[0]?.props.children;
+const managedProviders = (allowedByokProviders) =>
+  managedTranscription({ allowedModes: ["providers"], allowedByokProviders });
+
+test("a browsed tab says the saved provider stays in use until a model is picked", async (t) => {
+  const panel = await mount(t, {
+    settings: {
+      meetingCloudTranscriptionProvider: "openai",
+      meetingCloudTranscriptionModel: "gpt-4o-mini-transcribe",
+    },
+    overrides: {
+      transcriptionContext: "meeting",
+      streamingOnly: true,
+      selectedCloudProvider: "openai",
+      selectedCloudModel: "gpt-4o-mini-transcribe",
+    },
+  });
+  assert.equal(hint(panel), undefined, "the saved provider's own tab needs no hint");
+
+  await panel.selectTab("deepgram");
+  assert.equal(
+    hint(panel),
+    'transcription.browsedProviderHint {"current":"OpenAI","provider":"Deepgram"}'
+  );
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "openai", "browsing saves nothing");
+
+  await panel.selectTab("openai");
+  assert.equal(hint(panel), undefined, "browsing back to the saved tab clears it");
+
+  await panel.selectTab("deepgram");
+  await panel.selectModel("nova-3");
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "deepgram");
+  await panel.setProps({ selectedCloudProvider: "deepgram", selectedCloudModel: "nova-3" });
+  assert.equal(hint(panel), undefined, "a picked model saves the tab");
+});
+
+test("under a managed policy, the line names the provider the policy runs", async (t) => {
+  // OpenAI stays saved, but the policy refuses it and runs Groq, the first one it allows.
+  const panel = await mount(t, {
+    policy: managedProviders(["groq", "deepgram"]),
+    settings: { transcriptionMode: "providers" },
+    overrides: { selectedCloudProvider: "openai", selectedCloudModel: "gpt-4o-mini-transcribe" },
+  });
+  await panel.selectTab("deepgram");
+  assert.equal(
+    hint(panel),
+    'transcription.browsedProviderHint {"current":"Groq","provider":"Deepgram"}'
+  );
+  await panel.selectTab("groq");
+  assert.equal(hint(panel), undefined, "Groq is already in use");
+});
+
+test("a blank Note Recording provider names the dictation provider it runs on", async (t) => {
+  // Note Recording was never set, so it runs on dictation's Deepgram while the picker
+  // shows its first tab; a managed policy leaves that unsaved. The latched flag keeps
+  // the store's load from copying dictation's provider in.
+  const panel = await mount(t, {
+    policy: managedProviders(["openai", "deepgram"]),
+    settings: {
+      meetingFollowsTranscription: "false",
+      meetingTranscriptionMode: "providers",
+      cloudTranscriptionProvider: "deepgram",
+      cloudTranscriptionModel: "nova-3",
+    },
+    overrides: {
+      transcriptionContext: "meeting",
+      streamingOnly: true,
+      selectedCloudProvider: "",
+      selectedCloudModel: "",
+    },
+  });
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "");
+  await panel.selectTab("openai");
+  assert.equal(
+    hint(panel),
+    'transcription.browsedProviderHint {"current":"Deepgram","provider":"OpenAI"}'
+  );
+  await panel.selectTab("deepgram");
+  assert.equal(hint(panel), undefined, "Deepgram is already in use");
+});
+
+test("a browsed Custom tab asks for a model name while the saved provider runs", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "openai", selectedCloudModel: "gpt-4o-mini-transcribe" },
+  });
+  await panel.selectTab("custom");
+  assert.equal(hint(panel), 'transcription.browsedCustomHint {"current":"OpenAI"}');
+});
+
+test("a custom endpoint in use is named as one", async (t) => {
+  const endpoint = "https://stt.example.com/v1";
+  const panel = await mount(t, {
+    settings: {
+      cloudTranscriptionProvider: "custom",
+      cloudTranscriptionModel: "whisper-1",
+      cloudTranscriptionBaseUrl: endpoint,
+    },
+    overrides: {
+      selectedCloudProvider: "custom",
+      selectedCloudModel: "whisper-1",
+      cloudTranscriptionBaseUrl: endpoint,
+    },
+  });
+  await panel.selectTab("openai");
+  assert.equal(hint(panel), 'transcription.customInUseHint {"provider":"OpenAI"}');
 });

@@ -519,6 +519,7 @@ function initializeCoreManagers() {
     binding: accountScopeBinding.read(),
   });
   if (bootAccountId) databaseManager.setActiveAccountId(bootAccountId, { atLaunch: true });
+  databaseManager.ensureAccountDefaultFolders();
   clipboardManager = new ClipboardManager();
   const { createConnectorManager } = require("./src/helpers/connectors/connectorManager");
   const { createPendingActions } = require("./src/helpers/connectors/pendingActions");
@@ -1596,6 +1597,8 @@ async function startApp() {
     if (microsoftCalendarManager) microsoftCalendarManager.onWakeFromSleep();
     if (appleCalendarManager) appleCalendarManager.onWakeFromSleep();
     // Sleep evicts the local GPU model from VRAM; reload it once the driver settles. See #766.
+    // A GPU retry left over from the last wake would fire before then.
+    whisperManager?.cancelWakeGpuRetry();
     if (wakeRewarmTimer) clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = setTimeout(() => {
       wakeRewarmTimer = null;
@@ -2356,6 +2359,7 @@ function performSyncTeardown() {
     clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = null;
   }
+  whisperManager?.cancelWakeGpuRetry();
   clearPendingNoteDeepLink();
   if (authBridgeServer) {
     authBridgeServer.close();

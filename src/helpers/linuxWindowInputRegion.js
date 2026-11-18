@@ -2,6 +2,7 @@ const { spawn } = require("child_process");
 const { app } = require("electron");
 const { resolveBundledBinary } = require("./binaryResolver");
 const debugLogger = require("./debugLogger");
+const { isValidWindowInputRegion } = require("./windowInputRegion");
 
 const APPLY_TIMEOUT_MS = 1000;
 
@@ -102,25 +103,12 @@ function createLinuxWindowInputRegion(win) {
   const set = (region) => {
     let line = "full\n";
     if (region !== null) {
-      const values = [
-        region?.viewportWidth,
-        region?.viewportHeight,
-        region?.x,
-        region?.y,
-        region?.width,
-        region?.height,
-      ];
-      if (
-        !values.every(Number.isFinite) ||
-        values[0] <= 0 ||
-        values[1] <= 0 ||
-        values[4] < 0 ||
-        values[5] < 0
-      ) {
+      if (!isValidWindowInputRegion(region)) {
         fail(new Error("Invalid input region"));
         return rejectWithFailure();
       }
-      line = `${values.join(" ")}\n`;
+      const { viewportWidth, viewportHeight, x, y, width, height } = region;
+      line = `${[viewportWidth, viewportHeight, x, y, width, height].join(" ")}\n`;
     }
     return send(line);
   };

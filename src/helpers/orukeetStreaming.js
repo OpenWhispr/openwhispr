@@ -120,6 +120,7 @@ class OrukeetStreaming {
     baseUrl,
     apiKey,
     clientToken,
+    headers = {},
     protocol = ORUKEET_PCM_PROTOCOL,
     requireAccountLimits = false,
   }) {
@@ -141,10 +142,12 @@ class OrukeetStreaming {
       ? streamingUrl(baseUrl).replace("/v1/audio/transcriptions/stream", "/v1/pipeline/stream")
       : streamingUrl(baseUrl);
     this.beginConnecting();
+    const socketHeaders = new Headers(headers);
+    if (apiKey) socketHeaders.set("Authorization", `Bearer ${apiKey}`);
     this.ws = this.createSocket(
       url,
       {
-        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        headers: Object.fromEntries(socketHeaders),
         perMessageDeflate: false,
         handshakeTimeout: this.timeoutMs,
         maxPayload: MAX_PENDING_BYTES,

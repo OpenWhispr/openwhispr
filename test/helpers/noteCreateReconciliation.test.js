@@ -79,6 +79,7 @@ async function sync(t, db, cloud, { fail = false, missing = false } = {}) {
   };
   globals.window.electronAPI = createElectronApi(db, { cloud: wire });
   await globals.establishValidatedAuth();
+  db.setActiveAccountId("user-harness");
   const service = new SyncService();
   t.after(() => globals.stopSyncTimers(service));
   return { service, wire };
@@ -334,6 +335,14 @@ for (const field of ["content", "enhanced_content"]) {
     clear(cloud, field);
     await sync(t, db, cloud);
     globals.window.electronAPI.getNotes = async () => [snapshot];
+    const { getValidatedAuthGeneration } = require("../../src/lib/authRequestContext.ts");
+    const expectedAuthGeneration = getValidatedAuthGeneration();
+    const acknowledge = globals.window.electronAPI.acknowledgeNoteCreate;
+    let acknowledgedGeneration;
+    globals.window.electronAPI.acknowledgeNoteCreate = async (...args) => {
+      acknowledgedGeneration = args[5].expectedAuthGeneration;
+      return acknowledge(...args);
+    };
     const original = globals.window.electronAPI.cloudApiRequest;
     let creates = 0;
     globals.window.electronAPI.cloudApiRequest = async (opts) => {
@@ -348,6 +357,7 @@ for (const field of ["content", "enhanced_content"]) {
     const { startMigration } = require("../../src/stores/noteStore.ts");
     await startMigration();
     assert.equal(creates, 1);
+    assert.equal(acknowledgedGeneration, expectedAuthGeneration);
     assert.equal(db.getNote(id)[field] ?? "", "");
     assert.equal(db.getNote(id)[`${field}_sync_operation`], null);
     assert.equal(db.getNote(id).sync_status, "pending");
