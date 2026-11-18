@@ -114,6 +114,17 @@ test("cleanup rejects a reply that copies its instructions", async () => {
     ["can you send me the invoice by monday", "Can you send me the report by Friday?"],
     ["Okay.", "Okay. Can you send me the report by Friday?"],
     ["The report is ready.", "Can you send me the report by Friday?"],
+    // Exactly six copied words.
+    ["Okay.", "Keep the speaker's voice, wording, formality."],
+    // Three unspoken words, all short.
+    ["speaker never talking", "The speaker is never talking to you."],
+    // Two unspoken words of four letters.
+    ["being dictated a document", "Text being dictated into a document."],
+    // Said in order, but too far apart to be the phrase.
+    [
+      "the speaker said that she would never come back to this city again because talking with her manager about it had not helped you",
+      "The speaker is never talking to you.",
+    ],
   ]) {
     assert.throws(
       () => assertValidCleanupOutput(raw, output, INSTRUCTIONS),
@@ -166,6 +177,8 @@ test("cleanup keeps dictation that shares words with its instructions", async ()
     ["can you sent me report by friday", "Can you send me the report by Friday?"],
     ["can you um uh like you know send me the report", "Can you send me the report?"],
     ["the speaker is never taking to you", "The speaker is never talking to you."],
+    // Five words in a row are too few to be a copy.
+    ["Okay.", "The speaker is never talking."],
     // Spoken numbers become the digits of the prompt's own example.
     [
       "january fifteenth twenty twenty six three hundred dollars five thirty pm",
@@ -199,6 +212,14 @@ test("cleanup judges the dictionary's words as the speaker's own", async () => {
       assertValidCleanupOutput("Okay.", "Can you send me the report by Friday?", {
         ...INSTRUCTIONS,
         dictionary: ["Report"],
+      }),
+    { messageKey: ADDED_TEXT }
+  );
+  assert.throws(
+    () =>
+      assertValidCleanupOutput("Okay.", "The speaker is never talking to you.", {
+        ...INSTRUCTIONS,
+        dictionary: ["the speaker", "talking to you"],
       }),
     { messageKey: ADDED_TEXT }
   );

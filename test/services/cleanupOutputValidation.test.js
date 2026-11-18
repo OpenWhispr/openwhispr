@@ -144,10 +144,13 @@ test("cleanup validates completed provider output using the request's prompt set
     await assert.rejects(process({ toneStyle: { appCategory: "work", tone: "formal" } }), rejected);
 
     useSettingsStore.setState({ customDictionary: ["Zephyr"] });
-    window.electronAPI.processLocalReasoning = async (_text, _model, _agent, options) => ({
-      success: true,
-      text: options.systemPrompt.slice(options.systemPrompt.lastIndexOf("\n")),
-    });
+    window.electronAPI.processLocalReasoning = async (_text, _model, _agent, options) => {
+      useSettingsStore.setState({ customDictionary: [] });
+      return {
+        success: true,
+        text: options.systemPrompt.slice(options.systemPrompt.lastIndexOf("\n")),
+      };
+    };
     await assert.rejects(process(), rejected);
   });
 

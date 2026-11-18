@@ -57,7 +57,9 @@ function copiesInstructions(
   const rawTokens = comparisonTokens(rawText);
   const stretches =
     rawTokens.length > SPOKEN_RUN_SPAN ? wordRuns(rawTokens, SPOKEN_RUN_SPAN) : [rawTokens];
-  const dictionaryWords = new Set(comparisonTokens(dictionary.join(" ")));
+  const dictionaryWords = new Set(
+    dictionary.map(comparisonTokens).flatMap((tokens) => (tokens.length === 1 ? tokens : []))
+  );
   const promptRuns = new Set(
     wordRuns(comparisonTokens(prompt), COPIED_RUN_LENGTH).map((run) => run.join(" "))
   );
