@@ -4,6 +4,7 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { InferenceMode, InferenceSelection } from '@/lib/mobileProviders';
 import { getProviderCredentialReference } from '@/services/providers/ProviderCredentials';
 import type { UserConfig } from '@/types';
+import { upgradeSavedModels } from './androidModels';
 import type { KeyProviderId } from './keyCheck';
 import { SHEET_TASKS, providerCanRun, startingModel, type SheetTask } from './ownKey';
 
@@ -159,10 +160,16 @@ let watching = false;
 export function watchLocalMode(): void {
   if (watching) return;
   watching = true;
+  let upgraded = false;
   const check = (mode: string) => {
     if (!useConfigStore.getState().config) return;
     if (mode === 'private') void leaveLocalMode();
     else seedDefault();
+    // Saved choices on retired or retiring models move to their replacements, once a launch.
+    if (!upgraded) {
+      upgraded = true;
+      void upgradeSavedModels();
+    }
   };
   check(useProcessingModeStore.getState().activeMode);
   useProcessingModeStore.subscribe((state) => check(state.activeMode));

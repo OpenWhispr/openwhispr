@@ -353,7 +353,7 @@ describe('Task pages', () => {
     expect(useConfigStore.getState().config?.inference?.meeting).toMatchObject({
       mode: 'providers',
       providerId: 'assemblyai',
-      modelId: 'universal-streaming',
+      modelId: 'assemblyai-stt-3-7-realtime',
     });
   });
 });
