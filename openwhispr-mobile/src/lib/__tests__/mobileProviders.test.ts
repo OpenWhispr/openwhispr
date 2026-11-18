@@ -244,3 +244,36 @@ it.each(['agent', 'noteChat'] as const)(
     ).toEqual({ ok: false, code: 'POLICY_BLOCKED' });
   },
 );
+
+it('adds a provider the platform registers to transcription only, and routes to it', () => {
+  jest.isolateModules(() => {
+    const providers = require('../mobileProviders') as typeof import('../mobileProviders');
+    expect(providers.isMobileProviderId('deepgram')).toBe(false);
+    providers.registerTranscriptionProvider({
+      id: 'deepgram',
+      name: 'Deepgram',
+      endpoint: 'https://api.deepgram.com/v1',
+      models: [{ id: 'nova-3', name: 'Nova-3' }],
+      transcribe: async () => ({ text: '', duration: 0 }),
+    });
+    expect(providers.isMobileProviderId('deepgram')).toBe(true);
+    expect(providers.providerDisplayName('deepgram')).toBe('Deepgram');
+    expect(providers.getMobileProvidersForScope('upload').map((p) => p.id)).toContain('deepgram');
+    expect(providers.getMobileProvidersForScope('cleanup').map((p) => p.id)).not.toContain(
+      'deepgram',
+    );
+    expect(providers.getMobileProvidersForScope('meeting')).toEqual([]);
+    expect(
+      providers.resolveMobileInferenceRoute({
+        scope: 'dictation',
+        selection: {
+          mode: 'providers',
+          providerId: 'deepgram',
+          modelId: 'nova-3',
+          credentialRef: 'provider.deepgram',
+        },
+        policy: { status: 'unmanaged' },
+      } as never),
+    ).toMatchObject({ ok: true, route: { providerId: 'deepgram', modelId: 'nova-3' } });
+  });
+});

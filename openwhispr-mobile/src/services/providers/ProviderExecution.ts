@@ -11,8 +11,9 @@ import {
 } from '@/lib/providerEndpoints';
 import modelCatalog from '@/config/providerCatalog.json';
 import {
-  MOBILE_PROVIDER_IDS,
+  isMobileProviderId,
   isTranscriptionScope,
+  platformTranscriptionProvider,
   providerDisplayName,
   type InferenceRoute,
 } from '@/lib/mobileProviders';
@@ -149,7 +150,7 @@ function errorForStatus(providerId: string, status: number): ProviderExecutionEr
 }
 
 function assertSupportedProvider(route: ProviderRoute): void {
-  if (!MOBILE_PROVIDER_IDS.includes(route.providerId)) {
+  if (!isMobileProviderId(route.providerId)) {
     throw new ProviderExecutionError(
       'PROVIDER_UNSUPPORTED',
       `${providerDisplayName(route.providerId)} is not available on this device.`,
@@ -447,6 +448,24 @@ async function transcribe(
   const { endpoint, apiKey } = await prepareRoute(route, dependencies.getCredential);
   const size = await dependencies.fileSize(input.audioUri);
   if (size !== undefined && size > PROVIDER_AUDIO_LIMIT_BYTES) throw audioTooLargeError();
+  // A provider with its own client (registered by the platform) takes the file itself.
+  const platform = platformTranscriptionProvider(route.providerId);
+  if (platform) {
+    if (!apiKey)
+      throw new ProviderExecutionError(
+        'CREDENTIAL_MISSING',
+        `Configure credentials for ${providerDisplayName(route.providerId)}.`,
+      );
+    return platform.transcribe({
+      apiKey,
+      modelId: route.modelId,
+      audioUri: input.audioUri,
+      mimeType: input.mimeType,
+      language: input.language,
+      prompt: input.prompt,
+      signal: input.signal,
+    });
+  }
   const parameters: Record<string, string> = { model: route.modelId };
   if (input.language && input.language !== 'auto') parameters.language = input.language;
   if (input.prompt) parameters.prompt = input.prompt;
