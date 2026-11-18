@@ -1,3 +1,5 @@
+const { selfHostedSttRequest } = require("./selfHostedSttHeaders.js");
+const { isRefusedRedirect } = require("./providerHttpErrors.js");
 const ENDPOINTS = {
   openai: "https://api.openai.com/v1/models",
   groq: "https://api.groq.com/openai/v1/models",
@@ -168,6 +170,7 @@ function buildTranscriptionEndpoint(base) {
 
 function resolveProviderRequest(config) {
   const provider = String(config?.provider || "").toLowerCase();
+  const scope = String(config?.scope || "").toLowerCase();
   const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
   let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
   // A hosted provider's fixed endpoint never redirects. Following one would carry
@@ -176,6 +179,7 @@ function resolveProviderRequest(config) {
   // servers may redirect within themselves, such as adding a trailing slash.
   let redirect = "error";
   let transcriptionEndpoint;
+  let checksOpenRouterKey = false;
 
   if (provider === "openai") {
     const override = normalizeBaseUrl(
@@ -210,6 +214,21 @@ function resolveProviderRequest(config) {
     endpoints = buildModelEndpoints(parsed.toString());
     transcriptionEndpoint = buildTranscriptionEndpoint(parsed.toString());
     redirect = "follow";
+    // OpenRouter lists speech-to-text models only when asked for that output
+    // modality, so its default catalog reads every STT id as missing (#1764).
+    // The catalog answers any caller, so the key is checked on its own first.
+    const host = parsed.hostname;
+    if (
+      scope === "transcription" &&
+      (host === "openrouter.ai" || host.endsWith(".openrouter.ai"))
+    ) {
+      checksOpenRouterKey = true;
+      endpoints = endpoints.map((endpoint) => {
+        const url = new URL(endpoint);
+        url.searchParams.set("output_modalities", "transcription");
+        return url.toString();
+      });
+    }
   }
 
   if (endpoints.length === 0) {
@@ -238,7 +257,17 @@ function resolveProviderRequest(config) {
     }
   }
 
-  return { endpoint: endpoints[0], endpoints, headers, redirect, transcriptionEndpoint };
+  return {
+    endpoint: endpoints[0],
+    endpoints,
+    // A speech server's address is the user's to correct, so its refused redirect is named;
+    // a hosted provider's stays no verdict.
+    ...(provider === "custom" && scope === "transcription"
+      ? { ...selfHostedSttRequest(config.headers, headers), namesRedirect: true }
+      : { headers, redirect }),
+    transcriptionEndpoint,
+    checksOpenRouterKey,
+  };
 }
 
 // When several candidate endpoints fail, report the most actionable failure. An answer that
@@ -246,9 +275,10 @@ function resolveProviderRequest(config) {
 // key or a missing model. No answer outranks a candidate without a model list, which may only
 // be an address the server doesn't use.
 const FAILURE_PRIORITY = {
-  credentialsRejected: 6,
-  providerStatus: 5,
-  modelNotFound: 4,
+  credentialsRejected: 7,
+  providerStatus: 6,
+  modelNotFound: 5,
+  redirected: 4,
   endpointNotFound: 0,
 };
 const UNVERIFIED_PRIORITY = { providerStatus: 3, timeout: 2, network: 1 };
@@ -302,6 +332,11 @@ const NETWORK_FAILURE = {
   errorCode: "network",
   error: "The provider could not be reached.",
   unverified: true,
+};
+// A speech server that redirects a request carrying custom headers is set up wrong.
+const REDIRECT_FAILURE = {
+  errorCode: "redirected",
+  error: "The server redirected the request to another address.",
 };
 
 // An empty or non-JSON body reads as undefined. A body that never arrives (the 12 s cap
@@ -391,7 +426,8 @@ async function probe(endpoint, request, fetchImpl, judge, init = { method: "GET"
     });
     return await judge(response);
   } catch (error) {
-    return error?.name === "AbortError" ? TIMEOUT_FAILURE : NETWORK_FAILURE;
+    if (error?.name === "AbortError") return TIMEOUT_FAILURE;
+    return request.namesRedirect && isRefusedRedirect(error) ? REDIRECT_FAILURE : NETWORK_FAILURE;
   } finally {
     clearTimeout(timeout);
   }
@@ -413,6 +449,14 @@ async function testProviderConnection(
       errorCode: error.errorCode || "invalidUrl",
       error: error.message,
     };
+  }
+
+  if (request.checksOpenRouterKey) {
+    const keyCheck = await testProviderConnection(
+      { provider: "openrouter", scope: "transcription", apiKey: config.apiKey },
+      fetchImpl
+    );
+    if (!keyCheck.success) return keyCheck;
   }
 
   const provider = String(config?.provider || "").toLowerCase();

@@ -223,6 +223,7 @@ test("the cloud tool loop marks a call failed when its executor says so or throw
     return {
       stream: (async function* () {
         for (const event of events) yield event;
+        yield { type: "done", finishReason: step === 1 ? "tool-calls" : "stop" };
       })(),
       wasCancelled: () => false,
     };

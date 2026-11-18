@@ -107,7 +107,9 @@ class AgentWindowManager {
   }
 
   // A conversational wake-word command, transcribed by the dictation window.
-  deliverCommand(command) {
+  // `isCurrent` is asked again if the command waits for the renderer to load,
+  // since the account it was spoken under may have been replaced meanwhile.
+  deliverCommand(command, { isCurrent } = {}) {
     if (this.windowManager._onboardingActive) return false;
     const text = typeof command?.text === "string" ? command.text.trim() : "";
     if (!text) return false;
@@ -120,11 +122,15 @@ class AgentWindowManager {
       typeof command.selectedContext?.text === "string" ? command.selectedContext.text : "";
     this._ensureWindow();
     void this._show(() => this.windowManager._resolveActiveDisplay());
-    this._send("agent-window-command", {
-      text,
-      attachment,
-      selectedContext: selectedText.trim() ? { text: selectedText, source: "external" } : null,
-    });
+    this._send(
+      "agent-window-command",
+      {
+        text,
+        attachment,
+        selectedContext: selectedText.trim() ? { text: selectedText, source: "external" } : null,
+      },
+      isCurrent
+    );
     return true;
   }
 
@@ -141,7 +147,9 @@ class AgentWindowManager {
     this.ready = true;
     const pending = this.pending;
     this.pending = null;
-    if (pending) this.window.webContents.send(pending.channel, pending.payload);
+    if (pending && (!pending.isCurrent || pending.isCurrent())) {
+      this.window.webContents.send(pending.channel, pending.payload);
+    }
   }
 
   setLayout(event, request) {
@@ -305,10 +313,10 @@ class AgentWindowManager {
     this._applyVoiceState("idle");
   }
 
-  _send(channel, payload) {
+  _send(channel, payload, isCurrent) {
     if (!this.window) return;
     if (this.ready) this.window.webContents.send(channel, payload);
-    else this.pending = { channel, payload };
+    else this.pending = { channel, payload, isCurrent };
   }
 
   async _show(resolveDisplay) {

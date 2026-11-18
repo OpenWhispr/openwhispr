@@ -17,7 +17,7 @@ const member = (userId, name, email = `${userId}@openronnie.com`) => ({
   image: null,
 });
 
-const group = (id, name, memberCount = 2) => ({
+const team = (id, name, memberCount = 2) => ({
   id,
   workspace_id: "w1",
   name,
@@ -34,15 +34,15 @@ const ROSTER = [
   member("bob", "Bob", "bov@openronnie.com"),
   member("nameless", null, "ghost@openronnie.com"),
 ];
-const GROUPS = [group("sales", "Sales", 5), group("design", "Design Team", 2)];
+const TEAMS = [team("sales", "Sales", 5), team("design", "Design Team", 2)];
 
-const NO_ACCESS = { accessUserIds: new Set(), accessGroupIds: new Set() };
+const NO_ACCESS = { accessUserIds: new Set(), accessTeamIds: new Set() };
 
 const search = (query, overrides = {}) =>
   pickerResults({
     query,
     roster: ROSTER,
-    groups: GROUPS,
+    teams: TEAMS,
     picked: [],
     canInvite: true,
     ...NO_ACCESS,
@@ -51,69 +51,69 @@ const search = (query, overrides = {}) =>
 
 const names = (results) => ({
   members: results.members.map(({ member: person }) => person.name ?? person.email),
-  groups: results.groups.map(({ group: found }) => found.name),
+  teams: results.teams.map(({ team: found }) => found.name),
 });
 
-test("a query finds members and groups, members first", () => {
-  assert.deepEqual(names(search("sa")), { members: ["Saket"], groups: ["Sales"] });
+test("a query finds members and teams, members first", () => {
+  assert.deepEqual(names(search("sa")), { members: ["Saket"], teams: ["Sales"] });
   // Case does not matter, and members also match by email.
-  assert.deepEqual(names(search("ETHAN")), { members: ["Ethan"], groups: [] });
-  assert.deepEqual(names(search("bov@")), { members: ["Bob"], groups: [] });
-  // A group is found by its name only, not by its slug or description.
-  assert.deepEqual(names(search("design")), { members: [], groups: ["Design Team"] });
-  const support = { ...group("cs", "CS"), slug: "customer-success", description: "Customer care" };
-  assert.deepEqual(names(search("customer", { groups: [...GROUPS, support] })), {
+  assert.deepEqual(names(search("ETHAN")), { members: ["Ethan"], teams: [] });
+  assert.deepEqual(names(search("bov@")), { members: ["Bob"], teams: [] });
+  // A team is found by its name only, not by its slug or description.
+  assert.deepEqual(names(search("design")), { members: [], teams: ["Design Team"] });
+  const support = { ...team("cs", "CS"), slug: "customer-success", description: "Customer care" };
+  assert.deepEqual(names(search("customer", { teams: [...TEAMS, support] })), {
     members: [],
-    groups: [],
+    teams: [],
   });
   assert.deepEqual(names(search("openronnie")), {
     members: ["Ethan", "Saket", "Bob", "ghost@openronnie.com"],
-    groups: [],
+    teams: [],
   });
   assert.equal(search("sa").noResults, false);
 });
 
 test("an empty query lists the first of each, at most eight", () => {
   const crowd = Array.from({ length: 12 }, (_, index) => member(`m${index}`, `Person ${index}`));
-  const teams = Array.from({ length: 10 }, (_, index) => group(`g${index}`, `Group ${index}`));
-  for (const query of ["", "  ", "r"]) {
+  const teams = Array.from({ length: 10 }, (_, index) => team(`g${index}`, `Team ${index}`));
+  for (const query of ["", "  ", "e"]) {
     const results = pickerResults({
       query,
       roster: crowd,
-      groups: teams,
+      teams,
       picked: [],
       canInvite: true,
       ...NO_ACCESS,
     });
     assert.equal(results.members.length, 8);
-    assert.equal(results.groups.length, 8);
+    assert.equal(results.teams.length, 8);
     assert.equal(results.members[0].member.user_id, "m0");
-    assert.equal(results.groups[0].group.id, "g0");
+    assert.equal(results.teams[0].team.id, "g0");
   }
 });
 
 test("picked people stay listed with a check, and hidden people don't show", () => {
   const picked = [
     { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" },
-    { kind: "group", teamId: "sales", label: "Sales", memberCount: 5 },
+    { kind: "team", teamId: "sales", label: "Sales", memberCount: 5 },
   ];
   const results = search("", { picked });
   // Nobody leaves the list for being picked; the row says so, so choosing it again can take it back.
   assert.deepEqual(names(results), {
     members: ["Ethan", "Saket", "Bob", "ghost@openronnie.com"],
-    groups: ["Sales", "Design Team"],
+    teams: ["Sales", "Design Team"],
   });
   assert.deepEqual(
     results.members.map((row) => row.picked),
     [true, false, false, false]
   );
   assert.deepEqual(
-    results.groups.map((row) => row.picked),
+    results.teams.map((row) => row.picked),
     [true, false]
   );
   // A query keeps them too, and nothing is picked without a chip.
   assert.deepEqual(
-    search("sa", { picked }).groups.map((row) => [row.group.name, row.picked]),
+    search("sa", { picked }).teams.map((row) => [row.team.name, row.picked]),
     [["Sales", true]]
   );
   assert.ok(search("").members.every((row) => row.picked === false));
@@ -137,7 +137,7 @@ test("picked people stay listed with a check, and hidden people don't show", () 
   const crowded = pickerResults({
     query: "",
     roster: crowd,
-    groups: [],
+    teams: [],
     picked: [],
     hiddenUserIds: new Set(["m0"]),
     canInvite: false,
@@ -147,10 +147,10 @@ test("picked people stay listed with a check, and hidden people don't show", () 
   assert.equal(crowded.members[0].member.user_id, "m1");
 });
 
-test("someone with access shows disabled, a group with its count", () => {
+test("someone with access shows disabled, a team with its count", () => {
   const results = search("", {
     accessUserIds: new Set(["ethan"]),
-    accessGroupIds: new Set(["sales"]),
+    accessTeamIds: new Set(["sales"]),
   });
   const flags = (rows, pick) => Object.fromEntries(rows.map((row) => [pick(row), row.hasAccess]));
   assert.deepEqual(
@@ -158,11 +158,11 @@ test("someone with access shows disabled, a group with its count", () => {
     { ethan: true, saket: false, bob: false, nameless: false }
   );
   assert.deepEqual(
-    flags(results.groups, (row) => row.group.id),
+    flags(results.teams, (row) => row.team.id),
     { sales: true, design: false }
   );
-  // The row carries the group itself, so the list can say how many people it holds.
-  assert.equal(results.groups[0].group.member_count, 5);
+  // The row carries the team itself, so the list can say how many people it holds.
+  assert.equal(results.teams[0].team.member_count, 5);
 });
 
 test("an address with no match offers an invite only to those who can", () => {
@@ -183,7 +183,7 @@ test("an address with a pending invitation is shown as pending, not offered agai
   assert.equal(pending.inviteEmail, null);
   assert.equal(pending.pendingInvite, "clark@gmail.com");
   assert.equal(pending.noResults, false, "there is a row to show");
-  assert.deepEqual(names(pending), { members: [], groups: [] });
+  assert.deepEqual(names(pending), { members: [], teams: [] });
 
   // As typed, in any capitalisation and with spaces around it.
   assert.equal(search("  Clark@Gmail.com ", { pendingEmails }).pendingInvite, "Clark@Gmail.com");
@@ -210,7 +210,7 @@ test("no results tell the inviter they can enter an address, and others they can
     const results = search("Research", { canInvite });
     assert.equal(results.noResults, true);
     assert.equal(results.inviteEmail, null);
-    assert.deepEqual(names(results), { members: [], groups: [] });
+    assert.deepEqual(names(results), { members: [], teams: [] });
   }
   // An invite row, or any match, is something to show instead.
   assert.equal(search("alex@example.com").noResults, false);
@@ -263,11 +263,11 @@ test("an address the server would refuse reads as invalid", () => {
 test("pickedSummary splits the three kinds, keeps roles and flags invalid ones", () => {
   const picked = [
     { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" },
-    { kind: "group", teamId: "sales", label: "Sales", memberCount: 5 },
+    { kind: "team", teamId: "sales", label: "Sales", memberCount: 5 },
     { kind: "email", email: "a@x.io", role: "admin", valid: true },
     { kind: "email", email: "b@y.io", role: "member", valid: true },
     { kind: "member", userId: "saket", label: "Saket", email: "saket@openronnie.com" },
-    { kind: "group", teamId: "design", label: "Design Team", memberCount: 2 },
+    { kind: "team", teamId: "design", label: "Design Team", memberCount: 2 },
   ];
   assert.deepEqual(pickedSummary(picked), {
     memberIds: ["ethan", "saket"],
@@ -300,7 +300,7 @@ test("pickedSummary splits the three kinds, keeps roles and flags invalid ones",
 
 test("adding recipients keeps each one once and skips those who can't be staged", () => {
   const ethan = { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" };
-  const sales = { kind: "group", teamId: "sales", label: "Sales", memberCount: 5 };
+  const sales = { kind: "team", teamId: "sales", label: "Sales", memberCount: 5 };
   const alex = { kind: "email", email: "alex@x.io", role: "admin", valid: true };
 
   assert.deepEqual(addRecipients([ethan], [ethan, sales, sales]), [ethan, sales]);
@@ -349,7 +349,7 @@ test("each kind of recipient has a key of its own", () => {
   assert.equal(
     new Set([
       recipientKey({ kind: "member", userId: "a", label: "A", email: "a@x.io" }),
-      recipientKey({ kind: "group", teamId: "a", label: "A", memberCount: 1 }),
+      recipientKey({ kind: "team", teamId: "a", label: "A", memberCount: 1 }),
       recipientKey({ kind: "email", email: "a", role: "member", valid: false }),
     ]).size,
     3

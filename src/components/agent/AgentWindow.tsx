@@ -26,6 +26,7 @@ import {
 } from "../../stores/connectorApprovalStore";
 import { editSelectedText } from "../../services/editSelectedText";
 import { getSelectionCaptureDisposition } from "../../helpers/selectionEditing";
+import { markdownToPlainText } from "../../helpers/markdownToPlainText";
 import type { ToneAppCategory } from "../../config/toneStyle";
 import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
@@ -82,6 +83,8 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 interface RequestExtras {
   selectedContext?: AgentSelectionContext | null;
   attachment?: ChatImageAttachment | null;
+  /** Another app's writable field from the press, with nothing selected: the answer is typed there. */
+  caretSessionId?: string;
 }
 
 type SelectionEditTarget =
@@ -193,14 +196,27 @@ export default function AgentWindow() {
   const chatBusyRef = useRef(chatBusy);
   chatBusyRef.current = chatBusy;
   const editTargetRef = useRef<SelectionEditTarget | null>(null);
+  const caretRef = useRef<{ press: number; sessionId: string } | null>(null);
+  const caretDeliveryRef = useRef<string | null>(null);
+  const cancelCaretDelivery = useCallback((): void => {
+    const sessionIds = new Set([caretRef.current?.sessionId, caretDeliveryRef.current]);
+    caretRef.current = null;
+    caretDeliveryRef.current = null;
+    for (const sessionId of sessionIds) {
+      if (sessionId) void window.electronAPI?.cancelSelectionEdit?.(sessionId).catch(() => {});
+    }
+  }, []);
+  // Set once the surface exists, below: a pasted answer hides the window and keeps the chat.
+  const hideKeepingChatRef = useRef<() => void>(() => {});
   const selectionEditRef = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
       pressRef.current += 1;
+      cancelCaretDelivery();
       selectionEditRef.current?.abort();
       selectionEditRef.current = null;
     },
-    []
+    [cancelCaretDelivery]
   );
   // A new function every render; read through a ref so callbacks stay stable.
   const sendRef = useRef(chat.send);
@@ -402,6 +418,7 @@ export default function AgentWindow() {
   const submit = useCallback(
     (text: string, typed: boolean, extras?: RequestExtras) => {
       if (refuseIfRestricted()) return;
+      cancelCaretDelivery();
       pressRef.current += 1;
       pressCaptureRef.current = null;
       const current = stateRef.current;
@@ -428,6 +445,7 @@ export default function AgentWindow() {
       const press = pressRef.current;
       const restoreUnsent = () => {
         if (press !== pressRef.current) return;
+        cancelCaretDelivery();
         busyRef.current = false;
         const latest = stateRef.current;
         if (latest.draft === (typed ? "" : current.draft)) {
@@ -440,6 +458,29 @@ export default function AgentWindow() {
         }
         dispatch({ type: "notice", notice: "chat.sendNotStarted" });
       };
+      const caretSessionId = extras?.caretSessionId;
+      caretDeliveryRef.current = caretSessionId ?? null;
+      // An answer that only read is typed into the field the take was spoken
+      // over; one that asked or acted, or that a newer take overtook, stays here.
+      const deliverToCaret = async ({
+        content,
+        onlyRead,
+      }: {
+        content: string;
+        onlyRead: boolean;
+      }): Promise<void> => {
+        if (!caretSessionId || caretDeliveryRef.current !== caretSessionId) return;
+        if (!onlyRead || press !== pressRef.current) {
+          cancelCaretDelivery();
+          return;
+        }
+        const result = await window.electronAPI
+          ?.pasteAtCapturedTarget?.(caretSessionId, markdownToPlainText(content) || content)
+          .catch(() => null);
+        if (caretDeliveryRef.current !== caretSessionId) return;
+        caretDeliveryRef.current = null;
+        if (result?.success && press === pressRef.current) hideKeepingChatRef.current();
+      };
       void (async () => {
         dispatch({
           type: "submitted",
@@ -451,12 +492,13 @@ export default function AgentWindow() {
         return sendRef.current(text, {
           ...(selectedContext ? { selectedContext } : {}),
           ...(attachment ? { attachment } : {}),
+          ...(caretSessionId ? { plainTextResponse: true, onComplete: deliverToCaret } : {}),
         });
       })().then((sent) => {
         if (!sent) restoreUnsent();
       }, restoreUnsent);
     },
-    [dispatch, refuseIfRestricted, stopReading]
+    [cancelCaretDelivery, dispatch, refuseIfRestricted, stopReading]
   );
 
   const handleTranscript = useCallback(
@@ -477,6 +519,8 @@ export default function AgentWindow() {
       pressRef.current += 1;
       const target = editTargetRef.current;
       editTargetRef.current = null;
+      const caret = caretRef.current?.press === press ? caretRef.current : null;
+      caretRef.current = null;
       const extras = {
         selectedContext: stateRef.current.selectedContext,
         attachment: stateRef.current.attachment,
@@ -491,7 +535,7 @@ export default function AgentWindow() {
               isCloudAgent: isCloudDictationAgentMode(),
             }).reachable))
       ) {
-        submit(text, false, extras);
+        submit(text, false, caret ? { ...extras, caretSessionId: caret.sessionId } : extras);
         return;
       }
       const controller = new AbortController();
@@ -860,10 +904,16 @@ export default function AgentWindow() {
       const press = ++pressRef.current;
       const isCurrent = () => press === pressRef.current;
       editTargetRef.current = card;
+      cancelCaretDelivery();
       if (external) dispatch({ type: "setContext", context: null });
       dispatch({ type: "setAttachment", attachment: null });
       const selection = Promise.resolve(
-        external ? window.electronAPI?.captureSelectedText?.() : null
+        external
+          ? window.electronAPI?.captureSelectedText?.({
+              // Only an answer that can be pasted needs the writable-field probe.
+              probeEditable: getSettings().autoPasteEnabled,
+            })
+          : null
       )
         .then(async (capture) => {
           if (isCurrent() && capture?.status === "selected") {
@@ -884,6 +934,9 @@ export default function AgentWindow() {
                 .catch(() => null);
               if (isCurrent()) target.appCategory = category ?? null;
             }
+          } else if (capture?.status === "editable") {
+            if (isCurrent()) caretRef.current = { press, sessionId: capture.sessionId };
+            else void window.electronAPI?.cancelSelectionEdit?.(capture.sessionId).catch(() => {});
           } else if (
             isCurrent() &&
             capture &&
@@ -910,7 +963,7 @@ export default function AgentWindow() {
       });
       pressCaptureRef.current = Promise.all([selection, screenshot]);
     },
-    [dispatch]
+    [cancelCaretDelivery, dispatch]
   );
 
   const startListening = useCallback(
@@ -938,6 +991,7 @@ export default function AgentWindow() {
   const { cancel: cancelTake } = voice;
   // The take belongs to the chat it was spoken in: opening another drops it.
   const dropTake = useCallback(() => {
+    cancelCaretDelivery();
     selectionEditRef.current?.abort();
     selectionEditRef.current = null;
     editTargetRef.current = null;
@@ -949,11 +1003,12 @@ export default function AgentWindow() {
     dispatch({ type: "setAttachment", attachment: null });
     dispatch({ type: "setContext", context: null });
     cancelTake();
-  }, [cancelTake, dispatch]);
+  }, [cancelCaretDelivery, cancelTake, dispatch]);
   const stopRequest = useCallback(() => {
+    cancelCaretDelivery();
     if (selectionEditRef.current) dropTake();
     else cancelTurn();
-  }, [cancelTurn, dropTake]);
+  }, [cancelCaretDelivery, cancelTurn, dropTake]);
   useEffect(
     () =>
       subscribeAuthBoundary(() => {
@@ -979,6 +1034,10 @@ export default function AgentWindow() {
   }, [dropTake, startNewChat, stopCallReply, stopReading]);
 
   const { hide: hideSurface } = surface;
+  hideKeepingChatRef.current = () => {
+    void hideSurface();
+    dispatch({ type: "hide" });
+  };
   // A close starts a new chat (the old one stays in the list); Minimize keeps
   // the chat. It starts before the hide, so a command that reaches the window
   // meanwhile goes to the new chat, though the window still ends hidden.
@@ -1293,7 +1352,8 @@ export default function AgentWindow() {
     latest?.role === "assistant" && Boolean(latest.content || latest.toolCalls?.length);
   // In the modal an answer card is on screen with its own Send, so the pill
   // waits only on an interaction card; outside it, the pill waits on any card.
-  // Either way it reads as at rest while an answer card waits or sends.
+  // Either way it reads as at rest while an answer card waits or sends. A
+  // streaming reply in the modal shows its own progress row, so the pill doesn't.
   const pillStatus = (placement: AgentPillPlacement): AgentPillStatus =>
     listening
       ? "listening"
@@ -1305,7 +1365,9 @@ export default function AgentWindow() {
             ? "waiting"
             : cardHolds
               ? "idle"
-              : busy && !answerStarted
+              : busy &&
+                  !answerStarted &&
+                  !(placement === "modal" && latest?.role === "assistant" && latest.isStreaming)
                 ? "thinking"
                 : busy
                   ? "streaming"

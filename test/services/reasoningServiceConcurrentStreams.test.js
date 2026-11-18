@@ -81,6 +81,7 @@ for (const transport of ["raw", "ai"]) {
       new Promise((resolve) => {
         release = resolve;
       });
+    globalThis.window.electronAPI.llamaServerCancelStart = async () => {};
     let requests = 0;
     t.mock.method(globalThis, "fetch", async () => {
       requests++;

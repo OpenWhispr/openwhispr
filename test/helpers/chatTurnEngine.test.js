@@ -3,8 +3,8 @@ const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-async function setup(t) {
-  installBrowserGlobals(t);
+async function setup(t, { electronAPI, initialStorage, options } = {}) {
+  installBrowserGlobals(t, { initialStorage, window: { electronAPI: electronAPI ?? {} } });
   const vite = await createRendererServer(t);
   const { createChatTurnEngine } = await vite.ssrLoadModule("/components/chat/chatTurnEngine.ts");
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
@@ -30,6 +30,7 @@ async function setup(t) {
       userName: null,
       isOwnerCurrent: () => ownerCurrent,
       onStreamComplete: (_id, content) => writes.push(content),
+      ...options,
     }),
     {
       setMessages: (update) => {
@@ -134,3 +135,216 @@ test("a superseded send cannot set its replacement idle", async (t) => {
   await second;
   assert.deepEqual(fixture.writes, ["Answer"]);
 });
+
+test("RAG context excludes notes outside the active workspace", async (t) => {
+  const note = (id, spaceId, title) => ({
+    id,
+    title,
+    content: `${title}: the pricing tiers`,
+    enhanced_content: null,
+    space_id: spaceId,
+  });
+  const notes = [note(11, 1, "Own pricing plan"), note(44, 4, "Other workspace pricing plan")];
+  const ragQueries = [];
+  // Workspace A is active (the dictation window: no workspace list). Its Private is 1 and its
+  // teamspace 2; workspace B's Private is 4.
+  const fixture = await setup(t, {
+    initialStorage: { activeWorkspaceId: "a" },
+    electronAPI: {
+      getSpaces: async () => [
+        { id: 1, kind: "private", workspace_id: "a" },
+        { id: 4, kind: "private", workspace_id: "b" },
+        { id: 2, kind: "team", workspace_id: "a" },
+      ],
+      getPrivateSpaceId: async () => 1,
+      getDefaultPrivateSpaceId: async () => 1,
+      // Answers as if main applied no scope, the worst case.
+      semanticSearchNotes: async (...args) => {
+        ragQueries.push(args);
+        return notes;
+      },
+      getNote: async (id) => notes.find((candidate) => candidate.id === id) ?? null,
+    },
+  });
+  const requests = [];
+  t.mock.method(fixture.service, "processTextStreamingAI", async function* (...args) {
+    requests.push(JSON.stringify(args.slice(0, 4)));
+    yield { type: "content", text: "Answer" };
+  });
+
+  const question = "What are our pricing tiers?";
+  await fixture.engine.send(question, [{ id: "user-1", role: "user", content: question }]);
+
+  assert.deepEqual(ragQueries, [["What are our pricing tiers?", 5, null, null, [1, 2]]]);
+  assert.equal(requests.length, 1);
+  assert.match(requests[0], /Own pricing plan/);
+  assert.doesNotMatch(requests[0], /Other workspace pricing plan/);
+});
+
+for (const [where, spaceId, grounded] of [
+  ["another workspace's Private", 4, false],
+  ["the active workspace", 1, true],
+]) {
+  test(`a conversation's source note in ${where} ${grounded ? "grounds" : "doesn't ground"} the turn`, async (t) => {
+    const fixture = await setup(t, {
+      initialStorage: { activeWorkspaceId: "a" },
+      electronAPI: {
+        getSpaces: async () => [
+          { id: 1, kind: "private", workspace_id: "a" },
+          { id: 4, kind: "private", workspace_id: "b" },
+        ],
+        getPrivateSpaceId: async () => 1,
+        getDefaultPrivateSpaceId: async () => 1,
+        semanticSearchNotes: async () => [],
+      },
+      // A Chat-section conversation started from a note; the list spans every workspace.
+      options: {
+        openNote: () => ({ text: "Note ID: 9\nTitle: Board secrets", transcriptPreview: false }),
+        openNoteSpaceId: spaceId,
+      },
+    });
+    const requests = [];
+    t.mock.method(fixture.service, "processTextStreamingAI", async function* (...args) {
+      requests.push(JSON.stringify(args.slice(0, 4)));
+      yield { type: "content", text: "Answer" };
+    });
+    const question = "What did we decide?";
+    await fixture.engine.send(question, [{ id: "user-1", role: "user", content: question }]);
+    assert.equal(requests.length, 1);
+    if (grounded) assert.match(requests[0], /Board secrets/);
+    else assert.doesNotMatch(requests[0], /Board secrets/);
+  });
+}
+
+for (const loadedContext of [true, false]) {
+  test(`a restored source-note chat refuses out-of-scope history with context ${loadedContext}`, async (t) => {
+    const fixture = await setup(t, {
+      initialStorage: { activeWorkspaceId: "b" },
+      electronAPI: {
+        getSpaces: async () => [
+          { id: 1, kind: "private", workspace_id: "a" },
+          { id: 4, kind: "private", workspace_id: "b" },
+        ],
+        getPrivateSpaceId: async () => 4,
+        getNote: async () => ({ id: 9, space_id: 1, deleted_at: null }),
+      },
+      options: { sourceNoteId: 9, openNote: loadedContext ? "A secret" : undefined },
+    });
+    let requests = 0;
+    t.mock.method(fixture.service, "processTextStreamingAI", async function* () {
+      requests++;
+      yield { type: "content", text: "Answer" };
+    });
+    await assert.rejects(
+      fixture.engine.send("Continue", [
+        { id: "old", role: "assistant", content: "Private A history" },
+      ]),
+      /outside the active workspace/
+    );
+    assert.equal(requests, 0);
+  });
+}
+
+for (const inScope of [false, true]) {
+  test(`a soft-deleted source ${inScope ? "inside" : "outside"} the workspace ${inScope ? "keeps" : "refuses"} chat history`, async (t) => {
+    const fixture = await setup(t, {
+      initialStorage: { activeWorkspaceId: "b" },
+      electronAPI: {
+        getSpaces: async () => [
+          { id: 1, kind: "private", workspace_id: "a" },
+          { id: 4, kind: "private", workspace_id: "b" },
+        ],
+        getPrivateSpaceId: async () => 4,
+        getNote: async () => ({ id: 9, space_id: inScope ? 4 : 1, deleted_at: "2026-11-11" }),
+      },
+      options: { sourceNoteId: 9 },
+    });
+    let requests = 0;
+    t.mock.method(fixture.service, "processTextStreamingAI", async function* () {
+      requests++;
+      yield { type: "content", text: "Answer" };
+    });
+    const sending = fixture.engine.send("Continue", [
+      { id: "old", role: "assistant", content: "Source history" },
+    ]);
+    if (inScope) await sending;
+    else await assert.rejects(sending, /outside the active workspace/);
+    assert.equal(requests, inScope ? 1 : 0);
+  });
+}
+
+for (const source of ["rag", "open-note", "container"]) {
+  for (const verdict of ["allow", "refuse", "cancel", "account-switch"]) {
+    test(`${source} protects a persisted chat before checkpoints and model exposure: ${verdict}`, async (t) => {
+      const note = {
+        id: 7,
+        space_id: 1,
+        title: "Private canary",
+        content: "PRIVATE_ENGINE_CANARY",
+      };
+      const events = [];
+      let release;
+      let markStarted;
+      const marking = new Promise((resolve) => {
+        markStarted = resolve;
+      });
+      const pending = new Promise((resolve) => {
+        release = resolve;
+      });
+      const fixture = await setup(t, {
+        electronAPI: {
+          getSpaces: async () => [{ id: 1, kind: "private", workspace_id: null }],
+          getPrivateSpaceId: async () => 1,
+          getDatabaseAccountScope: async () => ({ accountId: "owner", visibleAccountId: "owner" }),
+          getNote: async () => note,
+          semanticSearchNotes: async () => (source === "rag" ? [note] : []),
+          protectConversation: async (id, references, deviceOnly, accountId) => {
+            assert.equal(id, 42);
+            assert.equal(accountId, "owner");
+            if (source !== "container") assert.deepEqual(references, [{ id: 7, space_id: 1 }]);
+            else assert.equal(deviceOnly, true);
+            events.push("mark-start");
+            markStarted();
+            await pending;
+            events.push("mark-end");
+            return { success: verdict !== "refuse" };
+          },
+        },
+        options: {
+          ...(source === "open-note" ? { openNoteId: 7, openNote: note.content } : {}),
+          ...(source === "container" ? { noteContext: note.content } : {}),
+          onTurnCheckpoint: () => {
+            events.push("checkpoint");
+          },
+        },
+      });
+      const requests = [];
+      t.mock.method(fixture.service, "processTextStreamingAI", async function* (...args) {
+        events.push("request");
+        requests.push(JSON.stringify(args.slice(0, 4)));
+        yield { type: "content", text: "Answer" };
+      });
+      const send = fixture.engine.send(
+        "Question",
+        [{ id: "user", role: "user", content: "Question" }],
+        { conversationId: 42 }
+      );
+      const settled = send.catch((error) => error);
+      await marking;
+      assert.deepEqual(events, ["mark-start"]);
+      if (verdict === "cancel") fixture.engine.cancel({ explicit: true });
+      if (verdict === "account-switch") fixture.invalidate();
+      release();
+      const result = await settled;
+      if (verdict === "allow") {
+        assert.equal(result, undefined);
+        assert.match(requests[0], /PRIVATE_ENGINE_CANARY/);
+        assert.deepEqual(events.slice(0, 4), ["mark-start", "mark-end", "checkpoint", "request"]);
+      } else {
+        assert.ok(result instanceof Error);
+        assert.equal(requests.length, 0);
+        assert.deepEqual(events, ["mark-start", "mark-end"]);
+      }
+    });
+  }
+}

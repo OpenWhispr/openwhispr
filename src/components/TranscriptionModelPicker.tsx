@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } fro
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { isAwaitingCatalog } from "../models/modelLifecycle.js";
 import { getRegistryData } from "../models/registryData.js";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -15,6 +16,7 @@ import { ConfirmDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
 import {
+  getDictationTranscriptionProviders,
   getTranscriptionProviders,
   getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
@@ -27,7 +29,12 @@ import {
   type ColorScheme,
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
-import { useSettingsStore } from "../stores/settingsStore";
+import {
+  selectPolicyEffectiveSettings,
+  selectResolvedMeetingTranscription,
+  selectResolvedUploadTranscription,
+  useSettingsStore,
+} from "../stores/settingsStore";
 import {
   filterByokProviderOptionsByPolicy,
   isProviderAllowedByPolicy,
@@ -287,8 +294,26 @@ const CLOUD_PROVIDER_TABS = [
   { id: "tinfoil", name: "Tinfoil" },
   { id: "deepgram", name: "Deepgram" },
   { id: "assemblyai", name: "AssemblyAI" },
+  { id: "openrouter", name: "OpenRouter" },
   { id: "custom", name: "Custom" },
 ];
+
+const providerName = (id: string): string | undefined =>
+  CLOUD_PROVIDER_TABS.find((tab) => tab.id === id)?.name;
+
+// Only a model pick saves a browsed tab (on Custom, the first character of its
+// model name), so until then the line under it says which provider still runs.
+function browsedTabHint(t: TFunction, browsedId: string, inUseId: string): string | undefined {
+  if (browsedId === "custom") {
+    const current = providerName(inUseId);
+    return current ? t("transcription.browsedCustomHint", { current }) : undefined;
+  }
+  const provider = providerName(browsedId);
+  if (!provider) return undefined;
+  if (inUseId === "custom") return t("transcription.customInUseHint", { provider });
+  const current = providerName(inUseId);
+  return current ? t("transcription.browsedProviderHint", { current, provider }) : undefined;
+}
 
 interface ProviderCredentialField {
   key:
@@ -303,7 +328,8 @@ interface ProviderCredentialField {
     | "cortiTenant"
     | "tinfoilApiKey"
     | "deepgramApiKey"
-    | "assemblyaiApiKey";
+    | "assemblyaiApiKey"
+    | "openrouterApiKey";
   input: "secret" | "text" | "select";
   labelKey?: string;
   placeholder?: string;
@@ -367,6 +393,10 @@ const PROVIDER_CREDENTIALS: Record<
   assemblyai: {
     consoleUrl: "https://www.assemblyai.com/dashboard/api-keys",
     fields: [{ key: "assemblyaiApiKey", input: "secret" }],
+  },
+  openrouter: {
+    consoleUrl: "https://openrouter.ai/keys",
+    fields: [{ key: "openrouterApiKey", input: "secret" }],
   },
 };
 
@@ -504,6 +534,8 @@ export default function TranscriptionModelPicker({
   const setDeepgramApiKey = useSettingsStore((s) => s.setDeepgramApiKey);
   const assemblyaiApiKey = useSettingsStore((s) => s.assemblyaiApiKey);
   const setAssemblyaiApiKey = useSettingsStore((s) => s.setAssemblyaiApiKey);
+  const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
+  const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
@@ -620,11 +652,13 @@ export default function TranscriptionModelPicker({
   // providers note recording can actually run — not every streaming provider.
   // Upload is always http-batch, and the realtime-only providers have no batch
   // route at all (transcriptionRoute fails them closed), so they are hidden there.
+  // Upload is also the only screen that offers upload-only models.
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
-    const providers = getTranscriptionProviders();
-    if (transcriptionContext !== "upload") return providers;
-    return providers.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id));
+    if (transcriptionContext !== "upload") return getDictationTranscriptionProviders();
+    return getTranscriptionProviders().filter(
+      (provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id)
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
   }, [streamingOnly, transcriptionContext, registryVersion]);
   const cloudProviders = useMemo(
@@ -792,6 +826,18 @@ export default function TranscriptionModelPicker({
   ]);
   const displayedCloudProvider = effectiveCloudSelection.provider;
   const displayedCloudModel = effectiveCloudSelection.model;
+  // A blank Note Recording or Upload provider runs on the dictation one, and a
+  // managed policy runs an allowed provider in place of one it refuses.
+  const providerInUse = useSettingsStore((settings) => {
+    const effective = selectPolicyEffectiveSettings(settings, policyState);
+    if (transcriptionContext === "meeting") {
+      return selectResolvedMeetingTranscription(effective).cloudTranscriptionProvider;
+    }
+    if (transcriptionContext === "upload") {
+      return selectResolvedUploadTranscription(effective).cloudTranscriptionProvider;
+    }
+    return effective.cloudTranscriptionProvider;
+  });
 
   useEffect(() => {
     if (
@@ -1161,6 +1207,9 @@ export default function TranscriptionModelPicker({
     }
     if (normalized) {
       for (const provider of cloudProviders) {
+        // Custom endpoints on OpenRouter predate its tab and keep their own key
+        // slot, model id and WAV re-encode, so they are never moved onto it.
+        if (provider.id === "openrouter") continue;
         const providerNormalized = normalizeBaseUrl(provider.baseUrl);
         if (normalized === providerNormalized) {
           switchCloudTranscriptionProvider(transcriptionContext, provider.id);
@@ -1218,6 +1267,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: keyDraft.value("tinfoilApiKey", tinfoilApiKey),
     deepgramApiKey: keyDraft.value("deepgramApiKey", deepgramApiKey),
     assemblyaiApiKey: keyDraft.value("assemblyaiApiKey", assemblyaiApiKey),
+    openrouterApiKey: keyDraft.value("openrouterApiKey", openrouterApiKey),
   };
   const customKey = keyDraft.value("customTranscriptionApiKey", customTranscriptionApiKey);
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
@@ -1233,6 +1283,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: setTinfoilApiKey,
     deepgramApiKey: setDeepgramApiKey,
     assemblyaiApiKey: setAssemblyaiApiKey,
+    openrouterApiKey: setOpenrouterApiKey,
   };
 
   const endpointHold = useFocusHold();
@@ -1240,6 +1291,10 @@ export default function TranscriptionModelPicker({
   const visible = usePanelVisible();
   // A tab that is only being browsed has no model of this panel's: the key alone is checked.
   const panelModel = selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : "";
+  const browsedHint =
+    browsedCloudProvider && displayedCloudProvider !== providerInUse
+      ? browsedTabHint(t, displayedCloudProvider, providerInUse)
+      : undefined;
   const isCustom = displayedCloudProvider === "custom";
   const isCorti = displayedCloudProvider === "corti";
   const providerKey = credentialValues[providerCredentials.fields[0].key];
@@ -1338,17 +1393,25 @@ export default function TranscriptionModelPicker({
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
-    const { icon, invertInDark } = getRemoteProviderIcon(displayedCloudProvider);
-    return currentCloudProvider.models.map((m) => ({
-      value: m.id,
-      label: m.name,
-      description: m.descriptionKey
-        ? t(m.descriptionKey, { defaultValue: m.description })
-        : m.description,
-      icon,
-      invertInDark,
-      legacy: m.legacy,
-    }));
+    const providerIcon = getRemoteProviderIcon(displayedCloudProvider);
+    return currentCloudProvider.models.map((m) => {
+      // OpenRouter brokers other vendors' models, so the id's prefix
+      // ("openai/…", "google/…") names the model better than OpenRouter's own
+      // mark. Vendors we have no icon for keep it, rather than showing none.
+      const slash = displayedCloudProvider === "openrouter" ? m.id.indexOf("/") : -1;
+      const vendorIcon = slash > 0 ? getRemoteProviderIcon(m.id.slice(0, slash)) : null;
+      const { icon, invertInDark } = vendorIcon?.icon ? vendorIcon : providerIcon;
+      return {
+        value: m.id,
+        label: m.name,
+        description: m.descriptionKey
+          ? t(m.descriptionKey, { defaultValue: m.description })
+          : m.description,
+        icon,
+        invertInDark,
+        legacy: m.legacy,
+      };
+    });
   }, [currentCloudProvider, displayedCloudProvider, t]);
 
   const progressDisplay = useMemo(() => {
@@ -1560,7 +1623,7 @@ export default function TranscriptionModelPicker({
           )}
 
           {providerAllowed(displayedCloudProvider) && (
-            <div>
+            <div className="space-y-2">
               {displayedCloudProvider === "custom" ? (
                 <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
                   <div className="space-y-1.5">
@@ -1693,9 +1756,7 @@ export default function TranscriptionModelPicker({
                     </label>
                     <ModelCardList
                       models={cloudModelOptions}
-                      selectedModel={
-                        selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
-                      }
+                      selectedModel={panelModel}
                       onModelSelect={handleCloudModelSelect}
                       colorScheme="purple"
                     />
@@ -1714,6 +1775,7 @@ export default function TranscriptionModelPicker({
                   </div>
                 </div>
               )}
+              {browsedHint && <p className="text-xs text-muted-foreground">{browsedHint}</p>}
             </div>
           )}
         </>

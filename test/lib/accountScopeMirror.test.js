@@ -83,6 +83,8 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
   const events = windowEvents();
   const calls = { policy: [], config: [], clears: [] };
   let onScopeChanged = null;
+  // Main resolves the effective policy for the scope it holds.
+  let mainScope = scope;
   const electronAPI = {
     getAppVersion: async () => ({ version: "1.10.0" }),
     getActiveAccountScope: readScope ?? (async () => scope),
@@ -92,15 +94,18 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
         onScopeChanged = null;
       };
     },
-    getWorkspacePolicy: async (accountId, authGeneration) => {
-      calls.policy.push([accountId, authGeneration]);
+    getEffectivePolicy: async () => {
+      if (!mainScope) return { success: true, status: "unmanaged", revision: 0, deviceReady: true };
+      calls.policy.push([mainScope.accountId, mainScope.authGeneration]);
       return {
         success: true,
+        status: "managed",
         revision: calls.policy.length,
-        accountId,
-        authGeneration,
+        accountId: mainScope.accountId,
+        authGeneration: mainScope.authGeneration,
         managed: true,
         policy,
+        deviceReady: true,
       };
     },
     getManagedEnterpriseConfig: async (accountId, workspaceId, authGeneration) => {
@@ -137,7 +142,10 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
     calls,
     events,
     stop,
-    broadcast: (next) => onScopeChanged?.(next),
+    broadcast: (next) => {
+      mainScope = next;
+      onScopeChanged?.(next);
+    },
     listeningForBroadcasts: () => onScopeChanged !== null,
     // Browser semantics: the other window's write has landed before the event fires here.
     setActiveWorkspace: (id) => {
@@ -148,7 +156,7 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
 }
 
 test("a window without a session hydrates managed transcription from the main process scope", async (t) => {
-  const { managed, calls, broadcast, usePolicyStore, useEnterpriseIdentityStore } = await boot(t, {
+  const { managed, calls, broadcast, useEnterpriseIdentityStore } = await boot(t, {
     scope: { accountId: "account-a", authGeneration: 1 },
     activeWorkspaceId: "workspace-a",
   });
@@ -186,7 +194,6 @@ test("a window without a session hydrates managed transcription from the main pr
     broadcast(null);
     assert.equal(managed.isManagedTranscriptionActive(), false);
     assert.equal(managed.getManagedTranscriptionResolution(), undefined);
-    assert.equal(usePolicyStore.getState().status, "idle");
     assert.equal(useEnterpriseIdentityStore.getState().status, "idle");
     assert.equal(useEnterpriseIdentityStore.getState().accountId, null);
   });

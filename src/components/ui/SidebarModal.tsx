@@ -53,7 +53,7 @@ export default function SidebarModal<T extends string>({
   activeSection,
   onSectionChange,
   children,
-  sidebarWidth = "w-52",
+  sidebarWidth = "w-[226px]",
   version,
   header,
   compactHeader,
@@ -73,7 +73,7 @@ export default function SidebarModal<T extends string>({
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      setIsCompact(width > 0 && width < 800);
+      setIsCompact(width > 0 && width < 960);
     });
     observer.observe(el);
     observerRef.current = observer;
@@ -149,7 +149,7 @@ export default function SidebarModal<T extends string>({
             // otherwise take the whole settings modal with it.
             if (shouldBlockDismiss(e)) e.preventDefault();
           }}
-          className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-4xl translate-x-[-50%] translate-y-[-50%] rounded-xl p-0 overflow-hidden outline-none bg-background border border-border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] dark:bg-surface-1 dark:border-border-subtle dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98"
+          className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-[1020px] translate-x-[-50%] translate-y-[-50%] rounded-xl p-0 overflow-hidden outline-none bg-background border border-border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] dark:bg-surface-1 dark:border-border-subtle dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98"
         >
           <div className="relative h-full max-h-[85vh] overflow-hidden">
             <div className="absolute end-4 top-4 z-20 flex items-center gap-2">
@@ -170,7 +170,7 @@ export default function SidebarModal<T extends string>({
 
               {/* Sidebar */}
               <div
-                className={`${actualSidebarWidth} shrink-0 border-e border-border/70 dark:border-border-subtle flex flex-col bg-surface-1 dark:bg-surface-0 transition-[width] duration-200 ease-out`}
+                className={`${actualSidebarWidth} shrink-0 border-e border-border/70 dark:border-border-subtle flex flex-col bg-surface-1 transition-[width] duration-200 ease-out`}
               >
                 {/* Identity / custom header */}
                 {(isCompact ? compactHeader : header) && (
@@ -285,11 +285,17 @@ export default function SidebarModal<T extends string>({
               </div>
 
               {/* Main Content */}
-              <div className="flex-1 overflow-y-auto bg-background dark:bg-surface-1">
+              <div className="flex-1 overflow-y-auto bg-background">
                 <SettingsLayoutProvider value={{ isCompact }}>
                   {/* The close button (and compact notice badge) float over this column's top corner
                       (top-4, 26px tall); pt-[22px] centres a text-xs heading (line-height 1.15) on that row. */}
-                  <div className={`${isCompact ? "p-4" : "p-6"} pt-[22px]`}>{children}</div>
+                  {/* A page marked data-settings-fill (People) takes the column's height, so its own
+                      table scrolls under a fixed header instead of the whole column. */}
+                  <div
+                    className={`${isCompact ? "p-4" : "px-14 pb-5"} pt-[22px] has-[[data-settings-fill]]:flex has-[[data-settings-fill]]:h-full has-[[data-settings-fill]]:flex-col`}
+                  >
+                    {children}
+                  </div>
                 </SettingsLayoutProvider>
               </div>
             </div>

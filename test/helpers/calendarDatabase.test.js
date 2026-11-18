@@ -249,7 +249,7 @@ test("reopening a pre-v2 database clears microsoft sync tokens once", (t) => {
   assert.equal(calendar.sync_token, null);
   assert.equal(calendar.sync_token_expires_at, null);
   // Reopening runs every later migration too.
-  assert.equal(reopened.db.pragma("user_version", { simple: true }), 5);
+  assert.equal(reopened.db.pragma("user_version", { simple: true }), 6);
   reopened.db.close();
 });
 
@@ -305,7 +305,7 @@ test("Google shared RSVP repair is scoped, preserves notes, and runs once", (t) 
     assert.equal(repaired.getCalendarEventById(id).self_response_status, "declined");
   }
   // Reopening also runs the v5 lookback reset, which clears every REST token.
-  assert.equal(repaired.db.pragma("user_version", { simple: true }), 5);
+  assert.equal(repaired.db.pragma("user_version", { simple: true }), 6);
   const calendars = repaired.getGoogleCalendars();
   assert.equal(calendars.find((c) => c.id === "shared").sync_token, null);
   assert.equal(calendars.find((c) => c.id === "shared").sync_token_expires_at, null);

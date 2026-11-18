@@ -1,10 +1,12 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
 import { useChatMessageSender } from "../chat/useChatMessageSender";
 import { useInterruptedInteractions } from "../chat/useInterruptedInteractions";
+import { subscribeAuthBoundary } from "../../lib/authRequestContext";
 import type { SendToAIOptions } from "../chat/useChatStreaming";
 import type { Message } from "../chat/types";
+import { isConversationInScope, resolveAssistantScopeSpaceIds } from "../../lib/assistantNoteScope";
 
 const noop = () => {};
 const conversationTitle = (text: string) => (text.length > 50 ? `${text.slice(0, 50)}...` : text);
@@ -30,6 +32,16 @@ export function useAgentChat({
     setPickedSkill(null);
     setSkillPickOff(true);
   }, []);
+  // Persistence and streaming start a new chat on an account change by
+  // themselves; the skill chosen for the chat that ended goes with it.
+  useEffect(
+    () =>
+      subscribeAuthBoundary(() => {
+        setPickedSkill(null);
+        setSkillPickOff(false);
+      }),
+    []
+  );
   const skillSendOptions = useCallback(
     (): SendToAIOptions => ({
       attachedSkill: pickedSkill ? { name: pickedSkill.name } : undefined,
@@ -41,6 +53,7 @@ export function useAgentChat({
   const streaming = useChatStreaming({
     setMessages: persistence.setMessages,
     inferenceScope: "dictationAgent",
+    sourceNoteId: persistence.noteId ?? undefined,
     allowConnectors: true,
     allowInteractions: true,
     skillsEnabled: true,
@@ -79,9 +92,21 @@ export function useAgentChat({
   }, []);
   // An answer to a card left from an earlier turn goes on as a message of the app's.
   const sendWithSkill = useCallback(
-    (text: string, options?: SendToAIOptions) =>
-      track(sendMessage(text, { ...options, ...skillSendOptions() })),
-    [sendMessage, skillSendOptions, track]
+    (text: string, options?: SendToAIOptions): Promise<boolean> =>
+      track(
+        (async () => {
+          if (persistence.noteId === undefined) return false;
+          if (persistence.noteId != null) {
+            const version = persistence.getSessionVersion();
+            const note = await window.electronAPI?.getNote?.(persistence.noteId);
+            const scopeSpaceIds = await resolveAssistantScopeSpaceIds();
+            if (version !== persistence.getSessionVersion()) return false;
+            if (note && !scopeSpaceIds.includes(note.space_id)) return false;
+          }
+          return sendMessage(text, { ...options, ...skillSendOptions() });
+        })()
+      ),
+    [sendMessage, skillSendOptions, persistence, track]
   );
   useInterruptedInteractions(persistence, sendWithSkill);
 
@@ -166,13 +191,18 @@ export function useAgentChat({
   );
 
   const switchChat = useCallback(
-    (id: number, beforeOpen?: () => void) =>
-      loadConversation(id, () => {
-        cancelStream();
-        setPickedSkill(null);
-        setSkillPickOff(false);
-        beforeOpen?.();
-      }),
+    (id: number, beforeOpen?: () => void): Promise<boolean | null> =>
+      loadConversation(
+        id,
+        () => {
+          cancelStream();
+          setPickedSkill(null);
+          setSkillPickOff(false);
+          beforeOpen?.();
+        },
+        async (conversation): Promise<boolean> =>
+          isConversationInScope(conversation, await resolveAssistantScopeSpaceIds())
+      ),
     [cancelStream, loadConversation]
   );
 
