@@ -42,10 +42,10 @@ The mobile app is MIT-licensed. Local transcription and BYOK are free; OpenWhisp
 | On-device Parakeet transcription                                     | Yes | No (the native module is iOS-only)  |
 | Bring Your Own Key provider setup                                    | Yes | No (iOS-first rollout)              |
 | On-device text cleanup, note actions, note chat (Apple Intelligence) | Yes | No (Apple Intelligence is iOS-only) |
-| System-wide dictation keyboard                                       | Yes | No (Android uses a floating bubble) |
+| System-wide dictation keyboard                                       | Yes | No (use the in-app Record tab)      |
 | Google Calendar integration                                          | Yes | No (hidden on Android)              |
 
-On Android, text workflows that need a local model have no on-device engine yet; they use OpenWhispr Cloud. A fully free Android setup is therefore limited to local transcription plus Cloud calls within the free allowance. Use iOS with BYOK if you need free local text processing.
+On Android, text workflows that need a local model have no on-device engine yet; they use OpenWhispr Cloud. A fully free Android setup is therefore limited to local transcription plus Cloud calls within the free allowance. Use iOS with On-Device and a downloaded local model if you need free local text processing; BYOK with a hosted provider still sends text to that provider.
 
 ## Quick start
 
