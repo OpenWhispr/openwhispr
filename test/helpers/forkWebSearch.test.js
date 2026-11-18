@@ -121,3 +121,31 @@ test("a 200 without a results array yields an empty list, not a crash", async ()
   const out = await forkWebSearch({ servicesUrl: SERVICES, getKey: () => "k", fetchImpl }, "q", 5);
   assert.deepEqual(out, { success: true, results: [] });
 });
+
+test("a non-https or userinfo services URL is refused before any key lookup or request", async () => {
+  for (const servicesUrl of [
+    "http://stt.titaniumlabs.us",
+    "ftp://stt.titaniumlabs.us",
+    "https://stt.titaniumlabs.us@evil.example",
+    "not a url",
+  ]) {
+    let asked = 0;
+    const fetchImpl = fakeFetch(() => json(200, { results: [] }));
+    const out = await forkWebSearch(
+      {
+        servicesUrl,
+        getKey: () => {
+          asked += 1;
+          return "k";
+        },
+        fetchImpl,
+      },
+      "q",
+      5
+    );
+    assert.equal(out.success, false, servicesUrl);
+    assert.equal(out.code, "SERVER_ERROR", servicesUrl);
+    assert.equal(asked, 0, servicesUrl);
+    assert.equal(fetchImpl.calls.length, 0, servicesUrl);
+  }
+});

@@ -23,6 +23,17 @@ async function forkWebSearch({ servicesUrl, getKey, fetchImpl }, query, numResul
   const base = String(servicesUrl || "").replace(/\/+$/, "");
   if (!base) return failure("SERVER_ERROR", "Web search service is not configured");
 
+  // The bearer is a credential: never send it over anything but https.
+  let parsed;
+  try {
+    parsed = new URL(base);
+  } catch {
+    return failure("SERVER_ERROR", "Web search service is not configured");
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+    return failure("SERVER_ERROR", "Web search service must use https");
+  }
+
   const url = `${base}${SEARCH_PATH}`;
   const key = getKey(url);
   if (!key) return failure("AUTH_REQUIRED", "Sign in to use web search");

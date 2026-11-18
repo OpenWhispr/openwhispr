@@ -72,3 +72,53 @@ test("an empty SERVICES_URL adds no host", () => {
     _setSessionForTest(null);
   }
 });
+
+test("the key goes only to an https URL whose exact origin is a configured https origin", () => {
+  const config = {
+    DEFAULT_STT: { baseUrl: "https://x1gsjcjrmssitgnh7hthg7nd.coolify.titaniumlabs.us/v1" },
+    SERVICES_URL: "https://stt.titaniumlabs.us",
+    TITANIUM: { serviceHosts: ["search.titaniumlabs.test"] },
+  };
+  const cases = [
+    // [url, config override, expected key]
+    ["https://stt.titaniumlabs.us/v1/audio/transcriptions", {}, "key/abc.sig"],
+    ["https://STT.titaniumlabs.us:443/v1/x", {}, "key/abc.sig"],
+    [
+      "https://x1gsjcjrmssitgnh7hthg7nd.coolify.titaniumlabs.us/v1/audio/transcriptions",
+      {},
+      "key/abc.sig",
+    ],
+    ["https://search.titaniumlabs.test/x", {}, "key/abc.sig"],
+    ["http://stt.titaniumlabs.us/v1/x", {}, null],
+    ["https://stt.titaniumlabs.us:8443/v1/x", {}, null],
+    ["ftp://stt.titaniumlabs.us/v1/x", {}, null],
+    ["https://stt.titaniumlabs.us@evil.example/v1/x", {}, null],
+    ["https://user:pw@stt.titaniumlabs.us/v1/x", {}, null],
+    ["https://stt.titaniumlabs.us.evil.example/v1/x", {}, null],
+    ["https://evilstt.titaniumlabs.us/v1/x", {}, null],
+    ["http://search.titaniumlabs.test/x", {}, null],
+    ["", {}, null],
+    // An override that points the configured origin at http allows nothing there.
+    ["http://attacker.example/v1/x", { SERVICES_URL: "http://attacker.example" }, null],
+    ["https://attacker.example/v1/x", { SERVICES_URL: "http://attacker.example" }, null],
+    [
+      "http://attacker.example/v1/x",
+      { DEFAULT_STT: { baseUrl: "http://attacker.example/v1" } },
+      null,
+    ],
+    // The legacy https host keeps working when SERVICES_URL is overridden to http.
+    [
+      "https://x1gsjcjrmssitgnh7hthg7nd.coolify.titaniumlabs.us/v1/x",
+      { SERVICES_URL: "http://attacker.example" },
+      "key/abc.sig",
+    ],
+  ];
+  _setSessionForTest(signedIn);
+  try {
+    for (const [url, override, expected] of cases) {
+      assert.equal(titaniumServiceKeyFor(url, { ...config, ...override }), expected, url);
+    }
+  } finally {
+    _setSessionForTest(null);
+  }
+});
