@@ -110,7 +110,11 @@ export const LocalTextModel = {
               code: 'LOCAL_CONTEXT_LIMIT',
             });
           }
-          if (result.stopped_limit) throw new Error(i18n.t('responseTooLong'));
+          if (result.stopped_limit) {
+            throw Object.assign(new Error(i18n.t('responseTooLong')), {
+              code: 'LOCAL_OUTPUT_LIMIT',
+            });
+          }
           if (diagnostics)
             console.info(
               '[android-reasoning] complete',

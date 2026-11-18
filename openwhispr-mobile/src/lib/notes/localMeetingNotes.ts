@@ -210,6 +210,8 @@ async function generateStructuredNotes(input: {
     const notes = await localMeetingNotesPlatform.generateNotes(input);
     return normalizeMeetingNotes(notes);
   } catch (error) {
+    // Preserve Android's native limit without changing shared or Apple error normalization.
+    if (localMeetingNotesPlatform.isOutputLimitError?.(error)) throw error;
     throw toLocalReasoningError(error);
   }
 }
@@ -233,7 +235,9 @@ async function mapChunkWithRetry(input: {
   instructions: string;
   previousSummary?: string;
   outputLimitSplitsLeft?: number;
+  checkpoint?: () => void;
 }): Promise<StructuredMeetingNotes[]> {
+  input.checkpoint?.();
   const outputLimitSplitsLeft = input.outputLimitSplitsLeft ?? MAX_OUTPUT_LIMIT_SPLITS;
   const chunkInput = buildChunkInput({
     note: input.note,
@@ -252,7 +256,8 @@ async function mapChunkWithRetry(input: {
       }),
     ];
   } catch (error) {
-    const outputLimit = isLocalOutputLimitError(error);
+    const outputLimit =
+      isLocalOutputLimitError(error) || localMeetingNotesPlatform.isOutputLimitError?.(error);
     if (!isLocalContextLimitError(error) && !(outputLimit && outputLimitSplitsLeft > 0)) {
       throw error;
     }
@@ -301,7 +306,9 @@ async function reduceStructuredNotes(input: {
   notes: StructuredMeetingNotes[];
   instructions: string;
   budget: number;
+  checkpoint?: () => void;
 }): Promise<StructuredMeetingNotes> {
+  input.checkpoint?.();
   if (input.notes.length === 0) return emptyMeetingNotes();
   if (input.notes.length === 1) return normalizeMeetingNotes(input.notes[0]);
 
@@ -313,6 +320,7 @@ async function reduceStructuredNotes(input: {
       budget: input.budget,
     })
   ) {
+    input.checkpoint?.();
     try {
       return await generateStructuredNotes({
         instructions: input.instructions,
@@ -320,7 +328,12 @@ async function reduceStructuredNotes(input: {
       });
     } catch (error) {
       // Merged notes too long for the output cap are merged like ones too long to read.
-      if (!isLocalOutputLimitError(error)) throw error;
+      if (
+        !isLocalOutputLimitError(error) &&
+        !localMeetingNotesPlatform.isOutputLimitError?.(error)
+      ) {
+        throw error;
+      }
     }
   }
 
@@ -391,6 +404,7 @@ export async function generateLocalMeetingNotes(
         meetingContext,
         instructions,
         previousSummary,
+        checkpoint,
       })),
     );
   }
@@ -400,6 +414,7 @@ export async function generateLocalMeetingNotes(
     notes: mapped,
     instructions,
     budget: Math.min(budget, LOCAL_MEETING_MERGE_MAX_INPUT_TOKENS),
+    checkpoint,
   });
   checkpoint?.();
   const markdown = renderStructuredMeetingNotesToMarkdown(reduced);

@@ -44,6 +44,7 @@ type Phase =
   | 'cloud-finalizing'
   | 'cloud-recording'
   | 'cloud-save-failed'
+  | 'cancelling'
   | 'processing';
 type LocalCapture = {
   recorder: LocalMeetingRecorder;
@@ -60,6 +61,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const finishingRef = useRef(false);
   const [starting, setStarting] = useState(false);
   const focused = useRef(true);
+  const mounted = useRef(true);
   const requestGeneration = useRef(0);
   const requestBusy = useRef(false);
   const preparingLocalRecording = useRef(false);
@@ -116,6 +118,12 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     cancelLocalCapture.current();
     if (focused.current) setStarting(false);
   }, []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   useFocusEffect(
     useCallback(() => {
       focused.current = true;
@@ -166,6 +174,11 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   cancelLocalCapture.current = () => {
     const run = localCapture.current;
     if (!run) return;
+    try {
+      saveRawNotesNow();
+    } catch (error) {
+      Sentry.captureException(error);
+    }
     localCapture.current = null;
     run.controller.abort();
     const stopped = run.recorder.stop().catch(Sentry.captureException);
@@ -184,7 +197,15 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     } finally {
       run.context.dispose();
     }
-    if (focused.current) setPhase('prompt');
+    if (mounted.current) setPhase('cancelling');
+    stopped
+      .then(() => {
+        if (mounted.current && !localCapture.current) {
+          setStarting(false);
+          setPhase('prompt');
+        }
+      })
+      .catch(Sentry.captureException);
   };
   const startAndroidLocalRecording = async (
     expected: number | undefined,
@@ -274,6 +295,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const begin = async (expected: number | undefined): Promise<void> => {
     if (
       !focused.current ||
+      phase === 'cancelling' ||
       requestBusy.current ||
       preparingLocalRecording.current ||
       localCapture.current
@@ -678,25 +700,28 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     );
   }
 
-  // phase === 'processing' | 'downloading'
   return (
     <View className="flex-1 items-center justify-center gap-7 bg-systemBackground px-6">
       <ProcessingWaveform color={BRAND} size={48} />
       <View className="items-center gap-1.5">
         <Text className="text-lg font-semibold text-label">
-          {phase === 'cloud-finalizing'
-            ? t('meetingFinishing')
-            : phase === 'downloading'
-              ? 'Downloading model…'
-              : 'Preparing meeting notes…'}
+          {phase === 'cancelling'
+            ? t('meetingSaveForLater')
+            : phase === 'cloud-finalizing'
+              ? t('meetingFinishing')
+              : phase === 'downloading'
+                ? 'Downloading model…'
+                : 'Preparing meeting notes…'}
         </Text>
-        <Text className="text-[13px] text-tertiaryLabel">
-          {phase === 'cloud-finalizing'
-            ? t('meetingFinishingBody')
-            : phase === 'downloading'
-              ? t('meetingDownloadBody')
-              : 'Transcribing · separating voices · finalizing note'}
-        </Text>
+        {phase !== 'cancelling' && (
+          <Text className="text-[13px] text-tertiaryLabel">
+            {phase === 'cloud-finalizing'
+              ? t('meetingFinishingBody')
+              : phase === 'downloading'
+                ? t('meetingDownloadBody')
+                : 'Transcribing · separating voices · finalizing note'}
+          </Text>
+        )}
       </View>
       {phase === 'downloading' && (
         <Button

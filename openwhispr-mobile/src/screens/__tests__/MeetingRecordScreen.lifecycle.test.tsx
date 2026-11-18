@@ -2,7 +2,8 @@ import React from 'react';
 import { Platform, Alert, PermissionsAndroid } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { MeetingRecordScreen as IOSMeetingRecordScreen } from '../MeetingRecordScreen';
-import { MeetingRecordScreen as AndroidMeetingRecordScreen } from '../MeetingRecordScreen.android';
+import { MeetingRecordScreen as AndroidMeetingRecordScreen } from '@/android/MeetingRecordScreen';
+// Exercise each platform lifecycle directly; the Android dispatcher has separate routing tests.
 const MeetingRecordScreen = () =>
   Platform.OS === 'android' ? <AndroidMeetingRecordScreen /> : <IOSMeetingRecordScreen />;
 import { CloudMeetingFinishError } from '@/hooks/useCloudMeeting.android';
@@ -39,6 +40,7 @@ let mockUser = { id: 'a' };
 let mockMode = 'cloud';
 let mockFeature: (() => void) | undefined;
 let mockBlur: (() => void) | undefined;
+let mockFocus: (() => () => void) | undefined;
 let mockAuthListener: ((state: unknown, previous: unknown) => void) | undefined;
 let mockModeListener: ((state: unknown, previous: unknown) => void) | undefined;
 let mockParams = { folderId: '2' };
@@ -95,6 +97,7 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
   useFocusEffect: (callback: () => () => void) => {
     require('react').useEffect(() => {
+      mockFocus = callback;
       mockBlur = callback();
       return mockBlur;
     }, [callback]);
@@ -254,6 +257,7 @@ beforeEach(() => {
   mockUseRealLocalContext = false;
   mockAuthListeners.clear();
   mockNotes.transitionStatus.mockReset();
+  mockNotes.updateNote.mockReset();
   mockNotes.notes = [{ id: 7, transcriptionStatus: 'recording' }];
   mockSavedNote = { ...mockSavedNote, transcriptionStatus: 'recording' };
   mockNativeStopped = undefined;
@@ -268,6 +272,7 @@ beforeEach(() => {
   mockParams = { folderId: '2' };
   mockFeature = undefined;
   mockBlur = undefined;
+  mockFocus = undefined;
   mockAuthListener = undefined;
   mockModeListener = undefined;
   mockFinalize.mockReset().mockResolvedValue(undefined);
@@ -542,6 +547,86 @@ it('aborts local processing on leave and ignores its late completion', async () 
   expect(signal?.aborted).toBe(true);
   await act(async () => finish());
   expect(mockReplace).not.toHaveBeenCalled();
+});
+
+it.each([true, false])(
+  'returns to Local setup after cancellation settles across refocus (returnBeforeStop=%s)',
+  async (returnBeforeStop) => {
+    const view = await startPrivateMeeting();
+    let stopped!: (uri: string) => void;
+    mockDurableStop.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          stopped = resolve;
+        }),
+    );
+    await act(async () => mockBlur?.());
+    if (returnBeforeStop) {
+      act(() => {
+        mockFocus?.();
+      });
+      expect(view.queryByTestId('begin')).toBeNull();
+      expect(view.queryByTestId('meeting-stop')).toBeNull();
+    }
+    await act(async () => stopped('file:///app/documents/meeting-7.wav'));
+    if (!returnBeforeStop)
+      act(() => {
+        mockFocus?.();
+      });
+    expect(view.getByTestId('begin')).toBeTruthy();
+    expect(view.queryByTestId('meeting-stop')).toBeNull();
+    expect(mockNotes.transitionStatus).toHaveBeenCalledWith(7, 'failed');
+    expect(mockNotes.runMeetingPipeline).not.toHaveBeenCalled();
+  },
+);
+
+it('clears cancelled Local processing on refocus and ignores its late result after a new recording', async () => {
+  let processed!: () => void;
+  mockNotes.runMeetingPipeline.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        processed = resolve;
+      }),
+  );
+  const view = await startPrivateMeeting();
+  await act(async () => fireEvent.press(view.getByTestId('meeting-stop')));
+  expect(view.getByText('Preparing meeting notes…')).toBeTruthy();
+  await act(async () => mockBlur?.());
+  act(() => {
+    mockFocus?.();
+  });
+  expect(view.queryByText('Preparing meeting notes…')).toBeNull();
+  await act(async () => fireEvent.press(view.getByTestId('begin')));
+  await act(async () => mockFeature?.());
+  expect(view.getByTestId('meeting-stop')).toBeTruthy();
+  await act(async () => processed());
+  expect(view.getByTestId('meeting-stop')).toBeTruthy();
+  expect(mockReplace).not.toHaveBeenCalled();
+});
+
+it('saves the latest Local draft when leaving before the debounce fires', async () => {
+  const view = await startPrivateMeeting();
+  fireEvent.changeText(view.getByTestId('meeting-raw-notes'), 'Keep the last edit.');
+  expect(mockNotes.updateNote).not.toHaveBeenCalled();
+  await act(async () => mockBlur?.());
+  expect(mockNotes.updateNote).toHaveBeenCalledWith(7, { content: 'Keep the last edit.' });
+  expect(mockDurableStop).toHaveBeenCalled();
+});
+
+it('still stops Local capture when the draft cannot be saved during cancellation', async () => {
+  const failure = new Error('Database full');
+  const view = await startPrivateMeeting();
+  fireEvent.changeText(view.getByTestId('meeting-raw-notes'), 'Unsaved edit.');
+  mockNotes.updateNote.mockImplementationOnce(() => {
+    throw failure;
+  });
+  await act(async () => mockBlur?.());
+  expect(require('@/lib/sentry').Sentry.captureException).toHaveBeenCalledWith(failure);
+  expect(mockDurableStop).toHaveBeenCalled();
+  act(() => {
+    mockFocus?.();
+  });
+  expect(view.getByTestId('begin')).toBeTruthy();
 });
 
 it('cancels the speaker-model download and never starts from its late completion', async () => {

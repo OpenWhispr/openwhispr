@@ -531,7 +531,10 @@ export class TranscriptionService {
     }
     if (options.requestContext) {
       parameters.requestContext = options.requestContext;
-      Object.assign(parameters, transcriptionLifecycle.uploadParameters(options.requestContext));
+      Object.assign(
+        parameters,
+        transcriptionLifecycle.uploadParameters(options.requestContext, options.purpose),
+      );
     }
     if (options.purpose) {
       parameters.purpose = options.purpose;

@@ -37,4 +37,9 @@ export const localMeetingNotesPlatform: LocalMeetingNotesPlatform = {
     return androidMeetingNotesSchema.parse(JSON.parse(result.text));
   },
   getCheckpoint: (options) => options.checkpoint ?? (() => {}),
+  isOutputLimitError: (error) =>
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'LOCAL_OUTPUT_LIMIT',
 };

@@ -1946,8 +1946,28 @@ describe('Android Cloud meeting ownership', () => {
   });
 
   it.each([false, true])(
-    'aborts a delayed retry upload and drops its result after switching account (return=%s)',
+    'aborts a retry and restores Retry only for its returning owner (returnBeforeSettle=%s)',
     async (returns) => {
+      const note = notesRepository.getNoteById(7)!;
+      const ownerNote = { ...note, clientNoteId: 'owner-note', ownerUserId: signedInUser.id };
+      const otherNote = { ...note, clientNoteId: 'other-note', ownerUserId: 'other-account' };
+      const notesByAccount = new Map([
+        [signedInUser.id, ownerNote],
+        ['other-account', otherNote],
+      ]);
+      const statuses = new Map([
+        [signedInUser.id, 'failed'],
+        ['other-account', 'done'],
+      ]);
+      (notesRepository.getNoteById as jest.Mock).mockImplementation(
+        () => notesByAccount.get(mockAuthState.user?.id ?? '') ?? null,
+      );
+      (notesRepository.getTranscriptionStatus as jest.Mock).mockImplementation(() =>
+        statuses.get(mockAuthState.user?.id ?? ''),
+      );
+      (notesRepository.setTranscriptionStatus as jest.Mock).mockImplementation(
+        (_id: number, status: string) => statuses.set(mockAuthState.user?.id ?? '', status),
+      );
       let finish!: (value: { text: string; duration: number }) => void;
       let started!: () => void;
       const ready = new Promise<void>((resolve) => {
@@ -1976,11 +1996,142 @@ describe('Android Cloud meeting ownership', () => {
       expect(wasAbortedBeforeSwitch).toBe(false);
       expect(uploadSignal?.aborted).toBe(true);
       expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
-      expect(notesRepository.setTranscriptionStatus).not.toHaveBeenCalled();
+      expect(statuses.get('other-account')).toBe('done');
+      if (!returns) {
+        expect(notesRepository.setTranscriptionStatus).not.toHaveBeenCalled();
+        expect(statuses.get(signedInUser.id)).toBe('transcribing');
+        mockAuthState.user = signedInUser;
+        mockAuthListeners.forEach((fn) => fn());
+      }
+      expect(statuses.get(signedInUser.id)).toBe('failed');
+      expect(notesRepository.setTranscriptionStatus).toHaveBeenCalledTimes(1);
+      expect(notesRepository.setTranscriptionStatus).toHaveBeenCalledWith(7, 'failed');
       expect(notesRepository.updateNote).not.toHaveBeenCalled();
       expect(mockAuthListeners.size).toBe(0);
+      const firstId = mockCloudTranscribe.mock.calls[0][0].clientTranscriptionId;
+      const failure = new Error('Second attempt refused');
+      mockCloudTranscribe.mockRejectedValueOnce(failure);
+      await expect(useNotesStore.getState().retryMeetingTranscription(7)).rejects.toBe(failure);
+      expect(mockCloudTranscribe.mock.calls[1][0].clientTranscriptionId).toBe(firstId);
+      expect(notesRepository.setSyncState).toHaveBeenCalledTimes(1);
+      expect(ownerNote.sourceFile).toBe(note.sourceFile);
+      expect(statuses.get('other-account')).toBe('done');
     },
   );
+
+  it('does not let an old account-cancelled upload fail a newer Cloud retry', async () => {
+    const uploads: ((value: { text: string; duration: number }) => void)[] = [];
+    mockCloudTranscribe.mockImplementation(() => new Promise((resolve) => uploads.push(resolve)));
+    const old = useNotesStore
+      .getState()
+      .retryMeetingTranscription(7)
+      .catch((error) => error);
+    mockAuthState.user = { ...signedInUser, id: 'other-account' };
+    mockAuthListeners.forEach((fn) => fn());
+    mockAuthState.user = signedInUser;
+    mockAuthListeners.forEach((fn) => fn());
+    useNotesStore.getState().transitionStatus(7, 'failed');
+    const newer = useNotesStore.getState().retryMeetingTranscription(7);
+    uploads[0]({ text: 'Stale transcript', duration: 4 });
+    const oldResult = await old;
+    const statusWhileNewerRuns = notesRepository.getTranscriptionStatus(7);
+    uploads[1]({ text: 'Current transcript', duration: 5 });
+    await newer;
+    expect(oldResult).toBeInstanceOf(Error);
+    expect(statusWhileNewerRuns).toBe('transcribing');
+    expect(notesRepository.getTranscriptionStatus(7)).toBe('done');
+    expect(notesRepository.replaceSegments).toHaveBeenCalledTimes(1);
+    expect(mockAuthListeners.size).toBe(0);
+  });
+
+  it('does not let an old mode-cancelled upload fail a newer Local retry', async () => {
+    let finishOld!: (value: { text: string; duration: number }) => void;
+    mockCloudTranscribe.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = resolve;
+        }),
+    );
+    const old = useNotesStore
+      .getState()
+      .retryMeetingTranscription(7)
+      .catch((error) => error);
+    mockProcessingModeState.activeMode = 'private';
+    mockModeListeners.forEach((fn) => fn(mockProcessingModeState));
+    useNotesStore.getState().transitionStatus(7, 'failed');
+    const original = useNotesStore.getState().runMeetingPipeline;
+    let finishLocal!: () => void;
+    const local = jest.fn(async (noteId: number) => {
+      useNotesStore.getState().transitionStatus(noteId, 'transcribing');
+      await new Promise<void>((resolve) => {
+        finishLocal = resolve;
+      });
+      useNotesStore.getState().transitionStatus(noteId, 'done');
+    });
+    useNotesStore.setState({ runMeetingPipeline: local });
+    try {
+      const newer = useNotesStore.getState().retryMeetingTranscription(7);
+      finishOld({ text: 'Stale Cloud transcript', duration: 4 });
+      const oldResult = await old;
+      const statusWhileLocalRuns = notesRepository.getTranscriptionStatus(7);
+      finishLocal();
+      await newer;
+      expect(oldResult).toBeInstanceOf(Error);
+      expect(local).toHaveBeenCalledWith(7, 'file:///app/documents/meeting-7.wav', undefined);
+      expect(statusWhileLocalRuns).toBe('transcribing');
+      expect(notesRepository.getTranscriptionStatus(7)).toBe('done');
+      expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
+      expect(mockAuthListeners.size).toBe(0);
+    } finally {
+      useNotesStore.setState({ runMeetingPipeline: original });
+    }
+  });
+
+  it('keeps retry attempts separate for equal note IDs in different accounts', async () => {
+    const note = notesRepository.getNoteById(7)!;
+    const notes = new Map([
+      [signedInUser.id, { ...note, clientNoteId: 'owner-note', ownerUserId: signedInUser.id }],
+      ['other-account', { ...note, clientNoteId: 'other-note', ownerUserId: 'other-account' }],
+    ]);
+    const statuses = new Map([
+      [signedInUser.id, 'failed'],
+      ['other-account', 'failed'],
+    ]);
+    (notesRepository.getNoteById as jest.Mock).mockImplementation(
+      () => notes.get(mockAuthState.user?.id ?? '') ?? null,
+    );
+    (notesRepository.getTranscriptionStatus as jest.Mock).mockImplementation(() =>
+      statuses.get(mockAuthState.user?.id ?? ''),
+    );
+    (notesRepository.setTranscriptionStatus as jest.Mock).mockImplementation(
+      (_id: number, status: string) => statuses.set(mockAuthState.user?.id ?? '', status),
+    );
+    let finishOld!: (value: { text: string; duration: number }) => void;
+    mockCloudTranscribe.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = resolve;
+        }),
+    );
+    const old = useNotesStore
+      .getState()
+      .retryMeetingTranscription(7)
+      .catch((error) => error);
+    mockAuthState.user = { ...signedInUser, id: 'other-account' };
+    mockAuthListeners.forEach((fn) => fn());
+    const refusal = new Error('Other account request refused');
+    mockCloudTranscribe.mockRejectedValueOnce(refusal);
+    await expect(useNotesStore.getState().retryMeetingTranscription(7)).rejects.toBe(refusal);
+    finishOld({ text: 'Stale owner transcript', duration: 4 });
+    expect(await old).toBeInstanceOf(Error);
+    expect(statuses.get(signedInUser.id)).toBe('transcribing');
+    mockAuthState.user = signedInUser;
+    mockAuthListeners.forEach((fn) => fn());
+    expect(statuses.get(signedInUser.id)).toBe('failed');
+    expect(statuses.get('other-account')).toBe('failed');
+    expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
+    expect(mockAuthListeners.size).toBe(0);
+  });
 
   it('does not save a Cloud title after switching away and back', async () => {
     mockConfigState.config.autoGenerateNoteTitle = true;

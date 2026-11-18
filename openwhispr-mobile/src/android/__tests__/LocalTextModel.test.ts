@@ -124,6 +124,24 @@ it('does not expose reasoning when a balanced completion has no answer', async (
   }
 });
 
+it('rejects a partial answer at the native output cap with a recoverable output-limit code', async () => {
+  const completion = jest.fn().mockResolvedValue({
+    text: 'Partial notes.',
+    content: 'Partial notes.',
+    stopped_limit: 1,
+  });
+  jest.mocked(initLlama).mockResolvedValue({ completion, release: jest.fn() } as never);
+  try {
+    await expect(LocalTextModel.processText({ text: 'A long note.' })).rejects.toMatchObject({
+      code: 'LOCAL_OUTPUT_LIMIT',
+      retryable: false,
+    });
+    expect(completion).toHaveBeenCalledTimes(1);
+  } finally {
+    await LocalTextModel.release();
+  }
+});
+
 it('preserves the small model completion format and explicit sampling settings', async () => {
   const completion = jest.fn().mockResolvedValue({ text: 'Small model output.', content: '' });
   jest.mocked(initLlama).mockResolvedValue({ completion, release: jest.fn() } as never);
