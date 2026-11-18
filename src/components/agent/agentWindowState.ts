@@ -9,6 +9,20 @@ import type { ChatImageAttachment, Message, ToolCallInfo } from "../chat/types";
 export type AgentInputMode = "voice" | "keyboard";
 
 /**
+ * A voice call's surface: its pill in place of the agent pill, its transcript
+ * in place of the modal's composer. The call's own lifetime (starting, mic,
+ * speaking) lives in useVoiceCall; this is only what the window shows.
+ */
+export interface AgentCallSurface {
+  /** The call ended in the transcript, which stays readable until the user moves on. */
+  stopped: boolean;
+  /** The call's settings show above its pill, or over the transcript. */
+  settings: boolean;
+  /** Where the window goes back to when the call ends from its compact pill. */
+  returnTo: { layout: AgentWindowLayout; input: AgentInputMode };
+}
+
+/**
  * The agent window's shell: which layout shows, how the user is giving input,
  * and what rides with the next request. The draft and the selected context
  * survive every layout and input change; only a send or a close clears what
@@ -25,6 +39,7 @@ export interface AgentWindowState {
   attachment: ChatImageAttachment | null;
   /** An i18n key the pill shows in place of its waveform. */
   notice: string | null;
+  call: AgentCallSurface | null;
 }
 
 export type AgentWindowAction =
@@ -63,6 +78,18 @@ export type AgentWindowAction =
       attachment: ChatImageAttachment | null;
     }
   | { type: "notice"; notice: string | null }
+  /** A call starts in the chat on screen: the transcript if the modal shows, else its pill. */
+  | { type: "startCall" }
+  /** The call ended: the transcript shows it Stopped; the compact pill goes back to where it came from. */
+  | { type: "endCall" }
+  /** Out of a Stopped transcript (or a call that never started), to typing in the chat. */
+  | { type: "leaveCall" }
+  | { type: "callSettings"; open: boolean }
+  /**
+   * The compact call: its pill alone, or something above it (its settings, a
+   * card, why it couldn't start). The window derives which from what shows.
+   */
+  | { type: "callCompact"; standalone: boolean }
   | { type: "hide" };
 
 export const INITIAL_AGENT_WINDOW_STATE: AgentWindowState = {
@@ -73,6 +100,7 @@ export const INITIAL_AGENT_WINDOW_STATE: AgentWindowState = {
   selectedContext: null,
   attachment: null,
   notice: null,
+  call: null,
 };
 
 // Collapsing the modal goes back to the compact layout of the current input.
@@ -95,6 +123,8 @@ export function agentWindowReducer(
     case "expand":
       return { ...state, layout: "modal" };
     case "collapse":
+      // A call's compact layout follows what shows above its pill (callCompact).
+      if (state.call) return { ...state, layout: "pill" };
       return { ...state, layout: action.pending ? "pill" : compactLayout(state.input) };
     case "useKeyboard":
       return {
@@ -104,7 +134,7 @@ export function agentWindowReducer(
         notice: null,
       };
     case "showCard": {
-      if (state.layout === "modal") return state;
+      if (state.layout === "modal" || state.call) return state;
       // The keyboard stays with the window (and with a draft) from the typing
       // layout, or from a card above the pill the user is typing on.
       const typing =
@@ -115,6 +145,7 @@ export function agentWindowReducer(
       return { ...state, layout: action.asks ? "standalone" : "pill" };
     }
     case "cardSettled":
+      if (state.call) return state;
       return state.layout === "standalone"
         ? { ...state, layout: compactLayout(state.input) }
         : state;
@@ -163,6 +194,46 @@ export function agentWindowReducer(
     }
     case "notice":
       return { ...state, notice: action.notice };
+    case "startCall":
+      return {
+        ...state,
+        visible: true,
+        layout: state.layout === "modal" ? "modal" : "pill",
+        notice: null,
+        call: {
+          stopped: false,
+          settings: false,
+          returnTo: { layout: state.layout, input: state.input },
+        },
+      };
+    case "endCall": {
+      if (!state.call) return state;
+      if (state.layout === "modal") {
+        return { ...state, call: { ...state.call, stopped: true, settings: false } };
+      }
+      const { layout, input } = state.call.returnTo;
+      return {
+        ...state,
+        call: null,
+        input,
+        layout: layout === "typing" ? "typing" : "pill",
+      };
+    }
+    case "leaveCall":
+      if (!state.call) return state;
+      return state.layout === "modal"
+        ? { ...state, call: null, input: "keyboard" }
+        : {
+            ...state,
+            call: null,
+            input: state.call.returnTo.input,
+            layout: state.call.returnTo.layout === "typing" ? "typing" : "pill",
+          };
+    case "callSettings":
+      return state.call ? { ...state, call: { ...state.call, settings: action.open } } : state;
+    case "callCompact":
+      if (!state.call || state.layout === "modal") return state;
+      return { ...state, layout: action.standalone ? "standalone" : "pill" };
     case "hide":
       return {
         ...state,
@@ -172,6 +243,7 @@ export function agentWindowReducer(
         selectedContext: null,
         attachment: null,
         notice: null,
+        call: null,
       };
   }
 }
@@ -276,7 +348,7 @@ export function shownMessages<T extends Pick<Message, "toolCalls">>(
 export type AgentPillPlacement = "compact" | "typing" | "modal";
 export type AgentPillStatus =
   "idle" | "listening" | "transcribing" | "waiting" | "thinking" | "streaming";
-export type AgentPillButton = "expand" | "mic" | "keyboard" | "stop" | "close";
+export type AgentPillButton = "expand" | "call" | "mic" | "keyboard" | "stop" | "close";
 
 export interface AgentPillControls {
   waveform: boolean;
@@ -289,7 +361,8 @@ export interface AgentPillControls {
 
 /**
  * The pill's controls for where it shows and what is happening. Expand only
- * exists outside the modal; the typing layout swaps Keyboard for Mic.
+ * exists outside the modal; the typing layout swaps Keyboard for Mic. Call
+ * starts a voice call while nothing else runs.
  * "Thinking…" covers transcribing and a reply with nothing to show yet; in the
  * modal that reply can already be stopped. Waiting for an answer, the pill
  * offers the keyboard (and Expand) to reach the card.
@@ -305,7 +378,7 @@ export function resolveAgentPillControls(
     ...shows,
     buttons,
   });
-  if (placement === "typing") return controls(["expand", "mic", "close"]);
+  if (placement === "typing") return controls(["expand", "call", "mic", "close"]);
   const expand: AgentPillButton[] = placement === "compact" ? ["expand"] : [];
   switch (status) {
     case "listening":
@@ -322,6 +395,6 @@ export function resolveAgentPillControls(
     case "streaming":
       return controls([...expand, "keyboard", "stop", "close"]);
     case "idle":
-      return controls([...expand, "mic", "keyboard", "close"]);
+      return controls([...expand, "call", "mic", "keyboard", "close"]);
   }
 }

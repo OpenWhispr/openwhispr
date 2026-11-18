@@ -1,0 +1,79 @@
+import type { LocalModelRefusal } from "../../stores/policyRules";
+
+/** What a call hears and answers in; "auto" answers in the language spoken. */
+export type VoiceCallLanguage = "auto" | "en" | "hi" | "es" | "fr" | "de";
+
+/** The call's voices by their setting ids (main maps them to Supertonic speakers). */
+export type VoiceCallVoice = "helios" | "aurora";
+
+/** A language a call speaks in (Auto picks one of these per reply). */
+export type SpokenLanguage = Exclude<VoiceCallLanguage, "auto">;
+
+/** What one utterance is spoken with: every chunk of it carries the same profile. */
+export interface VoiceSpeechProfile {
+  voice: VoiceCallVoice;
+  speed: number;
+  language: SpokenLanguage;
+}
+
+/** One finished voice turn, sent to the main process in harness mode. */
+export interface VoiceTurnReport {
+  outcome: string;
+  transcript: string;
+  calledTools: string[];
+  availableTools: string[];
+  /** Write tools actually executed (not blocked as a repeat by the guard); see TurnMetrics.ranWrites. */
+  ranWrites: string[];
+  answer: string;
+  /** When the turn's speech ended (main-process clock), so a late report can't be misfiled. */
+  endedAt: number;
+  metrics: Record<string, number | null>;
+}
+
+/** How the worker decided the user's turn was over (Smart Turn or plain silence). */
+export interface VoiceTurnEndpoint {
+  reason: "silence" | "smart-turn" | "max-silence" | "max-turn";
+  /** Speech end to turn commit, on the mic clock. */
+  endpointMs: number;
+}
+
+/** Result of the main-process precondition check run before a session starts. */
+export type VoiceConversationReadiness =
+  | { ready: true }
+  | {
+      ready: false;
+      reason:
+        | "language-unsupported"
+        | "voice-models-missing"
+        | "speech-model-missing"
+        | "language-model-missing"
+        | "brain-not-downloaded"
+        | "brain-sign-in-required"
+        | "meeting-recording"
+        | "brain-key-missing";
+      missing?: string[];
+      missingBytes?: number;
+    }
+  /** Every downloaded model that fits is refused by the organization's policy. */
+  | { ready: false; reason: "speech-model-refused"; code: LocalModelRefusal["code"] };
+
+// `sessionId` marks what one session heard, so a later session can ignore it.
+export type VoiceConversationEvent =
+  | { type: "speech-start"; sessionId: number; at: number }
+  | {
+      type: "transcript";
+      sessionId: number;
+      text: string;
+      speechMs: number;
+      sttMs: number;
+      endedAt: number;
+      endpoint: VoiceTurnEndpoint | null;
+    }
+  | {
+      type: "tts-audio";
+      utteranceId: string;
+      samples: Float32Array;
+    }
+  | { type: "error"; stage: "stt"; sessionId: number; message: string }
+  | { type: "error"; stage: "worker"; message: string }
+  | { type: "ended"; reason: "meeting" };

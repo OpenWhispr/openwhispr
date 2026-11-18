@@ -1,6 +1,6 @@
-import { useId, useRef, type KeyboardEvent, type ReactElement } from "react";
+import { useId, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, CopyRounded, ExternalLink, Send } from "../icons";
+import { Check, CopyRounded, ExternalLink, Mail, Send } from "../icons";
 import { cn } from "../lib/utils";
 import {
   approveAction,
@@ -12,6 +12,8 @@ import {
   type ApprovalEntry,
 } from "../../stores/connectorApprovalStore";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
+import { CopyFieldButton } from "./CopyFieldButton";
+import { useCallCardPlacement } from "./callCardContext";
 import { connectorErrorText } from "../../utils/connectorErrorCopy";
 import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
 import type { ConnectionTarget } from "../../types/agentInteractions";
@@ -35,6 +37,7 @@ import {
 } from "../../utils/issueApprovalFields";
 import { EmailApprovalFields } from "./EmailApprovalFields";
 import { IssueApprovalFields } from "./IssueApprovalFields";
+import { SlackChannelPicker } from "./SlackChannelPicker";
 import { ConnectRow } from "./interactions/ConnectionCard";
 import { HeaderRow } from "./interactions/HeaderRow";
 import {
@@ -54,6 +57,7 @@ function BodyField({
   editing,
   label,
   invalidBecause,
+  className,
   onChange,
 }: {
   value: string;
@@ -61,6 +65,7 @@ function BodyField({
   label: string;
   /** The id of the text saying why Send is blocked, when the body is the reason. */
   invalidBecause?: string;
+  className?: string;
   onChange: (value: string) => void;
 }): ReactElement {
   return editing ? (
@@ -71,11 +76,14 @@ function BodyField({
       dir="auto"
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className={INLINE_TEXT_FIELD}
+      className={cn(INLINE_TEXT_FIELD, className)}
     />
   ) : (
     <p
-      className="whitespace-pre-wrap break-words leading-6 text-foreground agent:leading-snug"
+      className={cn(
+        "whitespace-pre-wrap break-words leading-6 text-foreground agent:leading-snug",
+        className
+      )}
       dir="auto"
     >
       {value}
@@ -95,6 +103,8 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const { t } = useTranslation();
   const { preview, draft } = entry;
   const cardRef = useRef<HTMLDivElement>(null);
+  const callPlacement = useCallCardPlacement();
+  const inCall = callPlacement !== null;
   const pending = entry.state === "pending";
   const waitingForRetry = Boolean(entry.awaitingRetry);
   // The draft is editable while it can still go out: before Send, or after a
@@ -108,11 +118,17 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const verb = issueVerb(preview.verbKey);
   const issueFields = verb && draft.fields ? toIssueFields(draft.fields, verb) : null;
   const slack = preview.verbKey === "slackPost";
+  // In a call an email card's actions sit in its title row, as the call's design shows.
+  const titleActions = inCall && emailFields !== null;
+  // A Slack channel post's channel, when the user picked another one.
+  const pickedChannel = preview.channel !== undefined ? draft.channel : undefined;
   // Who it goes to follows the user's edits: main's answer once sent,
-  // otherwise the card's own To and Cc.
+  // otherwise the card's own To and Cc, or its picked channel.
   const destination =
     entry.destinationLabel ??
-    ((emailFields && recipientsLabel(emailFields.to, emailFields.cc)) || preview.destinationLabel);
+    ((emailFields && recipientsLabel(emailFields.to, emailFields.cc)) ||
+      pickedChannel?.label ||
+      preview.destinationLabel);
   const problems = emailFields ? emailFieldProblems(emailFields) : null;
   const issueProblem = verb && issueFields ? issueFieldProblem(issueFields, verb) : null;
   // Send commits exactly what the card shows, so it waits until the card
@@ -143,9 +159,21 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       ? t("connectors.approval.email.invalidAddressAnnouncement")
       : problemText;
   const hasFieldLayout = Boolean(emailFields || issueFields);
-  // Copy takes the message itself, as the card shows it now.
+  // Copy takes the message itself, as the card shows it now; in a call an
+  // email's Copy all takes its recipients and subject with it.
   const body = emailFields?.body ?? issueFields?.body ?? draft.body;
-  const { copied, copyText, confirmCopied } = useCopyFeedback(body);
+  const copyAllText = titleActions
+    ? [
+        `${t("connectors.approval.email.toLabel")}: ${emailFields.to.join(", ")}`,
+        ...(emailFields.cc.length > 0
+          ? [`${t("connectors.approval.email.ccLabel")}: ${emailFields.cc.join(", ")}`]
+          : []),
+        `${t("connectors.approval.email.subjectLabel")}: ${emailFields.subject}`,
+        "",
+        body,
+      ].join("\n")
+    : body;
+  const { copied, copyText, confirmCopied } = useCopyFeedback(copyAllText);
 
   // Each layout names its own button and outcomes ("Create issue",
   // "Created ENG-124"); every other card keeps Send and "Sent to …".
@@ -187,39 +215,66 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const setBody = (value: string) =>
     updateApprovalDraft(entry.key, draft.fields ? { fields: { body: value } } : { body: value });
 
+  // Outside a call the Channel row names the workspace too; a call's card gives it its own row.
+  const channelText =
+    !inCall && preview.workspaceLabel
+      ? t("connectors.approval.slack.destination", {
+          workspace: preview.workspaceLabel,
+          destination,
+        })
+      : destination;
+  const withSlackMark = (content: ReactNode): ReactElement => (
+    <span className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground" dir="auto">
+      <img
+        src={slackMark}
+        alt=""
+        aria-hidden="true"
+        width={14}
+        height={14}
+        decoding="async"
+        draggable={false}
+        className="shrink-0"
+      />
+      {content}
+    </span>
+  );
+  // Main lists the channels for a pending action only; after a failure,
+  // Retry prepares a new one first.
+  const channelPicker =
+    pending && !entry.reconnect && preview.channel !== undefined ? (
+      <SlackChannelPicker
+        actionId={entry.actionId}
+        selectedId={pickedChannel?.id ?? preview.channel}
+        label={channelText}
+        onPick={(channel) => updateApprovalDraft(entry.key, { channel })}
+      />
+    ) : null;
+
   const header = emailFields ? (
     <EmailApprovalFields
       fields={emailFields}
       editing={editing}
       showCc={emailFields.cc.length > 0 || (preview.fields?.cc?.length ?? 0) > 0}
-      accountLabel={preview.accountLabel}
+      accountLabel={inCall ? undefined : preview.accountLabel}
       problems={problems}
       problemsId={problemsId}
       onChange={(patch) => updateApprovalDraft(entry.key, { fields: patch })}
     />
   ) : slack ? (
     <>
+      {inCall && preview.workspaceLabel && (
+        <HeaderRow label={t("connectors.approval.slack.workspaceLabel")}>
+          {withSlackMark(<span className="truncate">{preview.workspaceLabel}</span>)}
+        </HeaderRow>
+      )}
       <HeaderRow label={t("connectors.approval.slack.channelLabel")}>
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground" dir="auto">
-          <img
-            src={slackMark}
-            alt=""
-            aria-hidden="true"
-            width={14}
-            height={14}
-            decoding="async"
-            draggable={false}
-            className="shrink-0"
-          />
-          <span className="truncate">
-            {preview.workspaceLabel
-              ? t("connectors.approval.slack.destination", {
-                  workspace: preview.workspaceLabel,
-                  destination,
-                })
-              : destination}
-          </span>
-        </span>
+        {inCall
+          ? (channelPicker ?? (
+              <span className="min-w-0 flex-1 truncate text-foreground" dir="auto">
+                {channelText}
+              </span>
+            ))
+          : withSlackMark(channelPicker ?? <span className="truncate">{channelText}</span>)}
       </HeaderRow>
       <HeaderRow label={t("connectors.approval.slack.asLabel")}>
         <span className="min-w-0 flex-1 truncate font-medium text-foreground" dir="auto">
@@ -281,6 +336,8 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
             emailFields ? "connectors.approval.email.bodyLabel" : "connectors.approval.bodyLabel"
           )}
           invalidBecause={problems?.bodyTooLong ? problemsId : undefined}
+          // In a call the text keeps clear of the message's copy button.
+          className={titleActions ? "pe-8" : undefined}
           onChange={setBody}
         />
       </>
@@ -289,22 +346,89 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const copyButton = (
     <button
       type="button"
-      onClick={() => void copyText(body).then((done) => done && confirmCopied(body))}
+      onClick={() => void copyText(copyAllText).then((done) => done && confirmCopied(copyAllText))}
       className={PILL_BUTTON}
     >
       {copied ? <Check size={14} className="text-success" /> : <CopyRounded size={14} />}
-      {t(copied ? "common.copied" : "common.copy")}
+      {t(
+        copied
+          ? "common.copied"
+          : titleActions
+            ? "connectors.approval.email.copyAll"
+            : "common.copy"
+      )}
     </button>
   );
   const outcomeLink = (entry.state === "sent" || entry.state === "unknown") && entry.url && (
     <button
       type="button"
       onClick={() => openLink(entry.url as string)}
-      className="me-auto inline-flex items-center gap-1 rounded-sm text-xs font-medium text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 agent:text-[13px]"
+      className={cn(
+        "inline-flex items-center gap-1 rounded-sm text-xs font-medium text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 agent:text-[13px]",
+        // At the foot it stands apart at the start; in the title row, beside Copy.
+        !titleActions && "me-auto"
+      )}
     >
       <ExternalLink size={12} />
       {openLabel}
     </button>
+  );
+
+  const actions = (
+    <>
+      {outcomeLink}
+      {copyButton}
+      {/* A call's card is dismissed by speaking or Esc; its design has no Cancel. */}
+      {(pending || waitingForRetry) && !inCall && (
+        <button
+          type="button"
+          onClick={() => focusCardAnd(() => cancelApproval(entry.key))}
+          className={cn(PILL_BUTTON, "text-muted-foreground")}
+        >
+          {t("connectors.approval.cancel")}
+        </button>
+      )}
+      {(pending || entry.state === "committing") && (
+        // aria-disabled rather than disabled: Send stays focusable, and
+        // says why it can't send.
+        <button
+          type="button"
+          aria-disabled={sendBlocked || entry.state === "committing" || undefined}
+          aria-describedby={sendBlocked ? problemsId : undefined}
+          onClick={() => {
+            if (sendBlocked || !pending) return;
+            focusCardAnd(() => approveAction(entry.key));
+          }}
+          className={cn(
+            PRIMARY_PILL_BUTTON,
+            (sendBlocked || !pending) && "cursor-not-allowed opacity-50"
+          )}
+        >
+          <Send size={14} className="rtl:scale-x-[-1]" />
+          {pending ? sendLabel : t("connectors.approval.sending")}
+        </button>
+      )}
+      {waitingForRetry && (
+        <button
+          type="button"
+          aria-disabled={sendBlocked || undefined}
+          aria-describedby={sendBlocked ? problemsId : undefined}
+          onClick={() => {
+            if (sendBlocked) return;
+            focusCardAnd(() => retryApproval(entry.key));
+          }}
+          className={cn(PRIMARY_PILL_BUTTON, sendBlocked && "cursor-not-allowed opacity-50")}
+        >
+          {t("common.retry")}
+        </button>
+      )}
+      {entry.state === "sent" && (
+        <span className="inline-flex h-8 items-center gap-1.5 px-2 text-[13px] text-muted-foreground agent:text-[14px]">
+          <Check size={14} />
+          {verb ? sentText : t("connectors.approval.sentLabel")}
+        </span>
+      )}
+    </>
   );
 
   return (
@@ -313,20 +437,55 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       tabIndex={-1}
       data-approval-card={entry.key}
       data-state={entry.state}
+      data-call={callPlacement ?? undefined}
       onKeyDown={keepEscape}
-      className="my-1.5 flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-surface-1 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring agent:border-border agent:text-[15px]"
+      className={cn(
+        "my-1.5 flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-surface-1 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring agent:border-border agent:text-[15px]",
+        // Above a call's pill the frame around the card is its outline.
+        callPlacement === "compact" && "my-0 border-0"
+      )}
     >
-      <div className="space-y-1 px-4 pt-3 pb-2.5 agent:space-y-0.5">{header}</div>
+      {titleActions && (
+        <>
+          <div className="flex items-center gap-2 px-4 py-3">
+            <Mail size={16} className="shrink-0" />
+            <span className="me-auto font-medium text-foreground">
+              {t("connectors.approval.email.title")}
+            </span>
+            {!(pending && entry.reconnect) && actions}
+          </div>
+          <div className="border-t border-border/50 agent:border-border" />
+        </>
+      )}
+      <div
+        className={cn(
+          "px-4 pt-3 pb-2.5",
+          inCall && (emailFields || slack)
+            ? "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-4"
+            : "space-y-1 agent:space-y-0.5"
+        )}
+      >
+        {header}
+      </div>
       <div className="border-t border-border/50 agent:border-border" />
       {/* A long message scrolls here; who it goes to and the actions stay put. */}
       <div
         data-approval-body=""
-        className="agent-chat-scroll max-h-44 overflow-y-auto px-4 py-3 text-[14px] agent:text-[15px]"
+        className={cn(
+          "group agent-chat-scroll relative overflow-y-auto px-4 py-3 text-[14px] agent:text-[15px]",
+          // Above a call's pill a long message has the room of the call's long card.
+          callPlacement === "compact" ? "max-h-92" : "max-h-44"
+        )}
       >
+        {titleActions && (
+          <div className="sticky top-0 z-10 float-end -mt-1 h-0">
+            <CopyFieldButton text={body} label={t("connectors.approval.email.copyBody")} />
+          </div>
+        )}
         {message}
       </div>
 
-      <div className="px-4">
+      <div className={cn("px-4", titleActions && "pb-2")}>
         {hasFieldLayout && editing && (
           <>
             <p
@@ -397,75 +556,26 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
         </div>
       </div>
 
-      <div className="px-3 pt-1 pb-3">
-        {pending && entry.reconnect ? (
-          <ConnectRow
-            target={entry.connectorId as ConnectionTarget}
-            title={t("connectors.approval.connectToSend", {
-              name:
-                CONNECTION_TARGET_NAMES[entry.connectorId as ConnectionTarget] ?? entry.connectorId,
-            })}
-            working={entry.reconnect === "connecting"}
-            error={entry.connectError}
-            onConnect={() => void connectToSend(entry.key)}
-            onDismiss={() => dismissReconnect(entry.key)}
-          />
-        ) : (
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {outcomeLink}
-            {copyButton}
-            {(pending || waitingForRetry) && (
-              <button
-                type="button"
-                onClick={() => focusCardAnd(() => cancelApproval(entry.key))}
-                className={cn(PILL_BUTTON, "text-muted-foreground")}
-              >
-                {t("connectors.approval.cancel")}
-              </button>
-            )}
-            {(pending || entry.state === "committing") && (
-              // aria-disabled rather than disabled: Send stays focusable, and
-              // says why it can't send.
-              <button
-                type="button"
-                aria-disabled={sendBlocked || entry.state === "committing" || undefined}
-                aria-describedby={sendBlocked ? problemsId : undefined}
-                onClick={() => {
-                  if (sendBlocked || !pending) return;
-                  focusCardAnd(() => approveAction(entry.key));
-                }}
-                className={cn(
-                  PRIMARY_PILL_BUTTON,
-                  (sendBlocked || !pending) && "cursor-not-allowed opacity-50"
-                )}
-              >
-                <Send size={14} className="rtl:scale-x-[-1]" />
-                {pending ? sendLabel : t("connectors.approval.sending")}
-              </button>
-            )}
-            {waitingForRetry && (
-              <button
-                type="button"
-                aria-disabled={sendBlocked || undefined}
-                aria-describedby={sendBlocked ? problemsId : undefined}
-                onClick={() => {
-                  if (sendBlocked) return;
-                  focusCardAnd(() => retryApproval(entry.key));
-                }}
-                className={cn(PRIMARY_PILL_BUTTON, sendBlocked && "cursor-not-allowed opacity-50")}
-              >
-                {t("common.retry")}
-              </button>
-            )}
-            {entry.state === "sent" && (
-              <span className="inline-flex h-8 items-center gap-1.5 px-2 text-[13px] text-muted-foreground agent:text-[14px]">
-                <Check size={14} />
-                {verb ? sentText : t("connectors.approval.sentLabel")}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+      {(!titleActions || (pending && entry.reconnect)) && (
+        <div className="px-3 pt-1 pb-3">
+          {pending && entry.reconnect ? (
+            <ConnectRow
+              target={entry.connectorId as ConnectionTarget}
+              title={t("connectors.approval.connectToSend", {
+                name:
+                  CONNECTION_TARGET_NAMES[entry.connectorId as ConnectionTarget] ??
+                  entry.connectorId,
+              })}
+              working={entry.reconnect === "connecting"}
+              error={entry.connectError}
+              onConnect={() => void connectToSend(entry.key)}
+              onDismiss={() => dismissReconnect(entry.key)}
+            />
+          ) : (
+            <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

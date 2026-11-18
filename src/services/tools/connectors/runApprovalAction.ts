@@ -102,11 +102,16 @@ export async function runApprovalAction(
       useConnectorApprovalStore.getState().entries[
         approvalKey(context.messageId, context.toolCallId)
       ];
+    const shown = card?.preview ?? prepared.preview;
+    // Where it went, when the card changed that (a picked Slack channel).
+    const sentTo = outcome.destinationLabel
+      ? { ...shown, destinationLabel: outcome.destinationLabel }
+      : shown;
     const completedKey = approvalActionKey(
       connectorId,
       action,
       args,
-      card?.preview ?? prepared.preview,
+      sentTo,
       card?.draft.fields ?? (card ? { title: card.draft.title, body: card.draft.body } : undefined)
     );
     context.recordCompletedAction(completedKey, {
@@ -123,12 +128,7 @@ export async function runApprovalAction(
     // With what the user wrote on the card, so asking where keeps it.
     return prepareFailureResult(outcome.clarification, connectorId, outcome);
   }
-  // An edited card may have gone to other recipients than the model chose.
-  const destination =
-    (outcome.state === "sent" || outcome.state === "unknown") && outcome.destinationLabel
-      ? outcome.destinationLabel
-      : prepared.preview.destinationLabel;
-  return approvalOutcomeResult(outcome, destination, {
+  return approvalOutcomeResult(outcome, prepared.preview.destinationLabel, {
     ...options,
     connectorId,
     verbKey: prepared.preview.verbKey,

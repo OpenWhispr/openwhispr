@@ -41,9 +41,9 @@ function failedResult(result) {
 // provider, so it is "unknown", never "failed".
 //
 // destinationLabel is optional: only a connector whose commit can change
-// who the receipt names (Gmail's edited To/Cc) returns one, for "sent" and
-// "unknown" only. When it's absent the receipt keeps the label prepare
-// wrote (Slack: the destination is fixed once prepared).
+// who the receipt names (Gmail's edited To/Cc, Slack's picked channel)
+// returns one, for "sent" and "unknown" only. When it's absent the receipt
+// keeps the label prepare wrote.
 function normalizeCommitResult(result) {
   switch (result?.state) {
     case "sent":
@@ -73,6 +73,22 @@ function normalizeCommitResult(result) {
     default:
       return { state: "unknown" };
   }
+}
+
+// What a card offers to send to instead (Slack's channels), each an id and a label.
+function normalizeDestinations(result) {
+  if (result?.status === "failed") {
+    return { status: "failed", errorCode: stringOr(result.errorCode, "destinations_failed") };
+  }
+  if (result?.status !== "ok" || !Array.isArray(result.destinations)) {
+    return { status: "failed", errorCode: "invalid_result" };
+  }
+  return {
+    status: "ok",
+    destinations: result.destinations
+      .filter((destination) => isString(destination?.id) && isString(destination?.label))
+      .map(({ id, label }) => ({ id, label })),
+  };
 }
 
 // A direct action that threw or answered malformed may already have acted
@@ -172,11 +188,17 @@ function normalizePreview(preview, editable) {
   if (![verbKey, destinationLabel, accountLabel, body].every(isString)) return null;
   const fields = normalizePreviewFields(preview.fields, editable);
   if (fields === false || (fields && !hasLayoutFields(verbKey, fields))) return null;
+  // The channel a card's picker starts on (Slack). Like a field, the action
+  // must declare it editable, or Send would drop the user's pick.
+  const { channel } = preview;
+  const channelValid = Object.hasOwn(editable, "channel") && EDIT_TYPES[editable.channel](channel);
+  if (channel !== undefined && !channelValid) return null;
   return {
     verbKey,
     destinationLabel,
     accountLabel,
     body,
+    ...(channel !== undefined ? { channel } : {}),
     ...stringFields({ workspaceLabel: preview.workspaceLabel, title: preview.title }),
     ...(Array.isArray(preview.notes)
       ? { notes: preview.notes.map(normalizePreviewNote).filter(Boolean) }
@@ -787,8 +809,9 @@ function createConnectorManager({
         state: result.state,
         resultUrl: result.url || result.checkUrl || null,
         errorCode: result.errorCode || null,
-        // Only when the connector's commit named one (Gmail, edited
-        // recipients): the row otherwise keeps the label prepare wrote.
+        // Only when the connector's commit named one (Gmail's edited
+        // recipients, Slack's picked channel): the row otherwise keeps the
+        // label prepare wrote.
         ...(typeof result.destinationLabel === "string"
           ? { destinationLabel: result.destinationLabel }
           : {}),
@@ -804,6 +827,36 @@ function createConnectorManager({
       },
       "connectors"
     );
+    return result;
+  }
+
+  // What a pending card offers to send to instead (Slack's channels). Read
+  // through the login the action is bound to, never another, while the
+  // card can still be sent; nothing is written.
+  async function destinations(actionId, { policyState, accountId }) {
+    sweepExpired();
+    const entry = pendingActions.get(actionId);
+    if (entry?.state !== "pending") return { status: "unavailable", reason: "not_found" };
+    const refusal = policyRefusal(policyState);
+    if (refusal) return { status: "unavailable", reason: refusal };
+    if (entry.accountId !== accountId) return { status: "unavailable", reason: "account_changed" };
+
+    let result;
+    try {
+      result = normalizeDestinations(
+        await byId
+          .get(entry.connectorId)
+          .destinations?.(entry.action, entry.payload, { binding: entry.binding })
+      );
+    } catch (error) {
+      logger.warn(
+        "connector destinations threw",
+        { connectorId: entry.connectorId, action: entry.action, ...describeError(error) },
+        "connectors"
+      );
+      result = { status: "failed", errorCode: "destinations_failed" };
+    }
+    if (result.errorCode === "reconnect_needed") void notifyStatusChanged();
     return result;
   }
 
@@ -933,6 +986,7 @@ function createConnectorManager({
     connectorStatus,
     prepare,
     commit,
+    destinations,
     cancel,
     runDirect,
     query,

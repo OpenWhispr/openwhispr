@@ -172,6 +172,13 @@ function registerConnectorIpc({
     );
   });
 
+  // A pending card's choices of where to send (Slack's channels), read under
+  // the login its action is bound to.
+  ipcMain.handle("connector-destinations", async (event, actionId) => {
+    if (!isNonEmptyString(actionId)) return { status: "unavailable", reason: "invalid_request" };
+    return manager.destinations(actionId, await resolveCallAuth(event));
+  });
+
   // A run id equal to a pending approval's id must not swallow that
   // approval's cancel, so both are cancelled.
   ipcMain.handle("connector-cancel", (_event, actionId, reason) => {

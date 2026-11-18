@@ -725,6 +725,36 @@ test("a query reaches the manager with the call's auth; malformed requests don't
   assert.equal(calls.length, 1);
 });
 
+test("a card's destinations reach the manager with the call's auth; a malformed id doesn't", async () => {
+  const { registerConnectorIpc } = await load();
+  const ipcMain = fakeIpcMain();
+  const calls = [];
+  const manager = {
+    ...fakeManager(),
+    destinations: async (...args) => {
+      calls.push(args);
+      return { status: "ok", destinations: [] };
+    },
+  };
+  registerConnectorIpc({
+    ipcMain,
+    manager,
+    getPolicyState: async () => "allowed",
+    getAccountScope: () => SCOPE,
+  });
+  const destinations = ipcMain.handlers.get("connector-destinations");
+
+  assert.deepEqual(await destinations({}, "action-1"), { status: "ok", destinations: [] });
+  assert.deepEqual(calls, [["action-1", ALLOWED]]);
+  for (const bad of [7, "", null]) {
+    assert.deepEqual(await destinations({}, bad), {
+      status: "unavailable",
+      reason: "invalid_request",
+    });
+  }
+  assert.equal(calls.length, 1);
+});
+
 test("cancelling a connect needs no policy, and a malformed id never reaches the manager", async () => {
   const { registerConnectorIpc } = await load();
   const ipcMain = fakeIpcMain();

@@ -667,3 +667,26 @@ test("Done never asks for a key the chat's model doesn't use", async () => {
     useSettingsStore.setState(previous, true);
   }
 });
+
+test("words said in a call add to the options picked and the text begun on the card", async () => {
+  const store = await loadStore();
+  const key = "m1::call-24";
+  const pending = store.requestInteraction(context("call-24").value, QUESTIONS);
+  const entry = () => store.useAgentInteractionStore.getState().entries[key];
+
+  // A single choice has one answer: the words replace a pick.
+  store.updateInteractionDraft(key, { goal: "balanced" });
+  store.answerWithText(key, "Speed, then cost", { append: true });
+  store.updateInteractionDraft(key, { ...entry().draft, include: ["research", "wireframes"] });
+  store.answerWithText(key, "Add design as well.", { append: true });
+  store.updateInteractionDraft(key, { ...entry().draft, notes: "Due" });
+  store.answerWithText(key, "Friday", { append: true });
+  assert.deepEqual(await pending, {
+    status: "answered",
+    answers: {
+      goal: "Speed, then cost",
+      include: "Research, Wireframes, Add design as well.",
+      notes: "Due Friday",
+    },
+  });
+});

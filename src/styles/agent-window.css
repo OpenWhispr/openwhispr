@@ -144,13 +144,21 @@
   opacity: 1;
 }
 
-/* A connect card carries a faint wash of the brand blue behind its actions. */
-.agent-window [data-interaction-card][data-kind="connection"] {
+/* A connect card carries a faint wash of the brand blue behind its actions
+   (a call's card is plain, as in the call's designs). */
+.agent-window [data-interaction-card][data-kind="connection"]:not([data-call]) {
   background-image: radial-gradient(
     55% 140% at 72% 100%,
     color-mix(in oklab, var(--color-primary) 9%, transparent),
     transparent
   );
+}
+
+/* In a call a card's main and picked controls (Send, Allow, a ticked box,
+   Open Settings) are neutral, as in the call's designs, not the brand blue. */
+.agent-window [data-call] {
+  --color-primary: var(--color-foreground);
+  --color-primary-foreground: var(--color-background);
 }
 
 /* A step that is running: the label in the foreground color, with the brand
@@ -205,5 +213,49 @@
     animation: none;
     background: none;
     -webkit-text-fill-color: var(--color-foreground);
+  }
+}
+
+/* A call's pill changes state as in the reference: what comes in fades up,
+   over 120 ms into Listening (and End), over 180 ms into Speaking (its glow, Stop). */
+.voice-pill-swap {
+  animation: voice-pill-swap 120ms ease-out;
+}
+
+.voice-pill-swap-slow {
+  animation-duration: 180ms;
+}
+
+@keyframes voice-pill-swap {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The speaking glow in a call's status cap: a monochrome bloom rising from the
+   pill, as strong as the reply is loud (VoicePill sets --voice-level). */
+.voice-pill-glow {
+  animation: voice-pill-swap 180ms ease-out;
+  background: radial-gradient(
+    55% 85% at 50% 100%,
+    var(--color-foreground),
+    color-mix(in oklab, var(--color-foreground) 45%, transparent) 30%,
+    color-mix(in oklab, var(--color-foreground) 12%, transparent) 60%,
+    transparent 80%
+  );
+  opacity: calc(0.6 + var(--voice-level, 0) * 0.4);
+  transform-origin: 50% 100%;
+  transform: scaleY(calc(0.75 + var(--voice-level, 0) * 0.25));
+}
+
+/* Still under reduced motion: no fades, and a steady glow. */
+@media (prefers-reduced-motion: reduce) {
+  .voice-pill-swap {
+    animation: none;
+  }
+
+  .voice-pill-glow {
+    --voice-level: 0.6;
+    animation: none;
   }
 }

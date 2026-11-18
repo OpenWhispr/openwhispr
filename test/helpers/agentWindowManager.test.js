@@ -726,6 +726,15 @@ test("a crashed renderer releases the mic and the next press recreates the windo
   assert.notEqual(manager.window, win);
 });
 
+test("a renderer that crashed mid-call leaves no call layout for the next window", async () => {
+  const { manager, win } = await openedManager();
+  manager.setLayout(fromAgent(win), { layout: "pill", focus: false, call: true });
+  assert.equal(manager.call, true);
+
+  win.contentsListeners.get("render-process-gone")({}, { reason: "crashed" });
+  assert.equal(manager.call, false);
+});
+
 test("a reloaded renderer starts hidden and without a take, like a new one", async () => {
   const { manager, win } = await openedManager();
   manager.setLayout(fromAgent(win), { layout: "modal", focus: false });

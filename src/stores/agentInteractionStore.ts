@@ -14,6 +14,7 @@ import { isConnectorReady, refreshConnectorStatus } from "./connectorStatusStore
 import type { CalendarProvider } from "../utils/calendarConnect";
 import type { SettingsState } from "./settingsStore";
 import { getCachedPlatform } from "../utils/platform";
+import { answerText } from "../utils/interactionAnswers";
 
 // Every surface that renders a card imports this store, and the settings
 // store brings the app's i18n setup with it, so it loads only when used.
@@ -322,13 +323,24 @@ export function commitQuestion(key: string, step: number): void {
 /**
  * The composer's text answers the question on screen, even a choice question
  * (D3): a choice question takes it as typed text, which a later pick replaces.
+ * With `append` (words said in a call), it goes after what a text or multiple
+ * choice question already holds: the text begun on the card, the options picked.
  */
-export function answerWithText(key: string, text: string): void {
+export function answerWithText(key: string, text: string, { append = false } = {}): void {
   const card = pendingQuestions(key);
-  const answer = text.trim();
-  if (!card || !answer) return;
+  const said = text.trim();
+  if (!card || !said) return;
   const { entry, questions } = card;
   const question = questions[entry.step];
+  const held =
+    append && question.kind !== "single"
+      ? answerFor(question, entry.draft[question.id], undefined)
+      : null;
+  const answer = Array.isArray(held)
+    ? answerText(question, [...held, said])
+    : held
+      ? `${held} ${said}`
+      : said;
   if (question.kind === "text") {
     patchEntry(key, { draft: { ...entry.draft, [question.id]: answer } });
   } else {

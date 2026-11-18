@@ -99,7 +99,12 @@ function traceArgument(call: ToolCallInfo): string | null {
   } catch {
     return null;
   }
-  const value = (args as Record<string, unknown> | null)?.[field];
+  // Where the user sent it instead, when they chose another destination on the card.
+  const data = call.metadata && !Array.isArray(call.metadata) ? call.metadata : null;
+  const value =
+    field === "destination" && data?.chosenOnCard === true
+      ? data.destination
+      : (args as Record<string, unknown> | null)?.[field];
   // A Slack link as the destination is a link: whole or not at all.
   if (typeof value === "string" && /^https?:\/\//i.test(value.trim())) {
     return outcomeUrl(value.trim());

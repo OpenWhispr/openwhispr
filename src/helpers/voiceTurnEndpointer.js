@@ -1,0 +1,161 @@
+// End-of-turn policy for voice conversation, clocked in samples so it is pure and
+// replayable offline. Silence-only mode commits each Silero segment. Smart Turn
+// mode treats a (short) Silero segment end as a candidate pause: the classifier
+// decides whether the turn is complete, and max silence commits it regardless, as
+// does the first pause once the turn holds max-turn worth of speech. Over a reply
+// held for the user's speech, a word or two commits at its first pause.
+
+const SAMPLE_RATE = 16000;
+const SMART_TURN_CONTEXT_MS = 8000;
+const PRE_ROLL_MS = 500;
+const QUICK_TURN_MS = 1000;
+
+const speechLength = (segments) => segments.reduce((sum, entry) => sum + entry.samples.length, 0);
+
+function concatSegments(segments) {
+  const joined = new Float32Array(speechLength(segments));
+  let offset = 0;
+  for (const entry of segments) {
+    joined.set(entry.samples, offset);
+    offset += entry.samples.length;
+  }
+  return joined;
+}
+
+const toSamples = (valueMs) => Math.round((valueMs * SAMPLE_RATE) / 1000);
+
+function createTurnEndpointer({
+  smartTurn,
+  maxSilenceMs = 1200,
+  maxTurnMs = 30000,
+  threshold = 0.5,
+}) {
+  const maxSilenceSamples = toSamples(maxSilenceMs);
+  const maxTurnSamples = toSamples(maxTurnMs);
+  const contextSamples = toSamples(SMART_TURN_CONTEXT_MS);
+  const preRollSamples = toSamples(PRE_ROLL_MS);
+  const quickTurnSamples = toSamples(QUICK_TURN_MS);
+
+  let segments = [];
+  let speaking = false;
+  let lastSpeechEndSample = 0;
+  let nextRequestId = 1;
+  let awaitingRequestId = null;
+
+  const reset = () => {
+    segments = [];
+    speaking = false;
+    awaitingRequestId = null;
+  };
+
+  const commit = (reason, commitSample) => {
+    const action = {
+      type: "commit",
+      reason,
+      samples: concatSegments(segments),
+      turnStartSample: segments[0].startSample,
+      speechEndSample: lastSpeechEndSample,
+      commitSample,
+    };
+    reset();
+    return [action];
+  };
+
+  return {
+    onSpeechStart() {
+      speaking = true;
+      // Whatever the classifier says about the shorter turn no longer applies.
+      awaitingRequestId = null;
+      return [];
+    },
+
+    // `quick`: a reply waits on this turn, which is likely a backchannel or a stop word.
+    onSegment({ samples, startSample, nowSample, quick = false }) {
+      segments.push({ samples, startSample });
+      speaking = false;
+      lastSpeechEndSample = startSample + samples.length;
+      if (!smartTurn || (quick && speechLength(segments) <= quickTurnSamples)) {
+        return commit("silence", nowSample);
+      }
+      if (speechLength(segments) >= maxTurnSamples) return commit("max-turn", nowSample);
+      awaitingRequestId = nextRequestId++;
+      const turnStart = Math.max(0, segments[0].startSample - preRollSamples);
+      return [
+        {
+          type: "classify",
+          requestId: awaitingRequestId,
+          fromSample: Math.max(turnStart, nowSample - contextSamples),
+          toSample: nowSample,
+        },
+      ];
+    },
+
+    onPrediction({ requestId, probability, nowSample }) {
+      if (requestId !== awaitingRequestId || speaking || segments.length === 0) return [];
+      awaitingRequestId = null;
+      if (probability === null || probability === undefined) return [];
+      return probability > threshold ? commit("smart-turn", nowSample) : [];
+    },
+
+    advance(nowSample) {
+      if (segments.length === 0 || speaking) return [];
+      if (nowSample - lastSpeechEndSample < maxSilenceSamples) return [];
+      return commit("max-silence", nowSample);
+    },
+
+    reset,
+  };
+}
+
+/** Rolling mic history addressed by absolute sample index, for classifier windows. */
+function createSampleRing(capacity) {
+  const buffer = new Float32Array(capacity);
+  let totalSamples = 0;
+
+  return {
+    get totalSamples() {
+      return totalSamples;
+    },
+
+    push(samples) {
+      const source =
+        samples.length > capacity ? samples.subarray(samples.length - capacity) : samples;
+      const skipped = samples.length - source.length;
+      const writeAt = (totalSamples + skipped) % capacity;
+      const firstPart = Math.min(source.length, capacity - writeAt);
+      buffer.set(source.subarray(0, firstPart), writeAt);
+      buffer.set(source.subarray(firstPart), 0);
+      totalSamples += samples.length;
+    },
+
+    slice(fromSample, toSample) {
+      const from = Math.max(fromSample, totalSamples - capacity, 0);
+      const to = Math.min(toSample, totalSamples);
+      if (to <= from) return new Float32Array(0);
+      const out = new Float32Array(to - from);
+      for (let index = 0; index < out.length; index += 1)
+        out[index] = buffer[(from + index) % capacity];
+      return out;
+    },
+  };
+}
+
+/**
+ * Silero's segment starts at (or just after) the speech onset, and Parakeet
+ * mangles a first word with no lead-in, so the committed turn gets the mic
+ * audio from just before it. Offline: 300 ms cut WER 2.3% -> 1.4%.
+ */
+function withPreRoll({ ring, turnStartSample, samples, preRollSamples }) {
+  const preRoll = ring.slice(turnStartSample - preRollSamples, turnStartSample);
+  if (preRoll.length === 0) return samples;
+  const audio = new Float32Array(preRoll.length + samples.length);
+  audio.set(preRoll);
+  audio.set(samples, preRoll.length);
+  return audio;
+}
+
+module.exports = {
+  createTurnEndpointer,
+  createSampleRing,
+  withPreRoll,
+};

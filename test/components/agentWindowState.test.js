@@ -149,11 +149,17 @@ test("the pill's controls follow the reference states", async () => {
   assert.equal(controls("compact", "thinking").thinking, true);
   assert.deepEqual(controls("compact", "transcribing").buttons, ["keyboard", "close"]);
   assert.deepEqual(controls("modal", "transcribing").buttons, ["keyboard", "close"]);
-  assert.deepEqual(controls("typing", "idle").buttons, ["expand", "mic", "close"]);
+  assert.deepEqual(controls("typing", "idle").buttons, ["expand", "call", "mic", "close"]);
   assert.deepEqual(controls("modal", "listening").buttons, ["keyboard", "close"]);
   assert.deepEqual(controls("modal", "streaming").buttons, ["keyboard", "stop", "close"]);
-  assert.deepEqual(controls("modal", "idle").buttons, ["mic", "keyboard", "close"]);
-  assert.deepEqual(controls("compact", "idle").buttons, ["expand", "mic", "keyboard", "close"]);
+  assert.deepEqual(controls("modal", "idle").buttons, ["call", "mic", "keyboard", "close"]);
+  assert.deepEqual(controls("compact", "idle").buttons, [
+    "expand",
+    "call",
+    "mic",
+    "keyboard",
+    "close",
+  ]);
 });
 
 test("in the modal a reply can be stopped before it has anything to show", async () => {
@@ -369,4 +375,68 @@ test("a skill proposal waits above the assistant pill and stops waiting after it
     null
   );
   assert.equal(findPendingCard([], {}, {}, { skillApprovals }), null);
+});
+
+test("a call starts in the chat on screen and ends back where it came from", async () => {
+  const { agentWindowReducer, INITIAL_AGENT_WINDOW_STATE } = await load();
+  const typing = agentWindowReducer(
+    agentWindowReducer(INITIAL_AGENT_WINDOW_STATE, {
+      type: "show",
+      layout: "typing",
+      input: "keyboard",
+    }),
+    { type: "setDraft", draft: "Unsent words" }
+  );
+
+  // From the typing layout: the call's pill, and the draft waits untouched.
+  let state = agentWindowReducer(typing, { type: "startCall" });
+  assert.equal(state.layout, "pill");
+  assert.deepEqual(state.call, {
+    stopped: false,
+    settings: false,
+    returnTo: { layout: "typing", input: "keyboard" },
+  });
+  state = agentWindowReducer(state, { type: "endCall" });
+  assert.equal(state.call, null);
+  assert.equal(`${state.layout}/${state.input}`, "typing/keyboard");
+  assert.equal(state.draft, "Unsent words");
+
+  // From the modal: the transcript, which ends Stopped and stays readable.
+  const modal = agentWindowReducer(typing, { type: "expand" });
+  state = agentWindowReducer(modal, { type: "startCall" });
+  assert.equal(state.layout, "modal");
+  state = agentWindowReducer(state, { type: "callSettings", open: true });
+  state = agentWindowReducer(state, { type: "endCall" });
+  assert.equal(state.layout, "modal");
+  assert.deepEqual([state.call.stopped, state.call.settings], [true, false]);
+  // Out of it, typing goes on in the same chat, with the same draft.
+  state = agentWindowReducer(state, { type: "leaveCall" });
+  assert.equal(state.call, null);
+  assert.equal(`${state.layout}/${state.input}`, "modal/keyboard");
+  assert.equal(state.draft, "Unsent words");
+});
+
+test("the compact call shows what is above its pill; cards never reroute it", async () => {
+  const { agentWindowReducer, INITIAL_AGENT_WINDOW_STATE } = await load();
+  let state = agentWindowReducer(
+    agentWindowReducer(INITIAL_AGENT_WINDOW_STATE, {
+      type: "show",
+      layout: "pill",
+      input: "voice",
+    }),
+    { type: "startCall" }
+  );
+  state = agentWindowReducer(state, { type: "showCard", asks: false });
+  assert.equal(state.layout, "pill", "the window derives the call's layout itself");
+  state = agentWindowReducer(state, { type: "callCompact", standalone: true });
+  assert.equal(state.layout, "standalone");
+  state = agentWindowReducer(state, { type: "cardSettled" });
+  assert.equal(state.layout, "standalone");
+  state = agentWindowReducer(state, { type: "expand" });
+  state = agentWindowReducer(state, { type: "callCompact", standalone: false });
+  assert.equal(state.layout, "modal", "the transcript isn't compact");
+  state = agentWindowReducer(state, { type: "collapse", pending: true });
+  assert.equal(state.layout, "pill");
+  state = agentWindowReducer(state, { type: "hide" });
+  assert.equal(state.call, null);
 });

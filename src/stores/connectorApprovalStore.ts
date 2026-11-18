@@ -4,6 +4,7 @@ import type {
   ApprovalEdits,
   ApprovalOutcome,
   ConnectorCommitResult,
+  ConnectorDestination,
   ConnectorEdits,
   ConnectorPrepareResult,
   ConnectorPreview,
@@ -24,6 +25,8 @@ export interface ApprovalDraft {
   body: string;
   /** A fields preview's fields (an email's to, cc, subject, body); Send commits these. */
   fields?: DraftFields;
+  /** The channel picked on a card that offers the choice (Slack); unset is as prepared. */
+  channel?: ConnectorDestination;
 }
 
 export interface ApprovalEntry {
@@ -274,7 +277,12 @@ export function requestApproval(
 
 export function updateApprovalDraft(
   key: string,
-  patch: { title?: string; body?: string; fields?: Partial<DraftFields> }
+  patch: {
+    title?: string;
+    body?: string;
+    fields?: Partial<DraftFields>;
+    channel?: ConnectorDestination;
+  }
 ): void {
   const entry = entryFor(key);
   if (!entry || (entry.state !== "pending" && !entry.awaitingRetry)) return;
@@ -288,6 +296,9 @@ export function updateApprovalDraft(
         : {}),
       ...(patch.fields !== undefined && fields !== undefined
         ? { fields: mergeFields(fields, patch.fields) }
+        : {}),
+      ...(patch.channel !== undefined && entry.preview.channel !== undefined
+        ? { channel: patch.channel }
         : {}),
     },
   });
@@ -527,11 +538,16 @@ async function rebind(key: string): Promise<void> {
 async function commitDraft(key: string): Promise<void> {
   const entry = entryFor(key);
   if (!entry) return;
-  const { title, body, fields } = entry.draft;
-  // A fields card commits its fields; main keeps only those the action declares.
+  const { title, body, fields, channel } = entry.draft;
+  // A fields card commits its fields; main keeps only those the action
+  // declares, and checks a picked channel again for the bound login.
   const edits: ConnectorEdits = fields
     ? copyFields(fields)
-    : { ...(title !== undefined ? { title } : {}), body };
+    : {
+        ...(title !== undefined ? { title } : {}),
+        body,
+        ...(channel && entry.preview.channel !== undefined ? { channel: channel.id } : {}),
+      };
   // The expiry timer and abort listener stay armed while sending. They only
   // withdraw a card waiting on the user, and a Send that comes back without
   // sending returns the card to that; settle() disarms them for every final
