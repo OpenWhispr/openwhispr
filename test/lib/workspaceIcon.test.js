@@ -28,3 +28,19 @@ test("crops the centred square of the shorter side", /** @returns {Promise<void>
   assert.deepEqual(coverCrop(300, 300), { sx: 0, sy: 0, side: 300 });
   assert.deepEqual(coverCrop(101, 50), { sx: 25, sy: 0, side: 50 });
 });
+
+test("an image the browser can't decode is reported as unreadable", /** @returns {Promise<void>} */ async (t) => {
+  const { encodeWorkspaceIcon, WorkspaceIconUnreadableError } = await load();
+  const original = globalThis.createImageBitmap;
+  globalThis.createImageBitmap = async () => {
+    throw new Error("The source image could not be decoded.");
+  };
+  t.after(() => {
+    if (original === undefined) delete globalThis.createImageBitmap;
+    else globalThis.createImageBitmap = original;
+  });
+  await assert.rejects(
+    encodeWorkspaceIcon(new Blob(["not an image"])),
+    WorkspaceIconUnreadableError
+  );
+});

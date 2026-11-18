@@ -42,6 +42,7 @@ async function loadSection(
     noExternal: ["react-i18next"],
     mockModules: {
       "react-i18next": "export const useTranslation = () => ({ t: (key) => key });",
+      "/i18n": "export default { t: (key) => key };",
       "/useSettingsWorkspace": `
         export const useSettingsWorkspace = () => globalThis.__settingsWorkspace;
       `,
@@ -72,13 +73,21 @@ async function loadSection(
           globalThis.__iconTest ? globalThis.__iconTest.authGeneration : 7;
       `,
       "/cloudApi.js": `
+        import { CloudApiError } from "/services/cloudApi.ts";
+        export { CloudApiError };
+        // As main answers: a refusal comes back as { failure } and the request throws it.
+        const answer = (result) => {
+          if (!result?.failure) return result;
+          const { message, status, code } = result.failure;
+          throw new CloudApiError(message, status, code);
+        };
         export const cloudGet = () => {};
         export const cloudPatch = () => {};
         export const cloudDelete = () => {};
         export const cloudPost = async (path, body) =>
-          globalThis.__iconTest.request(path, body, globalThis.__iconTest.authGeneration);
+          answer(await globalThis.__iconTest.request(path, body, globalThis.__iconTest.authGeneration));
         export const cloudPostForAuthGeneration = async (path, body, generation) =>
-          globalThis.__iconTest.request(path, body, generation);
+          answer(await globalThis.__iconTest.request(path, body, generation));
       `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = (selector) =>
@@ -94,8 +103,14 @@ async function loadSection(
       ...(interactions
         ? {
             "/lib/workspaceIcon": `
-          export { WORKSPACE_ICON_INPUT_TYPES, checkWorkspaceIconFile } from "/lib/workspaceIcon.ts";
-          export const encodeWorkspaceIcon = (file) => globalThis.__iconTest.encode(file);
+          import { WorkspaceIconUnreadableError } from "/lib/workspaceIcon.ts";
+          export {
+            WORKSPACE_ICON_INPUT_TYPES,
+            WorkspaceIconUnreadableError,
+            checkWorkspaceIconFile,
+          } from "/lib/workspaceIcon.ts";
+          export const encodeWorkspaceIcon = (file) =>
+            globalThis.__iconTest.encode(file, WorkspaceIconUnreadableError);
         `,
           }
         : {}),
@@ -397,15 +412,20 @@ async function mountIconControls(t, overrides = {}) {
   state.refresh = overrides.refresh ?? (async (options) => state.refreshes.push(options));
   globalThis.__iconTest = state;
   const module = await loadSection(t, { interactions: true });
-  const workspace = { ...WORKSPACE, role: "admin", icon_url: ICON };
   globalThis.__caps = ROLE_CAPS.admin;
-  globalThis.__settingsWorkspace = { workspace, workspaces: [workspace], status: "ready" };
   const container = installHostDom(t);
   root = createRoot(container);
-  await act(async () => root.render(createElement(module.default)));
+  const show = (workspace) => {
+    globalThis.__settingsWorkspace = { workspace, workspaces: [workspace], status: "ready" };
+    return act(async () => root.render(createElement(module.default)));
+  };
+  await show({ ...WORKSPACE, role: "admin", icon_url: ICON });
   return {
     state,
-    input: findNode(container, (node) => propsOf(node).type === "file"),
+    show,
+    get input() {
+      return findNode(container, (node) => propsOf(node).type === "file");
+    },
     button: (key) =>
       findNode(
         container,
@@ -485,10 +505,16 @@ test("unsupported and oversized uploads stop before encoding or sending requests
   assert.deepEqual(view.state.refreshes, []);
 });
 
-for (const failure of ["decode", "upload", "remove"]) {
-  test(`${failure} failures show the error and restore icon controls`, async (t) => {
-    const fail = async () => {
-      throw new Error(`${failure} failed`);
+const PICK_PNG = { target: { files: [{ type: "image/png", size: 100 }], value: "image" } };
+
+for (const [failure, message] of [
+  ["decode", "iconUnreadable"],
+  ["upload", "iconFailed"],
+  ["remove", "iconFailed"],
+]) {
+  test(`${failure} failures show translated copy and restore icon controls`, async (t) => {
+    const fail = async (_file, Unreadable) => {
+      throw failure === "decode" ? new Unreadable("decode failed") : new Error(`${failure} failed`);
     };
     const view = await mountIconControls(t, {
       ...(failure === "decode" ? { encode: fail } : {}),
@@ -508,7 +534,7 @@ for (const failure of ["decode", "upload", "remove"]) {
     assert.deepEqual(view.state.toasts, [
       {
         title: "common.error",
-        description: `${failure} failed`,
+        description: `settingsPage.workspace.general.${message}`,
         variant: "destructive",
       },
     ]);
@@ -569,7 +595,13 @@ test("an account switch during encoding keeps the upload pinned to its initiatin
       requests.push({ path, body, authGeneration });
       // The main process refuses a pinned request after the credential generation changes.
       if (authGeneration !== globalThis.__iconTest.authGeneration) {
-        throw new Error("Authentication context changed");
+        return {
+          failure: {
+            message: "Authentication context changed before request",
+            status: 0,
+            code: "AUTH_CONTEXT_CHANGED",
+          },
+        };
       }
       mutatedAccounts.push(authGeneration);
       return { data: WORKSPACE };
@@ -596,7 +628,7 @@ test("an account switch during encoding keeps the upload pinned to its initiatin
   assert.deepEqual(view.state.toasts, [
     {
       title: "common.error",
-      description: "Authentication context changed",
+      description: "settingsPage.workspace.general.iconSignInChanged",
       variant: "destructive",
     },
   ]);
@@ -630,4 +662,70 @@ test("a selection without a validated account stops before encoding or uploading
     },
   ]);
   assert.equal(propsOf(view.button("iconChange")).disabled, false);
+});
+
+test("server refusals of an upload read as translated copy, or the server's own reason", async (t) => {
+  let refusal;
+  const view = await mountIconControls(t, {
+    realService: true,
+    request: async () => ({ failure: refusal }),
+  });
+  for (const [failure, description] of [
+    [
+      { message: "Service temporarily unavailable", status: 503, code: "SERVER_ERROR" },
+      "settingsPage.workspace.general.iconUnavailable",
+    ],
+    [
+      { message: "Insufficient role", status: 403 },
+      "settingsPage.workspace.general.iconNotAllowed",
+    ],
+    [
+      { message: "Sign in with company SSO", status: 403, code: "SSO_REQUIRED" },
+      "settingsPage.workspace.general.iconSsoRequired",
+    ],
+    [{ message: "Network request failed", status: 0 }, "settingsPage.workspace.general.iconFailed"],
+    [
+      { message: "Upload a PNG, JPEG or WebP image", status: 400 },
+      "Upload a PNG, JPEG or WebP image",
+    ],
+  ]) {
+    refusal = failure;
+    await act(async () => propsOf(view.input).onChange(PICK_PNG));
+    assert.equal(view.state.toasts.at(-1).description, description, failure.message);
+  }
+  assert.deepEqual(view.state.refreshes, []);
+});
+
+test("switching workspace mid-upload leaves the next workspace's controls alone", async (t) => {
+  let finishEncoding;
+  const encoding = new Promise((resolve) => {
+    finishEncoding = resolve;
+  });
+  const view = await mountIconControls(t, { encode: () => encoding });
+  await act(async () => propsOf(view.input).onChange(PICK_PNG));
+  assert.equal(propsOf(view.button("iconUploading")).disabled, true);
+
+  await view.show({ ...WORKSPACE, id: "w2", name: "Beta Labs", role: "admin", icon_url: null });
+  assert.ok(!view.button("iconUploading"), "the next workspace isn't uploading");
+  assert.equal(propsOf(view.button("iconUpload")).disabled, false);
+
+  // The upload still lands on the workspace it started on.
+  await act(async () => finishEncoding("encoded-webp"));
+  assert.deepEqual(view.state.calls, [["upload", "w1", "encoded-webp", 7]]);
+  assert.equal(propsOf(view.button("iconUpload")).disabled, false);
+});
+
+test("focus returns to the upload button only when finishing left it nowhere", async (t) => {
+  const view = await mountIconControls(t);
+  const focused = [];
+  view.button("iconChange").focus = () => focused.push("upload");
+
+  await act(async () => propsOf(view.input).onChange(PICK_PNG));
+  assert.deepEqual(focused, ["upload"]);
+
+  // Somewhere the user moved focus during the removal keeps it.
+  globalThis.document.activeElement = view.button("iconRemove");
+  await act(async () => propsOf(view.button("iconRemove")).onClick());
+  assert.deepEqual(view.state.calls.at(-1), ["remove", "w1"]);
+  assert.deepEqual(focused, ["upload"]);
 });

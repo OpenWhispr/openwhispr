@@ -12,10 +12,13 @@ import { workspaceCan } from "../../lib/capabilities";
 import { getValidatedAuthGeneration } from "../../lib/authRequestContext";
 import {
   WORKSPACE_ICON_INPUT_TYPES,
+  WorkspaceIconUnreadableError,
   checkWorkspaceIconFile,
   encodeWorkspaceIcon,
 } from "../../lib/workspaceIcon";
+import { classifyWorkspaceIconError } from "../../lib/workspaceErrors";
 import { privateNotesDestinationName } from "../../lib/workspaceSwitcher";
+import { isolate } from "../../utils/bidiIsolate";
 import { exitReducer } from "../../lib/workspaceExitFlow";
 import { transferReducer } from "../../lib/workspaceTransferFlow";
 import { WorkspaceExitDialog } from "../workspace/WorkspaceExitDialog";
@@ -86,6 +89,8 @@ export default function WorkspaceGeneralSection({
       <SettingsWorkspaceFrame state={state}>
         {(workspace) => (
           <GeneralPage
+            // A save or icon change still running belongs to the workspace it started on.
+            key={workspace.id}
             workspace={workspace}
             onTransfer={() => startTransfer(workspace)}
             onDelete={() => startExit(workspace, "startDelete")}
@@ -141,6 +146,8 @@ function GeneralPage({
   const [saving, setSaving] = useState(false);
   const [iconBusy, setIconBusy] = useState<"upload" | "remove" | null>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
+  const iconButtonRef = useRef<HTMLButtonElement>(null);
+  const iconWasBusy = useRef(false);
   const nameId = useId();
   const hintId = useId();
   const canEdit = workspaceCan(workspace, "manage_settings");
@@ -153,17 +160,60 @@ function GeneralPage({
     setName(workspace.name);
   }, [workspace.id, workspace.name]);
 
-  async function applyUpdate(update: () => Promise<unknown>, successTitle: string): Promise<void> {
+  useEffect(() => {
+    if (iconBusy) {
+      iconWasBusy.current = true;
+      return;
+    }
+    if (!iconWasBusy.current) return;
+    iconWasBusy.current = false;
+    // Disabling the focused button, or removing Remove, left focus on the page.
+    if (!document.activeElement || document.activeElement === document.body) {
+      iconButtonRef.current?.focus();
+    }
+  }, [iconBusy]);
+
+  function showError(description: string): void {
+    toast({ title: t("common.error"), description, variant: "destructive" });
+  }
+
+  function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : t("common.unknownError");
+  }
+
+  function iconErrorMessage(error: unknown): string {
+    if (error instanceof WorkspaceIconUnreadableError) {
+      return t("settingsPage.workspace.general.iconUnreadable");
+    }
+    const failure = classifyWorkspaceIconError(error);
+    const workspaceName = isolate(workspace.name);
+    switch (failure.kind) {
+      case "signInChanged":
+        return t("settingsPage.workspace.general.iconSignInChanged");
+      case "unavailable":
+        return t("settingsPage.workspace.general.iconUnavailable");
+      case "notAllowed":
+        return t("settingsPage.workspace.general.iconNotAllowed", { workspace: workspaceName });
+      case "ssoRequired":
+        return t("settingsPage.workspace.general.iconSsoRequired", { workspace: workspaceName });
+      case "refused":
+        return failure.message;
+      default:
+        return t("settingsPage.workspace.general.iconFailed");
+    }
+  }
+
+  async function applyUpdate(
+    update: () => Promise<unknown>,
+    successTitle: string,
+    describeError: (error: unknown) => string
+  ): Promise<void> {
     try {
       await update();
       await refresh({ fresh: true });
       toast({ title: successTitle });
     } catch (error) {
-      toast({
-        title: t("common.error"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
-      });
+      showError(describeError(error));
     }
   }
 
@@ -171,7 +221,8 @@ function GeneralPage({
     setSaving(true);
     await applyUpdate(
       (): Promise<Workspace> => WorkspacesService.update(workspace.id, { name: name.trim() }),
-      t("settingsPage.workspace.general.saved")
+      t("settingsPage.workspace.general.saved"),
+      errorMessage
     );
     setSaving(false);
   }
@@ -180,28 +231,28 @@ function GeneralPage({
     if (!canEdit || iconBusy) return;
     const validation = checkWorkspaceIconFile(file);
     if (validation !== "ok") {
-      toast({
-        title: t("common.error"),
-        description: t(
+      showError(
+        t(
           validation === "unsupported"
             ? "settingsPage.workspace.general.iconUnsupported"
             : "settingsPage.workspace.general.iconTooLarge"
-        ),
-        variant: "destructive",
-      });
+        )
+      );
       return;
     }
     // Pin before encoding so an account switch cannot adopt the replacement session.
     const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration === null) {
+      showError(t("auth.unconfirmedSession"));
+      return;
+    }
     setIconBusy("upload");
-    await applyUpdate(async (): Promise<Workspace> => {
-      if (authGeneration === null) throw new Error(t("auth.unconfirmedSession"));
-      return WorkspacesService.uploadIcon(
-        workspace.id,
-        await encodeWorkspaceIcon(file),
-        authGeneration
-      );
-    }, t("settingsPage.workspace.general.iconUploaded"));
+    await applyUpdate(
+      async (): Promise<Workspace> =>
+        WorkspacesService.uploadIcon(workspace.id, await encodeWorkspaceIcon(file), authGeneration),
+      t("settingsPage.workspace.general.iconUploaded"),
+      iconErrorMessage
+    );
     setIconBusy(null);
   }
 
@@ -210,7 +261,8 @@ function GeneralPage({
     setIconBusy("remove");
     await applyUpdate(
       (): Promise<Workspace> => WorkspacesService.removeIcon(workspace.id),
-      t("settingsPage.workspace.general.iconRemoved")
+      t("settingsPage.workspace.general.iconRemoved"),
+      iconErrorMessage
     );
     setIconBusy(null);
   }
@@ -295,6 +347,7 @@ function GeneralPage({
                 }}
               />
               <Button
+                ref={iconButtonRef}
                 variant="outline"
                 size="sm"
                 onClick={(): void => iconInputRef.current?.click()}

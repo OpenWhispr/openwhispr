@@ -18,10 +18,7 @@ export function checkWorkspaceIconFile(file: {
   return file.size > WORKSPACE_ICON_INPUT_MAX_BYTES ? "tooLarge" : "ok";
 }
 
-export function coverCrop(
-  width: number,
-  height: number
-): { sx: number; sy: number; side: number } {
+export function coverCrop(width: number, height: number): { sx: number; sy: number; side: number } {
   const side = Math.min(width, height);
   return {
     sx: Math.floor((width - side) / 2),
@@ -30,8 +27,13 @@ export function coverCrop(
   };
 }
 
+// The file passed the type check but doesn't decode: corrupt, truncated, or another format.
+export class WorkspaceIconUnreadableError extends Error {}
+
 export async function encodeWorkspaceIcon(file: Blob): Promise<string> {
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await createImageBitmap(file).catch((): never => {
+    throw new WorkspaceIconUnreadableError("Unable to decode workspace icon");
+  });
   try {
     const canvas = new OffscreenCanvas(WORKSPACE_ICON_SIZE, WORKSPACE_ICON_SIZE);
     const context = canvas.getContext("2d");
