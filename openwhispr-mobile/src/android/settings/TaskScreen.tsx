@@ -28,6 +28,7 @@ import { modelName, useModelsReady } from './modelCatalog';
 import {
   KEY_PROVIDERS,
   TASKS,
+  clearMeetingKey,
   providerCanRun,
   providerModels,
   runTaskOnKey,
@@ -35,6 +36,7 @@ import {
   type KeyTask,
 } from './ownKey';
 import { LandingCheck } from './ProcessingScreen';
+import { isLiveProvider, meetingKey } from '../providers/liveMeeting';
 import { effectiveSelection, lockedOut, phoneModelFor, useChoosePhone } from './processingTasks';
 import { useSettingsT, type SettingsKey } from './strings';
 
@@ -117,22 +119,36 @@ function ModelPicker({
   );
 }
 
-/** Meetings: live on Cloud, or on this phone afterwards with speaker names. */
+/**
+ * Meetings: only what can transcribe them. Live on Cloud, on this phone afterwards with speaker
+ * names, or live on a saved OpenAI, Deepgram or AssemblyAI key.
+ */
 function MeetingsTask() {
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
   const activeMode = useProcessingModeStore((s) => s.activeMode);
+  // Read so the page follows a key saved or cleared for meetings.
+  useConfigStore((s) => s.config?.inference?.meeting);
+  const keys = useSavedKeys();
   const { ready } = useModelsReady();
   const { choosePhone, run, needsModel, closeModelSheet, goLocal } = useChoosePhone(t);
+  const [sheet, setSheet] = useState(false);
   const onPhone = activeMode === 'private';
+  const key = meetingKey();
+  const liveKeys = KEY_PROVIDERS.filter(({ id }) => keys[id] && isLiveProvider(id));
   const rows = [
     {
       key: 'cloud',
       icon: 'Cloud' as const,
       title: t('meetingCloud'),
       body: t('meetingCloudBody'),
-      selected: !onPhone,
-      choose: () => void run(() => switchWorkflowMode('dictation', 'openwhispr')),
+      selected: !onPhone && !key,
+      disabled: false,
+      choose: () =>
+        void run(async () => {
+          await clearMeetingKey();
+          if (onPhone) await switchWorkflowMode('dictation', 'openwhispr');
+        }),
     },
     {
       key: 'phone',
@@ -140,26 +156,60 @@ function MeetingsTask() {
       title: t('meetingPhone'),
       body: t('meetingPhoneBody'),
       selected: onPhone,
-      choose: choosePhone,
+      disabled: false,
+      choose: () => {
+        void clearMeetingKey();
+        choosePhone();
+      },
     },
+    ...(liveKeys.length
+      ? liveKeys.map(({ id, name }) => ({
+          key: id,
+          icon: 'KeyRound' as const,
+          title: name,
+          body: onPhone ? t('notWithPhoneDefault') : t('yourKeyConnected'),
+          selected: key?.providerId === id,
+          disabled: onPhone,
+          choose: () => void run(() => runTaskOnKey(id, 'meeting')),
+        }))
+      : [
+          {
+            key: 'key',
+            icon: 'KeyRound' as const,
+            title: t('ownKey'),
+            body: onPhone ? t('notWithPhoneDefault') : t('meetingOwnKeyBody'),
+            selected: false,
+            disabled: onPhone,
+            choose: () => setSheet(true),
+          },
+        ]),
   ];
   return (
     <SettingsPage title={t('meetings')}>
       <Text style={[type.subhead, { color: home.secondary, paddingHorizontal: 4 }]}>
         {t('meetingsIntro')}
       </Text>
-      <Group title={t('transcribeMeetings')} footer={t('meetingsFollowDefault')}>
+      <Group title={t('transcribeMeetings')}>
         {rows.map((row) => (
           <ListRow
             key={row.key}
             icon={row.icon}
             title={row.title}
             subtitle={row.body}
+            subtitleStyle={
+              row.selected && row.icon === 'KeyRound'
+                ? { color: KEY_CHECK_COLORS.connected }
+                : undefined
+            }
             selected={row.selected}
+            dimmed={row.disabled}
             trailing={<LandingCheck shown={row.selected} reduceMotion={reduceMotion} />}
-            onPress={row.selected ? undefined : row.choose}
+            onPress={row.selected || row.disabled ? undefined : row.choose}
           />
         ))}
+        {liveKeys.length > 0 && (
+          <ListRow title={t('addAnotherKey')} onPress={() => setSheet(true)} />
+        )}
       </Group>
       <Group title={t('speakerNames')}>
         <ListRow
@@ -174,6 +224,14 @@ function MeetingsTask() {
         />
       </Group>
       <SpeechModelSheet visible={needsModel} onClose={closeModelSheet} onReady={goLocal} />
+      <KeySheet
+        visible={sheet}
+        onClose={() => setSheet(false)}
+        initialProvider={
+          KEY_PROVIDERS.find(({ id }) => !keys[id] && isLiveProvider(id))?.id ?? 'openai'
+        }
+        onlyTask="meeting"
+      />
     </SettingsPage>
   );
 }

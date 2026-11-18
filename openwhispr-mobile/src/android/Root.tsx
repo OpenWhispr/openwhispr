@@ -1,4 +1,5 @@
 import { observeAndroidLanguage } from './strings';
+import './providers/register';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Stack, router } from 'expo-router';

@@ -11,6 +11,7 @@ import type { ProcessingMode, UserConfig } from '@/types';
 import { speechModelSupportsLanguages } from '../speechCapabilities';
 import type { AndroidSpeechModelId } from '../speechSelection';
 import type { AndroidModelId } from '../models';
+import { LIVE_MODEL, meetingKey } from '../providers/liveMeeting';
 import { MODEL_ROWS, modelName, useModelsReady } from './modelCatalog';
 import type { KeyTask } from './ownKey';
 import type { SettingsT } from './strings';
@@ -82,6 +83,26 @@ export function taskSummary(
       .filter(Boolean)
       .join(' · '),
     changed,
+  };
+}
+
+/** The Meetings row: live on a key saved for meetings, else whatever the default gives. */
+export function meetingSummary(
+  t: SettingsT,
+  activeMode: ProcessingMode,
+): { engine: string; changed: boolean } {
+  const key = meetingKey();
+  if (key)
+    return {
+      engine: t('meetingKeyValue', {
+        provider: providerDisplayName(key.providerId),
+        model: key.modelId || LIVE_MODEL[key.providerId],
+      }),
+      changed: activeMode !== 'providers',
+    };
+  return {
+    engine: t(activeMode === 'private' ? 'meetingPhoneValue' : 'meetingCloudValue'),
+    changed: false,
   };
 }
 

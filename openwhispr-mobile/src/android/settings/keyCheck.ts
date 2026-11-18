@@ -14,14 +14,23 @@ export const KEY_CHECK_DELAY_MS = 500;
 /** Desktop's probe timeout; no answer by then is "couldn't check", never a refusal. */
 export const KEY_CHECK_TIMEOUT_MS = 12000;
 
-export type KeyProviderId = 'openai' | 'groq' | 'openrouter';
+export type KeyProviderId = 'openai' | 'groq' | 'deepgram' | 'assemblyai' | 'openrouter';
 
 /** One read-only request per provider, the same ones desktop's key check makes. */
 const PROBES: Record<KeyProviderId, string> = {
   openai: 'https://api.openai.com/v1/models',
   groq: 'https://api.groq.com/openai/v1/models',
+  deepgram: 'https://api.deepgram.com/v1/auth/token',
+  assemblyai: 'https://api.assemblyai.com/v2/transcript?limit=1',
   openrouter: 'https://openrouter.ai/api/v1/key',
 };
+
+/** Deepgram takes "Token <key>" and AssemblyAI the bare key; the rest are bearer tokens. */
+function authorization(provider: KeyProviderId, apiKey: string): string {
+  if (provider === 'deepgram') return `Token ${apiKey}`;
+  if (provider === 'assemblyai') return apiKey;
+  return `Bearer ${apiKey}`;
+}
 
 /** Desktop's describeStatusFailure: 401/403 refuse the key; 408, 429 and 5xx give no verdict. */
 export function classifyStatus(status: number): KeyCheckResult {
@@ -40,11 +49,16 @@ export async function checkProviderKey(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), KEY_CHECK_TIMEOUT_MS);
   try {
-    const response = await fetcher(PROBES[provider], {
-      method: 'GET',
-      headers: { Accept: 'application/json', Authorization: `Bearer ${apiKey}` },
-      signal: controller.signal,
-    });
+    const request = (url: string) =>
+      fetcher(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json', Authorization: authorization(provider, apiKey) },
+        signal: controller.signal,
+      });
+    let response = await request(PROBES[provider]);
+    // A Deepgram project without the token endpoint is checked against its projects instead.
+    if (provider === 'deepgram' && response.status === 404)
+      response = await request('https://api.deepgram.com/v1/projects');
     const result = classifyStatus(response.status);
     // An OpenRouter management key can't run models, so it is refused like a wrong key.
     if (result.state === 'connected' && provider === 'openrouter') {

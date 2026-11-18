@@ -7,6 +7,7 @@ import { KeySheet } from '../settings/KeySheet';
 import ProcessingScreen from '../settings/ProcessingScreen';
 import TaskScreen from '../settings/TaskScreen';
 import { maskKey } from '../settings/ownKey';
+import '../providers/register';
 
 const mockPush = jest.fn();
 let mockParams: Record<string, string> = {};
@@ -15,7 +16,11 @@ jest.mock('@/android/navigationBar', () => ({
   useNavigationBarCanvas: () => undefined,
 }));
 jest.mock('expo-router', () => ({
-  router: { push: (...args: unknown[]) => mockPush(...args), back: jest.fn(), canGoBack: () => true },
+  router: {
+    push: (...args: unknown[]) => mockPush(...args),
+    back: jest.fn(),
+    canGoBack: () => true,
+  },
   useLocalSearchParams: () => mockParams,
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -175,8 +180,12 @@ describe('Use your own key', () => {
     expect(mockSetCredential).toHaveBeenCalledWith('provider.openai', {
       apiKey: 'sk-proj-abcdefghijklmnop4f2a',
     });
-    // Dictation, uploads, cleanup and notes, dictation first since it sets the default.
-    expect(mockUpdateConfig).toHaveBeenCalledTimes(4);
+    // Dictation, uploads, cleanup, notes and meetings, dictation first since it sets the default.
+    expect(mockUpdateConfig).toHaveBeenCalledTimes(5);
+    expect(useConfigStore.getState().config?.inference?.meeting).toMatchObject({
+      providerId: 'openai',
+      modelId: 'gpt-4o-transcribe',
+    });
     expect(useProcessingModeStore.getState().activeMode).toBe('providers');
     expect(onClose).toHaveBeenCalled();
   });
@@ -197,6 +206,27 @@ describe('Use your own key', () => {
     fireEvent.changeText(screen.getByLabelText('apiKey'), 'gsk_wrong_key_12345');
     expect(screen.queryByText('keyRefused')).toBeNull();
     expect(mockSetCredential).not.toHaveBeenCalled();
+  });
+
+  it('offers a Deepgram key dictation, uploads and live meetings, never text', async () => {
+    mockSaved['provider.deepgram'] = 'dg_abcdefghijklmnop9c1e';
+    render(<KeySheet visible onClose={jest.fn()} initialProvider="deepgram" />);
+    await act(async () => {});
+    expect(screen.getByText('dictation')).toBeTruthy();
+    expect(screen.getByText('audioUploads')).toBeTruthy();
+    expect(screen.getByText('meetings')).toBeTruthy();
+    expect(screen.getByText('liveModel')).toBeTruthy();
+    expect(screen.queryByText('textCleanup')).toBeNull();
+    expect(screen.getByText('textCleanupAndNotes')).toBeTruthy();
+  });
+
+  it('opened for meetings, offers only providers that transcribe live', async () => {
+    render(<KeySheet visible onClose={jest.fn()} onlyTask="meeting" />);
+    await act(async () => {});
+    for (const name of ['OpenAI', 'Deepgram', 'AssemblyAI'])
+      expect(screen.getByText(name)).toBeTruthy();
+    expect(screen.queryByText('Groq')).toBeNull();
+    expect(screen.queryByText('OpenRouter')).toBeNull();
   });
 
   it('offers OpenRouter only the text tasks', async () => {
@@ -270,11 +300,32 @@ describe('Task pages', () => {
     expect(mockPush).toHaveBeenCalledWith('/(account)/cleanup-prompt');
   });
 
-  it('Meetings: only choices that can transcribe them', () => {
+  it('Meetings: only choices that can transcribe them, and one way to add a key', async () => {
     mockParams = { task: 'meeting' };
+    mockSaved['provider.groq'] = 'gsk_abcdefghijklmnop91c0';
     render(<TaskScreen />);
+    await act(async () => {});
     expect(screen.getByText('meetingCloud')).toBeTruthy();
     expect(screen.getByText('meetingPhone')).toBeTruthy();
+    // A Groq key can't transcribe live, so it never shows here.
+    expect(screen.queryByText('Groq')).toBeNull();
+    expect(screen.getByText('meetingOwnKeyBody')).toBeTruthy();
     expect(screen.queryByText('addAnotherKey')).toBeNull();
+  });
+
+  it('Meetings: each live key is a row, and choosing one saves it for meetings', async () => {
+    mockParams = { task: 'meeting' };
+    mockSaved['provider.assemblyai'] = 'aai_abcdefghijklmnop0000';
+    render(<TaskScreen />);
+    await act(async () => {});
+    expect(screen.getByText('addAnotherKey')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByText('AssemblyAI'));
+    });
+    expect(useConfigStore.getState().config?.inference?.meeting).toMatchObject({
+      mode: 'providers',
+      providerId: 'assemblyai',
+      modelId: 'universal-streaming',
+    });
   });
 });

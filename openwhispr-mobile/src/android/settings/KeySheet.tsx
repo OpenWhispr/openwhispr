@@ -17,21 +17,23 @@ import { KEY_CHECK_COLORS, KeyCheckMark } from './KeyCheckMark';
 import { useKeyCheck, type KeyCheckResult, type KeyProviderId } from './keyCheck';
 import {
   KEY_PROVIDERS,
-  TASKS,
+  SHEET_TASKS,
   applyKeyToTasks,
   maskKey,
   providerCanRun,
   savedKey,
   startingModel,
   type KeyTask,
+  type SheetTask,
 } from './ownKey';
 import { useSettingsT, type SettingsKey, type SettingsT } from './strings';
 
-const TASK_TITLE: Record<KeyTask, SettingsKey> = {
+const TASK_TITLE: Record<SheetTask, SettingsKey> = {
   dictation: 'dictation',
   upload: 'audioUploads',
   cleanup: 'textCleanup',
   notes: 'noteFormatting',
+  meeting: 'meetings',
 };
 
 function reasonText(t: SettingsT, provider: string, result: KeyCheckResult): string {
@@ -100,7 +102,7 @@ export function KeySheet({
   onClose: () => void;
   initialProvider?: KeyProviderId;
   /** Opened from one task's page: only that task is ticked to start with. */
-  onlyTask?: KeyTask;
+  onlyTask?: SheetTask;
 }) {
   const t = useSettingsT();
   const activeMode = useProcessingModeStore((s) => s.activeMode);
@@ -109,15 +111,19 @@ export function KeySheet({
   // A key that passed the check (or was saved before) is locked in and shown masked.
   const [locked, setLocked] = useState<string | null>(null);
   const [lockedSaved, setLockedSaved] = useState(false);
-  const [unticked, setUnticked] = useState<KeyTask[]>([]);
+  const [unticked, setUnticked] = useState<SheetTask[]>([]);
   const [busy, setBusy] = useState(false);
   const check = useKeyCheck(provider, locked ? '' : draft);
   const name = KEY_PROVIDERS.find((item) => item.id === provider)!.name;
+  // Opened for meetings, only providers that can transcribe live are offered.
+  const chips = KEY_PROVIDERS.filter(
+    (item) => onlyTask !== 'meeting' || providerCanRun(item.id, 'meeting'),
+  );
 
   useEffect(() => {
     if (!visible) return;
     setProvider(initialProvider);
-    setUnticked(onlyTask ? TASKS.filter((task) => task !== onlyTask) : []);
+    setUnticked(onlyTask ? SHEET_TASKS.filter((task) => task !== onlyTask) : []);
   }, [visible, initialProvider, onlyTask]);
 
   // A provider with a key already saved starts locked in, with nothing to check.
@@ -146,15 +152,16 @@ export function KeySheet({
     return () => clearTimeout(timer);
   }, [check.state, draft]);
 
-  const runnable = TASKS.filter((task) => providerCanRun(provider, task));
-  const ticked = runnable.filter((task) => {
-    if (unticked.includes(task)) return false;
-    // While On this phone is the default, uploads stay on the phone unless dictation moves too.
-    if (task === 'upload' && activeMode === 'private' && unticked.includes('dictation'))
-      return false;
-    return true;
-  });
+  const runnable = SHEET_TASKS.filter((task) => providerCanRun(provider, task));
+  // While On this phone is the default, uploads stay on the phone unless dictation moves too,
+  // and meetings stay on it whatever the key.
+  const blocked = (task: SheetTask) =>
+    activeMode === 'private' &&
+    ((task === 'upload' && unticked.includes('dictation')) ||
+      (task === 'meeting' && unticked.includes('dictation')));
+  const ticked = runnable.filter((task) => !unticked.includes(task) && !blocked(task));
   const transcribes = providerCanRun(provider, 'dictation');
+  const writesText = providerCanRun(provider, 'cleanup');
   const accepted = !!locked;
   const failed = !accepted && check.state === 'failed';
   const markState = accepted ? 'connected' : check.state;
@@ -173,7 +180,7 @@ export function KeySheet({
     }
   };
 
-  const toggle = (task: KeyTask) =>
+  const toggle = (task: SheetTask) =>
     setUnticked((current) =>
       current.includes(task) ? current.filter((item) => item !== task) : [...current, task],
     );
@@ -197,7 +204,7 @@ export function KeySheet({
           accessibilityRole="radiogroup"
           accessibilityLabel={t('provider')}
         >
-          {KEY_PROVIDERS.map((item) => (
+          {chips.map((item) => (
             <Chip
               key={item.id}
               label={item.name}
@@ -328,15 +335,14 @@ export function KeySheet({
             <View style={[cardStyle, { overflow: 'hidden' }]}>
               {runnable.map((task, index) => {
                 const on = ticked.includes(task);
-                const blocked =
-                  task === 'upload' && activeMode === 'private' && unticked.includes('dictation');
+                const off = blocked(task);
                 return (
                   <Pressable
                     key={task}
                     cssInterop={false}
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: on, disabled: blocked }}
-                    disabled={blocked}
+                    accessibilityState={{ checked: on, disabled: off }}
+                    disabled={off}
                     onPress={() => toggle(task)}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
@@ -345,7 +351,7 @@ export function KeySheet({
                       paddingHorizontal: 16,
                       paddingVertical: 10,
                       gap: 12,
-                      opacity: blocked ? 0.45 : pressed ? 0.7 : 1,
+                      opacity: off ? 0.45 : pressed ? 0.7 : 1,
                       borderTopWidth: index ? 1 : 0,
                       borderTopColor: home.borderSubtle,
                     })}
@@ -353,7 +359,11 @@ export function KeySheet({
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text style={settings.title}>{t(TASK_TITLE[task])}</Text>
                       <Text style={settings.subtitle}>
-                        {blocked ? t('notWithPhoneDefault') : startingModel(provider, task)}
+                        {off
+                          ? t('notWithPhoneDefault')
+                          : task === 'meeting'
+                            ? t('liveModel', { model: startingModel(provider, task) })
+                            : startingModel(provider, task)}
                       </Text>
                     </View>
                     {on && (
@@ -362,21 +372,34 @@ export function KeySheet({
                   </Pressable>
                 );
               })}
-              {!transcribes && (
-                <View
-                  style={{
-                    minHeight: 56,
-                    paddingHorizontal: 16,
-                    paddingVertical: 10,
-                    gap: 2,
-                    opacity: 0.45,
-                    borderTopWidth: 1,
-                    borderTopColor: home.borderSubtle,
-                  }}
-                >
-                  <Text style={settings.title}>{t('dictationAndUploads')}</Text>
-                  <Text style={settings.subtitle}>{t('cantTranscribe', { provider: name })}</Text>
-                </View>
+              {[
+                !transcribes && {
+                  title: t('dictationAndUploads'),
+                  body: t('cantTranscribe', { provider: name }),
+                },
+                !writesText && {
+                  title: t('textCleanupAndNotes'),
+                  body: t('cantWriteText', { provider: name }),
+                },
+              ].map(
+                (row) =>
+                  row && (
+                    <View
+                      key={row.title}
+                      style={{
+                        minHeight: 56,
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        gap: 2,
+                        opacity: 0.45,
+                        borderTopWidth: 1,
+                        borderTopColor: home.borderSubtle,
+                      }}
+                    >
+                      <Text style={settings.title}>{row.title}</Text>
+                      <Text style={settings.subtitle}>{row.body}</Text>
+                    </View>
+                  ),
               )}
             </View>
           </View>
