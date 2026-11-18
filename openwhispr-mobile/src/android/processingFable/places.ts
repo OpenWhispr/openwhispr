@@ -44,6 +44,7 @@ import {
   type ProcessingDefault,
 } from '../settings/processingDefault';
 import { effectiveSelection } from '../settings/processingTasks';
+import { showToast } from '../settings/kit';
 import { settingsT } from '../settings/strings';
 import { fableT } from './strings';
 
@@ -435,6 +436,8 @@ export const usePhoneQueue = create<{ jobs: Job[]; doneBytes: number; totalBytes
   totalBytes: 0,
 }));
 let running = false;
+/** Set by "Use for everything" on device: once every model has landed, it says so, with Undo. */
+let finishedUndo: (() => Promise<void>) | null = null;
 
 async function moveOnDevice(tasks: SheetTask[]) {
   for (const task of tasks) await setTask(task, { mode: 'local' });
@@ -479,6 +482,16 @@ async function runQueue() {
   } finally {
     running = false;
     usePhoneQueue.setState({ jobs: [], doneBytes: 0, totalBytes: 0 });
+    const undo = finishedUndo;
+    finishedUndo = null;
+    // D3: everything is on the phone now (a failed or cancelled download leaves no toast).
+    const config = useConfigStore.getState().config;
+    if (undo && SHEET_TASKS.every((task) => config?.inference?.[task]?.mode === 'local'))
+      showToast(fableT('everythingDevice'), 'success', {
+        label: settingsT('undo'),
+        onPress: () => void undo().catch(() => undefined),
+        onClose: () => undefined,
+      });
   }
 }
 
@@ -541,11 +554,16 @@ export async function missingForEverything(): Promise<AndroidModelId[]> {
 export async function everythingOnDevice(): Promise<() => Promise<void>> {
   const saved = snapshot();
   markDefault({ mode: 'local' });
-  await moveTasksOnDevice([...SHEET_TASKS]);
-  return async () => {
+  const undo = async () => {
+    finishedUndo = null;
     cancelQueue();
     await restore(saved);
   };
+  finishedUndo = undo;
+  await moveTasksOnDevice([...SHEET_TASKS]);
+  // Nothing had to download: the queue never ran, so nothing else will say it's done.
+  if (!usePhoneQueue.getState().jobs.length) finishedUndo = null;
+  return undo;
 }
 
 // --- Adding and removing keys --------------------------------------------------------------

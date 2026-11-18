@@ -23,6 +23,7 @@ jest.mock('@/android/strings', () => ({
   __esModule: true,
   default: { addResourceBundle: jest.fn(), t: (key: string) => key },
 }));
+jest.mock('../settings/kit', () => ({ showToast: jest.fn() }));
 const mockReady = new Set<string>();
 jest.mock('../models', () => ({
   ANDROID_MODELS: {

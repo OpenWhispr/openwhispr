@@ -13,7 +13,6 @@ import { cardStyle, settings, SettingsPage } from '../settings/kit';
 import { KEY_CHECK_COLORS } from '../settings/KeyCheckMark';
 import { formatSize, modelName } from '../settings/modelCatalog';
 import { SHEET_TASKS, type SheetTask } from '../settings/ownKey';
-import { noOrphan } from '../settings/strings';
 import { AddKeySheet } from './AddKeySheet';
 import { DeviceSheet } from './DeviceSheet';
 import { KeyDetailSheet } from './KeyDetailSheet';
@@ -262,7 +261,9 @@ export default function ProcessingScreen() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         <View style={{ flex: 1, gap: 2 }}>
                           <Text style={settings.title}>{sourceName(source)}</Text>
-                          <Text style={settings.subtitle}>{noOrphan(ending)}</Text>
+                          <Text style={settings.subtitle} numberOfLines={1}>
+                            {ending}
+                          </Text>
                         </View>
                         <SystemIcon
                           name="checkmark"
