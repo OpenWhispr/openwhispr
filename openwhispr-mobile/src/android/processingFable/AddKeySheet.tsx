@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { home, type } from '../home/kit';
-import { BottomSheet, PillAction, TextAction, showToast } from '../settings/kit';
+import { BottomSheet, PillAction, TextAction, settings, showToast } from '../settings/kit';
 import { useKeyCheck, type KeyCheckResult, type KeyProviderId } from '../settings/keyCheck';
 import { KEY_PROVIDERS, maskKey } from '../settings/ownKey';
 import { isLiveProvider } from '../providers/liveMeeting';
@@ -49,7 +49,7 @@ function addedMessage(t: FableT, source: Source, count: number): string {
   return count === 5 ? t('keyAddedAll', { provider }) : t('keyAddedRuns', { provider, count });
 }
 
-/** The grouped provider list that slides into the sheet (6C2). */
+/** The grouped provider list that slides into the sheet (6C2): a card per group. */
 function ProviderList({
   t,
   current,
@@ -60,23 +60,25 @@ function ProviderList({
   onChoose: (source: Source) => void;
 }) {
   return (
-    <SheetCard maxHeight={520}>
-      {SOURCE_GROUPS.flatMap((group) => [
-        <View key={group.title} style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 }}>
+    <>
+      {SOURCE_GROUPS.map((group) => (
+        <View key={group.title} style={{ gap: 8 }}>
           <SectionLabel>{t(group.title)}</SectionLabel>
-        </View>,
-        ...group.ids.map((id) => (
-          <RadioRow
-            key={id}
-            title={sourceName(id)}
-            tag={isLiveProvider(id) ? { label: t('live') } : undefined}
-            subtitle={t(CAPABILITY[id].row)}
-            selected={id === current}
-            onPress={() => onChoose(id)}
-          />
-        )),
-      ])}
-    </SheetCard>
+          <SheetCard>
+            {group.ids.map((id) => (
+              <RadioRow
+                key={id}
+                title={sourceName(id)}
+                tag={isLiveProvider(id) ? { label: t('live') } : undefined}
+                subtitle={t(CAPABILITY[id].row)}
+                selected={id === current}
+                onPress={() => onChoose(id)}
+              />
+            ))}
+          </SheetCard>
+        </View>
+      ))}
+    </>
   );
 }
 
@@ -210,7 +212,11 @@ export function AddKeySheet({ visible, onClose }: { visible: boolean; onClose: (
                   text={t(serverResult?.invalidAddress ? 'serverInvalid' : 'serverUnreachable')}
                 />
               ) : (
-                !found && <Reason failed={false} text={t('serverExample')} />
+                !found && (
+                  <Text style={[settings.subtitle, { paddingHorizontal: 2 }]}>
+                    {t('serverExample')}
+                  </Text>
+                )
               )}
             </View>
             <View style={{ gap: 8 }}>
@@ -223,7 +229,9 @@ export function AddKeySheet({ visible, onClose }: { visible: boolean; onClose: (
                 locked={!!found && !!serverKey}
                 failed={serverRefusedKey}
               />
-              {serverRefusedKey && <Reason failed text={t('serverRefusedKey')} />}
+              {serverRefusedKey && (
+                <Reason failed text={t(serverKey.trim() ? 'serverRefusedKey' : 'serverNeedsKey')} />
+              )}
             </View>
             {found && (
               <TickLine

@@ -238,7 +238,7 @@ export function TaskSheet({
       >
         <SlideIn pageKey="models">
           <SectionLabel>{sourceName(source)}</SectionLabel>
-          <SheetCard maxHeight={420}>
+          <SheetCard>
             {keyModels.map((model) => (
               <RadioRow
                 key={model}

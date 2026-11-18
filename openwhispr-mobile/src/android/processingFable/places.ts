@@ -127,10 +127,12 @@ export function placementOf(
 export function modelLabel(source: string, task: SheetTask, modelId: string | undefined): string {
   if (!modelId) return '';
   const scope = task === 'meeting' ? 'dictation' : task;
-  const found = getMobileProvidersForScope(scope)
-    .find((item) => item.id === source)
-    ?.models.find((model) => model.id === modelId);
-  return found?.name ?? modelId;
+  const models = getMobileProvidersForScope(scope).find((item) => item.id === source)?.models;
+  const found = models?.find((model) => model.id === modelId);
+  if (found) return found.name;
+  // A live model is named after its batch sibling ("AssemblyAI STT 3.7 Realtime").
+  const batch = models?.find((model) => `${model.id}-realtime` === modelId);
+  return batch ? `${batch.name} Realtime` : modelId;
 }
 
 // --- Snapshots, for Undo -------------------------------------------------------------------
@@ -251,7 +253,7 @@ export async function checkCustomServer(endpoint: string, apiKey?: string): Prom
 
 /** Checks a server half a second after the address or key last changed; `run` checks at once. */
 export function useServerCheck(endpoint: string, apiKey: string) {
-  const [result, setResult] = useState<ServerCheck | null>(null);
+  const [result, setResult] = useState<(ServerCheck & { for: string }) | null>(null);
   const [checking, setChecking] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const revision = useRef(0);
@@ -267,16 +269,18 @@ export function useServerCheck(endpoint: string, apiKey: string) {
         void checkCustomServer(address, apiKey).then((next) => {
           if (revision.current !== mine) return;
           setChecking(false);
-          setResult(next);
+          setResult({ ...next, for: `${address}|${apiKey}` });
         });
       },
       attempt ? 0 : KEY_CHECK_DELAY_MS,
     );
     return () => clearTimeout(timer);
   }, [address, apiKey, attempt]);
+  // An answer only counts for the address and key it was for: typing never reads as checked.
+  const current = result?.for === `${address}|${apiKey}` ? result : null;
   return {
-    state: result ? result.state : checking ? ('checking' as const) : ('idle' as const),
-    result,
+    state: current ? current.state : checking ? ('checking' as const) : ('idle' as const),
+    result: current,
     run: () => setAttempt((count) => count + 1),
   };
 }
@@ -332,8 +336,12 @@ export function sourceModels(source: Source, task: SheetTask): string[] {
 export type SavedSource = { source: Source; tail: string };
 
 /** The saved keys (and the custom server), each with its last four characters, kept current. */
+// The last read, so the key card shows at once when Processing opens again (the reads take a
+// moment: each key is decrypted).
+let lastSources: SavedSource[] | null = null;
+
 export function useSavedSources(): SavedSource[] | null {
-  const [saved, setSaved] = useState<SavedSource[] | null>(null);
+  const [saved, setSaved] = useState<SavedSource[] | null>(lastSources);
   const server = useCustomServer((s) => s.endpoint);
   useEffect(() => {
     let live = true;
@@ -348,7 +356,8 @@ export function useSavedSources(): SavedSource[] | null {
       const custom = server
         ? { source: 'custom' as Source, tail: (await serverKey(server)).slice(-4) }
         : null;
-      if (live) setSaved([...keys, custom].filter((item): item is SavedSource => !!item));
+      lastSources = [...keys, custom].filter((item): item is SavedSource => !!item);
+      if (live) setSaved(lastSources);
     };
     void read();
     const unsubscribe = subscribeProviderCredentialChanges(() => void read());

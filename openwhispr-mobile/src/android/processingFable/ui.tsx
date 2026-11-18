@@ -1,5 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, TextInput, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { home, type } from '../home/kit';
@@ -189,16 +197,10 @@ export function AddRow({ label, onPress }: { label: string; onPress: () => void 
   );
 }
 
-/** A card in a sheet; the list inside scrolls when long, never cutting the card's shadow. */
-export function SheetCard({
-  children,
-  maxHeight,
-}: {
-  children: React.ReactNode;
-  maxHeight?: number;
-}) {
+/** A card of rows in a sheet, split by inset dividers. */
+export function SheetCard({ children }: { children: React.ReactNode }) {
   const rows = React.Children.toArray(children).filter(Boolean);
-  const card = (
+  return (
     <View style={cardStyle}>
       {rows.map((row, index) => (
         <React.Fragment key={index}>
@@ -209,15 +211,6 @@ export function SheetCard({
         </React.Fragment>
       ))}
     </View>
-  );
-  if (!maxHeight) return card;
-  return (
-    <ScrollView
-      style={{ maxHeight, marginHorizontal: -16, marginVertical: -8 }}
-      contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, paddingBottom: 24 }}
-    >
-      {card}
-    </ScrollView>
   );
 }
 
@@ -230,7 +223,10 @@ export function SectionLabel({ children }: { children: string }) {
   );
 }
 
-/** A page that slid into a sheet: it comes in 24 px from the side, fading (200 ms). */
+/**
+ * A page that slid into a sheet: it comes in 24 px from the side, fading (200 ms). The page
+ * scrolls once it's taller than the screen allows, padded so no card's shadow is cut.
+ */
 export function SlideIn({
   pageKey,
   back,
@@ -241,6 +237,7 @@ export function SlideIn({
   children: React.ReactNode;
 }) {
   const reduceMotion = useReduceMotion();
+  const { height } = useWindowDimensions();
   const value = useRef(new Animated.Value(1)).current;
   const first = useRef(true);
   useEffect(() => {
@@ -260,7 +257,6 @@ export function SlideIn({
   return (
     <Animated.View
       style={{
-        gap: 16,
         opacity: value,
         transform: [
           {
@@ -272,7 +268,14 @@ export function SlideIn({
         ],
       }}
     >
-      {children}
+      <ScrollView
+        // The status bar, the sheet's handle and title, and a little of the screen above stay.
+        style={{ maxHeight: height - 200, marginHorizontal: -16, marginVertical: -8 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, gap: 16 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {children}
+      </ScrollView>
     </Animated.View>
   );
 }

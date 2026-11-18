@@ -244,7 +244,8 @@ export default function ProcessingScreen() {
                   ? t(items.length ? 'keyEnding' : 'keyEndingIdle', { tail })
                   : t(items.length ? 'noKeyNeeded' : 'noKeyNeededIdle');
                 return (
-                  <View key={source}>
+                  // Keyed by its task count, so a line that loses its chips lays out afresh.
+                  <View key={`${source}-${items.length}`}>
                     <Divider />
                     <Pressable
                       cssInterop={false}

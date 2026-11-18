@@ -74,6 +74,7 @@ export const fableEnglish = {
     'Couldn’t reach this address. Check it, and that this phone is on the same network.',
   serverInvalid: 'Use an https address, or http on your local network.',
   serverRefusedKey: 'The server refused this key.',
+  serverNeedsKey: 'This server needs a key.',
   saveServerOnly: 'Save server only',
   keyAddedAll: '{{provider}} key added. It runs all 5 tasks.',
   keyAddedRuns_one: '{{provider}} key added. It runs 1 task.',

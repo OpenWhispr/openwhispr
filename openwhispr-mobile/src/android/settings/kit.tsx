@@ -84,7 +84,7 @@ export function SettingsPage({
             accessibilityRole="button"
             accessibilityLabel={t('back')}
             hitSlop={6}
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/(record)'))}
             style={({ pressed }) => ({
               width: 36,
               height: 36,
