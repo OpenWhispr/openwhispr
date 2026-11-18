@@ -1217,6 +1217,7 @@ for (const mode of ["normal", "update", "held delete"]) {
       "registryLoader",
       "disposeRegistryIpc",
       "wakeRewarmTimer",
+      "whisperManager",
       "authBridgeServer",
       "cliBridge",
       "hotkeyManager",

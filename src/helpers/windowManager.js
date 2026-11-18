@@ -7,6 +7,7 @@ const {
   meetingDestinationContext,
 } = require("./meetingNotificationDestination");
 const { createLinuxWindowInputRegion } = require("./linuxWindowInputRegion");
+const { createWin32WindowShape } = require("./win32WindowShape");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
 const HotkeyManager = require("./hotkeyManager");
@@ -257,9 +258,24 @@ class WindowManager {
     return this._linuxWindowInputRegion;
   }
 
+  _win32MainWindowShape() {
+    const win = this.mainWindow;
+    if (this._win32WindowShape?.window !== win) {
+      this._win32WindowShape = { window: win, ...createWin32WindowShape(win) };
+    }
+    return this._win32WindowShape;
+  }
+
   async setMainWindowInputRegion(region) {
     const win = this.mainWindow;
-    if (process.platform !== "linux" || !win || win.isDestroyed()) return false;
+    if (!win || win.isDestroyed()) return false;
+    if (process.platform === "win32") {
+      const visible = win.isVisible() && !win.isMinimized();
+      // A hidden pill shows whole; the renderer shapes it again once shown.
+      this._win32MainWindowShape().set(visible ? region : null);
+      return visible;
+    }
+    if (process.platform !== "linux") return false;
     try {
       await this._mainWindowInputRegion().set(region);
       return !win.isDestroyed() && win.isVisible() && !win.isMinimized();
@@ -513,6 +529,13 @@ class WindowManager {
     }
   }
 
+  _setResizedMainWindowBounds(bounds) {
+    // A Windows shape measured at the old size would cover the wrong part of
+    // the resized window, or none of it, until the resize event clears it.
+    if (process.platform === "win32") this._win32MainWindowShape().prepareResize(bounds);
+    this.mainWindow.setBounds(bounds);
+  }
+
   async _performMainWindowResize(sizeKey, request) {
     // The queue can drain after the window is gone (quit, recreate); the
     // caller's guard ran before enqueueing.
@@ -579,7 +602,7 @@ class WindowManager {
         return { success: false, message: "Window not available" };
       }
       this._lastResizeBounds = restored;
-      this.mainWindow.setBounds(restored);
+      this._setResizedMainWindowBounds(restored);
       this._activeHorizontalDirection = null;
       this._notifyMainWindowHorizontalDirection();
       return { success: true, bounds: restored, changed: true };
@@ -653,7 +676,7 @@ class WindowManager {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return { success: false, message: "Window not available" };
     }
-    this.mainWindow.setBounds(newBounds);
+    this._setResizedMainWindowBounds(newBounds);
     this._lastResizeBounds = newBounds;
     if (sizeKey === "BASE") {
       this._activeHorizontalDirection = null;
@@ -1938,10 +1961,11 @@ class WindowManager {
       return;
     }
 
-    if (process.platform === "linux") {
+    if (process.platform === "linux" || process.platform === "win32") {
       const win = this.mainWindow;
       // backgroundThrottling:false keeps document.visibilityState visible even
-      // after hide(). Native visibility owns the Linux input-region updates.
+      // after hide(). Native visibility owns the Linux input-region and the
+      // Windows window-shape updates, which pause while the pill is hidden.
       for (const event of ["show", "hide", "minimize", "restore"]) {
         win.on(event, () => {
           win.webContents.send(
@@ -1949,6 +1973,15 @@ class WindowManager {
             win.isVisible() && !win.isMinimized()
           );
         });
+      }
+    }
+
+    if (process.platform === "win32") {
+      const win = this.mainWindow;
+      const shape = this._win32MainWindowShape();
+      win.on("hide", () => shape.set(null));
+      for (const event of ["resize", "move"]) {
+        win.on(event, shape.revalidate);
       }
     }
 

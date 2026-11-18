@@ -1,3 +1,4 @@
+const { parseSelfHostedSttHeaders, selfHostedSttRequest } = require("./selfHostedSttHeaders.js");
 const {
   registryData: modelRegistryData,
   getRunnableSpeechModel,
@@ -75,6 +76,7 @@ const {
   asProviderError,
   redactProviderBody,
 } = require("./providerHttpErrors");
+const { getLlmRequestTimeoutSeconds, llmRequestTimeoutError } = require("./llmRequestTimeout");
 const { isSettingsTarget } = require("./settingsTargets");
 const {
   registerConnectorIpc,
@@ -502,7 +504,7 @@ async function postMultipart(
   body,
   boundary,
   headers = {},
-  { signal, session: fetchSession } = {}
+  { signal, session: fetchSession, redirect } = {}
 ) {
   const response = await (fetchSession ?? net).fetch(url.toString(), {
     method: "POST",
@@ -513,6 +515,7 @@ async function postMultipart(
     body,
     useSessionCookies: false,
     signal,
+    redirect,
   });
   const text = await response.text();
   try {
@@ -1830,18 +1833,22 @@ class IPCHandlers {
 
   _attachWhisperServerListeners(serverManager) {
     // Landing on the Vulkan pack or a bundled GPU build (#2168) keeps the GPU:
-    // no "switched to CPU" pop-up, but every GPU card re-reads to follow the server
-    serverManager.on("cuda-fallback", ({ reason, fallbackBackend }) => {
-      this._recordWhisperGpuFailure("cuda", reason);
-      if (fallbackBackend !== "cpu") {
+    // no "switched to CPU" pop-up, but every GPU card re-reads to follow the server.
+    // WhisperManager keeps a proven backend's failure for the session only, so it
+    // isn't remembered here, and a wake re-warm retries it on its own, so its CPU
+    // fallback there isn't announced either: the cards only re-read. See #2265.
+    const isSilent = (proven) => proven && this.whisperManager.isRewarmingAfterWake();
+    serverManager.on("cuda-fallback", ({ reason, fallbackBackend, proven }) => {
+      if (!proven) this._recordWhisperGpuFailure("cuda", reason);
+      if (fallbackBackend !== "cpu" || isSilent(proven)) {
         broadcastToWindows("whisper-gpu-status-changed");
       } else {
         broadcastToWindows("cuda-fallback-notification", {});
       }
     });
-    serverManager.on("gpu-fallback", ({ reason, fallbackBackend }) => {
-      this._recordWhisperGpuFailure("vulkan", reason);
-      if (fallbackBackend !== "cpu") {
+    serverManager.on("gpu-fallback", ({ reason, fallbackBackend, proven }) => {
+      if (!proven) this._recordWhisperGpuFailure("vulkan", reason);
+      if (fallbackBackend !== "cpu" || isSilent(proven)) {
         broadcastToWindows("whisper-gpu-status-changed");
       } else {
         broadcastToWindows("gpu-fallback-notification", {});
@@ -1857,6 +1864,11 @@ class IPCHandlers {
     });
     // The GPU card and banner stop offering a pack (see _whisperBundledGpu)
     serverManager.on("bundled-gpu", () => broadcastToWindows("whisper-gpu-status-changed"));
+    // A wake re-warm retried a GPU that failed this session: only main knows
+    // whether a saved failure still holds, so the cards re-read
+    this.whisperManager.on("gpu-status-changed", () =>
+      broadcastToWindows("whisper-gpu-status-changed")
+    );
   }
 
   // A bundled whisper-server built for the GPU runs on it with no pack (#2168),
@@ -1885,6 +1897,8 @@ class IPCHandlers {
   }
 
   _clearWhisperGpuFailure(backend) {
+    this.whisperManager.forgetSessionGpuFailures(backend);
+    this.whisperManager.serverManager.forgetGpuProofs(backend);
     const failed = this._whisperGpuFailedBackends().filter((b) => b !== backend);
     const reasonKey = WHISPER_GPU_FAILURE_REASON_KEYS[backend];
     if (failed.length > 0) {
@@ -1903,9 +1917,14 @@ class IPCHandlers {
     return null;
   }
 
+  // Includes a proven backend's failure kept for the session only (#2265),
+  // whose reason is newer than a saved one
   _whisperGpuFailureStatus(backend) {
-    const gpuFailed = this._whisperGpuFailedBackends().includes(backend);
-    const reason = gpuFailed ? process.env[WHISPER_GPU_FAILURE_REASON_KEYS[backend]] : null;
+    const gpuFailed = this.whisperManager.getFailedGpuBackends().includes(backend);
+    const reason = gpuFailed
+      ? this.whisperManager.getSessionGpuFailureReason(backend) ||
+        process.env[WHISPER_GPU_FAILURE_REASON_KEYS[backend]]
+      : null;
     return { gpuFailed, gpuFailReason: reason || null };
   }
 
@@ -5493,6 +5512,7 @@ class IPCHandlers {
     // Clears the remembered GPU failure and reloads the server with the GPU
     // backend re-enabled (Retry on the "GPU could not be activated" state)
     ipcMain.handle("whisper-gpu-retry", async () => {
+      this.whisperManager.forgetSessionGpuFailures();
       this._syncStartupEnv({}, [
         "WHISPER_GPU_FAILED",
         ...Object.values(WHISPER_GPU_FAILURE_REASON_KEYS),
@@ -6783,6 +6803,23 @@ class IPCHandlers {
       })
     );
 
+    // Headers and redirect mode for a request to the self-hosted speech server of `surface`
+    // ("dictation" or "upload"), with the custom key for a route that takes one (Orukeet's).
+    const selfHostedRequest = (surface, route) => {
+      const key =
+        route?.auth.keyRef === "custom" ? this.environmentManager.getCustomTranscriptionKey() : "";
+      return selfHostedSttRequest(
+        parseSelfHostedSttHeaders(this.environmentManager.getSelfHostedSttHeaders())[surface],
+        key ? { Authorization: `Bearer ${key}` } : {}
+      );
+    };
+    ipcMain.handle("get-self-hosted-stt-headers", () =>
+      this.environmentManager.getSelfHostedSttHeaders()
+    );
+    ipcMain.handle(
+      "save-self-hosted-stt-headers",
+      saveSecretKey("getSelfHostedSttHeaders", "saveSelfHostedSttHeaders", "selfHostedSttHeaders")
+    );
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -7464,6 +7501,8 @@ class IPCHandlers {
     handleRemoteProduct(
       "process-anthropic-reasoning",
       async (event, text, modelId, _agentName, config) => {
+        const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config?.inferenceScope });
+        const timeoutSignal = AbortSignal.timeout(timeoutSeconds * 1000);
         try {
           const apiKey = this.environmentManager.getAnthropicKey();
 
@@ -7503,7 +7542,7 @@ class IPCHandlers {
             model: modelId,
             messages: [{ role: "user", content: userContent }],
             system: systemPrompt,
-            max_tokens: config?.maxTokens || Math.max(100, Math.min(text.length * 2, 4096)),
+            max_tokens: config?.maxTokens || 4096,
             ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
           };
 
@@ -7515,6 +7554,7 @@ class IPCHandlers {
               "anthropic-version": "2023-06-01",
             },
             body: JSON.stringify(requestBody),
+            signal: timeoutSignal,
           });
 
           if (!response.ok) {
@@ -7552,12 +7592,15 @@ class IPCHandlers {
           }
           return { success: true, text: outputText };
         } catch (error) {
-          debugLogger.error("Anthropic reasoning error:", error);
+          // proxyFetch also aborts on device-policy signals, so only our own
+          // deadline counts as a timeout.
+          const failure = timeoutSignal.aborted ? llmRequestTimeoutError(timeoutSeconds) : error;
+          debugLogger.error("Anthropic reasoning error:", failure);
           // A network failure rejects proxyFetch before any response.
           return {
             success: false,
             ...ipcErrorFields(
-              asProviderError(error, { provider: "Anthropic", model: modelId, surface: "llm" })
+              asProviderError(failure, { provider: "Anthropic", model: modelId, surface: "llm" })
             ),
           };
         }
@@ -9252,8 +9295,10 @@ class IPCHandlers {
             formData.append("language", route.language);
           }
 
+          // Retries re-run dictation audio through dictation's server.
           const response = await proxyFetch(route.endpoint, {
             method: "POST",
+            ...selfHostedRequest("dictation", route),
             body: formData,
           });
           if (!response.ok) {
@@ -11653,6 +11698,7 @@ class IPCHandlers {
         options.mode,
         options.model,
         options.baseUrl,
+        provider === "orukeet" ? options.transcriptionMode : null,
         options.pipelineOptions,
         readsSavedKey ? credentialGeneration : null,
         provider === "openai-realtime"
@@ -11723,6 +11769,10 @@ class IPCHandlers {
             } else {
               await streaming.connect({
                 apiKey: this.environmentManager.getCustomTranscriptionKey(),
+                headers:
+                  options.transcriptionMode === "self-hosted"
+                    ? selfHostedRequest("dictation").headers
+                    : {},
                 baseUrl: options.baseUrl,
               });
             }
@@ -13761,12 +13811,14 @@ class IPCHandlers {
                 providerContentType(realByok),
                 { model: route.model, language: route.language }
               );
+              // A voice draft goes to dictation's server, a file to the Upload tab's.
+              const request = selfHostedRequest(audioFilePurpose(filePath, purpose), route);
               const data = await postMultipart(
                 new URL(route.endpoint),
                 body,
                 boundary,
-                {},
-                { signal }
+                request.headers,
+                { signal, redirect: request.redirect }
               );
               if (data.statusCode !== 200) {
                 debugLogger.warn("Self-hosted file transcription failed", {
