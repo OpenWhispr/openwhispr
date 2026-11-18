@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Linking, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { home, type } from '../home/kit';
 import {
   BottomSheet,
@@ -27,6 +26,7 @@ import {
   type KeyTask,
   type SheetTask,
 } from './ownKey';
+import { markDefault } from './processingDefault';
 import { useSettingsT, type SettingsKey, type SettingsT } from './strings';
 
 const TASK_TITLE: Record<SheetTask, SettingsKey> = {
@@ -98,15 +98,17 @@ export function KeySheet({
   onClose,
   initialProvider = 'openai',
   onlyTask,
+  asDefault,
 }: {
   visible: boolean;
   onClose: () => void;
   initialProvider?: KeyProviderId;
   /** Opened from one task's page: only that task is ticked to start with. */
   onlyTask?: SheetTask;
+  /** Opened from the Default row: the key it applies becomes the Default. */
+  asDefault?: boolean;
 }) {
   const t = useSettingsT();
-  const activeMode = useProcessingModeStore((s) => s.activeMode);
   const [provider, setProvider] = useState<KeyProviderId>(initialProvider);
   // Each provider keeps its half-typed key and its ticks while the sheet is open, so moving
   // between chips loses nothing.
@@ -167,13 +169,8 @@ export function KeySheet({
   }, [check.state, draft, provider]);
 
   const runnable = SHEET_TASKS.filter((task) => providerCanRun(provider, task));
-  // While On device is the default, uploads stay on the phone unless dictation moves too,
-  // and meetings stay on it whatever the key.
-  const blocked = (task: SheetTask) =>
-    activeMode === 'private' &&
-    ((task === 'upload' && unticked.includes('dictation')) ||
-      (task === 'meeting' && unticked.includes('dictation')));
-  const ticked = runnable.filter((task) => !unticked.includes(task) && !blocked(task));
+  // Every task the provider can run is tickable on its own.
+  const ticked = runnable.filter((task) => !unticked.includes(task));
   const transcribes = providerCanRun(provider, 'dictation');
   const writesText = providerCanRun(provider, 'cleanup');
   const accepted = !!locked;
@@ -185,6 +182,7 @@ export function KeySheet({
     setBusy(true);
     try {
       await applyKeyToTasks(provider, locked, ticked);
+      if (asDefault) markDefault({ mode: 'providers', providerId: provider });
       showToast(t('keyUsed', { provider: name, count: ticked.length }), 'success');
       onClose();
     } catch {
@@ -352,14 +350,12 @@ export function KeySheet({
             <View style={[cardStyle, { overflow: 'hidden' }]}>
               {runnable.map((task, index) => {
                 const on = ticked.includes(task);
-                const off = blocked(task);
                 return (
                   <Pressable
                     key={task}
                     cssInterop={false}
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: on, disabled: off }}
-                    disabled={off}
+                    accessibilityState={{ checked: on }}
                     onPress={() => toggle(task)}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
@@ -368,16 +364,14 @@ export function KeySheet({
                       paddingHorizontal: 16,
                       paddingVertical: 10,
                       gap: 12,
-                      opacity: off ? 0.45 : pressed ? 0.7 : 1,
+                      opacity: pressed ? 0.7 : 1,
                       borderTopWidth: index ? 1 : 0,
                       borderTopColor: home.borderSubtle,
                     })}
                   >
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text style={settings.title}>{t(TASK_TITLE[task])}</Text>
-                      <Text style={settings.subtitle}>
-                        {off ? t('notWithPhoneDefault') : startingModel(provider, task)}
-                      </Text>
+                      <Text style={settings.subtitle}>{startingModel(provider, task)}</Text>
                     </View>
                     {on && (
                       <SystemIcon name="checkmark" mdName="Check" size={22} color={home.accent} />

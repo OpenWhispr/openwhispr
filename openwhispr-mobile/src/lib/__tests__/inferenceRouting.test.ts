@@ -361,16 +361,22 @@ describe('Android Local Mode keeps the existing privacy boundary', () => {
       expect(snapshotTranscriptionJob('upload').provider).toBe('local');
     },
   );
-  it.each([undefined, { mode: 'openwhispr' }])(
-    'does not opt local transcripts into Cloud cleanup for %j',
-    (cleanup) => {
-      mockState.config = { defaultMode: 'private', inference: { cleanup } };
-      expect(snapshotTranscriptionJob('dictation').cleanupRoute).toEqual({
-        mode: 'local',
-        scope: 'cleanup',
-      });
-    },
-  );
+  it('keeps cleanup of a local transcript on the phone when cleanup has no choice saved', () => {
+    mockState.config = { defaultMode: 'private', inference: {} };
+    expect(snapshotTranscriptionJob('dictation').cleanupRoute).toEqual({
+      mode: 'local',
+      scope: 'cleanup',
+    });
+  });
+  // Processing v2 (Josh, 18 Nov): every task runs its own engine, so a transcript made on the
+  // phone is cleaned up where cleanup is set to run.
+  it('cleans a local transcript on Cloud when cleanup is set to Cloud', () => {
+    mockState.config = { defaultMode: 'private', inference: { cleanup: { mode: 'openwhispr' } } };
+    expect(snapshotTranscriptionJob('dictation').cleanupRoute).toEqual({
+      mode: 'openwhispr',
+      scope: 'cleanup',
+    });
+  });
   it('preserves the explicit transcript-only BYOK cleanup choice', () => {
     mockState.config = {
       defaultMode: 'private',

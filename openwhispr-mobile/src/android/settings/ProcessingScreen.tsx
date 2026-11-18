@@ -26,6 +26,7 @@ import {
   type KeyTask,
 } from './ownKey';
 import { effectiveSelection, meetingSummary, taskSummary, useChoosePhone } from './processingTasks';
+import { applyDefault, useProcessingDefault } from './processingDefault';
 import { useSettingsT, type SettingsKey } from './strings';
 
 /** The selected row's check, landing (200 ms) when the choice changes. */
@@ -125,51 +126,51 @@ export default function ProcessingScreen() {
   const { choosePhone, run, needsModel, closeModelSheet, goLocal } = useChoosePhone(t);
   const [sheet, setSheet] = useState(false);
 
-  const dictation = effectiveSelection(config, 'dictation', activeMode, cloudAccess);
-  const meeting = meetingSummary(t, activeMode);
-  // Your own key as the default: the key dictation used before, else any saved key that can
-  // transcribe; with none saved, the key sheet opens.
+  const defaults = useProcessingDefault();
+  const meeting = meetingSummary(t, config, defaults);
+  // Your own key as the Default: the key used as the Default before, else any saved key that
+  // can transcribe; with none saved, the key sheet opens and makes the key it saves the Default.
   const chooseKey = () => {
-    const remembered = Object.values(config?.rememberedInference?.dictation ?? {}).find(
-      (selection) => selection.mode === 'providers' && selection.providerId,
-    )?.providerId as KeyProviderId | undefined;
     const provider =
-      remembered && keys[remembered]
-        ? remembered
-        : KEY_PROVIDERS.find(({ id }) => keys[id] && providerCanRun(id, 'dictation'))?.id;
-    if (activeMode === 'providers' || !provider) {
+      (defaults.providerId && keys[defaults.providerId] ? defaults.providerId : undefined) ??
+      KEY_PROVIDERS.find(({ id }) => keys[id] && providerCanRun(id, 'dictation'))?.id;
+    if (defaults.mode === 'providers' || !provider) {
       setSheet(true);
       return;
     }
-    void run(() => runTaskOnKey(provider, 'dictation'));
+    void run(() => applyDefault({ mode: 'providers', providerId: provider }));
   };
 
   const modes = [
     {
-      mode: 'cloud',
+      mode: 'openwhispr',
       icon: 'Cloud',
       title: t('cloud'),
       body: t('cloudBody'),
-      choose: () => void run(() => switchWorkflowMode('dictation', 'openwhispr')),
+      choose: () => void run(() => applyDefault({ mode: 'openwhispr' })),
     },
     {
-      mode: 'private',
+      mode: 'local',
       icon: 'Smartphone',
       title: t('thisPhone'),
       body: t('thisPhoneBody'),
-      choose: choosePhone,
+      choose: () => choosePhone(() => applyDefault({ mode: 'local' })),
     },
     {
       mode: 'providers',
       icon: 'KeyRound',
       title: t('ownKey'),
       body:
-        activeMode === 'providers' && dictation.providerId
-          ? t('providerConnected', { provider: providerDisplayName(dictation.providerId) })
+        defaults.mode === 'providers' && defaults.providerId
+          ? t('providerConnected', { provider: providerDisplayName(defaults.providerId) })
           : t('ownKeyBody'),
       choose: chooseKey,
     },
   ] as const;
+  const allOnDevice =
+    TASKS.every(
+      (task) => effectiveSelection(config, task, activeMode, cloudAccess).mode === 'local',
+    ) && config?.inference?.meeting?.mode === 'local';
 
   // The phone's models, for the tasks that run on the phone.
   const onPhone = TASKS.filter(
@@ -180,7 +181,7 @@ export default function ProcessingScreen() {
       ? ['speech' as const]
       : []),
     ...(onPhone.some((task) => task === 'cleanup' || task === 'notes') ? ['text' as const] : []),
-    ...(activeMode === 'private' ? ['diarization' as const] : []),
+    ...(config?.inference?.meeting?.mode === 'local' ? ['diarization' as const] : []),
   ];
   const speechId: AndroidSpeechModelId = config?.androidSpeechModel ?? 'parakeet-v3';
   const textId: AndroidModelId = config?.androidTextModel ?? 'qwen-balanced';
@@ -206,20 +207,27 @@ export default function ProcessingScreen() {
             title={title}
             subtitle={body}
             subtitleStyle={
-              mode === 'providers' && activeMode === 'providers'
+              mode === 'providers' && defaults.mode === 'providers'
                 ? { color: KEY_CHECK_COLORS.connected }
                 : undefined
             }
-            selected={activeMode === mode}
-            trailing={<LandingCheck shown={activeMode === mode} reduceMotion={reduceMotion} />}
-            onPress={activeMode === mode && mode !== 'providers' ? undefined : choose}
+            selected={defaults.mode === mode}
+            trailing={<LandingCheck shown={defaults.mode === mode} reduceMotion={reduceMotion} />}
+            onPress={defaults.mode === mode && mode !== 'providers' ? undefined : choose}
           />
         ))}
       </Group>
 
-      <Group title={t('tasks')}>
+      <Group title={t('tasks')} footer={allOnDevice ? t('allOnDevice') : undefined}>
         {TASKS.map((task) => {
-          const { engine, changed } = taskSummary(t, config, task, activeMode, cloudAccess);
+          const { engine, changed } = taskSummary(
+            t,
+            config,
+            task,
+            activeMode,
+            cloudAccess,
+            defaults,
+          );
           return (
             <ListRow
               key={task}
@@ -285,7 +293,8 @@ export default function ProcessingScreen() {
       <KeySheet
         visible={sheet}
         onClose={() => setSheet(false)}
-        initialProvider={(dictation.providerId as KeyProviderId | undefined) ?? 'openai'}
+        initialProvider={defaults.providerId ?? 'openai'}
+        asDefault
       />
     </SettingsPage>
   );

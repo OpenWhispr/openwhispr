@@ -234,15 +234,16 @@ describe('AssemblyAI', () => {
 });
 
 describe('live meetings on a key', () => {
-  it('uses OpenWhispr Cloud with no key saved for meetings, and the phone in Local Mode', () => {
+  it('uses OpenWhispr Cloud with no key saved for meetings, and a saved key in any mode', () => {
     expect(liveMeetingDeps()).toEqual({});
     useConfigStore.setState({
       config: {
         inference: { meeting: { mode: 'providers', providerId: 'deepgram', modelId: 'nova-3' } },
       },
     } as never);
+    // Tasks are independent now: the Default (or a leftover Local Mode) doesn't hide the key.
     useProcessingModeStore.setState({ activeMode: 'private' });
-    expect(meetingKey()).toBeNull();
+    expect(meetingKey()?.providerId).toBe('deepgram');
   });
 
   it('opens a Deepgram socket with the saved key for every leg', async () => {
