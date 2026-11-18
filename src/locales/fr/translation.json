@@ -5439,7 +5439,9 @@
         "searchLanguages": "Rechercher une langue",
         "noLanguages": "Aucune langue trouvée",
         "languageUnavailable": "Aucun modèle vocal de cet ordinateur ne comprend : {{language}}",
-        "needsSpeechModel": "Nécessite un modèle vocal"
+        "needsSpeechModel": "Nécessite un modèle vocal",
+        "voiceLicense": "Les voix utilisent Supertonic 3 sous licence OpenRAIL-M.",
+        "viewLicense": "Voir la licence"
       },
       "setup": {
         "download": "Télécharger",

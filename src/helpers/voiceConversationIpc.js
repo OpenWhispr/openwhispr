@@ -1,5 +1,6 @@
 const { EventEmitter } = require("events");
-const { ipcMain } = require("electron");
+const path = require("path");
+const { app, ipcMain, shell } = require("electron");
 const debugLogger = require("./debugLogger");
 const voiceWorker = require("./voiceWorkerClient");
 const voiceModels = require("./voiceModels");
@@ -18,6 +19,7 @@ const { createDownloadSignal } = require("./downloadUtils");
 const { registryData, listRunnableLocalModels } = require("../models/registryData.js");
 
 const WORKER_IDLE_STOP_MS = 5 * 60 * 1000;
+const VOICE_LICENSE_FILE = path.join("assets", "licenses", "supertonic-3-LICENSE.txt");
 // Whisper for a language no Parakeet model here knows: the larger, the better it hears.
 const WHISPER_PREFERENCE = [
   "turbo",
@@ -415,6 +417,15 @@ function registerVoiceConversationIpc({
     if (!isFromCallWindow(event)) return { cancelled: false };
     modelDownload?.abort();
     return { cancelled: Boolean(modelDownload) };
+  });
+
+  ipcMain.handle("voice-conversation:open-voice-license", async (event) => {
+    if (!isFromCallWindow(event)) return { opened: false };
+    const assetsRoot = app.isPackaged
+      ? path.join(process.resourcesPath, "src")
+      : path.join(__dirname, "..");
+    const failure = await shell.openPath(path.join(assetsRoot, VOICE_LICENSE_FILE));
+    return { opened: !failure };
   });
 
   ipcMain.handle("voice-conversation:cancel-speech", (event, { utteranceId } = {}) => {

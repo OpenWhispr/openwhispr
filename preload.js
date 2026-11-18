@@ -593,6 +593,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     languages: (request) => ipcRenderer.invoke("voice-conversation:languages", request),
     downloadModels: () => ipcRenderer.invoke("voice-conversation:download-models"),
     cancelModelDownload: () => ipcRenderer.invoke("voice-conversation:cancel-download"),
+    openVoiceLicense: () => ipcRenderer.invoke("voice-conversation:open-voice-license"),
     onDownloadProgress: registerListener(
       "voice-conversation:download-progress",
       (callback) => (_event, progress) => callback(progress)

@@ -2890,7 +2890,9 @@
         "searchLanguages": "البحث عن لغة",
         "noLanguages": "لم يتم العثور على لغات",
         "languageUnavailable": "لا يوجد نموذج كلام على هذا الكمبيوتر يفهم {{language}}",
-        "needsSpeechModel": "يحتاج إلى نموذج كلام"
+        "needsSpeechModel": "يحتاج إلى نموذج كلام",
+        "voiceLicense": "تستخدم الأصوات Supertonic 3 بموجب ترخيص OpenRAIL-M.",
+        "viewLicense": "عرض الترخيص"
       },
       "setup": {
         "download": "تنزيل",

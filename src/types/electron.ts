@@ -2684,6 +2684,7 @@ declare global {
         >;
         downloadModels: () => Promise<{ ready: boolean; missing: string[]; missingBytes: number }>;
         cancelModelDownload: () => Promise<{ cancelled: boolean }>;
+        openVoiceLicense: () => Promise<{ opened: boolean }>;
         onDownloadProgress: (
           callback: (progress: {
             model: string;

@@ -5052,7 +5052,9 @@
         "searchLanguages": "搜索语言",
         "noLanguages": "未找到语言",
         "languageUnavailable": "这台电脑上没有能识别{{language}}的语音模型",
-        "needsSpeechModel": "需要语音模型"
+        "needsSpeechModel": "需要语音模型",
+        "voiceLicense": "语音使用 Supertonic 3，遵循 OpenRAIL-M 许可证。",
+        "viewLicense": "查看许可证"
       },
       "setup": {
         "download": "下载",

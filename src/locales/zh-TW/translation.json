@@ -5052,7 +5052,9 @@
         "searchLanguages": "搜尋語言",
         "noLanguages": "找不到語言",
         "languageUnavailable": "這台電腦上沒有能辨識{{language}}的語音模型",
-        "needsSpeechModel": "需要語音模型"
+        "needsSpeechModel": "需要語音模型",
+        "voiceLicense": "語音使用 Supertonic 3，遵循 OpenRAIL-M 授權條款。",
+        "viewLicense": "檢視授權條款"
       },
       "setup": {
         "download": "下載",

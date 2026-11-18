@@ -7,7 +7,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { isCancellation } from "../../hooks/useModelDownload";
 import { LOCAL_MODEL_REFUSAL_MESSAGE_KEYS } from "../../stores/policyRules";
 import type { VoiceCallStartFailure } from "./useVoiceCall";
-import { useLanguageName } from "./VoiceCallSettings";
+import { useLanguageName, VoiceLicenseNotice } from "./VoiceCallSettings";
 
 type Action = "download" | "settings" | "llmSettings" | "micSettings" | "language" | "retry";
 
@@ -135,6 +135,7 @@ export function VoiceCallSetupCard({
           <X size={15} />
         </button>
       </div>
+      {failure.reason === "voice-models-missing" && <VoiceLicenseNotice />}
       {action && (
         <div className="flex items-center justify-end gap-2">
           {download ? (

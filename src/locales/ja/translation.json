@@ -5052,7 +5052,9 @@
         "searchLanguages": "言語を検索",
         "noLanguages": "言語が見つかりません",
         "languageUnavailable": "このコンピューターの音声モデルは {{language}} を認識できません",
-        "needsSpeechModel": "音声モデルが必要です"
+        "needsSpeechModel": "音声モデルが必要です",
+        "voiceLicense": "音声には OpenRAIL-M ライセンスの Supertonic 3 を使用しています。",
+        "viewLicense": "ライセンスを表示"
       },
       "setup": {
         "download": "ダウンロード",

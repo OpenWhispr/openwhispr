@@ -5412,7 +5412,9 @@
         "searchLanguages": "Sprachen suchen",
         "noLanguages": "Keine Sprachen gefunden",
         "languageUnavailable": "Kein Sprachmodell auf diesem Computer versteht {{language}}",
-        "needsSpeechModel": "Benötigt ein Sprachmodell"
+        "needsSpeechModel": "Benötigt ein Sprachmodell",
+        "voiceLicense": "Die Stimmen nutzen Supertonic 3 unter der OpenRAIL-M-Lizenz.",
+        "viewLicense": "Lizenz ansehen"
       },
       "setup": {
         "download": "Herunterladen",

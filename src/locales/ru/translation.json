@@ -5220,7 +5220,9 @@
         "searchLanguages": "Поиск языков",
         "noLanguages": "Языки не найдены",
         "languageUnavailable": "Ни одна речевая модель на этом компьютере не понимает язык: {{language}}",
-        "needsSpeechModel": "Нужна речевая модель"
+        "needsSpeechModel": "Нужна речевая модель",
+        "voiceLicense": "Голоса используют Supertonic 3 по лицензии OpenRAIL-M.",
+        "viewLicense": "Открыть лицензию"
       },
       "setup": {
         "download": "Скачать",

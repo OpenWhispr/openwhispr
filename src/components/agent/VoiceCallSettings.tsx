@@ -330,7 +330,25 @@ export function VoiceCallSettings({ onClose }: { onClose: () => void }) {
           <span className="text-[15px]">{t("agentWindow.call.settings.language")}</span>
           <LanguagePicker menuRef={fitMenu} />
         </div>
+        <VoiceLicenseNotice />
       </div>
     </div>
+  );
+}
+
+/** The call's voices come with their license's terms, one click away. */
+export function VoiceLicenseNotice() {
+  const { t } = useTranslation();
+  return (
+    <p dir="auto" className="text-[12px] text-muted-foreground">
+      {t("agentWindow.call.settings.voiceLicense")}{" "}
+      <button
+        type="button"
+        onClick={() => void window.electronAPI?.voiceConversation?.openVoiceLicense()}
+        className="rounded-sm underline underline-offset-2 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+      >
+        {t("agentWindow.call.settings.viewLicense")}
+      </button>
+    </p>
   );
 }
