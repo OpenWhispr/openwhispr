@@ -3,6 +3,7 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
+  KeyboardAvoidingView,
   Modal,
   PanResponder,
   Pressable,
@@ -202,17 +203,33 @@ export function Group({
 }
 
 /** "Recommended": accent text on the tint, or white behind it on a selected (tinted) row. */
-export function Badge({ label, onSelected }: { label: string; onSelected?: boolean }) {
+export function Badge({
+  label,
+  onSelected,
+  neutral,
+}: {
+  label: string;
+  onSelected?: boolean;
+  /** Grey, for a plain fact such as Changed. */
+  neutral?: boolean;
+}) {
   return (
     <View
       style={{
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 999,
-        backgroundColor: onSelected ? home.surface : home.tint,
+        backgroundColor: neutral ? home.fill : onSelected ? home.surface : home.tint,
       }}
     >
-      <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '500', color: home.accent }}>
+      <Text
+        style={{
+          fontSize: 12,
+          lineHeight: 16,
+          fontWeight: '500',
+          color: neutral ? home.secondary : home.accent,
+        }}
+      >
         {label}
       </Text>
     </View>
@@ -329,7 +346,9 @@ export function ListRow({
             />
           </View>
         ))}
-      <View style={{ flex: 1, gap: 2, justifyContent: 'center', opacity: toggle?.disabled ? 0.4 : 1 }}>
+      <View
+        style={{ flex: 1, gap: 2, justifyContent: 'center', opacity: toggle?.disabled ? 0.4 : 1 }}
+      >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Text
             textBreakStrategy="balanced"
@@ -422,7 +441,7 @@ export function PillAction({
       onPress={onPress}
       style={({ pressed }) => [
         {
-          minHeight: 44,
+          minHeight: primary ? 48 : 44,
           borderRadius: 999,
           flexDirection: 'row',
           alignItems: 'center',
@@ -433,12 +452,14 @@ export function PillAction({
           borderWidth: primary ? 0 : 1,
           borderColor: home.borderSubtle,
           boxShadow: primary ? undefined : home.cardShadow,
-          opacity: disabled ? 0.5 : pressed ? 0.8 : 1,
+          opacity: disabled ? 0.5 : pressed && !primary ? 0.8 : 1,
         },
+        // Desktop's brand glass: gradient, inner rim, and a blue lift. Pressed, it sinks and darkens.
         primary && {
           experimental_backgroundImage: 'linear-gradient(180deg, #5588f0 0%, #3466e2 100%)',
-          boxShadow:
-            'inset 0px 1px 0px rgba(255,255,255,0.6), inset 0px 0px 0px 1px rgba(255,255,255,0.16), inset 0px -1px 1px rgba(0,0,0,0.12)',
+          boxShadow: `${disabled ? '' : '0px 10px 24px -8px rgba(52,102,226,0.45), '}inset 0px 1px 0px rgba(255,255,255,0.6), inset 0px 0px 0px 1px rgba(255,255,255,0.16), inset 0px -1px 1px rgba(0,0,0,0.12)`,
+          transform: [{ scale: pressed ? 0.985 : 1 }],
+          filter: pressed ? 'brightness(0.95)' : undefined,
         },
       ]}
     >
@@ -753,48 +774,50 @@ export function BottomSheet({
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('cancel')}
-        onPress={onClose}
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.32)' }}
-      />
-      <SafeAreaView
-        edges={['bottom']}
-        style={{
-          backgroundColor: home.canvas,
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          paddingHorizontal: 16,
-          paddingTop: 8,
-          paddingBottom: 16,
-          gap: 16,
-        }}
-      >
-        <View
-          style={{
-            alignSelf: 'center',
-            width: 36,
-            height: 5,
-            borderRadius: 3,
-            backgroundColor: home.borderDefault,
-          }}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('cancel')}
+          onPress={onClose}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.32)' }}
         />
-        <View style={{ gap: 6 }}>
-          <Text
-            accessibilityRole="header"
-            style={[settings.title, { fontSize: 20, lineHeight: 26 }]}
-          >
-            {title}
-          </Text>
-          {body && (
-            <Text textBreakStrategy="balanced" style={[type.subhead, { color: home.secondary }]}>
-              {noOrphan(body)}
+        <SafeAreaView
+          edges={['bottom']}
+          style={{
+            backgroundColor: home.canvas,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            paddingHorizontal: 16,
+            paddingTop: 8,
+            paddingBottom: 16,
+            gap: 16,
+          }}
+        >
+          <View
+            style={{
+              alignSelf: 'center',
+              width: 36,
+              height: 5,
+              borderRadius: 3,
+              backgroundColor: home.borderDefault,
+            }}
+          />
+          <View style={{ gap: 6 }}>
+            <Text
+              accessibilityRole="header"
+              style={[settings.title, { fontSize: 20, lineHeight: 26 }]}
+            >
+              {title}
             </Text>
-          )}
-        </View>
-        {children}
-      </SafeAreaView>
+            {body && (
+              <Text textBreakStrategy="balanced" style={[type.subhead, { color: home.secondary }]}>
+                {noOrphan(body)}
+              </Text>
+            )}
+          </View>
+          {children}
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

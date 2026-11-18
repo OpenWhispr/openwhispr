@@ -1,22 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, View } from 'react-native';
+import { Animated, Easing, View } from 'react-native';
 import { router } from 'expo-router';
 import { SystemIcon } from '@/components/ui/SystemIcon';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { cloudAccessFor } from '@/lib/aiWorkflows';
+import { providerDisplayName } from '@/lib/mobileProviders';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
-import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 import { home } from '../home/kit';
-import { speechModelSupportsLanguages } from '../speechCapabilities';
 import type { AndroidSpeechModelId } from '../speechSelection';
 import { ANDROID_MODELS, type AndroidModelId } from '../models';
-import { Group, ListRow, SettingsPage, settings, useReduceMotion } from './kit';
+import { Badge, Group, ListRow, SettingsPage, settings, useReduceMotion } from './kit';
+import { KEY_CHECK_COLORS } from './KeyCheckMark';
+import type { KeyProviderId } from './keyCheck';
+import { KeySheet } from './KeySheet';
 import { SpeechModelSheet } from './ModelSheet';
 import { MODEL_ROWS, formatSize, modelName, useModelsReady, type ModelKind } from './modelCatalog';
+import {
+  KEY_PROVIDERS,
+  TASKS,
+  providerCanRun,
+  runTaskOnKey,
+  useSavedKeys,
+  type KeyTask,
+} from './ownKey';
+import { effectiveSelection, taskSummary, useChoosePhone } from './processingTasks';
 import { useSettingsT, type SettingsKey } from './strings';
 
 /** The selected row's check, landing (200 ms) when the choice changes. */
-function LandingCheck({ shown, reduceMotion }: { shown: boolean; reduceMotion: boolean }) {
+export function LandingCheck({ shown, reduceMotion }: { shown: boolean; reduceMotion: boolean }) {
   const value = useRef(new Animated.Value(shown ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(value, {
@@ -90,82 +103,86 @@ const KIND_TITLE: Record<ModelKind, SettingsKey> = {
   text: 'textCleanup',
   diarization: 'meetingSpeakers',
 };
+const TASK_TITLE: Record<KeyTask, SettingsKey> = {
+  dictation: 'dictation',
+  upload: 'audioUploads',
+  cleanup: 'textCleanup',
+  notes: 'noteFormatting',
+};
 
 /**
- * Settings → Processing: the one place cloud and on-device split. Choosing On this phone with no
- * speech model opens the download sheet; the switch completes once a model is ready.
+ * Settings → Processing: one default for every task, then each task with where it runs. A task
+ * moved off the default is marked Changed. The phone's models show only while a task uses them.
  */
 export default function ProcessingScreen() {
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
   const config = useConfigStore((s) => s.config);
   const activeMode = useProcessingModeStore((s) => s.activeMode);
+  const cloudAccess = cloudAccessFor(useAuthStore((s) => s.user));
+  const keys = useSavedKeys();
   const { ready, checked, progress } = useModelsReady();
+  const { choosePhone, run, needsModel, closeModelSheet, goLocal } = useChoosePhone(t);
   const [sheet, setSheet] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const speechId: AndroidSpeechModelId = config?.androidSpeechModel ?? 'parakeet-v3';
-  const textId: AndroidModelId = config?.androidTextModel ?? 'qwen-balanced';
 
-  const run = async (work: () => Promise<unknown>) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await work();
-    } catch (error) {
-      Alert.alert(t('errorTitle'), (error as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const goLocal = () => void run(() => switchWorkflowMode('dictation', 'local'));
-
-  const chooseLocal = () => {
-    // Until the phone's models are checked, a missing model can't be told from an unchecked one.
-    if (!checked) return;
-    const languages = getPreferredTranscriptionLanguages();
-    const usable = MODEL_ROWS.filter(
-      (row) =>
-        row.kind === 'speech' &&
-        ready[row.id] &&
-        speechModelSupportsLanguages(row.id as AndroidSpeechModelId, languages),
-    ).map((row) => row.id as AndroidSpeechModelId);
-    if (!usable.length) {
+  const dictation = effectiveSelection(config, 'dictation', activeMode, cloudAccess);
+  // Your own key as the default: the key dictation used before, else any saved key that can
+  // transcribe; with none saved, the key sheet opens.
+  const chooseKey = () => {
+    const remembered = Object.values(config?.rememberedInference?.dictation ?? {}).find(
+      (selection) => selection.mode === 'providers' && selection.providerId,
+    )?.providerId as KeyProviderId | undefined;
+    const provider =
+      remembered && keys[remembered]
+        ? remembered
+        : KEY_PROVIDERS.find(({ id }) => keys[id] && providerCanRun(id, 'dictation'))?.id;
+    if (activeMode === 'providers' || !provider) {
       setSheet(true);
       return;
     }
-    void run(async () => {
-      if (!usable.includes(speechId))
-        await useConfigStore.getState().updateConfig({ androidSpeechModel: usable[0] });
-      await switchWorkflowMode('dictation', 'local');
-    });
+    void run(() => runTaskOnKey(provider, 'dictation'));
   };
 
   const modes = [
     {
       mode: 'cloud',
       icon: 'Cloud',
-      title: 'cloud',
-      body: 'cloudBody',
+      title: t('cloud'),
+      body: t('cloudBody'),
       choose: () => void run(() => switchWorkflowMode('dictation', 'openwhispr')),
     },
     {
       mode: 'private',
       icon: 'Smartphone',
-      title: 'thisPhone',
-      body: 'thisPhoneBody',
-      choose: chooseLocal,
+      title: t('thisPhone'),
+      body: t('thisPhoneBody'),
+      choose: choosePhone,
     },
     {
       mode: 'providers',
       icon: 'KeyRound',
-      title: 'ownKey',
-      body: 'ownKeyBody',
-      choose: () =>
-        router.push({ pathname: '/(account)/ai-workflow', params: { scope: 'dictation' } }),
+      title: t('ownKey'),
+      body:
+        activeMode === 'providers' && dictation.providerId
+          ? t('providerConnected', { provider: providerDisplayName(dictation.providerId) })
+          : t('ownKeyBody'),
+      choose: chooseKey,
     },
   ] as const;
 
+  // The phone's models, for the tasks that run on the phone.
+  const onPhone = TASKS.filter(
+    (task) => effectiveSelection(config, task, activeMode, cloudAccess).mode === 'local',
+  );
+  const kinds: ModelKind[] = [
+    ...(onPhone.some((task) => task === 'dictation' || task === 'upload')
+      ? ['speech' as const]
+      : []),
+    ...(onPhone.some((task) => task === 'cleanup' || task === 'notes') ? ['text' as const] : []),
+    ...(activeMode === 'private' ? ['diarization' as const] : []),
+  ];
+  const speechId: AndroidSpeechModelId = config?.androidSpeechModel ?? 'parakeet-v3';
+  const textId: AndroidModelId = config?.androidTextModel ?? 'qwen-balanced';
   const modelValue = (id: AndroidModelId) =>
     progress[id] !== undefined
       ? `${Math.min(99, Math.round(progress[id]! * 100))}%`
@@ -175,15 +192,23 @@ export default function ProcessingScreen() {
           ? t('ready')
           : t('download');
 
+  const openTask = (task: KeyTask | 'meeting') =>
+    router.push({ pathname: '/android-task', params: { task } });
+
   return (
     <SettingsPage title={t('processing')}>
-      <Group title={t('whereProcessed')}>
+      <Group title={t('defaultForEveryTask')}>
         {modes.map(({ mode, icon, title, body, choose }) => (
           <ListRow
             key={mode}
             icon={icon}
-            title={t(title)}
-            subtitle={t(body)}
+            title={title}
+            subtitle={body}
+            subtitleStyle={
+              mode === 'providers' && activeMode === 'providers'
+                ? { color: KEY_CHECK_COLORS.connected }
+                : undefined
+            }
             selected={activeMode === mode}
             trailing={<LandingCheck shown={activeMode === mode} reduceMotion={reduceMotion} />}
             onPress={activeMode === mode && mode !== 'providers' ? undefined : choose}
@@ -191,12 +216,31 @@ export default function ProcessingScreen() {
         ))}
       </Group>
 
-      {activeMode === 'private' && (
-        <Group title={t('onDeviceModels')}>
-          {(['speech', 'text', 'diarization'] as const).map((kind) => {
+      <Group title={t('tasks')}>
+        {TASKS.map((task) => {
+          const { engine, changed } = taskSummary(t, config, task, activeMode, cloudAccess);
+          return (
+            <ListRow
+              key={task}
+              title={t(TASK_TITLE[task])}
+              badge={changed ? <Badge label={t('changed')} neutral /> : undefined}
+              subtitle={engine}
+              onPress={() => openTask(task)}
+            />
+          );
+        })}
+        <ListRow
+          title={t('meetings')}
+          subtitle={t(activeMode === 'private' ? 'meetingPhoneValue' : 'meetingCloudValue')}
+          onPress={() => openTask('meeting')}
+        />
+      </Group>
+
+      {kinds.length > 0 && (
+        <Group title={t('thisPhone')}>
+          {kinds.map((kind) => {
             const id = kind === 'speech' ? speechId : kind === 'text' ? textId : 'meeting-speakers';
             const row = MODEL_ROWS.find((item) => item.id === id)!;
-            const value = modelValue(id);
             return (
               <ListRow
                 key={kind}
@@ -209,7 +253,11 @@ export default function ProcessingScreen() {
                 }
                 trailing={
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <LiftValue text={value} accent={!ready[id]} reduceMotion={reduceMotion} />
+                    <LiftValue
+                      text={modelValue(id)}
+                      accent={!ready[id]}
+                      reduceMotion={reduceMotion}
+                    />
                     <SystemIcon
                       name="chevron.right"
                       mdName="ChevronRight"
@@ -222,27 +270,21 @@ export default function ProcessingScreen() {
               />
             );
           })}
-        </Group>
-      )}
-
-      <Group title={t('advanced')}>
-        {activeMode === 'private' && (
           <ListRow
-            icon="Smartphone"
+            icon="Gauge"
             title={t('checkPhone')}
             subtitle={t('checkPhoneBody')}
             onPress={() => router.push('/(account)/device-check')}
           />
-        )}
-        <ListRow
-          icon="SlidersHorizontal"
-          title={t('customize')}
-          subtitle={t('customizeBody')}
-          onPress={() => router.push('/android-tasks')}
-        />
-      </Group>
+        </Group>
+      )}
 
-      <SpeechModelSheet visible={sheet} onClose={() => setSheet(false)} onReady={goLocal} />
+      <SpeechModelSheet visible={needsModel} onClose={closeModelSheet} onReady={goLocal} />
+      <KeySheet
+        visible={sheet}
+        onClose={() => setSheet(false)}
+        initialProvider={(dictation.providerId as KeyProviderId | undefined) ?? 'openai'}
+      />
     </SettingsPage>
   );
 }

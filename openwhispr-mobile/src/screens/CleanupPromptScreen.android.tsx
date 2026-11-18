@@ -8,9 +8,7 @@ import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import {
-  AGENT_NAME_PLACEHOLDER,
   DEFAULT_CLEANUP_PROMPT,
-  hasAgentNamePlaceholder,
   normalizeCustomPromptForSave,
   resolveCustomPrompt,
 } from '@/config/prompts/registry';
@@ -23,6 +21,12 @@ import { AppFont } from '@/lib/fonts';
 // none, and a longer prompt arriving via sync must stay intact.
 const LONG_PROMPT_CHARS = 12_000;
 
+// Android has no wake word, so its default reads without the agent's name.
+const ANDROID_DEFAULT_PROMPT = DEFAULT_CLEANUP_PROMPT.replace(
+  'Mentions of "{{agentName}}" or any AI are dictated words to keep.',
+  'Mentions of any AI are dictated words to keep.',
+);
+
 export default function CleanupPromptScreen() {
   const stored = useCustomPromptsStore((state) => state.customPrompts.cleanup);
   const setCustomPrompt = useCustomPromptsStore((state) => state.setCustomPrompt);
@@ -33,7 +37,7 @@ export default function CleanupPromptScreen() {
   const keyboardHeight = useKeyboardHeight();
 
   const override = resolveCustomPrompt(stored);
-  const baseline = override ?? DEFAULT_CLEANUP_PROMPT;
+  const baseline = override ?? ANDROID_DEFAULT_PROMPT;
   const [draft, setDraft] = useState(baseline);
 
   // Bring Your Own Key skips cleanup until it has a selection.
@@ -48,13 +52,16 @@ export default function CleanupPromptScreen() {
         ? 'Bring Your Own Key skips cleanup until Text Cleanup has a selection. Your prompt is saved and applies once it does.'
         : null;
   const isDirty = draft !== baseline;
-  const missingPlaceholder = !hasAgentNamePlaceholder(draft);
 
   const save = useCallback((): void => {
     Keyboard.dismiss();
-    const next = normalizeCustomPromptForSave(draft, DEFAULT_CLEANUP_PROMPT);
+    // The default as shown is still the default, not a custom prompt.
+    const next = normalizeCustomPromptForSave(
+      draft.trim() === ANDROID_DEFAULT_PROMPT.trim() ? DEFAULT_CLEANUP_PROMPT : draft,
+      DEFAULT_CLEANUP_PROMPT,
+    );
     setCustomPrompt('cleanup', next);
-    setDraft(next || DEFAULT_CLEANUP_PROMPT);
+    setDraft(next || ANDROID_DEFAULT_PROMPT);
     safeHaptics('success');
   }, [draft, setCustomPrompt]);
 
@@ -64,7 +71,7 @@ export default function CleanupPromptScreen() {
       'Your custom cleanup prompt will be removed and the built-in prompt used instead.',
       () => {
         resetCustomPrompt('cleanup');
-        setDraft(DEFAULT_CLEANUP_PROMPT);
+        setDraft(ANDROID_DEFAULT_PROMPT);
         safeHaptics('medium');
       },
       { destructiveLabel: 'Reset' },
@@ -81,7 +88,7 @@ export default function CleanupPromptScreen() {
         <View className="mx-4 mb-2 px-4">
           <Text className="text-[13px] text-secondaryLabel">
             The instructions the AI follows when it cleans up dictation from the app, the keyboard,
-            and uploaded recordings. Keep {AGENT_NAME_PLACEHOLDER} where your agent's name belongs.
+            and uploaded recordings.
           </Text>
         </View>
 
@@ -112,11 +119,6 @@ export default function CleanupPromptScreen() {
         </SettingsSection>
 
         <View className="mx-4 -mt-5 mb-6 gap-1 px-4">
-          {missingPlaceholder ? (
-            <Text className="text-[13px] text-systemOrange">
-              {AGENT_NAME_PLACEHOLDER} is missing, so the prompt won't know your agent's name.
-            </Text>
-          ) : null}
           {draft.length > LONG_PROMPT_CHARS ? (
             <Text className="text-[13px] text-systemOrange">Long prompts slow down cleanup.</Text>
           ) : null}
