@@ -157,7 +157,7 @@ function TaskV1({ task }: { task: KeyTask }) {
   const tails = useKeyTails();
   const { ready } = useModelsReady();
   const { choosePhone, run, needsModel, closeModelSheet, goLocal } = useChoosePhone(t);
-  const [sheet, setSheet] = useState<'provider' | 'model' | null>(null);
+  const [sheet, setSheet] = useState<'provider' | 'model' | 'server' | null>(null);
   const customPrompt = useCustomPromptsStore(
     (state) => resolveCustomPrompt(state.customPrompts.cleanup) !== undefined,
   );
@@ -176,8 +176,10 @@ function TaskV1({ task }: { task: KeyTask }) {
   );
   // A server's model list comes from the server itself, when it is in use or being picked.
   const serverAddress =
-    source === 'custom' ? (selection?.endpoint ?? '') : sheet === 'model' ? (server ?? '') : '';
-  const serverCheck = useServerCheck(serverAddress, saved ?? '');
+    source === 'custom' ? (selection?.endpoint ?? '') : sheet === 'server' ? (server ?? '') : '';
+  // The server's own key (it may take none), not the key the task is on now.
+  const serverKey = useSavedSecret(server ? 'custom' : '', server);
+  const serverCheck = useServerCheck(serverAddress, serverKey ?? '');
   const check = source === 'custom' ? serverCheck : keyCheck;
 
   const chooseCloud = () =>
@@ -218,7 +220,7 @@ function TaskV1({ task }: { task: KeyTask }) {
   const pickSource = (next: KeySource) => {
     if (next === 'custom') {
       if (!server) return keyPage('custom', task);
-      setSheet('model');
+      setSheet('server');
       return;
     }
     if (tails[next] === undefined) return keyPage(next, task);
@@ -381,7 +383,7 @@ function TaskV1({ task }: { task: KeyTask }) {
         }}
       />
       <ServerModelSheet
-        visible={sheet === 'model' && (source === 'custom' || !onKey) && !!server}
+        visible={(sheet === 'server' || (sheet === 'model' && source === 'custom')) && !!server}
         onClose={() => setSheet(null)}
         title={t('model')}
         models={serverCheck.result?.models ?? []}

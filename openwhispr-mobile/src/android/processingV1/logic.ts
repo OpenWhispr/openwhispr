@@ -306,6 +306,7 @@ export function taskValue(t: V1T, config: UserConfig | null, task: SheetTask): s
   }
   const selection = config?.inference?.[task];
   if (selection?.mode === 'local') return t('thisPhone');
+  if (selection?.mode === 'providers' && selection.providerId === 'custom') return t('yourServer');
   if (selection?.mode === 'providers' && selection.providerId)
     return t('keyValue', { provider: sourceName(selection.providerId) });
   return t('cloudShort');

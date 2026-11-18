@@ -472,7 +472,7 @@ export default function ProcessingScreenV1() {
             icon="Smartphone"
             title={t('checkPhone')}
             subtitle={t('checkPhoneBody')}
-            onPress={() => router.push('/(account)/device-check')}
+            onPress={() => router.push('/android-v1-check')}
           />
         )}
         <ListRow

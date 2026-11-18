@@ -103,6 +103,25 @@ export const v1Translations: Record<string, Partial<Record<V1Key, string>>> = {
     removeModelBody: 'Libera {{size}}. Puedes volver a descargarlo.',
     removeInUse:
       'Es el modelo de {{kind}} que usas. En el dispositivo deja de funcionar hasta que descargues otro. Puedes volver a descargarlo.',
+    memoryNow: 'Memoria disponible ahora',
+    freeSpaceModels: 'Espacio libre para modelos',
+    androidVersion: 'Android {{version}}',
+    coresValue: '{{count}} núcleos',
+    heat: 'Temperatura',
+    heatNormal: 'Normal',
+    heatHot: 'Caliente',
+    heatUnknown: 'Desconocida',
+    usesSelected: 'Usa los modelos y el idioma que elegiste',
+    recordingHint:
+      'Elige una grabación de 30 segundos o menos. Se procesa en este teléfono y no se guarda en el historial.',
+    stepOf: 'Paso {{step}} de {{count}}',
+    fasterThanSpoke:
+      'Más rápido de lo que hablaste. Lee las palabras de abajo antes de quedarte con estos modelos.',
+    slowerThanSpoke:
+      'Más lento de lo que hablaste. Lee las palabras de abajo y prueba un modelo más pequeño si te pareció lento.',
+    recognizedWords: 'Palabras reconocidas',
+    afterCleanup: 'Después de la limpieza',
+    testAnother: 'Probar otra grabación',
   },
   fr: {
     whereProcessed: 'Où votre voix est traitée',
@@ -207,6 +226,25 @@ export const v1Translations: Record<string, Partial<Record<V1Key, string>>> = {
     removeModelBody: 'Libère {{size}}. Vous pourrez le télécharger à nouveau.',
     removeInUse:
       'C’est le modèle {{kind}} que vous utilisez. Sur l’appareil ne fonctionne plus tant que vous n’en téléchargez pas un autre. Vous pourrez le télécharger à nouveau.',
+    memoryNow: 'Mémoire disponible',
+    freeSpaceModels: 'Espace libre pour les modèles',
+    androidVersion: 'Android {{version}}',
+    coresValue: '{{count}} cœurs',
+    heat: 'Température',
+    heatNormal: 'Normale',
+    heatHot: 'Élevée',
+    heatUnknown: 'Inconnue',
+    usesSelected: 'Utilise vos modèles et votre langue',
+    recordingHint:
+      'Choisissez un enregistrement de 30 secondes maximum. Il est traité sur ce téléphone et n’est pas ajouté à l’historique.',
+    stepOf: 'Étape {{step}} sur {{count}}',
+    fasterThanSpoke:
+      'Plus rapide que votre parole. Lisez les mots ci-dessous avant de garder ces modèles.',
+    slowerThanSpoke:
+      'Plus lent que votre parole. Lisez les mots ci-dessous et essayez un modèle plus petit si c’était lent.',
+    recognizedWords: 'Mots reconnus',
+    afterCleanup: 'Après nettoyage',
+    testAnother: 'Essayer un autre enregistrement',
   },
   de: {
     whereProcessed: 'Wo deine Stimme verarbeitet wird',
@@ -309,6 +347,25 @@ export const v1Translations: Record<string, Partial<Record<V1Key, string>>> = {
     removeModelBody: 'Gibt {{size}} frei. Du kannst es wieder herunterladen.',
     removeInUse:
       'Es ist das {{kind}}modell, das du nutzt. Auf dem Gerät funktioniert erst wieder, wenn du ein anderes lädst. Du kannst es wieder herunterladen.',
+    memoryNow: 'Verfügbarer Speicher',
+    freeSpaceModels: 'Freier Platz für Modelle',
+    androidVersion: 'Android {{version}}',
+    coresValue: '{{count}} Kerne',
+    heat: 'Temperatur',
+    heatNormal: 'Normal',
+    heatHot: 'Heiß',
+    heatUnknown: 'Unbekannt',
+    usesSelected: 'Nutzt deine gewählten Modelle und Sprache',
+    recordingHint:
+      'Wähle eine Aufnahme von höchstens 30 Sekunden. Sie läuft auf diesem Telefon und landet nicht im Verlauf.',
+    stepOf: 'Schritt {{step}} von {{count}}',
+    fasterThanSpoke:
+      'Schneller als du gesprochen hast. Lies die Wörter unten, bevor du diese Modelle behältst.',
+    slowerThanSpoke:
+      'Langsamer als du gesprochen hast. Lies die Wörter unten und probier ein kleineres Modell, wenn es langsam war.',
+    recognizedWords: 'Erkannte Wörter',
+    afterCleanup: 'Nach der Bereinigung',
+    testAnother: 'Andere Aufnahme testen',
   },
   pt: {
     whereProcessed: 'Onde sua voz é processada',
@@ -409,6 +466,25 @@ export const v1Translations: Record<string, Partial<Record<V1Key, string>>> = {
     removeModelBody: 'Libera {{size}}. Você pode baixar de novo.',
     removeInUse:
       'É o modelo de {{kind}} que você usa. No dispositivo deixa de funcionar até você baixar outro. Você pode baixar de novo.',
+    memoryNow: 'Memória disponível agora',
+    freeSpaceModels: 'Espaço livre para modelos',
+    androidVersion: 'Android {{version}}',
+    coresValue: '{{count}} núcleos',
+    heat: 'Temperatura',
+    heatNormal: 'Normal',
+    heatHot: 'Quente',
+    heatUnknown: 'Desconhecida',
+    usesSelected: 'Usa os modelos e o idioma escolhidos',
+    recordingHint:
+      'Escolha uma gravação de até 30 segundos. Ela roda neste telefone e não vai para o histórico.',
+    stepOf: 'Etapa {{step}} de {{count}}',
+    fasterThanSpoke:
+      'Mais rápido do que você falou. Leia as palavras abaixo antes de manter estes modelos.',
+    slowerThanSpoke:
+      'Mais lento do que você falou. Leia as palavras abaixo e tente um modelo menor se pareceu lento.',
+    recognizedWords: 'Palavras reconhecidas',
+    afterCleanup: 'Depois da limpeza',
+    testAnother: 'Testar outra gravação',
   },
   it: {
     whereProcessed: 'Dove viene elaborata la tua voce',
@@ -512,6 +588,25 @@ export const v1Translations: Record<string, Partial<Record<V1Key, string>>> = {
     removeModelBody: 'Libera {{size}}. Puoi scaricarlo di nuovo.',
     removeInUse:
       'È il modello {{kind}} che usi. Sul dispositivo smette di funzionare finché non ne scarichi un altro. Puoi scaricarlo di nuovo.',
+    memoryNow: 'Memoria disponibile ora',
+    freeSpaceModels: 'Spazio libero per i modelli',
+    androidVersion: 'Android {{version}}',
+    coresValue: '{{count}} core',
+    heat: 'Temperatura',
+    heatNormal: 'Normale',
+    heatHot: 'Alta',
+    heatUnknown: 'Sconosciuta',
+    usesSelected: 'Usa i modelli e la lingua scelti',
+    recordingHint:
+      'Scegli una registrazione di 30 secondi o meno. Viene elaborata su questo telefono e non finisce nella cronologia.',
+    stepOf: 'Passaggio {{step}} di {{count}}',
+    fasterThanSpoke:
+      'Più veloce di quanto hai parlato. Leggi le parole qui sotto prima di tenere questi modelli.',
+    slowerThanSpoke:
+      'Più lento di quanto hai parlato. Leggi le parole qui sotto e prova un modello più piccolo se è stato lento.',
+    recognizedWords: 'Parole riconosciute',
+    afterCleanup: 'Dopo la pulizia',
+    testAnother: 'Prova un’altra registrazione',
   },
   ru: {
     whereProcessed: 'Где обрабатывается ваш голос',
@@ -612,6 +707,25 @@ export const v1Translations: Record<string, Partial<Record<V1Key, string>>> = {
     removeModelBody: 'Освободит {{size}}. Её можно скачать снова.',
     removeInUse:
       'Это модель ({{kind}}), которую вы используете. «На устройстве» перестанет работать, пока вы не скачаете другую. Её можно скачать снова.',
+    memoryNow: 'Свободная память',
+    freeSpaceModels: 'Место для моделей',
+    androidVersion: 'Android {{version}}',
+    coresValue: 'Ядер: {{count}}',
+    heat: 'Нагрев',
+    heatNormal: 'Нормальный',
+    heatHot: 'Сильный',
+    heatUnknown: 'Неизвестно',
+    usesSelected: 'Использует выбранные модели и язык',
+    recordingHint:
+      'Выберите запись до 30 секунд. Она обрабатывается на этом телефоне и не попадает в историю.',
+    stepOf: 'Шаг {{step}} из {{count}}',
+    fasterThanSpoke:
+      'Быстрее, чем вы говорили. Прочитайте слова ниже, прежде чем оставить эти модели.',
+    slowerThanSpoke:
+      'Медленнее, чем вы говорили. Прочитайте слова ниже и попробуйте модель поменьше, если было медленно.',
+    recognizedWords: 'Распознанные слова',
+    afterCleanup: 'После очистки',
+    testAnother: 'Проверить другую запись',
   },
   'zh-CN': {
     whereProcessed: '语音在哪里处理',
@@ -705,6 +819,22 @@ export const v1Translations: Record<string, Partial<Record<V1Key, string>>> = {
     removeModelBody: '将释放 {{size}}。之后可以重新下载。',
     removeInUse:
       '这是你正在使用的{{kind}}模型。下载另一个模型之前，设备上处理将无法使用。之后可以重新下载。',
+    memoryNow: '当前可用内存',
+    freeSpaceModels: '模型可用空间',
+    androidVersion: 'Android {{version}}',
+    coresValue: '{{count}} 核',
+    heat: '温度',
+    heatNormal: '正常',
+    heatHot: '偏热',
+    heatUnknown: '未知',
+    usesSelected: '使用你选择的模型和语言',
+    recordingHint: '选择一段 30 秒以内的录音。它在这部手机上运行，不会存入历史记录。',
+    stepOf: '第 {{step}} 步，共 {{count}} 步',
+    fasterThanSpoke: '比你说话还快。保留这些模型前，请先看看下面的文字。',
+    slowerThanSpoke: '比你说话慢。请看看下面的文字，觉得慢的话可以试试更小的模型。',
+    recognizedWords: '识别出的文字',
+    afterCleanup: '润色后',
+    testAnother: '再试一段录音',
   },
   'zh-TW': {
     whereProcessed: '語音在哪裡處理',
@@ -798,6 +928,22 @@ export const v1Translations: Record<string, Partial<Record<V1Key, string>>> = {
     removeModelBody: '將釋出 {{size}}。之後可以重新下載。',
     removeInUse:
       '這是你正在使用的{{kind}}模型。下載另一個模型之前，裝置上處理將無法使用。之後可以重新下載。',
+    memoryNow: '目前可用記憶體',
+    freeSpaceModels: '模型可用空間',
+    androidVersion: 'Android {{version}}',
+    coresValue: '{{count}} 核心',
+    heat: '溫度',
+    heatNormal: '正常',
+    heatHot: '偏熱',
+    heatUnknown: '不明',
+    usesSelected: '使用你選擇的模型和語言',
+    recordingHint: '選擇一段 30 秒以內的錄音。它在這支手機上執行，不會存入歷史記錄。',
+    stepOf: '第 {{step}} 步，共 {{count}} 步',
+    fasterThanSpoke: '比你說話還快。保留這些模型前，請先看看下面的文字。',
+    slowerThanSpoke: '比你說話慢。請看看下面的文字，覺得慢的話可以試試較小的模型。',
+    recognizedWords: '辨識出的文字',
+    afterCleanup: '潤飾後',
+    testAnother: '再試一段錄音',
   },
   ja: {
     whereProcessed: '音声を処理する場所',
@@ -899,6 +1045,23 @@ export const v1Translations: Record<string, Partial<Record<V1Key, string>>> = {
     removeModelBody: '{{size}} 空きます。あとでまたダウンロードできます。',
     removeInUse:
       '使用中の{{kind}}モデルです。別のモデルをダウンロードするまで、デバイス上の処理は使えません。あとでまたダウンロードできます。',
+    memoryNow: '現在の空きメモリ',
+    freeSpaceModels: 'モデル用の空き容量',
+    androidVersion: 'Android {{version}}',
+    coresValue: '{{count}} コア',
+    heat: '温度',
+    heatNormal: '正常',
+    heatHot: '高温',
+    heatUnknown: '不明',
+    usesSelected: '選んだモデルと言語を使います',
+    recordingHint: '30 秒以内の録音を選んでください。この端末で処理され、履歴には残りません。',
+    stepOf: 'ステップ {{step}} / {{count}}',
+    fasterThanSpoke: '話すより速く処理できました。モデルを決める前に、下の文字を確認してください。',
+    slowerThanSpoke:
+      '話すより遅くなりました。下の文字を確認し、遅いと感じたら小さいモデルを試してください。',
+    recognizedWords: '認識された文字',
+    afterCleanup: '整形後',
+    testAnother: '別の録音で試す',
   },
   ar: {
     whereProcessed: 'أين يُعالَج صوتك',
@@ -996,5 +1159,21 @@ export const v1Translations: Record<string, Partial<Record<V1Key, string>>> = {
     removeModelBody: 'يحرّر {{size}}. يمكنك تنزيله مرة أخرى.',
     removeInUse:
       'إنه نموذج {{kind}} الذي تستخدمه. تتوقف المعالجة على الجهاز حتى تنزّل نموذجًا آخر. يمكنك تنزيله مرة أخرى.',
+    memoryNow: 'الذاكرة المتاحة الآن',
+    freeSpaceModels: 'المساحة الفارغة للنماذج',
+    androidVersion: 'Android {{version}}',
+    coresValue: '{{count}} أنوية',
+    heat: 'الحرارة',
+    heatNormal: 'عادية',
+    heatHot: 'مرتفعة',
+    heatUnknown: 'غير معروفة',
+    usesSelected: 'يستخدم النماذج واللغة التي اخترتها',
+    recordingHint: 'اختر تسجيلًا مدته 30 ثانية أو أقل. يُعالج على هذا الهاتف ولا يُحفظ في السجل.',
+    stepOf: 'الخطوة {{step}} من {{count}}',
+    fasterThanSpoke: 'أسرع من كلامك. اقرأ الكلمات أدناه قبل الاحتفاظ بهذه النماذج.',
+    slowerThanSpoke: 'أبطأ من كلامك. اقرأ الكلمات أدناه، وجرّب نموذجًا أصغر إن شعرت بالبطء.',
+    recognizedWords: 'الكلمات المتعرَّف عليها',
+    afterCleanup: 'بعد التحسين',
+    testAnother: 'جرّب تسجيلًا آخر',
   },
 };

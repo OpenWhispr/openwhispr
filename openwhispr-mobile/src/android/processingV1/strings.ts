@@ -103,6 +103,24 @@ export const v1English = {
   removeModelBody: 'It frees {{size}}. You can download it again.',
   removeInUse:
     'It’s the {{kind}} model you’re using. On device stops working until you download another one. You can download it again.',
+  memoryNow: 'Memory available now',
+  freeSpaceModels: 'Free space for models',
+  androidVersion: 'Android {{version}}',
+  coresValue: '{{count}} cores',
+  heat: 'Heat',
+  heatNormal: 'Normal',
+  heatHot: 'Hot',
+  heatUnknown: 'Unknown',
+  usesSelected: 'Uses your selected models and language',
+  recordingHint:
+    'Choose a recording of 30 seconds or less. It runs on this phone and isn’t saved to history.',
+  stepOf: 'Step {{step}} of {{count}}',
+  fasterThanSpoke: 'Faster than you spoke. Read the words below before keeping these models.',
+  slowerThanSpoke:
+    'Slower than you spoke. Read the words below, and try a smaller model if it felt slow.',
+  recognizedWords: 'Recognized words',
+  afterCleanup: 'After cleanup',
+  testAnother: 'Try another recording',
 };
 
 export type V1Key = keyof typeof v1English;

@@ -6,6 +6,15 @@ jest.mock('@/services/providers/ProviderExecution', () => ({
   discoverProviderModels: (...args: unknown[]) => mockDiscover(...args),
 }));
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
+jest.mock('@/services/providers/ProviderCredentials', () => ({
+  getProviderCredential: async () => ({ apiKey: 'test-key' }),
+  getProviderCredentialReference: async (id: string) =>
+    id === 'custom' ? `custom.${'a'.repeat(64)}` : `provider.${id}`,
+  getProviderCredentialStatus: async () => ({ isConfigured: true }),
+  removeProviderCredential: async () => undefined,
+  setProviderCredential: async () => undefined,
+  subscribeProviderCredentialChanges: () => () => undefined,
+}));
 jest.mock('@/android/strings', () => ({
   __esModule: true,
   default: { addResourceBundle: jest.fn(), t: (key: string) => key },
@@ -31,7 +40,18 @@ Object.defineProperty(globalThis, 'localStorage', {
 });
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const logic = require('../processingV1/logic') as typeof import('../processingV1/logic');
-const { checkCustomServer, normalizeServer, sourceCanRun, taskList, taskValue, tasksUsing } = logic;
+const {
+  checkCustomServer,
+  customSelection,
+  normalizeServer,
+  sourceCanRun,
+  taskList,
+  taskValue,
+  tasksUsing,
+} = logic;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { resolveMobileInferenceRoute } =
+  require('@/lib/mobileProviders') as typeof import('@/lib/mobileProviders');
 
 const t = ((key: string, options?: Record<string, string>) =>
   options ? `${key}:${JSON.stringify(options)}` : key) as never;
@@ -77,7 +97,9 @@ describe('Processing v1 logic', () => {
       state: 'failed',
       reason: 'rejected',
     });
-    mockDiscover.mockRejectedValueOnce(new ProviderExecutionError('PROVIDER_NETWORK_ERROR', 'down'));
+    mockDiscover.mockRejectedValueOnce(
+      new ProviderExecutionError('PROVIDER_NETWORK_ERROR', 'down'),
+    );
     await expect(checkCustomServer('https://x.example')).resolves.toMatchObject({
       state: 'unverified',
     });
@@ -100,8 +122,27 @@ describe('Processing v1 logic', () => {
     expect(taskList(t, ['dictation', 'cleanup'])).toBe(
       'listAnd:{"first":"dictation","last":"textCleanup"}',
     );
-    expect(
-      taskValue(t, { ...config, cleanupEnabled: false } as UserConfig, 'cleanup'),
-    ).toBe('offInSettings');
+    expect(taskValue(t, { ...config, cleanupEnabled: false } as UserConfig, 'cleanup')).toBe(
+      'offInSettings',
+    );
+  });
+
+  it('saves a custom server choice that routes for speech and text tasks, key included', async () => {
+    const selection = await customSelection('http://localhost:18765/v1', 'whisper-large-v3');
+    expect(selection).toEqual({
+      mode: 'providers',
+      providerId: 'custom',
+      modelId: 'whisper-large-v3',
+      endpoint: 'http://localhost:18765/v1',
+      credentialRef: `custom.${'a'.repeat(64)}`,
+    });
+    for (const scope of ['dictation', 'upload', 'cleanup'] as const) {
+      const route = resolveMobileInferenceRoute({
+        scope,
+        selection,
+        policy: { status: 'unmanaged' },
+      });
+      expect(route).toMatchObject({ ok: true, route: { providerId: 'custom', scope } });
+    }
   });
 });
