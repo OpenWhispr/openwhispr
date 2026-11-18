@@ -4,7 +4,8 @@ import {
   TRUNCATED_OUTPUT_MESSAGE_KEY,
 } from "../services/ai/chatRequestBody";
 import logger from "../utils/logger";
-import { BRAND_NAME, DEFAULT_STT, TITANIUM } from "../config/forkRuntime";
+import { BRAND_NAME } from "../config/forkRuntime";
+import { DEFAULT_STT, TITANIUM } from "../config/forkRuntime";
 import { isTitaniumServiceUrl } from "./titanium/titaniumHosts";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
