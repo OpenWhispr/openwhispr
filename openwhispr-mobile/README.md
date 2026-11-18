@@ -31,6 +31,22 @@ Expo SDK 55 · React 19 · expo-router (NativeTabs) · NativeWind · Zustand · 
 - **iOS** is the active release target. The keyboard extension and several native features require a development build; they do not run in Expo Go.
 - **Android** can be built locally from the checked-in source, but native Android build and release validation are not yet part of CI.
 
+## Platform and plan parity
+
+The mobile app is MIT-licensed. Local transcription and BYOK are free; OpenWhispr Cloud has a free weekly allowance and paid plans. Some features are iOS-only today:
+
+| Capability                                                           | iOS | Android                             |
+| -------------------------------------------------------------------- | --- | ----------------------------------- |
+| OpenWhispr Cloud (free allowance, then paid)                         | Yes | Yes                                 |
+| On-device Whisper transcription (whisper.rn)                         | Yes | Yes                                 |
+| On-device Parakeet transcription                                     | Yes | No (the native module is iOS-only)  |
+| Bring Your Own Key provider setup                                    | Yes | No (iOS-first rollout)              |
+| On-device text cleanup, note actions, note chat (Apple Intelligence) | Yes | No (Apple Intelligence is iOS-only) |
+| System-wide dictation keyboard                                       | Yes | No (use the in-app Record tab)      |
+| Google Calendar integration                                          | Yes | No (hidden on Android)              |
+
+On Android, text workflows that need a local model have no on-device engine yet; they use OpenWhispr Cloud. A fully free Android setup is therefore limited to local transcription plus Cloud calls within the free allowance. Use iOS with On-Device and a downloaded local model if you need free local text processing; BYOK with a hosted provider still sends text to that provider.
+
 ## Quick start
 
 ```bash
