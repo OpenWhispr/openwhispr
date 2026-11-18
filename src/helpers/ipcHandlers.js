@@ -1814,18 +1814,22 @@ class IPCHandlers {
 
   _attachWhisperServerListeners(serverManager) {
     // Landing on the Vulkan pack or a bundled GPU build (#2168) keeps the GPU:
-    // no "switched to CPU" pop-up, but every GPU card re-reads to follow the server
-    serverManager.on("cuda-fallback", ({ reason, fallbackBackend }) => {
-      this._recordWhisperGpuFailure("cuda", reason);
-      if (fallbackBackend !== "cpu") {
+    // no "switched to CPU" pop-up, but every GPU card re-reads to follow the server.
+    // WhisperManager keeps a proven backend's failure for the session only, so it
+    // isn't remembered here, and a wake re-warm retries it on its own, so its CPU
+    // fallback there isn't announced either: the cards only re-read. See #2265.
+    const isSilent = (proven) => proven && this.whisperManager.isRewarmingAfterWake();
+    serverManager.on("cuda-fallback", ({ reason, fallbackBackend, proven }) => {
+      if (!proven) this._recordWhisperGpuFailure("cuda", reason);
+      if (fallbackBackend !== "cpu" || isSilent(proven)) {
         broadcastToWindows("whisper-gpu-status-changed");
       } else {
         broadcastToWindows("cuda-fallback-notification", {});
       }
     });
-    serverManager.on("gpu-fallback", ({ reason, fallbackBackend }) => {
-      this._recordWhisperGpuFailure("vulkan", reason);
-      if (fallbackBackend !== "cpu") {
+    serverManager.on("gpu-fallback", ({ reason, fallbackBackend, proven }) => {
+      if (!proven) this._recordWhisperGpuFailure("vulkan", reason);
+      if (fallbackBackend !== "cpu" || isSilent(proven)) {
         broadcastToWindows("whisper-gpu-status-changed");
       } else {
         broadcastToWindows("gpu-fallback-notification", {});
@@ -1841,6 +1845,11 @@ class IPCHandlers {
     });
     // The GPU card and banner stop offering a pack (see _whisperBundledGpu)
     serverManager.on("bundled-gpu", () => broadcastToWindows("whisper-gpu-status-changed"));
+    // A wake re-warm retried a GPU that failed this session: only main knows
+    // whether a saved failure still holds, so the cards re-read
+    this.whisperManager.on("gpu-status-changed", () =>
+      broadcastToWindows("whisper-gpu-status-changed")
+    );
   }
 
   // A bundled whisper-server built for the GPU runs on it with no pack (#2168),
@@ -1869,6 +1878,8 @@ class IPCHandlers {
   }
 
   _clearWhisperGpuFailure(backend) {
+    this.whisperManager.forgetSessionGpuFailures(backend);
+    this.whisperManager.serverManager.forgetGpuProofs(backend);
     const failed = this._whisperGpuFailedBackends().filter((b) => b !== backend);
     const reasonKey = WHISPER_GPU_FAILURE_REASON_KEYS[backend];
     if (failed.length > 0) {
@@ -1887,9 +1898,14 @@ class IPCHandlers {
     return null;
   }
 
+  // Includes a proven backend's failure kept for the session only (#2265),
+  // whose reason is newer than a saved one
   _whisperGpuFailureStatus(backend) {
-    const gpuFailed = this._whisperGpuFailedBackends().includes(backend);
-    const reason = gpuFailed ? process.env[WHISPER_GPU_FAILURE_REASON_KEYS[backend]] : null;
+    const gpuFailed = this.whisperManager.getFailedGpuBackends().includes(backend);
+    const reason = gpuFailed
+      ? this.whisperManager.getSessionGpuFailureReason(backend) ||
+        process.env[WHISPER_GPU_FAILURE_REASON_KEYS[backend]]
+      : null;
     return { gpuFailed, gpuFailReason: reason || null };
   }
 
@@ -5441,6 +5457,7 @@ class IPCHandlers {
     // Clears the remembered GPU failure and reloads the server with the GPU
     // backend re-enabled (Retry on the "GPU could not be activated" state)
     ipcMain.handle("whisper-gpu-retry", async () => {
+      this.whisperManager.forgetSessionGpuFailures();
       this._syncStartupEnv({}, [
         "WHISPER_GPU_FAILED",
         ...Object.values(WHISPER_GPU_FAILURE_REASON_KEYS),
