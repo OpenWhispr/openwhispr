@@ -29,6 +29,7 @@ import {
   invalidateValidatedAuthContext,
   subscribeAuthRequestContext,
 } from "../lib/authRequestContext";
+import { clearInsightsCache } from "../lib/insightsCache";
 import {
   clearOfflineAccountProfile,
   readOfflineAccountProfile,
@@ -244,6 +245,7 @@ export function useAuth() {
         // this device is still holding for that account is kept: it is queued in
         // storage against that user id and is delivered whenever it signs back in.
         useLeaderboardParticipationStore.getState().reset();
+        clearInsightsCache();
       }
       if (accountScopeRequiresReconciliation(resolvedUserId)) {
         // This legacy marker drives every already-running SyncService window;
