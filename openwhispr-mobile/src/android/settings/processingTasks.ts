@@ -30,7 +30,7 @@ export function phoneModelFor(config: UserConfig | null, task: KeyTask): Android
     : (config?.androidTextModel ?? 'qwen-balanced');
 }
 
-/** Whether a mode can't be chosen for a task while On this phone is the default. */
+/** Whether a mode can't be chosen for a task while On device is the default. */
 export function lockedOut(task: KeyTask, mode: InferenceMode, activeMode: ProcessingMode) {
   return activeMode === 'private' && !!ANDROID_LOCAL_MODE_LOCKED[task]?.includes(mode);
 }
@@ -107,7 +107,7 @@ export function meetingSummary(
 }
 
 /**
- * Makes On this phone the default. With no speech model that can do the user's languages, the
+ * Makes On device the default. With no speech model that can do the user's languages, the
  * download sheet opens instead (`needsModel`), and `goLocal` finishes the switch once one is ready.
  */
 export function useChoosePhone(t: SettingsT) {

@@ -131,7 +131,7 @@ export const settingsEnglish = {
   cloud: 'OpenWhispr Cloud',
   cloudBody: 'Fastest. Needs an account.',
   cloudShort: 'Cloud',
-  thisPhone: 'On this phone',
+  thisPhone: 'On device',
   thisPhoneBody: 'Private and works offline. One-time download.',
   ownKey: 'Your own API key',
   ownKeyBody: 'OpenAI, Groq, Deepgram, AssemblyAI or OpenRouter',
@@ -144,14 +144,14 @@ export const settingsEnglish = {
   checkPhoneBody: 'See which models run well here',
   // Models
   downloadSpeechTitle: 'Download a speech model',
-  downloadSpeechBody: 'On this phone needs one speech model. It downloads once and works offline.',
+  downloadSpeechBody: 'On device needs one speech model. It downloads once and works offline.',
   speechModel: 'Speech model',
   textModel: 'Text cleanup model',
   remove: 'Remove',
   removeModel: 'Remove {{model}}',
   removeTitle: 'Remove {{model}}?',
   removeInUseBody:
-    'It’s the {{kind}} model you’re using. On this phone stops working until you download another one. You can download it again.',
+    'It’s the {{kind}} model you’re using. On device stops working until you download another one. You can download it again.',
   speechKind: 'speech',
   textKind: 'text',
   sizeOf: '{{done}} of {{total}}',
@@ -191,15 +191,15 @@ export const settingsEnglish = {
   chooseModel: 'Choose a model',
   modelId: 'Model ID',
   done: 'Done',
-  notWithPhoneDefault: 'Not while On this phone is the default',
+  notWithPhoneDefault: 'Not while On device is the default',
   meetingCloudValue: 'OpenWhispr Cloud · live',
-  meetingPhoneValue: 'On this phone · afterwards',
+  meetingPhoneValue: 'On device · afterwards',
   meetingsIntro:
     'Meetings need a model that can transcribe while people talk, or the phone can transcribe after the meeting ends.',
   transcribeMeetings: 'Transcribe meetings',
   meetingCloud: 'Live on OpenWhispr Cloud',
   meetingCloudBody: 'Words appear as people talk. Needs an account.',
-  meetingPhone: 'On this phone, afterwards',
+  meetingPhone: 'On device, afterwards',
   meetingPhoneBody: 'Private, with speaker names. Takes a few minutes.',
   speakerNames: 'Speaker names',
   useOwnKey: 'Use your own key',
@@ -237,6 +237,21 @@ export const settingsEnglish = {
   noteFormatting: 'Note formatting',
   cleanup: 'Cleanup',
   cleanupPrompt: 'Cleanup prompt',
+  promptIntro:
+    'The instructions the AI follows when it cleans up dictation from the app, the bubble and uploaded recordings.',
+  promptFooter: 'Used for every cleanup. Language, dictionary and tone are added automatically.',
+  promptLong: 'Long prompts slow down cleanup.',
+  savePrompt: 'Save prompt',
+  promptSaved: 'Prompt saved',
+  resetToDefault: 'Reset to default',
+  resetPromptBody:
+    'Your custom cleanup prompt will be removed and the built-in prompt used instead.',
+  promptCleanupOff:
+    'Text cleanup is off in Settings, under Dictation. Your prompt is saved and applies once it’s on.',
+  promptSkippedOnPhone:
+    'While On device is the default, cleanup is skipped until it runs on device or a key. Your prompt applies when it runs.',
+  promptSkippedKey:
+    'Cleanup is skipped until Text cleanup has somewhere to run. Your prompt applies once it does.',
   custom: 'Custom',
   default: 'Default',
   // Keep history

@@ -823,7 +823,15 @@ export function BottomSheet({
 }
 
 /** A text button in the accent colour (Not now, sheet actions). */
-export function TextAction({ label, onPress }: { label: string; onPress: () => void }) {
+export function TextAction({
+  label,
+  onPress,
+  destructive,
+}: {
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+}) {
   return (
     <Pressable
       cssInterop={false}
@@ -836,7 +844,11 @@ export function TextAction({ label, onPress }: { label: string; onPress: () => v
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <Text style={[type.subhead, { color: home.accent, fontWeight: '500' }]}>{label}</Text>
+      <Text
+        style={[type.subhead, { color: destructive ? home.error : home.accent, fontWeight: '500' }]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }

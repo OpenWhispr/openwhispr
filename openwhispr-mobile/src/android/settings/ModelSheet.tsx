@@ -8,7 +8,7 @@ import { useSettingsT } from './strings';
 import type { AndroidSpeechModelId } from '../speechSelection';
 
 /**
- * "On this phone needs one speech model": the V1 Ring runs here. When a model is ready the
+ * "On device needs one speech model": the V1 Ring runs here. When a model is ready the
  * sheet leaves 600 ms later and `onReady` finishes the switch behind it.
  */
 export function SpeechModelSheet({
