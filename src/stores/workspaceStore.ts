@@ -225,6 +225,7 @@ export function hydrateCachedWorkspaces(accountId: string): void {
     defaultWorkspaceId,
     listAccountId: accountId,
     loaded: true,
+    error: true,
   });
 }
 

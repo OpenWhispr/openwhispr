@@ -79,6 +79,9 @@ test.before(async (t) => {
         };
         export const useTranslation = () => ({ t, i18n: { language: "en" } });
       `,
+      "/lib/authRequestContext": `
+        export const hasValidatedAuthContext = () => globalThis.__authValidated !== false;
+      `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = {
           getState: () => ({
@@ -199,6 +202,13 @@ test("Not now closes and changes nothing", async (t) => {
   await click("Not now");
   assert.deepEqual(closes, [false]);
   assert.deepEqual(opened, []);
+});
+
+test("opening without a validated sign-in leaves the workspace list alone", async (t) => {
+  globalThis.__authValidated = false;
+  t.after(() => delete globalThis.__authValidated);
+  const { refreshes } = await mount(t, workspaceWith({ manage_billing: true }));
+  assert.deepEqual(refreshes(), []);
 });
 
 test("opening reads the workspace again, and a plan that turns out active hands over to the form", async (t) => {

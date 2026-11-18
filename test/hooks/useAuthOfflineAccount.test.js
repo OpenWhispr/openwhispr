@@ -80,6 +80,7 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0, loadWorkspa
             ? { accountId: binding.accountId, authGeneration: token.generation }
             : null,
         setActiveAccountScope: async (accountId, generation) => {
+          if (globalThis.__authTest.accountScopeFails) return { success: false };
           assert.equal(
             calls.chatPrepared.at(-1),
             accountId,
@@ -221,7 +222,7 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0, loadWorkspa
     );
     await setSession({ data: null, isPending: false, error: new Error("unreachable") });
   };
-  const answer = async (user) => {
+  const answer = async (user, { validates = true } = {}) => {
     await React.act(() =>
       authContext.handleAuthRequestSuccess({
         data: user ? { user, session: { id: "s" } } : null,
@@ -234,7 +235,7 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0, loadWorkspa
       isPending: false,
       error: null,
     });
-    if (user) {
+    if (user && validates) {
       // Reconciliation loads modules asynchronously; timer ticks alone do not
       // establish the validated session the next test action depends on.
       const deadline = performance.now() + 5000;
@@ -565,12 +566,41 @@ test("an offline workspace list comes from this account's cache until sign-in va
   assert.deepEqual(auth.workspace.getState().workspaces, [cachedWorkspace]);
   assert.equal(auth.workspace.getState().listAccountId, "user-a");
   assert.equal(auth.workspace.getState().loaded, true);
-  assert.equal(auth.workspace.getState().error, false);
+  assert.equal(auth.workspace.getState().error, true);
 
   await auth.answer(USER_A);
   assert.ok(auth.calls.cloudRequests.length > 0);
   assert.ok(auth.calls.cloudRequests.every(({ response }) => response.success));
   assert.equal(auth.workspace.getState().workspaces[0].id, "workspace-a");
+  assert.equal(auth.workspace.getState().error, false);
+});
+
+test("a reconciliation that keeps failing restores this account's cached workspaces", async (t) => {
+  const cachedWorkspace = {
+    id: "cached-workspace",
+    name: "Cached",
+    is_default: true,
+    plan: "free",
+  };
+  const auth = await mountUseAuth(t, {
+    initialStorage: {
+      ...reconciledFor("user-a"),
+      workspaceListCache: JSON.stringify({
+        accountId: "user-a",
+        fetchedAt: Date.now(),
+        workspaces: [cachedWorkspace],
+      }),
+    },
+    loadWorkspaces: true,
+  });
+  globalThis.__authTest.accountScopeFails = true;
+  await auth.answer(USER_A, { validates: false });
+
+  assert.equal(auth.result().isOfflineAccount, true);
+  assert.deepEqual(auth.calls.cloudRequests, []);
+  assert.deepEqual(auth.workspace.getState().workspaces, [cachedWorkspace]);
+  assert.equal(auth.workspace.getState().loaded, true);
+  assert.equal(auth.workspace.getState().error, true);
 });
 
 for (const { name, accountId, fetchedAt } of [

@@ -298,6 +298,11 @@ export function useAuth() {
       invalidateValidatedAuthContext();
       scheduleAccountScopeRetry(retryKey);
       logger.error("Account-scoped content reconciliation failed", { error }, "auth");
+      if (!cancelled && transientlyAuthenticated && resolvedUserId) {
+        void import("../stores/workspaceStore").then(({ hydrateCachedWorkspaces }) =>
+          hydrateCachedWorkspaces(resolvedUserId)
+        );
+      }
     });
 
     return () => {
@@ -313,6 +318,7 @@ export function useAuth() {
     rawIsSignedIn,
     resolvedUserId,
     sessionResolutionFailed,
+    transientlyAuthenticated,
   ]);
 
   return {
