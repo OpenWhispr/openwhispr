@@ -32,6 +32,7 @@ import {
 import { canStartDictation } from "../utils/dictationReadiness";
 import { waitForVisualFrames } from "../utils/visualFrame";
 import { recordCleanupFailure } from "../stores/cleanupFailureStore";
+import { subscribeAuthBoundary } from "../lib/authRequestContext";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -49,6 +50,17 @@ const WAYLAND_CLIPBOARD_REASON_KEYS = {
   "wl-copy-failed": "wlCopyFailed",
 };
 const DEMO_AUDIO_LEVEL_INTERVAL_MS = 80;
+
+// Fetches the STT config for whoever is signed in now. An answer that arrives
+// after invalidateSttConfig (an account change) is the previous account's, so
+// it is dropped. Resolves true when the config was installed.
+async function loadSttConfig(manager) {
+  const generation = manager.sttConfigGeneration;
+  const config = await window.electronAPI.getSttConfig?.();
+  if (!config?.success || manager.sttConfigGeneration !== generation) return false;
+  manager.setSttConfig(config);
+  return true;
+}
 
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
@@ -287,12 +299,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // refreshed in the background and this recording keeps the old decision.
         if (audioManagerRef.current.isSttConfigStale()) {
           const hadConfig = Boolean(audioManagerRef.current.sttConfig);
-          const configFetch = (async () => {
-            const config = await window.electronAPI.getSttConfig?.();
-            if (config?.success) {
-              audioManagerRef.current.setSttConfig(config);
-            }
-          })().catch((error) => {
+          const configFetch = loadSttConfig(audioManagerRef.current).catch((error) => {
             logger.warn("STT config fetch failed", { error: error?.message });
           });
           if (!hadConfig && needsSttConfigBeforeStart(getSettings())) {
@@ -1157,13 +1164,25 @@ export const useAudioRecording = (toast, options = {}) => {
     const unsubscribePolicy = usePolicyStore.subscribe(() => {
       window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);
     });
-    window.electronAPI.getSttConfig?.().then((config) => {
-      if (config?.success && audioManagerRef.current) {
-        audioManagerRef.current.setSttConfig(config);
-        if (audioManagerRef.current.shouldUseStreaming()) {
-          audioManagerRef.current.warmupStreamingConnection();
-        }
-      }
+    const loadAndWarmSttConfig = () => {
+      const manager = audioManagerRef.current;
+      loadSttConfig(manager)
+        .then((installed) => {
+          if (installed && audioManagerRef.current === manager && manager.shouldUseStreaming()) {
+            manager.warmupStreamingConnection();
+          }
+        })
+        .catch((error) => {
+          logger.warn("STT config fetch failed", { error: error?.message });
+        });
+    };
+    loadAndWarmSttConfig();
+    // The config is per account (the Orukeet rollout and its Gemma pipeline pick
+    // accounts), so a sign-in, sign-out or account switch fetches it again
+    // instead of keeping the previous account's copy for the rest of its TTL.
+    const unsubscribeAuthBoundary = subscribeAuthBoundary(() => {
+      audioManagerRef.current.invalidateSttConfig();
+      loadAndWarmSttConfig();
     });
 
     const handleToggle = async ({
@@ -1271,6 +1290,7 @@ export const useAudioRecording = (toast, options = {}) => {
       preparationGenerationRef.current += 1;
       if (recordingAttemptRef.current) recordingAttemptRef.current.abandoned = true;
       unsubscribePolicy();
+      unsubscribeAuthBoundary();
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
       disposeTranslationToggle?.();

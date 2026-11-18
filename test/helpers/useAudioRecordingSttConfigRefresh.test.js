@@ -122,3 +122,120 @@ test("a recording start refreshes a stale STT config in the background", async (
   assert.equal(globalThis.__sttRefreshStarts.length, 2);
   assert.notEqual(manager().sttConfig, configBefore);
 });
+
+// The config is per account (the Orukeet rollout and its Gemma pipeline pick
+// accounts), so an account switch must not keep the previous account's copy
+// for the rest of its TTL.
+const ACCOUNT_SWITCH_MANAGER_SOURCE = `
+export default class FakeAudioManager {
+  constructor() {
+    this.voiceAgentRequested = false;
+    this.translationRequested = false;
+    this.sttConfig = null;
+    this.sttConfigGeneration = 0;
+    globalThis.__sttSwitchManager = this;
+  }
+  setCallbacks(callbacks) { this.callbacks = callbacks; }
+  getState() { return { isRecording: false, isProcessing: false, isStreaming: false }; }
+  isSttConfigStale() { return true; }
+  setSttConfig(config) { this.sttConfig = config; }
+  invalidateSttConfig() { this.sttConfig = null; this.sttConfigGeneration += 1; }
+  shouldUseStreaming() { return false; }
+  prepareMicCapture() {}
+  setVoiceAgentRequested() {}
+  setTranslationRequested() {}
+  async startRecording() { return true; }
+  cleanup() {}
+}
+`;
+
+test("an account change replaces the STT config and drops the old account's late answer", async (t) => {
+  let root = null;
+  let start = null;
+  let broadcastScope = null;
+  const fetches = [];
+  globalThis.__sttSwitchManager = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    delete globalThis.__sttSwitchManager;
+  });
+
+  const noopDispose = () => () => {};
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        onToggleDictation: noopDispose,
+        onToggleVoiceAgent: noopDispose,
+        onToggleTranslation: noopDispose,
+        onStartDictation: (handler) => {
+          start = handler;
+          return () => {};
+        },
+        onPrepareDictation: noopDispose,
+        onCancelDictationPreparation: noopDispose,
+        onStopDictation: noopDispose,
+        getActiveAccountScope: async () => ({ accountId: "account-a", authGeneration: 1 }),
+        onActiveAccountScopeChanged: (handler) => {
+          broadcastScope = handler;
+          return () => {};
+        },
+        // Each fetch waits until the test answers it, so answers can arrive out of order.
+        getSttConfig: () =>
+          new Promise((resolve) => {
+            fetches.push((account) => resolve({ success: true, account }));
+          }),
+        captureDictationTarget: async () => {},
+        completeDictationPreview: async () => {},
+        hideDictationPreview: async () => {},
+        dictationLifecycleStateChanged: async () => true,
+      },
+    },
+  });
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-stt-config-account-switch-",
+    mockModules: {
+      "/helpers/audioManager": ACCOUNT_SWITCH_MANAGER_SOURCE,
+      "/utils/logger": "export default { debug() {}, info() {}, warn() {}, error() {} };",
+    },
+  });
+  const { useAudioRecording } = await vite.ssrLoadModule("/hooks/useAudioRecording.js");
+
+  function Harness() {
+    useAudioRecording(() => {}, { onDemoEvent: () => {} });
+    return null;
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  const manager = () => globalThis.__sttSwitchManager;
+  const answer = async (index, account) => {
+    await React.act(async () => {
+      fetches[index](account);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  };
+
+  await answer(fetches.length - 1, "account-a");
+  assert.equal(manager().sttConfig?.account, "account-a");
+
+  // A recording start leaves a background refresh pending for account A.
+  await React.act(async () => {
+    start();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  });
+  const pendingForA = fetches.length - 1;
+
+  assert.equal(typeof broadcastScope, "function", "the hook listens for account changes");
+  const fetchesBeforeSwitch = fetches.length;
+  await React.act(async () => {
+    broadcastScope({ accountId: "account-b", authGeneration: 2 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  assert.equal(manager().sttConfig, null, "the previous account's config is cleared at once");
+  assert.equal(fetches.length, fetchesBeforeSwitch + 1, "the new account's config is fetched");
+
+  await answer(fetches.length - 1, "account-b");
+  await answer(pendingForA, "account-a");
+  assert.equal(manager().sttConfig?.account, "account-b");
+});
