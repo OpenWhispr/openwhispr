@@ -81,10 +81,7 @@ export default function AccountLayout() {
         name="hardware-keyboard"
         options={{ title: 'Hardware Keyboard', headerLargeTitle: false }}
       />
-      <Stack.Screen
-        name="cleanup-prompt"
-        options={{ title: 'Cleanup Prompt', headerLargeTitle: false }}
-      />
+      <Stack.Screen name="cleanup-prompt" options={customHeaderStackOptions} />
       <Stack.Screen
         name="preferences"
         options={{ title: 'Preferences', headerLargeTitle: false, ...androidPageHeader }}

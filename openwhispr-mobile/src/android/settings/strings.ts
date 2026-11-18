@@ -237,6 +237,21 @@ export const settingsEnglish = {
   noteFormatting: 'Note formatting',
   cleanup: 'Cleanup',
   cleanupPrompt: 'Cleanup prompt',
+  promptIntro:
+    'The instructions the AI follows when it cleans up dictation from the app, the bubble and uploaded recordings.',
+  promptFooter: 'Used for every cleanup. Language, dictionary and tone are added automatically.',
+  promptLong: 'Long prompts slow down cleanup.',
+  savePrompt: 'Save prompt',
+  promptSaved: 'Prompt saved',
+  resetToDefault: 'Reset to default',
+  resetPromptBody:
+    'Your custom cleanup prompt will be removed and the built-in prompt used instead.',
+  promptCleanupOff:
+    'Text cleanup is off in Settings, under Dictation. Your prompt is saved and applies once it’s on.',
+  promptSkippedOnPhone:
+    'While On this phone is the default, cleanup is skipped until it runs on this phone or a key. Your prompt applies when it runs.',
+  promptSkippedKey:
+    'Cleanup is skipped until Text cleanup has somewhere to run. Your prompt applies once it does.',
   custom: 'Custom',
   default: 'Default',
   // Keep history

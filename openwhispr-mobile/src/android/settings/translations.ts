@@ -178,6 +178,22 @@ export const settingsTranslations: Record<
     noteFormatting: 'Formato de notas',
     cleanup: 'Limpieza',
     cleanupPrompt: 'Instrucción de limpieza',
+    promptIntro:
+      'Las instrucciones que sigue la IA al limpiar el dictado de la app, la burbuja y las grabaciones subidas.',
+    promptFooter:
+      'Se usa en cada limpieza. El idioma, el diccionario y el tono se añaden automáticamente.',
+    promptLong: 'Las instrucciones largas ralentizan la limpieza.',
+    savePrompt: 'Guardar instrucción',
+    promptSaved: 'Instrucción guardada',
+    resetToDefault: 'Restablecer valores predeterminados',
+    resetPromptBody:
+      'Se eliminará tu instrucción de limpieza personalizada y se usará la integrada.',
+    promptCleanupOff:
+      'La limpieza de texto está desactivada en Ajustes, en Dictado. Tu instrucción está guardada y se aplicará al activarla.',
+    promptSkippedOnPhone:
+      'Mientras En este teléfono sea la opción predeterminada, la limpieza se omite hasta que funcione en este teléfono o con una clave. Tu instrucción se aplicará cuando funcione.',
+    promptSkippedKey:
+      'La limpieza se omite hasta que la limpieza de texto tenga dónde ejecutarse. Tu instrucción se aplicará cuando la tenga.',
     custom: 'Personalizada',
     default: 'Predeterminada',
     keepDictationHistory: 'Guardar historial de dictado',
@@ -452,6 +468,22 @@ export const settingsTranslations: Record<
     noteFormatting: 'Mise en forme des notes',
     cleanup: 'Nettoyage',
     cleanupPrompt: 'Consigne de nettoyage',
+    promptIntro:
+      'Les consignes que l’IA suit pour nettoyer la dictée de l’app, de la bulle et des enregistrements importés.',
+    promptFooter:
+      'Utilisée pour chaque nettoyage. La langue, le dictionnaire et le ton sont ajoutés automatiquement.',
+    promptLong: 'Les consignes longues ralentissent le nettoyage.',
+    savePrompt: 'Enregistrer la consigne',
+    promptSaved: 'Consigne enregistrée',
+    resetToDefault: 'Rétablir par défaut',
+    resetPromptBody:
+      'Votre consigne de nettoyage personnalisée sera supprimée et la consigne intégrée sera utilisée.',
+    promptCleanupOff:
+      'Le nettoyage du texte est désactivé dans Paramètres, sous Dictée. Votre consigne est enregistrée et s’appliquera dès qu’il sera activé.',
+    promptSkippedOnPhone:
+      'Tant que Sur ce téléphone est le choix par défaut, le nettoyage est ignoré jusqu’à ce qu’il s’exécute sur ce téléphone ou avec une clé. Votre consigne s’appliquera alors.',
+    promptSkippedKey:
+      'Le nettoyage est ignoré tant que le nettoyage du texte n’a nulle part où s’exécuter. Votre consigne s’appliquera dès que ce sera possible.',
     custom: 'Personnalisée',
     default: 'Par défaut',
     keepDictationHistory: 'Conserver l’historique des dictées',
@@ -725,6 +757,22 @@ export const settingsTranslations: Record<
     noteFormatting: 'Notizformatierung',
     cleanup: 'Bereinigung',
     cleanupPrompt: 'Bereinigungsanweisung',
+    promptIntro:
+      'Die Anweisungen, denen die KI beim Bereinigen von Diktaten aus der App, der Blase und hochgeladenen Aufnahmen folgt.',
+    promptFooter:
+      'Wird bei jeder Bereinigung verwendet. Sprache, Wörterbuch und Ton werden automatisch ergänzt.',
+    promptLong: 'Lange Anweisungen verlangsamen die Bereinigung.',
+    savePrompt: 'Anweisung speichern',
+    promptSaved: 'Anweisung gespeichert',
+    resetToDefault: 'Auf Standard zurücksetzen',
+    resetPromptBody:
+      'Deine eigene Bereinigungsanweisung wird entfernt und stattdessen die integrierte verwendet.',
+    promptCleanupOff:
+      'Die Textbereinigung ist in den Einstellungen unter Diktat ausgeschaltet. Deine Anweisung ist gespeichert und gilt, sobald sie an ist.',
+    promptSkippedOnPhone:
+      'Solange Auf diesem Telefon der Standard ist, wird die Bereinigung übersprungen, bis sie auf diesem Telefon oder mit einem Schlüssel läuft. Deine Anweisung gilt dann.',
+    promptSkippedKey:
+      'Die Bereinigung wird übersprungen, bis die Textbereinigung einen Ort zum Ausführen hat. Deine Anweisung gilt dann.',
     custom: 'Eigene',
     default: 'Standard',
     keepDictationHistory: 'Diktatverlauf behalten',
@@ -996,6 +1044,22 @@ export const settingsTranslations: Record<
     noteFormatting: 'Formatação de notas',
     cleanup: 'Limpeza',
     cleanupPrompt: 'Instrução de limpeza',
+    promptIntro:
+      'As instruções que a IA segue ao limpar o ditado do app, da bolha e de gravações enviadas.',
+    promptFooter:
+      'Usada em toda limpeza. Idioma, dicionário e tom são adicionados automaticamente.',
+    promptLong: 'Instruções longas deixam a limpeza mais lenta.',
+    savePrompt: 'Salvar instrução',
+    promptSaved: 'Instrução salva',
+    resetToDefault: 'Redefinir para o padrão',
+    resetPromptBody:
+      'Sua instrução de limpeza personalizada será removida e a integrada será usada.',
+    promptCleanupOff:
+      'A limpeza de texto está desativada em Configurações, em Ditado. Sua instrução está salva e passa a valer quando ela for ativada.',
+    promptSkippedOnPhone:
+      'Enquanto Neste celular for o padrão, a limpeza é ignorada até rodar neste celular ou com uma chave. Sua instrução vale quando ela rodar.',
+    promptSkippedKey:
+      'A limpeza é ignorada até que a limpeza de texto tenha onde rodar. Sua instrução vale quando tiver.',
     custom: 'Personalizada',
     default: 'Padrão',
     keepDictationHistory: 'Manter histórico de ditados',
@@ -1266,6 +1330,22 @@ export const settingsTranslations: Record<
     noteFormatting: 'Formattazione note',
     cleanup: 'Pulizia',
     cleanupPrompt: 'Istruzione di pulizia',
+    promptIntro:
+      'Le istruzioni che l’IA segue per ripulire il testo dettato dall’app, dalla bolla e dalle registrazioni caricate.',
+    promptFooter:
+      'Usata a ogni pulizia. Lingua, dizionario e tono vengono aggiunti automaticamente.',
+    promptLong: 'Le istruzioni lunghe rallentano la pulizia.',
+    savePrompt: 'Salva istruzione',
+    promptSaved: 'Istruzione salvata',
+    resetToDefault: 'Ripristina predefinita',
+    resetPromptBody:
+      'La tua istruzione di pulizia personalizzata verrà rimossa e useremo quella integrata.',
+    promptCleanupOff:
+      'La pulizia del testo è disattivata in Impostazioni, sotto Dettatura. La tua istruzione è salvata e vale appena la attivi.',
+    promptSkippedOnPhone:
+      'Finché Su questo telefono è l’impostazione predefinita, la pulizia viene saltata finché non gira su questo telefono o con una chiave. La tua istruzione vale quando gira.',
+    promptSkippedKey:
+      'La pulizia viene saltata finché la pulizia del testo non ha un posto dove girare. La tua istruzione vale appena ce l’ha.',
     custom: 'Personalizzata',
     default: 'Predefinita',
     keepDictationHistory: 'Conserva la cronologia delle dettature',
@@ -1537,6 +1617,21 @@ export const settingsTranslations: Record<
     noteFormatting: 'Оформление заметок',
     cleanup: 'Очистка',
     cleanupPrompt: 'Инструкция очистки',
+    promptIntro:
+      'Инструкции, которым ИИ следует при очистке диктовки из приложения, кнопки и загруженных записей.',
+    promptFooter: 'Используется при каждой очистке. Язык, словарь и тон добавляются автоматически.',
+    promptLong: 'Длинные инструкции замедляют очистку.',
+    savePrompt: 'Сохранить инструкцию',
+    promptSaved: 'Инструкция сохранена',
+    resetToDefault: 'Сбросить по умолчанию',
+    resetPromptBody:
+      'Ваша инструкция очистки будет удалена, вместо неё будет использована встроенная.',
+    promptCleanupOff:
+      'Очистка текста выключена в Настройках, в разделе Диктовка. Ваша инструкция сохранена и начнёт действовать после включения.',
+    promptSkippedOnPhone:
+      'Пока по умолчанию выбрано На этом телефоне, очистка пропускается, пока она не работает на этом телефоне или с ключом. Ваша инструкция начнёт действовать, когда она заработает.',
+    promptSkippedKey:
+      'Очистка пропускается, пока у очистки текста нет места для работы. Ваша инструкция начнёт действовать, когда оно появится.',
     custom: 'Своя',
     default: 'Стандартная',
     keepDictationHistory: 'Хранить историю диктовок',
@@ -1806,6 +1901,17 @@ export const settingsTranslations: Record<
     noteFormatting: '笔记排版',
     cleanup: '润色',
     cleanupPrompt: '润色提示词',
+    promptIntro: 'AI 在润色应用、悬浮球和上传录音的听写内容时遵循的指令。',
+    promptFooter: '每次润色都会使用。语言、词典和语气会自动添加。',
+    promptLong: '提示词过长会拖慢润色。',
+    savePrompt: '保存提示词',
+    promptSaved: '提示词已保存',
+    resetToDefault: '恢复默认',
+    resetPromptBody: '你的自定义润色提示词将被移除，改用内置提示词。',
+    promptCleanupOff: '设置的“听写”中已关闭文字润色。你的提示词已保存，开启后即生效。',
+    promptSkippedOnPhone:
+      '当默认选项为“在此手机上”时，润色会被跳过，直到它能在此手机上或通过密钥运行。运行后你的提示词即生效。',
+    promptSkippedKey: '文字润色没有可运行的位置时，润色会被跳过。有了之后你的提示词即生效。',
     custom: '自定义',
     default: '默认',
     keepDictationHistory: '保留听写历史',
@@ -2064,6 +2170,17 @@ export const settingsTranslations: Record<
     noteFormatting: '筆記排版',
     cleanup: '潤飾',
     cleanupPrompt: '潤飾提示詞',
+    promptIntro: 'AI 在潤飾應用程式、懸浮球和上傳錄音的聽寫內容時遵循的指令。',
+    promptFooter: '每次潤飾都會使用。語言、詞典和語氣會自動加入。',
+    promptLong: '提示詞過長會拖慢潤飾。',
+    savePrompt: '儲存提示詞',
+    promptSaved: '提示詞已儲存',
+    resetToDefault: '恢復預設',
+    resetPromptBody: '你的自訂潤飾提示詞將被移除，改用內建提示詞。',
+    promptCleanupOff: '設定的「聽寫」中已關閉文字潤飾。你的提示詞已儲存，開啟後即生效。',
+    promptSkippedOnPhone:
+      '當預設選項為「在這支手機上」時，潤飾會被略過，直到它能在這支手機上或透過金鑰執行。執行後你的提示詞即生效。',
+    promptSkippedKey: '文字潤飾沒有可執行的位置時，潤飾會被略過。有了之後你的提示詞即生效。',
     custom: '自訂',
     default: '預設',
     keepDictationHistory: '保留聽寫歷史',
@@ -2328,6 +2445,20 @@ export const settingsTranslations: Record<
     noteFormatting: 'ノートの整形',
     cleanup: '整形',
     cleanupPrompt: '整形プロンプト',
+    promptIntro:
+      'アプリ、バブル、アップロードした録音の音声入力を整形するときに AI が従う指示です。',
+    promptFooter: '整形のたびに使われます。言語、辞書、トーンは自動で追加されます。',
+    promptLong: 'プロンプトが長いと整形が遅くなります。',
+    savePrompt: 'プロンプトを保存',
+    promptSaved: 'プロンプトを保存しました',
+    resetToDefault: 'デフォルトに戻す',
+    resetPromptBody: 'カスタム整形プロンプトは削除され、組み込みのプロンプトが使われます。',
+    promptCleanupOff:
+      'テキスト整形は設定の音声入力でオフになっています。プロンプトは保存済みで、オンにすると適用されます。',
+    promptSkippedOnPhone:
+      '「このスマートフォン」がデフォルトの間は、このスマートフォンまたはキーで実行できるようになるまで整形はスキップされます。実行できるようになるとプロンプトが適用されます。',
+    promptSkippedKey:
+      'テキスト整形の実行先がない間は、整形はスキップされます。実行先ができるとプロンプトが適用されます。',
     custom: 'カスタム',
     default: 'デフォルト',
     keepDictationHistory: '音声入力の履歴を保存',
@@ -2595,6 +2726,20 @@ export const settingsTranslations: Record<
     noteFormatting: 'تنسيق الملاحظات',
     cleanup: 'التحسين',
     cleanupPrompt: 'تعليمات التحسين',
+    promptIntro:
+      'التعليمات التي يتبعها الذكاء الاصطناعي عند تحسين الإملاء من التطبيق والفقاعة والتسجيلات المرفوعة.',
+    promptFooter: 'تُستخدم في كل عملية تحسين. تُضاف اللغة والقاموس والنبرة تلقائيًا.',
+    promptLong: 'التعليمات الطويلة تبطئ التحسين.',
+    savePrompt: 'حفظ التعليمات',
+    promptSaved: 'تم حفظ التعليمات',
+    resetToDefault: 'إعادة الضبط إلى الافتراضي',
+    resetPromptBody: 'ستُحذف تعليمات التحسين المخصصة وتُستخدم التعليمات المدمجة بدلًا منها.',
+    promptCleanupOff:
+      'تحسين النص متوقف في الإعدادات ضمن الإملاء. تعليماتك محفوظة وتُطبَّق عند تشغيله.',
+    promptSkippedOnPhone:
+      'ما دام «على هذا الهاتف» هو الافتراضي، يُتخطى التحسين إلى أن يعمل على هذا الهاتف أو بمفتاح. تُطبَّق تعليماتك عند عمله.',
+    promptSkippedKey:
+      'يُتخطى التحسين إلى أن يتوفر لتحسين النص مكان يعمل فيه. تُطبَّق تعليماتك عند توفره.',
     custom: 'مخصص',
     default: 'افتراضي',
     keepDictationHistory: 'حفظ سجل الإملاء',

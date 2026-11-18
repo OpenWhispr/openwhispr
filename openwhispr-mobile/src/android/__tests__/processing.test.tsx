@@ -6,6 +6,7 @@ import { checkProviderKey, classifyStatus, useKeyCheck } from '../settings/keyCh
 import { KeySheet } from '../settings/KeySheet';
 import ProcessingScreen from '../settings/ProcessingScreen';
 import TaskScreen from '../settings/TaskScreen';
+import CleanupPromptScreen from '../settings/CleanupPromptScreen';
 import { maskKey } from '../settings/ownKey';
 import '../providers/register';
 
@@ -63,9 +64,15 @@ const mockUpdateConfig = jest.fn(async (change: object) => {
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
 }));
+const mockSetPrompt = jest.fn();
+const mockResetPrompt = jest.fn();
 jest.mock('@/store/useCustomPromptsStore', () => ({
-  useCustomPromptsStore: (selector: (state: { customPrompts: object }) => unknown) =>
-    selector({ customPrompts: { cleanup: '' } }),
+  useCustomPromptsStore: (selector: (state: object) => unknown) =>
+    selector({
+      customPrompts: { cleanup: '' },
+      setCustomPrompt: mockSetPrompt,
+      resetCustomPrompt: mockResetPrompt,
+    }),
 }));
 const mockSwitch = jest.fn(async (..._args: unknown[]) => 'switched');
 jest.mock('@/lib/workflowModeSwitch.android', () => ({
@@ -327,5 +334,21 @@ describe('Task pages', () => {
       providerId: 'assemblyai',
       modelId: 'universal-streaming',
     });
+  });
+});
+
+describe('Cleanup prompt', () => {
+  it('shows the default without an agent name, saves only after an edit, and scrolls inside its card', () => {
+    render(<CleanupPromptScreen />);
+    const input = screen.getByLabelText('cleanupPrompt');
+    expect(input.props.value).toContain('Mentions of any AI are dictated words to keep.');
+    expect(input.props.value).not.toContain('{{agentName}}');
+    expect(input.props.scrollEnabled).toBe(true);
+    const save = () => screen.getByRole('button', { name: 'savePrompt' });
+    expect(save().props.accessibilityState.disabled).toBe(true);
+    fireEvent.changeText(input, 'Keep it short.');
+    expect(save().props.accessibilityState.disabled).toBe(false);
+    fireEvent.press(save());
+    expect(mockSetPrompt).toHaveBeenCalledWith('cleanup', 'Keep it short.');
   });
 });
