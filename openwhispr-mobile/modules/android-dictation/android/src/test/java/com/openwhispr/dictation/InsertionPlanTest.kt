@@ -41,4 +41,21 @@ class InsertionPlanTest {
   @Test fun anOutOfRangeCaretIsRefused() {
     assertNull(InsertionPlan.plan("Hi", 2, 2, "Hi", 5, 5, "there"))
   }
+
+  @Test fun aPlaceholderReadsAsAnEmptyField() {
+    // WhatsApp's empty message box: its placeholder as the text, unflagged, with no caret.
+    assertEquals(Field("", 0, 0), InsertionPlan.field("Message", -1, -1, showingHint = false))
+    assertEquals(Field("", 0, 0), InsertionPlan.field("Search", 0, 0, showingHint = true))
+    assertEquals(Field("", 0, 0), InsertionPlan.field("", -1, -1, showingHint = false))
+  }
+
+  @Test fun aFieldWithACaretKeepsItsText() {
+    assertEquals(Field("Hi ", 3, 3), InsertionPlan.field("Hi ", 3, 3, showingHint = false))
+    assertEquals(Field("Hi you", 3, 6), InsertionPlan.field("Hi you", 3, 6, showingHint = false))
+  }
+
+  @Test fun dictationReplacesAnUnflaggedPlaceholder() {
+    val (text, start, end) = InsertionPlan.field("Message", -1, -1, showingHint = false)
+    assertEquals(Insertion("Hello", 5), InsertionPlan.plan(text, start, end, text, start, end, "Hello"))
+  }
 }

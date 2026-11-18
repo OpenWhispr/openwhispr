@@ -3,8 +3,19 @@ package com.openwhispr.dictation
 /** What a finished dictation writes into the field it was started in. */
 data class Insertion(val text: String, val cursor: Int)
 
+/** A field's own text and selection, with any placeholder it shows read as empty. */
+data class Field(val text: String, val start: Int, val end: Int)
+
 /** Where dictated words go, kept free of Android so it can be unit tested. */
 object InsertionPlan {
+  /**
+   * Reads a field as accessibility reports it. A field showing its placeholder holds nothing, whether it flags the
+   * placeholder as a hint or not: WhatsApp's empty message box reports "Message" as its text, unflagged, with no
+   * caret. A focused field with text in it always has a caret, so no caret (-1) means the field is empty.
+   */
+  fun field(text: String, start: Int, end: Int, showingHint: Boolean): Field =
+    if (showingHint || (start == -1 && end == -1)) Field("", 0, 0) else Field(text, start, end)
+
   /**
    * Words dictated over a selection replace exactly that selection, so they go in only while the field is
    * unchanged. Words dictated at a caret go in at the caret as it is now, as a paste would, so typing a space
