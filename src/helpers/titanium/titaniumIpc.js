@@ -63,14 +63,19 @@ function hostOf(url) {
 
 /**
  * The signed-in user's license key, but only for a request to one of our own
- * services (the fork's default STT host, plus TITANIUM.serviceHosts). A Custom
+ * services (the fork's default STT host, the SERVICES_URL host, plus
+ * TITANIUM.serviceHosts). A Custom
  * endpoint the user points elsewhere never receives the Titanium credential.
  */
 function titaniumServiceKeyFor(url, forkConfig = require("../../config/forkConfig")) {
   const host = hostOf(url);
   if (!host || !session) return null;
   const allowed = new Set(
-    [hostOf(forkConfig.DEFAULT_STT?.baseUrl), ...(forkConfig.TITANIUM?.serviceHosts || [])]
+    [
+      hostOf(forkConfig.DEFAULT_STT?.baseUrl),
+      hostOf(forkConfig.SERVICES_URL),
+      ...(forkConfig.TITANIUM?.serviceHosts || []),
+    ]
       .map((h) => String(h || "").toLowerCase())
       .filter(Boolean)
   );

@@ -68,14 +68,14 @@ test("authorize asks for user scopes only, exchanges with the PKCE verifier, and
 
   const { authUrl, options } = flows[0];
   assert.equal(options.errorParam, "slack_error");
-  assert.equal(options.publicRedirectUri, "https://openwhispr.com/auth/slack/callback");
+  assert.equal(options.publicRedirectUri, "https://stt.titaniumlabs.us/auth/slack/callback");
   assert.deepEqual(options.ports, [0]);
   assert.equal(options.callbackPath, "/slack/callback");
   assert.equal(options.timeoutMs, 300000);
   assert.equal(authUrl.origin + authUrl.pathname, "https://slack.com/oauth/v2/authorize");
   assert.equal(
     authUrl.searchParams.get("redirect_uri"),
-    "https://openwhispr.com/auth/slack/callback"
+    "https://stt.titaniumlabs.us/auth/slack/callback"
   );
   assert.match(authUrl.searchParams.get("user_scope"), /chat:write/);
   assert.equal(authUrl.searchParams.get("scope"), null, "no bot scopes");
@@ -84,7 +84,7 @@ test("authorize asks for user scopes only, exchanges with the PKCE verifier, and
     client_id: "123.456",
     code: "code-1",
     code_verifier: "verifier-1",
-    redirect_uri: "https://openwhispr.com/auth/slack/callback",
+    redirect_uri: "https://stt.titaniumlabs.us/auth/slack/callback",
   });
   assert.equal(slack.calls[1].authorization, "Bearer xoxe.xoxp-1-test-access");
   assert.deepEqual(credential, {

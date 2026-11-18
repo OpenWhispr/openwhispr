@@ -10,7 +10,7 @@ const {
   memoryCredentials,
 } = require("./linearFixtures");
 
-const RELAY = "https://openwhispr.com/auth/linear/callback";
+const RELAY = "https://stt.titaniumlabs.us/auth/linear/callback";
 const silentLogger = { info() {}, warn() {}, error() {} };
 
 // The real loopback flow, with Electron's shell replaced so opening the
@@ -24,7 +24,8 @@ function loadLoopback(opened) {
   const originalLoad = Module._load;
   Module._load = function loadWithElectronMock(request, parent, isMain) {
     // Record the URL instead of reaching the real opener (win32: explorer.exe opens a browser tab).
-    if (request.endsWith("externalUrlOpener")) return { openExternalUrl: async (url) => opened.push(url) };
+    if (request.endsWith("externalUrlOpener"))
+      return { openExternalUrl: async (url) => opened.push(url) };
     if (request === "electron") return { shell: { openExternal: async (url) => opened.push(url) } };
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -75,7 +76,7 @@ async function until(read) {
   throw new Error("timed out waiting");
 }
 
-test("the relay URL is openwhispr.com's, and only an https override replaces it", async () => {
+test("the relay URL is the fork services host's, and only an https override replaces it", async () => {
   const { linearRedirectUri, LINEAR_RELAY_REDIRECT_URI } =
     await import("../../../src/helpers/connectors/linearAuth.js");
   assert.equal(LINEAR_RELAY_REDIRECT_URI, RELAY);

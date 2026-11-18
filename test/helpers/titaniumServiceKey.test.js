@@ -40,3 +40,35 @@ test("returns nothing when signed out or unlicensed", () => {
     _setSessionForTest(null);
   }
 });
+
+test("hands the license key to the SERVICES_URL host (web search) and no look-alike host", () => {
+  const withServices = { ...FORK, SERVICES_URL: "https://stt.titaniumlabs.us" };
+  _setSessionForTest(signedIn);
+  try {
+    assert.equal(
+      titaniumServiceKeyFor("https://stt.titaniumlabs.us/v1/agent/web-search", withServices),
+      "key/abc.sig"
+    );
+    assert.equal(titaniumServiceKeyFor("https://evil.example/x", withServices), null);
+    assert.equal(
+      titaniumServiceKeyFor("https://stt.titaniumlabs.us.evil.example/x", withServices),
+      null
+    );
+    // The default STT host is still allowed beside it.
+    assert.equal(
+      titaniumServiceKeyFor("https://stt.titaniumlabs.test/v1/audio/transcriptions", withServices),
+      "key/abc.sig"
+    );
+  } finally {
+    _setSessionForTest(null);
+  }
+});
+
+test("an empty SERVICES_URL adds no host", () => {
+  _setSessionForTest(signedIn);
+  try {
+    assert.equal(titaniumServiceKeyFor("https://x.example/y", { ...FORK, SERVICES_URL: "" }), null);
+  } finally {
+    _setSessionForTest(null);
+  }
+});

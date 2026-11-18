@@ -679,9 +679,7 @@ test("with a callback path, only that path is a callback", async () => {
   assert.deepEqual(await started.flow, { code: "c8" });
 });
 
-test("with SITE_URL empty, a calendar flow still answers the browser with a local 200 page", async () => {
-  const forkConfig = require("../../src/config/forkConfig");
-  assert.equal(forkConfig.SITE_URL, "");
+test("a calendar flow answers the browser with a local 200 page", async () => {
   const { calendarResultPage } = require("../../src/helpers/calendarOAuthResultPage.js");
   const i18n = { t: (key) => key };
   const started = startFlow(async () => ({ success: true, email: "a@b.test" }), {
