@@ -10,7 +10,7 @@ import {
   resolveCustomPrompt,
 } from '@/config/prompts/registry';
 import { home, type } from '../home/kit';
-import { PillAction, SettingsPage, TextAction, settings, showToast } from './kit';
+import { PillAction, SettingsPage, TextAction, cardStyle, settings, showToast } from './kit';
 import { useSettingsT } from './strings';
 
 // The prompt is sent with every cleanup; past about 5x the default, latency shows. A caution,
@@ -77,20 +77,21 @@ export default function CleanupPromptScreen() {
   return (
     <SettingsPage title={t('cleanupPrompt')} scroll={false}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, gap: 16 }}>
+        {/* The page already pads the sides, so the card lines up with every other screen. */}
+        <View style={{ flex: 1, paddingBottom: 16, gap: 16 }}>
           <Text style={[settings.title, { fontWeight: '400' }]}>{t('promptIntro')}</Text>
           {notice && <Text style={[settings.subtitle]}>{notice}</Text>}
           <View
-            style={{
-              flex: 1,
-              minHeight: 160,
-              borderRadius: 16,
-              borderWidth: 1.5,
-              borderColor: focused ? home.accent : home.borderSubtle,
-              backgroundColor: home.surface,
-              paddingHorizontal: 16,
-              paddingTop: 12,
-            }}
+            style={[
+              cardStyle,
+              {
+                flex: 1,
+                minHeight: 160,
+                paddingHorizontal: 16,
+                paddingTop: 12,
+              },
+              focused && { borderColor: home.accent },
+            ]}
           >
             <Text style={[type.footnote, { color: home.secondary }]}>{t('prompt')}</Text>
             <TextInput
