@@ -302,6 +302,8 @@ export default function LeaderboardSection({
   useEffect(
     () =>
       subscribeToInsightsCacheInvalidation(() => {
+        // The re-read below replaces any access read in flight.
+        accessRequestIdRef.current += 1;
         setAccess(null);
         setAccessLoading(true);
         setLeaderboard(null);
@@ -342,13 +344,17 @@ export default function LeaderboardSection({
       setAccessLoading(true);
       setAccessError(null);
       const cacheVersion = getLeaderboardCacheVersion(accountId);
+      // A clear that tells no listener (a join, a leave, a refused board) retires
+      // this reply too, so read again rather than settle on no answer.
+      const superseded = (): boolean => {
+        if (requestId !== accessRequestIdRef.current) return true;
+        if (isLeaderboardCacheCurrent(accountId, cacheVersion)) return false;
+        void loadAccess(preferredScopeKey, { dropKeptOnFailure });
+        return true;
+      };
       try {
         const response = await LeaderboardService.getAccess();
-        if (
-          requestId !== accessRequestIdRef.current ||
-          !isLeaderboardCacheCurrent(accountId, cacheVersion)
-        )
-          return;
+        if (superseded()) return;
         cacheLeaderboardAccess(accountId, response);
         // An unchanged answer keeps its object: the selected scope comes from it,
         // and a new one would restart the board read already running on it.
@@ -359,15 +365,15 @@ export default function LeaderboardSection({
           resolveLeaderboardScopeKey(response.scopes, current, preferredScopeKey)
         );
       } catch (loadError) {
-        if (
-          requestId !== accessRequestIdRef.current ||
-          !isLeaderboardCacheCurrent(accountId, cacheVersion)
-        )
-          return;
+        if (superseded()) return;
         console.error("Loading leaderboard access failed:", loadError);
         const requiresAccount = isAccountRefusal(loadError);
-        if (requiresAccount) clearCachedLeaderboards({ revalidate: false });
-        if (dropKeptOnFailure) setAccess(null);
+        if (requiresAccount) {
+          // The server refused the account, so the kept answer goes and Sign in shows.
+          // A session still revalidating keeps the board, as before this cache.
+          clearCachedLeaderboards({ revalidate: false });
+        }
+        if (requiresAccount || dropKeptOnFailure) setAccess(null);
         setAccessError(requiresAccount ? "auth" : "generic");
       } finally {
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
@@ -466,14 +472,16 @@ export default function LeaderboardSection({
     const cachedBoard = readCachedLeaderboard(accountId, selectedRequestKey);
     if (cachedBoard) {
       setLeaderboard(cachedBoard.value);
-      setLoadedRequestKey(selectedRequestKey);
       setFailure(null);
       lastLoadedAtRef.current = cachedBoard.fetchedAt;
       if (isInsightFresh(cachedBoard)) {
+        setLoadedRequestKey(selectedRequestKey);
         // This load retired any still in flight, so it settles their spinner too.
         setLoading(false);
         return;
       }
+      // An older board stays dimmed until this read answers, so a failed read
+      // still shows its error instead of passing the old board off as current.
     }
     const weekStartsCache = cachedLeaderboardWeekStarts(accountId);
     const cacheVersion = getLeaderboardCacheVersion(accountId);
@@ -785,7 +793,7 @@ export default function LeaderboardSection({
 
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
   if (accessLoading && !access) return withDialogs(<LeaderboardSkeleton />);
-  if (accessError && (accessError === "auth" || !access || accountOffline)) {
+  if (accessError && (!access || accountOffline)) {
     return withDialogs(
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}

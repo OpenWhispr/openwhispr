@@ -67,6 +67,10 @@ test("Your usage skips only a check for remote changes while its summary is fres
     "a dictation always reloads; focus and the interval wait out a fresh summary, not a failure"
   );
   assert.ok(view.includes("else cacheInsightsSummary(accountId, account);"));
+  assert.ok(
+    view.includes('return load(dataChanged ? "refresh" : "allow");'),
+    "only a check may be answered from the API's copy"
+  );
 });
 
 test("clearing or shortening history drops the kept Insights answers", () => {

@@ -19,6 +19,7 @@ import {
   getAccountAnalyticsSummary,
   hasPendingAnalyticsErasures,
   subscribeToAnalyticsRefresh,
+  type AccountSummaryCache,
 } from "../services/AnalyticsService";
 import { syncService } from "../services/SyncService";
 import { buildAnalyticsActivityDays } from "../helpers/analytics";
@@ -409,68 +410,71 @@ function YourUsage({
     []
   );
 
-  const load = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    const cacheVersion = accountId ? getInsightsCacheVersion(accountId) : null;
-    setLoading(true);
-    setSyncError(false);
+  const load = useCallback(
+    async (cache: AccountSummaryCache = "refresh") => {
+      const requestId = ++requestIdRef.current;
+      const cacheVersion = accountId ? getInsightsCacheVersion(accountId) : null;
+      setLoading(true);
+      setSyncError(false);
 
-    // The device read stands on its own. Folding it into the same catch as the
-    // cloud fetch meant a failed local read fell through to a summary of
-    // zeros — under a confident "On this device", with no error anywhere — and
-    // told the user their history was empty.
-    let local: AnalyticsSummary;
-    try {
-      local = await window.electronAPI.getAnalyticsSummary();
-    } catch (error) {
-      if (requestId !== requestIdRef.current) return;
-      console.error("Reading local Insights failed:", error);
-      setLoadFailed(true);
-      setLoading(false);
-      return;
-    }
-    if (requestId !== requestIdRef.current) return;
-    setLoadFailed(false);
-
-    try {
-      if (isLoaded && syncActive) {
-        if (!(await syncService.syncAnalyticsNow())) {
-          throw new Error("Insights uploads are not enabled for this account");
-        }
-        // Asked before the read: when nothing is owed now, the totals read next
-        // reflect every erasure. Not knowing counts as owed, since keeping the
-        // totals is only a shortcut.
-        const authGeneration = getValidatedAuthGeneration();
-        const erasuresPending =
-          accountId && authGeneration != null
-            ? await hasPendingAnalyticsErasures({ accountId, authGeneration }).catch(() => true)
-            : true;
+      // The device read stands on its own. Folding it into the same catch as the
+      // cloud fetch meant a failed local read fell through to a summary of
+      // zeros — under a confident "On this device", with no error anywhere — and
+      // told the user their history was empty.
+      let local: AnalyticsSummary;
+      try {
+        local = await window.electronAPI.getAnalyticsSummary();
+      } catch (error) {
         if (requestId !== requestIdRef.current) return;
-        const account = await getAccountAnalyticsSummary(accountId);
-        if (requestId !== requestIdRef.current) return;
-        if (accountId && cacheVersion != null) {
-          if (!isInsightsCacheCurrent(accountId, cacheVersion)) return;
-          // Totals the cloud may not have erased yet are shown but never kept, so
-          // a remount doesn't repaint them and the next focus check, which retries
-          // the erasure, isn't skipped.
-          if (erasuresPending) forgetCachedInsightsSummary(accountId);
-          else cacheInsightsSummary(accountId, account);
-        }
-        accountReadFailedRef.current = false;
-        setSummary(account);
-      } else {
-        setSummary(local);
+        console.error("Reading local Insights failed:", error);
+        setLoadFailed(true);
+        setLoading(false);
+        return;
       }
-    } catch {
       if (requestId !== requestIdRef.current) return;
-      // Real device data, and the pill says the cloud is the part that failed.
-      accountReadFailedRef.current = true;
-      setSummary(local);
-      setSyncError(true);
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [accountId, isLoaded, syncActive]);
+      setLoadFailed(false);
+
+      try {
+        if (isLoaded && syncActive) {
+          if (!(await syncService.syncAnalyticsNow())) {
+            throw new Error("Insights uploads are not enabled for this account");
+          }
+          // Asked before the read: when nothing is owed now, the totals read next
+          // reflect every erasure. Not knowing counts as owed, since keeping the
+          // totals is only a shortcut.
+          const authGeneration = getValidatedAuthGeneration();
+          const erasuresPending =
+            accountId && authGeneration != null
+              ? await hasPendingAnalyticsErasures({ accountId, authGeneration }).catch(() => true)
+              : true;
+          if (requestId !== requestIdRef.current) return;
+          const account = await getAccountAnalyticsSummary(accountId, cache);
+          if (requestId !== requestIdRef.current) return;
+          if (accountId && cacheVersion != null) {
+            if (!isInsightsCacheCurrent(accountId, cacheVersion)) return;
+            // Totals the cloud may not have erased yet are shown but never kept, so
+            // a remount doesn't repaint them and the next focus check, which retries
+            // the erasure, isn't skipped.
+            if (erasuresPending) forgetCachedInsightsSummary(accountId);
+            else cacheInsightsSummary(accountId, account);
+          }
+          accountReadFailedRef.current = false;
+          setSummary(account);
+        } else {
+          setSummary(local);
+        }
+      } catch {
+        if (requestId !== requestIdRef.current) return;
+        // Real device data, and the pill says the cloud is the part that failed.
+        accountReadFailedRef.current = true;
+        setSummary(local);
+        setSyncError(true);
+      } finally {
+        if (requestId === requestIdRef.current) setLoading(false);
+      }
+    },
+    [accountId, isLoaded, syncActive]
+  );
 
   useEffect(() => {
     const unsubscribe = subscribeToAnalyticsRefresh((dataChanged) => {
@@ -483,7 +487,7 @@ function YourUsage({
         isInsightFresh(readCachedInsightsSummary(accountId))
       )
         return;
-      return load();
+      return load(dataChanged ? "refresh" : "allow");
     }, syncActive);
     return () => {
       requestIdRef.current += 1;
