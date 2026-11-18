@@ -47,7 +47,7 @@ jobs:
           cache-dependency-path: model-registry/package-lock.json
       # Validate before installing packages from the contributor's lockfile.
       - name: Validate dependency sources and integrity
-        run: npx --yes --ignore-scripts --package=lockfile-lint@5.0.1 lockfile-lint --path package-lock.json --type npm --validate-https --allowed-hosts npm --validate-integrity
+        run: npx --yes --ignore-scripts --package=lockfile-lint@5.0.1 lockfile-lint --path package-lock.json --type npm --validate-https --allowed-hosts npm --validate-integrity --validate-package-names
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run validate

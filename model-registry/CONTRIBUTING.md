@@ -2,7 +2,7 @@
 
 Thanks for helping keep OpenWhispr's model list current. Every change is reviewed by a maintainer before it merges, and merging publishes it to installed apps, so please keep pull requests small: one model or one correction each.
 
-Pull requests go to `OpenWhispr/openwhispr`, the repository this folder is part of. Opening one with [the model registry template](https://github.com/OpenWhispr/openwhispr/compare/main...main?template=model-registry.md) fills in the checklist.
+Pull requests go to `OpenWhispr/openwhispr`, the repository this folder is part of. Adding `?template=model-registry.md` to the address of the "Open a pull request" page fills in the checklist.
 
 ## Setup
 

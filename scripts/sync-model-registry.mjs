@@ -117,6 +117,18 @@ export async function check(dir = output, from = registry) {
   for (const field of ["schemaVersion", "contractHashes", "clientContract", "catalogSha256"])
     if (JSON.stringify(metadata[field]) !== JSON.stringify(expected.metadata[field]))
       fail(`registryMetadata.json has a stale ${field}.`);
+  // A reader the registry doesn't keep a copy of stops being tested by later publications,
+  // and a release build refuses it. Caught here, a changed reader fails its own pull
+  // request instead of the release cut from it.
+  try {
+    await fs.access(path.join(from, "compat", "clients", metadata.clientContract, "client.json"));
+  } catch {
+    throw new Error(
+      `The catalog reader changed, and model-registry/compat/clients has no copy of it (${metadata.clientContract}).\n` +
+        "Add one: the three reader files from model-registry/lib, floor.json (the catalog the release bundles) " +
+        "and client.json naming the first app version that ships it. See model-registry/README.md."
+    );
+  }
   let bundle = null;
   try {
     bundle = await read("registryBundle.json");
@@ -187,27 +199,30 @@ export function choosePublication({ candidates, metadata, catalog, reader }) {
 }
 
 // A build the registry doesn't test applies no publication, ever, and only logs a warning.
-export function releaseProblems({ manifest, liveVersion, clientContract, compatListed }) {
+// The reader's copy under compat/clients is required by check(), which every build runs.
+export function releaseProblems({ manifest, liveVersion, liveTested, clientContract }) {
   if (!manifest)
     return [
       `The model catalog at this commit is not published (live publication is ${liveVersion}). ` +
-        'Approve the waiting "Publish model registry" run, or merge the registry change, then run the release again.',
+        'If its "Publish model registry" run is waiting for approval, approve it and run the release again. ' +
+        "If a later registry change was published instead, this commit's catalog never will be: " +
+        "release from a commit that has that later change.",
     ];
   const problems = [];
+  if (!liveTested) problems.push("The live publication was not tested with this app's reader.");
   if (!manifest.testedClientContracts.includes(clientContract))
     problems.push("The publication of this catalog was not tested with this app's reader.");
-  if (!compatListed)
-    problems.push(
-      `Add this reader to model-registry/compat/clients (${clientContract}), or later publications stop testing it.`
-    );
   return problems;
 }
 
 async function pinRelease(revision) {
   const { metadata, catalog, keys, reader } = await readLocal();
   await check();
-  const commit = revision || publishedTip();
-  if (!isCommit(commit)) throw new Error("--revision takes a commit of the published branch");
+  // `revision` is null when the flag is absent. Given without a commit (an empty output
+  // from an earlier job), it must not quietly become whatever is live now.
+  if (revision !== null && !isCommit(revision))
+    throw new Error("--revision takes a commit of the published branch");
+  const commit = revision ?? publishedTip();
   const at = `${BASE}/${commit}/v2`;
   const load = async (file) => {
     const bytes = await fetchText(`${at}/${file}`);
@@ -234,19 +249,11 @@ async function pinRelease(revision) {
     candidates.push(earlier);
     chosen = choosePublication({ candidates: [earlier.manifest], metadata, catalog, reader });
   }
-  let compatListed = true;
-  try {
-    await fs.access(
-      path.join(registry, "compat", "clients", metadata.clientContract, "client.json")
-    );
-  } catch {
-    compatListed = false;
-  }
   const problems = releaseProblems({
     manifest: chosen,
     liveVersion: live.manifest.manifestVersion,
+    liveTested: live.manifest.testedClientContracts.includes(metadata.clientContract),
     clientContract: metadata.clientContract,
-    compatListed,
   });
   if (problems.length) throw new Error(problems.join("\n"));
   const { bytes } = candidates.find((candidate) => candidate.manifest === chosen);
@@ -267,7 +274,7 @@ async function pinRelease(revision) {
 async function main() {
   const argument = (flag) => {
     const index = process.argv.indexOf(flag);
-    return index === -1 ? undefined : process.argv[index + 1];
+    return index === -1 ? null : (process.argv[index + 1] ?? "");
   };
   if (process.argv.includes("--check")) return `Verified: the app bundles ${await check()}`;
   if (process.argv.includes("--status")) return status();

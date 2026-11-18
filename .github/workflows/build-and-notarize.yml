@@ -1,5 +1,9 @@
 name: Build and Notarize
 
+# These builds are for testing, not release: they bundle the catalog in model-registry/ as
+# version 0 with no signed publication, so they take the live publication at runtime.
+# Only release.yml pins a signed publication (npm run model-registry:pin-release).
+
 on:
   push:
     branches: [main, develop]

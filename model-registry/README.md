@@ -63,7 +63,7 @@ When a change alters the reader (`lib/schema.cjs`, `lib/envelope.cjs` or `lib/re
 
 ## Publication and recovery
 
-`Publish model registry` runs when a commit on `main` changes this folder, and never as part of an app release. It waits for a reviewer in the protected `registry-publish` environment, repeats every check, signs with Ed25519, and pushes to this repository's `model-registry-published` branch:
+`Publish model registry` runs when a commit on `main` changes this folder, and never as part of an app release. It waits for a reviewer in the protected `registry-publish` environment, repeats the tests, the catalog validation and the reader and download checks in a job that has no key, then verifies the published branch, signs with Ed25519, and pushes to this repository's `model-registry-published` branch:
 
 - `v2/manifest.json`: the current publication. `v2/history/<n>.json` keeps every version.
 - `v2/schema.cjs`, `v2/envelope.cjs`, `v2/registrySelection.js`: the exact reader that published it.

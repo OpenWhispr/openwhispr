@@ -86,13 +86,39 @@ test("a release bundles the newest publication of exactly its own catalog", asyn
 test("a release needs a published catalog the registry keeps serving", async () => {
   const { releaseProblems } = await import("../../scripts/sync-model-registry.mjs");
   const manifest = { manifestVersion: 4, testedClientContracts: ["c"] };
-  const good = { manifest, liveVersion: 4, clientContract: "c", compatListed: true };
+  const good = { manifest, liveVersion: 4, liveTested: true, clientContract: "c" };
   assert.deepEqual(releaseProblems(good), []);
   assert.deepEqual(releaseProblems({ ...good, liveVersion: 9 }), [], "a newer live one is fine");
   for (const [broken, pattern] of [
-    [{ manifest: null }, /not published.*Publish model registry/],
-    [{ clientContract: "another reader" }, /not tested/],
-    [{ compatListed: false }, /compat\/clients/],
+    [{ manifest: null }, /not published.*Publish model registry.*later registry change/],
+    [{ clientContract: "another reader" }, /publication of this catalog was not tested/],
+    [{ liveTested: false }, /live publication was not tested/],
   ])
     assert.match(releaseProblems({ ...good, ...broken }).join(), pattern);
+});
+
+test("a reader the registry keeps no copy of fails verify, not the release", async (t) => {
+  const { check } = await import("../../scripts/sync-model-registry.mjs");
+  const registry = fs.mkdtempSync(path.join(__dirname, "../../node_modules/.cache-sync-registry-"));
+  t.after(() => fs.rmSync(registry, { recursive: true, force: true }));
+  fs.cpSync(path.join(__dirname, "../../model-registry"), registry, {
+    recursive: true,
+    filter: (source) => !source.includes("node_modules"),
+  });
+  const dir = bundledCopy(t);
+  await check(dir, registry);
+  fs.rmSync(path.join(registry, "compat", "clients"), { recursive: true });
+  await assert.rejects(check(dir, registry), /compat\/clients has no copy/);
+});
+
+test("--revision without a commit is an error, not the live tip", () => {
+  const { spawnSync } = require("node:child_process");
+  const script = path.join(__dirname, "../../scripts/sync-model-registry.mjs");
+  for (const args of [["--revision"], ["--revision", ""], ["--revision", "main"]]) {
+    const result = spawnSync(process.execPath, [script, "--pin-release", ...args], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 1, args.join(" "));
+    assert.match(result.stderr, /--revision takes a commit/);
+  }
 });
