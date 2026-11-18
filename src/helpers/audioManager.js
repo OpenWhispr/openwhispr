@@ -4,7 +4,8 @@ import {
   TRUNCATED_OUTPUT_MESSAGE_KEY,
 } from "../services/ai/chatRequestBody";
 import logger from "../utils/logger";
-import { BRAND_NAME } from "../config/forkRuntime";
+import { BRAND_NAME, DEFAULT_STT, TITANIUM } from "../config/forkRuntime";
+import { isTitaniumServiceUrl } from "./titanium/titaniumHosts";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
@@ -1650,12 +1651,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         whisperModel,
         parakeetModel,
         cohereModel,
+        cloudTranscriptionProvider,
+        cloudTranscriptionBaseUrl,
       } = getSettings();
       const isNvidia = localTranscriptionProvider === "nvidia";
+      // Dictation routed Custom -> our own stt-api host previews over its WebSocket
+      // (the committed transcript still comes from the batch POST).
+      const sttApiPreview =
+        !useLocalWhisper &&
+        showTranscriptionPreview &&
+        shouldDisplayDictationPreview(showTranscriptionPreview, this.voiceAgentRequested) &&
+        cloudTranscriptionProvider === "custom" &&
+        isTitaniumServiceUrl(cloudTranscriptionBaseUrl, { DEFAULT_STT, TITANIUM });
       // Online models stream+commit during capture, so PCM runs even with preview off.
       const streamingCommit = useLocalWhisper && isNvidia && isOnlineParakeetModel(parakeetModel);
       this._streamingCommitActive = false;
-      if (useLocalWhisper && (showTranscriptionPreview || streamingCommit)) {
+      if ((useLocalWhisper && (showTranscriptionPreview || streamingCommit)) || sttApiPreview) {
         try {
           this._previewAudioContext = new AudioContext({ sampleRate: 16000 });
           this._previewSource = this._previewAudioContext.createMediaStreamSource(micStream);
@@ -1680,15 +1691,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               ? cohereModel
               : whisperModel;
           const language = getBaseLanguageCode(getSettings().preferredLanguage);
-          window.electronAPI?.startDictationPreview?.({
-            provider: localTranscriptionProvider,
+          const previewStarted = window.electronAPI?.startDictationPreview?.({
+            provider: sttApiPreview ? "stt-api" : localTranscriptionProvider,
             model,
             language,
             display: shouldDisplayDictationPreview(
               showTranscriptionPreview,
               this.voiceAgentRequested
             ),
+            ...(sttApiPreview ? { baseUrl: cloudTranscriptionBaseUrl } : {}),
           });
+          if (sttApiPreview) {
+            // Signed out or refused: stop this session's worklet, show no preview.
+            const processor = this._previewProcessor;
+            Promise.resolve(previewStarted)
+              .then((result) => {
+                if (result?.success !== false || this._previewProcessor !== processor) return;
+                logger.warn("stt-api preview unavailable", { reason: result.reason }, "audio");
+                return this.cleanupPreview({ dismiss: true });
+              })
+              .catch(() => {});
+          }
           this._streamingCommitActive = streamingCommit;
         } catch (e) {
           logger.warn("Preview worklet setup failed", { error: e.message }, "audio");

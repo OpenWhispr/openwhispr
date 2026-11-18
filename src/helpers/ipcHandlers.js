@@ -6,6 +6,8 @@ const fs = require("fs");
 const os = require("os");
 const { isRestorablePasteTarget } = require("./windowsPasteTarget");
 const { titaniumServiceKeyFor } = require("./titanium/titaniumIpc");
+const { sttApiStreamUrl } = require("./sttApiStreamPolicy");
+const { createSttApiPreviewStream } = require("./sttApiStreaming");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
@@ -9918,7 +9920,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "start-dictation-preview",
-      async (_event, { provider, model, language, display = true }) => {
+      async (_event, { provider, model, language, display = true, baseUrl }) => {
         resetDictationPreviewState();
         const gen = dictationPreviewGen;
         dictationPreviewMode = true;
@@ -9929,6 +9931,55 @@ class IPCHandlers {
         dictationPreviewDisplay = display;
         dictationPreviewChunkCount = 0;
         if (display) this.windowManager.showTranscriptionPreview("");
+
+        // Our own stt-api host (Phase 5, D-06): live partial text only. A refused
+        // or failed stream ends the preview; the dictation itself is untouched and
+        // no other preview path is tried.
+        if (provider === "stt-api") {
+          const endPreview = (reason) => {
+            if (gen !== dictationPreviewGen) return { success: true };
+            resetDictationPreviewState();
+            this.windowManager.hideTranscriptionPreview();
+            return { success: false, reason };
+          };
+          let key = null;
+          try {
+            key = titaniumServiceKeyFor(sttApiStreamUrl(baseUrl));
+          } catch (error) {
+            debugLogger.warn("stt-api preview endpoint refused", { error: error.message });
+            return endPreview("unavailable");
+          }
+          if (!key) return endPreview("signInRequired");
+          try {
+            const stream = await createSttApiPreviewStream({
+              baseUrl,
+              key,
+              onUpdate: (text) => {
+                if (gen === dictationPreviewGen && text && dictationPreviewDisplay) {
+                  this.windowManager.showTranscriptionPreview(text);
+                }
+              },
+              onError: (error) => {
+                if (gen !== dictationPreviewGen || dictationPreviewStream !== stream) return;
+                debugLogger.warn("stt-api preview stream ended", { error: error.message });
+                endPreview("unavailable");
+              },
+            });
+            if (gen !== dictationPreviewGen) {
+              stream.abort();
+              return { success: true };
+            }
+            dictationPreviewStream = stream;
+            for (const chunk of dictationPreviewBuffer) {
+              stream.sendPcm16(chunk);
+            }
+            dictationPreviewBuffer = [];
+            return { success: true };
+          } catch (error) {
+            debugLogger.warn("stt-api preview stream unavailable", { error: error.message });
+            return endPreview("unavailable");
+          }
+        }
 
         if (provider === "nvidia" && this.parakeetManager.supportsOnlineStreaming(model)) {
           try {

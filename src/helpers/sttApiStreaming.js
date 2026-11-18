@@ -48,6 +48,7 @@ class SttApiStreaming {
     this.connectionTimeout = null;
     this.finishPromise = null;
     this.finishResolve = null;
+    this.finalText = null;
   }
 
   get completedSegments() {
@@ -70,6 +71,7 @@ class SttApiStreaming {
     this.finalSegments = [];
     this.accumulatedText = "";
     this.openSegment = null;
+    this.finalText = null;
     this.audioBytesSent = 0;
     this.connectionLossNotified = false;
     this.finishPromise = null;
@@ -210,6 +212,7 @@ class SttApiStreaming {
         break;
       case "final":
         if (frame.truncated) debugLogger.warn("stt-api stream result was truncated");
+        this.finalText = frame.text;
         // A segment the server never closed is committed once, never re-emitted
         // from the cumulative final text.
         if (this.openSegment) {
@@ -230,7 +233,7 @@ class SttApiStreaming {
 
   _resolveFinish() {
     if (this.finishResolve) {
-      this.finishResolve({ text: this.accumulatedText });
+      this.finishResolve({ text: this.finalText ?? this.accumulatedText });
       this.finishResolve = null;
     }
   }
@@ -267,9 +270,9 @@ class SttApiStreaming {
   }
 
   async disconnect(closeStream = true) {
-    if (!this.ws) return { text: this.accumulatedText };
+    if (!this.ws) return { text: this.finalText ?? this.accumulatedText };
     this.isDisconnecting = true;
-    let result = { text: this.accumulatedText };
+    let result = { text: this.finalText ?? this.accumulatedText };
     try {
       if (closeStream && this.ws.readyState === WebSocket.OPEN) {
         result = await this.finalize();
@@ -280,6 +283,7 @@ class SttApiStreaming {
     }
     this.accumulatedText = "";
     this.finalSegments = [];
+    this.finalText = null;
     return result;
   }
 
@@ -310,4 +314,23 @@ class SttApiStreaming {
   }
 }
 
+/**
+ * Adapter for the dictation preview: the same sendPcm16/abort/finish shape as the
+ * local online stream, over the stt-api socket without the segments subprotocol.
+ * Cumulative `partial` text goes to onUpdate. Input is already 16 kHz.
+ */
+async function createSttApiPreviewStream({ baseUrl, key, onUpdate, onError }) {
+  const client = new SttApiStreaming();
+  client.onPartialTranscript = onUpdate;
+  client.onError = onError;
+  client.onConnectionLost = onError;
+  await client.connect({ baseUrl, token: key, segments: false, sampleRate: STT_API_INPUT_RATE });
+  return {
+    sendPcm16: (pcm) => client.sendAudio(pcm),
+    abort: () => client.cleanup(),
+    finish: async () => ({ text: (await client.disconnect()).text || "", truncated: false }),
+  };
+}
+
 module.exports = SttApiStreaming;
+module.exports.createSttApiPreviewStream = createSttApiPreviewStream;

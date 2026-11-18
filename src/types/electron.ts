@@ -3631,7 +3631,8 @@ declare global {
         model: string;
         language?: string;
         display?: boolean;
-      }) => Promise<{ success: boolean }>;
+        baseUrl?: string;
+      }) => Promise<{ success: boolean; reason?: string }>;
       stopDictationPreview?: (opts?: {
         showCleanup?: boolean;
         flushed?: boolean;

@@ -289,3 +289,36 @@ test("a 404 'streaming is not configured' refusal is an error and is not retried
     server.close();
   }
 });
+
+test("preview adapter: partials reach onUpdate, finish returns the final text and never claims a commit", async () => {
+  const server = await startMockServer({
+    onConnection: (socket) => {
+      send(socket, { type: "partial", text: "good morning" });
+      socket.on("message", (data, isBinary) => {
+        if (isBinary || data.toString() !== '{"type":"finish"}') return;
+        send(socket, { type: "final", text: "good morning everyone", truncated: false });
+      });
+    },
+  });
+  const { createSttApiPreviewStream } = SttApiStreaming;
+  const updates = [];
+
+  try {
+    const stream = await createSttApiPreviewStream({
+      baseUrl: server.baseUrl,
+      key: "k",
+      onUpdate: (text) => updates.push(text),
+      onError: () => {},
+    });
+    assert.equal(server.seen.protocol, "");
+    await until(() => updates.length === 1, "preview partial");
+    assert.deepEqual(updates, ["good morning"]);
+
+    stream.sendPcm16(Buffer.alloc(3200, 3));
+    const result = await stream.finish();
+    assert.deepEqual(result, { text: "good morning everyone", truncated: false });
+    assert.equal(server.seen.frames.length, 1);
+  } finally {
+    await server.close();
+  }
+});
