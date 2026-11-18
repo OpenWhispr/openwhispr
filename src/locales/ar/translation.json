@@ -6217,6 +6217,9 @@
     "getKey": "الحصول على مفتاح ←",
     "endpointUrl": "عنوان URL لنقطة النهاية",
     "azureHint": "Azure AI Foundry: أدخل نقطة نهاية موردك (مثال: https://your-resource.cognitiveservices.azure.com) وقم بتعيين النموذج إلى اسم النشر الدقيق الخاص بك.",
+    "browsedProviderHint": "لا يزال {{current}} قيد الاستخدام. اختر نموذجًا للتبديل إلى {{provider}}.",
+    "browsedCustomHint": "لا يزال {{current}} قيد الاستخدام. أدخل اسم نموذج للتبديل إلى نقطة النهاية المخصصة الخاصة بك.",
+    "customInUseHint": "لا تزال نقطة النهاية المخصصة الخاصة بك قيد الاستخدام. اختر نموذجًا للتبديل إلى {{provider}}.",
     "customProvider": "مخصص",
     "fallback": {
       "whisperModelDescription": "النموذج",
