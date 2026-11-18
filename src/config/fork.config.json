@@ -17,7 +17,7 @@
   "COMMUNITY_URL": "",
   "ORUKEET_BASE_URL": "",
   "DEFAULT_STT": {
-    "baseUrl": "https://x1gsjcjrmssitgnh7hthg7nd.coolify.titaniumlabs.us/v1",
+    "baseUrl": "https://stt.titaniumlabs.us/v1",
     "model": "parakeet-unified-en-0.6b"
   },
   "TITANIUM": {
