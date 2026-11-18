@@ -79,12 +79,15 @@ export function SettingsPage({
         }}
       >
         <View style={{ width: 84 }}>
+          {/* With nothing behind, back goes Home: '/(tabs)' alone resolves to the hidden Chat tab. */}
           <Pressable
             cssInterop={false}
             accessibilityRole="button"
             accessibilityLabel={t('back')}
             hitSlop={6}
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace('/(tabs)/(record)')
+            }
             style={({ pressed }) => ({
               width: 36,
               height: 36,
