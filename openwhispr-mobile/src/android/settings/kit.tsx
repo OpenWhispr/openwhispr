@@ -82,6 +82,7 @@ export function SettingsPage({
         }}
       >
         <View style={{ width: 84 }}>
+          {/* With nothing behind, back goes Home: '/(tabs)' alone resolves to the hidden Chat tab. */}
           <Pressable
             cssInterop={false}
             accessibilityRole="button"
