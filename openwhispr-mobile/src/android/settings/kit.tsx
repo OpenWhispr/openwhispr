@@ -329,7 +329,7 @@ export function ListRow({
             />
           </View>
         ))}
-      <View style={{ flex: 1, gap: 2, justifyContent: 'center' }}>
+      <View style={{ flex: 1, gap: 2, justifyContent: 'center', opacity: toggle?.disabled ? 0.4 : 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Text
             textBreakStrategy="balanced"
@@ -456,6 +456,7 @@ export function SettingsSlider({
   step,
   onChange,
   onRelease,
+  onActiveChange,
   label,
 }: {
   value: number;
@@ -464,6 +465,8 @@ export function SettingsSlider({
   step: number;
   onChange: (value: number) => void;
   onRelease?: (value: number) => void;
+  /** True while a finger is on the slider. */
+  onActiveChange?: (active: boolean) => void;
   label: string;
 }) {
   const [width, setWidth] = useState(0);
@@ -472,8 +475,8 @@ export function SettingsSlider({
   // child (knob or track) the finger landed on.
   const left = useRef(0);
   const dragging = useRef(false);
-  const latest = useRef({ width, onChange, onRelease, value });
-  latest.current = { width, onChange, onRelease, value };
+  const latest = useRef({ width, onChange, onRelease, onActiveChange, value });
+  latest.current = { width, onChange, onRelease, onActiveChange, value };
   const fromPageX = (pageX: number) => {
     const usable = Math.max(1, latest.current.width - KNOB);
     const ratio = Math.min(1, Math.max(0, (pageX - left.current - KNOB / 2) / usable));
@@ -488,6 +491,7 @@ export function SettingsSlider({
         !dragging.current && Math.abs(gesture.dy) > Math.abs(gesture.dx),
       onPanResponderGrant: () => {
         dragging.current = false;
+        latest.current.onActiveChange?.(true);
       },
       onPanResponderMove: (event, gesture) => {
         if (!dragging.current && Math.abs(gesture.dx) < 4) return;
@@ -499,6 +503,7 @@ export function SettingsSlider({
       onPanResponderRelease: (event, gesture) => {
         const wasDragging = dragging.current;
         dragging.current = false;
+        latest.current.onActiveChange?.(false);
         // A swipe that never became a sideways drag (an up or down flick) changes nothing.
         if (!wasDragging && Math.hypot(gesture.dx, gesture.dy) > 8) return;
         const next = fromPageX(event.nativeEvent.pageX);
@@ -507,6 +512,7 @@ export function SettingsSlider({
       },
       onPanResponderTerminate: () => {
         dragging.current = false;
+        latest.current.onActiveChange?.(false);
       },
     }),
   ).current;

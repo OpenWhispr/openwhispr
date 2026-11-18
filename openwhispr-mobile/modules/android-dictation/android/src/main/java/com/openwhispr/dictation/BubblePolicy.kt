@@ -24,11 +24,12 @@ object BubblePolicy {
   const val IDLE_SHRINK_MS = 5000L
 
   /**
-   * The Ready bubble shrinks once it has sat idle (when that's on), or straight away over a search
-   * field (when that's on) so it doesn't cover the results. Dictating always shows it full size.
+   * With shrinking on, the Ready bubble shrinks once it has sat idle, or straight away over a search
+   * field (when that's on too) so it doesn't cover the results. Search-field shrinking is part of
+   * shrinking, as Settings shows it. Dictating always shows the bubble full size.
    */
   fun shrunk(ready: Boolean, idle: Boolean, shrinkWhenIdle: Boolean, searchField: Boolean, shrinkInSearch: Boolean) =
-    ready && ((shrinkWhenIdle && idle) || (shrinkInSearch && searchField))
+    ready && shrinkWhenIdle && (idle || (shrinkInSearch && searchField))
 
   /**
    * Whether a focused field looks like a search box: a SearchView (the field or a near ancestor), or a

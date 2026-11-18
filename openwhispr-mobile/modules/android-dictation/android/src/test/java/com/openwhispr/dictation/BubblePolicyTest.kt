@@ -89,6 +89,8 @@ class BubblePolicyTest {
     assertFalse(shrunk(idle = true, whenIdle = false))
     assertTrue(shrunk(search = true, inSearch = true))
     assertFalse(shrunk(search = true))
+    // Search-field shrinking is part of shrinking: with shrinking off, nothing shrinks.
+    assertFalse(shrunk(search = true, inSearch = true, whenIdle = false))
     // Dictating, writing and results are always full size.
     assertFalse(shrunk(ready = false, idle = true, search = true, inSearch = true))
   }

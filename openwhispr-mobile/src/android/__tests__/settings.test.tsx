@@ -9,6 +9,8 @@ import { ModelListRow } from '../settings/ModelListRow';
 import ModelScreen from '../settings/ModelScreen';
 import { MODEL_ROWS } from '../settings/modelCatalog';
 import HistoryScreen from '../settings/HistoryScreen';
+import SizeLookScreen from '../settings/SizeLookScreen';
+import { applyBubbleLook } from '../settings/bubbleAppearance';
 import AnalyticsScreen from '@/screens/PrivacyDataScreen.android';
 import { noOrphan } from '../settings/strings';
 import { useSettingsToast } from '../settings/kit';
@@ -75,6 +77,10 @@ jest.mock('@/sync/useSyncStore', () => ({
 }));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
+}));
+
+jest.mock('../../../modules/android-dictation/src/appearance', () => ({
+  setBubbleAppearance: jest.fn(),
 }));
 
 const mockSave = jest.fn();
@@ -321,6 +327,21 @@ describe('Analytics', () => {
     await act(async () => fireEvent.press(screen.getByRole('switch', { name: 'usageAnalytics' })));
     expect(useConfigStore.getState().config?.usageAnalyticsEnabled).toBe(false);
     expect(useSettingsToast.getState().message).toBe('analyticsOff');
+  });
+});
+
+describe('Size & look', () => {
+  const locked = (name: string) =>
+    screen.getByRole('switch', { name }).props.accessibilityState.disabled;
+
+  it('locks the dot and search-field switches until shrinking is on', () => {
+    applyBubbleLook({ shrinkWhenIdle: false });
+    render(<SizeLookScreen />);
+    expect(locked('shrinkDot')).toBe(true);
+    expect(locked('shrinkSearch')).toBe(true);
+    fireEvent.press(screen.getByRole('switch', { name: 'shrinkIdle' }));
+    expect(locked('shrinkDot')).toBe(false);
+    expect(locked('shrinkSearch')).toBe(false);
   });
 });
 

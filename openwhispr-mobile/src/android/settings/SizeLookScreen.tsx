@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Image, View } from 'react-native';
+import { Animated, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { home } from '../home/kit';
@@ -26,17 +26,44 @@ import {
 
 const BUBBLE_ICON = require('../home/assets/glossy-icon.png');
 
-/** The real bubble, at the size and see-through level being set, or the dot it shrinks to. */
-function Preview({ size, opacity, dot }: { size: number; opacity: number; dot: boolean }) {
+/** How long the preview sits still before it shrinks, as the real bubble does when idle. */
+const PREVIEW_IDLE_MS = 1500;
+
+/**
+ * The real bubble at the size and see-through level being set. With "Shrink when not in use" on,
+ * it shrinks to its idle form (the dot or a smaller bubble) once nothing has been touched for a
+ * moment, and grows back at the next touch.
+ */
+function Preview({
+  size,
+  opacity,
+  shrunk,
+  dot,
+}: {
+  size: number;
+  opacity: number;
+  shrunk: boolean;
+  dot: boolean;
+}) {
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
-  const scale = useRef(new Animated.Value(1)).current;
-  const shownSize = dot ? 16 : (size / 64) * 56;
+  const shrink = useRef(new Animated.Value(0)).current;
+  // The same sizes as the bubble itself: 56 dp at Medium, 34 dp shrunk, a 16 dp dot.
+  const full = (size / 64) * 56;
+  const small = dot ? 16 : (size / 64) * 34;
   useEffect(() => {
-    if (reduceMotion) return;
-    scale.setValue(0.92);
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }).start();
-  }, [dot, reduceMotion, scale]);
+    if (reduceMotion) {
+      shrink.setValue(shrunk ? 1 : 0);
+      return;
+    }
+    Animated.spring(shrink, {
+      toValue: shrunk ? 1 : 0,
+      useNativeDriver: true,
+      speed: 14,
+      bounciness: shrunk ? 0 : 6,
+    }).start();
+  }, [shrunk, reduceMotion, shrink]);
+  const scale = shrink.interpolate({ inputRange: [0, 1], outputRange: [1, small / full] });
   return (
     <View
       accessible
@@ -53,21 +80,28 @@ function Preview({ size, opacity, dot }: { size: number; opacity: number; dot: b
         },
       ]}
     >
-      <Animated.View style={{ opacity, transform: [{ scale }] }}>
-        {dot ? (
-          <View
+      <Animated.View style={{ width: full, height: full, opacity, transform: [{ scale }] }}>
+        <Animated.Image
+          source={BUBBLE_ICON}
+          style={{
+            width: full,
+            height: full,
+            borderRadius: full / 2,
+            // Always driven by the same animated value, so the native driver never meets a plain one.
+            opacity: shrink.interpolate({ inputRange: [0, 1], outputRange: [1, dot ? 0 : 1] }),
+          }}
+          accessible={false}
+        />
+        {dot && (
+          <Animated.View
             style={{
-              width: shownSize,
-              height: shownSize,
-              borderRadius: 8,
+              position: 'absolute',
+              width: full,
+              height: full,
+              borderRadius: full / 2,
               backgroundColor: '#2457C5',
+              opacity: shrink,
             }}
-          />
-        ) : (
-          <Image
-            source={BUBBLE_ICON}
-            style={{ width: shownSize, height: shownSize, borderRadius: shownSize / 2 }}
-            accessible={false}
           />
         )}
       </Animated.View>
@@ -110,13 +144,22 @@ export default function SizeLookScreen() {
   const look = useBubbleLook();
   const [size, setSize] = useState(savedSize);
   const [opacity, setOpacity] = useState(look.opacity);
-  // The dot preview shows while "Shrink to a dot" was the last thing touched.
-  const [previewDot, setPreviewDot] = useState(false);
+  // The preview shrinks like the bubble: after a pause with no finger on a slider.
+  const [touches, setTouches] = useState(0);
+  const [sliding, setSliding] = useState(false);
+  const [resting, setResting] = useState(false);
+  const wake = () => setTouches((count) => count + 1);
+  useEffect(() => {
+    setResting(false);
+    if (!look.shrinkWhenIdle || sliding) return;
+    const timer = setTimeout(() => setResting(true), PREVIEW_IDLE_MS);
+    return () => clearTimeout(timer);
+  }, [look.shrinkWhenIdle, look.shrinkToDot, sliding, touches]);
 
   const reset = () => {
     setSize(DEFAULT_SIZE);
     setOpacity(DEFAULT_LOOK.opacity);
-    setPreviewDot(false);
+    wake();
     saveBubbleSize(DEFAULT_SIZE);
     applyBubbleLook({ ...DEFAULT_LOOK, size: DEFAULT_SIZE });
     showToast(t('bubbleReset'), 'neutral');
@@ -124,7 +167,7 @@ export default function SizeLookScreen() {
 
   return (
     <SettingsPage title={t('sizeLook')} right={{ label: t('reset'), onPress: reset }}>
-      <Preview size={size} opacity={opacity} dot={previewDot} />
+      <Preview size={size} opacity={opacity} shrunk={resting} dot={look.shrinkToDot} />
       <SliderCard title={t('size')} value={t(sizeLabel(size))} ends={[t('small'), t('large')]}>
         <SettingsSlider
           label={t('size')}
@@ -132,10 +175,8 @@ export default function SizeLookScreen() {
           min={BUBBLE_SIZE.min}
           max={BUBBLE_SIZE.max}
           step={1}
-          onChange={(value) => {
-            setPreviewDot(false);
-            setSize(value);
-          }}
+          onChange={setSize}
+          onActiveChange={setSliding}
           // The live bubble and the saved size change once, when the finger lifts.
           onRelease={(value) => {
             applyBubbleLook({ size: value });
@@ -154,10 +195,8 @@ export default function SizeLookScreen() {
           min={20}
           max={100}
           step={5}
-          onChange={(value) => {
-            setPreviewDot(false);
-            setOpacity(value / 100);
-          }}
+          onChange={(value) => setOpacity(value / 100)}
+          onActiveChange={setSliding}
           onRelease={(value) => applyBubbleLook({ opacity: value / 100, size })}
         />
       </SliderCard>
@@ -175,10 +214,8 @@ export default function SizeLookScreen() {
           subtitle={t('shrinkDotBody')}
           toggle={{
             value: look.shrinkToDot,
-            onValueChange: (shrinkToDot) => {
-              setPreviewDot(shrinkToDot);
-              applyBubbleLook({ shrinkToDot, size });
-            },
+            onValueChange: (shrinkToDot) => applyBubbleLook({ shrinkToDot, size }),
+            disabled: !look.shrinkWhenIdle,
           }}
         />
         <ListRow
@@ -187,6 +224,7 @@ export default function SizeLookScreen() {
           toggle={{
             value: look.shrinkInSearch,
             onValueChange: (shrinkInSearch) => applyBubbleLook({ shrinkInSearch, size }),
+            disabled: !look.shrinkWhenIdle,
           }}
         />
       </Group>
