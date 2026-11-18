@@ -340,9 +340,9 @@ describe('Android model choices (researched 18 Nov 2026)', () => {
 
   it('moves saved choices off retired models, but leaves live OpenAI meetings on gpt-4o-transcribe', async () => {
     const updateConfig = jest.fn(async (change: object) =>
-      useConfigStore.setState((state: { config: object }) => ({
-        config: { ...state.config, ...change },
-      })),
+      useConfigStore.setState({
+        config: { ...useConfigStore.getState().config, ...change },
+      } as never),
     );
     useConfigStore.setState({
       updateConfig,
