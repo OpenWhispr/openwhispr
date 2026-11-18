@@ -8,6 +8,10 @@ const CHUNK_SILENCE_SECONDS = 0.3;
 const MIN_DURATION_SECONDS = 0.1;
 const VOICE_HEADER_BYTES = 48;
 
+// WASM runs finish without returning to the event loop, so a cancel or a mic frame
+// that arrived during one is only read here.
+const letMessagesIn = () => new Promise((resolve) => setImmediate(resolve));
+
 /** voice.bin: six int64 dimensions, then every speaker's text style and duration style. */
 function parseVoiceStyles(file) {
   const dims = Array.from({ length: 6 }, (_, index) => Number(file.readBigInt64LE(index * 8)));
@@ -94,6 +98,7 @@ async function createSupertonicTts({ ort, sessionOptions, paths, numThreads }) {
     const totalStep = float32(new Float32Array([numSteps]), [1]);
     let latent = gaussianNoise(latentChannels * latentLength);
     for (let step = 0; step < numSteps; step += 1) {
+      await letMessagesIn();
       if (isCancelled()) return null;
       const { denoised_latent: denoised } = await vectorEstimator.run({
         noisy_latent: float32(latent, latentDims),
@@ -106,6 +111,7 @@ async function createSupertonicTts({ ort, sessionOptions, paths, numThreads }) {
       });
       latent = Float32Array.from(denoised.data);
     }
+    await letMessagesIn();
     if (isCancelled()) return null;
     const { wav_tts: wav } = await vocoder.run({ latent: float32(latent, latentDims) });
     return wav.data.slice(0, Math.min(wavLength, wav.data.length));

@@ -299,7 +299,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Uses sherpa-onnx runtime for cross-platform ONNX inference
   - Bundled binaries in `resources/bin/sherpa-onnx-{platform}-{arch}`
   - Windows: the bundled ONNX Runtime ships as `ow-onnxrt.dll`, not `onnxruntime.dll`. `scripts/download-sherpa-onnx.js` renames it and rewrites the import tables of every sherpa image (`scripts/lib/pe-imports.js`) because Windows 11 ships an older `onnxruntime.dll` in System32 and some loader configurations resolve the bare name to that copy (#2054). `afterPack.js` fails the Windows build if `onnxruntime.dll` is present or `ow-onnxrt.dll` is missing
-  - Uses the upstream `-no-tts` archives and bundles only the three executables plus ONNX Runtime. The TTS builds statically link espeak-ng (GPL-3.0) into `sherpa-onnx-c-api`, and nothing here loads the sherpa C/C++ API libraries, so this bundle leaves them out. The voice worker's `sherpa-onnx-node` does ship `libsherpa-onnx-c-api`, with espeak-ng statically linked: an open release gate (see Voice Calls)
+  - Uses the upstream `-no-tts` archives and bundles only the three executables plus ONNX Runtime. The TTS builds statically link espeak-ng (GPL-3.0) into `sherpa-onnx-c-api`, and nothing here loads the sherpa C/C++ API libraries, so this bundle leaves them out
   - INT8 quantized models for efficient CPU inference
   - Models stored in `~/.cache/openwhispr/parakeet-models/`
   - Server pre-warming on startup when `LOCAL_TRANSCRIPTION_PROVIDER=nvidia` is set

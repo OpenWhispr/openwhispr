@@ -14,7 +14,8 @@ function createSampleBuffer(capacity = INITIAL_BUFFER_SAMPLES) {
   let head = 0;
   let tail = 0;
 
-  function read(start, length, target = new Float32Array(length)) {
+  function read(start, length) {
+    const target = new Float32Array(length);
     const offset = start % data.length;
     const firstPart = Math.min(length, data.length - offset);
     target.set(data.subarray(offset, offset + firstPart));
