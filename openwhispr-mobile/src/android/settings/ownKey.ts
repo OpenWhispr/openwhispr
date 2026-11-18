@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useConfigStore } from '@/store/useConfigStore';
 import {
-  defaultModelId,
   getMobileProvidersForScope,
+  isTranscriptionScope,
   type MobileInferenceScope,
 } from '@/lib/mobileProviders';
 import {
@@ -13,6 +13,7 @@ import {
   subscribeProviderCredentialChanges,
 } from '@/services/providers/ProviderCredentials';
 import { LIVE_MODEL, isLiveProvider } from '../providers/liveMeeting';
+import { OPENROUTER_MODELS, RETIRING, TEXT_DEFAULT } from './androidModels';
 import type { KeyProviderId } from './keyCheck';
 import { keySelection, setTask } from './processingDefault';
 
@@ -31,15 +32,21 @@ export const KEY_PROVIDERS: { id: KeyProviderId; name: string; keyUrl: string }[
   { id: 'openrouter', name: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys' },
 ];
 
-// OpenRouter has no catalog of its own; this is the model the design starts it on.
-const OPENROUTER_DEFAULT_MODEL = 'openai/gpt-4.1-mini';
-
-/** The models a provider offers for a task, best first; none for a task it can't run. */
+/**
+ * The models a provider offers for a task, the starting one first; none for a task it can't
+ * run. Legacy and retiring models are left out (androidModels.ts).
+ */
 export function providerModels(provider: string, task: MobileInferenceScope): string[] {
   const definition = getMobileProvidersForScope(task).find((item) => item.id === provider);
   if (!definition) return [];
-  if (provider === 'openrouter') return [OPENROUTER_DEFAULT_MODEL];
-  return definition.models.filter((model) => !model.legacy).map((model) => model.id);
+  if (provider === 'openrouter') return OPENROUTER_MODELS;
+  const models = definition.models
+    .filter((model) => !model.legacy && !RETIRING.has(model.id))
+    .map((model) => model.id);
+  const first = isTranscriptionScope(task) ? undefined : TEXT_DEFAULT[provider];
+  return first && models.includes(first)
+    ? [first, ...models.filter((model) => model !== first)]
+    : models;
 }
 
 /** Meetings need a provider that transcribes while people talk. */
@@ -52,9 +59,9 @@ export function providerCanRun(provider: string, task: MobileInferenceScope | 'm
 export function startingModel(provider: string, task: MobileInferenceScope | 'meeting'): string {
   if (task === 'meeting') return isLiveProvider(provider) ? LIVE_MODEL[provider] : '';
   const remembered = useConfigStore.getState().config?.rememberedInference?.[task]?.[provider];
-  if (remembered?.modelId) return remembered.modelId;
-  if (provider === 'openrouter') return OPENROUTER_DEFAULT_MODEL;
-  return defaultModelId(getMobileProvidersForScope(task).find((item) => item.id === provider));
+  const models = providerModels(provider, task);
+  if (remembered?.modelId && models.includes(remembered.modelId)) return remembered.modelId;
+  return models[0] ?? '';
 }
 
 /** Which providers have a saved key, kept current as keys are added and removed. */
