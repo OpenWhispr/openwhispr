@@ -1,3 +1,5 @@
+import { acceptsCorrectionEdit, retainsCorrectionContext } from './correctionPolicy';
+
 const MIN_WORD_LENGTH = 3;
 const MAX_DISTANCE_RATIO = 0.65;
 const WORD_TOKEN_REGEX = /\p{L}[\p{L}'-]*/gu;
@@ -34,10 +36,14 @@ export function extractCorrections(
   existingDictionary: string[],
 ): string[] {
   if (!originalText || !newText || originalText === newText) return [];
+  // Autosave can observe a word halfway through typing or backspacing. Pure
+  // tail edits are not evidence of a deliberate transcription correction.
+  if (!acceptsCorrectionEdit(originalText, newText)) return [];
 
   const originalWords = tokenize(originalText);
   const newWords = tokenize(newText);
   if (newWords.length === 0) return [];
+  if (!retainsCorrectionContext(originalWords, newWords)) return [];
 
   const originalLowerSet = new Set(originalWords.map((w) => w.toLowerCase()));
   const newLowerSet = new Set(newWords.map((w) => w.toLowerCase()));

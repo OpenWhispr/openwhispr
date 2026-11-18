@@ -1,0 +1,26 @@
+diff --git a/node_modules/expo-superwall/android/src/main/java/expo/modules/superwallexpo/ReactNativeActivityProvider.kt b/node_modules/expo-superwall/android/src/main/java/expo/modules/superwallexpo/ReactNativeActivityProvider.kt
+--- a/node_modules/expo-superwall/android/src/main/java/expo/modules/superwallexpo/ReactNativeActivityProvider.kt
++++ b/node_modules/expo-superwall/android/src/main/java/expo/modules/superwallexpo/ReactNativeActivityProvider.kt
+@@ -1,12 +1,21 @@
+ package expo.modules.superwallexpo
+ 
+ import android.app.Activity
++import android.app.Application
+ import expo.modules.kotlin.AppContext
+ import com.superwall.sdk.misc.ActivityProvider
++import com.superwall.sdk.misc.CurrentActivityTracker
+ 
+ class ExpoActivityProvider(private val appContext: AppContext) : ActivityProvider {
+ 
++  // Expo retains the stopped React activity while Superwall's native preview is open.
++  private val activityTracker = CurrentActivityTracker().also {
++    (appContext.reactContext?.applicationContext as? Application)
++      ?.registerActivityLifecycleCallbacks(it)
++  }
++
+   override fun getCurrentActivity(): Activity? {
+-    return appContext.currentActivity
++    // Configuration can run after the initial resume, before the tracker sees a callback.
++    return activityTracker.getCurrentActivity() ?: appContext.currentActivity
+   }
+ }

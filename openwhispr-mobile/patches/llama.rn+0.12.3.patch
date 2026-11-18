@@ -1,0 +1,33 @@
+diff --git a/node_modules/llama.rn/cpp/rn-completion.cpp b/node_modules/llama.rn/cpp/rn-completion.cpp
+index 90d7e93..d724bc7 100644
+--- a/node_modules/llama.rn/cpp/rn-completion.cpp
++++ b/node_modules/llama.rn/cpp/rn-completion.cpp
+@@ -107,14 +107,6 @@ void llama_rn_context_completion::loadPrompt(const std::vector<std::string> &med
+         text_tokens = ::common_tokenize(parent_ctx->ctx, parent_ctx->params.prompt, add_bos || is_enc_dec, true);
+         num_prompt_tokens = text_tokens.size();
+ 
+-        // LOG tokens
+-        std::stringstream ss;
+-        ss << "\n" << __func__ << ": prompt_tokens = ";
+-        for (auto& token : text_tokens) {
+-            ss << token << " ";
+-        }
+-        LOG_INFO("%s\n", ss.str().c_str());
+-
+         if (parent_ctx->params.n_keep < 0) {
+             parent_ctx->params.n_keep = (int)num_prompt_tokens;
+         }
+@@ -554,11 +546,10 @@ completion_token_output llama_rn_context_completion::nextToken()
+         }
+         if (llama_decode(parent_ctx->ctx, llama_batch_get_one(&embd[n_past], n_eval)))
+         {
+-            LOG_ERROR("failed to eval, n_eval: %d, n_past: %d, n_threads: %d, embd: %s",
++            LOG_ERROR("failed to eval, n_eval: %d, n_past: %d, n_threads: %d",
+                 n_eval,
+                 n_past,
+-                parent_ctx->params.cpuparams.n_threads,
+-                tokens_to_str(parent_ctx->ctx, embd.cbegin() + n_past, embd.cend()).c_str()
++                parent_ctx->params.cpuparams.n_threads
+             );
+             has_next_token = false;
+             return result;

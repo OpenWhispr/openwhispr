@@ -22,6 +22,7 @@ jest.mock('@/store/useConfigStore', () => {
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { createSyncContext } from '../createSyncContext';
+import { createSyncContext as createAndroidSyncContext } from '../createSyncContext.android';
 import { SyncCancelledError } from '../syncContext';
 
 beforeEach(() => {
@@ -79,6 +80,14 @@ it('keeps uploading after a preference storage error', () => {
   context.dispose();
 });
 
+it('preserves the iOS default when a stored backup preference becomes unset', () => {
+  const context = createSyncContext();
+  useConfigStore.setState({ config: { defaultMode: 'cloud' } });
+  useConfigStore.setState({ config: { defaultMode: 'cloud', cloudBackupEnabled: true } });
+  expect(() => context.checkpoint(true)).not.toThrow();
+  context.dispose();
+});
+
 it('stops permanently when an auth transition starts, even if it returns to the same session', () => {
   const context = createSyncContext();
   useAuthStore.setState({ isLoading: true });
@@ -93,4 +102,16 @@ it('allows team uploads and private-copy deletion when personal backup was alrea
   expect(() => context.checkpoint(true)).not.toThrow();
   expect(() => context.checkpoint()).not.toThrow();
   context.dispose();
+});
+
+it('cancels an Android personal upload if its preference becomes unset, even after re-enabling', () => {
+  const context = createAndroidSyncContext();
+  try {
+    useConfigStore.setState({ config: { defaultMode: 'cloud' } });
+    useConfigStore.setState({ config: { defaultMode: 'cloud', cloudBackupEnabled: true } });
+    expect(() => context.checkpoint(true)).toThrow(SyncCancelledError);
+    expect(() => context.checkpoint()).not.toThrow();
+  } finally {
+    context.dispose();
+  }
 });

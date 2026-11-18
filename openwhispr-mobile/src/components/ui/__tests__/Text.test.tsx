@@ -13,12 +13,19 @@ jest.mock('@/lib/fonts', () => ({
 }));
 
 import { Text } from '../Text';
+import { Text as AndroidText } from '../Text.android';
 
 function fontFamilyOf(element: ReturnType<typeof render>['root']): string | undefined {
   return StyleSheet.flatten(element.props.style).fontFamily;
 }
 
 describe('Text', () => {
+  it('uses logical start alignment on Android and preserves explicit alignment', () => {
+    const view = render(<AndroidText>Arabic label</AndroidText>);
+    expect(StyleSheet.flatten(view.root.props.style).textAlign).toBe('left');
+    view.rerender(<AndroidText style={{ textAlign: 'center' }}>Arabic label</AndroidText>);
+    expect(StyleSheet.flatten(view.root.props.style).textAlign).toBe('center');
+  });
   beforeEach(() => {
     mockFonts.displayFontFamily = 'Display';
   });

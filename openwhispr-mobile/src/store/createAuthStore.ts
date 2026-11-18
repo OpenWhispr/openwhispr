@@ -1,0 +1,319 @@
+import { create, type StoreApi } from 'zustand';
+import * as SecureStore from 'expo-secure-store';
+import {
+  getStoredSession,
+  clearSession,
+  signInWithEmail,
+  signUpWithEmail,
+  signOut as signOutApi,
+  signInWithGoogle as signInWithGoogleApi,
+  signInWithApple as signInWithAppleApi,
+  signInWithMicrosoft as signInWithMicrosoftApi,
+  signInAnonymously,
+  deleteAccount as deleteAccountApi,
+  getSession,
+  initAuthenticatedUser,
+  type AuthUser,
+  type SocialAuthResult,
+} from '@/lib/authClient';
+import { Sentry } from '@/lib/sentry';
+import { useUsageStore } from '@/store/useUsageStore';
+import { clearAllSessions as clearAgentSessions } from '@/services/agent/AgentComposerService';
+import { claimNoteShareTokens, clearNoteShareTokens } from '@/lib/notes/noteShareTokens';
+import { withChatHistory } from '@/lib/chat/withChatHistory';
+
+const GUEST_SESSION_KEY = 'openwhispr_guest_session';
+
+type SessionResult = {
+  user: AuthUser | null;
+  sessionCookie: string | null;
+  error?: string | null;
+};
+
+interface AuthStore {
+  user: AuthUser | null;
+  sessionCookie: string | null;
+  isGuest: boolean;
+  isLoading: boolean;
+  loadingProvider: 'google' | 'apple' | 'microsoft' | null;
+  isInitialized: boolean;
+  error: string | null;
+
+  initialize: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, name?: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
+  signInWithMicrosoft: () => Promise<void>;
+  continueAsGuest: () => Promise<void>;
+  ensureAnonymousSession: () => Promise<void>;
+  signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
+  clearError: () => void;
+}
+
+type SetState = StoreApi<AuthStore>['setState'];
+
+export interface AuthStoreLifecycle {
+  initialize?: (
+    set: SetState,
+    claimNoteShares: (user: AuthUser | null) => Promise<void>,
+  ) => Promise<void>;
+  prepareLocalData?: (user: AuthUser | null) => void;
+  finishSignOut?: (set: SetState) => void;
+  deleteAccount?: (user: AuthUser | null) => Promise<string | undefined>;
+  /** Android erases chats in the selected account database, not the next active workspace. */
+  accountScopedChats?: boolean;
+}
+
+export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
+  // Explicit auth choices wait for the startup request to finish writing its cookie,
+  // including failures, so its late result cannot overwrite the chosen session.
+  let anonymousSignInInFlight: Promise<void> | null = null;
+
+  const useAuthStore = create<AuthStore>((set) => ({
+    user: null,
+    sessionCookie: null,
+    isGuest: false,
+    isLoading: false,
+    loadingProvider: null,
+    isInitialized: false,
+    error: null,
+
+    initialize: async () => {
+      set({ isLoading: true });
+      await anonymousSignInInFlight?.catch(() => undefined);
+      if (lifecycle.initialize) return lifecycle.initialize(set, claimNoteShares);
+      try {
+        const user = await getSession();
+        if (user) {
+          await claimNoteShares(user);
+          const sessionCookie = await getStoredSession();
+          set({ user, sessionCookie, isGuest: false, isInitialized: true, isLoading: false });
+        } else {
+          const isGuest = (await SecureStore.getItemAsync(GUEST_SESSION_KEY)) === 'true';
+          useUsageStore.getState().reset();
+          set({ user: null, sessionCookie: null, isGuest, isInitialized: true, isLoading: false });
+        }
+      } catch {
+        set({ isInitialized: true, isLoading: false });
+      }
+    },
+
+    signIn: async (email, password) => {
+      set({ isLoading: true, error: null });
+      await anonymousSignInInFlight?.catch(() => undefined);
+      const result = await signInWithEmail(email, password);
+      if (result.error || !result.user) {
+        set({ isLoading: false, error: result.error || 'Sign in failed' });
+        return;
+      }
+      await applyAuthenticatedSession(set, result);
+    },
+
+    signUp: async (email, password, name) => {
+      set({ isLoading: true, error: null });
+      await anonymousSignInInFlight?.catch(() => undefined);
+      const result = await signUpWithEmail(email, password, name);
+      if (result.error || !result.user) {
+        set({ isLoading: false, error: result.error || 'Sign up failed' });
+        return;
+      }
+      await applyAuthenticatedSession(set, result, name || email.split('@')[0]);
+    },
+
+    signInWithGoogle: async () => {
+      set({ isLoading: true, loadingProvider: 'google', error: null });
+      await anonymousSignInInFlight?.catch(() => undefined);
+      await applyOAuthResult(set, await signInWithGoogleApi());
+    },
+
+    signInWithApple: async () => {
+      set({ isLoading: true, loadingProvider: 'apple', error: null });
+      await anonymousSignInInFlight?.catch(() => undefined);
+      await applyOAuthResult(set, await signInWithAppleApi());
+    },
+
+    signInWithMicrosoft: async () => {
+      set({ isLoading: true, loadingProvider: 'microsoft', error: null });
+      await anonymousSignInInFlight?.catch(() => undefined);
+      await applyOAuthResult(set, await signInWithMicrosoftApi());
+    },
+
+    continueAsGuest: async () => {
+      set({ isLoading: true });
+      try {
+        await anonymousSignInInFlight?.catch(() => undefined);
+        await clearSession();
+        await SecureStore.setItemAsync(GUEST_SESSION_KEY, 'true');
+        lifecycle.prepareLocalData?.(null);
+        useUsageStore.getState().reset();
+        set({ user: null, sessionCookie: null, isGuest: true, error: null });
+      } finally {
+        set({ isLoading: false });
+      }
+    },
+
+    // Skips anyone who already chose "continue without an account" on a previous
+    // build. Silently creating a server-side record for someone who declined one
+    // is a consent question, not a plumbing detail — they keep the on-device
+    // experience they opted into.
+    ensureAnonymousSession: async () => {
+      const { user, isGuest, isInitialized, isLoading } = useAuthStore.getState();
+      if (!isInitialized || user || isGuest || isLoading) return;
+      // The store check above can't dedupe concurrent callers, since `user` is
+      // only set after the round trip — and each extra call would leave behind a
+      // real, orphaned user row on the server.
+      if (anonymousSignInInFlight) return anonymousSignInInFlight;
+
+      anonymousSignInInFlight = (async () => {
+        const result = await signInAnonymously();
+        if (!result.user) {
+          // This session is load-bearing for cloud transcription, usage limits
+          // and the paywall for the whole first run, so a refusal the server
+          // sent (route missing after a bad deploy, plugin off, rate limited)
+          // must be loud. No response, or a 5xx, is the offline-at-first-launch
+          // case the foreground retry exists for; it must not read as an outage.
+          const refused = result.status !== null && result.status < 500;
+          Sentry.captureMessage('Anonymous session could not be created', {
+            level: refused ? 'error' : 'warning',
+            tags: { feature: 'onboarding-auth' },
+            extra: { reason: result.error ?? 'no user returned' },
+          });
+          return;
+        }
+
+        // Deliberately skips initAuthenticatedUser: the server bootstraps this
+        // user on its first authenticated request, and there is no real address
+        // to send a welcome or verification email to yet.
+        lifecycle.prepareLocalData?.(result.user);
+        set({ user: result.user, sessionCookie: result.sessionCookie, isGuest: false });
+      })().finally(() => {
+        anonymousSignInInFlight = null;
+      });
+
+      return anonymousSignInInFlight;
+    },
+
+    signOut: async () => {
+      set({ isLoading: true });
+      await anonymousSignInInFlight?.catch(() => undefined);
+      // Chats go the way of the notes they quote: a guest or anonymous session keeps its notes for a
+      // later sign-up to claim (see initSyncTriggers), so it keeps its chats too.
+      const { user } = useAuthStore.getState();
+      const realAccount = user !== null && !user.isAnonymous;
+      await signOutApi();
+      await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
+      useUsageStore.getState().reset();
+      clearAgentSessions();
+      if (lifecycle.finishSignOut) lifecycle.finishSignOut(set);
+      else {
+        withChatHistory((chats) => (realAccount ? chats.clearChatHistory() : chats.stopChatTurn()));
+        set({ user: null, sessionCookie: null, isGuest: false, isLoading: false });
+      }
+    },
+
+    deleteAccount: async () => {
+      set({ isLoading: true, error: null });
+      await anonymousSignInInFlight?.catch(() => undefined);
+      try {
+        let deletedUserId: string | undefined;
+        if (lifecycle.deleteAccount) {
+          deletedUserId = await lifecycle.deleteAccount(useAuthStore.getState().user);
+        } else {
+          await deleteAccountApi();
+          deletedUserId = useAuthStore.getState().user?.id;
+        }
+        if (deletedUserId) await tolerateCacheFailure('clear', clearNoteShareTokens(deletedUserId));
+        // Keys survive sign-out by design, but not account deletion. They are erased only
+        // once the account is gone, so a failed delete keeps them. A failed erase leaves
+        // them for Remove all provider keys rather than undoing a completed deletion.
+        const { clearProviderCredentials } =
+          require('@/services/providers/ProviderCredentials') as typeof import('@/services/providers/ProviderCredentials');
+        await clearProviderCredentials().catch((error: unknown) => {
+          console.warn('[auth] account deleted but provider keys were not erased:', error);
+        });
+        await clearSession();
+        await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
+        lifecycle.prepareLocalData?.(null);
+        useUsageStore.getState().reset();
+        clearAgentSessions();
+        if (!lifecycle.accountScopedChats) withChatHistory((chats) => chats.clearChatHistory());
+        set({ user: null, sessionCookie: null, isGuest: false, isLoading: false });
+      } catch (error) {
+        set({ isLoading: false, error: error instanceof Error ? error.message : 'Delete failed' });
+        throw error;
+      }
+    },
+
+    clearError: () => set({ error: null }),
+  }));
+
+  async function applyAuthenticatedSession(
+    set: SetState,
+    result: SessionResult,
+    fallbackName?: string,
+  ): Promise<void> {
+    await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
+    await initAuthenticatedUser(result.user, fallbackName);
+    await claimNoteShares(result.user);
+    try {
+      lifecycle.prepareLocalData?.(result.user);
+    } catch (error) {
+      await clearSession();
+      useUsageStore.getState().reset();
+      set({
+        user: null,
+        sessionCookie: null,
+        isGuest: false,
+        isLoading: false,
+        loadingProvider: null,
+        error: error instanceof Error ? error.message : 'Local account data could not be opened.',
+      });
+      return;
+    }
+    useUsageStore.getState().reset();
+    set({
+      user: result.user,
+      sessionCookie: result.sessionCookie,
+      isGuest: false,
+      isLoading: false,
+      loadingProvider: null,
+      error: result.error ?? null,
+    });
+  }
+
+  async function applyOAuthResult(set: SetState, result: SocialAuthResult): Promise<void> {
+    if (!result.success) {
+      set({ isLoading: false, loadingProvider: null, error: result.error || null });
+      return;
+    }
+    const user = result.sessionCookie ? await getSession() : null;
+    await applyAuthenticatedSession(set, { user, sessionCookie: result.sessionCookie });
+  }
+
+  return useAuthStore;
+}
+
+// A local cache failure must not block sign-in or undo a completed account deletion.
+async function tolerateCacheFailure(
+  operation: 'claim' | 'clear',
+  cleanup: Promise<void>,
+): Promise<void> {
+  try {
+    await cleanup;
+  } catch (error) {
+    Sentry.captureException(error, {
+      level: 'warning',
+      tags: { feature: 'note-sharing', operation },
+    });
+  }
+}
+
+// Every real sign-in, including a session restored at launch, passes through here. Only real
+// accounts can share, so an anonymous session leaves other accounts' stored links in place.
+async function claimNoteShares(user: AuthUser | null): Promise<void> {
+  if (user && !user.isAnonymous) {
+    await tolerateCacheFailure('claim', claimNoteShareTokens(user.id));
+  }
+}

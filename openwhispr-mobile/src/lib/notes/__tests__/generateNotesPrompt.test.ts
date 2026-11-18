@@ -40,3 +40,16 @@ describe('buildActionSystemPrompt shared dictionary', () => {
     expect(buildActionSystemPrompt({ ...input, sharedDictionary: [] })).toBe(personalOnly);
   });
 });
+
+it.each(['plain-note', 'meeting-transcript'] as const)(
+  'keeps the upstream default %s prompt when Android-only options are supplied',
+  (inputKind) => {
+    const base = { actionPrompt: 'Summarize.', inputKind, isDefaultGenerateNotesAction: true };
+    const withAndroidOptions = {
+      ...base,
+      desktopDefaultNotes: true,
+      outputFormat: 'json' as const,
+    };
+    expect(buildActionSystemPrompt(withAndroidOptions)).toBe(buildActionSystemPrompt(base));
+  },
+);

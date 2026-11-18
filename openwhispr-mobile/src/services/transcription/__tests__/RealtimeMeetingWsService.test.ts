@@ -1,12 +1,17 @@
 /**
  * Service-level tests for the leg-swap transport: reconnect keeps the mic alive,
- * rotation hard-cuts seamlessly, and a terminal give-up preserves the transcript.
+ * rotation drains retiring legs, and a terminal give-up preserves the transcript.
  * The WebSocket is injected (a controllable fake); the native mic module, the API
  * client, and expo-network are mocked; timers are faked so the backoff budget and
  * rotation clock elapse deterministically.
  */
 import { Buffer } from 'buffer';
-import { startRealtimeMeetingWs, type WebSocketLike } from '../RealtimeMeetingWsService';
+import { startRealtimeMeetingWs, type WebSocketLike } from '../RealtimeMeetingWsService.android';
+import { startRealtimeMeetingWs as startIOSMeetingWs } from '../RealtimeMeetingWsService';
+import {
+  addPcmStopListener,
+  addPcmErrorListener,
+} from '../../../../modules/live-pcm-streaming/src/index.android';
 import { ROTATION_MS } from '../realtimeReconnect';
 import { MEETING_RECORDING_DISABLED_MESSAGE } from '../policyErrors';
 import { api } from '@/lib/apiClient';
@@ -30,7 +35,13 @@ jest.mock('../../../../modules/live-pcm-streaming/src', () => ({
     isAvailable: jest.fn(() => true),
   },
   addPcmFrameListener: jest.fn(),
+  addPcmStopListener: jest.fn(),
+  addPcmErrorListener: jest.fn(),
 }));
+
+jest.mock('../../../../modules/live-pcm-streaming/src/index.android', () =>
+  jest.requireMock('../../../../modules/live-pcm-streaming/src'),
+);
 
 const FLUSH_MS = 150;
 
@@ -142,8 +153,9 @@ const completed = (itemId: string, transcript: string): WsMessage => ({
 async function boot(
   callbacks: Parameters<typeof startRealtimeMeetingWs>[1] = {},
   opts: Parameters<typeof startRealtimeMeetingWs>[0] = {},
+  start = startRealtimeMeetingWs,
 ): Promise<{ session: Awaited<ReturnType<typeof startRealtimeMeetingWs>>; leg1: FakeWebSocket }> {
-  const startPromise = startRealtimeMeetingWs(opts, callbacks, { wsFactory });
+  const startPromise = start(opts, callbacks, { wsFactory });
   await flushMicro();
   const leg1 = lastLeg();
   leg1.open();
@@ -162,6 +174,8 @@ beforeEach(() => {
   (LivePCMStreaming.start as jest.Mock).mockReset().mockResolvedValue(undefined);
   (LivePCMStreaming.stop as jest.Mock).mockReset().mockResolvedValue(undefined);
   (addPcmFrameListener as jest.Mock).mockReset().mockReturnValue({ remove: jest.fn() });
+  (addPcmStopListener as jest.Mock).mockReset().mockReturnValue({ remove: jest.fn() });
+  (addPcmErrorListener as jest.Mock).mockReset().mockReturnValue({ remove: jest.fn() });
 });
 
 afterEach(() => {
@@ -373,7 +387,11 @@ describe('startRealtimeMeetingWs — rotation', () => {
 
     leg2.open();
     await flushMicro();
+    expect(leg1.closed).toBe(false);
+    leg1.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
     expect(leg1.didCommit()).toBe(true);
+    leg1.emit({ type: 'error', error: { code: 'input_audio_buffer_commit_empty' } });
+    await flushMicro();
     expect(leg1.closed).toBe(true);
 
     // Same raw id "a" recycled by the fresh leg must not overwrite leg one.
@@ -402,7 +420,10 @@ describe('startRealtimeMeetingWs — rotation', () => {
     leg2.open();
     await flushMicro();
 
-    // The still-live old leg is retired (committed + closed) — no leaked socket.
+    // The retiring leg closes only after the ordered final commit completes.
+    leg1.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    leg1.emit({ type: 'error', error: { code: 'input_audio_buffer_commit_empty' } });
+    await flushMicro();
     expect(leg1.didCommit()).toBe(true);
     expect(leg1.closed).toBe(true);
     expect(callbacks.onReconnected).toHaveBeenCalledTimes(1);
@@ -463,5 +484,280 @@ describe('startRealtimeMeetingWs — bounded outage buffer', () => {
     const bytes = leg2.appendedBytes();
     expect(bytes).toBeGreaterThan(0);
     expect(bytes).toBeLessThanOrEqual(4000);
+  });
+});
+
+describe('meeting final transcript drain', () => {
+  it('finishes a healthy rotation only after both legs drain independently', async () => {
+    const { session, leg1 } = await boot();
+    leg1.emit({ type: 'input_audio_buffer.speech_started', item_id: 'old', audio_start_ms: 10 });
+    await advanceToRotation();
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+    expect(leg1.closed).toBe(false);
+
+    const done = jest.fn();
+    const finishing = session.finish!().then(done);
+    await flushMicro();
+    leg1.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'old' });
+    leg1.emit(completed('old', 'Before rotation'));
+    await flushMicro();
+    expect(leg1.closed).toBe(true);
+    expect(done).not.toHaveBeenCalled();
+    expect(leg2.didCommit()).toBe(false);
+
+    leg2.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    leg2.emit({ type: 'input_audio_buffer.committed', item_id: 'new' });
+    await flushMicro();
+    expect(done).not.toHaveBeenCalled();
+    leg2.emit(completed('new', 'After rotation'));
+    await finishing;
+    expect(session.utterances().map((part) => part.text)).toEqual([
+      'Before rotation',
+      'After rotation',
+    ]);
+  });
+
+  it('orders overlapping leg results by recording order even without VAD timestamps', async () => {
+    const onUtterances = jest.fn();
+    const { session, leg1 } = await boot({ onUtterances });
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'first' });
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'second' });
+    await advanceToRotation();
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+    leg2.emit(completed('new', 'New leg'));
+    leg1.emit(completed('second', 'Old leg second'));
+    leg1.emit(completed('first', 'Old leg first'));
+    expect(session.utterances().map((part) => part.text)).toEqual([
+      'Old leg first',
+      'Old leg second',
+      'New leg',
+    ]);
+    expect(onUtterances).toHaveBeenLastCalledWith(session.utterances());
+    session.stop();
+    await flushMicro();
+    expect(leg1.closed).toBe(true);
+    expect(leg2.closed).toBe(true);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('keeps the active final transcript when the retiring leg times out', async () => {
+    const { session, leg1 } = await boot();
+    leg1.emit(completed('kept', 'Captured before rotation'));
+    await advanceToRotation();
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+    await jest.advanceTimersByTimeAsync(15001);
+    expect(leg1.closed).toBe(true);
+    const finishing = session.finish!();
+    const check = expect(finishing).rejects.toThrow(/incomplete|interrupted/i);
+    await flushMicro();
+    expect(leg2.closed).toBe(false);
+    leg2.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    leg2.emit({ type: 'input_audio_buffer.committed', item_id: 'last' });
+    leg2.emit(completed('last', 'Captured after rotation'));
+    await check;
+    expect(session.utterances().map((part) => part.text)).toEqual([
+      'Captured before rotation',
+      'Captured after rotation',
+    ]);
+  });
+
+  it('waits past an earlier VAD commit for the final explicit commit and transcript', async () => {
+    const { session, leg1 } = await boot();
+    const done = jest.fn();
+    const finishing = session.finish!().then(done);
+    await flushMicro();
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'earlier' });
+    leg1.emit(completed('earlier', 'Earlier sentence'));
+    expect(done).not.toHaveBeenCalled();
+    leg1.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    expect(leg1.didCommit()).toBe(true);
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'last' });
+    await flushMicro();
+    expect(done).not.toHaveBeenCalled();
+    leg1.emit(completed('last', 'Final sentence'));
+    await finishing;
+    expect(session.utterances().map((part) => part.text)).toEqual([
+      'Earlier sentence',
+      'Final sentence',
+    ]);
+    expect(leg1.closed).toBe(true);
+  });
+
+  it('rejects failed final transcription instead of completing with missing speech', async () => {
+    const { session, leg1 } = await boot();
+    const finishing = session.finish!();
+    const check = expect(finishing).rejects.toThrow('could not be transcribed');
+    await flushMicro();
+    leg1.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'last' });
+    leg1.emit({ type: 'conversation.item.input_audio_transcription.failed', item_id: 'last' });
+    await check;
+    expect(leg1.closed).toBe(true);
+  });
+
+  it('shares one finish promise and reports a timeout without promising a saved file', async () => {
+    const { session, leg1 } = await boot();
+    const first = session.finish!();
+    expect(session.finish!()).toBe(first);
+    const check = expect(first).rejects.toThrow('Final transcript timed out.');
+    await jest.advanceTimersByTimeAsync(15001);
+    await check;
+    expect(leg1.closed).toBe(true);
+  });
+
+  it('never starts the microphone after cancellation during token fetch', async () => {
+    let resolve!: (value: unknown) => void;
+    (api.post as jest.Mock).mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const controller = new AbortController();
+    const pending = startRealtimeMeetingWs({ signal: controller.signal }, {}, { wsFactory });
+    const check = expect(pending).rejects.toThrow('cancelled');
+    controller.abort();
+    resolve({ clientSecret: 'late' });
+    await check;
+    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+});
+
+describe('upstream iOS transport boundary', () => {
+  it('exposes synchronous Stop and passes only the sample rate to native capture', async () => {
+    const { session, leg1 } = await boot({}, {}, startIOSMeetingWs);
+    expect(Object.keys(session).sort()).toEqual(['stop', 'utterances']);
+    expect(LivePCMStreaming.start).toHaveBeenCalledWith(24000);
+    expect(addPcmStopListener).not.toHaveBeenCalled();
+    expect(addPcmErrorListener).not.toHaveBeenCalled();
+    expect(session.stop()).toBeUndefined();
+    expect(leg1.didCommit()).toBe(true);
+    expect(leg1.closed).toBe(true);
+  });
+
+  it('retains upstream final-transcript arrival order', async () => {
+    const { session, leg1 } = await boot({}, {}, startIOSMeetingWs);
+    leg1.emit({ type: 'input_audio_buffer.speech_started', item_id: 'first', audio_start_ms: 0 });
+    leg1.emit({
+      type: 'input_audio_buffer.speech_started',
+      item_id: 'second',
+      audio_start_ms: 1000,
+    });
+    leg1.emit(completed('second', 'Second finished first.'));
+    leg1.emit(completed('first', 'First finished second.'));
+    expect(session.utterances().map((u) => u.text)).toEqual([
+      'Second finished first.',
+      'First finished second.',
+    ]);
+  });
+
+  it('retains upstream delivery of messages received after Stop', async () => {
+    const onUtterance = jest.fn();
+    const { session, leg1 } = await boot({ onUtterance }, {}, startIOSMeetingWs);
+    session.stop();
+    leg1.emit(completed('late', 'Late server text.'));
+    expect(onUtterance).toHaveBeenCalledTimes(1);
+    expect(session.utterances()[0].text).toBe('Late server text.');
+  });
+
+  it('retains upstream handling of an individual transcription failure', async () => {
+    const onError = jest.fn();
+    const onClose = jest.fn();
+    const { leg1 } = await boot({ onError, onClose }, {}, startIOSMeetingWs);
+    leg1.emit({ type: 'conversation.item.input_audio_transcription.failed', item_id: 'failed' });
+    expect(onError).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+  });
+
+  it('ignores the Android abort option on the upstream iOS entry', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const { session } = await boot({}, { signal: controller.signal, noteId: 7 }, startIOSMeetingWs);
+    expect(LivePCMStreaming.start).toHaveBeenCalledWith(24000);
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+    session.stop();
+  });
+
+  it('commits and closes an upstream iOS retiring leg as soon as its replacement opens', async () => {
+    const { leg1 } = await boot({}, {}, startIOSMeetingWs);
+    await advanceToRotation();
+    const leg2 = lastLeg();
+    expect(leg2).not.toBe(leg1);
+    leg2.open();
+    await flushMicro();
+    expect(leg1.didCommit()).toBe(true);
+    expect(leg1.closed).toBe(true);
+  });
+
+  it('uses the upstream rotation offset captured before replacement connection time', async () => {
+    const { session } = await boot({}, {}, startIOSMeetingWs);
+    await advanceToRotation();
+    const leg2 = lastLeg();
+    jest.advanceTimersByTime(5000);
+    leg2.open();
+    await flushMicro();
+    leg2.emit({ type: 'input_audio_buffer.speech_started', item_id: 'new', audio_start_ms: 10 });
+    leg2.emit(completed('new', 'Rotated text.'));
+    expect(session.utterances()[0].startMs).toBe(ROTATION_MS + 10);
+  });
+});
+
+describe('Android native capture lifecycle', () => {
+  it('forwards notification Stop without discarding the active session', async () => {
+    const onStopRequested = jest.fn();
+    const { session } = await boot({ onStopRequested });
+    const notification = jest.mocked(addPcmStopListener).mock.calls[0][0];
+    notification();
+    expect(onStopRequested).toHaveBeenCalledTimes(1);
+    expect(LivePCMStreaming.stop).not.toHaveBeenCalled();
+    session.stop();
+    expect(jest.mocked(addPcmStopListener).mock.results[0].value.remove).toHaveBeenCalled();
+    expect(jest.mocked(addPcmErrorListener).mock.results[0].value.remove).toHaveBeenCalled();
+  });
+
+  it('retains native interruption as the terminal finalization error', async () => {
+    const onError = jest.fn();
+    const onClose = jest.fn();
+    const { session } = await boot({ onError, onClose });
+    jest.mocked(addPcmErrorListener).mock.calls[0][0]({ message: 'Native interruption' });
+    expect(onError).toHaveBeenCalledWith({ error: { message: 'Native interruption' } });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await expect(session.finish?.()).rejects.toThrow('Native interruption');
+  });
+
+  it('does not fetch a token or start capture for an already canceled Android request', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      startRealtimeMeetingWs({ signal: controller.signal }, {}, { wsFactory }),
+    ).rejects.toThrow('Meeting cancelled.');
+    expect(api.post).not.toHaveBeenCalled();
+    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
+  });
+
+  it('does not start Android capture after cancellation during token acquisition', async () => {
+    let grant!: (value: { clientSecret: string; model: string }) => void;
+    jest.mocked(api.post).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          grant = resolve;
+        }),
+    );
+    const controller = new AbortController();
+    const pending = startRealtimeMeetingWs({ signal: controller.signal }, {}, { wsFactory });
+    const rejected = expect(pending).rejects.toThrow('Meeting cancelled.');
+    controller.abort();
+    grant({ clientSecret: 'synthetic-token', model: 'synthetic-model' });
+    await rejected;
+    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
   });
 });

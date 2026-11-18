@@ -1,4 +1,5 @@
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
+import { prepareNoteLocation, prepareNoteDeletion } from './notesRepositoryPlatform';
 import {
   eq,
   ne,
@@ -470,21 +471,16 @@ export class LocalNotesRepository implements NotesRepository {
   }
 
   createNote(title: string, content: string, folderId?: number, spaceId?: number): Note {
-    // Created straight into a space (browsing it with no folder open): the note
-    // sits in the space itself rather than in any folder.
-    const targetFolderId = spaceId != null ? null : (folderId ?? 1);
+    const location = prepareNoteLocation(this.database, this, folderId, spaceId);
     return this.database
       .insert(notes)
       .values({
         title,
         content,
-        folderId: targetFolderId,
+        folderId: location.folderId,
         // A note always belongs to whatever space holds its folder — filing a
         // team folder's note into the private space would strand it.
-        spaceId:
-          targetFolderId != null
-            ? (this.getFolderSpaceId(targetFolderId) ?? this.getPrivateSpaceId())
-            : (spaceId ?? this.getPrivateSpaceId()),
+        spaceId: location.getSpaceId() ?? this.getPrivateSpaceId(),
         pendingSync: 1,
         updatedAt: sql`datetime('now')`,
       })
@@ -633,16 +629,6 @@ export class LocalNotesRepository implements NotesRepository {
       .run();
   }
 
-  private getFolderSpaceId(folderId: number): number | null {
-    return (
-      this.database
-        .select({ spaceId: folders.spaceId })
-        .from(folders)
-        .where(eq(folders.id, folderId))
-        .get()?.spaceId ?? null
-    );
-  }
-
   updateNote(id: number, updates: NoteUpdate): void {
     this.database
       .update(notes)
@@ -655,6 +641,7 @@ export class LocalNotesRepository implements NotesRepository {
   // meeting WAV must be removed explicitly on EVERY delete path (soft delete, hard delete,
   // remote-delete apply, and full wipe) — otherwise they orphan in the DB and on disk.
   private deleteNoteChildrenAndAudio(id: number): void {
+    prepareNoteDeletion(this, id);
     const row = this.database
       .select({ sourceFile: notes.sourceFile })
       .from(notes)

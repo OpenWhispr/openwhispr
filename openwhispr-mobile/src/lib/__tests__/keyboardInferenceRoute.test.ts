@@ -1,3 +1,17 @@
+let mockRecoveryPlatform: 'ios' | 'android' = 'ios';
+jest.mock('../keyboardRecoveryOwner', () => ({
+  get attachKeyboardRecoveryOwner() {
+    return jest.requireActual(
+      mockRecoveryPlatform === 'android'
+        ? '../keyboardRecoveryOwner.android'
+        : '../keyboardRecoveryOwner',
+    ).attachKeyboardRecoveryOwner;
+  },
+}));
+beforeEach(() => {
+  mockRecoveryPlatform = 'ios';
+});
+
 import {
   snapshotKeyboardInferenceRoute,
   readKeyboardInferenceRoute,
@@ -235,4 +249,50 @@ it('recovers an on-device keyboard job with no text route, sending only cleanup 
   const route = readKeyboardInferenceRoute('local-job');
   expect(route?.cleanupRoute).toEqual({ mode: 'local', scope: 'cleanup' });
   expect(route?.agentRoute).toEqual({ mode: 'openwhispr', scope: 'agent' });
+});
+
+it.each(['ios', 'android'] as const)(
+  'selects %s ownership metadata while recovering a completed provider result',
+  (platform) => {
+    mockRecoveryPlatform = platform;
+    mockJobIds.push('owned');
+    mockStorage.set(
+      'keyboard_provider_result.owned',
+      JSON.stringify({
+        version: 1,
+        jobId: 'owned',
+        route: mockRoute,
+        text: 'Recovered text',
+        requestContext: 'file',
+      }),
+    );
+    mockStorage.set(
+      'keyboard_upload_route.owned',
+      JSON.stringify({ historyOwner: 'account-owner' }),
+    );
+    const job = listPendingProviderRecoveryJobs()[0];
+    expect(job.result?.text).toBe('Recovered text');
+    expect(job.requestContext).toBe('file');
+    expect(job.historyOwner).toBe(platform === 'android' ? 'account-owner' : undefined);
+    expect(job.error).toBeUndefined();
+  },
+);
+
+it('retains iOS recovery when an unrelated original route is malformed but the result is valid', () => {
+  mockJobIds.push('completed');
+  mockStorage.set(
+    'keyboard_provider_result.completed',
+    JSON.stringify({
+      version: 1,
+      jobId: 'completed',
+      route: mockRoute,
+      text: 'Recovered text',
+      requestContext: 'file',
+    }),
+  );
+  mockStorage.set('keyboard_upload_route.completed', '{invalid');
+  const job = listPendingProviderRecoveryJobs()[0];
+  expect(job.error).toBeUndefined();
+  expect(job.requestContext).toBe('file');
+  expect(job.result?.text).toBe('Recovered text');
 });

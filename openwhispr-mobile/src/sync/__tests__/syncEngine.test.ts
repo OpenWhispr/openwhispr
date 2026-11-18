@@ -1,3 +1,4 @@
+jest.mock('@/android/accountData', () => ({ assertAccountDataOwner: jest.fn() }));
 jest.mock('../privateNoteDeletion', () => ({
   pushPrivateNoteDeletes: jest.fn(),
   clearPrivateNoteDeletionQueue: jest.fn(),
@@ -41,7 +42,7 @@ jest.mock('@/store/useAuthStore', () => ({
 }));
 
 const mockConfigState = {
-  config: { cloudBackupEnabled: true } as { cloudBackupEnabled: boolean } | undefined,
+  config: { cloudBackupEnabled: true } as { cloudBackupEnabled?: boolean } | undefined,
 };
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { subscribe: jest.fn(() => () => {}), getState: () => mockConfigState },
@@ -145,12 +146,14 @@ jest.mock('../initialBackfill', () => ({
 }));
 
 import { requestSync, subscribeSyncCompletion } from '../syncEngine';
+import { requestSync as requestAndroidSync } from '../syncEngine.android';
 import { pushPrivateNoteDeletes } from '../privateNoteDeletion';
 import { useSyncStore } from '../useSyncStore';
 import { ApiError } from '@/lib/apiClient';
 import { SyncStalledError } from '../syncContext';
 import { notesRepository } from '@/data';
 import * as Sentry from '@sentry/react-native';
+import { assertAccountDataOwner } from '@/android/accountData';
 
 // Flushes the microtask queue (via a macrotask boundary) enough times to
 // drain runSyncNow's long await chain — requestSync doesn't return the
@@ -1082,5 +1085,58 @@ describe('personal dictionary pass', () => {
 
     expect(mockPushDictionary).not.toHaveBeenCalled();
     expect(useSyncStore.getState().policyBlocked).toBe(true);
+  });
+});
+
+describe('Android backup consent defaults', () => {
+  it.each([undefined, {}])(
+    'keeps personal uploads off with an unset preference (%p)',
+    async (config) => {
+      mockConfigState.config = config;
+      await requestAndroidSync('manual');
+      expect(mockPullSharedDictionary).toHaveBeenCalled();
+      expect(mockPushFolders).toHaveBeenCalledWith(true, expect.any(Function));
+      expect(mockPushNotes).toHaveBeenCalledWith(true, expect.any(Function));
+      expect(mockPullFolders).not.toHaveBeenCalled();
+      expect(mockPushDictionary).not.toHaveBeenCalled();
+      expect(mockPushSnippets).not.toHaveBeenCalled();
+      expect(mockFetchUsage).not.toHaveBeenCalled();
+      expect(useSyncStore.getState().lastError).toBeNull();
+    },
+  );
+
+  it('allows personal backup after explicit Android opt-in', async () => {
+    await requestAndroidSync('manual');
+    expect(mockPushFolders).toHaveBeenCalledWith(false, expect.any(Function));
+    expect(mockPushDictionary).toHaveBeenCalled();
+  });
+
+  it('preserves the existing iOS default', async () => {
+    mockConfigState.config = {};
+    await requestSync('manual');
+    expect(mockPushFolders).toHaveBeenCalledWith(false, expect.any(Function));
+  });
+});
+
+describe('Android sync account ownership', () => {
+  it('refuses a mismatched account without wiping rows or uploading notes', async () => {
+    mockAuthState.user = { id: 'other-account' };
+    await requestAndroidSync('manual');
+    expect(assertAccountDataOwner).toHaveBeenCalledWith(mockAuthState.user);
+    expect(notesRepository.wipeAllSyncableData).not.toHaveBeenCalled();
+    expect(mockPushNotes).not.toHaveBeenCalled();
+    expect(useSyncStore.getState().lastError?.message).toBe('Local account ownership mismatch.');
+  });
+
+  it('stops before reading sync identity when the account database is unavailable', async () => {
+    jest.mocked(assertAccountDataOwner).mockImplementationOnce(() => {
+      throw new Error('Local account data is unavailable.');
+    });
+    await requestAndroidSync('manual');
+    expect(notesRepository.getSyncState).not.toHaveBeenCalled();
+    expect(notesRepository.wipeAllSyncableData).not.toHaveBeenCalled();
+    expect(mockFetchUsage).not.toHaveBeenCalled();
+    expect(mockPushNotes).not.toHaveBeenCalled();
+    expect(useSyncStore.getState().lastError?.message).toBe('Local account data is unavailable.');
   });
 });

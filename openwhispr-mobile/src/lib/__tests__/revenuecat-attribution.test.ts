@@ -313,6 +313,40 @@ it('links once the ID becomes readable instead of clearing', async () => {
   expect(server['billing-a']).toBe('af-device');
 });
 
+it('upstream iOS ignores unsupported purchase-owner arguments', async () => {
+  const check = jest.fn(() => {
+    throw new Error('Unsupported owner guard');
+  });
+  await expect(
+    Reflect.apply(rc.recordRevenueCatPurchase, undefined, ['pro.monthly', 'billing-a', check]),
+  ).resolves.toBe(true);
+  expect(check).not.toHaveBeenCalled();
+  expect(device.user).toBe('$RCAnonymousID:device');
+  expect(sdk.logIn).not.toHaveBeenCalled();
+  expect(sdk.recordPurchase).toHaveBeenCalledWith('pro.monthly');
+});
+
+it('upstream iOS records after linking without an Android owner-check argument', async () => {
+  let current = true;
+  await rc.identifyRevenueCatUser('billing-a');
+  sdk.setAttributes.mockImplementation(async (attributes) => {
+    if (attributes.$appsflyerId) current = false;
+  });
+  const check = jest.fn(() => {
+    if (!current) throw new Error('Purchase owner changed');
+  });
+  await expect(
+    Reflect.apply(rc.recordRevenueCatPurchase, undefined, ['pro.monthly', 'billing-a', check]),
+  ).resolves.toBe(true);
+  expect(current).toBe(false);
+  expect(check).not.toHaveBeenCalled();
+  expect(sdk.recordPurchase).toHaveBeenCalledWith('pro.monthly');
+});
+
+it('upstream iOS keeps the Android store-controller API out of its public entry', () => {
+  expect('withRevenueCatUser' in rc).toBe(false);
+});
+
 it('does not restore under an account that changed while linking', async () => {
   let current = true;
   await rc.identifyRevenueCatUser('billing-a');

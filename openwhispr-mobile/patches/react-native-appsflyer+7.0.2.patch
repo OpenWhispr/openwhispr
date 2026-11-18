@@ -1,0 +1,13 @@
+diff --git a/node_modules/react-native-appsflyer/android/build.gradle b/node_modules/react-native-appsflyer/android/build.gradle
+index f1aa051..f7175f8 100755
+--- a/node_modules/react-native-appsflyer/android/build.gradle
++++ b/node_modules/react-native-appsflyer/android/build.gradle
+@@ -85,7 +85,7 @@ repositories {
+ }
+ 
+ dependencies {
+-    implementation "org.jetbrains.kotlin:kotlin-stdlib:${safeExtGet('kotlin_stdlib_version', '2.4.10')}"
++    implementation "org.jetbrains.kotlin:kotlin-stdlib:${safeExtGet('kotlinVersion', '2.1.20')}"
+     implementation "com.facebook.react:react-native:${safeExtGet('reactNativeVersion', '+')}"
+     implementation "com.android.installreferrer:installreferrer:${safeExtGet('installReferrerVersion', '2.2')}"
+     if (includeConnector){

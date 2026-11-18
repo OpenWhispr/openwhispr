@@ -1,0 +1,198 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
+import { Alert, ActivityIndicator, Platform, Pressable, useColorScheme } from 'react-native';
+import { MenuView, type MenuAction } from '@react-native-menu/menu';
+import * as Sentry from '@sentry/react-native';
+import { SystemIcon } from '@/components/ui/SystemIcon';
+import { GlassCapsule } from '@/components/ui/GlassIconButton';
+import { useNotesStore } from '@/store/useNotesStore';
+import { safeHaptics } from '@/lib/utils';
+import { BRAND } from '@/config/colors';
+import type { Action } from '@/data';
+
+interface NoteActionsMenuProps {
+  noteId: number;
+  actions: Action[];
+  hasContent: boolean;
+  isRecording: boolean;
+  processing: boolean;
+  onRunAction: (action: Action) => void;
+  onManageActions: () => void;
+  onAskNote?: () => void;
+  askNoteDisabled?: boolean;
+  onCopyGeneratedNote?: () => void;
+  onViewTranscript?: () => void;
+  onShare: () => void;
+  onDelete: () => void;
+}
+
+const MANAGE_ID = '__manage';
+const ASK_NOTE_ID = '__ask_note';
+const COPY_GENERATED_NOTE_ID = '__copy_generated_note';
+const VIEW_TRANSCRIPT_ID = '__view_transcript';
+const SHARE_ID = '__share';
+const PRIVACY_ID = '__privacy';
+const DELETE_ID = '__delete';
+
+export function NoteActionsMenu({
+  noteId,
+  actions,
+  hasContent,
+  isRecording,
+  processing,
+  onRunAction,
+  onManageActions,
+  onAskNote,
+  askNoteDisabled = false,
+  onCopyGeneratedNote,
+  onViewTranscript,
+  onShare,
+  onDelete,
+}: NoteActionsMenuProps) {
+  const { copy } = useAndroidCopy();
+  const isPrivate = useNotesStore((s) => s.notes.find((n) => n.id === noteId)?.isPrivate === 1);
+  const setNotePrivacy = useNotesStore((s) => s.setNotePrivacy);
+
+  const scheme = useColorScheme();
+  const iconColor = scheme === 'dark' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(0, 0, 0, 0.85)';
+
+  const disabled = isRecording || processing;
+
+  const menuActions: MenuAction[] = [
+    ...actions.map((action) => ({
+      id: action.id.toString(),
+      title: action.name,
+      image: 'sparkles',
+      imageColor: iconColor,
+      attributes: { disabled: !hasContent },
+    })),
+    {
+      id: MANAGE_ID,
+      title: copy('editor.manageActions', 'Manage Actions…'),
+      image: 'slider.horizontal.3',
+      imageColor: iconColor,
+    },
+    ...(onAskNote
+      ? [
+          {
+            id: ASK_NOTE_ID,
+            title: copy('editor.askNote', 'Ask about this note'),
+            image: 'message',
+            imageColor: iconColor,
+            // Chat also reads the generated notes, so the caller decides when there is context.
+            attributes: { disabled: askNoteDisabled },
+          },
+        ]
+      : []),
+    ...(onCopyGeneratedNote
+      ? [
+          {
+            id: COPY_GENERATED_NOTE_ID,
+            title: copy('editor.copyNotes', 'Copy Notes'),
+            image: 'doc.on.doc',
+            imageColor: iconColor,
+          },
+        ]
+      : []),
+    ...(onViewTranscript
+      ? [
+          {
+            id: VIEW_TRANSCRIPT_ID,
+            title: copy('editor.viewTranscript', 'View Transcript'),
+            image: 'text.quote',
+            imageColor: iconColor,
+          },
+        ]
+      : []),
+    {
+      id: SHARE_ID,
+      title: copy('editor.share', 'Share'),
+      image: 'square.and.arrow.up',
+      imageColor: iconColor,
+    },
+    {
+      id: PRIVACY_ID,
+      title: isPrivate
+        ? copy('editor.enableSync', 'Enable Cloud Sync')
+        : copy('editor.disableSync', 'Disable Cloud Sync'),
+      image: isPrivate ? 'icloud' : 'icloud.slash',
+      imageColor: iconColor,
+    },
+    {
+      id: DELETE_ID,
+      title: copy('deleteAction', 'Delete'),
+      image: 'trash',
+      // Hex literal — @react-native-menu/menu's processColor can't serialize
+      // PlatformColor/iosColor; passing one collapses to imageColor=0 (transparent).
+      imageColor: '#FF3B30',
+      attributes: { destructive: true },
+    },
+  ];
+
+  const handlePress = ({ nativeEvent }: { nativeEvent: { event: string } }) => {
+    if (Platform.OS === 'android' && disabled) return;
+    const id = nativeEvent.event;
+    safeHaptics('light');
+
+    if (id === MANAGE_ID) {
+      onManageActions();
+      return;
+    }
+    if (id === ASK_NOTE_ID) {
+      onAskNote?.();
+      return;
+    }
+    if (id === COPY_GENERATED_NOTE_ID) {
+      onCopyGeneratedNote?.();
+      return;
+    }
+    if (id === VIEW_TRANSCRIPT_ID) {
+      onViewTranscript?.();
+      return;
+    }
+    if (id === SHARE_ID) {
+      onShare();
+      return;
+    }
+    if (id === PRIVACY_ID) {
+      safeHaptics('selection');
+      setNotePrivacy(noteId, !isPrivate).catch((err) => {
+        Sentry.captureException(err, { tags: { sync: 'setNotePrivacy.toggle' } });
+        Alert.alert(
+          copy('editor.cloudRemovalPending', 'Cloud copy removal pending'),
+          copy(
+            'editor.cloudRemovalBody',
+            'The note stays private on this device. Its cloud copy could not be removed yet; OpenWhispr will retry when sync is available.',
+          ),
+        );
+      });
+      return;
+    }
+    if (id === DELETE_ID) {
+      onDelete();
+      return;
+    }
+
+    const action = actions.find((a) => a.id.toString() === id);
+    if (action) onRunAction(action);
+  };
+
+  return (
+    <MenuView actions={menuActions} onPressAction={handlePress} shouldOpenOnLongPress={false}>
+      <Pressable
+        disabled={disabled}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={copy('editor.noteActions', 'Note actions')}
+        style={({ pressed }) => ({ opacity: disabled ? 0.4 : pressed ? 0.6 : 1 })}
+      >
+        <GlassCapsule>
+          {processing ? (
+            <ActivityIndicator size="small" color={BRAND} />
+          ) : (
+            <SystemIcon name="ellipsis" mdName="MoreHorizontal" size={20} color="brand" />
+          )}
+        </GlassCapsule>
+      </Pressable>
+    </MenuView>
+  );
+}

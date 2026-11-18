@@ -60,8 +60,10 @@ jest.mock('@/lib/trackingTransparency', () => ({
     mockGetTrackingAuthorizationStatus(),
 }));
 
-function loadAppsFlyer(): AppsFlyerModule {
+function loadAppsFlyer(platform: 'ios' | 'android' = 'ios'): AppsFlyerModule {
   jest.resetModules();
+  const { Platform } = require('react-native') as typeof import('react-native');
+  Platform.OS = platform;
   return require('../appsflyer') as AppsFlyerModule;
 }
 
@@ -82,8 +84,10 @@ function flushPromises(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-async function loadInitializedAppsFlyer(): Promise<AppsFlyerModule> {
-  const appsFlyer = loadAppsFlyer();
+async function loadInitializedAppsFlyer(
+  platform: 'ios' | 'android' = 'ios',
+): Promise<AppsFlyerModule> {
+  const appsFlyer = loadAppsFlyer(platform);
   appsFlyer.initAppsFlyer();
   setConfigState({
     config: { defaultMode: 'cloud', usageAnalyticsEnabled: true },
@@ -93,8 +97,8 @@ async function loadInitializedAppsFlyer(): Promise<AppsFlyerModule> {
   return appsFlyer;
 }
 
-async function loadStartedAppsFlyer(): Promise<AppsFlyerModule> {
-  const appsFlyer = await loadInitializedAppsFlyer();
+async function loadStartedAppsFlyer(platform: 'ios' | 'android' = 'ios'): Promise<AppsFlyerModule> {
+  const appsFlyer = await loadInitializedAppsFlyer(platform);
   mockSessionReadyListener?.();
   await flushPromises();
   return appsFlyer;
@@ -603,6 +607,123 @@ describe('AppsFlyer lifecycle', () => {
     );
   });
 
+  it('retries a rejected opt-out when the unchanged policy is applied again', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    const appsFlyer = await loadStartedAppsFlyer('android');
+    mockStop.mockRejectedValueOnce(new Error('native bridge unavailable'));
+    const optedOut: MockConfigState = {
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    };
+
+    setConfigState(optedOut);
+    await flushPromises();
+    appsFlyer.logAppsFlyerEvent('event_after_opt_out');
+    setConfigState(optedOut);
+    await flushPromises();
+
+    expect(mockStop.mock.calls).toEqual([[{ shouldStop: true }], [{ shouldStop: true }]]);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+
+    setConfigState(optedOut);
+    await flushPromises();
+    expect(mockStop).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a rejected Android opt-out on the next foreground session without starting it', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    await loadStartedAppsFlyer('android');
+    mockStop.mockRejectedValueOnce(new Error('native bridge unavailable'));
+
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    });
+    await flushPromises();
+    mockSessionReadyListener?.();
+    await flushPromises();
+
+    expect(mockStop.mock.calls).toEqual([[{ shouldStop: true }], [{ shouldStop: true }]]);
+    expect(mockStart).toHaveBeenCalledTimes(1);
+    expect(mockGetTrackingAuthorizationStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds an Android foreground session and events until a failed resume is retried', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    const appsFlyer = await loadStartedAppsFlyer('android');
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    });
+    await flushPromises();
+    mockStop.mockRejectedValueOnce(new Error('native bridge unavailable'));
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: true },
+      isLoading: false,
+    });
+    await flushPromises();
+
+    const resume = deferred<void>();
+    mockStop.mockReturnValueOnce(resume.promise);
+    mockSessionReadyListener?.();
+    appsFlyer.logAppsFlyerEvent('event_after_resume');
+    await flushPromises();
+
+    expect(mockStop.mock.calls).toEqual([
+      [{ shouldStop: true }],
+      [{ shouldStop: false }],
+      [{ shouldStop: false }],
+    ]);
+    expect(mockStart).toHaveBeenCalledTimes(1);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+
+    resume.resolve();
+    await flushPromises();
+
+    expect(mockStart).toHaveBeenCalledTimes(2);
+    expect(mockLogEvent).toHaveBeenCalledWith({
+      eventName: 'event_after_resume',
+      eventValues: {},
+    });
+  });
+
+  it('does not restart or send events after opt-out supersedes a pending resume', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    const appsFlyer = await loadStartedAppsFlyer('android');
+    const optedOut: MockConfigState = {
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    };
+    setConfigState(optedOut);
+    await flushPromises();
+
+    const resume = deferred<void>();
+    mockStop.mockReturnValueOnce(resume.promise);
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: true },
+      isLoading: false,
+    });
+    appsFlyer.logAppsFlyerEvent('event_during_resume');
+    mockSessionReadyListener?.();
+    await flushPromises();
+    expect(mockStart).toHaveBeenCalledTimes(1);
+
+    setConfigState(optedOut);
+    setConfigState(optedOut);
+    resume.resolve();
+    await flushPromises();
+    setConfigState(optedOut);
+    await flushPromises();
+
+    expect(mockStart).toHaveBeenCalledTimes(1);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+    expect(mockStop.mock.calls).toEqual([
+      [{ shouldStop: true }],
+      [{ shouldStop: false }],
+      [{ shouldStop: true }],
+    ]);
+  });
+
   it('pauses collection while refreshing ATT for an initialized SDK', async () => {
     const appsFlyer = await loadStartedAppsFlyer();
     mockStop.mockClear();
@@ -1038,4 +1159,44 @@ it('keeps the af_subscribe client event on Android', async () => {
     Platform.OS = originalOS;
   }
   expect(mockLogEvent).toHaveBeenCalledWith(expect.objectContaining({ eventName: 'af_subscribe' }));
+});
+
+// Native bundling selects one lifecycle implementation for each platform.
+jest.mock('../appsFlyerLifecycle', () => {
+  const { Platform } = require('react-native') as typeof import('react-native');
+  return jest.requireActual(
+    Platform.OS === 'android' ? '../appsFlyerLifecycle.android' : '../appsFlyerLifecycle',
+  );
+});
+
+describe('upstream iOS attribution boundary', () => {
+  it('does not retry a rejected opt-out when the same preference is reapplied', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    await loadStartedAppsFlyer();
+    mockStop.mockRejectedValueOnce(new Error('native bridge unavailable'));
+    const optedOut: MockConfigState = {
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    };
+    setConfigState(optedOut);
+    await flushPromises();
+    setConfigState(optedOut);
+    await flushPromises();
+    expect(mockStop.mock.calls).toEqual([[{ shouldStop: true }]]);
+  });
+
+  it('does not add Android native-stop recovery to an unsupported-ATT foreground callback', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    await loadStartedAppsFlyer();
+    mockStop.mockRejectedValueOnce(new Error('native bridge unavailable'));
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    });
+    await flushPromises();
+    mockSessionReadyListener?.();
+    await flushPromises();
+    expect(mockStop.mock.calls).toEqual([[{ shouldStop: true }]]);
+    expect(mockStart).toHaveBeenCalledTimes(1);
+  });
 });

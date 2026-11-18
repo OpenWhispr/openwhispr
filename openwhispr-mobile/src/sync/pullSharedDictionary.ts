@@ -1,3 +1,4 @@
+import { checkpointDictionaryPersistence } from './dictionaryPersistenceCheckpoint';
 import { SyncStalledError, uncheckedSync, type SyncCheckpoint } from './syncContext';
 import { notesRepository } from '@/data';
 import {
@@ -357,6 +358,7 @@ async function pullPass(
 async function clearSharedDictionary(checkpoint: SyncCheckpoint): Promise<boolean> {
   checkpoint();
   const changed = await saveSharedDictionaryState(null);
+  checkpointDictionaryPersistence(checkpoint);
   resetSharedDictionaryCursors();
   return changed;
 }
@@ -374,7 +376,9 @@ export async function pullSharedDictionary(
   workspaces: RemoteWorkspace[] | null = null,
 ): Promise<{ changed: boolean }> {
   if (endpointUnavailable) return { changed: false };
+  checkpointDictionaryPersistence(checkpoint);
   const stored = await loadSharedDictionaryState();
+  checkpointDictionaryPersistence(checkpoint);
   // Whether this run already removed a stored state, for the paths that end early.
   let removed = false;
   try {
@@ -398,16 +402,19 @@ export async function pullSharedDictionary(
       // The old workspace's words go too: if this workspace's first snapshot
       // fails, they must not be republished as its words.
       removed = (await saveSharedDictionaryState(null)) || removed;
+      checkpointDictionaryPersistence(checkpoint);
       resetSharedDictionaryCursors();
     }
 
     const result = await pullPass(workspace, base, checkpoint);
     checkpoint();
     const changed = await saveSharedDictionaryState(result.state);
+    checkpointDictionaryPersistence(checkpoint);
     writeCursor(ENTRIES_CURSOR, result.entriesCursor);
     writeCursor(HIDES_CURSOR, result.hidesCursor);
     return { changed };
   } catch (err) {
+    checkpointDictionaryPersistence(checkpoint);
     if (isAccessLost(err)) {
       return { changed: (await clearSharedDictionary(checkpoint)) || removed };
     }

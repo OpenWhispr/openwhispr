@@ -67,6 +67,7 @@ jest.mock('@/services/transcription/LocalTranscriptionService', () => ({
 }));
 
 import { useNotesStore } from '../useNotesStore';
+import { useNotesStore as useAndroidNotesStore } from '../useNotesStore.android';
 import { notesRepository, spacesRepository } from '@/data';
 import type { Folder, Note } from '@/data/types';
 import type { Space } from '@/data/spacesTypes';
@@ -117,15 +118,16 @@ const note = (overrides: Partial<Note> = {}): Note =>
 
 beforeEach(() => {
   jest.clearAllMocks();
-  useNotesStore.setState({
-    folders: [],
-    folderCounts: {},
-    notes: [],
-    spaces: [],
-    activeFolderId: null,
-    activeSpaceId: null,
-    isInitialized: false,
-  });
+  for (const store of [useNotesStore, useAndroidNotesStore])
+    store.setState({
+      folders: [],
+      folderCounts: {},
+      notes: [],
+      spaces: [],
+      activeFolderId: null,
+      activeSpaceId: null,
+      isInitialized: false,
+    });
   mockListSpaces.mockReturnValue([
     space({ id: 1, kind: 'private', name: 'Personal' }),
     space({ id: 2, kind: 'team', name: 'Engineering' }),
@@ -133,6 +135,31 @@ beforeEach(() => {
 });
 
 describe('useNotesStore — spaces', () => {
+  it('retains upstream iOS search clearing and reload when a folder is selected again', () => {
+    useNotesStore.setState({
+      activeFolderId: 41,
+      activeSpaceId: null,
+      isInitialized: true,
+      searchQuery: 'retained',
+      isSearching: true,
+      activeNoteId: 10,
+    });
+    useNotesStore.getState().setActiveFolderId(41);
+    expect(useNotesStore.getState()).toMatchObject({
+      searchQuery: '',
+      isSearching: false,
+      activeNoteId: null,
+    });
+    expect(mockNotesRepository.getNotesByFolder).toHaveBeenCalledWith(41);
+  });
+
+  it('retains the explicit folder passed to iOS note creation', () => {
+    mockNotesRepository.getFolders.mockReturnValue([folder({ id: 41 })]);
+    useNotesStore.getState().createNote('iOS note', 'Body', 88);
+    expect(mockNotesRepository.createNote).toHaveBeenCalledWith('iOS note', 'Body', 88);
+    expect(useNotesStore.getState().activeFolderId).toBeNull();
+  });
+
   it('initialize() populates spaces alongside folders/notes', () => {
     useNotesStore.getState().initialize();
 
@@ -200,11 +227,37 @@ describe('useNotesStore — spaces', () => {
   });
 
   it('createNote() still uses the active folder when no space is being browsed', () => {
+    mockNotesRepository.getFolders.mockReturnValue([folder({ id: 5 })]);
     useNotesStore.setState({ activeFolderId: 5, activeSpaceId: null });
 
     useNotesStore.getState().createNote();
 
     expect(mockNotesRepository.createNote).toHaveBeenCalledWith('Untitled', '', 5);
+  });
+
+  it('falls back from a stale explicit folder to the current private default and visible scope', () => {
+    const personal = folder({ id: 41 });
+    mockNotesRepository.getFolders.mockReturnValue([personal]);
+    mockNotesRepository.getPrivateFolders.mockReturnValue([personal]);
+    useAndroidNotesStore.setState({ folders: [personal], activeFolderId: 88, isInitialized: true });
+    useAndroidNotesStore.getState().createNote('Local note', 'Local body', 88);
+    expect(mockNotesRepository.createNote).toHaveBeenCalledWith('Local note', 'Local body', 41);
+    expect(useAndroidNotesStore.getState().activeFolderId).toBe(41);
+  });
+
+  it('preserves an open search when refocusing a still-valid folder', () => {
+    const personal = folder({ id: 41 });
+    mockNotesRepository.getFolders.mockReturnValue([personal]);
+    useAndroidNotesStore.setState({
+      activeFolderId: 41,
+      activeSpaceId: null,
+      isInitialized: true,
+      searchQuery: 'retained',
+      isSearching: true,
+    });
+    useAndroidNotesStore.getState().setActiveFolderId(41);
+    expect(useAndroidNotesStore.getState().searchQuery).toBe('retained');
+    expect(mockNotesRepository.getNotesByFolder).not.toHaveBeenCalled();
   });
 
   it('createFolder(name, spaceId) creates the folder inside that space', () => {

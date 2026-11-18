@@ -1,3 +1,4 @@
+import { createAppsFlyerLifecycle } from './appsFlyerLifecycle';
 import { Platform } from 'react-native';
 import { useConfigStore } from '@/store/useConfigStore';
 import {
@@ -36,7 +37,6 @@ const REVENUE_ID_LOOKUP_TIMEOUT_MS = 2_000;
 
 let didSetUp = false;
 let didInit = false;
-let stopped = false;
 let sessionReady = false;
 let didStartCurrentSession = false;
 let sdkReady: Promise<boolean> | null = null;
@@ -47,6 +47,19 @@ let pendingEvents: PendingEvent[] = [];
 const attributionListeners = new Set<() => void>();
 let lastPublishedConsent: AppsFlyerAttributionConsent | undefined;
 let revenueId: string | null = null;
+
+const lifecycle = createAppsFlyerLifecycle({
+  isInitialized: () => didInit,
+  updateStopped: updateSdkStoppedState,
+  setReadiness: (readiness) => {
+    sdkReady = readiness;
+  },
+  isCurrentReadiness: (readiness) => sdkReady === readiness,
+  collectionAllowed,
+  startSession: startSessionIfAllowed,
+  flushEvents: flushPendingEvents,
+  publishReady: () => publishAttributionState(true),
+});
 
 // 'revoked' is an explicit opt-out on this device (Usage Analytics off, ATT
 // denied). 'undecided' is a device that has not answered the ATT prompt, or a
@@ -140,7 +153,7 @@ function getAppsFlyer(): AppsFlyerSdk {
 // AppsFlyer records install/app-open attribution and a small set of product
 // milestones — never transcription content. Like Sentry, every interaction is
 // gated behind the user's Usage Analytics preference: disabling the toggle
-// stops the SDK immediately, re-enabling resumes it. A null result means the
+// requests native stop and immediately blocks app events. A null result means the
 // persisted preference has not hydrated yet, so no SDK interaction is allowed.
 function analyticsPreference(): boolean | null {
   const config = useConfigStore.getState().config;
@@ -170,7 +183,13 @@ function collectionAllowed(): boolean {
 }
 
 function startSessionIfAllowed(): void {
-  if (!sessionReady || didStartCurrentSession || !collectionAllowed()) return;
+  if (
+    !sessionReady ||
+    didStartCurrentSession ||
+    !lifecycle.canStartSession() ||
+    !collectionAllowed()
+  )
+    return;
 
   didStartCurrentSession = true;
   const startOperation = invokeSdk(() => getAppsFlyer().start())
@@ -245,29 +264,7 @@ function updateSdkStoppedState(shouldStop: boolean): Promise<boolean> {
   return result;
 }
 
-function setSdkStopped(shouldStop: boolean): void {
-  if (!didInit || shouldStop === stopped) return;
-
-  stopped = shouldStop;
-  const preferenceChange = updateSdkStoppedState(shouldStop);
-  if (shouldStop) {
-    sdkReady = null;
-    return;
-  }
-
-  const readiness = preferenceChange.then((updated): boolean => {
-    if (!updated || stopped) return false;
-    startSessionIfAllowed();
-    flushPendingEvents();
-    return true;
-  });
-  sdkReady = readiness;
-  readiness.then((ready): void => {
-    // A resume that starts no session of its own (after the ATT re-check, or one
-    // that superseded a pending start) still makes the identifier readable.
-    if (ready && sdkReady === readiness) publishAttributionState(true);
-  });
-}
+const setSdkStopped = lifecycle.setStopped;
 
 function applyAttributionPolicy(devKey: string): void {
   applyCollectionPolicy(devKey);
@@ -313,6 +310,9 @@ export function setAppsFlyerTrackingAuthorizationStatus(status: TrackingAuthoriz
 
 export async function refreshAppsFlyerTrackingAuthorization(): Promise<void> {
   if (trackingAuthorizationStatus === 'notSupported') {
+    if (lifecycle.reapplyPolicyOnUnsupportedRefresh && didSetUp && DEV_KEY) {
+      applyAttributionPolicy(DEV_KEY);
+    }
     startSessionIfAllowed();
     return;
   }
