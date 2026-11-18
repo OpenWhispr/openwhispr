@@ -1191,6 +1191,8 @@ class IPCHandlers {
       const scopeChanged = this.databaseManager.activeAccountId !== null;
       this._noteFilesSync?.flushSync();
       this.databaseManager.setActiveAccountId(null);
+      this.databaseManager.ensureAccountDefaultFolders();
+      this._flushAccountRepairMirrors();
       if (scopeChanged) this._noteFilesSync?.accountChanged();
       this._clearDictionaryHotwordHints();
       accountScopeBinding.clear();
@@ -1477,13 +1479,28 @@ class IPCHandlers {
   get noteFiles() {
     this._noteFilesSync ??= createNoteFilesSync({
       getDatabase: () => this.databaseManager,
-      getSpeakerMappings: (noteId) => this._buildSpeakerMappings(noteId),
+      // Mirrors include inactive accounts; their speaker names need the same scope.
+      getSpeakerMappings: (noteId) =>
+        Object.fromEntries(
+          this.databaseManager.db
+            .prepare("SELECT speaker_id, display_name FROM speaker_mappings WHERE note_id = ?")
+            .all(noteId)
+            .map((mapping) => [mapping.speaker_id, mapping.display_name])
+        ),
     });
     return this._noteFilesSync;
   }
 
   _asyncMirrorWrite(note) {
     this.noteFiles.writeNote(note);
+  }
+
+  _flushAccountRepairMirrors() {
+    if (!this.noteFiles.enabled) return;
+    for (const note of this.databaseManager.takeAccountRepairNotes()) {
+      this.noteFiles.writeNote(note);
+    }
+    this.noteFiles.containersChanged();
   }
 
   _captureMirrorDeletionNotes(filter) {
@@ -3738,6 +3755,8 @@ class IPCHandlers {
       // After those two: they give the account the signed-out chats this moves
       // out of the stand-in along with the notes.
       const privateNotesClaimed = this._claimSignedOutPrivateNotes();
+      this.databaseManager.ensureAccountDefaultFolders();
+      this._flushAccountRepairMirrors();
       // After the claims, so the new account's notes include the ones it took over.
       if (accountChanged) this.noteFiles.accountChanged();
       if (accountChanged) {
@@ -3833,6 +3852,9 @@ class IPCHandlers {
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId, snapshots);
+          }
+          for (const note of result.relocatedNotes) {
+            if (!note.deleted_at) this._asyncMirrorWrite(note);
           }
           this.noteFiles.containersChanged();
           // The account's rows are already gone, so a vault that won't delete
@@ -4220,6 +4242,20 @@ class IPCHandlers {
       }
       return this.databaseManager.queueUnlinkedPrivateFolders();
     });
+    // Scope changes run before useAuth waits for the sync lock. Cloud ownership
+    // evidence must still belong to the active account when its queued IPC lands.
+    const assertSyncAccountScope = (expectedScope) => {
+      const activeScope = accountScopeBinding.resolveActiveAccountScope({
+        ...tokenStore.getState(),
+        binding: accountScopeBinding.read(),
+      });
+      if (
+        !accountScopeBinding.matchesActiveAccountScope(expectedScope, activeScope) ||
+        this.databaseManager.activeAccountId !== expectedScope.accountId
+      ) {
+        throw new Error("Authentication context changed during sync acknowledgement");
+      }
+    };
     ipcMain.handle(
       "db-acknowledge-note-create",
       (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
@@ -4375,6 +4411,23 @@ class IPCHandlers {
         return this.databaseManager.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId);
       }
     );
+    ipcMain.handle("db-ensure-account-default-folders", (_, foreignCloudIds, expectedScope) => {
+      assertSyncAccountScope(expectedScope);
+      const before = this.databaseManager.getFolders();
+      this.databaseManager.ensureAccountDefaultFolders(
+        Array.isArray(foreignCloudIds)
+          ? foreignCloudIds.filter((cloudId) => typeof cloudId === "string")
+          : []
+      );
+      this._flushAccountRepairMirrors();
+      // A folder proved to be another account's is gone from this scope.
+      const kept = new Set(this.databaseManager.getFolders().map((folder) => folder.id));
+      setImmediate(() => {
+        for (const { id } of before) {
+          if (!kept.has(id)) broadcastToWindows("folder-deleted", { id });
+        }
+      });
+    });
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
     ipcMain.handle("db-get-pending-folder-deletes", () =>
       this.databaseManager.getPendingFolderDeletes()
@@ -15624,6 +15677,7 @@ class IPCHandlers {
         for (const note of this.databaseManager.mergedNotes.splice(0)) {
           this.noteFiles.deleteNote(note.id, note, note.speakerMappings);
         }
+        this._flushAccountRepairMirrors();
         return { success: true };
       } catch (error) {
         debugLogger.error(
@@ -15639,6 +15693,7 @@ class IPCHandlers {
       try {
         if (!this.noteFiles.enabled) return { success: false, error: "Note files not enabled" };
         await this.noteFiles.setPath(newPath);
+        this._flushAccountRepairMirrors();
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to set note-files path", { error: error.message }, "note-files");
@@ -15650,6 +15705,7 @@ class IPCHandlers {
       try {
         if (!this.noteFiles.enabled) return { success: false, error: "Note files not enabled" };
         await this.noteFiles.rebuild();
+        this._flushAccountRepairMirrors();
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to rebuild note files", { error: error.message }, "note-files");

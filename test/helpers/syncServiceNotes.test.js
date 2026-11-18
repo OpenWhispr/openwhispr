@@ -306,7 +306,8 @@ test("a cloud tombstone hard-deletes the local note", async (t) => {
     updated_at: LOCAL_EARLY,
   });
 
-  // Tombstones only travel on the delta page, so the cursor must already exist.
+  // Tombstones only travel on the delta page, so this account must own its cursor.
+  localStorageStub.setItem("lastSyncedAt.accountId", "user-harness");
   localStorageStub.setItem("lastSyncedAt.notes", "2026-07-01T00:00:00.000Z");
   await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: cloudRow.id } });
   const mark = cloud.log.length;
@@ -365,6 +366,7 @@ test("a cloud note that fails to save is retried without blocking the rest of th
   const errors = silenceConsoleErrors(t);
 
   const cursor = "2026-07-01T00:00:00.000Z";
+  localStorageStub.setItem("lastSyncedAt.accountId", "user-harness");
   localStorageStub.setItem("lastSyncedAt.notes", cursor);
   const failing = cloud.seedNote({
     client_note_id: "client-failing",
@@ -827,7 +829,7 @@ test("unowned cursors on a device another account used get one snapshot pull", a
   assert.equal(snapshotPulls.length, 1, "the snapshot runs once");
 });
 
-test("unowned cursors on a device only one account used download nothing extra", async (t) => {
+test("unowned personal cursors replay tombstones once without an extra live snapshot", async (t) => {
   const db = createDb(t);
   if (!db) return;
   resetBrowserGlobals();
@@ -848,12 +850,12 @@ test("unowned cursors on a device only one account used download nothing extra",
     ["2026-06-01T00:00:00.000Z"],
     "conversations pull once, from the inherited cursor"
   );
-  // The second read is the note feed's one-time replay, which every upgraded
-  // device runs; the unowned cursors add no snapshot pull of their own.
+  // No recorded owner proves these cursors are this account's. One feed read
+  // includes deleted rows even if the old replay budget was already exhausted.
   assert.deepEqual(
     sinces("/api/notes/list"),
-    ["2026-06-01T00:00:00.000Z", "1970-01-01T00:00:00.000Z"],
-    "notes pull from the inherited cursor, with no snapshot"
+    ["1970-01-01T00:00:00.000Z"],
+    "notes replay the full feed, with no extra live snapshot"
   );
 });
 
@@ -2587,6 +2589,7 @@ for (const backup of [true, false]) {
     const { db, cloud, service } = ctx;
     silenceConsoleErrors(t);
     localStorageStub.setItem("cloudBackupEnabled", String(backup));
+    localStorageStub.setItem("lastSyncedAt.accountId", "user-harness");
     db.setActiveAccountId("user-harness");
     const api = createElectronApi(db, { cloud });
     windowStub.electronAPI = api;

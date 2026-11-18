@@ -37,6 +37,7 @@ async function setup(t) {
   enableSync();
   const cloud = createFakeCloud();
   windowStub.electronAPI = createElectronApi(db, { cloud });
+  db.setActiveAccountId("user-harness");
   await establishValidatedAuth();
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
