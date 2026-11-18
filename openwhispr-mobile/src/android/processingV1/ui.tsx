@@ -31,8 +31,12 @@ export function OptionSheet({
 }) {
   return (
     <BottomSheet visible={visible} onClose={onClose} title={title} body={body}>
-      {/* Room below the card, so its shadow is never cut by the scroll view. */}
-      <ScrollView style={{ maxHeight: 440 }} contentContainerStyle={{ paddingBottom: 8 }}>
+      {/* The scroll area reaches the sheet's edges and pads inside, so the card's shadow
+          (8 px down, 24 px blur) is never cut at the sides or the bottom. */}
+      <ScrollView
+        style={{ maxHeight: 480, marginHorizontal: -16, marginTop: -8, marginBottom: -16 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 }}
+      >
         <View style={cardStyle}>
           {options.map((option, index) => (
             <View key={option.id}>
