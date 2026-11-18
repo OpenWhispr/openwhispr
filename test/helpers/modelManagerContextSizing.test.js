@@ -38,8 +38,12 @@ function loadModelManager() {
     return originalLoad.call(this, request, parent, isMain);
   };
   try {
-    require("../../src/helpers/modelDirUtils.js");
-    return require("../../src/helpers/modelManagerBridge.js").default;
+    const modelManager = require("../../src/helpers/modelManagerBridge.js").default;
+    // Pin modelsDir to the temp home. getCacheRoot() prefers OPENWHISPR_CACHE_ROOT,
+    // XDG_CACHE_HOME (linux) and USERPROFILE (win32) over the stubbed home, and
+    // migrates model folders when they differ, so it must not run here (#3244).
+    modelManager.getModelsDir = () => path.join(electronHome, ".cache", "openwhispr", "models");
+    return modelManager;
   } finally {
     Module._load = originalLoad;
   }
