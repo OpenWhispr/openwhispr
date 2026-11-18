@@ -1304,7 +1304,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   <IntegrationsView
                     isPaid={usage?.hasPaidAccessOptimistic ?? false}
                     onUpgrade={() => {
-                      setSettingsSection("plansBilling");
+                      // A fork build has no Plans & Billing: sign in and the license live in the Titanium account.
+                      setSettingsSection(CLOUD_ENABLED ? "plansBilling" : "titaniumAccount");
                       setShowSettings(true);
                     }}
                     section={integrationsSection}

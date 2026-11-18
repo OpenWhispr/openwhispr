@@ -567,6 +567,8 @@ function initializeCoreManagers() {
       credentials: connectorCredentials,
       logger: debugLogger,
       env: process.env,
+      // A fork's calendar Google project has no gmail.send scope (D-11).
+      allowCalendarGmailClient: FORK_IDENTITY.CLOUD_ENABLED,
       openExternal: (url) => require("./src/helpers/externalUrlOpener").openExternalUrl(url),
       writeClipboard: (text, webContents) => clipboardManager.writeClipboard(text, webContents),
       // Read only when revoking a Gmail login on the calendar's Google project;

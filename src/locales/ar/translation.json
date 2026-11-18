@@ -960,9 +960,11 @@
         "token_exchange_failed": "لم يكمل Slack عملية الربط. حاول مرة أخرى.",
         "not_configured": "Slack غير متاح في هذا الإصدار.",
         "connection_changed": "تغيّر حسابك أو اتصال Slack أثناء الربط. حاول مرة أخرى.",
-        "signed_out": "سجّل الدخول إلى {{brand}} لربط Slack.",
+        "signed_out": "سجّل الدخول بحساب Titanium الخاص بك لربط Slack.",
         "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
-        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى."
+        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
+        "reauth_required": "سجّل الدخول إلى حساب Titanium مرة أخرى لربط Slack.",
+        "plan_required": "يتطلب ربط Slack ترخيص {{brand}} ساريًا."
       },
       "browser": {
         "connectedTitle": "تم توصيل Slack",
@@ -991,13 +993,15 @@
         "token_exchange_failed": "لم يكمل GitHub عملية الربط. حاول مرة أخرى.",
         "not_configured": "GitHub غير متاح في هذا الإصدار.",
         "connection_changed": "تغيّر حسابك أو اتصال GitHub أثناء الربط. حاول مرة أخرى.",
-        "signed_out": "سجّل الدخول إلى {{brand}} لربط GitHub.",
+        "signed_out": "سجّل الدخول بحساب Titanium الخاص بك لربط GitHub.",
         "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
         "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
         "code_expired": "انتهت صلاحية الرمز. حاول مرة أخرى.",
         "device_flow_disabled": "تسجيل الدخول إلى GitHub برمز غير مُعدّ في هذا الإصدار.",
         "network": "تعذّر الوصول إلى GitHub. تحقّق من اتصالك وحاول مرة أخرى.",
-        "rate_limited": "GitHub مشغول الآن. حاول مرة أخرى بعد دقيقة."
+        "rate_limited": "GitHub مشغول الآن. حاول مرة أخرى بعد دقيقة.",
+        "reauth_required": "سجّل الدخول إلى حساب Titanium مرة أخرى لربط GitHub.",
+        "plan_required": "يتطلب ربط GitHub ترخيص {{brand}} ساريًا."
       },
       "deviceCode": {
         "instructions": "أدخل هذا الرمز على GitHub:",
@@ -1031,12 +1035,14 @@
         "token_exchange_failed": "لم يكمل Google عملية الربط. حاول مرة أخرى.",
         "not_configured": "Gmail غير متاح في هذا الإصدار.",
         "connection_changed": "تغيّر حسابك أو اتصال Gmail أثناء الربط. حاول مرة أخرى.",
-        "signed_out": "سجّل الدخول إلى {{brand}} لربط Gmail.",
+        "signed_out": "سجّل الدخول بحساب Titanium الخاص بك لربط Gmail.",
         "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
         "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
         "permission_not_granted": "لم يتم ربط Gmail لأن إذن إرسال الرسائل الإلكترونية لم يُمنح. أعد الربط واترك هذا الإذن محددًا.",
         "email_not_verified": "لم تتحقق Google من عنوان البريد الإلكتروني لهذا الحساب، لذلك لم يتم ربط Gmail.",
-        "domain_policy": "حظر مسؤول Google في مؤسستك هذا التطبيق. اطلب منه السماح بـ {{brand}}."
+        "domain_policy": "حظر مسؤول Google في مؤسستك هذا التطبيق. اطلب منه السماح بـ {{brand}}.",
+        "reauth_required": "سجّل الدخول إلى حساب Titanium مرة أخرى لربط Gmail.",
+        "plan_required": "يتطلب ربط Gmail ترخيص {{brand}} ساريًا."
       },
       "browser": {
         "connectedTitle": "تم توصيل Gmail",
@@ -1064,10 +1070,12 @@
         "token_exchange_failed": "لم يكمل Linear عملية الربط. حاول مرة أخرى.",
         "not_configured": "Linear غير متاح في هذا الإصدار.",
         "connection_changed": "تغيّر حسابك أو اتصال Linear أثناء الربط. حاول مرة أخرى.",
-        "signed_out": "سجّل الدخول إلى {{brand}} لربط Linear.",
+        "signed_out": "سجّل الدخول بحساب Titanium الخاص بك لربط Linear.",
         "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
         "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
-        "permission_not_granted": "لم يتم ربط Linear لأن بعض الأذونات لم تُمنح. أعد الربط واسمح بها جميعًا."
+        "permission_not_granted": "لم يتم ربط Linear لأن بعض الأذونات لم تُمنح. أعد الربط واسمح بها جميعًا.",
+        "reauth_required": "سجّل الدخول إلى حساب Titanium مرة أخرى لربط Linear.",
+        "plan_required": "يتطلب ربط Linear ترخيص {{brand}} ساريًا."
       },
       "browser": {
         "connectedTitle": "تم توصيل Linear",
@@ -1212,8 +1220,8 @@
       "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب."
     },
     "beta": "تجريبي",
-    "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
-    "locked": "متاح ضمن الخطط المدفوعة"
+    "upsell": "تتطلب الموصلات ترخيص {{brand}} ساريًا. سجّل الدخول بحساب Titanium الخاص بك ليعمل المساعد في أدواتك.",
+    "locked": "مُضمَّن مع ترخيص {{brand}}"
   },
   "auth": {
     "cloudNotConfigured": "السحابة غير مهيأة",

@@ -41,11 +41,14 @@ const DOMAIN_POLICY_ERRORS = new Set(["admin_policy_enforced", "org_internal"]);
 // the same Google Cloud project, so CI and release configs need no new
 // secrets. The fallback is pair-wise: an id from one client with another's
 // secret is a pair Google refuses (invalid_client), so half a pair is ignored.
-function gmailClientCredentials(env) {
-  for (const [idKey, secretKey] of [
-    ["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET"],
-    ["GOOGLE_CALENDAR_CLIENT_ID", "GOOGLE_CALENDAR_CLIENT_SECRET"],
-  ]) {
+// A fork build passes allowCalendarClient: false: its calendar Google project has
+// no gmail.send scope, so only a dedicated GMAIL_* pair makes Gmail configured.
+function gmailClientCredentials(env, { allowCalendarClient = true } = {}) {
+  const pairs = [["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET"]];
+  if (allowCalendarClient) {
+    pairs.push(["GOOGLE_CALENDAR_CLIENT_ID", "GOOGLE_CALENDAR_CLIENT_SECRET"]);
+  }
+  for (const [idKey, secretKey] of pairs) {
     const clientId = env?.[idKey];
     const clientSecret = env?.[secretKey];
     if (clientId && clientSecret) return { clientId, clientSecret };

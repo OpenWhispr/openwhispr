@@ -284,7 +284,10 @@ function buildGmailConnector(deps) {
   const auth = createGmailAuth({
     api,
     credentials: deps.credentials,
-    getClientCredentials: () => gmailClientCredentials(deps.env),
+    getClientCredentials: () =>
+      gmailClientCredentials(deps.env, {
+        allowCalendarClient: deps.allowCalendarGmailClient !== false,
+      }),
     // Revoking Gmail must not disconnect that account's Google Calendar.
     // `clientId` is the login's own issuing client (gmailAuth.js passes it
     // through from the credential being revoked), not deps.env's current
