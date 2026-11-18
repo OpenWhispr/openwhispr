@@ -40,7 +40,7 @@ class WavRecorder internal constructor(
   private var task: Future<*>? = null
   private var file: File? = null
   private var peak = 0
-  /** Loudness of the latest buffer, 0..1, for an in-app meter. */
+  /** Loudness of the latest buffer, 0..1 (-60..-20 dBFS), for an in-app meter. */
   @Volatile var level = 0f
     private set
   private var samples = 0L
