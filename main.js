@@ -2312,6 +2312,9 @@ if (gotSingleInstanceLock) {
     if (updateManager && updateManager.isQuittingForUpdate) {
       // Quit must proceed for the installer to run, so no preventDefault;
       // sidecar shutdown is best-effort (the reaper cleans up orphans on relaunch).
+      // The windows haven't closed yet, so a live meeting still ends as app-quit;
+      // a stop the exit cuts short is written from its marker at the next launch.
+      meetingAuditLog?.closeOpenSession();
       performSyncTeardown();
       sidecarRegistry.shutdownAll().catch(() => {});
       return;

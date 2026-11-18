@@ -155,6 +155,13 @@ test("a refused local model choice keeps its policy code", async () => {
   );
 });
 
+test("a start the device or product policy blocks keeps its code", async () => {
+  const { log } = harness();
+  log.recordingRefused({ noteId: 4, trigger: "hotkey", reason: "DEVICE_POLICY_BLOCKED" });
+  await log.flush();
+  assert.equal(lines()[0].reason, "DEVICE_POLICY_BLOCKED");
+});
+
 test("a stop is written beside its start after the policy or AuditLogPath changes", async () => {
   const custom = path.join(userData, "it-collector");
   const { log, state } = harness({ configuredPath: custom });
@@ -297,6 +304,46 @@ test("an unwritable path never throws into the recording and warns once", async 
   });
   await log.flush();
   assert.equal(warnings.length, 1);
+});
+
+// The lifecycle calls the log after capture has started and before it stops, and
+// before-quit calls it after preventDefault, so a throw would orphan capture or
+// hang the quit.
+test("a dependency that throws never reaches the recording or the quit, and warns once", async () => {
+  const { log, state, clock, warnings } = harness();
+  let clockFails = false;
+  Object.defineProperty(clock, "now", {
+    get() {
+      if (clockFails) throw new Error("clock failed");
+      return START;
+    },
+  });
+
+  state.configuredPath = { not: "a path" };
+  assert.doesNotThrow(() => log.recordingStarted({ sessionId: "s1", noteId: 1, trigger: "tray" }));
+  assert.doesNotThrow(() =>
+    log.recordingRefused({ noteId: 1, trigger: "tray", reason: "POLICY_UNRESOLVABLE" })
+  );
+  // The wipe still has its own record to write after this line.
+  assert.doesNotThrow(() => log.localDataWiped({ trigger: "device-policy", incomplete: false }));
+  state.configuredPath = null;
+
+  log.recordingStarted({ sessionId: "s2", noteId: 2, trigger: "tray" });
+  clockFails = true;
+  assert.doesNotThrow(() => log.recordingStopped({ sessionId: "s2", reason: "user" }));
+  clockFails = false;
+
+  log.recordingStarted({ sessionId: "s3", noteId: 3, trigger: "tray" });
+  clockFails = true;
+  let quit;
+  assert.doesNotThrow(() => {
+    quit = log.closeOpenSession();
+  });
+  await quit;
+  assert.deepEqual(
+    warnings.map((warning) => warning.message),
+    ["Meeting audit log failed"]
+  );
 });
 
 test("a recording the app never stopped is closed on the next launch at its last checkpoint", async () => {

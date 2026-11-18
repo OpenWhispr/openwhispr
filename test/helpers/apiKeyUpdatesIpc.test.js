@@ -1961,3 +1961,35 @@ test("meeting starts, stops and refusals reach the audit log with their source a
     ["refused", { noteId: 3, trigger: "new-note", reason: "policyRestricted" }],
   ]);
 });
+
+// #3029: a start main refuses for a provider the policy doesn't allow is a
+// policy block too, so it reaches the audit log with its code.
+test("a meeting start the policy blocks for its provider reaches the audit log", async (t) => {
+  resetMeeting(t);
+  const audit = [];
+  target.meetingAuditLog = {
+    recordingStarted: (entry) => audit.push(["started", entry]),
+    recordingStopped: (entry) => audit.push(["stopped", entry]),
+    recordingRefused: (entry) => audit.push(["refused", entry]),
+  };
+  t.after(() => {
+    delete target.meetingAuditLog;
+  });
+  invoke("save-deepgram-key", "A");
+  const policy = defaultDevicePolicy();
+  policy.transcription.allowedByokProviders = ["openai"];
+  setWorkspacePolicy({ success: true, managed: true, policy });
+
+  const result = await invoke("meeting-transcription-start", {
+    provider: "deepgram-realtime",
+    mode: "byok",
+    noteId: 5,
+    startSource: "hotkey",
+    sessionId: "audit-blocked",
+  });
+
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(audit, [
+    ["refused", { noteId: 5, trigger: "hotkey", reason: "DEVICE_POLICY_BLOCKED" }],
+  ]);
+});

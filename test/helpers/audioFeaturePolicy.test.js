@@ -559,6 +559,24 @@ test("onRefused hears a local-model refusal of a start that did not go ahead", a
   assert.deepEqual(refused, ["POLICY_MODEL_BLOCKED"]);
 });
 
+// Main throws DEVICE_POLICY_BLOCKED for a meeting whose transcription choice
+// the device or product policy refuses, before the meeting starts.
+test("onRefused hears a device policy block of a start that did not go ahead", async () => {
+  const guard = createAudioFeaturePolicy({ getPolicy: async () => policy(true) });
+  guard.update(policy(true));
+  const refused = [];
+  const result = await guard.run(
+    {},
+    "meeting",
+    async () => {
+      throw Object.assign(new Error("blocked"), { code: "DEVICE_POLICY_BLOCKED" });
+    },
+    { onRefused: (failure) => refused.push(failure.code) }
+  );
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(refused, ["DEVICE_POLICY_BLOCKED"]);
+});
+
 test("known pending audio restrictions retire only denied jobs and keep new work unresolved", async () => {
   const entered = [deferred(), deferred()];
   const finish = deferred();

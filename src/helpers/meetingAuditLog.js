@@ -42,10 +42,11 @@ const STOP_REASONS = new Set([
 ]);
 // What asked for a local data wipe (#3030).
 const WIPE_TRIGGERS = new Set(["device-policy", "workspace-removal"]);
-// Plus the renderer's own "restricted" refusal.
+// Plus main's device or product policy block and the renderer's own "restricted" refusal.
 const REFUSAL_REASONS = new Set([
   ...AUDIO_POLICY_REFUSAL_CODES,
   ...LOCAL_POLICY_CODES,
+  "DEVICE_POLICY_BLOCKED",
   "policyRestricted",
 ]);
 
@@ -113,6 +114,18 @@ function createMeetingAuditLog({
       .then(task)
       .catch((error) => warnOnce("Meeting audit log write failed", { error: error.message }));
   };
+
+  // Callers sit on a recording's start, stop and quit paths, so a throw in here
+  // (from isEnabled, getConfiguredPath or the clock) is logged, never passed on.
+  const guarded =
+    (record) =>
+    (...args) => {
+      try {
+        record(...args);
+      } catch (error) {
+        warnOnce("Meeting audit log failed", { error: error.message });
+      }
+    };
 
   function directory() {
     const configured = getConfiguredPath();
@@ -285,44 +298,48 @@ function createMeetingAuditLog({
     });
   }
 
+  function recordingRefused({ noteId, trigger, reason }) {
+    if (!isEnabled()) return;
+    const dir = directory();
+    const at = now();
+    enqueue(() =>
+      append(dir, at, {
+        event: "recording.refused",
+        noteId: noteIdOf(noteId),
+        trigger: allowed(START_SOURCES, trigger),
+        reason: allowed(REFUSAL_REASONS, reason),
+      })
+    );
+  }
+
+  // #3030: the offboarding wipe, kept with the recordings it outlives. The
+  // trigger is the device policy's token or a removal from the managing
+  // workspace; "incomplete" means some store could not be deleted.
+  function localDataWiped({ trigger, incomplete }) {
+    if (!isEnabled()) return;
+    const dir = directory();
+    const at = now();
+    enqueue(() =>
+      append(dir, at, {
+        event: "local-data.wiped",
+        trigger: allowed(WIPE_TRIGGERS, trigger),
+        reason: incomplete ? "incomplete" : null,
+      })
+    );
+  }
+
+  const stopGuarded = guarded(recordingStopped);
+
   return {
-    recordingStarted,
-    recordingStopped,
+    recordingStarted: guarded(recordingStarted),
+    recordingStopped: stopGuarded,
+    recordingRefused: guarded(recordingRefused),
+    localDataWiped: guarded(localDataWiped),
     recoverInterrupted,
-
-    recordingRefused({ noteId, trigger, reason }) {
-      if (!isEnabled()) return;
-      const dir = directory();
-      const at = now();
-      enqueue(() =>
-        append(dir, at, {
-          event: "recording.refused",
-          noteId: noteIdOf(noteId),
-          trigger: allowed(START_SOURCES, trigger),
-          reason: allowed(REFUSAL_REASONS, reason),
-        })
-      );
-    },
-
-    // #3030: the offboarding wipe, kept with the recordings it outlives. The
-    // trigger is the device policy's token or a removal from the managing
-    // workspace; "incomplete" means some store could not be deleted.
-    localDataWiped({ trigger, incomplete }) {
-      if (!isEnabled()) return;
-      const dir = directory();
-      const at = now();
-      enqueue(() =>
-        append(dir, at, {
-          event: "local-data.wiped",
-          trigger: allowed(WIPE_TRIGGERS, trigger),
-          reason: incomplete ? "incomplete" : null,
-        })
-      );
-    },
 
     // A quit ends a live recording with the app, before its session is torn down.
     closeOpenSession() {
-      if (session) recordingStopped({ sessionId: session.sessionId, reason: "app-quit" });
+      if (session) stopGuarded({ sessionId: session.sessionId, reason: "app-quit" });
       return queue;
     },
 
