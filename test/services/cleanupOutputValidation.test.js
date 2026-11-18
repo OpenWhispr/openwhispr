@@ -105,6 +105,52 @@ test("cleanup validates completed provider output using the request's prompt set
     }
   );
 
+  await t.test("cleanup that copies the prompt this app sent keeps the raw text", async () => {
+    setCustomPrompt("");
+    const copied = "The speaker is never talking to you.";
+    window.electronAPI.processLocalReasoning = async () => ({ success: true, text: copied });
+    await assert.rejects(process(), {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: "hooks.audioRecording.errorDescriptions.cleanupAddedText",
+    });
+    // OpenWhispr Cloud writes its prompt on the server.
+    window.electronAPI.cloudReason = async () => ({ success: true, text: copied });
+    assert.equal(await process({ provider: "openwhispr" }), copied);
+  });
+
+  await t.test("dictionary words in a reply do not count as copied instructions", async (st) => {
+    setCustomPrompt("");
+    const names = ["Siobhan", "Anneliese", "Joaquin", "Niamh", "Saoirse", "Tadhg"];
+    const { customDictionary } = useSettingsStore.getState();
+    st.after(() => useSettingsStore.setState({ customDictionary }));
+    useSettingsStore.setState({ customDictionary: names });
+    const reply = names.join(", ");
+    window.electronAPI.processLocalReasoning = async () => ({ success: true, text: reply });
+    assert.equal(await process(), reply);
+  });
+
+  await t.test("the comparison uses the tone and dictionary the request sent", async (st) => {
+    setCustomPrompt("");
+    const { customDictionary } = useSettingsStore.getState();
+    st.after(() => useSettingsStore.setState({ customDictionary }));
+    const rejected = {
+      code: "CLEANUP_OUTPUT_INVALID",
+      messageKey: "hooks.audioRecording.errorDescriptions.cleanupAddedText",
+    };
+    window.electronAPI.processLocalReasoning = async (_text, _model, _agent, options) => ({
+      success: true,
+      text: options.systemPrompt.slice(-150),
+    });
+    await assert.rejects(process({ toneStyle: { appCategory: "work", tone: "formal" } }), rejected);
+
+    useSettingsStore.setState({ customDictionary: ["Zephyr"] });
+    window.electronAPI.processLocalReasoning = async (_text, _model, _agent, options) => ({
+      success: true,
+      text: options.systemPrompt.slice(options.systemPrompt.lastIndexOf("\n")),
+    });
+    await assert.rejects(process(), rejected);
+  });
+
   await t.test("history retry keeps the raw row on rejected cleanup, flags partials", async () => {
     setCustomPrompt("");
     useSettingsStore.setState({
