@@ -57,6 +57,33 @@ const policy = {
   minAppVersion: null,
 };
 
+test("personal API access follows the effective feature independently of backup and agent access", async () => {
+  const { isApiAccessAllowed } = await load();
+  for (const [status, signedIn, expected] of [
+    ["unmanaged", true, true],
+    ["idle", false, true],
+    ["idle", true, false],
+    ["loading", true, false],
+    ["error", true, false],
+  ]) {
+    assert.equal(
+      isApiAccessAllowed({ status, policy: null, appVersion: null }, signedIn),
+      expected
+    );
+  }
+  for (const features of [{}, { apiAccessEnabled: true }, { apiAccessEnabled: false }]) {
+    const managed = {
+      ...policy,
+      features: { ...policy.features, agentEnabled: false, ...features },
+      dataRetention: { ...policy.dataRetention, cloudBackupAllowed: false },
+    };
+    assert.equal(
+      isApiAccessAllowed({ status: "managed", policy: managed, appVersion: null }, true),
+      features.apiAccessEnabled !== false
+    );
+  }
+});
+
 test("update-required derives from the org minimum and known app version", async () => {
   const { isUpdateRequiredByOrg } = await load();
   const managedWithMin = (minAppVersion, appVersion) => ({

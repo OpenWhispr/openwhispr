@@ -15,6 +15,7 @@ const MOCKS = {
   "/stores/settingsStore": `
     export function useSettingsStore(selector) {
       return selector({
+        isSignedIn: true,
         gcalAccounts: globalThis.__gcalAccounts ?? [],
         mcalAccounts: [],
         appleCalendarConnected: false,
@@ -44,12 +45,19 @@ const MOCKS = {
       return React.createElement("div", null, "CONNECTORS SECTION");
     }
   `,
-  "/ApiKeysSection": `
-    import React from "react";
-    export default function ApiKeysSection({ createRequest, onCanCreateChange }) {
-      React.useEffect(() => { onCanCreateChange(true); }, [onCanCreateChange]);
-      return React.createElement("div", null, "API KEYS SECTION create:" + createRequest);
-    }
+  "/services/ApiKeysService": `
+    export const ApiKeysService = {
+      list: async () => ({ keys: [{ id: "1", name: "Personal test key", scopes: [] }] }),
+    };
+  `,
+  "/ui/dialog": `
+    export const Dialog = ({ open, children }) => open ? children : null;
+    export const DialogContent = ({ children }) => children;
+    export const DialogHeader = DialogContent;
+    export const DialogTitle = DialogContent;
+    export const DialogDescription = DialogContent;
+    export const DialogFooter = DialogContent;
+    export const ConfirmDialog = () => null;
   `,
   "/integrations/CalendarsPane": `
     import React from "react";
@@ -165,6 +173,18 @@ async function renderView(
   const { default: IntegrationsView } = await vite.ssrLoadModule(
     "/components/IntegrationsView.tsx"
   );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({ status: "unmanaged" });
+  const setApiAccess = (enabled) =>
+    React.act(async () => {
+      usePolicyStore.setState({
+        status: "managed",
+        policy: {
+          features: { apiAccessEnabled: enabled },
+          dataRetention: { cloudBackupAllowed: false },
+        },
+      });
+    });
   const upgrades = { count: 0 };
   function Harness() {
     const [current, setCurrent] = React.useState(section);
@@ -178,7 +198,7 @@ async function renderView(
   }
   root = createRoot(container);
   await React.act(async () => root.render(createElement(Harness)));
-  return { container, upgrades, openedUrls };
+  return { container, upgrades, openedUrls, setApiAccess };
 }
 
 test("sectionMeta shows counts on a paid plan and plan badges on a free one", async (t) => {
@@ -189,9 +209,24 @@ test("sectionMeta shows counts on a paid plan and plan badges on a free one", as
     "/components/integrations/integrationsSections.ts"
   );
   const connectors = (isPaid, ready, blockedByOrg = false) => ({ isPaid, blockedByOrg, ready });
-  const paid = { isPaid: true, connectors: connectors(true, 2), connectedCalendars: 1 };
-  const free = { isPaid: false, connectors: connectors(false, 0), connectedCalendars: 1 };
-  const empty = { isPaid: true, connectors: connectors(true, 0), connectedCalendars: 0 };
+  const paid = {
+    apiAccessAllowed: true,
+    isPaid: true,
+    connectors: connectors(true, 2),
+    connectedCalendars: 1,
+  };
+  const free = {
+    apiAccessAllowed: true,
+    isPaid: false,
+    connectors: connectors(false, 0),
+    connectedCalendars: 1,
+  };
+  const empty = {
+    apiAccessAllowed: true,
+    isPaid: true,
+    connectors: connectors(true, 0),
+    connectedCalendars: 0,
+  };
 
   assert.deepEqual(sectionMeta("connectors", paid), { kind: "count", value: 2 });
   assert.deepEqual(sectionMeta("calendars", paid), { kind: "count", value: 1 });
@@ -225,6 +260,7 @@ test("Skills has no nav tag on any plan", async (t) => {
   for (const isPaid of [true, false]) {
     const input = {
       isPaid,
+      apiAccessAllowed: true,
       connectors: { isPaid, blockedByOrg: false, ready: 2 },
       connectedCalendars: 1,
     };
@@ -326,10 +362,10 @@ test("MCP's Create API key step opens the API keys section and asks it to create
   await React.act(async () => click(buttonWithText(container, "apiKeysSection.createButton")));
 
   assert.equal(navButton(container, "api").getAttribute("aria-current"), "page");
-  assert.match(shownText(container), /API KEYS SECTION create:1/);
+  assert.match(shownText(container), /apiKeysSection\.create\.title/);
   assert.equal(
-    container.ownerDocument.activeElement === heading(container, "integrations.nav.sections.api"),
-    true
+    container.ownerDocument.activeElement.getAttribute("placeholder"),
+    "apiKeysSection.create.namePlaceholder"
   );
 });
 
@@ -410,7 +446,7 @@ test("a free plan sees plan badges, the API upsell, and no key list", async (t) 
     "integrations.nav.sections.cliintegrations.cli.local.freeBadge"
   );
   assert.match(shownText(container), /integrations\.api\.proRequired/);
-  assert.doesNotMatch(container.textContent, /API KEYS SECTION/);
+  assert.doesNotMatch(container.textContent, /Personal test key/);
 
   await React.act(async () => click(buttonWithText(container, "integrations.api.viewPlans")));
   assert.equal(upgrades.count, 1);
@@ -433,7 +469,43 @@ test("the API header opens the existing creation dialog through its request", as
   assert.ok(createButton);
   assert.equal(createButton.getAttribute("disabled") !== null, false);
   await React.act(async () => click(createButton));
-  assert.match(shownText(container), /API KEYS SECTION create:1/);
+  assert.match(shownText(container), /apiKeysSection\.create\.title/);
+});
+
+test("revoking API access closes the open dialog and removes actions in both mounted panes", async (t) => {
+  const { container, setApiAccess } = await renderView(t, { section: "mcp" });
+  await React.act(async () => click(buttonWithText(container, "apiKeysSection.createButton")));
+  assert.match(shownText(container), /apiKeysSection\.create\.title/);
+
+  await setApiAccess(false);
+  assert.match(shownText(container), /common\.managedByOrg/);
+  assert.match(shownText(container), /integrations\.apiAccessDisabled/);
+  assert.doesNotMatch(
+    container.textContent,
+    /Personal test key|apiKeysSection\.create|integrations\.api\.useWith/
+  );
+  await React.act(async () => click(navButton(container, "mcp")));
+  assert.match(shownText(container), /integrations\.apiAccessDisabled/);
+  assert.doesNotMatch(container.textContent, /mcp\.openwhispr\.com|integrations\.mcp\.oauthTitle/);
+
+  await setApiAccess(true);
+  assert.match(shownText(container), /integrations\.mcp\.oauthTitle/);
+  await React.act(async () => click(navButton(container, "api")));
+  assert.match(shownText(container), /Personal test key/);
+  assert.doesNotMatch(shownText(container), /apiKeysSection\.create\.title/);
+  await React.act(async () => click(buttonWithText(container, "apiKeysSection.createButton")));
+  assert.match(shownText(container), /apiKeysSection\.create\.title/);
+});
+
+test("a managed restriction takes precedence over both free-plan upsells", async (t) => {
+  const { container, setApiAccess } = await renderView(t, { section: "api", isPaid: false });
+  await setApiAccess(false);
+  for (const section of ["api", "mcp"]) {
+    await React.act(async () => click(navButton(container, section)));
+    assert.match(shownText(container), /integrations\.apiAccessDisabled/);
+    assert.doesNotMatch(shownText(container), /proRequired|apiKeysSection\.createButton/);
+    assert.equal(label(navButton(container, section)), "integrations.nav.sections." + section);
+  }
 });
 
 test("API, MCP and CLI use one docs label and open their own documentation", async (t) => {

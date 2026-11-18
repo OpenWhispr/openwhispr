@@ -5032,6 +5032,7 @@
     "waitingForAnswer": "In attesa di risposta"
   },
   "integrations": {
+    "apiAccessDisabled": "La tua organizzazione ha disattivato l’accesso all’API e a MCP.",
     "title": "Integrazioni",
     "googleCalendar": {
       "title": "Google Calendar",

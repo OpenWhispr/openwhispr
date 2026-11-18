@@ -11,6 +11,7 @@ import {
 import {
   filterModeOptionsByPolicy,
   getTranscriptionSelection,
+  isApiAccessAllowed,
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
   isAudioFeatureAllowed,
@@ -32,6 +33,11 @@ export function usePolicySnapshot(): PolicyDecisionSnapshot {
   const policy = usePolicyStore((state) => state.policy);
   const appVersion = usePolicyStore((state) => state.appVersion);
   return useMemo(() => ({ status, policy, appVersion }), [status, policy, appVersion]);
+}
+
+export function useApiAccessAllowed(): boolean {
+  const isSignedIn = useSettingsStore((state) => state.isSignedIn);
+  return usePolicyStore((state) => isApiAccessAllowed(state, isSignedIn));
 }
 
 interface MeetingAutoTranscriptionAuth {

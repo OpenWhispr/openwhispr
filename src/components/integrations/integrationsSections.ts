@@ -31,6 +31,7 @@ export type SectionMeta =
 
 export interface SectionMetaInput {
   isPaid: boolean;
+  apiAccessAllowed: boolean;
   /** Connectors decide their plan and org policy as the Connectors pane does. */
   connectors: { isPaid: boolean; blockedByOrg: boolean; ready: number };
   connectedCalendars: number;
@@ -39,7 +40,7 @@ export interface SectionMetaInput {
 /** The status shown beside a section in the nav: what's connected, or which plan it needs. */
 export function sectionMeta(
   section: IntegrationsSection,
-  { isPaid, connectors, connectedCalendars }: SectionMetaInput
+  { isPaid, apiAccessAllowed, connectors, connectedCalendars }: SectionMetaInput
 ): SectionMeta | null {
   switch (section) {
     case "connectors":
@@ -53,7 +54,7 @@ export function sectionMeta(
       return null;
     case "api":
     case "mcp":
-      return isPaid ? null : { kind: "badge", badge: "pro" };
+      return isPaid || !apiAccessAllowed ? null : { kind: "badge", badge: "pro" };
     case "cli":
       // Local mode is free; saying so is the point of surfacing it to free plans.
       return isPaid ? null : { kind: "badge", badge: "free" };

@@ -220,6 +220,12 @@ export function isAgentAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.agentEnabled);
 }
 
+/** A signed-in member's policy must resolve before offering personal keys or MCP setup. */
+export function isApiAccessAllowed(state: PolicyDecisionSnapshot, isSignedIn: boolean): boolean {
+  if (state.status === "idle" && isSignedIn) return false;
+  return managedPolicyDecision(state, (policy) => policy.features.apiAccessEnabled !== false);
+}
+
 /** Whether the agent's web_search tool is allowed. */
 export function isWebSearchAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.webSearchEnabled);
