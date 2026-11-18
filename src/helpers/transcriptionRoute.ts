@@ -21,6 +21,7 @@ import {
 } from "./selfHostedTranscription.js";
 import {
   acceptsUnlistedTranscriptionModel,
+  isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
   type PolicyDecisionSnapshot,
 } from "../stores/policyRules.ts";
@@ -334,12 +335,16 @@ export function resolveTranscriptionRoute({
 
   // Fail-closed floor only: callers pass policy-effective settings, so a
   // disallowed selection here means the policy layer was bypassed upstream.
+  // A local selection names no model here; the local managers check it.
+  const mode = s.transcriptionMode || (s.useLocalWhisper ? "local" : "providers");
   if (
     managed &&
-    !isTranscriptionSelectionAllowed(policy!, {
-      mode: (s.transcriptionMode || (s.useLocalWhisper ? "local" : "providers")) as never,
-      provider: s.cloudTranscriptionProvider || "",
-    })
+    !(mode === "local"
+      ? isModeAllowedByPolicy(policy!, "transcription", "local")
+      : isTranscriptionSelectionAllowed(policy!, {
+          mode: mode as never,
+          provider: s.cloudTranscriptionProvider || "",
+        }))
   ) {
     return error(
       "Transcription is restricted by your organization.",

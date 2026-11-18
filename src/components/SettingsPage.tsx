@@ -1,3 +1,4 @@
+import CreatorLinkField from "./CreatorLinkField";
 import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import React, { useState, useCallback, useEffect, useRef } from "react";
@@ -73,11 +74,13 @@ import { useSignOut } from "../hooks/useSignOut";
 import { useAccountPlan } from "../hooks/useAccountPlan";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
+import { clearInsightsCache } from "../lib/insightsCache";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useClipboard } from "../hooks/useClipboard";
 import { useUpdater } from "../hooks/useUpdater";
+import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
 
 import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
@@ -191,8 +194,6 @@ interface SettingsPageProps {
   onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
-  /** Opens the workspace picker in the Settings nav (owned by SettingsModal). */
-  onChooseWorkspace?: () => void;
   /** Takes the user to a teamspace in Notes (owned by the control panel, which closes Settings). */
   onOpenTeamspace?: (localSpaceId: number) => void;
 }
@@ -551,6 +552,8 @@ function TranscriptionSection({
   const setEnterpriseTranscriptionSetupMode = useSettingsStore(
     (s) => s.setEnterpriseTranscriptionSetupMode
   );
+  const selfHostedHeaders = useSettingsStore((s) => s.selfHostedSttHeaders.dictation);
+  const setSelfHostedSttHeaders = useSettingsStore((s) => s.setSelfHostedSttHeaders);
   const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
   const managedAvailable = useManagedScopeResolution("transcription", "managed");
   const {
@@ -810,6 +813,8 @@ function TranscriptionSection({
               onUrlChange={setRemoteTranscriptionUrl}
               model={remoteTranscriptionModel}
               onModelChange={setRemoteTranscriptionModel}
+              headers={selfHostedHeaders}
+              onHeadersChange={(rows) => setSelfHostedSttHeaders("dictation", rows)}
             />
           )}
         </>
@@ -1164,7 +1169,6 @@ export default function SettingsPage({
   activeSection = "general",
   onNavigateToSection,
   initialSubTab,
-  onChooseWorkspace,
   onOpenTeamspace,
 }: SettingsPageProps) {
   const registryVersion = useRegistryVersion();
@@ -1343,8 +1347,18 @@ export default function SettingsPage({
     getAppVersion,
   } = useUpdater();
 
+  const organizationManagesUpdates = updateStatus.updateMode === "it_managed";
+  const updatePolicyUnavailable =
+    updateStatus.policyReady === false && updateStatus.policyUnavailable === true;
+  const updatePolicyPending = updateStatus.policyReady === false && !updatePolicyUnavailable;
+  const updateToggleLocked =
+    updatePolicyPending || updateStatus.updateMode === "always_on" || organizationManagesUpdates;
+
   const isUpdateAvailable =
     !updateStatus.isDevelopment && (updateStatus.updateAvailable || updateStatus.updateDownloaded);
+  const showUpdateDetails =
+    !organizationManagesUpdates &&
+    (isUpdateAvailable || updateStatus.updateDownloaded || updateInfo?.releaseNotes);
 
   const migration = useMigration();
 
@@ -1868,7 +1882,7 @@ export default function SettingsPage({
     leavePending: leaderboardLeavePending,
     ready: leaderboardParticipationReady,
     updating: leaderboardParticipationUpdating,
-  } = useLeaderboardParticipation();
+  } = useLeaderboardParticipation({ autoRefresh: activeSection === "privacyData" });
   const [leaderboardPreferencePending, setLeaderboardPreferencePending] = useState(false);
   const updateLeaderboardParticipation = useCallback(
     async (enabled: boolean) => {
@@ -2625,6 +2639,7 @@ export default function SettingsPage({
 
                 <div className="space-y-5">
                   <SectionHeader title={t("settingsPage.account.pricing.title")} />
+                  {!usage?.isPersonallySubscribed && <CreatorLinkField />}
                   <div className={`grid gap-1.5 ${isCompact ? "grid-cols-2" : "grid-cols-4"}`}>
                     <div
                       className={cn(
@@ -3153,12 +3168,7 @@ export default function SettingsPage({
         );
 
       case "workspaceGeneral":
-        return (
-          <WorkspaceGeneralSection
-            onNavigateToSection={onNavigateToSection}
-            onChooseWorkspace={onChooseWorkspace}
-          />
-        );
+        return <WorkspaceGeneralSection onNavigateToSection={onNavigateToSection} />;
 
       case "workspacePeople":
         return (
@@ -4363,11 +4373,6 @@ EOF`,
                       </div>
                     </div>
                   )}
-                  {!migration && cloudBackupEnabled && isSignedIn && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("settingsPage.privacy.cloudNotesMigrationDone")}
-                    </p>
-                  )}
                   {cloudBackupEnabled &&
                     isSignedIn &&
                     (() => {
@@ -4586,7 +4591,12 @@ EOF`,
                     <select
                       value={transcriptRetentionDays}
                       disabled={!effectiveDataRetentionEnabled}
-                      onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
+                      onChange={(e) => {
+                        setTranscriptRetentionDays(parseInt(e.target.value, 10));
+                        // A shorter period may remove counters, and Insights would otherwise
+                        // open on the kept totals that still count them.
+                        clearInsightsCache();
+                      }}
                       className={RETENTION_SELECT_CLASS}
                     >
                       <option value={0}>
@@ -4718,13 +4728,19 @@ EOF`,
                   <SettingsRow
                     label={t("settingsPage.general.updates.currentVersion")}
                     description={
-                      updateStatus.isDevelopment
-                        ? t("settingsPage.general.updates.devMode")
-                        : !updateStatus.isSupported
-                          ? t("settingsPage.general.updates.managedByPackageManager")
-                          : isUpdateAvailable
-                            ? t("settingsPage.general.updates.newVersionAvailable")
-                            : t("settingsPage.general.updates.latestVersion")
+                      organizationManagesUpdates
+                        ? t("settingsPage.general.updates.itManaged")
+                        : updateStatus.isDevelopment
+                          ? t("settingsPage.general.updates.devMode")
+                          : !updateStatus.isSupported
+                            ? t("settingsPage.general.updates.managedByPackageManager")
+                            : isUpdateAvailable
+                              ? t("settingsPage.general.updates.newVersionAvailable")
+                              : updatePolicyPending
+                                ? t("settingsPage.general.updates.policyLoading")
+                                : updatePolicyUnavailable
+                                  ? t("settingsPage.general.updates.policyUnavailable")
+                                  : t("settingsPage.general.updates.latestVersion")
                     }
                   >
                     <div className="flex items-center gap-2.5">
@@ -4734,7 +4750,11 @@ EOF`,
                       >
                         {currentVersion || t("settingsPage.general.updates.versionPlaceholder")}
                       </span>
-                      {updateStatus.isDevelopment ? (
+                      {organizationManagesUpdates ? (
+                        <Badge variant="outline">
+                          {t("settingsPage.general.updates.managedBadge")}
+                        </Badge>
+                      ) : updateStatus.isDevelopment ? (
                         <Badge variant="warning">
                           {t("settingsPage.general.updates.badges.dev")}
                         </Badge>
@@ -4755,16 +4775,25 @@ EOF`,
                   <SettingsPanelRow>
                     <SettingsRow
                       label={t("settingsPage.general.updates.automaticUpdates")}
-                      description={t("settingsPage.general.updates.automaticUpdatesDescription")}
+                      description={t(
+                        updatePolicyPending
+                          ? "settingsPage.general.updates.policyLoading"
+                          : updateToggleLocked
+                            ? "settingsPage.general.updates.managedByOrganization"
+                            : "settingsPage.general.updates.automaticUpdatesDescription"
+                      )}
                     >
-                      <Toggle checked={autoUpdatesEnabled} onChange={setAutoUpdatesEnabled} />
+                      <Toggle
+                        checked={updateStatus.effectiveAutoUpdatesEnabled ?? autoUpdatesEnabled}
+                        onChange={setAutoUpdatesEnabled}
+                        disabled={updateToggleLocked}
+                        ariaLabel={t("settingsPage.general.updates.automaticUpdates")}
+                      />
                     </SettingsRow>
                   </SettingsPanelRow>
                 )}
 
-                {(isUpdateAvailable ||
-                  updateStatus.updateDownloaded ||
-                  updateInfo?.releaseNotes) && (
+                {showUpdateDetails && (
                   <SettingsPanelRow>
                     <div className="space-y-2.5">
                       {isUpdateAvailable && !updateStatus.updateDownloaded && (
@@ -4773,7 +4802,12 @@ EOF`,
                             onClick={async () => {
                               try {
                                 await downloadUpdate();
-                              } catch {
+                              } catch (error) {
+                                const policyMessage = updatePolicyMessageKey(error);
+                                if (policyMessage) {
+                                  toast({ title: t(policyMessage) });
+                                  return;
+                                }
                                 showAlertDialog({
                                   title: t(
                                     "settingsPage.general.updates.dialogs.downloadFailed.title"
@@ -4830,7 +4864,12 @@ EOF`,
                               onConfirm: async () => {
                                 try {
                                   await installUpdateAction();
-                                } catch {
+                                } catch (error) {
+                                  const policyMessage = updatePolicyMessageKey(error);
+                                  if (policyMessage) {
+                                    toast({ title: t(policyMessage) });
+                                    return;
+                                  }
                                   showAlertDialog({
                                     title: t(
                                       "settingsPage.general.updates.dialogs.installFailed.title"
@@ -4877,12 +4916,20 @@ EOF`,
                   </SettingsPanelRow>
                 )}
               </SettingsPanel>
+              {organizationManagesUpdates && updateStatus.stagedUpdate && (
+                <p role="status" className="mt-3 text-xs text-warning">
+                  {t("settingsPage.general.updates.stagedBeforePolicy")}
+                </p>
+              )}
               <div className="mt-5 flex justify-end">
                 <Button
                   onClick={async () => {
                     try {
                       const result = await checkForUpdates();
-                      if (result && !result.updateAvailable) {
+                      const policyMessage = updatePolicyMessageKey(result);
+                      if (policyMessage) {
+                        toast({ title: t(policyMessage) });
+                      } else if (result && !result.updateAvailable) {
                         toast({
                           title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
                           description: t(
@@ -4900,7 +4947,10 @@ EOF`,
                     }
                   }}
                   disabled={
-                    checkingForUpdates || updateStatus.isDevelopment || !updateStatus.isSupported
+                    checkingForUpdates ||
+                    updatePolicyPending ||
+                    (!organizationManagesUpdates &&
+                      (updateStatus.isDevelopment || !updateStatus.isSupported))
                   }
                   variant="outline"
                   size="sm"

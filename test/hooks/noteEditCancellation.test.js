@@ -9,7 +9,12 @@ const {
 } = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 
-for (const boundary of ["note read", "conversation creation", "conversation load"]) {
+for (const boundary of [
+  "grounding read",
+  "note read",
+  "conversation creation",
+  "conversation load",
+]) {
   test(`switching notes during ${boundary} cancels stale persistence and edits`, async (t) => {
     let root;
     let reasoning;
@@ -26,6 +31,7 @@ for (const boundary of ["note read", "conversation creation", "conversation load
           content: `Personal ${id}`,
           enhanced_content: "## Decisions Made\nKeep me",
           transcript: "Source",
+          space_id: 1,
         },
       ])
     );
@@ -43,9 +49,21 @@ for (const boundary of ["note read", "conversation creation", "conversation load
     const writes = [];
     let requests = 0;
     const replies = [];
+    const protectedNotes = [];
     installBrowserGlobals(t, {
       window: {
         electronAPI: {
+          getPrivateSpaceId: async () => 1,
+          getDatabaseAccountScope: async () => ({ accountId: null, visibleAccountId: null }),
+          getNoteWriteGuard: async () => ({ accountId: null, authGeneration: 0 }),
+          protectConversation: async (id, references, deviceOnly, accountId) => {
+            assert.equal(id, 1);
+            assert.deepEqual(references, [{ id: 7, space_id: 1 }]);
+            assert.equal(deviceOnly, false);
+            assert.equal(accountId, null);
+            protectedNotes.push(references);
+            return { success: true };
+          },
           getConversationsForNote: async () => [],
           createAgentConversation: async () => {
             if (boundary === "conversation creation") await pause();
@@ -59,7 +77,8 @@ for (const boundary of ["note read", "conversation creation", "conversation load
             if (role === "assistant") replies.push(text);
           },
           getNote: async (id) => {
-            if (boundary === "note read") await pause();
+            if (boundary === "grounding read" || (boundary === "note read" && requests > 0))
+              await pause();
             return notes.get(id);
           },
           updateNote: async (id, updates) => {
@@ -122,6 +141,7 @@ for (const boundary of ["note read", "conversation creation", "conversation load
       await sending;
     });
     assert.equal(requests, boundary === "note read" ? 1 : 0);
+    assert.equal(protectedNotes.length, boundary === "note read" ? 1 : 0);
     assert.deepEqual(writes, []);
     assert.deepEqual(replies, []);
     assert.deepEqual(chat.messages, []);

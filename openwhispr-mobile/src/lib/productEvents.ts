@@ -1,19 +1,26 @@
-import { randomUUID } from '@/lib/uuid';
-import type { ProcessingMode } from '@/types';
+import { randomUUID, uuidFromKey } from '@/lib/uuid';
+import { WORD_COUNTER_VERSION } from '@/lib/wordCount';
+import type { ProcessingMode, TranscriptionProvider } from '@/types';
 
 // Dashboard funnel milestones (/api/product-events/batch). Content-free: never
 // transcripts, audio, titles or provider details. Sent with every upload as
 // coverage, which tells a stage nobody could observe apart from one that never
 // happened.
-export const PRODUCT_EVENT_CAPABILITIES = ['app_session_authenticated', 'onboarding_completed'];
+export const PRODUCT_EVENT_CAPABILITIES = [
+  'app_session_authenticated',
+  'onboarding_completed',
+  'dictation_completed',
+];
 
 const STORAGE_KEY = 'openwhispr_product_events';
 const STATE_VERSION = 1;
 const SCHEMA_VERSION = 1;
 const BATCH_SIZE = 50;
-// The queue only ever holds a handful of milestones; these bound what a server
-// that never acknowledges (deferring an event forever, or unreachable) leaves behind.
-const MAX_QUEUED_EVENTS = 200;
+// The queue only ever holds a handful of milestones and the dictations of the
+// first 200 words; these bound what a server that never acknowledges
+// (deferring an event forever, or unreachable) leaves behind.
+// Milestones retain their original capacity independently of dictation traffic.
+const MAX_QUEUED_EVENTS_PER_KIND = 200;
 const MAX_EVENT_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 30 * 60_000];
 // Sign-ins the server already took. A relaunch restores the same session and
@@ -26,12 +33,29 @@ const SETUP_MODES: Record<ProcessingMode, 'cloud' | 'byok' | 'local'> = {
   private: 'local',
   providers: 'byok',
 };
+// The transcription that ran, in the analytics ledger's modes.
+const DICTATION_MODES: Record<TranscriptionProvider, 'openwhispr_cloud' | 'local' | 'byok'> = {
+  cloud: 'openwhispr_cloud',
+  local: 'local',
+  byok: 'byok',
+};
+// The funnel's last stage. Once this installation has recorded this many
+// counted words for an account, none of its later dictations can be the one
+// that crosses, for the account or for this platform, so none is recorded.
+const DICTATION_WORDS_NEEDED = 200;
 
 /** The session the auth store holds: its user and cookie always change together. */
 export interface ProductEventsIdentity {
   userId: string;
   isAnonymous: boolean;
   cookie: string;
+}
+
+/** Capture-time session and consent scope; never persisted with the event. */
+export interface ProductEventsCaptureContext {
+  readonly identity: ProductEventsIdentity | null;
+  readonly isPractice: boolean;
+  readonly consentSignal: AbortSignal | null;
 }
 
 interface QueuedEvent {
@@ -59,6 +83,13 @@ interface State {
    */
   links: Record<string, string>;
   acknowledgedBindings: string[];
+  /** Counted dictation words recorded here, per account. */
+  dictationWords: Record<string, number>;
+  /**
+   * One entry per uncountable contribution, queued or acknowledged. Usually
+   * one per account; a late acknowledgement can overlap its replacement.
+   */
+  uncountedDictations: string[];
 }
 
 export interface ProductEventsStorage {
@@ -86,6 +117,8 @@ interface Dependencies {
    * The Usage Analytics switch, or null while its saved value is unknown.
    */
   getConsent: () => boolean | null;
+  /** Onboarding is running or hasn't loaded: a dictation now is its practice. */
+  isOnboarding: () => boolean;
   request: ProductEventsRequest;
   os: string;
   appVersion: string | null;
@@ -101,6 +134,8 @@ function emptyState(): State {
     events: [],
     links: {},
     acknowledgedBindings: [],
+    dictationWords: {},
+    uncountedDictations: [],
   };
 }
 
@@ -116,6 +151,7 @@ export function createProductEvents({
   storage,
   getIdentity,
   getConsent,
+  isOnboarding,
   request,
   os,
   appVersion,
@@ -126,6 +162,8 @@ export function createProductEvents({
   // Every read-modify-write runs here in turn, so two writers never race.
   let chain: Promise<unknown> = Promise.resolve();
   let running: Promise<void> | null = null;
+  // Queue discards can race with the server acknowledging an in-flight fact.
+  const discardedDictations = new Set<string>();
   let flushAgain = false;
   let retryPending = false;
   let retryAttempt = 0;
@@ -167,22 +205,82 @@ export function createProductEvents({
     return run;
   }
 
+  function discardQueuedEvents(
+    current: State,
+    shouldDiscard: (event: QueuedEvent, index: number) => boolean,
+  ): State {
+    const discarded = current.events.filter(shouldDiscard);
+    if (discarded.length === 0) return current;
+    const discardedIds = new Set(discarded.map((event) => event.event_id));
+    const dictationWords = { ...current.dictationWords };
+    const uncountedDictations = [...current.uncountedDictations];
+    for (const event of discarded) {
+      if (
+        event.event_name !== 'dictation_completed' ||
+        event.properties.is_practice !== false ||
+        event.properties.is_retranscribe !== false
+      ) {
+        continue;
+      }
+      if (running) discardedDictations.add(event.event_id);
+      const words = event.properties.word_count;
+      if (words === null) {
+        const contribution = uncountedDictations.indexOf(event.owner_user_id);
+        if (contribution !== -1) uncountedDictations.splice(contribution, 1);
+      } else if (typeof words === 'number') {
+        dictationWords[event.owner_user_id] = Math.max(
+          0,
+          (dictationWords[event.owner_user_id] ?? 0) - words,
+        );
+      }
+    }
+    return {
+      ...current,
+      events: current.events.filter((event) => !discardedIds.has(event.event_id)),
+      dictationWords,
+      uncountedDictations,
+    };
+  }
+
+  /**
+   * Queues an event once. `admit` decides, in the same write, whether it is
+   * still wanted and what else changes with it; null leaves it unqueued.
+   */
   function enqueue(
     event: Omit<QueuedEvent, 'identity_generation'>,
     mayRecord: () => boolean,
+    admit: (current: State) => Partial<State> | null = () => ({}),
   ): Promise<boolean> {
     return withState((current) => {
       if (!mayRecord()) return { result: false };
+      const cutoff = now() - MAX_EVENT_AGE_MS;
+      const fresh = discardQueuedEvents(
+        current,
+        (queued) => Date.parse(queued.captured_at) < cutoff,
+      );
+      const trimmed = fresh !== current ? fresh : undefined;
       if (
-        current.events.some((queued) => queued.event_id === event.event_id) ||
-        current.acknowledgedBindings.includes(event.event_id.toLowerCase())
+        fresh.events.some((queued) => queued.event_id === event.event_id) ||
+        fresh.acknowledgedBindings.includes(event.event_id.toLowerCase())
       ) {
-        return { result: true };
+        return { next: trimmed, result: true };
       }
-      const events = [...current.events, { ...event, identity_generation: current.generation }];
+      const changes = admit(fresh);
+      if (!changes) return { next: trimmed, result: false };
+      const events = [...fresh.events, { ...event, identity_generation: fresh.generation }];
+      const isDictation = event.event_name === 'dictation_completed';
+      const sameKind = events.filter(
+        (queued) => (queued.event_name === 'dictation_completed') === isDictation,
+      );
+      const overflow = new Set(
+        sameKind
+          .slice(0, Math.max(0, sameKind.length - MAX_QUEUED_EVENTS_PER_KIND))
+          .map((queued) => queued.event_id),
+      );
       return {
-        // Oldest first out when full.
-        next: { ...current, events: events.slice(-MAX_QUEUED_EVENTS) },
+        next: discardQueuedEvents({ ...fresh, ...changes, events }, (queued) =>
+          overflow.has(queued.event_id),
+        ),
         result: true,
       };
     });
@@ -258,7 +356,7 @@ export function createProductEvents({
     const signal = consent.signal;
     if (purgeNeeded) {
       purging ??= withState((current) => ({
-        next: { ...current, events: [], links: {} },
+        next: { ...discardQueuedEvents(current, () => true), links: {} },
         result: undefined,
       }))
         .then(() => {
@@ -377,6 +475,99 @@ export function createProductEvents({
     if (queued && active()) await flush();
   }
 
+  // Startup can restore a capture owner before validation; uploads still use getIdentity.
+  function captureContext(
+    identity: ProductEventsIdentity | null = getIdentity(),
+  ): ProductEventsCaptureContext {
+    const signal = consent.signal;
+    const allowed =
+      mayCollect(signal) &&
+      identity !== null &&
+      !blockedSessions.has(identityKey(identity) as string);
+    return {
+      identity: allowed ? { ...identity } : null,
+      isPractice: isOnboarding(),
+      consentSignal: allowed ? signal : null,
+    };
+  }
+
+  /**
+   * An original dictation finished: its word count, never its words. Only an
+   * account records one; words spoken before sign-up never count.
+   * `retranscribe` is a recording transcribed again after its first attempt
+   * failed, recorded as such and never counted.
+   */
+  async function recordDictation({
+    context,
+    captureId,
+    words,
+    provider,
+    source,
+    retranscribe,
+  }: {
+    context: ProductEventsCaptureContext;
+    captureId: string;
+    words: number | null;
+    provider: TranscriptionProvider;
+    source: 'dictation' | 'keyboard';
+    retranscribe: boolean;
+  }): Promise<void> {
+    const { identity, consentSignal: signal, isPractice: practice } = context;
+    if (!identity || identity.isAnonymous || signal === null || words === 0) return;
+    const active = (): boolean => {
+      const currentIdentity = getIdentity();
+      const accountBlocked =
+        currentIdentity?.userId === identity.userId
+          ? blockedSessions.has(identityKey(currentIdentity) as string)
+          : [...blockedSessions].some((key) => key.startsWith(`${identity.userId}\n`));
+      return (
+        mayCollect(signal) &&
+        !blockedSessions.has(identityKey(identity) as string) &&
+        !accountBlocked
+      );
+    };
+    // A refreshed session can learn the original account's policy while capture is in flight.
+    if (!active()) return;
+    const counts = !practice && !retranscribe;
+    const occurredAt = new Date(now()).toISOString();
+    const queued = await enqueue(
+      {
+        // One recording is one event, however often a path reports it.
+        event_id: await uuidFromKey(`dictation_completed:${captureId}`),
+        event_name: 'dictation_completed',
+        occurred_at: occurredAt,
+        owner_user_id: identity.userId,
+        owner_is_anonymous: false,
+        app_version: appVersion,
+        flow_version: null,
+        properties: {
+          word_count: words,
+          counter_version: WORD_COUNTER_VERSION,
+          mode: DICTATION_MODES[provider],
+          source,
+          is_practice: practice,
+          is_retranscribe: retranscribe,
+        },
+        captured_at: occurredAt,
+      },
+      active,
+      (current) => {
+        const counted = current.dictationWords[identity.userId] ?? 0;
+        if (
+          counted >= DICTATION_WORDS_NEEDED ||
+          (counts && words === null && current.uncountedDictations.includes(identity.userId))
+        ) {
+          return null;
+        }
+        if (!counts) return {};
+        return words === null
+          ? { uncountedDictations: [...current.uncountedDictations, identity.userId] }
+          : { dictationWords: { ...current.dictationWords, [identity.userId]: counted + words } };
+      },
+    );
+    if (queued && active()) await flush();
+  }
+
   function flush(): Promise<void> {
     if (running) {
       // The running pass read the queue before whatever asked for this one.
@@ -387,6 +578,7 @@ export function createProductEvents({
     running = runPass()
       .catch(() => scheduleRetry())
       .finally(() => {
+        discardedDictations.clear();
         running = null;
         if (flushAgain) flush().catch(() => undefined);
       });
@@ -403,7 +595,10 @@ export function createProductEvents({
 
     const batches = await withState((current) => {
       const cutoff = now() - MAX_EVENT_AGE_MS;
-      const events = current.events.filter((event) => !(Date.parse(event.captured_at) < cutoff));
+      const fresh = active()
+        ? discardQueuedEvents(current, (event) => Date.parse(event.captured_at) < cutoff)
+        : current;
+      const { events } = fresh;
       // Own events go first. Each candidate anonymous origin needs a separate
       // request so the API can verify its link without blocking other origins.
       const groups = new Map<string | null, QueuedEvent[]>([[null, []]]);
@@ -420,8 +615,7 @@ export function createProductEvents({
         groups.set(origin, group);
       }
       return {
-        next:
-          active() && events.length !== current.events.length ? { ...current, events } : undefined,
+        next: fresh !== current ? fresh : undefined,
         result: [...groups].filter(
           ([, pending]) => pending.length > 0 || !reportedSessions.has(key),
         ),
@@ -462,15 +656,90 @@ export function createProductEvents({
         identity.cookie,
         signal,
       ).catch(() => null);
-      if (!active()) return;
-
       const body = asRecord(response?.body);
+      const accepted = new Set(
+        (Array.isArray(body.accepted) ? body.accepted : []).map((id) => String(id).toLowerCase()),
+      );
+      if (response?.status === 200 && accepted.size > 0) {
+        // Accepted means stop retrying, including rejected facts that cannot count.
+        const rejected = new Set(
+          (Array.isArray(body.rejected) ? body.rejected : []).map((outcome) =>
+            String(asRecord(outcome).event_id ?? '').toLowerCase(),
+          ),
+        );
+        const bindings = pending
+          .filter(
+            (event) =>
+              event.event_name === 'app_session_authenticated' &&
+              accepted.has(event.event_id.toLowerCase()),
+          )
+          .map((event) => event.event_id.toLowerCase());
+        const acceptedDictationIds = new Set(
+          pending
+            .filter(
+              (event) =>
+                event.event_name === 'dictation_completed' &&
+                accepted.has(event.event_id.toLowerCase()),
+            )
+            .map((event) => event.event_id.toLowerCase()),
+        );
+        // Settle acknowledgements and discarded contributions in the same write,
+        // so a queue discard cannot lose progress between those operations.
+        await withState((current) => {
+          const currentSession = active();
+          if (!currentSession && acceptedDictationIds.size === 0) return { result: undefined };
+          const retained = discardQueuedEvents(current, (event) => {
+            const id = event.event_id.toLowerCase();
+            return acceptedDictationIds.has(id) && rejected.has(id);
+          });
+          const queuedIds = new Set(retained.events.map((event) => event.event_id));
+          const dictationWords = { ...retained.dictationWords };
+          const uncountedDictations = [...retained.uncountedDictations];
+          for (const event of pending) {
+            if (
+              !discardedDictations.has(event.event_id) ||
+              !accepted.has(event.event_id.toLowerCase()) ||
+              rejected.has(event.event_id.toLowerCase()) ||
+              queuedIds.has(event.event_id)
+            ) {
+              continue;
+            }
+            const words = event.properties.word_count;
+            if (words === null) uncountedDictations.push(event.owner_user_id);
+            else if (typeof words === 'number')
+              dictationWords[event.owner_user_id] =
+                (dictationWords[event.owner_user_id] ?? 0) + words;
+          }
+          return {
+            next: {
+              ...retained,
+              dictationWords,
+              uncountedDictations,
+              acknowledgedBindings: currentSession
+                ? [...retained.acknowledgedBindings, ...bindings].slice(-MAX_ACKNOWLEDGED_BINDINGS)
+                : retained.acknowledgedBindings,
+              // Accepted dictations settle for their original owner even if the
+              // session changed, so a later consent change cannot undo that progress.
+              events: retained.events.filter((event): boolean => {
+                const id = event.event_id.toLowerCase();
+                return !acceptedDictationIds.has(id) && (!currentSession || !accepted.has(id));
+              }),
+            },
+            result: undefined,
+          };
+        });
+        for (const event of pending) discardedDictations.delete(event.event_id);
+      }
+      if (!active()) return;
       if (response?.status === 403 && String(body.code ?? '').startsWith('POLICY_')) {
         blockedSessions.add(key);
-        const sent = new Set(pending.map((event) => event.event_id));
         await withState((current) => ({
           next: active()
-            ? { ...current, events: current.events.filter((event) => !sent.has(event.event_id)) }
+            ? discardQueuedEvents(
+                current,
+                (event) =>
+                  event.owner_user_id === identity.userId || event.owner_user_id === origin,
+              )
             : undefined,
           result: undefined,
         }));
@@ -495,28 +764,7 @@ export function createProductEvents({
       }
 
       reportedSessions.add(key);
-      const accepted = new Set(
-        (Array.isArray(body.accepted) ? body.accepted : []).map((id) => String(id).toLowerCase()),
-      );
       const acknowledged = pending.filter((event) => accepted.has(event.event_id.toLowerCase()));
-      if (acknowledged.length > 0) {
-        const ids = new Set(acknowledged.map((event) => event.event_id));
-        const bindings = acknowledged
-          .filter((event) => event.event_name === 'app_session_authenticated')
-          .map((event) => event.event_id.toLowerCase());
-        await withState((current) => ({
-          next: active()
-            ? {
-                ...current,
-                acknowledgedBindings: [...current.acknowledgedBindings, ...bindings].slice(
-                  -MAX_ACKNOWLEDGED_BINDINGS,
-                ),
-                events: current.events.filter((event) => !ids.has(event.event_id)),
-              }
-            : undefined,
-          result: undefined,
-        }));
-      }
       if (pending.length === BATCH_SIZE && acknowledged.length === pending.length) more = true;
     }
     if (!active()) return;
@@ -529,6 +777,8 @@ export function createProductEvents({
     observeIdentity,
     observeConsent,
     recordOnboardingCompleted: recordOnboarding,
+    captureDictationContext: captureContext,
+    recordDictationCompleted: recordDictation,
     flush,
     installationId,
   };
@@ -554,6 +804,8 @@ export function initProductEvents(): void {
     require('@/store/useConfigStore') as typeof import('@/store/useConfigStore');
   const { isUsageAnalyticsAllowed } =
     require('@/lib/usageAnalytics') as typeof import('@/lib/usageAnalytics');
+  const { useOnboardingStore } =
+    require('@/store/useOnboardingStore') as typeof import('@/store/useOnboardingStore');
 
   const instance = createProductEvents({
     storage: AsyncStorage,
@@ -566,6 +818,10 @@ export function initProductEvents(): void {
     getConsent: () => {
       const { config } = useConfigStore.getState();
       return config === null ? null : isUsageAnalyticsAllowed(config);
+    },
+    isOnboarding: () => {
+      const { hydrated, finished } = useOnboardingStore.getState();
+      return !(hydrated && finished);
     },
     request: async (path, body, cookie, signal) => {
       const response = await fetch(`${BASE_URL}${path}`, {
@@ -596,6 +852,34 @@ export function initProductEvents(): void {
   useConfigStore.subscribe(observeConsent);
   observeConsent();
   observe();
+}
+
+export function captureDictationContext(
+  identity?: ProductEventsIdentity | null,
+): ProductEventsCaptureContext {
+  return (
+    runtime?.captureDictationContext(identity) ?? {
+      identity: null,
+      isPractice: true,
+      consentSignal: null,
+    }
+  );
+}
+
+/**
+ * dictation_completed, from a dictation that delivered its text: the app's
+ * own recorder (useAudioRecording) and the keyboard (useKeyboardHandoff).
+ * Fire-and-forget, so it never holds up or breaks the dictation.
+ */
+export function recordDictationCompleted(dictation: {
+  context: ProductEventsCaptureContext;
+  captureId: string;
+  words: number | null;
+  provider: TranscriptionProvider;
+  source: 'dictation' | 'keyboard';
+  retranscribe: boolean;
+}): void {
+  runtime?.recordDictationCompleted(dictation).catch(() => undefined);
 }
 
 /** Called while the saved config is still opted out, before persisting an opt-in. */

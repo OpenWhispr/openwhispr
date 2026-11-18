@@ -14,6 +14,14 @@ const SCOPES = [
   "dictationTranslation",
 ];
 
+const SCOPE_SETTINGS = [
+  ["dictationCleanup", "cleanup"],
+  ["dictationAgent", "dictationAgent"],
+  ["noteFormatting", "noteFormatting"],
+  ["chatIntelligence", "chatAgent"],
+  ["dictationTranslation", "translation"],
+];
+
 const MANAGED_MODEL = "anthropic.claude-sonnet-4-20250514-v1:0";
 
 function managedBedrockConfig() {
@@ -244,4 +252,195 @@ test("required managed access fails closed when workspace policy forbids it", as
   assert.equal(unavailable.mode, "enterprise");
   assert.equal(unavailable.provider, "");
   assert.equal(unavailable.model, "");
+});
+
+test("manual enterprise requests follow the desktop provider catalog without erasing preferences", async (t) => {
+  const requests = [];
+  let streamListener;
+  const personalSettings = Object.fromEntries(
+    SCOPE_SETTINGS.flatMap(([, prefix]) => [
+      [`${prefix}Mode`, "enterprise"],
+      [`${prefix}Provider`, "azure"],
+      [`${prefix}Model`, "personal-deployment"],
+    ])
+  );
+  const { storage } = installBrowserGlobals(t, {
+    initialStorage: {
+      _providerSettingsMigrated: "1",
+      uploadTranscriptionMigrated: "true",
+      enterpriseSetupMode: "manual",
+      ...personalSettings,
+    },
+    window: {
+      electronAPI: {
+        processEnterpriseReasoning: async (_text, model, _agentName, config) => {
+          requests.push({ model, config });
+          return { success: true, text: "Processed text" };
+        },
+        onEnterpriseStreamPart: (listener) => {
+          streamListener = listener;
+          return () => {};
+        },
+        enterpriseStreamStart: async ({ streamId, modelId, provider, config }) => {
+          requests.push({ model: modelId, config: { ...config, provider } });
+          streamListener({ streamId, done: true });
+          return { success: true };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const service = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
+  t.after(() => service.destroy());
+  const { createEnterpriseChatModel } = await vite.ssrLoadModule(
+    "/services/ai/enterpriseChatModel.ts"
+  );
+  const { useSettingsStore, getSettings, selectResolvedLLMConfig } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  useSettingsStore.setState({
+    azureApiKey: "personal-test-key",
+    azureEndpoint: "https://personal.example.invalid",
+  });
+  const setManagedPolicy = (providers) =>
+    usePolicyStore.setState({
+      status: "managed",
+      policy: buildPolicy({ llmModes: ["enterprise"], llmEnterpriseProviders: providers }),
+    });
+  const run = async (scope, transport) => {
+    const { provider, model } = selectResolvedLLMConfig(getSettings(), scope);
+    if (transport === "standard") {
+      return service.processText("Text", model, null, {
+        provider,
+        inferenceScope: scope,
+        systemPrompt: "Process text",
+      });
+    }
+    if (transport === "agent") {
+      const stream = service.processTextStreamingAI(
+        [{ role: "user", content: "Text" }],
+        model,
+        provider,
+        { inferenceScope: scope, systemPrompt: "Process text" }
+      );
+      try {
+        return await stream.next();
+      } finally {
+        await stream.return();
+      }
+    }
+    const { stream } = await createEnterpriseChatModel(provider, model, scope).doStream({
+      prompt: [],
+    });
+    assert.equal((await stream.getReader().read()).done, true);
+  };
+
+  await t.test(
+    "an Azure-only workspace stops both transports before sending personal credentials",
+    async () => {
+      setManagedPolicy(["azure"]);
+      for (const scope of SCOPES) {
+        for (const transport of ["standard", "streaming", "agent"]) {
+          await assert.rejects(run(scope, transport), {
+            code: "POLICY_RESTRICTED",
+            messageKey: "common.policyAiProcessingRestricted",
+          });
+        }
+      }
+      assert.deepEqual(requests, []);
+    }
+  );
+
+  await t.test("a supported Bedrock fallback remains usable", async () => {
+    setManagedPolicy(["bedrock", "azure"]);
+    for (const scope of SCOPES) {
+      for (const transport of ["standard", "streaming"]) {
+        await run(scope, transport);
+        assert.equal(requests.at(-1).config.provider, "bedrock");
+        assert.equal(requests.at(-1).config.managedContext, undefined);
+      }
+    }
+  });
+
+  await t.test("removing the policy restores personal Azure in every scope", async () => {
+    usePolicyStore.setState({ status: "unmanaged", policy: null });
+    for (const [scope, prefix] of SCOPE_SETTINGS) {
+      assert.equal(useSettingsStore.getState()[`${prefix}Provider`], "azure");
+      assert.equal(storage.getItem(`${prefix}Provider`), "azure");
+      assert.equal(storage.getItem(`${prefix}Model`), "personal-deployment");
+      for (const transport of ["standard", "streaming"]) {
+        await run(scope, transport);
+        const request = requests.at(-1);
+        assert.equal(request.model, "personal-deployment");
+        assert.equal(request.config.provider, "azure");
+        assert.equal(request.config.apiKey, "personal-test-key");
+        assert.equal(request.config.azureEndpoint, "https://personal.example.invalid");
+        assert.equal(request.config.managedContext, undefined);
+      }
+    }
+  });
+
+  await t.test(
+    "organization-provisioned Azure still runs under an Azure-only policy",
+    async (managedTest) => {
+      setManagedPolicy(["azure"]);
+      const config = managedBedrockConfig();
+      config.providers[0] = {
+        ...config.providers[0],
+        provider: "azure",
+        config: {
+          tenantId: "11111111-1111-4111-8111-111111111111",
+          clientId: "22222222-2222-4222-8222-222222222222",
+          endpoint: "https://workspace.openai.azure.com",
+          apiVersion: "v1",
+          allowedDeployments: ["workspace-deployment"],
+          scopeDefaults: Object.fromEntries(SCOPES.map((scope) => [scope, "workspace-deployment"])),
+        },
+      };
+      useEnterpriseIdentityStore.setState({
+        status: "ready",
+        config,
+        accountId: "account-a",
+        workspaceId: "workspace-a",
+        authGeneration: 1,
+      });
+      for (const scope of SCOPES) {
+        for (const transport of ["standard", "streaming"]) {
+          await run(scope, transport);
+          const request = requests.at(-1);
+          assert.equal(request.model, "workspace-deployment");
+          assert.equal(request.config.managedContext.provider, "azure");
+          assert.equal(request.config.managedContext.inferenceScope, scope);
+        }
+      }
+
+      await managedTest.test(
+        "optional managed Azure requires opting into the organization setup",
+        async () => {
+          useEnterpriseIdentityStore.setState({
+            config: {
+              ...config,
+              providers: config.providers.map((record) => ({
+                ...record,
+                mode: "managed_default",
+                allowManualSetup: true,
+              })),
+            },
+          });
+          const requestsBefore = requests.length;
+          await assert.rejects(run("dictationCleanup", "standard"), { code: "POLICY_RESTRICTED" });
+          await assert.rejects(run("chatIntelligence", "agent"), { code: "POLICY_RESTRICTED" });
+          assert.equal(requests.length, requestsBefore);
+          useSettingsStore.getState().setEnterpriseSetupMode("auto");
+          await run("chatIntelligence", "streaming");
+          assert.equal(requests.at(-1).config.managedContext.provider, "azure");
+          assert.equal(requests.at(-1).model, "workspace-deployment");
+        }
+      );
+    }
+  );
 });

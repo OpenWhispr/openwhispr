@@ -248,6 +248,45 @@ test("resolveFailedGpuBackends tolerates empty and messy values", () => {
   assert.deepEqual(resolveFailedGpuBackends(" cuda , vulkan ,"), ["cuda", "vulkan"]);
 });
 
+test("a proven failure keeps the backend off for the session without remembering it", () => {
+  const manager = managerWith({ cudaDownloaded: true });
+  manager.serverManager.emit("cuda-fallback", { proven: true });
+
+  assert.deepEqual(manager.resolveGpuStartOptions(), {
+    useCuda: false,
+    useVulkan: false,
+    fallbackToVulkan: false,
+  });
+  assert.deepEqual(manager.getFailedGpuBackends(), ["cuda"]);
+
+  manager.forgetSessionGpuFailures();
+  assert.deepEqual(manager.resolveGpuStartOptions(), {
+    useCuda: true,
+    useVulkan: false,
+    fallbackToVulkan: false,
+  });
+});
+
+test("an unproven failure is left to the persisted WHISPER_GPU_FAILED", () => {
+  const manager = managerWith({ vulkanDownloaded: true });
+  manager.serverManager.emit("gpu-fallback", { proven: false });
+  assert.deepEqual(manager.getFailedGpuBackends(), []);
+});
+
+test("failed backends combine remembered and session-only failures without duplicates", () => {
+  process.env.WHISPER_GPU_FAILED = "cuda";
+  const manager = managerWith({ cudaDownloaded: true, vulkanDownloaded: true });
+  manager.serverManager.emit("cuda-fallback", { proven: true });
+  manager.serverManager.emit("gpu-fallback", { proven: true });
+  assert.deepEqual(manager.getFailedGpuBackends(), ["cuda", "vulkan"]);
+
+  // Forgetting one backend's session failure leaves the remembered one in place
+  manager.forgetSessionGpuFailures("cuda");
+  assert.deepEqual(manager.getFailedGpuBackends(), ["cuda", "vulkan"]);
+  manager.forgetSessionGpuFailures("vulkan");
+  assert.deepEqual(manager.getFailedGpuBackends(), ["cuda"]);
+});
+
 // The pack the settings card describes (#1736): the pack every server start
 // picks, else the installed pack that failed, CUDA first, else none
 const ONLY_CUDA = { cuda: true };
@@ -443,4 +482,20 @@ test("_warnIfGpuFallback ignores an outdated Vulkan pack while CUDA runs", (t) =
     fallbackToVulkan: false,
   });
   assert.deepEqual(fallbackWarnings(t, manager), []);
+});
+
+test("_warnIfGpuFallback names a session failure and its reason (#2265)", (t) => {
+  const manager = managerWith({ cudaDownloaded: true });
+  manager.serverManager.emit("cuda-fallback", {
+    proven: true,
+    reason: "CUDA error: out of memory",
+  });
+
+  assert.deepEqual(fallbackWarnings(t, manager), [
+    {
+      message: "Whisper CUDA enabled but cannot be used, falling back to CPU",
+      pack: "CUDA whisper",
+      reason: "failed this session, tried again after wake: CUDA error: out of memory",
+    },
+  ]);
 });

@@ -34,7 +34,7 @@ function loadEngine() {
   }
 }
 
-function createEngine() {
+function createEngine(engineOptions) {
   const MeetingDetectionEngine = loadEngine();
 
   const reminderScheduler = {
@@ -69,12 +69,14 @@ function createEngine() {
   const shown = [];
   const meetingNavigations = [];
   const noteNavigations = [];
+  const refusals = [];
   const windowManager = {
     notificationPrefs: {},
     showMeetingNotification: (data) => shown.push(data),
     dismissMeetingNotification: () => {},
     queueMeetingNoteNavigation: async (payload) => meetingNavigations.push(payload),
     queueNoteNavigation: async (payload) => noteNavigations.push(payload),
+    sendMeetingStartRefused: (code) => refusals.push(code),
   };
 
   const engine = new MeetingDetectionEngine(
@@ -82,7 +84,8 @@ function createEngine() {
     processDetector,
     audioDetector,
     windowManager,
-    {}
+    {},
+    engineOptions
   );
 
   return {
@@ -93,6 +96,7 @@ function createEngine() {
     shown,
     meetingNavigations,
     noteNavigations,
+    refusals,
   };
 }
 
@@ -179,7 +183,7 @@ function createJoinDatabase(ownNote) {
     getMeetingsFolder: () => ({ id: 7 }),
     saveNote: (title) => {
       saved.push(title);
-      return { note: { id: 99, title } };
+      return { note: { id: 99, title, space_id: 1 } };
     },
     updateNote: (id, updates) => ({ note: { id, ...updates } }),
   };
@@ -319,6 +323,18 @@ test("joining a calendar meeting resumes the user's own note for the event", asy
   assert.equal(meetingNavigations[0].folderId, 3);
 });
 
+test("resuming a root meeting preserves its space and null folder", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  const db = createJoinDatabase({ id: 5, space_id: 1, folder_id: null });
+  engine.databaseManager = db.databaseManager;
+
+  await engine.joinCalendarMeeting("event-1");
+
+  assert.deepEqual(db.saved, []);
+  assert.equal(meetingNavigations[0].spaceId, 1);
+  assert.equal(meetingNavigations[0].folderId, null);
+});
+
 test("a joined meeting's new note tags the event's guests, keeps the user and skips rooms and declines", async () => {
   const { engine } = createEngine();
   const db = createJoinDatabase(null);
@@ -361,6 +377,33 @@ test("joining a calendar meeting with no note of the user's own creates one", as
   assert.equal(meetingNavigations.length, 1);
   assert.equal(meetingNavigations[0].noteId, 99);
   assert.equal(meetingNavigations[0].folderId, 7);
+});
+
+// A signed-out device, or an account whose defaults haven't arrived, has no
+// Meetings folder; saveNote then files the note at the space root.
+test("a meeting with no Meetings folder opens its note at the space root", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  const db = createJoinDatabase(null);
+  engine.databaseManager = {
+    ...db.databaseManager,
+    getMeetingsFolder: () => null,
+    getActiveEvents: () => [],
+  };
+
+  await engine.startManualMeeting();
+  await engine.joinCalendarMeeting("event-1");
+
+  assert.deepEqual(
+    meetingNavigations.map((navigation) => [
+      navigation.noteId,
+      navigation.spaceId,
+      navigation.folderId,
+    ]),
+    [
+      [99, 1, null],
+      [99, 1, null],
+    ]
+  );
 });
 
 test("a manual meeting passes its options to whichever note it opens", async () => {
@@ -496,6 +539,48 @@ const ENABLED_SNAPSHOT = {
 function applySnapshot(engine, snapshot) {
   engine.setPreferences(deriveDetectorPreferences(snapshot));
 }
+
+// The bare {} databaseManager is the assertion that nothing reaches the note path.
+test("an administrator-disabled build never runs detectors, prompts, or starts a meeting", async () => {
+  let disabled = true;
+  const {
+    engine,
+    audioDetector,
+    processDetector,
+    shown,
+    meetingNavigations,
+    noteNavigations,
+    refusals,
+    windowManager,
+  } = createEngine({ isMeetingRecordingDisabled: () => disabled });
+
+  engine.start();
+  applySnapshot(engine, ENABLED_SNAPSHOT);
+  assert.equal(audioDetector.running, false);
+  assert.equal(processDetector.running, false);
+
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0 });
+  engine.handleCalendarReminder({ id: "event-1" });
+  assert.deepEqual(shown, []);
+
+  // Both starts say why, rather than doing nothing, naming the device's ban even
+  // when the effective verdict has its own reason.
+  windowManager.resolveMeetingRecordingRefusal = async () => ({ code: "POLICY_UNRESOLVABLE" });
+  await engine.startManualMeeting();
+  assert.deepEqual(refusals, ["POLICY_MEETING_RECORDING_DISABLED"]);
+  assert.equal(
+    (await engine.joinCalendarMeeting("event-1"))?.code,
+    "POLICY_MEETING_RECORDING_DISABLED"
+  );
+  assert.deepEqual(meetingNavigations, []);
+  assert.deepEqual(noteNavigations, []);
+
+  // Removing the profile takes effect on the next preference sync.
+  disabled = false;
+  applySnapshot(engine, ENABLED_SNAPSHOT);
+  assert.equal(audioDetector.running, true);
+  assert.equal(processDetector.running, true);
+});
 
 test("startup waits for saved notification preferences before starting prompt detectors", () => {
   const { engine, audioDetector, processDetector } = createEngine();
