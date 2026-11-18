@@ -22,9 +22,9 @@ const MOCKS = {
       globalThis.__createNoteCheck = canAutoStart;
       return { createNote() {}, createNoteIn() {} };
     };
-    export const startRecordingForNote = async (note, _recorderName, canAutoStart) => {
+    export const startRecordingForNote = async (note, _recorderName, startSource, canAutoStart) => {
       if (canAutoStart && !canAutoStart()) return false;
-      globalThis.__starts.push(note.id);
+      globalThis.__starts.push([note.id, startSource]);
       return true;
     };`,
   "/ui/useToast": `
@@ -177,7 +177,7 @@ const NOTIFICATION = {
 test("a meeting prompt records under automatic policy", async (t) => {
   const calls = await mount(t, NOTIFICATION, "automatic");
   await until(() => globalThis.__starts.length > 0);
-  assert.deepEqual(globalThis.__starts, [9]);
+  assert.deepEqual(globalThis.__starts, [[9, "prompt"]]);
   assert.equal(globalThis.__createNoteCheck(), true, "New note follows the policy too");
   assert.deepEqual(calls.noteOnly, []);
 });
@@ -191,15 +191,23 @@ test("a meeting prompt only opens the note under manual policy", async (t) => {
   assert.equal(globalThis.__createNoteCheck(), false, "New note follows the policy too");
 });
 
-test("a pending navigation hands its trigger and session to the notes view", async (t) => {
+test("a pending navigation hands its trigger, start source and session to the notes view", async (t) => {
   await mount(
     t,
-    { noteId: 9, folderId: null, event: null, trigger: "hotkey", noteSessionId: "session" },
+    {
+      noteId: 9,
+      folderId: null,
+      event: null,
+      trigger: "hotkey",
+      startSource: "tray",
+      noteSessionId: "session",
+    },
     "manual"
   );
   await until(() => globalThis.__notesProps?.meetingRecordingRequest);
   const request = globalThis.__notesProps.meetingRecordingRequest;
   assert.equal(request.trigger, "hotkey");
+  assert.equal(request.startSource, "tray");
   assert.equal(request.noteSessionId, "session");
   assert.equal(globalThis.__notesProps.canAutoStartMeeting, globalThis.__createNoteCheck);
 });

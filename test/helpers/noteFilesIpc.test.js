@@ -1157,7 +1157,9 @@ for (const transition of ["account switch", "scope sign-out", "token sign-out"])
 
 for (const mode of ["normal", "update", "held delete"]) {
   const updating = mode === "update";
-  test(`${mode} quit synchronously drains queued and deferred note writes once`, async () => {
+  // Every quit, an update's included, also ends a live meeting as app-quit in
+  // the audit log while its windows are still open.
+  test(`${mode} quit synchronously drains queued and deferred note writes once and closes the audit session`, async () => {
     await enableMirror();
     await invoke("db-upsert-note-from-cloud", { id: 100, content: "body at quit" });
     const db = target.databaseManager;
@@ -1178,6 +1180,7 @@ for (const mode of ["normal", "update", "held delete"]) {
     let prevented = false;
     let exited = false;
     let bodyAtExit;
+    let auditCloses = 0;
     const context = {
       app: {
         on: (event, callback) => callbacks.set(event, callback),
@@ -1188,6 +1191,11 @@ for (const mode of ["normal", "update", "held delete"]) {
       },
       ipcHandlers: target,
       sidecarRegistry: { shutdownAll: async () => {} },
+      meetingAuditLog: {
+        closeOpenSession: async () => {
+          auditCloses++;
+        },
+      },
       updateManager: { isQuittingForUpdate: updating, cleanup: () => {} },
       windowManager:
         mode === "held delete"
@@ -1246,6 +1254,7 @@ for (const mode of ["normal", "update", "held delete"]) {
     });
     assert.match(fs.readFileSync(fileOf(100), "utf8"), /body at quit$/);
     assert.match(fs.readFileSync(fileOf(101), "utf8"), /local body at quit$/);
+    assert.equal(auditCloses, 1);
     const recordsAtQuit = records;
     await settle();
     assert.equal(

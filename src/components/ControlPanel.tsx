@@ -124,6 +124,7 @@ import {
 } from "../utils/pendingInvitationToken";
 import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
 import type { SourceNote } from "./chat/useSourceNote";
+import type { MeetingStartSource } from "../types/electron";
 
 const platform = getCachedPlatform();
 
@@ -206,6 +207,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     noteId: number;
     folderId: number | null;
     event: any;
+    startSource?: MeetingStartSource;
     trigger?: string;
     noteSessionId?: string;
   } | null>(null);
@@ -520,6 +522,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 startRecordingForNote(
                   note,
                   recordingRecorderName(note, recordingUser, translate),
+                  "prompt",
                   args.canAutoStart
                 ),
               restoreFromMeetingMode: () => window.electronAPI?.restoreFromMeetingMode?.(),
@@ -561,6 +564,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
+        startSource: data.startSource,
         trigger: data.trigger,
         noteSessionId: data.noteSessionId,
       });
