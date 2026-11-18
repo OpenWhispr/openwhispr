@@ -1,7 +1,7 @@
 {
   "name": "open-whispr-mobile",
   "version": "1.1.0",
-  "main": "expo-router/entry",
+  "main": "./index",
   "scripts": {
     "start": "expo start",
     "android": "OPENWHISPR_APP_ENV=development expo run:android",

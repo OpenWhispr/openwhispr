@@ -117,4 +117,27 @@ class BubblePolicyTest {
     assertEquals(48 / 64f, BubbleAppearance(size = 10).scale, 0f)
     assertEquals(88 / 64f, BubbleAppearance(size = 200).scale, 0f)
   }
+
+  @Test fun restoresOnlyAChoiceTheUserLeftOnWithPermissionsStillGranted() {
+    assertTrue(BubblePolicy.shouldRestore(wanted = true, sdk = 34, overlay = true, microphone = true))
+    assertFalse(BubblePolicy.shouldRestore(wanted = false, sdk = 34, overlay = true, microphone = true))
+    assertFalse(BubblePolicy.shouldRestore(wanted = true, sdk = 34, overlay = false, microphone = true))
+    assertFalse(BubblePolicy.shouldRestore(wanted = true, sdk = 34, overlay = true, microphone = false))
+    assertFalse(BubblePolicy.shouldRestore(wanted = true, sdk = 25, overlay = true, microphone = true))
+  }
+
+  @Test fun aSavedSizeOutsideTheBubbleRangeFallsBackToMedium() {
+    assertEquals(48, BubblePolicy.restoredSize(48))
+    assertEquals(80, BubblePolicy.restoredSize(80))
+    assertEquals(64, BubblePolicy.restoredSize(0))
+    assertEquals(64, BubblePolicy.restoredSize(200))
+  }
+
+  @Test fun keepsThePipelineAwakeOnlyWhileADictationIsInFlight() {
+    assertTrue(BubblePolicy.keepsPipelineAwake(BubbleState.LISTENING, false))
+    assertTrue(BubblePolicy.keepsPipelineAwake(BubbleState.PROCESSING, false))
+    assertTrue(BubblePolicy.keepsPipelineAwake(BubbleState.READY, true))
+    for (state in listOf(BubbleState.READY, BubbleState.RETRY, BubbleState.RECOVER))
+      assertFalse(BubblePolicy.keepsPipelineAwake(state, false))
+  }
 }

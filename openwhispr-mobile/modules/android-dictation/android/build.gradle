@@ -31,6 +31,8 @@ dependencies {
   androidTestImplementation 'androidx.test:runner:1.6.2'
   androidTestImplementation 'androidx.test.ext:junit:1.2.1'
   androidTestImplementation 'com.facebook.react:react-android'
+  // The bubble starts the app's React runtime for its headless pipeline.
+  implementation 'com.facebook.react:react-android'
   testImplementation 'junit:junit:4.13.2'
   implementation "com.squareup.okhttp3:okhttp:4.12.0"
   implementation 'androidx.appcompat:appcompat:1.6.1'

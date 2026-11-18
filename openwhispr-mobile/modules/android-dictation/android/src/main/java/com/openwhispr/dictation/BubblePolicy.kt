@@ -69,6 +69,25 @@ object BubblePolicy {
     return !hidden && (!accessibilityOn || typing)
   }
 
+  const val DEFAULT_SIZE = 64
+
+  /**
+   * Whether to bring the bubble back on launch, after an update or after a restart: only when the
+   * user left it on and the overlay and microphone permissions are still granted.
+   */
+  fun shouldRestore(wanted: Boolean, sdk: Int, overlay: Boolean, microphone: Boolean) =
+    wanted && sdk >= 26 && overlay && microphone
+
+  /** A saved bubble size, or the default when it is missing or out of range. */
+  fun restoredSize(saved: Int) = if (saved in 48..88) saved else DEFAULT_SIZE
+
+  /** How long, after a recording ends, the bubble waits for the JS pipeline before offering Retry. */
+  const val PIPELINE_READY_TIMEOUT_MS = 20_000L
+
+  /** The JS pipeline runs as a headless task only while a dictation is in flight. */
+  fun keepsPipelineAwake(state: BubbleState, stopping: Boolean) =
+    stopping || state == BubbleState.LISTENING || state == BubbleState.PROCESSING
+
   /** Only a focused, editable field that isn't a password can take dictation. */
   fun canDictate(editable: Boolean, password: Boolean) = editable && !password
 

@@ -44,7 +44,12 @@ interface NativeDictation {
   getLocale(): string;
   getStatus(): BubbleStatus;
   openSettings(kind: 'overlay' | 'accessibility' | 'battery' | 'app'): void;
+  /** Turns the floating bubble on or off and remembers the choice and size across restarts. */
   setEnabled(enabled: boolean, size: number): void;
+  /** Starts the bubble again when the user left it on and its permissions are still granted. */
+  restoreBubble(): boolean;
+  /** The bubble pipeline is listening; the bubble sends the events it held for it. */
+  pipelineReady(): Promise<void>;
   setPractice(visible: boolean): Promise<void>;
   /**
    * processing · success · retry (nothing kept: Retry listens again) · retry-kept (the recording

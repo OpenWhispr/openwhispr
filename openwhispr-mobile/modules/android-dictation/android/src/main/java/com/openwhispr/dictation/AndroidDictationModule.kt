@@ -66,6 +66,12 @@ class AndroidDictationModule : Module() {
     Name("AndroidDictation")
     Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange")
     OnCreate { DictationService.emit = { event, data -> sendEvent(event, data) } }
+    // The bubble pipeline listens, in the app or in a headless task: send what the bubble held.
+    AsyncFunction("pipelineReady") {
+      HeadlessPipeline.ready = true
+      android.util.Log.i("OpenWhisprBubble", "Pipeline ready")
+      DictationService.instance?.pipelineReady()
+    }.runOnQueue(Queues.MAIN)
     OnActivityEntersForeground {
       navigationBar.attach(appContext.currentActivity)
       DictationService.appVisible = true
@@ -90,7 +96,7 @@ class AndroidDictationModule : Module() {
       if (speechRuntime.isInitialized()) parakeet.close()
       if (moonshineRuntime.isInitialized()) moonshine.close()
       if (diarizationRuntime.isInitialized()) diarizationRuntime.value.close()
-      recorder?.close(); DictationService.emit = null
+      recorder?.close(); HeadlessPipeline.ready = false; DictationService.emit = null
     }
     AsyncFunction("startPCM") { sampleRate: Int, noteId: Int?, audioNamespace: String, promise: Promise ->
       startMeetingCapture(sampleRate, noteId ?: 0, false, null, audioNamespace, promise)
@@ -165,8 +171,12 @@ class AndroidDictationModule : Module() {
       if (enabled) {
         check(android.os.Build.VERSION.SDK_INT >= 26) { "The floating bubble needs Android 8 or newer." }
         check(Settings.canDrawOverlays(context)) { "Allow display over other apps first." }
+        BubbleRestore.remember(context, true, size)
         context.startForegroundService(Intent(context, DictationService::class.java).putExtra("size", size))
-      } else context.stopService(Intent(context, DictationService::class.java))
+      } else {
+        BubbleRestore.remember(context, false, size)
+        context.stopService(Intent(context, DictationService::class.java))
+      }
     }
     // Stored so the service has it after a restart, and applied live when the bubble is running.
     Function("setAppearance") { options: Map<String, Any?> ->
@@ -189,6 +199,7 @@ class AndroidDictationModule : Module() {
       navigationBar.attach(appContext.currentActivity)
       navigationBar.style(color)
     }.runOnQueue(Queues.MAIN)
+    Function("restoreBubble") { BubbleRestore.restore(context, fromApp = true) }
     AsyncFunction("setPractice") { visible: Boolean ->
       DictationService.practiceVisible = visible
       DictationService.instance?.let { service ->
