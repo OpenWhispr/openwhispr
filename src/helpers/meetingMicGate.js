@@ -16,7 +16,9 @@ function computeChunkStats(buffer) {
   if (!buffer || buffer.length < 2) {
     return { rms: 0, peak: 0, sampleCount: 0 };
   }
-  const samples = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.length >> 1);
+  // An Int16Array view must start on an even byte offset; a sliced Buffer may not.
+  const aligned = (buffer.byteOffset & 1) === 0 ? buffer : Buffer.from(buffer);
+  const samples = new Int16Array(aligned.buffer, aligned.byteOffset, aligned.length >> 1);
   let sumSq = 0;
   let peak = 0;
   for (let i = 0; i < samples.length; i += 1) {
