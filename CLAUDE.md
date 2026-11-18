@@ -33,7 +33,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
    - Main Process: Electron main, IPC handlers, database operations
    - Renderer Process: React app with context isolation
    - Preload Script: Secure bridge between processes
-   - ONNX Utility Process: hosts all `onnxruntime-node` inference (text embeddings, speaker embeddings, fbank). Lazy-spawned on first use via `src/helpers/onnxWorkerClient.js` → `src/workers/onnxWorker.js`. Native crashes (e.g., ORT `bad_alloc`) confine to the worker; main process rejects in-flight requests, waits out a backoff, and respawns the worker on the next request (never eagerly, so a crash can't leave an empty worker running). A request that times out kills the worker so it respawns the same way; the embedding clients reload their sessions on the new worker. Exits once idle with no session loaded (`releaseIfIdle`, called after semantic search releases its model and after `speakerEmbeddings.js` unloads the speaker model 5 minutes after its last extract). Each session's calls are serialized in the worker, so an unload never releases a session mid-inference. Stopped in `will-quit`.
+   - ONNX Utility Process: hosts the `onnxruntime-node` inference for text and speaker embeddings, and computes the speaker model's fbank features in JS. Lazy-spawned on first use via `src/helpers/onnxWorkerClient.js` → `src/workers/onnxWorker.js`. Native crashes (e.g., ORT `bad_alloc`) confine to the worker; main process rejects in-flight requests, waits out a backoff, and respawns the worker on the next request (never eagerly, so a crash can't leave an empty worker running). A request that times out kills the worker so it respawns the same way; the embedding clients reload their sessions on the new worker. Exits once idle with no session loaded (`releaseIfIdle`, called after semantic search releases its model and after `speakerEmbeddings.js` unloads the speaker model 5 minutes after its last extract). Each session's calls are serialized in the worker, so an unload never releases a session mid-inference. Stopped in `will-quit`.
    - Voice Utility Process: hosts a voice call's audio models (Silero VAD, Smart Turn v3.2 on onnxruntime-web WASM, Supertonic 3 TTS on onnxruntime-node, or its WASM build on Intel Macs). Spawned by the first call via `src/helpers/voiceWorkerClient.js` → `src/workers/voiceWorker.js`, stopped 5 minutes after the last call ends and in `will-quit`. `src/helpers/voiceConversationIpc.js` owns the session (see Voice Calls below)
 
 3. **Audio Pipeline**:
@@ -910,7 +910,7 @@ Every workspace shows a **Private** section beside its teamspaces, and each acco
 - **Limits**: downgrades aren't supported, and the Markdown mirror still lays folders out by name across workspaces
 - **Tests**: `test/helpers/spacesDatabase.test.js` (real DB), `test/helpers/syncServiceNotes.test.js` and `test/services/privateNotesBackup.test.js` (fake cloud)
 
-### 22. Voice Calls (agent window)
+### 23. Voice Calls (agent window)
 
 A hands-free call on the agent window: listen → the agent's turn → spoken reply → listen, over the same chat, tools, cards and history as typed turns. Started from Call on the agent pill or the modal's composer (never from a hotkey; the Voice Assistant hotkey keeps its one-shot take and only brings a running call into view).
 
