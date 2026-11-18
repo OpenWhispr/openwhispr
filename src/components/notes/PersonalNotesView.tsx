@@ -759,26 +759,25 @@ export default function PersonalNotesView({
     if (
       !meetingRecordingRequest ||
       activeNoteId !== meetingRecordingRequest.noteId ||
+      activeNote?.id !== meetingRecordingRequest.noteId ||
       handledMeetingRequest.current === meetingRecordingRequest
     )
       return;
     handledMeetingRequest.current = meetingRecordingRequest;
-    const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
-    const seedSegments = parseSeedSegments(note?.transcript);
+    const note = activeNote;
+    const seedSegments = parseSeedSegments(note.transcript);
     void handleMeetingRecordingRequest({
       args: {
         noteId: meetingRecordingRequest.noteId,
-        noteTitle: note?.title ?? null,
-        folderId: note ? note.folder_id : (meetingRecordingRequest.folderId ?? null),
+        noteTitle: note.title,
+        folderId: note.folder_id,
         seedSegments,
         recorderName: recordingRecorderName(note, user, t),
         diarizationEnabled:
-          note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
+          note.diarization_enabled == null ? null : note.diarization_enabled === 1,
         expectedCount: resolveExpectedSpeakerCount(note),
-        expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
-        // Requests come from meeting detection, so a note that hasn't loaded
-        // yet is still a meeting note.
-        autoEndEligible: note ? isMeetingAutoEndEligible(note) : true,
+        expectedCountIsExplicit: isExplicitSpeakerCount(note.expected_speaker_count),
+        autoEndEligible: isMeetingAutoEndEligible(note),
       },
       trigger: meetingRecordingRequest.trigger,
       canAutoStart: canAutoStartMeeting,

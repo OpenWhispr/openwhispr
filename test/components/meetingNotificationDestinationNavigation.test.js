@@ -144,6 +144,38 @@ test("manual root meetings refresh a cached root without loading other container
   assert.equal(f.store.getNoteFromStore(9).content, "Fresh meeting");
 });
 
+for (const folderId of [10, null]) {
+  test(`resuming an older meeting loads its saved transcript beyond the ${folderId ? "folder" : "root"} page`, async (t) => {
+    const f = await fixture(t);
+    const savedNote = {
+      ...f.row,
+      space_id: 1,
+      folder_id: folderId,
+      transcript: "The earlier meeting's saved transcript.",
+      diarization_enabled: 0,
+      expected_speaker_count: 3,
+    };
+    globalThis.window.electronAPI.getFolders = async () => [
+      { id: 10, space_id: 1, name: "Meetings", is_default: 1 },
+    ];
+    globalThis.window.electronAPI.getNotes = async () =>
+      Array.from({ length: 50 }, (_, index) => ({ ...savedNote, id: 100 + index }));
+    globalThis.window.electronAPI.getNote = async (id) => {
+      assert.equal(id, 9);
+      return savedNote;
+    };
+    await f.store.initializeNotesTree();
+    assert.equal(f.store.getNoteFromStore(9), null);
+
+    await f.navigateAndLoadMeetingNote(9, 1, folderId);
+
+    assert.equal(f.store.getActiveNoteIdValue(), 9);
+    assert.equal(f.store.getNoteFromStore(9)?.transcript, savedNote.transcript);
+    assert.equal(f.store.getNoteFromStore(9)?.diarization_enabled, 0);
+    assert.equal(f.store.getNoteFromStore(9)?.expected_speaker_count, 3);
+  });
+}
+
 test("notification navigation rechecks automatic consent after confirmation without losing the note", async (t) => {
   const f = await fixture(t);
   const { handleMeetingRecordingRequest } =

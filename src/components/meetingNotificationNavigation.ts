@@ -2,6 +2,7 @@ import type { NoteItem } from "../types/electron";
 import {
   addNote,
   ensureContainerLoaded,
+  ensureNoteLoaded,
   folderContainerKey,
   initializeNotes,
   initializeNotesTree,
@@ -29,7 +30,7 @@ export function navigateMeetingNote(
   setActiveNoteId(noteId);
 }
 
-export function navigateAndLoadMeetingNote(
+export async function navigateAndLoadMeetingNote(
   noteId: number,
   spaceId: number | undefined,
   folderId: number | null
@@ -42,7 +43,10 @@ export function navigateAndLoadMeetingNote(
           folderId == null ? spaceContainerKey(spaceId) : folderContainerKey(folderId)
         );
   navigateMeetingNote(noteId, spaceId, folderId);
-  return loading;
+  const notes = await loading;
+  // A resumed meeting may sit beyond the container's newest page.
+  await ensureNoteLoaded(noteId);
+  return notes;
 }
 
 /** Only the main process's final, live row authorizes recording. */
