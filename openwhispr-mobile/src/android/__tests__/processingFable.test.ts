@@ -34,6 +34,7 @@ jest.mock('../models', () => ({
   modelReady: async (id: string) => mockReady.has(id),
   downloadAndroidModel: jest.fn(async () => undefined),
   cancelAndroidDownload: jest.fn(async () => undefined),
+  removeAndroidModel: jest.fn(async () => undefined),
   useModelDownloads: Object.assign(() => ({}), {
     getState: () => ({ progress: {} }),
     subscribe: () => () => undefined,
@@ -184,5 +185,34 @@ describe('Processing · Fable’s take', () => {
       'qwen-balanced',
       'meeting-speakers',
     ]);
+  });
+
+  it('Cancel stops the queued downloads; tasks that moved stay, waiting tasks stay put', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const models = require('../models') as {
+      downloadAndroidModel: jest.Mock;
+      cancelAndroidDownload: jest.Mock;
+    };
+    let fail: (error: Error) => void = () => undefined;
+    models.downloadAndroidModel.mockImplementationOnce(
+      () => new Promise((_, reject) => (fail = reject)),
+    );
+    models.cancelAndroidDownload.mockImplementationOnce(async () =>
+      fail(new Error('downloadCancelled')),
+    );
+    mockReady.add('parakeet-v3');
+    await places.moveTasksOnDevice(['dictation', 'cleanup', 'meeting']);
+    expect(places.usePhoneQueue.getState().jobs.map((job) => job.id)).toEqual([
+      'qwen-balanced',
+      'meeting-speakers',
+    ]);
+    places.cancelPhoneDownloads();
+    expect(models.cancelAndroidDownload).toHaveBeenCalledWith('qwen-balanced');
+    expect(places.usePhoneQueue.getState().jobs).toEqual([]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const inference = useConfigStore.getState().config?.inference;
+    expect(inference?.dictation).toEqual({ mode: 'local' });
+    expect(inference?.cleanup).toBeUndefined();
+    expect(inference?.meeting).toBeUndefined();
   });
 });

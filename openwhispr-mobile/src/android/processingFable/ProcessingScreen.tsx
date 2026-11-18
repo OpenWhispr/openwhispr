@@ -9,7 +9,7 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { home, type } from '../home/kit';
 import { ANDROID_MODELS, useModelDownloads } from '../models';
-import { cardStyle, settings, SettingsPage } from '../settings/kit';
+import { cardStyle, settings, SettingsPage, showToast } from '../settings/kit';
 import { KEY_CHECK_COLORS } from '../settings/KeyCheckMark';
 import { formatSize, modelName } from '../settings/modelCatalog';
 import { SHEET_TASKS, type SheetTask } from '../settings/ownKey';
@@ -17,6 +17,7 @@ import { AddKeySheet } from './AddKeySheet';
 import { DeviceSheet } from './DeviceSheet';
 import { KeyDetailSheet } from './KeyDetailSheet';
 import {
+  cancelPhoneDownloads,
   everythingOnCloud,
   everythingOnDevice,
   missingForEverything,
@@ -62,13 +63,34 @@ function DownloadLine({ t }: { t: FableT }) {
           }}
         />
       </View>
-      <Text style={[settings.subtitle, settings.tabular]}>
-        {t('downloadingLine', {
-          model: modelName(current.id),
-          done: formatSize(done).replace(/ (MB|GB)$/, ''),
-          total: formatSize(totalBytes),
-        })}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Text style={[settings.subtitle, settings.tabular, { flex: 1 }]}>
+          {t('downloadingLine', {
+            model: modelName(current.id),
+            done: formatSize(done).replace(/ (MB|GB)$/, ''),
+            total: formatSize(totalBytes),
+          })}
+        </Text>
+        <Pressable
+          cssInterop={false}
+          accessibilityRole="button"
+          accessibilityLabel={t('cancelDownloads')}
+          hitSlop={12}
+          onPress={() => {
+            cancelPhoneDownloads();
+            showToast(t('downloadCancelled'), 'neutral');
+          }}
+          style={({ pressed }) => ({
+            minHeight: 32,
+            justifyContent: 'center',
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Text style={[type.subhead, { color: home.accent, fontWeight: '500' }]}>
+            {t('cancel')}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

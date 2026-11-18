@@ -21,6 +21,7 @@ import {
   cancelAndroidDownload,
   downloadAndroidModel,
   modelReady,
+  removeAndroidModel,
   useModelDownloads,
   type AndroidModelId,
 } from '../models';
@@ -469,6 +470,14 @@ async function runQueue() {
           Alert.alert(settingsT('downloadProblem'), (error as Error).message, [
             { text: settingsT('ok') },
           ]);
+        else {
+          // Cancelled: the unfinished model's files go too, so no space is held for it.
+          await removeAndroidModel(job.id).catch(() => undefined);
+          // Cancelled from its ring (the queue still holds it): say so. Cancel and Undo say it
+          // themselves, or need not.
+          if (usePhoneQueue.getState().jobs[0]?.id === job.id)
+            showToast(settingsT('downloadCancelled'), 'neutral');
+        }
       }
       // The job may have been cancelled (Undo) while it downloaded.
       const current = usePhoneQueue.getState().jobs[0];
@@ -538,6 +547,16 @@ function cancelQueue() {
   const first = usePhoneQueue.getState().jobs[0];
   usePhoneQueue.setState({ jobs: [], doneBytes: 0, totalBytes: 0 });
   if (first) void cancelAndroidDownload(first.id);
+}
+
+/**
+ * Cancel on the On device card's progress line: every queued download stops and its files
+ * go. Models that landed stay, tasks that moved stay on device, and tasks still waiting stay
+ * where they were.
+ */
+export function cancelPhoneDownloads() {
+  finishedUndo = null;
+  cancelQueue();
 }
 
 /** The models "Use for everything" on device still has to download (D1). */

@@ -29,6 +29,7 @@ export const fableEnglish = {
   everythingDevice: 'Everything runs on this phone',
   everythingDeviceSoon: 'Each task moves to this phone as its model lands',
   downloadingLine: 'Downloading {{model}} · {{done}} of {{total}}',
+  cancelDownloads: 'Cancel the downloads',
   fastest: 'Fastest',
   wordsAsPeopleTalk: 'Words appear as people talk',
   speakerNamesDownload: 'Speaker names · {{size}} download',
