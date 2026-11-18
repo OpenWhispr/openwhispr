@@ -23,7 +23,8 @@ interface UseWorkspaceResult {
 }
 
 export function useWorkspace(): UseWorkspaceResult {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isOfflineAccount } = useAuth();
+  const canLoadWorkspaces = isSignedIn && !isOfflineAccount;
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const loaded = useWorkspaceStore((s) => s.loaded);
@@ -33,15 +34,15 @@ export function useWorkspace(): UseWorkspaceResult {
   const defaultWorkspaceId = useWorkspaceStore((s) => s.defaultWorkspaceId);
 
   useEffect(() => {
-    if (isSignedIn && !loaded) {
+    if (canLoadWorkspaces && !loaded) {
       void refresh();
     }
-  }, [isSignedIn, loaded, refresh]);
+  }, [canLoadWorkspaces, loaded, refresh]);
 
   // A list that failed while offline would otherwise stay failed until the
   // user presses Retry. refresh() dedupes, so every mounted caller can listen.
   useEffect(() => {
-    if (!isSignedIn || !error) return;
+    if (!canLoadWorkspaces || !error) return;
     const retry = (): void => void refresh();
     const retryOnFocus = (): void => {
       const now = Date.now();
@@ -55,7 +56,7 @@ export function useWorkspace(): UseWorkspaceResult {
       window.removeEventListener("online", retry);
       window.removeEventListener("focus", retryOnFocus);
     };
-  }, [isSignedIn, error, refresh]);
+  }, [canLoadWorkspaces, error, refresh]);
 
   const active = activeWorkspaceId
     ? (workspaces.find((w) => w.id === activeWorkspaceId) ?? null)

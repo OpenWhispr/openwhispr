@@ -33,6 +33,7 @@ test.before(async (t) => {
       "/hooks/useAuth": 'export const useAuth = () => ({ user: { id: "me" } });',
       "/ui/useToast":
         "export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });",
+      "/lib/authRequestContext": "export const hasValidatedAuthContext = () => true;",
       "/stores/workspaceStore": `
         export const useWorkspaceStore = Object.assign(
           (selector) => selector(globalThis.__store),
