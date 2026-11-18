@@ -137,7 +137,6 @@ function createSalesforceApi({ fetchImpl }) {
 module.exports = {
   createSalesforceApi,
   normalizeSalesforceOrigin,
-  SALESFORCE_API_VERSION,
   SALESFORCE_API_BASE,
   SALESFORCE_LOGIN_URL,
   USERINFO_PATH,

@@ -5502,7 +5502,6 @@
         "after": "Предлагаемая замена",
         "empty": "Пусто",
         "limit": "{{count}} / {{max}} символов",
-        "invalidPreview": "Предпросмотр полей неполон. Запросите новую проверку.",
         "noneSelected": "Выберите хотя бы одно поле или отмените.",
         "tooLong": "Выбранное поле превышает ограничение длины.",
         "salesforceActivity": {
@@ -5882,6 +5881,7 @@
         "sourceNote": "Из заметки «{{title}}».",
         "sourceNoteUntitled": "Из заметки без названия."
       },
+      "provenance": "Источник: OpenWhispr — {{title}}{{date}}",
       "briefing": {
         "untitledRecord": "Выбранная запись Salesforce",
         "retrieved": "Получено: {{time}}",

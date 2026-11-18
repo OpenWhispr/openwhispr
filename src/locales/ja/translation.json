@@ -5334,7 +5334,6 @@
         "after": "変更後の値",
         "empty": "空欄",
         "limit": "{{count}} / {{max}}文字",
-        "invalidPreview": "項目のプレビューが不完全です。再度確認を依頼してください。",
         "noneSelected": "項目を1つ以上選択するか、キャンセルしてください。",
         "tooLong": "選択した項目が文字数制限を超えています。",
         "salesforceActivity": {
@@ -5714,6 +5713,7 @@
         "sourceNote": "メモ「{{title}}」から。",
         "sourceNoteUntitled": "タイトルのないメモから。"
       },
+      "provenance": "出典: OpenWhispr — {{title}}{{date}}",
       "briefing": {
         "untitledRecord": "選択したSalesforceレコード",
         "retrieved": "取得日時: {{time}}",

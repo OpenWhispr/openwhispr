@@ -5,6 +5,7 @@ const { createSalesforceExports } = require("../../../src/helpers/connectors/sal
 const {
   createSalesforceConnector,
 } = require("../../../src/helpers/connectors/salesforceConnector");
+const { i18nMain, changeLanguage } = require("../../../src/helpers/i18nMain");
 const instanceUrl = "https://tenant.my.salesforce.com";
 const binding = {
   ownerAccountId: "owner",
@@ -94,7 +95,6 @@ function fixture() {
   };
   const auth = {
     boundCredential: () => (current ? credential : null),
-    stillBound: () => current,
     getAccessToken: async () =>
       current
         ? { ok: true, token: "token", credential }
@@ -144,6 +144,7 @@ function fixture() {
     credentials,
     exports: store,
     getNote: async (id, owner) => (owner === "owner" ? (notes.get(id) ?? null) : null),
+    i18n: i18nMain,
   });
   return {
     connector,
@@ -885,6 +886,31 @@ test("text a Salesforce Flow rewrites on save isn't reported as an edit at the n
     SOURCE_NOTE,
     { key: "connectors.salesforce.notes.updateExisting" },
   ]);
+});
+
+test("the provenance line follows the app's language, with its untitled fallback", async (t) => {
+  t.after(() => changeLanguage("en"));
+  changeLanguage("de");
+  const fixtureState = fixture();
+  fixtureState.notes.get(1).title = "";
+  const preview = await prepare(fixtureState);
+  assert.match(preview.preview.body, /Quelle: OpenWhispr — Unbenannte Notiz$/);
+});
+
+test("a redirected data call flags the login for reconnect", async () => {
+  const fixtureState = fixture();
+  fixtureState.api.request = async () => ({
+    ok: false,
+    errorCode: "redirect_refused",
+    outcome: "unknown",
+  });
+  const result = await fixtureState.connector.query(
+    "get_record",
+    { objectType: "Opportunity", recordId },
+    { binding }
+  );
+  assert.equal(result.errorCode, "reconnect_needed");
+  assert.equal(fixtureState.auth.reconnects, 1);
 });
 
 test("the card names the source note, and the provenance date is the note's local day", async () => {

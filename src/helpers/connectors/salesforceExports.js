@@ -66,22 +66,15 @@ function createSalesforceExports(databaseManager) {
           .get(...values(key)) ?? null
       );
     },
-    list(key, limit = 11) {
+    list(key) {
       return database()
         .prepare(
           `SELECT note_id, activity_id, confirmed_at FROM salesforce_exports
         WHERE account_id = ? AND organization_id = ? AND instance_url = ? AND object_type = ? AND record_id = ?
           AND activity_id IS NOT NULL AND confirmed_at IS NOT NULL
-        ORDER BY confirmed_at DESC LIMIT ?`
+        ORDER BY confirmed_at DESC LIMIT 11`
         )
-        .all(
-          key.ownerAccountId,
-          key.organizationId,
-          key.instanceUrl,
-          key.objectType,
-          key.recordId,
-          limit
-        );
+        .all(key.ownerAccountId, key.organizationId, key.instanceUrl, key.objectType, key.recordId);
     },
     // An unknown outcome doesn't block a new write: the card approving it was
     // prepared after that outcome (the version proves it) and said so.

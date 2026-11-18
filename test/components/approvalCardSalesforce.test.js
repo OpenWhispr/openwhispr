@@ -201,17 +201,6 @@ test("Salesforce field cards show current values, edit replacements and omit cha
   });
 });
 
-test("a malformed Salesforce field card fails closed instead of hiding committed fields", async (t) => {
-  const { container, calls } = await mountCard(t, {
-    preview: { ...PREVIEW, salesforceFields: undefined },
-  });
-  assert.equal(problemText(container), "connectors.approval.salesforce.invalidPreview");
-  const send = button(container, "connectors.approval.send");
-  assert.equal(send.getAttribute("aria-disabled"), "true");
-  await React.act(async () => click(send));
-  assert.deepEqual(calls.commit, []);
-});
-
 test("an activity card edits title and body without changing its selected destination", async (t) => {
   const preview = {
     verbKey: "salesforceActivity",

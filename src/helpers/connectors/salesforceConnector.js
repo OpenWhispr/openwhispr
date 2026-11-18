@@ -65,6 +65,7 @@ const SALESFORCE_ERRORS = new Map([
   ["http_429", "rate_limited"],
   ["SERVER_UNAVAILABLE", "network"],
   ["INVALID_SESSION_ID", "reconnect_needed"],
+  ["redirect_refused", "reconnect_needed"],
   ["PRECONDITION_FAILED", "stale_record"],
   ["http_412", "stale_record"],
 ]);
@@ -195,7 +196,14 @@ function conditionFor(record) {
   return Number.isFinite(date) ? { "If-Unmodified-Since": new Date(date).toUTCString() } : null;
 }
 
-function createSalesforceConnector({ api, auth, credentials, exports: exportStore, getNote }) {
+function createSalesforceConnector({
+  api,
+  auth,
+  credentials,
+  exports: exportStore,
+  getNote,
+  i18n,
+}) {
   function bound(binding) {
     return (
       binding?.ownerAccountId &&
@@ -236,6 +244,8 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
       // Salesforce refused a token it just issued: only signing in again helps.
       if (!result.ok && result.errorCode === "INVALID_SESSION_ID") auth.markReconnect(binding);
     }
+    // The instance moved (a renamed My Domain): only signing in again helps.
+    if (!result.ok && result.errorCode === "redirect_refused") auth.markReconnect(binding);
     if (!options.method && !bound(binding))
       return { ok: false, errorCode: "connection_changed", outcome: "failed" };
     return result;
@@ -577,7 +587,10 @@ function createSalesforceConnector({ api, auth, credentials, exports: exportStor
       }
       const config = await taskConfiguration(binding, args.objectType, !!payload.activityId);
       if (!config.ok) return failed(config.errorCode);
-      const provenance = `Source: OpenWhispr — ${note.title || "Untitled note"}${localDate(note.created_at)}`;
+      const provenance = i18n.t("connectors.salesforce.provenance", {
+        title: note.title || i18n.t("notes.list.untitledNote"),
+        date: localDate(note.created_at),
+      });
       const activityBody =
         typeof args.body === "string" ? `${args.body}\n\n${provenance}` : args.body;
       const problem = textProblem(args.title, activityBody, config);
@@ -903,6 +916,7 @@ function buildSalesforceConnector(deps) {
     credentials: deps.credentials,
     exports: createSalesforceExports(deps.database),
     getNote: deps.getSalesforceNote,
+    i18n: deps.i18n,
   });
 }
 module.exports = { createSalesforceConnector, buildSalesforceConnector };

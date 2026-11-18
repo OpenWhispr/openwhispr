@@ -5355,7 +5355,6 @@
         "after": "Sostituzione proposta",
         "empty": "Vuoto",
         "limit": "{{count}} / {{max}} caratteri",
-        "invalidPreview": "Questa anteprima è incompleta. Richiedi una nuova revisione.",
         "noneSelected": "Seleziona almeno un campo oppure annulla.",
         "tooLong": "Un campo selezionato supera il limite di caratteri.",
         "salesforceActivity": {
@@ -5735,6 +5734,7 @@
         "sourceNote": "Dalla nota «{{title}}».",
         "sourceNoteUntitled": "Da una nota senza titolo."
       },
+      "provenance": "Fonte: OpenWhispr — {{title}}{{date}}",
       "briefing": {
         "untitledRecord": "Record di Salesforce selezionato",
         "retrieved": "Recuperato: {{time}}",

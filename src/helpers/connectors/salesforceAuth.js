@@ -139,7 +139,7 @@ function createSalesforceAuth({
   // was made on; anything else signs in at the build's default.
   function loginUrlFor(loginDomain, config) {
     if (loginDomain) return loginOrigin(loginDomain);
-    const accountId = credentials.activeAccountId?.();
+    const accountId = credentials.activeAccountId();
     const saved = accountId ? credentials.read(accountId, "salesforce")?.credential : null;
     return saved && normalizeSalesforceOrigin(saved.loginUrl, { login: true }) === saved.loginUrl
       ? saved.loginUrl
@@ -280,9 +280,7 @@ function createSalesforceAuth({
     connectorId: "salesforce",
     credentials,
     sameLogin: (entry, binding) =>
-      sameLogin(entry, binding) &&
-      (typeof credentials.activeAccountId !== "function" ||
-        credentials.activeAccountId() === binding.ownerAccountId),
+      sameLogin(entry, binding) && credentials.activeAccountId() === binding.ownerAccountId,
     isFresh: (credential) =>
       nonEmptyString(credential.accessToken) &&
       (credential.expiresAt == null || credential.expiresAt - EXPIRY_SKEW_MS > now()),
@@ -307,13 +305,7 @@ function createSalesforceAuth({
     getAccessToken: login.getAccessToken,
     boundCredential: login.boundCredential,
     markReconnect: login.markReconnect,
-    stillBound: login.stillBound,
   };
 }
 
-module.exports = {
-  createSalesforceAuth,
-  SALESFORCE_SCOPES,
-  SALESFORCE_CALLBACK_URL,
-  SALESFORCE_LOOPBACK,
-};
+module.exports = { createSalesforceAuth, SALESFORCE_CALLBACK_URL };

@@ -1046,7 +1046,6 @@
         "after": "البديل المقترح",
         "empty": "فارغ",
         "limit": "{{count}} / {{max}} حرف",
-        "invalidPreview": "معاينة الحقول غير مكتملة. اطلب مراجعة جديدة.",
         "noneSelected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية.",
         "tooLong": "يتجاوز أحد الحقول المحددة الحد الأقصى للأحرف.",
         "salesforceActivity": {
@@ -1426,6 +1425,7 @@
         "sourceNote": "من الملاحظة «{{title}}».",
         "sourceNoteUntitled": "من ملاحظة بلا عنوان."
       },
+      "provenance": "المصدر: OpenWhispr — {{title}}{{date}}",
       "briefing": {
         "untitledRecord": "سجل Salesforce المحدد",
         "retrieved": "وقت الجلب: {{time}}",

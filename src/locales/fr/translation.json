@@ -5721,7 +5721,6 @@
         "after": "Remplacement proposé",
         "empty": "Vide",
         "limit": "{{count}} / {{max}} caractères",
-        "invalidPreview": "Cet aperçu est incomplet. Demandez une nouvelle vérification.",
         "noneSelected": "Sélectionnez au moins un champ ou annulez.",
         "tooLong": "Un champ sélectionné dépasse sa limite de caractères.",
         "salesforceActivity": {
@@ -6101,6 +6100,7 @@
         "sourceNote": "D'après la note « {{title}} ».",
         "sourceNoteUntitled": "D'après une note sans titre."
       },
+      "provenance": "Source : OpenWhispr — {{title}}{{date}}",
       "briefing": {
         "untitledRecord": "Enregistrement Salesforce sélectionné",
         "retrieved": "Récupéré : {{time}}",

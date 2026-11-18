@@ -4,7 +4,7 @@ const load = () => import("../../src/utils/salesforceApprovalFields.ts");
 const definitions = [
   { key: "value0", name: "Needs__c", label: "Needs", before: "Old", maxLength: 4 },
 ];
-test("field approval blocks malformed previews, no selected changes and overlength edits", async () => {
+test("field approval blocks no selected changes and overlength edits", async () => {
   const { salesforceFieldProblem } = await load();
   assert.equal(salesforceFieldProblem(definitions, { value0: "New", include0: "yes" }), null);
   assert.equal(salesforceFieldProblem(definitions, { value0: "😀😀", include0: "yes" }), null);
@@ -25,15 +25,6 @@ test("field approval blocks malformed previews, no selected changes and overleng
     salesforceFieldProblem(definitions, { value0: "", include0: "yes" }),
     null,
     "explicit clearing is allowed"
-  );
-  assert.equal(salesforceFieldProblem(undefined, {}), "invalidPreview");
-  assert.equal(
-    salesforceFieldProblem(definitions, { value0: ["hidden"], include0: "yes" }),
-    "invalidPreview"
-  );
-  assert.equal(
-    salesforceFieldProblem(definitions, { value0: "New", include0: "yes", value1: "hidden" }),
-    "invalidPreview"
   );
 });
 

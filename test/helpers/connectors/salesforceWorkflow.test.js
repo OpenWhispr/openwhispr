@@ -5,6 +5,7 @@ const { buildSalesforceConnector } = require("../../../src/helpers/connectors/sa
 const { createConnectorManager } = require("../../../src/helpers/connectors/connectorManager");
 const { createPendingActions } = require("../../../src/helpers/connectors/pendingActions");
 const { createSalesforceNoteReader } = require("../../../src/helpers/connectors/salesforceNotes");
+const { i18nMain } = require("../../../src/helpers/i18nMain");
 
 test("real connector pipeline exports, reviews field edits, briefs linked notes and updates the same activity", async (t) => {
   const db = new DatabaseSync(":memory:");
@@ -104,7 +105,7 @@ test("real connector pipeline exports, reviews field edits, briefs linked notes 
     database,
     getSalesforceNote: createSalesforceNoteReader({ database, getAccountId: () => owner }),
     env: { SALESFORCE_CLIENT_ID: "synthetic-client" },
-    i18n: { t: (key) => key },
+    i18n: i18nMain,
     logger: { warn() {} },
     fetch: async (url, init) => {
       assert.equal(new URL(url).origin, instanceUrl);

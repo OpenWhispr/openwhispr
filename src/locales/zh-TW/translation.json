@@ -5334,7 +5334,6 @@
         "after": "建議替換值",
         "empty": "空白",
         "limit": "{{count}} / {{max}}個字元",
-        "invalidPreview": "欄位預覽不完整，請重新申請審核。",
         "noneSelected": "請至少選擇一個欄位，或取消。",
         "tooLong": "選定欄位超出字元數限制。",
         "salesforceActivity": {
@@ -5714,6 +5713,7 @@
         "sourceNote": "來自筆記「{{title}}」。",
         "sourceNoteUntitled": "來自一篇無標題筆記。"
       },
+      "provenance": "來源：OpenWhispr — {{title}}{{date}}",
       "briefing": {
         "untitledRecord": "所選 Salesforce 記錄",
         "retrieved": "擷取時間：{{time}}",

@@ -5694,7 +5694,6 @@
         "after": "Proposed replacement",
         "empty": "Empty",
         "limit": "{{count}} / {{max}} characters",
-        "invalidPreview": "This field preview is incomplete. Request a new review.",
         "noneSelected": "Select at least one field, or cancel.",
         "tooLong": "A selected field exceeds its character limit.",
         "salesforceActivity": {
@@ -6074,6 +6073,7 @@
         "sourceNote": "From the note “{{title}}”.",
         "sourceNoteUntitled": "From an untitled note."
       },
+      "provenance": "Source: OpenWhispr — {{title}}{{date}}",
       "briefing": {
         "untitledRecord": "Selected Salesforce record",
         "retrieved": "Retrieved: {{time}}",

@@ -273,7 +273,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
 
   const message = isSalesforceFields ? (
     <>
-      {salesforceProblem !== "invalidPreview" && preview.salesforceFields && draft.fields && (
+      {preview.salesforceFields && draft.fields && (
         <SalesforceApprovalFields
           definitions={preview.salesforceFields}
           fields={draft.fields}

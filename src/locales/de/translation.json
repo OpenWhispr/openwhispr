@@ -5694,7 +5694,6 @@
         "after": "Vorgeschlagener Ersatz",
         "empty": "Leer",
         "limit": "{{count}} / {{max}} Zeichen",
-        "invalidPreview": "Diese Feldvorschau ist unvollständig. Fordere eine neue Prüfung an.",
         "noneSelected": "Wähle mindestens ein Feld oder brich ab.",
         "tooLong": "Ein ausgewähltes Feld überschreitet seine Zeichenbegrenzung.",
         "salesforceActivity": {
@@ -6074,6 +6073,7 @@
         "sourceNote": "Aus der Notiz „{{title}}“.",
         "sourceNoteUntitled": "Aus einer Notiz ohne Titel."
       },
+      "provenance": "Quelle: OpenWhispr — {{title}}{{date}}",
       "briefing": {
         "untitledRecord": "Ausgewählter Salesforce-Datensatz",
         "retrieved": "Abgerufen: {{time}}",

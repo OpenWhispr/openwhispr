@@ -422,7 +422,7 @@ test("a value that opens with a list marker can't nest a list in a conflict or a
   assert.ok(lines.some((line) => /^\[\^sf-[^\]]+\]: 3\\\) Follow-up — /.test(line)));
 });
 
-test("only wording that leaves a passage unsettled keeps it proposed", async (t) => {
+test("only explicit proposal or conditional wording forces a passage to proposed", async (t) => {
   const notes = [];
   const registry = await setup(t, { notes });
   const cases = [
@@ -435,22 +435,25 @@ test("only wording that leaves a passage unsettled keeps it proposed", async (t)
     ["Sarah has not approved these targets", true],
     ["Sarah hasn\u2019t approved the proposal", true],
     ["The proposal has not yet been approved", true],
-    ["The proposal was not signed", true],
-    ["The proposal must be signed by Friday", true],
-    ["The proposal is 8 reps for 2 weeks", true],
+    ["The proposed pilot was approved by Sarah", true],
     ["## Proposed pilot\n8 reps for two weeks.", true],
     ["## Proposals\n8 reps for two weeks.", true],
     ["We will sign by Friday if legal approves", true],
     ["If legal approves, we will sign by Friday", true],
     ["They tentatively agreed to a two week pilot", true],
     ["Sarah approved the proposal subject to redlines", true],
-    ["Budget approval is still pending", true],
+    ["## Proposal review\nWe rejected the proposal", true],
     ["Sarah approved the proposal and signed the order form", false],
     ["We rejected the proposal", false],
     ["The proposal was signed on Tuesday", false],
     ["**Outcome:** Sarah approved the proposal", false],
     ["- We rejected the proposal", false],
-    ["## Proposal review\nWe rejected the proposal", false],
+    ["Get the proposal signed by Friday", false],
+    ["We signed the contract. No items pending.", false],
+    ["The proposal was not signed", false],
+    ["The proposal must be signed by Friday", false],
+    ["The proposal is 8 reps for 2 weeks", false],
+    ["Budget approval is still pending", false],
     ["We signed the deal. Let me know if you need anything.", false],
     ["Daniel owns pilot coordination.", false],
   ];

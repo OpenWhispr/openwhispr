@@ -1,33 +1,16 @@
 import type { SalesforcePreviewField } from "../types/connectors";
 
-export type SalesforceFieldProblem = "invalidPreview" | "noneSelected" | "tooLong";
+export type SalesforceFieldProblem = "noneSelected" | "tooLong";
 
 export function salesforceFieldProblem(
   definitions: SalesforcePreviewField[] | undefined,
   fields: Record<string, string | string[]> | undefined
 ): SalesforceFieldProblem | null {
-  if (
-    !definitions?.length ||
-    definitions.length > 3 ||
-    !fields ||
-    Object.keys(fields).length !== definitions.length * 2
-  )
-    return "invalidPreview";
   let selected = 0;
-  for (const [index, definition] of definitions.entries()) {
-    const value = fields[definition.key];
-    const include = fields[`include${index}`];
-    if (
-      definition.key !== `value${index}` ||
-      typeof value !== "string" ||
-      (include !== "yes" && include !== "no") ||
-      !Number.isSafeInteger(definition.maxLength) ||
-      definition.maxLength < 1
-    )
-      return "invalidPreview";
-    if (include === "no") continue;
+  for (const [index, definition] of (definitions ?? []).entries()) {
+    if (fields?.[`include${index}`] !== "yes") continue;
     selected++;
-    if (value.length > definition.maxLength) return "tooLong";
+    if (fields[definition.key].length > definition.maxLength) return "tooLong";
   }
   return selected ? null : "noneSelected";
 }

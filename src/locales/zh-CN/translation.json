@@ -5334,7 +5334,6 @@
         "after": "建议替换值",
         "empty": "空",
         "limit": "{{count}} / {{max}}个字符",
-        "invalidPreview": "字段预览不完整，请重新申请审核。",
         "noneSelected": "请至少选择一个字段，或取消。",
         "tooLong": "选定字段超出字符数限制。",
         "salesforceActivity": {
@@ -5714,6 +5713,7 @@
         "sourceNote": "来自笔记“{{title}}”。",
         "sourceNoteUntitled": "来自一篇无标题笔记。"
       },
+      "provenance": "来源：OpenWhispr — {{title}}{{date}}",
       "briefing": {
         "untitledRecord": "所选 Salesforce 记录",
         "retrieved": "获取时间：{{time}}",

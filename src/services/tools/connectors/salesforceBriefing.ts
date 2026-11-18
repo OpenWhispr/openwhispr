@@ -134,15 +134,18 @@ function safeLink(value: unknown): string {
 function failure(message: string): ToolResult {
   return { success: false, data: null, displayText: message };
 }
-// English wording only: in another language the model's label stands.
+// One way, and English only: this wording stays proposed, and every other
+// passage keeps the model's label.
 const UNSETTLED =
-  /\bpropos(?!als?\b)\w*|\b(?:tentative(?:ly)?|indicative|planning estimate|subject to|unapproved|unless|pending|contingent (?:on|upon)|provided that|assuming|depending on)\b|(?<!\b(?:know|see|ask|asked|check|wonder)\s)\bif\b|(?:\b(?:not|never)|n['’]t)\s+(?:\w+\s+){0,2}approved\b/i;
-// What became of a proposal: "must be signed" and "was not signed" don't say.
-const SETTLED =
-  /(?<!(?:\b(?:not|never|be|once|until)|n['’]t)\s+(?:\w+\s+){0,2})\b(?:approved|accepted|agreed|signed|rejected|declined)\b/i;
+  /\bpropos(?:e|ed|es|ing)\b|\b(?:tentative(?:ly)?|indicative|planning estimate|subject to|contingent (?:on|upon)|provided that|unapproved)\b|(?:\bnot|n['’]t)\s+(?:\w+\s+){0,2}approved\b|\bwill\b[^.!?\n]*\b(?:if|unless)\b|\b(?:if|unless)\b[^.!?\n]*\bwill\b/i;
 
-function isProposed(value: string): boolean {
-  return UNSETTLED.test(value) || (/\bproposals?\b/i.test(value) && !SETTLED.test(value));
+function isProposed(section: string, passageText: string): boolean {
+  return (
+    UNSETTLED.test(section) ||
+    UNSETTLED.test(passageText) ||
+    /\bproposals?\b/i.test(section) ||
+    /^\W*proposals?[*_\s]*:/i.test(passageText)
+  );
 }
 
 // Paired markers with a line edge or a non-word character outside them, so
@@ -173,7 +176,7 @@ function addPassage(
     id: `${sourceId}:P${passages.length + 1}`,
     section,
     text: passageText,
-    proposed: isProposed(`${section} ${passageText}`),
+    proposed: isProposed(section, passageText),
   });
   return true;
 }
