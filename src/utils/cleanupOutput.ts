@@ -11,6 +11,8 @@ const SPOKEN_RUN_SPAN = COPIED_RUN_LENGTH * 2;
 const MAX_UNSPOKEN_WORDS = 2;
 const MAX_UNSPOKEN_LONG_WORDS = 1;
 const LONG_WORD_LENGTH = 4;
+// Written without spaces, six of these words are a short everyday phrase.
+const UNSPACED_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
 
 interface CleanupInstructions {
   prompt: string;
@@ -64,7 +66,8 @@ function copiesInstructions(
     wordRuns(comparisonTokens(prompt), COPIED_RUN_LENGTH).map((run) => run.join(" "))
   );
   return wordRuns(comparisonTokens(output), COPIED_RUN_LENGTH).some((run) => {
-    if (!promptRuns.has(run.join(" "))) return false;
+    const text = run.join(" ");
+    if (!promptRuns.has(text) || UNSPACED_SCRIPT.test(text)) return false;
     // Cleanup writes spoken numbers as digits and is told to use the dictionary's spellings.
     const words = run.filter((token) => !dictionaryWords.has(token) && !/^\p{N}+$/u.test(token));
     const longWords = words.filter((token) => [...token].length >= LONG_WORD_LENGTH);
