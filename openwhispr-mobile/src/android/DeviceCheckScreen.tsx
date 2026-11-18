@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/Text';
+import { ResultTimes } from './settings/ResultTimes';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ANDROID_MODELS } from './models';
@@ -127,7 +128,6 @@ export default function DeviceCheckScreen() {
     }
   };
   const gib = (bytes: number) => (bytes / 1024 ** 3).toFixed(1);
-  const seconds = (ms: number) => (ms / 1000).toFixed(1);
   return (
     <Page title={t('deviceCheck')} back>
       <Text style={styles.body}>{t('deviceCheckBody')}</Text>
@@ -200,19 +200,21 @@ export default function DeviceCheckScreen() {
         ) : null}
       </Card>
       {result ? (
+        <ResultTimes
+          times={{
+            recording: result.durationMs,
+            speech: result.speechMs,
+            cleanup: result.cleanupMs,
+            total: result.totalMs,
+          }}
+        />
+      ) : null}
+      {result ? (
         <Card>
           <Text style={styles.heading}>{t('benchmarkResult')}</Text>
           <Text style={styles.body}>
             {ANDROID_MODELS[result.selection.speech].title} +{' '}
             {ANDROID_MODELS[result.selection.text].title}
-          </Text>
-          <Text style={styles.body}>
-            {t('benchmarkTiming', {
-              duration: seconds(result.durationMs),
-              speech: seconds(result.speechMs),
-              cleanup: seconds(result.cleanupMs),
-              total: seconds(result.totalMs),
-            })}
           </Text>
           <Text style={styles.caption}>{t('benchmarkTimingHint')}</Text>
           <Text style={styles.heading}>{t('benchmarkTranscript')}</Text>

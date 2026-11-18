@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
+import { Toggle } from './settings/kit';
 import { setPrivateMode } from '@/lib/workflowModeSwitch.android';
 import {
   ANDROID_MODELS,
@@ -17,7 +17,7 @@ import {
   modelSupported,
   type AndroidModelId,
 } from './models';
-import { Button, Card, Page, Row, styles } from './ui';
+import { Button, Card, Row, styles } from './ui';
 import type { AndroidSpeechModelId } from './speechSelection';
 import type { UserConfig } from '@/types';
 import { speechModelSupportsLanguages } from './speechCapabilities';
@@ -101,8 +101,8 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
       <Card>
         <View style={styles.row}>
           <Text style={[styles.heading, { flex: 1 }]}>{t('privateMode')}</Text>
-          <SettingsSwitch
-            accessibilityLabel={t('privateMode')}
+          <Toggle
+            label={t('privateMode')}
             value={requestedPrivateMode ?? privateMode}
             disabled={requestedPrivateMode !== null}
             onValueChange={(enabled) => {
@@ -115,8 +115,8 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
       <Card>
         <View style={styles.row}>
           <Text style={[styles.heading, { flex: 1 }]}>{t('cleanup')}</Text>
-          <SettingsSwitch
-            accessibilityLabel={t('cleanup')}
+          <Toggle
+            label={t('cleanup')}
             value={config?.cleanupEnabled !== false}
             disabled={saving}
             onValueChange={(cleanupEnabled) => {
@@ -254,31 +254,5 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
         </View>
       ))}
     </>
-  );
-}
-export default function ModelsScreen() {
-  const { t } = useTranslation();
-  return (
-    <Page title={t('models')} back>
-      <ModelsContent />
-      <Card>
-        <Text style={styles.heading}>{t('workflow')}</Text>
-        {(['dictation', 'upload', 'cleanup', 'notes', 'agent'] as const).map((scope) => (
-          <Row
-            key={scope}
-            title={t(
-              scope === 'dictation'
-                ? 'dictate'
-                : scope === 'notes'
-                  ? 'formatting'
-                  : scope === 'agent'
-                    ? 'assistant'
-                    : scope,
-            )}
-            onPress={() => router.push({ pathname: '/(account)/ai-workflow', params: { scope } })}
-          />
-        ))}
-      </Card>
-    </Page>
   );
 }

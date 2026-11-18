@@ -29,8 +29,17 @@ class DictationService : Service() {
     var emit: ((String, Map<String, Any>) -> Unit)? = null
     var appVisible = true
     var practiceVisible = false
-    private const val PREFERENCES = "bubble"
+    const val PREFERENCES = "bubble"
     private const val ERROR_TIMEOUT_MS = 15000L
+
+    fun readAppearance(preferences: android.content.SharedPreferences) = BubbleAppearance(
+      size = preferences.getInt("size", 64), opacity = preferences.getFloat("opacity", 0.8f),
+      shrinkWhenIdle = preferences.getBoolean("shrinkWhenIdle", true), shrinkToDot = preferences.getBoolean("shrinkToDot", false),
+      shrinkInSearch = preferences.getBoolean("shrinkInSearch", false))
+    fun writeAppearance(preferences: android.content.SharedPreferences, value: BubbleAppearance) {
+      preferences.edit().putInt("size", value.size).putFloat("opacity", value.alpha).putBoolean("shrinkWhenIdle", value.shrinkWhenIdle)
+        .putBoolean("shrinkToDot", value.shrinkToDot).putBoolean("shrinkInSearch", value.shrinkInSearch).apply()
+    }
   }
   private val handler = Handler(Looper.getMainLooper())
   private lateinit var windows: WindowManager
@@ -44,7 +53,15 @@ class DictationService : Service() {
   private var targetLayout: WindowManager.LayoutParams? = null
   private var waveform: WaveformView? = null
   private var snap: ValueAnimator? = null
-  private var scale = 1f
+  private var appearance = BubbleAppearance()
+  private val scale get() = appearance.scale
+  /** 0 is full size, 1 fully shrunk; only the Ready bubble shrinks. */
+  private var shrink = 0f
+  private var shrinking: ValueAnimator? = null
+  private var idle = false
+  private var touched = false
+  private var searchField = false
+  private var focusedField: Int? = null
 
   private var state = BubbleState.READY
   private var recorder: WavRecorder? = null
@@ -62,6 +79,7 @@ class DictationService : Service() {
   private val maximumRecording = Runnable { if (state == BubbleState.LISTENING) finish(false) }
   private val dismissError = Runnable { dismiss() }
   private val unhide = Runnable { unhide() }
+  private val idleShrink = Runnable { idle = true; updateShrink() }
 
   override fun onBind(intent: Intent?) = null
   override fun onCreate() {
@@ -70,6 +88,7 @@ class DictationService : Service() {
     dockRight = preferences.getBoolean("dockRight", true)
     savedTop = preferences.getInt("top", -1).takeIf { it >= 0 }
     hiddenUntil = preferences.getLong("hiddenUntil", 0L)
+    appearance = readAppearance(preferences)
     if (hidden) handler.postDelayed(unhide, hiddenUntil - System.currentTimeMillis())
     val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
     manager.createNotificationChannel(NotificationChannel("dictation", getString(R.string.ow_bubble_channel), NotificationManager.IMPORTANCE_LOW))
@@ -100,9 +119,11 @@ class DictationService : Service() {
       "stop" -> { stopSelf(); return START_NOT_STICKY }
       "show" -> unhide()
       else -> {
-        val size = intent?.getIntExtra("size", 64) ?: 64
-        scale = size.coerceIn(48, 88) / 64f
+        // setEnabled's size wins over a stored one and is kept, so a restart comes back the same.
+        val stored = readAppearance(preferences)
+        appearance = if (intent?.hasExtra("size") == true) stored.copy(size = intent.getIntExtra("size", 64)).also { writeAppearance(preferences, it) } else stored
         if (root == null) createWindow() else render()
+        wake()
       }
     }
     InsertionService.instance?.refreshTyping()
@@ -115,9 +136,12 @@ class DictationService : Service() {
   // Visibility -------------------------------------------------------------------------------
 
   /** Called by the accessibility service when a text box gains or loses focus, or the keyboard moves. */
-  fun onTyping(value: Boolean, top: Int?) {
-    typing = value; keyboardTop = top
+  fun onTyping(value: Boolean, top: Int?, field: Int? = null, search: Boolean = false) {
+    // Focusing a field (another one, or one after none) wakes a shrunk bubble; typing in it doesn't.
+    val focused = value && (!typing || field != focusedField)
+    typing = value; keyboardTop = top; focusedField = if (value) field else null; searchField = value && search
     if (state == BubbleState.READY && !dragging) place()
+    if (focused) wake() else updateShrink()
     updateVisibility()
   }
   fun updateVisibility() {
@@ -152,6 +176,43 @@ class DictationService : Service() {
     updateVisibility()
   }
 
+  // Appearance -------------------------------------------------------------------------------
+
+  /** Applies Settings › Size & look to the running bubble without recreating its window. */
+  fun applyAppearance(value: BubbleAppearance) {
+    val resized = value.scale != appearance.scale || value.shrinkToDot != appearance.shrinkToDot
+    appearance = value
+    // Re-rendering a pill mid-dictation would rebuild its buttons, so a new size waits for Ready.
+    if (resized && state == BubbleState.READY) render()
+    else if (state == BubbleState.READY) root?.alpha = value.alpha
+    wake()
+  }
+  /** Brings a shrunk bubble back to full size and restarts the idle countdown. */
+  private fun wake(animate: Boolean = true) {
+    idle = false
+    handler.removeCallbacks(idleShrink)
+    if (appearance.shrinkWhenIdle && state == BubbleState.READY) handler.postDelayed(idleShrink, BubblePolicy.IDLE_SHRINK_MS)
+    updateShrink(animate)
+  }
+  /** ValueAnimator follows the system animator scale, so "Remove animations" makes this a jump. */
+  private fun updateShrink(animate: Boolean = true) {
+    val goal = if (BubblePolicy.shrunk(state == BubbleState.READY && !touched, idle, appearance.shrinkWhenIdle, searchField, appearance.shrinkInSearch)) 1f else 0f
+    shrinking?.cancel(); shrinking = null
+    if (shrink == goal) return
+    if (!animate || root?.isShown != true) { shrink = goal; resizeReady(); return }
+    shrinking = ValueAnimator.ofFloat(shrink, goal).apply {
+      duration = 220
+      addUpdateListener { shrink = it.animatedValue as Float; resizeReady() }
+      start()
+    }
+  }
+  private fun resizeReady() {
+    val bubble = root?.getChildAt(0) as? IconBubble ?: return
+    bubble.dot = if (appearance.shrinkToDot) shrink else 0f
+    bubble.layoutParams = bubble.layoutParams.apply { width = shown; height = shown }
+    if (!dragging) place()
+  }
+
   // Layout -----------------------------------------------------------------------------------
 
   private fun dp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics)
@@ -159,6 +220,9 @@ class DictationService : Service() {
   private val shadowRoom get() = dp(14f).toInt()
   private val edge get() = dp(12f).toInt()
   private val size get() = px(56f)
+  private val shrunkSize get() = if (appearance.shrinkToDot) dp(16f).toInt() else px(34f)
+  /** The bubble's visible diameter: smaller while the Ready bubble is shrunk. */
+  private val shown get() = if (state == BubbleState.READY) (size + (shrunkSize - size) * shrink).toInt() else size
   private fun screen(): Pair<Int, Int> =
     if (Build.VERSION.SDK_INT >= 30) windows.currentWindowMetrics.bounds.let { it.width() to it.height() }
     else resources.displayMetrics.let { it.widthPixels to it.heightPixels }
@@ -184,8 +248,11 @@ class DictationService : Service() {
     val view = root ?: return
     view.removeAllViews(); waveform = null
     // The round bubble has a fixed size; a plain View asked to wrap its content would fill the window.
-    val width = if (state == BubbleState.READY) size else FrameLayout.LayoutParams.WRAP_CONTENT
-    view.addView(content(state), FrameLayout.LayoutParams(width, size))
+    val ready = state == BubbleState.READY
+    if (!ready) { shrinking?.cancel(); shrink = 0f }
+    view.addView(content(state), FrameLayout.LayoutParams(if (ready) shown else FrameLayout.LayoutParams.WRAP_CONTENT, if (ready) shown else size))
+    (view.getChildAt(0) as? IconBubble)?.dot = if (appearance.shrinkToDot) shrink else 0f
+    view.alpha = if (ready) appearance.alpha else 1f
     place()
   }
   private fun place() {
@@ -196,7 +263,8 @@ class DictationService : Service() {
     view.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
     val visibleWidth = view.measuredWidth - 2 * shadowRoom
     params.x = if (dockRight) width - edge - visibleWidth - shadowRoom else edge - shadowRoom
-    params.y = BubblePolicy.bubbleTop(savedTop, keyboardTop, height, size, dp(16f).toInt(), dp(48f).toInt()) - shadowRoom
+    // A shrunk bubble keeps the full bubble's centre, so it grows back in place.
+    params.y = BubblePolicy.bubbleTop(savedTop, keyboardTop, height, size, dp(16f).toInt(), dp(48f).toInt()) - shadowRoom + (size - shown) / 2
     if (view.isAttachedToWindow) windows.updateViewLayout(view, params)
   }
 
@@ -261,7 +329,7 @@ class DictationService : Service() {
     handler.removeCallbacks(dismissError)
     if (value == BubbleState.RETRY || value == BubbleState.RECOVER) handler.postDelayed(dismissError, ERROR_TIMEOUT_MS)
     if (value != state) {
-      state = value; render()
+      state = value; render(); wake()
       val announcement = when (value) {
         BubbleState.LISTENING -> R.string.ow_bubble_listening
         BubbleState.PROCESSING -> R.string.ow_bubble_writing
@@ -285,6 +353,9 @@ class DictationService : Service() {
     val view = root ?: return
     when (event.actionMasked) {
       MotionEvent.ACTION_DOWN -> {
+        // A touch brings a shrunk bubble straight back, so the drag and the tap work on the full bubble,
+        // and holds off shrinking until the gesture ends.
+        touched = true; wake(animate = false); handler.removeCallbacks(idleShrink)
         downX = event.rawX; downY = event.rawY; startX = params.x; startY = params.y
         moved = false; held = false; snap?.cancel()
         handler.postDelayed(hold, 300)
@@ -302,25 +373,27 @@ class DictationService : Service() {
         }
       }
       MotionEvent.ACTION_UP -> {
-        handler.removeCallbacks(hold)
+        handler.removeCallbacks(hold); touched = false
         when {
-          moved -> { val hide = overTarget(); endDrag(); if (hide) hideForAnHour() else settle() }
+          // A settled bubble starts counting down once it reaches the edge.
+          moved -> { val hide = overTarget(); endDrag(); if (hide) { hideForAnHour(); wake() } else settle() }
           held -> finish(false)
           else -> { view.performClick(); begin() }
         }
         held = false
       }
       MotionEvent.ACTION_CANCEL -> {
-        handler.removeCallbacks(hold)
+        handler.removeCallbacks(hold); touched = false
         if (moved) { endDrag(); place() }
         if (held) finish(true)
         held = false
+        wake()
       }
     }
   }
   private fun bubbleCenter(): Pair<Float, Float> {
     val params = layout!!
-    return (params.x + shadowRoom + size / 2f) to (params.y + shadowRoom + size / 2f)
+    return (params.x + shadowRoom + shown / 2f) to (params.y + shadowRoom + shown / 2f)
   }
   private fun targetCenter(): Pair<Float, Float> {
     val (width, height) = screen()
@@ -342,6 +415,11 @@ class DictationService : Service() {
     snap = ValueAnimator.ofInt(params.x, destination).apply {
       duration = 180
       addUpdateListener { params.x = it.animatedValue as Int; if (view.isAttachedToWindow) windows.updateViewLayout(view, params) }
+      addListener(object : android.animation.AnimatorListenerAdapter() {
+        private var cancelled = false
+        override fun onAnimationCancel(animation: android.animation.Animator) { cancelled = true }
+        override fun onAnimationEnd(animation: android.animation.Animator) { if (!cancelled) wake() }
+      })
       start()
     }
   }
@@ -470,7 +548,7 @@ class DictationService : Service() {
     })
   }
   override fun onDestroy() {
-    handler.removeCallbacksAndMessages(null); snap?.cancel(); recorder?.close(); recorder = null
+    handler.removeCallbacksAndMessages(null); snap?.cancel(); shrinking?.cancel(); recorder?.close(); recorder = null
     target?.let { runCatching { windows.removeView(it) } }; target = null; targetCircle = null
     root?.let { runCatching { windows.removeView(it) } }; root = null; waveform = null
     InsertionService.instance?.clearTarget(); emit?.invoke("onCancel", emptyMap())

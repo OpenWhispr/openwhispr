@@ -1162,14 +1162,14 @@ describe('the Chat page', () => {
   it('hides the model choice while chat is off', () => {
     mockConfig = { defaultMode: 'cloud', noteChatEnabled: false };
     render(<WorkflowSettingsScreen />);
-    expect(screen.getByLabelText('Chat').props.value).toBe(false);
+    expect(screen.getByLabelText('Chat').props.accessibilityState.checked).toBe(false);
     expect(screen.queryByText('OpenWhispr Cloud')).toBeNull();
   });
 
   it('stays on when only the voice assistant is off', () => {
     mockConfig = { defaultMode: 'cloud', dictationAgentEnabled: false };
     render(<WorkflowSettingsScreen />);
-    expect(screen.getByLabelText('Chat').props.value).toBe(true);
+    expect(screen.getByLabelText('Chat').props.accessibilityState.checked).toBe(true);
   });
 
   it('says what switching note chat off does', () => {
@@ -1209,7 +1209,7 @@ describe('the Voice Assistant page', () => {
   it('hides the model choice and settings while the voice assistant is off', () => {
     mockConfig = { defaultMode: 'cloud', dictationAgentEnabled: false, noteChatEnabled: true };
     render(<WorkflowSettingsScreen />);
-    expect(screen.getByLabelText('Voice Assistant').props.value).toBe(false);
+    expect(screen.getByLabelText('Voice Assistant').props.accessibilityState.checked).toBe(false);
     expect(screen.queryByText('OpenWhispr Cloud')).toBeNull();
     expect(screen.queryByText('Voice Assistant Settings')).toBeNull();
     expect(screen.getByText('The OpenWhispr keyboard shows no wand.')).toBeTruthy();
@@ -1220,8 +1220,8 @@ describe('the Voice Assistant page', () => {
     mockActiveMode = 'private';
     mockConfig = { defaultMode: 'private', dictationAgentEnabled: true };
     render(<WorkflowSettingsScreen />);
-    expect(screen.getByLabelText('Voice Assistant').props.value).toBe(true);
-    expect(screen.getByLabelText('Voice Assistant').props.disabled).toBeFalsy();
+    expect(screen.getByLabelText('Voice Assistant').props.accessibilityState.checked).toBe(true);
+    expect(screen.getByLabelText('Voice Assistant').props.accessibilityState.disabled).toBeFalsy();
     expect(screen.getByText('Voice Assistant Settings')).toBeTruthy();
   });
 });
@@ -1786,8 +1786,8 @@ describe('Android Local Mode workflow controls', () => {
     };
     render(<WorkflowSettingsScreen />);
     await act(async () => undefined);
-    expect(screen.getByLabelText('Voice Assistant').props.enabled).toBe(false);
-    expect(screen.getByLabelText('Voice Assistant').props.on).toBe(false);
+    expect(screen.getByLabelText('Voice Assistant').props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByLabelText('Voice Assistant').props.accessibilityState.checked).toBe(false);
     expect(screen.getByText(/Off while Local Mode is on\./)).toBeTruthy();
   });
   it.each(['upload', 'cleanup'])('does not offer Cloud for %s while Local Mode is on', (scope) => {

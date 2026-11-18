@@ -1,71 +1,392 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
-import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { useUsageStore } from '@/store/useUsageStore';
+import { SystemIcon } from '@/components/ui/SystemIcon';
+import registry from '@/config/languageRegistry.json';
 import { useAuthStore } from '@/store/useAuthStore';
-import { Page, Section, Row, styles } from '@/android/ui';
+import { useUsageStore } from '@/store/useUsageStore';
+import { useConfigStore } from '@/store/useConfigStore';
+import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { useSyncStore } from '@/sync/useSyncStore';
+import { requestSync } from '@/sync/syncEngine';
+import { requiresRealAccount } from '@/lib/accountAccess';
+import { getAccountDisplay } from '@/lib/accountDisplay';
+import { safeHaptics } from '@/lib/utils';
+import { AndroidDictation } from '../../modules/android-dictation/src';
+import { home, type } from '@/android/home/kit';
+import {
+  Group,
+  ListRow,
+  PillAction,
+  SettingsPage,
+  cardStyle,
+  relativeTime,
+  settings,
+  showToast,
+} from '@/android/settings/kit';
+import { useSettingsT, type SettingsKey } from '@/android/settings/strings';
+import { requestRuntime, usePermissions } from '@/android/settings/permissions';
+import { applyBubbleLook, sizeLabel, useBubbleLook } from '@/android/settings/bubbleAppearance';
 
-export default function AndroidAccount() {
-  const { t } = useTranslation();
+const HISTORY_LABEL: Record<number, SettingsKey> = {
+  [-1]: 'forever',
+  30: 'thirtyDays',
+  7: 'sevenDays',
+  0: 'dontSave',
+};
+const MODE_LABEL: Record<string, SettingsKey> = {
+  cloud: 'cloudShort',
+  private: 'thisPhone',
+  providers: 'ownKey',
+};
+
+export default function SettingsScreen() {
+  const t = useSettingsT();
   const user = useAuthStore((s) => s.user);
-  const subscribed = useUsageStore((s) => s.usage?.isSubscribed);
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const signOut = useAuthStore((s) => s.signOut);
+  const usage = useUsageStore((s) => s.usage);
   const loadUsage = useUsageStore((s) => s.load);
+  const config = useConfigStore((s) => s.config);
+  const activeMode = useProcessingModeStore((s) => s.activeMode);
+  const sync = useSyncStore();
+  const opacity = useBubbleLook((s) => s.opacity);
+  const { status, offCount, refresh } = usePermissions();
+  const [switching, setSwitching] = useState(false);
+  const signedIn = !requiresRealAccount(user);
+  const bubbleSize = config?.androidBubbleSize ?? 64;
+
   useEffect(() => {
-    if (user && !user.isAnonymous) loadUsage();
-  }, [user, loadUsage]);
+    if (signedIn) loadUsage();
+  }, [signedIn, loadUsage]);
+
+  const save = async (
+    change: Parameters<ReturnType<typeof useConfigStore.getState>['updateConfig']>[0],
+  ) => {
+    await useConfigStore.getState().updateConfig(change);
+    const error = useConfigStore.getState().error;
+    if (error) throw new Error(error);
+  };
+
+  // The same switch as the Home card. Turning it on asks for what the bubble needs first.
+  const setBubble = async (value: boolean) => {
+    if (switching || !AndroidDictation) return;
+    setSwitching(true);
+    try {
+      if (value) {
+        if (!(await requestRuntime('microphone'))) {
+          Alert.alert(t('micOffTitle'), t('micOffBody'), [
+            { text: t('notNow'), style: 'cancel' },
+            { text: t('openSettings'), onPress: () => AndroidDictation?.openSettings('app') },
+          ]);
+          return;
+        }
+        await requestRuntime('notifications');
+        if (!AndroidDictation.getStatus().overlay) {
+          Alert.alert(t('overlayTitle'), t('overlayBody'), [
+            { text: t('cancel'), style: 'cancel' },
+            { text: t('turnOn'), onPress: () => AndroidDictation?.openSettings('overlay') },
+          ]);
+          return;
+        }
+        applyBubbleLook({ size: bubbleSize });
+      }
+      AndroidDictation.setEnabled(value, bubbleSize);
+      setTimeout(refresh, 300);
+    } catch (error) {
+      Alert.alert(t('errorTitle'), (error as Error).message);
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const setBackup = async (value: boolean) => {
+    if (value && !signedIn) {
+      Alert.alert(t('backupSignInTitle'), t('backupSignInBody'), [
+        { text: t('cancel'), style: 'cancel' },
+        { text: t('signIn'), onPress: () => router.push('/auth') },
+      ]);
+      return;
+    }
+    if (value && sync.subscriptionRequired) {
+      Alert.alert(t('backupProTitle'), t('backupProBody'), [
+        { text: t('notNow'), style: 'cancel' },
+        { text: t('seePlans'), onPress: () => router.push('/android-pro') },
+      ]);
+      return;
+    }
+    try {
+      await save({ cloudBackupEnabled: value });
+      showToast(t(value ? 'backupOn' : 'backupOff'), value ? 'success' : 'neutral');
+      if (value) void requestSync('manual').catch(() => undefined);
+    } catch (error) {
+      showToast((error as Error).message, 'error');
+    }
+  };
+
+  const backupOn = Boolean(config?.cloudBackupEnabled) && signedIn;
+  const backupFailed = backupOn && sync.status === 'error';
+  const backupLine = sync.policyBlocked
+    ? t('backupOrganization')
+    : backupFailed
+      ? t('backupFailed')
+      : backupOn && sync.lastSyncAt
+        ? t('backedUp', { when: relativeTime(sync.lastSyncAt, t) })
+        : t('cloudBackupBody');
+
+  const { initials, name } = getAccountDisplay(user, isGuest);
+  const language = registry.languages.find(
+    (item) => item.code === (config?.preferredLanguage ?? 'auto'),
+  );
+  const planLabel = usage
+    ? usage.isSubscribed
+      ? usage.isTrial
+        ? t('trial')
+        : t('pro')
+      : t('free')
+    : undefined;
+  const bubbleOn = Boolean(status?.enabled);
+
   return (
-    <Page title={t('account')} back>
-      <Text accessibilityRole="header" style={styles.title}>
-        {user?.name || t('signedOut')}
-      </Text>
-      <Section title={t('account')}>
-        <Row
-          icon="UserRound"
-          title={!user || user.isAnonymous ? t('signIn') : user.email}
-          onPress={() => router.push(!user || user.isAnonymous ? '/auth' : '/(account)/profile')}
-        />
-        <Row
-          icon="Sparkles"
-          title={t('plansAndBilling')}
-          detail={
-            subscribed === undefined ? undefined : t(subscribed ? 'cloudUnlimited' : 'proBody')
+    <SettingsPage title={t('settings')}>
+      <Group>
+        <ListRow
+          leading={
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: home.accent,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {signedIn ? (
+                <Text style={{ fontSize: 13, lineHeight: 18, color: '#FFFFFF' }}>{initials}</Text>
+              ) : (
+                <SystemIcon name="person" mdName="UserRound" size={16} color="#FFFFFF" />
+              )}
+            </View>
           }
+          title={signedIn ? name : t('localWorkspace')}
+          badge={
+            signedIn && planLabel ? (
+              <View
+                style={{
+                  backgroundColor: home.fill,
+                  borderRadius: 999,
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    lineHeight: 14,
+                    fontWeight: '500',
+                    letterSpacing: 0.11,
+                    color: home.secondary,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {planLabel}
+                </Text>
+              </View>
+            ) : undefined
+          }
+          subtitle={signedIn ? (user?.email ?? undefined) : t('signInToSync')}
+          onPress={() => router.push(signedIn ? '/(account)/profile' : '/auth')}
+        />
+      </Group>
+
+      {signedIn && usage && (
+        <Pressable
+          cssInterop={false}
+          accessibilityRole="button"
           onPress={() => router.push('/android-pro')}
+          style={({ pressed }) => [
+            cardStyle,
+            {
+              borderColor: home.borderSubtle,
+              boxShadow: home.cardShadow,
+              padding: 16,
+              gap: 8,
+              opacity: pressed ? 0.8 : 1,
+            },
+          ]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Text style={[settings.title, { flex: 1 }]}>{t('wordsThisWeek')}</Text>
+            {!usage.isSubscribed && (
+              <Text style={[settings.title, settings.tabular]}>
+                {`${usage.wordsUsed.toLocaleString()} / ${usage.limit.toLocaleString()}`}
+              </Text>
+            )}
+          </View>
+          {!usage.isSubscribed && (
+            <View
+              style={{
+                height: 6,
+                borderRadius: 999,
+                backgroundColor: home.fill,
+                overflow: 'hidden',
+              }}
+            >
+              <View
+                style={{
+                  height: 6,
+                  borderRadius: 999,
+                  backgroundColor: home.accent,
+                  width: `${Math.max(2, Math.min(100, (usage.wordsUsed / Math.max(1, usage.limit)) * 100))}%`,
+                }}
+              />
+            </View>
+          )}
+          <Text style={[type.footnote, settings.tabular]}>
+            {usage.isSubscribed
+              ? t('unlimitedWords')
+              : t('wordsLeft', { words: Math.max(usage.wordsRemaining, 0).toLocaleString() })}
+          </Text>
+        </Pressable>
+      )}
+
+      <Group title={t('bubble')}>
+        <ListRow
+          icon="Power"
+          title={t('showBubble')}
+          toggle={{
+            value: bubbleOn,
+            disabled: switching,
+            onValueChange: (value) => {
+              void setBubble(value);
+            },
+          }}
         />
-      </Section>
-      <Section title={t('preferences')}>
-        <Row
+        <ListRow
           icon="SlidersHorizontal"
-          title={t('preferences')}
-          detail={t('preferencesSummary')}
-          onPress={() => router.push('/(account)/preferences')}
+          title={t('sizeLook')}
+          value={`${t(sizeLabel(bubbleSize))} · ${Math.round(opacity * 100)}%`}
+          onPress={() => router.push('/android-size-look')}
         />
-        <Row
-          icon="Cpu"
-          title={t('models')}
-          detail={t('processingSummary')}
+        <ListRow
+          icon="Hand"
+          title={t('permissions')}
+          value={offCount ? t('toTurnOn', { count: offCount }) : t('allOn')}
+          valueAccent={offCount > 0}
+          onPress={() => router.push('/android-permissions')}
+        />
+      </Group>
+
+      <Group title={t('dictation')}>
+        <ListRow
+          icon="Globe"
+          title={t('language')}
+          value={!language || language.code === 'auto' ? t('autoDetect') : language.label}
+          onPress={() => router.push('/(account)/transcription-language')}
+        />
+        <ListRow
+          icon={
+            activeMode === 'private'
+              ? 'Smartphone'
+              : activeMode === 'providers'
+                ? 'KeyRound'
+                : 'Cloud'
+          }
+          title={t('processing')}
+          value={t(MODE_LABEL[activeMode])}
           onPress={() => router.push('/(account)/ai-models')}
         />
-        <Row
-          icon="ShieldCheck"
-          title={t('privacyData')}
-          detail={t('privacySummary')}
+        <ListRow
+          icon="Sparkles"
+          title={t('textCleanup')}
+          subtitle={t('textCleanupBody')}
+          toggle={{
+            value: config?.cleanupEnabled !== false,
+            disabled: !config,
+            onValueChange: (cleanupEnabled) => {
+              save({ cleanupEnabled }).catch((error: Error) => showToast(error.message, 'error'));
+            },
+          }}
+        />
+      </Group>
+
+      <Group title={t('privacy')}>
+        <ListRow
+          icon="BookOpen"
+          title={t('keepHistory')}
+          value={t(HISTORY_LABEL[config?.androidHistoryDays ?? -1] ?? 'forever')}
+          onPress={() => router.push('/android-history')}
+        />
+        <ListRow
+          icon="Cloud"
+          title={t('cloudBackup')}
+          subtitle={backupLine}
+          subtitleStyle={backupFailed ? { color: home.error } : undefined}
+          onPress={
+            backupFailed ? () => void requestSync('manual').catch(() => undefined) : undefined
+          }
+          trailing={null}
+          toggle={
+            backupFailed
+              ? undefined
+              : {
+                  value: backupOn,
+                  disabled: !config || sync.policyBlocked,
+                  onValueChange: (value) => {
+                    void setBackup(value);
+                  },
+                }
+          }
+        />
+        <ListRow
+          icon="Info"
+          title={t('analytics')}
+          value={t(config?.usageAnalyticsEnabled === false ? 'off' : 'on')}
           onPress={() => router.push('/(account)/privacy')}
         />
-      </Section>
-      <Section title="OpenWhispr">
-        <Row
+      </Group>
+
+      <Group title="OpenWhispr">
+        <ListRow
+          icon="CreditCard"
+          title={t('plan')}
+          value={planLabel}
+          onPress={() => router.push('/android-pro')}
+        />
+        <ListRow
           icon="Gift"
-          title={t('referrals')}
+          title={t('referral')}
           onPress={() => router.push('/(account)/referral')}
         />
-        <Row
+        <ListRow
           icon="CircleHelp"
-          title={t('helpAbout')}
+          title={t('help')}
           onPress={() => router.push('/(account)/help')}
         />
-      </Section>
-    </Page>
+      </Group>
+
+      {signedIn && (
+        <PillAction
+          label={t('signOut')}
+          icon="LogOut"
+          destructive
+          onPress={() =>
+            Alert.alert(t('signOutTitle'), t('signOutBody'), [
+              { text: t('cancel'), style: 'cancel' },
+              {
+                text: t('signOut'),
+                style: 'destructive',
+                onPress: () => {
+                  safeHaptics('warning');
+                  void signOut();
+                },
+              },
+            ])
+          }
+        />
+      )}
+    </SettingsPage>
   );
 }

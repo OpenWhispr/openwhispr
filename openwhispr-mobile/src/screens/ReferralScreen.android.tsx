@@ -29,6 +29,8 @@ import { iosColor } from '@/config/colors';
 import { AppFont } from '@/lib/fonts';
 import { handleAccountRequiredError, requiresRealAccount } from '@/lib/accountAccess';
 import { router } from 'expo-router';
+import { showToast } from '@/android/settings/kit';
+import { settingsT } from '@/android/settings/strings';
 
 const LABEL_COLOR = iosColor('label');
 const PLACEHOLDER_COLOR = iosColor('tertiaryLabel');
@@ -85,24 +87,16 @@ function StepRow({ step, text }: { step: number; text: string }) {
 }
 
 // Guests have no session, so the referral API can never load. Instead of the
-// generic error state, sell the reward and route to sign-in (signOut clears the
-// guest session, which surfaces AuthScreen from the root layout).
+// generic error state, sell the reward and open sign-in. Android has no root auth
+// gate, so signing a guest out would leave them here; an anonymous session must
+// never be signed out either (it carries a purchase and notes).
 function GuestReferralEmptyState() {
-  const signOut = useAuthStore((s) => s.signOut);
-  // Non-null here means an anonymous onboarding session. Signing it out to
-  // reach AuthScreen would revoke it, and the purchase and notes it carries.
   const anonymous = useAuthStore((s) => s.user !== null);
-  const [leaving, setLeaving] = useState(false);
 
-  const handleSignIn = useCallback(async () => {
+  const handleSignIn = useCallback(() => {
     safeHaptics('medium');
-    if (anonymous) {
-      router.push('/auth');
-      return;
-    }
-    setLeaving(true);
-    await signOut();
-  }, [anonymous, signOut]);
+    router.push('/auth');
+  }, []);
 
   return (
     <View className="flex-1 bg-systemBackground">
@@ -177,7 +171,7 @@ function GuestReferralEmptyState() {
         </View>
 
         <View className="mt-7 px-4">
-          <Button onPress={handleSignIn} loading={leaving}>
+          <Button onPress={handleSignIn}>
             {anonymous ? 'Create an account to get your link' : 'Sign in to get your link'}
           </Button>
         </View>
@@ -231,6 +225,7 @@ export default function ReferralScreen() {
     try {
       await Clipboard.setStringAsync(stats.referralLink);
       safeHaptics('success');
+      showToast(settingsT('linkCopied'));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (copyError) {
@@ -264,6 +259,7 @@ export default function ReferralScreen() {
       if (ok) {
         setEmailInput('');
         safeHaptics('success');
+        showToast(settingsT('inviteSent', { email: trimmed }));
         void loadData();
       } else {
         Alert.alert('Failed', 'Could not send invite. Please try again.');

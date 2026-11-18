@@ -3,6 +3,16 @@ import { Alert } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 let mockActiveMode = 'private';
+jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
+jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => null }));
+jest.mock('@/android/strings', () => ({
+  __esModule: true,
+  default: { addResourceBundle: jest.fn(), t: (key: string) => key },
+}));
+jest.mock('@/android/navigationBar', () => ({
+  useNavigationBar: () => ({ buttons: true, inset: 0 }),
+  useNavigationBarCanvas: () => undefined,
+}));
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
@@ -73,7 +83,7 @@ it.each([
   mockActiveMode = mode;
   render(<ModelsContent />);
   const control = screen.getByRole('switch', { name: 'privateMode' });
-  expect(control.props.value).toBe(!enabled);
+  expect(control.props.accessibilityState.checked).toBe(!enabled);
   await act(async () => fireEvent(control, 'valueChange', enabled));
   expect(setPrivateMode).toHaveBeenCalledWith(enabled);
 });
@@ -91,8 +101,8 @@ it('keeps the selected mode and enables retry after a switch fails', async () =>
     ]),
   );
   const control = screen.getByRole('switch', { name: 'privateMode' });
-  expect(control.props.value).toBe(true);
-  expect(control.props.disabled).toBe(false);
+  expect(control.props.accessibilityState.checked).toBe(true);
+  expect(control.props.accessibilityState.disabled).toBe(false);
 });
 
 it('offers a translated dismissal after a failed download and allows retry', async () => {

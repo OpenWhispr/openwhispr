@@ -6,9 +6,49 @@ import kotlin.math.sqrt
 /** What the floating bubble shows. Every state but [READY] is a pill. */
 enum class BubbleState { READY, LISTENING, PROCESSING, RETRY, RECOVER }
 
+/** How the Ready bubble looks (Settings › Size & look). Out-of-range values are clamped, not rejected. */
+data class BubbleAppearance(
+  val size: Int = 64,
+  val opacity: Float = 0.8f,
+  val shrinkWhenIdle: Boolean = true,
+  val shrinkToDot: Boolean = false,
+  val shrinkInSearch: Boolean = false,
+) {
+  val scale get() = size.coerceIn(48, 88) / 64f
+  val alpha get() = if (opacity.isNaN()) 0.8f else opacity.coerceIn(0.2f, 1f)
+}
+
 /** Decisions behind the floating bubble, kept free of Android views so they can be unit tested. */
 object BubblePolicy {
   const val HIDE_FOR_MS = 60 * 60 * 1000L
+  const val IDLE_SHRINK_MS = 5000L
+
+  /**
+   * With shrinking on, the Ready bubble shrinks once it has sat idle, or straight away over a search
+   * field (when that's on too) so it doesn't cover the results. Search-field shrinking is part of
+   * shrinking, as Settings shows it. Dictating always shows the bubble full size.
+   */
+  fun shrunk(ready: Boolean, idle: Boolean, shrinkWhenIdle: Boolean, searchField: Boolean, shrinkInSearch: Boolean) =
+    ready && shrinkWhenIdle && (idle || (shrinkInSearch && searchField))
+
+  /**
+   * Whether a focused field looks like a search box: a SearchView (the field or a near ancestor), or a
+   * word starting with "search" in its id, hint or description. "searchBox", "edit_search" and "Search
+   * contacts" count; "research_notes" doesn't.
+   */
+  fun searchField(labels: List<CharSequence?>, classes: List<CharSequence?>): Boolean =
+    classes.any { it?.contains("SearchView") == true } || labels.any { it != null && hasSearchWord(it) }
+
+  private fun hasSearchWord(text: CharSequence): Boolean {
+    var from = 0
+    while (true) {
+      val index = text.indexOf("search", from, ignoreCase = true)
+      if (index < 0) return false
+      val before = text.getOrNull(index - 1)
+      if (before == null || !before.isLetter() || text[index].isUpperCase()) return true
+      from = index + 1
+    }
+  }
 
   /**
    * The bubble shows over other apps only while someone is typing in a text box, and always on
