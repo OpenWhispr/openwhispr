@@ -83,3 +83,12 @@ test("expiry is checked against the injected clock (boundary is expired)", () =>
     (e) => e.code === "expired"
   );
 });
+
+test("the shipped fork config names a Keygen product, so licenses can verify", () => {
+  const { TITANIUM } = require("../../src/config/fork.config.json");
+  assert.match(
+    TITANIUM.keygenProductId,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    "an empty product id makes every license fail as unconfigured"
+  );
+});
