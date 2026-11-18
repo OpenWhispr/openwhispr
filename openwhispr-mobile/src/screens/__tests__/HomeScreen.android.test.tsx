@@ -13,7 +13,10 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { useFocusEffect } from 'expo-router';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: jest.fn() }));
-jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
+jest.mock('@react-navigation/native', () => ({
+  useIsFocused: () => true,
+  useScrollToTop: () => undefined,
+}));
 const mockStatus = {
   overlay: true,
   accessibility: true,

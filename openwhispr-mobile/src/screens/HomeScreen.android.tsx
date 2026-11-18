@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useBubbleResult } from '@/android/bubbleResult';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
@@ -109,6 +110,7 @@ export default function AndroidHome() {
   const { register } = useSuperwallGate();
   const action = useRef(false);
   const scroll = useRef<ScrollView>(null);
+  useScrollToTop(scroll);
   const navigationRevision = useRef(0);
   const retryController = useRef<AbortController | null>(null);
   const [working, setWorking] = useState(false);

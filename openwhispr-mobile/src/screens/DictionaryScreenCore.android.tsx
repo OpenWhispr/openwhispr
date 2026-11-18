@@ -1,5 +1,13 @@
 import type { TOptions } from 'i18next';
-import { useEffect, useMemo, useState, type ComponentProps, type ComponentType } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ComponentType,
+} from 'react';
+import { useScrollToTop } from '@react-navigation/native';
 import { View, Pressable, ScrollView, StyleSheet, type ViewProps } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
@@ -378,6 +386,8 @@ export function createDictionaryScreen(options: DictionaryPresentation = {}) {
     const alphabetical = useMemo(() => alphabetize(remainingEntries), [remainingEntries]);
 
     const isEmpty = isLoaded && entries.length === 0;
+    const scroll = useRef<ScrollView>(null);
+    useScrollToTop(scroll);
     const hasNoResults = isLoaded && !isEmpty && filteredEntries.length === 0;
 
     const handleDelete = (word: string) => {
@@ -399,6 +409,7 @@ export function createDictionaryScreen(options: DictionaryPresentation = {}) {
               <EmptyState onAdd={() => setSheetOpen(true)} moved={movedWords} />
             ) : (
               <ScrollView
+                ref={scroll}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
                 contentContainerStyle={{ paddingBottom: FAB_BOTTOM_PADDING }}

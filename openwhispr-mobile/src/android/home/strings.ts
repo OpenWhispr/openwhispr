@@ -62,6 +62,10 @@ export const homeEnglish = {
   audioOnly: 'Audio only — no text was saved',
   nothingFromBefore: 'Nothing from before',
   nothingFromBeforeBody: 'This phone has no recordings from before accounts.',
+  // TalkBack: a main tab's place in the bar, read after its name.
+  tabPosition: '{{index}} of {{count}}',
+  // The shared locale files leave "Notes" untranslated.
+  tabNotes: 'Notes',
 };
 
 export type HomeKey = keyof typeof homeEnglish;

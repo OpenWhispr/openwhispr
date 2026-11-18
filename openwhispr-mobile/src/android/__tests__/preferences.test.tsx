@@ -3,6 +3,8 @@ import { Alert } from 'react-native';
 import { useConfigStore } from '@/store/useConfigStore';
 import StyleScreen from '../StyleScreen';
 
+jest.mock('@react-navigation/native', () => ({ useScrollToTop: () => undefined }));
+
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));

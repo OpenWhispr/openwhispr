@@ -18,6 +18,8 @@ import DictionaryScreen from '../DictionaryScreen';
 import type { DictionaryEntry } from '@/store/useDictionaryStore';
 import type { SharedDictionarySummary } from '@/store/useSharedDictionaryStore';
 
+jest.mock('@react-navigation/native', () => ({ useScrollToTop: () => undefined }));
+
 let mockEntries: DictionaryEntry[] = [];
 let mockSummary: SharedDictionarySummary | null = null;
 let mockSharedWordsLower = new Set<string>();
