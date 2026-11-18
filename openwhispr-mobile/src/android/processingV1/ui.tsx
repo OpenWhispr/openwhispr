@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, ScrollView, TextInput, View } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { home } from '../home/kit';
-import { BottomSheet, ListRow, cardStyle, settings } from '../settings/kit';
+import { BottomSheet, ListRow, cardStyle, settings, useReduceMotion } from '../settings/kit';
 import { KEY_CHECK_COLORS, KeyCheckMark } from '../settings/KeyCheckMark';
 import type { KeyCheckResult, KeyCheckState } from '../settings/keyCheck';
 import type { V1T } from './strings';
@@ -177,26 +178,88 @@ export function reasonText(
   return t('keyRefused', { provider });
 }
 
-/** "Check connection" row value: the mark and one word (Works, Failed, Couldn't check). */
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+// The tick on a 24 unit grid: down to (10.2, 15.6), then up to (17, 8.8).
+const TICK = 'M7 12.4l3.2 3.2L17 8.8';
+const TICK_LENGTH = 14.2;
+
+/**
+ * "It works": a green circle pops in (spring) and a white tick draws across it, once, when the
+ * check comes back. Under Remove animations it shows finished at once.
+ */
+export function ConnectedMark({ t, size = 24 }: { t: V1T; size?: number }) {
+  const reduceMotion = useReduceMotion();
+  // Native-driven: the circle's pop. JS-driven: the tick's stroke (a separate view).
+  const pop = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  const draw = useRef(new Animated.Value(reduceMotion ? 0 : TICK_LENGTH)).current;
+  useEffect(() => {
+    if (reduceMotion) {
+      pop.setValue(1);
+      draw.setValue(0);
+      return;
+    }
+    Animated.spring(pop, { toValue: 1, speed: 16, bounciness: 9, useNativeDriver: true }).start();
+    Animated.timing(draw, {
+      toValue: 0,
+      duration: 260,
+      delay: 140,
+      easing: Easing.bezier(0.65, 0, 0.35, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [reduceMotion, pop, draw]);
+  return (
+    <Animated.View
+      accessible
+      accessibilityLabel={t('works')}
+      style={{
+        width: size,
+        height: size,
+        opacity: pop.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 1, 1] }),
+        transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }],
+      }}
+    >
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Circle cx={12} cy={12} r={11} fill={KEY_CHECK_COLORS.connected} />
+        <AnimatedPath
+          d={TICK}
+          stroke="#FFFFFF"
+          strokeWidth={2.4}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+          strokeDasharray={TICK_LENGTH}
+          strokeDashoffset={draw}
+          // Hidden until the stroke starts, so its round end never shows as a dot first.
+          strokeOpacity={draw.interpolate({
+            inputRange: [0, TICK_LENGTH * 0.97, TICK_LENGTH],
+            outputRange: [1, 1, 0],
+          })}
+        />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/**
+ * "Check connection" row value. Working is the green circled tick alone; checking, failed and
+ * couldn't check say so in a word beside their mark.
+ */
 export function ConnectionValue({ t, state }: { t: V1T; state: KeyCheckState }) {
+  if (state === 'connected') return <ConnectedMark t={t} />;
   const word =
     state === 'checking'
       ? t('checking')
-      : state === 'connected'
-        ? t('works')
-        : state === 'failed'
-          ? t('failed')
-          : state === 'unverified'
-            ? t('couldntCheck')
-            : '';
-  const color =
-    state === 'connected'
-      ? home.accent
       : state === 'failed'
-        ? KEY_CHECK_COLORS.failed
+        ? t('failed')
         : state === 'unverified'
-          ? KEY_CHECK_COLORS.unverified
-          : home.tertiary;
+          ? t('couldntCheck')
+          : '';
+  const color =
+    state === 'failed'
+      ? KEY_CHECK_COLORS.failed
+      : state === 'unverified'
+        ? KEY_CHECK_COLORS.unverified
+        : home.tertiary;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <Text style={[settings.rowValue, { color }]}>{word}</Text>

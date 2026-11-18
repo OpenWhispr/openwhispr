@@ -378,7 +378,7 @@ export default function ProcessingScreenV1() {
           <ListRow title={t('model')} value={draft.model} onPress={() => setSheet('model')} />
           <ListRow
             title={t('apiKey')}
-            value={keyTail ? `••••${keyTail}` : t('addKey')}
+            value={keyTail ? `••••${keyTail}` : saved === undefined ? '' : t('addKey')}
             valueAccent
             onPress={() =>
               router.push({ pathname: '/android-v1-key', params: { provider, from: 'processing' } })

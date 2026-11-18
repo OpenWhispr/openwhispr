@@ -229,12 +229,14 @@ export function useKeyTails(): Partial<Record<KeySource, string>> {
 
 /**
  * The saved key for a provider (or the custom server's key, '' when it takes none), read again
- * whenever the screen comes back and whenever a key is added or removed. `null` until read.
+ * whenever the screen comes back and whenever a key is added or removed. `undefined` while it
+ * is read the first time, `null` when there is none.
  */
-export function useSavedSecret(source: string, server?: string): string | null {
-  const [secret, setSecret] = useState<string | null>(null);
+export function useSavedSecret(source: string, server?: string): string | null | undefined {
+  const [secret, setSecret] = useState<string | null | undefined>(undefined);
   const focused = useIsFocused();
   const [revision, setRevision] = useState(0);
+  const shown = useRef('');
   useEffect(() => subscribeProviderCredentialChanges(() => setRevision((n) => n + 1)), []);
   useEffect(() => {
     let live = true;
@@ -242,6 +244,9 @@ export function useSavedSecret(source: string, server?: string): string | null {
       setSecret(null);
       return;
     }
+    // A different key is unknown until read; re-reading the same one keeps what shows.
+    if (shown.current !== `${source}|${server ?? ''}`) setSecret(undefined);
+    shown.current = `${source}|${server ?? ''}`;
     const read =
       source === 'custom'
         ? server

@@ -265,7 +265,9 @@ function TaskV1({ task }: { task: KeyTask }) {
     },
   ];
   const models = onKey && source !== 'custom' ? providerModels(source, task) : [];
-  const keyReady = saved !== null && (saved !== '' || source === 'custom');
+  // Undefined while the saved key is still being read: the row stays empty, never "Add key".
+  const loadingKey = onKey && saved === undefined;
+  const keyReady = !!saved || (saved === '' && source === 'custom');
 
   return (
     <SettingsPage title={t(TASK_KEY[task])}>
@@ -317,21 +319,23 @@ function TaskV1({ task }: { task: KeyTask }) {
             onPress={() => setSheet('model')}
           />
           <ListRow
-            icon="Check"
+            icon="PlugZap"
             title={t('connection')}
             trailing={
-              keyReady ? (
+              loadingKey ? null : keyReady ? (
                 <ConnectionValue t={t} state={check.state} />
               ) : (
                 <Text style={[settings.rowValue, { color: settings.accent }]}>{t('addKey')}</Text>
               )
             }
             onPress={
-              !keyReady
-                ? () => keyPage(source, task)
-                : check.state === 'failed' || check.state === 'unverified'
-                  ? check.retry
-                  : undefined
+              loadingKey
+                ? undefined
+                : !keyReady
+                  ? () => keyPage(source, task)
+                  : check.state === 'failed' || check.state === 'unverified'
+                    ? check.retry
+                    : undefined
             }
           />
         </Group>
