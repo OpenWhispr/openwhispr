@@ -112,6 +112,18 @@ function createMeetingAuditLog({
       .catch((error) => warnOnce("Meeting audit log write failed", { error: error.message }));
   };
 
+  // Callers sit on a recording's start, stop and quit paths, so a throw in here
+  // (from isEnabled, getConfiguredPath or the clock) is logged, never passed on.
+  const guarded =
+    (record) =>
+    (...args) => {
+      try {
+        record(...args);
+      } catch (error) {
+        warnOnce("Meeting audit log failed", { error: error.message });
+      }
+    };
+
   function directory() {
     const configured = getConfiguredPath();
     if (configured && path.isAbsolute(configured)) return configured;
@@ -283,28 +295,31 @@ function createMeetingAuditLog({
     });
   }
 
-  return {
-    recordingStarted,
-    recordingStopped,
-    recoverInterrupted,
+  function recordingRefused({ noteId, trigger, reason }) {
+    if (!isEnabled()) return;
+    const dir = directory();
+    const at = now();
+    enqueue(() =>
+      append(dir, at, {
+        event: "recording.refused",
+        noteId: noteIdOf(noteId),
+        trigger: allowed(START_SOURCES, trigger),
+        reason: allowed(REFUSAL_REASONS, reason),
+      })
+    );
+  }
 
-    recordingRefused({ noteId, trigger, reason }) {
-      if (!isEnabled()) return;
-      const dir = directory();
-      const at = now();
-      enqueue(() =>
-        append(dir, at, {
-          event: "recording.refused",
-          noteId: noteIdOf(noteId),
-          trigger: allowed(START_SOURCES, trigger),
-          reason: allowed(REFUSAL_REASONS, reason),
-        })
-      );
-    },
+  const stopGuarded = guarded(recordingStopped);
+
+  return {
+    recordingStarted: guarded(recordingStarted),
+    recordingStopped: stopGuarded,
+    recordingRefused: guarded(recordingRefused),
+    recoverInterrupted,
 
     // A quit ends a live recording with the app, before its session is torn down.
     closeOpenSession() {
-      if (session) recordingStopped({ sessionId: session.sessionId, reason: "app-quit" });
+      if (session) stopGuarded({ sessionId: session.sessionId, reason: "app-quit" });
       return queue;
     },
 
