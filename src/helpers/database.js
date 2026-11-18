@@ -12172,20 +12172,17 @@ class DatabaseManager {
     }
   }
 
-  // Whether this account has a chat that settled as synced, the only kind
-  // whose cloud copy can be missing messages without the push knowing.
-  hasSyncedLinkedConversations() {
+  // Chats that can hold unsent messages without the push knowing. Enumerate
+  // local IDs so the repair cannot miss ties in cloud timestamp pagination.
+  getSyncedLinkedConversations() {
     const scope = this._syncRowScope("agent_conversations");
-    return Boolean(
-      this.db
-        .prepare(
-          `SELECT 1 FROM agent_conversations
-           WHERE cloud_id IS NOT NULL AND sync_status = 'synced' AND deleted_at IS NULL
-             AND device_only = 0 AND ${scope.sql}
-           LIMIT 1`
-        )
-        .get(...scope.params)
-    );
+    return this.db
+      .prepare(
+        `SELECT id, cloud_id FROM agent_conversations
+         WHERE cloud_id IS NOT NULL AND sync_status = 'synced' AND deleted_at IS NULL
+           AND device_only = 0 AND ${scope.sql}`
+      )
+      .all(...scope.params);
   }
 
   // Main refused the create before it left, so no cloud copy can exist. The row

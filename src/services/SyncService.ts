@@ -313,7 +313,7 @@ const UNOWNED_CURSORS_ACCOUNT_KEY = "syncCursors.unownedClaimedBy";
 const UNOWNED_CLAIM_PROGRESS_KEY = "syncCursors.unownedClaimProgress";
 const UNOWNED_CLAIM_RETRY_MS = 5 * 60 * 1000;
 const UNOWNED_CLAIM_MAX_RETRY_MS = 60 * 60 * 1000;
-// Per account: "done" once a pull has checked every chat for messages its cloud
+// Per account: "done" once repair has checked every linked chat for messages its cloud
 // copy is missing (repairUnsentChatMessages), else when a failed check may next
 // run, so one that keeps failing doesn't walk every chat on every pass.
 const CHAT_MESSAGE_REPAIR_PREFIX = "syncCursors.chatMessages:";
@@ -4097,7 +4097,7 @@ export class SyncService {
 
   private async syncConversations(accountId: string): Promise<void> {
     await this.repairUnsentChatMessages(accountId);
-    if (!this.passIsCurrent()) return;
+    if (!this.passIsCurrent() || !this.canSync()) return;
     await this.pushPendingConversations();
     if (!this.passIsCurrent()) return;
     await this.pushConversationDeletes();
@@ -4105,22 +4105,52 @@ export class SyncService {
     await this.pullConversations();
   }
 
-  // Builds before this one settled a chat as synced after its first upload and
-  // never queued it again, so its later messages stayed on the device. The pull
-  // queues a chat whose cloud copy is missing messages, but a delta pull only
-  // sees copies changed since its cursor, so each account gets one snapshot
-  // pull first and this pass's push sends what it found. Without a cursor, this
-  // pass's own pull already reads every chat, and without a synced chat there is
-  // nothing to find.
+  // Older builds never queued synced chats again. Check each local cloud ID:
+  // a delta pull cannot see unchanged copies, and timestamp-only snapshot
+  // pagination can skip chats created in the same second at a page boundary.
   private async repairUnsentChatMessages(accountId: string): Promise<void> {
     const key = `${CHAT_MESSAGE_REPAIR_PREFIX}${accountId}`;
     const state = localStorage.getItem(key);
     if (state === "done" || Date.now() < Number(state)) return;
-    const needsSnapshot =
-      localStorage.getItem("lastSyncedAt.conversations") !== null &&
-      (await window.electronAPI.hasSyncedLinkedConversations?.()) === true;
-    const checked = !needsSnapshot || (await this.pullConversations(true));
-    // A pull the sign-in ended under says nothing about this account's chats.
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
+    let checked = false;
+    try {
+      const conversations =
+        (await window.electronAPI.getSyncedLinkedConversations?.(authGeneration)) ?? [];
+      stopIfPullStale(conversations);
+      for (const conversation of conversations) {
+        stopIfSignInReplaced(authGeneration);
+        if (!this.canSync()) return;
+        const local = await window.electronAPI.getAgentConversation?.(conversation.id);
+        if (
+          !local ||
+          local.cloud_id !== conversation.cloud_id ||
+          !(await this.canUploadConversation(local))
+        )
+          continue;
+        try {
+          const { messages } = await ConversationsService.listMessages(
+            conversation.cloud_id,
+            authGeneration
+          );
+          stopIfSignInReplaced(authGeneration);
+          if (cloudCopyIsMissingMessages(local.messages, messages)) {
+            stopIfPullStale(
+              await window.electronAPI.markConversationPending?.(local.id, authGeneration)
+            );
+          }
+        } catch (error) {
+          // Normal delete reconciliation handles cloud copies that no longer exist.
+          if (!isHttpStatus(error, 404)) throw error;
+        }
+      }
+      await assertAuthGenerationCurrent(authGeneration);
+      checked = true;
+    } catch (error) {
+      if (!isAuthContextError(error)) console.error("Chat message repair failed:", error);
+    }
+    // A check the sign-in ended under says nothing about this account's chats.
     if (!this.passIsCurrent()) return;
     localStorage.setItem(key, checked ? "done" : String(Date.now() + CHAT_MESSAGE_REPAIR_RETRY_MS));
   }

@@ -618,7 +618,6 @@ test("a cloud conversation tombstone hard-deletes the local row and its messages
   localStorageStub.setItem("lastSyncedAt.conversations", "2026-07-01T00:00:00.000Z");
   await service.syncAll(true);
 
-  // The one snapshot pull that checks chats for unsent messages lists live rows only.
   const deltaCalls = cloud
     .logFor("/api/conversations/list")
     .filter((call) => queryParam(call.path, "since") !== null);
@@ -1217,10 +1216,8 @@ async function establishPreFixDevice(service) {
   localStorageStub.removeItem("syncCursors.chatMessages:user-harness");
 }
 
-function fullConversationLists(cloud) {
-  return cloud
-    .logFor("/api/conversations/list")
-    .filter((call) => queryParam(call.path, "since") === null).length;
+function conversationMessageReads(cloud) {
+  return cloud.logFor("/api/conversations/messages").filter((call) => call.method === "GET").length;
 }
 
 test("chats an older build left synced with unsent messages go up once; complete ones stay put", async (t) => {
@@ -1258,9 +1255,94 @@ test("chats an older build left synced with unsent messages go up once; complete
   }
 
   // Once per account.
-  const listsAfterRepair = fullConversationLists(cloud);
+  const readsAfterRepair = conversationMessageReads(cloud);
   await service.syncAll(true);
-  assert.equal(fullConversationLists(cloud), listsAfterRepair);
+  assert.equal(conversationMessageReads(cloud), readsAfterRepair);
+});
+
+for (const hasCursor of [true, false]) {
+  test(`repair checks tied creation timestamps with an existing cursor: ${hasCursor}`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud, service } = ctx;
+    await establishPreFixDevice(service);
+    if (!hasCursor) localStorageStub.removeItem("lastSyncedAt.conversations");
+    // All 51 share a creation timestamp, so a timestamp-only 50-row page
+    // cannot visit every chat. Local chat timestamps have only second precision.
+    for (let index = 0; index < 51; index++) {
+      seedSyncedChat(db, cloud, `tied-${index}`, ["u:question"], ["u:question", "a:answer"]);
+    }
+
+    await service.syncAll(true);
+    await service.syncAll(true);
+
+    for (let index = 0; index < 51; index++) {
+      assertOneLiveCopy(cloud, `tied-${index}`, ["question", "answer"]);
+    }
+    assert.equal(localStorageStub.getItem("syncCursors.chatMessages:user-harness"), "done");
+  });
+}
+
+test("a deleted cloud copy does not prevent repairing the remaining chats", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  await establishPreFixDevice(service);
+  const deleted = seedSyncedChat(db, cloud, "repair-deleted", ["u:gone"], ["u:gone"]);
+  cloud.deleteConversation(deleted.cloudRow.id);
+  seedSyncedChat(db, cloud, "repair-live", ["u:question"], ["u:question", "a:answer"]);
+
+  await service.syncAll(true);
+
+  assertOneLiveCopy(cloud, "repair-live", ["question", "answer"]);
+  assert.equal(db.getAgentConversation(deleted.local.id), null);
+  assert.equal(localStorageStub.getItem("syncCursors.chatMessages:user-harness"), "done");
+});
+
+test("repair does not finish or queue chats after its sign-in is replaced", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  await establishPreFixDevice(service);
+  const broken = seedSyncedChat(db, cloud, "repair-switch", ["u:q1"], ["u:q1", "a:a1"]);
+  const request = api.cloudApiRequest;
+  api.cloudApiRequest = async (options) => {
+    const result = await request(options);
+    if (options.method === "GET" && options.path.startsWith("/api/conversations/messages")) {
+      api.authState.generation += 1;
+    }
+    return result;
+  };
+
+  await service.syncAll(true);
+
+  assert.notEqual(localStorageStub.getItem("syncCursors.chatMessages:user-harness"), "done");
+  assert.deepEqual(cloudContents(cloud, "repair-switch"), ["q1"]);
+  assert.equal(db.getAgentConversation(broken.local.id).sync_status, "synced");
+});
+
+test("turning Backup off during repair defers its queued uploads until Backup returns", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  await establishPreFixDevice(service);
+  seedSyncedChat(db, cloud, "repair-opt-out", ["u:q1"], ["u:q1", "a:a1"]);
+  const request = api.cloudApiRequest;
+  api.cloudApiRequest = async (options) => {
+    const result = await request(options);
+    if (options.method === "GET" && options.path.startsWith("/api/conversations/messages")) {
+      localStorageStub.setItem("cloudBackupEnabled", "false");
+      api.cloudApiRequest = request;
+    }
+    return result;
+  };
+
+  await service.syncAll(true);
+  assert.deepEqual(cloudContents(cloud, "repair-opt-out"), ["q1"]);
+
+  enableSync();
+  await service.syncAll(true);
+  assertOneLiveCopy(cloud, "repair-opt-out", ["q1", "a1"]);
 });
 
 test("a failed check for unsent chat messages waits before walking the chats again", async (t) => {
@@ -1269,16 +1351,15 @@ test("a failed check for unsent chat messages waits before walking the chats aga
   const { db, cloud, service } = ctx;
   await establishPreFixDevice(service);
   seedSyncedChat(db, cloud, "client-broken", ["u:q1"], ["u:q1", "a:a1"]);
-  const listsBefore = fullConversationLists(cloud);
+  const readsBefore = conversationMessageReads(cloud);
   cloud.failNext(
-    (call) =>
-      call.path.startsWith("/api/conversations/list") && queryParam(call.path, "since") === null,
+    (call) => call.method === "GET" && call.path.startsWith("/api/conversations/messages"),
     { status: 503 }
   );
 
   await service.syncAll(true);
   await service.syncAll(true);
-  assert.equal(fullConversationLists(cloud), listsBefore + 1, "one attempt until the wait ends");
+  assert.equal(conversationMessageReads(cloud), readsBefore + 1, "one attempt until the wait ends");
   assert.deepEqual(cloudContents(cloud, "client-broken"), ["q1"]);
 
   localStorageStub.setItem("syncCursors.chatMessages:user-harness", String(Date.now() - 1));

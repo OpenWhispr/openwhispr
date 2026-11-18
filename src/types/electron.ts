@@ -4386,7 +4386,9 @@ declare global {
         id: number,
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean; stale?: boolean }>;
-      hasSyncedLinkedConversations?: () => Promise<boolean>;
+      getSyncedLinkedConversations?: (
+        expectedAuthGeneration: number
+      ) => Promise<Array<{ id: number; cloud_id: string }> | StaleSyncWrite>;
       clearConversationCreateAttempted?: (id: number) => Promise<void>;
       acknowledgeConversationCreate?: (
         id: number,
