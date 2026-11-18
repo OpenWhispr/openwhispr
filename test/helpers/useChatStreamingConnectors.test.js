@@ -26,7 +26,9 @@ const MODES = {
     titanium: null,
   },
   fork: {
-    env: {},
+    // test/setup/forkEnv.js pre-sets the hosted-cloud URLs for the whole suite; a real
+    // fork build has them empty (forkRuntime falls back to the empty fork config).
+    env: { VITE_OPENWHISPR_API_URL: "", VITE_AUTH_URL: "" },
     storage: {},
     openWhisprSignedIn: false,
     titanium: { signedIn: true, accountBound: true, licensed: true },

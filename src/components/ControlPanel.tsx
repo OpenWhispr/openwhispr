@@ -1254,7 +1254,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <Suspense fallback={null}>
                   <InsightsView
                     onSignIn={() => {
-                      setSettingsSection("account");
+                      setSettingsSection(CLOUD_ENABLED ? "account" : "titaniumAccount");
                       setShowSettings(true);
                     }}
                   />

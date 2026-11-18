@@ -1,3 +1,4 @@
+import { CLOUD_ENABLED } from "../config/forkRuntime";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { CreditCard, Gift, LogOut, UserCircle } from "./icons";
@@ -45,7 +46,8 @@ export default function ProfileMenu({
     return (
       <button
         type="button"
-        onClick={() => onOpenSettings("account")}
+        // A fork build has no OpenWhispr account section: sign-in lives in the Titanium account.
+        onClick={() => onOpenSettings(CLOUD_ENABLED ? "account" : "titaniumAccount")}
         aria-label={t("common.signIn")}
         title={t("common.signIn")}
         className={triggerClass}

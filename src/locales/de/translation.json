@@ -4706,7 +4706,8 @@
     },
     "beta": "Beta",
     "upsell": "Konnektoren erfordern eine aktive {{brand}}-Lizenz. Melde dich mit deinem Titanium-Konto an, damit der Assistent in deinen Tools arbeiten kann.",
-    "locked": "In einer {{brand}}-Lizenz enthalten"
+    "locked": "In einer {{brand}}-Lizenz enthalten",
+    "upsellAction": "Titanium-Konto öffnen"
   },
   "notesView": {
     "searchPlaceholder": "Notizen durchsuchen…",

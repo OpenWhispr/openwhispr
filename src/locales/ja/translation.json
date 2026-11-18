@@ -4534,7 +4534,8 @@
     },
     "beta": "ベータ",
     "upsell": "コネクタには有効な{{brand}}ライセンスが必要です。Titaniumアカウントでサインインすると、アシスタントがあなたのツールで操作できるようになります。",
-    "locked": "{{brand}}ライセンスに含まれます"
+    "locked": "{{brand}}ライセンスに含まれます",
+    "upsellAction": "Titaniumアカウントを開く"
   },
   "calendar": {
     "title": "Google カレンダー",

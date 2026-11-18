@@ -4534,7 +4534,8 @@
     },
     "beta": "測試版",
     "upsell": "連接器需要有效的 {{brand}} 授權。請使用您的 Titanium 帳戶登入，助手即可在您的工具中執行操作。",
-    "locked": "{{brand}} 授權包含此功能"
+    "locked": "{{brand}} 授權包含此功能",
+    "upsellAction": "開啟 Titanium 帳戶"
   },
   "calendar": {
     "title": "Google 日曆",

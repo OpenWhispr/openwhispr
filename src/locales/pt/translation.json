@@ -4534,7 +4534,8 @@
     },
     "beta": "Beta",
     "upsell": "Os conectores exigem uma licença ativa do {{brand}}. Entre com sua conta Titanium para que o assistente trabalhe nas suas ferramentas.",
-    "locked": "Incluído com uma licença do {{brand}}"
+    "locked": "Incluído com uma licença do {{brand}}",
+    "upsellAction": "Abrir conta Titanium"
   },
   "calendar": {
     "title": "Google Agenda",

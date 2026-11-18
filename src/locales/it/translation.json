@@ -4534,7 +4534,8 @@
     },
     "beta": "Beta",
     "upsell": "I connettori richiedono una licenza {{brand}} attiva. Accedi con il tuo account Titanium per far lavorare l'assistente nei tuoi strumenti.",
-    "locked": "Incluso con una licenza {{brand}}"
+    "locked": "Incluso con una licenza {{brand}}",
+    "upsellAction": "Apri account Titanium"
   },
   "calendar": {
     "title": "Google Calendar",

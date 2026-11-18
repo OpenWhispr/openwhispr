@@ -4534,7 +4534,8 @@
     },
     "beta": "测试版",
     "upsell": "连接器需要有效的 {{brand}} 许可证。请使用您的 Titanium 账户登录，助手即可在您的工具中执行操作。",
-    "locked": "{{brand}} 许可证包含此功能"
+    "locked": "{{brand}} 许可证包含此功能",
+    "upsellAction": "打开 Titanium 账户"
   },
   "calendar": {
     "title": "Google 日历",

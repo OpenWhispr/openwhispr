@@ -4706,7 +4706,8 @@
     },
     "beta": "Beta",
     "upsell": "Connectors need an active {{brand}} license. Sign in with your Titanium account to let the assistant work in your tools.",
-    "locked": "Included with a {{brand}} license"
+    "locked": "Included with a {{brand}} license",
+    "upsellAction": "Open Titanium account"
   },
   "notesView": {
     "searchPlaceholder": "Search notes…",

@@ -68,6 +68,12 @@ const MOUNT_SITES = [
     id: "shareLink",
     anchor: 'openShare("copy-link")',
   },
+  // ShareNoteDialog: the whole sync/link block is one gated fragment; export stays outside it.
+  {
+    file: "src/components/notes/ShareNoteDialog.tsx",
+    id: "shareLink",
+    anchor: "syncAndShare",
+  },
   { file: "src/utils/signInCloudNudge.ts", id: "signInCloudNudge", anchor: "NaN" },
 ];
 

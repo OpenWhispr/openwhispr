@@ -1221,7 +1221,8 @@
     },
     "beta": "تجريبي",
     "upsell": "تتطلب الموصلات ترخيص {{brand}} ساريًا. سجّل الدخول بحساب Titanium الخاص بك ليعمل المساعد في أدواتك.",
-    "locked": "مُضمَّن مع ترخيص {{brand}}"
+    "locked": "مُضمَّن مع ترخيص {{brand}}",
+    "upsellAction": "فتح حساب Titanium"
   },
   "auth": {
     "cloudNotConfigured": "السحابة غير مهيأة",

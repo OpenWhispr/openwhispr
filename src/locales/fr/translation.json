@@ -4706,7 +4706,8 @@
     },
     "beta": "Bêta",
     "upsell": "Les connecteurs nécessitent une licence {{brand}} active. Connectez-vous avec votre compte Titanium pour que l'assistant travaille dans vos outils.",
-    "locked": "Inclus avec une licence {{brand}}"
+    "locked": "Inclus avec une licence {{brand}}",
+    "upsellAction": "Ouvrir le compte Titanium"
   },
   "notesView": {
     "searchPlaceholder": "Rechercher des notes…",

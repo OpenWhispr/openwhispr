@@ -62,17 +62,19 @@ export function IntegrationsPane({
 interface UpsellBarProps {
   message: string;
   onUpgrade: () => void;
+  /** Overrides the default View Plans label (a fork build has no plans). */
+  actionLabel?: string;
 }
 
 /** Shown under a section's header when the user's plan doesn't include it. */
-export function UpsellBar({ message, onUpgrade }: UpsellBarProps): ReactElement {
+export function UpsellBar({ message, onUpgrade, actionLabel }: UpsellBarProps): ReactElement {
   const { t } = useTranslation();
   return (
     <div className="flex items-center gap-3 rounded-lg border border-primary/20 dark:border-primary/30 bg-primary/5 dark:bg-primary/10 ps-3.5 pe-2 py-2">
       <Sparkles size={15} className="shrink-0 text-primary" />
       <p className="flex-1 min-w-0 text-xs text-foreground/85 leading-relaxed">{message}</p>
       <Button size="sm" onClick={onUpgrade} className="shrink-0">
-        {t("integrations.api.viewPlans")}
+        {actionLabel ?? t("integrations.api.viewPlans")}
       </Button>
     </div>
   );
