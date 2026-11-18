@@ -17,3 +17,29 @@ export function cleanupKeySource({
   if (baseUrl && baseUrl.trim() && isTitaniumService) return "titanium";
   return "none";
 }
+
+/**
+ * Whether to switch dictation cleanup to our own server (Phase 5, D-04). Only for
+ * a user signed in to Titanium who has never configured cleanup: no stored
+ * provider, endpoint, model or non-default mode, and no BYOK key of any kind. An
+ * existing BYOK install keeps exactly the settings it has.
+ */
+export function shouldSeedSttApiCleanup({
+  licensed,
+  storedProvider,
+  storedBaseUrl,
+  storedModel,
+  storedMode,
+  hasByokKey,
+}: {
+  licensed: boolean;
+  storedProvider?: string | null;
+  storedBaseUrl?: string | null;
+  storedModel?: string | null;
+  storedMode?: string | null;
+  hasByokKey: boolean;
+}): boolean {
+  if (!licensed || hasByokKey) return false;
+  if (storedProvider || storedBaseUrl || storedModel) return false;
+  return !storedMode || storedMode === "providers";
+}

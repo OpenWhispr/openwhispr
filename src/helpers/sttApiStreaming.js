@@ -45,6 +45,7 @@ class SttApiStreaming {
     this.resampler = null;
     this.lastSendAt = 0;
     this.keepAliveInterval = null;
+    this.keepAliveMs = KEEPALIVE_INTERVAL_MS;
     this.connectionTimeout = null;
     this.finishPromise = null;
     this.finishResolve = null;
@@ -103,6 +104,12 @@ class SttApiStreaming {
       this.ws = socket;
 
       socket.on("open", () => {
+        // Cancelled (cleanup ran) while the handshake was in flight: never arm a keep-alive.
+        if (this.ws !== socket) {
+          socket.close();
+          settle(new Error("stt-api stream connection cancelled"));
+          return;
+        }
         if (this.segmentsMode && socket.protocol !== STT_API_SEGMENTS_SUBPROTOCOL) {
           settle(new Error("stt-api server did not accept the stt-segments subprotocol"));
           return;
@@ -154,11 +161,11 @@ class SttApiStreaming {
   _startKeepAlive(socket) {
     this._stopKeepAlive();
     this.keepAliveInterval = setInterval(() => {
-      if (socket.readyState !== WebSocket.OPEN) {
+      if (socket.readyState !== WebSocket.OPEN || this.ws !== socket) {
         this._stopKeepAlive();
         return;
       }
-      if (Date.now() - this.lastSendAt < KEEPALIVE_INTERVAL_MS) return;
+      if (Date.now() - this.lastSendAt < this.keepAliveMs) return;
       try {
         socket.send(SILENCE_FRAME);
         this.lastSendAt = Date.now();
@@ -166,7 +173,7 @@ class SttApiStreaming {
         debugLogger.debug("stt-api keep-alive failed", { error: error.message });
         this._stopKeepAlive();
       }
-    }, KEEPALIVE_INTERVAL_MS);
+    }, this.keepAliveMs);
   }
 
   _stopKeepAlive() {

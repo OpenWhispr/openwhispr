@@ -322,3 +322,37 @@ test("preview adapter: partials reach onUpdate, finish returns the final text an
     await server.close();
   }
 });
+
+test("cancelling while the handshake is in flight rejects the connect and arms no keep-alive", async () => {
+  const server = await startMockServer();
+  const client = new SttApiStreaming();
+
+  try {
+    const pending = client.connect({ baseUrl: server.baseUrl, token: "k", sampleRate: 24000 });
+    client.cleanup();
+    await assert.rejects(pending);
+    assert.equal(client.keepAliveInterval, null);
+    assert.equal(client.isConnected, false);
+  } finally {
+    await server.close();
+  }
+});
+
+test("the silence keep-alive runs while warm and stops for good after cleanup", async () => {
+  const server = await startMockServer();
+  const client = new SttApiStreaming();
+  client.keepAliveMs = 20;
+
+  try {
+    await client.connect({ baseUrl: server.baseUrl, token: "k", sampleRate: 24000 });
+    await until(() => server.seen.frames.length >= 2, "keep-alive silence frames");
+    client.cleanup();
+    assert.equal(client.keepAliveInterval, null);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const after = server.seen.frames.length;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(server.seen.frames.length, after, "no frames after cleanup");
+  } finally {
+    await server.close();
+  }
+});

@@ -5,7 +5,7 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { isRestorablePasteTarget } = require("./windowsPasteTarget");
-const { titaniumServiceKeyFor } = require("./titanium/titaniumIpc");
+const { titaniumServiceKeyFor, onTitaniumStateChanged } = require("./titanium/titaniumIpc");
 const { sttApiStreamUrl } = require("./sttApiStreamPolicy");
 const { createSttApiPreviewStream } = require("./sttApiStreaming");
 const crypto = require("crypto");
@@ -203,7 +203,10 @@ const {
 const {
   ALLOWED_MEETING_PROVIDERS,
   getMeetingStreamingClient,
-  getMeetingConnectionKey,
+  getMeetingConnectionKey: getMeetingConnectionKeyBase,
+  licenseFingerprint,
+  isSttApiConnectionStale,
+  isSttApiConnectionKey,
 } = require("./meetingStreamingProviders");
 const {
   createServerTokenPoster,
@@ -216,6 +219,20 @@ const { CALENDAR_LOOKBACK_MS } = require("./calendarCacheWindow");
 // Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
 // streaming providers must be told the true PCM rate or they misread the audio.
 const MEETING_STREAM_SAMPLE_RATE = 24000;
+
+// The license fingerprint a stt-api meeting connection is opened under (null for
+// every other provider). Re-read on each prepare/start so a sign-out or account
+// switch can never ride a socket opened for the previous license.
+const meetingCredentialIdentity = (options = {}) => {
+  if (options.provider !== "stt-api-realtime") return null;
+  try {
+    return licenseFingerprint(titaniumServiceKeyFor(sttApiStreamUrl(options.baseUrl)));
+  } catch {
+    return "";
+  }
+};
+const getMeetingConnectionKey = (options, credentialGeneration) =>
+  getMeetingConnectionKeyBase(options, credentialGeneration, meetingCredentialIdentity(options));
 const MEETING_RECONNECT_BUFFER_MAX_BYTES = MEETING_STREAM_SAMPLE_RATE * 2 * 30;
 // The realtime clients default to a 0.6 server-VAD threshold, raised in #630 to
 // keep mic ambient noise from opening turns. The system loopback channel's noise
@@ -8887,6 +8904,34 @@ class IPCHandlers {
       resetMeetingReconnectAudio();
     };
 
+    // Drops warm (or live) stt-api meeting sockets. A recording that loses its
+    // license mid-session is told once, via the existing sign-in-expired message.
+    const dropSttApiMeetingStreams = async (reason) => {
+      const mic = this._meetingMicStreaming;
+      const system = this._meetingSystemStreaming;
+      const recording = meetingConnectionOptions !== null;
+      const win = meetingConnectionWin;
+      this._meetingMicStreaming = null;
+      this._meetingSystemStreaming = null;
+      meetingConnectionKey = null;
+      debugLogger.info("Dropping stt-api meeting streams", { reason, recording });
+      await Promise.all([
+        mic?.disconnect(false).catch(() => undefined),
+        system?.disconnect(false).catch(() => undefined),
+      ]);
+      if (recording && win && !win.isDestroyed() && !meetingFatalErrorSent) {
+        meetingFatalErrorSent = true;
+        win.webContents.send("meeting-transcription-fatal-error", "signInExpired");
+      }
+    };
+
+    onTitaniumStateChanged(() => {
+      const stale = isSttApiConnectionStale(meetingConnectionKey, (parsed) =>
+        meetingCredentialIdentity(parsed)
+      );
+      if (stale) void dropSttApiMeetingStreams("license-changed");
+    });
+
     const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
       const results = await Promise.all([
         this._meetingMicStreaming
@@ -9238,6 +9283,11 @@ class IPCHandlers {
     });
 
     ipcMain.handle("meeting-transcription-cancel", async () => {
+      // A prepared-but-unrecorded stt-api stream holds a pool slot and sends
+      // silence until dropped, so a cancel closes it.
+      if (meetingConnectionOptions === null && isSttApiConnectionKey(meetingConnectionKey)) {
+        await dropSttApiMeetingStreams("prepare-cancelled");
+      }
       if (isMeetingStreamingConnected() || meetingLocalTimer) {
         return { success: false, reason: "recording-active" };
       }

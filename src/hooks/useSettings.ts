@@ -6,6 +6,7 @@ import {
   selectLocalServerPrefs,
 } from "../stores/settingsStore";
 import logger from "../utils/logger";
+import { startCleanupSeeding } from "../config/forkCleanupSeed";
 import { useLocalStorage } from "./useLocalStorage";
 import type {
   ChineseScriptPreference,
@@ -139,13 +140,15 @@ function useSettingsInternal() {
   useEffect(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
-    initializeSettings().catch((err) => {
-      logger.warn(
-        "Failed to initialize settings store",
-        { error: (err as Error).message },
-        "settings"
-      );
-    });
+    initializeSettings()
+      .then(startCleanupSeeding)
+      .catch((err) => {
+        logger.warn(
+          "Failed to initialize settings store",
+          { error: (err as Error).message },
+          "settings"
+        );
+      });
   }, []);
 
   // Refresh the in-memory store from main-process broadcasts (auto-learn, sync

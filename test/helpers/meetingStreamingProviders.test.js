@@ -198,3 +198,72 @@ test("stt-api connection identity follows the endpoint and never embeds a creden
     getMeetingConnectionKey({ ...options, baseUrl: "https://other.example.test/v1" })
   );
 });
+
+test("stt-api connection key carries a non-reversible license fingerprint, never the key", async () => {
+  const { getMeetingConnectionKey, licenseFingerprint } = await load();
+  const options = {
+    provider: "stt-api-realtime",
+    mode: "self-hosted",
+    baseUrl: "https://stt.example.test/v1",
+  };
+  const licenseA = "key/account-a.signature";
+  const licenseB = "key/account-b.signature";
+
+  const keyA = getMeetingConnectionKey(options, 1, licenseFingerprint(licenseA));
+  const keyB = getMeetingConnectionKey(options, 1, licenseFingerprint(licenseB));
+  const signedOut = getMeetingConnectionKey(options, 1, licenseFingerprint(null));
+
+  assert.notEqual(keyA, keyB, "another account must not reuse a warm connection");
+  assert.notEqual(keyA, signedOut, "signing out must not reuse a warm connection");
+  assert.equal(keyA, getMeetingConnectionKey(options, 2, licenseFingerprint(licenseA)));
+  assert.ok(!keyA.includes(licenseA));
+  assert.match(licenseFingerprint(licenseA), /^[0-9a-f]{16}$/);
+  assert.equal(licenseFingerprint(null), "");
+  assert.equal(licenseFingerprint(""), "");
+});
+
+test("a stt-api connection is stale after sign-out or an account change, other providers never are", async () => {
+  const { getMeetingConnectionKey, licenseFingerprint, isSttApiConnectionStale } = await load();
+  const options = {
+    provider: "stt-api-realtime",
+    mode: "self-hosted",
+    baseUrl: "https://stt.example.test/v1",
+  };
+  const openedUnder = getMeetingConnectionKey(options, null, licenseFingerprint("license-a"));
+  const identityFor = (license) => (parsed) => {
+    assert.equal(parsed.baseUrl, options.baseUrl);
+    return licenseFingerprint(license);
+  };
+
+  assert.equal(isSttApiConnectionStale(openedUnder, identityFor("license-a")), false);
+  assert.equal(isSttApiConnectionStale(openedUnder, identityFor(null)), true, "signed out");
+  assert.equal(isSttApiConnectionStale(openedUnder, identityFor("license-b")), true, "account");
+
+  const deepgram = getMeetingConnectionKey({ provider: "deepgram-realtime", mode: "byok" }, 1);
+  assert.equal(
+    isSttApiConnectionStale(deepgram, () => "anything"),
+    false
+  );
+  assert.equal(
+    isSttApiConnectionStale(null, () => ""),
+    false
+  );
+  assert.equal(
+    isSttApiConnectionStale("not json", () => ""),
+    false
+  );
+});
+
+test("a prepared stt-api key is recognised so a cancelled prepare can drop it", async () => {
+  const { getMeetingConnectionKey, isSttApiConnectionKey } = await load();
+
+  assert.equal(
+    isSttApiConnectionKey(getMeetingConnectionKey({ provider: "stt-api-realtime" }, null, "x")),
+    true
+  );
+  assert.equal(
+    isSttApiConnectionKey(getMeetingConnectionKey({ provider: "deepgram-realtime" }, 1)),
+    false
+  );
+  assert.equal(isSttApiConnectionKey(null), false);
+});
