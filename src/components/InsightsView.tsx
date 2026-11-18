@@ -26,6 +26,8 @@ import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { Skeleton } from "./ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Tooltip } from "./ui/tooltip";
+import { CLOUD_ENABLED } from "../config/forkRuntime";
+import { cloudFeatureVisible } from "../config/cloudFeatures";
 
 type ActivityDay = { date: string; words: number };
 
@@ -477,7 +479,10 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
   const participationError = useLeaderboardParticipationStore((state) => state.error);
   const participationReady = useLeaderboardParticipationStore((state) => state.ready);
   const participationLeavePending = useLeaderboardParticipationStore((state) => state.leavePending);
-  const [activeTab, setActiveTab] = useState("usage");
+  const leaderboardVisible = cloudFeatureVisible("leaderboard", CLOUD_ENABLED);
+  const [selectedTab, setActiveTab] = useState("usage");
+  // A hidden leaderboard can never be the active tab (stale state, a deep link).
+  const activeTab = leaderboardVisible ? selectedTab : "usage";
   const [syncError, setSyncError] = useState(false);
   // A managed workspace that forbids cloud backup forbids these counters with
   // it, so the page stays device-scoped even with the preference left on.
@@ -511,9 +516,11 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
             <TabsTrigger value="usage" variant="pill">
               {t("insights.yourUsage")}
             </TabsTrigger>
-            <TabsTrigger value="leaderboard" variant="pill">
-              {t("insights.leaderboard.title")}
-            </TabsTrigger>
+            {leaderboardVisible && (
+              <TabsTrigger value="leaderboard" variant="pill">
+                {t("insights.leaderboard.title")}
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {activeTab === "usage" ? (
@@ -567,16 +574,18 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
             </p>
           )}
         </TabsContent>
-        <TabsContent value="leaderboard" className="mt-0">
-          <Suspense fallback={isSignedIn ? <LeaderboardSkeleton /> : null}>
-            <LeaderboardView
-              enableInsightsSync={enableInsightsSync}
-              insightsSyncEnabled={insightsSyncEnabled}
-              onSignIn={onSignIn}
-              syncAllowedByPolicy={syncAllowedByPolicy}
-            />
-          </Suspense>
-        </TabsContent>
+        {leaderboardVisible && (
+          <TabsContent value="leaderboard" className="mt-0">
+            <Suspense fallback={isSignedIn ? <LeaderboardSkeleton /> : null}>
+              <LeaderboardView
+                enableInsightsSync={enableInsightsSync}
+                insightsSyncEnabled={insightsSyncEnabled}
+                onSignIn={onSignIn}
+                syncAllowedByPolicy={syncAllowedByPolicy}
+              />
+            </Suspense>
+          </TabsContent>
+        )}
       </Tabs>
       {optInDialog}
     </div>

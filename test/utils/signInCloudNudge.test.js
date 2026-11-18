@@ -10,6 +10,7 @@ const UNMANAGED = { status: "unmanaged", policy: null, appVersion: null };
 const decide = async (overrides) => {
   const { decideSignInCloudNudge } = await load();
   return decideSignInCloudNudge({
+    cloudEnabled: true,
     promptedAt: NOW - 60_000,
     now: NOW,
     isSignedIn: true,
@@ -55,4 +56,17 @@ test("a prompt that is too old or unreadable is dropped", async () => {
   assert.equal(await decide({ promptedAt: NOW - SIGN_IN_CLOUD_NUDGE_WINDOW_MS - 1 }), "skip");
   assert.equal(await decide({ promptedAt: Number.NaN }), "skip");
   assert.equal(await decide({ promptedAt: Number.NaN, isSignedIn: false }), "skip");
+});
+
+test("a fork build (cloud disabled) never nudges, whatever else is true", async () => {
+  for (const transcriptionMode of ["local", "providers", "self-hosted", "openwhispr"]) {
+    for (const isSignedIn of [true, false]) {
+      assert.equal(
+        await decide({ cloudEnabled: false, transcriptionMode, isSignedIn }),
+        "skip",
+        `${transcriptionMode} signedIn=${isSignedIn}`
+      );
+    }
+  }
+  assert.equal(await decide({ cloudEnabled: false, promptedAt: Number.NaN }), "skip");
 });

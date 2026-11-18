@@ -1,3 +1,4 @@
+import { cloudFeatureVisible } from "../config/cloudFeatures";
 import { isModeAllowedByPolicy, type PolicyDecisionSnapshot } from "../stores/policyRules";
 import type { InferenceMode } from "../types/electron";
 
@@ -7,6 +8,8 @@ export const SIGN_IN_CLOUD_NUDGE_WINDOW_MS = 15 * 60 * 1000;
 export type SignInCloudNudgeDecision = "wait" | "nudge" | "skip";
 
 export interface SignInCloudNudgeInputs {
+  /** False in a fork build: there is no hosted cloud to nudge toward. */
+  cloudEnabled: boolean;
   /** When the prompt was opened (epoch ms). */
   promptedAt: number;
   now: number;
@@ -19,12 +22,14 @@ export interface SignInCloudNudgeInputs {
 // what overrode Local for #2086. Users whose dictation already runs on their own setup
 // are told Cloud is available instead, once the account's policy says it is.
 export function decideSignInCloudNudge({
+  cloudEnabled,
   promptedAt,
   now,
   isSignedIn,
   policy,
   transcriptionMode,
 }: SignInCloudNudgeInputs): SignInCloudNudgeDecision {
+  if (!cloudFeatureVisible("signInCloudNudge", cloudEnabled)) return "skip";
   if (Number.isNaN(promptedAt) || now - promptedAt > SIGN_IN_CLOUD_NUDGE_WINDOW_MS) return "skip";
   // A failed load is retried on the next identity refresh, inside the prompt window.
   if (!isSignedIn || (policy.status !== "managed" && policy.status !== "unmanaged")) {

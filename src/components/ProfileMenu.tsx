@@ -21,7 +21,8 @@ const itemIconClass = "shrink-0 text-foreground/60";
 
 interface ProfileMenuProps {
   onOpenSettings: (section: string) => void;
-  onOpenReferrals: () => void;
+  /** Omitted when referrals are hidden (a fork build). */
+  onOpenReferrals?: () => void;
   onSignOut: () => void;
 }
 
@@ -91,10 +92,12 @@ export default function ProfileMenu({
           <CreditCard size={15} className={itemIconClass} />
           {t("settingsModal.sections.plansBilling.label")}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onOpenReferrals} className={itemClass}>
-          <Gift size={15} className={itemIconClass} />
-          {t("sidebar.referral")}
-        </DropdownMenuItem>
+        {onOpenReferrals && (
+          <DropdownMenuItem onSelect={onOpenReferrals} className={itemClass}>
+            <Gift size={15} className={itemIconClass} />
+            {t("sidebar.referral")}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSignOut} className={itemClass}>
           <LogOut size={15} className={itemIconClass} />
