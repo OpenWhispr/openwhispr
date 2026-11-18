@@ -24,14 +24,14 @@ const NOTHING: Record<ModelKind, SettingsKey> = {
 };
 
 /** Models removed from the list whose files wait for the Undo snackbar to close. */
-const useRemovals = create<{ pending: AndroidModelId[] }>(() => ({ pending: [] }));
-const setPending = (id: AndroidModelId, pending: boolean) =>
+export const useRemovals = create<{ pending: AndroidModelId[] }>(() => ({ pending: [] }));
+export const setPending = (id: AndroidModelId, pending: boolean) =>
   useRemovals.setState((state) => ({
     pending: pending ? [...state.pending, id] : state.pending.filter((item) => item !== id),
   }));
 
 /** The row goes back to "not downloaded" at once; the files go only when the snackbar closes. */
-function removeWithUndo(id: AndroidModelId, refresh: () => Promise<void>) {
+export function removeWithUndo(id: AndroidModelId, refresh: () => Promise<void>) {
   setPending(id, true);
   showToast(settingsT('removedModel', { model: modelName(id) }), 'neutral', {
     label: settingsT('undo'),

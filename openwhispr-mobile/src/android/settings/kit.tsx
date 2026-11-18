@@ -761,12 +761,15 @@ export function BottomSheet({
   title,
   body,
   children,
+  onBack,
 }: {
   visible: boolean;
   onClose: () => void;
   title: string;
   body?: string;
   children: React.ReactNode;
+  /** A page inside the sheet (a list that slid in): a back arrow before the title returns. */
+  onBack?: () => void;
 }) {
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
@@ -835,12 +838,31 @@ export function BottomSheet({
               }}
             />
             <View style={{ gap: 6 }}>
-              <Text
-                accessibilityRole="header"
-                style={[settings.title, { fontSize: 20, lineHeight: 26 }]}
-              >
-                {title}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {onBack && (
+                  <Pressable
+                    cssInterop={false}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('back')}
+                    hitSlop={12}
+                    onPress={onBack}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  >
+                    <SystemIcon
+                      name="chevron.left"
+                      mdName="ChevronLeft"
+                      size={22}
+                      color={home.accent}
+                    />
+                  </Pressable>
+                )}
+                <Text
+                  accessibilityRole="header"
+                  style={[settings.title, { fontSize: 20, lineHeight: 26, flexShrink: 1 }]}
+                >
+                  {title}
+                </Text>
+              </View>
               {body && (
                 <Text
                   textBreakStrategy="balanced"
