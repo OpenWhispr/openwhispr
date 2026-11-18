@@ -28,6 +28,27 @@ function saved(): ProcessingDefault {
 
 export const useProcessingDefault = create<ProcessingDefault>(() => saved());
 
+function hasSaved(): boolean {
+  try {
+    return localStorage.getItem(KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Before this setting existed the Default was the app mode, so the first run seeds it from
+ * there: a key mode keeps the key dictation runs on. (Local Mode is handled by leaveLocalMode.)
+ */
+function seedDefault(): void {
+  if (hasSaved()) return;
+  const { activeMode } = useProcessingModeStore.getState();
+  const dictation = useConfigStore.getState().config?.inference?.dictation;
+  if (activeMode === 'providers' && dictation?.mode === 'providers' && dictation.providerId)
+    remember({ mode: 'providers', providerId: dictation.providerId as KeyProviderId });
+  else if (activeMode === 'cloud') remember({ mode: 'openwhispr' });
+}
+
 function remember(value: ProcessingDefault) {
   useProcessingDefault.setState(value, true);
   try {
@@ -139,7 +160,9 @@ export function watchLocalMode(): void {
   if (watching) return;
   watching = true;
   const check = (mode: string) => {
-    if (mode === 'private' && useConfigStore.getState().config) void leaveLocalMode();
+    if (!useConfigStore.getState().config) return;
+    if (mode === 'private') void leaveLocalMode();
+    else seedDefault();
   };
   check(useProcessingModeStore.getState().activeMode);
   useProcessingModeStore.subscribe((state) => check(state.activeMode));
