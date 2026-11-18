@@ -35,6 +35,17 @@ const timing = (
 ) => Animated.timing(value, { toValue, duration, delay, easing, useNativeDriver });
 
 /**
+ * A stroke stays invisible until its dash starts drawing in: with round line ends, a fully
+ * hidden dash still shows a dot where it begins.
+ */
+const shownWhileDrawing = (offset: Animated.Value, length: number) =>
+  offset.interpolate({
+    inputRange: [0, length * 0.97, length],
+    outputRange: [1, 1, 0],
+    extrapolate: 'clamp',
+  });
+
+/**
  * The status mark at the end of a key field: a grey arc spins while the key is checked, closes
  * green and gives way to a tick (accepted), closes red around an X (refused), or closes amber
  * around a "!" (no answer). Under reduced motion the final shape appears at once.
@@ -166,6 +177,7 @@ export function KeyCheckMark({
             strokeLinejoin="round"
             strokeDasharray={[TICK, TICK]}
             strokeDashoffset={tick}
+            strokeOpacity={shownWhileDrawing(tick, TICK)}
           />
         )}
         {state === 'failed' && (
@@ -175,12 +187,14 @@ export function KeyCheckMark({
               {...line}
               strokeDasharray={[STROKE_X, STROKE_X]}
               strokeDashoffset={crossA}
+              strokeOpacity={shownWhileDrawing(crossA, STROKE_X)}
             />
             <AnimatedPath
               d="M15.5 8.5l-7 7"
               {...line}
               strokeDasharray={[STROKE_X, STROKE_X]}
               strokeDashoffset={crossB}
+              strokeOpacity={shownWhileDrawing(crossB, STROKE_X)}
             />
           </>
         )}
@@ -191,6 +205,7 @@ export function KeyCheckMark({
               {...line}
               strokeDasharray={[BANG, BANG]}
               strokeDashoffset={bang}
+              strokeOpacity={shownWhileDrawing(bang, BANG)}
             />
             <AnimatedCircle cx={12} cy={16.3} r={1.25} fill={color} opacity={dot} />
           </>
