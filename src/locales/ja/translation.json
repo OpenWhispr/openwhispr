@@ -960,6 +960,7 @@
     "endpointUrl": "エンドポイント URL",
     "azureHint": "Azure AI Foundry: リソースのエンドポイント（例: https://your-resource.cognitiveservices.azure.com）を入力し、モデルにデプロイの正確な名前を設定してください。",
     "customProvider": "カスタム",
+    "providerUnavailable": "ここでは {{provider}} を利用できません。モデルを選択するとプロバイダーを切り替えられます。",
     "fallback": {
       "whisperModelDescription": "モデル",
       "parakeetModelDescription": "NVIDIA Parakeet モデル"

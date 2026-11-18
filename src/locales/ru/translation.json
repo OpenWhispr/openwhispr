@@ -960,6 +960,7 @@
     "endpointUrl": "URL конечной точки",
     "azureHint": "Azure AI Foundry: укажите endpoint вашего ресурса (например, https://your-resource.cognitiveservices.azure.com) и задайте в поле «Model» точное имя вашего развёртывания.",
     "customProvider": "Пользовательский",
+    "providerUnavailable": "{{provider}} здесь использовать нельзя. Выберите модель, чтобы сменить провайдера.",
     "fallback": {
       "whisperModelDescription": "Модель",
       "parakeetModelDescription": "Модель NVIDIA Parakeet"

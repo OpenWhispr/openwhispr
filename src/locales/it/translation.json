@@ -960,6 +960,7 @@
     "endpointUrl": "URL endpoint",
     "azureHint": "Azure AI Foundry: inserisci l'endpoint della tua risorsa (es. https://your-resource.cognitiveservices.azure.com) e imposta Modello con il nome esatto della tua distribuzione.",
     "customProvider": "Personalizzato",
+    "providerUnavailable": "{{provider}} non può essere usato qui. Scegli un modello per cambiare provider.",
     "fallback": {
       "whisperModelDescription": "Modello",
       "parakeetModelDescription": "Modello NVIDIA Parakeet"

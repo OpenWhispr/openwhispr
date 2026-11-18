@@ -6218,6 +6218,7 @@
     "endpointUrl": "عنوان URL لنقطة النهاية",
     "azureHint": "Azure AI Foundry: أدخل نقطة نهاية موردك (مثال: https://your-resource.cognitiveservices.azure.com) وقم بتعيين النموذج إلى اسم النشر الدقيق الخاص بك.",
     "customProvider": "مخصص",
+    "providerUnavailable": "لا يمكن استخدام {{provider}} هنا. اختر نموذجًا للتبديل إلى مزود آخر.",
     "fallback": {
       "whisperModelDescription": "النموذج",
       "parakeetModelDescription": "نموذج NVIDIA Parakeet"

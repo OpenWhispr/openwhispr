@@ -3,6 +3,7 @@ import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { isAwaitingCatalog } from "../models/modelLifecycle.js";
 import { getRegistryData } from "../models/registryData.js";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
@@ -28,7 +29,12 @@ import {
   type ColorScheme,
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
-import { useSettingsStore } from "../stores/settingsStore";
+import {
+  selectPolicyEffectiveSettings,
+  selectResolvedMeetingTranscription,
+  selectResolvedUploadTranscription,
+  useSettingsStore,
+} from "../stores/settingsStore";
 import {
   filterByokProviderOptionsByPolicy,
   isProviderAllowedByPolicy,
@@ -754,6 +760,25 @@ export default function TranscriptionModelPicker({
     return queuedLoad;
   }, []);
 
+  // A blank Note Recording or Upload provider is no choice of its own: it runs on what the
+  // store resolves (dictation's provider, or the one a managed policy allows instead).
+  const inheritedCloudSelection = useSettingsStore(
+    useShallow((settings) => {
+      if (selectedCloudProvider || transcriptionContext === "dictation") return null;
+      const effective = selectPolicyEffectiveSettings(settings, policyState);
+      const resolved =
+        transcriptionContext === "meeting"
+          ? selectResolvedMeetingTranscription(effective)
+          : selectResolvedUploadTranscription(effective);
+      return {
+        provider: resolved.cloudTranscriptionProvider,
+        model: resolved.cloudTranscriptionModel,
+      };
+    })
+  );
+  const committedCloudProvider = inheritedCloudSelection?.provider ?? selectedCloudProvider;
+  const committedCloudModel = inheritedCloudSelection?.model ?? selectedCloudModel;
+
   const effectiveCloudSelection = useMemo(() => {
     // Every provider's URL counts as known, including policy-blocked ones and
     // the ones this scope does not offer: otherwise such a provider's stored URL
@@ -775,37 +800,56 @@ export default function TranscriptionModelPicker({
     // known model this scope filters out is still reconciled.
     if (
       !browsedCloudProvider &&
-      cloudProviders.some((provider) => provider.id === selectedCloudProvider) &&
-      isAwaitingCatalog("transcriptionProviders", selectedCloudModel)
+      cloudProviders.some((provider) => provider.id === committedCloudProvider) &&
+      isAwaitingCatalog("transcriptionProviders", committedCloudModel)
     ) {
-      return { provider: selectedCloudProvider, model: selectedCloudModel };
+      return { provider: committedCloudProvider, model: committedCloudModel };
     }
     return (
       reconcileCloudProviderSelection({
-        selectedProvider: browsedCloudProvider ?? selectedCloudProvider,
-        selectedModel: selectedCloudModel,
+        selectedProvider: browsedCloudProvider ?? committedCloudProvider,
+        selectedModel: committedCloudModel,
         allowedProviders: cloudProviders,
         customAllowed: !streamingOnly && providerAllowed("custom"),
         hasCustomUrl,
       }) ?? {
-        provider: browsedCloudProvider ?? selectedCloudProvider,
-        model: selectedCloudModel,
+        provider: browsedCloudProvider ?? committedCloudProvider,
+        model: committedCloudModel,
       }
     );
   }, [
     cloudProviders,
     cloudTranscriptionBaseUrl,
     browsedCloudProvider,
-    selectedCloudProvider,
-    selectedCloudModel,
+    committedCloudProvider,
+    committedCloudModel,
     providerAllowed,
     streamingOnly,
   ]);
   const displayedCloudProvider = effectiveCloudSelection.provider;
   const displayedCloudModel = effectiveCloudSelection.model;
+  // A tab that is only being browsed, or stands in for a provider this tab can't use, has
+  // no model of this panel's: the key alone is checked.
+  const panelModel = committedCloudProvider === displayedCloudProvider ? displayedCloudModel : "";
+
+  // Only dictation saves its corrected pair. Settings mounts the Note Recording and Upload
+  // pickers beside it, so a correction there rewrote a tab nobody opened (#3100): a blank
+  // provider there runs on dictation's, and one the tab can't use is named, not replaced.
+  const savesCorrectedSelection = transcriptionContext === "dictation";
+  const unavailableProvider =
+    !savesCorrectedSelection &&
+    !browsedCloudProvider &&
+    committedCloudProvider &&
+    committedCloudProvider !== displayedCloudProvider
+      ? committedCloudProvider === "custom"
+        ? t("transcription.customProvider")
+        : (CLOUD_PROVIDER_TABS.find((tab) => tab.id === committedCloudProvider)?.name ??
+          committedCloudProvider)
+      : undefined;
 
   useEffect(() => {
     if (
+      !savesCorrectedSelection ||
       effectiveLocal ||
       browsedCloudProvider ||
       !shouldPersistProviderFallback(policyState, isSignedIn) ||
@@ -828,6 +872,7 @@ export default function TranscriptionModelPicker({
     onCloudModelSelect,
     onCloudProviderSelect,
     policyState,
+    savesCorrectedSelection,
     selectedCloudModel,
     selectedCloudProvider,
   ]);
@@ -1254,8 +1299,6 @@ export default function TranscriptionModelPicker({
   const endpointHold = useFocusHold();
   const editing = useFocusHold();
   const visible = usePanelVisible();
-  // A tab that is only being browsed has no model of this panel's: the key alone is checked.
-  const panelModel = selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : "";
   const isCustom = displayedCloudProvider === "custom";
   const isCorti = displayedCloudProvider === "corti";
   const providerKey = credentialValues[providerCredentials.fields[0].key];
@@ -1583,6 +1626,12 @@ export default function TranscriptionModelPicker({
             />
           )}
 
+          {unavailableProvider && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {t("transcription.providerUnavailable", { provider: unavailableProvider })}
+            </p>
+          )}
+
           {providerAllowed(displayedCloudProvider) && (
             <div>
               {displayedCloudProvider === "custom" ? (
@@ -1717,9 +1766,7 @@ export default function TranscriptionModelPicker({
                     </label>
                     <ModelCardList
                       models={cloudModelOptions}
-                      selectedModel={
-                        selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
-                      }
+                      selectedModel={panelModel}
                       onModelSelect={handleCloudModelSelect}
                       colorScheme="purple"
                     />

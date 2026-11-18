@@ -960,6 +960,7 @@
     "endpointUrl": "Endpoint-URL",
     "azureHint": "Azure AI Foundry: Geben Sie Ihren Ressourcen-Endpunkt ein (z. B. https://your-resource.cognitiveservices.azure.com) und setzen Sie „Model“ auf den exakten Namen Ihrer Bereitstellung.",
     "customProvider": "Benutzerdefiniert",
+    "providerUnavailable": "{{provider}} kann hier nicht verwendet werden. Wähle ein Modell, um den Anbieter zu wechseln.",
     "fallback": {
       "whisperModelDescription": "Modell",
       "parakeetModelDescription": "NVIDIA-Parakeet-Modell"

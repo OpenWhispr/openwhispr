@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { mountSettingsPanel } = require("../lib/settingsPanelHarness");
+const { managedPolicy } = require("../helpers/harness/policyFixtures");
 
 const PICKER = "/components/TranscriptionModelPicker.tsx";
 const KEY = "common.apiKey";
@@ -604,4 +605,170 @@ test("an unsupported Mac leaves a policy-blocked sherpa selection saved", async 
     },
   });
   assert.deepEqual(selected, []);
+});
+
+// Settings mounts the Dictation, Note Recording and Upload pickers at once, so a picker
+// that saved its own correction rewrote a tab nobody opened (#3100). Note Recording and
+// Upload save nothing until a model is picked: a blank provider runs on dictation's, and
+// one the tab can't use is named rather than replaced.
+const dictating = (provider, model, extra = {}) => ({
+  // Latched, or loading the store copies dictation's provider into Note Recording.
+  meetingFollowsTranscription: "false",
+  meetingFollowsReasoning: "false",
+  isSignedIn: "false",
+  transcriptionMode: "providers",
+  cloudTranscriptionMode: "byok",
+  cloudTranscriptionProvider: provider,
+  cloudTranscriptionModel: model,
+  ...extra,
+});
+async function scopePicker(t, context, { provider = "", model = "", ...options } = {}) {
+  const saves = [];
+  const panel = await mount(t, {
+    ...options,
+    overrides: {
+      transcriptionContext: context,
+      streamingOnly: context === "meeting",
+      selectedCloudProvider: provider,
+      selectedCloudModel: model,
+      onCloudProviderSelect: (value) => saves.push(["provider", value]),
+      onCloudModelSelect: (value) => saves.push(["model", value]),
+    },
+  });
+  await panel.wait(0);
+  return { panel, saves };
+}
+const savedPair = (panel, context) => [
+  panel.state()[`${context}CloudTranscriptionProvider`],
+  panel.state()[`${context}CloudTranscriptionModel`],
+];
+const shownTab = (panel) =>
+  panel.find((node) => Array.isArray(node.props?.providers) && node.props.selectedId)[0].props
+    .selectedId;
+const shownModel = (panel) =>
+  panel.find((node) => typeof node.props?.onModelSelect === "function")[0].props.selectedModel;
+// The harness's `t` returns the key followed by its interpolation values.
+const unavailableNotice = (panel) =>
+  panel.find(
+    (node) =>
+      typeof node.props?.children === "string" &&
+      node.props.children.startsWith("transcription.providerUnavailable")
+  )[0]?.props.children;
+
+test("a blank Note Recording provider shows dictation's and saves nothing, even hidden", async (t) => {
+  for (const visible of [false, true]) {
+    await t.test(visible ? "shown" : "hidden", async (t) => {
+      const { panel, saves } = await scopePicker(t, "meeting", {
+        settings: dictating("deepgram", "nova-3"),
+        visible,
+      });
+      assert.deepEqual(saves, []);
+      assert.deepEqual(savedPair(panel, "meeting"), ["", ""]);
+      assert.equal(shownTab(panel), "deepgram");
+      assert.equal(shownModel(panel), "nova-3", "what runs is what is selected");
+      assert.equal(unavailableNotice(panel), undefined);
+    });
+  }
+});
+
+test("a blank Upload provider shows what uploads run on and saves nothing", async (t) => {
+  await t.test("dictation's provider", async (t) => {
+    const { panel, saves } = await scopePicker(t, "upload", {
+      settings: dictating("groq", "whisper-large-v3-turbo"),
+    });
+    assert.deepEqual(saves, []);
+    assert.deepEqual(savedPair(panel, "upload"), ["", ""]);
+    assert.equal(shownTab(panel), "groq");
+    assert.equal(shownModel(panel), "whisper-large-v3-turbo");
+  });
+  await t.test("dictation's own server stays the upload server", async (t) => {
+    const { panel, saves } = await scopePicker(t, "upload", {
+      settings: dictating("custom", "my-whisper", {
+        cloudTranscriptionBaseUrl: "https://stt.example.test/v1",
+      }),
+    });
+    assert.deepEqual(saves, []);
+    assert.deepEqual(savedPair(panel, "upload"), ["", ""]);
+    assert.equal(shownTab(panel), "custom");
+    assert.equal(panel.field(MODEL).props.value, "my-whisper");
+  });
+  await t.test("a live-only dictation provider leaves uploads on OpenAI", async (t) => {
+    const { panel, saves } = await scopePicker(t, "upload", {
+      settings: dictating("deepgram", "nova-3"),
+    });
+    assert.deepEqual(saves, []);
+    assert.equal(shownTab(panel), "openai");
+    assert.equal(shownModel(panel), "gpt-transcribe");
+    assert.equal(unavailableNotice(panel), undefined);
+  });
+});
+
+test("a provider the tab can't use is named, not replaced", async (t) => {
+  await t.test("Note Recording set to Groq by onboarding", async (t) => {
+    const { panel, saves } = await scopePicker(t, "meeting", {
+      provider: "groq",
+      model: "whisper-large-v3-turbo",
+      settings: dictating("groq", "whisper-large-v3-turbo", {
+        meetingCloudTranscriptionProvider: "groq",
+        meetingCloudTranscriptionModel: "whisper-large-v3-turbo",
+      }),
+    });
+    assert.deepEqual(saves, []);
+    assert.deepEqual(savedPair(panel, "meeting"), ["groq", "whisper-large-v3-turbo"]);
+    assert.equal(shownTab(panel), "openai");
+    assert.equal(shownModel(panel), "", "nothing is selected while Groq is saved");
+    assert.equal(unavailableNotice(panel), 'transcription.providerUnavailable {"provider":"Groq"}');
+
+    await panel.selectTab("deepgram");
+    assert.equal(unavailableNotice(panel), undefined, "a browsed tab is the user's own choice");
+  });
+  await t.test("blank Note Recording under a dictation provider it can't use", async (t) => {
+    const { panel, saves } = await scopePicker(t, "meeting", {
+      settings: dictating("groq", "whisper-large-v3-turbo"),
+    });
+    assert.deepEqual(saves, []);
+    assert.equal(unavailableNotice(panel), 'transcription.providerUnavailable {"provider":"Groq"}');
+  });
+  await t.test("Upload set to a live-only provider", async (t) => {
+    const { panel, saves } = await scopePicker(t, "upload", {
+      provider: "deepgram",
+      model: "nova-3",
+      settings: dictating("deepgram", "nova-3", {
+        uploadCloudTranscriptionProvider: "deepgram",
+        uploadCloudTranscriptionModel: "nova-3",
+      }),
+    });
+    assert.deepEqual(saves, []);
+    assert.equal(shownModel(panel), "");
+    assert.equal(
+      unavailableNotice(panel),
+      'transcription.providerUnavailable {"provider":"Deepgram"}'
+    );
+  });
+});
+
+test("picking a model on an inherited tab saves the provider with it", async (t) => {
+  const { panel, saves } = await scopePicker(t, "meeting", {
+    settings: dictating("deepgram", "nova-3"),
+  });
+  await panel.selectModel("nova-3");
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "deepgram");
+  assert.deepEqual(saves, [["model", "nova-3"]]);
+});
+
+test("a managed policy shows the provider it runs for a blank Note Recording one", async (t) => {
+  const { panel, saves } = await scopePicker(t, "meeting", {
+    settings: dictating("groq", "whisper-large-v3-turbo", { isSignedIn: "true" }),
+    policy: {
+      status: "managed",
+      appVersion: "1.11.1",
+      policy: managedPolicy({
+        transcription: { allowedModes: ["providers"], allowedByokProviders: ["deepgram"] },
+      }),
+    },
+  });
+  assert.deepEqual(saves, []);
+  assert.equal(shownTab(panel), "deepgram");
+  assert.equal(shownModel(panel), "nova-3");
+  assert.equal(unavailableNotice(panel), undefined);
 });
