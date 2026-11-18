@@ -1,0 +1,280 @@
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react-native';
+import * as Haptics from 'expo-haptics';
+import { useConfigStore } from '@/store/useConfigStore';
+import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { checkProviderKey, classifyStatus, useKeyCheck } from '../settings/keyCheck';
+import { KeySheet } from '../settings/KeySheet';
+import ProcessingScreen from '../settings/ProcessingScreen';
+import TaskScreen from '../settings/TaskScreen';
+import { maskKey } from '../settings/ownKey';
+
+const mockPush = jest.fn();
+let mockParams: Record<string, string> = {};
+jest.mock('@/android/navigationBar', () => ({
+  useNavigationBar: () => ({ buttons: false, inset: 0 }),
+  useNavigationBarCanvas: () => undefined,
+}));
+jest.mock('expo-router', () => ({
+  router: { push: (...args: unknown[]) => mockPush(...args), back: jest.fn(), canGoBack: () => true },
+  useLocalSearchParams: () => mockParams,
+}));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('@/android/strings', () => ({
+  __esModule: true,
+  default: { addResourceBundle: jest.fn(), t: (key: string) => key },
+}));
+jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
+jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: require('react-native').View,
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
+jest.mock('react-native-svg', () => {
+  const { View } = require('react-native');
+  return { __esModule: true, default: View, Circle: View, Path: View, Rect: View };
+});
+jest.mock('expo-haptics', () => ({
+  performAndroidHapticsAsync: jest.fn(async () => undefined),
+  AndroidHaptics: { Confirm: 'confirm', Reject: 'reject', Clock_Tick: 'clock-tick' },
+}));
+jest.mock('../models', () => ({
+  ANDROID_MODELS: {
+    'parakeet-v3': { title: 'Parakeet v3', bytes: 670478772 },
+    'qwen-balanced': { title: 'Qwen3 1.7B', bytes: 1100000000 },
+    'meeting-speakers': { title: 'Meeting speakers', bytes: 41800000 },
+  },
+  modelReady: async () => true,
+  useModelDownloads: () => ({}),
+}));
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: (selector: (state: { user: object | null }) => unknown) =>
+    selector({ user: { id: 'a', isAnonymous: false } }),
+}));
+const mockUpdateConfig = jest.fn(async (change: object) => {
+  const { useConfigStore: store } = require('@/store/useConfigStore');
+  store.setState((state: { config: object }) => ({ config: { ...state.config, ...change } }));
+});
+jest.mock('@/store/useConfigStore', () => ({
+  useConfigStore: require('zustand').create(() => ({ config: {}, error: null })),
+}));
+jest.mock('@/store/useCustomPromptsStore', () => ({
+  useCustomPromptsStore: (selector: (state: { customPrompts: object }) => unknown) =>
+    selector({ customPrompts: { cleanup: '' } }),
+}));
+const mockSwitch = jest.fn(async (..._args: unknown[]) => 'switched');
+jest.mock('@/lib/workflowModeSwitch.android', () => ({
+  switchWorkflowMode: (...args: unknown[]) => mockSwitch(...args),
+}));
+const mockSaved: Record<string, string> = {};
+const mockSetCredential = jest.fn(async (reference: string, credential: { apiKey: string }) => {
+  mockSaved[reference] = credential.apiKey;
+});
+jest.mock('@/services/providers/ProviderCredentials', () => ({
+  getProviderCredentialReference: async (id: string) => `provider.${id}`,
+  getProviderCredential: async (reference: string) =>
+    mockSaved[reference] ? { apiKey: mockSaved[reference] } : null,
+  getProviderCredentialStatus: async (reference: string) => ({
+    reference,
+    isConfigured: !!mockSaved[reference],
+  }),
+  setProviderCredential: (reference: string, credential: { apiKey: string }) =>
+    mockSetCredential(reference, credential),
+  subscribeProviderCredentialChanges: () => () => {},
+}));
+
+const response = (status: number, body: object = {}) =>
+  ({ status, json: async () => body }) as unknown as Response;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockParams = {};
+  for (const key of Object.keys(mockSaved)) delete mockSaved[key];
+  useConfigStore.setState({ config: {}, updateConfig: mockUpdateConfig } as never);
+  useProcessingModeStore.setState({ activeMode: 'cloud' });
+});
+
+describe('key check', () => {
+  it('reads statuses the way desktop does', () => {
+    expect(classifyStatus(200)).toEqual({ state: 'connected' });
+    expect(classifyStatus(401).state).toBe('failed');
+    expect(classifyStatus(403).reason).toBe('rejected');
+    expect(classifyStatus(429).state).toBe('unverified');
+    expect(classifyStatus(503).state).toBe('unverified');
+    expect(classifyStatus(404)).toEqual({ state: 'failed', reason: 'status', status: 404 });
+  });
+
+  it('refuses an OpenRouter management key and gives no verdict without a network', async () => {
+    const management = jest.fn(async () => response(200, { data: { is_management_key: true } }));
+    expect(await checkProviderKey('openrouter', 'k', management as never)).toEqual({
+      state: 'failed',
+      reason: 'managementKey',
+    });
+    const offline = jest.fn(async () => {
+      throw new Error('offline');
+    });
+    expect(await checkProviderKey('openai', 'k', offline as never)).toEqual({
+      state: 'unverified',
+      reason: 'network',
+    });
+  });
+
+  it('waits half a second after the last change, and drops an answer for an older key', async () => {
+    jest.useFakeTimers();
+    const check = jest.fn(async (_provider: string, key: string) =>
+      key === 'sk-good' ? { state: 'connected' as const } : { state: 'failed' as const },
+    );
+    const { result, rerender } = renderHook(
+      ({ key }: { key: string }) => useKeyCheck('openai', key, check as never),
+      { initialProps: { key: 'sk-g' } },
+    );
+    act(() => jest.advanceTimersByTime(300));
+    rerender({ key: 'sk-good' });
+    // Nothing shows while more of the key may still be coming.
+    expect(result.current.state).toBe('idle');
+    await act(async () => jest.advanceTimersByTime(500));
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(check).toHaveBeenCalledWith('openai', 'sk-good');
+    expect(result.current.state).toBe('connected');
+    jest.useRealTimers();
+  });
+
+  it('masks a locked key to its first and last characters', () => {
+    expect(maskKey('sk-proj-abcdefghijklmnop4f2a')).toBe('sk-••••••••4f2a');
+    expect(maskKey('gsk_abcdefghijklmn91c0')).toBe('gsk••••••••91c0');
+  });
+});
+
+describe('Use your own key', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('checks a pasted key on its own, then uses it for every task it can run', async () => {
+    global.fetch = jest.fn(async () => response(200)) as never;
+    const onClose = jest.fn();
+    render(<KeySheet visible onClose={onClose} />);
+    await act(async () => {});
+    fireEvent.changeText(screen.getByLabelText('apiKey'), 'sk-proj-abcdefghijklmnop4f2a');
+    expect(screen.queryByText('useForTasks')).toBeNull();
+    await act(async () => jest.advanceTimersByTime(500));
+    await act(async () => jest.advanceTimersByTime(700));
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/models',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer sk-proj-abcdefghijklmnop4f2a' }),
+      }),
+    );
+    // Locked in: masked, with Change, and the tasks it will run.
+    expect(screen.getByText('sk-••••••••4f2a')).toBeTruthy();
+    expect(screen.getByText('change')).toBeTruthy();
+    expect(screen.getByText('dictation')).toBeTruthy();
+    expect(screen.getByText('noteFormatting')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByText('useForTasks'));
+    });
+    expect(mockSetCredential).toHaveBeenCalledWith('provider.openai', {
+      apiKey: 'sk-proj-abcdefghijklmnop4f2a',
+    });
+    // Dictation, uploads, cleanup and notes, dictation first since it sets the default.
+    expect(mockUpdateConfig).toHaveBeenCalledTimes(4);
+    expect(useProcessingModeStore.getState().activeMode).toBe('providers');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows the reason under a refused key, keeps the button off, and saves nothing', async () => {
+    global.fetch = jest.fn(async () => response(401)) as never;
+    render(<KeySheet visible onClose={jest.fn()} initialProvider="groq" />);
+    await act(async () => {});
+    fireEvent.changeText(screen.getByLabelText('apiKey'), 'gsk_wrong_key_123456');
+    await act(async () => jest.advanceTimersByTime(500));
+    await act(async () => jest.advanceTimersByTime(500));
+    expect(screen.getByText('keyRefused')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'useForTasks' }).props.accessibilityState.disabled,
+    ).toBe(true);
+    expect(Haptics.performAndroidHapticsAsync).not.toHaveBeenCalledWith('confirm');
+    // Editing clears the error at once.
+    fireEvent.changeText(screen.getByLabelText('apiKey'), 'gsk_wrong_key_12345');
+    expect(screen.queryByText('keyRefused')).toBeNull();
+    expect(mockSetCredential).not.toHaveBeenCalled();
+  });
+
+  it('offers OpenRouter only the text tasks', async () => {
+    mockSaved['provider.openrouter'] = 'sk-or-v1-abcdefghijkl77b1';
+    render(<KeySheet visible onClose={jest.fn()} initialProvider="openrouter" />);
+    await act(async () => {});
+    expect(screen.getByText('textCleanup')).toBeTruthy();
+    expect(screen.queryByText('dictation')).toBeNull();
+    expect(screen.getByText('dictationAndUploads')).toBeTruthy();
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      'https://openrouter.ai/api/v1/key',
+      expect.anything(),
+    );
+  });
+});
+
+describe('Processing', () => {
+  it('lists the default, then each task, marking one moved off the default', () => {
+    useConfigStore.setState({
+      config: { inference: { notes: { mode: 'local' } } },
+    } as never);
+    render(<ProcessingScreen />);
+    expect(screen.getByText('defaultForEveryTask')).toBeTruthy();
+    expect(screen.getAllByText('changed')).toHaveLength(1);
+    expect(screen.getByText('meetingCloudValue')).toBeTruthy();
+    // A task uses the phone, so its models show.
+    expect(screen.getByText('checkPhone')).toBeTruthy();
+    fireEvent.press(screen.getByText('noteFormatting'));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/android-task', params: { task: 'notes' } });
+  });
+
+  it('says cleanup is off in Settings, and hides the phone section when nothing uses it', () => {
+    useConfigStore.setState({ config: { cleanupEnabled: false } } as never);
+    render(<ProcessingScreen />);
+    expect(screen.getByText('offInSettings')).toBeTruthy();
+    expect(screen.queryByText('checkPhone')).toBeNull();
+  });
+
+  it('opens the key sheet for Your own API key when no key is saved', async () => {
+    render(<ProcessingScreen />);
+    await act(async () => {});
+    fireEvent.press(screen.getByText('ownKey'));
+    expect(screen.getByText('useOwnKey')).toBeTruthy();
+  });
+});
+
+describe('Task pages', () => {
+  it('Text cleanup: runs on, then model, then the prompt, with no switch', async () => {
+    mockParams = { task: 'cleanup' };
+    mockSaved['provider.openai'] = 'sk-proj-abcdefghijklmnop4f2a';
+    useConfigStore.setState({
+      config: {
+        inference: {
+          cleanup: {
+            mode: 'providers',
+            providerId: 'openai',
+            modelId: 'gpt-6-luna',
+            credentialRef: 'provider.openai',
+          },
+        },
+      },
+    } as never);
+    render(<TaskScreen />);
+    await act(async () => {});
+    expect(screen.getByText('runsOn')).toBeTruthy();
+    expect(screen.getByText('OpenAI')).toBeTruthy();
+    expect(screen.getByText('yourKeyConnected')).toBeTruthy();
+    expect(screen.getByText('gpt-6-luna')).toBeTruthy();
+    expect(screen.queryByRole('switch')).toBeNull();
+    fireEvent.press(screen.getByText('cleanupPrompt'));
+    expect(mockPush).toHaveBeenCalledWith('/(account)/cleanup-prompt');
+  });
+
+  it('Meetings: only choices that can transcribe them', () => {
+    mockParams = { task: 'meeting' };
+    render(<TaskScreen />);
+    expect(screen.getByText('meetingCloud')).toBeTruthy();
+    expect(screen.getByText('meetingPhone')).toBeTruthy();
+    expect(screen.queryByText('addAnotherKey')).toBeNull();
+  });
+});
