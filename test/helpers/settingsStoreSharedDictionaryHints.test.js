@@ -115,6 +115,7 @@ test("the setter persists the workspace and sends main only the hints", async (t
 
   assert.deepEqual(JSON.parse(loaded.storage.getItem("sharedDictionaryHints")), {
     workspaceId: WS_A,
+    accountId: null,
     ...hints,
   });
   assert.deepEqual(loaded.useSettingsStore.getState().sharedDictionaryHints, hints);

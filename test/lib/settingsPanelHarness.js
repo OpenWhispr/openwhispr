@@ -215,6 +215,12 @@ async function mountSettingsPanel(
       const list = find((node) => typeof node.props?.onModelSelect === "function")[0];
       await act(() => list.props.onModelSelect(id));
     },
+    // A button takes focus away from the fields, then its click runs.
+    click: async (label, index = 0) => {
+      await leaveFields();
+      const button = find((node) => node.props?.children === label && node.props.onClick)[index];
+      await act(() => button.props.onClick());
+    },
     choose: async (value) => {
       await leaveFields();
       const select = find((node) => typeof node.props?.onValueChange === "function")[0];

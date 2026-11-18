@@ -10,10 +10,26 @@ const DEFAULT_CHAT_AGENT_PROMPT =
 // Appended per request, not baked into the default: the panel renders markdown.
 export const PLAIN_TEXT_RESPONSE_SUFFIX =
   "\n\nOUTPUT FORMAT: Your answer will be inserted as plain text exactly where the user is typing, " +
-  "inside another application. Write plain prose with no markdown: no asterisks, underscores, " +
+  "inside another application. Answer with the text itself, ready to insert (asked for a reply, " +
+  "write the reply), with no introduction or comment around it, and don't draft or send it " +
+  "with a tool. Write plain prose with no markdown: no asterisks, underscores, " +
   "backticks, heading marks, bullet or numbered-list markers, tables, or link syntax. " +
   "Use ordinary sentences and paragraphs. If several items must be listed, put each on its " +
   "own line with no marker.";
+
+export const CARET_RESPONSE_PREFIXES = {
+  answer: "__OPENWHISPR_CARET_ANSWER__",
+  question: "__OPENWHISPR_CARET_QUESTION__",
+} as const;
+
+export const CARET_RESPONSE_DISPOSITION_SUFFIX =
+  "\n\nCARET DELIVERY: Start your response with exactly one of these prefixes on its own line, " +
+  "followed by your plain-text reply. " +
+  `Use ${CARET_RESPONSE_PREFIXES.answer} only for a complete answer ready to insert. ` +
+  `Use ${CARET_RESPONSE_PREFIXES.question} if you need clarification from the user or cannot ` +
+  "complete the request; the reply will stay in the assistant instead of being inserted. " +
+  "A question that belongs in the requested draft is still a complete answer. " +
+  "Write nothing before the prefix. The app removes the prefix before showing your reply.";
 
 export const PROMPT_KINDS = {
   cleanup: {

@@ -17,7 +17,7 @@ const lastBody = (): Record<string, unknown> =>
 beforeEach(() => jest.clearAllMocks());
 
 // The API treats `customPrompt` as a template it substitutes {{agentName}}
-// into and still appends language, dictionary and tone; `promptMode: 'cleanup'`
+// into and still appends language and dictionary, but no tone; `promptMode: 'cleanup'`
 // pins cleanup semantics (transcript wrapper, temperature 0, cleanup model).
 // `systemPrompt` is a raw action-mode override and must win outright.
 describe('ReasoningService custom cleanup prompt on the wire', () => {

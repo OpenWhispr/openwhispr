@@ -1,11 +1,11 @@
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Building2, Check, ChevronDown, Plus, User, Users } from "../icons";
+import { ArrowRight, Building2, Check, ChevronDown, Plus, User } from "../icons";
 import { cn } from "../lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import workspaceImage from "../../assets/workspace-intro-workspace.webp";
 import teamspacesImage from "../../assets/workspace-intro-teamspaces.webp";
-import teamsImage from "../../assets/workspace-intro-teams.webp";
+import teamsImage from "../../assets/workspace-intro-teams.png";
 
 type IntroStepId = "workspace" | "teamspaces" | "teams";
 
@@ -26,7 +26,9 @@ function WorkspaceMock({ workspaceName }: { workspaceName: string }): ReactEleme
   const { t } = useTranslation();
   return (
     <>
-      <div className={cn(MOCK_CARD, "bottom-[90px] left-1/2 w-[254px] -translate-x-1/2")}>
+      {/* One row now: raised so the "Add workspace" pill (bottom-[70px], about 42px tall) sits
+          just below it, clear of the check. */}
+      <div className={cn(MOCK_CARD, "bottom-[120px] left-1/2 w-[254px] -translate-x-1/2")}>
         <div className="flex items-center gap-3 p-3">
           <span className={MOCK_ICON}>
             <Building2 size={16} />
@@ -35,14 +37,6 @@ function WorkspaceMock({ workspaceName }: { workspaceName: string }): ReactEleme
             {workspaceName}
           </span>
           <Check size={16} className="shrink-0 text-primary" />
-        </div>
-        <div className="flex items-center gap-2 border-t border-border p-3">
-          <span className={MOCK_ICON}>
-            <User size={16} />
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-            {t("notes.spaces.personal")}
-          </span>
         </div>
       </div>
       <div
@@ -100,25 +94,6 @@ function TeamspacesMock({ workspaceName }: { workspaceName: string }): ReactElem
   );
 }
 
-function TeamsMock(): ReactElement {
-  const avatar =
-    "-me-1.5 flex size-[22px] items-center justify-center rounded-full border border-surface-1";
-  return (
-    <div className="absolute left-1/2 top-[132px] flex h-[54px] -translate-x-1/2 items-center gap-3 rounded-[20px] border border-primary/60 bg-gradient-to-b from-surface-1 to-primary/10 px-5 shadow-[0_5px_12px_rgba(0,0,0,0.12)]">
-      <span className="flex items-center">
-        <span className={cn(avatar, "bg-primary/20 text-primary")}>
-          <User size={12} />
-        </span>
-        <span className={cn(avatar, "bg-primary/35 text-primary")}>
-          <User size={12} />
-        </span>
-        <span className={cn(avatar, "bg-surface-3 text-[10px] font-medium text-primary")}>+2</span>
-      </span>
-      <Users size={22} className="text-primary" />
-    </div>
-  );
-}
-
 export interface WorkspaceIntroCardProps {
   step: number;
   workspaceName: string;
@@ -154,7 +129,6 @@ export function WorkspaceIntroCard({
         <div aria-hidden="true">
           {id === "workspace" && <WorkspaceMock workspaceName={workspaceName} />}
           {id === "teamspaces" && <TeamspacesMock workspaceName={workspaceName} />}
-          {id === "teams" && <TeamsMock />}
         </div>
       </div>
 

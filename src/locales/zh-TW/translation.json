@@ -212,11 +212,18 @@
     "policyAccountChanged": "您的帳戶已變更，因此此回答已停止。",
     "policyTranscriptionRestricted": "轉錄已被您的組織限制。",
     "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
+    "policyBlocked": "貴組織不允許在此裝置上執行此操作。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
     "managedConfigAmbiguous": "您組織的託管設定不一致。請聯絡管理員。",
     "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。",
-    "resizePanel": "調整面板大小"
+    "resizePanel": "調整面板大小",
+    "managedDevice": "受管理的裝置",
+    "managedDeviceAndWorkspace": "受管理的裝置與工作區",
+    "deviceLocalOnly": "此裝置僅使用本機處理。雲端功能無法使用，先前登入過的帳戶亦然。",
+    "deviceSignInRequired": "你的組織要求在此裝置上登入。",
+    "devicePolicyInvalid": "無法讀取裝置原則，或原則無效。請聯絡管理員。原則修正前，無法使用 OpenWhispr。",
+    "deviceWorkspaceUnavailable": "此裝置要求本機處理，但已儲存帳戶的工作區原則無法使用。請登出以不使用該帳戶繼續，或聯絡管理員。"
   },
   "onboarding": {
     "rehaul": {
@@ -409,7 +416,9 @@
           "modelNotFound": "所選模型無法從此服務商取得。",
           "providerStatus": "服務商回傳了狀態碼 {{status}}。",
           "timeout": "連線測試逾時。",
-          "network": "無法連上服務商。"
+          "network": "無法連上服務商。",
+          "invalidHeaders": "HTTP 標頭無效。請檢查名稱和值；無法自訂 Content-Type 和傳輸標頭。",
+          "redirected": "伺服器重新導向了請求。請輸入它重新導向的位址。"
         }
       },
       "local": {
@@ -655,7 +664,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "需要更新",
-      "description": "您的組織要求使用 OpenWhispr {{version}} 或更新版本。請更新應用程式。"
+      "description": "您的組織要求使用 OpenWhispr {{version}} 或更新版本。請更新應用程式。",
+      "contactIT": "你的組織要求使用 OpenWhispr {{version}} 或更新版本。請聯絡 IT 部門安裝經核准的版本。"
     },
     "update": {
       "readyTitle": "更新已準備就緒",
@@ -1238,7 +1248,8 @@
       "failedUserCheck": "無法檢查使用者帳號",
       "generic": "發生錯誤，請再試一次。",
       "invalidCredentials": "電子郵件或密碼不正確",
-      "invalidEmail": "請輸入有效的電子郵件地址"
+      "invalidEmail": "請輸入有效的電子郵件地址",
+      "signInDisabledByDevice": "您的組織已在此裝置上關閉登入。"
     },
     "getStarted": "開始使用",
     "legal": {
@@ -1835,6 +1846,9 @@
           "askOwner": "請 {{name}} 升級您的工作區。"
         },
         "currentPlan": "目前方案",
+        "yourPersonalPlan": "你的個人方案",
+        "yourWorkspacePlan": "你的工作區方案",
+        "manage": "管理",
         "coveredByWorkspace": "已包含在您的工作區方案中",
         "upgrade": "升級",
         "downgrade": "降級",
@@ -2269,7 +2283,14 @@
         "restarting": "重新啟動中...",
         "title": "更新",
         "versionPlaceholder": "—",
-        "whatsNew": "v{{version}} 的新功能"
+        "whatsNew": "v{{version}} 的新功能",
+        "managedByOrganization": "由你的組織管理。",
+        "itManaged": "更新由你的組織管理。",
+        "policyLoading": "正在載入更新設定…",
+        "policyUnavailable": "無法載入更新設定。請檢查更新以重試。",
+        "policyChanged": "更新原則已變更。請再次檢查更新。",
+        "managedBadge": "受管理",
+        "stagedBeforePolicy": "在此原則生效前已有更新準備就緒，可能會在結束應用程式時安裝。結束或重新啟動前請聯絡 IT 部門。"
       },
       "translationHotkey": {
         "title": "翻譯快捷鍵",
@@ -2301,9 +2322,8 @@
     "privacy": {
       "cloudBackup": "雲端備份",
       "cloudBackupDescription": "將轉錄記錄和筆記備份至雲端，實現跨裝置無縫存取。",
-      "cloudBackupTeamCaveat": "Teamspace 中的筆記和您已分享的筆記會始終同步，不受此設定影響。",
+      "cloudBackupTeamCaveat": "Teamspace 中的筆記和您已分享的筆記會始終同步，不受此設定影響。 使用私人內容的對話僅保留在這部裝置上。 舊版中的對話和從備份還原的對話也不納入備份。",
       "cloudNotesMigration": "正在備份筆記… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "所有筆記已備份",
       "description": "控制哪些資料會離開你的裝置。預設全部關閉。",
       "title": "隱私權",
       "insightsSync": "同步個人統計",
@@ -2488,19 +2508,26 @@
     "selfHosted": {
       "endpointUrl": "端點 URL",
       "serverUrl": "伺服器 URL",
-      "apiKeyOptional": "API Key（選填）"
+      "apiKeyOptional": "API Key（選填）",
+      "headers": "HTTP 標頭",
+      "headersHelp": "隨每個傳送到此伺服器的請求一起送出，例如閘道要求的 API 金鑰。",
+      "headerName": "標頭名稱",
+      "headerValue": "標頭值",
+      "removeHeader": "刪除",
+      "addHeader": "新增標頭",
+      "unauthorized": "你的伺服器拒絕了請求（401/403）。請檢查下方的標頭或伺服器的驗證設定。",
+      "headerErrors": {
+        "missingName": "請輸入標頭名稱。",
+        "invalidName": "標頭名稱不能包含空格、冒號或其他分隔符號。",
+        "reserved": "OpenWhispr 會自行設定此標頭。",
+        "invalidValue": "此值包含標頭無法攜帶的字元，例如彎引號。"
+      }
     },
     "workspace": {
       "title": "工作區",
       "description": "與團隊成員協作、分享筆記，並在同一處管理工作區存取權限。",
       "empty": {
-        "title": "建立你的第一個工作區",
-        "description": "工作區讓你與團隊成員協作並分享筆記。",
         "create": "建立工作區"
-      },
-      "personal": {
-        "title": "你目前在「個人」中",
-        "description": "選擇一個工作區以管理其設定。"
       },
       "loadError": {
         "title": "無法載入工作區",
@@ -2547,7 +2574,7 @@
         },
         "roleMenuLabel": "變更 {{name}} 的角色",
         "roleDescription": {
-          "member": "可以檢視和編輯筆記。",
+          "member": "使用工作區。",
           "admin": "管理成員、邀請、團隊和設定。"
         },
         "roleFailed": "無法變更 {{name}} 的角色。請檢查網路連線後再試一次。",
@@ -2584,7 +2611,8 @@
           "resentNoEmailMany_one": "{{count}} 封邀請已更新，但電子郵件無法送達，舊連結也已失效。它們仍處於選取狀態，你可以重新傳送。",
           "resentNoEmailMany_other": "{{count}} 封邀請已更新，但電子郵件無法送達，舊連結也已失效。它們仍處於選取狀態，你可以重新傳送。",
           "resendUnrenewable_one": "無法續訂 {{count}} 封已過期的邀請。請取消後重新邀請。",
-          "resendUnrenewable_other": "無法續訂 {{count}} 封已過期的邀請。請取消後重新邀請。"
+          "resendUnrenewable_other": "無法續訂 {{count}} 封已過期的邀請。請取消後重新邀請。",
+          "statusPending": "待處理"
         },
         "selection": {
           "count_one": "已選取 {{count}} 項",
@@ -2605,6 +2633,10 @@
           "invite": "邀請成員",
           "createTeam": "建立團隊",
           "label": "更多新增方式"
+        },
+        "roleMenu": {
+          "member": "工作區成員",
+          "admin": "工作區管理員"
         }
       },
       "teamspaces": {
@@ -2693,6 +2725,12 @@
           "roleMemberBody": "可以檢視和編輯筆記",
           "roleAdmin": "Teamspace 管理員",
           "roleAdminBody": "管理此 Teamspace 及其已指派的團隊。",
+          "teamAccessMember": "所有人都是成員",
+          "teamAccessMemberBody": "團隊中的所有人都可以檢視和編輯筆記。",
+          "teamAccessAdmin": "團隊管理員即管理員",
+          "teamAccessAdminBody": "團隊的管理員也管理此 Teamspace。團隊中的其他人是成員。",
+          "teamAccessMemberShort": "成員",
+          "teamAccessAdminShort": "團隊管理員",
           "removeItem": "從 Teamspace 中移除",
           "removeTitle": "要將 {{name}} 從 {{space}} 中移除嗎？",
           "removeBody": "這將結束 {{name}} 的直接成員身分。透過團隊取得的存取權將保留。對方仍留在工作區中。",
@@ -2767,8 +2805,8 @@
           "leaveBodyLoses": "你將無法再存取 {{space}} 及其筆記。",
           "leaveBodyAdmins": "其他管理員將繼續管理此 Teamspace。",
           "deleteNotAllowed": "你沒有刪除 {{space}} 的權限。",
-          "movedToPersonal_one": "{{count}} 則未同步的筆記已移至你的個人空間。",
-          "movedToPersonal_other": "{{count}} 則未同步的筆記已移至你的個人空間。"
+          "movedToPersonal_one": "{{count}} 則未同步的筆記已移至「私人」。",
+          "movedToPersonal_other": "{{count}} 則未同步的筆記已移至「私人」。"
         },
         "addPeople": {
           "loading": "正在載入 Teamspace…",
@@ -3021,6 +3059,7 @@
         "nextInvoice": "下期帳單",
         "manageStripe": "在 Stripe 中管理",
         "startSubscription": "開始訂閱",
+        "provisionedPlan": "由 OpenWhispr 設定。如需變更方案或席位，請聯絡銷售團隊。",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -3120,9 +3159,7 @@
         "invite": {
           "title_one": "邀請 {{count}} 位訪客加入 {{workspace}}",
           "title_other": "邀請 {{count}} 位訪客加入 {{workspace}}",
-          "description": "他們會收到一封電子郵件，透過其中的連結加入 {{workspace}}。",
-          "sent_one": "已傳送 {{count}} 份邀請，邀請加入 {{workspace}}",
-          "sent_other": "已傳送 {{count}} 份邀請，邀請加入 {{workspace}}"
+          "description": "他們會收到一封電子郵件，透過其中的連結加入 {{workspace}}。"
         },
         "remove": {
           "titleOne": "要將 {{name}} 從 {{workspace}} 移除嗎？",
@@ -3449,7 +3486,7 @@
       "defaultFolderImmutable": "無法變更預設資料夾。",
       "spaceNameRequired": "請輸入空間名稱。",
       "spaceNotFound": "找不到該空間。",
-      "privateSpaceImmutable": "無法變更你的個人空間。",
+      "privateSpaceImmutable": "「私人」無法變更。",
       "generic": "無法完成變更，請再試一次。"
     },
     "sidebar": {
@@ -3458,10 +3495,10 @@
       "templatesAndActions": "範本與動作"
     },
     "spaces": {
-      "privateSpaces": "私人筆記",
+      "privateSpaces": "私人",
       "teamSpaces": "Teamspaces",
-      "personal": "個人",
-      "privateTooltip": "只有你可以看到你的個人空間",
+      "personal": "私人",
+      "privateTooltip": "只有你能看到這裡的資料夾和筆記。",
       "newSpace": "新增 Teamspace",
       "nameAndIconLabel": "名稱與圖示",
       "changeEmoji": "變更表情符號",
@@ -3483,6 +3520,18 @@
       "noSpacesFound": "找不到空間",
       "spaceRoot": "空間根目錄",
       "moveConfirm": "移動",
+      "copyToPrivate": "複製到私人",
+      "moveToWorkspacePrivate": "移動到 {{workspace}} › 私人",
+      "workspacePrivate": "{{workspace}} › 私人",
+      "confirmCopyTitle": "複製到私人？",
+      "confirmCopy": "筆記仍會保留在 {{space}} 中。",
+      "copiedToPrivate": "已複製到「私人」",
+      "couldNotCopyNote": "無法複製筆記",
+      "openCopy": "開啟",
+      "noteAlreadyInTeam": "「{{title}}」已在 {{space}} 中。如需保留私人副本，請使用「複製到私人」。",
+      "folderAlreadyInTeam": "「{{name}}」已在 {{space}} 中。如需保留私人副本，請對其中的筆記使用「複製到私人」。",
+      "workspacesLoading": "工作區仍在載入中，請稍後再試。",
+      "cantMoveIntoLegacy": "{{space}} 不屬於任何工作區，無法將筆記移入其中。",
       "confirmMoveInTitle": "移動到 {{space}}？",
       "confirmMoveIn": "{{space}} 中的所有人都將能檢視和編輯這則筆記。之後筆記將無法移出 Teamspace。",
       "confirmMoveInFolder": "{{space}} 中的所有人都將能檢視和編輯這個資料夾及其筆記。之後資料夾及其筆記將無法移出 Teamspace。",
@@ -3500,10 +3549,10 @@
       "noteCount_other": "{{count}} 則筆記",
       "accessRevoked": "你已無法存取 {{space}}",
       "accessRevokedActiveNote": "你已無法存取 {{space}} — 「{{title}}」在此裝置上不再可用",
-      "movedToPersonal": "你已無法存取 {{space}}，「{{title}}」已移至你的個人空間",
-      "updateDeniedNote": "你沒有權限變更「{{title}}」——未同步的編輯已作為副本儲存到你的個人空間",
+      "movedToPersonal": "你已無法存取 {{space}}，「{{title}}」已移至「私人」",
+      "updateDeniedNote": "你沒有權限變更「{{title}}」——未同步的編輯已作為副本儲存到「私人」",
       "deleteDeniedNote": "「{{title}}」未被刪除——只有筆記擁有者或管理員才能刪除它",
-      "updateDeniedFolder": "你沒有權限變更「{{name}}」——未同步的內容已儲存到你的個人空間",
+      "updateDeniedFolder": "你沒有權限變更「{{name}}」——未同步的內容已儲存到「私人」",
       "deleteDeniedFolder": "「{{name}}」未被刪除——只有管理員才能刪除空間資料夾",
       "conflictBanner": "此筆記有更新的版本。",
       "conflictRefresh": "重新整理",
@@ -3529,11 +3578,29 @@
         "loadError": "無法載入團隊。"
       }
     },
+    "deviceNotes": {
+      "title": "在此裝置上",
+      "info": "這些筆記尚未指派給任何帳號。移動筆記即可保留並編輯。",
+      "infoLabel": "關於此裝置上的筆記",
+      "moveNote": "移動到我的私人",
+      "moveFolder": "將資料夾移動到我的私人",
+      "moveAll": "全部移動到我的私人",
+      "moveAllTo": "全部移動到資料夾",
+      "moved": "已移動到你的私人",
+      "movedCount_one": "已將 {{count}} 則筆記移動到你的私人",
+      "movedCount_other": "已將 {{count}} 則筆記移動到你的私人",
+      "moveFailed": "無法移動此筆記",
+      "moveFolderFailed": "無法移動這些筆記",
+      "banner": "此筆記尚未指派給任何帳號。",
+      "notesHeading": "筆記",
+      "summaryHeading": "AI 摘要",
+      "transcriptHeading": "轉錄"
+    },
     "structureIntro": {
       "title": "筆記存放在哪裡",
       "description": "OpenWhispr 將個人想法與協作內容分開，讓合適的人看到合適的筆記。",
       "personal": {
-        "title": "個人空間",
+        "title": "私人",
         "description": "只有你能看到這裡的資料夾和筆記。"
       },
       "workspace": {
@@ -3638,6 +3705,117 @@
         "taskList": "核取清單",
         "blockquote": "引用",
         "table": "插入表格"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "基本",
+          "blocks": "區塊",
+          "style": "樣式",
+          "tools": "工具"
+        },
+        "slash": {
+          "heading": "標題 {{level}}",
+          "bulletList": "項目符號清單",
+          "orderedList": "編號清單",
+          "taskList": "核取方塊任務",
+          "quote": "引言",
+          "divider": "分隔線",
+          "table": "表格",
+          "codeBlock": "程式碼區塊",
+          "codeHint": "語法著色",
+          "noteLink": "連結筆記",
+          "noteLinkHint": "或輸入 [[",
+          "toggle": "摺疊區塊",
+          "callout": "標註：{{type}}",
+          "toc": "目錄",
+          "mathBlock": "數學公式區塊",
+          "inlineMath": "行內公式",
+          "inlineMathHint": "或輸入 $$x^2$$",
+          "emoji": "表情符號",
+          "emojiHint": "或輸入 :smile:",
+          "highlight": "醒目提示",
+          "subscript": "下標",
+          "superscript": "上標",
+          "color": "文字顏色：{{name}}",
+          "font": "字型：{{name}}",
+          "ruby": "注音",
+          "rubyHint": "在文字上方顯示讀音",
+          "align": "對齊：{{dir}}",
+          "find": "尋找與取代",
+          "invisible": "顯示/隱藏不可見字元"
+        },
+        "callout": {
+          "note": "注意",
+          "tip": "提示",
+          "important": "重要",
+          "warning": "警告",
+          "caution": "小心"
+        },
+        "colors": {
+          "default": "預設",
+          "red": "紅色",
+          "orange": "橘色",
+          "yellow": "黃色",
+          "green": "綠色",
+          "blue": "藍色",
+          "purple": "紫色",
+          "gray": "灰色"
+        },
+        "fonts": {
+          "default": "預設",
+          "serif": "襯線",
+          "monospace": "等寬"
+        },
+        "align": {
+          "left": "靠左",
+          "center": "置中",
+          "right": "靠右",
+          "justify": "左右對齊"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX，例如 \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX，例如 x^2",
+          "emoji": "表情符號名稱，例如 rocket",
+          "reading": "讀音，例如 かんじ",
+          "textReading": "文字|讀音，例如 漢字|かんじ",
+          "apply": "Enter 套用 · Esc 取消",
+          "mathEdit": "Enter 儲存 · Esc 取消 · 留空則刪除"
+        },
+        "toolbar": {
+          "highlight": "醒目提示",
+          "subscript": "下標",
+          "superscript": "上標",
+          "color": "文字顏色",
+          "font": "字型",
+          "alignment": "對齊",
+          "ruby": "注音（在文字上方顯示讀音）"
+        },
+        "find": {
+          "find": "尋找",
+          "replace": "取代",
+          "all": "全部",
+          "previous": "上一個",
+          "next": "下一個",
+          "matchCase": "區分大小寫",
+          "close": "關閉"
+        },
+        "count": "字詞：{{words}} · 字元：{{chars}}",
+        "link": {
+          "header": "連結筆記",
+          "empty": "輸入筆記標題…",
+          "create": "連結到「{{title}}」（尚無此筆記）",
+          "open": "開啟「{{title}}」",
+          "missing": "沒有標題為「{{title}}」的筆記"
+        },
+        "backlinks": {
+          "label": "被以下筆記連結",
+          "more": "另外 {{count}} 則",
+          "untitled": "無標題"
+        },
+        "toc": {
+          "title": "目錄",
+          "empty": "新增標題以產生目錄。"
+        }
       }
     },
     "participants": {
@@ -3938,7 +4116,9 @@
       "addExisting": "新增現有筆記",
       "addCount": "新增 {{count}} 則筆記",
       "noResults": "沒有符合的筆記",
-      "noNotesAvailable": "沒有其他可用的筆記"
+      "noNotesAvailable": "沒有其他可用的筆記",
+      "notAdded_one": "{{count}} 則筆記無法加入",
+      "notAdded_other": "{{count}} 則筆記無法加入"
     },
     "onboarding": {
       "llm": {
@@ -4078,6 +4258,8 @@
     "wordsReady_other": "{{count}} 個詞語就緒",
     "promptLimitNotice": "字典目前共 {{chars}} 個字元。Groq 與 Whisper 模型只會讀取其中最後幾百個字元，因此清單越短效果越好；其他模型會收到完整清單。",
     "openRouterIgnoredNotice": "OpenRouter 不會將你的字典傳給其語音模型，因此在聽寫選用 OpenRouter 期間，這些詞不會影響轉錄結果。",
+    "localModelIgnoredNotice": "{{model}} 無法使用你的字典，因此在聽寫選用該模型期間，這些詞不會影響轉錄結果。開啟 AI 清理時，這些詞仍會生效。",
+    "localModelHotwordsLimitNotice": "{{model}} 最多使用 {{limit}} 筆字典項目作為轉錄提示。個人項目優先，其次是團隊空間項目，最後是工作區項目。",
     "exportDictionary": "匯出詞典",
     "exportFailed": "匯出失敗",
     "editWord": "編輯 {{word}}",
@@ -4238,7 +4420,6 @@
       },
       "locked": {
         "noWorkspace": "共享字典包含在 Business 方案中。與所有人共享團隊的術語、產品名稱和縮寫。",
-        "chooseWorkspace": "你目前在「個人」中。切換到一個工作區即可使用其共享詞語。",
         "upgradeAdmin": "共享字典包含在 Business 方案中。升級 {{workspace}}，讓每個人都使用相同的詞語。",
         "upgradeMember": "共享字典包含在 Business 方案中。請管理員升級 {{workspace}}。",
         "paused_one": "{{workspace}} 的 {{count}} 個共享詞語已暫停。升級到 Business 即可在聽寫中再次使用。",
@@ -4690,8 +4871,6 @@
       "request_accessStatus": "正在請求存取...",
       "look_at_screenName": "查看螢幕",
       "look_at_screenStatus": "正在查看你的螢幕...",
-      "look_at_screenSuccess": "已讀取螢幕。",
-      "look_at_screenFailed": "無法讀取螢幕。",
       "request_api_keyName": "API 金鑰",
       "request_api_keyStatus": "正在請求 API 金鑰...",
       "open_settingsName": "設定",
@@ -5878,10 +6057,13 @@
     "missingAudio": "[音訊缺失 {{from}}-{{to}}]"
   },
   "workspaces": {
+    "defaultName": "{{name}} 的工作區",
+    "defaultNameFallback": "我的工作區",
     "switcher": {
       "workspaces": "工作區",
       "add": "新增工作區",
-      "invitePeople": "邀請成員"
+      "invitePeople": "邀請成員",
+      "unavailable": "工作區暫時無法使用。"
     },
     "create": {
       "title": "建立工作區",
@@ -5915,8 +6097,6 @@
       "submitOne": "傳送邀請",
       "submit_one": "傳送 {{count}} 份邀請",
       "submit_other": "傳送 {{count}} 份邀請",
-      "submitting_one": "正在邀請 {{count}} 人…",
-      "submitting_other": "正在邀請 {{count}} 人…",
       "sentTitle_one": "已傳送 {{count}} 份邀請",
       "sentTitle_other": "已傳送 {{count}} 份邀請",
       "attachedTitle_one": "已更新 {{count}} 個邀請",
@@ -5959,7 +6139,7 @@
       },
       "roleDescription": {
         "admin": "管理成員、邀請、團隊和設定。",
-        "member": "可以檢視和編輯筆記。"
+        "member": "使用工作區。"
       },
       "errors": {
         "invalid": "{{email}} 不是有效的電子郵件地址",
@@ -5973,7 +6153,8 @@
         "rateLimited": "目前邀請過多，請稍後再試。",
         "requestFailed": "無法邀請 {{email}}。請檢查你的網路連線後再試。",
         "refused": "無法邀請 {{email}}：{{reason}}"
-      }
+      },
+      "sending": "正在邀請…"
     },
     "join": {
       "title": "加入你的團隊",
@@ -6011,17 +6192,18 @@
     "exit": {
       "leave": {
         "title": "離開 {{name}}？",
-        "body": "你將失去此工作區、其團隊與 Teamspace 的存取權。工作區管理員可以再次邀請你。",
+        "body": "你將失去此工作區、其團隊與 Teamspace 的存取權。工作區擁有者或管理員可以再次邀請你。",
+        "privateNotes": "你在此工作區中的私人筆記將移至 {{workspace}}。",
         "failed": "無法離開 {{name}}。請檢查網路連線後再試一次。"
       },
       "left": {
         "title": "你已離開 {{name}}"
       },
-      "chooseAnother": "請選擇另一個工作區以繼續。",
-      "chooseWorkspace": "選擇工作區",
+      "nowIn": "你現在位於 {{workspace}}。",
       "delete": {
         "title": "刪除 {{name}}？",
-        "body": "這將為所有人永久刪除該工作區及其筆記、檔案、團隊與 Teamspace，且無法復原。"
+        "body": "這將為所有人永久刪除該工作區及其筆記、檔案、團隊與 Teamspace，且無法復原。",
+        "privateNotes": "你在此工作區中的私人筆記將移至 {{workspace}}。"
       },
       "deleting": {
         "title": "正在刪除 {{name}}…",
@@ -6041,9 +6223,9 @@
       "body": "對方將失去此工作區中所有 Teamspace 和團隊的存取權限。你可以隨時再次邀請對方。",
       "confirm": "移除",
       "removing": "正在移除…",
-      "failed": "無法確認已移除 {{name}}。請檢查網路連線後再試一次。",
       "notAllowed": "你已無權從 {{workspace}} 中移除成員。",
-      "alreadyRemoved": "{{name}} 已被移除"
+      "alreadyRemoved": "{{name}} 已被移除",
+      "failedTitle": "無法移除 {{name}}"
     },
     "removeMembers": {
       "title_one": "要將 {{count}} 名成員從 {{workspace}} 移除嗎？",
@@ -6051,8 +6233,6 @@
       "confirm_one": "移除 {{count}} 名成員",
       "confirm_other": "移除 {{count}} 名成員",
       "checking": "正在檢查…",
-      "failed_one": "無法確認已移除 {{count}} 名成員。請檢查網路連線後再試一次。",
-      "failed_other": "無法確認已移除 {{count}} 名成員。請檢查網路連線後再試一次。",
       "body": "這些人將失去此工作區中所有 Teamspace 和團隊的存取權限。你可以隨時再次邀請他們。",
       "ownerOne": "{{name}} 在此工作區中擁有筆記或 Teamspace。",
       "owners_one": "其中 {{count}} 人擁有筆記或 Teamspace。",
@@ -6063,24 +6243,31 @@
       "directoryManagedOneOthers": "{{name}} 由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
       "directoryManagedOthers_one": "其中 {{count}} 人由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
       "directoryManagedOthers_other": "其中 {{count}} 人由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
-      "transferLabel": "轉讓給",
-      "transferBody": "他們的筆記和 Teamspace 將轉給新擁有者。他們將失去此工作區的存取權限。",
+      "transferLabel": "重新分配給",
       "transferBodyLimited": "他們的筆記和 Teamspace 將轉給 {{name}}，但 {{name}} 無法存取的 Teamspace 中的筆記會留在原處。他們將失去此工作區的存取權限。",
       "you": "{{name}}（你）",
-      "transferConfirm": "轉讓並移除",
+      "transferConfirm": "重新分配並移除",
       "transferring": "正在轉讓…",
-      "transferFailed": "無法確認轉移和移除是否完成。請檢查網路連線後再試一次。",
+      "transferFailed": "無法重新分配內容。未移除任何成員。請再試一次。",
+      "transferUnconfirmed": "無法確認內容重新分配和移除是否完成。請檢查網路連線後再試一次。",
       "invalidTarget": "{{name}} 已無法接收擁有權。請選擇其他人。",
       "cannotRemoveOwner": "無法移除工作區擁有者。",
       "cannotRemoveSelf": "你無法移除自己。請在「一般」中離開工作區。",
       "done_one": "已移除 {{count}} 名成員",
       "done_other": "已移除 {{count}} 名成員",
-      "transferDone_one": "已將他們的筆記和 Teamspace 移至 {{name}}，並移除了 {{count}} 名成員。",
-      "transferDone_other": "已將他們的筆記和 Teamspace 移至 {{name}}，並移除了 {{count}} 名成員。",
       "transferPartial_one": "{{count}} 則筆記留在了 {{name}} 無法存取的 Teamspace 中。其餘內容已全部移動。",
       "transferPartial_other": "{{count}} 則筆記留在了 {{name}} 無法存取的 Teamspace 中。其餘內容已全部移動。",
       "alreadyRemoved_one": "{{count}} 名成員已被移除",
-      "alreadyRemoved_other": "{{count}} 名成員已被移除"
+      "alreadyRemoved_other": "{{count}} 名成員已被移除",
+      "failedBody": "他們對工作區的存取權未變。請檢查網路連線後再試一次。",
+      "unconfirmedTitle": "無法確認是否已移除",
+      "unconfirmedBody": "他們可能已被移除。請檢查網路連線後再試一次。",
+      "reassignBody": "移除前，請轉移他們的筆記並指定 Teamspace 管理員。",
+      "ownersAll": "他們擁有筆記或管理 Teamspace。",
+      "failedTitle_one": "無法移除 {{count}} 位成員",
+      "failedTitle_other": "無法移除 {{count}} 位成員",
+      "transferDone_one": "已將內容與 Teamspace 管理權限重新分配給 {{name}}。已移除 {{count}} 位成員。",
+      "transferDone_other": "已將內容與 Teamspace 管理權限重新分配給 {{name}}。已移除 {{count}} 位成員。"
     },
     "cancelInvitation": {
       "title": "取消寄給 {{email}} 的邀請？",
@@ -6108,7 +6295,6 @@
       "body": "選擇一位現有的工作區成員。轉讓後你將成為管理員。",
       "newOwner": "新擁有者",
       "placeholder": "選擇工作區成員",
-      "candidate": "{{name}} · {{role}}",
       "confirmTitle": "將擁有權轉讓給 {{name}}？",
       "confirmBody": "{{name}} 將成為 {{workspace}} 的擁有者，你將成為管理員。",
       "submit": "轉讓擁有權",
@@ -6236,7 +6422,9 @@
       "timeout": "你的伺服器回應逾時。",
       "unreachable": "無法連線到你的伺服器。請確認它正在執行。",
       "noResponse": "未能收到你的伺服器的回應。請檢查它的 API 金鑰，並確認它正在執行。",
-      "unknown": "你的伺服器回傳了意外的錯誤。"
+      "unknown": "你的伺服器回傳了意外的錯誤。",
+      "invalidHeaders": "你的伺服器的某個自訂標頭無效。",
+      "redirected": "你的伺服器重新導向了請求。請輸入它重新導向的位址。"
     },
     "openSettings": "開啟設定",
     "copyDetails": "複製詳細資訊",
@@ -6329,6 +6517,7 @@
       "saveChanges": "儲存變更",
       "saved": "語氣與風格已儲存",
       "cleanupOff": "文字整理已關閉，因此這些語氣不會套用到你的聽寫。助理和聊天仍會使用它們。",
+      "customPrompt": "你正在為文字整理使用自訂提示詞，因此這些語氣不會套用到你的聽寫。助理和聊天仍會使用它們。",
       "turnOnCleanup": "開啟文字整理",
       "enabled": "啟用語氣與聲音",
       "enabledDescription": "文字整理、助理和聊天會為每類應用程式使用你的語氣。關閉時使用標準語氣。"
@@ -6429,5 +6618,16 @@
       "bootstrapMismatch": "引導檔案與您的帳號、此工作區或其設定的憑證不符。",
       "testLinkOtherWorkspace": "此測試連結對應的是其他工作區。請切換到該工作區，然後重新開啟連結。"
     }
+  },
+  "affiliate": {
+    "remove": "移除創作者連結",
+    "haveLink": "有創作者連結嗎？",
+    "label": "創作者連結（選填）",
+    "placeholder": "貼上創作者的連結",
+    "saved": "創作者連結已儲存。",
+    "checking": "正在檢查連結…",
+    "unavailable": "無法檢查此連結。請重試，或清空輸入欄以繼續。",
+    "privacy": "目前的追蹤設定不支援創作者連結。請清空輸入欄以繼續。",
+    "review": "您的連結已儲存，等待審核。"
   }
 }

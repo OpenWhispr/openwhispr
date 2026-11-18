@@ -223,8 +223,9 @@ export interface RevokedNoteFork {
 // Update applied to a team note whose access was revoked (plan §7.2): move it
 // to the private space (unless it already sits there, e.g. a left_team row or
 // one just relocated by its folder's stub — those keep their folder link),
-// drop the cloud link, and fork the client identity so the next push
-// re-creates it as a new personal note. Push-side rejections fork the
+// drop the cloud link, and fork the client identity so it never writes to the
+// team's row again; personal Backup consent governs later uploads. Push-side
+// rejections fork the
 // identity only when a server row exists (cloud_id) and clear the pending
 // left_team retraction the server will never accept. Every new identity also
 // drops the old server revision/owner/editor metadata; the pull-side
@@ -281,6 +282,18 @@ const PERMISSION_DENIAL_CODES = new Set([
 
 export function isPermissionDenialCode(code: string | undefined): boolean {
   return code !== undefined && PERMISSION_DENIAL_CODES.has(code);
+}
+
+/**
+ * An existing personal share remains eligible for collaboration independently
+ * of Backup consent. A fork that dropped its cloud identity is not shared.
+ * Mirrors LEGACY_SHARED_PRIVATE_NOTE_SQL in database.js.
+ */
+export function isLegacySharedPrivateNote(note: {
+  is_shared?: number | boolean | null;
+  cloud_id?: string | null;
+}): boolean {
+  return !!note.is_shared && !!note.cloud_id;
 }
 
 // Whether a pulled note should copy its cloud owner onto the local row. Kept

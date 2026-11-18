@@ -44,9 +44,12 @@ function loadChain() {
   };
 
   try {
-    require("../../src/helpers/modelDirUtils.js");
     const bridge = require("../../src/services/localReasoningBridge.js").default;
     const modelManager = require("../../src/helpers/modelManagerBridge.js").default;
+    // Pin modelsDir to the temp home. getCacheRoot() prefers OPENWHISPR_CACHE_ROOT,
+    // XDG_CACHE_HOME (linux) and USERPROFILE (win32) over the stubbed home, and
+    // migrates model folders when they differ, so it must not run here (#3244).
+    modelManager.getModelsDir = () => path.join(electronHome, ".cache", "openwhispr", "models");
     return { bridge, modelManager };
   } finally {
     Module._load = originalLoad;
@@ -323,4 +326,59 @@ test("cancel aborts only the in-flight request carrying that id, and frees the s
 
   hang = false;
   assert.equal(await bridge.processText("next", modelId, {}), "ok");
+});
+
+test("cancellation during startup or preflight prevents inference and releases the local bridge", async (t) => {
+  for (const stage of ["startup", "preflight"]) {
+    await t.test(stage, async (t) => {
+      const { bridge, modelManager, modelId, requests, serverManager } = await setupChain(t, () =>
+        completion("stop", "cleanup")
+      );
+      const controller = new AbortController();
+      if (stage === "startup") {
+        serverManager.ready = false;
+        serverManager.start = async () => {
+          controller.abort();
+          bridge.cancel("revoked-job");
+          serverManager.ready = true;
+        };
+      } else {
+        const preflight = modelManager._ensurePromptFits;
+        modelManager._ensurePromptFits = async () => {
+          controller.abort();
+          bridge.cancel("revoked-job");
+          return 512;
+        };
+        t.after(() => {
+          modelManager._ensurePromptFits = preflight;
+        });
+      }
+      await assert.rejects(
+        bridge.processText("private", modelId, {
+          requestId: "revoked-job",
+          signal: controller.signal,
+        }),
+        { name: "AbortError" }
+      );
+      assert.equal(requests.length, 0);
+      assert.equal(bridge.isProcessing, false);
+    });
+  }
+});
+
+test("cancellation after context metadata prevents tokenization and inference", async (t) => {
+  const { bridge, modelId, requests, serverManager } = await setupChain(t, () =>
+    completion("stop", "unused")
+  );
+  const controller = new AbortController();
+  serverManager.usableContextSize = async () => {
+    controller.abort();
+    return 4096;
+  };
+  await assert.rejects(
+    bridge.processText("word ".repeat(6000), modelId, { maxTokens: 32, signal: controller.signal }),
+    { name: "AbortError" }
+  );
+  assert.equal(requests.length, 0);
+  assert.equal(bridge.isProcessing, false);
 });

@@ -10,7 +10,7 @@ import {
   type RefObject,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, FolderRounded, Loader2, Plus } from "../icons";
+import { Check, Loader2, Office, Plus } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -78,6 +78,8 @@ export default function TeamSpacesPanel({
   // With nothing assigned the empty state leads, and its button brings the field in.
   const [revealed, setRevealed] = useState(false);
   const [focusRequest, setFocusRequest] = useState(0);
+  // After an add: the field comes back with its list closed, so the result isn't covered.
+  const [returnFocusRequest, setReturnFocusRequest] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   // What this panel added, so it reads as assigned and stops being offered before (or without) the
   // directory read that confirms it.
@@ -202,7 +204,7 @@ export default function TeamSpacesPanel({
     }
     if (!mounted.current) return;
     setAdding(false);
-    setFocusRequest((count) => count + 1);
+    setReturnFocusRequest((count) => count + 1);
     setSelectedIds(failed.map((space) => space.id));
     setFailureText(failed.length > 0 ? title : null);
   };
@@ -257,7 +259,7 @@ export default function TeamSpacesPanel({
           action={createButton}
         />
       ) : (
-        <Message title={t(`${COPY}.emptyTitle`)} body={t(`${COPY}.emptyBody`)} />
+        <Message icon title={t(`${COPY}.emptyTitle`)} body={t(`${COPY}.emptyBody`)} />
       );
   } else if (!hasAssigned && !revealed && staged.length === 0) {
     body = (
@@ -278,7 +280,7 @@ export default function TeamSpacesPanel({
         type="button"
         onClick={() => void handleAdd()}
         disabled={adding || staged.length === 0}
-        className="h-10 shrink-0 rounded-lg px-4"
+        className="h-10 shrink-0 px-4 text-xs"
       >
         {adding && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
         {adding ? t(`${COPY}.adding`) : t(`${COPY}.add`)}
@@ -296,6 +298,7 @@ export default function TeamSpacesPanel({
                 disabled={adding}
                 canCreate={canCreate}
                 inputRef={fieldRef}
+                returnFocusRequest={returnFocusRequest}
                 onToggle={toggle}
                 onCreate={openCreate}
               />
@@ -305,12 +308,7 @@ export default function TeamSpacesPanel({
         )}
         {staged.length > 0 ? (
           <div className="flex flex-col items-center gap-1 px-6 py-10 text-center">
-            <span
-              aria-hidden="true"
-              className="mb-2 flex size-9 items-center justify-center rounded-full bg-surface-3 text-foreground/70"
-            >
-              <FolderRounded className="size-3.5" />
-            </span>
+            <StateTile />
             <p className="text-sm font-medium text-foreground">
               {t(`${COPY}.selectedTitle`, { count: staged.length })}
             </p>
@@ -339,7 +337,7 @@ export default function TeamSpacesPanel({
             <AssignedList spaces={assigned} label={t(`${KEY}.dialog.tabSpaces`)} />
           </>
         ) : (
-          <Message title={t(`${COPY}.emptyTitle`)} body={t(`${COPY}.emptyBody`)} />
+          <Message icon title={t(`${COPY}.emptyTitle`)} body={t(`${COPY}.emptyBody`)} />
         )}
       </div>
     );
@@ -361,16 +359,31 @@ export default function TeamSpacesPanel({
   );
 }
 
+// The 32px tile above a teamspace message, with the teamspace glyph in the link blue.
+function StateTile(): ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      className="mb-2 flex size-8 items-center justify-center rounded-full bg-surface-3 text-primary"
+    >
+      <Office className="size-4" />
+    </span>
+  );
+}
+
 function Message({
   title,
   body,
   action,
   busy,
+  icon = false,
 }: {
   title: string;
   body: string;
   action?: ReactElement | null;
   busy?: boolean;
+  /** Shows the teamspace tile above the title, for the states that say what a teamspace is. */
+  icon?: boolean;
 }): ReactElement {
   return (
     <div
@@ -378,6 +391,7 @@ function Message({
       aria-busy={busy || undefined}
       className="flex flex-col items-center gap-1 px-6 py-10 text-center"
     >
+      {icon ? <StateTile /> : null}
       <p className="text-sm font-medium text-foreground">{title}</p>
       <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">{body}</p>
       {action && <div className="mt-4">{action}</div>}
@@ -434,6 +448,8 @@ interface TeamspacePickerProps {
   disabled: boolean;
   canCreate: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
+  /** Each increase moves focus into the field with its list closed. */
+  returnFocusRequest: number;
   onToggle: (spaceId: string) => void;
   onCreate: () => void;
 }
@@ -447,6 +463,7 @@ function TeamspacePicker({
   disabled,
   canCreate,
   inputRef,
+  returnFocusRequest,
   onToggle,
   onCreate,
 }: TeamspacePickerProps): ReactElement {
@@ -467,6 +484,13 @@ function TeamspacePicker({
   const rowCount = matches.length + (canCreate ? 1 : 0);
   const activeIndex = active < rowCount ? active : -1;
   const createActive = canCreate && activeIndex === matches.length;
+
+  useEffect(() => {
+    if (returnFocusRequest === 0) return;
+    inputRef.current?.focus();
+    // Focus opens the list; this focus is only the field coming back.
+    setDismissed(true);
+  }, [returnFocusRequest, inputRef]);
 
   useEffect(() => {
     if (activeIndex < 0) return;

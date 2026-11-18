@@ -1,19 +1,34 @@
-import type { SpaceItem } from "../../types/electron";
+import type { NoteSearchScope } from "../NotesService";
+import type { NoteScope } from "./noteScope";
+import type { NoteItem, SpaceItem } from "../../types/electron";
 import type { ContainerScope } from "../../types/chat";
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import type { ToolDefinition, ToolExecutionContext, ToolResult } from "./ToolRegistry";
 import { resolveLocalNoteId, resolveSpace } from "./utils";
 import { withoutAttendeesFence } from "../../utils/noteAttendees";
+import { getValidatedAuthGeneration } from "../../lib/authRequestContext";
 
 export const MAX_CONTENT_LENGTH = 500;
 
+// The most the cloud search endpoint returns at once; it refuses a larger limit.
+const MAX_SEARCH_LIMIT = 50;
+const CANCELLED_SEARCH: ToolResult = { success: false, data: null, displayText: "" };
+
 interface SearchToolOptions {
   useCloudSearch: boolean;
+  privateWorkspaceId?: string | null;
+  protectNotes?: NoteScope["protectNotes"];
   /** Pins every search to this container; the LLM's space arg is dropped. */
   fixedScope?: ContainerScope;
+  /**
+   * The spaces search reads: the active workspace's Private and its teamspaces in scope. A note
+   * anywhere else never reaches the model, whatever the space arg names.
+   */
+  scopeSpaceIds: readonly number[];
 }
 
 export function createSearchNotesTool(options: SearchToolOptions): ToolDefinition {
   const { useCloudSearch, fixedScope } = options;
+  const scopeSpaceIds = new Set(options.scopeSpaceIds);
 
   const spaceParameter = fixedScope
     ? {}
@@ -48,12 +63,27 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
     },
     readOnly: true,
 
-    async execute(args: Record<string, unknown>): Promise<ToolResult> {
+    async execute(
+      args: Record<string, unknown>,
+      context?: ToolExecutionContext
+    ): Promise<ToolResult> {
+      // Capture before local reads: every search belongs to this sign-in.
+      const authGeneration = getValidatedAuthGeneration();
+      const isCurrent = (): boolean =>
+        !context?.signal.aborted && getValidatedAuthGeneration() === authGeneration;
+      if (!isCurrent()) return CANCELLED_SEARCH;
       const query = args.query as string;
-      const limit = typeof args.limit === "number" ? args.limit : 5;
+      const limit =
+        typeof args.limit === "number" && Number.isFinite(args.limit)
+          ? Math.min(Math.max(Math.floor(args.limit), 1), MAX_SEARCH_LIMIT)
+          : 5;
       const spaceName = fixedScope ? undefined : (args.space as string | undefined);
 
-      const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
+      // Only spaces in scope can be named, listed or searched.
+      const spaces = ((await window.electronAPI.getSpaces?.()) ?? []).filter((s) =>
+        scopeSpaceIds.has(s.id)
+      );
+      if (!isCurrent()) return CANCELLED_SEARCH;
       let space: SpaceItem | undefined;
       if (fixedScope) {
         space = spaces.find((s) => s.id === fixedScope.spaceId);
@@ -64,35 +94,78 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
         }
         space = resolved.space;
       }
-      const spaceId = fixedScope?.spaceId ?? space?.id ?? null;
+      const searchSpaceIds = spacesToSearch(space, spaces, scopeSpaceIds, !!fixedScope);
       const folderId = fixedScope?.folderId ?? null;
 
-      // Fallback chain: cloud → local semantic (hybrid RRF) → FTS5 keyword.
-      // A team space without a cloud team can't be scoped server-side, so its
-      // searches go straight to the local legs. Folder scoping is local-only:
-      // the cloud API has no folder filter, and a pinned scope whose space
-      // didn't resolve must not widen to an all-spaces cloud search.
-      const strategies: Array<() => Promise<ToolResult>> = [];
-      const cloudCanScope = fixedScope
-        ? !!space && (space.kind === "private" || !!space.cloud_space_id)
-        : !space || space.kind === "private" || !!space.cloud_space_id;
-      if (useCloudSearch && cloudCanScope && folderId == null) {
-        strategies.push(() => executeCloudSearch(query, limit, space, spaces));
+      const searchSpaces = spaces.filter((candidate) => searchSpaceIds.includes(candidate.id));
+      const privateSpaces = searchSpaces.filter((candidate) => candidate.kind === "private");
+      const privateWorkspaceId = privateSpaces.length
+        ? (options.privateWorkspaceId ??
+          privateSpaces.find((candidate) => candidate.workspace_id)?.workspace_id ??
+          null)
+        : null;
+      const cloudScope = {
+        spaceIds: searchSpaces.flatMap((candidate) =>
+          candidate.kind === "team" && candidate.cloud_space_id ? [candidate.cloud_space_id] : []
+        ),
+        privateWorkspaceId,
+      };
+      // Keep main's cloud → semantic → keyword order. Folder filtering remains local-only.
+      const strategies: Array<() => Promise<ToolResult>> = [
+        () =>
+          executeLocalSearch(
+            query,
+            limit,
+            true,
+            space,
+            spaces,
+            searchSpaceIds,
+            folderId,
+            isCurrent,
+            options.protectNotes
+          ),
+        () =>
+          executeLocalSearch(
+            query,
+            limit,
+            false,
+            space,
+            spaces,
+            searchSpaceIds,
+            folderId,
+            isCurrent,
+            options.protectNotes
+          ),
+      ];
+      if (
+        useCloudSearch &&
+        (cloudScope.spaceIds.length || privateWorkspaceId) &&
+        folderId == null
+      ) {
+        strategies.unshift(() =>
+          executeCloudSearch(
+            query,
+            limit,
+            space,
+            searchSpaces,
+            cloudScope,
+            authGeneration,
+            isCurrent,
+            options.protectNotes
+          )
+        );
       }
-      strategies.push(() =>
-        executeLocalSearch(query, limit, true, space, spaces, spaceId, folderId)
-      );
-      strategies.push(() =>
-        executeLocalSearch(query, limit, false, space, spaces, spaceId, folderId)
-      );
 
       for (let i = 0; i < strategies.length; i++) {
+        if (!isCurrent()) return CANCELLED_SEARCH;
         try {
           const result = await strategies[i]();
+          if (!isCurrent()) return CANCELLED_SEARCH;
           if (Array.isArray(result.data) && result.data.length === 0 && i < strategies.length - 1)
             continue;
           return result;
         } catch (error) {
+          if (!isCurrent()) return CANCELLED_SEARCH;
           if (i === strategies.length - 1) {
             return {
               success: false,
@@ -106,6 +179,22 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
       return { success: false, data: null, displayText: "No search strategies available" };
     },
   };
+}
+
+// The spaces one search reads. Private stands for every Private in scope, as the tree's section
+// does (the pending one too, until main binds it). A pinned container outside the scope reads
+// nothing.
+function spacesToSearch(
+  space: SpaceItem | undefined,
+  spaces: SpaceItem[],
+  scopeSpaceIds: ReadonlySet<number>,
+  pinned: boolean
+): number[] {
+  if (!space) return pinned ? [] : [...scopeSpaceIds];
+  if (space.kind === "private" && !pinned) {
+    return spaces.filter((s) => s.kind === "private").map((s) => s.id);
+  }
+  return [space.id];
 }
 
 function summaryText(
@@ -125,15 +214,22 @@ async function executeLocalSearch(
   semantic: boolean,
   space: SpaceItem | undefined,
   spaces: SpaceItem[],
-  spaceId: number | null,
-  folderId: number | null
+  spaceIds: number[],
+  folderId: number | null,
+  isCurrent: () => boolean,
+  protectNotes?: NoteScope["protectNotes"]
 ): Promise<ToolResult> {
   const notes = semantic
-    ? await window.electronAPI.semanticSearchNotes(query, limit, spaceId, folderId)
-    : await window.electronAPI.searchNotes(query, limit, spaceId, folderId);
+    ? await window.electronAPI.semanticSearchNotes(query, limit, null, folderId, spaceIds)
+    : await window.electronAPI.searchNotes(query, limit, null, folderId, spaceIds);
 
+  if (!isCurrent()) return CANCELLED_SEARCH;
   const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]));
-  const results = notes.map((note) => ({
+  // Main already searched these spaces only; a note it returns from anywhere else is dropped.
+  const inScope = notes.filter((note) => spaceIds.includes(note.space_id));
+  await protectNotes?.(inScope);
+  if (!isCurrent()) return CANCELLED_SEARCH;
+  const results = inScope.map((note) => ({
     id: note.id,
     title: withoutAttendeesFence(note.title),
     date: note.created_at,
@@ -155,37 +251,86 @@ async function executeCloudSearch(
   query: string,
   limit: number,
   space: SpaceItem | undefined,
-  spaces: SpaceItem[]
+  spaces: SpaceItem[],
+  cloudScope: NoteSearchScope,
+  authGeneration: number | null,
+  isCurrent: () => boolean,
+  protectNotes?: NoteScope["protectNotes"]
 ): Promise<ToolResult> {
+  if (authGeneration == null) throw new Error("Cloud note search requires a verified account");
   const { NotesService } = await import("../../services/NotesService.js");
-  // No space → all accessible spaces; team space → that space only (membership
-  // is server-enforced); private space → the personal-only default.
-  const spaceId = space?.kind === "team" ? (space.cloud_space_id ?? undefined) : undefined;
-  const scope = space ? undefined : ("all" as const);
-  const { notes: cloudNotes } = await NotesService.search(query, limit, scope, spaceId);
-
-  const spaceNameByCloudId = new Map(
-    spaces.filter((s) => s.cloud_space_id).map((s) => [s.cloud_space_id!, s.name])
+  if (!isCurrent()) return CANCELLED_SEARCH;
+  const { notes } = await NotesService.search(
+    query,
+    limit,
+    "all",
+    undefined,
+    authGeneration,
+    cloudScope
   );
-  const privateSpaceName = spaces.find((s) => s.kind === "private")?.name ?? null;
-  const results = await Promise.all(
-    cloudNotes.map(async (cn) => ({
-      id: await resolveLocalNoteId(
-        cn.client_note_id ?? cn.id,
-        async () =>
-          (await window.electronAPI.getNoteForCloudRow?.(cn.client_note_id, cn.id)) ?? null
-      ),
-      title: cn.title && withoutAttendeesFence(cn.title),
-      date: cn.created_at,
-      type: cn.note_type,
-      score: cn.score,
-      space: cn.space_id ? (spaceNameByCloudId.get(cn.space_id) ?? null) : privateSpaceName,
+  if (!isCurrent()) return CANCELLED_SEARCH;
+  const teamByCloudId = new Map(
+    spaces
+      .filter((candidate) => candidate.kind === "team")
+      .map((candidate) => [candidate.cloud_space_id, candidate])
+  );
+  const privateSpaces = spaces.filter((candidate) => candidate.kind === "private");
+  const privateIds = new Set(privateSpaces.map((candidate) => candidate.id));
+  const spaceIds = new Set(spaces.map((candidate) => candidate.id));
+  const localNotes: NoteItem[] = [];
+  let containsPrivate = false;
+  const results = [];
+
+  // The server scopes before ranking. Keep that ranking and check scope again before exposure.
+  for (const cloudNote of notes) {
+    const team = cloudNote.space_id ? teamByCloudId.get(cloudNote.space_id) : undefined;
+    const isPrivate =
+      !cloudNote.space_id && !cloudNote.workspace_id && !!cloudScope.privateWorkspaceId;
+    if (!team && !isPrivate) continue;
+    if (
+      isPrivate &&
+      cloudNote.private_workspace_id != null &&
+      cloudNote.private_workspace_id !== cloudScope.privateWorkspaceId
+    )
+      continue;
+    let local: NoteItem | null = null;
+    try {
+      local =
+        (await window.electronAPI.getNoteForCloudRow?.(cloudNote.client_note_id, cloudNote.id)) ??
+        null;
+    } catch {
+      // Cloud-only results remain useful without a local card; Private still protects the chat.
+    }
+    if (!isCurrent()) return CANCELLED_SEARCH;
+    if (isPrivate) {
+      // Legacy NULL placement belongs to the default; a known local move is stronger evidence.
+      if (local && !privateIds.has(local.space_id)) continue;
+      if (
+        cloudNote.private_workspace_id == null &&
+        !local &&
+        !privateSpaces.some((candidate) => candidate.is_default_private === 1)
+      )
+        continue;
+      containsPrivate = true;
+    }
+    const linked = local && spaceIds.has(local.space_id) && !local.deleted_at ? local : null;
+    if (linked) localNotes.push(linked);
+    results.push({
+      id: await resolveLocalNoteId(cloudNote.client_note_id ?? cloudNote.id, async () => linked),
+      title: cloudNote.title && withoutAttendeesFence(cloudNote.title),
+      date: cloudNote.created_at,
+      type: cloudNote.note_type,
+      score: cloudNote.score,
+      space: team?.name ?? privateSpaces[0]?.name ?? null,
       content: withoutAttendeesFence(
-        (cn.enhanced_content || cn.content).slice(0, MAX_CONTENT_LENGTH)
+        (cloudNote.enhanced_content || cloudNote.content).slice(0, MAX_CONTENT_LENGTH)
       ),
-    }))
-  );
-
+    });
+    if (results.length === limit) break;
+  }
+  // A cloud-only Private hit has no local id for main to inspect. Protect it explicitly.
+  await protectNotes?.(localNotes, containsPrivate);
+  if (!isCurrent()) return CANCELLED_SEARCH;
   return {
     success: true,
     data: results,

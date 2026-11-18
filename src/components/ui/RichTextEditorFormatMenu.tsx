@@ -43,6 +43,7 @@ import {
   type ChainCommand,
 } from "./RichTextEditorMenus";
 import { insertEmptyTable, isOnEmptyLine } from "./RichTextEditorTable";
+import { FormatStyleControls } from "./editorBlocks/FormatStyleControls";
 
 interface FormatAction {
   key: string;
@@ -128,7 +129,7 @@ const shouldShowOnEmptyLine: FloatingMenuProps["shouldShow"] = ({ editor, state 
 const LINE_MENU_OPTIONS: FloatingMenuProps["options"] = { placement: "bottom-start" };
 
 /** A toggle when `active` is set, a plain button otherwise. */
-function ToolbarButton({
+export function ToolbarButton({
   label,
   title = label,
   active,
@@ -208,7 +209,13 @@ function FormatToolbar({
     >
       {MARKS.map(actionButton)}
       <Separator />
-      <DropdownMenu open={dropdown.open} onOpenChange={dropdown.setOpen}>
+      {/* highlight, sub/superscript, colour, font, alignment, ruby. */}
+      <FormatStyleControls editor={editor} dropdown={dropdown} />
+      <Separator />
+      <DropdownMenu
+        open={dropdown.open === "block"}
+        onOpenChange={(open) => dropdown.setOpen(open ? "block" : null)}
+      >
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"

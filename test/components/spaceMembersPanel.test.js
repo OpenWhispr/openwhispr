@@ -394,11 +394,11 @@ test("each kind of row says what it is", async (t) => {
   assert.equal(text(rowFor("Ronnie")), "Ronnie me@openronnie.com Admin");
   assert.equal(text(rowFor("Misa")), "Misa misa@openronnie.com Member");
   assert.equal(text(rowFor("clark@gmail.com")), "clark@gmail.com Invitation pending Member");
-  assert.equal(text(rowFor("Sales")), "Sales 5 people Member");
+  assert.equal(text(rowFor("Sales")), "Sales 5 people Members");
   assert.equal(
     text(rowFor("Jin")),
-    "Jin jin@openronnie.com · Sales Member · via Sales",
-    "an inherited person names the team beside the email and in the role cell"
+    "Jin jin@openronnie.com · Sales Member",
+    "an inherited person names the team beside the email; the role cell holds the role alone"
   );
 });
 
@@ -410,7 +410,7 @@ test("an email stays left-to-right and names keep their own direction", async (t
   assert.equal(rowFor("Misa").querySelector("[dir='auto']").textContent, "Misa");
 });
 
-test("an inherited admin reads Admin via its team", async (t) => {
+test("an inherited admin reads Admin, with its team on hover", async (t) => {
   await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -422,17 +422,36 @@ test("an inherited admin reads Admin via its team", async (t) => {
     ],
   });
 
-  assert.equal(text(rowFor("Jin")), "Jin jin@openronnie.com · Sales Admin · via Sales");
+  assert.equal(text(rowFor("Jin")), "Jin jin@openronnie.com · Sales Admin");
+  assert.equal(rowFor("Jin").querySelector("[title]").getAttribute("title"), "Admin · via Sales");
+  assert.equal(roleTrigger(rowFor("Jin")), null, "nothing to promote an admin to");
 });
 
-test("an inherited person has no menu; an invitation has no menu; a person with a direct role has one", async (t) => {
+test("an invitation has no menu; people, inherited people and teams have one", async (t) => {
   await mount(t);
 
-  assert.equal(roleTrigger(rowFor("Jin")), null);
+  assert.ok(roleTrigger(rowFor("Jin")), "someone through a team can be made an admin here");
   assert.equal(roleTrigger(rowFor("clark@gmail.com")), null);
   assert.ok(roleTrigger(rowFor("Misa")));
   assert.ok(roleTrigger(rowFor("Sales")), "a team's access has one too");
-  assert.equal(roleTriggers().length, 5, "Ronnie, Sales, Misa, Ravi and Lila");
+  assert.equal(roleTriggers().length, 6, "Ronnie, Sales, Misa, Ravi, Lila and Jin");
+});
+
+test("an inherited person's menu offers the roles but nothing to remove", async (t) => {
+  await mount(t);
+
+  await openMenu(roleTrigger(rowFor("Jin")));
+  assert.ok(menuItem("Teamspace Admin"));
+  assert.ok(menuItem("Teamspace Member"));
+  assert.equal(menuItem("Remove from teamspace"), undefined, "their access belongs to the team");
+});
+
+test("a team's access menu says what Admin means for the team", async (t) => {
+  await mount(t);
+
+  await openMenu(roleTrigger(rowFor("Sales")));
+  assert.match(text(menuItem("Everyone is a member")), /Everyone on the team can view and edit notes/);
+  assert.match(text(menuItem("Team admins are admins")), /Everyone else on the team is a member/);
 });
 
 test("a member sees the table without the field or menus", async (t) => {
@@ -442,7 +461,7 @@ test("a member sees the table without the field or menus", async (t) => {
   assert.ok(!addButton(), "no Add members button");
   assert.equal(roleTriggers().length, 0);
   assert.equal(text(rowFor("Misa")), "Misa misa@openronnie.com Member");
-  assert.equal(text(rowFor("Sales")), "Sales 5 people Member");
+  assert.equal(text(rowFor("Sales")), "Sales 5 people Members");
   // Only someone who manages the teamspace can read its invitations.
   assert.equal(callsTo("invitations").length, 0);
   assert.ok(!rowFor("clark@gmail.com"));
@@ -469,7 +488,7 @@ test("a team's count is left out when the teams can't be read", async (t) => {
     },
   });
 
-  assert.equal(text(rowFor("Sales")), "Sales Member");
+  assert.equal(text(rowFor("Sales")), "Sales Members");
 });
 
 test("a failed invitation read still shows members", async (t) => {
@@ -1907,7 +1926,7 @@ test("someone else's demotion isn't asked about", async (t) => {
 
 const VIA_SALES = [{ team_id: "sales", name: "Sales", role: "member", access: "member" }];
 
-test("the only admin with everyone else in a team can make one of them an admin", async (t) => {
+test("a manager can make someone who comes through a team an admin", async (t) => {
   const { callsTo } = await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -1925,7 +1944,7 @@ test("the only admin with everyone else in a team can make one of them an admin"
   assert.equal(callsTo("setSpaceMemberRole")[0][3], "admin");
 });
 
-test("a workspace admin isn't blocked from leaving, so team people stay read-only", async (t) => {
+test("a workspace admin gets the same menu on team people", async (t) => {
   await mount(t, {
     workspaceAdmin: true,
     members: [
@@ -1934,20 +1953,13 @@ test("a workspace admin isn't blocked from leaving, so team people stay read-onl
     ],
   });
 
-  assert.equal(roleTrigger(rowFor("Jin")), null);
+  assert.ok(roleTrigger(rowFor("Jin")));
 });
 
-test("team people stay read-only while someone direct could be made an admin", async (t) => {
-  await mount(t);
-
-  assert.equal(roleTrigger(rowFor("Jin")), null);
-});
-
-test("team people stay read-only when another admin can carry on", async (t) => {
+test("someone who is already an admin through a team has no menu", async (t) => {
   await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
-      entry("jin", "Jin", { direct_role: null, via_teams: VIA_SALES }),
       entry("kim", "Kim", {
         role: "admin",
         direct_role: null,
@@ -1956,7 +1968,7 @@ test("team people stay read-only when another admin can carry on", async (t) => 
     ],
   });
 
-  assert.equal(roleTrigger(rowFor("Jin")), null);
+  assert.equal(roleTrigger(rowFor("Kim")), null);
 });
 
 test("removing someone a team also reaches says that access stays", async (t) => {
@@ -2042,8 +2054,8 @@ test("a team's access changes from its row", async (t) => {
   const { callsTo, space } = await mount(t);
 
   await openMenu(roleTrigger(rowFor("Sales")));
-  assert.equal(menuItem("Teamspace Member").getAttribute("aria-checked"), "true");
-  await ui.click(menuItem("Teamspace Admin"));
+  assert.equal(menuItem("Everyone is a member").getAttribute("aria-checked"), "true");
+  await ui.click(menuItem("Team admins are admins"));
   await ui.settle();
 
   assert.deepEqual(callsTo("setSpaceTeamAccess"), [

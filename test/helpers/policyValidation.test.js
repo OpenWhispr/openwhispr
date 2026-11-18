@@ -308,3 +308,19 @@ test("meeting and upload controls are optional booleans for backward compatibili
     }
   }
 });
+
+test("update policy is additive and future string modes do not invalidate managed policy", () => {
+  for (const updates of [
+    undefined,
+    {},
+    { mode: "user_choice" },
+    { mode: "always_on" },
+    { mode: "it_managed" },
+    { mode: "future_mode" },
+  ]) {
+    assert.equal(isValidPolicyShape({ ...validPolicy(), updates }), true);
+  }
+  for (const updates of [null, [], "it_managed", { mode: 1 }, { mode: null }]) {
+    assert.equal(isValidPolicyShape({ ...validPolicy(), updates }), false);
+  }
+});

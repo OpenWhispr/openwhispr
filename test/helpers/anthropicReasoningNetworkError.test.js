@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -74,6 +75,7 @@ function anything() {
 function buildFakeThis() {
   const target = {
     sessionId: "test-session",
+    windowManager: { controlPanelWindow: null, mainWindow: null },
     environmentManager: {
       getAnthropicKey: () => "sk-ant-test-key",
     },
@@ -88,7 +90,7 @@ test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(buildFakeThis());
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(buildFakeThis()));
   anthropicHandler = handlers.get("process-anthropic-reasoning");
   assert.ok(anthropicHandler, "process-anthropic-reasoning must be registered");
 });
@@ -135,6 +137,7 @@ test("an Anthropic HTTP failure resolves with classified IPC fields", async () =
 test("an already-classified failure (missing key) passes through unchanged", async () => {
   const noKeyThis = {
     sessionId: "test-session",
+    windowManager: { controlPanelWindow: null, mainWindow: null },
     environmentManager: { getAnthropicKey: () => "" },
   };
   const proxiedThis = new Proxy(noKeyThis, {
@@ -146,7 +149,7 @@ test("an already-classified failure (missing key) passes through unchanged", asy
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(proxiedThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(proxiedThis));
   electronStub.ipcMain.handle = originalHandle;
 
   const handler = handlersForNoKey.get("process-anthropic-reasoning");
@@ -155,4 +158,137 @@ test("an already-classified failure (missing key) passes through unchanged", asy
   assert.equal(result.success, false);
   assert.equal(result.code, "API_KEY_MISSING");
   assert.equal(result.messageKey, "providerErrors.keyMissing");
+});
+
+for (const model of ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-haiku-4-5"]) {
+  test(`${model}: short cleanup has room for an answer`, async () => {
+    let requestBody;
+    fetchBehavior = async (_url, init) => {
+      requestBody = JSON.parse(init.body);
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "Cleaned dictation." }],
+          stop_reason: "end_turn",
+        }),
+        { status: 200 }
+      );
+    };
+
+    const result = await anthropicHandler({}, "a".repeat(73), model, null, {
+      requireCompleteOutput: true,
+      supportsTemperature: model === "claude-haiku-4-5",
+      temperature: 0,
+    });
+
+    assert.equal(requestBody.max_tokens, 4096);
+    assert.equal(requestBody.temperature, model === "claude-haiku-4-5" ? 0 : undefined);
+    assert.equal(requestBody.thinking, undefined);
+    assert.equal(requestBody.output_config, undefined);
+    assert.deepEqual(result, { success: true, text: "Cleaned dictation." });
+  });
+}
+
+for (const maxTokens of [128, 8192]) {
+  test(`an explicit ${maxTokens}-token cap is preserved`, async () => {
+    let requestBody;
+    fetchBehavior = async (_url, init) => {
+      requestBody = JSON.parse(init.body);
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "Incomplete" }],
+          stop_reason: "max_tokens",
+        }),
+        { status: 200 }
+      );
+    };
+
+    const result = await anthropicHandler({}, "short dictation", "claude-sonnet-5-5", null, {
+      maxTokens,
+      requireCompleteOutput: true,
+    });
+
+    assert.equal(requestBody.max_tokens, maxTokens);
+    assert.equal(result.success, false);
+    assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.cleanupTruncated");
+  });
+}
+
+// The deadline comes from AbortSignal.timeout; swapping it for a controller's
+// signal lets a test expire it at once instead of waiting 30 seconds.
+function stubDeadline(t) {
+  const controller = new AbortController();
+  const requestedMs = [];
+  t.mock.method(AbortSignal, "timeout", (ms) => {
+    requestedMs.push(ms);
+    return controller.signal;
+  });
+  return {
+    requestedMs,
+    expire: () => controller.abort(new DOMException("The operation timed out.", "TimeoutError")),
+  };
+}
+
+// Electron's net.fetch rejects an aborted request with an AbortError.
+function rejectWhenAborted(init) {
+  return new Promise((_resolve, reject) => {
+    init.signal.addEventListener(
+      "abort",
+      () => reject(new DOMException("The operation was aborted.", "AbortError")),
+      { once: true }
+    );
+  });
+}
+
+// Without a deadline the handler waits forever, so fail fast instead of hanging.
+test("a request that never answers times out as PROVIDER_TIMEOUT", { timeout: 5000 }, async (t) => {
+  const deadline = stubDeadline(t);
+  fetchBehavior = async (_url, init) => {
+    setImmediate(deadline.expire);
+    return rejectWhenAborted(init);
+  };
+
+  const result = await anthropicHandler({ sender: {} }, "hello", "claude-sonnet-5-5", null, {
+    inferenceScope: "dictationCleanup",
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.code, "PROVIDER_TIMEOUT");
+  assert.equal(result.messageKey, "providerErrors.timeout");
+});
+
+for (const [scope, expectedMs] of [
+  ["dictationCleanup", 30_000],
+  ["noteFormatting", 600_000],
+  [undefined, 30_000],
+]) {
+  test(`the ${scope ?? "default"} scope gets a ${expectedMs / 1000}s deadline`, async (t) => {
+    const deadline = stubDeadline(t);
+    let sentSignal;
+    fetchBehavior = async (_url, init) => {
+      sentSignal = init.signal;
+      return Response.json({ content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" });
+    };
+
+    const result = await anthropicHandler({ sender: {} }, "hello", "claude-sonnet-5-5", null, {
+      inferenceScope: scope,
+    });
+
+    assert.equal(result.success, true);
+    assert.deepEqual(deadline.requestedMs, [expectedMs]);
+    assert.ok(sentSignal instanceof AbortSignal, "the request must carry an abort signal");
+  });
+}
+
+test("an abort before the deadline is not reported as a timeout", async (t) => {
+  stubDeadline(t);
+  fetchBehavior = async () => {
+    throw new DOMException("The operation was aborted.", "AbortError");
+  };
+
+  const result = await anthropicHandler({ sender: {} }, "hello", "claude-sonnet-5-5", null, {
+    inferenceScope: "dictationCleanup",
+  });
+
+  assert.equal(result.success, false);
+  assert.notEqual(result.code, "PROVIDER_TIMEOUT");
 });
