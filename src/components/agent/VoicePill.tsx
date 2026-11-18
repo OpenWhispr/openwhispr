@@ -4,6 +4,14 @@ import { Messages, Mic, MicOff, Settings, X } from "../icons";
 import { cn } from "../lib/utils";
 import { ICON_BUTTON } from "../chat/interactions/cardStyles";
 import { useAgentWindowDrag } from "./useAgentWindowDrag";
+import {
+  SOUND_BAR_COUNT,
+  SOUND_HISTORY_FRAMES,
+  followLevel,
+  soundBarHeight,
+  soundBarLevels,
+  soundLevel,
+} from "./voiceBars";
 
 /** What the call's status cap says, from what is actually happening. */
 export type VoiceCallStatus =
@@ -36,9 +44,6 @@ const STATUS_LABELS: Record<VoiceCallStatus, string> = {
 const CAP_WIDTH = 196;
 const CAP_HEIGHT = 28;
 const CAP_PATH = "M0 28C13 28 14 1 39 1H157C182 1 183 28 196 28";
-// The Sound glyph's four bars at rest; they rise with the sound, by up to SOUND_GAIN.
-const SOUND_BARS_PX = [8, 10, 12, 8];
-const SOUND_GAIN = 0.6;
 
 interface VoicePillProps {
   status: VoiceCallStatus;
@@ -100,15 +105,27 @@ export function VoicePill({
   useEffect(() => {
     const element = pillRef.current;
     if (!element) return undefined;
+    const paintBars = (lifts: number[]) =>
+      lifts.forEach((lift, index) =>
+        element.style.setProperty(`--voice-bar-${index}`, lift.toFixed(3))
+      );
     if (!levelActive || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       element.style.setProperty("--voice-level", "0");
+      paintBars(new Array(SOUND_BAR_COUNT).fill(0));
       return undefined;
     }
     let frame = 0;
     let level = 0;
+    let barLevel = 0;
+    const history: number[] = new Array(SOUND_HISTORY_FRAMES).fill(0);
     const paint = () => {
-      level = level * 0.8 + Math.min(1, readLevel() * 6) * 0.2;
+      const rms = readLevel();
+      level = level * 0.8 + Math.min(1, rms * 6) * 0.2;
       element.style.setProperty("--voice-level", level.toFixed(3));
+      barLevel = followLevel(barLevel, soundLevel(rms));
+      history.pop();
+      history.unshift(barLevel);
+      paintBars(soundBarLevels(history));
       frame = requestAnimationFrame(paint);
     };
     frame = requestAnimationFrame(paint);
@@ -178,18 +195,16 @@ export function VoicePill({
       >
         <div
           className={cn(
-            "flex h-5 shrink-0 items-center gap-[3.5px] text-foreground",
+            "flex h-7 shrink-0 items-center gap-[3.5px] text-foreground",
             !waveformActive && "opacity-50"
           )}
           aria-hidden="true"
         >
-          {SOUND_BARS_PX.map((height, index) => (
+          {Array.from({ length: SOUND_BAR_COUNT }, (_, index) => (
             <span
               key={index}
               className="w-0.5 rounded-full bg-current"
-              style={{
-                height: `calc(${height}px * (1 + var(--voice-level, 0) * ${SOUND_GAIN}))`,
-              }}
+              style={{ height: soundBarHeight(index) }}
             />
           ))}
         </div>
