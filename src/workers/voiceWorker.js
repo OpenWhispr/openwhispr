@@ -1,5 +1,5 @@
-// Utility process for local voice conversation: sherpa-onnx TTS and
-// Silero VAD. Native aborts (e.g. an unsupported ORT provider) stay confined here.
+// Utility process for local voice conversation: Supertonic TTS and Silero VAD on
+// ONNX Runtime. Native aborts (e.g. an unsupported ORT provider) stay confined here.
 const fs = require("fs");
 const path = require("path");
 const {
@@ -7,7 +7,10 @@ const {
   createSampleRing,
   withPreRoll,
 } = require("../helpers/voiceTurnEndpointer");
+const { createSileroVad } = require("./sileroVad");
 const { createSmartTurnSession } = require("./smartTurnSession");
+const { createSupertonicTts } = require("./supertonicTts");
+const { loadVoiceOrt } = require("./voiceOrt");
 const { createPreparedSpeech } = require("./preparedSpeech");
 const { trimSilence } = require("./trimSilence");
 const { timeStretch } = require("./timeStretch");
@@ -41,12 +44,14 @@ function log(level, message, extra) {
   }
 }
 
-let sherpa = null;
 let port = null;
 let tts = null;
 let numSteps = 5;
 let vad = null;
 let vadSpeaking = false;
+// Mic frames are read in arrival order; a reset drops the ones still waiting.
+let vadQueue = Promise.resolve();
+let vadGeneration = 0;
 // The renderer paused a reply for the user's speech: a short turn ends at its first pause.
 let replyHeld = false;
 let endpointer = null;
@@ -69,19 +74,12 @@ function enqueueTts(run) {
 const MAX_MODEL_SPEED = 1;
 
 // Speaker, rate and language ride on every request, so one worker speaks any profile.
-const generationRequest = ({ sid, speed, lang }) => {
-  const modelSpeed = Math.min(speed, MAX_MODEL_SPEED);
-  return {
-    sid,
-    speed: modelSpeed,
-    generationConfig: new sherpa.GenerationConfig({
-      sid,
-      speed: modelSpeed,
-      numSteps,
-      extra: { lang },
-    }),
-  };
-};
+const generationRequest = ({ sid, speed, lang }) => ({
+  sid,
+  speed: Math.min(speed, MAX_MODEL_SPEED),
+  lang,
+  numSteps,
+});
 
 // What plays: the synthesized clip without its padding, at the profile's full rate.
 const playable = (samples, sampleRate, { speed }) =>
@@ -94,20 +92,11 @@ const playable = (samples, sampleRate, { speed }) =>
 const preparedSpeech = createPreparedSpeech({
   synthesize: (text, profile) =>
     enqueueTts(async () => {
-      const audio = await tts.generateAsync({
-        text,
-        enableExternalBuffer: false,
-        ...generationRequest(profile),
-      });
+      const audio = await tts.generate(text, generationRequest(profile));
       return playable(audio.samples, audio.sampleRate, profile);
     }),
   onError: (error) => log("warn", "speech preparation failed", { error: error?.message }),
 });
-
-function loadSherpa() {
-  if (!sherpa) sherpa = require("sherpa-onnx-node");
-  return sherpa;
-}
 
 function emit(event, payload) {
   port?.postMessage({ event, ...payload });
@@ -132,6 +121,7 @@ async function loadSmartTurn(smartTurnConfig, vadConfig) {
 }
 
 function resetTurnState() {
+  vadGeneration += 1;
   vad?.reset();
   vadSpeaking = false;
   replyHeld = false;
@@ -146,13 +136,17 @@ async function configure({
   vad: requestedVadConfig,
   smartTurn: smartTurnConfig,
 }) {
-  const lib = loadSherpa();
+  const runtime = loadVoiceOrt();
   const started = Date.now();
-  tts = await lib.OfflineTts.createAsync(ttsConfig);
+  tts = await createSupertonicTts({
+    ...runtime,
+    paths: ttsConfig.supertonic,
+    numThreads: ttsConfig.numThreads,
+  });
   preparedSpeech.clear();
   numSteps = steps;
   const vadConfig = await loadSmartTurn(smartTurnConfig, requestedVadConfig);
-  vad = new lib.Vad(vadConfig, 60);
+  vad = await createSileroVad({ ...runtime, config: vadConfig.sileroVad });
   const { maxSilenceMs, maxTurnMs, threshold } = smartTurnConfig || {};
   endpointer = createTurnEndpointer({
     smartTurn: Boolean(smartTurn),
@@ -187,31 +181,18 @@ function speak({ utteranceId, text, profile }) {
       emit("tts-audio", { utteranceId, samples: prepared });
       return { queueWaitMs, firstAudioMs: 0 };
     }
-    let streamedSamples = 0;
     let firstAudioMs = null;
-    const audio = await tts.generateAsync({
-      text,
-      // Electron's V8 sandbox rejects external buffers, so the audio is copied.
-      enableExternalBuffer: false,
+    const isCancelled = () => cancelledUtterances.has(utteranceId);
+    await tts.generate(text, {
       ...generationRequest(profile),
-      onProgress: (info) => {
-        if (cancelledUtterances.has(utteranceId)) return 0;
-        if (info.samples?.length) {
-          if (firstAudioMs === null) firstAudioMs = Date.now() - started;
-          const samples = playable(info.samples, tts.sampleRate, profile);
-          streamedSamples += samples.length;
-          emit("tts-audio", { utteranceId, samples });
-        }
-        return 1;
+      isCancelled,
+      onChunk: (chunk) => {
+        if (isCancelled()) return;
+        if (firstAudioMs === null) firstAudioMs = Date.now() - started;
+        emit("tts-audio", { utteranceId, samples: playable(chunk, tts.sampleRate, profile) });
       },
     });
-    if (cancelledUtterances.has(utteranceId)) return { cancelled: true };
-    // Non-streaming models may report the audio only in the result.
-    if (streamedSamples === 0 && audio.samples?.length) {
-      firstAudioMs = Date.now() - started;
-      const samples = playable(audio.samples, audio.sampleRate, profile);
-      emit("tts-audio", { utteranceId, samples });
-    }
+    if (isCancelled()) return { cancelled: true };
     return { queueWaitMs, firstAudioMs };
   };
   preparedSpeech.speakStarted();
@@ -265,10 +246,10 @@ function applyTurnActions(actions) {
   }
 }
 
-function feedVad({ samples }) {
-  if (!vad) return;
+async function readMicFrame(samples, generation) {
   micRing.push(samples);
-  vad.acceptWaveform(samples);
+  await vad.acceptWaveform(samples);
+  if (generation !== vadGeneration) return;
   const detected = vad.isDetected();
   if (detected && !vadSpeaking) {
     emit("speech-start", {});
@@ -276,11 +257,11 @@ function feedVad({ samples }) {
   }
   vadSpeaking = detected;
   while (!vad.isEmpty()) {
-    const segment = vad.front(false);
+    const segment = vad.front();
     vad.pop();
     applyTurnActions(
       endpointer.onSegment({
-        samples: new Float32Array(segment.samples),
+        samples: segment.samples,
         startSample: segment.start,
         nowSample: micRing.totalSamples,
         quick: replyHeld,
@@ -288,6 +269,14 @@ function feedVad({ samples }) {
     );
   }
   applyTurnActions(endpointer.advance(micRing.totalSamples));
+}
+
+function feedVad({ samples }) {
+  if (!vad) return;
+  const generation = vadGeneration;
+  vadQueue = vadQueue
+    .then(() => (generation === vadGeneration ? readMicFrame(samples, generation) : undefined))
+    .catch((error) => log("error", "voice activity detection failed", { error: error?.message }));
 }
 
 const handlers = {

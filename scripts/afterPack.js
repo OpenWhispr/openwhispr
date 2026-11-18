@@ -317,18 +317,15 @@ function verifyUnpackedBinaries(context) {
 }
 
 // ---------------------------------------------------------------------------
-// Voice conversation dependencies (sherpa-onnx-node + Smart Turn onnxruntime-web)
+// Voice conversation dependencies (onnxruntime-node + onnxruntime-web)
 // ---------------------------------------------------------------------------
 
-// sherpa-onnx-node loads `sherpa-onnx-${platform}-${os.arch()}` at runtime, so
-// the package must match the target arch, not the build host's: a mac x64
-// build on an arm64 runner only gets darwin-arm64 from `npm ci`.
-const SHERPA_PLATFORM_PACKAGE = /^sherpa-onnx-(?:darwin|linux|win)-(?:arm64|x64|ia32)$/;
-
-function requiredSherpaPackages({ platform, arch }) {
-  const sherpaPlatform = platform === "win32" ? "win" : platform;
-  const archs = arch === "universal" ? ["arm64", "x64"] : [arch];
-  return archs.map((name) => `sherpa-onnx-${sherpaPlatform}-${name}`);
+// The voice worker runs its speech models on onnxruntime-node, which has no Intel Mac
+// binding: an Intel Mac runs them on onnxruntime-web, and a universal app's arm64 half
+// is the only one with a native runtime.
+function requiredOrtBindings({ platform, arch }) {
+  if (platform !== "darwin") return [arch];
+  return arch === "x64" ? [] : ["arm64"];
 }
 
 // All Smart Turn loads from onnxruntime-web in Node (require → ort.node.min.js, which
@@ -341,27 +338,19 @@ const SMART_TURN_RUNTIME_FILES = [
   "ort-wasm-simd-threaded.wasm",
 ];
 
-// The voice worker loads sherpa-onnx-node (native, per-platform package) and
-// Smart Turn on onnxruntime-web, whose WASM threads load from real files.
 function prepareVoiceDependencies(context) {
   const modulesDir = path.join(resolveResourcesDir(context), "app.asar.unpacked", "node_modules");
-  const sherpaDirs = requiredSherpaPackages({
-    platform: context.electronPlatformName,
-    arch: Arch[context.arch],
-  });
-  const missing = sherpaDirs.filter((name) => !fs.existsSync(path.join(modulesDir, name)));
-  if (missing.length > 0) {
+  const platform = context.electronPlatformName;
+  const bindingDirs = requiredOrtBindings({ platform, arch: Arch[context.arch] }).map((arch) =>
+    path.join(modulesDir, "onnxruntime-node", "bin", "napi-v6", platform, arch)
+  );
+  const missingBinding = bindingDirs.find(
+    (dir) => !fs.existsSync(path.join(dir, "onnxruntime_binding.node"))
+  );
+  if (missingBinding) {
     throw new Error(
-      `afterPack: missing ${missing.join(", ")} in ${modulesDir}; voice conversation would fail to load for this target (install the target-arch platform package before packaging)`
+      `afterPack: missing onnxruntime_binding.node in ${missingBinding}; voice conversation would fail to load for this target`
     );
-  }
-  // npm installs the build host's package too, so a mac x64 build made on an arm64
-  // runner would also ship darwin-arm64 (~33 MB) that it never loads.
-  for (const name of fs.readdirSync(modulesDir)) {
-    if (SHERPA_PLATFORM_PACKAGE.test(name) && !sherpaDirs.includes(name)) {
-      fs.rmSync(path.join(modulesDir, name), { recursive: true, force: true });
-      console.log(`  afterPack: removed ${name}, which this target never loads`);
-    }
   }
   const ortDist = path.join(modulesDir, "onnxruntime-web", "dist");
   const missingRuntime = SMART_TURN_RUNTIME_FILES.filter(
@@ -372,12 +361,11 @@ function prepareVoiceDependencies(context) {
       `afterPack: missing ${missingRuntime.join(", ")} in ${ortDist}; Smart Turn would fall back to silence-only turns`
     );
   }
-  if (context.electronPlatformName === "win32") {
-    for (const name of sherpaDirs) {
-      const dir = path.join(modulesDir, name);
+  if (platform === "win32") {
+    for (const dir of bindingDirs) {
       privatizeOnnxRuntimeDir(dir);
       verifyOnnxRuntimePrivatizedDir(dir);
-      console.log(`  afterPack: ${name} loads ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}`);
+      console.log(`  afterPack: onnxruntime-node loads ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}`);
     }
   }
 }
@@ -400,5 +388,5 @@ exports.default = async function (context) {
 
 exports.verifyWindowsOnnxRuntimePrivatized = verifyWindowsOnnxRuntimePrivatized;
 exports.verifyWindowsKeyListener = verifyWindowsKeyListener;
-exports.requiredSherpaPackages = requiredSherpaPackages;
+exports.requiredOrtBindings = requiredOrtBindings;
 exports.prepareVoiceDependencies = prepareVoiceDependencies;

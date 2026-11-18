@@ -28,6 +28,7 @@ const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { registerVoiceConversationIpc } = require("./voiceConversationIpc");
 const { isFromWindow } = require("./ipcSender");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
@@ -2071,7 +2072,7 @@ class IPCHandlers {
   }
 
   setupHandlers() {
-    this.voiceConversation = require("./voiceConversationIpc").registerVoiceConversationIpc({
+    this.voiceConversation = registerVoiceConversationIpc({
       parakeetManager: this.parakeetManager,
       whisperManager: this.whisperManager,
       isFromCallWindow: (event) => isFromWindow(event, this.windowManager.agentWindow?.window),

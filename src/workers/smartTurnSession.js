@@ -1,8 +1,6 @@
 // Pipecat Smart Turn v3 end-of-turn classifier on ONNX Runtime Web (WASM).
-// WASM, not onnxruntime-node: the voice worker already holds sherpa-onnx's own
-// ORT, and on Windows both ship a DLL named onnxruntime.dll, so a second native
-// ORT in this process would depend on load order. WASM also covers Intel Macs,
-// which onnxruntime-node >= 1.24 has no binding for.
+// WASM, not onnxruntime-node: it also covers Intel Macs, which onnxruntime-node
+// >= 1.24 has no binding for.
 const {
   prepareSmartTurnAudio,
   whisperLogMel,

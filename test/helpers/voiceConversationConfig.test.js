@@ -110,8 +110,8 @@ test("config uses Smart Turn from the voice models directory and 5 flow steps", 
     threshold: 0.8,
     numThreads: 4,
   });
-  assert.deepEqual(config.tts.model.supertonic, modelPaths.supertonic);
-  assert.equal(config.tts.model.numThreads, 2);
+  assert.deepEqual(config.tts.supertonic, modelPaths.supertonic);
+  assert.equal(config.tts.numThreads, 2);
   assert.equal(config.numSteps, 5);
 });
 

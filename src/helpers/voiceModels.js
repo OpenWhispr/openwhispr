@@ -17,6 +17,7 @@ const SUPERTONIC_FILES = {
   voiceStyle: "voice.bin",
 };
 
+// The sherpa-onnx project only hosts these model files; nothing of its runtime is used.
 // Every download is pinned by hash: the GitHub release tags are rolling and a Hugging
 // Face branch moves, so an upstream swap fails the check instead of installing a
 // different model. Updating a model means a new URL and hash here.

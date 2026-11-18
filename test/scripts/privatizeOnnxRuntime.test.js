@@ -7,7 +7,7 @@ const path = require("path");
 const { buildPeImage } = require("../helpers/harness/peFixture");
 const { listImportedModules } = require("../../scripts/lib/pe-imports");
 const {
-  privatizeInstalledSherpaNode,
+  privatizeInstalledOnnxRuntimeNode,
   privatizeOnnxRuntimeDir,
   verifyOnnxRuntimePrivatizedDir,
 } = require("../../scripts/download-sherpa-onnx");
@@ -85,17 +85,17 @@ test("verification fails while onnxruntime.dll would still ship", (t) => {
   assert.throws(() => verifyOnnxRuntimePrivatizedDir(dir), /onnxruntime\.dll must not ship/);
 });
 
-test("npm run dev on Windows renames the runtime in the installed sherpa-onnx package", (t) => {
-  const modulesDir = fs.mkdtempSync(path.join(os.tmpdir(), "sherpa-modules-"));
+test("npm run dev on Windows renames the runtime in the installed onnxruntime-node binding", (t) => {
+  const modulesDir = fs.mkdtempSync(path.join(os.tmpdir(), "ort-modules-"));
   t.after(() => fs.rmSync(modulesDir, { recursive: true, force: true }));
-  const installed = path.join(modulesDir, "sherpa-onnx-win-x64");
+  const installed = path.join(modulesDir, "onnxruntime-node", "bin", "napi-v6", "win32", "x64");
   fs.cpSync(sherpaDir(t), installed, { recursive: true });
 
-  privatizeInstalledSherpaNode("darwin-arm64", modulesDir);
+  privatizeInstalledOnnxRuntimeNode("darwin-arm64", modulesDir);
   assert.equal(fs.existsSync(path.join(installed, "onnxruntime.dll")), true, "only on Windows");
 
-  privatizeInstalledSherpaNode("win32-x64", modulesDir);
+  privatizeInstalledOnnxRuntimeNode("win32-x64", modulesDir);
   assert.doesNotThrow(() => verifyOnnxRuntimePrivatizedDir(installed));
   // Nothing installed for this arch: nothing to do.
-  assert.doesNotThrow(() => privatizeInstalledSherpaNode("win32-arm64", modulesDir));
+  assert.doesNotThrow(() => privatizeInstalledOnnxRuntimeNode("win32-arm64", modulesDir));
 });

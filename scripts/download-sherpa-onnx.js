@@ -291,8 +291,8 @@ function privatizeWindowsOnnxRuntime({ binDir, binaryPaths, libraryNames }) {
   return shippedLibraries;
 }
 
-// sherpa-onnx-node's Windows package (packaged by afterPack) ships the same
-// runtime beside its .node addon, so it gets the same rename. A package that
+// onnxruntime-node's Windows binding (packaged by afterPack) ships the same
+// runtime beside its .node addon, so it gets the same rename. A binding that
 // an earlier pack already privatized is left as is.
 function privatizeOnnxRuntimeDir(dir) {
   const images = fs.readdirSync(dir).filter(isPeImageName);
@@ -302,18 +302,19 @@ function privatizeOnnxRuntimeDir(dir) {
   privatizeWindowsOnnxRuntime({ binDir: dir, binaryPaths: [], libraryNames: images });
 }
 
-// `npm run dev` loads sherpa-onnx-node's platform package straight from node_modules,
-// which afterPack never touches, so the #2054 collision would still hit the voice
-// worker in development. Idempotent, like the packaged rename.
-function privatizeInstalledSherpaNode(
+// `npm run dev` loads onnxruntime-node's binding straight from node_modules, which
+// afterPack never touches, so the #2054 collision would still hit the voice worker
+// in development. Idempotent, like the packaged rename.
+function privatizeInstalledOnnxRuntimeNode(
   platformArch,
   modulesDir = path.join(__dirname, "..", "node_modules")
 ) {
   if (!platformArch.startsWith("win32-")) return;
-  const dir = path.join(modulesDir, `sherpa-onnx-win-${platformArch.slice("win32-".length)}`);
+  const arch = platformArch.slice("win32-".length);
+  const dir = path.join(modulesDir, "onnxruntime-node", "bin", "napi-v6", "win32", arch);
   if (!fs.existsSync(dir)) return;
   privatizeOnnxRuntimeDir(dir);
-  console.log(`  ${path.basename(dir)} loads ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}`);
+  console.log(`  onnxruntime-node (${arch}) loads ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}`);
 }
 
 function verifyOnnxRuntimePrivatizedDir(dir) {
@@ -547,7 +548,7 @@ async function main() {
       return;
     }
 
-    privatizeInstalledSherpaNode(args.platformArch);
+    privatizeInstalledOnnxRuntimeNode(args.platformArch);
 
     // Remove old CLI-style binaries replaced by WS server binaries
     const oldBinaryName = args.platformArch.startsWith("win32")
@@ -603,7 +604,7 @@ module.exports = {
   findObsoleteLibraries,
   isCompleteInstall,
   parseMacosDeploymentTargets,
-  privatizeInstalledSherpaNode,
+  privatizeInstalledOnnxRuntimeNode,
   privatizeOnnxRuntimeDir,
   privatizeWindowsOnnxRuntime,
   validateMacosDeploymentTargets,

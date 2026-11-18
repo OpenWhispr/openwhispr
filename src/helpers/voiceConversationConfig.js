@@ -36,12 +36,8 @@ function buildVoiceWorkerConfig({ modelPaths }) {
       numThreads: 4,
     },
     tts: {
-      model: {
-        supertonic: modelPaths.supertonic,
-        numThreads: TTS_NUM_THREADS,
-        provider: "cpu",
-      },
-      maxNumSentences: 1,
+      supertonic: modelPaths.supertonic,
+      numThreads: TTS_NUM_THREADS,
     },
     numSteps: SUPERTONIC_NUM_STEPS,
     vad: {
@@ -54,10 +50,6 @@ function buildVoiceWorkerConfig({ modelPaths }) {
         maxSpeechDuration: 20,
         windowSize: 512,
       },
-      sampleRate: VAD_SAMPLE_RATE,
-      numThreads: 1,
-      provider: "cpu",
-      debug: false,
     },
   };
 }
