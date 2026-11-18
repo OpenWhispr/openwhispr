@@ -137,10 +137,11 @@ export function AndroidTabBar({ state, descriptors, navigation }: BottomTabBarPr
 
 export default function AndroidTabs() {
   const { t } = useTranslation();
+  const h = useHomeT();
   return (
     <Tabs tabBar={(props) => <AndroidTabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="(record)" options={{ title: t('home') }} />
-      <Tabs.Screen name="(notes)" options={{ title: t('notes') }} />
+      <Tabs.Screen name="(notes)" options={{ title: h('tabNotes') }} />
       {/* Chat isn't part of the Android beta. The route stays registered for iOS, so hide it. */}
       <Tabs.Screen name="(chat)" options={{ href: null }} />
       <Tabs.Screen name="(dictionary)" options={{ title: t('dictionary') }} />
