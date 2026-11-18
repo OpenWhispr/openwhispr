@@ -7763,6 +7763,7 @@ class IPCHandlers {
             environment: options.environment,
             tenant: options.tenant,
             keyterms: options.keyterms,
+            baseUrl: options.baseUrl,
             sampleRate: MEETING_STREAM_SAMPLE_RATE,
           };
 
@@ -7881,6 +7882,7 @@ class IPCHandlers {
           proxyFetch,
           postServerToken,
           mintCortiToken: (tokenOptions) => this._mintStoredCortiToken(tokenOptions),
+          titaniumServiceKeyFor,
         },
         options,
         { streams }
@@ -7952,6 +7954,7 @@ class IPCHandlers {
         environment: options.environment,
         tenant: options.tenant,
         keyterms: options.keyterms,
+        baseUrl: options.baseUrl,
         sampleRate: MEETING_STREAM_SAMPLE_RATE,
       };
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();

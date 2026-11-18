@@ -6,6 +6,11 @@
 // table is unit-testable without Electron.
 
 const { readPolicyResponseError } = require("./policyResponseError");
+const { sttApiStreamUrl } = require("./sttApiStreamPolicy");
+
+// Raised when our own STT host is selected but nobody is signed in to Titanium.
+// The renderer maps it to a translated sign-in message (never a silent failure).
+const TITANIUM_SIGN_IN_REQUIRED = "TITANIUM_SIGN_IN_REQUIRED";
 
 const dual = (streams, factory) =>
   streams === 2 ? Promise.all([factory(), factory()]) : factory();
@@ -80,6 +85,18 @@ const REALTIME_TOKEN_PROVIDERS = {
     // One token covers both meeting streams; it's only used at the WSS handshake.
     const { token } = await mintCortiToken(options);
     return duplicate(streams, token);
+  },
+
+  // Our own stt-api host (Phase 5). The bearer is the Titanium license key, handed
+  // over by main only for a Titanium service host; nothing from BYOK settings.
+  "stt-api-realtime": async ({ titaniumServiceKeyFor }, options, streams) => {
+    const key = titaniumServiceKeyFor?.(sttApiStreamUrl(options.baseUrl));
+    if (!key) {
+      throw Object.assign(new Error("Sign in to transcribe meetings"), {
+        code: TITANIUM_SIGN_IN_REQUIRED,
+      });
+    }
+    return duplicate(streams, key);
   },
 
   "tinfoil-realtime": async ({ environmentManager }, options, streams) => {
@@ -175,9 +192,12 @@ function createServerTokenPoster({
 }
 
 const isSignInRefusal = (error) =>
-  error?.code === "AUTH_EXPIRED" || error?.code === "AUTH_REQUIRED";
+  error?.code === "AUTH_EXPIRED" ||
+  error?.code === "AUTH_REQUIRED" ||
+  error?.code === TITANIUM_SIGN_IN_REQUIRED;
 
 module.exports = {
+  TITANIUM_SIGN_IN_REQUIRED,
   REALTIME_TOKEN_PROVIDERS,
   createServerTokenPoster,
   fetchRealtimeTokenForProvider,

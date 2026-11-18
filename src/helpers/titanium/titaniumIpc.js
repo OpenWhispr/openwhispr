@@ -3,6 +3,7 @@
 const path = require("path");
 const { app, ipcMain, shell, safeStorage, BrowserWindow } = require("electron");
 const { TitaniumSession } = require("./titaniumSession");
+const { isTitaniumServiceUrl } = require("./titaniumHosts");
 
 let session = null;
 
@@ -53,28 +54,14 @@ function getTitaniumSession() {
   return session;
 }
 
-function hostOf(url) {
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return "";
-  }
-}
-
 /**
  * The signed-in user's license key, but only for a request to one of our own
  * services (the fork's default STT host, plus TITANIUM.serviceHosts). A Custom
  * endpoint the user points elsewhere never receives the Titanium credential.
  */
 function titaniumServiceKeyFor(url, forkConfig = require("../../config/forkConfig")) {
-  const host = hostOf(url);
-  if (!host || !session) return null;
-  const allowed = new Set(
-    [hostOf(forkConfig.DEFAULT_STT?.baseUrl), ...(forkConfig.TITANIUM?.serviceHosts || [])]
-      .map((h) => String(h || "").toLowerCase())
-      .filter(Boolean)
-  );
-  return allowed.has(host) ? session.getLicenseKey() : null;
+  if (!session || !isTitaniumServiceUrl(url, forkConfig)) return null;
+  return session.getLicenseKey();
 }
 
 function _setSessionForTest(value) {

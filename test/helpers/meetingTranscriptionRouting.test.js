@@ -105,6 +105,67 @@ test("self-hosted mode never follows a stale Tinfoil provider", async () => {
   );
 });
 
+test("self-hosted mode on our own host routes to the stt-api stream", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  assert.deepEqual(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      transcriptionMode: "self-hosted",
+      language: "en",
+      selfHostedBaseUrl: "https://stt.titaniumlabs.test/v1",
+      isTitaniumService: true,
+    }),
+    {
+      provider: "stt-api-realtime",
+      mode: "self-hosted",
+      baseUrl: "https://stt.titaniumlabs.test/v1",
+      language: "en",
+    }
+  );
+});
+
+test("self-hosted mode on a foreign host still throws unsupportedSelfHosted", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  assert.throws(
+    () =>
+      resolveMeetingTranscriptionOptions({
+        ...baseOptions,
+        transcriptionMode: "self-hosted",
+        selfHostedBaseUrl: "https://stt.example.invalid/v1",
+        isTitaniumService: false,
+      }),
+    { message: "unsupportedSelfHosted" }
+  );
+});
+
+test("the fork default (Custom provider on our host) routes to the stt-api stream", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  const options = resolveMeetingTranscriptionOptions({
+    ...baseOptions,
+    transcriptionMode: "providers",
+    selectedProvider: "custom",
+    selfHostedBaseUrl: "https://stt.titaniumlabs.test/v1",
+    isTitaniumService: true,
+  });
+  assert.equal(options.provider, "stt-api-realtime");
+  assert.equal(options.baseUrl, "https://stt.titaniumlabs.test/v1");
+
+  assert.throws(
+    () =>
+      resolveMeetingTranscriptionOptions({
+        ...baseOptions,
+        transcriptionMode: "providers",
+        selectedProvider: "custom",
+        selfHostedBaseUrl: "https://stt.example.invalid/v1",
+        isTitaniumService: false,
+      }),
+    { message: "unsupportedProvider:custom" }
+  );
+});
+
 test("local mode wins over stale cloud provider state", async () => {
   const { resolveMeetingTranscriptionOptions } = await load();
 

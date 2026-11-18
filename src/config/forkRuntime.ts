@@ -22,6 +22,7 @@ export const SHARE_VIEWER_URL = strip(env.VITE_SHARE_VIEWER_URL || fork.SHARE_VI
 export const MCP_URL = env.VITE_MCP_URL || fork.MCP_URL || "";
 export const BRAND_NAME = fork.BRAND_NAME;
 export const DEFAULT_STT = fork.DEFAULT_STT;
+export const TITANIUM = fork.TITANIUM;
 export const CLOUD_ENABLED = Boolean(API_URL && AUTH_URL);
 export const REPO_URL = strip(fork.REPO_URL || "");
 export const COMMUNITY_URL = strip(fork.COMMUNITY_URL || "");

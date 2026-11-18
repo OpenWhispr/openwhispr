@@ -154,7 +154,7 @@ test("connection identity follows key saves exactly when the token comes from a 
         readsSavedKey = true;
         return "key";
       };
-      const options = { provider, mode };
+      const options = { provider, mode, baseUrl: "https://stt.example.test/v1" };
       await fetchRealtimeTokenForProvider(
         provider,
         {
@@ -162,6 +162,8 @@ test("connection identity follows key saves exactly when the token comes from a 
           proxyFetch: async () => ({ ok: true, json: async () => ({ token: "token" }) }),
           postServerToken: async () => ({ token: "token", clientSecret: "token" }),
           mintCortiToken: async () => ({ token: savedKey() }),
+          // stt-api reads the Titanium license, never a saved BYOK key.
+          titaniumServiceKeyFor: () => "license",
         },
         options
       );
@@ -172,4 +174,27 @@ test("connection identity follows key saves exactly when the token comes from a 
       );
     }
   }
+});
+
+test("stt-api-realtime resolves to the stt-api client and is allowed for meetings", async () => {
+  const { STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS } = await load();
+  const SttApiStreaming = require("../../src/helpers/sttApiStreaming.js");
+
+  assert.equal(STREAMING_CLIENT_BY_PROVIDER["stt-api-realtime"], SttApiStreaming);
+  assert.equal(ALLOWED_MEETING_PROVIDERS.has("stt-api-realtime"), true);
+});
+
+test("stt-api connection identity follows the endpoint and never embeds a credential", async () => {
+  const { getMeetingConnectionKey } = await load();
+  const options = {
+    provider: "stt-api-realtime",
+    mode: "self-hosted",
+    baseUrl: "https://stt.example.test/v1",
+  };
+
+  assert.equal(getMeetingConnectionKey(options, 1), getMeetingConnectionKey(options, 2));
+  assert.notEqual(
+    getMeetingConnectionKey(options),
+    getMeetingConnectionKey({ ...options, baseUrl: "https://other.example.test/v1" })
+  );
 });
