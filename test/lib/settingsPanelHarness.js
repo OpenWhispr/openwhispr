@@ -209,6 +209,12 @@ async function mountSettingsPanel(
       const tabs = find((node) => node.props?.providers?.some?.((tab) => tab.id === id))[0];
       await act(() => tabs.props.onSelect(id));
     },
+    // A button takes focus away from the fields, then its click runs.
+    click: async (label, index = 0) => {
+      await leaveFields();
+      const button = find((node) => node.props?.children === label && node.props.onClick)[index];
+      await act(() => button.props.onClick());
+    },
     choose: async (value) => {
       await leaveFields();
       const select = find((node) => typeof node.props?.onValueChange === "function")[0];

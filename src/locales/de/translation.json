@@ -416,7 +416,9 @@
           "modelNotFound": "Das ausgewählte Modell ist bei diesem Anbieter nicht verfügbar.",
           "providerStatus": "Der Anbieter hat den Status {{status}} zurückgegeben.",
           "timeout": "Der Verbindungstest hat das Zeitlimit überschritten.",
-          "network": "Der Anbieter ist nicht erreichbar."
+          "network": "Der Anbieter ist nicht erreichbar.",
+          "invalidHeaders": "Ungültiger HTTP-Header. Name und Wert prüfen; Content-Type und Transport-Header können nicht angepasst werden.",
+          "redirected": "Der Server hat die Anfrage umgeleitet. Geben Sie die Adresse ein, auf die er umleitet."
         }
       },
       "local": {
@@ -3257,7 +3259,20 @@
     "selfHosted": {
       "endpointUrl": "Endpunkt-URL",
       "serverUrl": "Server-URL",
-      "apiKeyOptional": "API-Schlüssel (optional)"
+      "apiKeyOptional": "API-Schlüssel (optional)",
+      "headers": "HTTP-Header",
+      "headersHelp": "Werden mit jeder Anfrage an diesen Server gesendet, etwa ein API-Schlüssel, den ein Gateway verlangt.",
+      "headerName": "Headername",
+      "headerValue": "Headerwert",
+      "removeHeader": "Entfernen",
+      "addHeader": "Header hinzufügen",
+      "unauthorized": "Ihr Server hat die Anfrage abgelehnt (401/403). Prüfen Sie die Header unten oder die Authentifizierungseinstellungen des Servers.",
+      "headerErrors": {
+        "missingName": "Geben Sie einen Headernamen ein.",
+        "invalidName": "Headernamen dürfen keine Leerzeichen, Doppelpunkte oder andere Trennzeichen enthalten.",
+        "reserved": "Diesen Header setzt OpenWhispr selbst.",
+        "invalidValue": "Dieser Wert enthält ein Zeichen, das ein Header nicht übertragen kann, etwa ein typografisches Anführungszeichen."
+      }
     },
     "enterpriseCheckout": {
       "title": "Auf Enterprise upgraden",
@@ -6404,7 +6419,9 @@
       "timeout": "Ihr Server hat zu lange zum Antworten gebraucht.",
       "unreachable": "Ihr Server konnte nicht erreicht werden. Überprüfen Sie, ob er läuft.",
       "noResponse": "Keine Antwort von Ihrem Server erhalten. Überprüfen Sie seinen API-Schlüssel und ob er läuft.",
-      "unknown": "Ihr Server hat einen unerwarteten Fehler zurückgegeben."
+      "unknown": "Ihr Server hat einen unerwarteten Fehler zurückgegeben.",
+      "invalidHeaders": "Ein benutzerdefinierter Header für Ihren Server ist ungültig.",
+      "redirected": "Ihr Server hat die Anfrage umgeleitet. Geben Sie die Adresse ein, auf die er umleitet."
     },
     "openSettings": "Einstellungen öffnen",
     "copyDetails": "Details kopieren",

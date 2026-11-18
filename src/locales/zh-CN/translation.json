@@ -416,7 +416,9 @@
           "modelNotFound": "所选模型无法从此服务商获得。",
           "providerStatus": "服务商返回了状态码 {{status}}。",
           "timeout": "连接测试超时。",
-          "network": "无法连接到服务商。"
+          "network": "无法连接到服务商。",
+          "invalidHeaders": "HTTP 请求头无效。请检查名称和值；无法自定义 Content-Type 和传输请求头。",
+          "redirected": "服务器重定向了请求。请输入它重定向到的地址。"
         }
       },
       "local": {
@@ -2503,7 +2505,20 @@
     "selfHosted": {
       "endpointUrl": "端点 URL",
       "serverUrl": "服务器 URL",
-      "apiKeyOptional": "API Key（可选）"
+      "apiKeyOptional": "API Key（可选）",
+      "headers": "HTTP 请求头",
+      "headersHelp": "随每个发往此服务器的请求一起发送，例如网关要求的 API 密钥。",
+      "headerName": "请求头名称",
+      "headerValue": "请求头值",
+      "removeHeader": "删除",
+      "addHeader": "添加请求头",
+      "unauthorized": "你的服务器拒绝了请求（401/403）。请检查下方的请求头或服务器的认证设置。",
+      "headerErrors": {
+        "missingName": "请输入请求头名称。",
+        "invalidName": "请求头名称不能包含空格、冒号或其他分隔符。",
+        "reserved": "OpenWhispr 会自行设置此请求头。",
+        "invalidValue": "此值包含请求头无法携带的字符，例如弯引号。"
+      }
     },
     "workspace": {
       "title": "工作区",
@@ -6404,7 +6419,9 @@
       "timeout": "你的服务器响应超时。",
       "unreachable": "无法连接到你的服务器。请检查它是否正在运行。",
       "noResponse": "未能收到你的服务器的响应。请检查它的 API 密钥以及它是否正在运行。",
-      "unknown": "你的服务器返回了一个意外错误。"
+      "unknown": "你的服务器返回了一个意外错误。",
+      "invalidHeaders": "你的服务器的某个自定义请求头无效。",
+      "redirected": "你的服务器重定向了请求。请输入它重定向到的地址。"
     },
     "openSettings": "打开设置",
     "copyDetails": "复制详情",

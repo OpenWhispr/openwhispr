@@ -1,3 +1,4 @@
+const { parseSelfHostedSttHeaders, selfHostedSttRequest } = require("./selfHostedSttHeaders.js");
 const {
   registryData: modelRegistryData,
   getRunnableSpeechModel,
@@ -503,7 +504,7 @@ async function postMultipart(
   body,
   boundary,
   headers = {},
-  { signal, session: fetchSession } = {}
+  { signal, session: fetchSession, redirect } = {}
 ) {
   const response = await (fetchSession ?? net).fetch(url.toString(), {
     method: "POST",
@@ -514,6 +515,7 @@ async function postMultipart(
     body,
     useSessionCookies: false,
     signal,
+    redirect,
   });
   const text = await response.text();
   try {
@@ -6748,6 +6750,23 @@ class IPCHandlers {
       })
     );
 
+    // Headers and redirect mode for a request to the self-hosted speech server of `surface`
+    // ("dictation" or "upload"), with the custom key for a route that takes one (Orukeet's).
+    const selfHostedRequest = (surface, route) => {
+      const key =
+        route?.auth.keyRef === "custom" ? this.environmentManager.getCustomTranscriptionKey() : "";
+      return selfHostedSttRequest(
+        parseSelfHostedSttHeaders(this.environmentManager.getSelfHostedSttHeaders())[surface],
+        key ? { Authorization: `Bearer ${key}` } : {}
+      );
+    };
+    ipcMain.handle("get-self-hosted-stt-headers", () =>
+      this.environmentManager.getSelfHostedSttHeaders()
+    );
+    ipcMain.handle(
+      "save-self-hosted-stt-headers",
+      saveSecretKey("getSelfHostedSttHeaders", "saveSelfHostedSttHeaders", "selfHostedSttHeaders")
+    );
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -9223,8 +9242,10 @@ class IPCHandlers {
             formData.append("language", route.language);
           }
 
+          // Retries re-run dictation audio through dictation's server.
           const response = await proxyFetch(route.endpoint, {
             method: "POST",
+            ...selfHostedRequest("dictation", route),
             body: formData,
           });
           if (!response.ok) {
@@ -11624,6 +11645,7 @@ class IPCHandlers {
         options.mode,
         options.model,
         options.baseUrl,
+        provider === "orukeet" ? options.transcriptionMode : null,
         options.pipelineOptions,
         readsSavedKey ? credentialGeneration : null,
         provider === "openai-realtime"
@@ -11694,6 +11716,10 @@ class IPCHandlers {
             } else {
               await streaming.connect({
                 apiKey: this.environmentManager.getCustomTranscriptionKey(),
+                headers:
+                  options.transcriptionMode === "self-hosted"
+                    ? selfHostedRequest("dictation").headers
+                    : {},
                 baseUrl: options.baseUrl,
               });
             }
@@ -13732,12 +13758,14 @@ class IPCHandlers {
                 providerContentType(realByok),
                 { model: route.model, language: route.language }
               );
+              // A voice draft goes to dictation's server, a file to the Upload tab's.
+              const request = selfHostedRequest(audioFilePurpose(filePath, purpose), route);
               const data = await postMultipart(
                 new URL(route.endpoint),
                 body,
                 boundary,
-                {},
-                { signal }
+                request.headers,
+                { signal, redirect: request.redirect }
               );
               if (data.statusCode !== 200) {
                 debugLogger.warn("Self-hosted file transcription failed", {

@@ -416,7 +416,9 @@
           "modelNotFound": "Le modèle sélectionné n’est pas disponible auprès de ce fournisseur.",
           "providerStatus": "Le fournisseur a renvoyé le statut {{status}}.",
           "timeout": "Le test de connexion a expiré.",
-          "network": "Le fournisseur est injoignable."
+          "network": "Le fournisseur est injoignable.",
+          "invalidHeaders": "En-tête HTTP invalide. Vérifiez le nom et la valeur ; Content-Type et les en-têtes de transport ne peuvent pas être modifiés.",
+          "redirected": "Le serveur a redirigé la requête. Saisissez l’adresse vers laquelle il redirige."
         }
       },
       "local": {
@@ -3263,7 +3265,20 @@
     "selfHosted": {
       "endpointUrl": "URL du point d'accès",
       "serverUrl": "URL du serveur",
-      "apiKeyOptional": "Clé API (facultative)"
+      "apiKeyOptional": "Clé API (facultative)",
+      "headers": "En-têtes HTTP",
+      "headersHelp": "Envoyés avec chaque requête à ce serveur, par exemple une clé API demandée par une passerelle.",
+      "headerName": "Nom de l’en-tête",
+      "headerValue": "Valeur de l’en-tête",
+      "removeHeader": "Supprimer",
+      "addHeader": "Ajouter un en-tête",
+      "unauthorized": "Votre serveur a refusé la requête (401/403). Vérifiez les en-têtes ci-dessous ou les réglages d’authentification du serveur.",
+      "headerErrors": {
+        "missingName": "Saisissez un nom d’en-tête.",
+        "invalidName": "Un nom d’en-tête ne peut contenir ni espaces, ni deux-points, ni autres séparateurs.",
+        "reserved": "OpenWhispr définit lui-même cet en-tête.",
+        "invalidValue": "Cette valeur contient un caractère qu’un en-tête ne peut pas transmettre, comme un guillemet typographique."
+      }
     },
     "enterpriseCheckout": {
       "title": "Passer à Enterprise",
@@ -6431,7 +6446,9 @@
       "timeout": "Votre serveur a pris trop de temps à répondre.",
       "unreachable": "Impossible de contacter votre serveur. Vérifiez qu’il est en cours d’exécution.",
       "noResponse": "Aucune réponse de votre serveur. Vérifiez sa clé API et qu’il est en cours d’exécution.",
-      "unknown": "Votre serveur a renvoyé une erreur inattendue."
+      "unknown": "Votre serveur a renvoyé une erreur inattendue.",
+      "invalidHeaders": "Un en-tête personnalisé de votre serveur n’est pas valide.",
+      "redirected": "Votre serveur a redirigé la requête. Saisissez l’adresse vers laquelle il redirige."
     },
     "openSettings": "Ouvrir les réglages",
     "copyDetails": "Copier les détails",

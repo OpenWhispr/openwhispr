@@ -343,6 +343,26 @@ test("asProviderError classifies Electron net::ERR_* rejections and leaves net::
   assert.equal(asProviderError(aborted, ctx), aborted);
 });
 
+test("a redirect refused for a self-hosted server's custom headers is named", async () => {
+  const { asProviderError, isRefusedRedirect } = await load();
+  const selfHosted = { provider: "Your server", surface: "transcription", selfHosted: true };
+  // Electron's net.fetch, then Node's fetch, under redirect: "error".
+  const electron = new Error("Attempted to redirect, but redirect policy was 'error'");
+  const node = new TypeError("fetch failed", { cause: new Error("unexpected redirect") });
+  for (const error of [electron, node]) {
+    assert.equal(isRefusedRedirect(error), true);
+    const classified = asProviderError(error, selfHosted);
+    assert.equal(classified.code, "PROVIDER_REDIRECTED");
+    assert.equal(classified.messageKey, "providerErrors.selfHosted.redirected");
+    assert.equal(classified.settingsTarget, "speechToText");
+  }
+  assert.equal(isRefusedRedirect(new TypeError("fetch failed")), false);
+  assert.equal(
+    asProviderError(node, { provider: "Groq", surface: "transcription" }).code,
+    "PROVIDER_UNREACHABLE"
+  );
+});
+
 test("asProviderError leaves classified, cancelled and unrelated errors untouched", async () => {
   const { asProviderError } = await load();
   const ctx = { provider: "OpenAI", surface: "llm" };
@@ -404,7 +424,7 @@ async function everyClassification() {
         C.TIMEOUT,
         C.UNREACHABLE,
         C.NO_RESPONSE,
-        ...(selfHosted ? [] : [C.KEY_MISSING]),
+        ...(selfHosted ? [C.INVALID_HEADERS, C.REDIRECTED] : [C.KEY_MISSING]),
       ]) {
         errors.push(providerError(code, base));
       }
