@@ -564,6 +564,22 @@ test("a one-line transcript longer than the budget publishes whole sentences", a
   assert.equal(fetched.data.truncated, true);
 });
 
+test("a one-line Japanese transcript splits at sentence marks, never inside a quote or number", async (t) => {
+  const sentence = "田中さんは「承認します。」と言い、予算は3.5万ドルになりました。";
+  const registry = await setup(t, {
+    notes: [{ ...note(7, ""), transcript: sentence.repeat(400) }],
+  });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const passages = fetched.data.sources[0].passages;
+  assert.ok(passages.length > 1);
+  assert.ok(passages.every((passage) => passage.text.length < 500));
+  assert.ok(
+    passages.every((passage) => passage.text.replaceAll(sentence, "") === ""),
+    "every passage holds whole sentences"
+  );
+  assert.equal(fetched.data.truncated, true);
+});
+
 test("transcript text the briefing doesn't publish leaves its budget to the next notes", async (t) => {
   const transcript = (length) =>
     Array.from({ length }, (_, index) => `Dana: Line ${index + 1} is here.`).join("\n");

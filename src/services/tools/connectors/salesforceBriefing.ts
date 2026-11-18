@@ -291,8 +291,10 @@ async function readTranscript(
 }
 
 // A transcript stored as one line (an upload whose provider named no
-// speakers) is cut at sentence ends instead of line breaks.
-const SENTENCE_END = /[.!?\u3002\uff01\uff1f](?=\s|$)/g;
+// speakers) is cut at sentence ends instead of line breaks. CJK text puts no
+// space after a sentence, but a closing quote or bracket keeps it going.
+const SENTENCE_END =
+  /[.!?](?=\s|$)|[\u3002\uff01\uff1f](?![\u3002\uff01\uff1f\u300d\u300f\uff09\u3011\u201d\u2019])/g;
 
 function wholeSentences(value: string): string {
   let end = 0;
