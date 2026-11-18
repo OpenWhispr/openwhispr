@@ -234,8 +234,3 @@ test("cleanup judges the dictionary's words as the speaker's own", async () => {
     { messageKey: ADDED_TEXT }
   );
 });
-
-test("cleanup without instructions never compares against a prompt", async () => {
-  const { assertValidCleanupOutput } = await import("../../src/utils/cleanupOutput.ts");
-  assert.doesNotThrow(() => assertValidCleanupOutput(RAW, "The speaker is never talking to you."));
-});

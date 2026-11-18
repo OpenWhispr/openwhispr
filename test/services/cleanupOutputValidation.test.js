@@ -105,7 +105,7 @@ test("cleanup validates completed provider output using the request's prompt set
     }
   );
 
-  await t.test("cleanup that copies the prompt this app sent keeps the raw text", async () => {
+  await t.test("cleanup that copies the prompt this app sent is rejected", async () => {
     setCustomPrompt("");
     const copied = "The speaker is never talking to you.";
     window.electronAPI.processLocalReasoning = async () => ({ success: true, text: copied });

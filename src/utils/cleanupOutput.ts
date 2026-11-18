@@ -70,7 +70,7 @@ function copiesInstructions(
     if (!promptRuns.has(text) || UNSPACED_SCRIPT.test(text)) return false;
     // Cleanup writes spoken numbers as digits and is told to use the dictionary's spellings.
     const words = run.filter((token) => !dictionaryWords.has(token) && !/^\p{N}+$/u.test(token));
-    const longWords = words.filter((token) => [...token].length >= LONG_WORD_LENGTH);
+    const longWords = words.filter((token) => token.length >= LONG_WORD_LENGTH);
     return !stretches.some(
       (stretch) =>
         words.length - wordsInOrder(words, stretch) <= MAX_UNSPOKEN_WORDS &&
