@@ -5,7 +5,8 @@ const { generateKeyPairSync } = require("node:crypto");
 const { readCatalog } = require("../lib/catalog.cjs");
 const { verifyEnvelope } = require("../lib/envelope.cjs");
 const { SCHEMA_VERSION, validateManifest } = require("../lib/schema.cjs");
-const { createPublication, readPreviousManifest } = require("../lib/publication.cjs");
+const { createPublication } = require("../lib/publication.cjs");
+const { readPublicationDir } = require("../lib/publicationDir.cjs");
 const { checkCompatibility, droppedClients } = require("../lib/compat.cjs");
 const { rollbackCatalog } = require("../lib/rollback.cjs");
 const pinned = require("../trusted-keys.json");
@@ -59,11 +60,9 @@ if (sourceCommit !== latestMain())
   skipStale("Skipped stale source; the newer main workflow owns publication.");
 const output = path.join(directory, `v${SCHEMA_VERSION}`);
 const readEnvelope = (file) => verifyEnvelope(fs.readFileSync(file), trusted);
-// The v2 sequence continues the version numbers of the frozen v1 manifest.
-const previousPath = [path.join(output, "manifest.json"), path.join(directory, "manifest.json")].find(
-  (file) => fs.existsSync(file)
-);
-const previous = previousPath ? readPreviousManifest(readEnvelope(previousPath)) : undefined;
+// Verified, and null only on a branch that has never published: a branch whose manifest
+// was deleted or put back to an older one must not restart or repeat the numbering.
+const previous = readPublicationDir(directory, trusted)?.manifest;
 const data = rollbackTo
   ? rollbackCatalog(
       validateManifest(readEnvelope(path.join(output, "history", `${rollbackTo}.json`))).data,
