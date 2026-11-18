@@ -222,6 +222,25 @@ describe('startRealtimeMeetingWs — token purpose', () => {
   });
 });
 
+describe('startRealtimeMeetingWs — a client secret from the caller', () => {
+  it('opens every leg with it and never calls the token endpoint', async () => {
+    const fetchClientSecret = jest.fn(async () => 'ek_own_key');
+    const startPromise = startRealtimeMeetingWs({}, {}, { wsFactory, fetchClientSecret });
+    await flushMicro();
+    lastLeg().open();
+    await startPromise;
+    lastLeg().serverClose(1006);
+    await flushMicro();
+    lastLeg().open();
+    await flushMicro();
+
+    expect(fetchClientSecret.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(api.post).not.toHaveBeenCalled();
+    for (const leg of FakeWebSocket.instances)
+      expect(leg.protocols).toEqual(['realtime', 'openai-insecure-api-key.ek_own_key']);
+  });
+});
+
 describe('startRealtimeMeetingWs — org policy refusal', () => {
   const meetingRefusal = (): Error =>
     Object.assign(new Error('Meeting recording is turned off by your organization.'), {
