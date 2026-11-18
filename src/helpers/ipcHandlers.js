@@ -314,6 +314,8 @@ const {
   formatSpeakerTranscript,
 } = require("./speakerMerge");
 const { timestampRequestFields, mapVerboseSegments } = require("./uploadTimestamps");
+const { scribeRequestFields, scribeWordsToSegments } = require("./scribeSegments");
+const { isTitaniumServiceUrl } = require("./titanium/titaniumHosts");
 const { listLocalTranscriptionModels } = require("./localTranscriptionModels");
 
 // Canonicalize allowed dirs so realpath'd inputs match on macOS (/var -> /private/var).
@@ -10936,7 +10938,23 @@ class IPCHandlers {
             // that require one (Corti) are handled on their own branch above.
           }
 
-          if (diarize) {
+          // Our own stt-api host (Phase 5, D-07): speakers and timestamps come from
+          // the Scribe route. Uploads that want neither keep the plain POST above.
+          const scribeUrl =
+            (diarize || timestamps) &&
+            route.provider === "custom" &&
+            isTitaniumServiceUrl(transcriptionUrl, forkConfig)
+              ? transcriptionUrl.replace(/\/audio\/transcriptions\/?$/, "/speech-to-text")
+              : null;
+          const useScribe = !!scribeUrl && scribeUrl !== transcriptionUrl;
+          if (useScribe) {
+            transcriptionUrl = scribeUrl;
+            for (const field of Object.keys(multipartFields)) delete multipartFields[field];
+            Object.assign(
+              multipartFields,
+              scribeRequestFields({ model: route.model, diarize: !!diarize })
+            );
+          } else if (diarize) {
             // A Custom endpoint may front OpenAI or Mistral, so fall back to the
             // resolved host before giving up on speaker labels.
             const diarizeTarget =
@@ -10997,6 +11015,15 @@ class IPCHandlers {
               status: data.statusCode,
               body: data.data,
             });
+          }
+
+          if (useScribe) {
+            // Same shape the verbose_json branches below already consume.
+            const scribeSegments = scribeWordsToSegments(data.data?.words);
+            data.data = {
+              text: data.data?.text,
+              ...(scribeSegments.length ? { segments: scribeSegments } : {}),
+            };
           }
 
           if (diarize && data.data?.speakers) {
