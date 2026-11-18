@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } fro
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { isAwaitingCatalog } from "../models/modelLifecycle.js";
 import { getRegistryData } from "../models/registryData.js";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -28,7 +29,12 @@ import {
   type ColorScheme,
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
-import { useSettingsStore } from "../stores/settingsStore";
+import {
+  selectPolicyEffectiveSettings,
+  selectResolvedMeetingTranscription,
+  selectResolvedUploadTranscription,
+  useSettingsStore,
+} from "../stores/settingsStore";
 import {
   filterByokProviderOptionsByPolicy,
   isProviderAllowedByPolicy,
@@ -291,6 +297,23 @@ const CLOUD_PROVIDER_TABS = [
   { id: "openrouter", name: "OpenRouter" },
   { id: "custom", name: "Custom" },
 ];
+
+const providerName = (id: string): string | undefined =>
+  CLOUD_PROVIDER_TABS.find((tab) => tab.id === id)?.name;
+
+// Only a model pick saves a browsed tab (on Custom, the first character of its
+// model name), so until then the line under it says which provider still runs.
+function browsedTabHint(t: TFunction, browsedId: string, inUseId: string): string | undefined {
+  if (browsedId === "custom") {
+    const current = providerName(inUseId);
+    return current ? t("transcription.browsedCustomHint", { current }) : undefined;
+  }
+  const provider = providerName(browsedId);
+  if (!provider) return undefined;
+  if (inUseId === "custom") return t("transcription.customInUseHint", { provider });
+  const current = providerName(inUseId);
+  return current ? t("transcription.browsedProviderHint", { current, provider }) : undefined;
+}
 
 interface ProviderCredentialField {
   key:
@@ -803,6 +826,18 @@ export default function TranscriptionModelPicker({
   ]);
   const displayedCloudProvider = effectiveCloudSelection.provider;
   const displayedCloudModel = effectiveCloudSelection.model;
+  // A blank Note Recording or Upload provider runs on the dictation one, and a
+  // managed policy runs an allowed provider in place of one it refuses.
+  const providerInUse = useSettingsStore((settings) => {
+    const effective = selectPolicyEffectiveSettings(settings, policyState);
+    if (transcriptionContext === "meeting") {
+      return selectResolvedMeetingTranscription(effective).cloudTranscriptionProvider;
+    }
+    if (transcriptionContext === "upload") {
+      return selectResolvedUploadTranscription(effective).cloudTranscriptionProvider;
+    }
+    return effective.cloudTranscriptionProvider;
+  });
 
   useEffect(() => {
     if (
@@ -1256,14 +1291,10 @@ export default function TranscriptionModelPicker({
   const visible = usePanelVisible();
   // A tab that is only being browsed has no model of this panel's: the key alone is checked.
   const panelModel = selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : "";
-  // Only a model pick saves a browsed tab, so say which provider is still in use until then.
-  const browsedProviderName =
-    browsedCloudProvider && selectedCloudProvider !== displayedCloudProvider
-      ? cloudProviderTabs.find((tab) => tab.id === displayedCloudProvider)?.name
+  const browsedHint =
+    browsedCloudProvider && displayedCloudProvider !== providerInUse
+      ? browsedTabHint(t, displayedCloudProvider, providerInUse)
       : undefined;
-  const selectedProviderName = cloudProviderTabs.find(
-    (tab) => tab.id === selectedCloudProvider
-  )?.name;
   const isCustom = displayedCloudProvider === "custom";
   const isCorti = displayedCloudProvider === "corti";
   const providerKey = credentialValues[providerCredentials.fields[0].key];
@@ -1725,9 +1756,7 @@ export default function TranscriptionModelPicker({
                     </label>
                     <ModelCardList
                       models={cloudModelOptions}
-                      selectedModel={
-                        selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
-                      }
+                      selectedModel={panelModel}
                       onModelSelect={handleCloudModelSelect}
                       colorScheme="purple"
                     />
@@ -1746,18 +1775,7 @@ export default function TranscriptionModelPicker({
                   </div>
                 </div>
               )}
-              {browsedProviderName && (
-                <p className="text-xs text-muted-foreground">
-                  {selectedProviderName
-                    ? t("transcription.browsedProviderHint", {
-                        current: selectedProviderName,
-                        provider: browsedProviderName,
-                      })
-                    : t("transcription.browsedProviderHintNoCurrent", {
-                        provider: browsedProviderName,
-                      })}
-                </p>
-              )}
+              {browsedHint && <p className="text-xs text-muted-foreground">{browsedHint}</p>}
             </div>
           )}
         </>

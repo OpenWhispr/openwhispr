@@ -950,7 +950,8 @@
     "endpointUrl": "Endpoint URL",
     "azureHint": "Azure AI Foundry: enter your resource endpoint (e.g. https://your-resource.cognitiveservices.azure.com) and set Model to your exact deployment name.",
     "browsedProviderHint": "{{current}} is still in use. Choose a model to switch to {{provider}}.",
-    "browsedProviderHintNoCurrent": "Choose a model to start using {{provider}}.",
+    "browsedCustomHint": "{{current}} is still in use. Enter a model name to switch to your custom endpoint.",
+    "customInUseHint": "Your custom endpoint is still in use. Choose a model to switch to {{provider}}.",
     "customProvider": "Custom",
     "fallback": {
       "whisperModelDescription": "Model",
