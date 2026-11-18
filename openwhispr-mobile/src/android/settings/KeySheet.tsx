@@ -153,7 +153,7 @@ export function KeySheet({
   }, [check.state, draft]);
 
   const runnable = SHEET_TASKS.filter((task) => providerCanRun(provider, task));
-  // While On this phone is the default, uploads stay on the phone unless dictation moves too,
+  // While On device is the default, uploads stay on the phone unless dictation moves too,
   // and meetings stay on it whatever the key.
   const blocked = (task: SheetTask) =>
     activeMode === 'private' &&

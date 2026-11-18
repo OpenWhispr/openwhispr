@@ -32,7 +32,7 @@ export function isLiveProvider(id: string | undefined): id is LiveProviderId {
 }
 
 /**
- * The key a live meeting runs on: one saved for meetings, unless On this phone is the default,
+ * The key a live meeting runs on: one saved for meetings, unless On device is the default,
  * which keeps meetings on the phone.
  */
 export function meetingKey(): (InferenceSelection & { providerId: LiveProviderId }) | null {
