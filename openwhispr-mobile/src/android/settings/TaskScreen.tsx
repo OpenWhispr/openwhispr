@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -15,9 +15,7 @@ import {
   BottomSheet,
   Group,
   ListRow,
-  PillAction,
   SettingsPage,
-  settings,
   useReduceMotion,
 } from './kit';
 import { KEY_CHECK_COLORS } from './KeyCheckMark';
@@ -65,56 +63,25 @@ function ModelPicker({
   onChoose: (model: string) => void;
 }) {
   const t = useSettingsT();
-  const [typed, setTyped] = useState(current);
-  const listed = provider !== 'openrouter';
   const models = providerModels(provider, task);
   // A model chosen before that has since left the list stays on it, as the old screen did.
   const options = models.includes(current) || !current ? models : [current, ...models];
   return (
     <BottomSheet visible={visible} onClose={onClose} title={t('chooseModel')}>
-      {listed ? (
-        <View style={{ borderRadius: 16, overflow: 'hidden', backgroundColor: home.surface }}>
-          {options.map((model) => (
-            <ListRow
-              key={model}
-              title={model}
-              selected={model === current}
-              onPress={() => onChoose(model)}
-            />
-          ))}
-        </View>
-      ) : (
-        <View style={{ gap: 12 }}>
-          <Text style={[type.footnote, { color: home.secondary }]}>{t('modelId')}</Text>
-          <TextInput
-            value={typed}
-            onChangeText={setTyped}
-            autoCapitalize="none"
-            autoCorrect={false}
-            accessibilityLabel={t('modelId')}
-            style={[
-              settings.title,
-              {
-                fontWeight: '400',
-                minHeight: 48,
-                borderRadius: 14,
-                borderWidth: 1.5,
-                borderColor: home.borderSubtle,
-                backgroundColor: home.surface,
-                paddingHorizontal: 16,
-              },
-            ]}
+      {/* OpenRouter lists twelve; the list scrolls rather than run off the screen. */}
+      <ScrollView
+        style={{ maxHeight: 420, borderRadius: 16, backgroundColor: home.surface }}
+        contentContainerStyle={{ paddingBottom: 4 }}
+      >
+        {options.map((model) => (
+          <ListRow
+            key={model}
+            title={model}
+            selected={model === current}
+            onPress={() => onChoose(model)}
           />
-          <View style={{ paddingBottom: 12 }}>
-            <PillAction
-              primary
-              label={t('done')}
-              disabled={!typed.trim()}
-              onPress={() => onChoose(typed.trim())}
-            />
-          </View>
-        </View>
-      )}
+        ))}
+      </ScrollView>
     </BottomSheet>
   );
 }

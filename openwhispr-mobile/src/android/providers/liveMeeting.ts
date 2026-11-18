@@ -20,7 +20,7 @@ export type LiveProviderId = (typeof LIVE_PROVIDERS)[number];
 export const LIVE_MODEL: Record<LiveProviderId, string> = {
   openai: 'gpt-4o-transcribe',
   deepgram: 'nova-3',
-  assemblyai: 'universal-streaming',
+  assemblyai: 'assemblyai-stt-3-7-realtime',
 };
 
 // The meeting transport streams 24 kHz PCM (live-pcm-streaming's default).
@@ -102,6 +102,6 @@ export function liveMeetingDeps(language?: string): RealtimeMeetingDeps {
   return {
     fetchClientSecret: async () => assemblyAiStreamingToken(await keyFor('assemblyai')),
     wsFactory: (_url, protocols): WebSocketLike =>
-      assemblyAiLiveSocket(secretFrom(protocols), SAMPLE_RATE),
+      assemblyAiLiveSocket(secretFrom(protocols), SAMPLE_RATE, model),
   };
 }

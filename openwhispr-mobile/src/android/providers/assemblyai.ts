@@ -22,7 +22,11 @@ export const assemblyAiProvider: PlatformTranscriptionProvider = {
   id: 'assemblyai',
   name: NAME,
   endpoint: API,
-  models: [{ id: 'universal', name: 'Universal' }],
+  // AssemblyAI's Nov 17, 2026 lineup: STT 3.7 first, Universal-2 for its other languages.
+  models: [
+    { id: 'assemblyai-stt-3-7', name: 'AssemblyAI STT 3.7' },
+    { id: 'universal-2', name: 'Universal-2' },
+  ],
   async transcribe({ apiKey, modelId, audioUri, language, prompt, signal }) {
     const auth = { Authorization: apiKey };
     const { upload_url: audioUrl } = (await uploadFile(
@@ -38,7 +42,11 @@ export const assemblyAiProvider: PlatformTranscriptionProvider = {
       headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         audio_url: audioUrl,
-        speech_model: modelId || 'universal',
+        // STT 3.7 covers 32 languages; Universal-2 takes over for the rest of its 99.
+        speech_models:
+          modelId === 'universal-2'
+            ? ['universal-2']
+            : [modelId || 'assemblyai-stt-3-7', 'universal-2'],
         ...(language && language !== 'auto'
           ? { language_code: language }
           : { language_detection: true }),
@@ -91,8 +99,14 @@ type AssemblyMessage = {
 };
 
 /** A live Universal-Streaming (v3) socket that speaks the meeting transport's Realtime events. */
-export function assemblyAiLiveSocket(token: string, sampleRate: number) {
+export function assemblyAiLiveSocket(
+  token: string,
+  sampleRate: number,
+  model = 'assemblyai-stt-3-7-realtime',
+) {
   const params = new URLSearchParams({
+    // Named explicitly: with none, the socket falls back to the retiring Universal-Streaming.
+    speech_model: model,
     sample_rate: String(sampleRate),
     encoding: 'pcm_s16le',
     format_turns: 'true',
