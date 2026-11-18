@@ -121,7 +121,8 @@ offline revocation or retroactively remove events already delivered.
 - Refund/cancellation semantics must be checked against RevenueCat's actual
   outgoing payload. A cancellation is not automatically a refund; do not assign
   positive purchase revenue to a non-payment event.
-- Android client `af_subscribe` remains unchanged. No Android ID bridge is added.
+- Android client `af_subscribe` remains unchanged. The Android account bridge is
+  described separately in [Android revenue attribution](android/revenue-attribution.md).
 
 Using the existing iOS `af_subscribe` partner mapping for RevenueCat's initial
 paid event avoids duplicating the old client purchase signal on this app version.

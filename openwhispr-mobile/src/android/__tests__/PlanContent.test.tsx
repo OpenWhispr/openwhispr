@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, Linking } from 'react-native';
 import { router } from 'expo-router';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore.android';
 import { restoreAndroidPurchases, useAndroidBillingStatus } from '../billing';
 import { PlanContent } from '../PlanContent';
@@ -23,7 +24,10 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 jest.mock('@/store/useAuthStore', () => ({
-  useAuthStore: require('zustand').create(() => ({ user: { id: 'a', isAnonymous: false } })),
+  useAuthStore: require('zustand').create(() => ({
+    user: { id: 'a', isAnonymous: false },
+    sessionCookie: 'session-a',
+  })),
 }));
 jest.mock('@/store/useUsageStore.android', () => ({
   useUsageStore: require('zustand').create(() => ({
@@ -68,6 +72,13 @@ jest.mock('../ui', () => {
 });
 beforeEach(() => {
   jest.clearAllMocks();
+  useAuthStore.setState({
+    user: { id: 'a', isAnonymous: false } as NonNullable<
+      ReturnType<typeof useAuthStore.getState>['user']
+    >,
+    sessionCookie: 'session-a',
+  });
+  (restoreAndroidPurchases as jest.Mock).mockResolvedValue('payment-pending');
   (useUsageStore.getState().load as jest.Mock).mockResolvedValue({ status: 'loaded' });
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
@@ -149,6 +160,71 @@ it('explains the unresolved payment after an empty restore', async () => {
   await waitFor(() =>
     expect(Alert.alert).toHaveBeenCalledWith('restorePurchases', 'billingPaymentPending'),
   );
+});
+it.each(['account switch', 'new session', 'unmount'] as const)(
+  'discards a late Restore error after %s',
+  async (change) => {
+    let rejectRestore!: (error: Error) => void;
+    (restoreAndroidPurchases as jest.Mock).mockImplementationOnce(
+      () => new Promise((_, reject) => (rejectRestore = reject)),
+    );
+    const view = render(<PlanContent />);
+    fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
+    act(() => {
+      if (change === 'unmount') view.unmount();
+      else if (change === 'new session') useAuthStore.setState({ sessionCookie: 'session-a-new' });
+      else useAuthStore.setState({ user: { ...useAuthStore.getState().user!, id: 'b' } });
+    });
+    await act(async () => {
+      rejectRestore(new Error('Billing account changed'));
+    });
+    expect(Alert.alert).not.toHaveBeenCalled();
+  },
+);
+it.each(['account switch', 'unmount'] as const)(
+  'discards a late Restore success after %s',
+  async (change) => {
+    let finishRestore!: (result: string) => void;
+    (restoreAndroidPurchases as jest.Mock).mockImplementationOnce(
+      () => new Promise((resolve) => (finishRestore = resolve)),
+    );
+    const view = render(<PlanContent />);
+    fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
+    act(() => {
+      if (change === 'unmount') view.unmount();
+      else useAuthStore.setState({ user: { ...useAuthStore.getState().user!, id: 'b' } });
+    });
+    await act(async () => {
+      finishRestore('restored');
+    });
+    expect(Alert.alert).not.toHaveBeenCalled();
+  },
+);
+it('still displays a Restore failure for the current account', async () => {
+  (restoreAndroidPurchases as jest.Mock).mockRejectedValueOnce(new Error('Store unavailable'));
+  render(<PlanContent />);
+  fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('errorTitle', 'Store unavailable'));
+});
+it('keeps the new account busy until its own Restore finishes', async () => {
+  let rejectOldRestore!: (error: Error) => void;
+  let finishNewRestore!: (result: string) => void;
+  (restoreAndroidPurchases as jest.Mock)
+    .mockImplementationOnce(() => new Promise((_, reject) => (rejectOldRestore = reject)))
+    .mockImplementationOnce(() => new Promise((resolve) => (finishNewRestore = resolve)));
+  render(<PlanContent />);
+  fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
+  await act(async () => {
+    useAuthStore.setState({ user: { ...useAuthStore.getState().user!, id: 'b' } });
+  });
+  fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
+  expect(restoreAndroidPurchases).toHaveBeenCalledTimes(2);
+  await act(async () => rejectOldRestore(new Error('Billing account changed')));
+  expect(Alert.alert).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByRole('button', { name: 'restorePurchases' }));
+  expect(restoreAndroidPurchases).toHaveBeenCalledTimes(2);
+  await act(async () => finishNewRestore('restored'));
+  expect(Alert.alert).toHaveBeenCalledWith('restorePurchases', 'purchaseRestored');
 });
 it('does not show Play management for a free account without a pending payment', () => {
   useAndroidBillingStatus.setState({ accounts: {} });

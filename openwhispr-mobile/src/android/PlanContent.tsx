@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,7 @@ import { Button, Card, Row, styles } from './ui';
 export function PlanContent() {
   const { t } = useTranslation('android');
   const user = useAuthStore((state) => state.user);
+  const sessionCookie = useAuthStore((state) => state.sessionCookie);
   const usage = useUsageStore((state) => state.usage);
   const isUsageLoading = useUsageStore((state) => state.isLoading);
   const sessionRejected = useUsageStore((state) => state.sessionRejected);
@@ -27,8 +28,24 @@ export function PlanContent() {
   const sources = usage?.entitlementSources;
   const { register } = useSuperwallGate();
   const [busy, setBusy] = useState(false);
+  const activeAction = useRef<symbol | null>(null);
   const [accessLoadFailed, setAccessLoadFailed] = useState(false);
   const signedIn = user && !user.isAnonymous;
+  useEffect(() => {
+    const unsubscribe = useAuthStore.subscribe((current, previous) => {
+      if (
+        current.user?.id !== previous.user?.id ||
+        current.sessionCookie !== previous.sessionCookie
+      ) {
+        activeAction.current = null;
+        setBusy(false);
+      }
+    });
+    return () => {
+      activeAction.current = null;
+      unsubscribe();
+    };
+  }, []);
   useEffect(() => {
     let active = true;
     setAccessLoadFailed(false);
@@ -43,16 +60,23 @@ export function PlanContent() {
     return () => {
       active = false;
     };
-  }, [signedIn, user?.id]);
-  const run = async (action: () => Promise<unknown>) => {
-    if (busy) return;
+  }, [signedIn, user?.id, sessionCookie]);
+  const run = async (action: (isCurrent: () => boolean) => Promise<unknown>) => {
+    if (activeAction.current) return;
+    const operation = Symbol();
+    activeAction.current = operation;
+    // Account changes and unmounts invalidate both successful and failed results.
+    const isCurrent = () => activeAction.current === operation;
     setBusy(true);
     try {
-      await action();
+      await action(isCurrent);
     } catch (error) {
-      Alert.alert(t('errorTitle'), (error as Error).message);
+      if (isCurrent()) Alert.alert(t('errorTitle'), (error as Error).message);
     } finally {
-      setBusy(false);
+      if (isCurrent()) {
+        activeAction.current = null;
+        setBusy(false);
+      }
     }
   };
   if (signedIn && sessionRejected) {
@@ -81,9 +105,9 @@ export function PlanContent() {
           label={t('refreshAccess')}
           busy={busy || isUsageLoading}
           onPress={() => {
-            run(async () => {
+            run(async (isCurrent) => {
               const result = await useUsageStore.getState().load(true);
-              setAccessLoadFailed(result.status !== 'loaded');
+              if (isCurrent()) setAccessLoadFailed(result.status !== 'loaded');
             });
           }}
         />
@@ -151,8 +175,9 @@ export function PlanContent() {
             label={t('restorePurchases')}
             disabled={busy}
             onPress={() => {
-              void run(async () => {
+              void run(async (isCurrent) => {
                 const restored = await restoreAndroidPurchases();
+                if (!isCurrent()) return;
                 Alert.alert(
                   t('restorePurchases'),
                   t(
@@ -205,9 +230,9 @@ export function PlanContent() {
             <Row
               title={t('manageWeb')}
               onPress={() => {
-                void run(async () => {
+                void run(async (isCurrent) => {
                   const url = await createStripeBillingPortalSession();
-                  await Linking.openURL(url);
+                  if (isCurrent()) await Linking.openURL(url);
                 });
               }}
             />

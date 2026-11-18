@@ -554,3 +554,124 @@ it('records a link before writing it, so an interrupted link is still cleared', 
   await rc.identifyRevenueCatUser('billing-a');
   expect(JSON.parse(device.storage['revenuecat.appsflyerLinkedUsers'])).toContain('billing-a');
 });
+
+describe('Android account attribution', () => {
+  let android: typeof import('../revenuecat.android');
+
+  beforeEach(() => {
+    (require('react-native').Platform as typeof Platform).OS = 'android';
+    android = require('../revenuecat.android');
+  });
+
+  it('links the current consenting account before an Android store operation', async () => {
+    await android.identifyRevenueCatUser('billing-a');
+    await android.withRevenueCatUser('billing-a', async () => {
+      push();
+      expect(server['billing-a']).toBe('af-device');
+    });
+    expect(sdk.setAppsflyerID).not.toHaveBeenCalled();
+    expect(sdk.collectDeviceIdentifiers).not.toHaveBeenCalled();
+  });
+
+  it('clears the departing account and links only the new account', async () => {
+    await android.identifyRevenueCatUser('billing-a');
+    push();
+    expect(server['billing-a']).toBe('af-device');
+    await android.identifyRevenueCatUser('billing-b');
+    push();
+    expect(server['billing-a']).toBe('');
+    expect(server['billing-b']).toBe('af-device');
+  });
+
+  it('pushes withdrawal without requiring a purchase', async () => {
+    await android.identifyRevenueCatUser('billing-a');
+    push();
+    expect(server['billing-a']).toBe('af-device');
+    mockConsent = 'revoked';
+    mockAttributionListener?.();
+    await flush();
+    expect(server['billing-a']).toBe('');
+  });
+
+  it('links again before restore after another device changes the account link', async () => {
+    await android.identifyRevenueCatUser('billing-a');
+    push();
+    server['billing-a'] = 'another-install';
+    await expect(android.reconcileRevenueCatPurchases('billing-a', () => true)).resolves.toBe(true);
+    expect(server['billing-a']).toBe('af-device');
+  });
+
+  it.each(['pending', 'undecided', 'revoked'] as const)(
+    'does not read or link an identifier with %s consent',
+    async (consent) => {
+      mockConsent = consent;
+      await android.identifyRevenueCatUser('billing-a');
+      await android.withRevenueCatUser('billing-a', async () => push());
+      expect(server['billing-a'] ?? '').toBe('');
+      expect(mockGetRevenueId).not.toHaveBeenCalled();
+    },
+  );
+
+  it('discards a delayed identifier when another account is requested', async () => {
+    let resolveId!: (id: string) => void;
+    mockGetRevenueId.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveId = resolve;
+        }),
+    );
+    const first = android.identifyRevenueCatUser('billing-a');
+    await flush();
+    const second = android.identifyRevenueCatUser('billing-b');
+    resolveId('stale-a-id');
+    await Promise.all([first, second]);
+    push();
+    expect(server['billing-a'] ?? '').toBe('');
+    expect(server['billing-b']).toBe('af-device');
+  });
+
+  it('does not relink after logout fails', async () => {
+    await android.identifyRevenueCatUser('billing-a');
+    push();
+    sdk.logOut.mockRejectedValueOnce(new Error('offline'));
+    await android.resetRevenueCatUser();
+    mockAttributionListener?.();
+    await flush();
+    push();
+    expect(server['billing-a']).toBe('');
+  });
+
+  it('refreshes the account link immediately before a store operation', async () => {
+    await android.identifyRevenueCatUser('billing-a');
+    push();
+    server['billing-a'] = 'another-install';
+    await android.withRevenueCatUser('billing-a', async () => push());
+    expect(server['billing-a']).toBe('af-device');
+  });
+
+  it('clears consent withdrawn during linking before the store operation posts', async () => {
+    await android.identifyRevenueCatUser('billing-a');
+    sdk.setAttributes.mockImplementation(async (attributes) => {
+      storeLocally(attributes.$appsflyerId as string);
+      if (attributes.$appsflyerId === 'af-device') mockConsent = 'revoked';
+    });
+    await android.withRevenueCatUser('billing-a', async () => push());
+    expect(server['billing-a']).toBe('');
+  });
+
+  it('skips the store operation if the account changes during linking', async () => {
+    await android.identifyRevenueCatUser('billing-a');
+    let current = true;
+    const operation = jest.fn(async () => push());
+    mockGetRevenueId.mockImplementationOnce(async () => {
+      current = false;
+      return 'af-device';
+    });
+    await expect(
+      android.withRevenueCatUser('billing-a', operation, () => {
+        if (!current) throw new Error('account changed');
+      }),
+    ).rejects.toThrow('account changed');
+    expect(operation).not.toHaveBeenCalled();
+  });
+});
