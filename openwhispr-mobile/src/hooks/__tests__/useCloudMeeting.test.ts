@@ -6,6 +6,10 @@ import type {
   RealtimeSession,
 } from '@/services/transcription/RealtimeMeetingWsService.android';
 
+jest.mock('@/android/providers/liveMeeting', () => ({
+  liveMeetingDeps: () => ({}),
+  meetingKey: () => null,
+}));
 jest.mock('@/services/transcription/RealtimeMeetingWsService.android', () => ({
   startRealtimeMeetingWs: jest.fn(),
 }));

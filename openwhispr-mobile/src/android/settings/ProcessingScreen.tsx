@@ -25,7 +25,7 @@ import {
   useSavedKeys,
   type KeyTask,
 } from './ownKey';
-import { effectiveSelection, taskSummary, useChoosePhone } from './processingTasks';
+import { effectiveSelection, meetingSummary, taskSummary, useChoosePhone } from './processingTasks';
 import { useSettingsT, type SettingsKey } from './strings';
 
 /** The selected row's check, landing (200 ms) when the choice changes. */
@@ -126,6 +126,7 @@ export default function ProcessingScreen() {
   const [sheet, setSheet] = useState(false);
 
   const dictation = effectiveSelection(config, 'dictation', activeMode, cloudAccess);
+  const meeting = meetingSummary(t, activeMode);
   // Your own key as the default: the key dictation used before, else any saved key that can
   // transcribe; with none saved, the key sheet opens.
   const chooseKey = () => {
@@ -231,7 +232,8 @@ export default function ProcessingScreen() {
         })}
         <ListRow
           title={t('meetings')}
-          subtitle={t(activeMode === 'private' ? 'meetingPhoneValue' : 'meetingCloudValue')}
+          badge={meeting.changed ? <Badge label={t('changed')} neutral /> : undefined}
+          subtitle={meeting.engine}
           onPress={() => openTask('meeting')}
         />
       </Group>

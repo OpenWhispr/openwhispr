@@ -15,15 +15,21 @@ import {
   setProviderCredential,
   subscribeProviderCredentialChanges,
 } from '@/services/providers/ProviderCredentials';
+import { LIVE_MODEL, isLiveProvider } from '../providers/liveMeeting';
 import type { KeyProviderId } from './keyCheck';
 
-/** The tasks on Processing, in order. Meetings has its own page and no key yet. */
+/** The tasks with a Runs on page of their own, in order. Meetings has its own page. */
 export const TASKS = ['dictation', 'upload', 'cleanup', 'notes'] as const;
 export type KeyTask = (typeof TASKS)[number];
+/** Every task a key can run, as the key sheet lists them. */
+export const SHEET_TASKS = [...TASKS, 'meeting'] as const;
+export type SheetTask = (typeof SHEET_TASKS)[number];
 
 export const KEY_PROVIDERS: { id: KeyProviderId; name: string; keyUrl: string }[] = [
   { id: 'openai', name: 'OpenAI', keyUrl: 'https://platform.openai.com/api-keys' },
   { id: 'groq', name: 'Groq', keyUrl: 'https://console.groq.com/keys' },
+  { id: 'deepgram', name: 'Deepgram', keyUrl: 'https://console.deepgram.com' },
+  { id: 'assemblyai', name: 'AssemblyAI', keyUrl: 'https://www.assemblyai.com/dashboard' },
   { id: 'openrouter', name: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys' },
 ];
 
@@ -38,12 +44,15 @@ export function providerModels(provider: string, task: MobileInferenceScope): st
   return definition.models.filter((model) => !model.legacy).map((model) => model.id);
 }
 
-export function providerCanRun(provider: string, task: MobileInferenceScope): boolean {
+/** Meetings need a provider that transcribes while people talk. */
+export function providerCanRun(provider: string, task: MobileInferenceScope | 'meeting'): boolean {
+  if (task === 'meeting') return isLiveProvider(provider);
   return getMobileProvidersForScope(task).some((item) => item.id === provider);
 }
 
 /** The model a task starts on with a provider: the one used before, else the provider's best. */
-export function startingModel(provider: string, task: MobileInferenceScope): string {
+export function startingModel(provider: string, task: MobileInferenceScope | 'meeting'): string {
+  if (task === 'meeting') return isLiveProvider(provider) ? LIVE_MODEL[provider] : '';
   const remembered = useConfigStore.getState().config?.rememberedInference?.[task]?.[provider];
   if (remembered?.modelId) return remembered.modelId;
   if (provider === 'openrouter') return OPENROUTER_DEFAULT_MODEL;
@@ -92,7 +101,7 @@ export function maskKey(key: string): string {
 /** Runs a task on a provider whose key is saved, on the model it used before or its best one. */
 export async function runTaskOnKey(
   provider: KeyProviderId,
-  task: MobileInferenceScope,
+  task: MobileInferenceScope | 'meeting',
   modelId = startingModel(provider, task),
 ): Promise<void> {
   const selection: InferenceSelection = {
@@ -103,6 +112,12 @@ export async function runTaskOnKey(
   };
   const { activeMode, setActiveMode } = useProcessingModeStore.getState();
   const { updateConfig } = useConfigStore.getState();
+  // Meetings keep their key beside the other tasks' choices; nothing else follows it.
+  if (task === 'meeting') {
+    const config = useConfigStore.getState().config;
+    await updateConfig({ inference: { ...config?.inference, meeting: selection } });
+    return;
+  }
   await updateConfig(
     workflowSaveConfig(useConfigStore.getState().config, task, selection, activeMode),
   );
@@ -110,15 +125,23 @@ export async function runTaskOnKey(
   if (task === 'dictation') setActiveMode('providers', true);
 }
 
+/** Meetings go back to following the default for every task. */
+export async function clearMeetingKey(): Promise<void> {
+  const { config, updateConfig } = useConfigStore.getState();
+  if (!config?.inference?.meeting) return;
+  const { meeting: _meeting, ...rest } = config.inference;
+  await updateConfig({ inference: rest });
+}
+
 /** Saves the key once, then runs each ticked task on it. Dictation goes first: it sets the mode. */
 export async function applyKeyToTasks(
   provider: KeyProviderId,
   apiKey: string,
-  tasks: KeyTask[],
+  tasks: SheetTask[],
 ): Promise<void> {
   await setProviderCredential(await getProviderCredentialReference(provider), {
     apiKey: apiKey.trim(),
   });
-  const ordered = TASKS.filter((task) => tasks.includes(task));
+  const ordered = SHEET_TASKS.filter((task) => tasks.includes(task));
   for (const task of ordered) await runTaskOnKey(provider, task);
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { liveMeetingDeps } from '@/android/providers/liveMeeting';
 import {
   startRealtimeMeetingWs,
   type RealtimeSession,
@@ -72,6 +73,15 @@ export function useCloudMeeting({
     setError(null);
     setElapsedSeconds(0);
     setStatus('connecting');
+    // A key saved for meetings connects the leg itself; otherwise OpenWhispr Cloud does.
+    let deps: ReturnType<typeof liveMeetingDeps>;
+    try {
+      deps = liveMeetingDeps(language);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setStatus('error');
+      return;
+    }
     startRealtimeMeetingWs(
       { language, noteId, signal: controller.signal },
       {
@@ -108,6 +118,7 @@ export function useCloudMeeting({
           if (!stoppedRef.current) setStatus('live');
         },
       },
+      deps,
     )
       .then((session) => {
         if (cancelled || stoppedRef.current) {
