@@ -125,6 +125,7 @@ test("classifies definitive refusals and uncertain responses without exposing CR
       "FIELD_CUSTOM_VALIDATION_EXCEPTION",
     ],
     [503, '{"message":"private"}', "unknown", "http_503"],
+    // Without a Location header net.fetch does return the 3xx.
     [302, "", "unknown", "redirect_refused"],
     [201, "broken", "unknown", "bad_response"],
   ]) {
@@ -135,6 +136,14 @@ test("classifies definitive refusals and uncertain responses without exposing CR
     assert.doesNotMatch(JSON.stringify(result), /private/);
     assert.equal(calls.length, 1);
   }
+});
+
+test("a redirect, which Electron's net.fetch rejects, is refused and never followed", async () => {
+  const { api, calls } = setup(new Error("Redirect was cancelled"));
+  const result = await api.request(REQUEST);
+  assert.equal(result.errorCode, "redirect_refused");
+  assert.equal(result.outcome, "unknown");
+  assert.equal(calls.length, 1);
 });
 
 test("transport failures are never retried and distinguish preconnect from uncertain writes", async () => {

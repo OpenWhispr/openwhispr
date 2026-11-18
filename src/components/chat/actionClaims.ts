@@ -28,7 +28,14 @@ const KINDS: Record<
 > = {
   send: {
     verbs: "sent|messaged|posted",
-    tools: ["email_draft", "slack_send_message", "linear_comment", "github_comment"],
+    tools: [
+      "email_draft",
+      "slack_send_message",
+      "linear_comment",
+      "github_comment",
+      "salesforce_export_conversation",
+      "salesforce_update_fields",
+    ],
     did: wentOut,
   },
   // "Emailed" names its channel: a Slack message never backs it.
@@ -46,6 +53,7 @@ const KINDS: Record<
       "github_create_issue",
       "linear_comment",
       "github_comment",
+      "salesforce_export_conversation",
     ],
     did: (call) => (call.name === "create_note" ? call.status === "completed" : wentOut(call)),
   },
@@ -219,7 +227,7 @@ interface Claim {
 
 const DESTINATION = /\bto\s+(#[\w-]+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|[A-Z][\w'’-]*)|\bin\s+(#[\w-]+)/;
 // "Posted it to Slack" names where, not whom.
-const SERVICE = /^(?:slack|gmail|outlook|linear|github|email)$/i;
+const SERVICE = /^(?:slack|gmail|outlook|linear|github|salesforce|email)$/i;
 
 const FORMS: ReadonlyArray<[RegExp, "first" | "report" | "sentTo"]> = [
   [FIRST_PERSON, "first"],

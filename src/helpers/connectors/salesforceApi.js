@@ -51,6 +51,9 @@ function createSalesforceApi({ fetchImpl }) {
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch (error) {
+      // Electron's net.fetch rejects a real redirect instead of returning the 3xx.
+      if (error?.message === "Redirect was cancelled")
+        return failure("redirect_refused", "unknown");
       // Salesforce's own codes are upper case too (ENTITY_IS_LOCKED), so a
       // transport code (ECONNRESET) would read as one of them.
       return failure("network", classifyTransportError(error));

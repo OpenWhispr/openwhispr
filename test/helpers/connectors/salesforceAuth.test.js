@@ -4,6 +4,7 @@ const {
   createSalesforceAuth,
   SALESFORCE_CALLBACK_URL,
 } = require("../../../src/helpers/connectors/salesforceAuth");
+const { createSalesforceApi } = require("../../../src/helpers/connectors/salesforceApi");
 const { FakeFlowError, memoryCredentials } = require("./linearFixtures");
 const INSTANCE = "https://acme.my.salesforce.com";
 const NOW = 1700000000000;
@@ -197,13 +198,30 @@ test("refresh cannot replace a newer login or cross an org or instance boundary"
 });
 
 test("a refused refresh flags the login for reconnect without an automatic retry", async () => {
-  for (const response of [
-    { ok: false, errorCode: "invalid_grant", refused: true, status: 400, outcome: "failed" },
-    { ok: false, errorCode: "inactive_user", refused: true, status: 400, outcome: "failed" },
-    // The sign-in host moved (a renamed My Domain): asking again won't help.
-    { ok: false, errorCode: "redirect_refused", outcome: "unknown" },
+  // The sign-in host moved (a renamed My Domain): net.fetch rejects the redirect.
+  const moved = createSalesforceApi({
+    fetchImpl: async () => {
+      throw new Error("Redirect was cancelled");
+    },
+  });
+  for (const refresh of [
+    async () => ({
+      ok: false,
+      errorCode: "invalid_grant",
+      refused: true,
+      status: 400,
+      outcome: "failed",
+    }),
+    async () => ({
+      ok: false,
+      errorCode: "inactive_user",
+      refused: true,
+      status: 400,
+      outcome: "failed",
+    }),
+    () => moved.refreshToken({ client_id: "client" }, "https://login.salesforce.com"),
   ]) {
-    const { auth, calls, credentials } = setup({ refresh: async () => response });
+    const { auth, calls, credentials } = setup({ refresh });
     assert.equal(
       (await auth.getAccessToken(BINDING, { forceRefresh: true })).errorCode,
       "reconnect_needed"

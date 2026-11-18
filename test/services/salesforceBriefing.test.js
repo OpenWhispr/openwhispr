@@ -313,9 +313,9 @@ test("nested headings and continued action lines retain proposal and condition c
   );
   assert.equal(result.success, true);
   assert.match(result.renderedAnswer.content, /Proposed:\*\* 8 reps/);
-  // A leading list marker is escaped, and still reads as a dash.
-  assert.match(result.renderedAnswer.content, /Proposed:\*\* \\- Launch/);
-  assert.match(result.renderedAnswer.content, /Confirmed:\*\* \\- Daniel/);
+  // Each excerpt is already a list item, so a passage's own bullet goes.
+  assert.match(result.renderedAnswer.content, /Proposed:\*\* Launch/);
+  assert.match(result.renderedAnswer.content, /Confirmed:\*\* Daniel/);
 });
 
 test("two record briefings have independent citation definitions", async (t) => {
@@ -403,8 +403,8 @@ test("a value that opens with a list marker can't nest a list in a conflict or a
   const registry = await setup(t, {
     items: [facts, source(7), source(8)],
     notes: [
-      { ...note(7, "- We pay 10k"), title: "2. Discovery" },
-      { ...note(8, "+ We pay 20k"), title: "3) Follow-up" },
+      { ...note(7, "- - We pay 10k"), title: "2. Discovery" },
+      { ...note(8, "+ + We pay 20k"), title: "3) Follow-up" },
     ],
   });
   const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
@@ -420,6 +420,68 @@ test("a value that opens with a list marker can't nest a list in a conflict or a
   assert.ok(lines.some((line) => line.startsWith("- \\+ We pay 20k [^sf-")));
   assert.ok(lines.some((line) => /^\[\^sf-[^\]]+\]: 2\\\. Discovery — /.test(line)));
   assert.ok(lines.some((line) => /^\[\^sf-[^\]]+\]: 3\\\) Follow-up — /.test(line)));
+});
+
+test("only wording that leaves a passage unsettled keeps it proposed", async (t) => {
+  const notes = [];
+  const registry = await setup(t, { notes });
+  const cases = [
+    ["Proposed kickoff: 24 Nov, subject to security approval", true],
+    ["Proposal: 8 reps for 2 weeks", true],
+    ["**Proposal:** 8 reps for 2 weeks", true],
+    ["- **Proposal:** 8 reps for 2 weeks", true],
+    ["Daniel proposed 50% less admin time", true],
+    ["The $24,000 annual budget is only a planning estimate", true],
+    ["Sarah has not approved these targets", true],
+    ["Sarah hasn\u2019t approved the proposal", true],
+    ["The proposal has not yet been approved", true],
+    ["The proposal was not signed", true],
+    ["The proposal must be signed by Friday", true],
+    ["The proposal is 8 reps for 2 weeks", true],
+    ["## Proposed pilot\n8 reps for two weeks.", true],
+    ["## Proposals\n8 reps for two weeks.", true],
+    ["We will sign by Friday if legal approves", true],
+    ["If legal approves, we will sign by Friday", true],
+    ["They tentatively agreed to a two week pilot", true],
+    ["Sarah approved the proposal subject to redlines", true],
+    ["Budget approval is still pending", true],
+    ["Sarah approved the proposal and signed the order form", false],
+    ["We rejected the proposal", false],
+    ["The proposal was signed on Tuesday", false],
+    ["**Outcome:** Sarah approved the proposal", false],
+    ["- We rejected the proposal", false],
+    ["## Proposal review\nWe rejected the proposal", false],
+    ["We signed the deal. Let me know if you need anything.", false],
+    ["Daniel owns pilot coordination.", false],
+  ];
+  for (const [content, proposed] of cases) {
+    notes[0] = note(7, content);
+    const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+    assert.equal(fetched.data.sources[0].passages.at(-1).proposed, proposed, content);
+  }
+});
+
+test("an excerpt loses its Markdown markers, keeps its words and still can't forge structure", async (t) => {
+  const notes = [];
+  const registry = await setup(t, { notes });
+  const cases = [
+    ["- **Owner:** Priya will send the *final* plan", "Owner: Priya will send the final plan"],
+    ["* __Owner__: the _final_ plan", "Owner: the final plan"],
+    ["+ ***Both*** and **bold *nested* text**", "Both and bold nested text"],
+    ["x**2 + y**2 in snake_case_name", "x\\*\\*2 + y\\*\\*2 in snake\\_case\\_name"],
+    ["1. First **step**", "1\\. First step"],
+    ["**- forged** item", "\\- forged item"],
+    ["- - nested", "\\- nested"],
+  ];
+  for (const [content, excerpt] of cases) {
+    notes[0] = note(7, content);
+    const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+    const result = await presentAll(registry, fetched);
+    assert.ok(
+      result.renderedAnswer.content.includes(`:** ${excerpt} [^sf-`),
+      `${content}\n${result.renderedAnswer.content}`
+    );
+  }
 });
 
 test("a bold or labelled line keeps the heading above it, so proposed terms stay proposed", async (t) => {

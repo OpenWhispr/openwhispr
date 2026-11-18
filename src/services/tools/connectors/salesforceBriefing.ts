@@ -134,10 +134,27 @@ function safeLink(value: unknown): string {
 function failure(message: string): ToolResult {
   return { success: false, data: null, displayText: message };
 }
+// English wording only: in another language the model's label stands.
+const UNSETTLED =
+  /\bpropos(?!als?\b)\w*|\b(?:tentative(?:ly)?|indicative|planning estimate|subject to|unapproved|unless|pending|contingent (?:on|upon)|provided that|assuming|depending on)\b|(?<!\b(?:know|see|ask|asked|check|wonder)\s)\bif\b|(?:\b(?:not|never)|n['’]t)\s+(?:\w+\s+){0,2}approved\b/i;
+// What became of a proposal: "must be signed" and "was not signed" don't say.
+const SETTLED =
+  /(?<!(?:\b(?:not|never|be|once|until)|n['’]t)\s+(?:\w+\s+){0,2})\b(?:approved|accepted|agreed|signed|rejected|declined)\b/i;
+
 function isProposed(value: string): boolean {
-  return /\b(propos\w*|tentative|indicative|planning estimate|subject to|not approved|unapproved)\b/i.test(
-    value
-  );
+  return UNSETTLED.test(value) || (/\bproposals?\b/i.test(value) && !SETTLED.test(value));
+}
+
+// Paired markers with a line edge or a non-word character outside them, so
+// x**2 and snake_case stay as written. Run twice for emphasis inside bold.
+const EMPHASIS = /(^|[^\w*_])(\*\*|__|\*|_)(?=\S)([^\n]{1,500}?)(?<=\S)\2(?=$|[^\w*_])/gm;
+
+// A note's Markdown without its markers: each excerpt is already a list item.
+function excerptText(value: string): string {
+  return value
+    .replace(/^[-*+]\s+/, "")
+    .replace(EMPHASIS, "$1$3")
+    .replace(EMPHASIS, "$1$3");
 }
 
 // Deeper than any Markdown heading: a bold or "Label:" line nests under the
@@ -399,7 +416,7 @@ function renderBriefing(briefing: Briefing, presentation?: Presentation): string
         value: markdown(crmFact.value),
       });
     if (!citations.has(passageId)) citations.set(passageId, citations.size + 1);
-    return `${markdown(passageSource(passageId).passage.text)} [^sf-${briefing.id}-${citations.get(passageId)}]`;
+    return `${markdown(excerptText(passageSource(passageId).passage.text))} [^sf-${briefing.id}-${citations.get(passageId)}]`;
   };
   for (const category of CATEGORY) {
     const findings =
