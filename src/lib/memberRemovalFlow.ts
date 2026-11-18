@@ -18,6 +18,8 @@ export type MemberRemovalState =
       /** The preview said this workspace's removal can wipe the members' devices. */
       canWipeDevices: boolean;
       wipeDevices: boolean;
+      /** An attempt may have gone through, so its choice stands until the dialog is reopened. */
+      wipeLocked: boolean;
       error?: RemovalError;
     };
 
@@ -60,6 +62,7 @@ function confirmWith(state: OpenState, owners: OwnedMemberContent[]): OpenState 
     defaultOwnerId: state.defaultOwnerId,
     canWipeDevices: state.canWipeDevices,
     wipeDevices: state.wipeDevices,
+    wipeLocked: state.wipeLocked,
   };
 }
 
@@ -91,6 +94,7 @@ export function memberRemovalReducer(
         defaultOwnerId: event.defaultOwnerId,
         canWipeDevices: false,
         wipeDevices: true,
+        wipeLocked: false,
       };
     case "previewed": {
       if (state.kind !== "checking") return state;
@@ -127,6 +131,7 @@ export function memberRemovalReducer(
         defaultOwnerId: state.defaultOwnerId,
         canWipeDevices: state.canWipeDevices,
         wipeDevices: state.wipeDevices,
+        wipeLocked: state.wipeLocked,
       };
     case "failed": {
       if (state.kind !== "running") return state;
@@ -138,7 +143,13 @@ export function memberRemovalReducer(
       if (error.kind === "invalidTransferTarget") {
         return { ...state, kind: "failed", transferTo: state.defaultOwnerId, error };
       }
-      return { ...state, kind: "failed", error };
+      const mayHaveLanded = error.kind === "failed" || error.kind === "gone";
+      return {
+        ...state,
+        kind: "failed",
+        wipeLocked: state.wipeLocked || mayHaveLanded,
+        error,
+      };
     }
     case "succeeded":
       return state.kind === "running" ? { kind: "closed" } : state;
@@ -148,13 +159,12 @@ export function memberRemovalReducer(
 }
 
 /**
- * Whether the wipe choice can still change. Not once a removal that may have gone through failed:
- * a retry then finds them gone and changes nothing, so the first attempt's choice stands.
+ * Whether the wipe choice can still change. Not once a removal that may have gone through failed,
+ * even if a retry is then refused: a later attempt finds them gone and changes nothing, so the
+ * first attempt's choice stands.
  */
 export function canChangeWipeChoice(state: MemberRemovalState): boolean {
-  if (state.kind === "confirm") return true;
-  if (state.kind !== "failed") return false;
-  return state.error?.kind !== "failed" && state.error?.kind !== "gone";
+  return (state.kind === "confirm" || state.kind === "failed") && !state.wipeLocked;
 }
 
 /** Whether the removal moves content to a new owner. */

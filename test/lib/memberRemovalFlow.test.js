@@ -43,6 +43,7 @@ test("opening checks first", async () => {
     defaultOwnerId: SELF.user_id,
     canWipeDevices: false,
     wipeDevices: true,
+    wipeLocked: false,
   });
   assert.equal(needsTransfer(state), false);
 });
@@ -244,6 +245,19 @@ test("the wipe choice locks once a removal that may have gone through failed", a
     assert.equal(canChangeWipeChoice(failed), false, error.kind);
     const untick = { type: "setWipeDevices", wipeDevices: false };
     assert.equal(memberRemovalReducer(failed, untick), failed, error.kind);
+
+    // A refused retry says nothing about the attempt before it.
+    const retried = memberRemovalReducer(failed, { type: "confirm" });
+    const refused = memberRemovalReducer(retried, {
+      type: "failed",
+      error: { kind: "rateLimited" },
+    });
+    assert.equal(canChangeWipeChoice(refused), false, error.kind);
+
+    // Opened again, the choice is the admin's once more.
+    const reopened = memberRemovalReducer(refused, open());
+    const confirm = memberRemovalReducer(reopened, { type: "previewFailed" });
+    assert.equal(canChangeWipeChoice(confirm), true, error.kind);
   }
 });
 
@@ -406,6 +420,7 @@ test("a preview the server refuses fails with no owners", async () => {
     defaultOwnerId: SELF.user_id,
     canWipeDevices: false,
     wipeDevices: true,
+    wipeLocked: false,
     error: DIRECTORY_MANAGED,
   });
   assert.equal(needsTransfer(state), false);
