@@ -207,3 +207,11 @@ test("exports the exact production thresholds", () => {
   assert.equal(gate.MEETING_MIC_BLEED_RMS_CEILING, 0.018);
   assert.equal(gate.MEETING_MIC_BLEED_PEAK_CEILING, 0.07);
 });
+
+test("computeChunkStats handles a Buffer view at an odd byte offset", () => {
+  const even = fx.toInt16Buffer(new Float32Array([0.5, -0.5, 0.25, -0.25]));
+  const padded = Buffer.concat([Buffer.alloc(1), even]);
+  const sliced = padded.subarray(1);
+  assert.equal(sliced.byteOffset % 2, padded.byteOffset % 2 === 0 ? 1 : 0);
+  assert.deepEqual(gate.computeChunkStats(sliced), gate.computeChunkStats(even));
+});
