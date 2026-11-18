@@ -5086,6 +5086,14 @@
     "permissionRestricted": "Restricted",
     "permissionNotDetermined": "Not requested"
   },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "Calendar is connected",
+      "connectedBody": "You can close this tab and return to {{brand}}.",
+      "failedTitle": "Calendar wasn't connected",
+      "failedBody": "Connecting the calendar didn't finish. Return to {{brand}} to try again."
+    }
+  },
   "titaniumAccount": {
     "title": "Titanium account",
     "description": "Sign in with your Titanium Labs account to use {{brand}} with our transcription servers.",

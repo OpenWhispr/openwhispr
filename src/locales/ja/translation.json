@@ -5086,6 +5086,14 @@
     "permissionRestricted": "制限あり",
     "permissionNotDetermined": "未要求"
   },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "カレンダーが接続されました",
+      "connectedBody": "このタブを閉じて{{brand}}に戻ることができます。",
+      "failedTitle": "カレンダーは接続されませんでした",
+      "failedBody": "カレンダーの接続が完了しませんでした。{{brand}}に戻ってもう一度お試しください。"
+    }
+  },
   "titaniumAccount": {
     "title": "Titanium アカウント",
     "description": "Titanium Labs アカウントでサインインすると、{{brand}} で当社の文字起こしサーバーを使えます。",

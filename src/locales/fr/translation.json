@@ -5086,6 +5086,14 @@
     "permissionRestricted": "Restreint",
     "permissionNotDetermined": "Non demandé"
   },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "Le calendrier est connecté",
+      "connectedBody": "Vous pouvez fermer cet onglet et retourner dans {{brand}}.",
+      "failedTitle": "Le calendrier n'a pas été connecté",
+      "failedBody": "La connexion du calendrier n'a pas abouti. Retournez dans {{brand}} pour réessayer."
+    }
+  },
   "titaniumAccount": {
     "title": "Compte Titanium",
     "description": "Connectez-vous avec votre compte Titanium Labs pour utiliser {{brand}} avec nos serveurs de transcription.",
