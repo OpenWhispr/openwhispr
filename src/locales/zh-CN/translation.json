@@ -6253,7 +6253,9 @@
       "failedTitle_one": "无法移除 {{count}} 位成员",
       "failedTitle_other": "无法移除 {{count}} 位成员",
       "transferDone_one": "已将内容和 Teamspace 管理权限重新分配给 {{name}}。已移除 {{count}} 位成员。",
-      "transferDone_other": "已将内容和 Teamspace 管理权限重新分配给 {{name}}。已移除 {{count}} 位成员。"
+      "transferDone_other": "已将内容和 Teamspace 管理权限重新分配给 {{name}}。已移除 {{count}} 位成员。",
+      "wipeDevices": "清除其设备上的 OpenWhispr 数据",
+      "wipeDevicesHint": "下次 OpenWhispr 在此工作区为其管理的设备上连接时，会删除该设备上的所有笔记、录音和设置，包括其他账户的数据。"
     },
     "cancelInvitation": {
       "title": "取消发给 {{email}} 的邀请？",

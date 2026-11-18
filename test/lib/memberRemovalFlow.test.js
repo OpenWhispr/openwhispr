@@ -41,6 +41,8 @@ test("opening checks first", async () => {
     owners: [],
     transferTo: null,
     defaultOwnerId: SELF.user_id,
+    canWipeDevices: false,
+    wipeDevices: true,
   });
   assert.equal(needsTransfer(state), false);
 });
@@ -167,6 +169,82 @@ test("confirm runs from confirm or failed and clears the error", async () => {
 
   const checking = memberRemovalReducer({ kind: "closed" }, open());
   assert.equal(memberRemovalReducer(checking, { type: "confirm" }), checking);
+});
+
+test("a managed workspace's preview asks whether to wipe their devices, ticked", async () => {
+  const { memberRemovalReducer } = await load();
+
+  const managed = run(memberRemovalReducer, [
+    open(),
+    { type: "previewed", owners: [], canWipeDevices: true },
+  ]);
+  assert.equal(managed.canWipeDevices, true);
+  assert.equal(managed.wipeDevices, true);
+
+  // An older API leaves it out, and anything but true reads as no choice.
+  for (const canWipeDevices of [undefined, "true", 1]) {
+    const state = run(memberRemovalReducer, [
+      open(),
+      { type: "previewed", owners: [], canWipeDevices },
+    ]);
+    assert.equal(state.canWipeDevices, false);
+  }
+  // A preview that couldn't tell still asks, since the server wipes when told nothing.
+  assert.equal(
+    run(memberRemovalReducer, [open(), { type: "previewFailed" }]).canWipeDevices,
+    true
+  );
+});
+
+test("the wipe choice changes in confirm or failed only, and outlives a refused run", async () => {
+  const { memberRemovalReducer, canChangeWipeChoice } = await load();
+  const untick = { type: "setWipeDevices", wipeDevices: false };
+
+  const checking = memberRemovalReducer({ kind: "closed" }, open());
+  assert.equal(memberRemovalReducer(checking, untick), checking);
+
+  const unticked = run(
+    memberRemovalReducer,
+    [{ type: "previewed", owners: [], canWipeDevices: true }, untick],
+    checking
+  );
+  assert.equal(unticked.wipeDevices, false);
+  const running = memberRemovalReducer(unticked, { type: "confirm" });
+  assert.equal(memberRemovalReducer(running, untick), running);
+  assert.equal(running.wipeDevices, false);
+
+  const transfer = memberRemovalReducer(running, {
+    type: "failed",
+    error: { kind: "transferRequired", owners: [owns("u-alex")] },
+  });
+  assert.equal(transfer.canWipeDevices, true);
+  assert.equal(transfer.wipeDevices, false);
+
+  const refused = memberRemovalReducer(memberRemovalReducer(transfer, { type: "confirm" }), {
+    type: "failed",
+    error: { kind: "rateLimited" },
+  });
+  assert.equal(canChangeWipeChoice(refused), true);
+  assert.equal(
+    memberRemovalReducer(refused, { type: "setWipeDevices", wipeDevices: true }).wipeDevices,
+    true
+  );
+});
+
+test("the wipe choice locks once a removal that may have gone through failed", async () => {
+  const { memberRemovalReducer, canChangeWipeChoice } = await load();
+  const running = run(memberRemovalReducer, [
+    open(),
+    { type: "previewed", owners: [], canWipeDevices: true },
+    { type: "confirm" },
+  ]);
+
+  for (const error of [{ kind: "failed" }, { kind: "gone" }]) {
+    const failed = memberRemovalReducer(running, { type: "failed", error });
+    assert.equal(canChangeWipeChoice(failed), false, error.kind);
+    const untick = { type: "setWipeDevices", wipeDevices: false };
+    assert.equal(memberRemovalReducer(failed, untick), failed, error.kind);
+  }
 });
 
 test("a transfer_required answer switches to the transfer branch", async () => {
@@ -326,6 +404,8 @@ test("a preview the server refuses fails with no owners", async () => {
     owners: [],
     transferTo: null,
     defaultOwnerId: SELF.user_id,
+    canWipeDevices: false,
+    wipeDevices: true,
     error: DIRECTORY_MANAGED,
   });
   assert.equal(needsTransfer(state), false);

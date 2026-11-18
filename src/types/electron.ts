@@ -945,6 +945,8 @@ export interface MemberRemovalPreview {
   members: OwnedMemberContent[];
   already_removed: string[];
   transfer_required: boolean;
+  /** A managed workspace's removal can wipe their devices; absent from an older API. */
+  can_wipe_devices?: boolean;
 }
 
 export interface MemberRemovalResult {

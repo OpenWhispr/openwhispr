@@ -3850,7 +3850,9 @@
       "failedTitle_one": "Impossible de retirer {{count}} membre",
       "failedTitle_other": "Impossible de retirer {{count}} membres",
       "transferDone_one": "Contenu et accès admin de teamspace réattribués à {{name}}. {{count}} membre retiré.",
-      "transferDone_other": "Contenu et accès admin de teamspace réattribués à {{name}}. {{count}} membres retirés."
+      "transferDone_other": "Contenu et accès admin de teamspace réattribués à {{name}}. {{count}} membres retirés.",
+      "wipeDevices": "Effacer les données OpenWhispr des appareils concernés",
+      "wipeDevicesHint": "La prochaine fois qu'OpenWhispr se connectera sur l'un de ces appareils gérés par cet espace, il y supprimera toutes les notes, tous les enregistrements et tous les paramètres, y compris ceux des autres comptes."
     },
     "cancelInvitation": {
       "title": "Annuler l'invitation de {{email}} ?",

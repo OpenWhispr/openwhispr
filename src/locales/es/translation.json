@@ -6274,7 +6274,9 @@
       "failedTitle_one": "No se pudo eliminar a {{count}} miembro",
       "failedTitle_other": "No se pudo eliminar a {{count}} miembros",
       "transferDone_one": "Se reasignaron el contenido y el acceso de administrador de teamspace a {{name}}. Se eliminó a {{count}} miembro.",
-      "transferDone_other": "Se reasignaron el contenido y el acceso de administrador de teamspace a {{name}}. Se eliminó a {{count}} miembros."
+      "transferDone_other": "Se reasignaron el contenido y el acceso de administrador de teamspace a {{name}}. Se eliminó a {{count}} miembros.",
+      "wipeDevices": "Borrar los datos de OpenWhispr de sus dispositivos",
+      "wipeDevicesHint": "La próxima vez que OpenWhispr se conecte en uno de sus dispositivos gestionados por este espacio de trabajo, borrará allí todas las notas, grabaciones y ajustes, incluidos los de otras cuentas."
     },
     "cancelInvitation": {
       "title": "¿Cancelar la invitación para {{email}}?",

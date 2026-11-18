@@ -3,7 +3,8 @@ import type { RemovalError } from "./workspaceErrors";
 
 // Pure state machine for removing one or more members. It checks who owns content before
 // asking: with no owners it is a plain confirm, otherwise a new owner is picked (you, unless
-// changed) and the content moves to them as the members are removed.
+// changed) and the content moves to them as the members are removed. A managed workspace also
+// asks whether their devices wipe OpenWhispr's data, ticked unless the admin unticks it.
 export type RemovalPhase = "checking" | "confirm" | "running" | "failed";
 
 export type MemberRemovalState =
@@ -14,17 +15,21 @@ export type MemberRemovalState =
       owners: OwnedMemberContent[];
       transferTo: string | null;
       defaultOwnerId: string;
+      /** The preview said this workspace's removal can wipe the members' devices. */
+      canWipeDevices: boolean;
+      wipeDevices: boolean;
       error?: RemovalError;
     };
 
 export type MemberRemovalEvent =
   | { type: "open"; subjects: WorkspaceMember[]; defaultOwnerId: string }
   // The preview's entries; only those that own something are kept.
-  | { type: "previewed"; owners: unknown }
+  | { type: "previewed"; owners: unknown; canWipeDevices?: unknown }
   | { type: "previewFailed" }
   // The server refused to check at all, for a reason the removal would be refused for too.
   | { type: "previewRefused"; error: RemovalError }
   | { type: "pickOwner"; userId: string }
+  | { type: "setWipeDevices"; wipeDevices: boolean }
   | { type: "confirm" }
   | { type: "failed"; error: RemovalError }
   | { type: "succeeded" }
@@ -53,6 +58,8 @@ function confirmWith(state: OpenState, owners: OwnedMemberContent[]): OpenState 
     owners,
     transferTo: owners.length > 0 ? state.defaultOwnerId : null,
     defaultOwnerId: state.defaultOwnerId,
+    canWipeDevices: state.canWipeDevices,
+    wipeDevices: state.wipeDevices,
   };
 }
 
@@ -82,21 +89,32 @@ export function memberRemovalReducer(
         owners: [],
         transferTo: null,
         defaultOwnerId: event.defaultOwnerId,
+        canWipeDevices: false,
+        wipeDevices: true,
       };
-    case "previewed":
+    case "previewed": {
       if (state.kind !== "checking") return state;
+      const previewed = { ...state, canWipeDevices: event.canWipeDevices === true };
       // A list that can't be read says nothing about owners, as a failed preview doesn't.
-      if (!Array.isArray(event.owners)) return confirmWith(state, []);
-      return confirmWith(state, event.owners.filter(isOwnerEntry).filter(ownsContent));
+      if (!Array.isArray(event.owners)) return confirmWith(previewed, []);
+      return confirmWith(previewed, event.owners.filter(isOwnerEntry).filter(ownsContent));
+    }
     case "previewFailed":
-      // The removal itself tells the dialog when someone owns content (transfer_required).
-      return state.kind === "checking" ? confirmWith(state, []) : state;
+      // The removal itself tells the dialog when someone owns content (transfer_required). The
+      // wipe is still asked about: the server wipes when told nothing, and ignores the choice
+      // where a removal can't wipe.
+      return state.kind === "checking"
+        ? confirmWith({ ...state, canWipeDevices: true }, [])
+        : state;
     case "previewRefused":
       if (state.kind !== "checking") return state;
       return { ...state, kind: "failed", owners: [], transferTo: null, error: event.error };
     case "pickOwner":
       if (state.kind !== "confirm" && state.kind !== "failed") return state;
       return { ...state, transferTo: event.userId };
+    case "setWipeDevices":
+      if (state.kind === "closed" || !canChangeWipeChoice(state)) return state;
+      return { ...state, wipeDevices: event.wipeDevices };
     case "confirm":
       if (state.kind !== "confirm" && state.kind !== "failed") return state;
       // Trying again can't help until the identity provider stops assigning them.
@@ -107,6 +125,8 @@ export function memberRemovalReducer(
         owners: state.owners,
         transferTo: state.transferTo,
         defaultOwnerId: state.defaultOwnerId,
+        canWipeDevices: state.canWipeDevices,
+        wipeDevices: state.wipeDevices,
       };
     case "failed": {
       if (state.kind !== "running") return state;
@@ -125,6 +145,16 @@ export function memberRemovalReducer(
     case "dismiss":
       return state.kind === "running" || state.kind === "closed" ? state : { kind: "closed" };
   }
+}
+
+/**
+ * Whether the wipe choice can still change. Not once a removal that may have gone through failed:
+ * a retry then finds them gone and changes nothing, so the first attempt's choice stands.
+ */
+export function canChangeWipeChoice(state: MemberRemovalState): boolean {
+  if (state.kind === "confirm") return true;
+  if (state.kind !== "failed") return false;
+  return state.error?.kind !== "failed" && state.error?.kind !== "gone";
 }
 
 /** Whether the removal moves content to a new owner. */

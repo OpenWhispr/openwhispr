@@ -56,6 +56,7 @@ function textOf(node) {
 
 const GLOBALS = [
   "__actionDialogProps",
+  "__checkboxProps",
   "__menuContentProps",
   "__menuItems",
   "__menuItemTextValues",
@@ -118,6 +119,13 @@ async function loadDialog(t) {
         };
       `,
       "/MemberAvatar": "export default function MemberAvatar() { return null; }",
+      "/ui/checkbox": `
+        import React from "react";
+        export function Checkbox(props) {
+          globalThis.__checkboxProps = props;
+          return React.createElement("button", null, props.checked ? "☑" : "☐", props.children);
+        }
+      `,
       "/ui/dropdown-menu": `
         import React from "react";
         const passThrough = ({ children }) => React.createElement(React.Fragment, null, children);
@@ -481,6 +489,60 @@ test("a transfer sends the new owner and toasts the transfer", async (t) => {
   );
   assert.deepEqual(view.removed, [["u-liam", "u-alex"]]);
   assert.equal(view.text(), "");
+});
+
+test("a managed workspace offers to wipe their devices, ticked, and sends the choice", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => ({ ...preview([]), can_wipe_devices: true });
+  const view = await mount(opened([LIAM, ALEX]));
+
+  assert.match(view.text(), /☑workspaces\.removeMembers\.wipeDevices/);
+  // Announced with the box, through its description.
+  const hint = findById(view.container, globalThis.__checkboxProps.describedBy);
+  assert.equal(textOf(hint), "workspaces.removeMembers.wipeDevicesHint");
+  await view.act(() => globalThis.__checkboxProps.onChange(false));
+  assert.match(view.text(), /☐workspaces\.removeMembers\.wipeDevices/);
+  await view.clickPrimary();
+
+  assert.deepEqual(globalThis.__removeCalls, [
+    ["w1", { userIds: ["u-liam", "u-alex"], wipeDevices: false }],
+  ]);
+});
+
+test("a managed workspace's box left ticked sends the wipe", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => ({ ...preview([]), can_wipe_devices: true });
+  const view = await mount(opened([LIAM]));
+
+  await view.clickPrimary();
+
+  assert.deepEqual(globalThis.__removeCalls, [["w1", { userIds: ["u-liam"], wipeDevices: true }]]);
+});
+
+test("an unconfirmed removal locks the wipe box, so a retry can't claim another choice", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => ({ ...preview([]), can_wipe_devices: true });
+  globalThis.__removeImpl = async () => {
+    throw new Error("socket hang up");
+  };
+  const view = await mount(opened([LIAM]));
+  assert.equal(globalThis.__checkboxProps.disabled, false);
+
+  await view.clickPrimary();
+
+  assert.match(view.text(), /workspaces\.removeMembers\.unconfirmedTitle/);
+  assert.equal(globalThis.__checkboxProps.disabled, true);
+});
+
+test("a workspace without a policy offers no wipe and leaves it to the server", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+  globalThis.__previewImpl = async () => ({ ...preview([]), can_wipe_devices: false });
+  const view = await mount(opened([LIAM]));
+
+  assert.doesNotMatch(view.text(), /wipeDevices/);
+  await view.clickPrimary();
+
+  assert.deepEqual(globalThis.__removeCalls, [["w1", { userIds: ["u-liam"] }]]);
 });
 
 test("a removal without content sends no new owner and toasts the count", async (t) => {

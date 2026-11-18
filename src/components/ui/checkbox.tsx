@@ -9,6 +9,8 @@ interface CheckboxProps {
   children: ReactNode;
   disabled?: boolean;
   className?: string;
+  /** The id of text that explains the option, read after its label. */
+  describedBy?: string;
 }
 
 /** A labelled checkbox row: a button, so Space and a click both toggle it. */
@@ -18,12 +20,14 @@ export function Checkbox({
   children,
   disabled = false,
   className,
+  describedBy,
 }: CheckboxProps) {
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={checked}
+      aria-describedby={describedBy}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(

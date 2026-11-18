@@ -6253,7 +6253,9 @@
       "failedTitle_one": "{{count}} 人のメンバーを削除できませんでした",
       "failedTitle_other": "{{count}} 人のメンバーを削除できませんでした",
       "transferDone_one": "コンテンツと Teamspace 管理者権限を {{name}} に引き継ぎました。{{count}} 人のメンバーを削除しました。",
-      "transferDone_other": "コンテンツと Teamspace 管理者権限を {{name}} に引き継ぎました。{{count}} 人のメンバーを削除しました。"
+      "transferDone_other": "コンテンツと Teamspace 管理者権限を {{name}} に引き継ぎました。{{count}} 人のメンバーを削除しました。",
+      "wipeDevices": "メンバーのデバイスから OpenWhispr のデータを消去する",
+      "wipeDevicesHint": "このワークスペースがメンバー用に管理するデバイスで次に OpenWhispr が接続すると、そのデバイス上のすべてのノート、録音、設定が削除されます。他のアカウントのデータも含まれます。"
     },
     "cancelInvitation": {
       "title": "{{email}} への招待を取り消しますか？",

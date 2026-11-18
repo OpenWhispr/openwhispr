@@ -3844,7 +3844,9 @@
       "failedTitle_one": "{{count}} Mitglied konnte nicht entfernt werden",
       "failedTitle_other": "{{count}} Mitglieder konnten nicht entfernt werden",
       "transferDone_one": "Inhalte und Teamspace-Admin-Zugriff wurden {{name}} zugewiesen. {{count}} Mitglied entfernt.",
-      "transferDone_other": "Inhalte und Teamspace-Admin-Zugriff wurden {{name}} zugewiesen. {{count}} Mitglieder entfernt."
+      "transferDone_other": "Inhalte und Teamspace-Admin-Zugriff wurden {{name}} zugewiesen. {{count}} Mitglieder entfernt.",
+      "wipeDevices": "OpenWhispr-Daten auf den betroffenen Geräten löschen",
+      "wipeDevicesHint": "Sobald sich OpenWhispr das nächste Mal auf einem dieser Geräte verbindet, die dieser Workspace verwaltet, löscht es dort alle Notizen, Aufnahmen und Einstellungen, auch die anderer Konten."
     },
     "cancelInvitation": {
       "title": "Einladung für {{email}} zurückziehen?",
