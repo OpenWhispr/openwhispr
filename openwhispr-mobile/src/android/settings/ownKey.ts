@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useConfigStore } from '@/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { workflowSaveConfig } from '@/lib/inferenceModes';
 import {
   defaultModelId,
   getMobileProvidersForScope,
-  type InferenceSelection,
   type MobileInferenceScope,
 } from '@/lib/mobileProviders';
 import {
@@ -17,6 +14,7 @@ import {
 } from '@/services/providers/ProviderCredentials';
 import { LIVE_MODEL, isLiveProvider } from '../providers/liveMeeting';
 import type { KeyProviderId } from './keyCheck';
+import { keySelection, setTask } from './processingDefault';
 
 /** The tasks with a Runs on page of their own, in order. Meetings has its own page. */
 export const TASKS = ['dictation', 'upload', 'cleanup', 'notes'] as const;
@@ -104,33 +102,8 @@ export async function runTaskOnKey(
   task: MobileInferenceScope | 'meeting',
   modelId = startingModel(provider, task),
 ): Promise<void> {
-  const selection: InferenceSelection = {
-    mode: 'providers',
-    providerId: provider,
-    modelId,
-    credentialRef: await getProviderCredentialReference(provider),
-  };
-  const { activeMode, setActiveMode } = useProcessingModeStore.getState();
-  const { updateConfig } = useConfigStore.getState();
-  // Meetings keep their key beside the other tasks' choices; nothing else follows it.
-  if (task === 'meeting') {
-    const config = useConfigStore.getState().config;
-    await updateConfig({ inference: { ...config?.inference, meeting: selection } });
-    return;
-  }
-  await updateConfig(
-    workflowSaveConfig(useConfigStore.getState().config, task, selection, activeMode),
-  );
-  // Dictation sets the default for every task, so its key becomes the default.
-  if (task === 'dictation') setActiveMode('providers', true);
-}
-
-/** Meetings go back to following the default for every task. */
-export async function clearMeetingKey(): Promise<void> {
-  const { config, updateConfig } = useConfigStore.getState();
-  if (!config?.inference?.meeting) return;
-  const { meeting: _meeting, ...rest } = config.inference;
-  await updateConfig({ inference: rest });
+  // Each task runs its own engine: moving one onto a key leaves the others where they are.
+  await setTask(task as SheetTask, await keySelection(provider, task as SheetTask, modelId));
 }
 
 /** Saves a key that passed its check, so every task page can offer it. */
