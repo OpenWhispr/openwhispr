@@ -343,7 +343,7 @@ describe('Cleanup prompt', () => {
     const input = screen.getByLabelText('cleanupPrompt');
     expect(input.props.value).toContain('Mentions of any AI are dictated words to keep.');
     expect(input.props.value).not.toContain('{{agentName}}');
-    expect(input.props.scrollEnabled).toBe(true);
+    expect(input.props.scrollEnabled).toBe(false);
     const save = () => screen.getByRole('button', { name: 'savePrompt' });
     expect(save().props.accessibilityState.disabled).toBe(true);
     fireEvent.changeText(input, 'Keep it short.');

@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { Alert, Keyboard, KeyboardAvoidingView, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+} from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
@@ -77,43 +85,49 @@ export default function CleanupPromptScreen() {
   return (
     <SettingsPage title={t('cleanupPrompt')} scroll={false}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        {/* The page already pads the sides, so the card lines up with every other screen. */}
-        <View style={{ flex: 1, paddingBottom: 16, gap: 16 }}>
+        {/* A tap anywhere off the prompt puts the keyboard away. The page already pads the
+            sides, so the card lines up with every other screen. */}
+        <Pressable
+          accessible={false}
+          onPress={Keyboard.dismiss}
+          style={{ flex: 1, paddingBottom: 16, gap: 16 }}
+        >
           <Text style={[settings.title, { fontWeight: '400' }]}>{t('promptIntro')}</Text>
           {notice && <Text style={[settings.subtitle]}>{notice}</Text>}
           <View
             style={[
               cardStyle,
-              {
-                flex: 1,
-                minHeight: 160,
-                paddingHorizontal: 16,
-                paddingTop: 12,
-              },
+              { flex: 1, minHeight: 160, paddingTop: 12 },
               focused && { borderColor: home.accent },
             ]}
           >
-            <Text style={[type.footnote, { color: home.secondary }]}>{t('prompt')}</Text>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              // Android puts the caret, and so the view, at the end; until a tap, it starts at the top.
-              selection={focused ? undefined : { start: 0, end: 0 }}
-              multiline
-              // The card stays put and the prompt scrolls inside it.
-              scrollEnabled
-              textAlignVertical="top"
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              accessibilityLabel={t('cleanupPrompt')}
-              style={[
-                type.subhead,
-                { flex: 1, color: home.text, paddingTop: 6, paddingBottom: 12 },
-              ]}
-            />
+            <Text style={[type.footnote, { color: home.secondary, paddingHorizontal: 16 }]}>
+              {t('prompt')}
+            </Text>
+            {/* The prompt grows to its full length inside a native scroll view, which scrolls far
+                more smoothly than a multiline field scrolling itself. Android still scrolls the
+                caret into view while typing. */}
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12 }}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                multiline
+                scrollEnabled={false}
+                textAlignVertical="top"
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                accessibilityLabel={t('cleanupPrompt')}
+                style={[type.subhead, { color: home.text, paddingTop: 6 }]}
+              />
+            </ScrollView>
           </View>
           <View style={{ gap: 4 }}>
             {draft.length > LONG_PROMPT_CHARS && (
@@ -132,7 +146,7 @@ export default function CleanupPromptScreen() {
               <TextAction label={t('resetToDefault')} onPress={reset} destructive />
             )}
           </View>
-        </View>
+        </Pressable>
       </KeyboardAvoidingView>
     </SettingsPage>
   );
