@@ -138,8 +138,9 @@ function failure(message: string): ToolResult {
 // passage keeps the model's label.
 // "Will confirm if it's approved" asks a question; it sets no condition.
 const CONDITION = String.raw`(?<!\b(?:ask(?:s|ed|ing)?|check(?:s|ed|ing)?|confirm(?:s|ed|ing)?|see(?:s|ing)?|know(?:s|ing)?|verif(?:y|ies|ied|ying)|determin(?:e|es|ed|ing)|(?:find|finds|found|finding) out)\s+)\b(?:if|unless)\b`;
+const WILL = String.raw`(?:\bwill\b|\b\w+['’]ll\b)`;
 const UNSETTLED = new RegExp(
-  String.raw`\bpropos(?:e|ed|es|ing)\b|\b(?:tentative(?:ly)?|indicative|planning estimate|subject to|contingent (?:on|upon)|provided that|unapproved)\b|(?:\bnot|n['’]t)\s+(?:\w+\s+){0,2}approved\b|\bwill\b[^.!?\n]*${CONDITION}|${CONDITION}[^.!?\n]*\bwill\b`,
+  String.raw`\bpropos(?:e|ed|es|ing)\b|\b(?:tentative(?:ly)?|indicative|planning estimate|subject to|contingent (?:on|upon)|provided that|unapproved)\b|(?:\bnot|n['’]t)\s+(?:\w+\s+){0,2}approved\b|${WILL}[^.!?\n]*${CONDITION}|${CONDITION}[^.!?\n]*${WILL}`,
   "i"
 );
 

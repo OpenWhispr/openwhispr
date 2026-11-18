@@ -35,7 +35,7 @@ test("restart marks dispatched writes unknown; only a card prepared after that c
   assert.equal(restarted.begin(key, "activity", "old-card", 0), false);
   assert.equal(restarted.begin(key, "activity", "retry", restarted.get(key).version), true);
 });
-test("confirmed associations are scoped to owner, org, instance and exact destination", () => {
+test("confirmed associations are scoped to owner, org and exact destination", () => {
   const { store } = fixture();
   store.begin(key, "activity", "one", 0);
   store.finish(key, "activity", "one", "succeeded", "00T000000000001");
@@ -43,12 +43,30 @@ test("confirmed associations are scoped to owner, org, instance and exact destin
   for (const change of [
     { ownerAccountId: "other" },
     { organizationId: "other" },
-    { instanceUrl: "https://other.my.salesforce.com" },
     { recordId: "006000000000002" },
   ]) {
     assert.equal(store.list({ ...key, ...change }).length, 0);
     assert.equal(store.get({ ...key, ...change }), null);
   }
+});
+test("a renamed My Domain keeps the organization's associations", () => {
+  const { store } = fixture();
+  const renamed = { ...key, instanceUrl: "https://renamed.my.salesforce.com" };
+  store.begin(key, "activity", "one", 0);
+  store.finish(key, "activity", "one", "succeeded", "00T000000000001");
+  assert.equal(store.list(renamed).length, 1);
+  const saved = store.get(renamed);
+  assert.equal(saved.activity_id, "00T000000000001");
+  assert.equal(store.begin(renamed, "activity", "two", saved.version), true);
+  assert.equal(store.finish(renamed, "activity", "two", "succeeded", saved.activity_id), true);
+});
+test("a write in flight finishes under the instance URL it began on", () => {
+  const { store } = fixture();
+  const renamed = { ...key, instanceUrl: "https://renamed.my.salesforce.com" };
+  store.begin(key, "activity", "one", 0);
+  assert.equal(store.get(renamed), null);
+  assert.equal(store.finish(key, "activity", "one", "succeeded", "00T000000000001"), true);
+  assert.equal(store.get(renamed).activity_id, "00T000000000001");
 });
 
 test("closing and reopening SQLite preserves confirmed activity and interrupted field outcome", () => {

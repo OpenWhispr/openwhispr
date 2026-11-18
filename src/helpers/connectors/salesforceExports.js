@@ -58,8 +58,20 @@ function createSalesforceExports(databaseManager) {
       throw new Error("Invalid Salesforce operation kind");
     return `${kind}_state`;
   }
+  // A renamed My Domain moves the organization to a new instance URL and keeps
+  // its Task ids. A write still in flight finishes under the URL it began on.
+  function followInstance(key) {
+    database()
+      .prepare(
+        `UPDATE OR IGNORE salesforce_exports SET instance_url = ?
+        WHERE account_id = ? AND organization_id = ? AND instance_url != ?
+          AND activity_state != 'committing' AND fields_state != 'committing'`
+      )
+      .run(key.instanceUrl, key.ownerAccountId, key.organizationId, key.instanceUrl);
+  }
   return {
     get(key) {
+      followInstance(key);
       return (
         database()
           .prepare(`SELECT * FROM salesforce_exports WHERE ${where}`)
@@ -67,6 +79,7 @@ function createSalesforceExports(databaseManager) {
       );
     },
     list(key) {
+      followInstance(key);
       return database()
         .prepare(
           `SELECT note_id, activity_id, confirmed_at FROM salesforce_exports

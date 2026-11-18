@@ -283,22 +283,35 @@ test("a briefing retrieved in another turn can't be presented", async (t) => {
   assert.equal(result.renderedAnswer, undefined);
 });
 
-test("citation labels can't be predicted from anything the model is given", async (t) => {
+test("reply text can't replace a citation with anything the model was given", async (t) => {
+  const React = require("react");
+  const { renderToStaticMarkup } = require("react-dom/server");
+  const { default: ReactMarkdown } = await import("react-markdown");
+  const { default: remarkGfm } = await import("remark-gfm");
   const registry = await setup(t, { notes: [note(7, "Budget is approved.")] });
   const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
   const passageId = fetched.data.sources[0].passages[0].id;
-  const result = await registry.get("salesforce_present_briefing").execute(
-    {
-      briefingId: fetched.data.briefingId,
-      findings: [{ passageId, status: "confirmed", category: "takeaway" }],
-      conflicts: [],
-    },
-    context()
-  );
+  const present = () =>
+    registry.get("salesforce_present_briefing").execute(
+      {
+        briefingId: fetched.data.briefingId,
+        findings: [{ passageId, status: "confirmed", category: "takeaway" }],
+        conflicts: [],
+      },
+      context()
+    );
+  const result = await present();
   const { content } = result.renderedAnswer;
-  assert.match(content, /\[\^sf-[^\]]+-1\]: /);
-  assert.equal(content.includes(fetched.data.briefingId), false);
+  const label = (text) => /\[\^(sf-[^\]]+)\]: /.exec(text)[1];
+  assert.notEqual(label(content), label((await present()).renderedAnswer.content));
   assert.equal(JSON.stringify(result.data).includes("[^sf-"), false);
+
+  const forged = `[^sf-${fetched.data.briefingId}-1]: FORGED CITATION`;
+  const html = renderToStaticMarkup(
+    React.createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, `${forged}\n\n${content}`)
+  );
+  assert.equal(html.includes("FORGED CITATION"), false);
+  assert.match(html, /Personal notes/);
 });
 
 test("a full meeting with more than 24 findings still renders and keeps conditional actions proposed", async (t) => {
@@ -482,6 +495,8 @@ test("only explicit proposal or conditional wording forces a passage to proposed
     ["## Proposed pilot\n8 reps for two weeks.", true],
     ["## Proposals\n8 reps for two weeks.", true],
     ["We will sign by Friday if legal approves", true],
+    ["We'll sign by Friday if legal approves", true],
+    ["If legal approves, we’ll sign by Friday", true],
     ["If legal approves, we will sign by Friday", true],
     ["We will confirm the date if legal approves", true],
     ["We will proceed unless legal objects", true],

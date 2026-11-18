@@ -323,6 +323,31 @@ test("field updates require a successful activity and only expose safe custom te
     new Date(modified).toUTCString()
   );
 });
+test("after a My Domain rename, a repeat export updates the same Task", async (t) => {
+  const fixtureState = fixture();
+  t.after(() => fixtureState.db.close());
+  await commit(fixtureState, await prepare(fixtureState));
+  const renamed = { ...binding, instanceUrl: "https://renamed.my.salesforce.com" };
+  const repeat = await fixtureState.connector.prepare("export_conversation", args, {
+    binding: renamed,
+  });
+  assert.equal(repeat.payload.activityId, activityId);
+  assert.ok(
+    repeat.preview.notes.some((note) => note.key === "connectors.salesforce.notes.updateExisting")
+  );
+  const result = await fixtureState.connector.commit(
+    "export_conversation",
+    repeat.payload,
+    {},
+    {
+      binding: renamed,
+    }
+  );
+  assert.equal(result.state, "sent");
+  assert.equal(writes(fixtureState).length, 2);
+  assert.equal(writes(fixtureState)[1].method, "PATCH");
+  assert.match(writes(fixtureState)[1].path, new RegExp(`/sobjects/Task/${activityId}$`));
+});
 test("a repeat export leaves the Task's Status as it stands in Salesforce", async (t) => {
   const fixtureState = fixture();
   t.after(() => fixtureState.db.close());
