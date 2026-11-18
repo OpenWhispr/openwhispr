@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, BackHandler, View } from 'react-native';
 import { router } from 'expo-router';
 import { usePreventRemove, useNavigation } from '@react-navigation/native';
 import { Text } from '@/components/ui/Text';
@@ -13,6 +13,7 @@ import {
   ListRow,
   PillAction,
   SettingsPage,
+  TextAction,
   settings,
   showToast,
   useReduceMotion,
@@ -35,11 +36,11 @@ import {
   KEY_SOURCES,
   applyCustomDefault,
   applyKeyDefault,
-  customServerKey,
   normalizeServer,
   saveCustomServer,
   sourceName,
   useCustomServer,
+  useSavedSecret,
   useServerCheck,
   type KeySource,
 } from './logic';
@@ -153,7 +154,6 @@ export default function ProcessingScreenV1() {
   const { ready, progress } = useModelsReady();
   const { choosePhone, run, needsModel, closeModelSheet, goLocal } = useChoosePhone(t);
   const [sheet, setSheet] = useState<'provider' | 'model' | 'speech' | 'text' | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -164,19 +164,7 @@ export default function ProcessingScreenV1() {
   const custom = draft.provider === 'custom';
   const provider = draft.provider;
   // The saved key (or server key) the check falls back on when nothing new was typed.
-  useEffect(() => {
-    let live = true;
-    setSaved(null);
-    const read = custom
-      ? draft.server
-        ? customServerKey(normalizeServer(draft.server))
-        : Promise.resolve(null)
-      : savedKey(provider as KeyProviderId).catch(() => null);
-    void read.then((key) => live && setSaved(key));
-    return () => {
-      live = false;
-    };
-  }, [provider, custom, draft.server]);
+  const saved = useSavedSecret(provider, custom ? normalizeServer(draft.server) : undefined);
 
   const keyMode = draft.open || defaults.mode === 'providers';
   const selectedMode = draft.open ? 'providers' : defaults.mode;
@@ -199,7 +187,7 @@ export default function ProcessingScreenV1() {
   }, [check.result, custom, draft.dirty, draft.key, draft.server, provider, t]);
 
   // 9.11: leaving with an unsaved key choice asks first.
-  usePreventRemove(draft.dirty, ({ data }) => {
+  const askDiscard = (leave: () => void) =>
     Alert.alert(t('discardTitle'), t('discardBody'), [
       { text: t('cancel'), style: 'cancel' },
       {
@@ -207,11 +195,24 @@ export default function ProcessingScreenV1() {
         style: 'destructive',
         onPress: () => {
           useKeyDraft.setState(EMPTY_DRAFT, true);
-          navigation.dispatch(data.action);
+          leave();
         },
       },
     ]);
-  });
+  usePreventRemove(draft.dirty, ({ data }) => askDiscard(() => navigation.dispatch(data.action)));
+  // Opened first (a link, or nothing behind it), the back gesture would leave the app without
+  // removing this screen; it asks too.
+  useEffect(() => {
+    if (!draft.dirty) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (router.canGoBack()) return false;
+      askDiscard(() => setTimeout(() => BackHandler.exitApp(), 0));
+      return true;
+    });
+    return () => sub.remove();
+    // askDiscard is rebuilt each render; only the draft decides this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.dirty]);
 
   const chooseCloud = () => {
     if (!user) return askSignIn(t);
@@ -437,17 +438,25 @@ export default function ProcessingScreenV1() {
               onPress={check.state === 'idle' ? undefined : check.retry}
             />
           </Group>
-          {check.result && check.state !== 'connected' && (
-            <Text
-              style={[
-                settings.subtitle,
-                { color: home.error, paddingHorizontal: 4, marginTop: -8 },
-              ]}
-            >
-              {reasonText(t, t('customServer'), check.result)}
-            </Text>
-          )}
         </>
+      )}
+
+      {keyMode && check.result && check.state !== 'connected' && (custom || keyTail) && (
+        <View style={{ marginTop: -8, paddingHorizontal: 4 }}>
+          <Text
+            style={[
+              settings.subtitle,
+              { color: check.state === 'failed' ? home.error : home.secondary },
+            ]}
+          >
+            {reasonText(t, custom ? t('customServer') : sourceName(provider), check.result)}
+          </Text>
+          {check.state === 'unverified' && (
+            <View style={{ alignSelf: 'flex-start' }}>
+              <TextAction label={t('tryAgain')} onPress={check.retry} />
+            </View>
+          )}
+        </View>
       )}
 
       {keyMode && draft.dirty && (

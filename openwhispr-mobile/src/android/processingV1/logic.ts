@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { create } from 'zustand';
 import type { InferenceSelection } from '@/lib/mobileProviders';
 import { providerDisplayName } from '@/lib/mobileProviders';
@@ -82,6 +83,8 @@ export type ServerCheck = KeyCheckResult & {
   /** The base that answered: a bare address may resolve to its /v1 API. */
   endpoint?: string;
   message?: string;
+  /** Not an address this phone can use (https, or http on a local network). */
+  invalidAddress?: boolean;
 };
 
 /**
@@ -90,6 +93,12 @@ export type ServerCheck = KeyCheckResult & {
  */
 export async function checkCustomServer(endpoint: string, apiKey?: string): Promise<ServerCheck> {
   try {
+    const key = apiKey?.trim() || undefined;
+    // A key is only sent for a route that names where it would be stored; the typed key stands
+    // in for the stored one while it is checked.
+    const credentialRef = key
+      ? await getProviderCredentialReference('custom', endpoint)
+      : undefined;
     const found = await discoverProviderModels({
       route: {
         mode: 'providers',
@@ -97,15 +106,20 @@ export async function checkCustomServer(endpoint: string, apiKey?: string): Prom
         providerId: 'custom',
         modelId: 'check',
         endpoint,
+        ...(credentialRef ? { credentialRef } : {}),
       },
-      apiKey: apiKey?.trim() || undefined,
+      apiKey: key,
     });
     return { state: 'connected', models: found.models.map((m) => m.id), endpoint: found.endpoint };
   } catch (error) {
     const code = (error as { code?: string }).code;
     if (code === 'INVALID_CREDENTIAL') return { state: 'failed', reason: 'rejected' };
-    if (code === 'ENDPOINT_INVALID' || code === 'PROVIDER_HTTPS_REQUIRED')
-      return { state: 'failed', reason: 'status', message: (error as Error).message };
+    if (
+      code === 'ENDPOINT_INVALID' ||
+      code === 'PROVIDER_HTTPS_REQUIRED' ||
+      (error as Error).message === 'Invalid provider endpoint'
+    )
+      return { state: 'failed', reason: 'status', invalidAddress: true };
     return { state: 'unverified', reason: 'network', message: (error as Error).message };
   }
 }
@@ -211,6 +225,38 @@ export function useKeyTails(): Partial<Record<KeySource, string>> {
     };
   }, [server]);
   return tails;
+}
+
+/**
+ * The saved key for a provider (or the custom server's key, '' when it takes none), read again
+ * whenever the screen comes back and whenever a key is added or removed. `null` until read.
+ */
+export function useSavedSecret(source: string, server?: string): string | null {
+  const [secret, setSecret] = useState<string | null>(null);
+  const focused = useIsFocused();
+  const [revision, setRevision] = useState(0);
+  useEffect(() => subscribeProviderCredentialChanges(() => setRevision((n) => n + 1)), []);
+  useEffect(() => {
+    let live = true;
+    if (!source) {
+      setSecret(null);
+      return;
+    }
+    const read =
+      source === 'custom'
+        ? server
+          ? customServerKey(server).then((key) => key ?? '')
+          : Promise.resolve(null)
+        : getProviderCredentialReference(source)
+            .then(getProviderCredential)
+            .then((credential) => credential?.apiKey ?? null)
+            .catch(() => null);
+    void read.then((key) => live && setSecret(key));
+    return () => {
+      live = false;
+    };
+  }, [source, server, focused, revision]);
+  return secret;
 }
 
 export async function removeKey(source: KeySource): Promise<void> {

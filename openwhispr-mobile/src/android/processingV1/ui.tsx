@@ -163,8 +163,9 @@ export function CheckMark({ t, state }: { t: V1T; state: KeyCheckState; animate?
 export function reasonText(
   t: V1T,
   provider: string,
-  result: KeyCheckResult & { message?: string },
+  result: KeyCheckResult & { message?: string; invalidAddress?: boolean },
 ) {
+  if (result.invalidAddress) return t('serverInvalid');
   if (result.state === 'unverified') return t('keyNoAnswer', { provider });
   if (result.reason === 'managementKey') return t('keyManagement');
   if (result.reason === 'status' && result.message) return result.message;

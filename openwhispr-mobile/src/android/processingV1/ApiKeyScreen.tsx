@@ -12,7 +12,7 @@ import {
   settings,
   showToast,
 } from '../settings/kit';
-import { KEY_CHECK_COLORS } from '../settings/KeyCheckMark';
+import { KEY_CHECK_COLORS, KeyCheckMark } from '../settings/KeyCheckMark';
 import { useKeyCheck, type KeyProviderId } from '../settings/keyCheck';
 import {
   KEY_PROVIDERS,
@@ -20,19 +20,18 @@ import {
   maskKey,
   runTaskOnKey,
   saveKey,
-  savedKey,
   type SheetTask,
 } from '../settings/ownKey';
 import { setTask } from '../settings/processingDefault';
 import { editDraft, useKeyDraft } from './draft';
 import {
   customSelection,
-  customServerKey,
   normalizeServer,
   removeKey,
   saveCustomServer,
   sourceName,
   useCustomServer,
+  useSavedSecret,
   useServerCheck,
   type KeySource,
 } from './logic';
@@ -56,23 +55,13 @@ export default function ApiKeyScreenV1() {
   const draft = useKeyDraft();
   const storedServer = useCustomServer((s) => s.endpoint);
 
-  const [saved, setSaved] = useState<string | null>(null);
   const [typed, setTyped] = useState(fromProcessing ? (custom ? draft.serverKey : draft.key) : '');
   const [server, setServer] = useState(fromProcessing ? draft.server : (storedServer ?? ''));
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let live = true;
-    const read = custom
-      ? storedServer
-        ? customServerKey(storedServer)
-        : Promise.resolve(null)
-      : savedKey(source as KeyProviderId).catch(() => null);
-    void read.then((key) => live && setSaved(key));
-    return () => {
-      live = false;
-    };
-  }, [custom, source, storedServer]);
+  const savedSecret = useSavedSecret(source, custom ? storedServer : undefined);
+  // A custom server with no key reads as ''; nothing to show then.
+  const saved = savedSecret || null;
 
   const keyCheck = useKeyCheck(custom ? 'openai' : (source as KeyProviderId), custom ? '' : typed);
   const serverCheck = useServerCheck(custom ? server : '', typed || saved || '');
@@ -90,7 +79,10 @@ export default function ApiKeyScreenV1() {
   }, [check.state, custom]);
 
   const provider = KEY_PROVIDERS.find((item) => item.id === source);
-  const showing = typed ? (locked ? maskKey(typed) : typed) : '';
+  // A saved key shows locked in with its tick, until Change.
+  const [changing, setChanging] = useState(false);
+  const savedShown = !custom && !!saved && !typed && !changing;
+  const showing = savedShown ? maskKey(saved) : typed ? (locked ? maskKey(typed) : typed) : '';
   const usable = custom
     ? !!normalizeServer(server) && (check.state === 'connected' || check.state === 'unverified')
     : !typed || check.state === 'connected' || check.state === 'unverified';
@@ -167,12 +159,18 @@ export default function ApiKeyScreenV1() {
             setLocked(false);
             setTyped(value);
           }}
-          locked={locked}
-          placeholder={saved ? maskKey(saved) : custom ? t('optional') : t('pasteKey')}
+          locked={locked || savedShown}
+          placeholder={custom && saved ? maskKey(saved) : custom ? t('optional') : t('pasteKey')}
           secure={!locked}
-          autoFocus={!custom && !saved}
+          autoFocus={(!custom && !saved) || changing}
           failed={!custom && failed}
-          mark={custom ? undefined : <CheckMark t={t} state={typed ? check.state : 'idle'} />}
+          mark={
+            custom ? undefined : savedShown ? (
+              <KeyCheckMark state="connected" animate={false} />
+            ) : (
+              <CheckMark t={t} state={typed ? check.state : 'idle'} />
+            )
+          }
         />
         {check.result && check.state !== 'connected' && (typed || custom) && (
           <View>
@@ -199,11 +197,12 @@ export default function ApiKeyScreenV1() {
             {t('keyHint', { provider: name })}
           </Text>
         )}
-        {locked && (
+        {(locked || savedShown) && (
           <View style={{ alignSelf: 'flex-start' }}>
             <TextAction
               label={t('change')}
               onPress={() => {
+                setChanging(true);
                 setLocked(false);
                 setTyped('');
               }}

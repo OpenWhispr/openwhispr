@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/ui/Text';
@@ -21,12 +21,12 @@ import {
   KEY_SOURCES,
   TASK_KEY,
   customSelection,
-  customServerKey,
   phoneLine,
   sourceCanRun,
   sourceName,
   useCustomServer,
   useKeyTails,
+  useSavedSecret,
   useServerCheck,
   type KeySource,
 } from './logic';
@@ -158,7 +158,6 @@ function TaskV1({ task }: { task: KeyTask }) {
   const { ready } = useModelsReady();
   const { choosePhone, run, needsModel, closeModelSheet, goLocal } = useChoosePhone(t);
   const [sheet, setSheet] = useState<'provider' | 'model' | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
   const customPrompt = useCustomPromptsStore(
     (state) => resolveCustomPrompt(state.customPrompts.cleanup) !== undefined,
   );
@@ -169,21 +168,7 @@ function TaskV1({ task }: { task: KeyTask }) {
   const onKey = mode === 'providers' && !!selection?.providerId;
   const speech = speechTask(task);
 
-  useEffect(() => {
-    let live = true;
-    setSaved(null);
-    if (!onKey) return;
-    const read =
-      source === 'custom'
-        ? server
-          ? customServerKey(server)
-          : Promise.resolve(null)
-        : savedKey(source as KeyProviderId).catch(() => null);
-    void read.then((key) => live && setSaved(key ?? ''));
-    return () => {
-      live = false;
-    };
-  }, [onKey, source, server]);
+  const saved = useSavedSecret(onKey ? source : '', source === 'custom' ? server : undefined);
 
   const keyCheck = useKeyCheck(
     source === 'custom' || !onKey ? 'openai' : (source as KeyProviderId),
