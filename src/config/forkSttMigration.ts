@@ -13,7 +13,10 @@ export const STT_BASE_URL_STORAGE_KEYS = [
 ] as const;
 
 /** Returns `url` with the legacy host swapped for `newHost`, or null when it is not a legacy URL. */
-export function migrateLegacySttUrl(url: string | null | undefined, newHost: string): string | null {
+export function migrateLegacySttUrl(
+  url: string | null | undefined,
+  newHost: string
+): string | null {
   const trimmed = (url || "").trim();
   if (!trimmed || !newHost) return null;
   let parsed: URL;
