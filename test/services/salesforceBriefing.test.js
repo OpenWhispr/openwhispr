@@ -256,6 +256,51 @@ test("large notes are bounded with explicit limits instead of implying complete 
   assert.match(result.renderedAnswer.content, /partial|limited|truncated/i);
 });
 
+test("a paragraph cut by the note limit is left out, since its condition may follow", async (t) => {
+  const content = `Whole paragraph.\n\nWe will sign ${"and sign ".repeat(1000)}if legal approves.`;
+  const registry = await setup(t, { notes: [note(7, content)] });
+  const result = await registry.get("salesforce_get_briefing").execute(record, context());
+  assert.deepEqual(
+    result.data.sources[0].passages.map((passage) => passage.text),
+    ["Whole paragraph."]
+  );
+  assert.equal(result.data.truncated, true);
+});
+
+test("a briefing retrieved in another turn can't be presented", async (t) => {
+  const registry = await setup(t, { notes: [note(7, "Budget is approved.")] });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context("first"));
+  const passageId = fetched.data.sources[0].passages[0].id;
+  const result = await registry.get("salesforce_present_briefing").execute(
+    {
+      briefingId: fetched.data.briefingId,
+      findings: [{ passageId, status: "confirmed", category: "takeaway" }],
+      conflicts: [],
+    },
+    context("second")
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.renderedAnswer, undefined);
+});
+
+test("citation labels can't be predicted from anything the model is given", async (t) => {
+  const registry = await setup(t, { notes: [note(7, "Budget is approved.")] });
+  const fetched = await registry.get("salesforce_get_briefing").execute(record, context());
+  const passageId = fetched.data.sources[0].passages[0].id;
+  const result = await registry.get("salesforce_present_briefing").execute(
+    {
+      briefingId: fetched.data.briefingId,
+      findings: [{ passageId, status: "confirmed", category: "takeaway" }],
+      conflicts: [],
+    },
+    context()
+  );
+  const { content } = result.renderedAnswer;
+  assert.match(content, /\[\^sf-[^\]]+-1\]: /);
+  assert.equal(content.includes(fetched.data.briefingId), false);
+  assert.equal(JSON.stringify(result.data).includes("[^sf-"), false);
+});
+
 test("a full meeting with more than 24 findings still renders and keeps conditional actions proposed", async (t) => {
   const content = [
     ...Array.from({ length: 25 }, (_, index) => `Observation ${index + 1}.`),

@@ -229,6 +229,25 @@ test("a refused refresh flags the login for reconnect without an automatic retry
   }
 });
 
+test("a refresh refused for the app's own client never flags the user's login", async () => {
+  for (const errorCode of ["invalid_client", "invalid_client_id", "unauthorized_client"]) {
+    const { auth, credentials } = setup({
+      refresh: async () => ({
+        ok: false,
+        errorCode,
+        refused: true,
+        status: 400,
+        outcome: "failed",
+      }),
+    });
+    assert.equal(
+      (await auth.getAccessToken(BINDING, { forceRefresh: true })).errorCode,
+      "salesforce_unavailable"
+    );
+    assert.equal(credentials.read("acct-1", "salesforce").credential.needsReconnect, false);
+  }
+});
+
 test("a refresh Salesforce couldn't answer keeps the login for the next action", async () => {
   for (const [response, errorCode] of [
     [{ ok: false, errorCode: "network", outcome: "unknown" }, "network"],

@@ -504,6 +504,25 @@ test("a localhost redirect is answered on ::1 too, for a browser that resolves i
   assert.equal(started.getAuthUrlCalls(), 1, "one browser launch for both listeners");
 });
 
+test("a port another app holds on ::1 still opens the browser for 127.0.0.1", async (t) => {
+  if (!(await ipv6Available())) return t.skip("no IPv6 loopback on this machine");
+  const port = await freeDualStackPort();
+  const blocker = net.createServer();
+  await new Promise((resolve) => blocker.listen(port, "::1", resolve));
+  t.after(() => blocker.close());
+  const started = startFlow(async (code) => ({ code }), {
+    redirectHost: "localhost",
+    ports: [port],
+    callbackPath: "/salesforce/callback",
+  });
+  await until(() => started.getAuthUrlCalls() === 1);
+  await getLocal(
+    `http://127.0.0.1:${port}/salesforce/callback?code=v4&state=${started.getState()}`
+  );
+  assert.deepEqual(await started.flow, { code: "v4" });
+  assert.equal(started.getAuthUrlCalls(), 1);
+});
+
 test(
   "a server error while ::1 is still binding closes ::1 and opens no browser",
   { timeout: 5000 },

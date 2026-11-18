@@ -318,6 +318,39 @@ test("field updates require a successful activity and only expose safe custom te
     "sent"
   );
   assert.deepEqual(writes(fixtureState)[1].body, { Notes__c: "Reviewed" });
+  assert.equal(
+    writes(fixtureState)[1].headers["If-Unmodified-Since"],
+    new Date(modified).toUTCString()
+  );
+});
+test("a repeat export leaves the Task's Status as it stands in Salesforce", async (t) => {
+  const fixtureState = fixture();
+  t.after(() => fixtureState.db.close());
+  await commit(fixtureState, await prepare(fixtureState));
+  fixtureState.task.Status = "In Progress";
+  // Nothing about Status can stop a repeat export, since it no longer writes one.
+  const status = fixtureState.metadata.Task.fields.find((item) => item.name === "Status");
+  status.updateable = false;
+  status.picklistValues = [];
+  const repeat = await prepare(fixtureState);
+  assert.equal(repeat.status, "ready");
+  assert.equal((await commit(fixtureState, repeat)).state, "sent");
+  assert.deepEqual(Object.keys(writes(fixtureState)[1].body).sort(), ["Description", "Subject"]);
+  assert.equal(fixtureState.task.Status, "In Progress");
+});
+test("a create reply without a Task id and success is uncertain, never saved", async (t) => {
+  for (const data of [
+    { id: activityId },
+    { id: "001000000000001", success: true },
+    { success: true },
+  ]) {
+    const fixtureState = fixture();
+    t.after(() => fixtureState.db.close());
+    fixtureState.setWriteResult({ ok: true, data });
+    const result = await commit(fixtureState, await prepare(fixtureState));
+    assert.equal(result.state, "unknown");
+    assert.equal(result.url, undefined);
+  }
 });
 test("field stale checks, live metadata limits and omissions prevent unintended writes", async () => {
   const fixtureState = fixture();

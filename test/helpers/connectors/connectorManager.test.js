@@ -1258,6 +1258,21 @@ test("connect saves under the account that started it, cancels old approvals and
   assert.equal(announced.length, 1);
 });
 
+test("a sign-in domain that isn't Salesforce's keeps its own error", async () => {
+  const { manager } = await setup(
+    connectable({
+      async authorize() {
+        throw Object.assign(new Error("bad domain"), { code: "invalid_login_domain" });
+      },
+    }),
+    undefined,
+    { credentials: memoryCredentials(null, { connectorId: "fake" }) }
+  );
+  const result = await manager.connect("fake", "allowed");
+  assert.equal(result.status, "failed");
+  assert.equal(result.errorCode, "invalid_login_domain");
+});
+
 test("a sign-in domain reaches only a connector that takes one", async () => {
   for (const takesLoginDomain of [false, true]) {
     const seen = [];

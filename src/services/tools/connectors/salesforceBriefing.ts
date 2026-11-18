@@ -426,6 +426,8 @@ function renderBriefing(briefing: Briefing, presentation?: Presentation): string
     lines.push("", `### ${copy("findings")}`, "", copy("findingsExplainer"));
   }
   const citations = new Map<string, number>();
+  // Never the briefing id: the model has that, and a footnote it defined first would win.
+  const citationPrefix = `sf-${crypto.randomUUID()}`;
   const passageSource = (passageId: string): { source: Source; passage: Passage } => {
     const source = briefing.sources.find((item) =>
       item.passages.some((passage) => passage.id === passageId)
@@ -440,7 +442,7 @@ function renderBriefing(briefing: Briefing, presentation?: Presentation): string
         value: markdown(crmFact.value),
       });
     if (!citations.has(passageId)) citations.set(passageId, citations.size + 1);
-    return `${markdown(excerptText(passageSource(passageId).passage.text))} [^sf-${briefing.id}-${citations.get(passageId)}]`;
+    return `${markdown(excerptText(passageSource(passageId).passage.text))} [^${citationPrefix}-${citations.get(passageId)}]`;
   };
   for (const category of CATEGORY) {
     const findings =
@@ -477,7 +479,7 @@ function renderBriefing(briefing: Briefing, presentation?: Presentation): string
     const link = activityLink(source);
     lines.push(
       "",
-      `[^sf-${briefing.id}-${citation}]: ${markdown(source.title)} — ${markdown(passage.section)}.${link ? ` ${link}` : ""}`
+      `[^${citationPrefix}-${citation}]: ${markdown(source.title)} — ${markdown(passage.section)}.${link ? ` ${link}` : ""}`
     );
   }
   return lines.join("\n");

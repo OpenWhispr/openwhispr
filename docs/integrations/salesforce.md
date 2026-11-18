@@ -52,7 +52,7 @@ An additional restricted test user is useful for checking denied object/field ac
 4. Review and edit the activity title and summary, then save. The assistant reports a confirmed Salesforce activity link when available.
 5. For an Opportunity, optionally select up to three writable custom text fields. Review each current/proposed value in a separate card after the activity is saved. Omit any field you do not want to change.
 
-The exported activity contains the reviewed summary and meeting metadata, not a raw audio upload or a full transcript. Exporting again to the same destination updates the known activity. Field updates are separately approved; an activity can succeed even when an optional field update fails.
+The exported activity contains the reviewed summary and meeting metadata, not a raw audio upload or a full transcript. Exporting again to the same destination updates the known activity's subject and description and leaves its Status as it stands in Salesforce. Field updates are separately approved; an activity can succeed even when an optional field update fails.
 
 If a network interruption leaves the outcome uncertain, check Salesforce before sending again. OpenWhispr never repeats an uncertain write on its own, including after restart or reconnect. The next review card for that note and destination warns that the earlier attempt may have saved, and you can still send it. Salesforce takes no idempotency key, so sending again after an uncertain first save can create a second Task. OpenWhispr does not promise exactly-once delivery.
 

@@ -152,9 +152,31 @@ test("a connected Salesforce login offers no sign-in domain", async (t) => {
   assert.equal(hasButton(container, "connectors.salesforce.loginDomain.toggle"), false);
 });
 
-test("a Salesforce login that needs reconnecting signs in where it was made", async (t) => {
+test("Reconnect signs in where the login was made unless a moved domain is typed", async (t) => {
+  const connects = [];
   const { container } = await renderSalesforceRow(t, {
     status: { ...SALESFORCE, needsReconnect: true },
+    electronAPI: {
+      connectorConnect: async (connectorId, options) => {
+        connects.push([connectorId, options]);
+        return { status: "connected" };
+      },
+    },
   });
-  assert.equal(hasButton(container, "connectors.salesforce.loginDomain.toggle"), false);
+  await React.act(async () => click(button(container, "connectors.salesforce.reconnect")));
+  assert.deepEqual(connects, [["salesforce", undefined]]);
+
+  await React.act(async () => click(button(container, "connectors.salesforce.loginDomain.toggle")));
+  // "Leave empty for production" isn't true here: empty keeps the saved host.
+  assert.doesNotMatch(container.textContent, /connectors\.salesforce\.loginDomain\.hint/);
+  const input = findElement(
+    container,
+    (element) =>
+      element.tagName === "INPUT" &&
+      element.getAttribute("aria-label") === "connectors.salesforce.loginDomain.label"
+  );
+  assert.ok(input);
+  await React.act(async () => type(input, "renamed.my.salesforce.com"));
+  await React.act(async () => click(button(container, "connectors.salesforce.reconnect")));
+  assert.deepEqual(connects[1], ["salesforce", { loginDomain: "renamed.my.salesforce.com" }]);
 });

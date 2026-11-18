@@ -466,12 +466,14 @@ function createSalesforceConnector({
     const fields = new Map(readableFields(result.data).map((field) => [field.name, field]));
     const relationship = ["Contact", "Lead"].includes(objectType) ? "WhoId" : "WhatId";
     if (
-      ["Subject", "Description", "Status", ...(update ? [] : [relationship])].some(
+      ["Subject", "Description", ...(update ? [] : ["Status", relationship])].some(
         (name) => !fields.get(name)?.[permission]
       ) ||
       !fields.get(relationship)?.referenceTo?.includes(objectType)
     )
       return { ok: false, errorCode: "forbidden" };
+    // A repeat export leaves the Task's Status as it stands in Salesforce.
+    if (update) return { ok: true, fields, relationship };
     const statuses = await request(
       binding,
       `/query?q=${encodeURIComponent("SELECT ApiName FROM TaskStatus WHERE IsClosed = true ORDER BY SortOrder LIMIT 10")}`
@@ -686,7 +688,7 @@ function createSalesforceConnector({
       const description = edits.body ?? payload.body;
       const problem = textProblem(title, description, config);
       if (problem) return failed(problem, true);
-      body = { Subject: title, Description: description, Status: config.status };
+      body = { Subject: title, Description: description };
       path = `/sobjects/Task${payload.activityId ? `/${payload.activityId}` : ""}`;
       if (payload.activityId) {
         const task = await readTask(binding, payload.activityId, payload);
@@ -705,7 +707,10 @@ function createSalesforceConnector({
         )
           return failed("stale_record", true);
         headers = conditionFor(task.data);
-      } else body[config.relationship] = payload.recordId;
+      } else {
+        body.Status = config.status;
+        body[config.relationship] = payload.recordId;
+      }
     } else {
       if (payload.objectType !== "Opportunity" || !saved?.activity_id)
         return failed("export_required", true);

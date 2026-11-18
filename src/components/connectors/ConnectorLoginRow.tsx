@@ -160,7 +160,8 @@ export function ConnectorLoginRow({
       ? () => void window.electronAPI?.connectorCancelConnect?.(connectorId)
       : null;
     try {
-      const domain = row.loginDomain && domainOpen && !connected ? loginDomain.trim() : "";
+      const domain =
+        row.loginDomain && domainOpen && (!connected || needsReconnect) ? loginDomain.trim() : "";
       const result = await window.electronAPI?.connectorConnect?.(
         connectorId,
         domain ? { loginDomain: domain } : undefined
@@ -242,10 +243,10 @@ export function ConnectorLoginRow({
               <ConnectingDetail connectorId={connectorId} />
             </div>
           )}
-          {/* Only before the first sign-in: a Reconnect signs in where the login was made. */}
+          {/* Left empty, a Reconnect signs in where the login was made; that host may have moved. */}
           {row.loginDomain &&
             offerConnect &&
-            !connected &&
+            (!connected || needsReconnect) &&
             (domainOpen ? (
               <div className="mt-2 max-w-xs">
                 <Input
@@ -259,7 +260,11 @@ export function ConnectorLoginRow({
                   autoCorrect="off"
                   className="h-8 text-xs"
                 />
-                <p className="text-xs text-muted-foreground/70 mt-1">{copy("loginDomain.hint")}</p>
+                {!connected && (
+                  <p className="text-xs text-muted-foreground/70 mt-1">
+                    {copy("loginDomain.hint")}
+                  </p>
+                )}
               </div>
             ) : (
               <button
