@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const { parseDbTimestamp } = require("../dbTimestamp");
 const { createSalesforceExports } = require("./salesforceExports");
-const { SALESFORCE_API_BASE } = require("./salesforceApi");
+const { SALESFORCE_API_BASE, SALESFORCE_LOGIN_URL } = require("./salesforceApi");
 const { connectorResultPage } = require("./oauthResultPage");
 const { clarify, MAX_QUERY_LENGTH, MAX_RESULTS } = require("./connectorText");
 
@@ -904,7 +904,7 @@ function buildSalesforceConnector(deps) {
     api,
     credentials: deps.credentials,
     getClientId: () => deps.env?.SALESFORCE_CLIENT_ID,
-    getLoginUrl: () => deps.env?.SALESFORCE_LOGIN_URL ?? "https://login.salesforce.com",
+    getLoginUrl: () => deps.env?.SALESFORCE_LOGIN_URL ?? SALESFORCE_LOGIN_URL,
     runOAuthLoopbackFlow: deps.runOAuthLoopbackFlow,
     OAuthFlowError: deps.OAuthFlowError,
     renderResultPage: connectorResultPage(deps, "salesforce"),

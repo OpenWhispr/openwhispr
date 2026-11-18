@@ -96,8 +96,6 @@ function createSalesforceExports(databaseManager) {
       );
     },
     finish(key, kind, operationId, state, activityId = null, activityHash = null) {
-      if (!["succeeded", "failed", "unknown"].includes(state))
-        throw new Error("Invalid Salesforce outcome");
       const stateColumn = column(kind);
       const activityPatch =
         kind === "activity" && state === "succeeded"

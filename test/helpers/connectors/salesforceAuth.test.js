@@ -1,11 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {
-  createSalesforceAuth,
-  SALESFORCE_CALLBACK_URL,
-} = require("../../../src/helpers/connectors/salesforceAuth");
+const { createSalesforceAuth } = require("../../../src/helpers/connectors/salesforceAuth");
 const { createSalesforceApi } = require("../../../src/helpers/connectors/salesforceApi");
 const { FakeFlowError, memoryCredentials } = require("./linearFixtures");
+const SALESFORCE_CALLBACK_URL = "http://localhost:1718/salesforce/callback";
 const INSTANCE = "https://acme.my.salesforce.com";
 const NOW = 1700000000000;
 const CONNECTED = {

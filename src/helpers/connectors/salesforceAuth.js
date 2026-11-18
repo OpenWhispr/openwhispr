@@ -6,7 +6,6 @@ const {
 } = require("./salesforceApi");
 
 const SALESFORCE_SCOPES = "api refresh_token openid";
-const SALESFORCE_CALLBACK_URL = "http://localhost:1718/salesforce/callback";
 // Salesforce allows a plain-http callback only on localhost, so the
 // loopback server answers on both 127.0.0.1 and ::1 (oauthLoopbackFlow).
 const SALESFORCE_LOOPBACK = {
@@ -308,4 +307,4 @@ function createSalesforceAuth({
   };
 }
 
-module.exports = { createSalesforceAuth, SALESFORCE_CALLBACK_URL };
+module.exports = { createSalesforceAuth };

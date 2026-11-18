@@ -136,8 +136,12 @@ function failure(message: string): ToolResult {
 }
 // One way, and English only: this wording stays proposed, and every other
 // passage keeps the model's label.
-const UNSETTLED =
-  /\bpropos(?:e|ed|es|ing)\b|\b(?:tentative(?:ly)?|indicative|planning estimate|subject to|contingent (?:on|upon)|provided that|unapproved)\b|(?:\bnot|n['’]t)\s+(?:\w+\s+){0,2}approved\b|\bwill\b[^.!?\n]*\b(?:if|unless)\b|\b(?:if|unless)\b[^.!?\n]*\bwill\b/i;
+// "Will confirm if it's approved" asks a question; it sets no condition.
+const CONDITION = String.raw`(?<!\b(?:ask(?:s|ed|ing)?|check(?:s|ed|ing)?|confirm(?:s|ed|ing)?|see(?:s|ing)?|know(?:s|ing)?|verif(?:y|ies|ied|ying)|determin(?:e|es|ed|ing)|(?:find|finds|found|finding) out)\s+)\b(?:if|unless)\b`;
+const UNSETTLED = new RegExp(
+  String.raw`\bpropos(?:e|ed|es|ing)\b|\b(?:tentative(?:ly)?|indicative|planning estimate|subject to|contingent (?:on|upon)|provided that|unapproved)\b|(?:\bnot|n['’]t)\s+(?:\w+\s+){0,2}approved\b|\bwill\b[^.!?\n]*${CONDITION}|${CONDITION}[^.!?\n]*\bwill\b`,
+  "i"
+);
 
 function isProposed(section: string, passageText: string): boolean {
   return (

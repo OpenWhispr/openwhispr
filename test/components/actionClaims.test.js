@@ -566,4 +566,11 @@ test("a report a lookup could be repeating is left alone; a first-person claim i
   assert.equal(await unbacked("It was sent to Acme.", { turnCalls }), false);
   assert.equal(await unbacked("It was sent to Acme."), true);
   assert.equal(await unbacked("I've sent it to Acme.", { turnCalls }), true);
+  for (const name of [
+    "salesforce_search_records",
+    "salesforce_get_record",
+    "salesforce_get_briefing",
+  ]) {
+    assert.equal(await unbacked("It was sent to Acme.", { turnCalls: [call(name)] }), false, name);
+  }
 });

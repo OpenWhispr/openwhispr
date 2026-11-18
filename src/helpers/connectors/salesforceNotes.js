@@ -5,13 +5,10 @@ function createSalesforceNoteReader({ database, getAccountId }) {
     if (
       !ownerAccountId ||
       ownerAccountId !== getAccountId() ||
-      ownerAccountId !== database.activeAccountId ||
-      !Number.isSafeInteger(noteId) ||
-      noteId <= 0
+      ownerAccountId !== database.activeAccountId
     )
       return null;
-    const note = database.getNote(noteId);
-    return note && !note.deleted_at ? note : null;
+    return database.getNote(noteId);
   };
 }
 

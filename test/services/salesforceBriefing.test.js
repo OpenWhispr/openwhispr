@@ -440,6 +440,8 @@ test("only explicit proposal or conditional wording forces a passage to proposed
     ["## Proposals\n8 reps for two weeks.", true],
     ["We will sign by Friday if legal approves", true],
     ["If legal approves, we will sign by Friday", true],
+    ["We will confirm the date if legal approves", true],
+    ["We will proceed unless legal objects", true],
     ["They tentatively agreed to a two week pilot", true],
     ["Sarah approved the proposal subject to redlines", true],
     ["## Proposal review\nWe rejected the proposal", true],
@@ -456,6 +458,11 @@ test("only explicit proposal or conditional wording forces a passage to proposed
     ["Budget approval is still pending", false],
     ["We signed the deal. Let me know if you need anything.", false],
     ["Daniel owns pilot coordination.", false],
+    ["Sarah will confirm if the budget process applies by Friday", false],
+    ["Daniel will ask if Priya can join the kickoff", false],
+    ["Priya will find out if the pilot can start", false],
+    ["Sarah will let us know if the budget is approved", false],
+    ["Ask if Priya will attend the kickoff", false],
   ];
   for (const [content, proposed] of cases) {
     notes[0] = note(7, content);

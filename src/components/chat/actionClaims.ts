@@ -125,6 +125,9 @@ const READ_TOOLS = new Set([
   "web_search",
   "linear_search_issues",
   "github_search_issues",
+  "salesforce_search_records",
+  "salesforce_get_record",
+  "salesforce_get_briefing",
 ]);
 // A first-person claim in the simple past or about before ("I sent Gabe the
 // roadmap", "I've sent it earlier") reports on what was done, which an
