@@ -65,7 +65,9 @@ export function tabLabelProps(selected: boolean): Pick<
 }
 
 export const tabColors = {
-  bar: home.canvas,
+  /** White with a hairline on top (Figma variant 1); pages sit on bg/canvas. */
+  bar: home.surface,
+  hairline: home.divider,
   pill: home.tint,
   iconSelected: home.accent,
   icon: home.secondary,
