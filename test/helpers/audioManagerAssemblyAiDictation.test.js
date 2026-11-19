@@ -17,6 +17,8 @@ test("AssemblyAI Dictation sends the recording and keyterms, and hands back both
     cloudTranscriptionProvider: "assemblyai",
     cloudTranscriptionModel: "dictation",
     transcriptionMode: "providers",
+    assemblyaiApiKey: "aai-key",
+    openaiApiKey: "",
     customDictionary: ["Piha"],
     snippets: [],
     sharedDictionaryHints: { space: [], workspace: [] },
@@ -26,13 +28,15 @@ test("AssemblyAI Dictation sends the recording and keyterms, and hands back both
     payloads.push(payload);
     return { text: VERBATIM, cleanedText: CLEANED };
   };
+  // Only an AssemblyAI key is saved: the key lookup must not ask for OpenAI's.
+  loaded.window.electronAPI.getOpenAIKey = async () => null;
   let cleanupOptions;
 
   const result = await loaded
     .createManager({
+      cachedApiKey: null,
+      cachedApiKeyProvider: null,
       getEffectiveSttLanguage: () => "auto",
-      getTranscriptionModel: () => "dictation",
-      getAPIKey: async () => "test-key",
       shouldStreamTranscription: () => false,
       processTranscription: async (value, _source, _wasCancelled, options) => {
         cleanupOptions = options;
@@ -77,6 +81,7 @@ async function loadCleanupManager(t) {
     useDictationAgent: false,
     useDictationTranslation: false,
     customPrompts: { cleanup: "" },
+    toneStyleEnabled: false,
     preferredLanguage: "en",
   });
   const cleanupRequests = [];
@@ -98,9 +103,11 @@ async function loadCleanupManager(t) {
   const dictate = (text, cleanedText) =>
     manager.processTranscriptionCore(text, "assemblyai", () => false, { cleanedText });
   return {
+    window,
     manager,
     dictate,
     cleanupRequests,
+    usePolicyStore,
     setSettings: (next) => useSettingsStore.setState(next),
   };
 }
@@ -150,4 +157,88 @@ test("translation and assistant requests run on the verbatim transcript", async 
   manager.voiceAgentRequested = false;
 
   assert.equal(cleanupRequests.includes(CLEANED), false);
+});
+
+test("the user's own cleanup prompt or tone keeps the app's cleanup", async (t) => {
+  const { manager, dictate, cleanupRequests, setSettings } = await loadCleanupManager(t);
+  manager.consumeToneStyle = async () => null;
+
+  setSettings({ customPrompts: { cleanup: "Rewrite as a bulleted list." } });
+  assert.equal(await dictate(VERBATIM, CLEANED), "Cleaned by the app.");
+
+  setSettings({ customPrompts: { cleanup: "" }, toneStyleEnabled: true });
+  assert.equal(await dictate(VERBATIM, CLEANED), "Cleaned by the app.");
+  assert.equal(cleanupRequests.length, 2);
+
+  // With no model of the app's own to run them, the provider's text still beats raw.
+  setSettings({ cleanupMode: "providers", cleanupProvider: "openai", cleanupModel: "" });
+  assert.equal(await dictate(VERBATIM, CLEANED), CLEANED);
+  assert.equal(cleanupRequests.length, 2);
+});
+
+test("the assistant's name, with no assistant to hear it, is still cleaned", async (t) => {
+  const { window, dictate, setSettings } = await loadCleanupManager(t);
+  window.localStorage.setItem("agentName", "Sam");
+  setSettings({ cleanupMode: "providers", cleanupProvider: "openai", cleanupModel: "" });
+
+  assert.equal(
+    await dictate("um hey Sam can we move the meeting", "Hey Sam, can we move it?"),
+    "Hey Sam, can we move it?"
+  );
+});
+
+test("a workspace that keeps AI processing on the device gets no cloud rewrite", async (t) => {
+  const { managedPolicy } = require("./harness/policyFixtures");
+  const { dictate, usePolicyStore, cleanupRequests } = await loadCleanupManager(t);
+  usePolicyStore.setState({
+    status: "managed",
+    managed: true,
+    appVersion: "1.12.0",
+    policy: managedPolicy({ llm: { allowedModes: ["local"], allowedLocalModels: ["test-model"] } }),
+    accountId: "account",
+    authGeneration: 1,
+  });
+
+  assert.notEqual(await dictate(VERBATIM, CLEANED), CLEANED);
+  assert.equal(cleanupRequests.includes(CLEANED), false);
+});
+
+test("a rewrite of a transcript that recited the dictionary is not used", async (t) => {
+  const loaded = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-assemblyai-dictation-echo-",
+    settingsKey: "__assemblyAiDictationEchoSettings",
+  });
+  loaded.setSettings({
+    useLocalWhisper: false,
+    allowLocalFallback: false,
+    cloudTranscriptionProvider: "assemblyai",
+    cloudTranscriptionModel: "dictation",
+    transcriptionMode: "providers",
+    assemblyaiApiKey: "aai-key",
+    customDictionary: ["Piha", "OpenWhispr", "Orukeet"],
+    snippets: [],
+    sharedDictionaryHints: { space: [], workspace: [] },
+  });
+  loaded.window.electronAPI.proxyAssemblyAiTranscription = async () => ({
+    text: "Move the meeting to Thursday. Piha, OpenWhispr, Orukeet",
+    cleanedText: "Move the meeting to Thursday. Piha, OpenWhispr, Orukeet.",
+  });
+  let cleanupOptions;
+
+  const result = await loaded
+    .createManager({
+      cachedApiKey: null,
+      cachedApiKeyProvider: null,
+      getEffectiveSttLanguage: () => "auto",
+      shouldStreamTranscription: () => false,
+      processTranscription: async (value, _source, _wasCancelled, options) => {
+        cleanupOptions = options;
+        return value;
+      },
+      isReasoningAvailable: async () => false,
+    })
+    .processWithOpenAIAPI(new Blob([new ArrayBuffer(8)], { type: "audio/webm" }), {});
+
+  assert.equal(result.rawText, "Move the meeting to Thursday.");
+  assert.deepEqual(cleanupOptions, { cleanedText: undefined });
 });

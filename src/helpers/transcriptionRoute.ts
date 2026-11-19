@@ -101,14 +101,14 @@ export function batchTranscriptionHttpError(
 // has to fail closed: the fall-through at the end of resolveTranscriptionRoute
 // would otherwise POST the user's audio to api.openai.com with their OpenAI key.
 // Hand-maintained rather than derived from the registry: Corti's only model is
-// realtime too, yet it batches through the proxy. Every other "realtime-only"
-// decision (dictationStreamingRouting, audioManager.shouldUseStreaming, the
-// upload picker and selector) derives from this set.
+// realtime too, yet it batches through the proxy. The upload picker and selector
+// read this set; dictation and voice takes ask isStreamingOnlySelection, which
+// knows the one exception.
 export const STREAMING_ONLY_PROVIDERS = new Set(["deepgram", "assemblyai"]);
 
 // AssemblyAI's Dictation API is the one batch model on a realtime-only provider:
-// it transcribes and cleans up a finished recording in one request, through the
-// main-process proxy. Uploads still treat AssemblyAI as realtime-only.
+// it transcribes and cleans up a finished recording in one request, through
+// main. The upload picker still leaves AssemblyAI out.
 export const ASSEMBLYAI_DICTATION_MODEL = "dictation";
 
 export function isStreamingOnlySelection(provider: string, model?: string | null): boolean {
@@ -503,15 +503,6 @@ export function resolveTranscriptionRoute({
     };
   }
 
-  if (provider === "assemblyai" && model === ASSEMBLYAI_DICTATION_MODEL) {
-    return {
-      transport: "proxied",
-      provider,
-      model,
-      language: language && ASSEMBLYAI_DICTATION_LANGUAGES.has(language) ? language : undefined,
-      sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
-    };
-  }
   if (STREAMING_ONLY_PROVIDERS.has(provider)) {
     if (hasProviderKey === false) {
       return error(
@@ -519,6 +510,15 @@ export function resolveTranscriptionRoute({
         "API_KEY_MISSING",
         PROVIDER_KEY_MISSING_MESSAGE_KEY
       );
+    }
+    if (!isStreamingOnlySelection(provider, model)) {
+      return {
+        transport: "proxied",
+        provider: "assemblyai",
+        model,
+        language: language && ASSEMBLYAI_DICTATION_LANGUAGES.has(language) ? language : undefined,
+        sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+      };
     }
     return error(
       "This provider only supports live transcription. Choose another provider for file uploads and retries.",

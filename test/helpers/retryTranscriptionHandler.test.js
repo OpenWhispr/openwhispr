@@ -274,6 +274,7 @@ function buildFakeThis() {
       getMistralKey: () => "mk-mistral",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
+      getAssemblyAIKey: () => "aai-assemblyai",
       getOpenrouterKey: () => "ork-openrouter",
       getCustomTranscriptionKey: () => "ck-custom",
       getSelfHostedSttHeaders: () => selfHostedHeaders,
@@ -835,6 +836,64 @@ test("retry: openrouter goes to OpenRouter with the OpenRouter key", async () =>
   assert.equal(fetches[0].init.headers.Authorization, "Bearer ork-openrouter");
 });
 
+const ASSEMBLYAI_DICTATION = {
+  cloudTranscriptionProvider: "assemblyai",
+  cloudTranscriptionModel: "dictation",
+  cloudTranscriptionMode: "byok",
+  transcriptionMode: "providers",
+};
+const dictationResponse = (body) => () => ({
+  ok: true,
+  status: 200,
+  json: async () => body,
+  text: async () => JSON.stringify(body),
+});
+const defaultFetchResponse = fetchResponse;
+
+test("retry: AssemblyAI Dictation goes to the Dictation API and hands back its rewrite", async () => {
+  fetches.length = 0;
+  textUpdates.length = 0;
+  fetchResponse = dictationResponse({ text: "um hello there", llm_response: "Hello there." });
+  try {
+    const result = await invoke({ ...ASSEMBLYAI_DICTATION, preferredLanguage: "es" });
+    assert.equal(result.success, true);
+    assert.equal(fetches.length, 1);
+    assert.equal(fetches[0].url, "https://dictation.assemblyai.com/v1/transcribe");
+    assert.deepEqual(fetches[0].init.headers, { Authorization: "aai-assemblyai" });
+    const body = fetches[0].init.body;
+    assert.deepEqual(JSON.parse(await body.get("config").text()), { language_codes: ["es"] });
+    assert.equal(body.get("audio").type, "audio/webm");
+    // The row keeps the verbatim transcript; the renderer decides whether the rewrite stands in.
+    assert.deepEqual(textUpdates, [{ id: 7, text: "um hello there" }]);
+    assert.equal(result.cleanedText, "Hello there.");
+  } finally {
+    fetchResponse = defaultFetchResponse;
+  }
+});
+
+test("retry: AssemblyAI's realtime models still fail closed", async () => {
+  fetches.length = 0;
+  const result = await invoke({ ...ASSEMBLYAI_DICTATION, cloudTranscriptionModel: "" });
+  assert.equal(result.success, false);
+  assert.equal(result.code, "STREAMING_ONLY_PROVIDER");
+  assert.equal(fetches.length, 0);
+});
+
+test("retry: a missing AssemblyAI key is a classified error", async () => {
+  fetches.length = 0;
+  const originalGetKey = fakeThis.environmentManager.getAssemblyAIKey;
+  fakeThis.environmentManager.getAssemblyAIKey = () => "";
+  try {
+    const result = await invoke(ASSEMBLYAI_DICTATION);
+    assert.equal(result.success, false);
+    assert.equal(result.code, "API_KEY_MISSING");
+    assert.deepEqual(result.messageParams, { provider: "AssemblyAI" });
+    assert.equal(fetches.length, 0);
+  } finally {
+    fakeThis.environmentManager.getAssemblyAIKey = originalGetKey;
+  }
+});
+
 test("retry: a missing BYOK key on the generic provider branch is a classified error", async () => {
   fetches.length = 0;
   const originalGetMistralKey = fakeThis.environmentManager.getMistralKey;
@@ -919,6 +978,7 @@ test("proxy transcription handlers resolve to structured errors instead of rejec
     for (const channel of [
       "proxy-mistral-transcription",
       "proxy-xai-transcription",
+      "proxy-assemblyai-transcription",
       "proxy-corti-transcription",
     ]) {
       const fn = handlers.get(channel);
@@ -971,6 +1031,28 @@ test("upload: mistral sends x-api-key with a provider-validated model and no lan
   const body = fetches[0].init.body.toString();
   assert.match(body, /voxtral-mini-latest/);
   assert.doesNotMatch(body, /name="language"/);
+});
+
+test("voice take: AssemblyAI Dictation transcribes through the Dictation API, verbatim", async () => {
+  fetches.length = 0;
+  fetchResponse = dictationResponse({ text: "um what's on my calendar", llm_response: "Tidy." });
+  try {
+    const result = await invokeUpload({
+      apiKey: "aai-from-renderer",
+      model: "dictation",
+      provider: "assemblyai",
+      language: "en",
+      purpose: "dictation",
+      transcriptionMode: "providers",
+    });
+    assert.deepEqual(result, { success: true, text: "um what's on my calendar" });
+    assert.equal(fetches.length, 1);
+    assert.equal(fetches[0].url, "https://dictation.assemblyai.com/v1/transcribe");
+    assert.deepEqual(fetches[0].init.headers, { Authorization: "aai-from-renderer" });
+    assert.equal(fetches[0].init.body.get("audio").type, "audio/webm");
+  } finally {
+    fetchResponse = defaultFetchResponse;
+  }
 });
 
 test("upload: openai diarization fields ride the route, Bearer auth", async () => {
@@ -1226,55 +1308,68 @@ async function withReplies(reply, pieces, run) {
 
 test("upload: a 30-minute OpenRouter file goes out in 4-minute pieces, comes back whole", async () => {
   let n = 0;
-  await withReplies(() => okReply(`part ${++n}`), 8, async () => {
-    const result = await invokeUpload(OPENROUTER_UPLOAD, OVER_ONE_REQUEST);
-    assert.equal(result.success, true, result.error);
-    assert.equal(result.text, "part 1 part 2 part 3 part 4 part 5 part 6 part 7 part 8");
-    assert.equal(splitCalls[0].options.segmentDuration, 240);
-    assert.equal(fetches.length, 8);
-    fetches.forEach((f, i) => {
-      assert.equal(f.url, "https://openrouter.ai/api/v1/audio/transcriptions");
-      assert.equal(f.init.headers.Authorization, "Bearer ork-openrouter");
-      const body = f.init.body.toString("latin1");
-      assert.match(body, new RegExp(`filename="chunk-00${i}\\.mp3"`));
-      assert.match(body, /name="model"\r\n\r\ngoogle\/chirp-3\r\n/);
-      assert.doesNotMatch(body, /name="(language|prompt)"/);
-    });
-    assert.deepEqual(progressEvents.at(-1), {
-      channel: "upload-transcription-progress",
-      data: { stage: "transcribing", chunksTotal: 8, chunksCompleted: 8 },
-    });
-  });
+  await withReplies(
+    () => okReply(`part ${++n}`),
+    8,
+    async () => {
+      const result = await invokeUpload(OPENROUTER_UPLOAD, OVER_ONE_REQUEST);
+      assert.equal(result.success, true, result.error);
+      assert.equal(result.text, "part 1 part 2 part 3 part 4 part 5 part 6 part 7 part 8");
+      assert.equal(splitCalls[0].options.segmentDuration, 240);
+      assert.equal(fetches.length, 8);
+      fetches.forEach((f, i) => {
+        assert.equal(f.url, "https://openrouter.ai/api/v1/audio/transcriptions");
+        assert.equal(f.init.headers.Authorization, "Bearer ork-openrouter");
+        const body = f.init.body.toString("latin1");
+        assert.match(body, new RegExp(`filename="chunk-00${i}\\.mp3"`));
+        assert.match(body, /name="model"\r\n\r\ngoogle\/chirp-3\r\n/);
+        assert.doesNotMatch(body, /name="(language|prompt)"/);
+      });
+      assert.deepEqual(progressEvents.at(-1), {
+        channel: "upload-transcription-progress",
+        data: { stage: "transcribing", chunksTotal: 8, chunksCompleted: 8 },
+      });
+    }
+  );
 });
 
 test("upload: a Custom endpoint on OpenRouter is sent in pieces with its own key and model", async () => {
-  await withReplies(() => okReply("piece"), 2, async () => {
-    const result = await invokeUpload(
-      {
-        apiKey: "ck-custom",
-        baseUrl: "https://openrouter.ai/api/v1",
-        model: "microsoft/mai-transcribe-2",
-        provider: "custom",
-        language: "",
-        transcriptionMode: "providers",
-      },
-      OVER_ONE_REQUEST
-    );
-    assert.equal(result.success, true, result.error);
-    assert.equal(fetches.length, 2);
-    assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
-    assert.match(
-      fetches[0].init.body.toString("latin1"),
-      /name="model"\r\n\r\nmicrosoft\/mai-transcribe-2\r\n/
-    );
-  });
+  await withReplies(
+    () => okReply("piece"),
+    2,
+    async () => {
+      const result = await invokeUpload(
+        {
+          apiKey: "ck-custom",
+          baseUrl: "https://openrouter.ai/api/v1",
+          model: "microsoft/mai-transcribe-2",
+          provider: "custom",
+          language: "",
+          transcriptionMode: "providers",
+        },
+        OVER_ONE_REQUEST
+      );
+      assert.equal(result.success, true, result.error);
+      assert.equal(fetches.length, 2);
+      assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
+      assert.match(
+        fetches[0].init.body.toString("latin1"),
+        /name="model"\r\n\r\nmicrosoft\/mai-transcribe-2\r\n/
+      );
+    }
+  );
 });
 
 // Pieces fail through the same translated provider errors as a single request.
 test("upload: an OpenRouter piece failure is a classified provider error", async () => {
   const unauthorized = () => {
     const body = { error: { message: "No auth credentials found", code: 401 } };
-    return { ok: false, status: 401, json: async () => body, text: async () => JSON.stringify(body) };
+    return {
+      ok: false,
+      status: 401,
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    };
   };
   await withReplies(unauthorized, 3, async () => {
     const tab = await invokeUpload(OPENROUTER_UPLOAD);
@@ -1293,12 +1388,16 @@ test("upload: an OpenRouter piece failure is a classified provider error", async
     assert.equal(custom.messageKey, "providerErrors.selfHosted.authFailed");
   });
 
-  await withReplies(() => okReply("piece"), 1, async () => {
-    const result = await invokeUpload({ ...OPENROUTER_UPLOAD, apiKey: "" });
-    assert.equal(result.code, "API_KEY_MISSING");
-    assert.deepEqual(result.messageParams, { provider: "OpenRouter" });
-    assert.equal(fetches.length, 0, "a missing key must fail before any piece is sent");
-  });
+  await withReplies(
+    () => okReply("piece"),
+    1,
+    async () => {
+      const result = await invokeUpload({ ...OPENROUTER_UPLOAD, apiKey: "" });
+      assert.equal(result.code, "API_KEY_MISSING");
+      assert.deepEqual(result.messageParams, { provider: "OpenRouter" });
+      assert.equal(fetches.length, 0, "a missing key must fail before any piece is sent");
+    }
+  );
 });
 
 test("upload: running out of OpenRouter credits mid-upload sends no further pieces", async () => {
@@ -1335,14 +1434,18 @@ test("upload: cancelling an OpenRouter upload stops at the piece in flight", asy
 // route. Registered only after that await, the upload never heard it and sent,
 // and billed, every piece.
 test("upload: a Cancel that lands while an OpenRouter upload starts is not lost", async () => {
-  await withReplies(() => okReply("piece"), 3, async () => {
-    const pending = invokeUpload({ ...OPENROUTER_UPLOAD, requestId: "upload-cancel-early" });
-    const cancel = await handlers.get("cancel-upload-transcription")({}, "upload-cancel-early");
-    assert.equal(cancel.success, true, "registered before its first await");
-    const result = await pending;
-    assert.equal(result.code, "UPLOAD_CANCELLED");
-    assert.equal(fetches.length, 0, "no piece is sent");
-  });
+  await withReplies(
+    () => okReply("piece"),
+    3,
+    async () => {
+      const pending = invokeUpload({ ...OPENROUTER_UPLOAD, requestId: "upload-cancel-early" });
+      const cancel = await handlers.get("cancel-upload-transcription")({}, "upload-cancel-early");
+      assert.equal(cancel.success, true, "registered before its first await");
+      const result = await pending;
+      assert.equal(result.code, "UPLOAD_CANCELLED");
+      assert.equal(fetches.length, 0, "no piece is sent");
+    }
+  );
 });
 
 // Electron's net.fetch rejects with a plain Error whose message is the Chromium

@@ -252,6 +252,15 @@ test("AssemblyAI's Dictation model batches through the proxy; its realtime model
   });
   assert.equal(unsupported.language, undefined, "the Dictation API rejects codes outside its 32");
 
+  const missingKey = await resolve(
+    {
+      cloudTranscriptionProvider: "assemblyai",
+      cloudTranscriptionModel: ASSEMBLYAI_DICTATION_MODEL,
+    },
+    { hasProviderKey: false }
+  );
+  assert.equal(missingKey.code, "API_KEY_MISSING", "a missing key is named before any request");
+
   assert.equal(isStreamingOnlySelection("assemblyai", ASSEMBLYAI_DICTATION_MODEL), false);
   assert.equal(isStreamingOnlySelection("assemblyai", "universal-3-6-pro"), true);
   assert.equal(isStreamingOnlySelection("assemblyai", undefined), true);

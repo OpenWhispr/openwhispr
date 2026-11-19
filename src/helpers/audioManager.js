@@ -66,6 +66,7 @@ import {
   isLlmSelectionAllowed,
   isLocalChoiceRefusal,
   isLocalModelAllowedByPolicy,
+  isModeAllowedByPolicy,
   isTranscriptionContextAllowed,
   isTranscriptionSelectionAllowed,
   localModelRefusal,
@@ -128,6 +129,7 @@ import {
 } from "../config/agentDetection";
 import {
   cleanupUnconfiguredNotice,
+  providerCleanupStandsIn,
   resolveDictationRouteKind,
   resolveAgentImageTarget,
   resolveWakeWordLanguage,
@@ -2951,6 +2953,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "assemblyai") {
+      // The Dictation proxy reads the key in main; only verify one exists here.
+      apiKey = s.assemblyaiApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getAssemblyAIKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "AssemblyAI API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else if (provider === "openrouter") {
       apiKey = s.openrouterApiKey;
       if (!apiKey?.trim()) {
@@ -3529,16 +3544,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const blockedAgentCommand =
       isAgentScopeBlocked(settings) && !this.translationRequested && addressesAgent;
 
-    // A provider that cleaned the transcript itself (AssemblyAI Dictation) stands
-    // in for the cleanup step. Assistant commands and translation still take the
-    // verbatim transcript below, since cleanup can reword a wake phrase.
+    // A provider that cleaned the transcript itself (AssemblyAI Dictation) can
+    // stand in for the cleanup step. Assistant commands and translation still take
+    // the verbatim transcript below, since cleanup can reword a wake phrase; a name
+    // spoken with no assistant to hear it is ordinary dictation.
     const providerCleanedText = typeof cleanedText === "string" ? cleanedText.trim() : "";
     if (
       providerCleanedText &&
-      settings.useCleanupModel &&
       !this.voiceAgentRequested &&
       !this.translationRequested &&
-      !addressesAgent
+      !(addressesAgent && (agentReachable || isAgentScopeBlocked(settings))) &&
+      providerCleanupStandsIn(settings, {
+        cleanupReachable,
+        providerLlmAllowed: isModeAllowedByPolicy(usePolicyStore.getState(), "llm", "providers"),
+      })
     ) {
       logger.logReasoning("PROVIDER_CLEANUP_USED", { source });
       return providerCleanedText;
@@ -4210,7 +4229,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
         const text = await this.processTranscription(proxyText, providerName, wasCancelled, {
-          cleanedText: result.cleanedText,
+          // A rewrite of a transcript that recited the dictionary still carries the recital.
+          cleanedText: proxyText === result.text ? result.cleanedText : undefined,
         });
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 

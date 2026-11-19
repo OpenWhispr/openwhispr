@@ -207,8 +207,9 @@ export function resolveStreamingProviderName({ settings, context, sttConfig, lan
   if (isGeminiLiveSelection(settings)) {
     return "gemini";
   }
-  // Realtime-only providers have no batch endpoint, so BYOK selection alone
-  // routes them, and their renderer channel name is the bare provider id. Ahead
+  // Realtime-only providers have no batch endpoint (AssemblyAI's Dictation model
+  // aside), so BYOK selection of a realtime model alone routes them, and their
+  // renderer channel name is the bare provider id. Ahead
   // of the REALTIME_MODELS check so a stale OpenAI model id in settings can't
   // hijack the provider, matching the tinfoil/corti precedent above.
   if (

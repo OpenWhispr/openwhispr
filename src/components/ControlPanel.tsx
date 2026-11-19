@@ -49,12 +49,14 @@ import { startWorkspaceScopeBridge } from "../stores/workspaceScopeBridge";
 import { useEnsureDefaultWorkspace } from "../hooks/useWorkspace";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
 import { usePolicySnapshot, useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
+import { providerCleanupStandsIn } from "../helpers/dictationRouting";
 import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
 import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
 import {
   isAgentAllowed,
   isAudioFeatureAllowed,
   isControlPanelViewAllowed,
+  isModeAllowedByPolicy,
   isPolicyActionAllowed,
   isTranscriptionContextAllowed,
   isUpdateRequiredByOrg,
@@ -946,13 +948,26 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               ]);
               const model = getEffectiveCleanupModel();
               const isCloud = isCloudCleanupMode();
-              if (model || isCloud) {
-                const agentName = getAgentName();
-                const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
-                  disableThinking: getSettings().cleanupDisableThinking,
-                  reasoningEffort: getSettings().cleanupReasoningEffort,
-                  requireCompleteOutput: true,
-                });
+              // A provider's own rewrite stands in for cleanup, as on a fresh dictation.
+              const providerCleanedText =
+                (providerCleanupStandsIn(getSettings(), {
+                  cleanupReachable: !!model || isCloud,
+                  providerLlmAllowed: isModeAllowedByPolicy(
+                    usePolicyStore.getState(),
+                    "llm",
+                    "providers"
+                  ),
+                }) &&
+                  result.cleanedText?.trim()) ||
+                "";
+              if (providerCleanedText || model || isCloud) {
+                const reasonedText =
+                  providerCleanedText ||
+                  (await ReasoningService.processText(rawText, model, getAgentName(), {
+                    disableThinking: getSettings().cleanupDisableThinking,
+                    reasoningEffort: getSettings().cleanupReasoningEffort,
+                    requireCompleteOutput: true,
+                  }));
                 if (hasTextContent(reasonedText) && reasonedText !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,

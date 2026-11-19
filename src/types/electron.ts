@@ -2046,6 +2046,8 @@ declare global {
         success: boolean;
         transcription?: TranscriptionItem;
         warning?: string;
+        // The transcript as the provider rewrote it (AssemblyAI Dictation).
+        cleanedText?: string;
         error?: string;
         code?: string;
         messageKey?: string;

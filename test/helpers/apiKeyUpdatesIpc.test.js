@@ -494,6 +494,7 @@ test("local-only device policy refuses direct remote IPC despite saved keys and 
     "proxy-gemini-transcription",
     "proxy-xai-transcription",
     "proxy-mistral-transcription",
+    "proxy-assemblyai-transcription",
   ]) {
     assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED", channel);
   }
@@ -1625,6 +1626,7 @@ test("valid inference restrictions retire active provider streams without disabl
     "proxy-corti-transcription",
     "proxy-tinfoil-transcription",
     "proxy-gemini-transcription",
+    "proxy-assemblyai-transcription",
   ])
     assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED");
   for (const path of [
