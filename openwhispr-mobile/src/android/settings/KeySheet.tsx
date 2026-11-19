@@ -34,6 +34,7 @@ const TASK_TITLE: Record<SheetTask, SettingsKey> = {
   upload: 'audioUploads',
   cleanup: 'textCleanup',
   notes: 'noteFormatting',
+  agent: 'assistant',
   meeting: 'meetings',
 };
 

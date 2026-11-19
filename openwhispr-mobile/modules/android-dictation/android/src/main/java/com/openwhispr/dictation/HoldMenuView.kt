@@ -35,8 +35,12 @@ data class MenuCopy(
  * Edit selection. Drawn inside the bubble's own window, which never takes focus, so the text box keeps
  * its caret and selection. A row lights up under a sliding finger.
  */
-class HoldMenuView(context: Context, regular: Typeface, medium: Typeface, val rows: List<MenuRow>, copy: MenuCopy) : LinearLayout(context) {
-  private fun dp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics)
+class HoldMenuView(
+  context: Context, regular: Typeface, medium: Typeface, val rows: List<MenuRow>, copy: MenuCopy,
+  /** Size & look's size, as for the bubble (BubbleMenuPolicy.menuScale). */
+  private val scale: Float = 1f,
+) : LinearLayout(context) {
+  private fun dp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics) * scale
   val padding = dp(6f)
   val rowHeight = dp(44f)
   val gap = dp(2f)
@@ -82,7 +86,7 @@ class HoldMenuView(context: Context, regular: Typeface, medium: Typeface, val ro
   }
 
   private fun text(value: String, face: Typeface, size: Float, color: Int) = TextView(context).apply {
-    text = value; typeface = face; setTextColor(color); setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
+    text = value; typeface = face; setTextColor(color); setTextSize(TypedValue.COMPLEX_UNIT_SP, size * scale)
     maxLines = 1; ellipsize = TextUtils.TruncateAt.END; includeFontPadding = false
   }
 

@@ -78,11 +78,11 @@ describe('Processing · Fable’s take', () => {
   });
 
   it('counts the tasks each provider can run, as the key sheet’s button names them', () => {
-    expect(places.sourceTasks('openai')).toHaveLength(5);
-    expect(places.sourceTasks('groq')).toEqual(['dictation', 'upload', 'cleanup', 'notes']);
+    expect(places.sourceTasks('openai')).toHaveLength(6);
+    expect(places.sourceTasks('groq')).toEqual(['dictation', 'upload', 'cleanup', 'notes', 'agent']);
     expect(places.sourceTasks('deepgram')).toEqual(['dictation', 'upload', 'meeting']);
     expect(places.sourceTasks('assemblyai')).toEqual(['dictation', 'upload', 'meeting']);
-    expect(places.sourceTasks('openrouter')).toEqual(['cleanup', 'notes']);
+    expect(places.sourceTasks('openrouter')).toEqual(['cleanup', 'notes', 'agent']);
   });
 
   it('puts each task in the place it runs on, meetings on Cloud until moved', () => {
@@ -132,7 +132,7 @@ describe('Processing · Fable’s take', () => {
 
   it('adds a key for every task it can run, and Undo takes the key and the tasks back', async () => {
     const { tasks, undo } = await places.addSource('groq', 'gsk_test', true);
-    expect(tasks).toEqual(['dictation', 'upload', 'cleanup', 'notes']);
+    expect(tasks).toEqual(['dictation', 'upload', 'cleanup', 'notes', 'agent']);
     expect(mockKeys.get('provider.groq')).toBe('gsk_test');
     expect(useConfigStore.getState().config?.inference?.cleanup).toMatchObject({
       mode: 'providers',

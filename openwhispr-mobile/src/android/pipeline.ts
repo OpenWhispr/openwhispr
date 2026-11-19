@@ -48,6 +48,21 @@ export interface AndroidJob {
   language?: string;
   tone?: KeyboardTone;
 }
+
+/**
+ * Where the bubble's Assistant, Translate and Edit selection run: the Assistant task on Processing,
+ * or with nothing saved for it, Text cleanup's engine (where they ran before the task existed).
+ */
+export function assistantRoute(route: TranscriptionJobRoute): {
+  route: TranscriptionJobRoute['cleanupRoute'];
+  unavailable?: string;
+  scope: 'agent' | 'cleanup';
+} {
+  if (useConfigStore.getState().config?.inference?.agent)
+    return { route: route.agentRoute, unavailable: route.agentUnavailable, scope: 'agent' };
+  return { route: route.cleanupRoute, unavailable: route.cleanupUnavailable, scope: 'cleanup' };
+}
+
 export function createAndroidJob(
   mode: DictationMode = 'dictate',
   target = 'Spanish',
@@ -61,7 +76,7 @@ export function createAndroidJob(
     localDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
     accountScope: insightsScope(),
     historyScope: captureTranscriptScope(),
-    route: snapshotTranscriptionJob('dictation'),
+    route: snapshotTranscriptionJob('dictation', ['cleanup', 'agent']),
     mode,
     target,
     selection,
@@ -88,8 +103,10 @@ export async function ensureAndroidModels(job: AndroidJob): Promise<void> {
   const cleanupRuns =
     config?.cleanupEnabled !== false &&
     (job.route.provider !== 'local' || cleanupSavedOnDevice(config));
+  const textRoute =
+    job.mode === 'dictate' ? job.route.cleanupRoute : assistantRoute(job.route).route;
   if (
-    job.route.cleanupRoute?.mode === 'local' &&
+    textRoute?.mode === 'local' &&
     (job.mode !== 'dictate' || cleanupRuns) &&
     !(await modelReady(selectedTextModel()))
   )
@@ -156,7 +173,8 @@ export async function processAndroidAudio(
       throw new AndroidCleanupError(output.transcription.cleanupWarning, output.originalText);
     let text = output.text;
     if (job.mode !== 'dictate') {
-      if (job.route.cleanupUnavailable) throw new Error(job.route.cleanupUnavailable);
+      const assistant = assistantRoute(job.route);
+      if (assistant.unavailable) throw new Error(assistant.unavailable);
       stage('cleaning');
       const instruction =
         job.mode === 'translate'
@@ -170,10 +188,10 @@ export async function processAndroidAudio(
             ? `Original text:\n${job.selection}\n\nEditing instruction:\n${output.originalText}`
             : output.originalText,
         systemPrompt: instruction,
-        inferenceScope: 'cleanup',
-        inferenceRoute: job.route.cleanupRoute,
+        inferenceScope: assistant.scope,
+        inferenceRoute: assistant.route,
         routing:
-          job.route.cleanupRoute?.mode === 'providers'
+          assistant.route?.mode === 'providers'
             ? { sendToChosenProvider: true }
             : { isPrivateNote: job.route.provider === 'local' },
         signal,

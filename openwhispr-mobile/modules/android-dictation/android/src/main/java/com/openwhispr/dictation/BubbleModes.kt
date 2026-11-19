@@ -85,8 +85,23 @@ object BubbleMenuPolicy {
     return index
   }
 
-  /** Whether the bubble's hold opens the menu (Settings › Bubble › Hold the bubble). */
-  fun holdOpensMenu(setting: String?) = setting != "nothing"
+  /** How long a press on the bubble with the Assistant off waits before it starts hold-to-talk. */
+  const val TALK_HOLD_MS = 300L
+
+  /**
+   * Whether the bubble's hold opens the menu (Settings › Bubble › Assistant on). With the Assistant
+   * off ("talk", or "nothing" from builds before the switch) a hold is hold-to-talk instead.
+   */
+  fun holdOpensMenu(setting: String?) = setting != "talk" && setting != "nothing"
+
+  /**
+   * The menu follows Size & look's size like the bubble, kept between 87.5 % and 125 % so its
+   * 12 sp second lines stay readable on the smallest bubble.
+   */
+  fun menuScale(bubbleScale: Float) = if (bubbleScale.isNaN()) 1f else bubbleScale.coerceIn(0.875f, 1.25f)
+
+  /** Whether a hold records while the finger is down and pastes on release (the Assistant is off). */
+  fun holdToTalk(setting: String?) = !holdOpensMenu(setting)
 
   /** A tab touched by a finger stays; otherwise it leaves [holdMs] after it last came out or was let go. */
   fun tabLeavesAt(shownAt: Long, releasedAt: Long?, touching: Boolean, holdMs: Long = TAB_HOLD_MS): Long? =
@@ -104,7 +119,7 @@ object BubbleMenuPolicy {
 
   /**
    * Translate offers its target in the second line ("Into Spanish"). The target is the label saved in
-   * Settings › Translation; nothing saved reads as Spanish, the pipeline's own default.
+   * Settings › Bubble › Assistant › Translate; nothing saved reads as Spanish, the pipeline's own default.
    */
   fun translateTarget(saved: String?) = saved?.trim()?.takeIf { it.isNotEmpty() } ?: "Spanish"
 }

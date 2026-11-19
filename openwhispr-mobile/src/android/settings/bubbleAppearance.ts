@@ -51,27 +51,32 @@ export function saveBubbleSize(size: number) {
   void useConfigStore.getState().updateConfig({ androidBubbleSize: size });
 }
 
-export type HoldAction = 'menu' | 'nothing';
 const HOLD_KEY = 'android-bubble-hold-v1';
 
-function savedHold(): HoldAction {
+function savedAssistant(): boolean {
   try {
-    return localStorage.getItem(HOLD_KEY) === 'nothing' ? 'nothing' : 'menu';
+    // "nothing" is the PR #3336 "Hold the bubble: Nothing" choice, which this switch replaces.
+    const saved = localStorage.getItem(HOLD_KEY);
+    return saved !== 'talk' && saved !== 'nothing';
   } catch {
-    return 'menu';
+    return true;
   }
 }
 
-/** Settings › Bubble › Hold the bubble: show the menu (default) or nothing. Per phone. */
-export const useHoldAction = create<{ value: HoldAction }>(() => ({ value: savedHold() }));
+/**
+ * Settings › Bubble › Assistant: on (default), holding the bubble opens the menu (Assistant,
+ * Translate, Edit selection); off, a hold is hold to talk. A tap dictates either way. Per phone.
+ */
+export const useBubbleAssistant = create<{ on: boolean }>(() => ({ on: savedAssistant() }));
 
-/** Saves the choice and tells the running bubble, which keeps it for its next start. */
-export function setHoldAction(value: HoldAction) {
-  useHoldAction.setState({ value });
+/** Saves the switch and tells the running bubble, which keeps it for its next start. */
+export function setBubbleAssistant(on: boolean) {
+  useBubbleAssistant.setState({ on });
+  const holdAction = on ? 'menu' : 'talk';
   try {
-    localStorage.setItem(HOLD_KEY, value);
+    localStorage.setItem(HOLD_KEY, holdAction);
   } catch {
     // The native side keeps its own copy; this one only feeds the screen.
   }
-  AndroidDictation?.setMenuContext?.({ holdAction: value });
+  AndroidDictation?.setMenuContext?.({ holdAction });
 }

@@ -68,6 +68,11 @@ jest.mock('../pipeline', () => {
   return {
     AndroidCleanupError: CleanupError,
     createAndroidJob: jest.fn((mode: string) => ({ mode })),
+    assistantRoute: (route: { cleanupRoute?: unknown; cleanupUnavailable?: string }) => ({
+      route: route.cleanupRoute,
+      unavailable: route.cleanupUnavailable,
+      scope: 'cleanup',
+    }),
     processAndroidAudio: jest.fn(),
   };
 });

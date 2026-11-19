@@ -47,6 +47,7 @@ class BubbleModesTest {
     assertFalse(BubbleMenuPolicy.showsHint("menu", menuUsed = false, timesShown = 3))
     assertFalse(BubbleMenuPolicy.showsHint("menu", menuUsed = true, timesShown = 0))
     assertFalse(BubbleMenuPolicy.showsHint("nothing", menuUsed = false, timesShown = 0))
+    assertFalse(BubbleMenuPolicy.showsHint("talk", menuUsed = false, timesShown = 0))
   }
 
   @Test fun `a finger finds the row under it, not the gaps or the edges`() {
@@ -62,10 +63,20 @@ class BubbleModesTest {
     assertNull(BubbleMenuPolicy.rowAt(20f, 209f, 208f, rows, 6f, 44f, 2f))
   }
 
-  @Test fun `holding shows the menu unless Settings says Nothing`() {
+  @Test fun `holding shows the menu while the Assistant is on`() {
     assertTrue(BubbleMenuPolicy.holdOpensMenu(null))
     assertTrue(BubbleMenuPolicy.holdOpensMenu("menu"))
+    assertFalse(BubbleMenuPolicy.holdOpensMenu("talk"))
     assertFalse(BubbleMenuPolicy.holdOpensMenu("nothing"))
+  }
+
+  @Test fun `with the Assistant off a hold is hold to talk`() {
+    assertTrue(BubbleMenuPolicy.holdToTalk("talk"))
+    // Builds before the Assistant switch saved "Nothing"; that now means off too.
+    assertTrue(BubbleMenuPolicy.holdToTalk("nothing"))
+    assertFalse(BubbleMenuPolicy.holdToTalk("menu"))
+    assertFalse(BubbleMenuPolicy.holdToTalk(null))
+    assertTrue(BubbleMenuPolicy.TALK_HOLD_MS < BubbleMenuPolicy.HOLD_MS)
   }
 
   @Test fun `the tab stays while touched and leaves 4 s after it came out or was let go`() {
@@ -82,5 +93,13 @@ class BubbleModesTest {
 
   @Test fun `hiding lasts 15 minutes`() {
     assertEquals(15 * 60 * 1000L, BubblePolicy.HIDE_FOR_MS)
+  }
+
+  @Test fun `the menu follows the bubble's size, within readable bounds`() {
+    assertEquals(1f, BubbleMenuPolicy.menuScale(1f), 0f)
+    assertEquals(1.125f, BubbleMenuPolicy.menuScale(1.125f), 0f)
+    assertEquals(0.875f, BubbleMenuPolicy.menuScale(0.75f), 0f)
+    assertEquals(1.25f, BubbleMenuPolicy.menuScale(1.375f), 0f)
+    assertEquals(1f, BubbleMenuPolicy.menuScale(Float.NaN), 0f)
   }
 }

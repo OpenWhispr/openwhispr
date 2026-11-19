@@ -367,7 +367,8 @@ class DictationService : Service() {
     bubble.dot = if (appearance.shrinkToDot) shrink else 0f
     cancel.visibility = if (state == BubbleState.LISTENING) View.VISIBLE else View.GONE
     bubble.contentDescription = getString(if (state == BubbleState.LISTENING) R.string.ow_bubble_stop else R.string.ow_bubble_talk)
-    view.alpha = if (state == BubbleState.READY && menu == null) appearance.alpha else 1f
+    // The resting bubble and its hold menu are as see-through as Size & look says; a take is solid.
+    view.alpha = if (state == BubbleState.READY) appearance.alpha else 1f
     place()
   }
 
@@ -539,6 +540,15 @@ class DictationService : Service() {
     menuThisTouch = true
     openMenu()
   }
+  /** With the Assistant off, a hold is hold-to-talk: it records while held and pastes on release. */
+  private var talking = false
+  private val holdToTalk = Runnable {
+    if (moved || stopping || !canStartGesture()) return@Runnable
+    face?.let { release(it) }
+    face?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    tapToDictate()
+    talking = state == BubbleState.LISTENING
+  }
 
   private fun canStartGesture() =
     !stopping && (state == BubbleState.READY || state == BubbleState.RETRY || state == BubbleState.RECOVER)
@@ -558,15 +568,20 @@ class DictationService : Service() {
         // A touch brings a shrunk bubble straight back, so the drag and the tap work on the full bubble.
         touched = true; wake(animate = false); handler.removeCallbacks(idleShrink)
         bubble.animate().scaleX(0.94f).scaleY(0.94f).setDuration(80).setInterpolator(BubbleMotion.easeOut).start()
-        if (BubbleMenuPolicy.holdOpensMenu(preferences.getString("holdAction", null))) {
+        talking = false
+        val holdAction = preferences.getString("holdAction", null)
+        if (BubbleMenuPolicy.holdOpensMenu(holdAction)) {
           bubble.holdRing(true)
           handler.postDelayed(holdForMenu, BubbleMenuPolicy.HOLD_MS)
-        }
+        } else handler.postDelayed(holdToTalk, BubbleMenuPolicy.TALK_HOLD_MS)
       }
       MotionEvent.ACTION_MOVE -> {
         if (open != null) { open.highlighted = open.rowAtScreen(event.rawX, event.rawY); return }
+        // A finger that drifts while talking keeps talking; the bubble stays where it is.
+        if (talking) return
         if (!moved && abs(event.rawX - downX) + abs(event.rawY - downY) > dp(12f)) {
-          moved = true; handler.removeCallbacks(holdForMenu); bubble.holdRing(false); release(bubble); startDrag()
+          moved = true; handler.removeCallbacks(holdForMenu); handler.removeCallbacks(holdToTalk)
+          bubble.holdRing(false); release(bubble); startDrag()
         }
         if (moved) {
           val (width, height) = screen()
@@ -578,7 +593,8 @@ class DictationService : Service() {
         }
       }
       MotionEvent.ACTION_UP -> {
-        handler.removeCallbacks(holdForMenu); touched = false
+        handler.removeCallbacks(holdForMenu); handler.removeCallbacks(holdToTalk); touched = false
+        if (talking) { talking = false; finish(false); return }
         if (open != null) {
           val row = open.rowAtScreen(event.rawX, event.rawY)
           when {
@@ -595,12 +611,14 @@ class DictationService : Service() {
         when {
           // A settled bubble starts counting down once it reaches the edge.
           moved -> { val hide = overTarget(); endDrag(); if (hide) { hideForAWhile(); wake() } else settle() }
-          // A tap (or, with the menu off, any press) dictates, starting on the lift.
+          // A tap dictates, starting on the lift.
           else -> { view.performClick(); bubble.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); tapToDictate() }
         }
       }
       MotionEvent.ACTION_CANCEL -> {
-        handler.removeCallbacks(holdForMenu); touched = false
+        handler.removeCallbacks(holdForMenu); handler.removeCallbacks(holdToTalk); touched = false
+        // The system took the touch: a hold-to-talk take is discarded, as before the menu.
+        if (talking) { talking = false; finish(true) }
         bubble.holdRing(false); release(bubble)
         if (moved) { endDrag(); place() }
         menuThisTouch = false; menuTouch = false
@@ -651,11 +669,12 @@ class DictationService : Service() {
       } },
       blockedReason = getString(if (block == AssistantBlock.SIGN_IN) R.string.ow_menu_sign_in_to_use else R.string.ow_menu_unavailable),
     )
-    val view = HoldMenuView(this, regular, font, BubbleMenuPolicy.rows(selected, block != null), copy)
+    val view = HoldMenuView(this, regular, font, BubbleMenuPolicy.rows(selected, block != null), copy, BubbleMenuPolicy.menuScale(scale))
     view.onPick = { pick(it) }
     menu = view
     holder.addView(view, 0, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8f).toInt() })
-    root?.alpha = 1f
+    // The menu follows Size & look's see-through, like the bubble it opens from (Josh, 19 Nov).
+    if (state == BubbleState.READY) root?.alpha = appearance.alpha
     handler.removeCallbacks(idleShrink)
     place()
     view.grow(dockRight)

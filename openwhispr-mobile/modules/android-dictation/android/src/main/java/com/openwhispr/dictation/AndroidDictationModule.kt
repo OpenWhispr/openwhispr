@@ -135,6 +135,12 @@ class AndroidDictationModule : Module() {
       .runOnQueue(appContext.backgroundCoroutineScope)
     Function("cancelProviderRequest") { id: String -> providers.cancel(id) }
     Function("getLocale") { context.resources.configuration.locales[0].toLanguageTag() }
+    // Every language set on the phone, in its order (Settings › Translate into › On your phone).
+    Function("getLocales") {
+      // The system list, not the app's: a per-app language would hide the rest.
+      val locales = android.content.res.Resources.getSystem().configuration.locales
+      List(locales.size()) { locales[it].toLanguageTag() }
+    }
     Function("getDeviceProfile") {
       val manager = context.getSystemService(ActivityManager::class.java)
       val memory = ActivityManager.MemoryInfo()
@@ -223,7 +229,7 @@ class AndroidDictationModule : Module() {
       else service.insert(text, highlight = options?.get("highlight") == true) { promise.resolve(it) }
     }.runOnQueue(Queues.MAIN)
     // What the hold menu shows: the Translate target, why the Assistant is greyed ("" = available),
-    // and what holding the bubble does ("menu" or "nothing"). Kept for the bubble's next start.
+    // and what holding the bubble does ("menu", or "talk" with the Assistant off; older builds sent "nothing"). Kept for the bubble's next start.
     Function("setMenuContext") { options: Map<String, Any?> ->
       val translateTarget = options["translateTarget"] as? String
       val assistantBlock = options["assistantBlock"] as? String

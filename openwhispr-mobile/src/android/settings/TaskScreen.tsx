@@ -37,6 +37,7 @@ const TITLE: Record<KeyTask | 'meeting', SettingsKey> = {
   upload: 'audioUploads',
   cleanup: 'textCleanup',
   notes: 'noteFormatting',
+  agent: 'assistant',
   meeting: 'meetings',
 };
 

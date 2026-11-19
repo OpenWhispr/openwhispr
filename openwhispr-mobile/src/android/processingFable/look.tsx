@@ -28,6 +28,7 @@ export const TASK_ICON: Record<SheetTask, LucideIconName> = {
   upload: 'FileUp',
   cleanup: 'Sparkles',
   notes: 'NotepadText',
+  agent: 'Sparkle',
   meeting: 'Users',
 };
 
