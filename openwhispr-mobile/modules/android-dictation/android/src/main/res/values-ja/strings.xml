@@ -49,4 +49,5 @@
   <string name="ow_toast_written">アシスタントが作成</string>
   <string name="ow_toast_translated">%1$sに翻訳しました</string>
   <string name="ow_toast_edited">編集しました · 選択部分を置換</string>
+  <string name="ow_bubble_hint">タップで音声入力 · 長押しでメニュー</string>
 </resources>

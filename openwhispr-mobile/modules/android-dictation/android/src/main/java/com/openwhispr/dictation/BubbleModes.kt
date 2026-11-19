@@ -48,6 +48,12 @@ object BubbleMenuPolicy {
   const val HOLD_MS = 400L
   /** How long the status tab stays out when nothing touches it. */
   const val TAB_HOLD_MS = 4000L
+  /** A failed take's tab stays longer: its recording, kept for Retry, goes when the tab does. */
+  const val FAILURE_TAB_HOLD_MS = 7000L
+  /** The first-time hint ("Tap to dictate · Hold for more") tucks back after 3 s. */
+  const val HINT_HOLD_MS = 3000L
+  /** The hint shows the first three times the bubble appears, until the menu has been opened once. */
+  const val HINT_TIMES = 3
   /** "Still writing…" only appears when writing is slow. */
   const val STILL_WRITING_AFTER_MS = 3000L
   /** How long the bottom toast stays up. */
@@ -55,11 +61,14 @@ object BubbleMenuPolicy {
   /** How long edited words stay highlighted before the Undo toast rises. */
   const val EDIT_HIGHLIGHT_MS = 1200L
 
-  /** Assistant and Translate always; Edit selection only when text is selected. */
+  /**
+   * Assistant and Translate always; Edit selection only when text is selected. All three run on the
+   * assistant, so when it isn't available (signed out, plan, policy) every row is greyed and says why.
+   */
   fun rows(hasSelection: Boolean, assistantBlocked: Boolean): List<MenuRow> = buildList {
     add(MenuRow(BubbleMode.ASSISTANT, !assistantBlocked))
-    add(MenuRow(BubbleMode.TRANSLATE, true))
-    if (hasSelection) add(MenuRow(BubbleMode.EDIT, true))
+    add(MenuRow(BubbleMode.TRANSLATE, !assistantBlocked))
+    if (hasSelection) add(MenuRow(BubbleMode.EDIT, !assistantBlocked))
   }
 
   /**
@@ -79,9 +88,19 @@ object BubbleMenuPolicy {
   /** Whether the bubble's hold opens the menu (Settings › Bubble › Hold the bubble). */
   fun holdOpensMenu(setting: String?) = setting != "nothing"
 
-  /** A tab touched by a finger stays; otherwise it leaves [TAB_HOLD_MS] after it last came out or was let go. */
-  fun tabLeavesAt(shownAt: Long, releasedAt: Long?, touching: Boolean): Long? =
-    if (touching) null else maxOf(shownAt, releasedAt ?: 0L) + TAB_HOLD_MS
+  /** A tab touched by a finger stays; otherwise it leaves [holdMs] after it last came out or was let go. */
+  fun tabLeavesAt(shownAt: Long, releasedAt: Long?, touching: Boolean, holdMs: Long = TAB_HOLD_MS): Long? =
+    if (touching) null else maxOf(shownAt, releasedAt ?: 0L) + holdMs
+
+  /** How long a message's tab stays out: failures 7 s, the first-time hint 3 s, the rest 4 s. */
+  fun holdFor(message: StatusMessage): Long = when (message) {
+    StatusMessage.SAVED, StatusMessage.COPIED, StatusMessage.STILL_WRITING -> TAB_HOLD_MS
+    else -> FAILURE_TAB_HOLD_MS
+  }
+
+  /** Whether the first-time hint shows now: the menu is on and hasn't been opened, and it has shown fewer than 3 times. */
+  fun showsHint(holdAction: String?, menuUsed: Boolean, timesShown: Int) =
+    holdOpensMenu(holdAction) && !menuUsed && timesShown < HINT_TIMES
 
   /**
    * Translate offers its target in the second line ("Into Spanish"). The target is the label saved in

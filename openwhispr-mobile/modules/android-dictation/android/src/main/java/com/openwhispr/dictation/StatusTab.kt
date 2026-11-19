@@ -43,12 +43,16 @@ data class TabMessage(
   val onAction: (() -> Unit)? = null,
   /** Tapping the words themselves (Saved opens the text from either). */
   val onLabel: (() -> Unit)? = null,
-  /** Whether it leaves by itself after 4 s; "Still writing…" stays until the words land. */
+  /** Whether it leaves by itself after [holdMs]; "Still writing…" stays until the words land. */
   val leaves: Boolean = true,
   /** Grey words, for a settled state such as the Dictionary's "Won't learn “Synty”" after Undo. */
   val muted: Boolean = false,
   /** Another 14 dp glyph in place of the brand bars (the Dictionary's book). */
   val glyph: ((Context) -> View)? = null,
+  /** No glyph at all (the first-time hint). */
+  val plain: Boolean = false,
+  /** How long it stays out when nothing touches it. */
+  val holdMs: Long = BubbleMenuPolicy.TAB_HOLD_MS,
 )
 
 /**
@@ -79,6 +83,8 @@ class StatusTab(private val context: Context, private val windows: WindowManager
   private val leave = Runnable { val gone = onGone; hide(); gone?.invoke() }
 
   val showing get() = message != null
+  /** The words out now, so a caller can tell its own tab from another's. */
+  val currentLabel get() = message?.label
 
   private fun dp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, context.resources.displayMetrics)
   private val room get() = dp(12f).toInt()
@@ -160,8 +166,11 @@ class StatusTab(private val context: Context, private val windows: WindowManager
       val icon = next.glyph?.invoke(context) ?: TabGlyph(context)
       content.removeViewAt(0)
       content.addView(icon, 0, LinearLayout.LayoutParams(dp(14f).toInt(), dp(14f).toInt()))
+      icon.visibility = if (next.plain) View.GONE else View.VISIBLE
+      content.setPadding(dp(if (next.plain) 14f else 12f).toInt(), 0, dp(14f).toInt(), 0)
     }
     label?.apply {
+      (layoutParams as? LinearLayout.LayoutParams)?.marginStart = if (next.plain) 0 else dp(8f).toInt()
       setTextColor(if (next.muted) BubbleColors.secondary else BubbleColors.ink)
       text = next.label
       isClickable = next.onLabel != null
@@ -197,7 +206,7 @@ class StatusTab(private val context: Context, private val windows: WindowManager
   private fun schedule() {
     handler.removeCallbacks(leave)
     if (message?.leaves != true) return
-    val at = BubbleMenuPolicy.tabLeavesAt(shownAt, releasedAt, touching) ?: return
+    val at = BubbleMenuPolicy.tabLeavesAt(shownAt, releasedAt, touching, message?.holdMs ?: BubbleMenuPolicy.TAB_HOLD_MS) ?: return
     handler.postAtTime(leave, at)
   }
 }

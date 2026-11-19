@@ -26,11 +26,27 @@ class BubbleModesTest {
     assertEquals(listOf(BubbleMode.ASSISTANT, BubbleMode.TRANSLATE, BubbleMode.EDIT), BubbleMenuPolicy.rows(true, false).map { it.mode })
   }
 
-  @Test fun `a blocked Assistant stays in the menu, greyed`() {
+  @Test fun `without the assistant every row stays in the menu, greyed`() {
     val rows = BubbleMenuPolicy.rows(true, assistantBlocked = true)
-    assertEquals(BubbleMode.ASSISTANT, rows[0].mode)
-    assertFalse(rows[0].enabled)
-    assertTrue(rows.drop(1).all { it.enabled })
+    assertEquals(listOf(BubbleMode.ASSISTANT, BubbleMode.TRANSLATE, BubbleMode.EDIT), rows.map { it.mode })
+    assertTrue(rows.none { it.enabled })
+    assertTrue(BubbleMenuPolicy.rows(true, assistantBlocked = false).all { it.enabled })
+  }
+
+  @Test fun `a failed take's tab stays 7 s, the others 4 s`() {
+    for (message in listOf(StatusMessage.NO_SPEECH, StatusMessage.OFFLINE, StatusMessage.FAILED, StatusMessage.OUT_OF_WORDS, StatusMessage.MIC_OFF))
+      assertEquals(message.name, 7000L, BubbleMenuPolicy.holdFor(message))
+    assertEquals(4000L, BubbleMenuPolicy.holdFor(StatusMessage.SAVED))
+    assertEquals(4000L, BubbleMenuPolicy.holdFor(StatusMessage.COPIED))
+    assertEquals(7000L, BubbleMenuPolicy.tabLeavesAt(0L, null, touching = false, holdMs = 7000L))
+  }
+
+  @Test fun `the first-time hint shows three times, until the menu is used or turned off`() {
+    assertTrue(BubbleMenuPolicy.showsHint(null, menuUsed = false, timesShown = 0))
+    assertTrue(BubbleMenuPolicy.showsHint("menu", menuUsed = false, timesShown = 2))
+    assertFalse(BubbleMenuPolicy.showsHint("menu", menuUsed = false, timesShown = 3))
+    assertFalse(BubbleMenuPolicy.showsHint("menu", menuUsed = true, timesShown = 0))
+    assertFalse(BubbleMenuPolicy.showsHint("nothing", menuUsed = false, timesShown = 0))
   }
 
   @Test fun `a finger finds the row under it, not the gaps or the edges`() {

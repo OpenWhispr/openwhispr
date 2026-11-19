@@ -179,6 +179,34 @@ class DictationService : Service() {
     if (focused) wake() else updateShrink()
     updateVisibility()
     face?.warning = InsertionService.instance == null
+    if (focused) showHint()
+  }
+
+  // First-time hint ----------------------------------------------------------------------------
+
+  private var hint: String? = null
+  /**
+   * The first three times the bubble appears for a text box, a chip slides out once: "Tap to dictate ·
+   * Hold for more". It tucks back after 3 s or at the first touch, and stops for good once the menu has
+   * been opened.
+   */
+  private fun showHint() {
+    val shown = preferences.getInt("hintShown", 0)
+    if (!BubbleMenuPolicy.showsHint(preferences.getString("holdAction", null), preferences.getBoolean("menuUsed", false), shown)) return
+    if (state != BubbleState.READY || root?.visibility != View.VISIBLE || tab.showing || dragging) return
+    preferences.edit().putInt("hintShown", shown + 1).apply()
+    val words = getString(R.string.ow_bubble_hint)
+    hint = words
+    // Laid out first, so the tab sits beside the bubble where it settled for this field.
+    handler.post {
+      if (hint != words || state != BubbleState.READY) return@post
+      tab.show(TabMessage(words, plain = true, holdMs = BubbleMenuPolicy.HINT_HOLD_MS), bubbleRect(), dockRight) { hint = null }
+    }
+  }
+  private fun hideHint() {
+    val words = hint ?: return
+    hint = null
+    if (tab.currentLabel == words) tab.hide()
   }
   fun updateVisibility() {
     val busy = state != BubbleState.READY || stopping
@@ -409,7 +437,8 @@ class DictationService : Service() {
     val (label, action) = words(message)
     val run: (() -> Unit)? = if (action == null) null else ({ act(message) })
     tab.show(TabMessage(label, action, run, onLabel = if (message == StatusMessage.SAVED) run else null,
-      leaves = message != StatusMessage.STILL_WRITING), bubbleRect(), dockRight) { tabGone(message) }
+      leaves = message != StatusMessage.STILL_WRITING, holdMs = BubbleMenuPolicy.holdFor(message)),
+      bubbleRect(), dockRight) { tabGone(message) }
   }
   private fun words(message: StatusMessage): Pair<String, String?> = when (message) {
     StatusMessage.STILL_WRITING -> getString(R.string.ow_status_still_writing) to null
@@ -491,6 +520,7 @@ class DictationService : Service() {
         downX = event.rawX; downY = event.rawY; startX = params.x; startY = params.y
         moved = false; menuThisTouch = false; snap?.cancel()
         menuTouch = open != null
+        hideHint()
         if (open != null) { open.highlighted = open.rowAtScreen(event.rawX, event.rawY); return }
         // A touch brings a shrunk bubble straight back, so the drag and the tap work on the full bubble.
         touched = true; wake(animate = false); handler.removeCallbacks(idleShrink)
@@ -568,6 +598,8 @@ class DictationService : Service() {
     val bubble = face ?: return
     bubble.holdRing(false)
     bubble.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    preferences.edit().putBoolean("menuUsed", true).apply()
+    hideHint()
     if (state == BubbleState.RETRY) dismiss() else if (state == BubbleState.RECOVER) setState(BubbleState.READY)
     tab.hide()
     val selected = InsertionService.instance?.hasSelection() == true
@@ -609,7 +641,7 @@ class DictationService : Service() {
     val row = open.rows.getOrNull(index) ?: return
     closeMenu()
     if (!row.enabled) {
-      // The Assistant isn't available: picking it opens the app (sign-in) instead of recording.
+      // The assistant isn't available: picking any of its rows opens the app (sign-in) instead of recording.
       val block = AssistantBlock.fromWire(preferences.getString("assistantBlock", null))
       openApp(if (block == AssistantBlock.SIGN_IN) "onOpenSignIn" else "onOpenModels")
       return
