@@ -3870,7 +3870,11 @@ declare global {
       connectorNoteAttendees?: (
         request: NoteAttendeesRequest
       ) => Promise<{ attendees: NoteAttendee[]; unavailableReason?: string }>;
-      connectorConnect?: (connectorId: string) => Promise<ConnectorConnectResult>;
+      /** `loginDomain`: Salesforce's sandbox or My Domain sign-in host, when not the default. */
+      connectorConnect?: (
+        connectorId: string,
+        options?: { loginDomain?: string }
+      ) => Promise<ConnectorConnectResult>;
       /**
        * Stops this connector's connect in progress, whichever account started it
        * (including one still waiting on policy); the connect ends as oauth_cancelled.
