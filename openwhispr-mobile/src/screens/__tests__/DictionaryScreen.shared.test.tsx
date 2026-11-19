@@ -1,19 +1,6 @@
-jest.mock('../DictionaryScreen', () => {
-  const ios = jest.requireActual<typeof import('../DictionaryScreen')>('../DictionaryScreen');
-  const android = jest.requireActual<typeof import('../DictionaryScreen.android')>(
-    '../DictionaryScreen.android',
-  );
-  return {
-    __esModule: true,
-    default: () =>
-      require('react').createElement(
-        (require('react-native').Platform.OS === 'android' ? android : ios).default,
-      ),
-  };
-});
+// iOS's Dictionary. Android's is src/android/dictionary (tests in its __tests__).
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Alert, Platform } from 'react-native';
+import { render, screen } from '@testing-library/react-native';
 import DictionaryScreen from '../DictionaryScreen';
 import type { DictionaryEntry } from '@/store/useDictionaryStore';
 import type { SharedDictionarySummary } from '@/store/useSharedDictionaryStore';
@@ -227,32 +214,3 @@ it('never marks a personal word that was not moved', () => {
   render(<DictionaryScreen />);
   expect(screen.queryByText(/Hidden for you/)).not.toBeOnTheScreen();
 });
-
-it.each([
-  ['en', 'Manual', 'Hidden for you', 'Cancel'],
-  ['ar', 'يدوي', 'مخفي عنك', 'إلغاء'],
-])(
-  'announces hidden team words in %s and confirms accessible deletion on Android',
-  (language, manual, hidden, cancel) => {
-    mockLanguage = language;
-    const originalPlatform = Platform.OS;
-    Platform.OS = 'android';
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    mockEntries = [entry('Grafana', 5)];
-    mockHiddenOnlyKeys = new Set(['grafana']);
-    try {
-      render(<DictionaryScreen />);
-      const row = screen.getByLabelText(`Grafana, ${manual} · today · ${hidden}`);
-      expect(screen.getByText(`${manual} · today · ${hidden}`).props.numberOfLines).toBeUndefined();
-      fireEvent(row, 'accessibilityAction', { nativeEvent: { actionName: 'delete' } });
-      expect(mockRemoveWord).not.toHaveBeenCalled();
-      const buttons = alert.mock.calls[0][2] ?? [];
-      expect(buttons.find((button) => button.style === 'cancel')?.text).toBe(cancel);
-      buttons.find((button) => button.style === 'destructive')?.onPress?.();
-      expect(mockRemoveWord).toHaveBeenCalledWith('Grafana');
-    } finally {
-      alert.mockRestore();
-      Platform.OS = originalPlatform;
-    }
-  },
-);
