@@ -45,6 +45,20 @@ class IconBubble(context: Context) : View(context) {
   private val solid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.dot }
   var dot = 0f
     set(value) { if (field != value) { field = value; invalidate() } }
+  /** 0 to 1 while a ring pulses out from the dot (Dictionary's C11); drawn outside the view's bounds. */
+  private var ring = -1f
+  private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.dot; style = Paint.Style.STROKE }
+  /** One soft ring pulse (300 ms), then [done]. The bubble itself doesn't move or grow. */
+  fun pulse(done: () -> Unit) {
+    android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+      duration = 300
+      addUpdateListener { ring = it.animatedValue as Float; invalidate() }
+      addListener(object : android.animation.AnimatorListenerAdapter() {
+        override fun onAnimationEnd(animation: android.animation.Animator) { ring = -1f; invalidate(); done() }
+      })
+      start()
+    }
+  }
   init {
     importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     outlineProvider = object : android.view.ViewOutlineProvider() {
@@ -62,6 +76,12 @@ class IconBubble(context: Context) : View(context) {
     solid.alpha = (dot * 255).toInt()
     if (dot < 1f) canvas.drawOval(0f, 0f, width.toFloat(), height.toFloat(), paint)
     if (dot > 0f) canvas.drawOval(0f, 0f, width.toFloat(), height.toFloat(), solid)
+    if (ring >= 0f) {
+      val radius = width / 2f
+      ringPaint.strokeWidth = radius / 4f
+      ringPaint.alpha = ((1f - ring) * 160).toInt()
+      canvas.drawCircle(radius, height / 2f, radius * (1f + ring), ringPaint)
+    }
   }
 }
 

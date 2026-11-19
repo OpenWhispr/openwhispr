@@ -56,6 +56,13 @@ interface NativeDictation {
    * is kept: Retry sends onRetry) · recover (the text is kept in the app: the bubble offers to open it)
    */
   setStatus(status: BubbleStatusValue): Promise<void>;
+  /** Shows the bubble's "Learned" tab; false when the bubble isn't on screen. */
+  showLearnedTab(options: {
+    words: string[];
+    message: string;
+    undo: string;
+    undone: string;
+  }): Promise<boolean>;
   insert(text: string): Promise<boolean>;
   startRecording(): Promise<void>;
   stopRecording(cancel: boolean): Promise<Recording>;
@@ -108,6 +115,12 @@ export const dictationEvents = AndroidDictation
       onCancel: () => void;
       onOpenResult: () => void;
       onStatusChange: () => void;
+      /** The field the bubble typed into changed within 30 s: its text then and now. */
+      onFieldEdited: (event: { before: string; after: string }) => void;
+      /** Undo on the bubble's learned tab. */
+      onLearnedUndo: (event: { words: string[] }) => void;
+      /** The learned tab's words were tapped: the app opens on the Dictionary. */
+      onOpenDictionary: () => void;
       'local-meeting-stopped': (event: { noteId: number; captureId: string }) => void;
       'local-meeting-error': (event: {
         noteId: number;

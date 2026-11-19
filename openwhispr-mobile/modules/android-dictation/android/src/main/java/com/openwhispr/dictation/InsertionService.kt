@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
@@ -15,14 +16,49 @@ class InsertionService : AccessibilityService() {
   private data class Target(val node: AccessibilityNodeInfo, val text: String, val start: Int, val end: Int)
   private var target: Target? = null
   private val handler = Handler(Looper.getMainLooper())
+  /** The field the last dictation went into, read again for 30 s so a fix there can be learned. */
+  private var watched: AccessibilityNodeInfo? = null
+  private val watch = FieldWatch()
+  private val settle = Runnable { reportEdit() }
+  private val endWatch = Runnable { stopWatch() }
   private fun readField(node: AccessibilityNodeInfo): Field =
     InsertionPlan.field(node.text?.toString().orEmpty(), node.textSelectionStart, node.textSelectionEnd, node.isShowingHintText)
 
   override fun onServiceConnected() { instance = this; refreshTyping(); DictationService.emit?.invoke("onStatusChange", emptyMap()) }
   // Focus and window changes only decide whether the bubble shows. They check whether the focused
-  // field takes text and isn't a password; the field's text is read only when dictation starts.
+  // field takes text and isn't a password. A field's text is read when dictation starts, and again
+  // for 30 s after the bubble typed into it, from that field alone, so a word fixed there can be
+  // learned (Dictionary's C11). Text changes anywhere else are ignored.
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+    if (event?.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) { onTextChanged(event); return }
     handler.removeCallbacks(typingCheck); handler.postDelayed(typingCheck, 120)
+  }
+  private fun onTextChanged(event: AccessibilityEvent) {
+    val field = watched ?: return
+    if (!watch.inWindow(SystemClock.uptimeMillis())) { stopWatch(); return }
+    val source = event.source ?: return
+    val same = source == field
+    source.recycle()
+    if (!same) return
+    handler.removeCallbacks(settle); handler.postDelayed(settle, FieldWatch.SETTLE_MS)
+  }
+  private fun reportEdit() {
+    val field = watched ?: return
+    if (!watch.inWindow(SystemClock.uptimeMillis())) { stopWatch(); return }
+    if (!runCatching { field.refresh() }.getOrDefault(false)) { stopWatch(); return }
+    val edit = watch.settled(readField(field).text, field.isPassword) ?: return
+    if (!watch.watching) { stopWatch(); return }
+    DictationService.emit?.invoke("onFieldEdited", mapOf("before" to edit.first, "after" to edit.second))
+  }
+  private fun startWatch(field: AccessibilityNodeInfo, text: String) {
+    stopWatch()
+    watched = AccessibilityNodeInfo.obtain(field)
+    watch.start(text, SystemClock.uptimeMillis())
+    handler.postDelayed(endWatch, FieldWatch.WINDOW_MS + FieldWatch.SETTLE_MS)
+  }
+  private fun stopWatch() {
+    handler.removeCallbacks(settle); handler.removeCallbacks(endWatch)
+    watch.stop(); watched?.recycle(); watched = null
   }
   private val typingCheck = Runnable { refreshTyping() }
   fun refreshTyping() {
@@ -51,14 +87,16 @@ class InsertionService : AccessibilityService() {
     parent?.recycle()
     return BubblePolicy.searchField(labels, classes)
   }
-  override fun onInterrupt() { clearTarget() }
-  override fun onDestroy() { handler.removeCallbacks(typingCheck); clearTarget(); instance = null; DictationService.instance?.onTyping(false, null); DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
+  override fun onInterrupt() { clearTarget(); stopWatch() }
+  override fun onDestroy() { handler.removeCallbacks(typingCheck); clearTarget(); stopWatch(); instance = null; DictationService.instance?.onTyping(false, null); DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
   fun clearTarget() { target?.node?.recycle(); target = null }
   private fun focusedField(): AccessibilityNodeInfo? {
     val root = rootInActiveWindow ?: return null
     return try { root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) } finally { root.recycle() }
   }
   fun captureTarget(): String {
+    // A new dictation ends the watch on the last one's field.
+    stopWatch()
     clearTarget()
     val node = focusedField() ?: return ""
     if (!node.isEditable || node.isPassword) { node.recycle(); return "" }
@@ -92,6 +130,7 @@ class InsertionService : AccessibilityService() {
     // never retry a write because that can duplicate text in another application.
     handler.postDelayed({
       val verified = runCatching { current.refresh() && InsertionPlan.landed(currentText, readField(current).text, text) }.getOrDefault(false)
+      if (verified && !current.isPassword) runCatching { startWatch(current, readField(current).text) }
       current.recycle(); complete(verified)
     }, 150)
   }

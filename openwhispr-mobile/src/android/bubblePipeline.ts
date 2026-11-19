@@ -1,3 +1,4 @@
+import { observeFieldLearning } from './dictionary/fieldLearning';
 import { observeTranscriptScope } from '@/lib/transcriptScope';
 import i18n from './strings';
 import { useBubbleResult } from './bubbleResult';
@@ -151,6 +152,8 @@ export function startBubblePipeline(): void {
     controller?.abort();
     dropKept();
   });
+  // Dictionary's C11: a word fixed in the field the bubble just typed into is learned.
+  observeFieldLearning();
   void native.pipelineReady();
 }
 

@@ -102,6 +102,7 @@ export const dictionaryEnglish = {
   fixedLearnedOne: 'Fixed · learned “{{word}}”',
   fixedLearnedMany: 'Fixed {{count}} · learned “{{word}}”',
   wontLearn: 'Won’t learn “{{word}}”',
+  wontLearnMany: 'Won’t learn {{count}} words',
 
   // C9: long-press a misheard word.
   fixWordTitle: 'Fix “{{word}}”',
