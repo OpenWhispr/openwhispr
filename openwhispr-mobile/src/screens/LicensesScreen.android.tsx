@@ -1,8 +1,9 @@
-import { Linking } from 'react-native';
+import { Linking, View } from 'react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { Page, Card, Row, styles } from '@/android/ui';
+import { Group, ListRow, SettingsPage, settings } from '@/android/settings/kit';
+import { bodyText } from '@/android/settings/look';
 import notices from '@/android/licenses.json';
 
 const entries = [
@@ -53,50 +54,58 @@ export default function LicensesScreen() {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<string | null>(null);
   return (
-    <Page title={t('licenses')} back>
-      <Text style={styles.body}>{t('licenseIntro')}</Text>
-      {entries.map((entry) => (
-        <Card key={entry.name}>
-          <Row
+    <SettingsPage title={t('licenses')}>
+      <Text style={bodyText}>{t('licenseIntro')}</Text>
+      <Group inset={14}>
+        {entries.map((entry) => (
+          <ListRow
+            key={entry.name}
             title={entry.name}
+            subtitle={
+              <View style={{ gap: 4 }}>
+                <Text style={settings.subtitle}>
+                  {entry.license} · © {entry.owner}
+                </Text>
+                <Text style={settings.subtitle}>{t(entry.note)}</Text>
+              </View>
+            }
             onPress={() => {
               void Linking.openURL(entry.url);
             }}
           />
-          <Text style={styles.caption}>
-            {entry.license} · © {entry.owner}
-          </Text>
-          <Text>{t(entry.note)}</Text>
-        </Card>
-      ))}
-      <Row
-        title="CC-BY-4.0"
-        onPress={() => {
-          void Linking.openURL('https://creativecommons.org/licenses/by/4.0/');
-        }}
-      />
-      <Text style={styles.heading}>{t('licenseNotices')}</Text>
-      {notices.map((notice) => (
-        <Card key={notice.name}>
-          <Row
-            title={notice.name}
-            onPress={() => setExpanded(expanded === notice.name ? null : notice.name)}
-          />
-          {expanded === notice.name && (
-            <>
-              <Text selectable style={styles.caption}>
-                {notice.text}
-              </Text>
-              <Row
-                title={t('licenseSource')}
-                onPress={() => {
-                  void Linking.openURL(notice.url);
-                }}
-              />
-            </>
-          )}
-        </Card>
-      ))}
-    </Page>
+        ))}
+      </Group>
+      <Group inset={14}>
+        <ListRow
+          title="CC-BY-4.0"
+          onPress={() => {
+            void Linking.openURL('https://creativecommons.org/licenses/by/4.0/');
+          }}
+        />
+      </Group>
+      <Group title={t('licenseNotices')} inset={14}>
+        {notices.map((notice) => (
+          <View key={notice.name}>
+            <ListRow
+              title={notice.name}
+              onPress={() => setExpanded(expanded === notice.name ? null : notice.name)}
+            />
+            {expanded === notice.name && (
+              <>
+                <Text selectable style={[settings.subtitle, { paddingHorizontal: 14 }]}>
+                  {notice.text}
+                </Text>
+                <ListRow
+                  title={t('licenseSource')}
+                  onPress={() => {
+                    void Linking.openURL(notice.url);
+                  }}
+                />
+              </>
+            )}
+          </View>
+        ))}
+      </Group>
+    </SettingsPage>
   );
 }

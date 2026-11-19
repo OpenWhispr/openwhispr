@@ -37,7 +37,7 @@ export default function ProfileScreen() {
 
   return (
     <SettingsPage title={t('profile')}>
-      <Group title={t('account')} inset={16}>
+      <Group title={t('account')} inset={14}>
         {user?.name ? <ListRow title={t('name')} value={user.name} trailing={null} /> : null}
         <ListRow title={t('email')} value={user?.email} trailing={null} />
         <ListRow
@@ -49,7 +49,7 @@ export default function ProfileScreen() {
           onPress={() => router.push('/android-pro')}
         />
       </Group>
-      <Group inset={16}>
+      <Group inset={14}>
         <ListRow
           title={t('deleteAccount')}
           subtitle={t('deleteAccountBody')}

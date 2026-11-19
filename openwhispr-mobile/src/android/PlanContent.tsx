@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, View } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
@@ -13,7 +13,24 @@ import {
   refreshAndroidBillingAccess,
   useAndroidBillingStatus,
 } from './billing';
-import { Button, Card, Row, styles } from './ui';
+import { Group, ListRow, PillAction, cardStyle, settings } from './settings/kit';
+import { bodyText } from './settings/look';
+
+const titleText = {
+  fontSize: 32,
+  lineHeight: 38,
+  fontWeight: '700' as const,
+  color: settings.text,
+};
+
+/** A one-row card that opens something (Manage on Google Play, Support, Web billing). */
+function LinkCard({ title, onPress }: { title: string; onPress: () => void }) {
+  return (
+    <Group inset={14}>
+      <ListRow title={title} onPress={onPress} />
+    </Group>
+  );
+}
 
 export function PlanContent() {
   const { t } = useTranslation('android');
@@ -82,26 +99,27 @@ export function PlanContent() {
   if (signedIn && sessionRejected) {
     return (
       <>
-        <Text accessibilityRole="header" style={styles.title}>
+        <Text accessibilityRole="header" style={titleText}>
           {t('plansAndBilling')}
         </Text>
-        <Text accessibilityLiveRegion="polite" style={styles.body}>
+        <Text accessibilityLiveRegion="polite" style={bodyText}>
           {t('planSignInRequired')}
         </Text>
-        <Button label={t('signIn')} onPress={() => router.push('/auth')} />
+        <PillAction primary label={t('signIn')} onPress={() => router.push('/auth')} />
       </>
     );
   }
   if (signedIn && !usage) {
     return (
       <>
-        <Text accessibilityRole="header" style={styles.title}>
+        <Text accessibilityRole="header" style={titleText}>
           {t('plansAndBilling')}
         </Text>
-        <Text accessibilityLiveRegion="polite" style={styles.body}>
+        <Text accessibilityLiveRegion="polite" style={bodyText}>
           {t(accessLoadFailed && !isUsageLoading ? 'planUnavailable' : 'planChecking')}
         </Text>
-        <Button
+        <PillAction
+          primary
           label={t('refreshAccess')}
           busy={busy || isUsageLoading}
           onPress={() => {
@@ -116,7 +134,7 @@ export function PlanContent() {
   }
   return (
     <>
-      <Text accessibilityRole="header" style={styles.title}>
+      <Text accessibilityRole="header" style={titleText}>
         {usage?.isSubscribed
           ? usage.plan === 'business'
             ? 'OpenWhispr Business'
@@ -125,24 +143,26 @@ export function PlanContent() {
               : t('plansAndBilling')
           : t('proTitle')}
       </Text>
-      {!usage?.isSubscribed && <Text style={styles.body}>{t('proBody')}</Text>}
+      {!usage?.isSubscribed && <Text style={bodyText}>{t('proBody')}</Text>}
       {usage && (
-        <Card>
-          <Text style={styles.heading}>{t('cloud')}</Text>
-          <Text style={styles.body}>
-            {usage.isSubscribed
-              ? t('cloudUnlimited')
-              : t('cloudAllowance', {
-                  remaining: usage.wordsRemaining.toLocaleString(),
-                  limit: usage.limit.toLocaleString(),
-                })}
-          </Text>
-        </Card>
+        <Group title={t('cloud')} inset={14}>
+          <ListRow
+            title={
+              usage.isSubscribed
+                ? t('cloudUnlimited')
+                : t('cloudAllowance', {
+                    remaining: usage.wordsRemaining.toLocaleString(),
+                    limit: usage.limit.toLocaleString(),
+                  })
+            }
+            trailing={null}
+          />
+        </Group>
       )}
-      {!usage?.isSubscribed && <Text style={styles.caption}>{t('proNote')}</Text>}
+      {!usage?.isSubscribed && <Text style={settings.subtitle}>{t('proNote')}</Text>}
       {billingStatus && billingStatus !== 'idle' && (
-        <Card>
-          <Text accessibilityLiveRegion="polite" style={styles.body}>
+        <View style={[cardStyle, { padding: 16 }]}>
+          <Text accessibilityLiveRegion="polite" style={bodyText}>
             {t(
               billingStatus === 'checking'
                 ? 'billingChecking'
@@ -151,10 +171,11 @@ export function PlanContent() {
                   : 'billingAccessPending',
             )}
           </Text>
-        </Card>
+        </View>
       )}
       {(!signedIn || (!usage?.isSubscribed && (!billingStatus || billingStatus === 'idle'))) && (
-        <Button
+        <PillAction
+          primary
           label={signedIn ? t('upgrade') : t('signIn')}
           busy={busy}
           onPress={() => {
@@ -170,8 +191,7 @@ export function PlanContent() {
       )}
       {signedIn && (
         <>
-          <Button
-            secondary
+          <PillAction
             label={t('restorePurchases')}
             disabled={busy}
             onPress={() => {
@@ -195,8 +215,7 @@ export function PlanContent() {
           />
           {(sources?.providerStore === 'play_store' ||
             (billingStatus && billingStatus !== 'idle')) && (
-            <Button
-              secondary
+            <PillAction
               label={t('refreshAccess')}
               disabled={busy}
               onPress={() => {
@@ -208,7 +227,7 @@ export function PlanContent() {
           )}
           {(sources?.providerStore === 'play_store' ||
             (billingStatus && billingStatus !== 'idle')) && (
-            <Row
+            <LinkCard
               title={t('managePlay')}
               onPress={() => {
                 void run(() =>
@@ -218,16 +237,16 @@ export function PlanContent() {
             />
           )}
           {billingStatus && billingStatus !== 'idle' && (
-            <Row title={t('support')} onPress={() => router.push('/(account)/help')} />
+            <LinkCard title={t('support')} onPress={() => router.push('/(account)/help')} />
           )}
           {sources?.providerStore === 'app_store' && (
-            <Text style={styles.caption}>{t('billingAppStore')}</Text>
+            <Text style={settings.subtitle}>{t('billingAppStore')}</Text>
           )}
           {!!sources?.workspaceIds.length && (
-            <Text style={styles.caption}>{t('billingWorkspace')}</Text>
+            <Text style={settings.subtitle}>{t('billingWorkspace')}</Text>
           )}
           {usage?.entitlementSources?.personal && (
-            <Row
+            <LinkCard
               title={t('manageWeb')}
               onPress={() => {
                 void run(async (isCurrent) => {

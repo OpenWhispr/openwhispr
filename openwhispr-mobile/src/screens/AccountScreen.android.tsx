@@ -14,7 +14,8 @@ import { requiresRealAccount } from '@/lib/accountAccess';
 import { getAccountDisplay } from '@/lib/accountDisplay';
 import { safeHaptics } from '@/lib/utils';
 import { AndroidDictation } from '../../modules/android-dictation/src';
-import { home, type } from '@/android/home/kit';
+import { gloss, home, type } from '@/android/home/kit';
+import { look } from '@/android/settings/look';
 import {
   Group,
   ListRow,
@@ -154,19 +155,23 @@ export default function SettingsScreen() {
         <ListRow
           leading={
             <View
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
-                backgroundColor: home.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              style={[
+                {
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                },
+                gloss,
+              ]}
             >
               {signedIn ? (
-                <Text style={{ fontSize: 13, lineHeight: 18, color: '#FFFFFF' }}>{initials}</Text>
+                <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: '#FFFFFF' }}>
+                  {initials}
+                </Text>
               ) : (
-                <SystemIcon name="person" mdName="UserRound" size={16} color="#FFFFFF" />
+                <SystemIcon name="person" mdName="UserRound" size={18} color="#FFFFFF" />
               )}
             </View>
           }
@@ -175,8 +180,8 @@ export default function SettingsScreen() {
             signedIn && planLabel ? (
               <View
                 style={{
-                  backgroundColor: home.fill,
-                  borderRadius: 999,
+                  backgroundColor: look.track,
+                  borderRadius: 6,
                   paddingHorizontal: 8,
                   paddingVertical: 3,
                 }}
@@ -209,8 +214,6 @@ export default function SettingsScreen() {
           style={({ pressed }) => [
             cardStyle,
             {
-              borderColor: home.borderSubtle,
-              boxShadow: home.cardShadow,
               padding: 16,
               gap: 8,
               opacity: pressed ? 0.8 : 1,
@@ -230,7 +233,7 @@ export default function SettingsScreen() {
               style={{
                 height: 6,
                 borderRadius: 999,
-                backgroundColor: home.fill,
+                backgroundColor: look.track,
                 overflow: 'hidden',
               }}
             >
@@ -238,7 +241,7 @@ export default function SettingsScreen() {
                 style={{
                   height: 6,
                   borderRadius: 999,
-                  backgroundColor: home.accent,
+                  experimental_backgroundImage: gloss.experimental_backgroundImage,
                   width: `${Math.max(2, Math.min(100, (usage.wordsUsed / Math.max(1, usage.limit)) * 100))}%`,
                 }}
               />
@@ -323,7 +326,7 @@ export default function SettingsScreen() {
           icon="Cloud"
           title={t('cloudBackup')}
           subtitle={backupLine}
-          subtitleStyle={backupFailed ? { color: home.error } : undefined}
+          subtitleStyle={backupFailed ? { color: look.error } : undefined}
           onPress={
             backupFailed ? () => void requestSync('manual').catch(() => undefined) : undefined
           }

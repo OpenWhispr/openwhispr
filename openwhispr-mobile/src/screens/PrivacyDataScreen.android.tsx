@@ -7,7 +7,7 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useSyncStore } from '@/sync/useSyncStore';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { setInsightsSyncConsent, useInsights } from '@/android/insights';
-import { type } from '@/android/home/kit';
+import { bodyText } from '@/android/settings/look';
 import { Group, ListRow, SettingsPage, showToast } from '@/android/settings/kit';
 import { noOrphan, useSettingsT } from '@/android/settings/strings';
 
@@ -60,10 +60,10 @@ export default function AnalyticsScreen() {
 
   return (
     <SettingsPage title={t('analytics')}>
-      <Text textBreakStrategy="balanced" style={[type.subhead, { paddingHorizontal: 4 }]}>
+      <Text textBreakStrategy="balanced" style={bodyText}>
         {noOrphan(t('analyticsIntro'))}
       </Text>
-      <Group title={t('share')} inset={16}>
+      <Group title={t('share')} inset={14}>
         <ListRow
           title={t('usageAnalytics')}
           subtitle={t('usageAnalyticsBody')}
@@ -83,7 +83,7 @@ export default function AnalyticsScreen() {
           }}
         />
       </Group>
-      <Group title={t('neverCollected')} inset={16}>
+      <Group title={t('neverCollected')} inset={14}>
         {(['wordsTranscripts', 'audioRecordings', 'notesDictionary'] as const).map((key) => (
           <ListRow key={key} title={t(key)} value={t('never')} trailing={null} />
         ))}

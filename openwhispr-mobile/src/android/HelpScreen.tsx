@@ -3,46 +3,44 @@ import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { openExternal, openMail } from '@/lib/openExternal';
-import { Page, Section, Row, styles } from './ui';
+import { Group, ListRow, SettingsPage, settings } from './settings/kit';
 
 export default function HelpScreen() {
   const { t } = useTranslation();
   return (
-    <Page title={t('helpAbout')} back>
-      <Section title={t('support')}>
-        <Row
-          icon="Mail"
+    <SettingsPage title={t('helpAbout')}>
+      <Group title={t('support')} inset={14}>
+        <ListRow
           title={t('support')}
           onPress={() => {
             void openMail('support@openwhispr.com', 'Android support');
           }}
         />
-        <Row
-          icon="MessageSquare"
+        <ListRow
           title={t('feedback')}
           onPress={() => {
             void openExternal('https://github.com/OpenWhispr/openwhispr/issues', t('errorTitle'));
           }}
         />
-      </Section>
-      <Section title={t('about')}>
-        <Row
+      </Group>
+      <Group title={t('about')} inset={14}>
+        <ListRow
           title={t('terms')}
           onPress={() => {
             void openExternal('https://openwhispr.com/terms', t('errorTitle'));
           }}
         />
-        <Row
+        <ListRow
           title={t('privacy')}
           onPress={() => {
             void openExternal('https://openwhispr.com/privacy', t('errorTitle'));
           }}
         />
-        <Row title={t('licenses')} onPress={() => router.push('/(account)/licenses')} />
-      </Section>
-      <Text style={styles.caption}>
+        <ListRow title={t('licenses')} onPress={() => router.push('/(account)/licenses')} />
+      </Group>
+      <Text style={[settings.subtitle, { paddingHorizontal: 4 }]}>
         {t('version')} · {Constants.expoConfig?.version}
       </Text>
-    </Page>
+    </SettingsPage>
   );
 }

@@ -61,13 +61,13 @@ export default function HistoryScreen() {
 
   return (
     <SettingsPage title={t('keepHistory')}>
-      <Group title={t('keepDictationHistory')} inset={16} footer={t('historyFooter')}>
+      <Group title={t('keepDictationHistory')} inset={14} footer={t('historyFooter')}>
         {PERIODS.map(({ days, label }) => (
           <ListRow
             key={days}
             title={t(label)}
             selected={current === days}
-            trailing={current === days ? undefined : null}
+            trailing={null}
             onPress={() => choose(days, label)}
           />
         ))}

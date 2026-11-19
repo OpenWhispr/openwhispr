@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Alert, FlatList, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import { SystemIcon } from '@/components/ui/SystemIcon';
 import registry from '@/config/languageRegistry.json';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
@@ -14,8 +13,11 @@ import { Badge, ListRow, SettingsPage, cardStyle, settings } from '@/android/set
 import { MODEL_ROWS, modelName } from '@/android/settings/modelCatalog';
 import { useSettingsT } from '@/android/settings/strings';
 import { useNavigationBar } from '@/android/navigationBar';
+import { bodyText, edgeField, look } from '@/android/settings/look';
 
-const Divider = () => <View style={{ height: 1, marginLeft: 16, backgroundColor: home.divider }} />;
+const Divider = () => (
+  <View style={{ height: 1, marginLeft: 14, backgroundColor: look.hairline }} />
+);
 
 /** Settings → Language: one searchable list; a tap saves and goes straight back. */
 export default function LanguageScreen() {
@@ -78,20 +80,7 @@ export default function LanguageScreen() {
 
   return (
     <SettingsPage title={t('language')} scroll={false}>
-      <View
-        style={[
-          cardStyle,
-          {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            paddingHorizontal: 12,
-            borderColor: query ? home.accent : home.borderDefault,
-            boxShadow: undefined,
-          },
-        ]}
-      >
-        <SystemIcon name="magnifyingglass" mdName="Search" size={18} color={home.tertiary} />
+      <View style={[edgeField, query ? { borderColor: home.accent } : null]}>
         <TextInput
           accessibilityLabel={t('searchLanguages')}
           placeholder={t('searchLanguages')}
@@ -99,12 +88,12 @@ export default function LanguageScreen() {
           value={query}
           onChangeText={setQuery}
           returnKeyType="search"
-          style={{ flex: 1, minHeight: 44, fontSize: 17, color: home.text }}
+          style={[bodyText, { minHeight: 47, paddingHorizontal: 16, paddingVertical: 13 }]}
         />
       </View>
       {/* One card that fills the room left down to the handle or bar and scrolls inside, so the
           list never runs off the bottom of the screen. */}
-      <View style={[cardStyle, { flexShrink: 1, boxShadow: undefined }]}>
+      <View style={[cardStyle, { flexShrink: 1 }]}>
         <FlatList
           data={languages}
           keyExtractor={(item) => item.code}
@@ -125,7 +114,7 @@ export default function LanguageScreen() {
                 ) : undefined
               }
               selected={selected === item.code}
-              trailing={selected === item.code ? undefined : null}
+              trailing={null}
               onPress={() => choose(item.code, item.label)}
             />
           )}
