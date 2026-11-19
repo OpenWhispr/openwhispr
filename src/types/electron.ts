@@ -4417,7 +4417,14 @@ declare global {
       countTeamNotesMissingOwner?: () => Promise<number>;
       countNotesMissingRevision?: (scope?: "private" | "team" | null) => Promise<number>;
       markNoteSyncError?: (id: number) => Promise<void>;
-      restoreNoteAfterDeniedDelete?: (id: number) => Promise<{ success: boolean; id: number }>;
+      keepDeletedNoteTranscript?: (
+        id: number,
+        transcript: string,
+        writeGuard: NoteWriteGuard
+      ) => Promise<{ success: boolean; id?: number; code?: "note_live"; error?: string }>;
+      restoreNoteAfterDeniedDelete?: (
+        id: number
+      ) => Promise<{ success: boolean; id: number; pending?: boolean }>;
       hardDeleteNote?: (
         id: number,
         expectedAuthGeneration?: number

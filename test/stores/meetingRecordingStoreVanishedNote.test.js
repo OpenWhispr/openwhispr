@@ -10,7 +10,8 @@ const {
 // or with its folder (here or elsewhere). Its later saves were refused and only
 // logged, so the meeting was lost. The recording now goes on in a new note in
 // Private holding what this session recorded, and nothing else of the note.
-// A note the user deletes here still takes its transcript with it.
+// A note the user deletes here still takes its transcript with it, kept on its
+// tombstone in case the server denies the delete.
 
 const OWNER = "account-1";
 const NOTE_ID = 11;
@@ -40,6 +41,7 @@ function createElectronAPI({ spaceId = PRIVATE.id } = {}) {
   };
   const writes = [];
   const saves = [];
+  const kept = [];
   const api = {
     checkSystemAudioAccess: async () => ({
       granted: true,
@@ -66,6 +68,10 @@ function createElectronAPI({ spaceId = PRIVATE.id } = {}) {
       }
       return { success: true };
     },
+    keepDeletedNoteTranscript: async (...args) => {
+      kept.push(args);
+      return state.keepAnswer ?? { success: true, id: args[0] };
+    },
     saveNote: async (...args) => {
       saves.push(args);
       const [title, , , , , , spaceArg] = args;
@@ -86,7 +92,7 @@ function createElectronAPI({ spaceId = PRIVATE.id } = {}) {
     onMeetingSystemAudioSilent: noopListener,
     onMeetingDiarizationComplete: noopListener,
   };
-  return { api, listeners, state, writes, saves };
+  return { api, listeners, state, writes, saves, kept };
 }
 
 async function loadStore(t, api) {
@@ -209,6 +215,54 @@ test("a note the user deletes here takes its transcript with it", async (t) => {
     "nothing goes elsewhere"
   );
   assert.equal(store.useMeetingRecordingStore.getState().recordingCopy, null);
+});
+
+// The user deleted it here and stopped before its delete was answered.
+async function stopAfterUserDelete(store, listeners, state) {
+  store.markRecordingNoteDeletedByUser(NOTE_ID);
+  state.stored = { ...state.stored, deleted_at: "2026-11-19 10:00:00" };
+  listeners.noteDeleted({ id: NOTE_ID });
+  await settle();
+  listeners.segment(final("said after the delete"));
+  await store.stopRecording();
+}
+
+test("a stop after the user's delete keeps its final transcript on the tombstone", async (t) => {
+  const { api, listeners, state, saves, kept } = createElectronAPI();
+  const store = await loadStore(t, api);
+  await startRecording(store, listeners);
+  await stopAfterUserDelete(store, listeners, state);
+
+  assert.equal(kept.length, 1);
+  const [noteId, transcript, guard] = kept[0];
+  assert.equal(noteId, NOTE_ID);
+  assert.match(transcript, /said before the delete/);
+  assert.match(transcript, /said after the delete/);
+  assert.deepEqual(guard, { accountId: OWNER, authGeneration: 1 });
+  assert.equal(saves.length, 0, "no copy");
+});
+
+test("a deleted note's transcript is kept only for the recording's account", async (t) => {
+  const { api, listeners, state, kept } = createElectronAPI();
+  const store = await loadStore(t, api);
+  await startRecording(store, listeners);
+  state.accountId = "account-2";
+  await stopAfterUserDelete(store, listeners, state);
+
+  assert.deepEqual(kept, []);
+});
+
+test("a note revived before its transcript was kept takes it as a save", async (t) => {
+  const { api, listeners, state, writes, kept } = createElectronAPI();
+  const store = await loadStore(t, api);
+  await startRecording(store, listeners);
+  state.keepAnswer = { success: false, id: NOTE_ID, code: "note_live" };
+  await stopAfterUserDelete(store, listeners, state);
+
+  assert.equal(kept.length, 1);
+  const [target, { transcript }] = transcriptWrites(writes).at(-1);
+  assert.equal(target, NOTE_ID);
+  assert.match(transcript, /said after the delete/);
 });
 
 test("a delete that failed doesn't stop a later delete elsewhere from making a copy", async (t) => {

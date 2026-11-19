@@ -2042,6 +2042,24 @@ async function persistToRecordingCopy(
   }
 }
 
+// A stop whose note the user deleted here: the final transcript stays on the tombstone, so a
+// delete the server denies brings the note back with it, and a confirmed one takes both. Only
+// for the account the recording started under. A note revived meanwhile takes it as any save.
+async function keepTranscriptOfDeletedNote(noteId: number, transcript: string): Promise<void> {
+  const api = window.electronAPI;
+  const guard = await api?.getNoteWriteGuard?.();
+  if (
+    !guard ||
+    recordingOwnerAccountId === undefined ||
+    guard.accountId !== recordingOwnerAccountId
+  ) {
+    logger.warn("A deleted recording note's transcript wasn't kept", { noteId }, "meeting");
+    return;
+  }
+  const kept = await api?.keepDeletedNoteTranscript?.(noteId, transcript, guard);
+  if (kept?.code === "note_live") await api?.updateNote?.(noteId, { transcript });
+}
+
 /**
  * The note being recorded, when it sits in one of these folders, so deleting them would take
  * it. Null at once when nothing is recording.
@@ -2170,8 +2188,12 @@ export async function stopRecording(
           return;
         }
         const result = await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
-        if (result && !result.success && !recordingNoteDeletedByUser) {
-          await persistToRecordingCopy(recordingNoteId, null);
+        if (result && !result.success) {
+          if (recordingNoteDeletedByUser) {
+            await keepTranscriptOfDeletedNote(recordingNoteId, transcript);
+          } else {
+            await persistToRecordingCopy(recordingNoteId, null);
+          }
         }
       } catch (err) {
         logger.error(

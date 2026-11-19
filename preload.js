@@ -1411,6 +1411,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   countNotesMissingRevision: (spaceKind) =>
     ipcRenderer.invoke("db-count-notes-missing-revision", spaceKind),
   markNoteSyncError: (id) => ipcRenderer.invoke("db-mark-note-sync-error", id),
+  keepDeletedNoteTranscript: (id, transcript, writeGuard) =>
+    ipcRenderer.invoke("db-keep-deleted-note-transcript", id, transcript, writeGuard),
   restoreNoteAfterDeniedDelete: (id) =>
     ipcRenderer.invoke("db-restore-note-after-denied-delete", id),
   hardDeleteNote: (id, authGeneration) =>

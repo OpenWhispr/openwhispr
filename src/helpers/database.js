@@ -11997,23 +11997,80 @@ class DatabaseManager {
     }
   }
 
-  // A denied optimistic delete leaves the server row untouched. Revive the
-  // local tombstone in place so its numeric id, chats and speaker rows survive;
-  // the deliberately old timestamp lets the mandatory snapshot pull replace
-  // it with the authoritative cloud row.
-  restoreNoteAfterDeniedDelete(id) {
+  // The final transcript of a recording whose note the user deleted here, kept on
+  // the tombstone while its cloud delete waits. A confirmed delete removes it with
+  // the note; a denied one brings the note back with it (see
+  // restoreNoteAfterDeniedDelete). Nothing else of the tombstone changes, so its
+  // delete still goes out. updated_at takes milliseconds, so it never matches the
+  // whole-second deleted_at, even within the same second.
+  keepTranscriptOnDeletedNote(id, transcript) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      if (typeof transcript !== "string") return { success: false, error: "Invalid transcript" };
       const accountScope = this._accountScopeCondition("notes");
       const result = this.db
         .prepare(
           `UPDATE notes
-           SET deleted_at = NULL, sync_status = 'synced',
-               updated_at = '1970-01-01 00:00:00'
-           WHERE id = ? AND deleted_at IS NOT NULL AND ${accountScope.sql}`
+           SET transcript = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+           WHERE id = ? AND deleted_at IS NOT NULL AND cloud_id IS NOT NULL
+             AND sync_status = 'pending' AND ${accountScope.sql}
+             AND NOT EXISTS (
+               SELECT 1 FROM optimistic_folder_delete_rows r
+               WHERE r.entity_type = 'note' AND r.entity_id = notes.id
+             )`
         )
-        .run(id, ...accountScope.params);
-      return { success: result.changes > 0, id };
+        .run(transcript, id, ...accountScope.params);
+      if (result.changes > 0) return { success: true, id };
+      // Revived meanwhile (its delete was denied): an ordinary save takes it.
+      const live = this.getNote(id);
+      return live && !live.deleted_at
+        ? { success: false, id, code: "note_live" }
+        : { success: false, id, error: "Note not found" };
+    } catch (error) {
+      debugLogger.error(
+        "Error keeping a deleted note's transcript",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  // A denied optimistic delete leaves the server row untouched. Revive the
+  // local tombstone in place so its numeric id, chats and speaker rows survive;
+  // the deliberately old timestamp lets the mandatory snapshot pull replace
+  // it with the authoritative cloud row. A tombstone written after its delete
+  // (its updated_at no longer the delete's own stamp, see
+  // keepTranscriptOnDeletedNote) comes back pending with that write instead, so
+  // the pull leaves it and the next push sends it.
+  restoreNoteAfterDeniedDelete(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const accountScope = this._accountScopeCondition("notes");
+      return this.db.transaction(() => {
+        const tombstone = this.db
+          .prepare(
+            `SELECT updated_at IS NOT deleted_at AS edited FROM notes
+             WHERE id = ? AND deleted_at IS NOT NULL AND ${accountScope.sql}`
+          )
+          .get(id, ...accountScope.params);
+        if (!tombstone) return { success: false, id };
+        if (tombstone.edited) {
+          this.db
+            .prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?")
+            .run(id);
+          return { success: true, id, pending: true };
+        }
+        this.db
+          .prepare(
+            `UPDATE notes
+             SET deleted_at = NULL, sync_status = 'synced',
+                 updated_at = '1970-01-01 00:00:00'
+             WHERE id = ?`
+          )
+          .run(id);
+        return { success: true, id };
+      })();
     } catch (error) {
       debugLogger.error(
         "Error restoring note after denied delete",

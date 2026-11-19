@@ -3125,11 +3125,13 @@ export class SyncService {
 
   // A note DELETE was denied: only the owner or an admin may delete it. Revive
   // the local row in place (preserving chat/speaker identity) and let the
-  // caller snapshot-pull the authoritative server note over it.
+  // caller snapshot-pull the authoritative server note over it. A row written
+  // after its delete comes back pending with that write, pushed on a re-run.
   private async handleDeniedNoteDelete(note: NoteItem): Promise<void> {
-    await window.electronAPI.restoreNoteAfterDeniedDelete?.(note.id);
+    const restored = await window.electronAPI.restoreNoteAfterDeniedDelete?.(note.id);
     this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
     this.emitSyncUiEvent("note-delete-denied", { title: note.title });
+    if (restored?.pending) this.syncAllPending = true;
   }
 
   // A folder PATCH was denied (folder_access_denied): only a space admin may

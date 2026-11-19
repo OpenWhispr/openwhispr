@@ -271,6 +271,10 @@ function createElectronApi(db, options = {}) {
     setNoteOwnerFromCloud: async (id, ownerUserId) => db.setNoteOwnerFromCloud(id, ownerUserId),
     countTeamNotesMissingOwner: async () => db.countTeamNotesMissingOwner(),
     countNotesMissingRevision: async (spaceKind) => db.countNotesMissingRevision(spaceKind),
+    keepDeletedNoteTranscript: async (id, transcript, guard) =>
+      guard?.accountId !== db.activeAccountId
+        ? { success: false, error: "Account changed" }
+        : db.keepTranscriptOnDeletedNote(id, transcript),
     restoreNoteAfterDeniedDelete: async (id) => db.restoreNoteAfterDeniedDelete(id),
     hardDeleteNote: async (id, generation) =>
       generation !== undefined && authState.isStale(generation)

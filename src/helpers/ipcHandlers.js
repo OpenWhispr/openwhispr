@@ -4376,6 +4376,13 @@ class IPCHandlers {
     ipcMain.handle("db-mark-note-sync-error", (_, id) =>
       this.databaseManager.markNoteSyncError(id)
     );
+    // No broadcast or mirror write: the note stays deleted until its delete is answered.
+    ipcMain.handle("db-keep-deleted-note-transcript", (_, id, transcript, writeGuard) => {
+      if (writeGuard === undefined || isStaleNoteWrite(writeGuard)) {
+        return { success: false, error: "Account changed" };
+      }
+      return this.databaseManager.keepTranscriptOnDeletedNote(id, transcript);
+    });
     ipcMain.handle("db-restore-note-after-denied-delete", (_, id) => {
       const result = this.databaseManager.restoreNoteAfterDeniedDelete(id);
       // Its files went when the delete was made locally.
