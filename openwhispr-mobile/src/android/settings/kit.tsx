@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  ActivityIndicator,
   Animated,
   Easing,
   Modal,
@@ -16,7 +17,8 @@ import { router } from 'expo-router';
 import { create } from 'zustand';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { home, type } from '../home/kit';
+import { gloss, glossPressed, home, type } from '../home/kit';
+import { bodyText, edge, edgeCard, look, sectionLabel } from './look';
 import { noOrphan, useSettingsT } from './strings';
 import { useNavigationBar, useNavigationBarCanvas } from '../navigationBar';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
@@ -25,8 +27,9 @@ import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 export const settings = {
   ...home,
   success: '#1F9D55',
-  rowValue: { fontSize: 17, lineHeight: 24, color: home.tertiary },
+  rowValue: { fontSize: 15, lineHeight: 24, color: home.tertiary },
   title: { fontSize: 17, lineHeight: 22, fontWeight: '500' as const, color: home.text },
+  rowTitle: { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text },
   subtitle: { fontSize: 13, lineHeight: 18, color: home.secondary },
   tabular: { fontVariant: ['tabular-nums' as const] },
 };
@@ -54,23 +57,20 @@ export function SettingsPage({
   right,
   children,
   scroll = true,
-  edgeBack,
 }: {
   title: string;
   right?: { label: string; onPress: () => void };
   children: React.ReactNode;
   scroll?: boolean;
-  /** The desktop glass edge on the back button (hairline, top highlight, soft lift), ink chevron. */
-  edgeBack?: boolean;
 }) {
   const t = useSettingsT();
   // Gestures: edge to edge, the list scrolls under the handle. Buttons: the bar is part of the
   // page (canvas colour) and nothing scrolls under it.
   const { buttons, inset } = useNavigationBar();
-  useNavigationBarCanvas(home.canvas);
+  useNavigationBarCanvas(look.canvas);
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: home.canvas }}
+      style={{ flex: 1, backgroundColor: look.canvas }}
       edges={buttons ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}
     >
       <View
@@ -91,33 +91,22 @@ export function SettingsPage({
               router.canGoBack() ? router.back() : router.replace('/(tabs)/(record)')
             }
             style={({ pressed }) => ({
+              ...edge,
               width: 36,
               height: 36,
               borderRadius: 18,
-              backgroundColor: edgeBack ? home.surface : 'rgba(255,255,255,0.72)',
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pressed ? 0.7 : 1,
-              ...(edgeBack && {
-                borderWidth: 1,
-                borderColor: 'rgba(0,0,0,0.06)',
-                boxShadow:
-                  'inset 0px 1px 0px rgba(255,255,255,0.7), 0px 2px 10px rgba(15,23,42,0.06)',
-              }),
             })}
           >
-            <SystemIcon
-              name="chevron.left"
-              mdName="ChevronLeft"
-              size={22}
-              color={edgeBack ? home.text : home.accent}
-            />
+            <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color={home.text} />
           </Pressable>
         </View>
         <Text
           accessibilityRole="header"
           numberOfLines={1}
-          style={[settings.title, { flex: 1, textAlign: 'center' }]}
+          style={[settings.title, { flex: 1, textAlign: 'center', lineHeight: 24 }]}
         >
           {title}
         </Text>
@@ -129,10 +118,10 @@ export function SettingsPage({
               onPress={right.onPress}
               hitSlop={6}
               style={({ pressed }) => ({
+                ...edge,
                 minHeight: 36,
-                paddingHorizontal: 12,
+                paddingHorizontal: 16,
                 borderRadius: 18,
-                backgroundColor: 'rgba(255,255,255,0.72)',
                 justifyContent: 'center',
                 opacity: pressed ? 0.7 : 1,
               })}
@@ -161,26 +150,19 @@ export function SettingsPage({
   );
 }
 
-export const cardStyle: ViewStyle = {
-  backgroundColor: home.surface,
-  borderWidth: 1,
-  borderColor: home.borderDefault,
-  borderRadius: 14,
-  overflow: 'hidden',
-  boxShadow: home.tipShadow,
-};
+export const cardStyle: ViewStyle = edgeCard;
 
 /** Figma List/Card: an uppercase header, one card of rows split by inset dividers, a caption. */
 export function Group({
   title,
   footer,
-  inset = 56,
+  inset = 62,
   children,
   style,
 }: {
   title?: string;
   footer?: string;
-  /** Where the dividers start: past the 28 px icon (56), or at the card padding (16). */
+  /** Where the dividers start: past the icon tile (62), or at the row's padding (14). */
   inset?: number;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -189,7 +171,7 @@ export function Group({
   return (
     <View style={[{ gap: 12 }, style]}>
       {title && (
-        <Text accessibilityRole="header" style={type.section}>
+        <Text accessibilityRole="header" style={sectionLabel}>
           {title}
         </Text>
       )}
@@ -201,7 +183,7 @@ export function Group({
                 style={{
                   height: 1,
                   marginLeft: inset,
-                  backgroundColor: home.divider,
+                  backgroundColor: look.hairline,
                 }}
               />
             )}
@@ -218,7 +200,7 @@ export function Group({
   );
 }
 
-/** "Recommended": accent text on the tint, or white behind it on a selected (tinted) row. */
+/** "Recommended": accent text on the tint, or a white glass-edged tag on a selected (tinted) row. */
 export function Badge({
   label,
   onSelected,
@@ -231,12 +213,15 @@ export function Badge({
 }) {
   return (
     <View
-      style={{
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 999,
-        backgroundColor: neutral ? home.fill : onSelected ? home.surface : home.tint,
-      }}
+      style={[
+        {
+          paddingHorizontal: 8,
+          paddingVertical: 2,
+          borderRadius: 6,
+          backgroundColor: neutral ? look.track : look.selFill,
+        },
+        onSelected && !neutral && edge,
+      ]}
     >
       <Text
         style={{
@@ -284,36 +269,42 @@ export function Toggle({
       onPress={() => onValueChange(!value)}
       style={{ opacity: disabled ? 0.4 : 1 }}
     >
-      <Animated.View
+      <View
         style={{
           width: 64,
           height: 28,
           borderRadius: 999,
           padding: 2,
-          backgroundColor: position.interpolate({
-            inputRange: [0, 1],
-            outputRange: [home.fill, home.accent],
-          }),
+          backgroundColor: look.track,
         }}
       >
+        {/* On, the track is the brand glass; it fades in over the grey. */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: 999 },
+            gloss,
+            { opacity: position },
+          ]}
+        />
         <Animated.View
           style={{
             width: 39,
             height: 24,
             borderRadius: 999,
             backgroundColor: home.surface,
-            boxShadow: '0px 2px 4px rgba(0,0,0,0.12), 0px 0px 1px rgba(0,0,0,0.04)',
+            boxShadow: '0px 1px 2px rgba(0,0,0,0.04), 0px 8px 24px rgba(0,0,0,0.06)',
             transform: [
               { translateX: position.interpolate({ inputRange: [0, 1], outputRange: [0, 21] }) },
             ],
           }}
         />
-      </Animated.View>
+      </View>
     </Pressable>
   );
 }
 
-/** Figma List/Card row: icon, title (+ badge), optional line under it, value, then a chevron, switch or slot. */
+/** Figma List/Card row: icon tile, title (+ badge), optional line under it, value, then a chevron, switch or slot. */
 export function ListRow({
   icon,
   leading,
@@ -348,18 +339,22 @@ export function ListRow({
   accessibilityLabel?: string;
   subtitleStyle?: StyleProp<import('react-native').TextStyle>;
 }) {
-  const ink = destructive ? home.error : home.text;
+  const ink = destructive ? look.error : home.text;
   const body = (
     <>
       {leading ??
         (icon && (
-          <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
-            <SystemIcon
-              name="circle"
-              mdName={icon}
-              size={20}
-              color={destructive ? home.error : home.text}
-            />
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: look.idleFill,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <SystemIcon name="circle" mdName={icon} size={18} color={ink} />
           </View>
         ))}
       <View
@@ -368,7 +363,7 @@ export function ListRow({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Text
             textBreakStrategy="balanced"
-            style={[settings.title, { color: ink, flexShrink: 1 }]}
+            style={[settings.rowTitle, { color: ink, flexShrink: 1 }]}
           >
             {title}
           </Text>
@@ -405,10 +400,12 @@ export function ListRow({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 56,
-    backgroundColor: selected ? home.tint : undefined,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingLeft: 14,
+    paddingRight: 12,
+    minHeight: 48,
+    backgroundColor: selected ? look.selFill : undefined,
     opacity: dimmed ? 0.45 : 1,
   };
   if (!onPress || toggle)
@@ -424,14 +421,17 @@ export function ListRow({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ selected: Boolean(selected) }}
       onPress={onPress}
-      style={({ pressed }) => [rowStyle, pressed && { backgroundColor: home.fill }]}
+      style={({ pressed }) => [rowStyle, pressed && { backgroundColor: look.idleFill }]}
     >
       {body}
     </Pressable>
   );
 }
 
-/** Full-width pill in a card's place: Sign out, Choose a short recording. */
+/**
+ * Full-width pill on the canvas: Sign out, Choose a short recording. Primary is the desktop's brand
+ * glass with no lift (pressed, it sinks and darkens); the rest are white with the glass edge.
+ */
 export function PillAction({
   label,
   icon,
@@ -439,6 +439,7 @@ export function PillAction({
   destructive,
   primary,
   disabled,
+  busy,
 }: {
   label: string;
   icon?: LucideIconName;
@@ -446,46 +447,55 @@ export function PillAction({
   destructive?: boolean;
   primary?: boolean;
   disabled?: boolean;
+  /** A spinner in place of the label while the action runs. */
+  busy?: boolean;
 }) {
-  const color = primary ? '#FFFFFF' : destructive ? home.error : home.text;
+  const color = primary ? '#FFFFFF' : destructive ? look.error : home.text;
+  const off = disabled || busy;
   return (
     <Pressable
       cssInterop={false}
       accessibilityRole="button"
-      accessibilityState={{ disabled: Boolean(disabled) }}
-      disabled={disabled}
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: Boolean(off), busy: Boolean(busy) }}
+      disabled={off}
       onPress={onPress}
       style={({ pressed }) => [
         {
-          minHeight: primary ? 48 : 44,
+          minHeight: destructive ? 44 : 50,
           borderRadius: 999,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 8,
-          paddingHorizontal: 16,
-          backgroundColor: primary ? undefined : home.surface,
-          borderWidth: primary ? 0 : 1,
-          borderColor: home.borderSubtle,
-          boxShadow: primary ? undefined : home.cardShadow,
-          opacity: disabled ? 0.5 : pressed && !primary ? 0.8 : 1,
+          paddingHorizontal: 20,
+          opacity: off ? 0.5 : pressed && !primary ? 0.8 : 1,
         },
-        // Desktop's brand glass: gradient, inner rim, and a blue lift. Pressed, it sinks and darkens.
-        primary && {
-          experimental_backgroundImage: 'linear-gradient(180deg, #5588f0 0%, #3466e2 100%)',
-          boxShadow: `${disabled ? '' : '0px 10px 24px -8px rgba(52,102,226,0.45), '}inset 0px 1px 0px rgba(255,255,255,0.6), inset 0px 0px 0px 1px rgba(255,255,255,0.16), inset 0px -1px 1px rgba(0,0,0,0.12)`,
-          transform: [{ scale: pressed ? 0.985 : 1 }],
-          filter: pressed ? 'brightness(0.95)' : undefined,
-        },
+        primary ? gloss : edge,
+        primary && pressed && !off && glossPressed,
       ]}
     >
-      {icon && <SystemIcon name="circle" mdName={icon} size={18} color={color} />}
-      <Text style={[type.subhead, { color, fontWeight: '500' }]}>{label}</Text>
+      {busy ? (
+        <ActivityIndicator color={color} />
+      ) : (
+        <>
+          {icon && <SystemIcon name="circle" mdName={icon} size={18} color={color} />}
+          <Text
+            style={
+              primary
+                ? { color, fontSize: 17, lineHeight: 22, fontWeight: '700' }
+                : [type.subhead, { color, lineHeight: 22, fontWeight: '500' }]
+            }
+          >
+            {label}
+          </Text>
+        </>
+      )}
     </Pressable>
   );
 }
 
-/** Figma slider: a 4 px track that fills with the accent and a white knob, 24 tall to touch. */
+/** Figma slider: a 6 px track that fills with the brand glass and a white knob, 44 tall to touch. */
 export function SettingsSlider({
   value,
   min,
@@ -583,18 +593,19 @@ export function SettingsSlider({
       <View
         pointerEvents="none"
         style={{
-          height: 4,
+          height: 6,
           marginHorizontal: KNOB / 2,
-          borderRadius: 2,
-          backgroundColor: home.fill,
+          borderRadius: 3,
+          backgroundColor: look.track,
+          overflow: 'hidden',
         }}
       >
         <View
           style={{
             width: `${ratio * 100}%`,
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: home.accent,
+            height: 6,
+            borderRadius: 3,
+            experimental_backgroundImage: gloss.experimental_backgroundImage,
           }}
         />
       </View>
@@ -607,9 +618,7 @@ export function SettingsSlider({
           height: KNOB,
           borderRadius: KNOB / 2,
           backgroundColor: home.surface,
-          borderWidth: 1,
-          borderColor: home.borderSubtle,
-          boxShadow: '0px 2px 6px rgba(0,0,0,0.16)',
+          boxShadow: '0px 1px 4px rgba(0,0,0,0.20)',
         }}
       />
     </View>
@@ -826,16 +835,16 @@ export function BottomSheet({
           accessibilityRole="button"
           accessibilityLabel={t('cancel')}
           onPress={onClose}
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.32)' }}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.40)' }}
         />
       </Animated.View>
       <View style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
         <Animated.View
           style={{
-            backgroundColor: home.canvas,
+            backgroundColor: look.canvas,
             // The safe-area view below can't round its own corners, so this view does.
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
             overflow: 'hidden',
             paddingBottom: keyboard,
             transform: [
@@ -845,15 +854,15 @@ export function BottomSheet({
         >
           <SafeAreaView
             edges={['bottom']}
-            style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, gap: 16 }}
+            style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, gap: 16 }}
           >
             <View
               style={{
                 alignSelf: 'center',
                 width: 36,
-                height: 5,
-                borderRadius: 3,
-                backgroundColor: home.borderDefault,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: look.track,
               }}
             />
             <View style={{ gap: 6 }}>
@@ -884,10 +893,7 @@ export function BottomSheet({
                 </Text>
               </View>
               {body && (
-                <Text
-                  textBreakStrategy="balanced"
-                  style={[type.subhead, { color: home.secondary }]}
-                >
+                <Text textBreakStrategy="balanced" style={bodyText}>
                   {noOrphan(body)}
                 </Text>
               )}
@@ -916,14 +922,19 @@ export function TextAction({
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => ({
-        minHeight: 44,
+        minHeight: 50,
         alignItems: 'center',
         justifyContent: 'center',
         opacity: pressed ? 0.6 : 1,
       })}
     >
       <Text
-        style={[type.subhead, { color: destructive ? home.error : home.accent, fontWeight: '500' }]}
+        style={{
+          color: destructive ? look.error : home.accent,
+          fontSize: 17,
+          lineHeight: 22,
+          fontWeight: '500',
+        }}
       >
         {label}
       </Text>
