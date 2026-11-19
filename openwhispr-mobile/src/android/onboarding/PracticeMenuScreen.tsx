@@ -241,26 +241,31 @@ export function PracticeMenuScreen({
           <View style={[s.content, { gap: 12 }]}>
             <AppCard app="gmail">
               <View>
-                <TextInput
-                  ref={input}
-                  multiline
-                  value={text}
-                  onChangeText={(value) => {
-                    setText(value);
-                    setRuns(null);
-                  }}
-                  onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
-                  placeholder={t('emailPlaceholder')}
-                  placeholderTextColor={colors.tertiary}
-                  accessibilityLabel={t('appGmail')}
-                  autoFocus
-                  showSoftInputOnFocus
-                  // Read-only would close the keyboard; the board keeps it up while listening and writing.
-                  editable={!done}
-                  // While Practice 3's result shows, the field stays mounted and focused but out of
-                  // sight, so the keyboard stays up under the marked copy below.
-                  style={highlighted ? pm.hiddenInput : fieldText}
-                />
+                {done ? (
+                  // The done step shows the text, not a read-only field: Android drops a read-only
+                  // field's padding, which pushed the text to the card's edge (Josh, 20 Nov).
+                  <Text style={fieldText}>{text}</Text>
+                ) : (
+                  <TextInput
+                    ref={input}
+                    multiline
+                    value={text}
+                    onChangeText={(value) => {
+                      setText(value);
+                      setRuns(null);
+                    }}
+                    onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
+                    placeholder={t('emailPlaceholder')}
+                    placeholderTextColor={colors.tertiary}
+                    accessibilityLabel={t('appGmail')}
+                    autoFocus
+                    showSoftInputOnFocus
+                    // Read-only would close the keyboard; the board keeps it up while listening and writing.
+                    // While Practice 3's result shows, the field stays mounted and focused but out of
+                    // sight, so the keyboard stays up under the marked copy below.
+                    style={highlighted ? pm.hiddenInput : fieldText}
+                  />
+                )}
                 {highlighted ? (
                   <Text style={fieldText} accessibilityLiveRegion="polite">
                     {text.slice(0, runs.start)}

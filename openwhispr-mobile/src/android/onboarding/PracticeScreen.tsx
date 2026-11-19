@@ -133,20 +133,25 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
           <View style={[s.content, { gap: 12 }]}>
             <AppCard app="whatsapp">
               <View>
-                <TextInput
-                  ref={input}
-                  multiline
-                  value={text}
-                  onChangeText={setText}
-                  placeholder={phase === 'blank' ? '' : t('messagePlaceholder')}
-                  placeholderTextColor={colors.tertiary}
-                  accessibilityLabel={t('messagePlaceholder')}
-                  onFocus={() => setPhase((value) => (value === 'blank' ? 'focused' : value))}
-                  onBlur={onBlur}
-                  editable={!done}
-                  showSoftInputOnFocus
-                  style={fieldText}
-                />
+                {done ? (
+                  // The done step shows the text, not a read-only field: Android drops a read-only
+                  // field's padding, which pushed the text to the card's edge (Josh, 20 Nov).
+                  <Text style={fieldText}>{text}</Text>
+                ) : (
+                  <TextInput
+                    ref={input}
+                    multiline
+                    value={text}
+                    onChangeText={setText}
+                    placeholder={phase === 'blank' ? '' : t('messagePlaceholder')}
+                    placeholderTextColor={colors.tertiary}
+                    accessibilityLabel={t('messagePlaceholder')}
+                    onFocus={() => setPhase((value) => (value === 'blank' ? 'focused' : value))}
+                    onBlur={onBlur}
+                    showSoftInputOnFocus
+                    style={fieldText}
+                  />
+                )}
                 {phase === 'blank' && !text ? (
                   <Pressable
                     cssInterop={false}
