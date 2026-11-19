@@ -223,7 +223,13 @@ jest.mock('@/store/useTranscriptStore', () => ({
     { getState: () => ({ retryTranscript: mockRetryTranscript }) },
   ),
 }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+  initReactI18next: { type: '3rdParty', init: () => undefined },
+}));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/android/ui', () => {
   const { View, Text, Pressable } = require('react-native');

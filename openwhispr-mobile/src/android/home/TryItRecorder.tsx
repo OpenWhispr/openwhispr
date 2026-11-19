@@ -7,6 +7,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AndroidDictation, type Recording } from '../../../modules/android-dictation/src';
 import { useHomeT } from './strings';
 import { gloss, glossPressed, home, type } from './kit';
+import { edge, look } from '../settings/look';
 
 const BARS = 48;
 const BAR_MAX = 48;
@@ -110,7 +111,7 @@ export function TryItRecorder({
   return (
     <Modal visible animationType="slide" statusBarTranslucent onRequestClose={discard}>
       <SafeAreaProvider>
-        <SafeAreaView style={{ flex: 1, backgroundColor: home.canvas }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: look.canvas }}>
           <View
             style={{
               flexDirection: 'row',
@@ -135,15 +136,15 @@ export function TryItRecorder({
             >
               <View
                 style={{
+                  ...edge,
                   width: 36,
                   height: 36,
                   borderRadius: 18,
-                  backgroundColor: 'rgba(255,255,255,0.72)',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <SystemIcon name="xmark" mdName="X" size={22} color={home.text} />
+                <SystemIcon name="xmark" mdName="X" size={20} color={home.text} />
               </View>
             </Pressable>
             <Text

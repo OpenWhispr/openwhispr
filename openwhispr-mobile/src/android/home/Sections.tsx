@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, AppState, Easing, Image, Pressable, ScrollView, View } from 'react-native';
-import { useIsFocused } from '@react-navigation/native';
+import {
+  Animated,
+  AppState,
+  Easing,
+  Image,
+  Pressable,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { Transcript } from '@/types';
 import { useHomeT, type HomeKey } from './strings';
-import { home, SectionHeader, type } from './kit';
+import { home, IconTile, SectionHeader, TileButton, type } from './kit';
+import { edge, edgeCard, look } from '../settings/look';
+import { BottomSheet, PillAction } from '../settings/kit';
+import { tipsVisible, useTips } from './tipsState';
 import { relativeDate, wordSafeLines, type HomeStats } from './model';
 
 const TIPS: { video: number; poster: number; title: HomeKey; body: HomeKey }[] = [
@@ -29,9 +39,6 @@ const TIPS: { video: number; poster: number; title: HomeKey; body: HomeKey }[] =
     body: 'tip3Body',
   },
 ];
-const TIP_WIDTH = 228;
-// Room around the row so no tip's shadow is cut off by the scroll view.
-const SHADOW_ROOM = 24;
 
 function useForeground() {
   const [active, setActive] = useState(AppState.currentState === 'active');
@@ -44,8 +51,51 @@ function useForeground() {
   return active;
 }
 
-function TipCard({ tip, playing }: { tip: (typeof TIPS)[number]; playing: boolean }) {
+/** Inset hairline between rows of a card (black 6%, inset 14). */
+function RowDivider() {
+  return (
+    <View style={{ paddingLeft: 14 }}>
+      <View style={{ height: 1, backgroundColor: look.hairline }} />
+    </View>
+  );
+}
+
+/** A tip's poster in a 36 grey tile, with a small play mark: tapping the row plays the video. */
+function TipThumbnail({ poster }: { poster: number }) {
+  return (
+    <IconTile>
+      <Image source={poster} style={{ width: 36, height: 36 }} />
+      <View
+        style={{
+          position: 'absolute',
+          width: 18,
+          height: 18,
+          borderRadius: 9,
+          backgroundColor: 'rgba(0,0,0,0.45)',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <SystemIcon name="play.fill" mdName="Play" size={10} color="#FFFFFF" />
+      </View>
+    </IconTile>
+  );
+}
+
+/** The tip's video, large and looping, in a canvas sheet; "Got it" closes it. */
+function TipSheet({
+  tip,
+  visible,
+  onClose,
+}: {
+  tip: (typeof TIPS)[number];
+  visible: boolean;
+  onClose: () => void;
+}) {
   const t = useHomeT();
+  const foreground = useForeground();
+  const { width, height } = useWindowDimensions();
+  const size = Math.min(width - 32, 360, height * 0.45);
   const [ready, setReady] = useState(false);
   const player = useVideoPlayer(tip.video, (video) => {
     video.loop = true;
@@ -55,79 +105,134 @@ function TipCard({ tip, playing }: { tip: (typeof TIPS)[number]; playing: boolea
   });
   useEffect(() => {
     try {
-      if (playing) player.play();
+      if (visible && foreground) player.play();
       else player.pause();
     } catch {
       // expo-video may release the native player before this effect runs.
     }
-  }, [player, playing]);
+  }, [player, visible, foreground]);
   return (
-    <View
-      accessible
-      accessibilityLabel={`${t(tip.title)}. ${t(tip.body)}`}
-      style={{
-        width: TIP_WIDTH,
-        borderRadius: 20,
-        backgroundColor: home.surface,
-        boxShadow: home.tipShadow,
-      }}
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title={t(tip.title)}
+      trailing={
+        <Pressable
+          cssInterop={false}
+          accessibilityRole="button"
+          accessibilityLabel={t('close')}
+          onPress={onClose}
+          hitSlop={6}
+          style={({ pressed }) => ({
+            ...edge,
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <SystemIcon name="xmark" mdName="X" size={18} color={home.text} />
+        </Pressable>
+      }
     >
-      <View style={{ borderRadius: 20, overflow: 'hidden' }}>
-        <View style={{ width: TIP_WIDTH, height: TIP_WIDTH }}>
-          <VideoView
-            player={player}
-            nativeControls={false}
-            contentFit="cover"
-            surfaceType="textureView"
-            allowsPictureInPicture={false}
-            onFirstFrameRender={() => setReady(true)}
-            style={{ width: TIP_WIDTH, height: TIP_WIDTH }}
-          />
-          {!ready && (
-            <Image
-              source={tip.poster}
-              style={{ position: 'absolute', width: TIP_WIDTH, height: TIP_WIDTH }}
-            />
-          )}
-        </View>
-        <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14, gap: 2 }}>
-          <Text style={type.headline}>{t(tip.title)}</Text>
-          <Text style={type.footnote}>{t(tip.body)}</Text>
-        </View>
+      <View
+        style={{
+          alignSelf: 'center',
+          width: size,
+          height: size,
+          borderRadius: 16,
+          overflow: 'hidden',
+          backgroundColor: look.idleFill,
+        }}
+      >
+        <VideoView
+          player={player}
+          nativeControls={false}
+          contentFit="cover"
+          surfaceType="textureView"
+          allowsPictureInPicture={false}
+          onFirstFrameRender={() => setReady(true)}
+          style={{ width: size, height: size }}
+        />
+        {!ready && (
+          <Image source={tip.poster} style={{ position: 'absolute', width: size, height: size }} />
+        )}
       </View>
+      <Text style={type.footnote}>{t(tip.body)}</Text>
+      <PillAction primary label={t('gotIt')} onPress={onClose} />
+    </BottomSheet>
+  );
+}
+
+/**
+ * Tips as one card of rows, each with its video's thumbnail. A row opens the video in a sheet.
+ * Watching all three, or "Hide", removes Tips from Home.
+ */
+export function Tips() {
+  const t = useHomeT();
+  const tips = useTips();
+  const [open, setOpen] = useState<number | null>(null);
+  // The sheet keeps its tip while it slides away.
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    void tips.load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Tips goes only once its sheet has closed, so the last video is never cut short.
+  if (!tipsVisible(tips) && open === null) return null;
+  const close = () => {
+    if (open !== null) tips.watch(open);
+    setOpen(null);
+  };
+  return (
+    <View style={{ gap: 8 }}>
+      <SectionHeader title={t('tips')} action={{ label: t('hide'), onPress: tips.hide }} />
+      <View style={edgeCard}>
+        {TIPS.map((tip, index) => (
+          <View key={tip.title}>
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              accessibilityLabel={`${t(tip.title)}. ${t(tip.body)}`}
+              onPress={() => {
+                setShown(index);
+                setOpen(index);
+              }}
+              style={({ pressed }) => [ROW, pressed && { backgroundColor: look.idleFill }]}
+            >
+              <TipThumbnail poster={tip.poster} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={ROW_TITLE}>{t(tip.title)}</Text>
+                <Text style={type.footnote}>{t(tip.body)}</Text>
+              </View>
+              <SystemIcon
+                name="chevron.right"
+                mdName="ChevronRight"
+                size={20}
+                color={home.tertiary}
+              />
+            </Pressable>
+            {index < TIPS.length - 1 && <RowDivider />}
+          </View>
+        ))}
+      </View>
+      <TipSheet key={shown} tip={TIPS[shown]} visible={open !== null} onClose={close} />
     </View>
   );
 }
 
-export function Tips({ gutter }: { gutter: number }) {
-  const t = useHomeT();
-  const focused = useIsFocused();
-  const foreground = useForeground();
-  return (
-    <View>
-      <SectionHeader title={t('tips')} />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{
-          marginHorizontal: -gutter,
-          marginTop: 8 - SHADOW_ROOM,
-          marginBottom: -SHADOW_ROOM,
-        }}
-        contentContainerStyle={{
-          paddingHorizontal: gutter,
-          paddingVertical: SHADOW_ROOM,
-          gap: 12,
-          alignItems: 'flex-start',
-        }}
-      >
-        {TIPS.map((tip) => (
-          <TipCard key={tip.title} tip={tip} playing={focused && foreground} />
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
+const ROW = {
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  gap: 12,
+  paddingLeft: 14,
+  paddingRight: 12,
+  paddingVertical: 12,
+  minHeight: 60,
+};
+const ROW_TITLE = { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text };
 
 function StatColumn({ value, label }: { value: string; label: string }) {
   return (
@@ -169,7 +274,7 @@ function StatColumn({ value, label }: { value: string; label: string }) {
 }
 
 function StatDivider() {
-  return <View style={{ width: 1, height: 36, backgroundColor: home.divider }} />;
+  return <View style={{ width: 1, height: 36, backgroundColor: look.hairline }} />;
 }
 
 /** One strip: words spoken, words per minute, streak, with thin dividers between. */
@@ -180,16 +285,7 @@ export function Stats({ stats, feedback }: { stats: HomeStats; feedback?: ReactN
   return (
     <View style={{ gap: 8 }}>
       <SectionHeader title={t('yourStats')} />
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingVertical: 14,
-          borderRadius: 20,
-          backgroundColor: home.surface,
-          boxShadow: home.tipShadow,
-        }}
-      >
+      <View style={[edgeCard, { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }]}>
         <StatColumn
           value={stats.words === undefined ? dash : stats.words.toLocaleString()}
           label={t('wordsSpoken')}
@@ -245,19 +341,29 @@ function useArrival(arriving: boolean) {
   };
 }
 
-function HistoryRow({
+/** Where a row's text came from: a dictation (mic) or an uploaded audio file. */
+function SourceTile({ item }: { item: Transcript }) {
+  return (
+    <IconTile icon={item.requestContext === 'file' ? 'FileUp' : 'Mic'} color={home.secondary} />
+  );
+}
+
+export function HistoryRow({
   item,
   last,
-  highlighted,
-  arriving,
+  meta,
+  highlighted = false,
+  arriving = false,
   busy,
   onCopy,
   onRetry,
 }: {
   item: Transcript;
   last: boolean;
-  highlighted: boolean;
-  arriving: boolean;
+  /** When it was said; Home shows how long ago, the History page the time or day. */
+  meta?: string;
+  highlighted?: boolean;
+  arriving?: boolean;
   busy: boolean;
   onCopy: (text: string) => void;
   onRetry: (id: string) => void;
@@ -265,91 +371,57 @@ function HistoryRow({
   const t = useHomeT();
   const failed = item.status === 'failed';
   const text = failed ? item.errorMessage || '' : item.text;
-  const when = relativeDate(item.createdAt, t);
+  const when = meta ?? relativeDate(item.createdAt, t);
   const canRetry = failed && Boolean(item.audioUrl) && !busy;
   const arrival = useArrival(highlighted && arriving);
+  const source = item.requestContext === 'file' ? t('fromFile') : t('fromDictation');
   return (
     <View>
       <Animated.View
         style={[
-          {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-          },
+          { ...ROW, minHeight: 64 },
           // The newest row is the card's first: keep the tint inside its rounded top.
-          highlighted ? [arrival, { borderTopLeftRadius: 13, borderTopRightRadius: 13 }] : null,
+          highlighted ? [arrival, { borderTopLeftRadius: 15, borderTopRightRadius: 15 }] : null,
         ]}
       >
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text numberOfLines={1} style={type.headline}>
-            {text}
-          </Text>
-          {item.cleanupWarning ? (
-            <Text accessibilityRole="alert" numberOfLines={2} style={type.footnote}>
-              {item.cleanupWarning}
+        <View
+          accessible
+          accessibilityLabel={`${source}. ${text}. ${failed ? `${when}, ${t('notSent')}` : when}`}
+          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+        >
+          <SourceTile item={item} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text numberOfLines={1} style={ROW_TITLE}>
+              {text}
             </Text>
-          ) : null}
-          <Text numberOfLines={1} style={type.footnote}>
-            {failed ? `${when} · ${t('notSent')}` : when}
-          </Text>
+            {item.cleanupWarning ? (
+              <Text accessibilityRole="alert" numberOfLines={2} style={type.footnote}>
+                {item.cleanupWarning}
+              </Text>
+            ) : null}
+            <Text numberOfLines={1} style={type.footnote}>
+              {failed ? `${when} · ${t('notSent')}` : when}
+            </Text>
+          </View>
         </View>
         {failed ? (
-          <IconButton
+          <TileButton
+            accent
             icon="RotateCcw"
             label={t('retry')}
             disabled={!canRetry}
             onPress={() => onRetry(item.id)}
           />
         ) : (
-          <IconButton icon="Copy" label={t('copy')} onPress={() => onCopy(item.text)} />
+          <TileButton icon="Copy" label={t('copy')} onPress={() => onCopy(item.text)} />
         )}
       </Animated.View>
-      {!last && (
-        <View style={{ paddingLeft: 16 }}>
-          <View style={{ height: 1, backgroundColor: home.divider }} />
-        </View>
-      )}
+      {!last && <RowDivider />}
     </View>
   );
 }
 
-function IconButton({
-  icon,
-  label,
-  onPress,
-  disabled,
-}: {
-  icon: 'Copy' | 'RotateCcw';
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      cssInterop={false}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: Boolean(disabled) }}
-      disabled={disabled}
-      onPress={onPress}
-      hitSlop={8}
-      style={({ pressed }) => ({
-        width: 40,
-        height: 40,
-        marginRight: -6,
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: disabled ? 0.4 : pressed ? 0.6 : 1,
-      })}
-    >
-      <SystemIcon name="doc.on.doc" mdName={icon} size={20} color={home.secondary} />
-    </Pressable>
-  );
-}
-
+/** Home's History: the newest rows, ending in "See all history", which opens the full page. */
 export function HistoryCard({
   items,
   highlightId,
@@ -357,6 +429,7 @@ export function HistoryCard({
   busy,
   onCopy,
   onRetry,
+  onSeeAll,
 }: {
   items: Transcript[];
   highlightId?: string | null;
@@ -364,22 +437,16 @@ export function HistoryCard({
   busy: boolean;
   onCopy: (text: string) => void;
   onRetry: (id: string) => void;
+  onSeeAll?: () => void;
 }) {
+  const t = useHomeT();
   return (
-    <View
-      style={{
-        backgroundColor: home.surface,
-        borderWidth: 1,
-        borderColor: home.borderDefault,
-        borderRadius: 14,
-        boxShadow: home.cardShadow,
-      }}
-    >
+    <View style={edgeCard}>
       {items.map((item, index) => (
         <HistoryRow
           key={item.id}
           item={item}
-          last={index === items.length - 1}
+          last={index === items.length - 1 && !onSeeAll}
           highlighted={item.id === highlightId}
           arriving={item.id === highlightId && highlightArriving}
           busy={busy}
@@ -387,6 +454,20 @@ export function HistoryCard({
           onRetry={onRetry}
         />
       ))}
+      {onSeeAll ? (
+        <Pressable
+          cssInterop={false}
+          accessibilityRole="button"
+          onPress={onSeeAll}
+          style={({ pressed }) => [
+            { ...ROW, minHeight: 52 },
+            pressed && { backgroundColor: look.idleFill },
+          ]}
+        >
+          <Text style={[ROW_TITLE, { flex: 1, color: home.accent }]}>{t('seeAllHistory')}</Text>
+          <SystemIcon name="chevron.right" mdName="ChevronRight" size={20} color={home.tertiary} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

@@ -62,6 +62,20 @@ export const homeEnglish = {
   audioOnly: 'Audio only — no text was saved',
   nothingFromBefore: 'Nothing from before',
   nothingFromBeforeBody: 'This phone has no recordings from before accounts.',
+  homeTitle: 'Home',
+  hide: 'Hide',
+  gotIt: 'Got it',
+  seeAllHistory: 'See all history',
+  searchHistory: 'Search your dictations',
+  clearSearch: 'Clear search',
+  today: 'Today',
+  thisWeek: 'This week',
+  noMatches: 'Nothing matches “{{query}}”.',
+  savedInOpenWhispr: 'Saved in OpenWhispr',
+  bubbleCouldntType: 'The bubble couldn’t type this one.',
+  // TalkBack: where a History row's text came from, read before it.
+  fromDictation: 'Dictated',
+  fromFile: 'From an audio file',
   // TalkBack: a main tab's place in the bar, read after its name.
   tabPosition: '{{index}} of {{count}}',
   // The shared locale files leave "Notes" untranslated.

@@ -15,14 +15,13 @@ import { useBubbleResult } from '@/android/bubbleResult';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useScrollToTop } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { useTranscriptStore } from '@/store/useTranscriptStore.android';
 import { useAppInit } from '@/hooks/useAppInit';
-import { Card, Button } from '@/android/ui';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useInsights, refreshInsights } from '@/android/insights';
 import {
@@ -46,10 +45,12 @@ import {
   AccountAvatar,
   HomeToast,
   home,
+  IconTile,
   PillButton,
   SectionHeader,
   type,
 } from '@/android/home/kit';
+import { edgeCard, look } from '@/android/settings/look';
 import { BubbleCard } from '@/android/home/BubbleCard';
 import { Notch, NOTCH_REACH } from '@/android/home/Notch';
 import { notchAnnouncement, notchStateFor, type NotchModel } from '@/android/home/notchModel';
@@ -64,6 +65,9 @@ const SECTION_GAP = 20;
 /** Room below the card while the notch is out: its reach plus 12 px before the next section. */
 const NOTCH_SPACE = NOTCH_REACH + 12 - SECTION_GAP;
 const SCROLL_TO_HISTORY_MS = 950;
+/** Home shows the newest History rows; "See all history" opens the rest. */
+const HOME_HISTORY_ROWS = 5;
+const CARD_TITLE = { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text };
 
 /** ScrollView's own animated scroll is quick and fixed; this one eases in and out slowly. */
 function smoothScroll(
@@ -426,18 +430,25 @@ export default function AndroidHome() {
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: home.canvas }}
+      style={{ flex: 1, backgroundColor: look.canvas }}
       edges={['top', 'left', 'right']}
     >
       <View
         style={{
           flexDirection: 'row',
-          justifyContent: 'flex-end',
-          paddingHorizontal: GUTTER - 6,
-          minHeight: 52,
+          paddingLeft: GUTTER,
+          paddingRight: GUTTER - 6,
+          minHeight: 56,
           alignItems: 'center',
         }}
       >
+        <Text
+          accessibilityRole="header"
+          numberOfLines={1}
+          style={{ flex: 1, fontSize: 28, lineHeight: 34, fontWeight: '500', color: home.text }}
+        >
+          {h('homeTitle')}
+        </Text>
         <AccountAvatar />
       </View>
       <ScrollView
@@ -489,34 +500,40 @@ export default function AndroidHome() {
           </View>
         </Animated.View>
         {pending.text || pending.error ? (
-          <View
-            style={{
-              backgroundColor: home.surface,
-              borderRadius: 20,
-              padding: 16,
-              gap: 12,
-              boxShadow: home.cardShadow,
-            }}
-          >
-            {pending.error ? (
-              <Text accessibilityRole="alert" style={type.footnote}>
-                {pending.error}
-              </Text>
-            ) : null}
+          <View style={[edgeCard, { padding: 14, gap: 12 }]}>
+            {/* A tile and a title say why the card is here: the bubble couldn't type the text,
+                or something failed and this is what was kept. */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <IconTile
+                icon={pending.text ? 'Save' : 'TriangleAlert'}
+                color={pending.text ? home.text : home.error}
+              />
+              <View style={{ flex: 1, gap: 2 }}>
+                {pending.text ? <Text style={CARD_TITLE}>{h('savedInOpenWhispr')}</Text> : null}
+                <Text
+                  accessibilityRole={pending.error ? 'alert' : undefined}
+                  style={pending.text ? type.footnote : [CARD_TITLE, { fontWeight: '400' }]}
+                >
+                  {!pending.error || pending.error === t('insertionFailed')
+                    ? h('bubbleCouldntType')
+                    : pending.error}
+                </Text>
+              </View>
+            </View>
             {pending.text ? (
-              <Text selectable style={[type.subhead, { fontSize: 17, lineHeight: 24 }]}>
+              <Text selectable style={{ fontSize: 17, lineHeight: 24, color: home.text }}>
                 {pending.text}
               </Text>
             ) : null}
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {pending.text ? (
-                <PillButton primary label={h('copy')} onPress={() => copy(pending.text)} />
+                <PillButton icon="Copy" label={h('copy')} onPress={() => copy(pending.text)} />
               ) : null}
               <PillButton label={t('close')} onPress={pending.dismiss} />
             </View>
           </View>
         ) : null}
-        <Tips gutter={GUTTER} />
+        <Tips />
         <Stats
           stats={stats}
           feedback={
@@ -547,18 +564,24 @@ export default function AndroidHome() {
         />
         <View
           ref={historyRef}
-          style={{ gap: 12 }}
+          style={{ gap: 8 }}
           onLayout={({ nativeEvent }) => {
             historyY.current = nativeEvent.layout.y;
           }}
         >
           <SectionHeader title={h('history')} />
           {historyError ? (
-            <Card>
-              <Text accessibilityRole="alert">{historyError}</Text>
-              <Button
-                secondary
+            <View style={[edgeCard, { padding: 14, gap: 12 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <IconTile icon="TriangleAlert" color="#C27A00" />
+                <Text accessibilityRole="alert" style={[CARD_TITLE, { flex: 1 }]}>
+                  {historyError}
+                </Text>
+              </View>
+              <PillButton
+                icon="RotateCcw"
                 label={t('retry')}
+                style={{ flex: 0 }}
                 onPress={() => {
                   useTranscriptStore
                     .getState()
@@ -566,25 +589,18 @@ export default function AndroidHome() {
                     .catch(() => undefined);
                 }}
               />
-            </Card>
+            </View>
           ) : null}
           {!history.length && !historyError ? (
-            <View
-              style={{
-                backgroundColor: home.surface,
-                borderRadius: 14,
-                padding: 16,
-                gap: 4,
-                boxShadow: home.cardShadow,
-              }}
-            >
-              <Text style={type.headline}>{t('emptyHistory')}</Text>
+            <View style={[edgeCard, { padding: 14, gap: 4 }]}>
+              <Text style={CARD_TITLE}>{t('emptyHistory')}</Text>
               <Text style={type.footnote}>{t('emptyHistoryBody')}</Text>
             </View>
           ) : null}
           {recent.length ? (
             <HistoryCard
-              items={recent}
+              items={recent.slice(0, HOME_HISTORY_ROWS)}
+              onSeeAll={() => router.push('/android-home-history')}
               highlightId={highlight?.id ?? null}
               highlightArriving={Boolean(highlight?.arriving)}
               busy={working}
