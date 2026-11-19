@@ -222,7 +222,7 @@ class LearnedTab(
     if (!paused) handler.postDelayed(hideLater, HOLD_MS)
   }
 
-  /** Undo: the words go, the pill says so in grey for 1.2 s and goes back. The fixed text stays. */
+  /** Undo: the words go, the pill says so for 3 s and goes back. The fixed text stays. */
   private fun undone() {
     val value = text ?: return
     handler.removeCallbacks(hideLater)
@@ -238,7 +238,7 @@ class LearnedTab(
     const val GROW_MS = 520L
     const val SHRINK_MS = 300L
     const val HOLD_MS = 5000L
-    const val UNDONE_MS = 1200L
+    const val UNDONE_MS = 3000L
   }
 }
 
