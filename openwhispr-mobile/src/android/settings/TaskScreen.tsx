@@ -11,13 +11,7 @@ import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { providerDisplayName, type InferenceMode } from '@/lib/mobileProviders';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
 import { home, type } from '../home/kit';
-import {
-  BottomSheet,
-  Group,
-  ListRow,
-  SettingsPage,
-  useReduceMotion,
-} from './kit';
+import { BottomSheet, Group, ListRow, SettingsPage, useReduceMotion } from './kit';
 import { KEY_CHECK_COLORS } from './KeyCheckMark';
 import type { KeyProviderId } from './keyCheck';
 import { KeySheet } from './KeySheet';
