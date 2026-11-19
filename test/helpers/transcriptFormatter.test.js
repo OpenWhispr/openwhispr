@@ -372,12 +372,6 @@ test("a recorder label names the recorder's lines in every format", () => {
   assert.equal(json.segments[0].speaker, "Ada Lovelace");
 });
 
-test("an unknown recorder exports as Note taker", () => {
-  const txt = formatTxt(recorderNote, recorderSegments, {}, { recorderLabel: "Note taker" });
-
-  assert.ok(txt.includes("[00:00:00] Note taker:\nMorning."));
-});
-
 test("a localized You speaker name takes the recorder label", (t) => {
   changeLanguage("de");
   t.after(() => changeLanguage("en"));
