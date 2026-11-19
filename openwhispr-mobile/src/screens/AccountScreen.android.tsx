@@ -67,9 +67,8 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (signedIn) loadCalendars().catch(() => undefined);
   }, [signedIn, loadCalendars]);
-  // The row shows the account that needs attention first, else the first one.
-  const calendarAccount =
-    calendarAccounts.find((account) => needsReconnect(account)) ?? calendarAccounts[0] ?? null;
+  // 20.1: one account shows its address, more show how many; any signed out shows that in amber.
+  const signedOutCalendars = calendarAccounts.filter((account) => needsReconnect(account)).length;
 
   const save = async (
     change: Parameters<ReturnType<typeof useConfigStore.getState>['updateConfig']>[0],
@@ -323,14 +322,18 @@ export default function SettingsScreen() {
           icon="Calendar"
           title={t('calendar')}
           value={
-            calendarAccount
-              ? needsReconnect(calendarAccount)
-                ? t('reconnect')
-                : (calendarAccount.email ?? t('calendar'))
-              : t('notConnected')
+            calendarAccounts.length === 0
+              ? t('notConnected')
+              : signedOutCalendars > 0
+                ? calendarAccounts.length === 1
+                  ? t('reconnect')
+                  : t('signedOutCount', { count: signedOutCalendars })
+                : calendarAccounts.length === 1
+                  ? (calendarAccounts[0].email ?? t('calendar'))
+                  : t('accountsCount', { count: calendarAccounts.length })
           }
-          valueAccent={!calendarAccount}
-          valueColor={calendarAccount && needsReconnect(calendarAccount) ? '#B45309' : undefined}
+          valueAccent={calendarAccounts.length === 0}
+          valueColor={signedOutCalendars > 0 ? '#B45309' : undefined}
           onPress={() => router.push('/android-calendar')}
         />
         <ListRow
