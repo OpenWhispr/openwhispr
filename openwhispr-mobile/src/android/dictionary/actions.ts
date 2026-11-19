@@ -84,5 +84,8 @@ export function addWordsByHand(words: string[]) {
     clean.length === 1
       ? dictionaryT('addedOne', { word: clean[0] })
       : dictionaryT('addedMany', { count: clean.length }),
+    'success',
+    undefined,
+    { aboveTabBar: true },
   );
 }

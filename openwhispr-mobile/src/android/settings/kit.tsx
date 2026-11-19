@@ -12,7 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { create } from 'zustand';
 import { Text } from '@/components/ui/Text';
@@ -659,6 +659,9 @@ export function showToast(
 export function SettingsToastHost() {
   const { message, tone, id, action, options } = useSettingsToast();
   const { inset } = useNavigationBar();
+  // With the keyboard up (a note being typed in), the toast sits just above it, not behind it.
+  // Android's keyboard height leaves out the navigation bar, as in BottomSheet.
+  const keyboard = useKeyboardHeight();
   const reduceMotion = useReduceMotion();
   const opacity = useRef(new Animated.Value(0)).current;
   const lift = useRef(new Animated.Value(16)).current;
@@ -698,7 +701,8 @@ export function SettingsToastHost() {
         position: 'absolute',
         left: 0,
         right: 0,
-        bottom: inset + (options?.aboveTabBar ? TAB_BAR_HEIGHT : 0),
+        bottom:
+          keyboard > 0 ? keyboard + inset : inset + (options?.aboveTabBar ? TAB_BAR_HEIGHT : 0),
         alignItems: 'center',
       }}
     >
@@ -827,6 +831,11 @@ export function BottomSheet({
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
   const keyboard = useKeyboardHeight(visible);
+  // Android's keyboard height leaves out the navigation bar, and a SafeAreaView inside a Modal
+  // sees no inset, so with the keyboard up the sheet adds the app's own bottom inset or its last
+  // ~48 dp (the button) sits behind the keyboard.
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const lift = keyboard > 0 ? keyboard + bottomInset : 0;
   // Stays mounted through the closing animation.
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(0)).current;
@@ -871,7 +880,7 @@ export function BottomSheet({
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             overflow: 'hidden',
-            paddingBottom: keyboard,
+            paddingBottom: lift,
             transform: [
               { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [600, 0] }) },
             ],

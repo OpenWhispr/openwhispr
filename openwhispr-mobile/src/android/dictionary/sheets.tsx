@@ -103,7 +103,13 @@ export function AddWordsSheet({
       )}
       <Text style={[type.footnote, { fontSize: 14, lineHeight: 20 }]}>{t('addWordsHelp')}</Text>
       <GlassButton
-        label={words.length > 1 ? t('addMany', { count: words.length }) : t('addOne', { count: 1 })}
+        label={
+          words.length > 1
+            ? t('addMany', { count: words.length })
+            : words.length === 1
+              ? t('addOne', { count: 1 })
+              : t('addWords')
+        }
         onPress={submit}
         disabled={words.length === 0}
       />
