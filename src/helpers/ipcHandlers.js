@@ -4505,8 +4505,8 @@ class IPCHandlers {
       const result = this.databaseManager.hardDeleteFolder(id, options);
       if (result?.success) {
         this.notifyVectorChanges();
-        // Unsent notes forked to Private and notes unfiled to their space's top
-        // level are among the relocated notes, so _mirrorRemovedFolder writes them.
+        // Notes a pulled delete unfiled to their space's top level are among the
+        // relocated notes, so _mirrorRemovedFolder writes them.
         this._mirrorRemovedFolder(result, snapshots);
         setImmediate(() => {
           // Before the folder goes, so a window showing one of them keeps it open.
