@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { extractCorrectionPairs } from '@/lib/correctionLearner';
+import { extractCorrectionPairs } from './correctionPairs';
 import { buildEffectiveDictionaryWords } from '@/lib/dictationHints';
 import { AndroidDictation, dictationEvents } from '../../../modules/android-dictation/src';
 import { forgetLearned, learnCorrections, loadLearnedWords, relearn, unlearn } from './learned';
