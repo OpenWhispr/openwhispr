@@ -160,7 +160,7 @@ export default function FolderNotes() {
 
   return (
     <SafeAreaView
-      edges={selecting ? ['top', 'left', 'right', 'bottom'] : ['top', 'left', 'right']}
+      edges={['top', 'left', 'right']}
       style={{ flex: 1, backgroundColor: notesLook.canvas }}
     >
       <ScrollView

@@ -175,7 +175,6 @@ export const notesEnglish = {
   minimise: 'Back to notes',
   notesWhileRecording: 'Jot decisions, follow-ups or context while recording…',
   // Upload (U1)
-  uploadingTitle: 'New recording',
   transcribing: 'Transcribing',
   cleaningUp: 'Writing it up',
   stayOnScreen: 'Keep this screen open until it’s done.',

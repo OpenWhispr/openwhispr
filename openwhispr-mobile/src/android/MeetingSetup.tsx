@@ -39,11 +39,9 @@ export function MeetingSetup({
       started.current = true;
       startRef.current();
     };
-    if (ready) {
-      go();
-      return;
-    }
-    const timer = setTimeout(go, AUTOSTART_WAIT_MS);
+    // After the recorder's own mount effects, which reset its start generation and would
+    // otherwise cancel a start made during the same commit.
+    const timer = setTimeout(go, ready ? 50 : AUTOSTART_WAIT_MS);
     return () => clearTimeout(timer);
   }, [autoStart, canStart, ready]);
   if (autoStart && canStart && (busy || !started.current))

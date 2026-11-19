@@ -40,7 +40,7 @@ export function MetaChip({
   onPress,
   testID,
 }: {
-  icon: LucideIconName;
+  icon?: LucideIconName;
   label: string;
   onPress?: () => void;
   testID?: string;

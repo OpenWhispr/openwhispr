@@ -122,7 +122,7 @@ export function RecordingView({
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {chips.map((chip) => (
-            <MetaChip key={chip} icon="Circle" label={chip} />
+            <MetaChip key={chip} label={chip} />
           ))}
         </View>
         {status === 'error' && error ? (

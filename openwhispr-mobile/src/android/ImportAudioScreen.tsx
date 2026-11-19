@@ -226,7 +226,7 @@ export default function ImportAudioScreen() {
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         <Text accessibilityRole="header" style={notesLook.title}>
-          {notesT('uploadingTitle')}
+          {notesT('uploadAudio')}
         </Text>
         {(isProcessing ? destination.current : preview.target) ? (
           <View style={{ flexDirection: 'row', gap: 8 }}>

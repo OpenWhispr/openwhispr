@@ -234,8 +234,13 @@ export default function SearchScreen() {
                 showsHorizontalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 // The chips' shadows need room: the row scrolls, the page doesn't clip them.
-                style={{ marginHorizontal: -16, overflow: 'visible' }}
-                contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 6, gap: 8 }}
+                style={{ marginHorizontal: -16, overflow: 'visible', flexGrow: 0 }}
+                contentContainerStyle={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 6,
+                  gap: 8,
+                  alignItems: 'center',
+                }}
               >
                 <Chip
                   label={t('all')}

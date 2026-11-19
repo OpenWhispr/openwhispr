@@ -774,8 +774,12 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
         const rewrite = rewriteRef.current;
         rewriteRef.current = null;
         // Shorter and longer keep the template that wrote the summary (E1's chip still names it).
-        if (rewrite && rewrite.kind !== 'template' && rewrite.previous.enhancementPrompt)
-          updates.enhancementPrompt = rewrite.previous.enhancementPrompt;
+        if (rewrite && rewrite.kind !== 'template') {
+          if (rewrite.previous.enhancementPrompt)
+            updates.enhancementPrompt = rewrite.previous.enhancementPrompt;
+          // It still summarises the same notes, so it isn't marked out of date.
+          updates.enhancedAtContentHash = rewrite.previous.hash;
+        }
         updateNote(noteId, updates);
         setViewMode('enhanced');
         // E5: a summary that replaced another one offers Undo for 6 s, never an "are you sure?".
