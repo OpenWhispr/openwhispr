@@ -7,6 +7,8 @@ import registry from '@/config/languageRegistry.json';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { useConfigStore } from '@/store/useConfigStore';
+import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
+import { needsReconnect } from '@/android/calendar/connect';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { useSyncStore } from '@/sync/useSyncStore';
@@ -59,6 +61,14 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (signedIn) loadUsage();
   }, [signedIn, loadUsage]);
+
+  const calendarAccounts = useGoogleCalendarStore((state) => state.accounts);
+  const loadCalendars = useGoogleCalendarStore((state) => state.load);
+  useEffect(() => {
+    if (signedIn) loadCalendars().catch(() => undefined);
+  }, [signedIn, loadCalendars]);
+  // 20.1: one account shows its address, more show how many; any signed out shows that in amber.
+  const signedOutCalendars = calendarAccounts.filter((account) => needsReconnect(account)).length;
 
   const save = async (
     change: Parameters<ReturnType<typeof useConfigStore.getState>['updateConfig']>[0],
@@ -280,7 +290,7 @@ export default function SettingsScreen() {
         />
       </Group>
 
-      <Group title={t('dictation')}>
+      <Group title={t('transcription')}>
         <ListRow
           icon="Globe"
           title={t('language')}
@@ -302,6 +312,41 @@ export default function SettingsScreen() {
             disabled: !config,
             onValueChange: (cleanupEnabled) => {
               save({ cleanupEnabled }).catch((error: Error) => showToast(error.message, 'error'));
+            },
+          }}
+        />
+      </Group>
+
+      <Group title={t('meetings')}>
+        <ListRow
+          icon="Calendar"
+          title={t('calendar')}
+          value={
+            calendarAccounts.length === 0
+              ? t('notConnected')
+              : signedOutCalendars > 0
+                ? calendarAccounts.length === 1
+                  ? t('reconnect')
+                  : t('signedOutCount', { count: signedOutCalendars })
+                : calendarAccounts.length === 1
+                  ? (calendarAccounts[0].email ?? t('calendar'))
+                  : t('accountsCount', { count: calendarAccounts.length })
+          }
+          valueAccent={calendarAccounts.length === 0}
+          valueColor={signedOutCalendars > 0 ? '#B45309' : undefined}
+          onPress={() => router.push('/android-calendar')}
+        />
+        <ListRow
+          icon="Sparkles"
+          title={t('autoRename')}
+          subtitle={t('autoRenameBody')}
+          toggle={{
+            value: config?.autoGenerateNoteTitle !== false,
+            disabled: !config,
+            onValueChange: (autoGenerateNoteTitle) => {
+              save({ autoGenerateNoteTitle }).catch((error: Error) =>
+                showToast(error.message, 'error'),
+              );
             },
           }}
         />

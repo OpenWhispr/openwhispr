@@ -121,16 +121,16 @@ const PILL_HAIRLINE = 'rgba(0,0,0,0.12)';
 export const TILE_FILL = '#F1F1F0';
 
 /**
- * A button inside a card (Fable reskin): always a flat outline pill, 44 tall. `accent` is the
- * one thing a card asks for (a missing permission): the same pill in blue. Busy or disabled, it
- * dims to 40%; the label never changes. The icon sits in a 28 px slot and follows the label
- * colour, so a pair of buttons always shows same-size icons.
+ * A button inside a card (Fable reskin): a flat outline pill, 44 tall. `primary` is the one
+ * thing a card asks for (a missing permission): the brand gloss with a white label, no outline.
+ * Busy or disabled, it dims (40%, or 50% for primary); the label never changes. The icon sits in
+ * a 28 px slot and follows the label colour, so a pair of buttons always shows same-size icons.
  */
 export function PillButton({
   label,
   icon,
   onPress,
-  accent,
+  primary,
   disabled,
   compact,
   style,
@@ -138,13 +138,13 @@ export function PillButton({
   label: string;
   icon?: LucideIconName;
   onPress: () => void;
-  accent?: boolean;
+  primary?: boolean;
   disabled?: boolean;
   /** Tighter side padding and icon gap, so two fit side by side on a narrow phone. */
   compact?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
-  const color = accent ? home.accent : home.text;
+  const color = primary ? '#FFFFFF' : home.text;
   return (
     <Pressable
       cssInterop={false}
@@ -165,11 +165,13 @@ export function PillButton({
           alignItems: 'center',
           justifyContent: 'center',
           gap: compact ? 4 : 8,
-          backgroundColor: pressed ? TILE_FILL : home.surface,
-          borderWidth: 1,
-          borderColor: accent ? home.accent : PILL_HAIRLINE,
-          opacity: disabled ? 0.4 : 1,
+          backgroundColor: primary ? undefined : pressed ? TILE_FILL : home.surface,
+          borderWidth: primary ? 0 : 1,
+          borderColor: PILL_HAIRLINE,
+          opacity: disabled ? (primary ? 0.5 : 0.4) : 1,
         },
+        primary && gloss,
+        primary && pressed && !disabled && glossPressed,
         style,
       ]}
     >
@@ -179,7 +181,10 @@ export function PillButton({
         </View>
       ) : null}
       <Text
-        style={[type.subhead, { color, flexShrink: 1, textAlign: 'center', fontWeight: '500' }]}
+        style={[
+          type.subhead,
+          { color, flexShrink: 1, textAlign: 'center', fontWeight: primary ? '600' : '500' },
+        ]}
       >
         {label}
       </Text>

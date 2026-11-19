@@ -108,6 +108,10 @@ export function SettingsPage({
         <Text
           accessibilityRole="header"
           numberOfLines={1}
+          // An address as the title (a calendar account) shrinks to fit when it's a little too
+          // long; a longer one is cut in the middle. Android ignores minimumFontScale.
+          adjustsFontSizeToFit={title.length <= 24}
+          ellipsizeMode="middle"
           style={[settings.title, { flex: 1, textAlign: 'center', lineHeight: 24 }]}
         >
           {title}
@@ -315,6 +319,7 @@ export function ListRow({
   subtitle,
   value,
   valueAccent,
+  valueColor,
   trailing,
   toggle,
   onPress,
@@ -323,14 +328,22 @@ export function ListRow({
   destructive,
   accessibilityLabel,
   subtitleStyle,
+  titleColor,
+  singleLineTitle,
 }: {
   icon?: LucideIconName;
   leading?: React.ReactNode;
   title: string;
+  /** A title in its own colour (the blue "Add Google account"). */
+  titleColor?: string;
+  /** One line, cut in the middle (an email address keeps its domain). */
+  singleLineTitle?: boolean;
   badge?: React.ReactNode;
   subtitle?: React.ReactNode;
   value?: string;
   valueAccent?: boolean;
+  /** A value in its own colour (amber Reconnect). */
+  valueColor?: string;
   /** Replaces the chevron. Pass null for no trailing element. */
   trailing?: React.ReactNode;
   toggle?: { value: boolean; onValueChange: (value: boolean) => void; disabled?: boolean };
@@ -342,6 +355,7 @@ export function ListRow({
   subtitleStyle?: StyleProp<import('react-native').TextStyle>;
 }) {
   const ink = destructive ? look.error : home.text;
+  const titleInk = titleColor ?? ink;
   const body = (
     <>
       {leading ??
@@ -362,10 +376,20 @@ export function ListRow({
       <View
         style={{ flex: 1, gap: 2, justifyContent: 'center', opacity: toggle?.disabled ? 0.4 : 1 }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            // One-line titles keep their badge beside them and shrink instead.
+            flexWrap: singleLineTitle ? 'nowrap' : 'wrap',
+          }}
+        >
           <Text
             textBreakStrategy="balanced"
-            style={[settings.rowTitle, { color: ink, flexShrink: 1 }]}
+            numberOfLines={singleLineTitle ? 1 : undefined}
+            ellipsizeMode="middle"
+            style={[settings.rowTitle, { color: titleInk, flexShrink: 1 }]}
           >
             {title}
           </Text>
@@ -382,7 +406,12 @@ export function ListRow({
       {value !== undefined && (
         <Text
           numberOfLines={1}
-          style={[settings.rowValue, { maxWidth: '45%' }, valueAccent && { color: home.accent }]}
+          style={[
+            settings.rowValue,
+            { maxWidth: '45%' },
+            valueAccent && { color: home.accent },
+            valueColor != null && { color: valueColor },
+          ]}
         >
           {value}
         </Text>
