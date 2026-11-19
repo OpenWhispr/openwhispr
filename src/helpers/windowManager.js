@@ -277,8 +277,8 @@ class WindowManager {
     }
     if (process.platform !== "linux") return false;
     try {
-      // Electron reapplies this flag on resize. Clear it for full-window input
-      // and let the helper set the exact clickable area for a collapsed pill.
+      // Electron reapplies this flag on every bounds, state and theme change. Clear it for
+      // full-window input and let the helper set the exact clickable area for a collapsed pill.
       win.setIgnoreMouseEvents(region !== null);
       await this._mainWindowInputRegion().set(region);
       return !win.isDestroyed() && win.isVisible() && !win.isMinimized();

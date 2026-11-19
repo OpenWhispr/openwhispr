@@ -257,7 +257,7 @@ test("a destroyed window is never touched", () => {
   assert.deepEqual(hoverCycle("linux", win), []);
 });
 
-test("Linux keeps resize input in sync with the pill and restores capture after a writer failure", async () => {
+test("Linux sets the ignore flag before the helper writes the region and restores capture after a writer failure", async () => {
   const original = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "linux", configurable: true });
   try {
@@ -274,8 +274,8 @@ test("Linux keeps resize input in sync with the pill and restores capture after 
       viewportHeight: 120,
     };
     applyInputRegion = async (region) => {
-      // Electron restores this flag on resize. It must already match the
-      // surface when the helper writes the more precise X11 shape.
+      // Electron reapplies this flag on every bounds, state and theme change. It must
+      // already match the surface when the helper writes the more precise X11 shape.
       assert.equal(win.calls.at(-1)?.ignore, region !== null);
     };
     await manager.setMainWindowInputRegion(pillRegion);
