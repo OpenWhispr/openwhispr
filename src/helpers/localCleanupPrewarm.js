@@ -25,11 +25,12 @@ function createLocalCleanupPrewarm(modelManager) {
       modelId = nextModel;
       update();
     },
-    setLifecycleState(state) {
+    setLifecycleState(state, voiceAgentRequested = false) {
       if (state !== DICTATION_LIFECYCLE.RECORDING && state !== DICTATION_LIFECYCLE.IDLE) return;
-      const recording = state === DICTATION_LIFECYCLE.RECORDING;
-      if (active === recording) return;
-      active = recording;
+      // The onboarding assistant also records in the dictation window, but skips cleanup.
+      const needsCleanup = state === DICTATION_LIFECYCLE.RECORDING && !voiceAgentRequested;
+      if (active === needsCleanup) return;
+      active = needsCleanup;
       update();
     },
   };

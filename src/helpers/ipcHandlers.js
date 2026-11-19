@@ -2909,13 +2909,20 @@ class IPCHandlers {
     // in the dictation renderer. Only confirmed renderer state may change the
     // main-process recording gate. Preparing reserves it before the renderer
     // opens the mic; an older attempt cannot release a newer reservation.
-    ipcMain.handle("dictation-lifecycle-state-changed", (event, state, attempt) => {
-      const dictationWindow = this.windowManager.mainWindow;
-      if (!isFromWindow(event, dictationWindow) || typeof attempt !== "string" || !attempt) {
-        return false;
+    ipcMain.handle(
+      "dictation-lifecycle-state-changed",
+      (event, state, attempt, voiceAgentRequested) => {
+        const dictationWindow = this.windowManager.mainWindow;
+        if (!isFromWindow(event, dictationWindow) || typeof attempt !== "string" || !attempt) {
+          return false;
+        }
+        return this.windowManager.setDictationLifecycleState(
+          state,
+          attempt,
+          voiceAgentRequested === true
+        );
       }
-      return this.windowManager.setDictationLifecycleState(state, attempt);
-    });
+    );
 
     // Dictionary handlers
     ipcMain.on("auto-learn-changed", (_event, enabled) => {

@@ -1425,8 +1425,8 @@ async function startApp() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
-  windowManager.onDictationStateChanged = (state) => {
-    ipcHandlers.dictationCleanupPrewarm.setLifecycleState(state);
+  windowManager.onDictationStateChanged = (state, voiceAgentRequested) => {
+    ipcHandlers.dictationCleanupPrewarm.setLifecycleState(state, voiceAgentRequested);
     trayManager?.updateTrayMenu();
   };
 

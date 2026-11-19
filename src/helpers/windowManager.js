@@ -1055,7 +1055,7 @@ class WindowManager {
     }
   }
 
-  setDictationLifecycleState(state, attempt) {
+  setDictationLifecycleState(state, attempt, voiceAgentRequested = false) {
     const nextState = normalizeDictationLifecycle(state);
     if (attempt !== undefined) {
       if (nextState === DICTATION_LIFECYCLE.PREPARING && !this._dictationAttempt) {
@@ -1070,7 +1070,7 @@ class WindowManager {
     this._dictationLifecycleState = nextState;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.syncUserRecording();
-    this.onDictationStateChanged?.(nextState);
+    this.onDictationStateChanged?.(nextState, voiceAgentRequested);
     return true;
   }
 

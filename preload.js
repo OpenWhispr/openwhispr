@@ -154,8 +154,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
-  dictationLifecycleStateChanged: (state, attempt) =>
-    ipcRenderer.invoke("dictation-lifecycle-state-changed", state, attempt),
+  dictationLifecycleStateChanged: (state, attempt, voiceAgentRequested = false) =>
+    ipcRenderer.invoke("dictation-lifecycle-state-changed", state, attempt, voiceAgentRequested),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>
