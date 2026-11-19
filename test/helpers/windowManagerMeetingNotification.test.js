@@ -1095,16 +1095,29 @@ test("a queued or undelivered navigation keeps its note session pending", async 
   manager._meetingNavigationOperation = null;
 });
 
-test("onDictationStart fires once per recording", () => {
+test("only accepted lifecycle transitions reach the recording observers", () => {
   const manager = createNormalWindowManager();
-  let starts = 0;
-  manager.onDictationStart = () => starts++;
+  const states = [];
+  manager.onDictationStateChanged = (state) => states.push(state);
+  manager.setDictationLifecycleState("preparing", "tap");
+  manager.setDictationLifecycleState("idle", "tap");
+  manager.setDictationLifecycleState("preparing", "take");
+  assert.equal(manager.setDictationLifecycleState("recording", "tap"), false);
+  manager.setDictationLifecycleState("recording", "take");
+  manager.setDictationLifecycleState("recording", "take");
+  manager.setDictationLifecycleState("processing", "take");
+  manager.setDictationLifecycleState("idle", "take");
+  assert.deepEqual(states, ["preparing", "idle", "preparing", "recording", "processing", "idle"]);
+});
 
-  manager.setDictationLifecycleState("preparing");
+test("closing the dictation window releases a confirmed take if its renderer never reports idle", () => {
+  const manager = createNormalWindowManager();
+  manager.mainWindow = new EventEmitter();
+  manager.registerMainWindowEvents();
+  const states = [];
+  manager.onDictationStateChanged = (state) => states.push(state);
   manager.setDictationLifecycleState("recording");
-  manager.setDictationLifecycleState("processing");
-  manager.setDictationLifecycleState("idle");
-  manager.setDictationLifecycleState("preparing");
-
-  assert.equal(starts, 2);
+  manager.mainWindow.emit("closed");
+  assert.deepEqual(states, ["recording", "idle"]);
+  assert.equal(manager.isDictationActive(), false);
 });

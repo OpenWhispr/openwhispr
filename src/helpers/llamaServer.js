@@ -110,6 +110,7 @@ function buildResponseError(statusCode, body) {
 class LlamaServerManager {
   constructor() {
     this.keepResident = false;
+    this.dictationModelPath = null;
     this.process = null;
     this.port = null;
     this.ready = false;
@@ -259,7 +260,9 @@ class LlamaServerManager {
       contextSize: options.contextSize || DEFAULT_CONTEXT_SIZE,
     };
 
-    const busyDeadline = Date.now() + (options.busyWaitMs ?? DEFAULT_BUSY_WAIT_MS);
+    const dictationPrewarm = options.prewarm === "dictation";
+    const busyWaitMs = options.busyWaitMs ?? DEFAULT_BUSY_WAIT_MS;
+    let busyDeadline = Date.now() + busyWaitMs;
     // A caller that gives up during the wait must not still swap the model in.
     const { signal } = options;
 
@@ -269,9 +272,23 @@ class LlamaServerManager {
       // this request. Callers record the model they asked for as loaded once
       // this resolves, so it must never resolve on a startup for another one.
       while (this.startupPromise) {
-        if (servesRequest(this.startingRequest, request)) {
+        const starting = this.startingRequest;
+        if (servesRequest(starting, request) && !starting.preemption?.signal.aborted) {
+          // A foreground caller now owns the startup and its handoff to inference.
+          if (!options.prewarm) starting.preemption = null;
           this.cancelDeferredStop();
           return this.startupPromise;
+        }
+        if (starting.preemption && (!options.prewarm || starting.preemption.signal.aborted)) {
+          // A speculative load has no caller waiting for an answer. Reclaim its
+          // slot without charging native process teardown to the edit's busy wait.
+          starting.preemption.abort(cancelledError());
+          await this._waitFor(
+            this.startupPromise.catch(() => {}),
+            { signal }
+          );
+          busyDeadline = Date.now() + busyWaitMs;
+          continue;
         }
         await this._waitFor(
           this.startupPromise.catch(() => {}),
@@ -284,9 +301,13 @@ class LlamaServerManager {
         // inference(), so asking for the running server is its only activity.
         this.cancelDeferredStop();
         this.resetIdleTimer();
-        this._handOff();
+        if (!dictationPrewarm) this._handOff();
         return;
       }
+
+      // Never swap away another scope's model for speculative cleanup, even
+      // if that model loaded while the cleanup file was being validated.
+      if (dictationPrewarm && this.ready) throw modelBusyError();
 
       // A server that failed its health check has no answer left to protect.
       if (!this.process || !this.ready) break;
@@ -302,6 +323,13 @@ class LlamaServerManager {
       await this._waitFor(sleep(Math.min(remaining, BUSY_WAIT_POLL_MS)), { signal });
     }
 
+    request.preemption = dictationPrewarm ? new AbortController() : null;
+    const startupSignal = request.preemption?.signal;
+    // A route change or cancelled take releases only an unclaimed startup.
+    // A matching foreground request clears preemption when it joins above.
+    const cancelUnclaimedStart = () => request.preemption?.abort(cancelledError());
+    if (signal?.aborted) throw cancelledError();
+    if (startupSignal) signal?.addEventListener("abort", cancelUnclaimedStart, { once: true });
     this.startingRequest = request;
     // Assigned before any await so waiters woken by the same startup cannot
     // both spawn.
@@ -310,12 +338,18 @@ class LlamaServerManager {
         if (this.process) await this.stop();
         // Residency may have been turned off while the old server stopped.
         this.clearIdleTimer();
-        await this._doStart(modelPath, options);
+        startupSignal?.throwIfAborted();
+        await this._doStart(modelPath, { ...options, startupSignal });
+        startupSignal?.throwIfAborted();
         // The ladder may have stepped the context down to get a GPU rung to
         // start; record what loaded, not what was asked for.
         this.contextSize = this.activeContextSize ?? request.contextSize;
-        this._handOff();
+        if (!request.preemption) this._handOff();
+      } catch (error) {
+        if (startupSignal?.aborted) await this.stop();
+        throw error;
       } finally {
+        if (startupSignal) signal?.removeEventListener("abort", cancelUnclaimedStart);
         this.startupPromise = null;
         this.startingRequest = null;
       }
@@ -423,7 +457,8 @@ class LlamaServerManager {
         binaryPaths.default,
         args,
         this._buildEnv(binaryPaths.default),
-        STARTUP_TIMEOUT_MS
+        STARTUP_TIMEOUT_MS,
+        options.startupSignal
       );
       this.activeBackend = "metal";
       this.activeDraftModelPath = this.draftModelPath;
@@ -524,7 +559,8 @@ class LlamaServerManager {
           rung.binary,
           rung.args,
           this._buildEnv(rung.binary),
-          rung.timeout
+          rung.timeout,
+          options.startupSignal
         );
         this.activeBackend = rung.backend;
         this.activeDraftModelPath = rung.mtp ? this.draftModelPath : null;
@@ -534,6 +570,7 @@ class LlamaServerManager {
         this.contextSize = this.activeContextSize;
         return;
       } catch (err) {
+        options.startupSignal?.throwIfAborted();
         lastError = err;
         if (next) {
           debugLogger.warn(`${rung.name} backend failed, falling back to ${next.name}`, {
@@ -573,10 +610,11 @@ class LlamaServerManager {
     return env;
   }
 
-  _startWithBinary(binaryPath, args, env, timeoutMs) {
+  _startWithBinary(binaryPath, args, env, timeoutMs, startupSignal) {
     return new Promise((resolve, reject) => {
       debugLogger.debug("Spawning llama-server", { binary: binaryPath, port: this.port, args });
 
+      startupSignal?.throwIfAborted();
       assertLocalModelOperation(this);
       const child = spawn(binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
@@ -596,8 +634,11 @@ class LlamaServerManager {
       const settle = (fn) => {
         if (settled) return;
         settled = true;
+        startupSignal?.removeEventListener("abort", onAbort);
         fn();
       };
+      const onAbort = () => settle(() => reject(startupSignal.reason));
+      startupSignal?.addEventListener("abort", onAbort, { once: true });
 
       child.stdout.on("data", (data) => {
         debugLogger.debug("llama-server stdout", { data: data.toString().trim() });
@@ -659,7 +700,9 @@ class LlamaServerManager {
         }
 
         pollCount++;
-        if (await this.checkHealth()) {
+        const healthy = await this.checkHealth();
+        if (settled) return;
+        if (healthy) {
           this.ready = true;
           debugLogger.debug("llama-server ready", {
             startupTimeMs: Date.now() - startTime,
@@ -780,10 +823,28 @@ class LlamaServerManager {
     else if (this.process && !this.startupPromise) this.resetIdleTimer();
   }
 
+  holdForDictation(modelPath, signal) {
+    if (signal.aborted || this.modelPath !== modelPath) return;
+    this.dictationModelPath = modelPath;
+    this.clearIdleTimer();
+    signal.addEventListener(
+      "abort",
+      () => {
+        this.dictationModelPath = null;
+        if (this.ready && this.modelPath === modelPath) this.resetIdleTimer();
+      },
+      { once: true }
+    );
+  }
+
   resetIdleTimer() {
     this.clearIdleTimer();
     // Explicit stop, model/context changes and app shutdown still release it.
-    if (this.keepResident) return;
+    if (
+      this.keepResident ||
+      (this.dictationModelPath && this.dictationModelPath === this.modelPath)
+    )
+      return;
     const timer = setTimeout(async () => {
       // Streaming chat talks to the port directly, so only the server knows
       // whether an answer that outlived the timeout is still being generated.

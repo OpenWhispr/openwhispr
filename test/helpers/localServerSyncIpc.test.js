@@ -195,3 +195,12 @@ test("a downloaded GPU binary requests an idle stop that preferences cannot canc
   assert.equal(stop.mock.callCount(), 1);
   assert.deepEqual(stop.mock.calls[0].arguments, [{ cancelOnReuse: false }]);
 });
+
+test("a settled cleanup route configures recording prewarm and a managed route clears it", async () => {
+  const models = [];
+  target.dictationCleanupPrewarm = { setModel: (modelId) => models.push(modelId) };
+  await sync({ signedIn: true, policySettled: false, cleanupMode: "local", cleanupModel: MODEL });
+  await sync({ signedIn: true, cleanupMode: "local", cleanupModel: MODEL });
+  await sync({ signedIn: true, cleanupMode: "enterprise", cleanupModel: "managed-model" });
+  assert.deepEqual(models, [MODEL, ""]);
+});

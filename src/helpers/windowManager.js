@@ -82,10 +82,8 @@ class WindowManager {
     // Set by IPCHandlers so its demo session dies with the demo kind on every
     // teardown path (id-matched end, onboarding exit, control panel closed).
     this.onOnboardingDemoTeardown = null;
-    // Set by main.js so the tray's listen item rebuilds with dictation state.
+    // Main observes accepted transitions for cleanup residency and the tray.
     this.onDictationStateChanged = null;
-    // Set by main.js: called as a dictation leaves idle, to pre-warm its models.
-    this.onDictationStart = null;
     // Set by IPCHandlers: the org-policy refusal of meeting recording, or null.
     this.getMeetingRecordingRefusal = () => null;
     // Set by IPCHandlers: the same refusal, fetching the policy if it hasn't loaded.
@@ -1046,11 +1044,10 @@ class WindowManager {
     if (nextState === DICTATION_LIFECYCLE.IDLE) this._dictationAttempt = null;
     if (nextState === this._dictationLifecycleState) return true;
 
-    if (this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE) this.onDictationStart?.();
     this._dictationLifecycleState = nextState;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.syncUserRecording();
-    this.onDictationStateChanged?.();
+    this.onDictationStateChanged?.(nextState);
     return true;
   }
 
@@ -1933,12 +1930,12 @@ class WindowManager {
   }
 
   registerMainWindowEvents() {
-    if (!this.mainWindow) {
+    const win = this.mainWindow;
+    if (!win) {
       return;
     }
 
     if (process.platform === "linux") {
-      const win = this.mainWindow;
       // backgroundThrottling:false keeps document.visibilityState visible even
       // after hide(). Native visibility owns the Linux input-region updates.
       for (const event of ["show", "hide", "minimize", "restore"]) {
@@ -1963,7 +1960,7 @@ class WindowManager {
       }
     }, 10000);
 
-    this.mainWindow.once("ready-to-show", () => {
+    win.once("ready-to-show", () => {
       clearTimeout(showTimeout);
       this.enforceMainWindowOnTop();
       if (!this.mainWindow.isVisible() && !this._floatingIconAutoHide) {
@@ -1971,14 +1968,17 @@ class WindowManager {
       }
     });
 
-    this.mainWindow.on("show", () => {
+    win.on("show", () => {
       this.enforceMainWindowOnTop();
       if (process.platform === "win32") this._restoreWin32MainWindowClicks();
     });
 
-    this.mainWindow.on("focus", () => this.enforceMainWindowOnTop());
+    win.on("focus", () => this.enforceMainWindowOnTop());
 
-    this.mainWindow.on("closed", () => {
+    win.on("closed", () => {
+      clearTimeout(showTimeout);
+      if (this.mainWindow !== win) return;
+      this.setDictationLifecycleState(DICTATION_LIFECYCLE.IDLE);
       this.dragManager.cleanup();
       this.mainWindow = null;
     });

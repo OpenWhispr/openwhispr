@@ -1,15 +1,38 @@
-// Loads the local cleanup model when a dictation starts, so a llama-server the
-// idle timeout stopped reloads while the user speaks rather than after the
-// transcript is ready. It never replaces a different model a running server
-// holds: another scope may be mid-request on it, and the cleanup request
-// still swaps models itself as it always has.
-function prewarmLocalCleanup(modelManager, env = process.env) {
-  const modelId = env.LOCAL_CLEANUP_MODEL;
-  if (env.CLEANUP_PROVIDER !== "local" || !modelId) return Promise.resolve(false);
-  if (modelManager.getServerStatus().running && modelManager.currentServerModelId !== modelId) {
-    return Promise.resolve(false);
+const debugLogger = require("./debugLogger");
+const { DICTATION_LIFECYCLE } = require("./dictationLifecycle");
+
+// The renderer can prepare and cancel without opening a recording. Once confirmed,
+// keep the take's model eligible through processing, including a slow transcription.
+function createLocalCleanupPrewarm(modelManager) {
+  let active = false;
+  let modelId = null;
+  let controller = null;
+
+  function update() {
+    controller?.abort();
+    controller = null;
+    if (!active || !modelId) return;
+
+    controller = new AbortController();
+    modelManager.prewarmServer(modelId, controller.signal).catch((error) => {
+      debugLogger.debug("llama-server dictation pre-warm failed", { error: error.message });
+    });
   }
-  return modelManager.prewarmServer(modelId);
+
+  return {
+    setModel(nextModel) {
+      if (modelId === nextModel) return;
+      modelId = nextModel;
+      update();
+    },
+    setLifecycleState(state) {
+      if (state !== DICTATION_LIFECYCLE.RECORDING && state !== DICTATION_LIFECYCLE.IDLE) return;
+      const recording = state === DICTATION_LIFECYCLE.RECORDING;
+      if (active === recording) return;
+      active = recording;
+      update();
+    },
+  };
 }
 
-module.exports = { prewarmLocalCleanup };
+module.exports = { createLocalCleanupPrewarm };

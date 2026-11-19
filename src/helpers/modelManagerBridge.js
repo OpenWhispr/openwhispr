@@ -958,13 +958,13 @@ class ModelManager {
     this.serverManager.cancelInference();
   }
 
-  async prewarmServer(modelId) {
+  async prewarmServer(modelId, dictationSignal) {
     try {
       return await runLocalModelOperation(
         this,
         "llm",
         modelId,
-        () => this._policyAllowedPrewarmServer(modelId),
+        () => this._policyAllowedPrewarmServer(modelId, dictationSignal),
         {
           memoryOnly: true,
           // The pre-warm may be checking whether another model is answering, so
@@ -979,11 +979,14 @@ class ModelManager {
         }
       );
     } catch (error) {
-      if (error.code === "POLICY_UNRESOLVABLE") {
+      if (error.code === "POLICY_UNRESOLVABLE" && !dictationSignal?.aborted) {
         this.localModelPolicy?.runOnceVerdictSettles(() => {
-          // A request in the meantime already started what it needs.
-          if (this.serverManager.ready || this.serverManager.startupPromise) return;
-          this.prewarmServer(modelId).catch((resumeError) => {
+          if (dictationSignal?.aborted) return;
+          // The launch warm-up is redundant once a request starts. An active
+          // recording still needs to hold a matching server through cleanup.
+          if (!dictationSignal && (this.serverManager.ready || this.serverManager.startupPromise))
+            return;
+          this.prewarmServer(modelId, dictationSignal).catch((resumeError) => {
             debugLogger.warn("Resumed llama-server pre-warm failed", {
               error: resumeError.message,
             });
@@ -994,8 +997,8 @@ class ModelManager {
     }
   }
 
-  async _policyAllowedPrewarmServer(modelId) {
-    if (!modelId) return false;
+  async _policyAllowedPrewarmServer(modelId, dictationSignal) {
+    if (!modelId || dictationSignal?.aborted) return false;
     this.ensureInitialized();
 
     const modelInfo = this.findModelById(modelId);
@@ -1008,14 +1011,21 @@ class ModelManager {
 
     try {
       // Nobody is waiting on a pre-warm, so it never gets in an answer's way.
-      await this.serverManager.start(
-        modelPath,
-        await this.serverStartOptions(modelInfo, { busyWaitMs: 0 })
-      );
+      const options = await this.serverStartOptions(modelInfo, { busyWaitMs: 0 });
+      if (dictationSignal?.aborted) return false;
+      await this.serverManager.start(modelPath, {
+        ...options,
+        prewarm: dictationSignal ? "dictation" : "background",
+        signal: dictationSignal,
+      });
       this.currentServerModelId = modelId;
+      if (dictationSignal && !dictationSignal.aborted) {
+        this.serverManager.holdForDictation(modelPath, dictationSignal);
+      }
       debugLogger.info("llama-server pre-warmed", { modelId });
       return true;
     } catch (error) {
+      if (dictationSignal && SERVER_LEFT_ALONE_CODES.has(error.code)) return false;
       debugLogger.warn("Failed to pre-warm llama-server", { error: error.message });
       return false;
     }

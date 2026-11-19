@@ -693,3 +693,23 @@ test("a binary refresh clears the loaded model after reuse without cancelling th
   assert.equal(serverManager.process, null);
   assert.equal(modelManager.currentServerModelId, null);
 });
+
+test("disabling cleanup during file validation leaves the stopped server stopped", async (t) => {
+  const { modelManager, serverManager, modelId, restarts } = await setup(t);
+  await modelManager.stopServer();
+  const checking = Promise.withResolvers();
+  const validated = Promise.withResolvers();
+  t.mock.method(modelManager, "checkModelValid", () => {
+    checking.resolve();
+    return validated.promise;
+  });
+  const take = new AbortController();
+  const warming = modelManager.prewarmServer(modelId, take.signal);
+  await checking.promise;
+  take.abort();
+  await modelManager.stopServerWhenIdle();
+  validated.resolve(true);
+  assert.equal(await warming, false);
+  assert.equal(serverManager.ready, false);
+  assert.deepEqual(restarts, []);
+});

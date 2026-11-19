@@ -317,7 +317,6 @@ const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
-const { prewarmLocalCleanup } = require("./src/helpers/localCleanupPrewarm");
 const { PermissionGuideManager } = require("./src/helpers/permissionGuideManager");
 const { AgentWindowManager } = require("./src/helpers/agentWindowManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
@@ -1343,16 +1342,9 @@ async function startApp() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
-  // The idle timeout frees the cleanup model between dictations; reload it as
-  // each dictation starts so the load overlaps speech, not the paste. Set before
-  // the main window exists: its dictation hotkey works from that moment.
-  windowManager.onDictationStart = () => {
-    const modelManager = require("./src/helpers/modelManagerBridge").default;
-    prewarmLocalCleanup(modelManager).catch((err) => {
-      debugLogger.debug("llama-server dictation pre-warm error (non-fatal)", {
-        error: err.message,
-      });
-    });
+  windowManager.onDictationStateChanged = (state) => {
+    ipcHandlers.dictationCleanupPrewarm.setLifecycleState(state);
+    trayManager?.updateTrayMenu();
   };
 
   // Create windows FIRST so the user sees UI as soon as possible.
@@ -1589,9 +1581,6 @@ async function startApp() {
 
   trayManager.setWindows(windowManager.mainWindow, windowManager.controlPanelWindow);
   trayManager.setWindowManager(windowManager);
-  // The tray's listen item is a toggle, so it has to rebuild when dictation
-  // starts or stops.
-  windowManager.onDictationStateChanged = () => trayManager.updateTrayMenu();
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 

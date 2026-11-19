@@ -1,45 +1,51 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { createLocalCleanupPrewarm } = require("../../src/helpers/localCleanupPrewarm");
 
-const { prewarmLocalCleanup } = require("../../src/helpers/localCleanupPrewarm.js");
-
-const LOCAL_ENV = { CLEANUP_PROVIDER: "local", LOCAL_CLEANUP_MODEL: "gemma-4-e2b-it-qat-q4_0" };
-
-function makeModelManager({ running = false, loadedModelId = null } = {}) {
-  const prewarmed = [];
-  return {
-    prewarmed,
-    currentServerModelId: loadedModelId,
-    getServerStatus: () => ({ running }),
-    prewarmServer: async (modelId) => {
-      prewarmed.push(modelId);
-      return true;
-    },
-  };
+function setup() {
+  const starts = [];
+  const prewarm = createLocalCleanupPrewarm({
+    prewarmServer: async (modelId, signal) => starts.push({ modelId, signal }),
+  });
+  return { prewarm, starts };
 }
 
-test("a stopped server reloads the local cleanup model", async () => {
-  const manager = makeModelManager();
-  assert.equal(await prewarmLocalCleanup(manager, LOCAL_ENV), true);
-  assert.deepEqual(manager.prewarmed, ["gemma-4-e2b-it-qat-q4_0"]);
+test("a cancelled preparation does not warm cleanup", () => {
+  const { prewarm, starts } = setup();
+  prewarm.setModel("cleanup");
+  prewarm.setLifecycleState("preparing");
+  prewarm.setLifecycleState("idle");
+  assert.deepEqual(starts, []);
 });
 
-test("a server already holding the cleanup model is only touched", async () => {
-  const manager = makeModelManager({ running: true, loadedModelId: "gemma-4-e2b-it-qat-q4_0" });
-  await prewarmLocalCleanup(manager, LOCAL_ENV);
-  assert.deepEqual(manager.prewarmed, ["gemma-4-e2b-it-qat-q4_0"]);
+test("a confirmed recording holds the same warm-up through processing and releases on idle", () => {
+  const { prewarm, starts } = setup();
+  prewarm.setModel("cleanup");
+  prewarm.setLifecycleState("recording");
+  prewarm.setModel("cleanup");
+  prewarm.setLifecycleState("recording");
+  prewarm.setLifecycleState("processing");
+  assert.deepEqual(
+    starts.map(({ modelId }) => modelId),
+    ["cleanup"]
+  );
+  assert.equal(starts[0].signal.aborted, false);
+  prewarm.setLifecycleState("idle");
+  assert.equal(starts[0].signal.aborted, true);
 });
 
-test("a server holding another scope's model is left alone", async () => {
-  const manager = makeModelManager({ running: true, loadedModelId: "qwen3-8b-q4_k_m" });
-  assert.equal(await prewarmLocalCleanup(manager, LOCAL_ENV), false);
-  assert.deepEqual(manager.prewarmed, []);
-});
-
-test("cleanup that is not local loads nothing", async () => {
-  for (const env of [{}, { CLEANUP_PROVIDER: "local" }, { LOCAL_CLEANUP_MODEL: "gemma" }]) {
-    const manager = makeModelManager();
-    assert.equal(await prewarmLocalCleanup(manager, env), false);
-    assert.deepEqual(manager.prewarmed, []);
-  }
+test("late settings warm an active take and changing route invalidates its previous warm-up", () => {
+  const { prewarm, starts } = setup();
+  prewarm.setLifecycleState("recording");
+  assert.equal(starts.length, 0);
+  prewarm.setModel("first");
+  prewarm.setModel("second");
+  prewarm.setModel("");
+  prewarm.setLifecycleState("idle");
+  prewarm.setLifecycleState("recording");
+  assert.deepEqual(
+    starts.map(({ modelId }) => modelId),
+    ["first", "second"]
+  );
+  assert.ok(starts.every(({ signal }) => signal.aborted));
 });
