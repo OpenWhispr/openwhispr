@@ -37,7 +37,7 @@ class FieldWatch(private val windowMs: Long = WINDOW_MS, private val settleMs: L
   }
 
   companion object {
-    const val WINDOW_MS = 30_000L
+    const val WINDOW_MS = 45_000L
     const val SETTLE_MS = 1_500L
   }
 }

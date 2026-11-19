@@ -7,7 +7,7 @@ import { dictionaryT } from './strings';
 
 /**
  * Dictionary's C11: after the bubble types into another app, the accessibility service reads that
- * one field again for 30 s. When the person fixes a word there, the edit arrives here, is learned
+ * one field again for 45 s. When the person fixes a word there, the edit arrives here, is learned
  * silently, and the bubble's tab says so with Undo. Nothing leaves the phone except as an ordinary
  * learned dictionary word.
  */

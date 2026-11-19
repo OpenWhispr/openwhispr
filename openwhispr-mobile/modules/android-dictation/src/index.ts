@@ -115,7 +115,7 @@ export const dictationEvents = AndroidDictation
       onCancel: () => void;
       onOpenResult: () => void;
       onStatusChange: () => void;
-      /** The field the bubble typed into changed within 30 s: its text then and now. */
+      /** The field the bubble typed into changed within 45 s: its text then and now. */
       onFieldEdited: (event: { before: string; after: string }) => void;
       /** Undo on the bubble's learned tab. */
       onLearnedUndo: (event: { words: string[] }) => void;

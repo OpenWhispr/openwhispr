@@ -16,7 +16,7 @@ class InsertionService : AccessibilityService() {
   private data class Target(val node: AccessibilityNodeInfo, val text: String, val start: Int, val end: Int)
   private var target: Target? = null
   private val handler = Handler(Looper.getMainLooper())
-  /** The field the last dictation went into, read again for 30 s so a fix there can be learned. */
+  /** The field the last dictation went into, read again for 45 s so a fix there can be learned. */
   private var watched: AccessibilityNodeInfo? = null
   private val watch = FieldWatch()
   private val settle = Runnable { reportEdit() }
@@ -27,7 +27,7 @@ class InsertionService : AccessibilityService() {
   override fun onServiceConnected() { instance = this; refreshTyping(); DictationService.emit?.invoke("onStatusChange", emptyMap()) }
   // Focus and window changes only decide whether the bubble shows. They check whether the focused
   // field takes text and isn't a password. A field's text is read when dictation starts, and again
-  // for 30 s after the bubble typed into it, from that field alone, so a word fixed there can be
+  // for 45 s after the bubble typed into it, from that field alone, so a word fixed there can be
   // learned (Dictionary's C11). Text changes anywhere else are ignored.
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
     if (event?.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) { onTextChanged(event); return }
