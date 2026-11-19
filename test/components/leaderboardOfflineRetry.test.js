@@ -32,7 +32,9 @@ test("leaderboard Retry reloads online and confirms offline sessions with or wit
       "/lib/auth": "export const signInWithSSO = async () => ({});",
       "/lib/authRequestContext": `
         export const getValidatedAuthGeneration = () => globalThis.__leaderboardRetry.offline ? null : 1;
-        export const getAuthRequestContextSnapshot = () => ({ sessionUserId: "user-a" });
+        const authSnapshot = { sessionUserId: "user-a" };
+        export const getAuthRequestContextSnapshot = () => authSnapshot;
+        export const subscribeAuthRequestContext = () => () => {};
       `,
       "/stores/workspaceStore": `
         const state = {

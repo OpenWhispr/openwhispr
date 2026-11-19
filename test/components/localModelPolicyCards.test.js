@@ -14,6 +14,10 @@ function findElement(node, predicate) {
   return predicate(node) ? node : findElement(node.props?.children, predicate);
 }
 
+// The card's selection is an overlay button inside the card root.
+const selectionButton = (card) =>
+  findElement(card, (node) => node.type === "button" && "aria-pressed" in node.props);
+
 test("local model cards only select approved installed choices and keep Delete available", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
@@ -47,7 +51,7 @@ test("local model cards only select approved installed choices and keep Delete a
       onDownload: (id) => downloaded.push(id),
       onDelete: (id) => deleted.push(id),
     });
-    tree.props.onClick();
+    selectionButton(tree).props.onClick();
     assert.equal(selected.length, Number(fixture.selectable), JSON.stringify(fixture));
     const downloadButton = findElement(
       tree,

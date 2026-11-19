@@ -110,7 +110,7 @@ async function setup(t) {
       "/ui/dialog": `export const ConfirmDialog = () => null;`,
       "/hooks/useDialogs": `const noop = () => {}; const dialogs = {confirmDialog: {open: false}, showConfirmDialog: noop, hideConfirmDialog: noop}; export const useDialogs = () => dialogs;`,
       "/ui/useToast": `const value = {toast() {}}; export const useToast = () => value;`,
-      "/hooks/usePolicy": `const policy = {status: "unmanaged", policy: null}; export const usePolicySnapshot = () => policy;`,
+      "/hooks/usePolicy": `const policy = {status: "unmanaged", policy: null}; export const usePolicySnapshot = () => policy; export const useAssemblyAiDictationCleanup = () => false; export const useByokTranscriptionModelAllowed = () => () => true;`,
       "/stores/policyStore": `import {create} from "zustand"; export const usePolicyStore = create(() => ({agentAllowed: true})); globalThis.__gpuPolicy = usePolicyStore;`,
       "/stores/policyRules": `export * from "/stores/policyRules.ts"; export const isAgentAllowed = state => state.agentAllowed;`,
       "/i18n": `export const normalizeUiLanguage = value => value || "en"; export default {language: "en", changeLanguage: async () => {}};`,
@@ -260,7 +260,11 @@ test("retained panels poll only the visible subtab across hide and revisit", asy
         })
       );
       renderActive = (active) =>
-        h.renderSpeech(active, { dictation: panels[0], noteRecording: panels[1], upload: panels[2] });
+        h.renderSpeech(active, {
+          dictation: panels[0],
+          noteRecording: panels[1],
+          upload: panels[2],
+        });
     }
     const switchTab = (tab) =>
       React.act(async () => (isLlm ? globalThis.__gpuLlmTab : globalThis.__gpuSpeechTab)(tab));
@@ -299,7 +303,11 @@ test("retained panels poll only the visible subtab across hide and revisit", asy
           settingsScope: "dictationAgentVision",
         })
       );
-      assert.equal(h.counts.llama, vision + 1, "a visible agent-vision editor reads its tab status");
+      assert.equal(
+        h.counts.llama,
+        vision + 1,
+        "a visible agent-vision editor reads its tab status"
+      );
       await h.tick(5000);
       assert.equal(h.counts.llama, vision + 2);
       await React.act(async () => h.navigation.getState().openSettings("general"));

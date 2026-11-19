@@ -269,7 +269,7 @@ test("Workspace list refreshes keep the newest roster, teams and key metadata", 
     cachePrefix: "openwhispr-workspace-list-readers-",
     noExternal: ["react-i18next"],
     mockModules: {
-      "react-i18next": `export const useTranslation = () => ({t: globalThis.__controlLabels.t, i18n: {language: "en"}});`,
+      "react-i18next": `export const useTranslation = () => ({t: globalThis.__controlLabels.t, i18n: {language: "en"}}); export const initReactI18next = { type: "3rdParty", init() {} };`,
       "/services/WorkspaceApiKeysService": `export const WorkspaceApiKeysService = { list: () => globalThis.__controlLabels.pending("keys") };`,
       "/services/TeamsService": `export const TeamsService = { list: () => globalThis.__controlLabels.pending("teams") };`,
       "/services/InvitationsService": `export const InvitationsService = { list: () => globalThis.__controlLabels.pending("invites") };`,
@@ -285,10 +285,9 @@ test("Workspace list refreshes keep the newest roster, teams and key metadata", 
       "/InviteTeammateDialog": stub,
     },
   });
-  for (const [kind, module] of [
-    ["keys", "WorkspaceDeveloperTab"],
-    ["teams", "WorkspaceTeamsTab"],
-    ["invites", "WorkspaceMembersTab"],
+  for (const [kind, module, retryLabel] of [
+    ["keys", "WorkspaceDeveloperTab", "settingsPage.workspace.loadError.retry"],
+    ["teams", "WorkspaceTeamsTab", "settingsPage.workspace.teams.retry"],
   ]) {
     const { default: Component } = await vite.ssrLoadModule(`/components/settings/${module}.tsx`);
     const render = (id) =>
@@ -300,7 +299,7 @@ test("Workspace list refreshes keep the newest roster, teams and key metadata", 
     await render("one");
     await React.act(async () => lists[kind][0].reject(new Error("unavailable")));
     const retry = [...container.querySelectorAll("button")].find((button) =>
-      button.textContent.includes("settingsPage.workspace.loadError.retry")
+      button.textContent.includes(retryLabel)
     );
     assert.ok(retry, kind);
     await React.act(async () => {

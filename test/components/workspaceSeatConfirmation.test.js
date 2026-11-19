@@ -89,6 +89,7 @@ test("seat confirmations belong to the current billing snapshot and request", as
     mockModules: {
       "react-i18next": `const t = (key, options) => options?.count != null ? key + ":" + options.count : key; export const useTranslation = () => ({t});`,
       "/stores/workspaceStore": `export const useWorkspaceStore = globalThis.__seatTest.store;`,
+      "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: true, isOfflineAccount: false });`,
       "/services/WorkspacesService": `export const WorkspacesService = globalThis.__seatTest.service;`,
       "/components/icons": `export const ExternalLink = () => null; export const Plus = () => null; export const Loader2 = () => null;`,
       "/ui/useToast": `export const useToast = () => ({toast: value => globalThis.__seatTest.toasts.push(value)});`,

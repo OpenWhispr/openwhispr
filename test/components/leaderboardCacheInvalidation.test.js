@@ -122,7 +122,12 @@ for (const scenario of cases) {
     const vite = await createRendererServer(t, {
       cachePrefix: "openwhispr-leaderboard-cache-invalidation-",
       mockModules: {
-        "/lib/authRequestContext": "export const getValidatedAuthGeneration = () => 7;",
+        "/lib/authRequestContext": `
+          export const getValidatedAuthGeneration = () => 7;
+          const authSnapshot = { sessionUserId: "user-a" };
+          export const getAuthRequestContextSnapshot = () => authSnapshot;
+          export const subscribeAuthRequestContext = () => () => {};
+        `,
         "/stores/workspaceStore": `
           const state = {
             loaded: true, workspaces: [], activeWorkspaceId: null,

@@ -752,7 +752,7 @@ test("SettingsPage retains Speech state and current section actions", async (t) 
       api.deleteAllAudio = async () => ({ deleted: 3, failed: true });
       const clearButton = () =>
         observed.buttons.findLast(
-          (button) => button.children === "settingsPage.privacy.clearAllAudio"
+          (button) => button.children === "settingsPage.privacy.clearHistoryAudio"
         );
       assert.equal(clearButton().disabled, false);
       await React.act(async () => clearButton().onClick());
@@ -760,11 +760,11 @@ test("SettingsPage retains Speech state and current section actions", async (t) 
       assert.deepEqual(observed.toasts.at(-1), { title: "common.error", variant: "destructive" });
       const usageRow = () =>
         observed.rows.findLast((row) => row.label === "settingsPage.privacy.audioStorageUsage");
-      assert.equal(usageRow().description, "settingsPage.privacy.audioStorageFiles:2");
+      assert.equal(usageRow().description, "settingsPage.privacy.audioStorageHistoryFiles:2");
       await React.act(async () => resolveOldUsage({ fileCount: 20, totalBytes: 2000 }));
       assert.equal(
         usageRow().description,
-        "settingsPage.privacy.audioStorageFiles:2",
+        "settingsPage.privacy.audioStorageHistoryFiles:2",
         "old mount usage cannot overwrite post-delete evidence"
       );
       assert.equal(clearButton().disabled, false);
@@ -772,10 +772,10 @@ test("SettingsPage retains Speech state and current section actions", async (t) 
       api.getAudioStorageUsage = async () => ({ fileCount: 0, totalBytes: 0 });
       await React.act(async () => clearButton().onClick());
       assert.deepEqual(observed.toasts.at(-1), {
-        title: "settingsPage.privacy.clearAllAudio",
+        title: "settingsPage.privacy.clearHistoryAudio",
         variant: "default",
       });
-      assert.equal(usageRow().description, "settingsPage.privacy.audioStorageEmpty");
+      assert.equal(usageRow().description, "settingsPage.privacy.audioStorageHistoryEmpty");
       assert.equal(clearButton().disabled, true);
       await React.act(async () => root.unmount());
       root = null;

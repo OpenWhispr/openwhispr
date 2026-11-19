@@ -56,6 +56,7 @@ const SPEECH_MOCKS = {
       },
       transcriptionMode: "local", localTranscriptionProvider: "whisper", whisperModel: "base",
       useLocalWhisper: true, showTranscriptionPreview: false,
+      selfHostedSttHeaders: { dictation: [], upload: [] },
       meetingTranscriptionMode: "local", meetingLocalTranscriptionProvider: "whisper", meetingWhisperModel: "base",
       uploadTranscriptionMode: "local", uploadLocalTranscriptionProvider: "whisper", uploadWhisperModel: "base",
       whisperVadThreshold: 0.5, whisperVadMinSpeechDurationMs: 250,
@@ -149,9 +150,7 @@ async function mountSettingsPageOwner(
   t,
   { section = "system", extraMocks = {}, speech = false } = {}
 ) {
-  const navigatorBefore = speech
-    ? Object.getOwnPropertyDescriptor(globalThis, "navigator")
-    : null;
+  const navigatorBefore = speech ? Object.getOwnPropertyDescriptor(globalThis, "navigator") : null;
   const mounted = await mountAuditDom(t);
   const observed = (globalThis.__settingsPageOwner = { toasts: [] });
   if (speech) {
@@ -193,7 +192,7 @@ async function mountSettingsPageOwner(
     "/LocalOffInstalledModels": "export function LocalOffInstalledModels() { return null; }",
     "/hooks/usePolicy": `export const usePolicySnapshot = () => ({status: "unmanaged", policy: null}); export const usePolicyModeOptions = modes => ({modes});`,
     "/stores/policyStore": `const state = {status: "unmanaged", policy: null}; export const usePolicyStore = select => select(state); usePolicyStore.getState = () => state;`,
-    "/stores/enterpriseIdentityStore": `export const useManagedScopeResolution = () => ({kind: "unmanaged"}); export const getManagedScopeResolution = () => ({kind: "unmanaged"});`,
+    "/stores/enterpriseIdentityStore": `export const useManagedScopeResolution = () => ({kind: "manual"}); export const getManagedScopeResolution = () => ({kind: "manual"});`,
     "/stores/workspaceStore": `const state = {workspaces: [], loaded: false}; export const useWorkspaceStore = select => select(state);`,
     "/stores/noteStore.js": `export const useMigration = () => null; export const startMigration = async () => {}; export const loadFolders = () => {}; export const initializeNotesTree = () => {};`,
     "/stores/meetingRecordingStore": `export const stopRecording = async () => {}; export const useMeetingRecordingStore = {getState: () => ({isRecording: false})};`,

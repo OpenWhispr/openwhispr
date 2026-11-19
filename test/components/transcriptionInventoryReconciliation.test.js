@@ -50,7 +50,7 @@ test("retained transcription pickers reconcile only confirmed, current backend i
         const dialogs = {confirmDialog: {open: false}, showConfirmDialog: noop, hideConfirmDialog: noop, showAlertDialog: noop};
         export const useDialogs = () => dialogs;`,
       "/components/ui/useToast": `const context = {toast() {}}; export const useToast = () => context;`,
-      "/hooks/usePolicy": `const policy = {status: "unmanaged", policy: null}; export const usePolicySnapshot = () => policy;`,
+      "/hooks/usePolicy": `const policy = {status: "unmanaged", policy: null}; export const usePolicySnapshot = () => policy; export const useAssemblyAiDictationCleanup = () => false; export const useByokTranscriptionModelAllowed = () => () => true;`,
       "/i18n": `export const normalizeUiLanguage = value => value || "en"; export default {language: "en", changeLanguage: async () => {}};`,
       "/stores/settingsStore": `export * from "/stores/settingsStore.ts";`,
     },

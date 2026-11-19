@@ -119,7 +119,7 @@ test("real ASR picker cards keep downloaded-only selection and disabled cancella
       "react-i18next": `export const useTranslation = () => ({t: (key) => key});`,
       "/i18n": `export const normalizeUiLanguage = value => value || "en"; export default {language: "en", changeLanguage: async () => {}};`,
       "/stores/settingsStore": `export * from "/stores/settingsStore.ts";`,
-      "/hooks/usePolicy": `export const usePolicySnapshot = () => ({status:"unmanaged"});`,
+      "/hooks/usePolicy": `export const usePolicySnapshot = () => ({status:"unmanaged"}); export const useAssemblyAiDictationCleanup = () => false; export const useByokTranscriptionModelAllowed = () => () => true;`,
       "/hooks/useModelDownload": `export const useModelDownload = () => ({ downloads: {}, downloadModel() {}, deleteModel() {}, cancelDownload() {}, isDownloadingModel: id => id === "small", isCancellingModel: id => id === "small" });`,
       "/hooks/useDialogs": `export const useDialogs = () => ({confirmDialog: {}, showConfirmDialog: () => globalThis.__asrCalls.push("confirm"), hideConfirmDialog() {}});`,
       "/ui/dialog": `export const ConfirmDialog = () => null;`,

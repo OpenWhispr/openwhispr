@@ -28,6 +28,7 @@ test("LLM policy removal restores only owned, visible panel focus in StrictMode"
       "/stores/settingsStore": `
           import { create } from "zustand";
           export const useSettingsStore = create(() => ({ useCleanupModel: false, autoGenerateNoteTitle: false }));
+          export const selectPolicyEffectiveSettings = (state) => state;
         `,
       "/ProviderIcon": `export const ProviderIcon = () => null;`,
       "/ui/SettingsSection": `

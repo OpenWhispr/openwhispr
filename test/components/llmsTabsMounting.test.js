@@ -88,6 +88,7 @@ test("LLM keep-alive isolates retained editors from Settings section visibility"
           modelVersion: 0,
         }));
         globalThis.__llmSettingsStore = useSettingsStore;
+        export const selectPolicyEffectiveSettings = (state) => state;
       `,
       "/ui/ProviderTabs": `
         export function ProviderTabs({ selectedId, onSelect }) {

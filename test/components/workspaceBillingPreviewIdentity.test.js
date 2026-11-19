@@ -56,7 +56,7 @@ test("mounted Enterprise quotes follow billing snapshots, request/session order 
   const vite = await createRendererServer(t, {
     noExternal: ["react-i18next"],
     mockModules: {
-      "react-i18next": `const t = key => key; export const useTranslation = () => ({t});`,
+      "react-i18next": `const t = key => key; export const useTranslation = () => ({t}); export const initReactI18next = { type: "3rdParty", init() {} };`,
       "/stores/workspaceStore": `export const useWorkspaceStore = globalThis.__upgrade.store;`,
       "/services/WorkspacesService": `export const WorkspacesService = globalThis.__upgrade.service;`,
       "/ui/useToast": `export const useToast = () => ({toast: value => globalThis.__upgrade.toasts.push(value)});`,

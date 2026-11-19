@@ -26,7 +26,7 @@ async function mountPromptStudio(t) {
       "/utils/agentName": `export const useAgentName = () => ({agentName: "Whisper"});`,
       "/models/ModelRegistry": `export const getModelProvider = () => "openai";`,
       "/utils/logger": `export default {debug() {}, error() {}};`,
-      "/utils/snippets": `export const getDictionaryHintWords = settings => settings.customDictionary;`,
+      "/utils/snippets": `export const getLlmDictionaryWords = settings => settings.customDictionary; export const splitSharedDictionaryWords = words => ({personal: [...words], shared: []});`,
       "/helpers/dictationAgentInference": `export const resolveDictationAgentInference = settings => ({reachable: true, model: settings.dictationAgentModel || "auto", displayProvider: settings.dictationAgentProvider || "openwhispr", config: {provider: "openwhispr", customApiKey: settings.dictationAgentCustomApiKey, lanUrl: settings.dictationAgentRemoteUrl}});`,
       "/helpers/dictationTranslationInference": `export const resolveDictationTranslationInference = settings => ({reachable: true, model: settings.translationModel || "auto", displayProvider: settings.translationProvider || "openwhispr", config: {provider: "openwhispr", inferenceScope: "dictationTranslation", customApiKey: settings.translationCustomApiKey, lanUrl: settings.translationRemoteUrl}});`,
       "/stores/settingsStore": `

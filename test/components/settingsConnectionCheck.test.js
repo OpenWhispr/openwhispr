@@ -79,7 +79,7 @@ test("retained LLM editors share ancestor visibility, keep credential drafts and
     noExternal: ["react-i18next"],
     mockModules: {
       "react-i18next": `const t = key => key; export const useTranslation = () => ({t}); export const initReactI18next = {type: "3rdParty", init() {}};`,
-      "/hooks/usePolicy": `const policy = {status: "unmanaged", policy: null}; export const usePolicySnapshot = () => policy; export const usePolicyModeOptions = (modes, _scope, current) => ({modes, effectiveMode: current, isModeAllowed: () => true});`,
+      "/hooks/usePolicy": `const policy = {status: "unmanaged", policy: null}; export const usePolicySnapshot = () => policy; export const usePolicyModeOptions = (modes, _scope, current) => ({modes, effectiveMode: current, isModeAllowed: () => true}); export const useAssemblyAiDictationCleanup = () => false; export const useByokTranscriptionModelAllowed = () => () => true;`,
       "/settings/GpuDeviceSelector": `export default () => null;`,
       "/ui/PromptStudio": `export default () => null;`,
       "/ui/useToast": `const value = {toast() {}}; export const useToast = () => value;`,
