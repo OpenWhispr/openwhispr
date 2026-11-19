@@ -53,6 +53,10 @@ jest.mock('@/lib/notes/noteRouteOwner', () => ({
 }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
 jest.mock('../../home/kit', () => ({
+  // Settings' look reads these at import time.
+  glassEdge: { borderColor: 'rgba(0,0,0,0.06)', boxShadow: 'none' },
+  TILE_FILL: '#F1F1F0',
+  type: { section: {} },
   home: { text: '#000', secondary: '#666', tertiary: '#999', accent: '#15d', surface: '#fff' },
   gloss: {},
   glossPressed: {},
@@ -90,6 +94,7 @@ jest.mock('../meetingStart', () => ({
 jest.mock('../folderMenu', () => ({ useFolderMenu: () => ({ open: jest.fn(), sheets: null }) }));
 jest.mock('../pendingDeletes', () => ({ useHiddenNoteIds: () => [] }));
 jest.mock('../rows', () => ({ dayOf: () => 'today', timeOf: () => '10:00' }));
+jest.mock('../CalendarPrompt', () => ({ CalendarPrompt: () => null }));
 
 import NotesRoot from '../NotesRoot';
 import { setNotesScope } from '../library';

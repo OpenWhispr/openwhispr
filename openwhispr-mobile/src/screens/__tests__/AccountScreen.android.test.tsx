@@ -8,6 +8,11 @@ import SettingsScreen from '../AccountScreen.android';
 const mockPush = jest.fn();
 const mockSignOut = jest.fn();
 let mockUser: { id: string; name?: string; email?: string; isAnonymous: boolean } | null;
+jest.mock('@/store/useGoogleCalendarStore', () => {
+  const state = { accounts: [], load: async () => undefined };
+  return { useGoogleCalendarStore: (select: (value: unknown) => unknown) => select(state) };
+});
+jest.mock('@/android/calendar/connect', () => ({ needsReconnect: () => false }));
 jest.mock('@/android/navigationBar', () => ({
   useNavigationBar: () => ({ buttons: true, inset: 0 }),
   useNavigationBarCanvas: () => undefined,
