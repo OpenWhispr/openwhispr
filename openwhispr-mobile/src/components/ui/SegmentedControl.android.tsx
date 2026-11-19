@@ -62,7 +62,7 @@ export function SegmentedControl<T extends string>({
             style={({ pressed }) => [
               {
                 flex: scrollable ? undefined : 1,
-                minHeight: 40,
+                minHeight: 38,
                 paddingHorizontal: 16,
                 borderRadius: 999,
                 flexDirection: 'row',
