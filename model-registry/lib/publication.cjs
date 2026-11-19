@@ -44,10 +44,26 @@ const previousSchema = z.object({
   schemaVersion: z.union([z.literal(1), z.literal(SCHEMA_VERSION)]),
   manifestVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   sourceCommit: z.string().regex(/^[a-f0-9]{40}$/),
+  contractHashes: z.record(z.string(), z.string()).optional(),
   testedClientContracts: z.array(z.string()).optional(),
   data: z.record(z.string(), z.unknown()),
 });
 const readPreviousManifest = (input) => previousSchema.parse(input);
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// What apps receive is the catalog, the reader it was made with and the readers it was
+// tested with. A commit that leaves all three as published (documentation, tests, a
+// dependency update) is not a new version for every app to download.
+function alreadyPublished({ data, previous, sourceCommit, testedClientContracts }) {
+  if (previous?.schemaVersion !== SCHEMA_VERSION) return false;
+  if (previous.sourceCommit === sourceCommit) return true;
+  return (
+    same(previous.contractHashes, readerHashes()) &&
+    same(previous.testedClientContracts, testedClientContracts) &&
+    same(previous.data, validateCatalog(data))
+  );
+}
 
 function createPublication({
   data,
@@ -59,13 +75,16 @@ function createPublication({
   keyId,
   privateKey,
   rollback = false,
+  // A dry run signs even what is already published, so a pull request that changes only
+  // how publishing works still exercises it.
+  force = false,
   droppedClientContracts = [],
 }) {
   if (sourceCommit !== headCommit) throw new Error("Stale source: main has advanced");
   if (
     !rollback &&
-    previous?.sourceCommit === sourceCommit &&
-    previous.schemaVersion === SCHEMA_VERSION
+    !force &&
+    alreadyPublished({ data, previous, sourceCommit, testedClientContracts })
   )
     return null;
   assertCompatibleCatalog(data, seed, { floor: seed });

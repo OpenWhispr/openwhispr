@@ -44,6 +44,14 @@ test("reruns are idempotent; rollbacks and removals are handled explicitly", () 
   const first = open(createPublication({ ...options }));
   assert.equal(createPublication({ ...options, previous: first }), null);
   assert.equal(open(createPublication({ ...options, previous: first, rollback: true })).manifestVersion, 2);
+  // A later commit that leaves the catalog and its readers as published is not a version,
+  // read back from the published branch as the publishing run reads it.
+  const later = { ...options, sourceCommit: "e".repeat(40), headCommit: "e".repeat(40) };
+  const published = readPreviousManifest(first);
+  assert.equal(createPublication({ ...later, previous: published }), null);
+  assert.equal(open(createPublication({ ...later, previous: published, force: true })).manifestVersion, 2);
+  const retested = { ...later, testedClientContracts: [...tested, "d".repeat(64)] };
+  assert.equal(open(createPublication({ ...retested, previous: published })).manifestVersion, 2);
   const data = structuredClone(base);
   data.cloudProviders[0].models.push({ id: "new-published", name: "New", description: "Fixture" });
   const next = { ...options, sourceCommit: "b".repeat(40), headCommit: "b".repeat(40) };

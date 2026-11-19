@@ -73,6 +73,7 @@ const envelope = createPublication({
   data,
   previous,
   rollback: !!rollbackTo,
+  force: dryRun,
   sourceCommit,
   headCommit: latestMain(),
   testedClientContracts: checkCompatibility(data),
@@ -82,9 +83,7 @@ const envelope = createPublication({
 });
 if (!envelope) {
   console.log(
-    dryRun
-      ? "Dry run: this registry source is already published, so there is nothing to sign."
-      : "This source is already published."
+    `Nothing to publish: version ${previous.manifestVersion} already serves this catalog and its readers.`
   );
   process.exit(0);
 }
