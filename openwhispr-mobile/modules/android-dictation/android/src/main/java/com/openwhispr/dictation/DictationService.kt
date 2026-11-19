@@ -56,6 +56,8 @@ class DictationService : Service() {
   private val toast by lazy { BottomToast(this, windows, font) }
 
   private var root: BubbleRoot? = null
+  /** Dictionary's C11: "Learned “Synty”" · Undo, sliding out from behind the bubble. */
+  private var learnedTab: LearnedTab? = null
   private var layout: WindowManager.LayoutParams? = null
   private var face: BubbleFace? = null
   private var cancelButton: View? = null
@@ -223,7 +225,7 @@ class DictationService : Service() {
     }
     val visible = BubblePolicy.visible(appVisible, practiceVisible, InsertionService.instance != null, typing, hidden, busy)
     if (!visible && dragging) endDrag()
-    if (!visible) { closeMenu(); if (tab.showing) tab.hide(false) }
+    if (!visible) { closeMenu(); if (tab.showing) tab.hide(false); learnedTab?.hide(false) }
     root?.visibility = if (visible) View.VISIBLE else View.GONE
   }
   fun leavePractice() {
@@ -314,6 +316,11 @@ class DictationService : Service() {
         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
       PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
     createTarget()
+    // Added before the bubble, so the tab slides out from underneath it.
+    learnedTab = LearnedTab(this, windows, font,
+      onUndo = { words -> emit?.invoke("onLearnedUndo", mapOf("words" to words)) },
+      onRedo = { words -> emit?.invoke("onLearnedRedo", mapOf("words" to words)) },
+      onOpen = ::openDictionary).also { it.create() }
     root = view; layout = params
     render()
     windows.addView(view, params)
@@ -378,6 +385,30 @@ class DictationService : Service() {
     params.y = BubblePolicy.bubbleTop(savedTop, keyboardTop, height, size, dp(16f).toInt(), dp(48f).toInt()) - shadowRoom + (size - shown) / 2 - above
     if (view.isAttachedToWindow) windows.updateViewLayout(view, params)
     tab.follow(bubbleRect(), dockRight)
+    learnedTab?.follow(bubbleRect(), dockRight)
+  }
+
+  /**
+   * Shows the learned tab beside the Ready bubble while it is on screen. A bubble shrunk to a dot
+   * first gives one ring pulse, so the eye finds it. Returns whether it showed.
+   */
+  fun showLearnedTab(text: LearnedTabText): Boolean {
+    val learned = learnedTab ?: return false
+    // Never over a status tab or an open menu: the bubble's own message comes first.
+    if (state != BubbleState.READY || root?.isShown != true || dragging || tab.showing || menu != null) {
+      android.util.Log.i("OpenWhisprLearn", "Learned pill not shown: state=$state shown=${root?.isShown} dragging=$dragging")
+      return false
+    }
+    android.util.Log.i("OpenWhisprLearn", "Learned pill shown (${text.words.size} words)")
+    val dot = appearance.shrinkToDot && shrink >= 1f
+    if (dot && !learned.showing) {
+      face?.pulse { learned.show(text, bubbleRect(), dockRight, true) }
+    } else learned.show(text, bubbleRect(), dockRight, dot)
+    return true
+  }
+  private fun openDictionary() {
+    emit?.invoke("onOpenDictionary", emptyMap())
+    packageManager.getLaunchIntentForPackage(packageName)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
   }
   private fun menuAboveHeight(): Int {
     val open = menu ?: return 0
@@ -403,6 +434,8 @@ class DictationService : Service() {
     handler.removeCallbacks(stillWriting)
     if (value == state) { updateVisibility(); syncPipeline(); return }
     val previous = state
+    // A new dictation takes the bubble's place; the learned tab goes at once.
+    if (value != BubbleState.READY) learnedTab?.hide(false)
     state = value
     if (value != BubbleState.PROCESSING && tab.showing && previous == BubbleState.PROCESSING && !offering(value)) tab.hide()
     when (value) {
@@ -721,6 +754,7 @@ class DictationService : Service() {
   private fun startDrag() {
     dragging = true
     closeMenu()
+    learnedTab?.hide(false)
     val holder = target ?: return
     val params = targetLayout ?: return
     params.y = (targetCenter().second - dp(44f)).toInt()
@@ -877,6 +911,7 @@ class DictationService : Service() {
     handler.removeCallbacksAndMessages(null); snap?.cancel(); shrinking?.cancel(); recorder?.close(); recorder = null
     tab.hide(false); toast.hide(false)
     target?.let { runCatching { windows.removeView(it) } }; target = null; targetCircle = null
+    learnedTab?.destroy(); learnedTab = null
     root?.let { runCatching { windows.removeView(it) } }; root = null; face = null; menu = null; column = null; cancelButton = null
     InsertionService.instance?.clearTarget(); deliver("onCancel")
     application.unregisterActivityLifecycleCallbacks(screens); HeadlessPipeline.stop(this)

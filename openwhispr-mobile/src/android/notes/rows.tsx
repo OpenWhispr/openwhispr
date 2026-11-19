@@ -3,12 +3,12 @@ import { Pressable, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
-  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
+  withSpring,
   withTiming,
-  Extrapolation,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
@@ -183,7 +183,6 @@ function SelectCircle({ selected }: { selected: boolean }) {
 }
 
 const ACTION_WIDTH = 74;
-const OPEN_OFFSET = ACTION_WIDTH * 2;
 
 /**
  * Figma L9, swipe left. A short swipe settles 148 dp left on Move and Delete; past half the
@@ -196,15 +195,21 @@ export function SwipeRow({
   onDelete,
   onMove,
   noteId,
+  restored,
   enabled = true,
 }: {
   children: React.ReactNode;
   onDelete: () => void;
-  onMove: () => void;
-  noteId: number;
+  /** Without it the row offers Delete alone and settles 74 dp open (Dictionary's C4a). */
+  onMove?: () => void;
+  /** A note row: Undo of its delete plays the row back in (`consumeRestored`). */
+  noteId?: number;
+  /** For rows that aren't notes: this row is coming back from an Undo. */
+  restored?: boolean;
   enabled?: boolean;
 }) {
   const t = useNotesT();
+  const OPEN_OFFSET = onMove ? ACTION_WIDTH * 2 : ACTION_WIDTH;
   const reduceMotion = useReduceMotion();
   const { width: screenWidth } = useWindowDimensions();
   const [rowWidth, setRowWidth] = useState(screenWidth - 32);
@@ -212,43 +217,74 @@ export function SwipeRow({
   const x = useSharedValue(0);
   const start = useSharedValue(0);
   const armed = useSharedValue(0);
+  // 1 while the row slides away to be deleted, 2 while Undo slides it back: the red behind it
+  // stays full while it goes, and is hidden while it comes back.
+  const phase = useSharedValue(0);
   const height = useSharedValue(-1);
   const [open, setOpen] = useState(false);
-  const restoring = useRef(consumeRestored(noteId));
+  const restoring = useRef(noteId != null ? consumeRestored(noteId) : Boolean(restored));
 
   // Undo plays the delete backwards: the gap opens, then the row slides in from the left.
   useEffect(() => {
     if (!restoring.current || !measured) return;
     restoring.current = false;
     if (reduceMotion) return;
+    phase.value = 2;
     height.value = 0;
     x.value = -rowWidth;
     height.value = withTiming(measured, { duration: 180 }, () => {
-      x.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+      x.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) }, () => {
+        phase.value = 0;
+      });
     });
-  }, [measured, reduceMotion, rowWidth, height, x]);
+  }, [measured, reduceMotion, rowWidth, height, x, phase]);
 
   const tick = (strong: boolean) => safeHaptics(strong ? 'light' : 'selection');
   const finishDelete = () => {
     setOpen(false);
     onDelete();
   };
-  const removeRow = () => {
+  const removeRow = (velocity = 0) => {
     'worklet';
     if (reduceMotion) {
       runOnJS(finishDelete)();
       return;
     }
-    x.value = withTiming(-rowWidth, { duration: 200, easing: Easing.out(Easing.cubic) }, () => {
-      height.value = withTiming(0, { duration: 180 }, () => runOnJS(finishDelete)());
-    });
+    phase.value = 1;
+    // One motion: the row carries on off the screen at the speed it was thrown (slower rows take
+    // up to 220 ms), and the gap starts closing before it has quite gone.
+    const remaining = rowWidth + x.value;
+    const speed = Math.max(Math.abs(velocity), 1800);
+    const slide = Math.min(220, Math.max(140, (remaining / speed) * 1000));
+    x.value = withTiming(-rowWidth, { duration: slide, easing: Easing.out(Easing.quad) });
+    height.value = withDelay(
+      slide * 0.6,
+      withTiming(0, { duration: 200, easing: Easing.inOut(Easing.quad) }, (finished) => {
+        if (finished) runOnJS(finishDelete)();
+      }),
+    );
   };
 
   const close = () => {
-    x.value = withTiming(0, { duration: reduceMotion ? 0 : 180 });
+    settle(0);
     setOpen(false);
   };
 
+  // How far a row can rest open: the Delete area (and Move beside it in Notes), never further.
+  // Letting go short of that snaps open or shut; past half the row, or with a quick flick, the row
+  // goes in one motion.
+  const settle = (to: number, velocity = 0) => {
+    'worklet';
+    x.value = reduceMotion
+      ? to
+      : withSpring(to, {
+          damping: 26,
+          stiffness: 320,
+          mass: 0.9,
+          velocity,
+          overshootClamping: true,
+        });
+  };
   const pan = Gesture.Pan()
     .enabled(enabled)
     .activeOffsetX([-12, 12])
@@ -265,20 +301,20 @@ export function SwipeRow({
         runOnJS(tick)(past === 1);
       }
     })
-    .onEnd(() => {
+    .onEnd((event) => {
       const distance = -x.value;
-      if (armed.value === 1) {
+      const flick = event.velocityX < -1100 && distance > OPEN_OFFSET * 0.4;
+      if (armed.value === 1 || flick) {
         armed.value = 0;
-        removeRow();
+        removeRow(event.velocityX);
         return;
       }
-      if (distance > rowWidth * 0.25) {
-        x.value = withTiming(-OPEN_OFFSET, { duration: reduceMotion ? 0 : 180 });
-        runOnJS(setOpen)(true);
-      } else {
-        x.value = withTiming(0, { duration: reduceMotion ? 0 : 180 });
-        runOnJS(setOpen)(false);
-      }
+      // Opening needs a real pull or a leftward flick; anything less closes.
+      const opens =
+        (distance > OPEN_OFFSET * 0.5 && event.velocityX < 400) ||
+        (distance > 12 && event.velocityX < -500);
+      settle(opens ? -OPEN_OFFSET : 0, event.velocityX);
+      runOnJS(setOpen)(opens);
     });
 
   const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
@@ -287,19 +323,20 @@ export function SwipeRow({
   );
   // The red: see-through while dragging, solid once armed or past the open buttons.
   const redStyle = useAnimatedStyle(() => {
+    if (phase.value === 1) return { opacity: 1, width: rowWidth, alignItems: 'flex-start' };
+    if (phase.value === 2) return { opacity: 0, width: 0, alignItems: 'flex-end' };
     const distance = -x.value;
-    const besideMove = !armed.value && distance >= OPEN_OFFSET * 0.9;
-    const opacity = armed.value
-      ? 1
-      : interpolate(distance, [0, OPEN_OFFSET], [0.55, 0.85], Extrapolation.CLAMP);
-    // With Move showing, Delete keeps its own 74 dp beside it.
+    const besideMove = !!onMove && !armed.value && distance >= OPEN_OFFSET * 0.9;
+    // The red fills exactly what the row uncovers. Its bin stays at the row's edge, and jumps to
+    // the far side (under the finger) once letting go would delete.
     return {
-      opacity: distance > 0 ? (besideMove ? 1 : opacity) : 0,
+      opacity: distance > 0 ? 1 : 0,
       width: besideMove ? ACTION_WIDTH : Math.max(distance, 0),
-      alignItems: armed.value ? 'flex-start' : 'center',
+      alignItems: armed.value ? 'flex-start' : 'flex-end',
     };
   });
   const moveStyle = useAnimatedStyle(() => {
+    if (phase.value !== 0) return { opacity: 0 };
     const distance = -x.value;
     const show = !armed.value && distance >= OPEN_OFFSET * 0.9;
     return { opacity: show ? 1 : 0 };
@@ -317,11 +354,11 @@ export function SwipeRow({
       }}
       accessibilityActions={[
         { name: 'delete', label: t('delete') },
-        { name: 'move', label: t('move') },
+        ...(onMove ? [{ name: 'move', label: t('move') }] : []),
       ]}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'delete') onDelete();
-        if (event.nativeEvent.actionName === 'move') onMove();
+        if (event.nativeEvent.actionName === 'move') onMove?.();
       }}
     >
       <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
@@ -360,36 +397,38 @@ export function SwipeRow({
             </Text>
           </Pressable>
         </Animated.View>
-        <Animated.View
-          style={[
-            {
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              right: ACTION_WIDTH,
-              width: ACTION_WIDTH,
-              backgroundColor: '#E8E7E4',
-            },
-            moveStyle,
-          ]}
-        >
-          <Pressable
-            cssInterop={false}
-            accessibilityRole="button"
-            accessibilityElementsHidden={!open}
-            importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
-            onPress={() => {
-              close();
-              onMove();
-            }}
-            style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 }}
+        {onMove && (
+          <Animated.View
+            style={[
+              {
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                right: ACTION_WIDTH,
+                width: ACTION_WIDTH,
+                backgroundColor: '#E8E7E4',
+              },
+              moveStyle,
+            ]}
           >
-            <SystemIcon name="folder" mdName="Folder" size={20} color={home.text} />
-            <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '500', color: home.text }}>
-              {t('move')}
-            </Text>
-          </Pressable>
-        </Animated.View>
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              accessibilityElementsHidden={!open}
+              importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+              onPress={() => {
+                close();
+                onMove?.();
+              }}
+              style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 }}
+            >
+              <SystemIcon name="folder" mdName="Folder" size={20} color={home.text} />
+              <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '500', color: home.text }}>
+                {t('move')}
+              </Text>
+            </Pressable>
+          </Animated.View>
+        )}
       </View>
       <GestureDetector gesture={pan}>
         <Animated.View style={[{ backgroundColor: home.surface }, rowStyle]}>

@@ -323,13 +323,23 @@ export function Chip({
 }
 
 /** The floating brand-glass "+ New", bottom right, no drop shadow. */
-export function NewButton({ onPress, bottom }: { onPress: () => void; bottom: number }) {
+export function NewButton({
+  onPress,
+  bottom,
+  label,
+}: {
+  onPress: () => void;
+  bottom: number;
+  /** Another screen's "+ Add word"; Notes says New. */
+  label?: string;
+}) {
   const t = useNotesT();
+  const text = label ?? t('new');
   return (
     <Pressable
       cssInterop={false}
       accessibilityRole="button"
-      accessibilityLabel={t('new')}
+      accessibilityLabel={text}
       onPress={onPress}
       style={({ pressed }) => [
         {
@@ -349,7 +359,7 @@ export function NewButton({ onPress, bottom }: { onPress: () => void; bottom: nu
     >
       <SystemIcon name="plus" mdName="Plus" size={22} color="#FFFFFF" />
       <Text style={{ color: '#FFFFFF', fontSize: 17, lineHeight: 24, fontWeight: '700' }}>
-        {t('new')}
+        {text}
       </Text>
     </Pressable>
   );

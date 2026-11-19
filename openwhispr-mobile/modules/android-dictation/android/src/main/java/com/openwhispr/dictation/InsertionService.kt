@@ -6,23 +6,60 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 
 class InsertionService : AccessibilityService() {
-  companion object { var instance: InsertionService? = null; private set }
+  companion object {
+    var instance: InsertionService? = null; private set
+    private const val TAG = "OpenWhisprLearn"
+  }
   private data class Target(val node: AccessibilityNodeInfo, val text: String, val start: Int, val end: Int)
   private var target: Target? = null
   private val handler = Handler(Looper.getMainLooper())
+  /** The field the last dictation went into, read again for 45 s so a fix there can be learned. */
+  private var watched: AccessibilityNodeInfo? = null
+  private val watch = FieldWatch()
+  private val poll = Runnable { pollField() }
+  private var lastLogged: String? = null
   private fun readField(node: AccessibilityNodeInfo): Field =
     InsertionPlan.field(node.text?.toString().orEmpty(), node.textSelectionStart, node.textSelectionEnd, node.isShowingHintText)
 
   override fun onServiceConnected() { instance = this; refreshTyping(); DictationService.emit?.invoke("onStatusChange", emptyMap()) }
   // Focus and window changes only decide whether the bubble shows. They check whether the focused
-  // field takes text and isn't a password; the field's text is read only when dictation starts.
+  // field takes text and isn't a password. A field's text is read when dictation starts, and again
+  // for 45 s after the bubble typed into it, from that field alone, so a word fixed there can be
+  // learned (Dictionary's C11). No other field is read.
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
     handler.removeCallbacks(typingCheck); handler.postDelayed(typingCheck, 120)
+  }
+  /** One reading of the watched field; reschedules itself while the watch lasts. */
+  private fun pollField() {
+    val field = watched ?: return
+    val now = SystemClock.uptimeMillis()
+    if (!watch.active(now)) { Log.i(TAG, "Watch window over"); stopWatch(); return }
+    if (!runCatching { field.refresh() }.getOrDefault(false)) { Log.i(TAG, "Watched field gone (refresh failed)"); stopWatch(); return }
+    val current = readField(field).text
+    if (current != lastLogged) { Log.i(TAG, "Field now ${current.length} chars"); lastLogged = current }
+    val edit = watch.sample(current, field.isPassword, now)
+    if (edit != null) Log.i(TAG, "Field edit reported (${edit.second.length} chars)")
+    if (edit != null) DictationService.emit?.invoke("onFieldEdited", mapOf("before" to edit.first, "after" to edit.second))
+    if (watch.watching) handler.postDelayed(poll, FieldWatch.POLL_MS) else stopWatch()
+  }
+  private fun startWatch(field: AccessibilityNodeInfo, text: String) {
+    stopWatch()
+    watched = AccessibilityNodeInfo.obtain(field)
+    watch.start(text, SystemClock.uptimeMillis())
+    Log.i(TAG, "Watching the dictated field for ${FieldWatch.WINDOW_MS / 1000} s")
+    handler.postDelayed(poll, FieldWatch.POLL_MS)
+  }
+  private fun stopWatch() {
+    if (watched != null) Log.i(TAG, "Field watch ended")
+    handler.removeCallbacks(poll)
+    watch.stop(); watched?.recycle(); watched = null
   }
   private val typingCheck = Runnable { refreshTyping() }
   fun refreshTyping() {
@@ -51,8 +88,8 @@ class InsertionService : AccessibilityService() {
     parent?.recycle()
     return BubblePolicy.searchField(labels, classes)
   }
-  override fun onInterrupt() { clearTarget() }
-  override fun onDestroy() { handler.removeCallbacks(typingCheck); clearTarget(); instance = null; DictationService.instance?.onTyping(false, null); DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
+  override fun onInterrupt() { clearTarget(); stopWatch() }
+  override fun onDestroy() { handler.removeCallbacks(typingCheck); clearTarget(); stopWatch(); instance = null; DictationService.instance?.onTyping(false, null); DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
   /** Moves the caret after edited words still highlighted from [insert], unless the user moved on. */
   private fun settleHighlight(start: Int, end: Int) {
     val node = focusedField() ?: return
@@ -67,6 +104,8 @@ class InsertionService : AccessibilityService() {
     return try { root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) } finally { root.recycle() }
   }
   fun captureTarget(): String {
+    // A new dictation ends the watch on the last one's field.
+    stopWatch()
     clearTarget()
     val node = focusedField() ?: return ""
     if (!node.isEditable || node.isPassword) { node.recycle(); return "" }
@@ -125,6 +164,8 @@ class InsertionService : AccessibilityService() {
       val verified = after != null && InsertionPlan.landed(currentText, after, text)
       if (verified && highlight && wordsStart >= 0)
         handler.postDelayed({ settleHighlight(wordsStart, plan.cursor) }, BubbleMenuPolicy.EDIT_HIGHLIGHT_MS)
+      // Dictionary's C11: watch the field for a word the user fixes after the paste.
+      if (verified && !current.isPassword) runCatching { startWatch(current, after!!) }
       current.recycle(); complete(verified)
     }, 150)
   }

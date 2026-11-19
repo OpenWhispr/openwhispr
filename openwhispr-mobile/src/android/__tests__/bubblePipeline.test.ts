@@ -9,6 +9,7 @@ import { bubblePipelineTask, startBubblePipeline } from '../bubblePipeline';
 
 type Listener = (event?: any) => unknown;
 const mockListeners: Record<string, Listener> = {};
+jest.mock('../dictionary/fieldLearning', () => ({ observeFieldLearning: jest.fn() }));
 jest.mock('../../../modules/android-dictation/src', () => ({
   AndroidDictation: {
     setStatus: jest.fn(async () => {}),

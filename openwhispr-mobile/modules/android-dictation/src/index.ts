@@ -88,6 +88,13 @@ interface NativeDictation {
   setMenuContext?(context: BubbleMenuContext): void;
   /** Puts text on the clipboard (typing access is off, so nothing can paste). */
   copyText?(text: string): void;
+  /** Shows the bubble's "Learned" tab; false when the bubble isn't on screen. */
+  showLearnedTab(options: {
+    words: string[];
+    message: string;
+    undo: string;
+    undone: string;
+  }): Promise<boolean>;
   startRecording(): Promise<void>;
   stopRecording(cancel: boolean): Promise<Recording>;
   /** Loudness of the in-app recording, 0..1. Missing on builds before the Home recorder. */
@@ -142,6 +149,14 @@ export const dictationEvents = AndroidDictation
       onOpenSignIn: () => void;
       onOpenModels: () => void;
       onStatusChange: () => void;
+      /** The field the bubble typed into changed within 45 s: its text then and now. */
+      onFieldEdited: (event: { before: string; after: string }) => void;
+      /** Undo on the bubble's learned tab. */
+      onLearnedUndo: (event: { words: string[] }) => void;
+      /** "Won't learn" was tapped: learn the words again. */
+      onLearnedRedo: (event: { words: string[] }) => void;
+      /** The learned tab's words were tapped: the app opens on the Dictionary. */
+      onOpenDictionary: () => void;
       'local-meeting-stopped': (event: { noteId: number; captureId: string }) => void;
       'local-meeting-error': (event: {
         noteId: number;

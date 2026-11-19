@@ -1,5 +1,8 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
 jest.mock('../settings/processingDefault', () => ({ watchLocalMode: jest.fn() }));
 jest.mock('../accountData', () => ({
   useAccountData: Object.assign(

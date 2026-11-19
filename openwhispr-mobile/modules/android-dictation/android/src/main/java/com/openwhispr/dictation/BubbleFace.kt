@@ -150,6 +150,21 @@ class BubbleFace(context: Context) : View(context) {
     }
   }
 
+  private var pulseRing = -1f
+  private val pulsePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.dot; style = Paint.Style.STROKE }
+  /**
+   * One soft ring pulse out from the bubble (300 ms), then [done]: the Dictionary's "Learned" tab
+   * (C11) uses it on a bubble shrunk to a dot so the eye finds it. The bubble doesn't move or grow.
+   */
+  fun pulse(done: () -> Unit) {
+    ValueAnimator.ofFloat(0f, 1f).apply {
+      duration = 300
+      addUpdateListener { pulseRing = it.animatedValue as Float; invalidate() }
+      addListener(object : AnimatorListenerAdapter() { override fun onAnimationEnd(animation: Animator) { pulseRing = -1f; invalidate(); done() } })
+      start()
+    }
+  }
+
   /** Fills the hold ring linearly over [ms], or clears it. */
   fun holdRing(filling: Boolean, ms: Long = BubbleMenuPolicy.HOLD_MS) {
     ringAnimator?.cancel()
@@ -218,6 +233,11 @@ class BubbleFace(context: Context) : View(context) {
       val inset = -stroke * 1.4f
       canvas.drawOval(inset, inset, w - inset, h - inset, ringTrack)
       canvas.drawArc(inset, inset, w - inset, h - inset, -90f, 360f * ring, false, ringArc)
+    }
+    if (pulseRing >= 0f) {
+      pulsePaint.strokeWidth = r / 4f
+      pulsePaint.alpha = ((1f - pulseRing) * 160).toInt()
+      canvas.drawCircle(cx, cy, r * (1f + pulseRing), pulsePaint)
     }
     if (badge != BubbleMode.DICTATE && look != Look.ICON) drawBadge(canvas, w, r)
     if ((unseen || warning) && look == Look.ICON && dot < 1f) {
