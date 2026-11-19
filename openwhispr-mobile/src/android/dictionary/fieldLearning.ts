@@ -33,6 +33,8 @@ export function observeFieldLearning(): () => void {
         (pair) =>
           fixedTo.get(pair.from.toLowerCase())?.word.toLowerCase() !== pair.word.toLowerCase(),
       );
+      // Counts only: the words themselves never reach the log.
+      console.log(`[OpenWhisprLearn] edit: ${pairs.length} fixes`);
       if (pairs.length === 0) return;
       const replaced: string[] = [];
       for (const pair of pairs) {
@@ -46,6 +48,7 @@ export function observeFieldLearning(): () => void {
       for (const pair of pairs)
         if (learned.includes(pair.word))
           fixedTo.set(pair.from.toLowerCase(), { word: pair.word, at: now });
+      console.log(`[OpenWhisprLearn] learned ${learned.length} of ${pairs.length}`);
       if (learned.length === 0) return;
       const still =
         now < showingUntil ? showing.filter((w) => !replaced.includes(w.toLowerCase())) : [];

@@ -7,12 +7,16 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 
 class InsertionService : AccessibilityService() {
-  companion object { var instance: InsertionService? = null; private set }
+  companion object {
+    var instance: InsertionService? = null; private set
+    private const val TAG = "OpenWhisprLearn"
+  }
   private data class Target(val node: AccessibilityNodeInfo, val text: String, val start: Int, val end: Int)
   private var target: Target? = null
   private val handler = Handler(Looper.getMainLooper())
@@ -20,6 +24,7 @@ class InsertionService : AccessibilityService() {
   private var watched: AccessibilityNodeInfo? = null
   private val watch = FieldWatch()
   private val poll = Runnable { pollField() }
+  private var lastLogged: String? = null
   private fun readField(node: AccessibilityNodeInfo): Field =
     InsertionPlan.field(node.text?.toString().orEmpty(), node.textSelectionStart, node.textSelectionEnd, node.isShowingHintText)
 
@@ -35,8 +40,12 @@ class InsertionService : AccessibilityService() {
   private fun pollField() {
     val field = watched ?: return
     val now = SystemClock.uptimeMillis()
-    if (!watch.active(now) || !runCatching { field.refresh() }.getOrDefault(false)) { stopWatch(); return }
-    val edit = watch.sample(readField(field).text, field.isPassword, now)
+    if (!watch.active(now)) { Log.i(TAG, "Watch window over"); stopWatch(); return }
+    if (!runCatching { field.refresh() }.getOrDefault(false)) { Log.i(TAG, "Watched field gone (refresh failed)"); stopWatch(); return }
+    val current = readField(field).text
+    if (current != lastLogged) { Log.i(TAG, "Field now ${current.length} chars"); lastLogged = current }
+    val edit = watch.sample(current, field.isPassword, now)
+    if (edit != null) Log.i(TAG, "Field edit reported (${edit.second.length} chars)")
     if (edit != null) DictationService.emit?.invoke("onFieldEdited", mapOf("before" to edit.first, "after" to edit.second))
     if (watch.watching) handler.postDelayed(poll, FieldWatch.POLL_MS) else stopWatch()
   }
@@ -44,9 +53,11 @@ class InsertionService : AccessibilityService() {
     stopWatch()
     watched = AccessibilityNodeInfo.obtain(field)
     watch.start(text, SystemClock.uptimeMillis())
+    Log.i(TAG, "Watching the dictated field for ${FieldWatch.WINDOW_MS / 1000} s")
     handler.postDelayed(poll, FieldWatch.POLL_MS)
   }
   private fun stopWatch() {
+    if (watched != null) Log.i(TAG, "Field watch ended")
     handler.removeCallbacks(poll)
     watch.stop(); watched?.recycle(); watched = null
   }

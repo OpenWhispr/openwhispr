@@ -58,7 +58,7 @@ class LearnedTab(
   var showing = false; private set
 
   private fun dp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, context.resources.displayMetrics)
-  private val height get() = dp(44f).toInt()
+  private val pillHeight get() = dp(44f).toInt()
   private val gap get() = dp(10f).toInt()
   /** Room around the pill for its shadow. */
   private val margin get() = dp(12f).toInt()
@@ -125,7 +125,7 @@ class LearnedTab(
     val row = LinearLayout(context).apply {
       orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
       background = GradientDrawable().apply {
-        setColor(BubbleColors.surface); cornerRadius = height / 2f
+        setColor(BubbleColors.surface); cornerRadius = pillHeight / 2f
         setStroke(maxOf(1, dp(1f).toInt()), Color.argb(15, 0, 0, 0))
       }
       elevation = dp(6f)
@@ -164,7 +164,7 @@ class LearnedTab(
     // start under the bubble and grow out of it.
     return FrameLayout(context).apply {
       clipChildren = false; clipToPadding = false
-      addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, height, Gravity.CENTER_VERTICAL))
+      addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, pillHeight, Gravity.CENTER_VERTICAL))
     }
   }
 
@@ -174,16 +174,18 @@ class LearnedTab(
     val content = root.getChildAt(0) as? FrameLayout ?: return
     val row = pill ?: return
     bubble = Rect(bubbleRect); dockRight = right
-    row.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+    row.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.makeMeasureSpec(pillHeight, View.MeasureSpec.EXACTLY))
     val reach = gap + bubble.width() / 2
     content.setPadding(if (right) margin else reach, margin, if (right) reach else margin, margin)
     root.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
     // The pill's inner end sits [gap] from the bubble, its middle level with the bubble's.
     layout.x = if (right) bubble.left - gap - row.measuredWidth - margin else bubble.centerX()
-    layout.y = bubble.centerY() - height / 2 - margin
+    layout.y = bubble.centerY() - pillHeight / 2 - margin
     row.pivotX = if (right) row.measuredWidth.toFloat() else 0f
-    row.pivotY = height / 2f
+    row.pivotY = pillHeight / 2f
     runCatching { windows.updateViewLayout(root, layout) }
+      .onFailure { android.util.Log.w("OpenWhisprLearn", "Pill layout failed", it) }
+    android.util.Log.i("OpenWhisprLearn", "Pill window at ${layout.x},${layout.y} size ${root.measuredWidth}x${root.measuredHeight} pill ${row.measuredWidth} bubble $bubble attached=${root.isAttachedToWindow} visible=${root.visibility}")
   }
 
   /** Grows the pill out of the bubble (or back into it): from the bubble's middle, small and clear. */
@@ -205,7 +207,10 @@ class LearnedTab(
       addListener(object : AnimatorListenerAdapter() {
         private var cancelled = false
         override fun onAnimationCancel(animation: Animator) { cancelled = true }
-        override fun onAnimationEnd(animation: Animator) { if (!cancelled) end() }
+        override fun onAnimationEnd(animation: Animator) {
+          android.util.Log.i("OpenWhisprLearn", "Pill ${if (out) "grew" else "shrank"} cancelled=$cancelled alpha=${row.alpha} scale=${row.scaleX} shown=${row.isShown} w=${row.width}")
+          if (!cancelled) end()
+        }
       })
     }
     motion = set

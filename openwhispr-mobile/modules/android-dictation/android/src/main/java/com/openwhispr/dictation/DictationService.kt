@@ -310,7 +310,11 @@ class DictationService : Service() {
    */
   fun showLearnedTab(text: LearnedTabText): Boolean {
     val tab = learnedTab ?: return false
-    if (state != BubbleState.READY || root?.isShown != true || dragging) return false
+    if (state != BubbleState.READY || root?.isShown != true || dragging) {
+      android.util.Log.i("OpenWhisprLearn", "Learned pill not shown: state=$state shown=${root?.isShown} dragging=$dragging")
+      return false
+    }
+    android.util.Log.i("OpenWhisprLearn", "Learned pill shown (${text.words.size} words)")
     val dot = appearance.shrinkToDot && shrink >= 1f
     if (dot && !tab.showing) {
       (root?.getChildAt(0) as? IconBubble)?.pulse { tab.show(text, bubbleRect(), dockRight, true) }
