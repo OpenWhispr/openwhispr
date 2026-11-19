@@ -19,9 +19,9 @@ import { checkUserExists } from '@/lib/authClient';
 import { safeHaptics } from '@/lib/utils';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AppFont } from '@/lib/fonts';
-import { BRAND_GRADIENT } from '@/config/colors';
-import { LinearGradient } from 'expo-linear-gradient';
 import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
+import { gloss, glossPressed, home } from '@/android/home/kit';
+import { edge, edgeField, look } from '@/android/settings/look';
 
 type AuthMode = null | 'signin' | 'signup';
 type AuthScreenProps = {
@@ -37,11 +37,9 @@ type AuthScreenProps = {
 };
 
 // Full-pill radius shared by every login button.
-const BUTTON_HEIGHT = 54;
+const BUTTON_HEIGHT = 50;
 const PILL_RADIUS = BUTTON_HEIGHT / 2;
-// Deepest brand-gradient stop — page fallback + dark text/spinner on white surfaces.
-const DEEP_BLUE = BRAND_GRADIENT[2];
-const PLACEHOLDER_COLOR = 'rgba(255,255,255,0.55)';
+const PLACEHOLDER_COLOR = home.tertiary;
 
 function GoogleLogo() {
   return (
@@ -98,12 +96,15 @@ function ProviderButton({
     <Pressable
       onPress={onPress}
       disabled={isLoading}
-      style={[styles.providerButton, isLoading && styles.disabled]}
+      style={({ pressed }) => [
+        styles.providerButton,
+        isLoading ? styles.disabled : pressed && styles.pressed,
+      ]}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
       {loadingProvider === provider ? (
-        <ActivityIndicator size="small" />
+        <ActivityIndicator size="small" color={home.text} />
       ) : (
         <>
           {logo}
@@ -220,13 +221,6 @@ export default function AuthScreen({
 
   return (
     <View style={styles.root}>
-      <LinearGradient
-        colors={BRAND_GRADIENT}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -243,18 +237,22 @@ export default function AuthScreen({
         >
           {/* Brand lockup, top-left */}
           <View style={styles.brandRow}>
-            <OpenWhisprMark size={32} color="#FFFFFF" />
+            <OpenWhisprMark size={32} color={home.accent} />
             <Text style={styles.brandWord}>OpenWhispr</Text>
           </View>
           {onClose ? (
             <Pressable
               onPress={onClose}
-              style={[styles.closeButton, Platform.OS === 'android' && { top: insets.top + 18 }]}
+              style={({ pressed }) => [
+                styles.closeButton,
+                Platform.OS === 'android' && { top: insets.top + 18 },
+                pressed && styles.pressed,
+              ]}
               accessibilityRole="button"
               accessibilityLabel="Close sign in"
               hitSlop={8}
             >
-              <SystemIcon name="xmark" mdName="X" size={16} color="#FFFFFF" />
+              <SystemIcon name="xmark" mdName="X" size={18} color={home.text} />
             </Pressable>
           ) : null}
 
@@ -262,12 +260,12 @@ export default function AuthScreen({
             <View style={styles.authHeader}>
               <Pressable
                 onPress={handleBack}
-                style={styles.backButton}
+                style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
                 hitSlop={8}
               >
-                <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color="#FFFFFF" />
+                <SystemIcon name="chevron.left" mdName="ChevronLeft" size={20} color={home.text} />
               </Pressable>
               <Text accessibilityRole="header" style={styles.headline}>
                 {headerTitle}
@@ -336,9 +334,11 @@ export default function AuthScreen({
                 <Pressable
                   onPress={handleEmailContinue}
                   disabled={!email.trim() || isCheckingEmail}
-                  style={[
-                    styles.outlineButton,
-                    (!email.trim() || isCheckingEmail) && styles.disabled,
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    !email.trim() || isCheckingEmail
+                      ? styles.disabled
+                      : pressed && styles.primaryPressed,
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel="Continue with email"
@@ -346,7 +346,7 @@ export default function AuthScreen({
                   {isCheckingEmail ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.outlineButtonText}>Continue</Text>
+                    <Text style={styles.primaryButtonText}>Continue</Text>
                   )}
                 </Pressable>
 
@@ -354,7 +354,7 @@ export default function AuthScreen({
                   <Pressable
                     onPress={handleGuest}
                     disabled={isLoading}
-                    style={styles.guestButton}
+                    style={({ pressed }) => [styles.guestButton, pressed && styles.pressed]}
                     accessibilityRole="button"
                     accessibilityLabel="Continue without an account"
                   >
@@ -400,12 +400,15 @@ export default function AuthScreen({
                 <Pressable
                   onPress={handleSubmit}
                   disabled={!password || isLoading}
-                  style={[styles.primaryButton, (!password || isLoading) && styles.disabled]}
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    !password || isLoading ? styles.disabled : pressed && styles.primaryPressed,
+                  ]}
                   accessibilityRole="button"
                   accessibilityLabel={authMode === 'signin' ? 'Sign in' : 'Create account'}
                 >
                   {isLoading ? (
-                    <ActivityIndicator color={DEEP_BLUE} />
+                    <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <Text style={styles.primaryButtonText}>
                       {authMode === 'signin' ? 'Sign In' : 'Create Account'}
@@ -415,7 +418,7 @@ export default function AuthScreen({
 
                 <Pressable
                   onPress={handleToggleMode}
-                  style={styles.toggleButton}
+                  style={({ pressed }) => [styles.toggleButton, pressed && styles.pressed]}
                   accessibilityRole="button"
                 >
                   <Text style={styles.toggleText}>
@@ -446,14 +449,14 @@ export default function AuthScreen({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: DEEP_BLUE,
+    backgroundColor: look.canvas,
   },
   flex: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 28,
+    paddingHorizontal: 16,
   },
 
   brandRow: {
@@ -465,41 +468,46 @@ const styles = StyleSheet.create({
   brandWord: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: home.text,
     letterSpacing: -0.4,
   },
+  // The settings header's round button: white, the glass edge, an ink glyph.
   closeButton: {
+    ...edge,
     position: 'absolute',
     top: 18,
-    right: 20,
+    right: 16,
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)',
   },
 
   headline: {
-    fontSize: 40,
-    lineHeight: 46,
+    fontSize: 32,
+    lineHeight: 38,
     fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -1.2,
+    color: home.text,
     marginTop: 28,
   },
   authHeader: {
     marginTop: 28,
   },
   headerSub: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: home.secondary,
+    marginTop: 8,
   },
   backButton: {
+    ...edge,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 8,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
   },
 
   spacer: {
@@ -508,7 +516,7 @@ const styles = StyleSheet.create({
   },
 
   formGroup: {
-    gap: 12,
+    gap: 20,
   },
 
   providerLogoBox: {
@@ -523,132 +531,106 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   providerButton: {
+    ...edge,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     height: BUTTON_HEIGHT,
     borderRadius: PILL_RADIUS,
-    borderCurve: 'continuous',
-    backgroundColor: '#FFFFFF',
-    boxShadow: '0px 1px 3px rgba(0,0,0,0.12)',
   },
   providerButtonText: {
-    fontSize: 16,
-    color: '#000000',
-    fontWeight: '600',
-    letterSpacing: -0.3,
+    fontSize: 15,
+    lineHeight: 22,
+    color: home.text,
+    fontWeight: '500',
   },
 
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 2,
     gap: 12,
   },
   dividerLine: {
     flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    height: 1,
+    backgroundColor: look.hairline,
   },
   dividerText: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.65)',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: home.secondary,
   },
 
   input: {
-    height: BUTTON_HEIGHT,
-    borderRadius: 16,
-    borderCurve: 'continuous',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.4)',
-    paddingHorizontal: 18,
+    ...edgeField,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
     fontFamily: AppFont.regular,
     fontSize: 16,
-    color: '#FFFFFF',
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-
-  outlineButton: {
-    height: BUTTON_HEIGHT,
-    borderRadius: PILL_RADIUS,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.55)',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  outlineButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
+    lineHeight: 21,
+    color: home.text,
   },
 
   guestButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    minHeight: 44,
   },
   guestButtonText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.7)',
-    fontWeight: '500',
+    fontSize: 16,
+    lineHeight: 21,
+    color: home.accent,
   },
 
+  // The brand glass, flat: no lift. Disabled is the same glass at half strength.
   primaryButton: {
+    ...gloss,
     height: BUTTON_HEIGHT,
     borderRadius: PILL_RADIUS,
-    borderCurve: 'continuous',
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  primaryPressed: glossPressed,
   primaryButtonText: {
-    fontSize: 16,
+    fontSize: 17,
+    lineHeight: 22,
     fontWeight: '700',
-    color: DEEP_BLUE,
-    letterSpacing: -0.2,
+    color: '#FFFFFF',
   },
 
   toggleButton: {
-    paddingVertical: 6,
-    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
   },
   toggleText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.85)',
-    textAlign: 'center',
+    fontSize: 16,
+    lineHeight: 21,
+    color: home.accent,
   },
 
   disabled: {
-    opacity: 0.45,
+    opacity: 0.5,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 
   errorBanner: {
+    ...edgeField,
     marginTop: 14,
-    borderRadius: 14,
-    borderCurve: 'continuous',
     padding: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,120,110,0.9)',
-    backgroundColor: 'rgba(0,0,0,0.22)',
   },
   errorText: {
     fontSize: 13,
-    color: '#FFE3E0',
     lineHeight: 18,
+    color: look.error,
   },
 
   legal: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    lineHeight: 16,
-    marginTop: 18,
+    fontSize: 13,
+    lineHeight: 18,
+    color: home.secondary,
+    marginTop: 20,
     paddingBottom: 4,
   },
 });
