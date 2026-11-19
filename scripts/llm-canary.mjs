@@ -23,6 +23,7 @@
  * not report green.
  */
 import { applyChatCompletionsParams } from "../src/services/ai/chatRequestBody.ts";
+import { getModelFamilyConstraints } from "../src/services/ai/modelFamilyConstraints.ts";
 import { openaiProvider } from "../src/services/ai/inferenceProviders/openai.ts";
 import { geminiProvider } from "../src/services/ai/inferenceProviders/gemini.ts";
 import { getLlmRequestTimeoutSeconds } from "../src/helpers/llmRequestTimeout.js";
@@ -34,8 +35,6 @@ import {
   buildNoteProbeTranscript,
   countWords,
 } from "./lib/note-formatting-probe.mjs";
-
-const CONSTRAINED_FAMILY = /gpt-oss|qwen|magistral/i;
 
 const PROVIDERS = [
   {
@@ -249,7 +248,7 @@ async function catalogDiff(entry, apiKey) {
   const pinned = registryIdsByProvider.get(entry.id) ?? [];
   const vanished = pinned.filter((id) => !live.includes(id));
   const probed = new Set(entry.models);
-  const newConstrained = live.filter((id) => CONSTRAINED_FAMILY.test(id) && !probed.has(id));
+  const newConstrained = live.filter((id) => !probed.has(id) && getModelFamilyConstraints(id));
   return { vanished, newConstrained };
 }
 
