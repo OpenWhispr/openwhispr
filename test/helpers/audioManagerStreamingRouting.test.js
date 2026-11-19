@@ -366,9 +366,12 @@ test("the STT config goes stale after fifteen minutes and immediately when inval
   assert.equal(manager.isSttConfigStale(fetchedAt + 14 * 60 * 1000), false);
   assert.equal(manager.isSttConfigStale(fetchedAt + 15 * 60 * 1000 + 1), true);
 
+  const generation = manager.sttConfigGeneration;
   manager.invalidateSttConfig();
   assert.equal(manager.sttConfig, null);
   assert.equal(manager.isSttConfigStale(fetchedAt), true);
+  // A fetch issued before the invalidation reads the old generation and is dropped.
+  assert.equal(manager.sttConfigGeneration, generation + 1);
 });
 
 test("a cloud upload reports why it was batch instead of the managed Orukeet stream", async (t) => {

@@ -1164,12 +1164,19 @@ export const useAudioRecording = (toast, options = {}) => {
     const unsubscribePolicy = usePolicyStore.subscribe(() => {
       window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);
     });
-    const loadAndWarmSttConfig = () => {
+    const loadAndWarmSttConfig = (warmOptions) => {
       const manager = audioManagerRef.current;
       loadSttConfig(manager)
         .then((installed) => {
-          if (installed && audioManagerRef.current === manager && manager.shouldUseStreaming()) {
-            manager.warmupStreamingConnection();
+          // A warm redials the stream, so it waits for an idle manager rather
+          // than retiring a dictation's live session.
+          if (
+            installed &&
+            audioManagerRef.current === manager &&
+            canStartDictation(manager.getState()) &&
+            manager.shouldUseStreaming()
+          ) {
+            manager.warmupStreamingConnection(warmOptions);
           }
         })
         .catch((error) => {
@@ -1180,9 +1187,10 @@ export const useAudioRecording = (toast, options = {}) => {
     // The config is per account (the Orukeet rollout and its Gemma pipeline pick
     // accounts), so a sign-in, sign-out or account switch fetches it again
     // instead of keeping the previous account's copy for the rest of its TTL.
+    // An account change is no reason to open the mic.
     const unsubscribeAuthBoundary = subscribeAuthBoundary(() => {
       audioManagerRef.current.invalidateSttConfig();
-      loadAndWarmSttConfig();
+      loadAndWarmSttConfig({ warmMic: false });
     });
 
     const handleToggle = async ({

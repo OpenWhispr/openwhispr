@@ -136,15 +136,19 @@ export default class FakeAudioManager {
     globalThis.__sttSwitchManager = this;
   }
   setCallbacks(callbacks) { this.callbacks = callbacks; }
-  getState() { return { isRecording: false, isProcessing: false, isStreaming: false }; }
+  getState() {
+    const recording = Boolean(globalThis.__sttSwitchRecording);
+    return { isRecording: recording, isProcessing: false, isStreaming: recording };
+  }
   isSttConfigStale() { return true; }
   setSttConfig(config) { this.sttConfig = config; }
   invalidateSttConfig() { this.sttConfig = null; this.sttConfigGeneration += 1; }
-  shouldUseStreaming() { return false; }
+  shouldUseStreaming() { return true; }
+  warmupStreamingConnection(options) { globalThis.__sttSwitchWarms.push(options); }
   prepareMicCapture() {}
   setVoiceAgentRequested() {}
   setTranslationRequested() {}
-  async startRecording() { return true; }
+  async startStreamingRecording() { globalThis.__sttSwitchRecording = true; return true; }
   cleanup() {}
 }
 `;
@@ -155,9 +159,13 @@ test("an account change replaces the STT config and drops the old account's late
   let broadcastScope = null;
   const fetches = [];
   globalThis.__sttSwitchManager = null;
+  globalThis.__sttSwitchRecording = false;
+  globalThis.__sttSwitchWarms = [];
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
     delete globalThis.__sttSwitchManager;
+    delete globalThis.__sttSwitchRecording;
+    delete globalThis.__sttSwitchWarms;
   });
 
   const noopDispose = () => () => {};
@@ -228,6 +236,7 @@ test("an account change replaces the STT config and drops the old account's late
 
   assert.equal(typeof broadcastScope, "function", "the hook listens for account changes");
   const fetchesBeforeSwitch = fetches.length;
+  const warmsBeforeSwitch = globalThis.__sttSwitchWarms.length;
   await React.act(async () => {
     broadcastScope({ accountId: "account-b", authGeneration: 2 });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -238,4 +247,18 @@ test("an account change replaces the STT config and drops the old account's late
   await answer(fetches.length - 1, "account-b");
   await answer(pendingForA, "account-a");
   assert.equal(manager().sttConfig?.account, "account-b");
+  assert.equal(
+    globalThis.__sttSwitchWarms.length,
+    warmsBeforeSwitch,
+    "a switch during a recording leaves its stream alone"
+  );
+
+  // Once idle, a switch warms the stream for the new account without opening the mic.
+  globalThis.__sttSwitchRecording = false;
+  await React.act(async () => {
+    broadcastScope({ accountId: "account-c", authGeneration: 3 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await answer(fetches.length - 1, "account-c");
+  assert.deepEqual(globalThis.__sttSwitchWarms.slice(warmsBeforeSwitch), [{ warmMic: false }]);
 });
