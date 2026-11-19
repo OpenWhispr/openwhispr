@@ -61,7 +61,14 @@ async function transcribeWithElevenLabs(
       body: formData,
       ...(signal ? { signal } : {}),
     });
-    return { response, errorText: response.ok ? "" : await response.text() };
+    if (response.ok) return { response, errorText: "" };
+    // The status and headers still identify the failure if the body stream breaks.
+    const errorText = await response.text().catch((error) => {
+      if (error.name === "AbortError") throw error;
+      return "";
+    });
+    signal?.throwIfAborted();
+    return { response, errorText };
   };
 
   let { response, errorText } = await send(terms);

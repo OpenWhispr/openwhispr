@@ -141,6 +141,41 @@ test("a refused key is an auth failure; an exhausted quota is not", async () => 
   );
 });
 
+test("an interrupted HTTP error body preserves rate limiting and the provider request ID", async () => {
+  const body = new ReadableStream({
+    start(stream) {
+      stream.error(new TypeError("terminated"));
+    },
+  });
+  const response = new Response(body, { status: 429, headers: { "x-request-id": "scribe-429" } });
+  await assert.rejects(
+    transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, async () => response),
+    {
+      code: "PROVIDER_RATE_LIMITED",
+      status: 429,
+      technicalDetails: { provider: "ElevenLabs", status: 429, requestId: "scribe-429" },
+    }
+  );
+});
+
+test("cancelling while reading an HTTP error body preserves the abort reason", async () => {
+  const controller = new AbortController();
+  await assert.rejects(
+    transcribeWithElevenLabs(
+      { audioBuffer: AUDIO, apiKey: "k", signal: controller.signal },
+      async () => ({
+        ok: false,
+        status: 429,
+        text: async () => {
+          controller.abort();
+          throw new TypeError("terminated");
+        },
+      })
+    ),
+    (error) => error === controller.signal.reason
+  );
+});
+
 test("a 422 validation error is a bad request", async () => {
   const { fetchImpl } = makeFetch(422, { detail: [{ msg: "invalid keyterms" }] });
   await assert.rejects(
