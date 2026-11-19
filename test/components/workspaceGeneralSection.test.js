@@ -683,6 +683,14 @@ test("server refusals of an upload read as translated copy, or the server's own 
       { message: "Sign in with company SSO", status: 403, code: "SSO_REQUIRED" },
       "settingsPage.workspace.general.iconSsoRequired",
     ],
+    [
+      {
+        message: "Too many workspace icon uploads. Try again later.",
+        status: 429,
+        code: "rate_limited",
+      },
+      "settingsPage.workspace.general.iconRateLimited",
+    ],
     [{ message: "Network request failed", status: 0 }, "settingsPage.workspace.general.iconFailed"],
     [
       { message: "Upload a PNG, JPEG or WebP image", status: 400 },

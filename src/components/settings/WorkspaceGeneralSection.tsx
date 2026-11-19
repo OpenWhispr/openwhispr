@@ -196,6 +196,8 @@ function GeneralPage({
         return t("settingsPage.workspace.general.iconNotAllowed", { workspace: workspaceName });
       case "ssoRequired":
         return t("settingsPage.workspace.general.iconSsoRequired", { workspace: workspaceName });
+      case "rateLimited":
+        return t("settingsPage.workspace.general.iconRateLimited");
       case "refused":
         return failure.message;
       default:

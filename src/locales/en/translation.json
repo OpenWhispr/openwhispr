@@ -2086,6 +2086,7 @@
         "iconUnreadable": "Couldn't read that image. Choose another file.",
         "iconFailed": "Couldn't update the workspace icon. Check your connection and try again.",
         "iconUnavailable": "Workspace icons aren't available right now. Try again later.",
+        "iconRateLimited": "Too many icon uploads in the last hour. Try again later.",
         "iconSignInChanged": "Couldn't update the workspace icon: your sign-in expired or changed. Sign in again, then try again.",
         "iconNotAllowed": "You can no longer change the icon for {{workspace}}.",
         "iconSsoRequired": "Sign in with your company's single sign-on to change the icon for {{workspace}}.",

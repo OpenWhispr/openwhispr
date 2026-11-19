@@ -2899,6 +2899,7 @@
         "iconUnreadable": "No se pudo leer esa imagen. Elige otro archivo.",
         "iconFailed": "No se pudo actualizar el icono del espacio de trabajo. Comprueba tu conexión e inténtalo de nuevo.",
         "iconUnavailable": "Los iconos de espacio de trabajo no están disponibles en este momento. Inténtalo más tarde.",
+        "iconRateLimited": "Demasiadas subidas de iconos en la última hora. Inténtalo más tarde.",
         "iconSignInChanged": "No se pudo actualizar el icono del espacio de trabajo: tu sesión caducó o cambió. Vuelve a iniciar sesión e inténtalo de nuevo.",
         "iconNotAllowed": "Ya no puedes cambiar el icono de {{workspace}}.",
         "iconSsoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para cambiar el icono de {{workspace}}.",

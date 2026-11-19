@@ -2086,6 +2086,7 @@
         "iconUnreadable": "Impossible de lire cette image. Choisissez un autre fichier.",
         "iconFailed": "Impossible de mettre à jour l'icône de l'espace. Vérifiez votre connexion et réessayez.",
         "iconUnavailable": "Les icônes d'espace ne sont pas disponibles pour le moment. Réessayez plus tard.",
+        "iconRateLimited": "Trop d'icônes importées au cours de la dernière heure. Réessayez plus tard.",
         "iconSignInChanged": "Impossible de mettre à jour l'icône de l'espace : votre session a expiré ou a changé. Reconnectez-vous, puis réessayez.",
         "iconNotAllowed": "Vous ne pouvez plus changer l'icône de {{workspace}}.",
         "iconSsoRequired": "Connectez-vous avec l'authentification unique (SSO) de votre entreprise pour changer l'icône de {{workspace}}.",

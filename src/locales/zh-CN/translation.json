@@ -2847,6 +2847,7 @@
         "iconUnreadable": "无法读取该图片。请选择其他文件。",
         "iconFailed": "无法更新工作区图标。请检查网络连接后重试。",
         "iconUnavailable": "工作区图标暂时不可用。请稍后再试。",
+        "iconRateLimited": "过去一小时内上传图标的次数过多。请稍后再试。",
         "iconSignInChanged": "无法更新工作区图标：你的登录已过期或已更改。请重新登录后再试。",
         "iconNotAllowed": "你已无法再更改 {{workspace}} 的图标。",
         "iconSsoRequired": "请先使用公司的单点登录 (SSO) 登录，再更改 {{workspace}} 的图标。",
