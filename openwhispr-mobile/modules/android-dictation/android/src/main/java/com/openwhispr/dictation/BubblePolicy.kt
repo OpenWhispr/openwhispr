@@ -3,7 +3,10 @@ package com.openwhispr.dictation
 import kotlin.math.log10
 import kotlin.math.sqrt
 
-/** What the floating bubble shows. Every state but [READY] is a pill. */
+/**
+ * What the floating bubble is doing. [RETRY] and [RECOVER] look like [READY] (the app icon); the status
+ * tab beside it says what went wrong or where the words went.
+ */
 enum class BubbleState { READY, LISTENING, PROCESSING, RETRY, RECOVER }
 
 /** How the Ready bubble looks (Settings › Size & look). Out-of-range values are clamped, not rejected. */
@@ -20,7 +23,8 @@ data class BubbleAppearance(
 
 /** Decisions behind the floating bubble, kept free of Android views so they can be unit tested. */
 object BubblePolicy {
-  const val HIDE_FOR_MS = 60 * 60 * 1000L
+  /** Dragging the bubble onto ✕ hides it for 15 minutes. */
+  const val HIDE_FOR_MS = 15 * 60 * 1000L
   const val IDLE_SHRINK_MS = 5000L
 
   /**

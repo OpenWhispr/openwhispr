@@ -64,7 +64,7 @@ class AndroidDictationModule : Module() {
   private val navigationBar = NavigationBar { sendEvent("onNavigationBarChange", it) }
   override fun definition() = ModuleDefinition {
     Name("AndroidDictation")
-    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange", "onFieldEdited", "onLearnedUndo", "onLearnedRedo", "onOpenDictionary")
+    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onOpenPlans", "onOpenSignIn", "onOpenModels", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange", "onFieldEdited", "onLearnedUndo", "onLearnedRedo", "onOpenDictionary")
     OnCreate { DictationService.emit = { event, data -> sendEvent(event, data) } }
     // The bubble pipeline listens, in the app or in a headless task: send what the bubble held.
     AsyncFunction("pipelineReady") {
@@ -218,7 +218,9 @@ class AndroidDictationModule : Module() {
         service.updateVisibility()
       }
     }.runOnQueue(Queues.MAIN)
-    AsyncFunction("setStatus") { value: String -> DictationService.instance?.status(value) }.runOnQueue(Queues.MAIN)
+    AsyncFunction("setStatus") { value: String, options: Map<String, Any?>? ->
+      DictationService.instance?.status(value, options ?: emptyMap())
+    }.runOnQueue(Queues.MAIN)
     // Dictionary's C11: the bubble's "Learned" tab, with strings already translated by JS.
     AsyncFunction("showLearnedTab") { options: Map<String, Any?> ->
       val words = (options["words"] as? List<*>)?.filterIsInstance<String>().orEmpty()
@@ -226,10 +228,29 @@ class AndroidDictationModule : Module() {
       DictationService.instance?.showLearnedTab(LearnedTabText(words,
         options["message"] as? String ?: "", options["undo"] as? String ?: "", options["undone"] as? String ?: "")) ?: false
     }.runOnQueue(Queues.MAIN)
-    AsyncFunction("insert") { text: String, promise: Promise ->
+    AsyncFunction("insert") { text: String, options: Map<String, Any?>?, promise: Promise ->
       val service = InsertionService.instance
-      if (service == null) promise.resolve(false) else service.insert(text) { promise.resolve(it) }
+      if (service == null) promise.resolve(false)
+      else service.insert(text, highlight = options?.get("highlight") == true) { promise.resolve(it) }
     }.runOnQueue(Queues.MAIN)
+    // What the hold menu shows: the Translate target, why the Assistant is greyed ("" = available),
+    // and what holding the bubble does ("menu" or "nothing"). Kept for the bubble's next start.
+    Function("setMenuContext") { options: Map<String, Any?> ->
+      val translateTarget = options["translateTarget"] as? String
+      val assistantBlock = options["assistantBlock"] as? String
+      val holdAction = options["holdAction"] as? String
+      val preferences = context.getSharedPreferences(DictationService.PREFERENCES, android.content.Context.MODE_PRIVATE)
+      preferences.edit().apply {
+        if (translateTarget != null) putString("translateTarget", translateTarget)
+        if (assistantBlock != null) { if (assistantBlock.isEmpty()) remove("assistantBlock") else putString("assistantBlock", assistantBlock) }
+        if (holdAction != null) putString("holdAction", holdAction)
+      }.apply()
+    }
+    // With typing access off nothing can paste: the words go on the clipboard instead.
+    Function("copyText") { text: String ->
+      val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+      clipboard.setPrimaryClip(android.content.ClipData.newPlainText("OpenWhispr", text))
+    }
     AsyncFunction("startRecording") {
       check(recorder == null) { "A recording is already active." }
       val next = WavRecorder(context)

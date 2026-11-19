@@ -31,7 +31,12 @@ import {
 } from '@/android/settings/kit';
 import { useSettingsT, type SettingsKey } from '@/android/settings/strings';
 import { requestRuntime, usePermissions } from '@/android/settings/permissions';
-import { applyBubbleLook, sizeLabel, useBubbleLook } from '@/android/settings/bubbleAppearance';
+import {
+  applyBubbleLook,
+  sizeLabel,
+  useBubbleLook,
+  useHoldAction,
+} from '@/android/settings/bubbleAppearance';
 import { processingSummary } from '@/android/processingFable/places';
 
 const HISTORY_LABEL: Record<number, SettingsKey> = {
@@ -53,6 +58,7 @@ export default function SettingsScreen() {
   const processing = processingSummary(t, config, activeMode, cloudAccessFor(user));
   const sync = useSyncStore();
   const opacity = useBubbleLook((s) => s.opacity);
+  const holdAction = useHoldAction((s) => s.value);
   const { status, offCount, refresh } = usePermissions();
   const [switching, setSwitching] = useState(false);
   const signedIn = !requiresRealAccount(user);
@@ -280,6 +286,12 @@ export default function SettingsScreen() {
           title={t('sizeLook')}
           value={`${t(sizeLabel(bubbleSize))} · ${Math.round(opacity * 100)}%`}
           onPress={() => router.push('/android-size-look')}
+        />
+        <ListRow
+          icon="Pointer"
+          title={t('holdBubble')}
+          value={t(holdAction === 'nothing' ? 'holdNothing' : 'holdShowMenu')}
+          onPress={() => router.push('/android-hold-bubble')}
         />
         <ListRow
           icon="Hand"

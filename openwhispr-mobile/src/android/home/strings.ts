@@ -31,7 +31,7 @@ export const homeEnglish = {
   tip2Title: 'Change the bubble size',
   tip2Body: 'Settings → Size & look.',
   tip3Title: 'Hide the bubble',
-  tip3Body: 'Drag it onto “Hide for 1 hour”.',
+  tip3Body: 'Drag it onto “Hide for 15 minutes”.',
   yourStats: 'Your stats',
   wordsSpoken: 'words spoken',
   wordsPerMin: 'words / min',

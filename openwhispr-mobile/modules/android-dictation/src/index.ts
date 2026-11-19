@@ -38,7 +38,33 @@ export interface DeviceProfile {
   thermalStatus: number | null;
   emulator: boolean;
 }
-export type BubbleStatusValue = 'processing' | 'success' | 'retry' | 'retry-kept' | 'recover';
+export type BubbleStatusValue =
+  | 'processing'
+  | 'success'
+  | 'retry'
+  | 'retry-kept'
+  | 'recover'
+  | 'copied';
+/** What the bubble's status tab says after a failed take (each with its own action). */
+export type BubbleMessage =
+  | 'no-speech'
+  | 'offline'
+  | 'out-of-words'
+  | 'sign-in'
+  | 'model-needed'
+  | 'failed';
+export interface BubbleStatusOptions {
+  /** retry / retry-kept: what the status tab says. */
+  message?: BubbleMessage;
+}
+export interface BubbleMenuContext {
+  /** "Into {target}" under Translate (Settings › Translation). */
+  translateTarget?: string;
+  /** Why the Assistant row is greyed: "sign-in", "unavailable", or "" when it can be used. */
+  assistantBlock?: '' | 'sign-in' | 'unavailable';
+  /** Settings › Bubble › Hold the bubble. */
+  holdAction?: 'menu' | 'nothing';
+}
 interface NativeDictation {
   getDeviceProfile(): DeviceProfile;
   getLocale(): string;
@@ -57,7 +83,13 @@ interface NativeDictation {
    * processing · success · retry (nothing kept: Retry listens again) · retry-kept (the recording
    * is kept: Retry sends onRetry) · recover (the text is kept in the app: the bubble offers to open it)
    */
-  setStatus(status: BubbleStatusValue): Promise<void>;
+  setStatus(status: BubbleStatusValue, options?: BubbleStatusOptions): Promise<void>;
+  /** Writes the text where the dictation started; `highlight` keeps edited words selected for 1.2 s. */
+  insert(text: string, options?: { highlight?: boolean }): Promise<boolean>;
+  /** Stores what the hold menu shows. Missing on builds before the hold menu. */
+  setMenuContext?(context: BubbleMenuContext): void;
+  /** Puts text on the clipboard (typing access is off, so nothing can paste). */
+  copyText?(text: string): void;
   /** Shows the bubble's "Learned" tab; false when the bubble isn't on screen. */
   showLearnedTab(options: {
     words: string[];
@@ -65,7 +97,6 @@ interface NativeDictation {
     undo: string;
     undone: string;
   }): Promise<boolean>;
-  insert(text: string): Promise<boolean>;
   startRecording(): Promise<void>;
   stopRecording(cancel: boolean): Promise<Recording>;
   /** Loudness of the in-app recording, 0..1. Missing on builds before the Home recorder. */
@@ -109,13 +140,16 @@ export const AndroidDictation =
   Platform.OS === 'android' ? requireNativeModule<NativeDictation>('AndroidDictation') : null;
 export const dictationEvents = AndroidDictation
   ? new EventEmitter<{
-      onStart: (event: { selection: string }) => void;
+      onStart: (event: { selection: string; mode?: string }) => void;
       onRecording: (event: Recording) => void;
       onRetry: (event: { selection: string }) => void;
       onDismiss: () => void;
       onError: (event: { message: string }) => void;
       onCancel: () => void;
       onOpenResult: () => void;
+      onOpenPlans: () => void;
+      onOpenSignIn: () => void;
+      onOpenModels: () => void;
       onStatusChange: () => void;
       /** The field the bubble typed into changed within 45 s: its text then and now. */
       onFieldEdited: (event: { before: string; after: string }) => void;

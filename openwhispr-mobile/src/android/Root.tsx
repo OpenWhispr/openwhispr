@@ -59,10 +59,14 @@ export default function AndroidRoot() {
   }, []);
   useEffect(() => {
     // The bubble's "open" on a kept result; a cold launch lands on the record tab anyway.
-    const subscription = dictationEvents?.addListener('onOpenResult', () =>
-      router.navigate('/(tabs)/(record)'),
-    );
-    return () => subscription?.remove();
+    // The status tab's other actions open the page that fixes what went wrong.
+    const subscriptions = [
+      dictationEvents?.addListener('onOpenResult', () => router.navigate('/(tabs)/(record)')),
+      dictationEvents?.addListener('onOpenPlans', () => router.push('/android-pro')),
+      dictationEvents?.addListener('onOpenSignIn', () => router.push('/auth')),
+      dictationEvents?.addListener('onOpenModels', () => router.push('/android-models')),
+    ];
+    return () => subscriptions.forEach((subscription) => subscription?.remove());
   }, []);
   useRevenueCatIdentity();
   useEffect(() => observeAndroidPurchaseUpdates(), []);

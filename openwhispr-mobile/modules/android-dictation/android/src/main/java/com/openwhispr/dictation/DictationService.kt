@@ -4,14 +4,16 @@ import android.animation.ValueAnimator
 import android.app.*
 import android.content.Intent
 import android.net.Uri
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.*
-import android.text.TextUtils
+import android.provider.Settings
 import android.util.TypedValue
 import android.view.*
 import android.widget.FrameLayout
@@ -21,9 +23,11 @@ import java.io.File
 import kotlin.math.abs
 
 /**
- * The floating dictation bubble: a round app icon that shows while a text box is focused, grows
- * into a listening bar, writes the words up, and settles back. Dictation only; talking over
- * highlighted text replaces it.
+ * The floating dictation bubble (Variant 1 with Variant 3's hold menu). A tap dictates: listening and
+ * writing happen inside the bubble's own circle, and the words are pasted at the caret. Holding the
+ * bubble opens a menu (Assistant, Translate, Edit selection) drawn in the bubble's own window, which
+ * never takes focus, so the text box keeps its caret and selection. Anything the bubble has to say
+ * shows in a separate status tab beside it.
  */
 class DictationService : Service() {
   companion object {
@@ -33,7 +37,6 @@ class DictationService : Service() {
     var appVisible = false
     var practiceVisible = false
     const val PREFERENCES = "bubble"
-    private const val ERROR_TIMEOUT_MS = 15000L
 
     fun readAppearance(preferences: android.content.SharedPreferences) = BubbleAppearance(
       size = preferences.getInt("size", 64), opacity = preferences.getFloat("opacity", 0.8f),
@@ -48,15 +51,22 @@ class DictationService : Service() {
   private lateinit var windows: WindowManager
   private val preferences by lazy { getSharedPreferences(PREFERENCES, MODE_PRIVATE) }
   private val font by lazy { runCatching { resources.getFont(R.font.ow_space_grotesk_medium) }.getOrDefault(Typeface.DEFAULT) }
+  private val regular by lazy { runCatching { resources.getFont(R.font.ow_space_grotesk_regular) }.getOrDefault(Typeface.DEFAULT) }
+  private val tab by lazy { StatusTab(this, windows, font) }
+  private val toast by lazy { BottomToast(this, windows, font) }
 
   private var root: BubbleRoot? = null
   /** Dictionary's C11: "Learned “Synty”" · Undo, sliding out from behind the bubble. */
   private var learnedTab: LearnedTab? = null
   private var layout: WindowManager.LayoutParams? = null
+  private var face: BubbleFace? = null
+  private var cancelButton: View? = null
+  private var menu: HoldMenuView? = null
+  private var column: LinearLayout? = null
+  private var builtForRight: Boolean? = null
   private var target: FrameLayout? = null
   private var targetCircle: HideTargetView? = null
   private var targetLayout: WindowManager.LayoutParams? = null
-  private var waveform: WaveformView? = null
   private var snap: ValueAnimator? = null
   private var appearance = BubbleAppearance()
   private val scale get() = appearance.scale
@@ -69,11 +79,13 @@ class DictationService : Service() {
   private var focusedField: Int? = null
 
   private var state = BubbleState.READY
+  private var mode = BubbleMode.DICTATE
   private var recorder: WavRecorder? = null
   private var stopping = false
-  private var held = false
   private var dragging = false
   private var retryKept = false
+  /** Saved text the user hasn't opened yet: a glass dot on the bubble. */
+  private var unseen = false
   private var typing = false
   private var keyboardTop: Int? = null
   private var dockRight = true
@@ -82,14 +94,15 @@ class DictationService : Service() {
   private val hidden get() = System.currentTimeMillis() < hiddenUntil
 
   private val maximumRecording = Runnable { if (state == BubbleState.LISTENING) finish(false) }
-  private val dismissError = Runnable { dismiss() }
   private val unhide = Runnable { unhide() }
   private val idleShrink = Runnable { idle = true; updateShrink() }
+  private val stillWriting = Runnable { if (state == BubbleState.PROCESSING) showTab(StatusMessage.STILL_WRITING) }
+  private val settleDone = Runnable { if (state == BubbleState.READY) face?.show(BubbleFace.Look.ICON) }
   /** Events waiting for the JS pipeline, which may still be starting when a dictation ends. */
   private val pending = BubbleEventQueue()
   private val pipelineTimeout = Runnable {
     if (HeadlessPipeline.ready || !pending.holdsRecording) return@Runnable
-    pending.park(); retryKept = true; setState(BubbleState.RETRY)
+    pending.park(); retryKept = true; fail(StatusMessage.FAILED)
   }
   private val screens = object : Application.ActivityLifecycleCallbacks {
     override fun onActivityResumed(activity: Activity) { appVisible = true; updateVisibility() }
@@ -152,7 +165,7 @@ class DictationService : Service() {
     emit?.invoke("onStatusChange", emptyMap())
     return START_NOT_STICKY
   }
-  override fun onConfigurationChanged(newConfig: Configuration) { super.onConfigurationChanged(newConfig); place() }
+  override fun onConfigurationChanged(newConfig: Configuration) { super.onConfigurationChanged(newConfig); closeMenu(); place() }
 
   // Visibility -------------------------------------------------------------------------------
 
@@ -160,26 +173,63 @@ class DictationService : Service() {
   fun onTyping(value: Boolean, top: Int?, field: Int? = null, search: Boolean = false) {
     // Focusing a field (another one, or one after none) wakes a shrunk bubble; typing in it doesn't.
     val focused = value && (!typing || field != focusedField)
+    // Back closes the keyboard (or leaves the field): the menu closes with it. The menu's window
+    // never takes focus, so this is how Back reaches it.
+    if (menu != null && (value != typing || top != keyboardTop || field != focusedField)) closeMenu()
     typing = value; keyboardTop = top; focusedField = if (value) field else null; searchField = value && search
     if (state == BubbleState.READY && !dragging) place()
     if (focused) wake() else updateShrink()
     updateVisibility()
+    face?.warning = InsertionService.instance == null
+    if (focused) showHint()
+  }
+
+  // First-time hint ----------------------------------------------------------------------------
+
+  private var hint: String? = null
+  /**
+   * The first three times the bubble appears for a text box, a chip slides out once: "Tap to dictate ·
+   * Hold for more". It tucks back after 3 s or at the first touch, and stops for good once the menu has
+   * been opened.
+   */
+  private fun showHint() {
+    val shown = preferences.getInt("hintShown", 0)
+    if (!BubbleMenuPolicy.showsHint(preferences.getString("holdAction", null), preferences.getBoolean("menuUsed", false), shown)) return
+    if (state != BubbleState.READY || root?.visibility != View.VISIBLE || tab.showing || dragging) return
+    preferences.edit().putInt("hintShown", shown + 1).apply()
+    val words = getString(R.string.ow_bubble_hint)
+    hint = words
+    // Laid out first, so the tab sits beside the bubble where it settled for this field.
+    handler.post {
+      if (hint != words || state != BubbleState.READY) return@post
+      tab.show(TabMessage(words, plain = true, holdMs = BubbleMenuPolicy.HINT_HOLD_MS), bubbleRect(), dockRight) { hint = null }
+    }
+  }
+  private fun hideHint() {
+    val words = hint ?: return
+    hint = null
+    if (tab.currentLabel == words) tab.hide()
   }
   fun updateVisibility() {
     val busy = state != BubbleState.READY || stopping
     if (appVisible && !practiceVisible) {
+      closeMenu()
       if (state == BubbleState.LISTENING) finish(true)
       if (state == BubbleState.PROCESSING) { deliver("onCancel"); setState(BubbleState.READY) }
       // Dismiss, so a recording the bubble parked for Retry is deleted rather than left behind.
       if (state == BubbleState.RETRY) dismiss()
       if (state == BubbleState.RECOVER) setState(BubbleState.READY)
+      // Home shows the saved text, so it has been seen.
+      if (unseen) { unseen = false; face?.unseen = false }
+      tab.hide(false)
     }
     val visible = BubblePolicy.visible(appVisible, practiceVisible, InsertionService.instance != null, typing, hidden, busy)
     if (!visible && dragging) endDrag()
-    if (!visible) learnedTab?.hide(false)
+    if (!visible) { closeMenu(); if (tab.showing) tab.hide(false); learnedTab?.hide(false) }
     root?.visibility = if (visible) View.VISIBLE else View.GONE
   }
   fun leavePractice() {
+    closeMenu()
     if (state == BubbleState.LISTENING) finish(true)
     if (state == BubbleState.PROCESSING) { deliver("onCancel"); setState(BubbleState.READY) }
   }
@@ -191,13 +241,15 @@ class DictationService : Service() {
     foreground(state == BubbleState.LISTENING)
     updateVisibility()
   }
-  private fun hideForAnHour() {
+  private fun hideForAWhile() {
     hiddenUntil = System.currentTimeMillis() + BubblePolicy.HIDE_FOR_MS
     preferences.edit().putLong("hiddenUntil", hiddenUntil).apply()
     handler.removeCallbacks(unhide); handler.postDelayed(unhide, BubblePolicy.HIDE_FOR_MS)
     foreground(false)
     place()
     updateVisibility()
+    // A mistaken drop costs nothing: Undo brings it straight back.
+    toast.show(getString(R.string.ow_bubble_hidden_toast), getString(R.string.ow_bubble_undo), toastBottom()) { unhide(); wake() }
   }
 
   // Appearance -------------------------------------------------------------------------------
@@ -206,8 +258,7 @@ class DictationService : Service() {
   fun applyAppearance(value: BubbleAppearance) {
     val resized = value.scale != appearance.scale || value.shrinkToDot != appearance.shrinkToDot
     appearance = value
-    // Re-rendering a pill mid-dictation would rebuild its buttons, so a new size waits for Ready.
-    if (resized && state == BubbleState.READY) render()
+    if (resized) render()
     else if (state == BubbleState.READY) root?.alpha = value.alpha
     wake()
   }
@@ -220,18 +271,18 @@ class DictationService : Service() {
   }
   /** ValueAnimator follows the system animator scale, so "Remove animations" makes this a jump. */
   private fun updateShrink(animate: Boolean = true) {
-    val goal = if (BubblePolicy.shrunk(state == BubbleState.READY && !touched, idle, appearance.shrinkWhenIdle, searchField, appearance.shrinkInSearch)) 1f else 0f
+    val goal = if (BubblePolicy.shrunk(state == BubbleState.READY && !touched && menu == null, idle, appearance.shrinkWhenIdle, searchField, appearance.shrinkInSearch)) 1f else 0f
     shrinking?.cancel(); shrinking = null
     if (shrink == goal) return
-    if (!animate || root?.isShown != true) { shrink = goal; resizeReady(); return }
+    if (!animate || root?.isShown != true) { shrink = goal; resizeFace(); return }
     shrinking = ValueAnimator.ofFloat(shrink, goal).apply {
-      duration = 220
-      addUpdateListener { shrink = it.animatedValue as Float; resizeReady() }
+      duration = 240; interpolator = BubbleMotion.emphasizedDecelerate
+      addUpdateListener { shrink = it.animatedValue as Float; resizeFace() }
       start()
     }
   }
-  private fun resizeReady() {
-    val bubble = root?.getChildAt(0) as? IconBubble ?: return
+  private fun resizeFace() {
+    val bubble = face ?: return
     bubble.dot = if (appearance.shrinkToDot) shrink else 0f
     bubble.layoutParams = bubble.layoutParams.apply { width = shown; height = shown }
     if (!dragging) place()
@@ -254,13 +305,16 @@ class DictationService : Service() {
   private fun createWindow() {
     val view = BubbleRoot(this).apply {
       setPadding(shadowRoom, shadowRoom, shadowRoom, shadowRoom); clipToPadding = false; clipChildren = false
-      startsGesture = { state == BubbleState.READY && !stopping }
+      startsGesture = { canStartGesture() }
       gesture = ::onGesture
+      outside = { closeMenu() }
     }
+    // FLAG_WATCH_OUTSIDE_TOUCH: a tap elsewhere closes the menu and still reaches the app below.
     val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
       WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
+        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+      PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
     createTarget()
     // Added before the bubble, so the tab slides out from underneath it.
     learnedTab = LearnedTab(this, windows, font,
@@ -272,18 +326,51 @@ class DictationService : Service() {
     windows.addView(view, params)
   }
 
-  /** Puts the current state's content in the window and moves it so its outer edge stays put. */
+  /**
+   * Builds the window's content once per docked side: the menu (when open) above the bubble, and the
+   * listening ✕ on the bubble's inner side. The bubble view itself survives every state change, so its
+   * glass, bars, dots and ✓ animate rather than cut.
+   */
   private fun render() {
     val view = root ?: return
-    view.removeAllViews(); waveform = null
-    // The round bubble has a fixed size; a plain View asked to wrap its content would fill the window.
-    val ready = state == BubbleState.READY
-    if (!ready) { shrinking?.cancel(); shrink = 0f }
-    view.addView(content(state), FrameLayout.LayoutParams(if (ready) shown else FrameLayout.LayoutParams.WRAP_CONTENT, if (ready) shown else size))
-    (view.getChildAt(0) as? IconBubble)?.dot = if (appearance.shrinkToDot) shrink else 0f
-    view.alpha = if (ready) appearance.alpha else 1f
+    val bubble = face ?: BubbleFace(this).apply {
+      elevation = dp(8f)
+      setOnClickListener { if (state == BubbleState.LISTENING) finish(false) }
+    }.also { face = it }
+    val cancel = cancelButton ?: GlyphButton(this, GlyphButton.Glyph.CLOSE, Color.WHITE, BubbleColors.ink).apply {
+      contentDescription = getString(R.string.ow_bubble_cancel); elevation = dp(4f)
+      setOnClickListener { finish(true) }
+    }.also { cancelButton = it }
+    if (builtForRight != dockRight || column == null) {
+      view.removeAllViews()
+      (bubble.parent as? ViewGroup)?.removeView(bubble); (cancel.parent as? ViewGroup)?.removeView(cancel)
+      val row = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; clipChildren = false; clipToPadding = false
+      }
+      // The ✕ sits on the side facing the middle of the screen.
+      val cancelParams = LinearLayout.LayoutParams(px(28f), px(28f))
+      if (dockRight) {
+        row.addView(cancel, cancelParams.apply { marginEnd = px(14f) }); row.addView(bubble, LinearLayout.LayoutParams(shown, shown))
+      } else {
+        row.addView(bubble, LinearLayout.LayoutParams(shown, shown)); row.addView(cancel, cancelParams.apply { marginStart = px(14f) })
+      }
+      column = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; clipChildren = false; clipToPadding = false
+        gravity = if (dockRight) Gravity.END else Gravity.START
+        addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+      }
+      view.addView(column, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+      builtForRight = dockRight
+    }
+    if (state != BubbleState.READY) { shrinking?.cancel(); shrink = 0f }
+    bubble.layoutParams = bubble.layoutParams.apply { width = shown; height = shown }
+    bubble.dot = if (appearance.shrinkToDot) shrink else 0f
+    cancel.visibility = if (state == BubbleState.LISTENING) View.VISIBLE else View.GONE
+    bubble.contentDescription = getString(if (state == BubbleState.LISTENING) R.string.ow_bubble_stop else R.string.ow_bubble_talk)
+    view.alpha = if (state == BubbleState.READY && menu == null) appearance.alpha else 1f
     place()
   }
+
   private fun place() {
     val view = root ?: return
     val params = layout ?: return
@@ -292,17 +379,13 @@ class DictationService : Service() {
     view.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
     val visibleWidth = view.measuredWidth - 2 * shadowRoom
     params.x = if (dockRight) width - edge - visibleWidth - shadowRoom else edge - shadowRoom
-    // A shrunk bubble keeps the full bubble's centre, so it grows back in place.
-    params.y = BubblePolicy.bubbleTop(savedTop, keyboardTop, height, size, dp(16f).toInt(), dp(48f).toInt()) - shadowRoom + (size - shown) / 2
+    // A shrunk bubble keeps the full bubble's centre, so it grows back in place. An open menu sits
+    // above it, so the window grows upward and the bubble stays put.
+    val above = menuAboveHeight()
+    params.y = BubblePolicy.bubbleTop(savedTop, keyboardTop, height, size, dp(16f).toInt(), dp(48f).toInt()) - shadowRoom + (size - shown) / 2 - above
     if (view.isAttachedToWindow) windows.updateViewLayout(view, params)
+    tab.follow(bubbleRect(), dockRight)
     learnedTab?.follow(bubbleRect(), dockRight)
-  }
-
-  /** The Ready bubble's visible circle on screen. */
-  private fun bubbleRect(): android.graphics.Rect {
-    val params = layout ?: return android.graphics.Rect()
-    val left = params.x + shadowRoom; val top = params.y + shadowRoom
-    return android.graphics.Rect(left, top, left + shown, top + shown)
   }
 
   /**
@@ -310,120 +393,180 @@ class DictationService : Service() {
    * first gives one ring pulse, so the eye finds it. Returns whether it showed.
    */
   fun showLearnedTab(text: LearnedTabText): Boolean {
-    val tab = learnedTab ?: return false
-    if (state != BubbleState.READY || root?.isShown != true || dragging) {
+    val learned = learnedTab ?: return false
+    // Never over a status tab or an open menu: the bubble's own message comes first.
+    if (state != BubbleState.READY || root?.isShown != true || dragging || tab.showing || menu != null) {
       android.util.Log.i("OpenWhisprLearn", "Learned pill not shown: state=$state shown=${root?.isShown} dragging=$dragging")
       return false
     }
     android.util.Log.i("OpenWhisprLearn", "Learned pill shown (${text.words.size} words)")
     val dot = appearance.shrinkToDot && shrink >= 1f
-    if (dot && !tab.showing) {
-      (root?.getChildAt(0) as? IconBubble)?.pulse { tab.show(text, bubbleRect(), dockRight, true) }
-    } else tab.show(text, bubbleRect(), dockRight, dot)
+    if (dot && !learned.showing) {
+      face?.pulse { learned.show(text, bubbleRect(), dockRight, true) }
+    } else learned.show(text, bubbleRect(), dockRight, dot)
     return true
   }
   private fun openDictionary() {
     emit?.invoke("onOpenDictionary", emptyMap())
     packageManager.getLaunchIntentForPackage(packageName)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
   }
-
-  private fun label(text: Int, color: Int) = TextView(this).apply {
-    setText(text); typeface = font; setTextColor(color); setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f * scale)
-    maxLines = 1; ellipsize = TextUtils.TruncateAt.END; gravity = Gravity.CENTER_VERTICAL
+  private fun menuAboveHeight(): Int {
+    val open = menu ?: return 0
+    if (open.measuredHeight == 0) open.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+    return open.measuredHeight + dp(8f).toInt()
   }
-  private fun button(glyph: GlyphButton.Glyph, fill: Int, tint: Int, description: Int, action: () -> Unit) =
-    GlyphButton(this, glyph, fill, tint).apply { contentDescription = getString(description); setOnClickListener { action() } }
-
-  private fun pill(background: Int, vararg parts: Pair<View, Int>): View = LinearLayout(this).apply {
-    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-    this.background = GradientDrawable().apply { setColor(background); cornerRadius = size / 2f }
-    elevation = dp(8f)
-    val inset = px(8f)
-    setPadding(inset, 0, inset, 0)
-    parts.forEachIndexed { index, (child, width) ->
-      addView(child, LinearLayout.LayoutParams(width, if (child is TextView) LinearLayout.LayoutParams.MATCH_PARENT else width).apply {
-        if (index > 0) marginStart = px(8f)
-      })
-    }
+  /** The bubble's visible circle on screen, which the status tab sits beside. */
+  private fun bubbleRect(): Rect {
+    val params = layout ?: return Rect()
+    val (width, height) = screen()
+    val top = BubblePolicy.bubbleTop(savedTop, keyboardTop, height, size, dp(16f).toInt(), dp(48f).toInt()) + (size - shown) / 2
+    val left = if (dockRight) width - edge - shown else edge
+    return if (dragging) Rect(params.x + shadowRoom, params.y + shadowRoom, params.x + shadowRoom + shown, params.y + shadowRoom + shown)
+    else Rect(left, top, left + shown, top + shown)
   }
-
-  private fun content(value: BubbleState): View {
-    val round = px(40f)
-    return when (value) {
-      BubbleState.READY -> IconBubble(this).apply {
-        contentDescription = getString(R.string.ow_bubble_talk); elevation = dp(8f)
-      }
-      BubbleState.LISTENING -> {
-        val wave = WaveformView(this).also { waveform = it }
-        val parts = listOf(
-          button(GlyphButton.Glyph.CLOSE, BubbleColors.fill, BubbleColors.ink, R.string.ow_bubble_cancel) { finish(true) } to round,
-          wave to px(48f),
-          button(GlyphButton.Glyph.STOP, BubbleColors.accent, Color.WHITE, R.string.ow_bubble_stop) { finish(false) } to round,
-        )
-        // The stop button sits where the bubble was, so it grows away from the edge it is docked to.
-        pill(BubbleColors.surface, *(if (dockRight) parts else parts.reversed()).toTypedArray()).also {
-          (wave.layoutParams as LinearLayout.LayoutParams).height = px(24f)
-        }
-      }
-      BubbleState.PROCESSING -> pill(BubbleColors.surface,
-        SpinnerView(this) to px(20f),
-        label(R.string.ow_bubble_writing, BubbleColors.ink).apply { setPadding(0, 0, px(8f), 0) } to LinearLayout.LayoutParams.WRAP_CONTENT,
-      ).apply { contentDescription = getString(R.string.ow_bubble_writing) }
-      BubbleState.RETRY -> pill(BubbleColors.errorBackground,
-        label(R.string.ow_bubble_failed, BubbleColors.error).apply { setPadding(px(8f), 0, 0, 0) } to LinearLayout.LayoutParams.WRAP_CONTENT,
-        button(GlyphButton.Glyph.RETRY, BubbleColors.surface, BubbleColors.ink, R.string.ow_bubble_retry) { retry() } to px(36f),
-        button(GlyphButton.Glyph.CLOSE, BubbleColors.surface, BubbleColors.ink, R.string.ow_bubble_dismiss) { dismiss() } to px(36f),
-      )
-      BubbleState.RECOVER -> pill(BubbleColors.surface,
-        label(R.string.ow_bubble_saved, BubbleColors.accent).apply {
-          setPadding(px(8f), 0, px(4f), 0); contentDescription = getString(R.string.ow_bubble_open)
-          isClickable = true; setOnClickListener { openResult() }
-        } to LinearLayout.LayoutParams.WRAP_CONTENT,
-        button(GlyphButton.Glyph.CLOSE, BubbleColors.fill, BubbleColors.ink, R.string.ow_bubble_dismiss) { dismiss() } to px(36f),
-      )
-    }
+  /** Where the bottom toast's lower edge sits: just above the keyboard, or near the bottom of the screen. */
+  private fun toastBottom(): Int {
+    val (_, height) = screen()
+    return (keyboardTop ?: (height - dp(72f).toInt())) - dp(16f).toInt()
   }
 
   private fun setState(value: BubbleState) {
-    handler.removeCallbacks(dismissError)
-    if (value == BubbleState.RETRY || value == BubbleState.RECOVER) handler.postDelayed(dismissError, ERROR_TIMEOUT_MS)
-    if (value != state) {
-      // A new dictation takes the bubble's place; the tab goes at once.
-      if (value != BubbleState.READY) learnedTab?.hide(false)
-      state = value; render(); wake()
-      val announcement = when (value) {
-        BubbleState.LISTENING -> R.string.ow_bubble_listening
-        BubbleState.PROCESSING -> R.string.ow_bubble_writing
-        BubbleState.RETRY -> R.string.ow_bubble_failed
-        BubbleState.RECOVER -> R.string.ow_bubble_saved
-        BubbleState.READY -> null
+    handler.removeCallbacks(stillWriting)
+    if (value == state) { updateVisibility(); syncPipeline(); return }
+    val previous = state
+    // A new dictation takes the bubble's place; the learned tab goes at once.
+    if (value != BubbleState.READY) learnedTab?.hide(false)
+    state = value
+    if (value != BubbleState.PROCESSING && tab.showing && previous == BubbleState.PROCESSING && !offering(value)) tab.hide()
+    when (value) {
+      BubbleState.LISTENING -> { tab.hide(); face?.badge = mode; face?.show(BubbleFace.Look.LISTENING); popCancel() }
+      BubbleState.PROCESSING -> {
+        face?.badge = mode; face?.show(BubbleFace.Look.WRITING)
+        handler.postDelayed(stillWriting, BubbleMenuPolicy.STILL_WRITING_AFTER_MS)
       }
-      announcement?.let { root?.announceForAccessibility(getString(it)) }
+      BubbleState.READY, BubbleState.RETRY, BubbleState.RECOVER -> if (face?.look != BubbleFace.Look.DONE) { face?.badge = BubbleMode.DICTATE; face?.show(BubbleFace.Look.ICON) }
     }
+    render(); wake()
+    val announcement = when (value) {
+      BubbleState.LISTENING -> R.string.ow_bubble_listening
+      BubbleState.PROCESSING -> R.string.ow_bubble_writing
+      else -> null
+    }
+    announcement?.let { root?.announceForAccessibility(getString(it)) }
     updateVisibility(); syncPipeline()
+  }
+  private fun offering(value: BubbleState) = value == BubbleState.RETRY || value == BubbleState.RECOVER
+  /** The ✕ pops out on the inner side: scale 0.6 → 1, a short spring, 160 ms after the tap. */
+  private fun popCancel() {
+    val cancel = cancelButton ?: return
+    cancel.scaleX = 0.6f; cancel.scaleY = 0.6f; cancel.alpha = 0f
+    cancel.animate().scaleX(1f).scaleY(1f).alpha(1f).setStartDelay(160).setDuration(200)
+      .setInterpolator(android.view.animation.OvershootInterpolator(1.4f)).start()
+  }
+
+  // Status tab -------------------------------------------------------------------------------
+
+  private fun showTab(message: StatusMessage) {
+    val (label, action) = words(message)
+    val run: (() -> Unit)? = if (action == null) null else ({ act(message) })
+    tab.show(TabMessage(label, action, run, onLabel = if (message == StatusMessage.SAVED) run else null,
+      leaves = message != StatusMessage.STILL_WRITING, holdMs = BubbleMenuPolicy.holdFor(message)),
+      bubbleRect(), dockRight) { tabGone(message) }
+  }
+  private fun words(message: StatusMessage): Pair<String, String?> = when (message) {
+    StatusMessage.STILL_WRITING -> getString(R.string.ow_status_still_writing) to null
+    StatusMessage.SAVED -> getString(R.string.ow_status_saved) to getString(R.string.ow_status_open)
+    StatusMessage.NO_SPEECH -> getString(R.string.ow_status_no_speech) to getString(R.string.ow_bubble_retry)
+    StatusMessage.OFFLINE -> getString(R.string.ow_status_offline) to getString(R.string.ow_status_retry)
+    StatusMessage.OUT_OF_WORDS -> getString(R.string.ow_status_out_of_words) to getString(R.string.ow_status_see_plans)
+    StatusMessage.MIC_OFF -> getString(R.string.ow_status_mic_off) to getString(R.string.ow_status_allow)
+    StatusMessage.COPIED -> getString(R.string.ow_status_copied) to getString(R.string.ow_status_turn_on_typing)
+    StatusMessage.SIGN_IN -> getString(R.string.ow_status_signed_out) to getString(R.string.ow_status_sign_in)
+    StatusMessage.MODEL_NEEDED -> getString(R.string.ow_status_model_needed) to getString(R.string.ow_status_download)
+    StatusMessage.FAILED -> getString(R.string.ow_status_failed) to getString(R.string.ow_bubble_retry)
+  }
+  private fun act(message: StatusMessage) {
+    when (message) {
+      StatusMessage.STILL_WRITING -> Unit
+      StatusMessage.SAVED -> openResult()
+      // Nothing worth sending again: listen again at once, in the same mode.
+      StatusMessage.NO_SPEECH -> { val again = mode; tab.hide(); dismiss(); begin(again) }
+      StatusMessage.OFFLINE, StatusMessage.FAILED -> { tab.hide(); retry() }
+      StatusMessage.OUT_OF_WORDS -> { tab.hide(); dismiss(); openApp("onOpenPlans") }
+      StatusMessage.SIGN_IN -> { tab.hide(); dismiss(); openApp("onOpenSignIn") }
+      StatusMessage.MODEL_NEEDED -> { tab.hide(); dismiss(); openApp("onOpenModels") }
+      StatusMessage.MIC_OFF -> {
+        tab.hide(); dismiss()
+        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      }
+      StatusMessage.COPIED -> {
+        tab.hide(); dismiss()
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+      }
+    }
+  }
+  /** The tab left by itself: a failed take's offer goes with it; saved text keeps its dot. */
+  private fun tabGone(message: StatusMessage) {
+    if (message == StatusMessage.STILL_WRITING) return
+    if (state == BubbleState.RETRY) dismiss()
+    else if (state == BubbleState.RECOVER) setState(BubbleState.READY)
+  }
+  private fun openApp(event: String) {
+    emit?.invoke(event, emptyMap())
+    packageManager.getLaunchIntentForPackage(packageName)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+  }
+
+  /** Errors get a short shake and two ticks, never red; then the tab says what happened. */
+  private fun fail(message: StatusMessage) {
+    setState(BubbleState.RETRY)
+    face?.shake(dp(4f))
+    face?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    handler.postDelayed({ face?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }, 90)
+    // The tab slides out once the shake has started (board D: 200 ms in).
+    handler.postDelayed({ if (state == BubbleState.RETRY) showTab(message) }, 200)
   }
 
   // Gestures ---------------------------------------------------------------------------------
 
   private var downX = 0f; private var downY = 0f; private var startX = 0; private var startY = 0
   private var moved = false
-  private val hold = Runnable { if (!moved && state == BubbleState.READY && !stopping) { held = true; begin() } }
+  /** The menu opened during this touch, so lifting on a row picks it. */
+  private var menuThisTouch = false
+  /** A touch that started on an open menu or its bubble. */
+  private var menuTouch = false
+  private val holdForMenu = Runnable {
+    if (moved || stopping || !canStartGesture()) return@Runnable
+    menuThisTouch = true
+    openMenu()
+  }
+
+  private fun canStartGesture() =
+    !stopping && (state == BubbleState.READY || state == BubbleState.RETRY || state == BubbleState.RECOVER)
 
   private fun onGesture(event: MotionEvent) {
     val params = layout ?: return
     val view = root ?: return
+    val bubble = face ?: return
+    val open = menu
     when (event.actionMasked) {
       MotionEvent.ACTION_DOWN -> {
-        // A touch brings a shrunk bubble straight back, so the drag and the tap work on the full bubble,
-        // and holds off shrinking until the gesture ends.
-        touched = true; wake(animate = false); handler.removeCallbacks(idleShrink)
         downX = event.rawX; downY = event.rawY; startX = params.x; startY = params.y
-        moved = false; held = false; snap?.cancel()
-        handler.postDelayed(hold, 300)
+        moved = false; menuThisTouch = false; snap?.cancel()
+        menuTouch = open != null
+        hideHint()
+        if (open != null) { open.highlighted = open.rowAtScreen(event.rawX, event.rawY); return }
+        // A touch brings a shrunk bubble straight back, so the drag and the tap work on the full bubble.
+        touched = true; wake(animate = false); handler.removeCallbacks(idleShrink)
+        bubble.animate().scaleX(0.94f).scaleY(0.94f).setDuration(80).setInterpolator(BubbleMotion.easeOut).start()
+        if (BubbleMenuPolicy.holdOpensMenu(preferences.getString("holdAction", null))) {
+          bubble.holdRing(true)
+          handler.postDelayed(holdForMenu, BubbleMenuPolicy.HOLD_MS)
+        }
       }
       MotionEvent.ACTION_MOVE -> {
-        if (!moved && !held && abs(event.rawX - downX) + abs(event.rawY - downY) > dp(12f)) {
-          moved = true; handler.removeCallbacks(hold); startDrag()
+        if (open != null) { open.highlighted = open.rowAtScreen(event.rawX, event.rawY); return }
+        if (!moved && abs(event.rawX - downX) + abs(event.rawY - downY) > dp(12f)) {
+          moved = true; handler.removeCallbacks(holdForMenu); bubble.holdRing(false); release(bubble); startDrag()
         }
         if (moved) {
           val (width, height) = screen()
@@ -431,28 +574,119 @@ class DictationService : Service() {
           params.y = (startY + event.rawY - downY).toInt().coerceIn(-shadowRoom, height - view.height + shadowRoom)
           windows.updateViewLayout(view, params)
           targetCircle?.active = overTarget()
+          tab.follow(bubbleRect(), dockRight)
         }
       }
       MotionEvent.ACTION_UP -> {
-        handler.removeCallbacks(hold); touched = false
+        handler.removeCallbacks(holdForMenu); touched = false
+        if (open != null) {
+          val row = open.rowAtScreen(event.rawX, event.rawY)
+          when {
+            row != null -> pick(row)
+            // Lifting where the menu opened leaves it open, to tap a row; a tap on the bubble closes it.
+            menuThisTouch -> open.highlighted = null
+            menuTouch && onBubble(event) -> closeMenu()
+            else -> open.highlighted = null
+          }
+          menuThisTouch = false; menuTouch = false
+          return
+        }
+        bubble.holdRing(false); release(bubble)
         when {
           // A settled bubble starts counting down once it reaches the edge.
-          moved -> { val hide = overTarget(); endDrag(); if (hide) { hideForAnHour(); wake() } else settle() }
-          held -> finish(false)
-          else -> { view.performClick(); begin() }
+          moved -> { val hide = overTarget(); endDrag(); if (hide) { hideForAWhile(); wake() } else settle() }
+          // A tap (or, with the menu off, any press) dictates, starting on the lift.
+          else -> { view.performClick(); bubble.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); tapToDictate() }
         }
-        held = false
       }
       MotionEvent.ACTION_CANCEL -> {
-        handler.removeCallbacks(hold); touched = false
+        handler.removeCallbacks(holdForMenu); touched = false
+        bubble.holdRing(false); release(bubble)
         if (moved) { endDrag(); place() }
-        if (held) finish(true)
-        held = false
+        menuThisTouch = false; menuTouch = false
         wake()
       }
     }
   }
+  private fun release(bubble: View) {
+    bubble.animate().scaleX(1f).scaleY(1f).setDuration(120).setInterpolator(BubbleMotion.standard).start()
+  }
+  private fun onBubble(event: MotionEvent): Boolean {
+    val bubble = face ?: return false
+    val at = IntArray(2); bubble.getLocationOnScreen(at)
+    return event.rawX >= at[0] && event.rawX <= at[0] + bubble.width && event.rawY >= at[1] && event.rawY <= at[1] + bubble.height
+  }
+  /** A tap clears whatever the tab offered and dictates. */
+  private fun tapToDictate() {
+    if (state == BubbleState.RETRY) dismiss()
+    else if (state == BubbleState.RECOVER) setState(BubbleState.READY)
+    tab.hide()
+    begin(BubbleMode.DICTATE)
+  }
+
+  // Hold menu --------------------------------------------------------------------------------
+
+  private fun openMenu() {
+    val holder = column ?: return
+    val bubble = face ?: return
+    bubble.holdRing(false)
+    bubble.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    preferences.edit().putBoolean("menuUsed", true).apply()
+    hideHint()
+    if (state == BubbleState.RETRY) dismiss() else if (state == BubbleState.RECOVER) setState(BubbleState.READY)
+    tab.hide()
+    val selected = InsertionService.instance?.hasSelection() == true
+    val block = AssistantBlock.fromWire(preferences.getString("assistantBlock", null))
+    val target = BubbleMenuPolicy.translateTarget(preferences.getString("translateTarget", null))
+    val copy = MenuCopy(
+      title = { getString(when (it) {
+        BubbleMode.ASSISTANT -> R.string.ow_menu_assistant
+        BubbleMode.TRANSLATE -> R.string.ow_menu_translate
+        else -> R.string.ow_menu_edit
+      }) },
+      subtitle = { when (it) {
+        BubbleMode.ASSISTANT -> getString(R.string.ow_menu_assistant_body)
+        BubbleMode.TRANSLATE -> getString(R.string.ow_menu_translate_body, target)
+        else -> getString(R.string.ow_menu_edit_body)
+      } },
+      blockedReason = getString(if (block == AssistantBlock.SIGN_IN) R.string.ow_menu_sign_in_to_use else R.string.ow_menu_unavailable),
+    )
+    val view = HoldMenuView(this, regular, font, BubbleMenuPolicy.rows(selected, block != null), copy)
+    view.onPick = { pick(it) }
+    menu = view
+    holder.addView(view, 0, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8f).toInt() })
+    root?.alpha = 1f
+    handler.removeCallbacks(idleShrink)
+    place()
+    view.grow(dockRight)
+    root?.announceForAccessibility(getString(R.string.ow_menu_opened))
+  }
+  private fun closeMenu() {
+    val open = menu ?: return
+    menu = null
+    (open.parent as? ViewGroup)?.removeView(open)
+    if (state == BubbleState.READY) root?.alpha = appearance.alpha
+    face?.let { release(it) }
+    place(); wake()
+  }
+  private fun pick(index: Int) {
+    val open = menu ?: return
+    val row = open.rows.getOrNull(index) ?: return
+    closeMenu()
+    if (!row.enabled) {
+      // The assistant isn't available: picking any of its rows opens the app (sign-in) instead of recording.
+      val block = AssistantBlock.fromWire(preferences.getString("assistantBlock", null))
+      openApp(if (block == AssistantBlock.SIGN_IN) "onOpenSignIn" else "onOpenModels")
+      return
+    }
+    face?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    begin(row.mode)
+  }
+
+  // Dragging ---------------------------------------------------------------------------------
+
   private fun bubbleCenter(): Pair<Float, Float> {
+    // Only the Ready bubble is dragged, with no menu or ✕ beside it, so the window is just the bubble.
     val params = layout!!
     return (params.x + shadowRoom + shown / 2f) to (params.y + shadowRoom + shown / 2f)
   }
@@ -469,17 +703,18 @@ class DictationService : Service() {
     val params = layout ?: return
     val view = root ?: return
     val (width, height) = screen()
-    dockRight = BubblePolicy.dockRight(bubbleCenter().first, width)
+    val right = BubblePolicy.dockRight(bubbleCenter().first, width)
     savedTop = (params.y + shadowRoom).coerceIn(0, height - size)
-    preferences.edit().putBoolean("dockRight", dockRight).putInt("top", savedTop!!).apply()
-    val destination = if (dockRight) width - edge - size - shadowRoom else edge - shadowRoom
+    preferences.edit().putBoolean("dockRight", right).putInt("top", savedTop!!).apply()
+    if (right != dockRight) { dockRight = right; render() }
+    val destination = if (dockRight) width - edge - (view.measuredWidth - 2 * shadowRoom) - shadowRoom else edge - shadowRoom
     snap = ValueAnimator.ofInt(params.x, destination).apply {
       duration = 180
       addUpdateListener { params.x = it.animatedValue as Int; if (view.isAttachedToWindow) windows.updateViewLayout(view, params) }
       addListener(object : android.animation.AnimatorListenerAdapter() {
         private var cancelled = false
         override fun onAnimationCancel(animation: android.animation.Animator) { cancelled = true }
-        override fun onAnimationEnd(animation: android.animation.Animator) { if (!cancelled) wake() }
+        override fun onAnimationEnd(animation: android.animation.Animator) { if (!cancelled) { tab.follow(bubbleRect(), dockRight); wake() } }
       })
       start()
     }
@@ -491,13 +726,13 @@ class DictationService : Service() {
       setText(R.string.ow_bubble_hide_target); typeface = font; setTextColor(BubbleColors.ink)
       setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f); gravity = Gravity.CENTER
       val pad = dp(10f).toInt(); setPadding(pad, dp(4f).toInt(), pad, dp(4f).toInt())
-      background = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12f) }
+      background = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12f); setStroke(dp(1f).toInt().coerceAtLeast(1), BubbleColors.hairline) }
       elevation = dp(2f)
     }
     val holder = FrameLayout(this).apply {
       clipChildren = false; visibility = View.GONE
       val column = LinearLayout(this@DictationService).apply {
-        // The circle grows 18% under the bubble, into this padding, so the padding must not clip it.
+        // The circle grows under the bubble, into this padding, so the padding must not clip it.
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; clipChildren = false; clipToPadding = false
         val pad = dp(12f).toInt(); setPadding(0, pad, 0, pad)
         addView(circle, LinearLayout.LayoutParams(dp(64f).toInt(), dp(64f).toInt()))
@@ -518,13 +753,16 @@ class DictationService : Service() {
   }
   private fun startDrag() {
     dragging = true
+    closeMenu()
     learnedTab?.hide(false)
     val holder = target ?: return
     val params = targetLayout ?: return
     params.y = (targetCenter().second - dp(44f)).toInt()
     runCatching { windows.updateViewLayout(holder, params) }
     targetCircle?.active = false
-    holder.alpha = 0f; holder.visibility = View.VISIBLE; holder.animate().alpha(1f).setDuration(150).start()
+    // The target rises 24 dp and fades in.
+    holder.alpha = 0f; holder.translationY = dp(24f); holder.visibility = View.VISIBLE
+    holder.animate().alpha(1f).translationY(0f).setDuration(180).setInterpolator(BubbleMotion.emphasizedDecelerate).start()
   }
   private fun endDrag() {
     dragging = false
@@ -533,30 +771,35 @@ class DictationService : Service() {
 
   // Dictation --------------------------------------------------------------------------------
 
-  private fun begin() {
+  private fun begin(next: BubbleMode) {
     if (state != BubbleState.READY || stopping) return
     retryKept = false
+    if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+      mode = next; fail(StatusMessage.MIC_OFF); return
+    }
     try {
       val selected = InsertionService.instance?.captureTarget().orEmpty()
+      mode = next
       foreground(true)
       recorder = WavRecorder(this).also { recording ->
-        recording.onLevel = { level -> handler.post { waveform?.setLevel(level) } }
+        recording.onLevel = { level -> handler.post { face?.setLevel(level) } }
         recording.start()
       }
       setState(BubbleState.LISTENING)
-      deliver("onStart", mapOf("selection" to selected, "mode" to "dictate"))
+      deliver("onStart", mapOf("selection" to selected, "mode" to next.wire))
       handler.postDelayed(maximumRecording, 300000)
     } catch (error: Exception) {
       recorder?.close(); recorder = null; foreground(false)
       deliver("onError", mapOf("message" to (error.message ?: "Microphone could not start.")))
-      setState(BubbleState.RETRY)
+      fail(if (error is SecurityException) StatusMessage.MIC_OFF else StatusMessage.FAILED)
     }
   }
   private fun finish(cancel: Boolean) {
     if (state != BubbleState.LISTENING) return
-    handler.removeCallbacks(maximumRecording); held = false
+    handler.removeCallbacks(maximumRecording)
     val active = recorder; recorder = null
     stopping = true
+    if (cancel) mode = BubbleMode.DICTATE
     setState(if (cancel) BubbleState.READY else BubbleState.PROCESSING)
     Thread {
       try {
@@ -569,8 +812,9 @@ class DictationService : Service() {
         }
       } catch (error: Exception) {
         handler.post {
-          stopping = false; foreground(false); setState(BubbleState.RETRY)
+          stopping = false; foreground(false)
           deliver("onError", mapOf("message" to (error.message ?: "Recording failed.")))
+          fail(StatusMessage.FAILED)
         }
       } finally { active?.close() }
     }.start()
@@ -589,7 +833,7 @@ class DictationService : Service() {
       val selected = InsertionService.instance?.captureTarget().orEmpty()
       setState(BubbleState.PROCESSING)
       deliver("onRetry", mapOf("selection" to selected))
-    } else { setState(BubbleState.READY); begin() }
+    } else { val again = mode; setState(BubbleState.READY); begin(again) }
   }
   private fun dismiss() {
     if (state != BubbleState.RETRY && state != BubbleState.RECOVER) return
@@ -599,6 +843,8 @@ class DictationService : Service() {
     setState(BubbleState.READY)
   }
   private fun openResult() {
+    unseen = false; face?.unseen = false
+    tab.hide()
     emit?.invoke("onOpenResult", emptyMap())
     packageManager.getLaunchIntentForPackage(packageName)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     setState(BubbleState.READY)
@@ -626,22 +872,47 @@ class DictationService : Service() {
   private fun syncPipeline() {
     if (BubblePolicy.keepsPipelineAwake(state, stopping)) HeadlessPipeline.start(this) else HeadlessPipeline.stop(this)
   }
-  /** Set by the app: processing, success, retry (nothing kept), retry-kept (recording kept) or recover (text kept in the app). */
-  fun status(value: String) {
+
+  /**
+   * Set by the app: processing; success (the ✓);
+   * retry / retry-kept with the reason the tab names; recover (the text is kept in the app);
+   * copied (typing access is off, the words are on the clipboard).
+   */
+  fun status(value: String, options: Map<String, Any?> = emptyMap()) {
     if (state == BubbleState.LISTENING) return
     retryKept = value == "retry-kept"
-    setState(when (value) {
-      "processing" -> BubbleState.PROCESSING
-      "retry", "retry-kept", "error" -> BubbleState.RETRY
-      "recover" -> BubbleState.RECOVER
-      else -> BubbleState.READY
-    })
+    when (value) {
+      "processing" -> setState(BubbleState.PROCESSING)
+      "success" -> succeed()
+      "retry", "retry-kept", "error" -> fail(StatusMessage.fromWire(options["message"] as? String) ?: StatusMessage.FAILED)
+      "recover", "copied" -> {
+        setState(BubbleState.RECOVER)
+        unseen = true; face?.unseen = true
+        face?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        handler.postDelayed({ face?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }, 90)
+        showTab(if (value == "copied") StatusMessage.COPIED else StatusMessage.SAVED)
+      }
+      else -> setState(BubbleState.READY)
+    }
+  }
+  /**
+   * Paste first: the ✓ draws once the words are in the field, then the glass eases back to the icon.
+   * Every mode ends this way; the menu modes show no toast (Josh, 19 Nov: they got in the way).
+   */
+  private fun succeed() {
+    tab.hide()
+    face?.show(BubbleFace.Look.DONE)
+    face?.performHapticFeedback(HapticFeedbackConstants.CONFIRM.takeIf { Build.VERSION.SDK_INT >= 30 } ?: HapticFeedbackConstants.CLOCK_TICK)
+    mode = BubbleMode.DICTATE
+    setState(BubbleState.READY)
+    handler.removeCallbacks(settleDone); handler.postDelayed(settleDone, 400)
   }
   override fun onDestroy() {
     handler.removeCallbacksAndMessages(null); snap?.cancel(); shrinking?.cancel(); recorder?.close(); recorder = null
+    tab.hide(false); toast.hide(false)
     target?.let { runCatching { windows.removeView(it) } }; target = null; targetCircle = null
     learnedTab?.destroy(); learnedTab = null
-    root?.let { runCatching { windows.removeView(it) } }; root = null; waveform = null
+    root?.let { runCatching { windows.removeView(it) } }; root = null; face = null; menu = null; column = null; cancelButton = null
     InsertionService.instance?.clearTarget(); deliver("onCancel")
     application.unregisterActivityLifecycleCallbacks(screens); HeadlessPipeline.stop(this)
     instance = null; emit?.invoke("onStatusChange", emptyMap()); super.onDestroy()

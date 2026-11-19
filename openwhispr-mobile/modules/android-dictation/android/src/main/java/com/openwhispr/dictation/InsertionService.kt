@@ -90,6 +90,14 @@ class InsertionService : AccessibilityService() {
   }
   override fun onInterrupt() { clearTarget(); stopWatch() }
   override fun onDestroy() { handler.removeCallbacks(typingCheck); clearTarget(); stopWatch(); instance = null; DictationService.instance?.onTyping(false, null); DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
+  /** Moves the caret after edited words still highlighted from [insert], unless the user moved on. */
+  private fun settleHighlight(start: Int, end: Int) {
+    val node = focusedField() ?: return
+    try {
+      val field = readField(node)
+      if (field.start == start && field.end == end) select(node, end, end)
+    } finally { node.recycle() }
+  }
   fun clearTarget() { target?.node?.recycle(); target = null }
   private fun focusedField(): AccessibilityNodeInfo? {
     val root = rootInActiveWindow ?: return null
@@ -108,7 +116,29 @@ class InsertionService : AccessibilityService() {
     target = Target(node, text, start, end)
     return text.substring(start, end)
   }
-  fun insert(text: String, complete: (Boolean) -> Unit) {
+  /**
+   * Whether the focused field has text selected, so the hold menu offers Edit selection. Reads only the
+   * selection bounds of the focused field, and only when the user holds the bubble.
+   */
+  fun hasSelection(): Boolean {
+    val node = focusedField() ?: return false
+    return try {
+      if (!node.isEditable || node.isPassword) false
+      else readField(node).let { it.end > it.start && it.start >= 0 }
+    } finally { node.recycle() }
+  }
+
+  private fun select(node: AccessibilityNodeInfo, start: Int, end: Int) =
+    node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, Bundle().apply {
+      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, start)
+      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, end)
+    })
+
+  /**
+   * Writes [text] where the dictation started. With [highlight] (Edit selection), the new words stay
+   * selected for 1.2 s, the field's own highlight showing what changed, then the caret moves after them.
+   */
+  fun insert(text: String, highlight: Boolean = false, complete: (Boolean) -> Unit) {
     val captured = target ?: return complete(false)
     val current = focusedField()
     if (current == null) { clearTarget(); return complete(false) }
@@ -121,17 +151,21 @@ class InsertionService : AccessibilityService() {
     val inserted = current.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
       putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, result)
     })
-    if (inserted) current.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, Bundle().apply {
-      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, plan.cursor)
-      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, plan.cursor)
-    })
+    val wordsStart = plan.cursor - (result.length - (currentText.length - (end - start)))
+    if (inserted) {
+      if (highlight && wordsStart in 0..plan.cursor) select(current, wordsStart, plan.cursor) else select(current, plan.cursor, plan.cursor)
+    }
     clearTarget()
     if (!inserted) { current.recycle(); return complete(false) }
     // Some editors acknowledge an action without applying it. Verify the result;
     // never retry a write because that can duplicate text in another application.
     handler.postDelayed({
-      val verified = runCatching { current.refresh() && InsertionPlan.landed(currentText, readField(current).text, text) }.getOrDefault(false)
-      if (verified && !current.isPassword) runCatching { startWatch(current, readField(current).text) }
+      val after = runCatching { if (current.refresh()) readField(current).text else null }.getOrNull()
+      val verified = after != null && InsertionPlan.landed(currentText, after, text)
+      if (verified && highlight && wordsStart >= 0)
+        handler.postDelayed({ settleHighlight(wordsStart, plan.cursor) }, BubbleMenuPolicy.EDIT_HIGHLIGHT_MS)
+      // Dictionary's C11: watch the field for a word the user fixes after the paste.
+      if (verified && !current.isPassword) runCatching { startWatch(current, after!!) }
       current.recycle(); complete(verified)
     }, 150)
   }
