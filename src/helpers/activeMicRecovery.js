@@ -26,8 +26,8 @@ export const describeAudioInputs = (devices = []) => {
 };
 
 const trackMatchesDefault = (track, device) => {
-  const settings = track?.getSettings?.();
-  if (!settings || !device) return null;
+  const settings = track.getSettings();
+  if (!device) return null;
   // Chromium's default device ID is an alias. Only compare physical IDs
   // directly; fall back to the group when either endpoint exposes the alias.
   const isPhysicalId = (id) => id && !CHROMIUM_ALIAS_DEVICE_IDS.has(id);
@@ -58,7 +58,7 @@ export class ActiveMicRecoveryController {
     muteGraceMs = DEFAULT_MUTE_GRACE_MS,
     retryMs = DEFAULT_RETRY_MS,
     logger = null,
-    logScope = "audio",
+    logScope,
   }) {
     this.mediaDevices = mediaDevices;
     this.acquire = acquire;
@@ -112,7 +112,7 @@ export class ActiveMicRecoveryController {
   }
 
   log(level, message, meta) {
-    this.logger?.[level]?.(message, meta, this.logScope);
+    this.logger?.[level](message, meta, this.logScope);
   }
 
   isCurrent(generation) {
@@ -142,7 +142,7 @@ export class ActiveMicRecoveryController {
     const alive = this.track && this.track.readyState !== "ended";
     this.setStatus(alive ? "active" : "unavailable");
     if (!alive) {
-      this.log("info", "Microphone track ended before recording could watch it", {
+      this.log("info", "Recording started without a live microphone track", {
         track: describeTrack(this.track),
       });
       this.recover("start");
@@ -170,7 +170,7 @@ export class ActiveMicRecoveryController {
   }
 
   // A slow enumeration must not overwrite a newer devicechange or recording.
-  async refreshInputs(generation = this.generation) {
+  async refreshInputs(generation) {
     const read = ++this.inputRead;
     try {
       const inputs = describeAudioInputs(await this.mediaDevices.enumerateDevices());
@@ -280,15 +280,14 @@ export class ActiveMicRecoveryController {
         // An `ended` event, or the replacement recorder stopping on a dead track,
         // can arrive at any await above. Those calls were folded into this
         // attempt (#2743), so the replacement is checked here before it counts.
-        if (this.track?.readyState === "ended") {
+        if (track.readyState === "ended") {
           throw new Error("Replacement microphone ended before recovery finished");
         }
         // Enumeration can consume the only devicechange for a second default
-        // switch. Re-resolve the selection after releasing this attempt.
+        // switch, so re-resolve the selection after releasing this attempt.
+        // Without exposed IDs, only a changed default justifies another open.
         if (selectionMayHaveChanged()) {
           const matches = trackMatchesDefault(track, this.inputs.defaultInput);
-          // Coalesced devicechange events can hide an intermediate default.
-          // Without exposed IDs, only a changed default justifies another open.
           followNewDefault =
             matches === false || (matches === null && defaultAtAcquire !== this.inputs.defaultKey);
           if (followNewDefault) return false;
@@ -300,7 +299,6 @@ export class ActiveMicRecoveryController {
             reason,
             durationMs: Date.now() - this.recoveryStartedAt,
             label: track.label || "",
-            muted: track.muted,
             failedAttempts: this.failedAttempts,
           });
           this.failedAttempts = 0;
@@ -316,7 +314,7 @@ export class ActiveMicRecoveryController {
         return true;
       } catch (error) {
         if (replacement && replacement !== this.stream) {
-          if (this.isCurrent(generation) && this.track === track) {
+          if (this.track === track) {
             this.watchTrack(oldStream?.getAudioTracks?.()[0]);
           }
           stopStream(replacement);
