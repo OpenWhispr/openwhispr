@@ -371,6 +371,17 @@ export default function DictionaryRoot() {
   const [snippetSheet, setSnippetSheet] = useState<{ snippet: Snippet | null } | null>(null);
   // The Undo toast sits where the add button floats; it steps aside until the toast closes.
   const undoShowing = useSettingsToast((state) => state.action != null);
+  // A plain toast ("Added 2 words") shows 2.4 s where the add button floats; the button steps
+  // aside for it too, and comes back once it has gone.
+  const toastId = useSettingsToast((state) => state.id);
+  const [plainToast, setPlainToast] = useState(false);
+  const firstToastId = useRef(toastId);
+  useEffect(() => {
+    if (toastId === firstToastId.current) return;
+    setPlainToast(true);
+    const timer = setTimeout(() => setPlainToast(false), 2600);
+    return () => clearTimeout(timer);
+  }, [toastId]);
 
   // A word moved into a shared list applies as a team word until its shared copy is gone, so
   // it leaves "your words" and the team row names it instead.
@@ -553,7 +564,7 @@ export default function DictionaryRoot() {
           </>
         )}
       </ScrollView>
-      {showEmpty || searching || undoShowing ? null : (
+      {showEmpty || searching || undoShowing || plainToast ? null : (
         <NewButton
           onPress={onAdd}
           bottom={16}
