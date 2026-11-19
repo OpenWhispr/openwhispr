@@ -1,12 +1,12 @@
-export const WORKSPACE_ICON_INPUT_TYPES: readonly [
+export const WORKSPACE_ICON_INPUT_TYPES = [
   "image/png",
   "image/jpeg",
   "image/webp",
   "image/gif",
-] = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+] as const;
 
-export const WORKSPACE_ICON_INPUT_MAX_BYTES = 10485760;
-export const WORKSPACE_ICON_SIZE = 256;
+const WORKSPACE_ICON_INPUT_MAX_BYTES = 10 * 1024 * 1024;
+const WORKSPACE_ICON_SIZE = 256;
 
 export function checkWorkspaceIconFile(file: {
   type: string;
@@ -46,11 +46,8 @@ export async function encodeWorkspaceIcon(file: Blob): Promise<string> {
     return await new Promise<string>((resolve, reject): void => {
       const reader = new FileReader();
       reader.onload = (): void => {
-        if (typeof reader.result !== "string") {
-          reject(new Error("Unable to read workspace icon"));
-          return;
-        }
-        resolve(reader.result.slice(reader.result.indexOf(",") + 1));
+        const dataUrl = reader.result as string;
+        resolve(dataUrl.slice(dataUrl.indexOf(",") + 1));
       };
       reader.onerror = (): void => {
         reject(reader.error ?? new Error("Unable to read workspace icon"));

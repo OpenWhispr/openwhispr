@@ -158,7 +158,7 @@ function GeneralPage({
 
   useEffect(() => {
     setName(workspace.name);
-  }, [workspace.id, workspace.name]);
+  }, [workspace.name]);
 
   useEffect(() => {
     if (iconBusy) {
@@ -222,7 +222,7 @@ function GeneralPage({
   async function handleSave(): Promise<void> {
     setSaving(true);
     await applyUpdate(
-      (): Promise<Workspace> => WorkspacesService.update(workspace.id, { name: name.trim() }),
+      () => WorkspacesService.update(workspace.id, { name: name.trim() }),
       t("settingsPage.workspace.general.saved"),
       errorMessage
     );
@@ -250,7 +250,7 @@ function GeneralPage({
     }
     setIconBusy("upload");
     await applyUpdate(
-      async (): Promise<Workspace> =>
+      async () =>
         WorkspacesService.uploadIcon(workspace.id, await encodeWorkspaceIcon(file), authGeneration),
       t("settingsPage.workspace.general.iconUploaded"),
       iconErrorMessage
@@ -261,7 +261,7 @@ function GeneralPage({
   async function handleIconRemove(): Promise<void> {
     setIconBusy("remove");
     await applyUpdate(
-      (): Promise<Workspace> => WorkspacesService.removeIcon(workspace.id),
+      () => WorkspacesService.removeIcon(workspace.id),
       t("settingsPage.workspace.general.iconRemoved"),
       iconErrorMessage
     );
@@ -340,7 +340,7 @@ function GeneralPage({
                 accept={WORKSPACE_ICON_INPUT_TYPES.join(",")}
                 className="hidden"
                 disabled={iconBusy !== null}
-                onChange={(event): void => {
+                onChange={(event) => {
                   const file = event.target.files?.[0];
                   // Cleared so choosing the same file again still reports it.
                   event.target.value = "";
@@ -351,7 +351,7 @@ function GeneralPage({
                 ref={iconButtonRef}
                 variant="outline"
                 size="sm"
-                onClick={(): void => iconInputRef.current?.click()}
+                onClick={() => iconInputRef.current?.click()}
                 disabled={iconBusy !== null}
               >
                 <Upload className="size-3.5" aria-hidden="true" />
@@ -367,7 +367,7 @@ function GeneralPage({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={(): void => void handleIconRemove()}
+                  onClick={() => void handleIconRemove()}
                   disabled={iconBusy !== null}
                 >
                   <Trash2 className="size-3.5" aria-hidden="true" />

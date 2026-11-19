@@ -84,8 +84,7 @@ async function loadSection(
         export const cloudGet = () => {};
         export const cloudPatch = () => {};
         export const cloudDelete = () => {};
-        export const cloudPost = async (path, body) =>
-          answer(await globalThis.__iconTest.request(path, body, globalThis.__iconTest.authGeneration));
+        export const cloudPost = () => {};
         export const cloudPostForAuthGeneration = async (path, body, generation) =>
           answer(await globalThis.__iconTest.request(path, body, generation));
       `,
@@ -526,10 +525,7 @@ for (const [failure, message] of [
     assert.ok(view.input, "file picker");
     await act(async () => {
       if (failure === "remove") propsOf(view.button("iconRemove")).onClick();
-      else
-        propsOf(view.input).onChange({
-          target: { files: [{ type: "image/png", size: 100 }], value: "image" },
-        });
+      else propsOf(view.input).onChange(PICK_PNG);
     });
     assert.deepEqual(view.state.toasts, [
       {
@@ -559,7 +555,7 @@ test("icon service calls use the workspace icon route and unwrap Workspace respo
       "/cloudApi.js": `
         export const cloudGet = () => {};
         export const cloudPatch = () => {};
-        export const cloudPost = async (path, body) => globalThis.__iconApi("POST", path, body);
+        export const cloudPost = () => {};
         export const cloudPostForAuthGeneration = async (path, body, generation) =>
           globalThis.__iconApi("POST", path, body, generation);
         export const cloudDelete = async (path) => globalThis.__iconApi("DELETE", path);
@@ -567,7 +563,6 @@ test("icon service calls use the workspace icon route and unwrap Workspace respo
     },
   });
   const { WorkspacesService } = await vite.ssrLoadModule("/services/WorkspacesService.ts");
-  assert.equal(typeof WorkspacesService.uploadIcon, "function");
   assert.equal(await WorkspacesService.uploadIcon("w1", "encoded-webp", 7), workspace);
   assert.equal(await WorkspacesService.removeIcon("w1"), workspace);
   assert.deepEqual(calls, [
@@ -607,11 +602,7 @@ test("an account switch during encoding keeps the upload pinned to its initiatin
       return { data: WORKSPACE };
     },
   });
-  await act(async () =>
-    propsOf(view.input).onChange({
-      target: { files: [{ type: "image/png", size: 100 }], value: "image" },
-    })
-  );
+  await act(async () => propsOf(view.input).onChange(PICK_PNG));
   assert.deepEqual(requests, []);
   view.state.authGeneration = 8;
   await act(async () => finishEncoding("encoded-webp"));
@@ -645,11 +636,7 @@ test("a selection without a validated account stops before encoding or uploading
       return "encoded-webp";
     },
   });
-  await act(async () =>
-    propsOf(view.input).onChange({
-      target: { files: [{ type: "image/png", size: 100 }], value: "image" },
-    })
-  );
+  await act(async () => propsOf(view.input).onChange(PICK_PNG));
 
   assert.equal(encodes, 0);
   assert.deepEqual(view.state.calls, []);
