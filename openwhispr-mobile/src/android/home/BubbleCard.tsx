@@ -172,7 +172,7 @@ export function BubbleCard({
       {needsPermission ? (
         <View style={{ gap: 10 }}>
           <PillButton
-            accent
+            primary
             icon={PERMISSION_ICON[missing[0]]}
             label={t(PERMISSION_LABEL[missing[0]])}
             onPress={() => {
