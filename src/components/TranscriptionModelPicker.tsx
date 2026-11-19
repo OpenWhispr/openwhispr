@@ -45,7 +45,12 @@ import {
   type TranscriptionPolicyContext,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
-import { usePolicySnapshot } from "../hooks/usePolicy";
+import { isByokTranscriptionModelAllowed } from "../services/managedTranscription";
+import {
+  useAssemblyAiDictationCleanup,
+  useByokTranscriptionModelAllowed,
+  usePolicySnapshot,
+} from "../hooks/usePolicy";
 import {
   LOCAL_ASR_ORGANIZATIONS,
   getASRModelOrganization,
@@ -652,6 +657,9 @@ export default function TranscriptionModelPicker({
   const colorScheme: ColorScheme = variant === "settings" ? "purple" : "blue";
   const styles = useMemo(() => MODEL_PICKER_COLORS[colorScheme], [colorScheme]);
   const policyState = usePolicySnapshot();
+  const assemblyAiCleanup = useAssemblyAiDictationCleanup();
+  const cleanupEnabled = useSettingsStore((state) => state.useCleanupModel);
+  const modelAllowed = useByokTranscriptionModelAllowed(policyState);
   const providerAllowed = useCallback(
     (providerId: string) => isProviderAllowedByPolicy(policyState, "transcription", providerId),
     [policyState]
@@ -1156,6 +1164,11 @@ export default function TranscriptionModelPicker({
 
   const handleCloudModelSelect = useCallback(
     (modelId: string) => {
+      if (
+        displayedCloudProvider !== "custom" &&
+        !isByokTranscriptionModelAllowed(displayedCloudProvider, modelId)
+      )
+        return;
       if (displayedCloudProvider !== selectedCloudProvider) {
         switchCloudTranscriptionProvider(transcriptionContext, displayedCloudProvider);
       }
@@ -1404,25 +1417,27 @@ export default function TranscriptionModelPicker({
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
     const providerIcon = getRemoteProviderIcon(displayedCloudProvider);
-    return currentCloudProvider.models.map((m) => {
-      // OpenRouter brokers other vendors' models, so the id's prefix
-      // ("openai/…", "google/…") names the model better than OpenRouter's own
-      // mark. Vendors we have no icon for keep it, rather than showing none.
-      const slash = displayedCloudProvider === "openrouter" ? m.id.indexOf("/") : -1;
-      const vendorIcon = slash > 0 ? getRemoteProviderIcon(m.id.slice(0, slash)) : null;
-      const { icon, invertInDark } = vendorIcon?.icon ? vendorIcon : providerIcon;
-      return {
-        value: m.id,
-        label: m.name,
-        description: m.descriptionKey
-          ? t(m.descriptionKey, { defaultValue: m.description })
-          : m.description,
-        icon,
-        invertInDark,
-        legacy: m.legacy,
-      };
-    });
-  }, [currentCloudProvider, displayedCloudProvider, t]);
+    return currentCloudProvider.models
+      .filter((model) => modelAllowed(displayedCloudProvider, model.id))
+      .map((m) => {
+        // OpenRouter brokers other vendors' models, so the id's prefix
+        // ("openai/…", "google/…") names the model better than OpenRouter's own
+        // mark. Vendors we have no icon for keep it, rather than showing none.
+        const slash = displayedCloudProvider === "openrouter" ? m.id.indexOf("/") : -1;
+        const vendorIcon = slash > 0 ? getRemoteProviderIcon(m.id.slice(0, slash)) : null;
+        const { icon, invertInDark } = vendorIcon?.icon ? vendorIcon : providerIcon;
+        return {
+          value: m.id,
+          label: m.name,
+          description: m.descriptionKey
+            ? t(m.descriptionKey, { defaultValue: m.description })
+            : m.description,
+          icon,
+          invertInDark,
+          legacy: m.legacy,
+        };
+      });
+  }, [currentCloudProvider, displayedCloudProvider, modelAllowed, t]);
 
   const progressDisplay = useMemo(() => {
     if (!effectiveLocal) return null;
@@ -1791,6 +1806,17 @@ export default function TranscriptionModelPicker({
                   </div>
                 </div>
               )}
+              {transcriptionContext === "dictation" &&
+                assemblyAiCleanup &&
+                displayedCloudProvider === "assemblyai" && (
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      cleanupEnabled
+                        ? "settingsPage.aiModels.assemblyAiCleanup.pickerOn"
+                        : "settingsPage.aiModels.assemblyAiCleanup.pickerOff"
+                    )}
+                  </p>
+                )}
               {browsedHint && <p className="text-xs text-muted-foreground">{browsedHint}</p>}
             </div>
           )}

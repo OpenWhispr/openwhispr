@@ -744,8 +744,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveUiLanguage: (language) => ipcRenderer.invoke("save-ui-language", language),
   setUiLanguage: (language) => ipcRenderer.invoke("set-ui-language", language),
 
-  // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
+  // xAI / AssemblyAI / Mistral transcription proxies (keys handled by the manifest bridge)
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
+  proxyAssemblyAiTranscription: (data) =>
+    ipcRenderer.invoke("proxy-assemblyai-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
   proxyElevenlabsTranscription: (data) =>

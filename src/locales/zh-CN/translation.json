@@ -1957,6 +1957,19 @@
       "customSetup": "自定义设置",
       "customSetupDescription": "使用你自己的服务商和 API Key。",
       "description": "整理转录文本、处理指令、修正错误，同时保留你的语气风格。",
+      "assemblyAiCleanup": {
+        "pickerOn": "AssemblyAI Dictation 已包含标准文本整理。",
+        "pickerOff": "文本整理已关闭。OpenWhispr 将粘贴你的原话。",
+        "description": "AssemblyAI 会同时返回润色后的文本和原话。开启文本整理可粘贴润色后的文本，关闭则粘贴原话。",
+        "standard": "标准听写整理",
+        "included": "已包含在听写模型中，无需单独的整理模型。",
+        "advanced": "高级整理",
+        "summary": "为自定义提示词和语气与风格保存的服务商",
+        "advancedHelp": "AssemblyAI 负责标准听写整理。请选择 OpenWhispr 在应用自定义提示词或语气与风格时使用的服务商。",
+        "saved": "已保存",
+        "modelNeeded": "需要本地整理模型",
+        "modelHelp": "请选择并下载本地整理模型，以应用所选语气或自定义提示词。标准整理由 AssemblyAI 提供。"
+      },
       "enableTextCleanup": "启用文本整理",
       "enableTextCleanupDescription": "AI 去除语气词，修正语法和标点",
       "modes": {
@@ -3275,6 +3288,7 @@
         "deepgram_nova_3": "Deepgram 最精准的实时模型",
         "assemblyai_universal_streaming_english": "不会变动的实时转录（英语）",
         "assemblyai_universal_streaming_multilingual": "不会变动的实时转录（多语言）",
+        "assemblyai_dictation": "一次调用完成转录和整理，支持 32 种语言",
         "assemblyai_universal_3_5_pro": "最高精度实时转录，支持 18 种语言",
         "assemblyai_universal_3_6_pro": "最高精度实时转录，支持 32 种语言",
         "mistral_voxtral_mini_transcribe_3_0": "支持 50 多种语言的快速转录（预览版）",
