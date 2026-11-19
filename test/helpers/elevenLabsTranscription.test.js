@@ -46,6 +46,7 @@ test("posts multipart audio with the xi-api-key header to the Scribe endpoint", 
   assert.equal(form.get("model_id"), "scribe_v2");
   assert.equal(form.get("language_code"), "de");
   assert.equal(form.get("tag_audio_events"), "false", "sound tags must never reach the caret");
+  assert.equal(form.get("timestamps_granularity"), "none");
   const file = form.get("file");
   assert.equal(file.name, "memo.mp3");
   assert.equal(file.type, "audio/mpeg");
@@ -121,6 +122,14 @@ test("a refused key is an auth failure; an exhausted quota is not", async () => 
     transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, quota.fetchImpl),
     (error) => error.code === "PROVIDER_QUOTA_EXHAUSTED"
   );
+
+  const restricted = makeFetch(401, {
+    detail: { status: "missing_permissions", message: "The API key is missing a permission." },
+  });
+  await assert.rejects(
+    transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, restricted.fetchImpl),
+    (error) => error.code === "PROVIDER_ACCESS_DENIED"
+  );
 });
 
 test("a 422 validation error is a bad request", async () => {
@@ -135,4 +144,72 @@ test("a response without text yields an empty transcript", async () => {
   const { fetchImpl } = makeFetch(200, { language_code: "eng" });
   const result = await transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, fetchImpl);
   assert.equal(result.text, "");
+});
+
+test("Scribe's [pause] for silence and a body that isn't JSON are empty transcripts", async () => {
+  const pause = makeFetch(200, { text: " [pause] " });
+  const silent = await transcribeWithElevenLabs(
+    { audioBuffer: AUDIO, apiKey: "k" },
+    pause.fetchImpl
+  );
+  assert.equal(silent.text, "");
+
+  const notJson = async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers(),
+    json: async () => JSON.parse("<html>"),
+  });
+  const result = await transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, notJson);
+  assert.equal(result.text, "");
+});
+
+test("Tagalog goes out under the Filipino code ElevenLabs lists", async () => {
+  const { fetchImpl, calls } = makeFetch(200, { text: "ok" });
+  await transcribeWithElevenLabs({ audioBuffer: AUDIO, language: "tl", apiKey: "k" }, fetchImpl);
+  assert.equal(calls[0].init.body.get("language_code"), "fil");
+});
+
+test("a request refused over its keyterms goes again without them", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push(init.body.getAll("keyterms"));
+    const refused = calls.length === 1;
+    const body = refused
+      ? { detail: [{ loc: ["body", "keyterms", 0], msg: "too many words" }] }
+      : { text: "hello" };
+    return {
+      ok: !refused,
+      status: refused ? 422 : 200,
+      headers: new Headers(),
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    };
+  };
+
+  const result = await transcribeWithElevenLabs(
+    { audioBuffer: AUDIO, keyterms: ["state-of-the-art"], apiKey: "k" },
+    fetchImpl
+  );
+
+  assert.equal(result.text, "hello");
+  assert.deepEqual(calls, [["state-of-the-art"], []]);
+});
+
+test("a refusal that isn't about keyterms is not retried", async () => {
+  const other = makeFetch(422, { detail: [{ loc: ["body", "file"], msg: "invalid audio" }] });
+  await assert.rejects(
+    transcribeWithElevenLabs(
+      { audioBuffer: AUDIO, keyterms: ["OpenWhispr"], apiKey: "k" },
+      other.fetchImpl
+    ),
+    (error) => error.code === "PROVIDER_BAD_REQUEST"
+  );
+  assert.equal(other.calls.length, 1);
+
+  const noTerms = makeFetch(422, { detail: [{ msg: "invalid keyterms" }] });
+  await assert.rejects(
+    transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, noTerms.fetchImpl)
+  );
+  assert.equal(noTerms.calls.length, 1);
 });

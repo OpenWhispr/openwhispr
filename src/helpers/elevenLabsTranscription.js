@@ -17,9 +17,14 @@ const DEFAULT_MODEL = "scribe_v3";
 // It takes 1000 keyterms, but bills at least 20 seconds for a request with more
 // than 100, which would multiply the cost of a short dictation.
 const MAX_KEYTERMS = 100;
+// ElevenLabs allows 50 characters. The renderer cuts longer dictionary entries to
+// 50, and a cut-off word is no keyterm, so a term at the limit is dropped too.
 const MAX_KEYTERM_CHARS = 50;
 const MAX_KEYTERM_WORDS = 5;
 const FORBIDDEN_KEYTERM_CHARS = /[<>{}[\]\\]/;
+
+// ElevenLabs lists Filipino rather than Tagalog, so the app's "tl" goes out as "fil".
+const LANGUAGE_CODES = { tl: "fil" };
 
 function sanitizeKeyterms(keyterms) {
   if (!Array.isArray(keyterms)) return [];
@@ -54,18 +59,10 @@ async function transcribeWithElevenLabs(
   const resolvedModel = model || DEFAULT_MODEL;
   const type = contentType || "audio/webm";
   const buffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
-  const formData = new FormData();
-  formData.append("file", new Blob([buffer], { type }), fileName || "audio.webm");
-  formData.append("model_id", resolvedModel);
-  // Scribe tags non-speech sounds ("(laughter)") unless told not to; those would be pasted.
-  formData.append("tag_audio_events", "false");
-  if (language && language !== "auto") {
-    formData.append("language_code", language);
-  }
+  const audio = new Blob([buffer], { type });
+  const languageCode =
+    language && language !== "auto" ? (LANGUAGE_CODES[language] ?? language) : null;
   const terms = sanitizeKeyterms(keyterms);
-  for (const term of terms) {
-    formData.append("keyterms", term);
-  }
 
   debugLogger.debug(
     "ElevenLabs batch transcription starting",
@@ -74,15 +71,40 @@ async function transcribeWithElevenLabs(
   );
 
   const doFetch = fetchImpl || ((url, init) => net.fetch(url, init));
-  const response = await doFetch(ELEVENLABS_STT_URL, {
-    method: "POST",
-    headers: { "xi-api-key": apiKey },
-    body: formData,
-    ...(signal ? { signal } : {}),
-  });
+  const send = async (sentTerms) => {
+    const formData = new FormData();
+    formData.append("file", audio, fileName || "audio.webm");
+    formData.append("model_id", resolvedModel);
+    // Scribe tags non-speech sounds ("(laughter)") unless told not to; those would be pasted.
+    formData.append("tag_audio_events", "false");
+    // Only the text is read, and word timings are most of a long file's response.
+    formData.append("timestamps_granularity", "none");
+    if (languageCode) formData.append("language_code", languageCode);
+    for (const term of sentTerms) {
+      formData.append("keyterms", term);
+    }
+    const response = await doFetch(ELEVENLABS_STT_URL, {
+      method: "POST",
+      headers: { "xi-api-key": apiKey },
+      body: formData,
+      ...(signal ? { signal } : {}),
+    });
+    return { response, errorText: response.ok ? "" : await response.text().catch(() => "") };
+  };
+
+  let { response, errorText } = await send(terms);
+  // ElevenLabs counts a keyterm's words after its own normalisation, which the filter
+  // above can't reproduce. The dictation matters more than the hint, so a request
+  // refused over its keyterms goes again without them.
+  if (terms.length > 0 && [400, 422].includes(response.status) && /keyterm/i.test(errorText)) {
+    debugLogger.warn("ElevenLabs refused the keyterms; retrying without them", {
+      status: response.status,
+      body: redactProviderBody(errorText),
+    });
+    ({ response, errorText } = await send([]));
+  }
 
   if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
     debugLogger.warn("ElevenLabs transcription failed", {
       status: response.status,
       body: redactProviderBody(errorText),
@@ -97,8 +119,10 @@ async function transcribeWithElevenLabs(
     });
   }
 
-  const data = await response.json();
-  return { text: typeof data?.text === "string" ? data.text : "", model: resolvedModel };
+  const data = await response.json().catch(() => null);
+  const text = typeof data?.text === "string" ? data.text : "";
+  // Scribe can answer silence with "[pause]" instead of an empty string.
+  return { text: text.trim() === "[pause]" ? "" : text, model: resolvedModel };
 }
 
 module.exports = { transcribeWithElevenLabs, sanitizeKeyterms, ELEVENLABS_STT_URL };
