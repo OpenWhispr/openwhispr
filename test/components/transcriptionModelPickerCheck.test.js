@@ -755,3 +755,32 @@ test("AssemblyAI Dictation needs LLM approval to appear or save, while realtime 
   await panel.selectModel("universal-3-6-pro");
   assert.deepEqual(selected, ["dictation", "universal-3-6-pro", "universal-3-6-pro"]);
 });
+
+test("the dictation picker explains the current cleanup setting only for selected AssemblyAI batch dictation", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "assemblyai", selectedCloudModel: "dictation" },
+    secrets: {
+      transcriptionMode: "providers",
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "assemblyai",
+      cloudTranscriptionModel: "dictation",
+      useCleanupModel: true,
+    },
+  });
+  await require("react").act(() => loadAssemblyAiDictationCatalog(panel.vite));
+  const hint = () =>
+    panel.find(
+      (n) =>
+        typeof n.props?.children === "string" &&
+        n.props.children.startsWith("settingsPage.aiModels.assemblyAiCleanup.picker")
+    )[0]?.props.children;
+  assert.equal(hint(), "settingsPage.aiModels.assemblyAiCleanup.pickerOn");
+  await panel.setStore({ useCleanupModel: false });
+  assert.equal(hint(), "settingsPage.aiModels.assemblyAiCleanup.pickerOff");
+  await panel.selectTab("openai");
+  assert.equal(hint(), undefined);
+  await panel.selectTab("assemblyai");
+  await panel.setProps({ transcriptionContext: "upload" });
+  assert.equal(hint(), undefined);
+});

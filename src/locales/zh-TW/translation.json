@@ -1954,6 +1954,19 @@
       "customSetup": "自訂設定",
       "customSetupDescription": "使用你自己的供應商和 API Key。",
       "description": "整理轉錄文字、處理指令、修正錯誤，同時保留你的語調。",
+      "assemblyAiCleanup": {
+        "pickerOn": "AssemblyAI Dictation 已包含標準文字整理。",
+        "pickerOff": "文字整理已關閉。OpenWhispr 會貼上你的原話。",
+        "description": "AssemblyAI 會同時傳回潤飾後的文字和原話。開啟文字整理會貼上潤飾後的文字，關閉則貼上原話。",
+        "standard": "標準聽寫整理",
+        "included": "已包含在聽寫模型中，無需另外設定整理模型。",
+        "advanced": "進階整理",
+        "summary": "為自訂提示詞和語氣與風格儲存的服務供應商",
+        "advancedHelp": "AssemblyAI 負責標準聽寫整理。請選擇 OpenWhispr 在套用自訂提示詞或語氣與風格時使用的服務供應商。",
+        "saved": "已儲存",
+        "modelNeeded": "需要本機整理模型",
+        "modelHelp": "請選擇並下載本機整理模型，以套用所選語氣或自訂提示詞。標準整理由 AssemblyAI 提供。"
+      },
       "enableTextCleanup": "啟用文字整理",
       "enableTextCleanupDescription": "AI 移除語助詞，修正文法和標點",
       "modes": {

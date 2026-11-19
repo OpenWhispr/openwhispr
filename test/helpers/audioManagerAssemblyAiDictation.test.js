@@ -251,6 +251,10 @@ test("the user's own cleanup prompt or tone keeps the app's cleanup", async (t) 
   setSettings({ customPrompts: { cleanup: "" }, toneStyleEnabled: true });
   assert.equal(await dictate(VERBATIM, CLEANED), "Cleaned by the app.");
   assert.equal(cleanupRequests.length, 2);
+  for (const prompt of cleanupRequests) {
+    assert.ok(prompt.includes(VERBATIM));
+    assert.ok(!prompt.includes(CLEANED));
+  }
 
   // With no model of the app's own to run them, the provider's text still beats raw.
   setSettings({ cleanupMode: "providers", cleanupProvider: "openai", cleanupModel: "" });

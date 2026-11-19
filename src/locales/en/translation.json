@@ -2723,6 +2723,19 @@
       "customSetup": "Custom Setup",
       "customSetupDescription": "Use your own provider and API key.",
       "description": "Clean up transcriptions, handle commands, and fix errors while preserving your tone.",
+      "assemblyAiCleanup": {
+        "pickerOn": "Standard cleanup is included with AssemblyAI Dictation.",
+        "pickerOff": "Text cleanup is off. OpenWhispr will paste your original wording.",
+        "description": "AssemblyAI returns both polished text and your original wording. Leave cleanup on to paste polished text, or turn it off to paste your original wording.",
+        "standard": "Standard dictation cleanup",
+        "included": "Included with your dictation model. No separate cleanup model is needed.",
+        "advanced": "Advanced cleanup",
+        "summary": "Saved provider for custom prompts and Tone & Style",
+        "advancedHelp": "AssemblyAI handles standard dictation cleanup. Choose which provider OpenWhispr uses when a custom prompt or Tone & Style needs a separate cleanup pass.",
+        "saved": "Saved",
+        "modelNeeded": "Local cleanup model needed",
+        "modelHelp": "Choose and download a local cleanup model to apply your tone or custom prompt. AssemblyAI provides standard cleanup."
+      },
       "enableTextCleanup": "Enable text cleanup",
       "enableTextCleanupDescription": "Use AI to remove filler words, fix grammar, and polish punctuation",
       "modes": {

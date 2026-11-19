@@ -46,7 +46,11 @@ import {
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import { isByokTranscriptionModelAllowed } from "../services/managedTranscription";
-import { useByokTranscriptionModelAllowed, usePolicySnapshot } from "../hooks/usePolicy";
+import {
+  useAssemblyAiDictationCleanup,
+  useByokTranscriptionModelAllowed,
+  usePolicySnapshot,
+} from "../hooks/usePolicy";
 import {
   LOCAL_ASR_ORGANIZATIONS,
   getASRModelOrganization,
@@ -645,6 +649,8 @@ export default function TranscriptionModelPicker({
   const colorScheme: ColorScheme = variant === "settings" ? "purple" : "blue";
   const styles = useMemo(() => MODEL_PICKER_COLORS[colorScheme], [colorScheme]);
   const policyState = usePolicySnapshot();
+  const assemblyAiCleanup = useAssemblyAiDictationCleanup();
+  const cleanupEnabled = useSettingsStore((state) => state.useCleanupModel);
   const modelAllowed = useByokTranscriptionModelAllowed(policyState);
   const providerAllowed = useCallback(
     (providerId: string) => isProviderAllowedByPolicy(policyState, "transcription", providerId),
@@ -1784,6 +1790,17 @@ export default function TranscriptionModelPicker({
                   </div>
                 </div>
               )}
+              {transcriptionContext === "dictation" &&
+                assemblyAiCleanup &&
+                displayedCloudProvider === "assemblyai" && (
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      cleanupEnabled
+                        ? "settingsPage.aiModels.assemblyAiCleanup.pickerOn"
+                        : "settingsPage.aiModels.assemblyAiCleanup.pickerOff"
+                    )}
+                  </p>
+                )}
               {browsedHint && <p className="text-xs text-muted-foreground">{browsedHint}</p>}
             </div>
           )}

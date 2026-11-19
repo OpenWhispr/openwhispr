@@ -2723,6 +2723,19 @@
       "customSetup": "Benutzerdefinierte Einrichtung",
       "customSetupDescription": "Verwenden Sie Ihren eigenen Anbieter und API-Schlüssel.",
       "description": "Bereinigt Transkriptionen, verarbeitet Befehle und korrigiert Fehler unter Beibehaltung Ihres Stils.",
+      "assemblyAiCleanup": {
+        "pickerOn": "Die Standardbereinigung ist in AssemblyAI Dictation enthalten.",
+        "pickerOff": "Die Textbereinigung ist aus. OpenWhispr fügt den ursprünglichen Wortlaut ein.",
+        "description": "AssemblyAI liefert sowohl überarbeiteten Text als auch den ursprünglichen Wortlaut. Bei aktivierter Bereinigung wird der überarbeitete Text eingefügt, andernfalls der ursprüngliche Wortlaut.",
+        "standard": "Standardbereinigung für Diktate",
+        "included": "Im Diktiermodell enthalten. Ein separates Modell ist dafür nicht erforderlich.",
+        "advanced": "Erweiterte Bereinigung",
+        "summary": "Gespeicherter Anbieter für eigene Prompts und Ton & Stil",
+        "advancedHelp": "AssemblyAI übernimmt die Standardbereinigung. Wähle den Anbieter, den OpenWhispr für eigene Prompts oder Ton & Stil verwendet.",
+        "saved": "Gespeichert",
+        "modelNeeded": "Lokales Bereinigungsmodell erforderlich",
+        "modelHelp": "Wähle ein lokales Modell und lade es herunter, um deinen Ton oder eigenen Prompt anzuwenden. AssemblyAI übernimmt die Standardbereinigung."
+      },
       "enableTextCleanup": "Textbereinigung aktivieren",
       "enableTextCleanupDescription": "KI entfernt Füllwörter, korrigiert Grammatik und Zeichensetzung",
       "modes": {

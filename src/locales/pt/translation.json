@@ -1933,6 +1933,19 @@
       "customSetup": "Configuração personalizada",
       "customSetupDescription": "Use seu próprio provedor e chave API.",
       "description": "Limpe transcrições, processe comandos e corrija erros preservando seu tom de voz.",
+      "assemblyAiCleanup": {
+        "pickerOn": "A revisão padrão está incluída no AssemblyAI Dictation.",
+        "pickerOff": "A revisão está desativada. O OpenWhispr colará suas palavras originais.",
+        "description": "O AssemblyAI devolve tanto o texto revisado quanto as palavras originais. Mantenha a revisão ativada para colar o texto revisado ou desative-a para colar as palavras originais.",
+        "standard": "Revisão padrão do ditado",
+        "included": "Incluída no modelo de ditado. Não é necessário um modelo de revisão separado.",
+        "advanced": "Revisão avançada",
+        "summary": "Provedor salvo para instruções personalizadas e tom e estilo",
+        "advancedHelp": "O AssemblyAI faz a revisão padrão. Escolha o provedor que o OpenWhispr usa quando suas instruções ou seu tom e estilo exigem uma revisão adicional.",
+        "saved": "Salvo",
+        "modelNeeded": "É necessário um modelo de revisão local",
+        "modelHelp": "Escolha e baixe um modelo local para aplicar seu tom ou suas instruções. O AssemblyAI faz a revisão padrão."
+      },
       "enableTextCleanup": "Ativar limpeza de texto",
       "enableTextCleanupDescription": "A IA remove palavras de preenchimento, corrige gramática e pontuação",
       "modes": {

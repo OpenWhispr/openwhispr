@@ -1954,6 +1954,19 @@
       "customSetup": "Configurazione personalizzata",
       "customSetupDescription": "Usa il tuo provider e la tua chiave API.",
       "description": "Correggi le trascrizioni, gestisci i comandi e risolvi gli errori preservando il tuo tono.",
+      "assemblyAiCleanup": {
+        "pickerOn": "La pulizia standard è inclusa con AssemblyAI Dictation.",
+        "pickerOff": "La pulizia è disattivata. OpenWhispr incollerà le parole originali.",
+        "description": "AssemblyAI restituisce sia il testo rifinito sia le parole originali. Attiva la pulizia per incollare il testo rifinito o disattivala per incollare le parole originali.",
+        "standard": "Pulizia standard della dettatura",
+        "included": "Inclusa nel modello di dettatura. Non serve un modello di pulizia separato.",
+        "advanced": "Pulizia avanzata",
+        "summary": "Fornitore salvato per istruzioni personalizzate e tono e stile",
+        "advancedHelp": "AssemblyAI gestisce la pulizia standard. Scegli il fornitore che OpenWhispr usa quando le istruzioni personalizzate o il tono e lo stile richiedono un passaggio aggiuntivo.",
+        "saved": "Salvato",
+        "modelNeeded": "Serve un modello di pulizia locale",
+        "modelHelp": "Scegli e scarica un modello locale per applicare il tono o le istruzioni personalizzate. AssemblyAI gestisce la pulizia standard."
+      },
       "enableTextCleanup": "Attiva correzione testo",
       "enableTextCleanupDescription": "L'IA rimuove parole superflue, corregge grammatica e punteggiatura",
       "modes": {
