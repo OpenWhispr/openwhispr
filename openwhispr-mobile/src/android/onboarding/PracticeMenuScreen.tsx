@@ -266,13 +266,12 @@ export function PracticeMenuScreen({
                   showSoftInputOnFocus
                   // Read-only would close the keyboard; the board keeps it up while listening and writing.
                   editable={!done}
-                  caretHidden={Boolean(highlighted)}
-                  style={[pm.input, highlighted && { color: 'transparent' }]}
+                  // While Practice 3's result shows, the field stays mounted and focused but out of
+                  // sight, so the keyboard stays up under the marked copy below.
+                  style={highlighted ? pm.hiddenInput : pm.input}
                 />
                 {highlighted ? (
-                  // Practice 3's result: the same text laid over the field, only the new words blue.
-                  // The field stays focused underneath, so the keyboard stays up.
-                  <Text style={[pm.input, pm.overlayText]} pointerEvents="none">
+                  <Text style={pm.input} accessibilityLiveRegion="polite">
                     {text.slice(0, runs.start)}
                     {runs.runs.map((run, index) => (
                       <Text key={index} style={run.changed ? pm.changed : undefined}>
@@ -366,7 +365,7 @@ const pm = StyleSheet.create({
     textAlignVertical: 'top',
   },
   changed: { color: colors.brandMid, textDecorationLine: 'underline' },
-  overlayText: { position: 'absolute', top: 0, left: 0, right: 0 },
+  hiddenInput: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   overlay: { position: 'absolute', left: 16, right: 16, gap: 10 },
   bubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64 },
 });
