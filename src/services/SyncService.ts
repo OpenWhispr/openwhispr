@@ -51,6 +51,7 @@ import {
   isCloudBackupAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { findDefaultFolder } from "../components/notes/shared";
 import { useSettingsStore } from "../stores/settingsStore";
 import {
   hasWelcomedSharedDictionary,
@@ -314,6 +315,11 @@ const UNOWNED_CURSORS_ACCOUNT_KEY = "syncCursors.unownedClaimedBy";
 const UNOWNED_CLAIM_PROGRESS_KEY = "syncCursors.unownedClaimProgress";
 const UNOWNED_CLAIM_RETRY_MS = 5 * 60 * 1000;
 const UNOWNED_CLAIM_MAX_RETRY_MS = 60 * 60 * 1000;
+// Per account: "done" once repair has checked every linked chat for messages its cloud
+// copy is missing (repairUnsentChatMessages), else when a failed check may next
+// run, so one that keeps failing doesn't walk every chat on every pass.
+const CHAT_MESSAGE_REPAIR_PREFIX = "syncCursors.chatMessages:";
+const CHAT_MESSAGE_REPAIR_RETRY_MS = 5 * 60 * 1000;
 // localStorage keys gating what a pass may sync; a change in another window
 // means sync may have just become possible (sign-in, subscription, backup
 // enabled, Insights opt-in).
@@ -667,6 +673,20 @@ function missingConversationMessages<Message extends { role: string; content: st
   });
 }
 
+// Whether a linked chat's cloud copy lacks messages this device holds. The
+// matcher alone can't settle it: an empty reply kept here can take the place
+// of a later reply the copy already holds, and a reply completed here can sit
+// in the place of one the copy holds empty. A copy that is missing messages
+// also holds fewer messages with text than this device does.
+function cloudCopyIsMissingMessages(
+  local: ReadonlyArray<{ role: string; content: string }>,
+  cloud: ReadonlyArray<{ role: string; content: string }>
+): boolean {
+  const withText = (messages: ReadonlyArray<{ content: string }>) =>
+    messages.filter((message) => message.content.length > 0).length;
+  return withText(local) > withText(cloud) && missingConversationMessages(local, cloud).length > 0;
+}
+
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   try {
     const raw = localStorage.getItem(PURGED_SPACE_GUARD_KEY);
@@ -741,6 +761,7 @@ export async function upsertCloudSpaces(cloudSpaces: MySpace[]): Promise<number[
 
 export class SyncService {
   private syncing = false;
+  private boundFoldersClaimedFor: string | null = null;
   private syncAllPending = false;
   // Filled by the placement backfill's pre-pull: each personal cloud row's placement and folder.
   private pulledPlacements: Map<
@@ -959,6 +980,7 @@ export class SyncService {
       "syncCursors.privateBackup:",
       "syncCursors.privatePlacement:",
       "syncCursors.privatePlacementCandidates:",
+      CHAT_MESSAGE_REPAIR_PREFIX,
     ])
       localStorage.removeItem(`${prefix}${accountId}`);
     // While it is the cursor owner its cursors are the live ones, and the next
@@ -1026,6 +1048,12 @@ export class SyncService {
       this.noteFeedReplayTried.clear();
     } else if (SYNC_CURSOR_KEYS.some((key) => localStorage.getItem(key) !== null)) {
       localStorage.setItem(UNOWNED_CURSORS_ACCOUNT_KEY, accountId);
+      // An unowned personal cursor may have advanced under another account.
+      // Replay tombstones too; a live-row snapshot cannot remove stale copies.
+      localStorage.removeItem("lastSyncedAt.notes");
+      if (localStorage.getItem("lastSyncedAt.folders") !== null) {
+        localStorage.setItem("lastSyncedAt.folders", FEED_START);
+      }
     }
     localStorage.setItem(SYNC_CURSOR_ACCOUNT_KEY, accountId);
     return true;
@@ -1269,7 +1297,7 @@ export class SyncService {
           if (!this.passIsCurrent()) return;
           await this.relocatePulledPrivateWorkspaces(accountId, authGeneration);
           if (!this.passIsCurrent()) return;
-          if (this.canSync()) await this.syncConversations();
+          if (this.canSync()) await this.syncConversations(accountId);
           if (!this.passIsCurrent()) return;
           if (this.canSync()) await this.syncTranscriptions();
           if (!this.passIsCurrent()) return;
@@ -2938,6 +2966,8 @@ export class SyncService {
   }
 
   private async syncFolders(teamOnly = false): Promise<void> {
+    if (!teamOnly) await this.claimBoundFolders();
+    if (!this.passIsCurrent()) return;
     await this.pushPendingFolders(teamOnly);
     if (!this.passIsCurrent()) return;
     await this.pushFolderDeletes(teamOnly);
@@ -2953,6 +2983,69 @@ export class SyncService {
     if (authGeneration == null) return;
     const queued = await window.electronAPI.queueUnlinkedPrivateFolders?.(authGeneration);
     if (typeof queued === "number" && queued > 0) await this.pushPendingFolders();
+  }
+
+  // A full account folder list proves which cloud-bound legacy folders it owns.
+  // A foreign default cannot stand in for the account's own same-named folder.
+  private async claimBoundFolders(): Promise<void> {
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null || this.boundFoldersClaimedFor === accountId) return;
+    const ctx = await this.buildSpaceContext();
+    const local = (await window.electronAPI.getFolders?.()) ?? [];
+    const unclaimed = local.filter(
+      (folder) =>
+        !folder.account_id &&
+        folder.cloud_id &&
+        !folder.deleted_at &&
+        ctx.byId.get(folder.space_id)?.kind === "private"
+    );
+    if (unclaimed.length > 0) {
+      try {
+        const { folders: cloudFolders } = await FoldersService.list(
+          undefined,
+          undefined,
+          authGeneration,
+          "no-store"
+        );
+        const ownCloudIds = new Set(
+          cloudFolders
+            .filter((folder) => !folder.space_id && !folder.deleted_at)
+            .map((folder) => folder.id)
+        );
+        const foreignDefaults: string[] = [];
+        for (const folder of unclaimed) {
+          stopIfSignInReplaced(authGeneration);
+          const cloudId = folder.cloud_id!;
+          if (!ownCloudIds.has(cloudId)) {
+            if (folder.is_default) foreignDefaults.push(cloudId);
+            continue;
+          }
+          // Settling a pending row would discard an unsent edit; its own push claims it.
+          if (folder.sync_status !== "synced") continue;
+          stopIfPullStale(
+            await window.electronAPI.markFolderSyncedIfUnchanged?.(
+              folder.id,
+              folder,
+              cloudId,
+              authGeneration
+            )
+          );
+        }
+        if (foreignDefaults.length > 0) {
+          await window.electronAPI.ensureAccountDefaultFolders?.(foreignDefaults, {
+            accountId,
+            authGeneration,
+          });
+        }
+      } catch (err) {
+        if (isAuthContextError(err)) throw err;
+        console.error("Bound folder claim failed:", err);
+        return;
+      }
+    }
+    stopIfSignInReplaced(authGeneration);
+    this.boundFoldersClaimedFor = accountId;
   }
 
   private async pushFolderDeletes(teamOnly = false): Promise<void> {
@@ -4109,12 +4202,64 @@ export class SyncService {
     }
   }
 
-  private async syncConversations(): Promise<void> {
+  private async syncConversations(accountId: string): Promise<void> {
+    await this.repairUnsentChatMessages(accountId);
+    if (!this.passIsCurrent() || !this.canSync()) return;
     await this.pushPendingConversations();
     if (!this.passIsCurrent()) return;
     await this.pushConversationDeletes();
     if (!this.passIsCurrent()) return;
     await this.pullConversations();
+  }
+
+  // Older builds never queued synced chats again. Check each local cloud ID:
+  // a delta pull cannot see unchanged copies, and timestamp-only snapshot
+  // pagination can skip chats created in the same second at a page boundary.
+  private async repairUnsentChatMessages(accountId: string): Promise<void> {
+    const key = `${CHAT_MESSAGE_REPAIR_PREFIX}${accountId}`;
+    const state = localStorage.getItem(key);
+    if (state === "done" || Date.now() < Number(state)) return;
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
+    let checked = false;
+    try {
+      const conversations =
+        (await window.electronAPI.getSyncedLinkedConversations?.(authGeneration)) ?? [];
+      stopIfPullStale(conversations);
+      for (const conversation of conversations) {
+        stopIfSignInReplaced(authGeneration);
+        if (!this.canSync()) return;
+        const local = await window.electronAPI.getAgentConversation?.(conversation.id);
+        if (
+          !local ||
+          local.cloud_id !== conversation.cloud_id ||
+          !(await this.canUploadConversation(local))
+        )
+          continue;
+        try {
+          const { messages } = await ConversationsService.listMessages(
+            conversation.cloud_id,
+            authGeneration
+          );
+          stopIfSignInReplaced(authGeneration);
+          if (cloudCopyIsMissingMessages(local.messages, messages)) {
+            stopIfPullStale(
+              await window.electronAPI.markConversationPending?.(local.id, authGeneration)
+            );
+          }
+        } catch (error) {
+          // Normal delete reconciliation handles cloud copies that no longer exist.
+          if (!isHttpStatus(error, 404)) throw error;
+        }
+      }
+      await assertAuthGenerationCurrent(authGeneration);
+      checked = true;
+    } catch (error) {
+      if (!isAuthContextError(error)) console.error("Chat message repair failed:", error);
+    }
+    // A check the sign-in ended under says nothing about this account's chats.
+    if (!this.passIsCurrent()) return;
+    localStorage.setItem(key, checked ? "done" : String(Date.now() + CHAT_MESSAGE_REPAIR_RETRY_MS));
   }
 
   private async pushPendingConversations(): Promise<void> {
@@ -4230,6 +4375,24 @@ export class SyncService {
 
           // The next push sends what this row is still missing from the cloud.
           if (local?.cloud_id && local.sync_status === "pending") continue;
+
+          // A linked chat the cloud is missing messages of was settled as synced
+          // by an older build, which never queued a chat again after its first
+          // upload; queued now, the next push sends only what's missing. The
+          // counts come first, so a complete chat costs no lookup.
+          if (
+            local?.cloud_id === cloudConv.id &&
+            local.message_count > (cloudConv.messages?.length ?? 0)
+          ) {
+            const full = await window.electronAPI.getAgentConversation?.(local.id);
+            stopIfSignInReplaced(authGeneration);
+            if (full && cloudCopyIsMissingMessages(full.messages, cloudConv.messages ?? [])) {
+              stopIfPullStale(
+                await window.electronAPI.markConversationPending?.(local.id, authGeneration)
+              );
+              continue;
+            }
+          }
 
           // Applying a cloud copy replaces every local message, and messages added
           // after a chat's first create exist only on this device.
@@ -5421,8 +5584,7 @@ export class SyncService {
         .map((f) => [f.cloud_id!, { id: f.id, space_id: f.space_id }])
     );
     const personalFolderIn = (spaceId: number): number | null =>
-      folders.find((f) => f.is_default && f.name === "Personal" && f.space_id === spaceId)?.id ??
-      null;
+      findDefaultFolder(folders.filter((folder) => folder.space_id === spaceId))?.id ?? null;
     return { cloudToLocal, personalFolderIn };
   }
 }

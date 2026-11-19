@@ -4,7 +4,7 @@
 // call sites is what broke default dictation in 1.8.2 (#1624: the
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
-import { isOrukeetStreaming } from "./selfHostedTranscription.js";
+import { isOrukeetStreaming, isSelfHostedTranscription } from "./selfHostedTranscription.js";
 import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
 import bundledRegistryData from "../models/modelRegistryData.json" with { type: "json" };
@@ -260,6 +260,7 @@ export function buildStreamingSessionOptions({
     if (options.mode !== "byok" && pipelineOptions) options.pipelineOptions = pipelineOptions;
     if (options.mode === "byok") {
       options.baseUrl = settings.remoteTranscriptionUrl || settings.cloudTranscriptionBaseUrl;
+      options.transcriptionMode = isSelfHostedTranscription(settings) ? "self-hosted" : undefined;
     }
   }
   return options;

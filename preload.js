@@ -291,7 +291,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   discardNoteUndo: (id, token) => ipcRenderer.invoke("db-discard-note-undo", id, token),
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
-  exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
+  exportTranscript: (noteId, format, options) =>
+    ipcRenderer.invoke("export-transcript", noteId, format, options),
   exportDictionary: (words) => ipcRenderer.invoke("export-dictionary", words),
   searchNotes: (query, limit, spaceId, folderId, spaceIds) =>
     ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId, spaceIds),
@@ -736,6 +737,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   proxyTinfoilTranscription: (data) => ipcRenderer.invoke("proxy-tinfoil-transcription", data),
 
   // Custom endpoint API keys
+  getSelfHostedSttHeaders: () => ipcRenderer.invoke("get-self-hosted-stt-headers"),
+  saveSelfHostedSttHeaders: (value) => ipcRenderer.invoke("save-self-hosted-stt-headers", value),
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
   getCleanupCustomKey: () => ipcRenderer.invoke("get-cleanup-custom-key"),
@@ -1051,12 +1054,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
   isMeetingRecordingDisabled: () => ipcRenderer.invoke("is-meeting-recording-disabled"),
+  meetingRecordingRefused: (details) => ipcRenderer.invoke("meeting-recording-refused", details),
   meetingTranscriptionSend: (buffer, source, capturedAt) =>
     ipcRenderer.send("meeting-transcription-send", buffer, source, capturedAt),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
-  meetingTranscriptionStop: (expectedSessionId) =>
-    ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId),
+  meetingTranscriptionStop: (expectedSessionId, reason) =>
+    ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId, reason),
   meetingTranscriptionCancel: () => ipcRenderer.invoke("meeting-transcription-cancel"),
   onMeetingTranscriptionSegment: registerListener(
     "meeting-transcription-segment",
@@ -1428,6 +1432,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       expectedCloudId,
       authGeneration
     ),
+  ensureAccountDefaultFolders: (foreignCloudIds, expectedScope) =>
+    ipcRenderer.invoke("db-ensure-account-default-folders", foreignCloudIds, expectedScope),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
   getPendingFolderDeletes: () => ipcRenderer.invoke("db-get-pending-folder-deletes"),
   restoreFolderAfterDeniedDelete: (id) =>
@@ -1454,6 +1460,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ),
   markConversationCreateAttempted: (id, expectedAuthGeneration) =>
     ipcRenderer.invoke("db-mark-conversation-create-attempted", id, expectedAuthGeneration),
+  markConversationPending: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-mark-conversation-pending", id, expectedAuthGeneration),
+  getSyncedLinkedConversations: (expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-get-synced-linked-conversations", expectedAuthGeneration),
   clearConversationCreateAttempted: (id) =>
     ipcRenderer.invoke("db-clear-conversation-create-attempted", id),
   acknowledgeConversationCreate: (id, snapshot, cloudId, accountId, authGeneration) =>

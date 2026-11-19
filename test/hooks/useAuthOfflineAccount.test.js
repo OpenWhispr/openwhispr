@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const React = require("react");
 const { createRoot } = require("react-dom/client");
+const { createCloudApiRequestHandler } = require("../../src/helpers/cloudApiRequest");
 const {
   createRendererServer,
   installBrowserGlobals,
@@ -21,7 +22,7 @@ const reconciledFor = (userId, profileUser = USER_A) => ({
   [PROFILE_KEY]: JSON.stringify({ ...profileUser, emailVerified: true, validatedAt: Date.now() }),
 });
 
-async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
+async function mountUseAuth(t, { initialStorage, extraConsumers = 0, loadWorkspaces = false }) {
   // Registered first: the root must unmount while the browser globals exist.
   let root = null;
   t.after(async () => {
@@ -33,10 +34,24 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
     setActiveAccountScope: [],
     purge: 0,
     workspaceRefresh: 0,
+    cachedWorkspaces: [],
+    managedIdentity: [],
+    cloudRequests: [],
     setIsSignedIn: [],
   };
   const token = { token: "token-a", generation: 5 };
   const binding = { accountId: "user-a", token: "token-a" };
+  const cloudHandler = createCloudApiRequestHandler({
+    getApiUrl: () => "https://api.openwhispr.test",
+    getAppVersion: () => "1.12.0",
+    tokenStore: { getState: () => ({ ...token }) },
+    proxyFetch: async () =>
+      new Response(
+        JSON.stringify({
+          data: [{ id: "workspace-a", name: "Ada", is_default: true, plan: "free", role: "owner" }],
+        })
+      ),
+  });
   const sessionListeners = new Set();
   globalThis.__authTest = {
     session: { data: null, isPending: true, error: null, refetch: async () => null },
@@ -45,6 +60,7 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
       return () => sessionListeners.delete(listener);
     },
     calls,
+    accountId: "user-a",
   };
 
   const { storage } = installBrowserGlobals(t, {
@@ -53,18 +69,25 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
       location: { origin: "https://desktop.openwhispr.test", search: "?panel=true" },
       electronAPI: {
         authGetTokenState: async () => ({ ...token }),
+        cloudApiRequest: async (options) => {
+          const response = await cloudHandler(options);
+          calls.cloudRequests.push({ options, response });
+          return response;
+        },
         cloudUsage: async () => ({ success: true, plan: "pro", isSubscribed: true }),
         getActiveAccountScope: async () =>
           token.token === binding.token
             ? { accountId: binding.accountId, authGeneration: token.generation }
             : null,
         setActiveAccountScope: async (accountId, generation) => {
+          if (globalThis.__authTest.accountScopeFails) return { success: false };
           assert.equal(
             calls.chatPrepared.at(-1),
             accountId,
             "chat ownership is fenced before main scope changes"
           );
           calls.setActiveAccountScope.push([accountId, generation]);
+          globalThis.__authTest.accountId = accountId;
           return { success: true };
         },
       },
@@ -96,15 +119,15 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
           setInsightsSyncEnabled() {},
         }) };
       `,
-      "/stores/policyStore": `
+      "/policyStore": `
         const calls = globalThis.__authTest.calls;
-        export const usePolicyStore = { getState: () => ({}) };
+        export const usePolicyStore = { getState: () => ({ accountId: globalThis.__authTest.accountId, authGeneration: 5 }) };
         export const refreshEffectivePolicy = async () => {
           calls.policyRefreshes += 1;
         };
       `,
-      "/stores/enterpriseIdentityStore":
-        "export const useEnterpriseIdentityStore = { getState: () => ({ clear() {} }) };",
+      "/enterpriseIdentityStore":
+        "export const useEnterpriseIdentityStore = { getState: () => ({ clear() {}, refresh: async () => {} }) };",
       "/stores/leaderboardParticipationStore":
         "export const useLeaderboardParticipationStore = { getState: () => ({ reset() {} }) };",
       "/services/SyncService.js": `
@@ -120,25 +143,35 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
         export function resetForAccountChange() {}
       `,
       "/stores/noteStore": "export const resetForAccountChange = () => {};",
-      "/stores/workspaceStore": `
+      ...(!loadWorkspaces && {
+        "/stores/workspaceStore": `
         const calls = globalThis.__authTest.calls;
         export const useWorkspaceStore = { getState: () => ({
           refresh: async () => { calls.workspaceRefresh += 1; },
           resetForAccountChange() {},
         }) };
-        export const refreshManagedEnterpriseIdentity = () => {};
+        export const hydrateCachedWorkspaces = (accountId) => calls.cachedWorkspaces.push(accountId);
+        export const refreshManagedEnterpriseIdentity = (...args) => calls.managedIdentity.push(args);
       `,
+      }),
     },
   });
   const { useAuth } = await vite.ssrLoadModule("/hooks/useAuth.ts");
   const { useUsage } = await vite.ssrLoadModule("/hooks/useUsage.ts");
   const authContext = await vite.ssrLoadModule("/lib/authRequestContext.ts");
   authContext.resetAuthRequestContextForTests();
+  const workspaceModule = loadWorkspaces
+    ? await vite.ssrLoadModule("/stores/workspaceStore.ts")
+    : null;
+  const useWorkspace = loadWorkspaces
+    ? (await vite.ssrLoadModule("/hooks/useWorkspace.ts")).useWorkspace
+    : () => {};
 
   let result = null;
   const history = [];
   function Harness() {
     result = useAuth();
+    useWorkspace();
     const usage = useUsage();
     history.push({
       isSignedIn: result.isSignedIn,
@@ -189,7 +222,7 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
     );
     await setSession({ data: null, isPending: false, error: new Error("unreachable") });
   };
-  const answer = async (user) => {
+  const answer = async (user, { validates = true } = {}) => {
     await React.act(() =>
       authContext.handleAuthRequestSuccess({
         data: user ? { user, session: { id: "s" } } : null,
@@ -202,7 +235,7 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
       isPending: false,
       error: null,
     });
-    if (user) {
+    if (user && validates) {
       // Reconciliation loads modules asynchronously; timer ticks alone do not
       // establish the validated session the next test action depends on.
       const deadline = performance.now() + 5000;
@@ -273,6 +306,7 @@ async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
 
   return {
     calls,
+    workspace: workspaceModule?.useWorkspaceStore,
     history,
     loseNetwork,
     proxyBlocks,
@@ -297,9 +331,11 @@ test("an offline launch presents the last validated account read-only", async (t
   assert.equal(result.session, null);
   assert.equal(result.user.id, "user-a");
   assert.equal(result.user.email, "ada@example.com");
-  // Policy, managed config and the workspace list are requested for user-a…
+  // Offline hydration reads cached policy and identity without requesting memberships.
   assert.equal(auth.calls.policyRefreshes, 1);
-  assert.equal(auth.calls.workspaceRefresh, 1);
+  assert.equal(auth.calls.workspaceRefresh, 0);
+  assert.deepEqual(auth.calls.cachedWorkspaces, ["user-a"]);
+  assert.deepEqual(auth.calls.managedIdentity, [["user-a", 5]]);
   // …while reconciliation and sync stay fenced until a real get-session.
   assert.deepEqual(auth.calls.setActiveAccountScope, []);
   assert.deepEqual(auth.calls.setIsSignedIn, []);
@@ -486,4 +522,131 @@ test("a proxy's 200 HTML page keeps the account signed in and purges nothing", a
   await auth.answer(USER_A);
   assert.equal(auth.authContext.getValidatedAuthGeneration(), 5);
   assert.equal(auth.result().isOfflineAccount, false);
+});
+
+test("workspace loading waits for validation on a returning account's online launch", async (t) => {
+  const auth = await mountUseAuth(t, {
+    initialStorage: reconciledFor("user-a"),
+    loadWorkspaces: true,
+  });
+  await auth.answer(USER_A);
+
+  assert.ok(auth.calls.cloudRequests.length > 0);
+  for (const { options, response } of auth.calls.cloudRequests) {
+    assert.equal(options.expectedAuthGeneration, 5);
+    assert.equal(response.success, true);
+  }
+  assert.equal(auth.workspace.getState().error, false);
+  assert.equal(auth.workspace.getState().workspaces[0].id, "workspace-a");
+});
+
+test("an offline workspace list comes from this account's cache until sign-in validates", async (t) => {
+  const cachedWorkspace = {
+    id: "cached-workspace",
+    name: "Cached",
+    is_default: true,
+    plan: "free",
+  };
+  const auth = await mountUseAuth(t, {
+    initialStorage: {
+      ...reconciledFor("user-a"),
+      activeWorkspaceId: cachedWorkspace.id,
+      workspaceListCache: JSON.stringify({
+        accountId: "user-a",
+        fetchedAt: Date.now(),
+        workspaces: [cachedWorkspace],
+      }),
+    },
+    loadWorkspaces: true,
+  });
+  await auth.goOffline();
+
+  assert.equal(auth.result().isSignedIn, true);
+  assert.deepEqual(auth.calls.cloudRequests, []);
+  assert.deepEqual(auth.workspace.getState().workspaces, [cachedWorkspace]);
+  assert.equal(auth.workspace.getState().listAccountId, "user-a");
+  assert.equal(auth.workspace.getState().loaded, true);
+  assert.equal(auth.workspace.getState().error, true);
+
+  await auth.answer(USER_A);
+  assert.ok(auth.calls.cloudRequests.length > 0);
+  assert.ok(auth.calls.cloudRequests.every(({ response }) => response.success));
+  assert.equal(auth.workspace.getState().workspaces[0].id, "workspace-a");
+  assert.equal(auth.workspace.getState().error, false);
+});
+
+test("a reconciliation that keeps failing restores this account's cached workspaces", async (t) => {
+  const cachedWorkspace = {
+    id: "cached-workspace",
+    name: "Cached",
+    is_default: true,
+    plan: "free",
+  };
+  const auth = await mountUseAuth(t, {
+    initialStorage: {
+      ...reconciledFor("user-a"),
+      workspaceListCache: JSON.stringify({
+        accountId: "user-a",
+        fetchedAt: Date.now(),
+        workspaces: [cachedWorkspace],
+      }),
+    },
+    loadWorkspaces: true,
+  });
+  globalThis.__authTest.accountScopeFails = true;
+  await auth.answer(USER_A, { validates: false });
+
+  assert.equal(auth.result().isOfflineAccount, true);
+  assert.deepEqual(auth.calls.cloudRequests, []);
+  assert.deepEqual(auth.workspace.getState().workspaces, [cachedWorkspace]);
+  assert.equal(auth.workspace.getState().loaded, true);
+  assert.equal(auth.workspace.getState().error, true);
+});
+
+for (const { name, accountId, fetchedAt } of [
+  { name: "another account's", accountId: "user-b", fetchedAt: Date.now() },
+  { name: "an expired", accountId: "user-a", fetchedAt: 0 },
+]) {
+  test(`an offline account never hydrates ${name} workspace cache`, async (t) => {
+    const auth = await mountUseAuth(t, {
+      initialStorage: {
+        ...reconciledFor("user-a"),
+        workspaceListCache: JSON.stringify({
+          accountId,
+          fetchedAt,
+          workspaces: [{ id: "unavailable-workspace", is_default: true }],
+        }),
+      },
+      loadWorkspaces: true,
+    });
+    await auth.goOffline();
+
+    assert.equal(auth.result().isSignedIn, true);
+    assert.deepEqual(auth.calls.cloudRequests, []);
+    assert.deepEqual(auth.workspace.getState().workspaces, []);
+    assert.equal(auth.workspace.getState().listAccountId, null);
+    assert.equal(auth.workspace.getState().loaded, true);
+    assert.equal(auth.workspace.getState().error, true);
+  });
+}
+
+test("a failed session refetch preserves loaded workspaces without an unvalidated request", async (t) => {
+  const auth = await mountUseAuth(t, {
+    initialStorage: reconciledFor("user-a"),
+    loadWorkspaces: true,
+  });
+  await auth.answer(USER_A);
+  const workspaces = auth.workspace.getState().workspaces;
+  auth.calls.cloudRequests.length = 0;
+
+  await auth.loseNetwork();
+  assert.equal(auth.result().isSignedIn, true);
+  assert.equal(auth.result().isOfflineAccount, true);
+  assert.deepEqual(auth.calls.cloudRequests, []);
+  assert.equal(auth.workspace.getState().workspaces, workspaces);
+  assert.equal(auth.workspace.getState().error, false);
+
+  await auth.answer(USER_A);
+  assert.ok(auth.calls.cloudRequests.length > 0);
+  assert.ok(auth.calls.cloudRequests.every(({ response }) => response.success));
 });

@@ -249,8 +249,9 @@ const nothingToSummarizeError = () =>
 
 /**
  * Whether the reply is the marker itself, as models wrap it: in a fence or
- * emphasis, or after a short sentence. A summary that only contains it, such as
- * a section a small model answered with the marker, is still a summary.
+ * emphasis, after a short sentence, or in another letter case. A summary that
+ * only contains it, such as a section a small model answered with the marker,
+ * is still a summary.
  */
 function isNothingToSummarizeReply(reply: string): boolean {
   const lines = stripThinkingTags(reply)
@@ -258,7 +259,7 @@ function isNothingToSummarizeReply(reply: string): boolean {
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("```"));
   const last = lines.pop()?.replace(/^[*_`]+|[*_`.!]+$/g, "");
-  if (last !== NOTHING_TO_SUMMARIZE) return false;
+  if (last?.toUpperCase() !== NOTHING_TO_SUMMARIZE) return false;
   const lead = lines.join("\n");
   return lead.length <= 200 && !/^(?:#|[-*+]\s|\d+[.)]\s)/m.test(lead);
 }

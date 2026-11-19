@@ -6,6 +6,7 @@ import { useHotkey } from "./hooks/useHotkey";
 import { formatHotkeyListLabel } from "./utils/hotkeys";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useLinuxPillInteractivity } from "./hooks/useLinuxPillInteractivity";
+import { useWindowsPillShape } from "./hooks/useWindowsPillShape";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useOnboardingAssistantDemo } from "./hooks/useOnboardingAssistantDemo";
 import { useLiveTranscriptPanel } from "./hooks/useLiveTranscriptPanel";
@@ -482,11 +483,13 @@ export default function App() {
   // masked shrink back from the Live Transcript panel.
   const pillVisuallySuppressed = dictationErrorSuppressesPill || panelReturnResizeActive;
 
-  useLinuxPillInteractivity({
+  const pillWindowShape = {
     pillRef: pillPresenceRef,
     captureWindow: isCommandMenuOpen || toastCount > 0 || panelMounted || isDragging,
     pillInteractive: pillIsInteractive && !pillVisuallySuppressed,
-  });
+  };
+  useLinuxPillInteractivity(pillWindowShape);
+  useWindowsPillShape(pillWindowShape);
 
   return (
     <div className="dictation-window">

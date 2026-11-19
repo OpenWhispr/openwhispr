@@ -14,7 +14,13 @@ import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
-import type { ActionItem, ActionKind, NoteItem, NoteMutationResult } from "../../types/electron";
+import type {
+  ActionItem,
+  ActionKind,
+  MeetingStartSource,
+  NoteItem,
+  NoteMutationResult,
+} from "../../types/electron";
 import { buildNoteRunInput } from "../../helpers/templatePrompts";
 import {
   useSettingsStore,
@@ -144,6 +150,7 @@ interface PersonalNotesViewProps {
     noteId: number;
     folderId: number | null;
     event: any;
+    startSource?: MeetingStartSource;
     trigger?: string;
     noteSessionId?: string;
   } | null;
@@ -449,7 +456,11 @@ export default function PersonalNotesView({
 
   const startRecording = useCallback(
     () =>
-      startRecordingForNote(activeNote ?? null, recordingRecorderName(activeNote ?? null, user, t)),
+      startRecordingForNote(
+        activeNote ?? null,
+        recordingRecorderName(activeNote ?? null, user, t),
+        "record-button"
+      ),
     [activeNote, user, t]
   );
 
@@ -747,9 +758,9 @@ export default function PersonalNotesView({
   );
 
   const handleExportTranscript = useCallback(
-    async (format: "txt" | "srt" | "json" | "md") => {
+    async (format: "txt" | "srt" | "json" | "md", recorderLabel?: string) => {
       if (!activeNoteId) return;
-      await window.electronAPI.exportTranscript(activeNoteId, format);
+      await window.electronAPI.exportTranscript(activeNoteId, format, { recorderLabel });
     },
     [activeNoteId]
   );
@@ -759,26 +770,26 @@ export default function PersonalNotesView({
     if (
       !meetingRecordingRequest ||
       activeNoteId !== meetingRecordingRequest.noteId ||
+      activeNote?.id !== meetingRecordingRequest.noteId ||
       handledMeetingRequest.current === meetingRecordingRequest
     )
       return;
     handledMeetingRequest.current = meetingRecordingRequest;
-    const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
-    const seedSegments = parseSeedSegments(note?.transcript);
+    const note = activeNote;
+    const seedSegments = parseSeedSegments(note.transcript);
     void handleMeetingRecordingRequest({
       args: {
         noteId: meetingRecordingRequest.noteId,
-        noteTitle: note?.title ?? null,
-        folderId: note ? note.folder_id : (meetingRecordingRequest.folderId ?? null),
+        noteTitle: note.title,
+        folderId: note.folder_id,
         seedSegments,
         recorderName: recordingRecorderName(note, user, t),
         diarizationEnabled:
-          note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
+          note.diarization_enabled == null ? null : note.diarization_enabled === 1,
         expectedCount: resolveExpectedSpeakerCount(note),
-        expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
-        // Requests come from meeting detection, so a note that hasn't loaded
-        // yet is still a meeting note.
-        autoEndEligible: note ? isMeetingAutoEndEligible(note) : true,
+        expectedCountIsExplicit: isExplicitSpeakerCount(note.expected_speaker_count),
+        autoEndEligible: isMeetingAutoEndEligible(note),
+        startSource: meetingRecordingRequest.startSource,
       },
       trigger: meetingRecordingRequest.trigger,
       canAutoStart: canAutoStartMeeting,

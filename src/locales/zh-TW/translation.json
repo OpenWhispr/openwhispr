@@ -416,7 +416,9 @@
           "modelNotFound": "所選模型無法從此服務商取得。",
           "providerStatus": "服務商回傳了狀態碼 {{status}}。",
           "timeout": "連線測試逾時。",
-          "network": "無法連上服務商。"
+          "network": "無法連上服務商。",
+          "invalidHeaders": "HTTP 標頭無效。請檢查名稱和值；無法自訂 Content-Type 和傳輸標頭。",
+          "redirected": "伺服器重新導向了請求。請輸入它重新導向的位址。"
         }
       },
       "local": {
@@ -957,6 +959,9 @@
     "getKey": "取得金鑰 ->",
     "endpointUrl": "端點 URL",
     "azureHint": "Azure AI Foundry：輸入你的資源端點（例如 https://your-resource.cognitiveservices.azure.com），並將「模型」設定為你的確切部署名稱。",
+    "browsedProviderHint": "目前仍在使用 {{current}}。選擇一個模型即可切換至 {{provider}}。",
+    "browsedCustomHint": "目前仍在使用 {{current}}。輸入模型名稱即可切換至你的自訂端點。",
+    "customInUseHint": "目前仍在使用你的自訂端點。選擇一個模型即可切換至 {{provider}}。",
     "customProvider": "自訂",
     "fallback": {
       "whisperModelDescription": "模型",
@@ -2503,7 +2508,20 @@
     "selfHosted": {
       "endpointUrl": "端點 URL",
       "serverUrl": "伺服器 URL",
-      "apiKeyOptional": "API Key（選填）"
+      "apiKeyOptional": "API Key（選填）",
+      "headers": "HTTP 標頭",
+      "headersHelp": "隨每個傳送到此伺服器的請求一起送出，例如閘道要求的 API 金鑰。",
+      "headerName": "標頭名稱",
+      "headerValue": "標頭值",
+      "removeHeader": "刪除",
+      "addHeader": "新增標頭",
+      "unauthorized": "你的伺服器拒絕了請求（401/403）。請檢查下方的標頭或伺服器的驗證設定。",
+      "headerErrors": {
+        "missingName": "請輸入標頭名稱。",
+        "invalidName": "標頭名稱不能包含空格、冒號或其他分隔符號。",
+        "reserved": "OpenWhispr 會自行設定此標頭。",
+        "invalidValue": "此值包含標頭無法攜帶的字元，例如彎引號。"
+      }
     },
     "workspace": {
       "title": "工作區",
@@ -6404,7 +6422,9 @@
       "timeout": "你的伺服器回應逾時。",
       "unreachable": "無法連線到你的伺服器。請確認它正在執行。",
       "noResponse": "未能收到你的伺服器的回應。請檢查它的 API 金鑰，並確認它正在執行。",
-      "unknown": "你的伺服器回傳了意外的錯誤。"
+      "unknown": "你的伺服器回傳了意外的錯誤。",
+      "invalidHeaders": "你的伺服器的某個自訂標頭無效。",
+      "redirected": "你的伺服器重新導向了請求。請輸入它重新導向的位址。"
     },
     "openSettings": "開啟設定",
     "copyDetails": "複製詳細資訊",

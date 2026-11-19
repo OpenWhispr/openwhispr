@@ -144,6 +144,7 @@ export interface DictationRealtimeSessionOptions {
   baseUrl?: string;
   model?: string;
   mode?: "byok" | "openwhispr";
+  transcriptionMode?: string;
   language?: string;
   sampleRate?: number;
   keyterms?: string[];
@@ -721,6 +722,9 @@ export interface FolderItem {
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  // The local account that owns a private folder; NULL for team folders and
+  // device-owned ones not yet bound to an account's cloud.
+  account_id?: string | null;
   // 1 while a cloud-backed row that left a team space still owes its scope
   // retraction push (D6); cleared when the row settles.
   left_team?: number;
@@ -1277,6 +1281,11 @@ export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
 export type SystemAudioStrategy =
   "native" | "loopback" | "pipewire-loopback" | "wasapi-loopback" | "unsupported";
 
+// Where a meeting recording started from and why it stopped, for the local audit log.
+export type MeetingStartSource =
+  "hotkey" | "tray" | "pill" | "prompt" | "calendar-join" | "record-button" | "new-note";
+export type MeetingStopReason = "user" | "auto-end" | "policy" | "account-change" | "error";
+
 export interface MeetingSystemAudioInterruption {
   systemAudioStrategy: SystemAudioStrategy;
   reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet" | "loopback_takeover_failed";
@@ -1803,6 +1812,7 @@ declare global {
         scope: "transcription" | "reasoning";
         provider: string;
         apiKey?: string;
+        headers?: { name: string; value: string }[];
         baseUrl?: string;
         model?: string;
         clientId?: string;
@@ -2178,7 +2188,9 @@ declare global {
       ) => Promise<{ success: boolean; error?: string }>;
       exportTranscript: (
         noteId: number,
-        format: "txt" | "srt" | "json" | "md"
+        format: "txt" | "srt" | "json" | "md",
+        /** recorderLabel names the original recorder when someone else exports the note. */
+        options?: { recorderLabel?: string }
       ) => Promise<{ success: boolean; error?: string }>;
       exportDictionary: (words: string[]) => Promise<{ success: boolean; error?: string }>;
       searchNotes: (
@@ -2979,6 +2991,8 @@ declare global {
       saveAssemblyAIKey?: (key: string) => Promise<void>;
 
       // Custom endpoint API keys
+      getSelfHostedSttHeaders?: () => Promise<string | null>;
+      saveSelfHostedSttHeaders?: (value: string) => Promise<void>;
       getCustomTranscriptionKey?: () => Promise<string | null>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;
       getCleanupCustomKey?: () => Promise<string | null>;
@@ -3926,6 +3940,7 @@ declare global {
         autoEndEligible: boolean;
         aecEnabled?: boolean;
         speakerIndexBase?: number;
+        startSource?: MeetingStartSource;
       }) => Promise<
         {
           success: boolean;
@@ -3938,6 +3953,11 @@ declare global {
         } & PolicyFailureMetadata
       >;
       isMeetingRecordingDisabled?: () => Promise<boolean>;
+      meetingRecordingRefused?: (details: {
+        noteId: number | null;
+        startSource?: MeetingStartSource;
+        reason: string;
+      }) => Promise<void>;
       meetingTranscriptionSend?: (
         buffer: ArrayBuffer,
         source: "mic" | "system",
@@ -3947,7 +3967,10 @@ declare global {
         sessionId: string,
         available: boolean
       ) => Promise<{ success: boolean; reason?: "stale-session" }>;
-      meetingTranscriptionStop?: (expectedSessionId?: string) => Promise<{
+      meetingTranscriptionStop?: (
+        expectedSessionId?: string,
+        reason?: MeetingStopReason
+      ) => Promise<{
         success: boolean;
         transcript?: string;
         diarizationSessionId?: string;
@@ -4247,6 +4270,7 @@ declare global {
         folderId: number | null;
         event: any;
         trigger?: "hotkey" | "manual" | "calendar-join";
+        startSource?: MeetingStartSource;
       } | null>;
       onMeetingNoteNavigationPending?: (callback: () => void) => () => void;
       meetingNoteOpenedWithoutRecording?: (noteSessionId: string) => Promise<void>;
@@ -4394,6 +4418,10 @@ declare global {
         expectedCloudId: string,
         expectedAuthGeneration?: number
       ) => Promise<FolderAckResult | StaleSyncWrite>;
+      ensureAccountDefaultFolders?: (
+        foreignCloudIds: string[],
+        expectedScope: ActiveAccountScope
+      ) => Promise<void>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       restoreFolderAfterDeniedDelete?: (id: number) => Promise<{
@@ -4442,6 +4470,14 @@ declare global {
         id: number,
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** Queues a linked chat whose cloud copy is missing messages for the next push. */
+      markConversationPending?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      getSyncedLinkedConversations?: (
+        expectedAuthGeneration: number
+      ) => Promise<Array<{ id: number; cloud_id: string }> | StaleSyncWrite>;
       clearConversationCreateAttempted?: (id: number) => Promise<void>;
       acknowledgeConversationCreate?: (
         id: number,
