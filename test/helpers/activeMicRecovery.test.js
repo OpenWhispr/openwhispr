@@ -353,6 +353,29 @@ test("the old recorder stopping during recovery does not start a second recovery
   controller.stop();
 });
 
+test("a replacement whose recorder fails to start leaves the original microphone watched", async (t) => {
+  const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
+  const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
+  const original = new FakeTrack();
+  const replacement = new FakeTrack({ deviceId: "mic-2" });
+  const controller = new ActiveMicRecoveryController({
+    mediaDevices,
+    acquire: async () => new FakeStream(replacement),
+    onRecovered: async () => {
+      throw new Error("recorder failed");
+    },
+    debounceMs: 1,
+    retryMs: 10000,
+  });
+  t.after(() => controller.stop());
+  await controller.start(new FakeStream(original));
+  mediaDevices.change([mic("mic-2"), mic("mic-1")]);
+  await delay(10);
+  assert.equal(replacement.stopped, true);
+  assert.equal(controller.track, original);
+  assert.equal(controller.status, "unavailable");
+});
+
 test("a recording restarted during the final enumeration keeps its own status", async () => {
   const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
   const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
@@ -437,7 +460,7 @@ test("a microphone muted at the OS level is not reopened in a loop", async () =>
 });
 
 test("logs a recovery's start, its first failure, and the recovery", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
   const mediaDevices = new FakeMediaDevices([mic("mic-1")]);
   const original = new FakeTrack();
@@ -476,6 +499,8 @@ test("logs a recovery's start, its first failure, and the recovery", async (t) =
   assert.equal(notable[0].meta.reason, "ended");
   assert.equal(notable[1].meta.error, "no mic");
   assert.equal(notable[2].meta.failedAttempts, 2);
+  // The whole outage, not just the attempt that succeeded.
+  assert.equal(notable[2].meta.durationMs, 10);
   assert.ok(lines.every((line) => line.scope === "meeting"));
   // The second failure in the same outage stays at debug.
   assert.ok(

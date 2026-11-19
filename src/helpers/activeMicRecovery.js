@@ -85,6 +85,7 @@ export class ActiveMicRecoveryController {
     // Consecutive failed attempts, so a mic that stays gone logs one warning
     // per outage rather than one every retry.
     this.failedAttempts = 0;
+    this.recoveryStartedAt = 0;
     this.onDeviceChange = () => this.scheduleEvaluation();
     this.onTrackEnded = () => this.recover("ended");
     this.onTrackMute = () => {
@@ -239,7 +240,7 @@ export class ActiveMicRecoveryController {
       this.followDefault &&
       (defaultAtAcquire !== this.inputs.defaultKey || changesAtAcquire !== this.deviceChangeCount);
     let followNewDefault = false;
-    const startedAt = Date.now();
+    if (this.failedAttempts === 0) this.recoveryStartedAt = Date.now();
     this.log(this.failedAttempts === 0 ? "info" : "debug", "Microphone recovery started", {
       reason,
       status: this.status,
@@ -299,7 +300,7 @@ export class ActiveMicRecoveryController {
           this.restoreOnUnmute = null;
           this.log("info", "Microphone recovered", {
             reason,
-            durationMs: Date.now() - startedAt,
+            durationMs: Date.now() - this.recoveryStartedAt,
             label: track.label || "",
             muted: track.muted,
             failedAttempts: this.failedAttempts,
