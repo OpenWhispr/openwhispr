@@ -978,6 +978,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil использует Voxtral Mini 4B для потоковой обработки и Voxtral Small 24B для пакетной.",
       "docsLink": "Открыть документацию"
+    },
+    "elevenlabs": {
+      "keytermsNote": "При диктовке слова из вашего словаря отправляются в ElevenLabs как ключевые термины. За такую диктовку ElevenLabs берёт на 20% больше."
     }
   },
   "hooks": {

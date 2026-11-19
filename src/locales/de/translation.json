@@ -978,6 +978,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
       "docsLink": "Zur Dokumentation"
+    },
+    "elevenlabs": {
+      "keytermsNote": "Beim Diktieren werden die Wörter aus Ihrem Wörterbuch als Schlüsselbegriffe an ElevenLabs gesendet. ElevenLabs berechnet für diese Diktate 20 % mehr."
     }
   },
   "hooks": {

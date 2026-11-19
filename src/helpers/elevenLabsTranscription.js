@@ -14,7 +14,9 @@ const DEFAULT_MODEL = "scribe_v3";
 
 // ElevenLabs rejects the whole request (422) for a single keyterm outside its
 // documented limits, so terms that break them are dropped rather than sent.
-const MAX_KEYTERMS = 1000;
+// It takes 1000 keyterms, but bills at least 20 seconds for a request with more
+// than 100, which would multiply the cost of a short dictation.
+const MAX_KEYTERMS = 100;
 const MAX_KEYTERM_CHARS = 50;
 const MAX_KEYTERM_WORDS = 5;
 const FORBIDDEN_KEYTERM_CHARS = /[<>{}[\]\\]/;

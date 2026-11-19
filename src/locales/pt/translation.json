@@ -957,6 +957,9 @@
     "tinfoil": {
       "transportNote": "O Tinfoil transmite com o Voxtral Mini 4B e processa em lote com o Voxtral Small 24B.",
       "docsLink": "Ver a documentação"
+    },
+    "elevenlabs": {
+      "keytermsNote": "Ao ditar, as palavras do seu dicionário são enviadas à ElevenLabs como termos-chave. A ElevenLabs cobra 20% a mais por esses ditados."
     }
   },
   "hooks": {

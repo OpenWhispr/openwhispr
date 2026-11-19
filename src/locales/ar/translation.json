@@ -6238,6 +6238,9 @@
     "tinfoil": {
       "transportNote": "يستخدم Tinfoil نموذج Voxtral Mini 4B للتفريغ المباشر (البث)، ونموذج Voxtral Small 24B للمعالجة الدفعية.",
       "docsLink": "قراءة الوثائق"
+    },
+    "elevenlabs": {
+      "keytermsNote": "عند الإملاء، تُرسَل كلمات قاموسك إلى ElevenLabs ككلمات مفتاحية. يتقاضى ElevenLabs رسومًا أعلى بنسبة 20% مقابل هذا الإملاء."
     }
   },
   "cleanupPrompt": "التنظيف",
