@@ -41,7 +41,7 @@ A downloadable file is located by its URL or Hugging Face revision and proven by
 
 A file without a hash can be given one first, then moved. File name, folder, engine type, quantization and context length identify the artifact and cannot change.
 
-Request settings (`tokenParam`, `supportsTemperature`, `supportsThinking`, `disableThinking`, `supportsVision`, `supportsTools`, `reasoningEffort`, `thinkingFloor`) can change, but a wrong one breaks every request. CI lists such changes and fails until a maintainer checks them and adds the `capability-change` label.
+Request settings (`tokenParam`, `supportsTemperature`, `supportsThinking`, `disableThinking`, `supportsVision`, `supportsTools`, `reasoningEffort`, `thinkingFloor`) can change, but a wrong one breaks every request. CI lists such changes and fails until a maintainer checks them and adds the `capability-change` label. The label covers the commits it was added to: after a push, a reopen or another label change the check fails again until a maintainer removes the label and adds it back, so add it last.
 
 ## What CI checks
 
@@ -63,19 +63,19 @@ When a change alters the reader (`lib/schema.cjs`, `lib/envelope.cjs` or `lib/re
 
 ## Publication and recovery
 
-`Publish model registry` runs when a commit on `main` changes this folder, and never as part of an app release. It waits for a reviewer in the protected `registry-publish` environment, repeats the tests, the catalog validation and the reader and download checks in a job that has no key, then verifies the published branch, signs with Ed25519, and pushes to this repository's `model-registry-published` branch:
+`Publish model registry` runs when a commit on `main` changes this folder, and never as part of an app release. It repeats the tests, the catalog validation and the reader and download checks in a job that has no key, waits for a reviewer in the protected `registry-publish` environment, then verifies the published branch, signs with Ed25519, and pushes to this repository's `model-registry-published` branch:
 
 - `v2/manifest.json`: the current publication. `v2/history/<n>.json` keeps every version.
 - `v2/schema.cjs`, `v2/envelope.cjs`, `v2/registrySelection.js`: the exact reader that published it.
 - `manifest.json` and `history/` at the root: the retired v1 format, frozen at version 3.
 
-A publication's source is the last commit that changed this folder, so an app merge neither republishes the catalog nor makes a waiting publication stale. A serialized, non-cancelling queue and a final "is this still the registry at the latest main?" check stop an older run from overwriting a newer publication.
+A publication's source is the last commit that changed this folder, so an app merge neither republishes the catalog nor makes a waiting publication stale. A serialized, non-cancelling queue and a final "is this still the registry at the latest main?" check stop an older run from overwriting a newer publication. A commit that leaves the catalog, its reader and the readers it is tested with as published (documentation, tests, a dependency update) still starts a run, which publishes nothing: apps are not sent a new version of the same data.
 
-Apps released before the move read `OpenWhispr/model-registry`'s `published` branch. The last step of every run pushes the commit this repository serves to that branch, and the run fails if it cannot. Before publishing, a run also takes in any version that repository published itself, so there is one version sequence while both exist. Neither branch is copied on trust: before each push the run checks that the publication is signed by a pinned key, is the newest entry of its own history, is not older than what it replaces, and was signed from a registry commit on `main`.
+Apps released before the move read `OpenWhispr/model-registry`'s `published` branch. The last step of every run pushes the commit this repository serves to that branch, and the run fails if it cannot. Before publishing, a run also takes in any version that repository published itself, so there is one version sequence while both exist. Neither branch is copied on trust: before each push the run checks that the publication is signed by a pinned key, is the newest entry of a history that never lost or changed a version, is not older than what it replaces, and was signed from a registry commit on `main`.
 
 An app release bundles the signed publication of the catalog at its commit (`npm run model-registry:pin-release`). A release cut while a registry change is merged but not yet published fails with a message to approve the waiting publication first.
 
-To undo a bad publication quickly, run **Roll back model registry** with the version to restore. It republishes that version's data under a new number: models retired since stay retired, and models added since come back as legacy (hidden from new choices, still working for anyone already using them). Then fix `main`, or its next publication will bring the bad data back. A model that must stop working for everyone (a broken file, a provider shutdown) is retired in a normal pull request instead.
+To undo a bad publication quickly, run **Publish model registry** by hand (Actions → Publish model registry → Run workflow) with the version to restore. It republishes that version's data under a new number: models retired since stay retired, and models added since come back as legacy (hidden from new choices, still working for anyone already using them). Then fix `main`, or its next publication will bring the bad data back. A model that must stop working for everyone (a broken file, a provider shutdown) is retired in a normal pull request instead.
 
 A publication must keep testing every reader the last one was tested with. To stop serving a very old app, list its contract in `compat/dropped-clients.json` in a reviewed pull request.
 

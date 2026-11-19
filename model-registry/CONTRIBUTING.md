@@ -18,6 +18,10 @@ node model-registry/scripts/check-artifacts.cjs   # needs network
 
 Commit the files `model-registry:sync` changes under `src/models/` with your change; CI fails when they differ. To work on the registry alone, `cd model-registry && npm ci && npm test` still works.
 
+## Trying a change in the app
+
+A build made from a branch (`npm run dev`, or the build CI attaches to a pull request) bundles your catalog as version 0 and still reads the live publication. A model you add shows up, but for a model that is already published the published values win until your change is published too: a retirement, a corrected field or a new provider default does not show. To try those, turn the live list off first: Settings → Privacy → Model list updates, then restart the app (or put `OPENWHISPR_MODEL_REGISTRY_MODE=bundled` in the app's `.env`).
+
 ## Adding a model
 
 1. Add it to the matching file in `registry/` (see the README for which file holds what). `name` and `description` are required, in English.
