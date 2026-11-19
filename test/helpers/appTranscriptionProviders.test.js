@@ -32,3 +32,15 @@ test("a catalog that lists a provider keeps its own entry", () => {
   assert.equal(merged.transcriptionProviders.filter((p) => p.id === "openrouter").length, 1);
   assert.deepEqual(openRouter(merged).models, []);
 });
+
+test("ElevenLabs survives a live catalog that does not list it", () => {
+  const elevenLabs = (catalog) => catalog.transcriptionProviders.find((p) => p.id === "elevenlabs");
+  assert.equal(elevenLabs(vendored), undefined, "sync the catalog, then drop the app's entry");
+  const applied = acceptCatalog(vendored, bundled, "1.11.1");
+
+  assert.deepEqual(
+    elevenLabs(applied).models.map((model) => model.id),
+    ["scribe_v3", "scribe_v2"]
+  );
+  assert.equal(elevenLabs(applied).defaultModel, "scribe_v3");
+});

@@ -299,6 +299,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "tinfoil", name: "Tinfoil" },
   { id: "deepgram", name: "Deepgram" },
   { id: "assemblyai", name: "AssemblyAI" },
+  { id: "elevenlabs", name: "ElevenLabs" },
   { id: "openrouter", name: "OpenRouter" },
   { id: "custom", name: "Custom" },
 ];
@@ -334,6 +335,7 @@ interface ProviderCredentialField {
     | "tinfoilApiKey"
     | "deepgramApiKey"
     | "assemblyaiApiKey"
+    | "elevenlabsApiKey"
     | "openrouterApiKey";
   input: "secret" | "text" | "select";
   labelKey?: string;
@@ -398,6 +400,10 @@ const PROVIDER_CREDENTIALS: Record<
   assemblyai: {
     consoleUrl: "https://www.assemblyai.com/dashboard/api-keys",
     fields: [{ key: "assemblyaiApiKey", input: "secret" }],
+  },
+  elevenlabs: {
+    consoleUrl: "https://elevenlabs.io/app/settings/api-keys",
+    fields: [{ key: "elevenlabsApiKey", input: "secret" }],
   },
   openrouter: {
     consoleUrl: "https://openrouter.ai/keys",
@@ -539,6 +545,8 @@ export default function TranscriptionModelPicker({
   const setDeepgramApiKey = useSettingsStore((s) => s.setDeepgramApiKey);
   const assemblyaiApiKey = useSettingsStore((s) => s.assemblyaiApiKey);
   const setAssemblyaiApiKey = useSettingsStore((s) => s.setAssemblyaiApiKey);
+  const elevenlabsApiKey = useSettingsStore((s) => s.elevenlabsApiKey);
+  const setElevenlabsApiKey = useSettingsStore((s) => s.setElevenlabsApiKey);
   const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
@@ -1280,6 +1288,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: keyDraft.value("tinfoilApiKey", tinfoilApiKey),
     deepgramApiKey: keyDraft.value("deepgramApiKey", deepgramApiKey),
     assemblyaiApiKey: keyDraft.value("assemblyaiApiKey", assemblyaiApiKey),
+    elevenlabsApiKey: keyDraft.value("elevenlabsApiKey", elevenlabsApiKey),
     openrouterApiKey: keyDraft.value("openrouterApiKey", openrouterApiKey),
   };
   const customKey = keyDraft.value("customTranscriptionApiKey", customTranscriptionApiKey);
@@ -1296,6 +1305,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: setTinfoilApiKey,
     deepgramApiKey: setDeepgramApiKey,
     assemblyaiApiKey: setAssemblyaiApiKey,
+    elevenlabsApiKey: setElevenlabsApiKey,
     openrouterApiKey: setOpenrouterApiKey,
   };
 
@@ -1787,6 +1797,12 @@ export default function TranscriptionModelPicker({
                         </a>
                       </p>
                     )}
+                    {displayedCloudProvider === "elevenlabs" &&
+                      transcriptionContext === "dictation" && (
+                        <p className="text-xs text-muted-foreground/70">
+                          {t("transcription.elevenlabs.keytermsNote")}
+                        </p>
+                      )}
                   </div>
                 </div>
               )}

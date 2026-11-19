@@ -1,0 +1,27 @@
+// ElevenLabs rejects the whole request (422) for a single keyterm outside its
+// documented limits, so terms that break them are dropped rather than sent.
+// It takes 1000 keyterms, but bills at least 20 seconds for a request with more
+// than 100, which would multiply the cost of a short dictation.
+const MAX_KEYTERMS = 100;
+const MAX_KEYTERM_CHARS = 50;
+const MAX_KEYTERM_WORDS = 5;
+const FORBIDDEN_KEYTERM_CHARS = /[<>{}[\]\\]/;
+
+export function sanitizeElevenLabsKeyterms(keyterms) {
+  if (!Array.isArray(keyterms)) return [];
+  const seen = new Set();
+  const terms = [];
+  for (const raw of keyterms) {
+    if (typeof raw !== "string") continue;
+    const term = raw.trim().replace(/\s+/g, " ");
+    if (!term || [...term].length > MAX_KEYTERM_CHARS) continue;
+    if (term.split(" ").length > MAX_KEYTERM_WORDS) continue;
+    if (FORBIDDEN_KEYTERM_CHARS.test(term)) continue;
+    const key = term.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    terms.push(term);
+    if (terms.length === MAX_KEYTERMS) break;
+  }
+  return terms;
+}

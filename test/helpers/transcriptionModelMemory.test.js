@@ -127,6 +127,23 @@ test("per-provider transcription model memory", async (t) => {
     assert.equal(state().cloudTranscriptionModel, "mistralai/voxtral-mini-transcribe-3-0");
   });
 
+  await t.test(
+    "a reconciled dictation provider preserves an explicit meeting provider's inherited model",
+    () => {
+      state().setCloudTranscriptionProvider("openai");
+      state().setCloudTranscriptionModel("gpt-4o-transcribe");
+      state().setMeetingCloudTranscriptionProvider("openai");
+      state().setMeetingCloudTranscriptionModel("");
+
+      // The picker reconciles via the individual setters when the saved choice is unavailable.
+      state().setCloudTranscriptionProvider("elevenlabs");
+      state().setCloudTranscriptionModel("scribe_v3");
+
+      assert.equal(state().meetingCloudTranscriptionProvider, "openai");
+      assert.equal(state().meetingCloudTranscriptionModel, "gpt-4o-transcribe");
+    }
+  );
+
   await t.test("setCloudTranscriptionForAllScopes seeds memory in every scope", () => {
     state().setCloudTranscriptionForAllScopes({
       useLocalWhisper: false,

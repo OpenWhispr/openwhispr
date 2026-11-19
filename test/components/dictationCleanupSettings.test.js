@@ -148,8 +148,8 @@ test("a completed download or deletion updates the notice for the same selected 
     electronAPI: { modelGetAll: async () => [{ id: "model", isDownloaded: downloaded }] },
   });
   const events = new EventTarget();
-  t.mock.method(window, "addEventListener", events.addEventListener.bind(events));
-  t.mock.method(window, "removeEventListener", events.removeEventListener.bind(events));
+  t.mock.method(globalThis.window, "addEventListener", events.addEventListener.bind(events));
+  t.mock.method(globalThis.window, "removeEventListener", events.removeEventListener.bind(events));
   await panel.setStore({ cleanupMode: "local", cleanupModel: "model", toneStyleEnabled: true });
   assert.ok(missingNotice(panel));
   downloaded = true;

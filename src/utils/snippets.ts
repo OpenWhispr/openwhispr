@@ -167,7 +167,9 @@ function dedupeBelow(words: string[], seen: Set<string>): string[] {
 // The personal dictionary words that apply: all of them, except moved words
 // whose shared copies the member hid (see SharedHintWords.suppressedPersonal).
 // Without suppressed words this is the saved list itself.
-function personalDictionary(settings: DictionaryHintSettings | null | undefined): string[] {
+export function getPersonalDictionaryWords(
+  settings: DictionaryHintSettings | null | undefined
+): string[] {
   const dictionary = Array.isArray(settings?.customDictionary) ? settings.customDictionary : [];
   const suppressed = wordList(settings?.sharedDictionaryHints?.suppressedPersonal);
   if (suppressed.length === 0) return dictionary;
@@ -192,7 +194,7 @@ function sharedTiers(
  * dedupe) so a list without shared words is exactly what it always was.
  */
 export function getDictionaryHintTiers(settings?: DictionaryHintSettings | null): string[][] {
-  const dictionary = personalDictionary(settings);
+  const dictionary = getPersonalDictionaryWords(settings);
   const snippets = Array.isArray(settings?.snippets) ? settings.snippets : [];
   const triggers = snippets
     .map((s) => s?.trigger)
@@ -210,7 +212,7 @@ export function getDictionaryHintWords(settings?: DictionaryHintSettings | null)
 }
 
 function effectiveTiers(settings?: DictionaryHintSettings | null): string[][] {
-  const personal = personalDictionary(settings);
+  const personal = getPersonalDictionaryWords(settings);
   return [personal, ...sharedTiers(settings, personal)];
 }
 

@@ -978,6 +978,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
       "docsLink": "ドキュメントを見る"
+    },
+    "elevenlabs": {
+      "keytermsNote": "ディクテーション時、辞書の単語はキーワードとして ElevenLabs に送信されます。ElevenLabs はそのディクテーションに 20% の追加料金を課します。"
     }
   },
   "hooks": {
@@ -3276,6 +3279,8 @@
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
         "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
+        "elevenlabs_scribe_v3": "最も高精度な多言語文字起こし",
+        "elevenlabs_scribe_v2": "高精度な多言語文字起こし",
         "gemini_3_5_transcribe_live": "リアルタイムストリーミング文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",

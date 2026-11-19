@@ -226,6 +226,7 @@ const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const { transcribeAssemblyAiRecording } = require("./assemblyAiDictation");
+const { transcribeWithElevenLabs } = require("./elevenLabsTranscription");
 const AudioStorageManager = require("./audioStorage");
 const { SkillLibrary } = require("./skills/skillLibrary");
 const { registerSkillsIpc } = require("./skills/skillsIpc");
@@ -537,6 +538,14 @@ async function postMultipart(
       statusCode: response.status,
     });
   }
+}
+
+async function transcribeElevenLabsSpeech(options) {
+  const result = await transcribeWithElevenLabs(options);
+  if (!result.text) {
+    throw Object.assign(new Error("No speech detected in audio"), { code: "NO_SPEECH_DETECTED" });
+  }
+  return result;
 }
 
 function interpretTranscribeResponse(data) {
@@ -6915,6 +6924,43 @@ class IPCHandlers {
       })
     );
 
+    // ElevenLabs Scribe authenticates with xi-api-key and takes model_id /
+    // language_code, so it has no OpenAI-compatible path either.
+    const elevenLabsDictations = new AgentStreamRequestRegistry();
+    const transcribeElevenLabsDictation = createProductHandler(
+      "proxy-elevenlabs-transcription",
+      serializeIpcError(
+        async (_event, { audioBuffer, model, language, keyterms }, cancelSignal) => {
+          return transcribeElevenLabsSpeech({
+            signal: AbortSignal.any([cancelSignal, this._productRequestContext.getStore().signal]),
+            audioBuffer: Buffer.from(audioBuffer),
+            model,
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+            language,
+            keyterms,
+            apiKey: this.environmentManager.getElevenlabsKey(),
+          });
+        }
+      ),
+      true
+    );
+    ipcMain.handle("proxy-elevenlabs-transcription", async (event, options) => {
+      // Register before the policy lookup can yield so an early Cancel cannot miss the upload.
+      const sender = event.sender;
+      const senderId = sender.id;
+      const requestId = crypto.randomUUID();
+      const controller = elevenLabsDictations.begin(senderId, requestId);
+      const abort = () => controller.abort();
+      sender.once("destroyed", abort);
+      try {
+        return await transcribeElevenLabsDictation(event, options, controller.signal);
+      } finally {
+        sender.removeListener("destroyed", abort);
+        elevenLabsDictations.complete(senderId, requestId, controller);
+      }
+    });
+
     // Headers and redirect mode for a request to the self-hosted speech server of `surface`
     // ("dictation" or "upload"), with the custom key for a route that takes one (Orukeet's).
     const selfHostedRequest = (surface, route) => {
@@ -9408,6 +9454,7 @@ class IPCHandlers {
     });
 
     ipcMain.on("cloud-transcribe-cancel", (event) => {
+      elevenLabsDictations.cancelSender(event.sender.id);
       this._cloudTranscriptionRequests.cancelSender(event.sender.id);
       for (const [controller, operation] of this._productRequests) {
         if (
@@ -9711,6 +9758,19 @@ class IPCHandlers {
             apiKey: this.environmentManager.getAssemblyAIKey(),
           });
           result = { text, cleanedText, source: "assemblyai", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "elevenlabs") {
+          // No size check: the cap is the upload screen's, not ElevenLabs', and dictation
+          // already sent this recording once at this size.
+          const { text } = await transcribeElevenLabsSpeech({
+            signal,
+            audioBuffer: buffer,
+            model: route.model,
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+            language: route.language,
+            apiKey: this.environmentManager.getElevenlabsKey(),
+          });
+          result = { text, source: "elevenlabs", model: route.model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
           // directly; everything else consumes the route endpoint as-is.
@@ -14204,6 +14264,20 @@ class IPCHandlers {
                 model: route.model,
                 contentType: providerContentType(realByok),
                 apiKey: apiKey || this.environmentManager.getGeminiKey(),
+              });
+              return { success: true, text };
+            }
+
+            if (route.transport === "proxied" && route.provider === "elevenlabs") {
+              // No language hint, as for the other uploads: a file is often not
+              // in the dictation language.
+              const { text } = await transcribeElevenLabsSpeech({
+                audioBuffer: fs.readFileSync(realByok),
+                signal,
+                model: route.model,
+                fileName: path.basename(realByok),
+                contentType: providerContentType(realByok),
+                apiKey: apiKey || this.environmentManager.getElevenlabsKey(),
               });
               return { success: true, text };
             }

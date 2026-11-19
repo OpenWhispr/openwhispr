@@ -50,6 +50,7 @@ test("self-hosted mode without a URL fails closed unless the provider is custom"
     "corti",
     "gemini",
     "tinfoil",
+    "elevenlabs",
     "openrouter",
   ]) {
     const route = await resolve({
@@ -133,6 +134,13 @@ test("proxied providers carry their quirks as route data", async () => {
     14 * 1024 * 1024,
     "inline base64 audio must fit Gemini's 20 MB request cap"
   );
+
+  const elevenlabs = await resolve({ cloudTranscriptionProvider: "elevenlabs" });
+  assert.equal(elevenlabs.transport, "proxied");
+  assert.equal(elevenlabs.provider, "elevenlabs");
+  assert.equal(elevenlabs.model, "scribe_v3");
+  assert.equal(elevenlabs.sizeCapBytes, 25 * 1024 * 1024);
+  assert.equal("endpoint" in elevenlabs, false, "the key never reaches an OpenAI-shaped endpoint");
 });
 
 test("byokFileSizeLimit matches the per-provider route caps", async () => {
