@@ -28,6 +28,9 @@ const {
   BASELINE_CONTEXT_SIZE,
 } = require("./llamaContextPolicy");
 
+// start() refused to touch the running server: it was busy, or the caller gave up.
+const SERVER_LEFT_ALONE_CODES = new Set(["LOCAL_MODEL_BUSY", "LOCAL_MODEL_CANCELLED"]);
+
 const MIN_FILE_SIZE = 1_000_000; // 1MB minimum for valid model files
 // Room a download reserves: the model file(s) plus headroom.
 const LLM_DISK_SPACE_FACTOR = 1.2;
@@ -592,6 +595,7 @@ class ModelManager {
     if ((estimatedTokens + reserveTokens) * PREFLIGHT_MEASURE_FACTOR <= running) return maxTokens;
 
     const usable = (await this.serverManager.usableContextSize()) ?? running;
+    options.signal?.throwIfAborted();
     const exactTokens = await this.serverManager.countPromptTokens(messages, {
       disableThinking: options.disableThinking,
     });
@@ -611,6 +615,7 @@ class ModelManager {
     if (neededTokens <= usable) return maxTokens;
 
     const { ceiling: maxContext } = await ceilingFor();
+    options.signal?.throwIfAborted();
     const grown = resolveContextSize({
       needed: neededTokens,
       floor: contextFloor,
@@ -618,6 +623,7 @@ class ModelManager {
     });
 
     if (grown > usable) await startServer(grown);
+    options.signal?.throwIfAborted();
 
     const nowUsable =
       (await this.serverManager.usableContextSize()) ?? this.serverManager.contextSize ?? grown;
@@ -678,6 +684,7 @@ class ModelManager {
   }
 
   async _policyAllowedRunInference(modelId, prompt, options = {}) {
+    options.signal?.throwIfAborted();
     this.ensureInitialized();
     const startTime = Date.now();
     debugLogger.logReasoning("INFERENCE_START", {
@@ -773,11 +780,16 @@ class ModelManager {
         this.currentServerModelId === modelId
           ? this.serverManager.contextSize
           : null;
-      const startAt = async (size) =>
-        this.serverManager.start(
-          modelPath,
-          await this.serverStartOptions(modelInfo, { contextSize: size, cacheRamMiB })
-        );
+      const startAt = async (size) => {
+        const startOptions = await this.serverStartOptions(modelInfo, {
+          contextSize: size,
+          cacheRamMiB,
+          busyWaitMs: options.busyWaitMs,
+          signal: options.signal,
+        });
+        options.signal?.throwIfAborted();
+        return this.serverManager.start(modelPath, startOptions);
+      };
       // llama.cpp's startup dump is the diagnostic, so it goes to the log here
       // and nowhere else: details crosses IPC to the renderer, which neither
       // reads it nor should carry a stderr blob and absolute model paths.
@@ -802,7 +814,11 @@ class ModelManager {
         // be stepped down again.
         if (this.serverManager.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
-        if (isLocalModelPolicyRefusal(error) || error.code === "LOCAL_MODEL_BUSY") throw error;
+        // The running server was left alone, which says nothing about this window.
+        if (isLocalModelPolicyRefusal(error) || SERVER_LEFT_ALONE_CODES.has(error.code)) {
+          throw error;
+        }
+        options.signal?.throwIfAborted();
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
         // dies has already taken a working window with it. Come back at the
@@ -820,8 +836,12 @@ class ModelManager {
         try {
           await startAt(restorableContextSize);
         } catch (restoreError) {
-          if (isLocalModelPolicyRefusal(restoreError) || restoreError.code === "LOCAL_MODEL_BUSY")
+          if (
+            isLocalModelPolicyRefusal(restoreError) ||
+            SERVER_LEFT_ALONE_CODES.has(restoreError.code)
+          ) {
             throw restoreError;
+          }
           throw unavailable(restoreError);
         }
       }
@@ -843,6 +863,7 @@ class ModelManager {
       });
 
       await startServer(targetContextSize);
+      options.signal?.throwIfAborted();
 
       debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
         port: this.serverManager.port,
@@ -861,6 +882,7 @@ class ModelManager {
       ceilingFor,
       startServer,
     });
+    options.signal?.throwIfAborted();
 
     // The preflight shrank the reply to make room for the prompt. A reply that
     // fills that allowance was cut short by the window, not by the caller's cap,
@@ -882,6 +904,7 @@ class ModelManager {
         disableThinking: options.disableThinking,
         requireCompleteOutput: options.requireCompleteOutput || refuseWindowClip,
         responseFormat: options.responseFormat,
+        signal: options.signal,
       });
 
       const totalTime = Date.now() - startTime;
@@ -949,7 +972,18 @@ class ModelManager {
         "llm",
         modelId,
         () => this._policyAllowedPrewarmServer(modelId),
-        { memoryOnly: true, onAbort: () => this.stopServer() }
+        {
+          memoryOnly: true,
+          // The pre-warm may be checking whether another model is answering, so
+          // only a server that is, or is becoming, this model is stopped.
+          onAbort: () => {
+            const modelInfo = this.findModelById(modelId);
+            if (!modelInfo) return;
+            return this.serverManager.stopIfServing(
+              path.join(this.modelsDir, modelInfo.model.fileName)
+            );
+          },
+        }
       );
     } catch (error) {
       if (error.code === "POLICY_UNRESOLVABLE") {
@@ -980,7 +1014,11 @@ class ModelManager {
     if (!this.serverManager.isAvailable()) return false;
 
     try {
-      await this.serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
+      // Nobody is waiting on a pre-warm, so it never gets in an answer's way.
+      await this.serverManager.start(
+        modelPath,
+        await this.serverStartOptions(modelInfo, { busyWaitMs: 0 })
+      );
       this.currentServerModelId = modelId;
       debugLogger.info("llama-server pre-warmed", { modelId });
       return true;

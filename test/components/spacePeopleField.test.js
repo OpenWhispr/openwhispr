@@ -464,7 +464,7 @@ test("Select stages the address with its chosen role", async (t) => {
   await press(trigger, "ArrowDown");
   const items = [...doc().querySelectorAll('[role="menuitemradio"]')];
   assert.deepEqual(items.map(text), [
-    "Workspace Member Can view and edit notes.",
+    "Workspace Member Uses the workspace.",
     "Workspace Admin Manages members, invites, teams, and settings.",
   ]);
   assert.equal(items[0].getAttribute("aria-checked"), "true", "Member by default");

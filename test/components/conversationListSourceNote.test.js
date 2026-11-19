@@ -142,3 +142,34 @@ for (const [event, changes, expected] of [
     t.after(() => assert.equal(disposed, true, "the subscription is disposed on unmount"));
   });
 }
+
+// M6: a chat about a note outside the active workspace's scope stays out of the list, as the
+// note stays out of that chat's grounding: its earlier replies would reach the model as history.
+// Root chats, and chats whose note is gone, stay listed.
+test("a chat whose note sits outside the active workspace is left out of the list", async (t) => {
+  const chats = [
+    row({ id: 20, title: "In this workspace", note_id: 30, note_title: "Here", note_space_id: 3 }),
+    row({
+      id: 21,
+      title: "In another workspace",
+      note_id: 31,
+      note_title: "There",
+      note_space_id: 9,
+    }),
+    row({ id: 22, title: "A plain chat", last_message: "Hi" }),
+    row({ id: 23, title: "Its note is gone", note_id: 32, note_title: null, note_space_id: null }),
+  ];
+  const container = await renderConversationList(t, {
+    getAgentConversationsWithPreview: async (_limit, _offset, isArchived) =>
+      isArchived ? [] : chats,
+    getPrivateSpaceId: async () => 3,
+    getSpaces: async () => [
+      { id: 3, kind: "private", workspace_id: null },
+      { id: 9, kind: "private", workspace_id: "other" },
+    ],
+  });
+  assert.ok(rowText(container, "In this workspace"));
+  assert.equal(rowText(container, "In another workspace"), undefined);
+  assert.ok(rowText(container, "A plain chat"));
+  assert.ok(rowText(container, "Its note is gone"));
+});

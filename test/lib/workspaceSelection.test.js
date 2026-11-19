@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  activePrivateSpace,
+  assistantScopeSpaceIds,
   decideNoteWorkspaceScope,
   isSpaceInWorkspaceScope,
   manageableWorkspaces,
@@ -24,33 +26,167 @@ test("manageableWorkspaces follows the create_spaces capability", () => {
   assert.deepEqual(manageableWorkspaces([blockedAdmin, grantedMember]), [grantedMember]);
 });
 
-const personal = { id: 1, kind: "private", workspace_id: null };
+// A private space belongs to one workspace; the pending one (no workspace yet, or signed out
+// the stand-in) is the default workspace's until main binds it.
+const privateOf = (id, workspaceId) => ({ id, kind: "private", workspace_id: workspaceId });
+const privateA = privateOf(1, "a");
+const pending = privateOf(9, null);
 const teamIn = (id, workspaceId) => ({ id, kind: "team", workspace_id: workspaceId });
 const listed = [workspace("a", "member"), workspace("b", "member")];
 
-test("isSpaceInWorkspaceScope: Personal and the active workspace's spaces show", () => {
-  assert.equal(isSpaceInWorkspaceScope(personal, "a", listed), true);
-  assert.equal(isSpaceInWorkspaceScope(teamIn(2, "a"), "a", listed), true);
-  assert.equal(isSpaceInWorkspaceScope(teamIn(3, "b"), "a", listed), false);
+test("isSpaceInWorkspaceScope: the active workspace's Private and spaces show", () => {
+  assert.equal(isSpaceInWorkspaceScope(privateA, "a", listed, "a"), true);
+  assert.equal(isSpaceInWorkspaceScope(teamIn(2, "a"), "a", listed, "a"), true);
+  assert.equal(isSpaceInWorkspaceScope(teamIn(3, "b"), "a", listed, "a"), false);
 });
 
 test("isSpaceInWorkspaceScope: unlisted or workspace-less team spaces stay reachable", () => {
-  assert.equal(isSpaceInWorkspaceScope(teamIn(2, null), "a", listed), true);
-  assert.equal(isSpaceInWorkspaceScope(teamIn(3, "gone"), "a", listed), true);
+  assert.equal(isSpaceInWorkspaceScope(teamIn(2, null), "a", listed, "a"), true);
+  assert.equal(isSpaceInWorkspaceScope(teamIn(3, "gone"), "a", listed, "a"), true);
   // Before the workspace list loads nothing is hidden.
-  assert.equal(isSpaceInWorkspaceScope(teamIn(4, "b"), "a", []), true);
+  assert.equal(isSpaceInWorkspaceScope(teamIn(4, "b"), "a", [], null), true);
   // No active workspace (signed out, none yet): everything shows.
-  assert.equal(isSpaceInWorkspaceScope(teamIn(5, "b"), null, listed), true);
+  assert.equal(isSpaceInWorkspaceScope(teamIn(5, "b"), null, listed, "a"), true);
   // An active id the list doesn't hold (left, not loaded yet) scopes nothing.
-  assert.equal(isSpaceInWorkspaceScope(teamIn(6, "b"), "gone", listed), true);
+  assert.equal(isSpaceInWorkspaceScope(teamIn(6, "b"), "gone", listed, "a"), true);
+});
+
+test("a private space shows only in its own workspace", () => {
+  assert.equal(isSpaceInWorkspaceScope(privateOf(2, "b"), "a", listed, "a"), false);
+  assert.equal(isSpaceInWorkspaceScope(privateA, "b", listed, "a"), false);
+  assert.equal(isSpaceInWorkspaceScope(privateOf(2, "b"), "b", listed, "a"), true);
+  // A workspace the list no longer holds (lost, its Private not moved yet) still keeps it.
+  assert.equal(isSpaceInWorkspaceScope(privateOf(3, "gone"), "a", listed, "a"), false);
+  // Not even an active id the list doesn't hold opens every Private.
+  assert.equal(isSpaceInWorkspaceScope(privateOf(2, "b"), "gone", listed, "a"), false);
+});
+
+test("the pending private space shows in the default workspace", () => {
+  assert.equal(isSpaceInWorkspaceScope(pending, "a", listed, "a"), true);
+  assert.equal(isSpaceInWorkspaceScope(pending, "b", listed, "a"), false);
+});
+
+test("signed out, the stand-in Private shows", () => {
+  // No account: no workspaces, and no active or default workspace.
+  assert.equal(isSpaceInWorkspaceScope(pending, null, [], null), true);
+  // An active id another window left in storage doesn't hide it.
+  assert.equal(isSpaceInWorkspaceScope(pending, "a", [], null), true);
+});
+
+test("while the default workspace isn't known, the pending Private shows and no other workspace's does", () => {
+  // The list is loading: the workspace saved as active, no default yet.
+  assert.equal(isSpaceInWorkspaceScope(privateA, "a", [], null), true);
+  assert.equal(isSpaceInWorkspaceScope(pending, "a", [], null), true);
+  assert.equal(isSpaceInWorkspaceScope(privateOf(2, "b"), "a", [], null), false);
+  // The default's own row is another workspace's Private like any other.
+  assert.equal(
+    isSpaceInWorkspaceScope({ ...privateOf(3, "d"), is_default_private: 1 }, "a", [], null),
+    false
+  );
 });
 
 test("spacesInWorkspaceScope keeps order and drops other workspaces' spaces", () => {
-  const spaces = [teamIn(2, "b"), personal, teamIn(3, "a"), teamIn(4, null)];
+  const spaces = [teamIn(2, "b"), privateA, teamIn(3, "a"), privateOf(5, "b"), teamIn(4, null)];
   assert.deepEqual(
-    spacesInWorkspaceScope(spaces, "a", listed).map((s) => s.id),
+    spacesInWorkspaceScope(spaces, "a", listed, "a").map((s) => s.id),
     [1, 3, 4]
   );
+});
+
+test("activePrivateSpace: the active workspace's own Private comes before the pending one", () => {
+  const scoped = spacesInWorkspaceScope([pending, teamIn(2, "a"), privateA], "a", listed, "a");
+  assert.equal(activePrivateSpace(scoped), privateA);
+  assert.equal(activePrivateSpace([teamIn(2, "a"), pending]), pending);
+  assert.equal(activePrivateSpace([teamIn(2, "a")]), null);
+});
+
+// What the assistant may read: every space of workspace A's scope, none of workspace B's.
+const assistantSpaces = [
+  privateA,
+  pending,
+  privateOf(5, "b"),
+  teamIn(2, "a"),
+  teamIn(3, "b"),
+  teamIn(6, null),
+  teamIn(7, "gone"),
+];
+const assistantScope = (overrides) =>
+  assistantScopeSpaceIds({
+    spaces: assistantSpaces,
+    activeWorkspaceId: "a",
+    workspaces: listed,
+    defaultWorkspaceId: "a",
+    privateSpaceId: 1,
+    ...overrides,
+  }).sort((x, y) => x - y);
+
+test("assistantScopeSpaceIds: with the workspace list, the assistant reads what the tree shows", () => {
+  assert.deepEqual(assistantScope(), [1, 2, 6, 7, 9]);
+  // Workspace B active: its own Private and teamspace, never A's Private or the default's pending one.
+  assert.deepEqual(assistantScope({ activeWorkspaceId: "b", privateSpaceId: 5 }), [3, 5, 6, 7]);
+});
+
+test("assistantScopeSpaceIds: without the workspace list (the dictation window), the active workspace's Private and teamspaces", () => {
+  // The default isn't known here: the pending Private shows merged in, as the tree shows it.
+  assert.deepEqual(assistantScope({ workspaces: [], defaultWorkspaceId: null }), [1, 2, 6, 9]);
+  // Known (a cached list, or the row main last bound) to be another workspace's default: the
+  // pending notes are that workspace's.
+  assert.deepEqual(
+    assistantScope({ activeWorkspaceId: "b", workspaces: [], privateSpaceId: 5 }),
+    [3, 5, 6]
+  );
+  // A list that doesn't hold the active workspace (just left, still loading) is no list at all,
+  // and A's Private isn't the active workspace's.
+  assert.deepEqual(assistantScope({ activeWorkspaceId: "gone", privateSpaceId: 1 }), [6, 7]);
+});
+
+test("assistantScopeSpaceIds: a Private bound to another workspace never counts, whatever main names", () => {
+  // Main's workspace scope lags (startup, an account change): unnamed, it still answers the
+  // default workspace D's Private while workspace A is active and no list has loaded.
+  const boundD = { ...privateOf(5, "d"), is_default_private: 1 };
+  const lagging = {
+    spaces: [privateA, boundD, teamIn(2, "a")],
+    workspaces: [],
+    defaultWorkspaceId: null,
+    privateSpaceId: 5,
+  };
+  assert.deepEqual(assistantScope(lagging), [1, 2]);
+  // D is known as the default from the row main bound: its pending notes stay out of A.
+  assert.deepEqual(assistantScope({ ...lagging, spaces: [...lagging.spaces, pending] }), [1, 2]);
+  // Nothing of A's own yet: still nothing of D's.
+  assert.deepEqual(assistantScope({ ...lagging, spaces: [boundD, teamIn(2, "a"), pending] }), [2]);
+  // Nothing says which workspace is the default: the pending row shows merged in (D20).
+  assert.deepEqual(
+    assistantScope({ ...lagging, spaces: [privateA, privateOf(5, "d"), teamIn(2, "a"), pending] }),
+    [1, 2, 9]
+  );
+  // A is the default: the pending row is A's until main binds it.
+  assert.deepEqual(
+    assistantScope({ ...lagging, spaces: [pending, teamIn(2, "a")], defaultWorkspaceId: "a" }),
+    [2, 9]
+  );
+});
+
+test("assistantScopeSpaceIds: the active workspace's Private is a row that exists, never one main is asked to make", () => {
+  // First launch after the upgrade, main lagging: only the pending row exists, and the saved
+  // active workspace D is the default though nothing here knows it yet.
+  assert.deepEqual(
+    assistantScope({
+      spaces: [pending, teamIn(2, "d")],
+      activeWorkspaceId: "d",
+      workspaces: [],
+      defaultWorkspaceId: null,
+      privateSpaceId: 9,
+    }),
+    [2, 9]
+  );
+});
+
+test("assistantScopeSpaceIds fails closed to main's Private when no workspace is active", () => {
+  assert.deepEqual(assistantScope({ activeWorkspaceId: null }), [1]);
+  assert.deepEqual(assistantScope({ activeWorkspaceId: null, workspaces: [] }), [1]);
+  // Not even main's Private is known: nothing.
+  assert.deepEqual(assistantScope({ activeWorkspaceId: null, privateSpaceId: null }), []);
 });
 
 const decide = (overrides) =>
@@ -58,13 +194,14 @@ const decide = (overrides) =>
     reason: "workspaceSwitched",
     activeWorkspaceId: "a",
     workspaces: listed,
+    defaultWorkspaceId: "a",
     contextSpace: null,
     noteSpace: null,
     ...overrides,
   });
 
 test("decideNoteWorkspaceScope: nothing to do while everything shows", () => {
-  assert.deepEqual(decide({ contextSpace: personal, noteSpace: teamIn(2, "a") }), {
+  assert.deepEqual(decide({ contextSpace: privateA, noteSpace: teamIn(2, "a") }), {
     kind: "none",
   });
   assert.deepEqual(decide({ reason: "navigated", contextSpace: teamIn(2, "a") }), {
@@ -83,15 +220,21 @@ test("decideNoteWorkspaceScope: a switch closes a hidden note and leaves its con
     clearNote: false,
     context: "default",
   });
+  // Another workspace's Private, too.
+  assert.deepEqual(decide({ contextSpace: privateOf(2, "b"), noteSpace: privateOf(2, "b") }), {
+    kind: "leaveHidden",
+    clearNote: true,
+    context: "default",
+  });
 });
 
 test("decideNoteWorkspaceScope: a switch keeps a visible note and moves the container to it", () => {
-  assert.deepEqual(decide({ contextSpace: teamIn(3, "b"), noteSpace: personal }), {
+  assert.deepEqual(decide({ contextSpace: teamIn(3, "b"), noteSpace: privateA }), {
     kind: "leaveHidden",
     clearNote: false,
     context: "note",
   });
-  assert.deepEqual(decide({ contextSpace: personal, noteSpace: teamIn(3, "b") }), {
+  assert.deepEqual(decide({ contextSpace: privateA, noteSpace: teamIn(3, "b") }), {
     kind: "leaveHidden",
     clearNote: true,
     context: "keep",
@@ -106,7 +249,7 @@ test("decideNoteWorkspaceScope: opening another workspace's space or note switch
   // A search result sets the folder before the note: the moved container
   // wins over the note still open from before.
   assert.deepEqual(
-    decide({ reason: "navigated", contextSpace: teamIn(3, "b"), noteSpace: personal }),
+    decide({ reason: "navigated", contextSpace: teamIn(3, "b"), noteSpace: privateA }),
     { kind: "enterWorkspace", workspaceId: "b" }
   );
   // The note wins when the note and its container disagree.
@@ -121,10 +264,54 @@ test("decideNoteWorkspaceScope: opening another workspace's space or note switch
   );
 });
 
-test("decideNoteWorkspaceScope: data changing under the open note never switches", () => {
-  // A sync or an undone move put the open Personal note into B's teamspace.
+test("opening a private note of another workspace enters that workspace", () => {
   assert.deepEqual(
-    decide({ reason: "dataChanged", contextSpace: personal, noteSpace: teamIn(3, "b") }),
+    decide({ reason: "navigated", contextSpace: privateA, noteSpace: privateOf(2, "b") }),
+    { kind: "enterWorkspace", workspaceId: "b" }
+  );
+  assert.deepEqual(decide({ reason: "navigated", contextSpace: privateOf(2, "b") }), {
+    kind: "enterWorkspace",
+    workspaceId: "b",
+  });
+  // Before the list loads, the workspace the note names is entered; the list then keeps it or
+  // replaces it.
+  assert.deepEqual(
+    decide({
+      reason: "navigated",
+      workspaces: [],
+      defaultWorkspaceId: null,
+      noteSpace: privateOf(2, "b"),
+    }),
+    { kind: "enterWorkspace", workspaceId: "b" }
+  );
+});
+
+test("decideNoteWorkspaceScope: a private note of a workspace no longer listed never switches", () => {
+  // Its Private moves to the default's once the loss is handled; entering the lost workspace would
+  // leave the switcher on nothing it lists.
+  assert.deepEqual(decide({ reason: "navigated", noteSpace: privateOf(3, "gone") }), {
+    kind: "leaveHidden",
+    clearNote: true,
+    context: "keep",
+  });
+});
+
+test("decideNoteWorkspaceScope: opening a pending private note from another workspace enters the default", () => {
+  // The pending Private is the default workspace's until main binds it.
+  assert.deepEqual(decide({ reason: "navigated", activeWorkspaceId: "b", noteSpace: pending }), {
+    kind: "enterWorkspace",
+    workspaceId: "a",
+  });
+  assert.deepEqual(decide({ reason: "navigated", activeWorkspaceId: "b", contextSpace: pending }), {
+    kind: "enterWorkspace",
+    workspaceId: "a",
+  });
+});
+
+test("decideNoteWorkspaceScope: data changing under the open note never switches", () => {
+  // A sync or an undone move put the open private note into B's teamspace.
+  assert.deepEqual(
+    decide({ reason: "dataChanged", contextSpace: privateA, noteSpace: teamIn(3, "b") }),
     {
       kind: "leaveHidden",
       clearNote: true,
@@ -149,39 +336,4 @@ test("selectWorkspaceForSpaceCreation: falls back to active, then first manageab
   assert.equal(selectWorkspaceForSpaceCreation(manageable, manageable[1], null)?.id, "b");
   assert.equal(selectWorkspaceForSpaceCreation(manageable, workspace("x", "member"), "x")?.id, "a");
   assert.equal(selectWorkspaceForSpaceCreation([], null, null), null);
-});
-
-test("isSpaceInWorkspaceScope: choosing Personal hides listed workspaces' spaces", () => {
-  assert.equal(isSpaceInWorkspaceScope(personal, null, listed, true), true);
-  assert.equal(isSpaceInWorkspaceScope(teamIn(2, "a"), null, listed, true), false);
-  assert.equal(isSpaceInWorkspaceScope(teamIn(3, "b"), null, listed, true), false);
-});
-
-test("isSpaceInWorkspaceScope: choosing Personal leaves unreachable spaces visible", () => {
-  assert.equal(isSpaceInWorkspaceScope(teamIn(2, null), null, listed, true), true);
-  assert.equal(isSpaceInWorkspaceScope(teamIn(3, "gone"), null, listed, true), true);
-});
-
-test("decideNoteWorkspaceScope: choosing Personal closes a team note", () => {
-  assert.deepEqual(
-    decide({
-      activeWorkspaceId: null,
-      personalSelected: true,
-      contextSpace: teamIn(2, "a"),
-      noteSpace: teamIn(2, "a"),
-    }),
-    { kind: "leaveHidden", clearNote: true, context: "default" }
-  );
-});
-
-test("decideNoteWorkspaceScope: opening a team note from Personal enters its workspace", () => {
-  assert.deepEqual(
-    decide({
-      reason: "navigated",
-      activeWorkspaceId: null,
-      personalSelected: true,
-      noteSpace: teamIn(2, "a"),
-    }),
-    { kind: "enterWorkspace", workspaceId: "a" }
-  );
 });

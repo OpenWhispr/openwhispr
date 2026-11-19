@@ -149,6 +149,19 @@ test("with cleanup off, the section says so and turns it on", async (t) => {
   assert.equal(opened, 0);
 });
 
+test("with a custom cleanup prompt, the section says its tones aren't applied", async (t) => {
+  const { container, store } = await renderSection(t, {
+    useCleanupModel: true,
+    toneStyleEnabled: true,
+    toneStyles: DEFAULTS,
+    customPrompts: { cleanup: "Keep contractions." },
+  });
+  assert.ok(hasText(container, "toneStyle.settings.customPrompt"));
+
+  await React.act(async () => store.getState().setCustomPrompt("cleanup", ""));
+  assert.equal(hasText(container, "toneStyle.settings.customPrompt"), false);
+});
+
 test("turning cleanup on without a usable model opens its settings", async (t) => {
   let opened = 0;
   const { container, store } = await renderSection(

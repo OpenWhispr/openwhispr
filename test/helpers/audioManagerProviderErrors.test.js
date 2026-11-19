@@ -5,7 +5,7 @@ const { loadAudioManager } = require("./harness/audioManager");
 // processWithOpenAIAPI classifies BYOK transcription failures from the throw
 // shapes production sees: a renderer fetch Response or TypeError for direct
 // providers, and the { error } fields main serialises for proxied ones.
-async function loadManager(t, settings, window = {}) {
+async function loadManager(t, settings, window = {}, overrides = {}) {
   const loaded = await loadAudioManager(t, {
     cachePrefix: "openwhispr-provider-errors-test-",
     settingsKey: "__providerErrorsSettings",
@@ -22,6 +22,7 @@ async function loadManager(t, settings, window = {}) {
     isDictionaryEcho: () => false,
     processTranscription: async (text) => text,
     isReasoningAvailable: async () => false,
+    ...overrides,
   });
 }
 
@@ -57,7 +58,7 @@ test("a self-hosted 404 blames the user's server, not OpenAI", async (t) => {
   assert.doesNotMatch(error.message, /OpenAI/);
 });
 
-test("a direct-fetch \"Failed to fetch\" asks to check the key and connection", async (t) => {
+test('a direct-fetch "Failed to fetch" asks to check the key and connection', async (t) => {
   const manager = await loadManager(t, { cloudTranscriptionProvider: "groq" });
   t.mock.method(globalThis, "fetch", async () => {
     throw new TypeError("Failed to fetch");
@@ -121,5 +122,80 @@ test("a proxied provider's already-classified failure passes through unchanged",
 
   assert.equal(error.code, "PROVIDER_AUTH_FAILED");
   assert.equal(error.status, 401);
+  assert.equal(error.settingsTarget, "speechToText");
+});
+
+// Self-hosted dictation sends no key unless the server is Orukeet (shouldSkipTranscriptionApiKey).
+const noKey = { getAPIKey: async () => null };
+const dictationHeaders = {
+  selfHostedSttHeaders: {
+    dictation: [{ name: "X-API-Key", value: "dictation-key" }],
+    upload: [{ name: "X-API-Key", value: "upload-key" }],
+  },
+};
+
+test("self-hosted dictation sends dictation's headers only, and only to the self-hosted server", async (t) => {
+  const calls = [];
+  const manager = await loadManager(t, { ...selfHostedSettings, ...dictationHeaders }, {}, noKey);
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    calls.push(init);
+    return new Response(JSON.stringify({ text: "test" }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  await manager.processWithOpenAIAPI(recording());
+  assert.equal(calls[0].redirect, "manual");
+  assert.deepEqual(calls[0].headers, { "x-api-key": "dictation-key" });
+  const other = await loadManager(t, { cloudTranscriptionProvider: "openai", ...dictationHeaders });
+  await other.processWithOpenAIAPI(recording());
+  assert.equal(new Headers(calls.at(-1).headers).has("x-api-key"), false);
+  assert.equal(calls.at(-1).redirect, "follow");
+});
+
+test("self-hosted dictation with no effective custom headers keeps redirect follow", async (t) => {
+  const manager = await loadManager(
+    t,
+    { ...selfHostedSettings, selfHostedSttHeaders: { dictation: [{ name: " ", value: "" }] } },
+    {},
+    noKey
+  );
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    assert.equal(init.redirect, "follow");
+    assert.deepEqual(init.headers, {});
+    return new Response(JSON.stringify({ text: "test" }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  await manager.processWithOpenAIAPI(recording());
+});
+
+test("a redirect refused for custom headers is named, with a Settings link", async (t) => {
+  const manager = await loadManager(t, { ...selfHostedSettings, ...dictationHeaders }, {}, noKey);
+  // What Chromium's fetch returns for a redirect under redirect: "manual".
+  t.mock.method(globalThis, "fetch", async () => ({ type: "opaqueredirect", status: 0 }));
+
+  const error = await rejection(manager.processWithOpenAIAPI(recording()));
+
+  assert.equal(error.code, "PROVIDER_REDIRECTED");
+  assert.equal(error.messageKey, "providerErrors.selfHosted.redirected");
+  assert.equal(error.settingsTarget, "speechToText");
+});
+
+test("an invalid custom header fails with a translated message and sends nothing", async (t) => {
+  const manager = await loadManager(
+    t,
+    {
+      ...selfHostedSettings,
+      selfHostedSttHeaders: { dictation: [{ name: "X-API-Key: abc", value: "" }] },
+    },
+    {},
+    noKey
+  );
+  t.mock.method(globalThis, "fetch", async () => assert.fail("nothing may be sent"));
+
+  const error = await rejection(manager.processWithOpenAIAPI(recording()));
+
+  assert.equal(error.code, "PROVIDER_INVALID_HEADERS");
+  assert.equal(error.messageKey, "providerErrors.selfHosted.invalidHeaders");
   assert.equal(error.settingsTarget, "speechToText");
 });

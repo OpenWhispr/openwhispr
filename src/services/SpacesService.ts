@@ -55,9 +55,17 @@ export interface SpaceMemberEntry extends TeamMember {
 // Every space the caller can access across all their workspaces (direct
 // member, member of any assigned live team, or implicit workspace owner/admin).
 // Drives the spaces sync pass.
+interface MySpacesSnapshot extends DataWrap<MySpace[]> {
+  private_workspace_placement?: boolean;
+  default_workspace_id?: string | null;
+}
+
+async function mySpacesSnapshot(): Promise<MySpacesSnapshot> {
+  return cloudGet<MySpacesSnapshot>("/api/me/spaces", "no-store");
+}
+
 async function mySpaces(): Promise<MySpace[]> {
-  const res = await cloudGet<DataWrap<MySpace[]>>("/api/me/spaces");
-  return res.data;
+  return (await mySpacesSnapshot()).data;
 }
 
 async function mySpacesForAuthValidation(generation: number): Promise<MySpace[]> {
@@ -181,6 +189,7 @@ async function listInvitations(spaceId: string): Promise<SpaceInvitation[]> {
 
 export const SpacesService = {
   mySpaces,
+  mySpacesSnapshot,
   mySpacesForAuthValidation,
   create,
   update,

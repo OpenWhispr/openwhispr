@@ -1420,6 +1420,23 @@ test("sync defers both the user-only preparation gap and a held real lookup unti
   };
   h.db.api.markConversationCreateAttempted = async () => ({ success: true });
   h.db.api.acknowledgeConversationCreate = async () => ({ success: true, outcome: "synced" });
+  // A chat is pushed as the validated sign-in; without one nothing is sent.
+  h.db.api.authGetTokenState = async () => ({ token: "token-a", generation: 1 });
+  const origin = "https://auth.openwhispr.test";
+  globalThis.window.location = { origin };
+  const auth = await h.vite.ssrLoadModule("/lib/authRequestContext.ts");
+  await h.act(async () => {
+    const request = await auth.prepareAuthRequest({
+      url: `${origin}/api/auth/get-session`,
+      headers: {},
+    });
+    await auth.handleAuthRequestSuccess({
+      data: { user: { id: "account-a" } },
+      response: new Response(null),
+      request,
+    });
+    assert.equal(auth.commitValidatedAuthContext(1, "account-a"), true);
+  });
   const sync = new SyncService();
   let sending;
   await h.act(async () => {
@@ -1486,4 +1503,42 @@ test("Stop during the initial checkpoint settles the saved running row before re
   assert.equal(modelStarted, false);
   assert.equal(JSON.parse(h.db.rows[1].metadata).turn.status, "stopped");
   assert.equal((await h.db.api.getAgentConversation(id)).has_active_turn, false);
+});
+
+test("voice agent creates and protects its conversation before private RAG reaches its first checkpoint", async (t) => {
+  const h = await mountPersistence(t, { agent: true, streaming: true });
+  const note = { id: 7, space_id: 1, title: "Private", content: "VOICE_CHAT_CANARY" };
+  let protectedId;
+  Object.assign(h.db.api, {
+    getDatabaseAccountScope: async () => ({
+      accountId: "account-a",
+      visibleAccountId: "account-a",
+    }),
+    getSpaces: async () => [{ id: 1, kind: "private", workspace_id: null }],
+    getPrivateSpaceId: async () => 1,
+    semanticSearchNotes: async () => [note],
+    getNote: async () => note,
+    protectConversation: async (id, notes, _deviceOnly, accountId) => {
+      assert.ok(h.db.conversations.has(id));
+      assert.deepEqual(notes, [{ id: 7, space_id: 1 }]);
+      assert.equal(accountId, "account-a");
+      assert.equal(
+        h.db.calls.add.some((row) => row.role === "assistant"),
+        false
+      );
+      protectedId = id;
+      return { success: true };
+    },
+  });
+  const requests = [];
+  t.mock.method(h.service, "processTextStreamingAI", async function* (messages) {
+    requests.push({ messages, protectedId });
+    yield { type: "content", text: "Answer" };
+  });
+  await h.act(() => h.current().send("What is in my note?"));
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].protectedId, h.current().conversationId);
+  assert.match(JSON.stringify(requests[0].messages), /VOICE_CHAT_CANARY/);
+  assert.ok(protectedId);
+  assert.equal(h.db.calls.add.filter((row) => row.role === "assistant").length, 1);
 });
