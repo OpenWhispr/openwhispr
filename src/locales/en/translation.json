@@ -4383,6 +4383,11 @@
           "title": "Contents",
           "empty": "Add headings to build the table of contents."
         }
+      },
+      "lostNoteCopy": {
+        "title": "Your latest edits are in a new note",
+        "description": "“{{title}}” was deleted before they were saved. The new note is in Private.",
+        "open": "Open note"
       }
     },
     "participants": {

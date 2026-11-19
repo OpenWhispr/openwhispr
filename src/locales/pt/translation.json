@@ -3830,6 +3830,11 @@
           "title": "Conteúdo",
           "empty": "Adicione títulos para criar o sumário."
         }
+      },
+      "lostNoteCopy": {
+        "title": "Suas últimas edições estão em uma nova nota",
+        "description": "“{{title}}” foi excluída antes de elas serem salvas, então foram salvas em uma nova nota em Privado.",
+        "open": "Abrir nota"
       }
     },
     "participants": {

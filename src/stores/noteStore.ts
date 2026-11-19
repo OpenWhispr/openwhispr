@@ -720,6 +720,7 @@ export function resetForAccountChange(): void {
   landOnActivePrivate = false;
   pickedNoteId = null;
   pickedContext = null;
+  notesDeletedHere.clear();
   // The next account's first scope reads the spaces again, even one that names
   // the same workspaces (the same account signing back in).
   publishedScopeKey = null;
@@ -1228,6 +1229,25 @@ export async function setFolderParent(
   return result;
 }
 
+// Notes the user deleted here with their folder. An open note's save that the delete refused is
+// then dropped as the delete intended, not rescued like a note deleted elsewhere (see
+// PersonalNotesView). Kept briefly: that save is sent as the view closes the note.
+const NOTE_DELETED_HERE_TTL_MS = 60_000;
+const notesDeletedHere = new Map<number, number>();
+
+function rememberNotesDeletedHere(ids: Iterable<number>): void {
+  const now = Date.now();
+  for (const [id, at] of notesDeletedHere) {
+    if (now - at >= NOTE_DELETED_HERE_TTL_MS) notesDeletedHere.delete(id);
+  }
+  for (const id of ids) notesDeletedHere.set(id, now);
+}
+
+export function wasNoteDeletedHere(id: number): boolean {
+  const at = notesDeletedHere.get(id);
+  return at != null && Date.now() - at < NOTE_DELETED_HERE_TTL_MS;
+}
+
 export async function deleteFolder(id: number): Promise<{ success: boolean; error?: string }> {
   const result = await window.electronAPI.deleteFolder(id);
   if (!result.success) return result;
@@ -1236,6 +1256,11 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
   const folder = state.folders.find((f) => f.id === id);
   const keys = folderAndSubfolderKeys(state.folders, id);
   const teardown = teardownNoteContainers(state, keys);
+  // Before the teardown closes an open note in the folder, which sends its pending save.
+  rememberNotesDeletedHere([
+    ...(result.noteIds ?? []),
+    ...teardown.removedNotes.map((note) => note.id),
+  ]);
   persistExpandedContainers(teardown.expandedContainers);
   useNoteStore.setState({
     notesByContainer: teardown.notesByContainer,

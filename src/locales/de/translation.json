@@ -4383,6 +4383,11 @@
           "title": "Inhalt",
           "empty": "Füge Überschriften hinzu, um das Inhaltsverzeichnis zu erstellen."
         }
+      },
+      "lostNoteCopy": {
+        "title": "Deine letzten Änderungen sind in einer neuen Notiz",
+        "description": "„{{title}}“ wurde gelöscht, bevor sie gespeichert waren. Sie wurden deshalb in einer neuen Notiz in „Privat“ gespeichert.",
+        "open": "Notiz öffnen"
       }
     },
     "participants": {

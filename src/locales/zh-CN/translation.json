@@ -3824,6 +3824,11 @@
           "title": "目录",
           "empty": "添加标题以生成目录。"
         }
+      },
+      "lostNoteCopy": {
+        "title": "你最近的编辑已保存到新笔记",
+        "description": "“{{title}}”在这些编辑保存前已被删除，因此它们已保存到“私密”中的一条新笔记。",
+        "open": "打开笔记"
       }
     },
     "participants": {

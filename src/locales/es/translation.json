@@ -3876,6 +3876,11 @@
           "title": "Contenido",
           "empty": "Añade encabezados para crear el índice."
         }
+      },
+      "lostNoteCopy": {
+        "title": "Tus últimos cambios están en una nota nueva",
+        "description": "“{{title}}” se eliminó antes de guardarlos, así que se guardaron en una nota nueva en Privado.",
+        "open": "Abrir nota"
       }
     },
     "participants": {

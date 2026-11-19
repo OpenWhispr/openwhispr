@@ -4389,6 +4389,11 @@
           "title": "Sommaire",
           "empty": "Ajoutez des titres pour créer la table des matières."
         }
+      },
+      "lostNoteCopy": {
+        "title": "Vos dernières modifications sont dans une nouvelle note",
+        "description": "« {{title}} » a été supprimée avant leur enregistrement : elles ont été enregistrées dans une nouvelle note dans Privé.",
+        "open": "Ouvrir la note"
       }
     },
     "participants": {

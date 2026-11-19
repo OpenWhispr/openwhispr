@@ -2250,7 +2250,9 @@ declare global {
         writeGuard?: NoteWriteGuard,
         parentFolderId?: number | null
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash>;
-      deleteFolder: (id: number) => Promise<{ success: boolean; error?: string }>;
+      deleteFolder: (
+        id: number
+      ) => Promise<{ success: boolean; error?: string; noteIds?: number[] }>;
       renameFolder: (
         id: number,
         name: string

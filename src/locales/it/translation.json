@@ -3824,6 +3824,11 @@
           "title": "Indice",
           "empty": "Aggiungi titoli per creare l'indice."
         }
+      },
+      "lostNoteCopy": {
+        "title": "Le tue ultime modifiche sono in una nuova nota",
+        "description": "“{{title}}” è stata eliminata prima che venissero salvate, quindi sono state salvate in una nuova nota in Privato.",
+        "open": "Apri nota"
       }
     },
     "participants": {

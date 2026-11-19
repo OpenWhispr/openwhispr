@@ -119,6 +119,26 @@ test("deleting a parent tears down its subfolders' containers too", async (t) =>
   assert.deepEqual(expanded(), ["s:1"]);
 });
 
+// An open note's save that the delete refused is dropped, as the delete meant, rather than
+// rescued as a copy like a note deleted elsewhere (PersonalNotesView).
+test("a folder deleted here remembers its notes as deleted here, and only those", async (t) => {
+  const { main, store } = await loadStore(t);
+  const api = globalThis.window.electronAPI;
+  const deleteFolder = api.deleteFolder;
+  // Main lists every note it deleted, loaded or not.
+  api.deleteFolder = async (id) => ({ ...(await deleteFolder(id)), noteIds: [999] });
+
+  await store.deleteFolder(11);
+
+  assert.equal(store.wasNoteDeletedHere(111), true);
+  assert.equal(store.wasNoteDeletedHere(112), true, "its subfolder's notes too");
+  assert.equal(store.wasNoteDeletedHere(999), true);
+  assert.equal(store.wasNoteDeletedHere(101), false);
+
+  main.onFolderDeleted({ id: 1 });
+  assert.equal(store.wasNoteDeletedHere(101), false, "a delete from elsewhere isn't this user's");
+});
+
 test("a subfolder deleted elsewhere moves the active view to its parent", async (t) => {
   const { main, store } = await loadStore(t);
   store.setActiveContext(1, 12);

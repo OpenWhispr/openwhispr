@@ -3824,6 +3824,11 @@
           "title": "目錄",
           "empty": "新增標題以產生目錄。"
         }
+      },
+      "lostNoteCopy": {
+        "title": "你最近的編輯已儲存到新筆記",
+        "description": "「{{title}}」在這些編輯儲存前已被刪除，因此它們已儲存到「私人」中的一則新筆記。",
+        "open": "開啟筆記"
       }
     },
     "participants": {
