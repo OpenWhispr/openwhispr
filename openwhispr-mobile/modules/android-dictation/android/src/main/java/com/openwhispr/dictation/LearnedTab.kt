@@ -47,7 +47,7 @@ class LearnedTab(
   private var window: FrameLayout? = null
   private var params: WindowManager.LayoutParams? = null
   private var pill: LinearLayout? = null
-  private var icon: View? = null
+  private var icon: PillGlyph? = null
   private var label: TextView? = null
   private var undo: TextView? = null
   private var motion: Animator? = null
@@ -97,7 +97,7 @@ class LearnedTab(
     text = value
     if (showing && pill != null) {
       label?.text = value.message; label?.setTextColor(BubbleColors.ink)
-      undo?.visibility = View.VISIBLE; icon?.alpha = 1f
+      undo?.visibility = View.VISIBLE; icon?.kind = PillGlyph.Kind.BOOK
       layout(bubbleRect, right); hold(); return
     }
     bubble = Rect(bubbleRect); dockRight = right
@@ -140,7 +140,7 @@ class LearnedTab(
         false
       }
     }
-    val book = BookGlyph(context)
+    val book = PillGlyph(context)
     val message = TextView(context).apply {
       text = value.message; typeface = font; setTextColor(BubbleColors.ink)
       setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f); maxLines = 1; ellipsize = TextUtils.TruncateAt.END
@@ -227,8 +227,9 @@ class LearnedTab(
     val value = text ?: return
     handler.removeCallbacks(hideLater)
     onUndo(value.words)
-    label?.text = "↺  ${value.undone}"; label?.setTextColor(BubbleColors.secondary); label?.setOnClickListener(null)
-    undo?.visibility = View.GONE; icon?.alpha = 0f
+    // Same size and colours as "Learned", with the undo arrow where the book was.
+    label?.text = value.undone; label?.setOnClickListener(null)
+    undo?.visibility = View.GONE; icon?.kind = PillGlyph.Kind.UNDO
     layout(bubble, dockRight)
     handler.postDelayed(hideLater, UNDONE_MS)
   }
@@ -241,17 +242,42 @@ class LearnedTab(
   }
 }
 
-/** A small closed book in the accent colour, drawn so the overlay needs no icon font. */
-class BookGlyph(context: Context) : View(context) {
+/** The pill's icon, drawn so the overlay needs no icon font: a closed book, or the undo arrow. */
+class PillGlyph(context: Context) : View(context) {
+  enum class Kind { BOOK, UNDO }
+  var kind = Kind.BOOK
+    set(value) { if (field != value) { field = value; invalidate() } }
   private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = BubbleColors.accent; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
   }
+  private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.accent; style = Paint.Style.FILL }
   init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
   override fun onDraw(canvas: Canvas) {
     val w = width.toFloat(); val h = height.toFloat()
     stroke.strokeWidth = w / 10f
     val inset = stroke.strokeWidth
-    canvas.drawRoundRect(inset + w * 0.12f, inset, w - inset - w * 0.12f, h - inset, w / 8f, w / 8f, stroke)
-    canvas.drawLine(inset + w * 0.3f, inset, inset + w * 0.3f, h - inset, stroke)
+    when (kind) {
+      Kind.BOOK -> {
+        canvas.drawRoundRect(inset + w * 0.12f, inset, w - inset - w * 0.12f, h - inset, w / 8f, w / 8f, stroke)
+        canvas.drawLine(inset + w * 0.3f, inset, inset + w * 0.3f, h - inset, stroke)
+      }
+      Kind.UNDO -> {
+        // A circle open at the top left, its arrowhead pointing on round anticlockwise.
+        val r = w / 2f - inset * 1.6f
+        val cx = w / 2f; val cy = h / 2f
+        canvas.drawArc(cx - r, cy - r, cx + r, cy + r, 250f, 250f, false, stroke)
+        val a = Math.toRadians(250.0)
+        val px = cx + r * Math.cos(a).toFloat(); val py = cy + r * Math.sin(a).toFloat()
+        val dx = Math.sin(a).toFloat(); val dy = -Math.cos(a).toFloat()
+        val nx = -dy; val ny = dx
+        val head = android.graphics.Path().apply {
+          moveTo(px + dx * w * 0.24f, py + dy * w * 0.24f)
+          lineTo(px + nx * w * 0.15f, py + ny * w * 0.15f)
+          lineTo(px - nx * w * 0.15f, py - ny * w * 0.15f)
+          close()
+        }
+        canvas.drawPath(head, fill)
+      }
+    }
   }
 }
