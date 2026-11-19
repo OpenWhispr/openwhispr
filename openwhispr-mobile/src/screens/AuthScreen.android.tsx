@@ -220,6 +220,12 @@ export default function AuthScreen({
 
   // Decision 12: an email account verifies before going on (6.1–6.5).
   const verifying = needsEmailVerification(user);
+  // Verified on the website; 6.5 has no Back, only Continue.
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
+  const confirmEmail = useCallback(() => setEmailConfirmed(true), []);
+  useEffect(() => {
+    if (!verifying) setEmailConfirmed(false);
+  }, [verifying]);
   const leaveVerification = useCallback(() => {
     void signOut();
     signedUpHere.current = false;
@@ -234,6 +240,7 @@ export default function AuthScreen({
 
   const busy = isLoading || checkingEmail;
   const header = (() => {
+    if (verifying && emailConfirmed) return { label: t('back') };
     if (verifying) return { action: 'back' as const, label: t('back'), onPress: leaveVerification };
     switch (view) {
       case 'start':
@@ -265,7 +272,9 @@ export default function AuthScreen({
   const backRef = useRef<() => boolean>(() => false);
   backRef.current = () => {
     if (verifying) {
-      leaveVerification();
+      // Once verified, back goes on rather than signing the new account out.
+      if (emailConfirmed) finishVerification();
+      else leaveVerification();
       return true;
     }
     if (view === 'start' || view === 'again') return false;
@@ -487,6 +496,7 @@ export default function AuthScreen({
               resumed={!signedUpHere.current}
               onLeave={leaveVerification}
               onContinue={finishVerification}
+              onVerified={confirmEmail}
             />
           ) : view === 'forgot' ? (
             <ForgotPassword

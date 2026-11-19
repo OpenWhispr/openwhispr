@@ -29,6 +29,7 @@ export function VerifyEmail({
   resumed,
   onLeave,
   onContinue,
+  onVerified,
 }: {
   email: string;
   /** Signed in to an account that never verified (6.4): Resend is ready at once. */
@@ -37,6 +38,8 @@ export function VerifyEmail({
   onLeave: () => void;
   /** 6.5's Continue: goes where sign-up was heading. */
   onContinue: () => void;
+  /** Told once the API says the email is verified, so the screen drops its Back (6.5). */
+  onVerified?: () => void;
 }) {
   const t = useAuthT();
   const [verified, setVerified] = useState(false);
@@ -95,6 +98,10 @@ export function VerifyEmail({
       showToast(t(outcome.kind === 'network' ? 'networkError' : 'signInFailed'), 'neutral');
     }
   }, [email, t]);
+
+  useEffect(() => {
+    if (verified) onVerified?.();
+  }, [onVerified, verified]);
 
   if (verified) {
     return (

@@ -259,6 +259,8 @@ describe('Android verify email (section 6)', () => {
     mockVerificationStatus.mockResolvedValue({ verified: true });
     // The next 5 s check sees it.
     await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy(), { timeout: 7000 });
+    // 6.5 has no Back: it would sign the new account out.
+    expect(view.queryByLabelText('Back')).toBeNull();
     fireEvent.press(view.getByText('Continue'));
     expect(mockAuth.user?.emailVerified).toBe(true);
   }, 10000);
