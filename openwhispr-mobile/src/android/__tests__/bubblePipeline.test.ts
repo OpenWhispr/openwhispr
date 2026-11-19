@@ -14,6 +14,9 @@ jest.mock('../../../modules/android-dictation/src', () => ({
     setStatus: jest.fn(async () => {}),
     insert: jest.fn(async () => true),
     pipelineReady: jest.fn(async () => {}),
+    setMenuContext: jest.fn(),
+    copyText: jest.fn(),
+    getStatus: jest.fn(() => ({ accessibility: true })),
   },
   dictationEvents: {
     addListener: jest.fn((event: string, listener: Listener) => {
@@ -28,6 +31,17 @@ jest.mock('../accountData', () => ({
   useAccountData: { getState: jest.fn(() => ({ owner: 'user-1', error: null, blocked: false })) },
 }));
 jest.mock('../headlessStartup', () => ({ runHeadlessStartup: jest.fn() }));
+let mockRoute: Record<string, unknown> = { cleanupRoute: { mode: 'openwhispr' } };
+jest.mock('@/lib/inferenceRouting', () => ({ snapshotTranscriptionJob: () => mockRoute }));
+let mockGuest = false;
+jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: () => mockGuest }));
+const mockAuthListeners: (() => void)[] = [];
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: {
+    getState: () => ({ user: null }),
+    subscribe: (listener: () => void) => mockAuthListeners.push(listener),
+  },
+}));
 let mockScopeChange: () => void = () => {};
 jest.mock('@/lib/transcriptScope', () => ({
   observeTranscriptScope: (change: () => void) => {
@@ -36,7 +50,7 @@ jest.mock('@/lib/transcriptScope', () => ({
   },
 }));
 jest.mock('@/store/useConfigStore', () => ({
-  useConfigStore: { getState: () => ({ config: {} }) },
+  useConfigStore: { getState: () => ({ config: {} }), subscribe: jest.fn() },
 }));
 jest.mock('../strings', () => ({ __esModule: true, default: { t: (key: string) => key } }));
 jest.mock('../practiceSession', () => ({
@@ -63,6 +77,9 @@ const native = AndroidDictation as unknown as {
   setStatus: jest.Mock;
   insert: jest.Mock;
   pipelineReady: jest.Mock;
+  setMenuContext: jest.Mock;
+  copyText: jest.Mock;
+  getStatus: jest.Mock;
 };
 const addListener = dictationEvents!.addListener as unknown as jest.Mock;
 
@@ -70,22 +87,100 @@ const addListener = dictationEvents!.addListener as unknown as jest.Mock;
 beforeAll(() => {
   startBubblePipeline();
   expect(native.pipelineReady).toHaveBeenCalledTimes(1);
+  expect(native.setMenuContext).toHaveBeenCalledWith({
+    translateTarget: 'Spanish',
+    assistantBlock: '',
+  });
 });
 beforeEach(() => {
   jest.clearAllMocks();
   useBubbleResult.getState().dismiss();
 });
 
-it('always dictates, even over highlighted text', async () => {
+it('a tap dictates, even over highlighted text', async () => {
   jest.mocked(processAndroidAudio).mockResolvedValue('Tomorrow at 4 works.');
-  mockListeners.onStart({ selection: 'old words', mode: 'edit' });
+  mockListeners.onStart({ selection: 'old words', mode: 'dictate' });
   await flush();
   expect(createAndroidJob).toHaveBeenCalledWith('dictate', 'Spanish', 'old words');
   mockListeners.onRecording(audio);
   await flush();
-  expect(native.insert).toHaveBeenCalledWith('Tomorrow at 4 works.');
-  expect(native.setStatus).toHaveBeenLastCalledWith('success');
+  expect(native.insert).toHaveBeenCalledWith('Tomorrow at 4 works.', { highlight: false });
+  expect(native.setStatus).toHaveBeenLastCalledWith('success', {
+    mode: 'dictate',
+    language: undefined,
+  });
   expect(FileSystem.deleteAsync).toHaveBeenCalledWith(audio.uri, { idempotent: true });
+});
+
+it.each([
+  ['write', '', 'write'],
+  ['translate', '', 'translate'],
+  ['edit', 'old words', 'edit'],
+  // Edit selection needs a selection; without one the request is written fresh.
+  ['edit', '', 'write'],
+  [undefined, '', 'dictate'],
+  ['unknown', '', 'dictate'],
+])('the menu mode %s (selection "%s") runs as %s', async (mode, selection, expected) => {
+  jest
+    .mocked(createAndroidJob)
+    .mockImplementationOnce((value: string, target: string) => ({ mode: value, target }) as never);
+  jest.mocked(processAndroidAudio).mockResolvedValueOnce('Done.');
+  mockListeners.onStart({ selection, mode });
+  mockListeners.onRecording(audio);
+  await flush();
+  expect(createAndroidJob).toHaveBeenCalledWith(expected, 'Spanish', selection);
+  // Only an edit keeps its new words highlighted; the result names its mode for the Undo toast.
+  expect(native.insert).toHaveBeenCalledWith('Done.', { highlight: expected === 'edit' });
+  expect(native.setStatus).toHaveBeenLastCalledWith('success', {
+    mode: expected,
+    language: 'Spanish',
+  });
+});
+
+it('a retried take runs in the mode it was recorded in', async () => {
+  jest.mocked(processAndroidAudio).mockRejectedValueOnce(new Error('Network request failed'));
+  mockListeners.onStart({ selection: '', mode: 'translate' });
+  mockListeners.onRecording(audio);
+  await flush();
+  expect(native.setStatus).toHaveBeenLastCalledWith('retry-kept', { message: 'offline' });
+  jest.mocked(processAndroidAudio).mockResolvedValueOnce('Hola.');
+  mockListeners.onRetry({ selection: '' });
+  await flush();
+  expect(createAndroidJob).toHaveBeenLastCalledWith('translate', 'Spanish', '');
+});
+
+it('with typing access off, the words go on the clipboard and the tab offers to turn it on', async () => {
+  jest.mocked(processAndroidAudio).mockResolvedValueOnce('Copied words');
+  native.insert.mockResolvedValueOnce(false);
+  native.getStatus.mockReturnValueOnce({ accessibility: false });
+  mockListeners.onStart({ selection: '' });
+  mockListeners.onRecording(audio);
+  await flush();
+  expect(native.copyText).toHaveBeenCalledWith('Copied words');
+  expect(native.setStatus).toHaveBeenLastCalledWith('copied');
+  expect(useBubbleResult.getState().text).toBe('Copied words');
+});
+
+it('greys the Assistant for a guest, or when its route is unavailable', () => {
+  mockGuest = true;
+  mockAuthListeners.forEach((listener) => listener());
+  expect(native.setMenuContext).toHaveBeenLastCalledWith({
+    translateTarget: 'Spanish',
+    assistantBlock: 'sign-in',
+  });
+  mockRoute = { cleanupUnavailable: 'Choose a cleanup provider' };
+  mockAuthListeners.forEach((listener) => listener());
+  expect(native.setMenuContext).toHaveBeenLastCalledWith({
+    translateTarget: 'Spanish',
+    assistantBlock: 'unavailable',
+  });
+  // Nothing changed: the bubble isn't told again.
+  native.setMenuContext.mockClear();
+  mockAuthListeners.forEach((listener) => listener());
+  expect(native.setMenuContext).not.toHaveBeenCalled();
+  mockGuest = false;
+  mockRoute = { cleanupRoute: { mode: 'openwhispr' } };
+  mockAuthListeners.forEach((listener) => listener());
 });
 
 it('keeps a failed recording so Retry sends the same audio again, then deletes it', async () => {
@@ -93,7 +188,7 @@ it('keeps a failed recording so Retry sends the same audio again, then deletes i
   mockListeners.onStart({ selection: '' });
   mockListeners.onRecording(audio);
   await flush();
-  expect(native.setStatus).toHaveBeenLastCalledWith('retry-kept');
+  expect(native.setStatus).toHaveBeenLastCalledWith('retry-kept', { message: 'failed' });
   expect(FileSystem.deleteAsync).not.toHaveBeenCalled();
   expect(useBubbleResult.getState().error).toBe('Network down');
 
@@ -101,8 +196,11 @@ it('keeps a failed recording so Retry sends the same audio again, then deletes i
   mockListeners.onRetry({ selection: '' });
   await flush();
   expect(jest.mocked(processAndroidAudio).mock.calls[1][0]).toBe(audio);
-  expect(native.insert).toHaveBeenCalledWith('Hello there.');
-  expect(native.setStatus).toHaveBeenLastCalledWith('success');
+  expect(native.insert).toHaveBeenCalledWith('Hello there.', { highlight: false });
+  expect(native.setStatus).toHaveBeenLastCalledWith('success', {
+    mode: 'dictate',
+    language: undefined,
+  });
   expect(FileSystem.deleteAsync).toHaveBeenCalledWith(audio.uri, { idempotent: true });
 });
 
@@ -114,7 +212,7 @@ it('deletes a kept recording when the error is dismissed', async () => {
   mockListeners.onDismiss();
   expect(FileSystem.deleteAsync).toHaveBeenCalledWith(audio.uri, { idempotent: true });
   mockListeners.onRetry({ selection: '' });
-  expect(native.setStatus).toHaveBeenLastCalledWith('retry');
+  expect(native.setStatus).toHaveBeenLastCalledWith('retry', { message: 'failed' });
 });
 
 it('asks for a new recording after silence instead of keeping it', async () => {
@@ -122,7 +220,7 @@ it('asks for a new recording after silence instead of keeping it', async () => {
   mockListeners.onStart({ selection: '' });
   mockListeners.onRecording({ ...audio, noSpeech: true });
   await flush();
-  expect(native.setStatus).toHaveBeenLastCalledWith('retry');
+  expect(native.setStatus).toHaveBeenLastCalledWith('retry', { message: 'no-speech' });
   expect(FileSystem.deleteAsync).toHaveBeenCalled();
 });
 
@@ -165,7 +263,7 @@ it('waits for app data before creating the job', async () => {
   loaded();
   await flush();
   expect(createAndroidJob).toHaveBeenCalledWith('dictate', 'Spanish', '');
-  expect(native.insert).toHaveBeenCalledWith('Hi.');
+  expect(native.insert).toHaveBeenCalledWith('Hi.', { highlight: false });
 });
 
 it('a blocked account keeps the recording for Retry', async () => {
@@ -175,7 +273,7 @@ it('a blocked account keeps the recording for Retry', async () => {
   mockListeners.onRecording(audio);
   await flush();
   expect(processAndroidAudio).not.toHaveBeenCalled();
-  expect(native.setStatus).toHaveBeenLastCalledWith('retry-kept');
+  expect(native.setStatus).toHaveBeenLastCalledWith('retry-kept', { message: 'failed' });
   expect(useBubbleResult.getState().error).toBe(error);
   expect(FileSystem.deleteAsync).not.toHaveBeenCalled();
 });
@@ -185,7 +283,7 @@ it('a failed boot keeps the recording for Retry', async () => {
   mockListeners.onStart({ selection: '' });
   mockListeners.onRecording(audio);
   await flush();
-  expect(native.setStatus).toHaveBeenLastCalledWith('retry-kept');
+  expect(native.setStatus).toHaveBeenLastCalledWith('retry-kept', { message: 'offline' });
   expect(useBubbleResult.getState().error).toBe('offline');
 });
 
@@ -215,8 +313,7 @@ it('keeps a dictation that started before account data first loaded', async () =
   mockScopeChange(); // auth loads the owner during the boot
   loaded();
   await flush();
-  expect(native.insert).toHaveBeenCalledWith('First words.');
-  expect(native.setStatus).toHaveBeenLastCalledWith('success');
+  expect(native.insert).toHaveBeenCalledWith('First words.', { highlight: false });
 });
 
 it('a recording after the account changed ends on Retry instead of hanging', async () => {
@@ -225,7 +322,7 @@ it('a recording after the account changed ends on Retry instead of hanging', asy
   mockListeners.onRecording(audio);
   await flush();
   expect(processAndroidAudio).not.toHaveBeenCalled();
-  expect(native.setStatus).toHaveBeenLastCalledWith('retry');
+  expect(native.setStatus).toHaveBeenLastCalledWith('retry', { message: 'failed' });
   expect(FileSystem.deleteAsync).toHaveBeenCalledWith(audio.uri, { idempotent: true });
 });
 
@@ -241,7 +338,7 @@ it('a dictation cut off by an account change mid-processing still ends on Retry'
   finish('Too late.');
   await flush();
   expect(native.insert).not.toHaveBeenCalled();
-  expect(native.setStatus).toHaveBeenLastCalledWith('retry');
+  expect(native.setStatus).toHaveBeenLastCalledWith('retry', { message: 'failed' });
 });
 
 it('a cancelled dictation does not report Retry', async () => {
@@ -256,7 +353,7 @@ it('a cancelled dictation does not report Retry', async () => {
   finish('Cancelled.');
   await flush();
   expect(native.insert).not.toHaveBeenCalled();
-  expect(native.setStatus).not.toHaveBeenCalledWith('retry');
+  expect(native.setStatus).not.toHaveBeenCalledWith('retry', expect.anything());
 });
 
 it('an account change after a cancel does not report Retry', async () => {
@@ -271,5 +368,5 @@ it('an account change after a cancel does not report Retry', async () => {
   mockScopeChange();
   finish('Cancelled.');
   await flush();
-  expect(native.setStatus).not.toHaveBeenCalledWith('retry');
+  expect(native.setStatus).not.toHaveBeenCalledWith('retry', expect.anything());
 });

@@ -12,7 +12,12 @@ import {
   createAndroidJob,
   processAndroidAudio,
   type AndroidJob,
+  type DictationMode,
 } from './pipeline';
+import { bubbleFailure, bubbleMode } from './bubbleOutcome';
+import { snapshotTranscriptionJob } from '@/lib/inferenceRouting';
+import { requiresRealAccount } from '@/lib/accountAccess';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { usePracticeSession } from './practiceSession';
 import { bootAppData } from './appData';
@@ -23,18 +28,55 @@ const discard = (audio: Recording | null) => {
   if (audio) void FileSystem.deleteAsync(audio.uri, { idempotent: true }).catch(() => undefined);
 };
 
-/** The bubble dictates only: talking over highlighted text replaces it. */
-async function dictationJob(selection: string): Promise<AndroidJob> {
+const translateTarget = () =>
+  useConfigStore.getState().config?.androidTranslationTarget?.label ?? 'Spanish';
+
+/**
+ * A tap dictates (talking over highlighted text replaces it); the hold menu picks Assistant (write),
+ * Translate, or Edit selection, which arrive as the onStart event's mode.
+ */
+async function dictationJob(selection: string, mode: DictationMode): Promise<AndroidJob> {
   // The bubble can run before the app is opened; its data must be loaded first.
   await bootAppData();
   const { error, blocked } = useAccountData.getState();
   if (error || blocked) throw new Error(error ?? i18n.t('bootError'));
-  return createAndroidJob(
-    'dictate',
-    useConfigStore.getState().config?.androidTranslationTarget?.label ?? 'Spanish',
-    selection,
-  );
+  return createAndroidJob(mode, translateTarget(), selection);
 }
+
+/** Why the Assistant can't run right now, for the menu's greyed row: "" when it can. */
+function assistantBlock(): '' | 'sign-in' | 'unavailable' {
+  try {
+    const route = snapshotTranscriptionJob('dictation');
+    if (route.cleanupUnavailable) return 'unavailable';
+    if (
+      route.cleanupRoute?.mode === 'openwhispr' &&
+      requiresRealAccount(useAuthStore.getState().user)
+    )
+      return 'sign-in';
+    return '';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+let sentMenu = '';
+/**
+ * Tells the bubble what its hold menu shows; it keeps the values for its next start. Runs on every
+ * config or sign-in change, so only a changed menu reaches the bubble.
+ */
+export function syncBubbleMenu(): void {
+  const context = { translateTarget: translateTarget(), assistantBlock: assistantBlock() };
+  const key = JSON.stringify(context);
+  if (key === sentMenu) return;
+  sentMenu = key;
+  AndroidDictation?.setMenuContext?.(context);
+}
+
+const PIPELINE_MESSAGES = () => ({
+  noSpeech: i18n.t('noSpeech'),
+  speechDownloadNeeded: i18n.t('speechDownloadNeeded'),
+  textDownloadNeeded: i18n.t('textDownloadNeeded'),
+});
 
 let started = false;
 
@@ -57,13 +99,14 @@ export function startBubblePipeline(): void {
   // A dictation the account change cut off: it must still settle, or the bubble keeps "Writing".
   let abandoned: AbortController | null = null;
   const stopped = (current: AbortController) => {
-    if (current.signal.aborted && current === abandoned) void native.setStatus('retry');
+    if (current.signal.aborted && current === abandoned)
+      void native.setStatus('retry', { message: 'failed' });
     return current.signal.aborted;
   };
-  const prepare = (selection: string) => {
+  const prepare = (selection: string, mode: DictationMode) => {
     controller?.abort();
     controller = new AbortController();
-    job = dictationJob(selection);
+    job = dictationJob(selection, mode);
     // Reported when the recording arrives; a dictation cancelled before then has nothing to report.
     job.catch(() => undefined);
   };
@@ -73,7 +116,7 @@ export function startBubblePipeline(): void {
     if (!current || !pending) {
       // The account changed after this dictation started; there is nothing to write it into.
       discard(audio);
-      void native.setStatus('retry');
+      void native.setStatus('retry', { message: 'failed' });
       return;
     }
     let keep = false;
@@ -84,16 +127,20 @@ export function startBubblePipeline(): void {
         native.setStatus('processing'),
       );
       if (stopped(current)) return;
-      const inserted = await native.insert(text);
+      // Edited words stay highlighted a moment so the change is easy to see.
+      const inserted = await native.insert(text, { highlight: prepared.mode === 'edit' });
       if (stopped(current)) return;
       if (!inserted) {
-        // The words are safe in Home; the bubble offers to open them.
+        // The words are safe in Home; the bubble offers to open them. With typing access off
+        // nothing can paste, so they also go on the clipboard and the tab offers to turn it on.
         useBubbleResult.getState().setResult(text, i18n.t('insertionFailed'));
-        void native.setStatus('recover');
+        const typingOff = native.copyText && !native.getStatus().accessibility;
+        if (typingOff) native.copyText!(text);
+        void native.setStatus(typingOff ? 'copied' : 'recover');
       } else {
         useBubbleResult.setState({ error: '' });
         usePracticeSession.getState().complete(prepared.mode);
-        void native.setStatus('success');
+        void native.setStatus('success', { mode: prepared.mode, language: prepared.target });
       }
     } catch (error) {
       if (stopped(current)) return;
@@ -104,9 +151,11 @@ export function startBubblePipeline(): void {
       }
       const message = (error as Error).message;
       useBubbleResult.getState().setResult('', message);
-      // Silence has nothing worth sending again; anything else keeps the recording for Retry.
-      keep = !audio.noSpeech && message !== i18n.t('noSpeech');
-      void native.setStatus(keep ? 'retry-kept' : 'retry');
+      // Each failure has its own words in the status tab. Silence, a used-up plan, signing out and a
+      // missing model have nothing worth sending again; anything else keeps the recording for Retry.
+      const failure = bubbleFailure(error, audio.noSpeech, PIPELINE_MESSAGES());
+      keep = failure.keep;
+      void native.setStatus(keep ? 'retry-kept' : 'retry', { message: failure.message });
     } finally {
       if (keep) kept = audio;
       else discard(audio);
@@ -126,9 +175,11 @@ export function startBubblePipeline(): void {
     dropKept();
     useBubbleResult.getState().dismiss();
   });
-  dictationEvents.addListener('onStart', ({ selection }) => {
+  let lastMode: DictationMode = 'dictate';
+  dictationEvents.addListener('onStart', ({ selection, mode }) => {
     dropKept();
-    prepare(selection);
+    lastMode = bubbleMode(mode, selection);
+    prepare(selection, lastMode);
   });
   dictationEvents.addListener('onRecording', (audio) => {
     void run(audio);
@@ -137,10 +188,11 @@ export function startBubblePipeline(): void {
     const audio = kept;
     kept = null;
     if (!audio) {
-      void native.setStatus('retry');
+      void native.setStatus('retry', { message: 'failed' });
       return;
     }
-    prepare(selection);
+    // A retried take runs in the mode it was recorded in.
+    prepare(selection, bubbleMode(lastMode, selection));
     void run(audio);
   });
   dictationEvents.addListener('onDismiss', dropKept);
@@ -151,6 +203,9 @@ export function startBubblePipeline(): void {
     controller?.abort();
     dropKept();
   });
+  syncBubbleMenu();
+  useConfigStore.subscribe(syncBubbleMenu);
+  useAuthStore.subscribe(syncBubbleMenu);
   void native.pipelineReady();
 }
 

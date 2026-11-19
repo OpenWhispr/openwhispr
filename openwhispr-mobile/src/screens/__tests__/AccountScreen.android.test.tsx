@@ -50,6 +50,7 @@ jest.mock('@/android/settings/bubbleAppearance', () => ({
   useBubbleLook: (selector: (state: { opacity: number }) => unknown) => selector({ opacity: 0.8 }),
   applyBubbleLook: jest.fn(),
   sizeLabel: () => 'medium',
+  useHoldAction: (selector: (state: { value: string }) => unknown) => selector({ value: 'menu' }),
 }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: object) => unknown) =>

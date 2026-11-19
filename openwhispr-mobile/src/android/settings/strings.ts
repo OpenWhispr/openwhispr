@@ -18,6 +18,12 @@ export const settingsEnglish = {
   bubble: 'Bubble',
   showBubble: 'Show bubble',
   sizeLook: 'Size & look',
+  holdBubble: 'Hold the bubble',
+  holdShowMenu: 'Show the menu',
+  holdNothing: 'Nothing',
+  holdGroup: 'When you hold the bubble',
+  holdFooter:
+    'The menu has Assistant, Translate, and Edit selection when text is selected. A tap always dictates.',
   permissions: 'Permissions',
   allOn: 'All on',
   toTurnOn: '{{count}} to turn on',

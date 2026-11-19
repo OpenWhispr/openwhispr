@@ -24,10 +24,16 @@ import { useOnboardingT, type OnboardingKey } from './strings';
 
 export type PracticeKind = 'message' | 'email' | 'list';
 
+// The email written in Practice 2; Practice 4 edits it.
+let practiceEmail = '';
+export function rememberedPracticeEmail(): string {
+  return practiceEmail;
+}
+
 // Where the keyboard's top edge was last seen, in screen coordinates. The guidance and the
 // bubble (or the button) stay pinned there even while the keyboard is closed, as in Wispr Flow.
 let rememberedKeyboardTop: number | null = null;
-function anchorTop(current: number | null): number {
+export function anchorTop(current: number | null): number {
   if (current !== null) return current;
   if (rememberedKeyboardTop !== null) return rememberedKeyboardTop;
   return Dimensions.get('screen').height * 0.58;
@@ -162,6 +168,7 @@ export function PracticeScreen({
       const result = await recorder.current.finish(kind === 'message' ? undefined : kind);
       if (!mounted.current) return;
       setText(result.trim());
+      if (kind === 'email') practiceEmail = result.trim();
       if (kind === 'message') setPhase('inserted');
       else setPhase('done');
     } catch (failure) {

@@ -1,11 +1,9 @@
 package com.openwhispr.dictation
 
-import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.*
 import android.view.MotionEvent
 import android.view.View
-import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 
 /** Colours from the iOS design system's Theme variables (light). */
@@ -19,49 +17,37 @@ object BubbleColors {
   val errorBackground = Color.parseColor("#FDECEC")
   /** The icon's blue, for the bubble shrunk to a dot. */
   val dot = Color.parseColor("#2457C5")
+  /** Brand glass, the listening and writing bubble: #5588F0 → #3466E2. */
+  val glassTop = Color.parseColor("#5588F0")
+  val glassBottom = Color.parseColor("#3466E2")
+  /** The status tab's and menu's brand blue. */
+  val brand = Color.parseColor("#154BD4")
+  /** The menu's icon tiles. */
+  val tile = Color.parseColor("#F2F1EF")
+  /** The glass edge on white surfaces. */
+  val hairline = Color.argb(15, 0, 0, 0)
+  /** The bottom toast. */
+  val toast = Color.argb(240, 24, 23, 20)
+  val toastAction = Color.parseColor("#8FB0FF")
 }
 
 /**
  * The bubble window's root. A gesture that starts on the Ready bubble keeps reaching [gesture]
- * after the content switches to the listening pill, so holding to talk survives the switch.
+ * while the hold menu opens above it, so a finger can slide straight onto a row.
  */
 class BubbleRoot(context: Context) : FrameLayout(context) {
   var startsGesture: () -> Boolean = { false }
   var gesture: ((MotionEvent) -> Unit)? = null
+  /** A touch outside the window (FLAG_WATCH_OUTSIDE_TOUCH); it still reaches the app below. */
+  var outside: (() -> Unit)? = null
   private var tracking = false
   override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+    if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) { outside?.invoke(); return false }
     if (event.actionMasked == MotionEvent.ACTION_DOWN) tracking = startsGesture()
     if (!tracking) return super.dispatchTouchEvent(event)
     gesture?.invoke(event)
     if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) tracking = false
     return true
-  }
-}
-
-/** The glossy app icon, cropped to a circle. [dot] fades it into a solid blue dot as the bubble shrinks to one. */
-class IconBubble(context: Context) : View(context) {
-  private val bitmap = BitmapFactory.decodeResource(resources, R.drawable.ow_bubble_icon)
-  private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-  private val solid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.dot }
-  var dot = 0f
-    set(value) { if (field != value) { field = value; invalidate() } }
-  init {
-    importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
-    outlineProvider = object : android.view.ViewOutlineProvider() {
-      override fun getOutline(view: View, outline: Outline) { outline.setOval(0, 0, view.width, view.height) }
-    }
-  }
-  override fun getAccessibilityClassName(): CharSequence = android.widget.Button::class.java.name
-  override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-    val shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-    shader.setLocalMatrix(Matrix().apply { setScale(w / bitmap.width.toFloat(), h / bitmap.height.toFloat()) })
-    paint.shader = shader
-  }
-  override fun onDraw(canvas: Canvas) {
-    paint.alpha = ((1f - dot) * 255).toInt()
-    solid.alpha = (dot * 255).toInt()
-    if (dot < 1f) canvas.drawOval(0f, 0f, width.toFloat(), height.toFloat(), paint)
-    if (dot > 0f) canvas.drawOval(0f, 0f, width.toFloat(), height.toFloat(), solid)
   }
 }
 
@@ -108,62 +94,28 @@ class GlyphButton(context: Context, private val glyph: Glyph, private val fill: 
   }
 }
 
-/** Seven accent bars that follow the microphone level. */
-class WaveformView(context: Context) : View(context) {
-  private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.accent }
-  private var target = 0f
-  private var level = 0f
-  private var phase = 0f
-  private val ticker = ValueAnimator.ofFloat(0f, 1f).apply {
-    duration = 1000; repeatCount = ValueAnimator.INFINITE; interpolator = LinearInterpolator()
-    addUpdateListener { level += (target - level) * 0.35f; phase += 0.18f; invalidate() }
-  }
-  init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
-  fun setLevel(value: Float) { target = value }
-  override fun onAttachedToWindow() { super.onAttachedToWindow(); level = 0f; target = 0f; ticker.start() }
-  override fun onDetachedFromWindow() { ticker.cancel(); super.onDetachedFromWindow() }
-  override fun onDraw(canvas: Canvas) {
-    val bars = BubblePolicy.bars(level, phase)
-    val gap = width / (bars.size * 2f - 1)
-    for (i in bars.indices) {
-      val h = bars[i] * height
-      val left = i * gap * 2
-      canvas.drawRoundRect(left, (height - h) / 2, left + gap, (height + h) / 2, gap / 2, gap / 2, paint)
-    }
-  }
-}
-
-/** An accent arc that spins while the words are written up. */
-class SpinnerView(context: Context) : View(context) {
-  private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    color = BubbleColors.accent; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
-  }
-  private var angle = 0f
-  private val ticker = ValueAnimator.ofFloat(0f, 360f).apply {
-    duration = 900; repeatCount = ValueAnimator.INFINITE; interpolator = LinearInterpolator()
-    addUpdateListener { angle = it.animatedValue as Float; invalidate() }
-  }
-  init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
-  override fun onAttachedToWindow() { super.onAttachedToWindow(); ticker.start() }
-  override fun onDetachedFromWindow() { ticker.cancel(); super.onDetachedFromWindow() }
-  override fun onDraw(canvas: Canvas) {
-    paint.strokeWidth = width / 9f
-    val inset = paint.strokeWidth / 2
-    canvas.drawArc(inset, inset, width - inset, height - inset, angle - 90f, 270f, false, paint)
-  }
-}
-
-/** The dark round "Hide for 1 hour" target drawn while the bubble is dragged. */
+/** The white glass "Hide for 15 minutes" target drawn while the bubble is dragged; it grows to pull the bubble in. */
 class HideTargetView(context: Context) : View(context) {
-  private val circle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.ink }
-  private val cross = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+  private val circle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+  private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.hairline; style = Paint.Style.STROKE }
+  private val cross = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.ink; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+  init { elevation = 8f * resources.displayMetrics.density }
   var active = false
-    set(value) { if (field != value) { field = value; animate().scaleX(if (value) 1.18f else 1f).scaleY(if (value) 1.18f else 1f).setDuration(120).start() } }
+    set(value) {
+      if (field != value) {
+        field = value
+        animate().scaleX(if (value) 1.15f else 1f).scaleY(if (value) 1.15f else 1f).setDuration(120).start()
+        if (value) performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+      }
+    }
   override fun onDraw(canvas: Canvas) {
     val cx = width / 2f; val cy = height / 2f
-    canvas.drawCircle(cx, cy, minOf(width, height) / 2f, circle)
+    val r = minOf(width, height) / 2f
+    canvas.drawCircle(cx, cy, r, circle)
+    edge.strokeWidth = resources.displayMetrics.density
+    canvas.drawCircle(cx, cy, r - edge.strokeWidth / 2, edge)
     cross.strokeWidth = width / 28f
-    val r = width / 9f
-    canvas.drawLine(cx - r, cy - r, cx + r, cy + r, cross); canvas.drawLine(cx + r, cy - r, cx - r, cy + r, cross)
+    val arm = width / 9f
+    canvas.drawLine(cx - arm, cy - arm, cx + arm, cy + arm, cross); canvas.drawLine(cx + arm, cy - arm, cx - arm, cy + arm, cross)
   }
 }

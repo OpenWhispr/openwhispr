@@ -23,7 +23,7 @@ describe('Android onboarding flow', () => {
 
   it('runs sign-in, the practices and permissions before the Cloud or Private choice', () => {
     const steps = stepsFor('cloud');
-    expect(steps.slice(0, 7)).toEqual([
+    expect(steps.slice(0, 8)).toEqual([
       'splash',
       'signin',
       'pitch',
@@ -31,6 +31,7 @@ describe('Android onboarding flow', () => {
       'practiceMessage',
       'practiceEmail',
       'practiceList',
+      'practiceEdit',
     ]);
     expect(steps.indexOf('notifications')).toBeLessThan(steps.indexOf('mode'));
     expect(steps.indexOf('accessibility')).toBeGreaterThan(steps.indexOf('overlay'));
