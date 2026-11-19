@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { hasValidatedAuthContext } from "../lib/authRequestContext";
 import { WorkspacesService, type SeatPreview } from "../services/WorkspacesService";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { formatAmount } from "../utils/formatAmount";
@@ -31,7 +32,9 @@ export function useInviteSeatLines(workspaceId: string, open: boolean, pricedCou
   // The seat line, the warning and the ceiling all read the list's seats_used, which canceled
   // invitations and other admins change without this device reading it again.
   useEffect(() => {
-    if (open) void useWorkspaceStore.getState().refresh({ fresh: true });
+    if (open && hasValidatedAuthContext()) {
+      void useWorkspaceStore.getState().refresh({ fresh: true });
+    }
   }, [open]);
 
   useEffect(() => {

@@ -8,6 +8,104 @@ const { mapEnterpriseError } = require("../../src/helpers/enterpriseProviderErro
 
 const bedrockPrompt = [{ role: "user", content: [{ type: "text", text: "Hello" }] }];
 
+function stubBedrockTransport(t) {
+  const environmentKeys = [
+    "AWS_ENDPOINT_URL",
+    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    "AWS_BEARER_TOKEN_BEDROCK",
+  ];
+  const originalEnvironment = new Map(environmentKeys.map((key) => [key, process.env[key]]));
+  const originalFetch = global.fetch;
+  const requests = [];
+  for (const key of environmentKeys) delete process.env[key];
+  global.fetch = async (url, init) => {
+    requests.push({
+      url: String(url),
+      headers: Object.fromEntries(new Headers(init.headers)),
+      body: JSON.parse(init.body),
+    });
+    return Response.json({
+      output: { message: { role: "assistant", content: [{ text: "Hello" }] } },
+      stopReason: "end_turn",
+      usage: { inputTokens: 4, outputTokens: 1, totalTokens: 5 },
+      metrics: { latencyMs: 1 },
+    });
+  };
+  t.after(() => {
+    global.fetch = originalFetch;
+    for (const [key, value] of originalEnvironment) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  return requests;
+}
+
+test("Bedrock models support the core SDK used by connection checks and cleanup", async (t) => {
+  const { generateText } = require("ai");
+  const requests = stubBedrockTransport(t);
+  for (const enterprise of [
+    {
+      bedrockAccessKeyId: "AKIAEXAMPLE",
+      bedrockSecretAccessKey: "example-secret",
+    },
+    {
+      managedCredentialProvider: async () => ({
+        accessKeyId: "AKIAEXAMPLE",
+        secretAccessKey: "example-secret",
+        sessionToken: "example-session-token",
+      }),
+    },
+  ]) {
+    const model = await getEnterpriseAIModel("bedrock", "anthropic.claude-haiku", "", {
+      bedrockRegion: "us-west-2",
+      ...enterprise,
+    });
+    const result = await generateText({
+      model,
+      system: "Return the cleaned text.",
+      prompt: "Hello",
+      maxOutputTokens: 16,
+      maxRetries: 0,
+    });
+    assert.equal(result.text, "Hello");
+    assert.equal(result.finishReason, "stop");
+    assert.equal(result.usage.totalTokens, 5);
+  }
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[0].body.system, [{ text: "Return the cleaned text." }]);
+  assert.deepEqual(requests[0].body.messages, [{ role: "user", content: [{ text: "Hello" }] }]);
+});
+
+test("managed Bedrock requests stay on the configured AWS region despite endpoint overrides", async (t) => {
+  const requests = stubBedrockTransport(t);
+  for (const key of ["AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "AWS_ENDPOINT_URL"]) {
+    process.env[key] = "http://untrusted.invalid:9000/override";
+    for (const region of ["us-west-2", "us-gov-west-1"]) {
+      const model = await getEnterpriseAIModel("bedrock", "anthropic.claude-haiku", "", {
+        bedrockRegion: region,
+        managedCredentialProvider: async () => ({
+          accessKeyId: "AKIAEXAMPLE",
+          secretAccessKey: "example-secret",
+          sessionToken: "example-session-token",
+        }),
+      });
+      await model.doGenerate({ prompt: bedrockPrompt });
+      const { stream } = await model.doStream({ prompt: bedrockPrompt });
+      await stream.cancel();
+      for (const request of requests.slice(-2)) {
+        assert.equal(
+          new URL(request.url).origin,
+          `https://bedrock-runtime.${region}.amazonaws.com`
+        );
+        assert.match(request.headers.authorization, /^AWS4-HMAC-SHA256 /);
+        assert.equal(request.headers["x-amz-security-token"], "example-session-token");
+      }
+    }
+    delete process.env[key];
+  }
+});
+
 async function captureBedrockGenerationError(model) {
   let error;
   await assert.rejects(model.doGenerate({ prompt: bedrockPrompt }), (caught) => {
@@ -16,6 +114,99 @@ async function captureBedrockGenerationError(model) {
   });
   return error;
 }
+
+test("Bedrock chat streams preserve text, reasoning signatures, tools, and abort signals", async (t) => {
+  stubBedrockTransport(t);
+  const { EventStreamCodec } = require("@smithy/eventstream-codec");
+  const { toUtf8, fromUtf8 } = require("@smithy/util-utf8");
+  const codec = new EventStreamCodec(toUtf8, fromUtf8);
+  const events = [
+    ["contentBlockDelta", { contentBlockIndex: 0, delta: { text: "Checking." } }],
+    ["contentBlockStop", { contentBlockIndex: 0 }],
+    ["contentBlockDelta", { contentBlockIndex: 1, delta: { reasoningContent: { text: "Think" } } }],
+    [
+      "contentBlockDelta",
+      { contentBlockIndex: 1, delta: { reasoningContent: { signature: "signed-reasoning" } } },
+    ],
+    ["contentBlockStop", { contentBlockIndex: 1 }],
+    [
+      "contentBlockStart",
+      { contentBlockIndex: 2, start: { toolUse: { toolUseId: "call_1", name: "lookup" } } },
+    ],
+    [
+      "contentBlockDelta",
+      { contentBlockIndex: 2, delta: { toolUse: { input: '{"query":"hello"}' } } },
+    ],
+    ["contentBlockStop", { contentBlockIndex: 2 }],
+    ["messageStop", { stopReason: "tool_use" }],
+    [
+      "metadata",
+      { usage: { inputTokens: 4, outputTokens: 7, totalTokens: 11 }, metrics: { latencyMs: 1 } },
+    ],
+  ];
+  const bytes = Buffer.concat(
+    events.map(([eventType, payload]) =>
+      codec.encode({
+        headers: {
+          ":message-type": { type: "string", value: "event" },
+          ":event-type": { type: "string", value: eventType },
+        },
+        body: fromUtf8(JSON.stringify(payload)),
+      })
+    )
+  );
+  let request;
+  global.fetch = async (url, init) => {
+    request = { url: String(url), body: JSON.parse(init.body), signal: init.signal };
+    return new Response(bytes, {
+      headers: { "Content-Type": "application/vnd.amazon.eventstream" },
+    });
+  };
+  const model = await getEnterpriseAIModel("bedrock", "anthropic.claude-haiku", "", {
+    bedrockRegion: "us-west-2",
+    bedrockAccessKeyId: "AKIAEXAMPLE",
+    bedrockSecretAccessKey: "example-secret",
+  });
+  const signal = new AbortController().signal;
+  const { stream } = await model.doStream({
+    prompt: bedrockPrompt,
+    abortSignal: signal,
+    tools: [
+      {
+        type: "function",
+        name: "lookup",
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string" } },
+          required: ["query"],
+        },
+      },
+    ],
+    toolChoice: { type: "auto" },
+  });
+  const parts = [];
+  for await (const part of stream) parts.push(part);
+  assert.match(request.url, /\/converse-stream$/);
+  assert.equal(request.signal, signal);
+  assert.equal(request.body.toolConfig.tools[0].toolSpec.name, "lookup");
+  assert.equal(parts.find((part) => part.type === "text-delta").delta, "Checking.");
+  assert.equal(
+    parts.find((part) => part.type === "reasoning-delta" && part.providerMetadata).providerMetadata
+      .bedrock.signature,
+    "signed-reasoning"
+  );
+  assert.deepEqual(
+    parts.find((part) => part.type === "tool-call"),
+    {
+      type: "tool-call",
+      toolCallId: "call_1",
+      toolName: "lookup",
+      input: '{"query":"hello"}',
+    }
+  );
+  assert.deepEqual(parts.at(-1).finishReason, { unified: "tool-calls", raw: "tool_use" });
+  assert.equal(parts.at(-1).usage.outputTokens.total, 7);
+});
 
 test("builds the Azure SDK base below the public resource origin", () => {
   assert.equal(
@@ -177,11 +368,7 @@ test("real Bedrock provider maps header-only AWS exception identities", async (t
 });
 
 test("explicit Bedrock credential sources cannot fall through to populated AWS environment", async (t) => {
-  const environmentKeys = [
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN",
-  ];
+  const environmentKeys = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"];
   const originalEnvironment = new Map(
     environmentKeys.map((key) => [
       key,
@@ -238,11 +425,7 @@ test("explicit Bedrock credential sources cannot fall through to populated AWS e
 });
 
 test("Bedrock environment fallback remains available without an explicit credential source", async (t) => {
-  const environmentKeys = [
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN",
-  ];
+  const environmentKeys = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"];
   const originalEnvironment = new Map(
     environmentKeys.map((key) => [
       key,
@@ -313,10 +496,7 @@ test("the pinned Azure SDK requests the deployment below /openai/v1 with bearer 
   await assert.rejects(
     model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }] })
   );
-  assert.equal(
-    request.url,
-    "https://example.openai.azure.com/openai/v1/responses?api-version=v1"
-  );
+  assert.equal(request.url, "https://example.openai.azure.com/openai/v1/responses?api-version=v1");
   assert.equal(request.headers.authorization, "Bearer temporary-bearer-token");
   assert.equal(request.body.model, "deployment-a");
 });
@@ -374,9 +554,6 @@ test("manual Azure setup preserves legacy endpoints and API-key auth", async (t)
   await assert.rejects(
     model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }] })
   );
-  assert.equal(
-    request.url,
-    "https://legacy.example.com/custom/openai/responses"
-  );
+  assert.equal(request.url, "https://legacy.example.com/custom/openai/responses");
   assert.equal(request.headers["api-key"], "legacy-api-key");
 });

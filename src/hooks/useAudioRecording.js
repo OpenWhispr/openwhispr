@@ -15,6 +15,7 @@ import {
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
 import { isManagedOrukeetStream } from "../helpers/transcriptionFallback";
 import {
+  effectiveLocalHistoryEnabled,
   isAgentAllowed,
   isLocalChoiceRefusal,
   isScreenContextAllowed,
@@ -448,6 +449,7 @@ export const useAudioRecording = (toast, options = {}) => {
       onRetry,
       settingsTarget,
       technicalDetails,
+      offerTranscript = true,
     }) => {
       const errorGeneration = ++dictationErrorGenerationRef.current;
       const isCurrent = () => errorGeneration === dictationErrorGenerationRef.current;
@@ -538,7 +540,7 @@ export const useAudioRecording = (toast, options = {}) => {
         });
         return;
       }
-      const recoverableTranscript = getRecoverableTranscript(transcript);
+      const recoverableTranscript = offerTranscript ? getRecoverableTranscript(transcript) : "";
       // A retried paste can wait on held keys with no visible progress, so a
       // second click is ignored until it settles, and a paste that lands after
       // a newer pill or recording leaves that one alone.
@@ -757,15 +759,45 @@ export const useAudioRecording = (toast, options = {}) => {
             return;
           }
 
+          // Spoken under an account that has since been replaced. Its row is saved
+          // as that account's, so the snippets now loaded (the next account's)
+          // must not expand into it, and neither the agent window nor the
+          // onboarding demo may answer it for the next account.
+          const outlivedAccount =
+            (result.assistantConversation || getSettings().snippets?.length > 0) &&
+            (await window.electronAPI?.accountChangedSince?.(result.analyticsOccurredAt));
+
           // A selection edit must replace the model's exact result. Snippet
           // expansion is a dictation convenience and can otherwise mutate a
           // legitimate replacement that happens to contain a snippet trigger.
-          if (!result.selectionEdit?.sessionId) {
+          if (!result.selectionEdit?.sessionId && !outlivedAccount) {
             result.text = expandSnippets(result.text, getSettings().snippets);
           }
 
           setTranscript(result.text);
-          if (result.assistantConversation) {
+          if (result.assistantConversation && outlivedAccount) {
+            onDemoEventRef.current?.({
+              kind: demoKindRef.current,
+              status: "error",
+              message: t("hooks.audioRecording.commandAccountChanged.title"),
+            });
+            window.electronAPI?.hideDictationPreview?.();
+            // The save below files it under the account it was spoken under, so
+            // the pill points there and never shows it to the account now signed in.
+            const keptInHistory = effectiveLocalHistoryEnabled(
+              usePolicyStore.getState(),
+              getSettings().dataRetentionEnabled
+            );
+            showDictationError({
+              title: t("hooks.audioRecording.commandAccountChanged.title"),
+              description: t(
+                keptInHistory
+                  ? "hooks.audioRecording.commandAccountChanged.description"
+                  : "hooks.audioRecording.commandAccountChanged.descriptionNotSaved"
+              ),
+              offerTranscript: false,
+            });
+          } else if (result.assistantConversation) {
             window.electronAPI?.hideDictationPreview?.();
             const { screenContext, transcript, selectedContext } = result.assistantConversation;
             const command = {
@@ -785,8 +817,10 @@ export const useAudioRecording = (toast, options = {}) => {
               onOnboardingAssistantCommandRef.current?.(command);
             } else {
               // A conversational wake-word command is answered in the agent window.
+              // Main checks the account again when it delivers the command.
               void window.electronAPI?.submitAgentCommand?.({
                 ...command,
+                spokenAt: result.analyticsOccurredAt,
                 selectedContext: selectedContext
                   ? { text: selectedContext.text, source: "external" }
                   : null,

@@ -5,6 +5,7 @@ const {
   localModelOperationSignal,
   bindLocalModelDownload,
 } = require("./localModelPolicyGate");
+const { EventEmitter } = require("events");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
@@ -37,6 +38,8 @@ const {
 } = require("./installedModels");
 
 const CACHE_TTL_MS = 30000;
+// A GPU can take longer to come back after wake than the first re-warm waits
+const WAKE_GPU_RETRY_DELAY_MS = 30000;
 // Room a download reserves: the model file plus headroom.
 const WHISPER_DISK_SPACE_FACTOR = 1.2;
 
@@ -101,18 +104,30 @@ function shouldRewarmOnWake({
   isRemote,
   useCuda,
   useVulkan,
+  wantsGpu,
   modelName,
   transcribing,
   rewarmInFlight,
 }) {
-  // Only re-warm a running local GPU whisper-server: sleep evicts its model from
-  // VRAM. Skip remote/CPU servers, and skip while a transcription (already warming
-  // the server) or another re-warm is in flight. See #766.
-  return !isRemote && !!(useCuda || useVulkan) && !!modelName && !transcribing && !rewarmInFlight;
+  // Re-warm a running local GPU whisper-server, since sleep evicts its model from
+  // VRAM (#766), and a CPU one that should be on the GPU again, since wake is when
+  // a GPU that failed this session is likely back (#2265). Skip remote servers,
+  // and skip while a transcription (already warming the server) or another
+  // re-warm is in flight.
+  return (
+    !isRemote &&
+    !!(useCuda || useVulkan || wantsGpu) &&
+    !!modelName &&
+    !transcribing &&
+    !rewarmInFlight
+  );
 }
 
-class WhisperManager {
+// Emits "gpu-status-changed" when a wake re-warm or its retry has tried a GPU
+// that failed this session again, so the GPU cards re-read (ipcHandlers).
+class WhisperManager extends EventEmitter {
   constructor() {
+    super();
     this.cachedFFmpegPath = null;
     this.currentDownloadProcess = null;
     this.ffmpegAvailabilityCache = { result: null, expiresAt: 0 };
@@ -121,15 +136,47 @@ class WhisperManager {
     this.serverManager = new WhisperServerManager();
     this.currentServerModel = null;
     this.cachedVadModelPath = undefined;
-    this._transcribing = false;
+    // A count, not a flag: dictations, uploads and retries can overlap
+    this._activeTranscriptions = 0;
     this._rewarmInFlight = false;
+    this._wakeGpuRetryTimer = null;
     this._cudaBinaryManager = null;
     this._vulkanBinaryManager = null;
+
+    // A proven backend's failure (see the server's startedGpuKeys) keeps it
+    // off only until the next wake or launch. It is never written to
+    // WHISPER_GPU_FAILED, so no manual Retry is needed once the GPU is back.
+    // Maps the backend to its failure reason, for the GPU card. #2265
+    this._sessionGpuFailures = new Map();
+    this.serverManager.on("cuda-fallback", ({ proven, reason } = {}) => {
+      if (proven) this._sessionGpuFailures.set("cuda", reason || null);
+    });
+    this.serverManager.on("gpu-fallback", ({ proven, reason } = {}) => {
+      if (proven) this._sessionGpuFailures.set("vulkan", reason || null);
+    });
   }
 
   setGpuBinaryManagers({ cuda, vulkan }) {
     this._cudaBinaryManager = cuda || null;
     this._vulkanBinaryManager = vulkan || null;
+  }
+
+  getFailedGpuBackends() {
+    return [
+      ...new Set([
+        ...resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED),
+        ...this._sessionGpuFailures.keys(),
+      ]),
+    ];
+  }
+
+  getSessionGpuFailureReason(backend) {
+    return this._sessionGpuFailures.get(backend) ?? null;
+  }
+
+  forgetSessionGpuFailures(backend) {
+    if (backend) this._sessionGpuFailures.delete(backend);
+    else this._sessionGpuFailures.clear();
   }
 
   // The GPU backend for every server start is resolved fresh from the current
@@ -142,9 +189,10 @@ class WhisperManager {
   // lists backends that crashed on this machine (persisted by ipcHandlers
   // when the server falls back to CPU); they stay off until the user retries
   // or re-downloads, so a doomed backend isn't re-attempted — and its model
-  // reload re-paid — on every launch.
+  // reload re-paid — on every launch. Session-only failures (see the
+  // constructor) stay off until the next wake or launch.
   resolveGpuStartOptions() {
-    const failed = resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+    const failed = this.getFailedGpuBackends();
     const useCuda =
       (process.env.WHISPER_CUDA_ENABLED || "").toLowerCase() !== "false" &&
       !failed.includes("cuda") &&
@@ -173,9 +221,14 @@ class WhisperManager {
     if (needsUpdate) return "pack needs update";
     if (!downloaded) return "pack not installed or missing required libraries";
     // A wanted, downloaded pack is skipped only after it failed on this machine.
-    return resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED).includes(backend)
-      ? "previous failure recorded"
-      : null;
+    if (resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED).includes(backend)) {
+      return "previous failure recorded";
+    }
+    if (this._sessionGpuFailures.has(backend)) {
+      const reason = this._sessionGpuFailures.get(backend);
+      return `failed this session, tried again after wake${reason ? `: ${reason}` : ""}`;
+    }
+    return null;
   }
 
   _warnIfGpuFallback() {
@@ -217,7 +270,7 @@ class WhisperManager {
     const { useCuda, useVulkan } = this.resolveGpuStartOptions();
     if (useCuda) return "cuda";
     if (useVulkan) return "vulkan";
-    const failed = resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+    const failed = this.getFailedGpuBackends();
     if (failed.includes("cuda") && this._cudaBinaryManager?.isDownloaded()) return "cuda";
     if (failed.includes("vulkan") && this._vulkanBinaryManager?.isDownloaded()) return "vulkan";
     return null;
@@ -473,35 +526,104 @@ class WhisperManager {
   async onWakeFromSleep() {
     const sm = this.serverManager;
     const modelName = this.currentServerModel;
+    const gpu = this.resolveGpuStartOptions();
+    this.cancelWakeGpuRetry();
     if (
       !shouldRewarmOnWake({
         isRemote: sm.isRemote,
         useCuda: sm.useCuda,
         useVulkan: sm.useVulkan,
+        // A session-only failure is a GPU that worked earlier this session, so
+        // wake is when to try it again
+        wantsGpu: gpu.useCuda || gpu.useVulkan || this._sessionGpuFailures.size > 0,
         modelName,
-        transcribing: this._transcribing,
+        transcribing: this._activeTranscriptions > 0,
         rewarmInFlight: this._rewarmInFlight,
       })
     ) {
+      if (this._sessionGpuFailures.size === 0) return false;
+      if (modelName && !sm.isRemote) {
+        // The local server is busy: try the GPU again once it is free
+        this._scheduleWakeGpuRetry(modelName);
+      } else {
+        // No local server to reload: its next start tries the GPU
+        this.forgetSessionGpuFailures();
+        this.emit("gpu-status-changed");
+      }
       return false;
     }
 
-    // Replay the last start options (VAD, threads) so the reloaded server
-    // matches the signature the next dictation will use; a bare start would
-    // otherwise be rejected by start()'s no-op guard and reload the model on
-    // the first dictation. See #766. GPU flags are re-resolved so a backend
-    // that failed since is not re-attempted.
-    const options = { ...sm.lastStartOptions, ...this.resolveGpuStartOptions() };
+    const rewarmed = await this._retrySessionGpu(modelName);
+    // The re-warm runs seconds after wake, which can be before the GPU is usable
+    // again or while its start times out on a busy system: when it fell back
+    // from a proven backend, try once more a little later.
+    if (rewarmed && this._sessionGpuFailures.size > 0) this._scheduleWakeGpuRetry(modelName);
+    return rewarmed;
+  }
+
+  _scheduleWakeGpuRetry(modelName) {
+    this.cancelWakeGpuRetry();
+    this._wakeGpuRetryTimer = setTimeout(() => {
+      this._wakeGpuRetryTimer = null;
+      // Skip when a Retry, a pack change or another start already moved on
+      if (!this._sessionGpuOutranksRunning() || this.currentServerModel !== modelName) return;
+      // Never restart under a running dictation or another re-warm: wait again
+      if (this._activeTranscriptions > 0 || this._rewarmInFlight) {
+        this._scheduleWakeGpuRetry(modelName);
+        return;
+      }
+      this._retrySessionGpu(modelName).catch((err) => {
+        debugLogger.warn("whisper-server wake GPU retry failed", { error: err.message });
+      });
+    }, WAKE_GPU_RETRY_DELAY_MS);
+  }
+
+  // Whether a backend that failed this session comes before the one the server
+  // runs now (CUDA, then Vulkan, then CPU): a CUDA failure that landed on
+  // Vulkan is still worth retrying.
+  _sessionGpuOutranksRunning() {
+    const sm = this.serverManager;
+    const runningRank = sm.useCuda ? 0 : sm.useVulkan ? 1 : 2;
+    return [...this._sessionGpuFailures.keys()].some(
+      (backend) => (backend === "cuda" ? 0 : 1) < runningRank
+    );
+  }
+
+  // Tries this session's failed GPUs again. The cards re-read whatever it
+  // lands on, since they still show the failures it forgot.
+  async _retrySessionGpu(modelName) {
+    const hadFailures = this._sessionGpuFailures.size > 0;
+    this.forgetSessionGpuFailures();
+    try {
+      return await this._rewarmServer(modelName);
+    } finally {
+      if (hadFailures) this.emit("gpu-status-changed");
+    }
+  }
+
+  cancelWakeGpuRetry() {
+    clearTimeout(this._wakeGpuRetryTimer);
+    this._wakeGpuRetryTimer = null;
+  }
+
+  isRewarmingAfterWake() {
+    return this._rewarmInFlight;
+  }
+
+  // Reloads with the last start options (VAD, threads) so the server matches
+  // the signature the next dictation will use; a bare start would otherwise be
+  // rejected by start()'s no-op guard and reload the model on the first
+  // dictation. See #766. GPU flags are re-resolved, so a backend remembered as
+  // failed is not re-attempted.
+  async _rewarmServer(modelName) {
     this._rewarmInFlight = true;
     try {
       debugLogger.info("Re-warming whisper-server after wake from sleep", { model: modelName });
-      await this.stopServer();
-      const result = await this.startServer(modelName, options);
-      if (!result?.success) {
-        debugLogger.warn("whisper-server wake re-warm failed", { reason: result?.reason });
-        return false;
+      const result = await this.restartServerWithGpuPreference(modelName);
+      if (!result.success) {
+        debugLogger.warn("whisper-server wake re-warm failed", { reason: result.reason });
       }
-      return true;
+      return result.success;
     } finally {
       this._rewarmInFlight = false;
     }
@@ -571,11 +693,11 @@ class WhisperManager {
 
   async transcribeViaServer(audioBlob, model, language, initialPrompt = null, options = {}) {
     // Mark the server busy so a wake re-warm doesn't kill an in-flight dictation. See #766.
-    this._transcribing = true;
+    this._activeTranscriptions += 1;
     try {
       return await this._runServerTranscription(audioBlob, model, language, initialPrompt, options);
     } finally {
-      this._transcribing = false;
+      this._activeTranscriptions -= 1;
     }
   }
 

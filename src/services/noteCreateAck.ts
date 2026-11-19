@@ -16,6 +16,9 @@ export interface CloudNoteCreateResult extends NoteCloudText {
   write_applied?: boolean;
   row_created?: boolean;
   deleted_at?: string | null;
+  workspace_id?: string | null;
+  space_id?: string | null;
+  private_workspace_id?: string | null;
   access_removed?: boolean;
 }
 
@@ -45,6 +48,7 @@ export type NoteCreateResolution =
   | "orphan-cleanup-failed";
 
 export interface NoteCreateAckOptions {
+  expectedAuthGeneration?: number;
   // Full sync creates send every mutable field and may settle an unchanged
   // row. Legacy migration creates are partial and must stay pending for the
   // subsequent full PATCH.
@@ -103,6 +107,9 @@ export async function resolveCloudNoteCreate(
     cloud.user_id ?? null,
     {
       settleIfUnchanged: (options.settleIfUnchanged ?? true) && !writeRejected,
+      ...(options.expectedAuthGeneration !== undefined && {
+        expectedAuthGeneration: options.expectedAuthGeneration,
+      }),
       cloudRevision: writeRejected ? (note.cloud_revision ?? null) : (cloud.revision ?? null),
       writeRejected,
       ...(!writeRejected && {
@@ -144,15 +151,18 @@ function rendererDependencies(
   deleteCloud: (cloudId: string) => Promise<void>
 ): NoteCreateAckDependencies {
   return {
-    acknowledge: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
-      window.electronAPI.acknowledgeNoteCreate?.(
+    acknowledge: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
+      const result = await window.electronAPI.acknowledgeNoteCreate?.(
         id,
         snapshot,
         cloudId,
         cloudUpdatedAt,
         ownerUserId,
         options
-      ),
+      );
+      if (!result || !("outcome" in result)) return undefined;
+      return result;
+    },
     deleteCloud,
     onInvalidResponse: (expected, received) =>
       console.error("Ignoring note create response with mismatched client identity", {
@@ -188,7 +198,7 @@ export function resolveRendererCloudNoteCreate(
 }
 
 function rendererOptions(options: NoteCreateAckOptions): NoteCreateAckOptions {
-  const generation = getValidatedAuthGeneration();
+  const generation = options.expectedAuthGeneration ?? getValidatedAuthGeneration();
   return {
     ...options,
     requestStillCurrent: () =>
@@ -213,6 +223,11 @@ export function resolveRendererCloudNoteCreateBatch(
 // Recorded before a create request is sent, so a note deleted while the request
 // is in flight stays a tombstone its late receipt can link. A note deleted or
 // given a new identity since it was read is left out and must not be sent.
-export async function recordNoteCreateAttempts(clientNoteIds: string[]): Promise<Set<string>> {
-  return new Set((await window.electronAPI.markNoteCreatesAttempted?.(clientNoteIds)) ?? []);
+export async function recordNoteCreateAttempts(
+  clientNoteIds: string[],
+  authGeneration?: number
+): Promise<Set<string>> {
+  return new Set(
+    (await window.electronAPI.markNoteCreatesAttempted?.(clientNoteIds, authGeneration)) ?? []
+  );
 }

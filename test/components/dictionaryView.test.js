@@ -23,6 +23,13 @@ const MOCKS = {
     // Local dictation always gets the dictionary, so the OpenRouter notice stays hidden.
     export const selectPolicyEffectiveSettings = () => ({ useLocalWhisper: true });
     export const useSettingsStore = (selector) => selector({});
+    // Whose lists the page shows: a test moves them to another account by
+    // bumping the revision, as main's account-scope broadcast does.
+    export const getListsOwnerRevision = () => globalThis.__listsOwner.revision;
+    export const subscribeListsOwner = (listener) => {
+      globalThis.__listsOwner.listeners.add(listener);
+      return () => globalThis.__listsOwner.listeners.delete(listener);
+    };
   `,
   "/hooks/useWorkspace": `
     export function useWorkspace() {
@@ -191,10 +198,14 @@ function setState(t, { initialStorage = {}, shared = {}, settings = {} } = {}) {
   globalThis.__results = { deleteSharedWords: { undo: async () => {} } };
   globalThis.__settings = {
     customDictionary: ["OpenWhispr", "Supabase", "Whispr"],
-    updateCustomDictionary: (changes) => calls.push(["updateCustomDictionary", changes]),
+    updateCustomDictionary: (changes, listsOwner) => {
+      calls.push(["updateCustomDictionary", changes]);
+      globalThis.__listsOwner.writes.push(listsOwner);
+    },
     snippets: [],
     ...settings,
   };
+  globalThis.__listsOwner = { revision: 0, listeners: new Set(), writes: [] };
   globalThis.__workspace = {
     id: "ws",
     name: "Acme",
@@ -234,6 +245,7 @@ function setState(t, { initialStorage = {}, shared = {}, settings = {} } = {}) {
       "__shareProps",
       "__confirmPendingShare",
       "__ActionError",
+      "__listsOwner",
     ]) {
       delete globalThis[key];
     }
@@ -818,6 +830,62 @@ test("a Personal rename to a visible Personal word or the agent name is refused"
     calls.find(([name]) => name === "updateCustomDictionary"),
     undefined
   );
+});
+
+// React keeps an element's current props on the node; a handler read before
+// the account change is the one an in-flight keypress or click would still run.
+const reactProps = (node) => node[Object.keys(node).find((key) => key.startsWith("__reactProps$"))];
+
+test("a Personal rename opened under one account never saves into the next one's list", async (t) => {
+  const { container, calls } = await renderView(t);
+  await openList(container, "personal");
+  await click(
+    byAttribute(
+      rowFor(container, "Supabase"),
+      "aria-label",
+      named("dictionary.editWord", "Supabase")
+    )
+  );
+  const editor = findElement(rowFor(container, "Supabase"), (node) => node.tagName === "INPUT");
+  await type(editor, "Supabase Cloud");
+  const staleKeyDown = reactProps(editor).onKeyDown;
+
+  // Another account takes over the lists while the editor is open.
+  await React.act(async () => {
+    globalThis.__listsOwner.revision = 1;
+    for (const listener of globalThis.__listsOwner.listeners) listener();
+  });
+  assert.equal(
+    rowFor(container, "Supabase") &&
+      findElement(rowFor(container, "Supabase"), (node) => node.tagName === "INPUT"),
+    null,
+    "the editor opened for the previous account is closed"
+  );
+
+  await React.act(async () => staleKeyDown(domEvent("keydown", { key: "Enter" })));
+  assert.deepEqual(
+    globalThis.__listsOwner.writes,
+    [0],
+    "the late save names the account it was opened under, which the store refuses"
+  );
+
+  // The page the next account sees saves under that account.
+  await openList(container, "personal");
+  await click(
+    byAttribute(
+      rowFor(container, "Supabase"),
+      "aria-label",
+      named("dictionary.editWord", "Supabase")
+    )
+  );
+  const fresh = findElement(rowFor(container, "Supabase"), (node) => node.tagName === "INPUT");
+  await type(fresh, "Supabase Cloud");
+  await pressEnter(fresh);
+  assert.deepEqual(globalThis.__listsOwner.writes, [0, 1]);
+  assert.deepEqual(calls.filter(([name]) => name === "updateCustomDictionary").at(-1), [
+    "updateCustomDictionary",
+    { add: ["Supabase Cloud"], remove: ["Supabase"] },
+  ]);
 });
 
 test("a requested list opens first and the request is cleared", async (t) => {

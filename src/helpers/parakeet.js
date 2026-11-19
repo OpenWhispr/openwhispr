@@ -272,6 +272,14 @@ class ParakeetManager {
     return this.serverManager.getServerStatus();
   }
 
+  setDictionaryProvider(provider) {
+    this.serverManager.setDictionaryProvider(provider);
+  }
+
+  refreshHotwordsSoon() {
+    this.serverManager.refreshHotwordsSoon();
+  }
+
   supportsOnlineStreaming(modelName) {
     return getModelRuntime(modelName) === "online";
   }

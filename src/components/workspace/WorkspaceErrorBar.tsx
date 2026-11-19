@@ -11,8 +11,8 @@ export interface WorkspaceErrorBarProps {
   action?: { label: string; onClick: () => void };
 }
 
-// The tone colors the surface and the icon only; the message stays in the foreground color,
-// since the warning amber is too light for body text on a light background.
+// The tone colours the surface and the icon. An error's message is red as well; a warning's stays
+// in the foreground colour, since the warning amber is too light for body text on a light page.
 export function WorkspaceErrorBar({
   id,
   tone,
@@ -37,12 +37,19 @@ export function WorkspaceErrorBar({
           tone === "error" ? "text-destructive" : "text-warning"
         )}
       />
-      <p className="min-w-0 flex-1 leading-snug break-words">{message}</p>
+      <p
+        className={cn(
+          "min-w-0 flex-1 leading-snug break-words",
+          tone === "error" && "text-destructive"
+        )}
+      >
+        {message}
+      </p>
       {action ? (
         <button
           type="button"
           onClick={action.onClick}
-          className="-my-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-sm font-medium text-foreground underline-offset-2 transition-colors hover:bg-foreground/5 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="-my-0.5 shrink-0 rounded-full bg-foreground/10 px-2.5 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {action.label}
         </button>

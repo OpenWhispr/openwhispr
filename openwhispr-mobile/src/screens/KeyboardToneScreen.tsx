@@ -5,9 +5,11 @@ import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/store/useConfigStore';
+import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { KEYBOARD_TONES, DEFAULT_KEYBOARD_TONE, isToneApplicable } from '@/lib/keyboardTone';
 import { setKeyboardTone } from '@/lib/keyboardToneSync';
+import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { safeHaptics } from '@/lib/utils';
 import type { KeyboardTone } from '@/types';
 
@@ -17,6 +19,14 @@ export default function KeyboardToneScreen() {
 
   const selected: KeyboardTone = config?.keyboardTone ?? DEFAULT_KEYBOARD_TONE;
   const applicable = isToneApplicable(activeMode, config?.cleanupEnabled);
+  const hasCustomPrompt = useCustomPromptsStore(
+    (state) => resolveCustomPrompt(state.customPrompts.cleanup) !== undefined,
+  );
+  const notice = !applicable
+    ? 'Tone requires Cloud mode with Text Cleanup turned on. Your choice is saved.'
+    : hasCustomPrompt
+      ? "You're using a custom cleanup prompt, so tone isn't applied to your dictations. Your choice is saved and will apply if you reset the prompt to the default."
+      : null;
 
   const onSelect = useCallback((tone: KeyboardTone): void => {
     safeHaptics('selection');
@@ -33,13 +43,10 @@ export default function KeyboardToneScreen() {
           </Text>
         </View>
 
-        {!applicable ? (
+        {notice ? (
           <View className="mx-4 mb-3" style={{ borderCurve: 'continuous' }}>
             <View className="rounded-[14px] border border-separator bg-secondarySystemGroupedBackground px-4 py-3">
-              <Text className="text-[13px] text-secondaryLabel">
-                Tone requires Cloud mode with Text Cleanup turned on. Your choice is saved and will
-                apply once both are active.
-              </Text>
+              <Text className="text-[13px] text-secondaryLabel">{notice}</Text>
             </View>
           </View>
         ) : null}

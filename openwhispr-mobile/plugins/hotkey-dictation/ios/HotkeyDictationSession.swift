@@ -60,6 +60,7 @@ final class HotkeyDictationSession {
     let startedAt = Self.nowMs()
     let jobId = "\(startedAt)-\(UUID().uuidString)"
     defaults.set("0", forKey: HotkeyKeys.stopRequested)
+    defaults.removeObject(forKey: "keyboard_cancel_requested")
     defaults.removeObject(forKey: HotkeyKeys.stopRequestedAtMs)
     defaults.set("0", forKey: HotkeyKeys.recordingActive)
     defaults.removeObject(forKey: HotkeyKeys.audioLevel)
