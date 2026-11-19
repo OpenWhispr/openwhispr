@@ -52,14 +52,20 @@ const WAYLAND_CLIPBOARD_REASON_KEYS = {
 const DEMO_AUDIO_LEVEL_INTERVAL_MS = 80;
 
 // Fetches the STT config for whoever is signed in now. An answer that arrives
-// after invalidateSttConfig (an account change) is the previous account's, so
-// it is dropped. Resolves true when the config was installed.
+// after invalidateSttConfig (an auth change, or a FEATURE_NOT_ENABLED refusal)
+// may be out of date, so it is dropped. Resolves true when the config was
+// installed; a failed fetch is logged and resolves false.
 async function loadSttConfig(manager) {
   const generation = manager.sttConfigGeneration;
-  const config = await window.electronAPI.getSttConfig?.();
-  if (!config?.success || manager.sttConfigGeneration !== generation) return false;
-  manager.setSttConfig(config);
-  return true;
+  try {
+    const config = await window.electronAPI.getSttConfig?.();
+    if (!config?.success || manager.sttConfigGeneration !== generation) return false;
+    manager.setSttConfig(config);
+    return true;
+  } catch (error) {
+    logger.warn("STT config fetch failed", { error: error?.message });
+    return false;
+  }
 }
 
 export const useAudioRecording = (toast, options = {}) => {
@@ -299,9 +305,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // refreshed in the background and this recording keeps the old decision.
         if (audioManagerRef.current.isSttConfigStale()) {
           const hadConfig = Boolean(audioManagerRef.current.sttConfig);
-          const configFetch = loadSttConfig(audioManagerRef.current).catch((error) => {
-            logger.warn("STT config fetch failed", { error: error?.message });
-          });
+          const configFetch = loadSttConfig(audioManagerRef.current);
           if (!hadConfig && needsSttConfigBeforeStart(getSettings())) {
             await configFetch;
           }
@@ -1166,24 +1170,21 @@ export const useAudioRecording = (toast, options = {}) => {
     });
     const loadAndWarmSttConfig = (warmOptions) => {
       const manager = audioManagerRef.current;
-      loadSttConfig(manager)
-        .then((installed) => {
-          // A warm redials the stream, so it waits for an idle manager rather
-          // than retiring a dictation's live session.
-          if (
-            installed &&
-            audioManagerRef.current === manager &&
-            canStartDictation(manager.getState()) &&
-            !startLockRef.current &&
-            !manager.getState().isPreparing &&
-            manager.shouldUseStreaming()
-          ) {
-            manager.warmupStreamingConnection(warmOptions);
-          }
-        })
-        .catch((error) => {
-          logger.warn("STT config fetch failed", { error: error?.message });
-        });
+      loadSttConfig(manager).then((installed) => {
+        // A warm redials the stream, so it is skipped while a dictation runs or
+        // starts; the warm after each recording covers it.
+        const state = manager.getState();
+        if (
+          installed &&
+          audioManagerRef.current === manager &&
+          canStartDictation(state) &&
+          !startLockRef.current &&
+          !state.isPreparing &&
+          manager.shouldUseStreaming()
+        ) {
+          manager.warmupStreamingConnection(warmOptions);
+        }
+      });
     };
     loadAndWarmSttConfig();
     // The config is per account (the Orukeet rollout and its Gemma pipeline pick

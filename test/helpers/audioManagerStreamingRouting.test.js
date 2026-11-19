@@ -370,7 +370,7 @@ test("the STT config goes stale after fifteen minutes and immediately when inval
   manager.invalidateSttConfig();
   assert.equal(manager.sttConfig, null);
   assert.equal(manager.isSttConfigStale(fetchedAt), true);
-  // A fetch issued before the invalidation reads the old generation and is dropped.
+  // Invalidating also bumps the generation a fetch compares against.
   assert.equal(manager.sttConfigGeneration, generation + 1);
 });
 

@@ -123,9 +123,7 @@ test("a recording start refreshes a stale STT config in the background", async (
   assert.notEqual(manager().sttConfig, configBefore);
 });
 
-// The config is per account (the Orukeet rollout and its Gemma pipeline pick
-// accounts), so an account switch must not keep the previous account's copy
-// for the rest of its TTL.
+// An account change refetches the config, drops a late answer and warms only when idle.
 const ACCOUNT_SWITCH_MANAGER_SOURCE = `
 export default class FakeAudioManager {
   constructor() {
