@@ -218,7 +218,7 @@ export function Tips() {
           </View>
         ))}
       </View>
-      <TipSheet tip={TIPS[shown]} visible={open !== null} onClose={close} />
+      <TipSheet key={shown} tip={TIPS[shown]} visible={open !== null} onClose={close} />
     </View>
   );
 }
