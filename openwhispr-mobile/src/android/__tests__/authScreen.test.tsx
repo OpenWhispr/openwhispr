@@ -58,6 +58,9 @@ jest.mock('@/lib/authClient.android', () => ({
 }));
 const mockVerificationStatus = jest.fn();
 const mockVerifyToken = jest.fn();
+jest.mock('@/lib/sessionFetch.android', () => ({
+  sessionFetch: (...args: unknown[]) => mockVerifyToken(...args),
+}));
 jest.mock('@/lib/apiClient', () => {
   class ApiError extends Error {
     status: number;
@@ -70,6 +73,8 @@ jest.mock('@/lib/apiClient', () => {
   }
   return {
     ApiError,
+    BASE_URL: 'https://api.test',
+    getClientVersionHeader: () => ({}),
     api: {
       get: (...args: unknown[]) => mockVerificationStatus(...args),
       post: (...args: unknown[]) => mockVerifyToken(...args),
@@ -299,32 +304,58 @@ describe('Android verify email (section 6)', () => {
 });
 
 describe('Android verify link screen (6.5, 6.6)', () => {
-  const { ApiError } = jest.requireMock('@/lib/apiClient') as {
-    ApiError: new (message: string, status: number, code?: string) => Error;
-  };
+  const jwtFor = (email: string) =>
+    `h.${Buffer.from(JSON.stringify({ email })).toString('base64url')}.s`;
   const signedIn = { id: 'u', email: 'new@example.com', isAnonymous: false, emailVerified: false };
+  const answer = (status: number) => ({ ok: status === 200, status });
 
-  it('verifies the link in place and continues as the verified account', async () => {
+  it('verifies the link without the app session and continues as that account', async () => {
     mockAuth.user = signedIn;
-    mockVerifyToken.mockResolvedValue({ status: true });
+    mockVerifyToken.mockResolvedValue(answer(200));
     const onContinue = jest.fn();
+    const token = jwtFor('new@example.com');
     const view = render(
-      <VerifyLinkScreen token="tok" onContinue={onContinue} onSignIn={jest.fn()} />,
+      <VerifyLinkScreen token={token} onContinue={onContinue} onSignIn={jest.fn()} />,
     );
     await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy());
-    expect(mockVerifyToken).toHaveBeenCalledWith('/api/auth/verify-email', { token: 'tok' });
+    const [url, init] = mockVerifyToken.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.test/api/auth/verify-email');
+    expect(JSON.parse(init.body as string)).toEqual({ token });
+    expect((init.headers as Record<string, string>).Cookie).toBeUndefined();
     fireEvent.press(view.getByText('Continue'));
     expect(mockAuth.user?.emailVerified).toBe(true);
     expect(onContinue).toHaveBeenCalled();
   });
 
+  it('never touches a phone signed in as another account', async () => {
+    mockAuth.user = { ...signedIn, email: 'someone@example.com' };
+    mockVerifyToken.mockResolvedValue(answer(200));
+    const onSignIn = jest.fn();
+    const view = render(
+      <VerifyLinkScreen
+        token={jwtFor('new@example.com')}
+        onContinue={jest.fn()}
+        onSignIn={onSignIn}
+      />,
+    );
+    await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy());
+    expect(view.getByText('Your email is verified. Sign in to continue.')).toBeTruthy();
+    fireEvent.press(view.getByText('Sign in'));
+    expect(onSignIn).toHaveBeenCalled();
+    expect(mockAuth.user?.emailVerified).toBe(false);
+  });
+
   it('shows This link has expired, and Send a new link goes to Verify your email', async () => {
     mockAuth.user = signedIn;
-    mockVerifyToken.mockRejectedValue(new ApiError('expired', 401, 'TOKEN_EXPIRED'));
+    mockVerifyToken.mockResolvedValue(answer(401));
     mockVerificationStatus.mockResolvedValue({ verified: false });
     mockRequestVerification.mockResolvedValue({ status: 200 });
     const view = render(
-      <VerifyLinkScreen token="old" onContinue={jest.fn()} onSignIn={jest.fn()} />,
+      <VerifyLinkScreen
+        token={jwtFor('new@example.com')}
+        onContinue={jest.fn()}
+        onSignIn={jest.fn()}
+      />,
     );
     await waitFor(() => expect(view.getByText('This link has expired')).toBeTruthy());
     expect(view.getByDisplayValue('new@example.com')).toBeTruthy();
@@ -336,10 +367,14 @@ describe('Android verify link screen (6.5, 6.6)', () => {
 
   it('skips the expired screen for an account that is verified already', async () => {
     mockAuth.user = signedIn;
-    mockVerifyToken.mockRejectedValue(new ApiError('used', 401, 'INVALID_TOKEN'));
+    mockVerifyToken.mockResolvedValue(answer(401));
     mockVerificationStatus.mockResolvedValue({ verified: true });
     const view = render(
-      <VerifyLinkScreen token="used" onContinue={jest.fn()} onSignIn={jest.fn()} />,
+      <VerifyLinkScreen
+        token={jwtFor('new@example.com')}
+        onContinue={jest.fn()}
+        onSignIn={jest.fn()}
+      />,
     );
     await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy());
   });

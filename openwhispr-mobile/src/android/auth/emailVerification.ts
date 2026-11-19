@@ -31,18 +31,40 @@ export type VerifyLinkOutcome = 'verified' | 'invalid' | 'network';
  * is 'invalid' (6.6); an account already verified counts as verified.
  */
 export async function verifyEmailToken(token: string): Promise<VerifyLinkOutcome> {
-  const { api, ApiError } = require('@/lib/apiClient') as typeof import('@/lib/apiClient');
+  const { BASE_URL, getClientVersionHeader } =
+    require('@/lib/apiClient') as typeof import('@/lib/apiClient');
+  const { sessionFetch } =
+    require('@/lib/sessionFetch.android') as typeof import('@/lib/sessionFetch.android');
   try {
-    await api.post('/api/auth/verify-email', { token });
-    return 'verified';
-  } catch (error) {
-    if (
-      error instanceof ApiError &&
-      error.status >= 400 &&
-      error.status < 500 &&
-      error.status !== 429
-    )
-      return 'invalid';
+    // Without the app's session, and with cookies omitted both ways: the API signs the link's
+    // account in when the caller isn't it, which would silently switch a phone signed in as
+    // someone else. VerifyLinkScreen marks the app's own account verified, and only when the
+    // link is for that account.
+    const response = await sessionFetch(`${BASE_URL}/api/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getClientVersionHeader() },
+      body: JSON.stringify({ token }),
+    });
+    if (response.ok) return 'verified';
+    return response.status >= 400 && response.status < 500 && response.status !== 429
+      ? 'invalid'
+      : 'network';
+  } catch {
     return 'network';
+  }
+}
+
+/** The address a verify link is for, read from its token (a JWT; no secret needed to read it). */
+export function tokenEmail(token: string | undefined): string | null {
+  try {
+    const payload = token?.split('.')[1];
+    if (!payload) return null;
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(
+      globalThis.atob(base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')),
+    );
+    return typeof json?.email === 'string' ? json.email.toLowerCase() : null;
+  } catch {
+    return null;
   }
 }

@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { ForgotPassword } from './ForgotPassword';
 import { VerifyEmail } from './VerifyEmail';
 import { AuthBackground, AuthHeader, AuthLine, AuthTitle, WhiteButton, authLayout } from './look';
-import { readVerified, verifyEmailToken } from './emailVerification';
+import { readVerified, tokenEmail, verifyEmailToken } from './emailVerification';
 import { requestVerificationEmail } from '@/lib/authClient.android';
 import { useAuthT } from './strings';
 
@@ -31,7 +31,11 @@ export function VerifyLinkScreen({
   const t = useAuthT();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
-  const signedIn = !!user && !user.isAnonymous;
+  // Signed in as the account the link is for. Someone signed in as another account (or
+  // signed out) is told to sign in; the phone's session is never switched.
+  const linkEmail = tokenEmail(token);
+  const signedIn =
+    !!user && !user.isAnonymous && !!linkEmail && user.email.toLowerCase() === linkEmail;
   const [stage, setStage] = useState<Stage>('checking');
   const [sentTo, setSentTo] = useState('');
   const started = useRef(false);
@@ -84,7 +88,7 @@ export function VerifyLinkScreen({
   } else {
     body = (
       <ForgotPassword
-        initialEmail={signedIn ? user.email : ''}
+        initialEmail={signedIn ? user.email : (linkEmail ?? '')}
         title={t('linkExpiredTitle')}
         body={t('verifyExpiredBody')}
         sendLabel={t('sendNewLink')}
