@@ -57,9 +57,25 @@ jest.mock('@/lib/authClient.android', () => ({
   requestVerificationEmail: (...args: unknown[]) => mockRequestVerification(...args),
 }));
 const mockVerificationStatus = jest.fn();
-jest.mock('@/lib/apiClient', () => ({
-  api: { get: (...args: unknown[]) => mockVerificationStatus(...args) },
-}));
+const mockVerifyToken = jest.fn();
+jest.mock('@/lib/apiClient', () => {
+  class ApiError extends Error {
+    status: number;
+    code?: string;
+    constructor(message: string, mockStatus: number, mockCode?: string) {
+      super(message);
+      this.status = mockStatus;
+      this.code = mockCode;
+    }
+  }
+  return {
+    ApiError,
+    api: {
+      get: (...args: unknown[]) => mockVerificationStatus(...args),
+      post: (...args: unknown[]) => mockVerifyToken(...args),
+    },
+  };
+});
 const mockToast = jest.fn();
 jest.mock('@/android/settings/kit', () => ({
   showToast: (...args: unknown[]) => mockToast(...args),
@@ -95,6 +111,7 @@ jest.mock('../../../modules/android-dictation/src', () => ({
 import AuthScreen from '@/screens/AuthScreen.android';
 import { ResetPasswordScreen } from '../auth/ResetPasswordScreen';
 import { handleAuthBack } from '../auth/backPress';
+import { VerifyLinkScreen } from '../auth/VerifyLinkScreen';
 
 beforeEach(() => {
   store.clear();
@@ -278,6 +295,53 @@ describe('Android verify email (section 6)', () => {
     await act(async () => fireEvent.press(view.getByText('Use another account')));
     expect(mockAuth.signOut).toHaveBeenCalled();
     expect(view.getByText('Privacy-first\nVoice-to-text AI')).toBeTruthy();
+  });
+});
+
+describe('Android verify link screen (6.5, 6.6)', () => {
+  const { ApiError } = jest.requireMock('@/lib/apiClient') as {
+    ApiError: new (message: string, status: number, code?: string) => Error;
+  };
+  const signedIn = { id: 'u', email: 'new@example.com', isAnonymous: false, emailVerified: false };
+
+  it('verifies the link in place and continues as the verified account', async () => {
+    mockAuth.user = signedIn;
+    mockVerifyToken.mockResolvedValue({ status: true });
+    const onContinue = jest.fn();
+    const view = render(
+      <VerifyLinkScreen token="tok" onContinue={onContinue} onSignIn={jest.fn()} />,
+    );
+    await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy());
+    expect(mockVerifyToken).toHaveBeenCalledWith('/api/auth/verify-email', { token: 'tok' });
+    fireEvent.press(view.getByText('Continue'));
+    expect(mockAuth.user?.emailVerified).toBe(true);
+    expect(onContinue).toHaveBeenCalled();
+  });
+
+  it('shows This link has expired, and Send a new link goes to Verify your email', async () => {
+    mockAuth.user = signedIn;
+    mockVerifyToken.mockRejectedValue(new ApiError('expired', 401, 'TOKEN_EXPIRED'));
+    mockVerificationStatus.mockResolvedValue({ verified: false });
+    mockRequestVerification.mockResolvedValue({ status: 200 });
+    const view = render(
+      <VerifyLinkScreen token="old" onContinue={jest.fn()} onSignIn={jest.fn()} />,
+    );
+    await waitFor(() => expect(view.getByText('This link has expired')).toBeTruthy());
+    expect(view.getByDisplayValue('new@example.com')).toBeTruthy();
+    await act(async () => fireEvent.press(view.getByText('Send a new link')));
+    expect(mockRequestVerification).toHaveBeenCalledWith('new@example.com');
+    expect(view.getByText('Verify your email')).toBeTruthy();
+    expect(view.getByText('Resend in 1:00')).toBeTruthy();
+  });
+
+  it('skips the expired screen for an account that is verified already', async () => {
+    mockAuth.user = signedIn;
+    mockVerifyToken.mockRejectedValue(new ApiError('used', 401, 'INVALID_TOKEN'));
+    mockVerificationStatus.mockResolvedValue({ verified: true });
+    const view = render(
+      <VerifyLinkScreen token="used" onContinue={jest.fn()} onSignIn={jest.fn()} />,
+    );
+    await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy());
   });
 });
 

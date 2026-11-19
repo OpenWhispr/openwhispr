@@ -22,3 +22,27 @@ export async function readVerified(): Promise<boolean | null> {
     return null;
   }
 }
+
+export type VerifyLinkOutcome = 'verified' | 'invalid' | 'network';
+
+/**
+ * Verifies the token from the email's link (openwhispr.com/android-verify-email?token=…) through
+ * the API's POST /api/auth/verify-email, as the website does. An expired, used or mistyped link
+ * is 'invalid' (6.6); an account already verified counts as verified.
+ */
+export async function verifyEmailToken(token: string): Promise<VerifyLinkOutcome> {
+  const { api, ApiError } = require('@/lib/apiClient') as typeof import('@/lib/apiClient');
+  try {
+    await api.post('/api/auth/verify-email', { token });
+    return 'verified';
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.status >= 400 &&
+      error.status < 500 &&
+      error.status !== 429
+    )
+      return 'invalid';
+    return 'network';
+  }
+}

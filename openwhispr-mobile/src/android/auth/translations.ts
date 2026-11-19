@@ -94,6 +94,10 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
       'Esperando a que toques el enlace…  ¿No te llega? Revisa el spam o envíalo de nuevo.',
     verifiedTitle: 'Correo verificado',
     verifiedBody: 'Has iniciado sesión como <b>{{email}}</b>.',
+    verifiedSignIn: 'Tu correo está verificado. Inicia sesión para continuar.',
+    verifying: 'Verificando tu correo…',
+    verifyExpiredBody:
+      'Los enlaces de verificación funcionan una vez, durante 24 horas. Pide uno nuevo y abre el correo más reciente.',
   },
   fr: {
     back: 'Retour',
@@ -190,6 +194,10 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifyHint: 'En attente du lien…  Rien reçu ? Vérifiez les spams ou renvoyez-le.',
     verifiedTitle: 'E-mail vérifié',
     verifiedBody: 'Vous êtes connecté en tant que <b>{{email}}</b>.',
+    verifiedSignIn: 'Votre e-mail est vérifié. Connectez-vous pour continuer.',
+    verifying: 'Vérification de votre e-mail…',
+    verifyExpiredBody:
+      'Les liens de vérification ne servent qu’une fois, pendant 24 heures. Demandez-en un nouveau et ouvrez l’e-mail le plus récent.',
   },
   de: {
     back: 'Zurück',
@@ -285,6 +293,10 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
       'Wir warten, bis du auf den Link tippst…  Nichts bekommen? Sieh im Spam nach oder sende ihn erneut.',
     verifiedTitle: 'E-Mail bestätigt',
     verifiedBody: 'Du bist als <b>{{email}}</b> angemeldet.',
+    verifiedSignIn: 'Deine E-Mail ist bestätigt. Melde dich an, um weiterzumachen.',
+    verifying: 'Deine E-Mail wird bestätigt…',
+    verifyExpiredBody:
+      'Bestätigungslinks funktionieren einmal und 24 Stunden lang. Fordere einen neuen an und öffne die neueste E-Mail.',
   },
   pt: {
     back: 'Voltar',
@@ -377,6 +389,10 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifyHint: 'Esperando você tocar no link…  Não chegou? Veja o spam ou envie de novo.',
     verifiedTitle: 'E-mail confirmado',
     verifiedBody: 'Você entrou como <b>{{email}}</b>.',
+    verifiedSignIn: 'Seu e-mail foi confirmado. Entre para continuar.',
+    verifying: 'Confirmando seu e-mail…',
+    verifyExpiredBody:
+      'Os links de confirmação funcionam uma vez, por 24 horas. Peça um novo e abra o e-mail mais recente.',
   },
   it: {
     back: 'Indietro',
@@ -470,6 +486,10 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
       'In attesa che tocchi il link…  Non è arrivato? Controlla lo spam o invialo di nuovo.',
     verifiedTitle: 'Email verificata',
     verifiedBody: 'Hai effettuato l’accesso come <b>{{email}}</b>.',
+    verifiedSignIn: 'La tua email è verificata. Accedi per continuare.',
+    verifying: 'Verifica dell’email…',
+    verifyExpiredBody:
+      'I link di verifica funzionano una volta, per 24 ore. Chiedine uno nuovo e apri l’email più recente.',
   },
   ru: {
     back: 'Назад',
@@ -561,6 +581,10 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifyHint: 'Ждём, пока вы нажмёте ссылку…  Не пришло? Проверьте спам или отправьте ещё раз.',
     verifiedTitle: 'Почта подтверждена',
     verifiedBody: 'Вы вошли как <b>{{email}}</b>.',
+    verifiedSignIn: 'Почта подтверждена. Войдите, чтобы продолжить.',
+    verifying: 'Подтверждаем почту…',
+    verifyExpiredBody:
+      'Ссылка подтверждения работает один раз и 24 часа. Запросите новую и откройте самое новое письмо.',
   },
   'zh-CN': {
     back: '返回',
@@ -646,6 +670,9 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifyHint: '正在等待你点击链接…  没收到？请查看垃圾邮件，或重新发送。',
     verifiedTitle: '邮箱已验证',
     verifiedBody: '你已登录为 <b>{{email}}</b>。',
+    verifiedSignIn: '你的邮箱已验证。请登录以继续。',
+    verifying: '正在验证你的邮箱…',
+    verifyExpiredBody: '验证链接只能用一次，24 小时内有效。请重新发送，并打开最新的邮件。',
   },
   'zh-TW': {
     back: '返回',
@@ -731,6 +758,9 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifyHint: '正在等你點連結…  沒收到？請查看垃圾郵件，或重新傳送。',
     verifiedTitle: '電子郵件已驗證',
     verifiedBody: '你已登入為 <b>{{email}}</b>。',
+    verifiedSignIn: '你的電子郵件已驗證。請登入以繼續。',
+    verifying: '正在驗證你的電子郵件…',
+    verifyExpiredBody: '驗證連結只能用一次，24 小時內有效。請重新傳送，並開啟最新的郵件。',
   },
   ja: {
     back: '戻る',
@@ -821,6 +851,10 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
       'リンクのタップを待っています…  届きませんか？迷惑メールを確認するか、もう一度送信してください。',
     verifiedTitle: 'メールアドレスを確認しました',
     verifiedBody: '<b>{{email}}</b> としてサインインしています。',
+    verifiedSignIn: 'メールアドレスを確認しました。続けるにはサインインしてください。',
+    verifying: 'メールアドレスを確認しています…',
+    verifyExpiredBody:
+      '確認リンクは 1 回だけ、24 時間有効です。新しいリンクを送って、最新のメールを開いてください。',
   },
   ar: {
     back: 'رجوع',
@@ -911,5 +945,9 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
       'بانتظار أن تضغط على الرابط…  لم يصلك؟ تحقق من البريد غير المرغوب فيه، أو أرسله مرة أخرى.',
     verifiedTitle: 'تم تأكيد البريد الإلكتروني',
     verifiedBody: 'سجّلت الدخول باسم <b>{{email}}</b>.',
+    verifiedSignIn: 'تم تأكيد بريدك الإلكتروني. سجّل الدخول للمتابعة.',
+    verifying: 'جارٍ تأكيد بريدك الإلكتروني…',
+    verifyExpiredBody:
+      'تعمل روابط التأكيد مرة واحدة لمدة 24 ساعة. اطلب رابطًا جديدًا وافتح أحدث رسالة.',
   },
 };

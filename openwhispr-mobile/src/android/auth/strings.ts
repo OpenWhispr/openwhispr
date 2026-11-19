@@ -92,6 +92,10 @@ export const authEnglish = {
   verifyHint: 'Waiting for you to tap the link…  Didn’t get it? Check spam, or send it again.',
   verifiedTitle: 'Email verified',
   verifiedBody: 'You’re signed in as <b>{{email}}</b>.',
+  verifiedSignIn: 'Your email is verified. Sign in to continue.',
+  verifying: 'Verifying your email…',
+  verifyExpiredBody:
+    'Verification links work once, for 24 hours. Send a new one and open the newest email.',
 };
 
 export type AuthKey = keyof typeof authEnglish;
