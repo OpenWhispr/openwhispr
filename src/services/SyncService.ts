@@ -224,6 +224,18 @@ function withSentParent(folder: FolderItem, parentFolderId: string | null): Fold
   return { ...folder, parent_folder_id: parentFolderId === null ? null : folder.parent_folder_id };
 }
 
+// A Private subfolder takes its parent's placement, so its push leaves the
+// placement out and the server inherits it. Named, it could differ from the
+// parent's: the server reads an explicit null as the default workspace, a
+// parent backed up before placement is unassigned there, and a placement other
+// than the parent's is refused (invalid_parent_folder). A team row keeps its
+// explicit null, which says it has no Private placement at all.
+function folderPushScope(scope: PushScopeFields, parentFolderId: string | null): PushScopeFields {
+  if (!parentFolderId || scope.space_id || !("private_workspace_id" in scope)) return scope;
+  const { private_workspace_id: _placement, ...inherited } = scope;
+  return inherited;
+}
+
 // What a folder's server row holds after a push of it landed, but its parent.
 // Identity is left out: a create adopts the cloud id (and may adopt a client id).
 function folderPushFingerprint(folder: FolderItem): string {
@@ -1684,7 +1696,7 @@ export class SyncService {
             name: folder.name,
             sort_order: folder.sort_order,
             parent_folder_id: parentFolderId,
-            ...scope,
+            ...folderPushScope(scope, parentFolderId),
           },
           authGeneration
         );
@@ -1814,7 +1826,7 @@ export class SyncService {
         is_default: !!folder.is_default,
         sort_order: folder.sort_order,
         parent_folder_id: parentFolderId,
-        ...scope,
+        ...folderPushScope(scope, parentFolderId),
       },
       authGeneration
     );
@@ -3411,7 +3423,7 @@ export class SyncService {
             name: folder.name,
             sort_order: folder.sort_order,
             parent_folder_id: parentFolderId,
-            ...scope,
+            ...folderPushScope(scope, parentFolderId),
           },
           authGeneration
         );
@@ -3460,7 +3472,7 @@ export class SyncService {
             is_default: !!folder.is_default,
             sort_order: folder.sort_order,
             parent_folder_id: parentFolderId,
-            ...scope,
+            ...folderPushScope(scope, parentFolderId),
           })),
           authGeneration
         );

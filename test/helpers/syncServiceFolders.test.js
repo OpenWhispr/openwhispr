@@ -1154,6 +1154,66 @@ test("a batch create's refused rows settle as a single create's would", async (t
   assert.equal(q1.sync_status, "pending");
 });
 
+for (const bound of [false, true]) {
+  test(`a subfolder in ${bound ? "a bound" : "the pending"} default Private takes its parent's placement`, async (t) => {
+    const ctx = await setupPersonal(t, {
+      privateWorkspacePlacement: true,
+      subfolderPlacement: true,
+      defaultWorkspaceId: "workspace-default",
+    });
+    if (!ctx) return;
+    const { db, cloud } = ctx;
+    if (bound) {
+      db.setActiveWorkspaceScope({
+        activeWorkspaceId: "workspace-default",
+        defaultWorkspaceId: "workspace-default",
+      });
+      db.bindDefaultPrivateSpace("workspace-default");
+    }
+    // A parent backed up before placement, so unplaced on the server.
+    const clients = db.createFolder("Clients").folder;
+    const cloudClients = cloud.seedFolder({
+      client_folder_id: clients.client_folder_id,
+      name: "Clients",
+      is_default: false,
+      sort_order: 1,
+      private_workspace_id: null,
+    });
+    db.markFolderSynced(clients.id, cloudClients.id);
+    const quarter = db.createFolder("Q1", null, clients.id).folder;
+    const moved = db.createFolder("Q2").folder;
+    db.markFolderSynced(
+      moved.id,
+      cloud.seedFolder({
+        client_folder_id: moved.client_folder_id,
+        name: "Q2",
+        is_default: false,
+        sort_order: 1,
+        private_workspace_id: null,
+      }).id
+    );
+    db.setFolderParent(moved.id, clients.id);
+
+    await (await newSyncService(t)).syncAll(true);
+
+    const sent = [
+      ...cloud.logFor("/api/folders/batch-create").flatMap((call) => call.body.folders),
+      ...cloud.logFor("/api/folders/create").map((call) => call.body),
+      ...cloud.logFor("/api/folders/update").map((call) => call.body),
+    ].filter((body) => body.parent_folder_id);
+    assert.ok(sent.length >= 2);
+    for (const body of sent) {
+      assert.ok(!("private_workspace_id" in body), "the server inherits the parent's");
+    }
+    for (const folder of [quarter, moved]) {
+      const row = folderByClientId(db, folder.client_folder_id);
+      assert.equal(row.parent_folder_id, clients.id, `${folder.name} stays nested`);
+      assert.equal(row.sync_status, "synced");
+      assert.equal(cloud.folder(row.cloud_id).parent_folder_id, cloudClients.id);
+    }
+  });
+}
+
 test("a subfolder still waits for a parent whose push failed for now", async (t) => {
   const ctx = await setupPersonal(t);
   if (!ctx) return;

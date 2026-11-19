@@ -33,6 +33,10 @@
 // one elsewhere in the account's personal folders (a legacy unplaced one
 // included) answers 409 folder_name_taken with no winner; a batch create
 // returns such refusals per row (`refused`) and creates the rest.
+// `subfolderPlacement` models a subfolder's placement: one left out takes its
+// parent's, and one named (null being the default workspace) that isn't the
+// parent's answers 400 invalid_parent_folder. An unplaced parent counts as the
+// default only when the subfolder leaves the placement out.
 // `userId` models one account's note ownership and separates its cloud ids.
 // `adoptDefaultFolders` models the server returning an existing personal
 // default when another device creates the same name in the same workspace.
@@ -139,6 +143,7 @@ function createFakeCloud(config = {}) {
     userId: null,
     adoptDefaultFolders: false,
     folderNamesPerParent: false,
+    subfolderPlacement: false,
     revisionGuard: false,
     serverDate: false,
     ...config,
@@ -284,7 +289,23 @@ function createFakeCloud(config = {}) {
     throw new HttpError(400, "Folder not found");
   }
 
+  // As lib/folders-service.ts checks a subfolder's parent and placement.
+  function placeSubfolder(input) {
+    if (!cfg.subfolderPlacement || !input.parent_folder_id || input.space_id) return input;
+    const parent = folders.get(input.parent_folder_id);
+    if (!parent || parent.deleted_at) return input;
+    if (!("private_workspace_id" in input)) {
+      return { ...input, private_workspace_id: parent.private_workspace_id ?? null };
+    }
+    const named = input.private_workspace_id ?? cfg.defaultWorkspaceId ?? null;
+    if (!sameValue(named, parent.private_workspace_id ?? null)) {
+      throw new HttpError(400, "Invalid parent folder", "invalid_parent_folder");
+    }
+    return input;
+  }
+
   function createFolder(input) {
+    input = placeSubfolder(input);
     if (cfg.folderNamesPerParent && !input.space_id && "parent_folder_id" in input) {
       for (const row of folders.values()) {
         if (row.deleted_at || row.space_id || row.name !== input.name) continue;
@@ -670,7 +691,7 @@ function createFakeCloud(config = {}) {
       case "PATCH /api/folders/update": {
         const { id, ...updates } = body ?? {};
         const row = requireLive(folderCollection, id);
-        return applyWrite(folderCollection, row, updates);
+        return applyWrite(folderCollection, row, placeSubfolder(updates));
       }
       case "GET /api/me/spaces":
         if (spaces.size === 0 && !cfg.privateWorkspacePlacement)
