@@ -81,7 +81,7 @@ interface ReasoningModelSelectorProps {
   modelNeeds?: readonly ModelCapability[];
 }
 
-function GpuStatusBadge() {
+export function GpuStatusBadge() {
   const { t } = useTranslation();
   const [serverStatus, setServerStatus] = useState<LlamaServerStatus | null>(null);
   const [vulkanStatus, setVulkanStatus] = useState<LlamaVulkanStatus | null>(null);
@@ -90,7 +90,6 @@ function GpuStatusBadge() {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activating, setActivating] = useState(false);
-  const [activationFailed, setActivationFailed] = useState(false);
   const [dismissed, setDismissed] = useState(
     () => localStorage.getItem("llamaVulkanBannerDismissed") === "true"
   );
@@ -132,14 +131,12 @@ function GpuStatusBadge() {
 
   useEffect(() => {
     if (!activating) return;
-    if (serverStatus?.gpuAccelerated || vulkanStatus?.downloaded) {
+    if (serverStatus?.running) {
       setActivating(false);
-      setActivationFailed(false);
       return;
     }
     const timeout = setTimeout(() => {
       setActivating(false);
-      setActivationFailed(true);
     }, 10000);
     const fastPoll = setInterval(() => {
       window.electronAPI
@@ -155,7 +152,7 @@ function GpuStatusBadge() {
       clearTimeout(timeout);
       clearInterval(fastPoll);
     };
-  }, [activating, serverStatus?.gpuAccelerated, vulkanStatus?.downloaded]);
+  }, [activating, serverStatus?.running]);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -164,9 +161,10 @@ function GpuStatusBadge() {
       const result = await window.electronAPI?.downloadLlamaVulkanBinary?.();
       if (result?.success) {
         setVulkanStatus((prev) => (prev ? { ...prev, downloaded: true } : prev));
-        await window.electronAPI?.llamaGpuReset?.();
+        const reset = await window.electronAPI?.llamaGpuReset?.();
+        if (!reset?.success) throw new Error(reset?.error || t("gpu.activationFailed"));
+        setServerStatus(null);
         setActivating(true);
-        setActivationFailed(false);
       } else if (result && !result.cancelled) {
         setError(result.error || t("gpu.activationFailed"));
       }
@@ -184,9 +182,15 @@ function GpuStatusBadge() {
   };
 
   const handleRetry = async () => {
-    setActivationFailed(false);
+    setServerStatus(null);
     setActivating(true);
-    await window.electronAPI?.llamaGpuReset?.();
+    try {
+      const reset = await window.electronAPI?.llamaGpuReset?.();
+      if (!reset?.success) throw new Error(reset?.error || t("gpu.activationFailed"));
+    } catch (err) {
+      setActivating(false);
+      setError(err instanceof Error ? err.message : t("gpu.activationFailed"));
+    }
   };
 
   // State 1: macOS
@@ -250,10 +254,12 @@ function GpuStatusBadge() {
 
   // State 4: Downloaded + GPU active
   if (vulkanStatus?.downloaded) {
-    const isGpu = serverStatus?.gpuAccelerated && serverStatus?.backend === "vulkan";
+    const isGpu = serverStatus?.running && serverStatus.backend === "vulkan";
+    const usingCpu = serverStatus?.running && serverStatus.backend === "cpu";
 
-    // State 6: Activation failed
-    if (!isGpu && activationFailed) {
+    // A downloaded pack does not mean the GPU actually started. Keep the CPU
+    // fallback visible even after a restart or when Settings is opened later.
+    if (usingCpu) {
       return (
         <div className="mt-2 flex items-start justify-between gap-3 rounded-md border border-warning/40 bg-warning/5 p-2.5">
           <div className="flex min-w-0 items-start gap-2">
@@ -261,16 +267,22 @@ function GpuStatusBadge() {
             <div className="min-w-0">
               <p className="text-xs font-medium text-foreground">{t("gpu.activationFailed")}</p>
               <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-                {t("gpu.reasoningActivationFailedDescription")}
+                {t(
+                  serverStatus.gpuFallbackReason === "out_of_memory"
+                    ? "gpu.reasoningOutOfMemoryDescription"
+                    : "gpu.reasoningActivationFailedDescription"
+                )}
               </p>
-              <Button
-                type="button"
-                onClick={handleRetry}
-                size="sm"
-                className="mt-2 h-7 px-3 text-xs"
-              >
-                {t("gpu.retryActivation")}
-              </Button>
+              {serverStatus.gpuFallbackReason !== "out_of_memory" && (
+                <Button
+                  type="button"
+                  onClick={handleRetry}
+                  size="sm"
+                  className="mt-2 h-7 px-3 text-xs"
+                >
+                  {t("gpu.retryActivation")}
+                </Button>
+              )}
             </div>
           </div>
           <Button

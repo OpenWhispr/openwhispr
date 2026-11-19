@@ -4706,6 +4706,7 @@
     "activationFailed": "GPU アクセラレーションを利用できません",
     "activationFailedDescription": "OpenWhispr は CPU 文字起こしに切り替えました。",
     "reasoningActivationFailedDescription": "OpenWhispr は CPU 処理に切り替えました。",
+    "reasoningOutOfMemoryDescription": "このモデルは GPU メモリを使い切りました。OpenWhispr は CPU 処理に切り替えました。GPU を使うには、より小さいローカルモデルを選択してください。",
     "retryActivation": "GPU アクセラレーションを再試行",
     "redownloadNeeded": "GPU パックの再ダウンロードが必要です",
     "redownloadNeededDescription": "このバージョンの OpenWhispr はインストール済みの GPU パックを使用できません。再ダウンロードすると GPU アクセラレーションが再び有効になります。",

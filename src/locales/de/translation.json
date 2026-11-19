@@ -5066,6 +5066,7 @@
     "activationFailed": "GPU-Beschleunigung nicht verfügbar",
     "activationFailedDescription": "OpenWhispr verwendet die CPU-Transkription.",
     "reasoningActivationFailedDescription": "OpenWhispr verwendet die CPU-Verarbeitung.",
+    "reasoningOutOfMemoryDescription": "Dieses Modell hat den GPU-Speicher erschöpft. OpenWhispr verwendet jetzt die CPU. Wähle ein kleineres lokales Modell, um die GPU zu nutzen.",
     "retryActivation": "GPU-Beschleunigung erneut versuchen",
     "redownloadNeeded": "GPU-Paket muss erneut heruntergeladen werden",
     "redownloadNeededDescription": "Diese Version von OpenWhispr kann dein installiertes GPU-Paket nicht verwenden. Lade es erneut herunter, um die GPU-Beschleunigung wieder einzuschalten.",

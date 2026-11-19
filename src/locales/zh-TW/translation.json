@@ -4706,6 +4706,7 @@
     "activationFailed": "GPU 加速無法使用",
     "activationFailedDescription": "OpenWhispr 已切換為 CPU 轉錄。",
     "reasoningActivationFailedDescription": "OpenWhispr 已切換為 CPU 處理。",
+    "reasoningOutOfMemoryDescription": "此模型耗盡了 GPU 記憶體。OpenWhispr 已切換為 CPU 處理。請選擇較小的本機模型以使用 GPU。",
     "retryActivation": "重試 GPU 加速",
     "redownloadNeeded": "需要重新下載 GPU 加速包",
     "redownloadNeededDescription": "此版本的 OpenWhispr 無法使用已安裝的 GPU 加速包。請重新下載以重新啟用 GPU 加速。",
