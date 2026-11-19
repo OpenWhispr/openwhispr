@@ -1,4 +1,3 @@
-jest.mock('@/android/NoteRecordingControls', () => ({ NoteRecordingControls: () => null }));
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import NoteEditorScreen from '@/screens/NoteEditorScreen';

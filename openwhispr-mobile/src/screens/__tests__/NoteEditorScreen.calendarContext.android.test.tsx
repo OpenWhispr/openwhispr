@@ -30,7 +30,6 @@ jest.mock('@/hooks/useChatSendGate', () => {
         : ios.useChatSendGate(),
   };
 });
-jest.mock('@/android/NoteRecordingControls', () => ({ NoteRecordingControls: () => null }));
 import React from 'react';
 import { ProviderExecutionError } from '@/services/providers/ProviderExecutionError';
 import { Alert, Modal, Platform } from 'react-native';
@@ -1210,6 +1209,13 @@ describe('NoteEditorScreen generated titles', () => {
 });
 
 jest.mock('@/components/notes/NoteShareSheet', () => ({ NoteShareSheet: () => null }));
+jest.mock('react-native-svg', () => {
+  const { View } = require('react-native');
+  return { __esModule: true, default: View, SvgXml: View, Circle: View, Path: View, Rect: View };
+});
+jest.mock('@/hooks/useNoteSharing', () => ({
+  useNoteSharing: () => ({ hasLink: false, copyLink: jest.fn() }),
+}));
 
 it('runs signed-out note formatting through Providers without requiring a Cloud account', async () => {
   mockAuthState.user = null;

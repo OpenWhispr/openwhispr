@@ -6,6 +6,7 @@ import type { GoogleCalendarEvent } from '@/data/calendarTypes';
 import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { Sentry } from '@/lib/sentry';
+import { initialsOf } from './initials';
 
 /** The Up next card shows from an hour before a meeting until it ends (Figma L5). */
 export const UP_NEXT_LEAD_MS = 60 * 60 * 1000;
@@ -90,17 +91,6 @@ export function eventInitials(
   return { initials, more: Math.max(0, people.length - limit) };
 }
 
-export function initialsOf(nameOrEmail: string | null | undefined): string {
-  const text = (nameOrEmail ?? '')
-    .split('@')[0]
-    .replace(/[._-]+/g, ' ')
-    .trim();
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '?';
-  const first = words[0][0] ?? '';
-  const second = words.length > 1 ? (words[words.length - 1][0] ?? '') : (words[0][1] ?? '');
-  return (first + second).toUpperCase();
-}
 
 export function useStableNow(): number {
   const [now, setNow] = useState(() => Date.now());
