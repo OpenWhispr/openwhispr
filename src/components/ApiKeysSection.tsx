@@ -82,7 +82,7 @@ export default function ApiKeysSection({
 
   // Restored access reloads the list, which a blocked policy may have refused.
   useEffect(() => {
-    fetchKeys();
+    if (!listBlocked) fetchKeys();
   }, [listBlocked, fetchKeys]);
 
   useEffect(() => {

@@ -56,7 +56,7 @@ export default function IntegrationsView({
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
   const connectorAccess = useConnectorAccess();
   const apiRestriction = useApiAccessRestriction();
-  const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
+  const policyActionsAllowed = usePolicyStore(isPolicyActionAllowed);
   const readyConnectors = useConnectorStatusStore(
     (state) =>
       CONNECTOR_ROWS.filter((row) => {
