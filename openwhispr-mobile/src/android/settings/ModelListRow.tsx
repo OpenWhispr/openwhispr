@@ -73,7 +73,7 @@ function Swap({
 }
 
 /** A Material radio. Choosing springs the dot in (0 → 1.15 → 1, 150 ms); un-choosing shrinks it. */
-function Radio({ on, reduceMotion }: { on: boolean; reduceMotion: boolean }) {
+export function Radio({ on, reduceMotion }: { on: boolean; reduceMotion: boolean }) {
   const dot = useRef(new Animated.Value(on ? 1 : 0)).current;
   useEffect(() => {
     if (reduceMotion) {

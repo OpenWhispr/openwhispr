@@ -3,7 +3,6 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
-  KeyboardAvoidingView,
   Modal,
   PanResponder,
   Pressable,
@@ -20,6 +19,7 @@ import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { home, type } from '../home/kit';
 import { noOrphan, useSettingsT } from './strings';
 import { useNavigationBar, useNavigationBarCanvas } from '../navigationBar';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 
 /** Figma "Android · Settings" tokens on top of the shared Home tokens. */
 export const settings = {
@@ -54,11 +54,14 @@ export function SettingsPage({
   right,
   children,
   scroll = true,
+  edgeBack,
 }: {
   title: string;
   right?: { label: string; onPress: () => void };
   children: React.ReactNode;
   scroll?: boolean;
+  /** The desktop glass edge on the back button (hairline, top highlight, soft lift), ink chevron. */
+  edgeBack?: boolean;
 }) {
   const t = useSettingsT();
   // Gestures: edge to edge, the list scrolls under the handle. Buttons: the bar is part of the
@@ -84,18 +87,31 @@ export function SettingsPage({
             accessibilityRole="button"
             accessibilityLabel={t('back')}
             hitSlop={6}
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace('/(tabs)/(record)')
+            }
             style={({ pressed }) => ({
               width: 36,
               height: 36,
               borderRadius: 18,
-              backgroundColor: 'rgba(255,255,255,0.72)',
+              backgroundColor: edgeBack ? home.surface : 'rgba(255,255,255,0.72)',
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pressed ? 0.7 : 1,
+              ...(edgeBack && {
+                borderWidth: 1,
+                borderColor: 'rgba(0,0,0,0.06)',
+                boxShadow:
+                  'inset 0px 1px 0px rgba(255,255,255,0.7), 0px 2px 10px rgba(15,23,42,0.06)',
+              }),
             })}
           >
-            <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color={home.accent} />
+            <SystemIcon
+              name="chevron.left"
+              mdName="ChevronLeft"
+              size={22}
+              color={edgeBack ? home.text : home.accent}
+            />
           </Pressable>
         </View>
         <Text
@@ -750,74 +766,136 @@ export function SettingsToastHost() {
   );
 }
 
-/** A bottom sheet over a dimmed screen; Android back and a tap on the dim close it. */
+/**
+ * A bottom sheet over a dimmed screen; Android back and a tap on the dim close it. The dim
+ * fades in on its own while the sheet slides up, and both play out again before the sheet
+ * goes away. The keyboard pushes the sheet up by its own height, never by a guess.
+ */
 export function BottomSheet({
   visible,
   onClose,
   title,
   body,
   children,
+  onBack,
+  leading,
 }: {
   visible: boolean;
   onClose: () => void;
   title: string;
   body?: string;
   children: React.ReactNode;
+  /** A page inside the sheet (a list that slid in): a back arrow before the title returns. */
+  onBack?: () => void;
+  /** A tile before the title (a task's icon, a provider's logo). */
+  leading?: React.ReactNode;
 }) {
   const t = useSettingsT();
+  const reduceMotion = useReduceMotion();
+  const keyboard = useKeyboardHeight(visible);
+  // Stays mounted through the closing animation.
+  const [mounted, setMounted] = useState(visible);
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (visible) setMounted(true);
+    const animation = Animated.timing(progress, {
+      toValue: visible ? 1 : 0,
+      duration: reduceMotion ? 0 : visible ? 280 : 200,
+      easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished && !visible) setMounted(false);
+    });
+    return () => animation.stop();
+  }, [visible, reduceMotion, progress]);
+  if (!mounted) return null;
   return (
     <Modal
-      visible={visible}
+      visible
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+      <Animated.View
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: progress }}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('cancel')}
           onPress={onClose}
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.32)' }}
         />
-        <SafeAreaView
-          edges={['bottom']}
+      </Animated.View>
+      <View style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
+        <Animated.View
           style={{
             backgroundColor: home.canvas,
+            // The safe-area view below can't round its own corners, so this view does.
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
-            paddingHorizontal: 16,
-            paddingTop: 8,
-            paddingBottom: 16,
-            gap: 16,
+            overflow: 'hidden',
+            paddingBottom: keyboard,
+            transform: [
+              { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [600, 0] }) },
+            ],
           }}
         >
-          <View
-            style={{
-              alignSelf: 'center',
-              width: 36,
-              height: 5,
-              borderRadius: 3,
-              backgroundColor: home.borderDefault,
-            }}
-          />
-          <View style={{ gap: 6 }}>
-            <Text
-              accessibilityRole="header"
-              style={[settings.title, { fontSize: 20, lineHeight: 26 }]}
-            >
-              {title}
-            </Text>
-            {body && (
-              <Text textBreakStrategy="balanced" style={[type.subhead, { color: home.secondary }]}>
-                {noOrphan(body)}
-              </Text>
-            )}
-          </View>
-          {children}
-        </SafeAreaView>
-      </KeyboardAvoidingView>
+          <SafeAreaView
+            edges={['bottom']}
+            style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, gap: 16 }}
+          >
+            <View
+              style={{
+                alignSelf: 'center',
+                width: 36,
+                height: 5,
+                borderRadius: 3,
+                backgroundColor: home.borderDefault,
+              }}
+            />
+            <View style={{ gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: leading ? 12 : 8 }}>
+                {leading}
+                {onBack && (
+                  <Pressable
+                    cssInterop={false}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('back')}
+                    hitSlop={12}
+                    onPress={onBack}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  >
+                    <SystemIcon
+                      name="chevron.left"
+                      mdName="ChevronLeft"
+                      size={22}
+                      color={home.text}
+                    />
+                  </Pressable>
+                )}
+                <Text
+                  accessibilityRole="header"
+                  style={[settings.title, { fontSize: 20, lineHeight: 26, flexShrink: 1 }]}
+                >
+                  {title}
+                </Text>
+              </View>
+              {body && (
+                <Text
+                  textBreakStrategy="balanced"
+                  style={[type.subhead, { color: home.secondary }]}
+                >
+                  {noOrphan(body)}
+                </Text>
+              )}
+            </View>
+            {children}
+          </SafeAreaView>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }

@@ -1,11 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useConfigStore } from '@/store/useConfigStore';
 import { workflowSelection } from '@/lib/aiWorkflows';
-import { ANDROID_LOCAL_MODE_LOCKED } from '../workflowPolicy';
 import type { CloudAccess } from '@/lib/inferenceModes';
-import { providerDisplayName, type InferenceMode } from '@/lib/mobileProviders';
-import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
+import { providerDisplayName } from '@/lib/mobileProviders';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 import type { ProcessingMode, UserConfig } from '@/types';
 import { speechModelSupportsLanguages } from '../speechCapabilities';
@@ -14,14 +12,8 @@ import type { AndroidModelId } from '../models';
 import { LIVE_MODEL, meetingKey } from '../providers/liveMeeting';
 import { MODEL_ROWS, modelName, useModelsReady } from './modelCatalog';
 import type { KeyTask } from './ownKey';
+import { differsFromDefault, type ProcessingDefault } from './processingDefault';
 import type { SettingsT } from './strings';
-
-/** The mode each task follows when it has no choice of its own. */
-export const DEFAULT_MODE: Record<ProcessingMode, InferenceMode> = {
-  cloud: 'openwhispr',
-  private: 'local',
-  providers: 'providers',
-};
 
 /** The on-phone model a task uses: speech for audio, text for words. */
 export function phoneModelFor(config: UserConfig | null, task: KeyTask): AndroidModelId {
@@ -30,50 +22,29 @@ export function phoneModelFor(config: UserConfig | null, task: KeyTask): Android
     : (config?.androidTextModel ?? 'qwen-balanced');
 }
 
-/** Whether a mode can't be chosen for a task while On device is the default. */
-export function lockedOut(task: KeyTask, mode: InferenceMode, activeMode: ProcessingMode) {
-  return activeMode === 'private' && !!ANDROID_LOCAL_MODE_LOCKED[task]?.includes(mode);
-}
-
-/** What a task actually runs on, with Local Mode's locks applied. */
+/** What a task runs on: its own choice, or with none saved, what the mode gives it. */
 export function effectiveSelection(
   config: UserConfig | null,
   task: KeyTask,
   activeMode: ProcessingMode,
   cloudAccess: CloudAccess,
 ) {
-  const selection = workflowSelection(config, task, activeMode, cloudAccess);
-  if (task === 'dictation' && activeMode === 'private') return { mode: 'local' as const };
-  if (lockedOut(task, selection.mode, activeMode)) return { mode: 'local' as const };
-  return selection;
+  return workflowSelection(config, task, activeMode, cloudAccess);
 }
 
-/**
- * A task's row on Processing: where it runs, and whether that differs from the default for
- * every task ("Changed"). Dictation sets the default, so it is never changed.
- */
+/** A task's row on Processing: where it runs, and whether that differs from the Default. */
 export function taskSummary(
   t: SettingsT,
   config: UserConfig | null,
   task: KeyTask,
   activeMode: ProcessingMode,
   cloudAccess: CloudAccess,
+  defaults: ProcessingDefault,
 ): { engine: string; changed: boolean } {
   if (task === 'cleanup' && !(config?.cleanupEnabled ?? true))
     return { engine: t('offInSettings'), changed: false };
-  // In Local Mode, cleanup that wasn't set to the phone or a key is skipped.
-  if (
-    task === 'cleanup' &&
-    activeMode === 'private' &&
-    !['local', 'providers'].includes(config?.inference?.cleanup?.mode ?? '')
-  )
-    return { engine: t('cleanupSkipped'), changed: true };
   const selection = effectiveSelection(config, task, activeMode, cloudAccess);
-  const dictation = effectiveSelection(config, 'dictation', activeMode, cloudAccess);
-  const changed =
-    task !== 'dictation' &&
-    (selection.mode !== DEFAULT_MODE[activeMode] ||
-      (selection.mode === 'providers' && selection.providerId !== dictation.providerId));
+  const changed = differsFromDefault(selection, selection.mode, defaults);
   if (selection.mode === 'openwhispr') return { engine: t('cloud'), changed };
   if (selection.mode === 'local')
     return { engine: `${t('thisPhone')} · ${modelName(phoneModelFor(config, task))}`, changed };
@@ -86,11 +57,14 @@ export function taskSummary(
   };
 }
 
-/** The Meetings row: live on a key saved for meetings, else whatever the default gives. */
+/** The Meetings row: a key, on device afterwards, or OpenWhispr Cloud. */
 export function meetingSummary(
   t: SettingsT,
-  activeMode: ProcessingMode,
+  config: UserConfig | null,
+  defaults: ProcessingDefault,
 ): { engine: string; changed: boolean } {
+  const selection = config?.inference?.meeting;
+  const changed = differsFromDefault(selection, 'openwhispr', defaults);
   const key = meetingKey();
   if (key)
     return {
@@ -98,22 +72,24 @@ export function meetingSummary(
         provider: providerDisplayName(key.providerId),
         model: key.modelId || LIVE_MODEL[key.providerId],
       }),
-      changed: activeMode !== 'providers',
+      changed,
     };
   return {
-    engine: t(activeMode === 'private' ? 'meetingPhoneValue' : 'meetingCloudValue'),
-    changed: false,
+    engine: t(selection?.mode === 'local' ? 'meetingPhoneValue' : 'meetingCloudValue'),
+    changed,
   };
 }
 
 /**
- * Makes On device the default. With no speech model that can do the user's languages, the
- * download sheet opens instead (`needsModel`), and `goLocal` finishes the switch once one is ready.
+ * Puts something on the phone that needs a speech model (the On device Default, Dictation or
+ * Audio uploads). With no speech model that can do the user's languages, the download sheet
+ * opens instead (`needsModel`), and `goLocal` finishes the change once one is ready.
  */
 export function useChoosePhone(t: SettingsT) {
   const { ready, checked } = useModelsReady();
   const [needsModel, setNeedsModel] = useState(false);
   const [busy, setBusy] = useState(false);
+  const pending = useRef<(() => Promise<unknown>) | null>(null);
 
   const run = async (work: () => Promise<unknown>) => {
     if (busy) return;
@@ -127,7 +103,7 @@ export function useChoosePhone(t: SettingsT) {
     }
   };
 
-  const choosePhone = () => {
+  const choosePhone = (then: () => Promise<unknown>) => {
     // Until the phone's models are checked, a missing model can't be told from an unchecked one.
     if (!checked) return;
     const languages = getPreferredTranscriptionLanguages();
@@ -139,13 +115,14 @@ export function useChoosePhone(t: SettingsT) {
         speechModelSupportsLanguages(row.id as AndroidSpeechModelId, languages),
     ).map((row) => row.id as AndroidSpeechModelId);
     if (!usable.length) {
+      pending.current = then;
       setNeedsModel(true);
       return;
     }
     void run(async () => {
       if (!usable.includes(speechId))
         await useConfigStore.getState().updateConfig({ androidSpeechModel: usable[0] });
-      await switchWorkflowMode('dictation', 'local');
+      await then();
     });
   };
 
@@ -154,6 +131,10 @@ export function useChoosePhone(t: SettingsT) {
     run,
     needsModel,
     closeModelSheet: () => setNeedsModel(false),
-    goLocal: () => void run(() => switchWorkflowMode('dictation', 'local')),
+    goLocal: () => {
+      const then = pending.current;
+      pending.current = null;
+      if (then) void run(then);
+    },
   };
 }

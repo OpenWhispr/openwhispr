@@ -15,14 +15,19 @@ export const deepgramProvider: PlatformTranscriptionProvider = {
   id: 'deepgram',
   name: NAME,
   endpoint: 'https://api.deepgram.com/v1',
-  models: [{ id: MODEL, name: 'Nova-3' }],
+  models: [
+    { id: MODEL, name: 'Nova-3' },
+    { id: 'nova-3-medical', name: 'Nova-3 Medical' },
+    // Deepgram's pick for languages Nova-3 doesn't cover.
+    { id: 'nova-2', name: 'Nova-2' },
+  ],
   async transcribe({ apiKey, modelId, audioUri, mimeType, language, prompt, signal }) {
-    const params = new URLSearchParams({
-      model: modelId || MODEL,
-      smart_format: 'true',
-      punctuate: 'true',
-      language: languageParam(language),
-    });
+    const model = modelId || MODEL;
+    const params = new URLSearchParams({ model, smart_format: 'true', punctuate: 'true' });
+    // Nova-3 takes "multi" to detect the language; older models detect it with detect_language.
+    if (language && language !== 'auto') params.set('language', language);
+    else if (model.startsWith('nova-3')) params.set('language', 'multi');
+    else params.set('detect_language', 'true');
     for (const term of promptTerms(prompt, 100)) params.append('keyterm', term);
     const body = (await uploadFile(
       NAME,

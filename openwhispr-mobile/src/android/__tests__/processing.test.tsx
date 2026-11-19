@@ -8,6 +8,7 @@ import ProcessingScreen from '../settings/ProcessingScreen';
 import TaskScreen from '../settings/TaskScreen';
 import CleanupPromptScreen from '../settings/CleanupPromptScreen';
 import { maskKey } from '../settings/ownKey';
+import { applyDefault, leaveLocalMode, useProcessingDefault } from '../settings/processingDefault';
 import '../providers/register';
 
 const mockPush = jest.fn();
@@ -193,7 +194,12 @@ describe('Use your own key', () => {
       providerId: 'openai',
       modelId: 'gpt-4o-transcribe',
     });
-    expect(useProcessingModeStore.getState().activeMode).toBe('providers');
+    // Each task changed on its own; the app never enters Local Mode or switches mode for it.
+    expect(useConfigStore.getState().config?.inference?.dictation).toMatchObject({
+      mode: 'providers',
+      providerId: 'openai',
+    });
+    expect(useProcessingModeStore.getState().activeMode).toBe('cloud');
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -222,7 +228,7 @@ describe('Use your own key', () => {
     expect(screen.getByText('dictation')).toBeTruthy();
     expect(screen.getByText('audioUploads')).toBeTruthy();
     expect(screen.getByText('meetings')).toBeTruthy();
-    expect(screen.getByText('liveModel')).toBeTruthy();
+    expect(screen.getAllByText('nova-3')).toHaveLength(3);
     expect(screen.queryByText('textCleanup')).toBeNull();
     expect(screen.getByText('textCleanupAndNotes')).toBeTruthy();
   });
@@ -234,6 +240,21 @@ describe('Use your own key', () => {
       expect(screen.getByText(name)).toBeTruthy();
     expect(screen.queryByText('Groq')).toBeNull();
     expect(screen.queryByText('OpenRouter')).toBeNull();
+  });
+
+  it('keeps each provider’s ticks, and an accepted key, when moving between chips', async () => {
+    mockSaved['provider.deepgram'] = 'dg_abcdefghijklmnop9c1e';
+    render(<KeySheet visible onClose={jest.fn()} initialProvider="deepgram" />);
+    await act(async () => {});
+    fireEvent.press(screen.getAllByRole('checkbox', { checked: true })[0]);
+    const tickedBefore = screen.getAllByRole('checkbox', { checked: true }).length;
+    fireEvent.press(screen.getByText('Groq'));
+    await act(async () => {});
+    fireEvent.press(screen.getByText('Deepgram'));
+    await act(async () => {});
+    // The saved key is still locked in, and the untick survived.
+    expect(screen.getByText('dg_••••••••9c1e')).toBeTruthy();
+    expect(screen.getAllByRole('checkbox', { checked: true })).toHaveLength(tickedBefore);
   });
 
   it('offers OpenRouter only the text tasks', async () => {
@@ -332,7 +353,7 @@ describe('Task pages', () => {
     expect(useConfigStore.getState().config?.inference?.meeting).toMatchObject({
       mode: 'providers',
       providerId: 'assemblyai',
-      modelId: 'universal-streaming',
+      modelId: 'assemblyai-stt-3-7-realtime',
     });
   });
 });
@@ -350,5 +371,72 @@ describe('Cleanup prompt', () => {
     expect(save().props.accessibilityState.disabled).toBe(false);
     fireEvent.press(save());
     expect(mockSetPrompt).toHaveBeenCalledWith('cleanup', 'Keep it short.');
+  });
+});
+
+describe('Each task on its own (Processing v2, 18 Nov)', () => {
+  beforeEach(() => useProcessingDefault.setState({ mode: 'openwhispr' }, true));
+
+  it('puts only Dictation on the phone, leaving the other tasks and the mode alone', async () => {
+    mockParams = { task: 'dictation' };
+    useConfigStore.setState({
+      config: { inference: { upload: { mode: 'openwhispr' }, cleanup: { mode: 'openwhispr' } } },
+    } as never);
+    render(<TaskScreen />);
+    await act(async () => {});
+    await act(async () => {
+      fireEvent.press(screen.getByText('thisPhone'));
+    });
+    const inference = useConfigStore.getState().config?.inference;
+    expect(inference?.dictation).toEqual({ mode: 'local' });
+    expect(inference?.upload).toEqual({ mode: 'openwhispr' });
+    expect(inference?.cleanup).toEqual({ mode: 'openwhispr' });
+    expect(useProcessingModeStore.getState().activeMode).toBe('cloud');
+    expect(mockSwitch).not.toHaveBeenCalled();
+  });
+
+  it('the Default moves every task, and a task moved afterwards is marked Changed', async () => {
+    await applyDefault({ mode: 'local' });
+    const inference = useConfigStore.getState().config?.inference;
+    for (const task of ['dictation', 'upload', 'cleanup', 'notes', 'meeting'] as const)
+      expect(inference?.[task]).toEqual({ mode: 'local' });
+    expect(useProcessingModeStore.getState().activeMode).toBe('cloud');
+    render(<ProcessingScreen />);
+    expect(screen.queryByText('changed')).toBeNull();
+    expect(screen.getByText('allOnDevice')).toBeTruthy();
+  });
+
+  it('a key applied from the Default row becomes the Default', async () => {
+    jest.useFakeTimers();
+    global.fetch = jest.fn(async () => response(200)) as never;
+    render(<KeySheet visible onClose={jest.fn()} asDefault />);
+    await act(async () => {});
+    fireEvent.changeText(screen.getByLabelText('apiKey'), 'sk-proj-abcdefghijklmnop4f2a');
+    await act(async () => jest.advanceTimersByTime(500));
+    await act(async () => jest.advanceTimersByTime(700));
+    await act(async () => {
+      fireEvent.press(screen.getByText('useForTasks'));
+    });
+    expect(useProcessingDefault.getState()).toEqual({ mode: 'providers', providerId: 'openai' });
+    expect(useProcessingModeStore.getState().activeMode).toBe('providers');
+    jest.useRealTimers();
+  });
+
+  it('turns a leftover Local Mode into the On device Default, keeping a key saved for cleanup', async () => {
+    useConfigStore.setState({
+      config: {
+        defaultMode: 'private',
+        inference: { cleanup: { mode: 'providers', providerId: 'openai', modelId: 'gpt-6-luna' } },
+      },
+    } as never);
+    useProcessingModeStore.setState({ activeMode: 'private' });
+    await leaveLocalMode();
+    const config = useConfigStore.getState().config;
+    expect(config?.inference?.dictation).toEqual({ mode: 'local' });
+    expect(config?.inference?.meeting).toEqual({ mode: 'local' });
+    expect(config?.inference?.cleanup).toMatchObject({ mode: 'providers' });
+    expect(config?.defaultMode).toBe('cloud');
+    expect(useProcessingModeStore.getState().activeMode).toBe('cloud');
+    expect(useProcessingDefault.getState().mode).toBe('local');
   });
 });

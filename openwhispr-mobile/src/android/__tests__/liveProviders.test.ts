@@ -180,6 +180,7 @@ describe('AssemblyAI', () => {
     const received: { data: string }[] = [];
     const adapter = assemblyAiLiveSocket('tmp-token', 24000);
     expect(socket.url).toContain('token=tmp-token');
+    expect(socket.url).toContain('speech_model=assemblyai-stt-3-7-realtime');
     expect(socket.url).toContain('sample_rate=24000');
     adapter.onmessage = (event) => received.push(event);
     socket.receive({ type: 'Turn', transcript: 'hello every', end_of_turn: false });
@@ -199,7 +200,7 @@ describe('AssemblyAI', () => {
     expect(finals[0].transcript).toBe('Hello, everyone.');
   });
 
-  it('uploads, asks for a Universal transcript, and polls until it is done', async () => {
+  it('uploads, asks for an STT 3.7 transcript with Universal-2 behind it, and polls', async () => {
     jest.useFakeTimers();
     mockUpload.mockResolvedValue({
       status: 200,
@@ -217,7 +218,7 @@ describe('AssemblyAI', () => {
     })) as never;
     const result = assemblyAiProvider.transcribe({
       apiKey: 'aai-key',
-      modelId: 'universal',
+      modelId: 'assemblyai-stt-3-7',
       audioUri: 'file:///a.wav',
       language: 'en',
     });
@@ -226,7 +227,7 @@ describe('AssemblyAI', () => {
     const create = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
     expect(create).toMatchObject({
       audio_url: 'https://cdn/a',
-      speech_model: 'universal',
+      speech_models: ['assemblyai-stt-3-7', 'universal-2'],
       language_code: 'en',
     });
     jest.useRealTimers();
@@ -234,15 +235,16 @@ describe('AssemblyAI', () => {
 });
 
 describe('live meetings on a key', () => {
-  it('uses OpenWhispr Cloud with no key saved for meetings, and the phone in Local Mode', () => {
+  it('uses OpenWhispr Cloud with no key saved for meetings, and a saved key in any mode', () => {
     expect(liveMeetingDeps()).toEqual({});
     useConfigStore.setState({
       config: {
         inference: { meeting: { mode: 'providers', providerId: 'deepgram', modelId: 'nova-3' } },
       },
     } as never);
+    // Tasks are independent now: the Default (or a leftover Local Mode) doesn't hide the key.
     useProcessingModeStore.setState({ activeMode: 'private' });
-    expect(meetingKey()).toBeNull();
+    expect(meetingKey()?.providerId).toBe('deepgram');
   });
 
   it('opens a Deepgram socket with the saved key for every leg', async () => {
@@ -310,5 +312,54 @@ describe('key check for the speech providers', () => {
       state: 'connected',
     });
     expect(fetcher.mock.calls[1][0]).toBe('https://api.deepgram.com/v1/projects');
+  });
+});
+
+describe('Android model choices (researched 18 Nov 2026)', () => {
+  const { providerModels, startingModel } =
+    require('../settings/ownKey') as typeof import('../settings/ownKey');
+  const { upgradeSavedModels } =
+    require('../settings/androidModels') as typeof import('../settings/androidModels');
+  require('../providers/register');
+
+  it('starts OpenAI text on GPT-6 Luna and hides the retiring transcription models', () => {
+    expect(providerModels('openai', 'cleanup')[0]).toBe('gpt-6-luna');
+    expect(providerModels('openai', 'dictation')).not.toEqual(
+      expect.arrayContaining(['gpt-4o-transcribe']),
+    );
+    expect(providerModels('openai', 'dictation')).not.toContain('whisper-1');
+    expect(startingModel('openai', 'upload')).toBe('gpt-transcribe');
+  });
+
+  it('offers twelve current OpenRouter models, GPT-6 Luna first, and no GPT-4', () => {
+    const models = providerModels('openrouter', 'cleanup');
+    expect(models).toHaveLength(12);
+    expect(models[0]).toBe('openai/gpt-6-luna');
+    expect(models.some((id) => id.startsWith('openai/gpt-4'))).toBe(false);
+  });
+
+  it('moves saved choices off retired models, but leaves live OpenAI meetings on gpt-4o-transcribe', async () => {
+    const updateConfig = jest.fn(async (change: object) =>
+      useConfigStore.setState({
+        config: { ...useConfigStore.getState().config, ...change },
+      } as never),
+    );
+    useConfigStore.setState({
+      updateConfig,
+      config: {
+        inference: {
+          cleanup: { mode: 'providers', providerId: 'openrouter', modelId: 'openai/gpt-4.1-mini' },
+          upload: { mode: 'providers', providerId: 'assemblyai', modelId: 'universal' },
+          dictation: { mode: 'providers', providerId: 'openai', modelId: 'gpt-4o-transcribe' },
+          meeting: { mode: 'providers', providerId: 'openai', modelId: 'gpt-4o-transcribe' },
+        },
+      },
+    } as never);
+    await upgradeSavedModels();
+    const inference = useConfigStore.getState().config?.inference;
+    expect(inference?.cleanup?.modelId).toBe('openai/gpt-6-luna');
+    expect(inference?.upload?.modelId).toBe('assemblyai-stt-3-7');
+    expect(inference?.dictation?.modelId).toBe('gpt-transcribe');
+    expect(inference?.meeting?.modelId).toBe('gpt-4o-transcribe');
   });
 });

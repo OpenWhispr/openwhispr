@@ -46,6 +46,7 @@ let mockModeListener: ((state: unknown, previous: unknown) => void) | undefined;
 let mockParams = { folderId: '2' };
 
 const mockCancelDownload = jest.fn(async (_id: string) => undefined);
+jest.mock('@/android/meetingRouting', () => ({ meetingOnDevice: () => false }));
 jest.mock('@/android/providers/liveMeeting', () => ({
   liveMeetingDeps: () => ({}),
   meetingKey: () => null,

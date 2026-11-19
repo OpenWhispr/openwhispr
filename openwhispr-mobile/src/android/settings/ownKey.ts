@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useConfigStore } from '@/store/useConfigStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { workflowSaveConfig } from '@/lib/inferenceModes';
 import {
-  defaultModelId,
   getMobileProvidersForScope,
-  type InferenceSelection,
+  isTranscriptionScope,
   type MobileInferenceScope,
 } from '@/lib/mobileProviders';
 import {
@@ -16,7 +13,9 @@ import {
   subscribeProviderCredentialChanges,
 } from '@/services/providers/ProviderCredentials';
 import { LIVE_MODEL, isLiveProvider } from '../providers/liveMeeting';
+import { OPENROUTER_MODELS, RETIRING, TEXT_DEFAULT } from './androidModels';
 import type { KeyProviderId } from './keyCheck';
+import { keySelection, setTask } from './processingDefault';
 
 /** The tasks with a Runs on page of their own, in order. Meetings has its own page. */
 export const TASKS = ['dictation', 'upload', 'cleanup', 'notes'] as const;
@@ -33,15 +32,21 @@ export const KEY_PROVIDERS: { id: KeyProviderId; name: string; keyUrl: string }[
   { id: 'openrouter', name: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys' },
 ];
 
-// OpenRouter has no catalog of its own; this is the model the design starts it on.
-const OPENROUTER_DEFAULT_MODEL = 'openai/gpt-4.1-mini';
-
-/** The models a provider offers for a task, best first; none for a task it can't run. */
+/**
+ * The models a provider offers for a task, the starting one first; none for a task it can't
+ * run. Legacy and retiring models are left out (androidModels.ts).
+ */
 export function providerModels(provider: string, task: MobileInferenceScope): string[] {
   const definition = getMobileProvidersForScope(task).find((item) => item.id === provider);
   if (!definition) return [];
-  if (provider === 'openrouter') return [OPENROUTER_DEFAULT_MODEL];
-  return definition.models.filter((model) => !model.legacy).map((model) => model.id);
+  if (provider === 'openrouter') return OPENROUTER_MODELS;
+  const models = definition.models
+    .filter((model) => !model.legacy && !RETIRING.has(model.id))
+    .map((model) => model.id);
+  const first = isTranscriptionScope(task) ? undefined : TEXT_DEFAULT[provider];
+  return first && models.includes(first)
+    ? [first, ...models.filter((model) => model !== first)]
+    : models;
 }
 
 /** Meetings need a provider that transcribes while people talk. */
@@ -54,9 +59,9 @@ export function providerCanRun(provider: string, task: MobileInferenceScope | 'm
 export function startingModel(provider: string, task: MobileInferenceScope | 'meeting'): string {
   if (task === 'meeting') return isLiveProvider(provider) ? LIVE_MODEL[provider] : '';
   const remembered = useConfigStore.getState().config?.rememberedInference?.[task]?.[provider];
-  if (remembered?.modelId) return remembered.modelId;
-  if (provider === 'openrouter') return OPENROUTER_DEFAULT_MODEL;
-  return defaultModelId(getMobileProvidersForScope(task).find((item) => item.id === provider));
+  const models = providerModels(provider, task);
+  if (remembered?.modelId && models.includes(remembered.modelId)) return remembered.modelId;
+  return models[0] ?? '';
 }
 
 /** Which providers have a saved key, kept current as keys are added and removed. */
@@ -104,33 +109,15 @@ export async function runTaskOnKey(
   task: MobileInferenceScope | 'meeting',
   modelId = startingModel(provider, task),
 ): Promise<void> {
-  const selection: InferenceSelection = {
-    mode: 'providers',
-    providerId: provider,
-    modelId,
-    credentialRef: await getProviderCredentialReference(provider),
-  };
-  const { activeMode, setActiveMode } = useProcessingModeStore.getState();
-  const { updateConfig } = useConfigStore.getState();
-  // Meetings keep their key beside the other tasks' choices; nothing else follows it.
-  if (task === 'meeting') {
-    const config = useConfigStore.getState().config;
-    await updateConfig({ inference: { ...config?.inference, meeting: selection } });
-    return;
-  }
-  await updateConfig(
-    workflowSaveConfig(useConfigStore.getState().config, task, selection, activeMode),
-  );
-  // Dictation sets the default for every task, so its key becomes the default.
-  if (task === 'dictation') setActiveMode('providers', true);
+  // Each task runs its own engine: moving one onto a key leaves the others where they are.
+  await setTask(task as SheetTask, await keySelection(provider, task as SheetTask, modelId));
 }
 
-/** Meetings go back to following the default for every task. */
-export async function clearMeetingKey(): Promise<void> {
-  const { config, updateConfig } = useConfigStore.getState();
-  if (!config?.inference?.meeting) return;
-  const { meeting: _meeting, ...rest } = config.inference;
-  await updateConfig({ inference: rest });
+/** Saves a key that passed its check, so every task page can offer it. */
+export async function saveKey(provider: KeyProviderId, apiKey: string): Promise<void> {
+  await setProviderCredential(await getProviderCredentialReference(provider), {
+    apiKey: apiKey.trim(),
+  });
 }
 
 /** Saves the key once, then runs each ticked task on it. Dictation goes first: it sets the mode. */
@@ -139,9 +126,7 @@ export async function applyKeyToTasks(
   apiKey: string,
   tasks: SheetTask[],
 ): Promise<void> {
-  await setProviderCredential(await getProviderCredentialReference(provider), {
-    apiKey: apiKey.trim(),
-  });
+  await saveKey(provider, apiKey);
   const ordered = SHEET_TASKS.filter((task) => tasks.includes(task));
   for (const task of ordered) await runTaskOnKey(provider, task);
 }

@@ -2,7 +2,7 @@ import { ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { meetingOnDevice } from './meetingRouting';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { Text } from '@/components/ui/Text';
 import { Button, Card, styles } from './ui';
@@ -10,7 +10,8 @@ import { Button, Card, styles } from './ui';
 export function MeetingSetup({ onStart, busy }: { onStart: () => void; busy: boolean }) {
   const { t } = useTranslation('android');
   const user = useAuthStore((state) => state.user);
-  const privateMode = useProcessingModeStore((state) => state.activeMode === 'private');
+  // Meetings set to run on the phone record locally; the others connect live.
+  const privateMode = meetingOnDevice();
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Text accessibilityRole="header" style={styles.title}>

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Linking, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { home, type } from '../home/kit';
 import {
   BottomSheet,
@@ -21,11 +20,13 @@ import {
   applyKeyToTasks,
   maskKey,
   providerCanRun,
+  saveKey,
   savedKey,
   startingModel,
   type KeyTask,
   type SheetTask,
 } from './ownKey';
+import { markDefault } from './processingDefault';
 import { useSettingsT, type SettingsKey, type SettingsT } from './strings';
 
 const TASK_TITLE: Record<SheetTask, SettingsKey> = {
@@ -97,21 +98,29 @@ export function KeySheet({
   onClose,
   initialProvider = 'openai',
   onlyTask,
+  asDefault,
 }: {
   visible: boolean;
   onClose: () => void;
   initialProvider?: KeyProviderId;
   /** Opened from one task's page: only that task is ticked to start with. */
   onlyTask?: SheetTask;
+  /** Opened from the Default row: the key it applies becomes the Default. */
+  asDefault?: boolean;
 }) {
   const t = useSettingsT();
-  const activeMode = useProcessingModeStore((s) => s.activeMode);
   const [provider, setProvider] = useState<KeyProviderId>(initialProvider);
-  const [draft, setDraft] = useState('');
+  // Each provider keeps its half-typed key and its ticks while the sheet is open, so moving
+  // between chips loses nothing.
+  const [drafts, setDrafts] = useState<Partial<Record<KeyProviderId, string>>>({});
+  const [untickedBy, setUntickedBy] = useState<Partial<Record<KeyProviderId, SheetTask[]>>>({});
+  const draft = drafts[provider] ?? '';
+  const setDraft = (value: string) => setDrafts((current) => ({ ...current, [provider]: value }));
+  const startUnticked = onlyTask ? SHEET_TASKS.filter((task) => task !== onlyTask) : [];
+  const unticked = untickedBy[provider] ?? startUnticked;
   // A key that passed the check (or was saved before) is locked in and shown masked.
   const [locked, setLocked] = useState<string | null>(null);
   const [lockedSaved, setLockedSaved] = useState(false);
-  const [unticked, setUnticked] = useState<SheetTask[]>([]);
   const [busy, setBusy] = useState(false);
   const check = useKeyCheck(provider, locked ? '' : draft);
   const name = KEY_PROVIDERS.find((item) => item.id === provider)!.name;
@@ -123,14 +132,14 @@ export function KeySheet({
   useEffect(() => {
     if (!visible) return;
     setProvider(initialProvider);
-    setUnticked(onlyTask ? SHEET_TASKS.filter((task) => task !== onlyTask) : []);
-  }, [visible, initialProvider, onlyTask]);
+    setDrafts({});
+    setUntickedBy({});
+  }, [visible, initialProvider]);
 
   // A provider with a key already saved starts locked in, with nothing to check.
   useEffect(() => {
     if (!visible) return;
     let live = true;
-    setDraft('');
     setLocked(null);
     setLockedSaved(false);
     void savedKey(provider)
@@ -145,21 +154,23 @@ export function KeySheet({
     };
   }, [visible, provider]);
 
-  // The tick rests 620 ms after the answer, then the key locks in.
+  // The tick rests 620 ms after the answer, then the key locks in and is saved at once, so it
+  // stays saved when another chip is chosen or the sheet closes.
   useEffect(() => {
     if (check.state !== 'connected') return;
-    const timer = setTimeout(() => setLocked(draft.trim()), 620);
+    const key = draft.trim();
+    const timer = setTimeout(() => {
+      setLocked(key);
+      void saveKey(provider, key).catch(() => showToast(t('keySaveFailed'), 'error'));
+    }, 620);
     return () => clearTimeout(timer);
-  }, [check.state, draft]);
+    // t is a fresh function each render; the key and provider decide this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [check.state, draft, provider]);
 
   const runnable = SHEET_TASKS.filter((task) => providerCanRun(provider, task));
-  // While On device is the default, uploads stay on the phone unless dictation moves too,
-  // and meetings stay on it whatever the key.
-  const blocked = (task: SheetTask) =>
-    activeMode === 'private' &&
-    ((task === 'upload' && unticked.includes('dictation')) ||
-      (task === 'meeting' && unticked.includes('dictation')));
-  const ticked = runnable.filter((task) => !unticked.includes(task) && !blocked(task));
+  // Every task the provider can run is tickable on its own.
+  const ticked = runnable.filter((task) => !unticked.includes(task));
   const transcribes = providerCanRun(provider, 'dictation');
   const writesText = providerCanRun(provider, 'cleanup');
   const accepted = !!locked;
@@ -171,6 +182,7 @@ export function KeySheet({
     setBusy(true);
     try {
       await applyKeyToTasks(provider, locked, ticked);
+      if (asDefault) markDefault({ mode: 'providers', providerId: provider });
       showToast(t('keyUsed', { provider: name, count: ticked.length }), 'success');
       onClose();
     } catch {
@@ -181,9 +193,12 @@ export function KeySheet({
   };
 
   const toggle = (task: SheetTask) =>
-    setUnticked((current) =>
-      current.includes(task) ? current.filter((item) => item !== task) : [...current, task],
-    );
+    setUntickedBy((current) => ({
+      ...current,
+      [provider]: unticked.includes(task)
+        ? unticked.filter((item) => item !== task)
+        : [...unticked, task],
+    }));
 
   const borderColor = failed
     ? KEY_CHECK_COLORS.failed
@@ -335,14 +350,12 @@ export function KeySheet({
             <View style={[cardStyle, { overflow: 'hidden' }]}>
               {runnable.map((task, index) => {
                 const on = ticked.includes(task);
-                const off = blocked(task);
                 return (
                   <Pressable
                     key={task}
                     cssInterop={false}
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: on, disabled: off }}
-                    disabled={off}
+                    accessibilityState={{ checked: on }}
                     onPress={() => toggle(task)}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
@@ -351,20 +364,14 @@ export function KeySheet({
                       paddingHorizontal: 16,
                       paddingVertical: 10,
                       gap: 12,
-                      opacity: off ? 0.45 : pressed ? 0.7 : 1,
+                      opacity: pressed ? 0.7 : 1,
                       borderTopWidth: index ? 1 : 0,
                       borderTopColor: home.borderSubtle,
                     })}
                   >
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text style={settings.title}>{t(TASK_TITLE[task])}</Text>
-                      <Text style={settings.subtitle}>
-                        {off
-                          ? t('notWithPhoneDefault')
-                          : task === 'meeting'
-                            ? t('liveModel', { model: startingModel(provider, task) })
-                            : startingModel(provider, task)}
-                      </Text>
+                      <Text style={settings.subtitle}>{startingModel(provider, task)}</Text>
                     </View>
                     {on && (
                       <SystemIcon name="checkmark" mdName="Check" size={22} color={home.accent} />

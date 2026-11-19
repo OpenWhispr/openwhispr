@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -11,15 +11,7 @@ import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { providerDisplayName, type InferenceMode } from '@/lib/mobileProviders';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
 import { home, type } from '../home/kit';
-import {
-  BottomSheet,
-  Group,
-  ListRow,
-  PillAction,
-  SettingsPage,
-  settings,
-  useReduceMotion,
-} from './kit';
+import { BottomSheet, Group, ListRow, SettingsPage, useReduceMotion } from './kit';
 import { KEY_CHECK_COLORS } from './KeyCheckMark';
 import type { KeyProviderId } from './keyCheck';
 import { KeySheet } from './KeySheet';
@@ -28,7 +20,6 @@ import { modelName, useModelsReady } from './modelCatalog';
 import {
   KEY_PROVIDERS,
   TASKS,
-  clearMeetingKey,
   providerCanRun,
   providerModels,
   runTaskOnKey,
@@ -37,7 +28,8 @@ import {
 } from './ownKey';
 import { LandingCheck } from './ProcessingScreen';
 import { isLiveProvider, meetingKey } from '../providers/liveMeeting';
-import { effectiveSelection, lockedOut, phoneModelFor, useChoosePhone } from './processingTasks';
+import { effectiveSelection, phoneModelFor, useChoosePhone } from './processingTasks';
+import { setTask } from './processingDefault';
 import { useSettingsT, type SettingsKey } from './strings';
 
 const TITLE: Record<KeyTask | 'meeting', SettingsKey> = {
@@ -65,56 +57,25 @@ function ModelPicker({
   onChoose: (model: string) => void;
 }) {
   const t = useSettingsT();
-  const [typed, setTyped] = useState(current);
-  const listed = provider !== 'openrouter';
   const models = providerModels(provider, task);
   // A model chosen before that has since left the list stays on it, as the old screen did.
   const options = models.includes(current) || !current ? models : [current, ...models];
   return (
     <BottomSheet visible={visible} onClose={onClose} title={t('chooseModel')}>
-      {listed ? (
-        <View style={{ borderRadius: 16, overflow: 'hidden', backgroundColor: home.surface }}>
-          {options.map((model) => (
-            <ListRow
-              key={model}
-              title={model}
-              selected={model === current}
-              onPress={() => onChoose(model)}
-            />
-          ))}
-        </View>
-      ) : (
-        <View style={{ gap: 12 }}>
-          <Text style={[type.footnote, { color: home.secondary }]}>{t('modelId')}</Text>
-          <TextInput
-            value={typed}
-            onChangeText={setTyped}
-            autoCapitalize="none"
-            autoCorrect={false}
-            accessibilityLabel={t('modelId')}
-            style={[
-              settings.title,
-              {
-                fontWeight: '400',
-                minHeight: 48,
-                borderRadius: 14,
-                borderWidth: 1.5,
-                borderColor: home.borderSubtle,
-                backgroundColor: home.surface,
-                paddingHorizontal: 16,
-              },
-            ]}
+      {/* OpenRouter lists twelve; the list scrolls rather than run off the screen. */}
+      <ScrollView
+        style={{ maxHeight: 420, borderRadius: 16, backgroundColor: home.surface }}
+        contentContainerStyle={{ paddingBottom: 4 }}
+      >
+        {options.map((model) => (
+          <ListRow
+            key={model}
+            title={model}
+            selected={model === current}
+            onPress={() => onChoose(model)}
           />
-          <View style={{ paddingBottom: 12 }}>
-            <PillAction
-              primary
-              label={t('done')}
-              disabled={!typed.trim()}
-              onPress={() => onChoose(typed.trim())}
-            />
-          </View>
-        </View>
-      )}
+        ))}
+      </ScrollView>
     </BottomSheet>
   );
 }
@@ -126,14 +87,22 @@ function ModelPicker({
 function MeetingsTask() {
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
-  const activeMode = useProcessingModeStore((s) => s.activeMode);
-  // Read so the page follows a key saved or cleared for meetings.
-  useConfigStore((s) => s.config?.inference?.meeting);
+  // Read so the page follows what's saved for meetings.
+  const meeting = useConfigStore((s) => s.config?.inference?.meeting);
   const keys = useSavedKeys();
   const { ready } = useModelsReady();
-  const { choosePhone, run, needsModel, closeModelSheet, goLocal } = useChoosePhone(t);
   const [sheet, setSheet] = useState(false);
-  const onPhone = activeMode === 'private';
+  const [busy, setBusy] = useState(false);
+  const run = async (work: () => Promise<unknown>) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await work();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const mode = meeting?.mode ?? 'openwhispr';
   const key = meetingKey();
   const liveKeys = KEY_PROVIDERS.filter(({ id }) => keys[id] && isLiveProvider(id));
   const rows = [
@@ -142,34 +111,24 @@ function MeetingsTask() {
       icon: 'Cloud' as const,
       title: t('meetingCloud'),
       body: t('meetingCloudBody'),
-      selected: !onPhone && !key,
-      disabled: false,
-      choose: () =>
-        void run(async () => {
-          await clearMeetingKey();
-          if (onPhone) await switchWorkflowMode('dictation', 'openwhispr');
-        }),
+      selected: mode === 'openwhispr',
+      choose: () => void run(() => setTask('meeting', { mode: 'openwhispr' })),
     },
     {
       key: 'phone',
       icon: 'Smartphone' as const,
       title: t('meetingPhone'),
       body: t('meetingPhoneBody'),
-      selected: onPhone,
-      disabled: false,
-      choose: () => {
-        void clearMeetingKey();
-        choosePhone();
-      },
+      selected: mode === 'local',
+      choose: () => void run(() => setTask('meeting', { mode: 'local' })),
     },
     ...(liveKeys.length
       ? liveKeys.map(({ id, name }) => ({
           key: id,
           icon: 'KeyRound' as const,
           title: name,
-          body: onPhone ? t('notWithPhoneDefault') : t('yourKeyConnected'),
+          body: t('yourKeyConnected'),
           selected: key?.providerId === id,
-          disabled: onPhone,
           choose: () => void run(() => runTaskOnKey(id, 'meeting')),
         }))
       : [
@@ -177,9 +136,8 @@ function MeetingsTask() {
             key: 'key',
             icon: 'KeyRound' as const,
             title: t('ownKey'),
-            body: onPhone ? t('notWithPhoneDefault') : t('meetingOwnKeyBody'),
+            body: t('meetingOwnKeyBody'),
             selected: false,
-            disabled: onPhone,
             choose: () => setSheet(true),
           },
         ]),
@@ -202,9 +160,8 @@ function MeetingsTask() {
                 : undefined
             }
             selected={row.selected}
-            dimmed={row.disabled}
             trailing={<LandingCheck shown={row.selected} reduceMotion={reduceMotion} />}
-            onPress={row.selected || row.disabled ? undefined : row.choose}
+            onPress={row.selected ? undefined : row.choose}
           />
         ))}
         {liveKeys.length > 0 && (
@@ -223,7 +180,6 @@ function MeetingsTask() {
           }
         />
       </Group>
-      <SpeechModelSheet visible={needsModel} onClose={closeModelSheet} onReady={goLocal} />
       <KeySheet
         visible={sheet}
         onClose={() => setSheet(false)}
@@ -238,8 +194,7 @@ function MeetingsTask() {
 
 /**
  * One task: where it runs (Cloud, this phone, or a saved key), then its model, then, for text
- * cleanup, its prompt. Dictation sets the default for every task, so changing it here changes
- * the default.
+ * cleanup, its prompt. Changing it here changes only this task.
  */
 function Task({ task }: { task: KeyTask }) {
   const t = useSettingsT();
@@ -255,27 +210,26 @@ function Task({ task }: { task: KeyTask }) {
     (state) => resolveCustomPrompt(state.customPrompts.cleanup) !== undefined,
   );
   const selection = effectiveSelection(config, task, activeMode, cloudAccess);
-  // In Local Mode, cleanup not set to the phone or a key is skipped: nothing is chosen yet.
-  const skipped =
-    task === 'cleanup' &&
-    activeMode === 'private' &&
-    !['local', 'providers'].includes(config?.inference?.cleanup?.mode ?? '');
-  const chosen = skipped ? null : selection.mode;
+  const chosen = selection.mode;
   const phoneModel = phoneModelFor(config, task);
 
-  const choose = (mode: Exclude<InferenceMode, 'providers'>) =>
-    task === 'dictation' && mode === 'local'
-      ? choosePhone()
-      : void run(() => switchWorkflowMode(task, mode));
+  // Only this task changes. Speech on the phone needs a speech model first; text on the phone
+  // goes through the existing switch, which offers the text model's download when it's missing.
+  const choose = (mode: Exclude<InferenceMode, 'providers'>) => {
+    if (mode === 'openwhispr') void run(() => setTask(task, { mode }));
+    else if (task === 'dictation' || task === 'upload')
+      choosePhone(() => setTask(task, { mode: 'local' }));
+    else void run(() => switchWorkflowMode(task, 'local'));
+  };
 
   const runsOn = [
     {
       key: 'openwhispr',
       icon: 'Cloud' as const,
       title: t('cloud'),
-      body: lockedOut(task, 'openwhispr', activeMode) ? t('notWithPhoneDefault') : undefined,
+      body: undefined,
       selected: chosen === 'openwhispr',
-      disabled: lockedOut(task, 'openwhispr', activeMode),
+      disabled: false,
       onPress: () => choose('openwhispr'),
     },
     {
@@ -292,11 +246,9 @@ function Task({ task }: { task: KeyTask }) {
         key: id,
         icon: 'KeyRound' as const,
         title: name,
-        body: lockedOut(task, 'providers', activeMode)
-          ? t('notWithPhoneDefault')
-          : t('yourKeyConnected'),
+        body: t('yourKeyConnected'),
         selected: chosen === 'providers' && selection.providerId === id,
-        disabled: lockedOut(task, 'providers', activeMode),
+        disabled: false,
         onPress: () => void run(() => runTaskOnKey(id, task)),
       }),
     ),

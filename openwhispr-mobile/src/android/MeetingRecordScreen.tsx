@@ -25,6 +25,7 @@ import { useNotesStore } from '@/store/useNotesStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { canRunCloudMeeting } from '@/lib/accountAccess';
 import { meetingKey } from './providers/liveMeeting';
+import { meetingOnDevice } from './meetingRouting';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { CloudMeetingFinishError, useCloudMeeting } from '@/hooks/useCloudMeeting.android';
 import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMeetingLiveActivity';
@@ -428,7 +429,11 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   // Live with a key saved for meetings, or on OpenWhispr Cloud for an account that can use it.
   const isCloudMeeting = (): boolean =>
     !!meetingKey() ||
-    canRunCloudMeeting(useAuthStore.getState().user, useProcessingModeStore.getState().activeMode);
+    (!meetingOnDevice() &&
+      canRunCloudMeeting(
+        useAuthStore.getState().user,
+        useProcessingModeStore.getState().activeMode,
+      ));
 
   // Android checks microphone access before authorization so denial leaves setup intact.
   // The realtime session checks again when capture starts. Once permitted, create the note
