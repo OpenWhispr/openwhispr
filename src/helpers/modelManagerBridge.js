@@ -598,6 +598,7 @@ class ModelManager {
     options.signal?.throwIfAborted();
     const exactTokens = await this.serverManager.countPromptTokens(messages, {
       disableThinking: options.disableThinking,
+      signal: options.signal,
     });
 
     // A measurement we could not take must never fail the request; the
@@ -678,12 +679,16 @@ class ModelManager {
       this,
       "llm",
       modelId,
-      () => this._policyAllowedRunInference(modelId, prompt, options),
+      () =>
+        this.serverManager.withInferenceReservation(options.signal, (reservation) =>
+          this._policyAllowedRunInference(modelId, prompt, options, reservation)
+        ),
       { onAbort: () => this.cancelInference() }
     );
   }
 
-  async _policyAllowedRunInference(modelId, prompt, options = {}) {
+  async _policyAllowedRunInference(modelId, prompt, requestOptions, reservation) {
+    const options = { ...requestOptions, signal: reservation.signal };
     options.signal?.throwIfAborted();
     this.ensureInitialized();
     const startTime = Date.now();
@@ -788,6 +793,9 @@ class ModelManager {
           signal: options.signal,
         });
         options.signal?.throwIfAborted();
+        // An exact token count can require a larger window. Give up the old
+        // process before asking the scheduler to replace it.
+        reservation.release();
         return this.serverManager.start(modelPath, startOptions);
       };
       // llama.cpp's startup dump is the diagnostic, so it goes to the log here
@@ -845,6 +853,7 @@ class ModelManager {
           throw unavailable(restoreError);
         }
       }
+      reservation.acquire(modelPath);
       this.currentServerModelId = modelId;
     };
 
@@ -852,6 +861,8 @@ class ModelManager {
     // request needs a bigger window than the running one has.
     if (
       !this.serverManager.ready ||
+      this.serverManager.startupPromise ||
+      this.serverManager.modelPath !== modelPath ||
       this.currentServerModelId !== modelId ||
       targetContextSize > (this.serverManager.contextSize || SERVER_CONTEXT_SIZE)
     ) {
@@ -870,6 +881,8 @@ class ModelManager {
         model: modelId,
         contextSize: this.serverManager.contextSize,
       });
+    } else {
+      reservation.acquire(modelPath);
     }
 
     const grantedMaxTokens = await this._ensurePromptFits({

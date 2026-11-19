@@ -115,6 +115,8 @@ class LlamaServerManager {
     this.port = null;
     this.ready = false;
     this.activeRequest = null;
+    // Prompt measurement happens before the request is visible in /slots.
+    this.inferenceReservations = new Set();
     this.modelPath = null;
     // draftModelPath is the REQUESTED drafter (stable across identical requests, drives
     // the start() restart check); activeDraftModelPath is the one that actually loaded.
@@ -249,6 +251,28 @@ class LlamaServerManager {
     this.handoffs += 1;
   }
 
+  async withInferenceReservation(signal, run) {
+    const controller = new AbortController();
+    const reservation = {
+      signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
+      acquire: (modelPath) => {
+        if (!this.ready || this.modelPath !== modelPath) throw cancelledError();
+        this.inferenceReservations.add(controller);
+      },
+      release: () => this.inferenceReservations.delete(controller),
+    };
+    try {
+      return await run(reservation);
+    } finally {
+      reservation.release();
+    }
+  }
+
+  _cancelReservedInferences() {
+    for (const controller of this.inferenceReservations) controller.abort(cancelledError());
+    this.inferenceReservations.clear();
+  }
+
   async _policyAllowedStart(modelPath, options = {}) {
     if (this.stopPromise) await this.stopPromise;
 
@@ -317,7 +341,7 @@ class LlamaServerManager {
       const server = this.process;
       const busy = await this._waitFor(this._isBusy(busyDeadline - Date.now()), { signal });
       if (this.startupPromise || this.process !== server) continue;
-      if (!busy) break;
+      if (!busy && !this.inferenceReservations.size) break;
       const remaining = busyDeadline - Date.now();
       if (remaining <= 0) throw modelBusyError();
       await this._waitFor(sleep(Math.min(remaining, BUSY_WAIT_POLL_MS)), { signal });
@@ -382,7 +406,8 @@ class LlamaServerManager {
   // can't hold a restart up; but llama-server answers /slots between batches, so
   // one that goes unanswered is usually still evaluating a long prompt.
   async _isBusy(budgetMs) {
-    if (this.activeRequest || Date.now() < this.handoffUntil) return true;
+    if (this.inferenceReservations.size || this.activeRequest || Date.now() < this.handoffUntil)
+      return true;
     const handoffs = this.handoffs;
     const slots = await this._requestJson(
       "/slots",
@@ -662,6 +687,7 @@ class LlamaServerManager {
         // A SIGKILLed server can exit after stop() moved on and the next one
         // spawned; losing that one's handle would orphan it.
         if (this.process && this.process !== child) return;
+        this._cancelReservedInferences();
         this.ready = false;
         this.process = null;
         this.stopHealthCheck();
@@ -850,7 +876,7 @@ class LlamaServerManager {
       // whether an answer that outlived the timeout is still being generated.
       const busy = await this._slotsBusy();
       if (this.idleTimer !== timer) return;
-      if (busy) {
+      if (busy || this.inferenceReservations.size) {
         this.resetIdleTimer();
         return;
       }
@@ -879,7 +905,7 @@ class LlamaServerManager {
     const isCurrent = () =>
       this.process === server && (!cancelOnReuse || this.deferredStop === request);
     while (server && isCurrent()) {
-      if (!(await this._slotsBusy())) break;
+      if (!(await this._slotsBusy()) && !this.inferenceReservations.size) break;
       if (!isCurrent()) break;
       await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_INTERVAL_MS).unref?.());
     }
@@ -981,6 +1007,7 @@ class LlamaServerManager {
     if (typeof templated?.prompt !== "string") return null;
 
     assertLocalModelOperation(this);
+    options.signal?.throwIfAborted();
     const tokenized = await this._requestJson("/tokenize", { content: templated.prompt });
     return Array.isArray(tokenized?.tokens) ? tokenized.tokens.length : null;
   }
@@ -1136,6 +1163,7 @@ class LlamaServerManager {
 
   async _stop() {
     this.ready = false;
+    this._cancelReservedInferences();
     this.cancelDeferredStop();
     this.clearIdleTimer();
     this.stopHealthCheck();
