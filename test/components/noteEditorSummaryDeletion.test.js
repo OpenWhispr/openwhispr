@@ -1085,7 +1085,7 @@ test("the note header hands its event link to the dropdown, changeable only by e
   }
 });
 
-test("transcript exports follow recorder identity rather than note ownership", async (t) => {
+test("transcript exports name the recorder only when the creator, or else the owner, is someone else", async (t) => {
   const bob = {
     isSignedIn: true,
     user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },

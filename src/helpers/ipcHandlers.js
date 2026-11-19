@@ -4701,7 +4701,7 @@ class IPCHandlers {
         // legacy segments need that fallback because they have no session recorder.
         const recorderLabel =
           typeof options?.recorderLabel === "string" ? options.recorderLabel.trim() : "";
-        const formatOptions = recorderLabel ? { recorderLabel } : {};
+        const formatOptions = { recorderLabel };
         const transcriptFormatter = require("./transcriptFormatter");
         let exportContent;
         if (format === "txt") {
