@@ -174,6 +174,16 @@ export const notesEnglish = {
   stopAndSave: 'Stop and save',
   minimise: 'Back to notes',
   notesWhileRecording: 'Jot decisions, follow-ups or context while recording…',
+  // Upload (U1)
+  uploadingTitle: 'New recording',
+  transcribing: 'Transcribing',
+  cleaningUp: 'Writing it up',
+  stayOnScreen: 'Keep this screen open until it’s done.',
+  cancelUpload: 'Cancel upload',
+  uploadFailed: 'Couldn’t turn this audio into a note',
+  copyTranscript2: 'Copy what was transcribed',
+  tryAgain: 'Try again',
+  settingsProcessing: 'Settings → Processing',
 } as const;
 
 export type NotesKey = keyof typeof notesEnglish;

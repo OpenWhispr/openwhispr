@@ -1,11 +1,18 @@
 import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Animated, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation, usePreventRemove, type NavigationAction } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/ui/Text';
-import { Button, Card, Page, styles } from './ui';
+import { gloss, home } from './home/kit';
+import { look } from './settings/look';
+import { useReduceMotion } from './settings/kit';
+import { GlassButton } from './processingFable/look';
+import { BackButton, LinkButton, edgeCard, notesLook } from './notes/look';
+import { MetaChip } from './notes/noteParts';
+import { notesT } from './notes/strings';
 import { useFileUpload } from '@/hooks/useFileUpload.android';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -45,6 +52,7 @@ export default function ImportAudioScreen() {
   const params = useLocalSearchParams<{ folderId?: string; spaceId?: string }>();
   const router = useRouter();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const mode = useProcessingModeStore((state) => state.activeMode);
   // Refresh the preview when workflow configuration changes; the job takes its
   // own snapshot before the paywall or picker opens.
@@ -199,78 +207,130 @@ export default function ImportAudioScreen() {
           provider: preview.route?.provider,
           remoteCleanup: preview.route?.cleanupRoute?.mode === 'providers',
         };
+  // Where the audio goes is said before anything is picked, and while it runs.
+  const disclosure = choice?.isPrivate
+    ? choice.remoteCleanup
+      ? t('importPrivateRemoteCleanup')
+      : t('importPrivateLocal')
+    : choice?.provider === 'local'
+      ? t('importLocal')
+      : choice?.provider === 'byok'
+        ? t('importByok')
+        : t('importCloud');
   return (
-    <Page title={t('importAudio')} back showAccount={false}>
-      <Card>
-        <Text style={styles.heading}>{t('importTitle')}</Text>
-        <Text style={styles.body}>{t('importFormats')}</Text>
-        <Text style={styles.body}>
-          {t('importSaveTo', {
-            destination:
-              (isProcessing ? destination.current : preview.target)?.label ??
-              t('importUnavailable'),
-          })}
+    <View style={{ flex: 1, backgroundColor: notesLook.canvas, paddingTop: insets.top }}>
+      <View
+        style={{ paddingHorizontal: 16, paddingTop: 8, minHeight: 52, justifyContent: 'center' }}
+      >
+        <BackButton />
+      </View>
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <Text accessibilityRole="header" style={notesLook.title}>
+          {notesT('uploadingTitle')}
         </Text>
-        <Text style={styles.body}>
-          {choice?.isPrivate
-            ? choice.remoteCleanup
-              ? t('importPrivateRemoteCleanup')
-              : t('importPrivateLocal')
-            : choice?.provider === 'local'
-              ? t('importLocal')
-              : choice?.provider === 'byok'
-                ? t('importByok')
-                : t('importCloud')}
-        </Text>
+        {(isProcessing ? destination.current : preview.target) ? (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <MetaChip
+              icon="Folder"
+              label={t('importSaveTo', {
+                destination: (isProcessing ? destination.current : preview.target)?.label,
+              })}
+            />
+          </View>
+        ) : null}
         {isProcessing ? (
-          <>
-            <Text style={styles.body} accessibilityLiveRegion="polite">
-              {stage === 'cleaning' ? t('importFormatting') : t('importProcessing')}
+          <View style={[edgeCard, { padding: 16, gap: 12 }]}>
+            <Text style={notesLook.rowTitle} accessibilityLiveRegion="polite">
+              {stage === 'cleaning' ? notesT('cleaningUp') : notesT('transcribing')}
             </Text>
-            <Button label={t('importCancel')} secondary onPress={cancel} />
-          </>
+            <IndeterminateBar />
+            <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary }}>
+              {disclosure} {notesT('stayOnScreen')}
+            </Text>
+            <LinkButton destructive label={notesT('cancelUpload')} onPress={cancel} />
+          </View>
+        ) : error || preview.error ? (
+          <View style={[edgeCard, { padding: 16, gap: 8 }]}>
+            <Text style={notesLook.rowTitle} accessibilityRole="alert">
+              {notesT('uploadFailed')}
+            </Text>
+            <Text style={{ fontSize: 14, lineHeight: 20, color: home.secondary }}>
+              {error || preview.error}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
+              {!preview.error ? (
+                <LinkButton label={notesT('tryAgain')} onPress={() => void start()} />
+              ) : null}
+              <LinkButton
+                label={notesT('settingsProcessing')}
+                onPress={() => router.push('/(account)/ai-models')}
+              />
+              {currentText ? (
+                <LinkButton
+                  label={notesT('copyTranscript2')}
+                  onPress={() => {
+                    void Clipboard.setStringAsync(currentText)
+                      .then(() => Alert.alert(t('copied'), t('importCopied')))
+                      .catch(() => Alert.alert(t('importCopyFailed'), t('retry')));
+                  }}
+                />
+              ) : null}
+            </View>
+          </View>
         ) : (
-          <Button
-            label={t('importChoose')}
-            disabled={gating || accountChanged.current || !!preview.error}
-            onPress={() => {
-              void start();
-            }}
-          />
-        )}
-      </Card>
-      {error || preview.error ? (
-        <Card>
-          <Text style={styles.heading} accessibilityRole="alert">
-            {t('importFailure')}
-          </Text>
-          <Text style={styles.body}>{error || preview.error}</Text>
-          <Button
-            label={t('models')}
-            secondary
-            onPress={() => router.push('/(account)/ai-models')}
-          />
-        </Card>
-      ) : null}
-      {currentText ? (
-        <Card>
-          <Text style={styles.heading}>{t('importTranscript')}</Text>
-          <Text style={styles.body} selectable>
-            {currentText}
-          </Text>
-          {!isProcessing && error ? (
-            <Button
-              label={t('importCopyTranscript')}
-              secondary
+          <View style={[edgeCard, { padding: 16, gap: 12 }]}>
+            <Text style={{ fontSize: 15, lineHeight: 21, color: home.secondary }}>
+              {t('importFormats')}
+            </Text>
+            <Text style={{ fontSize: 15, lineHeight: 21, color: home.secondary }}>
+              {disclosure}
+            </Text>
+            <GlassButton
+              label={t('importChoose')}
+              disabled={gating || accountChanged.current || !!preview.error}
               onPress={() => {
-                void Clipboard.setStringAsync(currentText)
-                  .then(() => Alert.alert(t('copied'), t('importCopied')))
-                  .catch(() => Alert.alert(t('importCopyFailed'), t('retry')));
+                void start();
               }}
             />
-          ) : null}
-        </Card>
-      ) : null}
-    </Page>
+          </View>
+        )}
+        {isProcessing && currentText ? (
+          <View style={[edgeCard, { padding: 16 }]}>
+            <Text selectable style={{ fontSize: 16, lineHeight: 23, color: home.text }}>
+              {currentText}
+            </Text>
+          </View>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+/** A brand-glass bar that sweeps while the transcript is made (the pipeline reports no %). */
+function IndeterminateBar() {
+  const reduce = useReduceMotion();
+  const x = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduce) return;
+    const loop = Animated.loop(
+      Animated.timing(x, { toValue: 1, duration: 1400, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduce, x]);
+  return (
+    <View style={{ height: 6, borderRadius: 3, backgroundColor: look.track, overflow: 'hidden' }}>
+      <Animated.View
+        style={[
+          { width: '40%', height: 6, borderRadius: 3 },
+          gloss,
+          {
+            transform: [
+              { translateX: x.interpolate({ inputRange: [0, 1], outputRange: [-160, 360] }) },
+            ],
+          },
+        ]}
+      />
+    </View>
   );
 }

@@ -47,6 +47,18 @@ jest.mock('@react-navigation/native', () => ({
   usePreventRemove: jest.fn(),
 }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
+jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
+jest.mock('react-native-svg', () => {
+  const { View } = require('react-native');
+  return { __esModule: true, default: View, SvgXml: View };
+});
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+jest.mock('../notes/strings', () => ({
+  notesT: (key: string) => key,
+  useNotesT: () => (key: string) => key,
+}));
 jest.mock('../ui', () => ({
   Page: ({ children }: any) => children,
   Card: ({ children }: any) => children,

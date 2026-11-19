@@ -1313,7 +1313,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNotesState.notes = [mockNote];
     const { getByTestId } = render(<NoteEditorScreen />);
 
-    fireEvent.press(getByTestId('enhanced-edit'));
+    fireEvent.press(getByTestId('enhanced-read'));
     fireEvent.changeText(getByTestId('enhanced-editor'), '## Summary\n- Launch Friday');
     fireEvent.press(getByTestId('enhanced-done'));
 
@@ -1327,7 +1327,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNotesState.notes = [mockNote];
     const { getByTestId, unmount } = render(<NoteEditorScreen />);
 
-    fireEvent.press(getByTestId('enhanced-edit'));
+    fireEvent.press(getByTestId('enhanced-read'));
     fireEvent.changeText(getByTestId('enhanced-editor'), '## Summary\n- Draft');
     unmount();
 
@@ -1407,7 +1407,7 @@ describe('NoteEditorScreen replacing generated notes', () => {
 
   const runActionOverEdit = async (): Promise<ReturnType<typeof render>> => {
     const screen = render(<NoteEditorScreen />);
-    fireEvent.press(screen.getByTestId('enhanced-edit'));
+    fireEvent.press(screen.getByTestId('enhanced-read'));
     fireEvent.changeText(screen.getByTestId('enhanced-editor'), '## Edited');
     await act(async () => {
       fireEvent.press(screen.getByTestId('run-action-1'));
@@ -1663,7 +1663,7 @@ describe('NoteEditorScreen clearing generated notes', () => {
     mockNotesState.notes = [mockNote];
     const { getByTestId, rerender } = render(<NoteEditorScreen />);
 
-    fireEvent.press(getByTestId('enhanced-edit'));
+    fireEvent.press(getByTestId('enhanced-read'));
     fireEvent.changeText(getByTestId('enhanced-editor'), '');
     act(() => {
       jest.advanceTimersByTime(800);

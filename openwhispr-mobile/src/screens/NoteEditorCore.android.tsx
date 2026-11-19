@@ -26,7 +26,7 @@ import { extractCorrections } from '@/lib/correctionLearner';
 import { buildDictationHintTiers, buildEffectiveDictionaryWords } from '@/lib/dictationHints';
 import { useActionProcessing } from '@/hooks/useActionProcessing';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { EditableMarkdown } from '@/components/notes/EditableMarkdown';
+import { EditableMarkdown } from '@/components/notes/EditableMarkdown.android';
 import { resolveNoteBodyView, type NoteBodyView } from '@/lib/notes/noteBodyTabs';
 import { NoteShareSheet } from '@/components/notes/NoteShareSheet';
 import { ConflictBanner } from '@/components/notes/ConflictBanner';
@@ -634,6 +634,25 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     }, [flushDraft]);
 
     useEffect(() => flushDraft, [flushDraft]);
+
+    // Android hands focus back to the first text field when a sheet's window closes, which
+    // raised the keyboard over the title; nothing here asked for it, so it goes away again.
+    const anySheetOpen =
+      menuVisible || exportVisible || templateVisible || cloudSheet != null || attendeesVisible;
+    const sheetWasOpen = useRef(false);
+    useEffect(() => {
+      if (anySheetOpen) {
+        sheetWasOpen.current = true;
+        return;
+      }
+      if (!sheetWasOpen.current) return;
+      sheetWasOpen.current = false;
+      const timer = setTimeout(() => {
+        titleInputRef.current?.blur();
+        contentInputRef.current?.blur();
+      }, 350);
+      return () => clearTimeout(timer);
+    }, [anySheetOpen]);
 
     // Flow B: Write a note opens with the title empty and the keyboard up, and a note left
     // without a word in it is thrown away on the way out.
@@ -1467,6 +1486,7 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                     editable={!isEnhancing}
                     onChange={handleEnhancedChange}
                     onEditingChange={handleEnhancedEditingChange}
+                    showEditButton={false}
                   />
                   <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
                     <SoftChip

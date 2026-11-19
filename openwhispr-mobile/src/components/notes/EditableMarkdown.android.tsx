@@ -11,6 +11,8 @@ interface EditableMarkdownProps {
   editable?: boolean;
   onChange: (text: string) => void;
   onEditingChange?: (editing: boolean) => void;
+  /** The Notes design (Figma E1) has no Edit link: tapping the summary edits it. */
+  showEditButton?: boolean;
 }
 
 /** Rendered Markdown that swaps to its raw source for editing. The caller owns saving. */
@@ -19,6 +21,7 @@ export function EditableMarkdown({
   editable = true,
   onChange,
   onEditingChange,
+  showEditButton = true,
 }: EditableMarkdownProps): React.JSX.Element {
   const { copy } = useAndroidCopy();
   const [editing, setEditing] = useState(false);
@@ -92,7 +95,7 @@ export function EditableMarkdown({
 
   return (
     <View>
-      {editable ? (
+      {editable && showEditButton ? (
         <View className="mb-2 flex-row justify-end">
           <Pressable
             testID="enhanced-edit"
@@ -109,7 +112,10 @@ export function EditableMarkdown({
         testID="enhanced-read"
         disabled={!editable}
         // Screen readers move through the rendered headings and paragraphs; Edit enters editing.
-        accessible={false}
+        // Without the Edit link, the summary itself is the button that edits it.
+        accessible={!showEditButton && editable}
+        accessibilityRole={!showEditButton && editable ? 'button' : undefined}
+        accessibilityLabel={!showEditButton && editable ? copy('edit', 'Edit') : undefined}
         onPress={() => setEditingState(true)}
         // A long press selects text; without this handler Pressable would treat it as a tap.
         onLongPress={() => {}}
