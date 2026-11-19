@@ -210,7 +210,7 @@ test("Gemini 3.1 Flash Lite: no toggle, so a chosen level beats the minimal floo
   assert.equal(requests[1].generationConfig.thinkingConfig.thinkingLevel, "minimal");
 });
 
-async function streamRequestBody(t, { provider, model, config, tools, keys = {} }) {
+async function streamRequestBody(t, { provider, model, config, tools, keys = {}, editCatalog }) {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -226,6 +226,12 @@ async function streamRequestBody(t, { provider, model, config, tools, keys = {} 
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   usePolicyStore.setState({ status: "unmanaged", appVersion: "1.8.3", policy: null });
   t.after(() => reasoningService.destroy());
+  if (editCatalog) {
+    const store = await vite.ssrLoadModule("/models/registryData.js");
+    const data = structuredClone(store.getRegistrySnapshot().data);
+    editCatalog(data);
+    store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  }
 
   const bodies = [];
   const originalFetch = globalThis.fetch;
@@ -317,6 +323,32 @@ test("streaming: Gemini gets the chosen thinkingLevel", async (t) => {
   });
   assert.deepEqual(body.generationConfig.thinkingConfig, {
     thinkingLevel: "low",
+    includeThoughts: false,
+  });
+});
+
+// The AI SDK validates thinkingLevel against its own enum and throws before any
+// request on a level it doesn't know; 3.0.88 had no xhigh (Gemini 4 Neon/Hydrogen).
+test("streaming: Gemini gets xhigh when the catalog offers it", async (t) => {
+  const body = await streamRequestBody(t, {
+    provider: "gemini",
+    model: "gemini-4-neon",
+    config: CHOSEN("xhigh"),
+    editCatalog: (data) => {
+      data.cloudProviders
+        .find((provider) => provider.id === "gemini")
+        .models.push({
+          id: "gemini-4-neon",
+          name: "Gemini 4 Neon",
+          description: "Gemini 4 Neon",
+          supportsThinking: true,
+          reasoningEffort: { options: ["low", "medium", "high", "xhigh"], defaultValue: "high" },
+          thinkingFloor: { level: "low" },
+        });
+    },
+  });
+  assert.deepEqual(body?.generationConfig.thinkingConfig, {
+    thinkingLevel: "xhigh",
     includeThoughts: false,
   });
 });
