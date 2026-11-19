@@ -1013,7 +1013,12 @@ function makeLadder(shouldFail, { contextSize = 32768 } = {}) {
   manager._startWithBinary = async (binary, args) => {
     const attempt = { binary, ctx: Number(args[args.indexOf("--ctx-size") + 1]) };
     attempts.push(attempt);
-    if (shouldFail(attempt)) throw new Error(`stub fail: ${binary} ctx=${attempt.ctx}`);
+    const failure = shouldFail(attempt);
+    if (failure) {
+      throw failure instanceof Error
+        ? failure
+        : new Error(`stub fail: ${binary} ctx=${attempt.ctx}`);
+    }
   };
   const baseArgs = manager._buildBaseArgs("/models/main.gguf", 8221, { contextSize });
   return { manager, attempts, baseArgs, options: { contextSize } };
@@ -1061,4 +1066,41 @@ test("a context step-down is recorded, so the server reports what it actually ha
   // Otherwise the preflight would believe the request still fits and send a
   // prompt the server cannot take.
   assert.equal(manager.contextSize, 16384);
+});
+
+test("a Vulkan memory failure is reported as a CPU fallback without exposing stderr", async () => {
+  const { manager, baseArgs, options } = makeLadder(
+    (attempt) =>
+      attempt.binary === "/bin/vulkan" &&
+      new Error("/private/model.gguf: vk::Device::allocateMemory: ErrorOutOfDeviceMemory"),
+    { contextSize: 16384 }
+  );
+  const notifications = [];
+  manager.on("gpu-fallback", (event) => notifications.push(event));
+
+  await manager._startWithGpuFallback(BINARIES, baseArgs, options, []);
+  manager.ready = true;
+  manager.process = {};
+
+  assert.equal(manager.getStatus().backend, "cpu");
+  assert.equal(manager.getStatus().gpuFallbackReason, "out_of_memory");
+  assert.deepEqual(notifications, [{ reason: "out_of_memory" }]);
+  assert.ok(!JSON.stringify(manager.getStatus()).includes("/private/model.gguf"));
+});
+
+test("other GPU failures get a generic reason and a successful retry clears it", async () => {
+  const { manager, baseArgs, options } = makeLadder((attempt) => attempt.binary === "/bin/vulkan", {
+    contextSize: 16384,
+  });
+  const notifications = [];
+  manager.on("gpu-fallback", (event) => notifications.push(event));
+  await manager._startWithGpuFallback(BINARIES, baseArgs, options, []);
+  assert.equal(manager.gpuFallbackReason, "startup_failed");
+  assert.deepEqual(notifications, [{ reason: "startup_failed" }]);
+
+  manager._startWithBinary = async () => {};
+  await manager._startWithGpuFallback(BINARIES, baseArgs, options, []);
+  assert.equal(manager.activeBackend, "vulkan");
+  assert.equal(manager.gpuFallbackReason, null);
+  assert.equal(notifications.length, 1, "GPU success does not announce a fallback");
 });

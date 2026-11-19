@@ -829,6 +829,13 @@ class IPCHandlers {
     this.parakeetManager = managers.parakeetManager;
     const localModelManager = require("./modelManagerBridge").default;
     this._initLocalModelPolicy(localModelManager);
+    localModelManager.serverManager.on("gpu-fallback", ({ reason }) => {
+      const panel = this.windowManager?.controlPanelWindow;
+      const main = this.windowManager?.mainWindow;
+      const visible = (win) => win && !win.isDestroyed() && win.isVisible() && !win.isMinimized();
+      const target = visible(panel) ? panel : visible(main) ? main : null;
+      target?.webContents.send("llama-gpu-fallback", { reason });
+    });
     this.dictationCleanupPrewarm = createLocalCleanupPrewarm(localModelManager);
 
     this.diarizationManager = managers.diarizationManager;
