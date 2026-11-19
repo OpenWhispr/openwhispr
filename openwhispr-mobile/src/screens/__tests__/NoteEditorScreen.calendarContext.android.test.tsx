@@ -37,7 +37,7 @@ import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { makeContentHash } from '@/lib/utils';
 import { clearLocalReasoningReadinessCache } from '@/lib/localReasoning';
-import { extractCorrectionPairs } from '@/lib/correctionLearner';
+import { extractCorrectionPairs } from '@/android/dictionary/correctionPairs';
 import { learnCorrections } from '@/android/dictionary/learned';
 import { showLearnedToast } from '@/android/dictionary/learnedToast';
 import { showToast } from '@/android/settings/kit';
@@ -264,7 +264,7 @@ jest.mock('@/lib/privateMode', () => ({
   promptLocalModelFallback: jest.fn(),
 }));
 
-jest.mock('@/lib/correctionLearner', () => ({
+jest.mock('@/android/dictionary/correctionPairs', () => ({
   extractCorrectionPairs: jest.fn(() => []),
 }));
 jest.mock('@/android/dictionary/learned', () => ({

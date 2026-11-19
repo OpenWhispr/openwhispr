@@ -21,7 +21,7 @@ import { useActionsStore } from '@/store/useActionsStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useConfigStore } from '@/store/useConfigStore';
-import { extractCorrectionPairs } from '@/lib/correctionLearner';
+import { extractCorrectionPairs } from '@/android/dictionary/correctionPairs';
 import { learnCorrections } from '@/android/dictionary/learned';
 import { showLearnedToast } from '@/android/dictionary/learnedToast';
 import { applyTranscriptFix, FixWordCard, type FixTarget } from '@/android/dictionary/FixWord';
