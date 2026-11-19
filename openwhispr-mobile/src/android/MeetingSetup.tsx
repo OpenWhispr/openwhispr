@@ -67,7 +67,7 @@ export function MeetingSetup({
             />
           </>
         ) : requiresRealAccount(user) ? (
-          <Button label={t('signIn')} onPress={() => router.push('/auth')} />
+          <Button label={t('signIn')} onPress={() => router.push('/auth?reason=meeting')} />
         ) : (
           <Button label={t('meetingStart')} busy={busy} onPress={onStart} />
         )}

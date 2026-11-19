@@ -1,12 +1,16 @@
 import { useEffect } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import AuthScreen from '@/screens/AuthScreen';
+import AuthScreen, { isAuthReason } from '@/screens/AuthScreen.android';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore.android';
 
 export default function AuthRoute() {
-  const params = useLocalSearchParams<{ returnTo?: string; superwallPlacement?: string }>();
+  const params = useLocalSearchParams<{
+    returnTo?: string;
+    superwallPlacement?: string;
+    reason?: string;
+  }>();
   const user = useAuthStore((state) => state.user);
   const isGuest = useAuthStore((state) => state.isGuest);
   const sessionRejected = useUsageStore((state) => state.sessionRejected);
@@ -29,6 +33,9 @@ export default function AuthRoute() {
 
   return (
     <AuthScreen
+      reason={isAuthReason(params.reason) ? params.reason : undefined}
+      // The server refused this account's session: sign it in again (2.5), keeping its notes.
+      signInAgainEmail={sessionRejected && user && !user.isAnonymous ? user.email : undefined}
       // Also hidden for an anonymous session: the default guest action clears
       // the session, which would destroy their notes and any subscription.
       hideGuestContinue={isGuest || !!user}

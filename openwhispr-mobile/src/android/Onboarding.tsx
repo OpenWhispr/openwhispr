@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, BackHandler, PermissionsAndroid, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import AuthScreen from '@/screens/AuthScreen';
+import AuthScreen from '@/screens/AuthScreen.android';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
@@ -151,7 +151,11 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
       return (
         <>
           <StatusBar style="light" />
-          <AuthScreen onClose={() => go('splash')} onGuestContinue={() => go('pitch')} />
+          <AuthScreen
+            variant="onboarding"
+            onClose={() => go('splash')}
+            onGuestContinue={() => go('pitch')}
+          />
         </>
       );
     case 'pitch':

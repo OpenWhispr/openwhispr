@@ -187,7 +187,7 @@ export default function ProcessingScreen() {
           />
           {cloud.length ? chips(cloud) : <Text style={settings.subtitle}>{t('noTasksHere')}</Text>}
           {!signedIn ? (
-            <OutlineButton label={t('signIn')} onPress={() => router.push('/auth')} />
+            <OutlineButton label={t('signIn')} onPress={() => router.push('/auth?reason=cloud')} />
           ) : (
             !cloud.length && (
               <OutlineButton

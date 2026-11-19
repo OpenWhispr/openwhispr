@@ -152,3 +152,42 @@ export const {
   initAuthenticatedUser,
   checkUserExists,
 } = createAuthApi(client, { fetch: sessionFetch, afterSignIn: cacheAndroidSessionAfterSignIn });
+
+export type PasswordResetResponse = {
+  status: number | null;
+  code?: string;
+  retryAfter?: string | null;
+};
+
+// The raw answers of Better Auth's two reset endpoints; src/android/auth/passwordReset.ts reads them.
+export async function requestPasswordResetEmail(
+  email: string,
+  redirectTo: string,
+): Promise<PasswordResetResponse> {
+  let retryAfter: string | null = null;
+  const { error } = await client.requestPasswordReset({
+    email,
+    redirectTo,
+    fetchOptions: {
+      timeout: 15_000,
+      onError: ({ response }) => {
+        retryAfter = response.headers.get('X-Retry-After');
+      },
+    },
+  });
+  if (!error) return { status: 200 };
+  return { status: error.status || null, code: error.code, retryAfter };
+}
+
+export async function resetPasswordWithToken(
+  newPassword: string,
+  token: string,
+): Promise<PasswordResetResponse> {
+  const { error } = await client.resetPassword({
+    newPassword,
+    token,
+    fetchOptions: { timeout: 15_000 },
+  });
+  if (!error) return { status: 200 };
+  return { status: error.status || null, code: error.code };
+}

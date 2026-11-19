@@ -105,7 +105,7 @@ export function PlanContent() {
         <Text accessibilityLiveRegion="polite" style={bodyText}>
           {t('planSignInRequired')}
         </Text>
-        <PillAction primary label={t('signIn')} onPress={() => router.push('/auth')} />
+        <PillAction primary label={t('signIn')} onPress={() => router.push('/auth?reason=plan')} />
       </>
     );
   }
@@ -180,7 +180,7 @@ export function PlanContent() {
           busy={busy}
           onPress={() => {
             if (!signedIn) {
-              router.push('/auth');
+              router.push('/auth?reason=plan');
               return;
             }
             void run(async () => {
