@@ -30,7 +30,6 @@ import {
   shouldShowByokStreamingPreview,
 } from "../utils/transcriptionPreview";
 import { canStartDictation } from "../utils/dictationReadiness";
-import { waitForVisualFrames } from "../utils/visualFrame";
 import { recordCleanupFailure } from "../stores/cleanupFailureStore";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
@@ -222,12 +221,9 @@ export const useAudioRecording = (toast, options = {}) => {
         // microphone; AudioManager confirms the same value once recording.
         setIsAssistantVoice(voiceAgentRequested);
         if (!(await attempt.admission) || !current()) return false;
-        await waitForVisualFrames();
-        if (!current()) return false;
 
-        // Start acquisition only after the compact thinking frame has reached
-        // the compositor. startRecording() joins this prepared capture, so the
-        // device still opens exactly once.
+        // Both routes reuse the prepared mic. Batch dictation buffers pre-roll
+        // once audio arrives, and streaming starts collecting PCM in its worklet.
         void Promise.resolve(manager.prepareMicCapture?.())
           .catch((error) => logger.warn("Mic preparation failed", { error: error?.message }))
           .finally(() => reportManagerLifecycle(manager, attempt));
@@ -396,9 +392,8 @@ export const useAudioRecording = (toast, options = {}) => {
       window.electronAPI?.unregisterCancelHotkey?.();
       setIsPreparing(false);
       setIsStopping(true);
-      // Contract to the stable thinking state before MediaRecorder/streaming
-      // finalization can occupy the renderer on slower Windows machines.
-      await waitForVisualFrames();
+      // The thinking state paints alongside finalization rather than ahead of
+      // it, so a busy GPU never holds up the transcript.
 
       if (currentState.isStreaming || currentState.isStreamingStartInProgress) {
         void playStopCue();
@@ -1223,7 +1218,6 @@ export const useAudioRecording = (toast, options = {}) => {
         reportManagerLifecycle(manager, attempt);
         return;
       }
-      await waitForVisualFrames();
       if (
         generation !== preparationGenerationRef.current ||
         startLockRef.current ||

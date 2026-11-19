@@ -86,6 +86,34 @@ function createBatchFinalizationManager(AudioManager, merge) {
   };
 }
 
+test("two batch stops before the final recorder event finalize the delivered audio once", async (t) => {
+  const { AudioManager } = await loadManagerClass(t);
+  const finalized = [];
+  const manager = Object.assign(Object.create(AudioManager.prototype), {
+    isRecording: true,
+    micRecovery: { stop() {} },
+    micStreamHold: { touch() {} },
+    finalizeBatchRecording: (segment) => finalized.push(segment),
+  });
+  const recorder = {
+    state: "recording",
+    stop() {
+      this.state = "inactive";
+    },
+  };
+  manager.createBatchRecorder({ getTracks: () => [] }, { recorder, chunks: [] });
+
+  assert.equal(manager.stopRecording(), true);
+  assert.equal(recorder.state, "inactive");
+  assert.equal(manager.stopRecording(), false);
+  assert.deepEqual(finalized, []);
+
+  recorder.ondataavailable({ data: new Blob(["final audio"]) });
+  await recorder.onstop();
+  assert.equal(finalized.length, 1);
+  assert.equal(await finalized[0].text(), "final audio");
+});
+
 test("batch finalization keeps the recording occurrence time", async (t) => {
   const { AudioManager } = await loadManagerClass(t);
   const merge = deferred();
