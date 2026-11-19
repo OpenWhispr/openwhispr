@@ -231,7 +231,7 @@ class LearnedTab(
   private companion object {
     const val GROW_MS = 520L
     const val SHRINK_MS = 300L
-    const val HOLD_MS = 4000L
+    const val HOLD_MS = 5000L
     const val UNDONE_MS = 1200L
   }
 }

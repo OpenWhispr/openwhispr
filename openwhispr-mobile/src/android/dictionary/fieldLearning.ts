@@ -50,7 +50,7 @@ export function observeFieldLearning(): () => void {
       const still =
         now < showingUntil ? showing.filter((w) => !replaced.includes(w.toLowerCase())) : [];
       showing = [...still, ...learned];
-      showingUntil = now + 5000;
+      showingUntil = now + 6000;
       void native.showLearnedTab({
         words: showing,
         message:
