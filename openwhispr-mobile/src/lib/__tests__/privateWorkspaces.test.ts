@@ -174,15 +174,14 @@ describe('Private folder scoping', () => {
     expect(pickPrivateMeetingsFolder([explicitDefault])).toBeNull();
   });
 
-  it('groups folders under their workspace, the asked one first', () => {
+  it('groups folders under their workspace, in list order', () => {
     const groups = groupPrivateFoldersByWorkspace(all, {
       workspaces: [OWN, TEAM],
-      firstId: 'team',
       defaultId: 'own',
     });
     expect(groups.map((g) => [g.workspaceId, g.name, g.folders.map((f) => f.id)])).toEqual([
-      ['team', 'team', [3, 4]],
       ['own', 'own', [1, 5, 2]],
+      ['team', 'team', [3, 4]],
     ]);
   });
 
@@ -209,7 +208,6 @@ describe('Private folder scoping', () => {
     const orphan = folder({ id: 9, name: 'Old', privateWorkspaceId: 'gone' });
     const groups = groupPrivateFoldersByWorkspace([...all, orphan], {
       workspaces: [OWN, TEAM],
-      firstId: 'own',
       defaultId: 'own',
     });
     expect(groups.flatMap((g) => g.folders.map((f) => f.id))).not.toContain(9);
@@ -218,14 +216,13 @@ describe('Private folder scoping', () => {
   it('offers unplaced folders as their own move group until a default exists', () => {
     const groups = groupPrivateFoldersByWorkspace([defaultPersonal, teamPersonal], {
       workspaces: [TEAM],
-      firstId: 'team',
       defaultId: null,
     });
     expect(
       groups.map((group) => [group.workspaceId, group.folders.map((entry) => entry.id)]),
     ).toEqual([
-      ['team', [3]],
       [null, [1]],
+      ['team', [3]],
     ]);
   });
 });

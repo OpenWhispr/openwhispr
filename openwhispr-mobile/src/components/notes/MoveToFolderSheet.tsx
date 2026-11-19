@@ -8,7 +8,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import { safeHaptics } from '@/lib/utils';
 import type { Folder, Space } from '@/data';
-import type { PrivateFolderGroup } from '@/lib/privateWorkspaces';
+import { UNASSIGNED_PRIVATE_ID, type PrivateFolderGroup } from '@/lib/privateWorkspaces';
 
 export type MoveToFolderSheetProps = {
   visible: boolean;
@@ -127,7 +127,7 @@ export function MoveToFolderSheet({
           )}
 
           {privateGroups.map((group) => (
-            <View key={group.workspaceId ?? 'unassigned-private'} className="gap-2">
+            <View key={group.workspaceId ?? UNASSIGNED_PRIVATE_ID} className="gap-2">
               <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
                 {`${group.name} · Private`}
               </Text>

@@ -5,7 +5,11 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GroupedList } from './GroupedList';
 import { safeHaptics } from '@/lib/utils';
-import { privateWorkspaceOptions, type PrivateWorkspace } from '@/lib/privateWorkspaces';
+import {
+  privateWorkspaceOptions,
+  UNASSIGNED_PRIVATE_ID,
+  type PrivateWorkspace,
+} from '@/lib/privateWorkspaces';
 
 type PrivateWorkspaceSwitcherProps = {
   workspaces: PrivateWorkspace[];
@@ -13,8 +17,6 @@ type PrivateWorkspaceSwitcherProps = {
   defaultId: string | null;
   onSelect: (workspaceId: string | null) => void;
 };
-
-const UNASSIGNED_PRIVATE_ID = 'unassigned-private';
 
 /**
  * Picks the workspace whose Private and team spaces the Folders screen shows, as desktop's

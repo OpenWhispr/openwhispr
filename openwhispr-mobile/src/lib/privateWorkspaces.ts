@@ -75,6 +75,8 @@ export function resolveActivePrivateWorkspaceId({
   return defaultActiveWorkspaceId(workspaces) ?? defaultId;
 }
 
+export const UNASSIGNED_PRIVATE_ID = 'unassigned-private';
+
 export interface PrivateWorkspaceOption {
   id: string | null;
   name: string;
@@ -144,24 +146,15 @@ export interface PrivateFolderGroup<F> {
 }
 
 /**
- * Private folders grouped under each listed workspace, `firstId`'s first and the rest in list
- * order, including unplaced Personal folders until a default exists. A workspace no longer
- * listed is left out, so nothing is filed there.
+ * Private folders grouped under each listed workspace, in list order, including unplaced
+ * Personal folders until a default exists. A workspace no longer listed is left out, so nothing
+ * is filed there.
  */
 export function groupPrivateFoldersByWorkspace<F extends Pick<Folder, 'privateWorkspaceId'>>(
   folders: F[],
-  {
-    workspaces,
-    firstId,
-    defaultId,
-  }: { workspaces: PrivateWorkspace[]; firstId: string | null; defaultId: string | null },
+  { workspaces, defaultId }: { workspaces: PrivateWorkspace[]; defaultId: string | null },
 ): PrivateFolderGroup<F>[] {
-  const options = privateWorkspaceOptions(workspaces, defaultId);
-  const ordered = [
-    ...options.filter((workspace) => workspace.id === firstId),
-    ...options.filter((workspace) => workspace.id !== firstId),
-  ];
-  return ordered.map((workspace) => ({
+  return privateWorkspaceOptions(workspaces, defaultId).map((workspace) => ({
     workspaceId: workspace.id,
     name: workspace.name,
     folders: foldersInPrivateWorkspace(folders, workspace.id, defaultId),

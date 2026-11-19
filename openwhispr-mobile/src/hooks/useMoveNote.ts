@@ -132,7 +132,6 @@ export function useMoveNote({
     if (!isPersonal || !perWorkspacePrivate) return [];
     return groupPrivateFoldersByWorkspace(allPrivateFolders, {
       workspaces: privateWorkspaces,
-      firstId: noteWorkspaceId,
       defaultId: defaultPrivateWorkspaceId,
     }).filter((group) => group.workspaceId !== noteWorkspaceId && group.folders.length > 0);
   }, [
