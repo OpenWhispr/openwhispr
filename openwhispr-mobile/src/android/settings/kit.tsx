@@ -628,7 +628,8 @@ export function SettingsSlider({
 }
 const KNOB = 24;
 
-type ToastTone = 'success' | 'error' | 'neutral';
+/** `learned`: the dictionary learned a word (a blue dot with sparkles, Dictionary's C7). */
+type ToastTone = 'success' | 'error' | 'neutral' | 'learned';
 /** A snackbar's action. `onClose` runs once it closes without the action: timed out or replaced. */
 type ToastAction = { label: string; onPress: () => void; onClose: () => void };
 /** `durationMs` overrides the default (5 s with an action); `aboveTabBar` lifts it over the tab bar. */
@@ -737,12 +738,16 @@ export function SettingsToastHost() {
               experimental_backgroundImage:
                 tone === 'success'
                   ? 'linear-gradient(180deg, #4cc47f 0%, #1f9d55 100%)'
-                  : 'linear-gradient(180deg, #f2665c 0%, #d8352a 100%)',
+                  : tone === 'learned'
+                    ? gloss.experimental_backgroundImage
+                    : 'linear-gradient(180deg, #f2665c 0%, #d8352a 100%)',
               boxShadow: 'inset 0px 1px 0px rgba(255,255,255,0.5)',
             }}
           >
             {tone === 'success' ? (
               <SystemIcon name="checkmark" mdName="Check" size={12} color="#FFFFFF" />
+            ) : tone === 'learned' ? (
+              <SystemIcon name="sparkles" mdName="Sparkles" size={11} color="#FFFFFF" />
             ) : (
               <Text style={{ color: '#FFFFFF', fontSize: 12, lineHeight: 14, fontWeight: '700' }}>
                 !

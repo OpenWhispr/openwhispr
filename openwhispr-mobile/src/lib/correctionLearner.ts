@@ -30,11 +30,22 @@ function levenshtein(a: string, b: string): number {
   return prev[bl.length];
 }
 
+export type CorrectionPair = { word: string; from: string };
+
 export function extractCorrections(
   originalText: string,
   newText: string,
   existingDictionary: string[],
 ): string[] {
+  return extractCorrectionPairs(originalText, newText, existingDictionary).map((pair) => pair.word);
+}
+
+/** As extractCorrections, with the misheard word each correction replaced. */
+export function extractCorrectionPairs(
+  originalText: string,
+  newText: string,
+  existingDictionary: string[],
+): CorrectionPair[] {
   if (!originalText || !newText || originalText === newText) return [];
   // Autosave can observe a word halfway through typing or backspacing. Pure
   // tail edits are not evidence of a deliberate transcription correction.
@@ -53,26 +64,26 @@ export function extractCorrections(
 
   const dictLower = new Set(existingDictionary.map((w) => w.toLowerCase()));
   const seenLower = new Set<string>();
-  const results: string[] = [];
+  const results: CorrectionPair[] = [];
 
   for (const candidate of addedWords) {
     if (candidate.length < MIN_WORD_LENGTH) continue;
     const lower = candidate.toLowerCase();
     if (dictLower.has(lower) || seenLower.has(lower)) continue;
 
-    let best: { dist: number } | null = null;
+    let best: { dist: number; from: string } | null = null;
     for (const removed of removedWords) {
       if (removed.length < MIN_WORD_LENGTH) continue;
       const dist = levenshtein(candidate, removed);
       const maxLen = Math.max(candidate.length, removed.length);
       if (maxLen === 0) continue;
       if (dist / maxLen < MAX_DISTANCE_RATIO && (!best || dist < best.dist)) {
-        best = { dist };
+        best = { dist, from: removed };
       }
     }
 
     if (best) {
-      results.push(candidate);
+      results.push({ word: candidate, from: best.from });
       seenLower.add(lower);
     }
   }

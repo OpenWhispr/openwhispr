@@ -183,7 +183,6 @@ function SelectCircle({ selected }: { selected: boolean }) {
 }
 
 const ACTION_WIDTH = 74;
-const OPEN_OFFSET = ACTION_WIDTH * 2;
 
 /**
  * Figma L9, swipe left. A short swipe settles 148 dp left on Move and Delete; past half the
@@ -196,15 +195,21 @@ export function SwipeRow({
   onDelete,
   onMove,
   noteId,
+  restored,
   enabled = true,
 }: {
   children: React.ReactNode;
   onDelete: () => void;
-  onMove: () => void;
-  noteId: number;
+  /** Without it the row offers Delete alone and settles 74 dp open (Dictionary's C4a). */
+  onMove?: () => void;
+  /** A note row: Undo of its delete plays the row back in (`consumeRestored`). */
+  noteId?: number;
+  /** For rows that aren't notes: this row is coming back from an Undo. */
+  restored?: boolean;
   enabled?: boolean;
 }) {
   const t = useNotesT();
+  const OPEN_OFFSET = onMove ? ACTION_WIDTH * 2 : ACTION_WIDTH;
   const reduceMotion = useReduceMotion();
   const { width: screenWidth } = useWindowDimensions();
   const [rowWidth, setRowWidth] = useState(screenWidth - 32);
@@ -214,7 +219,7 @@ export function SwipeRow({
   const armed = useSharedValue(0);
   const height = useSharedValue(-1);
   const [open, setOpen] = useState(false);
-  const restoring = useRef(consumeRestored(noteId));
+  const restoring = useRef(noteId != null ? consumeRestored(noteId) : Boolean(restored));
 
   // Undo plays the delete backwards: the gap opens, then the row slides in from the left.
   useEffect(() => {
@@ -317,11 +322,11 @@ export function SwipeRow({
       }}
       accessibilityActions={[
         { name: 'delete', label: t('delete') },
-        { name: 'move', label: t('move') },
+        ...(onMove ? [{ name: 'move', label: t('move') }] : []),
       ]}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'delete') onDelete();
-        if (event.nativeEvent.actionName === 'move') onMove();
+        if (event.nativeEvent.actionName === 'move') onMove?.();
       }}
     >
       <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
@@ -360,36 +365,38 @@ export function SwipeRow({
             </Text>
           </Pressable>
         </Animated.View>
-        <Animated.View
-          style={[
-            {
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              right: ACTION_WIDTH,
-              width: ACTION_WIDTH,
-              backgroundColor: '#E8E7E4',
-            },
-            moveStyle,
-          ]}
-        >
-          <Pressable
-            cssInterop={false}
-            accessibilityRole="button"
-            accessibilityElementsHidden={!open}
-            importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
-            onPress={() => {
-              close();
-              onMove();
-            }}
-            style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 }}
+        {onMove && (
+          <Animated.View
+            style={[
+              {
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                right: ACTION_WIDTH,
+                width: ACTION_WIDTH,
+                backgroundColor: '#E8E7E4',
+              },
+              moveStyle,
+            ]}
           >
-            <SystemIcon name="folder" mdName="Folder" size={20} color={home.text} />
-            <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '500', color: home.text }}>
-              {t('move')}
-            </Text>
-          </Pressable>
-        </Animated.View>
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              accessibilityElementsHidden={!open}
+              importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+              onPress={() => {
+                close();
+                onMove?.();
+              }}
+              style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 }}
+            >
+              <SystemIcon name="folder" mdName="Folder" size={20} color={home.text} />
+              <Text style={{ fontSize: 13, lineHeight: 16, fontWeight: '500', color: home.text }}>
+                {t('move')}
+              </Text>
+            </Pressable>
+          </Animated.View>
+        )}
       </View>
       <GestureDetector gesture={pan}>
         <Animated.View style={[{ backgroundColor: home.surface }, rowStyle]}>
