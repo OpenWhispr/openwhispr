@@ -179,24 +179,31 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
             isInsidePath(move.newPath, other.newPath))
       );
     let movedAny = false;
-    let madeProgress = true;
-    while (madeProgress && pending.length > 0) {
-      madeProgress = false;
-      for (let index = 0; index < pending.length;) {
-        const move = pending[index];
-        if (mirror.getFolderPath(move.after) || mustWait(move)) {
-          index++;
-          continue;
-        }
-        pending.splice(index, 1);
-        // Even a move that can't happen frees the moves waiting on it.
-        madeProgress = true;
-        const source = existingPath(move.before);
-        if (source && mirror.relocateFolderDir(source, move.after, move.folderId)) {
-          done.add(move.folderId);
-          movedAny = true;
+    for (;;) {
+      let madeProgress = true;
+      while (madeProgress && pending.length > 0) {
+        madeProgress = false;
+        for (let index = 0; index < pending.length;) {
+          const move = pending[index];
+          if (mirror.getFolderPath(move.after) || mustWait(move)) {
+            index++;
+            continue;
+          }
+          pending.splice(index, 1);
+          // Even a move that can't happen frees the moves waiting on it.
+          madeProgress = true;
+          const source = existingPath(move.before);
+          if (source && mirror.relocateFolderDir(source, move.after, move.folderId)) {
+            done.add(move.folderId);
+            movedAny = true;
+          }
         }
       }
+      // A destination still taken now stays taken (the user's directory, or a
+      // cycle), so those moves never happen and the moves waiting on them go alone.
+      const stuck = pending.filter((move) => mirror.getFolderPath(move.after));
+      if (stuck.length === 0 || stuck.length === pending.length) break;
+      for (const move of stuck) pending.splice(pending.indexOf(move), 1);
     }
     return movedAny;
   };
