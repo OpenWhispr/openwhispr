@@ -150,8 +150,7 @@ const TRANSCRIPTION_POLICY_CATALOG = {
 };
 
 const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
-  // Self-hosted realtime is not implemented for Note Recording.
-  modes: ["openwhispr", "providers", "local", "enterprise"] as const,
+  modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"] as const,
   enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   byokProviders: modelRegistryData.transcriptionProviders
     .filter(

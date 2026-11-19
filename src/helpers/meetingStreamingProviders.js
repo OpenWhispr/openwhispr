@@ -29,7 +29,9 @@ const getMeetingStreamingClient = (provider) => {
   return StreamingClient;
 };
 
-// These authenticate with saved credentials whatever the mode says.
+// These authenticate with saved credentials whatever the mode says. Membership ties a
+// connection to key saves; productPolicy.js decides the policy mode (Self-Hosted for
+// openai-compatible-realtime, bring-your-own-key for the rest).
 const SAVED_KEY_PROVIDERS = new Set([
   "corti-realtime",
   "tinfoil-realtime",
