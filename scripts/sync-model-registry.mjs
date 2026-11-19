@@ -152,13 +152,13 @@ export async function check(dir = output, from = registry) {
   return "the catalog in model-registry/";
 }
 
-async function readLocal() {
-  const read = (name) => fs.readFile(path.join(output, name), "utf8");
+async function readLocal(dir = output) {
+  const read = (name) => fs.readFile(path.join(dir, name), "utf8");
   return {
     metadata: JSON.parse(await read("registryMetadata.json")),
     catalog: await read("modelRegistryData.json"),
     keys: JSON.parse(await read(KEYS)),
-    reader: require(path.join(output, "registrySchema.cjs")),
+    reader: require(path.join(dir, "registrySchema.cjs")),
   };
 }
 
@@ -215,17 +215,21 @@ export function releaseProblems({ manifest, liveVersion, liveTested, clientContr
   return problems;
 }
 
-async function pinRelease(revision) {
-  const { metadata, catalog, keys, reader } = await readLocal();
-  await check();
+// `dir`, `from`, `fetchFile` and `tip` are replaced in tests, which pin offline.
+export async function pinRelease(
+  revision,
+  { dir = output, from = registry, fetchFile = fetchText, tip = publishedTip } = {}
+) {
+  const { metadata, catalog, keys, reader } = await readLocal(dir);
+  await check(dir, from);
   // `revision` is null when the flag is absent. Given without a commit (an empty output
   // from an earlier job), it must not quietly become whatever is live now.
   if (revision !== null && !isCommit(revision))
     throw new Error("--revision takes a commit of the published branch");
-  const commit = revision ?? publishedTip();
+  const commit = revision ?? tip();
   const at = `${BASE}/${commit}/v2`;
   const load = async (file) => {
-    const bytes = await fetchText(`${at}/${file}`);
+    const bytes = await fetchFile(`${at}/${file}`);
     return { bytes, manifest: reader.validateManifest(verifyEnvelope(bytes, keys)) };
   };
   const live = await load("manifest.json");
@@ -257,9 +261,9 @@ async function pinRelease(revision) {
   });
   if (problems.length) throw new Error(problems.join("\n"));
   const { bytes } = candidates.find((candidate) => candidate.manifest === chosen);
-  await fs.writeFile(path.join(output, "registryBundle.json"), json(JSON.parse(bytes)));
+  await fs.writeFile(path.join(dir, "registryBundle.json"), json(JSON.parse(bytes)));
   await fs.writeFile(
-    path.join(output, "registryMetadata.json"),
+    path.join(dir, "registryMetadata.json"),
     json({
       ...metadata,
       manifestVersion: chosen.manifestVersion,
@@ -267,7 +271,7 @@ async function pinRelease(revision) {
       sourceCommit: chosen.sourceCommit,
     })
   );
-  await check();
+  await check(dir, from);
   return `Pinned signed publication ${chosen.manifestVersion} at ${commit} (live is ${live.manifest.manifestVersion}).`;
 }
 
