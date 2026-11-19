@@ -37,6 +37,7 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { ConfirmDialog } from "../ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useToast } from "../ui/useToast";
 import { useNoteDragAndDrop, type NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
@@ -74,6 +75,8 @@ import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
 import { defaultFolderDisplayName } from "./shared";
 import type {
+  DeviceNoteFolder,
+  DeviceNoteSummary,
   FolderItem,
   MoveRefusalCode,
   NoteItem,
@@ -109,6 +112,7 @@ import {
   openNote,
   useShareCache,
 } from "../../stores/noteStore";
+import { useDeviceNotesStore, type DeviceNotesMoveRequest } from "../../stores/deviceNotesStore";
 
 // A folder row's notes: those of every folder it stands for (one, except in the
 // Private section; see privateSectionFolders).
@@ -426,6 +430,51 @@ function SearchableMoveSubmenu({
   );
 }
 
+/** A folder picker's New folder row: asks for the name in place, then hands it on. */
+function NewFolderMenuFooter({ onCreate }: { onCreate: (name: string) => void }) {
+  const { t } = useTranslation();
+  const [isCreating, setIsCreating] = useState(false);
+  const [name, setName] = useState("");
+  if (!isCreating) {
+    return (
+      <DropdownMenuItem
+        onSelect={(e) => {
+          e.preventDefault();
+          setIsCreating(true);
+        }}
+        className={cn(MENU_ITEM_CLASS, "text-foreground/70")}
+      >
+        <Plus size={10} />
+        {t("notes.context.newFolder")}
+      </DropdownMenuItem>
+    );
+  }
+  return (
+    <div className="px-1">
+      <input
+        dir="auto"
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter" && name.trim()) {
+            onCreate(name.trim());
+            setName("");
+            setIsCreating(false);
+          }
+          if (e.key === "Escape") {
+            setIsCreating(false);
+            setName("");
+          }
+        }}
+        placeholder={t("notes.folders.folderName")}
+        className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+      />
+    </div>
+  );
+}
+
 function SpaceMenuIcon({ space }: { space: SpaceItem }) {
   if (space.kind === "private") {
     return <Lock size={11} className="text-muted-foreground/70 shrink-0" />;
@@ -726,7 +775,7 @@ function FolderRow({
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    window.electronAPI?.showFolderInExplorer?.(folder.name);
+                    window.electronAPI?.showFolderInExplorer?.(folder.id);
                   }}
                   className={MENU_ITEM_CLASS}
                 >
@@ -875,8 +924,6 @@ function NoteLeaf({
   t: TFn;
 }) {
   const [moveSearch, setMoveSearch] = useState("");
-  const [newFolderName, setNewFolderName] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
 
   const multiSpace = spaces.length > 1;
 
@@ -991,11 +1038,7 @@ function NoteLeaf({
       {hasActions && (
         <DropdownMenu
           onOpenChange={(open) => {
-            if (!open) {
-              setMoveSearch("");
-              setIsCreating(false);
-              setNewFolderName("");
-            }
+            if (!open) setMoveSearch("");
           }}
         >
           <DropdownMenuTrigger asChild>
@@ -1034,41 +1077,7 @@ function NoteLeaf({
                 onSearchChange={setMoveSearch}
                 searchPlaceholder={t("notes.context.searchFolders")}
                 footer={
-                  isCreating ? (
-                    <div className="px-1">
-                      <input
-                        dir="auto"
-                        autoFocus
-                        value={newFolderName}
-                        onChange={(e) => setNewFolderName(e.target.value)}
-                        onKeyDown={(e) => {
-                          e.stopPropagation();
-                          if (e.key === "Enter" && newFolderName.trim()) {
-                            onCreateFolderAndMove(note.id, newFolderName.trim());
-                            setNewFolderName("");
-                            setIsCreating(false);
-                          }
-                          if (e.key === "Escape") {
-                            setIsCreating(false);
-                            setNewFolderName("");
-                          }
-                        }}
-                        placeholder={t("notes.folders.folderName")}
-                        className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
-                      />
-                    </div>
-                  ) : (
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setIsCreating(true);
-                      }}
-                      className={cn(MENU_ITEM_CLASS, "text-foreground/70")}
-                    >
-                      <Plus size={10} />
-                      {t("notes.context.newFolder")}
-                    </DropdownMenuItem>
-                  )
+                  <NewFolderMenuFooter onCreate={(name) => onCreateFolderAndMove(note.id, name)} />
                 }
               >
                 {moveSearch ? (
@@ -1174,6 +1183,385 @@ function NoteLeaf({
   );
 }
 
+function DeviceNoteRow({
+  level,
+  label,
+  icon,
+  isActive,
+  isExpanded,
+  ariaLabel,
+  menuLabel,
+  indentClassName,
+  onActivate,
+  onMove,
+}: {
+  level: 1 | 2;
+  label: string;
+  icon: React.ReactNode;
+  isActive: boolean;
+  isExpanded?: boolean;
+  ariaLabel?: string;
+  menuLabel: string;
+  indentClassName: string;
+  onActivate: () => void;
+  onMove: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="treeitem"
+      aria-level={level}
+      aria-expanded={isExpanded}
+      aria-selected={isActive}
+      aria-label={ariaLabel}
+      tabIndex={0}
+      title={label}
+      onClick={onActivate}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
+        onActivate();
+      }}
+      style={treeRowActionClearanceStyle(1)}
+      className={cn(
+        ROW_BASE_CLASS,
+        "h-7 pe-2",
+        indentClassName,
+        isActive ? "bg-primary/8 dark:bg-primary/10" : "hover:bg-foreground/4 dark:hover:bg-white/4"
+      )}
+    >
+      {icon}
+      <span
+        dir="auto"
+        className={cn(
+          "text-[13px] truncate flex-1 transition-colors duration-150",
+          isActive
+            ? "text-foreground font-medium"
+            : "text-foreground/85 group-hover:text-foreground"
+        )}
+      >
+        {label}
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t("common.actions")}
+            onClick={(e) => e.stopPropagation()}
+            className={KEBAB_TRIGGER_CLASS}
+          >
+            <MoreHorizontal size={12} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={4} className="min-w-40">
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onMove();
+            }}
+            className={MENU_ITEM_CLASS}
+          >
+            <Lock size={11} className="text-muted-foreground/70" />
+            {menuLabel}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+/** The section's menu: every listed note into the on-screen Private, by folder or into one. */
+function MoveAllDeviceNotesMenu({
+  folderRows,
+  onMoveAll,
+  onMoveAllTo,
+  onCreateFolderAndMoveAll,
+}: {
+  folderRows: FolderRowGroup[];
+  onMoveAll: () => void;
+  onMoveAllTo: (folderId: number) => void;
+  /** Absent while the on-screen Private has no row to make a folder in. */
+  onCreateFolderAndMoveAll?: (name: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [search, setSearch] = useState("");
+  const options = folderRows.map(({ folder }) => ({
+    id: folder.id,
+    label: defaultFolderDisplayName(folder, t),
+  }));
+  const query = search.toLowerCase();
+  const shown = query
+    ? options.filter((option) => option.label.toLowerCase().includes(query))
+    : options;
+
+  return (
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (!open) setSearch("");
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("common.actions")}
+          className={cn(
+            HOVER_REVEAL_BUTTON_CLASS,
+            "group-hover/section:opacity-100 data-[state=open]:opacity-100"
+          )}
+        >
+          <MoreHorizontal size={11} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={4} className="min-w-44">
+        <DropdownMenuItem onClick={onMoveAll} className={MENU_ITEM_CLASS}>
+          <Lock size={11} className="text-muted-foreground/70" />
+          {t("notes.deviceNotes.moveAll")}
+        </DropdownMenuItem>
+        <SearchableMoveSubmenu
+          icon={<FolderOpen size={11} className="text-muted-foreground/70" />}
+          label={t("notes.deviceNotes.moveAllTo")}
+          itemCount={options.length}
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder={t("notes.context.searchFolders")}
+          footer={
+            onCreateFolderAndMoveAll && <NewFolderMenuFooter onCreate={onCreateFolderAndMoveAll} />
+          }
+        >
+          {shown.map((option) => (
+            <DropdownMenuItem
+              key={option.id}
+              onClick={() => onMoveAllTo(option.id)}
+              className={MENU_ITEM_CLASS}
+            >
+              <span dir="auto" className="truncate flex-1">
+                {option.label}
+              </span>
+            </DropdownMenuItem>
+          ))}
+          {query && shown.length === 0 && (
+            <p className="text-xs text-foreground/50 text-center py-1.5">
+              {t("notes.context.noResults")}
+            </p>
+          )}
+        </SearchableMoveSubmenu>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * Notes no account owns on a device other accounts have used: view-only until moved into the
+ * on-screen Private (`workspaceId` is its workspace; `folderRows` its folders, which "Move all
+ * to" offers, and `privateSpaceId` where a new one goes). Kept out of the tree's arrow-key rows.
+ */
+function DeviceNotesSection({
+  workspaceId,
+  folderRows,
+  privateSpaceId,
+}: {
+  workspaceId: string | null;
+  folderRows: FolderRowGroup[];
+  privateSpaceId: number | null;
+}) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const folders = useDeviceNotesStore((s) => s.folders);
+  const notes = useDeviceNotesStore((s) => s.notes);
+  const viewNoteId = useDeviceNotesStore((s) => s.viewNoteId);
+  const [expandedFolderIds, setExpandedFolderIds] = useState<ReadonlySet<number>>(new Set());
+  const [openMoreFolderId, setOpenMoreFolderId] = useState<number | null>(null);
+
+  if (folders.length === 0 && notes.length === 0) return null;
+
+  // A note whose folder isn't listed (deleted since) sits at the root.
+  const folderIds = new Set(folders.map((folder) => folder.id));
+  const rootNotes = notes.filter(
+    (note) => note.folder_id == null || !folderIds.has(note.folder_id)
+  );
+  const viewedNote = notes.find((note) => note.id === viewNoteId) ?? null;
+
+  const move = async (request: DeviceNotesMoveRequest) => {
+    const single = request.folderId == null && request.noteIds?.length === 1;
+    const result = await useDeviceNotesStore.getState().move(request, { workspaceId });
+    if ("error" in result) {
+      toast({
+        title: t(single ? "notes.deviceNotes.moveFailed" : "notes.deviceNotes.moveFolderFailed"),
+        variant: "destructive",
+      });
+      return;
+    }
+    // Nothing moved: another window moved them first, and the refreshed list no longer shows them.
+    if (result.moved.length === 0) return;
+    toast({
+      title: single
+        ? t("notes.deviceNotes.moved")
+        : t("notes.deviceNotes.movedCount", { count: result.moved.length }),
+    });
+  };
+
+  // Every listed note, those behind "N more" included; main moves only those still unowned.
+  const moveAll = (targetFolderId?: number) => {
+    const noteIds = notes.map((note) => note.id);
+    void move(targetFolderId == null ? { noteIds } : { noteIds, targetFolderId });
+  };
+
+  const createFolderAndMoveAll = async (spaceId: number, name: string) => {
+    const created = await createFolder(name, spaceId);
+    if (created.success && created.folder) {
+      moveAll(created.folder.id);
+    } else if (created.error) {
+      toast({
+        title: t("notes.folders.couldNotCreate"),
+        description: t(localMutationErrorKey(created.error)),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleFolder = (id: number) =>
+    setExpandedFolderIds((previous) => {
+      const next = new Set(previous);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  // The "N more" row is outside the tree's roving focus, like the section's other rows.
+  const moreRowA11y = (folderId: number): RowA11yProps => ({
+    tabIndex: 0,
+    rowRef: () => {},
+    onFocus: () => {},
+    onKeyDown: (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      setOpenMoreFolderId(folderId);
+    },
+  });
+
+  const renderNote = (note: DeviceNoteSummary, level: 1 | 2) => (
+    <DeviceNoteRow
+      key={note.id}
+      level={level}
+      label={note.title || t("notes.list.untitled")}
+      icon={
+        <FileText
+          size={14}
+          className={cn(
+            "shrink-0 transition-colors duration-150",
+            note.id === viewNoteId ? "text-primary" : "text-foreground/50 dark:text-foreground/45"
+          )}
+        />
+      }
+      isActive={note.id === viewNoteId}
+      menuLabel={t("notes.deviceNotes.moveNote")}
+      indentClassName={level === 1 ? "ps-[30px]" : "ps-8"}
+      onActivate={() => useDeviceNotesStore.getState().openView(note.id)}
+      onMove={() => void move({ noteIds: [note.id] })}
+    />
+  );
+
+  const renderFolder = (folder: DeviceNoteFolder) => {
+    const isExpanded = expandedFolderIds.has(folder.id);
+    const name = defaultFolderDisplayName(folder, t);
+    const folderNotes = notes.filter((note) => note.folder_id === folder.id);
+    const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+      folderNotes,
+      viewedNote,
+      folder.id,
+      folderNotes.length
+    );
+    return (
+      <div key={folder.id} role="none">
+        <DeviceNoteRow
+          level={1}
+          label={name}
+          icon={
+            <RowToggle
+              isExpanded={isExpanded}
+              onToggle={() => toggleFolder(folder.id)}
+              icon={<Folder size={14} className="text-foreground/55 dark:text-foreground/45" />}
+            />
+          }
+          isActive={false}
+          isExpanded={isExpanded}
+          ariaLabel={`${name}, ${t("notes.spaces.noteCount", { count: folder.noteCount })}`}
+          menuLabel={t("notes.deviceNotes.moveFolder")}
+          indentClassName="ps-2"
+          onActivate={() => toggleFolder(folder.id)}
+          onMove={() => void move({ folderId: folder.id })}
+        />
+        <TreeChildren open={isExpanded}>
+          {/* Collapsed rows stay mounted for the animation, out of Tab order and screen readers. */}
+          <div className="space-y-px" inert={!isExpanded}>
+            {shownNotes.map((note) => renderNote(note, 2))}
+            {hiddenCount > 0 && (
+              <FolderNotesPopover
+                folder={folder}
+                notes={folderNotes}
+                total={folderNotes.length}
+                hiddenCount={hiddenCount}
+                activeNoteId={viewNoteId}
+                level={2}
+                open={openMoreFolderId === folder.id}
+                onOpenChange={(open) => setOpenMoreFolderId(open ? folder.id : null)}
+                a11y={moreRowA11y(folder.id)}
+                onPick={(note) => useDeviceNotesStore.getState().openView(note.id)}
+              />
+            )}
+          </div>
+        </TreeChildren>
+      </div>
+    );
+  };
+
+  return (
+    <div role="none" className="group/section">
+      <SectionHeader
+        label={t("notes.deviceNotes.title")}
+        className="mt-4"
+        action={
+          <div className="flex items-center gap-px">
+            <Popover>
+              <PopoverTrigger asChild>
+                {/* Always shown: it is the only place the section explains itself. */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("notes.deviceNotes.infoLabel")}
+                  className={cn(HOVER_REVEAL_BUTTON_CLASS, "opacity-100")}
+                >
+                  <Info size={11} />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="bottom" align="end" className="max-w-64 p-3">
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t("notes.deviceNotes.info")}
+                </p>
+              </PopoverContent>
+            </Popover>
+            <MoveAllDeviceNotesMenu
+              folderRows={folderRows}
+              onMoveAll={() => moveAll()}
+              onMoveAllTo={moveAll}
+              onCreateFolderAndMoveAll={
+                privateSpaceId == null
+                  ? undefined
+                  : (name) => void createFolderAndMoveAll(privateSpaceId, name)
+              }
+            />
+          </div>
+        }
+      />
+      <div role="group" aria-label={t("notes.deviceNotes.title")} className="space-y-px">
+        {folders.map(renderFolder)}
+        {rootNotes.map((note) => renderNote(note, 1))}
+      </div>
+    </div>
+  );
+}
+
 function SkeletonRows() {
   return (
     <div className="space-y-px" aria-hidden="true">
@@ -1267,6 +1655,13 @@ export default function SpacesTree({
     () => spaces.filter((s) => (s.kind === "private" ? s === privateSpace : teamCapability)),
     [spaces, privateSpace, teamCapability]
   );
+
+  useEffect(() => {
+    const { startListening, load } = useDeviceNotesStore.getState();
+    const stopListening = startListening();
+    void load();
+    return stopListening;
+  }, []);
 
   // The rows show the other Private's notes and those of the folders it shares
   // by name, but open with their own keys: load those containers with them.
@@ -2389,6 +2784,11 @@ export default function SpacesTree({
             </TreeChildren>
           )}
         </div>
+        <DeviceNotesSection
+          workspaceId={privateSpace?.workspace_id ?? null}
+          folderRows={privateFolderGroups}
+          privateSpaceId={privateSpace?.id ?? null}
+        />
         {teamCapability && (
           <div role="none" className="group/section">
             <SectionHeader

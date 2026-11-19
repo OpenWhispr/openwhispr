@@ -1,3 +1,4 @@
+import CreatorLinkField from "./CreatorLinkField";
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -662,6 +663,7 @@ export default function AuthenticationStep({
             </button>
           )}
 
+          <CreatorLinkField />
           <form onSubmit={handleSubmit} className="mt-4 space-y-3 text-start">
             <label className="block space-y-2">
               <span className="text-xs text-[var(--onboarding-text-secondary)]">
@@ -803,6 +805,7 @@ export default function AuthenticationStep({
           {t("auth.welcomeSubtitle")}
         </p>
 
+        <CreatorLinkField />
         <form
           onSubmit={(event) => {
             event.preventDefault();

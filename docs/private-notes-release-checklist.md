@@ -17,7 +17,7 @@ Assistant search follows main’s sign-in/Backup gate and cloud → local semant
 3. Deploy the placement-aware API, including the scoped search endpoint, across all writers and drain old API requests before releasing the new clients or enabling placement backfill. Older clients are supported by the new API; mixed old API builds are not supported once nondefault placement exists, because their folder adoption selects by name alone.
 4. Keep the placement-aware API on rollback. Do not restore the old cutoff, purge schedule or name-only folder adoption.
 
-Retired cutover endpoints return authenticated 404s. The old purge endpoint remains authenticated and inert, with its schedule removed. Explicit user deletion continues normally.
+The retired cutover and purge endpoints have been removed from the API, along with the purge schedule. Explicit user deletion continues normally.
 
 ## Sharing and search verification (2026-11-12)
 
@@ -27,8 +27,6 @@ Retired cutover endpoints return authenticated 404s. The old purge endpoint rema
 - Focused sharing UI, search/auth and native sync checks passed, including account/client/space/cloud identity changes, stale receipts, explicit single-note consent, unchanged ordinary Backup gating, and failed privacy checkpoints. Counts overlap with the broad run. Independent code-quality reviews found no actionable issues.
 - TypeScript, lint, i18n key/placeholder checks, formatting, whitespace and renderer build passed. Existing lint/bundle warnings remain. No commit, push or deployment was performed for this revision.
 
-Evidence: `/tmp/pr385-sharing-search-verification-report.md`, `/tmp/pr3167-sharing-search-full.log`, `/tmp/pr385-direct-share-noteeditor-final.log`, `/tmp/pr385-direct-share-translations-final.log`, `/tmp/pr385-search-api-report.md`, `/tmp/pr385-search-scope-full.log`, and `/tmp/pr3167-sharing-search-source.json`.
-
 ## Placement and backup verification before this revision
 
 - API: 4,288 tests across 84 suites passed, with no failures or skips, using Node 24 and exact lockfile dependencies in an isolated temporary source copy. Focused validation passed 236 tests. Build, lint/type checks, generated-schema consistency, whitespace and source/snapshot equality passed. Existing warnings remain.
@@ -36,8 +34,6 @@ Evidence: `/tmp/pr385-sharing-search-verification-report.md`, `/tmp/pr3167-shari
 - Cross-device Electron/API: the final frozen-source rerun passed 13 journey groups across 22 Electron phases, plus 140 native integration checks. Four isolated device profiles passed source backfill, same-name folders, fresh restore, stale-device moves, stable placement after default-workspace transfer and lost-workspace recovery. Restore-first journeys passed with normal completion, interruption before queue completion, and a failed later download page; restarting the same profile preserved the original-device placement. Backup consent, account-switch fences and the unchanged protected-chat behavior were also exercised.
 - Mobile: 334 suites / 4,456 tests passed; TypeScript and the package lint command passed (existing warnings only). Tests reused installed dependencies: Better Auth/Expo patch versions differ from the lockfile. Native mobile acceptance remains separate.
 - Desktop: the final full suite passed 14,359 tests with zero failures, 16 platform skips and one pre-existing TODO (14,376 total). TypeScript, lint, translation consistency, changed-file formatting, whitespace and the final renderer build passed; existing lint and bundle-size warnings remain. The first broad run exposed obsolete policy fixtures and an account-marker cleanup regression; these were corrected. The final receipt-fence changes also passed 186 targeted tests. Counts overlap and must not be summed.
-
-Scratch evidence: `/tmp/pr385-api-restored-sync-report.md`, `/tmp/pr385-placement-full-tests.log`, `/tmp/pr385-folder-concurrency-final.log`, `/tmp/pr385-restored-e2e-xjafp6z8/`, `/tmp/pr385-placement-candidate-db.log`, `/tmp/pr385-pinning-candidates-final.log`, `/tmp/pr385-mobile-placement-full.log`, and `/tmp/pr385-restored-desktop-full-final.log`.
 
 ## Remaining release checks
 

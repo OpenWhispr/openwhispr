@@ -94,6 +94,146 @@ test("Windows keeps the existing always-interactive behavior", () => {
   assert.deepEqual(hoverCycle("win32"), [INTERACTIVE, INTERACTIVE, INTERACTIVE]);
 });
 
+const PILL_REGION = {
+  x: 156,
+  y: 68,
+  width: 40,
+  height: 40,
+  viewportWidth: 208,
+  viewportHeight: 120,
+};
+const PILL_SHAPE = [{ x: 156, y: 68, width: 40, height: 40 }];
+
+// A pill window whose setBounds emits resize and move the way Electron does.
+const fakePillWindow = () => {
+  const win = new EventEmitter();
+  const state = { bounds: { x: 10, y: 20, width: 208, height: 120 }, visible: false };
+  Object.assign(win, {
+    shapes: [],
+    sent: [],
+    state,
+    isDestroyed: () => false,
+    isVisible: () => state.visible,
+    isMinimized: () => false,
+    getBounds: () => ({ ...state.bounds }),
+    getMinimumSize: () => [208, 120],
+    setBounds: (next) => {
+      const previous = state.bounds;
+      state.bounds = { ...next };
+      if (next.width !== previous.width || next.height !== previous.height) win.emit("resize");
+      if (next.x !== previous.x || next.y !== previous.y) win.emit("move");
+    },
+    setShape: (rects) => win.shapes.push(rects),
+    webContents: { send: (channel, value) => win.sent.push([channel, value]) },
+  });
+  return win;
+};
+
+const withPlatform = async (platform, run) => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  try {
+    await run();
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+};
+
+test("Windows shapes the floating window to the pill, and a hidden window stays whole", async () => {
+  await withPlatform("win32", async () => {
+    const win = fakePillWindow();
+    const manager = Object.assign(Object.create(WindowManager.prototype), { mainWindow: win });
+    assert.equal(await manager.setMainWindowInputRegion(PILL_REGION), false);
+    assert.deepEqual(win.shapes, [[]]);
+    win.state.visible = true;
+    assert.equal(await manager.setMainWindowInputRegion(PILL_REGION), true);
+    assert.equal(await manager.setMainWindowInputRegion(null), true);
+    assert.deepEqual(win.shapes, [[], PILL_SHAPE, []]);
+  });
+});
+
+test("Windows tells the renderer when the pill shows or hides and keeps the shape on its window", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  await withPlatform("win32", async () => {
+    const win = fakePillWindow();
+    const manager = Object.assign(Object.create(WindowManager.prototype), {
+      mainWindow: win,
+      dragManager: { cleanup: () => undefined },
+    });
+    manager.registerMainWindowEvents();
+    win.state.visible = true;
+    win.emit("show");
+    await manager.setMainWindowInputRegion(PILL_REGION);
+    assert.deepEqual(win.shapes, [PILL_SHAPE]);
+
+    // A move reapplies the shape, so Chromium converts it at the new display's
+    // scale; a resize restores the full window until the renderer measures again.
+    win.setBounds({ ...win.state.bounds, x: 2000 });
+    win.setBounds({ ...win.state.bounds, width: 240, height: 280 });
+    assert.deepEqual(win.shapes, [PILL_SHAPE, PILL_SHAPE, []]);
+
+    await manager.setMainWindowInputRegion({
+      ...PILL_REGION,
+      viewportWidth: 240,
+      viewportHeight: 280,
+    });
+    win.state.visible = false;
+    win.emit("hide");
+    assert.deepEqual(win.shapes.at(-1), []);
+    assert.deepEqual(win.sent, [
+      ["main-window-visibility-changed", true],
+      ["main-window-visibility-changed", false],
+    ]);
+  });
+});
+
+test("Windows clears a shape that won't fit before the app resizes the window", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  await withPlatform("win32", async () => {
+    const win = fakePillWindow();
+    const calls = [];
+    const setBounds = win.setBounds;
+    win.setShape = (rects) => calls.push(["setShape", rects]);
+    win.setBounds = (bounds) => {
+      calls.push(["setBounds", bounds.width, bounds.height]);
+      setBounds(bounds);
+    };
+    const manager = Object.assign(Object.create(WindowManager.prototype), {
+      mainWindow: win,
+      dragManager: { cleanup: () => undefined },
+    });
+    manager.registerMainWindowEvents();
+    win.state.visible = true;
+    await manager.setMainWindowInputRegion(PILL_REGION);
+    manager._setResizedMainWindowBounds({ ...win.state.bounds, x: 40 });
+    manager._setResizedMainWindowBounds({ ...win.state.bounds, width: 400, height: 500 });
+    assert.deepEqual(calls, [
+      ["setShape", PILL_SHAPE],
+      ["setBounds", 208, 120],
+      ["setShape", PILL_SHAPE],
+      ["setShape", []],
+      ["setBounds", 400, 500],
+    ]);
+  });
+});
+
+test("Windows keeps the shape through the show nudge", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  await withPlatform("win32", async () => {
+    const win = fakePillWindow();
+    const manager = Object.assign(Object.create(WindowManager.prototype), {
+      mainWindow: win,
+      dragManager: { cleanup: () => undefined },
+    });
+    manager.registerMainWindowEvents();
+    win.state.visible = true;
+    await manager.setMainWindowInputRegion(PILL_REGION);
+    // The nudge resizes by a pixel and back, inside the rounding tolerance.
+    manager._restoreWin32MainWindowClicks();
+    assert.deepEqual(win.shapes, [PILL_SHAPE, PILL_SHAPE, PILL_SHAPE]);
+  });
+});
+
 test("Linux native capture fallback does not request unsupported forwarding", () => {
   assert.deepEqual(hoverCycle("linux"), [
     INTERACTIVE,
@@ -286,6 +426,7 @@ for (const { scaleFactor, size, nativeBounds } of [
         };
         resizedBounds.push(currentNativeBounds);
       };
+      win.setShape = () => undefined;
       win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
       const manager = Object.assign(Object.create(WindowManager.prototype), {
         mainWindow: win,

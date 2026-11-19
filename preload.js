@@ -124,10 +124,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   testProviderConnection: (config) => ipcRenderer.invoke("test-provider-connection", config),
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
-  captureSelectedText: () => ipcRenderer.invoke("capture-selected-text"),
+  captureSelectedText: (options) => ipcRenderer.invoke("capture-selected-text", options),
   cancelSelectionEdit: (sessionId) => ipcRenderer.invoke("cancel-selection-edit", sessionId),
   replaceSelectedText: (sessionId, text, options) =>
     ipcRenderer.invoke("replace-selected-text", sessionId, text, options),
+  pasteAtCapturedTarget: (sessionId, text) =>
+    ipcRenderer.invoke("paste-at-captured-target", sessionId, text),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
   openSettingsSection: (section) => ipcRenderer.invoke("open-settings-section", section),
@@ -300,6 +302,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Folder functions
   getFolders: (spaceId) => ipcRenderer.invoke("db-get-folders", spaceId),
+  getDeviceNotes: () => ipcRenderer.invoke("db-get-device-notes"),
+  getDeviceNote: (id) => ipcRenderer.invoke("db-get-device-note", id),
+  moveDeviceNotes: (request) => ipcRenderer.invoke("db-move-device-notes", request),
+  getStandInOwnershipCandidates: () => ipcRenderer.invoke("db-get-stand-in-ownership-candidates"),
+  resolveStandInOwnership: (request) =>
+    ipcRenderer.invoke("db-resolve-stand-in-ownership", request),
   createFolder: (name, spaceId, writeGuard) =>
     ipcRenderer.invoke("db-create-folder", name, spaceId, writeGuard),
   deleteFolder: (id) => ipcRenderer.invoke("db-delete-folder", id),
@@ -330,12 +338,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("product-events-record-app-session", context),
   recordOnboardingCompleted: (completion) =>
     ipcRenderer.invoke("product-events-record-onboarding-completed", completion),
+  recordDictationCompleted: (dictation) =>
+    ipcRenderer.invoke("product-events-record-dictation", dictation),
   getNoteWriteGuard: () => ipcRenderer.invoke("get-note-write-guard"),
   getDatabaseAccountScope: () => ipcRenderer.invoke("get-database-account-scope"),
   onDatabaseAccountScopeChanged: registerListener(
     "database-account-scope-changed",
     (callback) => (_event, scope) => callback(scope)
   ),
+  onDeviceNotesChanged: registerListener("device-notes-changed", (callback) => () => callback()),
   onActiveAccountScopeChanged: registerListener(
     "active-account-scope-changed",
     (callback) => (_event, scope) => callback(scope)
@@ -362,13 +373,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("note-files-set-enabled", enabled, customPath, options),
   noteFilesSetPath: (path) => ipcRenderer.invoke("note-files-set-path", path),
   noteFilesRebuild: () => ipcRenderer.invoke("note-files-rebuild"),
+  noteFilesSetWorkspaceNames: (workspaces) =>
+    ipcRenderer.invoke("note-files-set-workspace-names", workspaces),
   noteFilesGetDefaultPath: () => ipcRenderer.invoke("note-files-get-default-path"),
   noteFilesPickFolder: () => ipcRenderer.invoke("note-files-pick-folder"),
   granolaImportPickAndPreview: () => ipcRenderer.invoke("granola-import-pick-and-preview"),
   granolaImportRun: () => ipcRenderer.invoke("granola-import-run"),
   dragonImportPickFile: () => ipcRenderer.invoke("dragon-import-pick-file"),
   showNoteFile: (noteId) => ipcRenderer.invoke("show-note-file", noteId),
-  showFolderInExplorer: (folderName) => ipcRenderer.invoke("show-folder-in-explorer", folderName),
+  showFolderInExplorer: (folderId) => ipcRenderer.invoke("show-folder-in-explorer", folderId),
 
   // Action functions
   getActions: () => ipcRenderer.invoke("db-get-actions"),
@@ -673,6 +686,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setAutoUpdatesEnabled: (enabled) => ipcRenderer.invoke("set-auto-updates-enabled", enabled),
 
   // Update event listeners
+  onUpdateStatusChanged: registerListener(
+    "update-status-changed",
+    (callback) => (_event, status) => callback(status)
+  ),
   onUpdateAvailable: registerListener("update-available"),
   onUpdateNotAvailable: registerListener("update-not-available"),
   onUpdateDownloaded: registerListener("update-downloaded"),
@@ -719,6 +736,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   proxyTinfoilTranscription: (data) => ipcRenderer.invoke("proxy-tinfoil-transcription", data),
 
   // Custom endpoint API keys
+  getSelfHostedSttHeaders: () => ipcRenderer.invoke("get-self-hosted-stt-headers"),
+  saveSelfHostedSttHeaders: (value) => ipcRenderer.invoke("save-self-hosted-stt-headers", value),
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
   getCleanupCustomKey: () => ipcRenderer.invoke("get-cleanup-custom-key"),
@@ -898,19 +917,26 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloudStreamingUsage: (text, audioDurationSeconds, opts) =>
     ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
-  cloudCheckout: (opts) => ipcRenderer.invoke("cloud-checkout", opts),
+  cloudCheckout: (opts, generation) => ipcRenderer.invoke("cloud-checkout", opts, generation),
   cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),
   cloudSwitchPlan: (opts) => ipcRenderer.invoke("cloud-switch-plan", opts),
   cloudPreviewSwitch: (opts) => ipcRenderer.invoke("cloud-preview-switch", opts),
   cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
-  getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
-  getWorkspacePolicy: (accountId, expectedAuthGeneration) =>
-    ipcRenderer.invoke("get-workspace-policy", accountId, expectedAuthGeneration),
-  onWorkspacePolicyChanged: (callback) => {
-    const listener = (_event, snapshot) => callback(snapshot);
-    ipcRenderer.on("workspace-policy-changed", listener);
-    return () => ipcRenderer.removeListener("workspace-policy-changed", listener);
+  getAffiliateCandidate: () => ipcRenderer.invoke("affiliate-get-candidate"),
+  saveAffiliateCandidate: (input) => ipcRenderer.invoke("affiliate-save-candidate", input),
+  resolveAffiliateLink: (link, generation) =>
+    ipcRenderer.invoke("affiliate-resolve-link", link, generation),
+  onAffiliateLink: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on("affiliate-link", handler);
+    return () => ipcRenderer.removeListener("affiliate-link", handler);
   },
+  getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
+  getEffectivePolicy: () => ipcRenderer.invoke("get-effective-policy"),
+  onEffectivePolicyChanged: registerListener(
+    "effective-policy-changed",
+    (callback) => (_event, snapshot) => callback(snapshot)
+  ),
   getNoteRecordingConfig: () => ipcRenderer.invoke("get-note-recording-config"),
 
   // Cloud audio file transcription
@@ -1026,12 +1052,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-prepare", options),
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
+  isMeetingRecordingDisabled: () => ipcRenderer.invoke("is-meeting-recording-disabled"),
+  meetingRecordingRefused: (details) => ipcRenderer.invoke("meeting-recording-refused", details),
   meetingTranscriptionSend: (buffer, source, capturedAt) =>
     ipcRenderer.send("meeting-transcription-send", buffer, source, capturedAt),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
-  meetingTranscriptionStop: (expectedSessionId) =>
-    ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId),
+  meetingTranscriptionStop: (expectedSessionId, reason) =>
+    ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId, reason),
   meetingTranscriptionCancel: () => ipcRenderer.invoke("meeting-transcription-cancel"),
   onMeetingTranscriptionSegment: registerListener(
     "meeting-transcription-segment",
@@ -1217,8 +1245,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   completeDictationPreview: (payload) => ipcRenderer.invoke("complete-dictation-preview", payload),
   hideDictationPreview: () => ipcRenderer.invoke("hide-dictation-preview"),
   sendDictationPreviewAudio: (data) => ipcRenderer.send("dictation-preview-audio", data),
-  acquireRecordingLock: (pipeline) => ipcRenderer.invoke("acquire-recording-lock", pipeline),
-  releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
 
   // Agent cloud streaming (event-based for real-time chunks)
   startAgentStream: (requestId, messages, opts) =>
@@ -1318,8 +1344,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ),
   getPrivatePlacementBackupCandidates: (authGeneration) =>
     ipcRenderer.invoke("db-get-private-placement-backup-candidates", authGeneration),
-  queuePrivatePlacementBackup: (authGeneration, candidates) =>
-    ipcRenderer.invoke("db-queue-private-placement-backup", authGeneration, candidates),
+  getPrivatePlacementBackupRows: (authGeneration, candidates) =>
+    ipcRenderer.invoke("db-get-private-placement-backup-rows", authGeneration, candidates),
+  queueUnlinkedPrivateFolders: (authGeneration) =>
+    ipcRenderer.invoke("db-queue-unlinked-private-folders", authGeneration),
   acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",
@@ -1403,6 +1431,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       expectedCloudId,
       authGeneration
     ),
+  ensureAccountDefaultFolders: (foreignCloudIds, expectedScope) =>
+    ipcRenderer.invoke("db-ensure-account-default-folders", foreignCloudIds, expectedScope),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
   getPendingFolderDeletes: () => ipcRenderer.invoke("db-get-pending-folder-deletes"),
   restoreFolderAfterDeniedDelete: (id) =>

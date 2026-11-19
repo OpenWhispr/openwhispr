@@ -78,6 +78,167 @@ function createTestTeamSpace(db, { name, emoji = null } = {}) {
   return { success: true, space: db.getSpace(result.lastInsertRowid) };
 }
 
+test("the mirror's containers span every account and leave deleted rows out", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const { space } = createTestTeamSpace(db, { name: "Engineering" });
+  db.db.prepare("UPDATE spaces SET workspace_id = ? WHERE id = ?").run("w-1", space.id);
+  const kept = db.createFolder("General", space.id).folder;
+  const removed = db.createFolder("Old", space.id).folder;
+  db.deleteFolder(removed.id);
+  db.setActiveAccountId("another-account");
+  db.createFolder("Theirs");
+
+  const { spaces, folders, workspaceNames } = db.getMirrorContainers();
+
+  assert.deepEqual(workspaceNames, {});
+  assert.equal(spaces.find((row) => row.id === space.id).workspace_id, "w-1");
+  assert.ok(spaces.some((row) => row.kind === "private"));
+  assert.ok(folders.some((row) => row.id === kept.id));
+  assert.ok(folders.some((row) => row.name === "Theirs" && row.account_id === "another-account"));
+  assert.equal(
+    folders.some((row) => row.id === removed.id),
+    false
+  );
+});
+
+test("saving workspace names reports how many changed", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const first = [
+    { id: "w-1", name: "Acme" },
+    { id: "w-2", name: "Beta" },
+  ];
+  assert.equal(db.setWorkspaceNames(first), 2);
+  assert.equal(db.setWorkspaceNames(first), 0);
+  assert.equal(db.setWorkspaceNames([{ id: "w-1", name: "Acme Inc" }]), 1);
+  assert.deepEqual(db.getMirrorContainers().workspaceNames, { "w-1": "Acme Inc", "w-2": "Beta" });
+});
+
+test("the mirror's record of written files is kept per location", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.recordMirrorFile("/a", {
+    relPath: "Private notes/1-x.md",
+    ownerId: 1,
+    kind: "note",
+    hash: "h1",
+  });
+  db.recordMirrorFile("/a", {
+    relPath: "Private notes/1-x.md",
+    ownerId: 1,
+    kind: "note",
+    hash: "h2",
+  });
+  db.recordMirrorFile("/a", { relPath: "Private notes/Work", ownerId: 7, kind: "dir", hash: null });
+  db.recordMirrorFile("/b", {
+    relPath: "Private notes/1-x.md",
+    ownerId: 1,
+    kind: "note",
+    hash: "h3",
+  });
+
+  assert.deepEqual(db.getMirrorFiles("/a", 1), [
+    { relPath: "Private notes/1-x.md", ownerId: 1, kind: "note", hash: "h2" },
+  ]);
+  assert.equal(db.getMirrorFiles("/a").length, 2);
+  db.forgetMirrorFile("/a", "Private notes/1-x.md");
+  assert.deepEqual(
+    db.getMirrorFiles("/a").map((entry) => entry.kind),
+    ["dir"]
+  );
+  assert.equal(db.getMirrorFiles("/b").length, 1);
+});
+
+test("the mirror's note summaries flag a transcript without loading it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const plain = db.saveNote("Plain", "content").note;
+  const empty = db.saveNote("Empty", "c", "personal", null, null, null, null, "[]").note;
+  const withTranscript = db.saveNote(
+    "Call",
+    "c",
+    "meeting",
+    null,
+    null,
+    null,
+    null,
+    JSON.stringify([{ text: "hi" }])
+  ).note;
+  const gone = db.saveNote("Gone", "content").note;
+  db.deleteNote(gone.id);
+  const notArrays = ["null", "{}", "[ ]", "not json"].map(
+    (transcript) => db.saveNote("Odd", "c", "personal", null, null, null, null, transcript).note
+  );
+
+  const byId = new Map(db.getMirrorNoteSummaries().map((row) => [row.id, row]));
+  assert.equal(byId.get(plain.id).has_transcript, 0);
+  assert.equal(byId.get(empty.id).has_transcript, 0);
+  assert.equal(byId.get(withTranscript.id).has_transcript, 1);
+  assert.equal(byId.get(withTranscript.id).title, "Call");
+  assert.equal(byId.has(gone.id), false);
+  for (const note of notArrays) assert.equal(byId.get(note.id).has_transcript, 0);
+  assert.equal("content" in byId.get(plain.id), false);
+});
+
+test("the mirror's existence check sees every account's notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const mine = db.saveNote("Mine", "content").note;
+  db.setActiveAccountId("another-account");
+  const theirs = db.saveNote("Theirs", "content").note;
+
+  assert.deepEqual(
+    db.getExistingNoteIds([mine.id, theirs.id, 987654]).sort((left, right) => left - right),
+    [mine.id, theirs.id].sort((left, right) => left - right)
+  );
+});
+
+test("deleting an account forgets workspace names no space on the device uses", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const { space } = createTestTeamSpace(db, { name: "Engineering" });
+  db.db.prepare("UPDATE spaces SET workspace_id = ? WHERE id = ?").run("w-used", space.id);
+  db.setWorkspaceNames([
+    { id: "w-used", name: "Kept" },
+    { id: "w-gone", name: "Forgotten" },
+  ]);
+
+  db.deleteAccountData("test-account");
+
+  assert.deepEqual(db.getMirrorContainers().workspaceNames, { "w-used": "Kept" });
+});
+
+test("the mirror's note lookup includes deleted notes but not another account's", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const mine = db.saveNote("Mine", "content").note;
+  const deleted = db.saveNote("Gone", "content").note;
+  db.deleteNote(deleted.id);
+  const soft = db.saveNote("Tombstoned", "content").note;
+  db.db.prepare("UPDATE notes SET deleted_at = datetime('now') WHERE id = ?").run(soft.id);
+  db.setActiveAccountId("another-account");
+  const theirs = db.saveNote("Theirs", "content").note;
+  db.setActiveAccountId("test-account");
+
+  const ids = db
+    .getNotesForMirror([mine.id, deleted.id, soft.id, theirs.id, 987654])
+    .map((row) => row.id)
+    .sort((left, right) => left - right);
+
+  assert.equal(ids.includes(mine.id), true);
+  assert.equal(ids.includes(soft.id), true);
+  assert.equal(ids.includes(theirs.id), false);
+  assert.equal(ids.includes(987654), false);
+});
+
 test("spaces migration is idempotent across launches", (t) => {
   const db = createDb(t);
   if (!db) return;
@@ -214,16 +375,36 @@ function seedFolder(
 function seedNote(
   sqlite,
   spaceId,
-  { title, accountId = null, folderId = null, cloudId = null, deletedAt = null }
+  {
+    title,
+    accountId = null,
+    folderId = null,
+    cloudId = null,
+    deletedAt = null,
+    ownerUserId = null,
+    cloudCreateAttempted = 0,
+    cloudCreatePending = null,
+  }
 ) {
   return Number(
     sqlite
       .prepare(
-        `INSERT INTO notes (title, content, client_note_id, cloud_id, sync_status, deleted_at, folder_id, space_id, account_id, updated_at)
-         VALUES (?, '', ?, ?, 'synced', ?, ?, ?, ?, ?)`
+        `INSERT INTO notes (title, content, client_note_id, cloud_id, sync_status, deleted_at, folder_id, space_id, account_id, updated_at, owner_user_id, cloud_create_attempted, cloud_create_pending)
+         VALUES (?, '', ?, ?, 'synced', ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(title, randomUUID(), cloudId, deletedAt, folderId, spaceId, accountId, SEEDED_AT)
-      .lastInsertRowid
+      .run(
+        title,
+        randomUUID(),
+        cloudId,
+        deletedAt,
+        folderId,
+        spaceId,
+        accountId,
+        SEEDED_AT,
+        ownerUserId,
+        cloudCreateAttempted,
+        cloudCreatePending
+      ).lastInsertRowid
   );
 }
 
@@ -286,7 +467,7 @@ function pendingRowId(sqlite, accountId) {
 function noteRow(sqlite, id) {
   return sqlite
     .prepare(
-      "SELECT id, space_id, folder_id, account_id, sync_status, updated_at, cloud_id, left_team, deleted_at FROM notes WHERE id = ?"
+      "SELECT id, space_id, folder_id, account_id, sync_status, updated_at, cloud_id, owner_user_id, left_team, deleted_at FROM notes WHERE id = ?"
     )
     .get(id);
 }
@@ -465,7 +646,7 @@ test("the identity index refuses a second private row for the same account and w
     .run(randomUUID());
 });
 
-test("migration 6 keeps a single-account device's folder ids and cloud ids", (t) => {
+test("migration 6 keeps attributed folder ids and cloud ids", (t) => {
   const db = createDb(t);
   if (!db) return;
   const standInId = db._standInPrivateSpaceId();
@@ -475,7 +656,7 @@ test("migration 6 keeps a single-account device's folder ids and cloud ids", (t)
   const videos = seededFolderId(sqlite, "Videos");
   sqlite
     .prepare(
-      "UPDATE folders SET cloud_id = 'cloud-' || id, sync_status = 'synced' WHERE id IN (?, ?)"
+      "UPDATE folders SET account_id = 'a', cloud_id = 'cloud-' || id, sync_status = 'synced' WHERE id IN (?, ?)"
     )
     .run(personal, meetings);
   const notes = [
@@ -561,6 +742,16 @@ test("migration 6 gives each account its own copy of a folder they share", (t) =
     });
   }
   assertEveryRowInItsFolderSpace(after);
+
+  // The copy holds a's note, so a's next backup uploads it.
+  migrated.setActiveAccountId("a");
+  assert.equal(migrated.queueUnlinkedPrivateFolders(), 1);
+  assert.equal(
+    after
+      .prepare("SELECT sync_status FROM folders WHERE space_id = ? AND name = 'Meetings'")
+      .get(pendingRowId(after, "a")).sync_status,
+    "pending"
+  );
 });
 
 test("migration 6 moves soft-deleted rows and private root chats with their account", (t) => {
@@ -638,7 +829,6 @@ test("migration 6 moves a folder whole when its only other rows are chats from b
   const standInId = db._standInPrivateSpaceId();
   const sqlite = db.db;
   const meetings = seededFolderId(sqlite, "Meetings");
-  sqlite.prepare("UPDATE folders SET cloud_id = 'cloud-meetings' WHERE id = ?").run(meetings);
   const meetingsBefore = folderRow(sqlite, meetings);
   const aNote = seedNote(sqlite, standInId, { title: "a", accountId: "a", folderId: meetings });
   // Every container chat from before #2924 reads as unattributed until the
@@ -958,7 +1148,6 @@ test("purgeSpace leaves zero residue for the space and spares the private space"
   const result = db.purgeSpace(team.id);
   assert.ok(result.success);
   assert.deepEqual(result.noteIds, [teamNote.id]);
-  assert.deepEqual(result.folderNames, ["Vault"]);
   assert.equal(result.spaceId, team.id);
 
   // Never-synced notes exist nowhere else — relocated, not destroyed.
@@ -1404,6 +1593,65 @@ test("upsertFolderFromCloud converges on a same-space name collision", (t) => {
   assert.notEqual(forked.client_folder_id, "cf-remote");
   assert.equal(forked.cloud_id, null);
   assert.equal(forked.sync_status, "pending");
+});
+
+test("upsertFolderFromCloud never takes over a namesake that is another cloud folder", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a", W1_ACTIVE);
+  db.bindDefaultPrivateSpace("w1");
+  const home = db.getDefaultPrivateSpaceId();
+  const placed = db.upsertFolderFromCloud(
+    {
+      id: "cloud-placed",
+      client_folder_id: "cf-placed",
+      name: "Projects",
+      sort_order: 1,
+      private_workspace_id: "w1",
+      created_at: "2026-11-01T00:00:00.000Z",
+      updated_at: "2026-11-01T00:00:00.000Z",
+    },
+    home
+  );
+  const note = db.saveNote("Filed", "body", "personal", null, null, placed.id, home).note;
+  // Backed up before placement, beside it on the server.
+  const legacy = db.upsertFolderFromCloud(
+    {
+      id: "cloud-legacy",
+      client_folder_id: "cf-legacy",
+      name: "Projects",
+      sort_order: 2,
+      private_workspace_id: null,
+      created_at: "2026-11-02T00:00:00.000Z",
+      updated_at: "2026-11-02T00:00:00.000Z",
+    },
+    null
+  );
+  assert.notEqual(legacy.id, placed.id);
+  assert.equal(legacy.cloud_id, "cloud-legacy");
+  assert.equal(legacy.name, "Projects (2)");
+  assert.deepEqual(
+    { cloud_id: folderRow(db.db, placed.id).cloud_id, name: folderRow(db.db, placed.id).name },
+    { cloud_id: "cloud-placed", name: "Projects" }
+  );
+  assert.equal(db.getNote(note.id).folder_id, placed.id);
+
+  // Pulled again, it keeps the name it has here.
+  const again = db.upsertFolderFromCloud(
+    {
+      id: "cloud-legacy",
+      client_folder_id: "cf-legacy",
+      name: "Projects",
+      sort_order: 3,
+      private_workspace_id: null,
+      created_at: "2026-11-02T00:00:00.000Z",
+      updated_at: "2026-11-03T00:00:00.000Z",
+    },
+    null
+  );
+  assert.equal(again.id, legacy.id);
+  assert.equal(again.name, "Projects (2)");
+  assert.equal(folderRow(db.db, placed.id).cloud_id, "cloud-placed");
 });
 
 test("pending vector purges persist across relaunches until cleared", (t) => {
@@ -2353,7 +2601,6 @@ test("relocateRevokedFolder preserves dirty children and hard-deletes server-own
   const result = db.relocateRevokedFolder(folder.id, privateId, false);
   assert.ok(result.success);
   assert.equal(result.folder, null);
-  assert.equal(result.folderName, "Q3 calls");
   assert.deepEqual(result.deletedNoteIds, [clean.id]);
   assert.deepEqual(
     result.relocatedNotes.map((n) => n.id).sort((a, b) => a - b),
@@ -3673,6 +3920,16 @@ test("a folder delete the split left in the stand-in still finishes or rolls bac
 
   assert.equal(db.restoreFolderAfterDeniedDelete(denied.folder).success, true);
   assert.equal(folderRow(sqlite, denied.folder).deleted_at, null);
+  // a's note comes back in its own copy of the folder, where a can see it, as the split files it.
+  const [legacyNote, aNote] = denied.notes;
+  assert.equal(noteRow(sqlite, legacyNote).folder_id, denied.folder);
+  const restoredNote = db.getNote(aNote);
+  assert.equal(restoredNote.deleted_at, null);
+  assert.equal(restoredNote.space_id, db.getDefaultPrivateSpaceId());
+  assert.deepEqual(
+    db.getFolders().find((folder) => folder.id === restoredNote.folder_id)?.name,
+    folderRow(sqlite, denied.folder).name
+  );
   assert.equal(
     sqlite.prepare("SELECT COUNT(*) AS count FROM optimistic_folder_delete_rows").get().count,
     0
@@ -4232,7 +4489,7 @@ test("explicit cloud placement moves personal notes and folders, including back 
   assert.equal(db.getNote(localNote.id).cloud_id, note.id);
 });
 
-test("placement backfill queues only the active account's clean Private rows and keeps conflict bases", (t) => {
+test("placement backfill reads only the active account's clean Private rows and changes none", (t) => {
   const db = createFreshDeviceDb(t);
   if (!db) return;
   const { home, w2 } = defaultAndW2(db);
@@ -4268,17 +4525,25 @@ test("placement backfill queues only the active account's clean Private rows and
     },
     home
   );
-  const result = db.queuePrivatePlacementBackup(candidates);
+  const result = db.getPrivatePlacementBackupRows(candidates);
   assert.equal(result.success, true);
-  assert.equal(result.queuedNotes, 1);
-  assert.ok(result.queuedFolders >= 1);
-  assert.deepEqual(db.getNote(note.id), { ...before, sync_status: "pending" });
-  assert.equal(folderRow(db.db, folder.id).sync_status, "pending");
+  assert.deepEqual(result.notes, [
+    { id: note.id, cloud_id: "cloud-note", client_id: note.client_note_id, workspace_id: "w2" },
+  ]);
+  assert.ok(
+    result.folders.some(
+      (row) => row.id === folder.id && row.cloud_id === "cloud-folder" && row.workspace_id === "w2"
+    )
+  );
+  assert.equal(
+    result.folders.some((row) => row.id === restoredFolder.id),
+    false
+  );
+  assert.deepEqual(db.getNote(note.id), before);
+  assert.equal(folderRow(db.db, folder.id).sync_status, "synced");
   assert.equal(noteRow(db.db, foreign.id).sync_status, "synced");
   assert.equal(db.getNote(restored.id).sync_status, "synced");
-  assert.equal(folderRow(db.db, restoredFolder.id).sync_status, "synced");
   assert.equal(db.getDefaultPrivateSpaceId(), home);
-  assert.equal(db.queuePrivatePlacementBackup(candidates).queuedNotes, 0);
 });
 
 test("placement backfill waits for the default Private row to bind after workspace scope arrives", (t) => {
@@ -4291,14 +4556,14 @@ test("placement backfill waits for the default Private row to bind after workspa
   const candidates = db.getPrivatePlacementBackupCandidates();
 
   db.setActiveWorkspaceScope(W1_ACTIVE);
-  assert.equal(db.queuePrivatePlacementBackup(candidates).success, false);
+  assert.equal(db.getPrivatePlacementBackupRows(candidates).success, false);
   assert.deepEqual(db.getNote(note.id), before);
 
   db.bindDefaultPrivateSpace("w1");
-  const result = db.queuePrivatePlacementBackup(candidates);
+  const result = db.getPrivatePlacementBackupRows(candidates);
   assert.equal(result.success, true);
-  assert.equal(result.queuedNotes, 1);
-  assert.equal(db.getNote(note.id).sync_status, "pending");
+  // The default's own rows need none: the server reads no placement as the default.
+  assert.deepEqual(result.notes, []);
   assert.equal(db.getSpace(db.getNote(note.id).space_id).workspace_id, "w1");
 });
 
@@ -4642,4 +4907,1135 @@ test("a backed-up note keeps its identity after a team move and database reopen"
   assert.equal(db.getNote(note.id).client_note_id, remote.client_note_id);
   assert.equal(db.getNote(note.id).sync_status, "pending");
   assert.equal(db.getNote(note.id).space_id, team.id);
+});
+
+// Ownerless notes on a shared device (device notes).
+
+// A device another account ("b") has used, signed out so a test can seed stand-in
+// notes before an account signs in.
+function createSharedMacDb(t) {
+  const db = createFreshDeviceDb(t);
+  if (!db) return null;
+  signIn(db, "b");
+  signIn(db, null);
+  return db;
+}
+
+test("getDeviceNotes lists only eligible stand-in notes on a shared device", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const meetings = seededFolderId(db.db, "Meetings");
+  const eligibleInFolder = seedNote(db.db, standInId, { title: "m", folderId: meetings });
+  const eligibleRoot = seedNote(db.db, standInId, { title: "root" });
+  seedNote(db.db, standInId, { title: "cloud", cloudId: "c1" });
+  seedNote(db.db, standInId, { title: "owned", ownerUserId: "b" });
+  seedNote(db.db, standInId, { title: "deleted", deletedAt: SEEDED_AT });
+  seedNote(db.db, standInId, { title: "attempted", cloudCreateAttempted: 1 });
+  seedNote(db.db, standInId, { title: "pending", cloudCreatePending: "x" });
+  signIn(db, "a", W1_ACTIVE);
+
+  const { folders, notes } = db.getDeviceNotes();
+  assert.deepEqual(notes.map((note) => note.id).sort(), [eligibleInFolder, eligibleRoot].sort());
+  assert.deepEqual(folders, [{ id: meetings, name: "Meetings", is_default: 1, noteCount: 1 }]);
+});
+
+test("getDeviceNotes is empty signed out and on a single-account device", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  seedNote(db.db, standInId, { title: "n" });
+  assert.deepEqual(db.getDeviceNotes(), { folders: [], notes: [] });
+
+  const single = createFreshDeviceDb(t);
+  if (!single) return;
+  seedNote(single.db, single._standInPrivateSpaceId(), { title: "n" });
+  signIn(single, "a", W1_ACTIVE);
+  single.claimSignedOutPrivateNotes();
+  assert.deepEqual(single.getDeviceNotes(), { folders: [], notes: [] });
+});
+
+test("eligible notes stay out of the account's normal reads", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const id = seedNote(db.db, db._standInPrivateSpaceId(), { title: "n" });
+  signIn(db, "a", W1_ACTIVE);
+
+  assert.equal(db.getNote(id), null);
+  assert.ok(!db.getNotes().some((note) => note.id === id));
+  assert.ok(!db.getPendingNotes().some((note) => note.id === id));
+  assert.ok(!db.getSpaces().some((space) => space.id === db._standInPrivateSpaceId()));
+  assert.equal(db.getDeviceNote(id).id, id);
+  signIn(db, null);
+  assert.equal(db.getDeviceNote(id), null);
+});
+
+test("moveDeviceNotesToPrivate joins the account's folder of that name", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const standInMeetings = seededFolderId(db.db, "Meetings");
+  const id = seedNote(db.db, standInId, { title: "m", folderId: standInMeetings });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  db.ensureDefaultFolders(home);
+  const aMeetings = db._privateFolderNamed(home, "a", "Meetings");
+  const before = noteRow(db.db, id);
+  const standInBefore = folderRow(db.db, standInMeetings);
+  const clientNoteId = db.db.prepare("SELECT client_note_id FROM notes WHERE id = ?").get(id);
+
+  const { moved, skipped } = db.moveDeviceNotesToPrivate({ noteIds: [id] });
+
+  assert.equal(skipped, 0);
+  assert.equal(moved.length, 1);
+  assert.equal(moved[0].account_id, "a");
+  assert.equal(moved[0].space_id, home);
+  assert.equal(moved[0].folder_id, aMeetings);
+  assert.equal(moved[0].sync_status, before.sync_status);
+  assert.equal(moved[0].updated_at, before.updated_at);
+  assert.equal(moved[0].client_note_id, clientNoteId.client_note_id);
+  assert.deepEqual(folderRow(db.db, standInMeetings), standInBefore);
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("moveDeviceNotesToPrivate creates a missing folder and keeps root notes at the root", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas", sortOrder: 7 });
+  const inIdeas = seedNote(db.db, standInId, { title: "i", folderId: ideas });
+  const root = seedNote(db.db, standInId, { title: "r" });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+
+  const { moved } = db.moveDeviceNotesToPrivate({ noteIds: [inIdeas, root] });
+
+  const byId = new Map(moved.map((note) => [note.id, note]));
+  const created = folderRow(db.db, byId.get(inIdeas).folder_id);
+  assert.equal(created.name, "Ideas");
+  assert.equal(created.account_id, "a");
+  assert.equal(created.space_id, home);
+  assert.equal(created.sort_order, 7);
+  assert.equal(byId.get(root).folder_id, null);
+  assert.equal(folderRow(db.db, ideas).space_id, standInId);
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("moveDeviceNotesToPrivate by folder moves only eligible notes", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  seedNote(db.db, standInId, { title: "ok", folderId: ideas });
+  const cloud = seedNote(db.db, standInId, { title: "cloud", folderId: ideas, cloudId: "c1" });
+  signIn(db, "a", W1_ACTIVE);
+
+  const { moved } = db.moveDeviceNotesToPrivate({ folderId: ideas });
+
+  assert.equal(moved.length, 1);
+  const stayed = noteRow(db.db, cloud);
+  assert.equal(stayed.account_id, null);
+  assert.equal(stayed.folder_id, ideas);
+});
+
+test("moveDeviceNotesToPrivate skips notes that stopped being eligible", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const eligible = seedNote(db.db, standInId, { title: "e" });
+  const gone = seedNote(db.db, standInId, { title: "g", cloudId: "c1" });
+
+  signIn(db, "a", W1_ACTIVE);
+  const { moved, skipped } = db.moveDeviceNotesToPrivate({ noteIds: [eligible, gone] });
+  assert.equal(moved.length, 1);
+  assert.equal(skipped, 1);
+});
+
+test("moveDeviceNotesToPrivate into a workspace main doesn't know uses the default's Private", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const first = seedNote(db.db, standInId, { title: "1" });
+  const second = seedNote(db.db, standInId, { title: "2" });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const rowsBefore = privateRows(db.db).length;
+
+  const unknown = db.moveDeviceNotesToPrivate({ noteIds: [first], workspaceId: "unknown-ws" });
+  assert.equal(unknown.moved[0].space_id, home);
+  assert.equal(privateRows(db.db).length, rowsBefore);
+
+  db.setActiveWorkspaceScope(W2_ACTIVE);
+  const known = db.moveDeviceNotesToPrivate({ noteIds: [second], workspaceId: "w2" });
+  assert.equal(known.moved[0].space_id, db.getPrivateSpaceId("w2"));
+});
+
+test("moveDeviceNotesToPrivate does nothing signed out or on a single-account device", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const id = seedNote(db.db, db._standInPrivateSpaceId(), { title: "n" });
+  assert.deepEqual(db.moveDeviceNotesToPrivate({ noteIds: [id] }), { moved: [], skipped: 1 });
+
+  const single = createFreshDeviceDb(t);
+  if (!single) return;
+  const singleId = seedNote(single.db, single._standInPrivateSpaceId(), { title: "n" });
+  signIn(single, "a", W1_ACTIVE);
+  single.claimSignedOutPrivateNotes();
+  assert.deepEqual(single.moveDeviceNotesToPrivate({ noteIds: [singleId] }), {
+    moved: [],
+    skipped: 1,
+  });
+});
+
+test("moveDeviceNotesToPrivate files every note in a chosen Private folder", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  const inIdeas = seedNote(db.db, standInId, { title: "i", folderId: ideas });
+  const root = seedNote(db.db, standInId, { title: "r" });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const archive = seedFolder(db.db, home, { name: "Archive", accountId: "a" });
+  const foldersBefore = db.db.prepare("SELECT COUNT(*) AS n FROM folders").get().n;
+
+  const { moved, skipped } = db.moveDeviceNotesToPrivate({
+    noteIds: [inIdeas, root],
+    targetFolderId: archive,
+  });
+
+  assert.equal(skipped, 0);
+  assert.deepEqual(
+    moved.map((note) => [note.id, note.space_id, note.folder_id, note.account_id]),
+    [
+      [inIdeas, home, archive, "a"],
+      [root, home, archive, "a"],
+    ]
+  );
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS n FROM folders").get().n,
+    foldersBefore,
+    "no folder named after the stand-in's is made"
+  );
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("moveDeviceNotesToPrivate moves nothing into a folder that isn't the account's live Private folder", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const id = seedNote(db.db, standInId, { title: "n" });
+  const standInFolder = seedFolder(db.db, standInId, { name: "Ideas" });
+  const othersFolder = seedFolder(db.db, db._insertPrivateSpace("b", "wb"), {
+    name: "B's",
+    accountId: "b",
+  });
+  signIn(db, "a", W1_ACTIVE);
+  const deleted = seedFolder(db.db, db.getDefaultPrivateSpaceId(), {
+    name: "Gone",
+    accountId: "a",
+    deletedAt: SEEDED_AT,
+  });
+  const before = noteRow(db.db, id);
+
+  for (const targetFolderId of [standInFolder, othersFolder, deleted, 99999]) {
+    assert.deepEqual(db.moveDeviceNotesToPrivate({ noteIds: [id], targetFolderId }), {
+      moved: [],
+      skipped: 1,
+      code: "folder_unavailable",
+    });
+  }
+  assert.deepEqual(noteRow(db.db, id), before);
+});
+
+// A cloud copy of folder "Ideas" whose client key the signed-out stand-in's
+// folder holds here: the folder this account backed up before the split.
+const CLOUD_IDEAS = {
+  id: "cloud-ideas",
+  client_folder_id: "key-ideas",
+  name: "Ideas",
+  is_default: false,
+  sort_order: 4,
+  space_id: null,
+  created_at: "2026-01-01T00:00:00.000Z",
+  updated_at: "2026-02-01T00:00:00.000Z",
+};
+
+function seedStandInIdeas(db) {
+  return Number(
+    db.db
+      .prepare(
+        `INSERT INTO folders (name, is_default, sort_order, client_folder_id, cloud_id, sync_status, space_id)
+         VALUES ('Ideas', 0, 4, 'key-ideas', 'cloud-ideas', 'synced', ?)`
+      )
+      .run(db._standInPrivateSpaceId()).lastInsertRowid
+  );
+}
+
+function teamSpaceWithMembers(db, cloudSpaceId, members) {
+  const id = Number(
+    db.db
+      .prepare(
+        `INSERT INTO spaces (client_space_id, cloud_space_id, kind, name, sort_order, workspace_id)
+         VALUES (?, ?, 'team', ?, 5, 'w1')`
+      )
+      .run(`client-${cloudSpaceId}`, cloudSpaceId, cloudSpaceId).lastInsertRowid
+  );
+  for (const member of members) {
+    db.db
+      .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+      .run(id, member);
+  }
+  return id;
+}
+
+test("a pull moves a team folder from a teamspace the account isn't in, without a copy", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const left = teamSpaceWithMembers(db, "team-left", ["b"]);
+  const joined = teamSpaceWithMembers(db, "team-joined", ["a", "b"]);
+  const moved = seedFolder(db.db, left, { name: "Plans", cloudId: "cloud-plans" });
+  db.db.prepare("UPDATE folders SET client_folder_id = 'key-plans' WHERE id = ?").run(moved);
+  signIn(db, "a", W1_ACTIVE);
+
+  // Another member moved the folder into the teamspace both accounts are in.
+  db.upsertFolderFromCloud(
+    {
+      id: "cloud-plans",
+      client_folder_id: "key-plans",
+      name: "Plans",
+      space_id: "team-joined",
+      sort_order: 1,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-02-01T00:00:00.000Z",
+    },
+    joined
+  );
+
+  const linked = db.db.prepare("SELECT * FROM folders WHERE cloud_id = 'cloud-plans'").all();
+  assert.equal(linked.length, 1, "one row stands for the cloud folder");
+  assert.equal(linked[0].id, moved);
+  assert.equal(linked[0].space_id, joined);
+});
+
+test("a pull takes over an empty stand-in folder the account has no copy of", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standInIdeas = seedStandInIdeas(db);
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+
+  db.upsertFolderFromCloud(CLOUD_IDEAS, home);
+
+  const linked = db.db.prepare("SELECT * FROM folders WHERE cloud_id = 'cloud-ideas'").all();
+  assert.equal(linked.length, 1);
+  assert.equal(linked[0].id, standInIdeas);
+  assert.equal(linked[0].space_id, home);
+  assert.equal(linked[0].account_id, "a");
+});
+
+test("a pull leaves a stand-in folder that holds notes, filing the cloud folder under a key of its own", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInIdeas = seedStandInIdeas(db);
+  const note = seedNote(db.db, db._standInPrivateSpaceId(), { title: "n", folderId: standInIdeas });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const standInBefore = folderRow(db.db, standInIdeas);
+
+  db.upsertFolderFromCloud(CLOUD_IDEAS, home);
+
+  assert.deepEqual(folderRow(db.db, standInIdeas), standInBefore);
+  assert.equal(noteRow(db.db, note).folder_id, standInIdeas);
+  const own = db.db
+    .prepare("SELECT * FROM folders WHERE cloud_id = 'cloud-ideas' AND account_id = 'a'")
+    .all();
+  assert.equal(own.length, 1);
+  assert.equal(own[0].space_id, home);
+  assert.notEqual(own[0].client_folder_id, "key-ideas");
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("the sole-account claim joins a stand-in folder into the account's copy of that cloud folder", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standInIdeas = seedStandInIdeas(db);
+  const note = seedNote(db.db, db._standInPrivateSpaceId(), { title: "n", folderId: standInIdeas });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  // The account's copy, linked by cloud id under a key of its own and renamed since.
+  const copy = seedFolder(db.db, home, {
+    name: "Ideas renamed",
+    accountId: "a",
+    cloudId: "cloud-ideas",
+  });
+
+  db.claimSignedOutPrivateNotes();
+
+  assert.equal(noteRow(db.db, note).folder_id, copy);
+  assert.equal(noteRow(db.db, note).account_id, "a");
+  assert.equal(
+    db.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM folders WHERE cloud_id = 'cloud-ideas' AND account_id = 'a'"
+      )
+      .get().n,
+    1,
+    "no second folder of the account stands for the cloud folder"
+  );
+  assert.equal(folderRow(db.db, standInIdeas).space_id, db._standInPrivateSpaceId());
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("on a shared device the sign-in claim takes only notes the cloud says are the account's", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const meetings = seededFolderId(db.db, "Meetings");
+  const owned = seedNote(db.db, standInId, {
+    title: "owned",
+    folderId: meetings,
+    cloudId: "c1",
+    ownerUserId: "a",
+  });
+  const tombstone = seedNote(db.db, standInId, {
+    title: "gone",
+    cloudId: "c2",
+    ownerUserId: "a",
+    deletedAt: SEEDED_AT,
+  });
+  const theirs = seedNote(db.db, standInId, { title: "theirs", cloudId: "c3", ownerUserId: "b" });
+  const ownerless = seedNote(db.db, standInId, { title: "ownerless", folderId: meetings });
+  const backedUp = seedNote(db.db, standInId, { title: "backed up", cloudId: "c4" });
+  const foldersBefore = db.db.prepare("SELECT * FROM folders ORDER BY id").all();
+  signIn(db, "a", W1_ACTIVE);
+
+  assert.deepEqual(db.claimSignedOutPrivateNotes(), { notes: 2, folders: 0 });
+
+  const home = db.getDefaultPrivateSpaceId();
+  for (const id of [owned, tombstone]) {
+    const row = noteRow(db.db, id);
+    assert.equal(row.space_id, home);
+    assert.equal(row.account_id, "a");
+  }
+  assert.equal(folderRow(db.db, noteRow(db.db, owned).folder_id).name, "Meetings");
+  assert.notEqual(noteRow(db.db, owned).folder_id, meetings);
+  for (const id of [theirs, ownerless, backedUp]) {
+    assert.equal(noteRow(db.db, id).space_id, standInId);
+    assert.equal(noteRow(db.db, id).account_id, null);
+  }
+  assert.deepEqual(
+    db.db
+      .prepare(
+        "SELECT * FROM folders WHERE id IN (" + foldersBefore.map((f) => f.id) + ") ORDER BY id"
+      )
+      .all(),
+    foldersBefore
+  );
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("getStandInOwnershipCandidates lists backed-up notes with no owner, once per account", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const id = seedNote(db.db, standInId, { title: "n", cloudId: "c1" });
+  seedNote(db.db, standInId, { title: "owned", cloudId: "c2", ownerUserId: "b" });
+  seedNote(db.db, standInId, { title: "local" });
+  signIn(db, "a", W1_ACTIVE);
+
+  assert.deepEqual(db.getStandInOwnershipCandidates(), [{ id, cloud_id: "c1" }]);
+  db.resolveStandInOwnership(id, "c1", false);
+  assert.deepEqual(db.getStandInOwnershipCandidates(), []);
+  signIn(db, "b", W1_ACTIVE);
+  assert.deepEqual(db.getStandInOwnershipCandidates(), [{ id, cloud_id: "c1" }]);
+});
+
+test("resolveStandInOwnership claims an owned note into the default Private", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const meetings = seededFolderId(db.db, "Meetings");
+  const id = seedNote(db.db, db._standInPrivateSpaceId(), {
+    title: "n",
+    folderId: meetings,
+    cloudId: "c1",
+  });
+  signIn(db, "a", W1_ACTIVE);
+
+  assert.equal(db.resolveStandInOwnership(id, "c1", true).claimed, true);
+  const row = noteRow(db.db, id);
+  assert.equal(row.account_id, "a");
+  assert.equal(row.owner_user_id, "a");
+  assert.equal(row.cloud_id, "c1");
+  assert.equal(row.space_id, db.getDefaultPrivateSpaceId());
+  assert.equal(folderRow(db.db, row.folder_id).name, "Meetings");
+  assert.deepEqual(db.resolveStandInOwnership(id, "c1", true), { claimed: false });
+});
+
+test("resolveStandInOwnership refuses a note whose cloud id changed", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const id = seedNote(db.db, standInId, { title: "n", cloudId: "c1" });
+  signIn(db, "a", W1_ACTIVE);
+  const before = noteRow(db.db, id);
+
+  assert.deepEqual(db.resolveStandInOwnership(id, "other", true), { claimed: false });
+  assert.deepEqual(noteRow(db.db, id), before);
+});
+
+test("resolveStandInOwnership returns the claimed note row", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const id = seedNote(db.db, db._standInPrivateSpaceId(), { title: "n", cloudId: "c1" });
+  signIn(db, "a", W1_ACTIVE);
+
+  const result = db.resolveStandInOwnership(id, "c1", true);
+  assert.equal(result.claimed, true);
+  assert.equal(result.note.id, id);
+  assert.equal(result.note.account_id, "a");
+  assert.equal(result.note.owner_user_id, "a");
+});
+
+function accountFolderNamed(sqlite, spaceId, name) {
+  return sqlite
+    .prepare("SELECT * FROM folders WHERE space_id = ? AND account_id = 'a' AND name = ?")
+    .all(spaceId, name);
+}
+
+test("a deleted note the sign-in claim takes never makes a folder", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  const tombstone = seedNote(db.db, standInId, {
+    title: "gone",
+    folderId: ideas,
+    cloudId: "c1",
+    ownerUserId: "a",
+    deletedAt: SEEDED_AT,
+  });
+  signIn(db, "a", W1_ACTIVE);
+
+  db.claimSignedOutPrivateNotes();
+
+  const home = db.getDefaultPrivateSpaceId();
+  assert.equal(noteRow(db.db, tombstone).space_id, home);
+  assert.equal(noteRow(db.db, tombstone).folder_id, null);
+  assert.deepEqual(accountFolderNamed(db.db, home, "Ideas"), []);
+});
+
+test("a deleted note joins the account's live folder of that name", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  const tombstone = seedNote(db.db, standInId, {
+    title: "gone",
+    folderId: ideas,
+    cloudId: "c1",
+    deletedAt: SEEDED_AT,
+  });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const aIdeas = seedFolder(db.db, home, { name: "Ideas", accountId: "a" });
+
+  assert.equal(db.resolveStandInOwnership(tombstone, "c1", true).claimed, true);
+  assert.equal(noteRow(db.db, tombstone).folder_id, aIdeas);
+});
+
+test("resolveStandInOwnership files a deleted owned note at the root when the account has no such folder", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  const tombstone = seedNote(db.db, standInId, {
+    title: "gone",
+    folderId: ideas,
+    cloudId: "c1",
+    deletedAt: SEEDED_AT,
+  });
+  signIn(db, "a", W1_ACTIVE);
+
+  assert.equal(db.resolveStandInOwnership(tombstone, "c1", true).claimed, true);
+  const home = db.getDefaultPrivateSpaceId();
+  assert.equal(noteRow(db.db, tombstone).space_id, home);
+  assert.equal(noteRow(db.db, tombstone).folder_id, null);
+  assert.deepEqual(accountFolderNamed(db.db, home, "Ideas"), []);
+});
+
+test("a note in a deleted stand-in folder moves to the root", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const old = seedFolder(db.db, standInId, { name: "Old", deletedAt: SEEDED_AT });
+  const id = seedNote(db.db, standInId, { title: "n", folderId: old });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  seedFolder(db.db, home, { name: "Old", accountId: "a" });
+
+  const { moved } = db.moveDeviceNotesToPrivate({ noteIds: [id] });
+
+  assert.equal(moved[0].folder_id, null);
+  assert.equal(accountFolderNamed(db.db, home, "Old").length, 1);
+});
+
+test("a folder made for a moved note steps around a namesake whose delete is pending", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  const id = seedNote(db.db, standInId, { title: "n", folderId: ideas });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const held = seedFolder(db.db, home, {
+    name: "Ideas",
+    accountId: "a",
+    deletedAt: SEEDED_AT,
+  });
+  db.db
+    .prepare(
+      `INSERT INTO optimistic_folder_delete_rows
+         (folder_id, entity_type, entity_id, original_sync_status, original_deleted_at, original_updated_at)
+       VALUES (?, 'folder', ?, 'synced', NULL, ?)`
+    )
+    .run(held, held, SEEDED_AT);
+
+  const { moved } = db.moveDeviceNotesToPrivate({ noteIds: [id] });
+
+  assert.notEqual(moved[0].folder_id, held);
+  assert.equal(folderRow(db.db, moved[0].folder_id).name, "Ideas (2)");
+});
+
+// A stand-in "Ideas" holding `count` notes, with the account's own "Ideas"
+// in its Private waiting on a delete: its name is taken but nothing live has it.
+function seedIdeasBehindPendingDelete(db, { count, ownerUserId = null }) {
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  const noteIds = Array.from({ length: count }, (_, index) =>
+    seedNote(db.db, standInId, { title: `n${index}`, folderId: ideas, ownerUserId })
+  );
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const held = seedFolder(db.db, home, { name: "Ideas", accountId: "a", deletedAt: SEEDED_AT });
+  db.db
+    .prepare(
+      `INSERT INTO optimistic_folder_delete_rows
+         (folder_id, entity_type, entity_id, original_sync_status, original_deleted_at, original_updated_at)
+       VALUES (?, 'folder', ?, 'synced', NULL, ?)`
+    )
+    .run(held, held, SEEDED_AT);
+  return { ideas, noteIds, home, held };
+}
+
+function assertOneFolderHoldsAll(db, { noteIds, home, held }) {
+  const created = db.db
+    .prepare("SELECT * FROM folders WHERE space_id = ? AND account_id = 'a' AND id != ?")
+    .all(home, held);
+  assert.deepEqual(
+    created.map((folder) => folder.name),
+    ["Ideas (2)"]
+  );
+  for (const id of noteIds) assert.equal(noteRow(db.db, id).folder_id, created[0].id);
+}
+
+test("a folder move of several notes makes one folder while a namesake's delete is pending", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const seeded = seedIdeasBehindPendingDelete(db, { count: 3 });
+
+  db.moveDeviceNotesToPrivate({ folderId: seeded.ideas });
+
+  assertOneFolderHoldsAll(db, seeded);
+});
+
+test("a multi-note move makes one folder while a namesake's delete is pending", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const seeded = seedIdeasBehindPendingDelete(db, { count: 3 });
+
+  db.moveDeviceNotesToPrivate({ noteIds: seeded.noteIds });
+
+  assertOneFolderHoldsAll(db, seeded);
+});
+
+test("the shared-device sign-in claim makes one folder while a namesake's delete is pending", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  // Seeded after sign-in so the claim runs once the pending delete exists.
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  const noteIds = [0, 1].map((index) =>
+    seedNote(db.db, standInId, { title: `n${index}`, folderId: ideas, ownerUserId: "a" })
+  );
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const held = seedFolder(db.db, home, { name: "Ideas", accountId: "a", deletedAt: SEEDED_AT });
+  db.db
+    .prepare(
+      `INSERT INTO optimistic_folder_delete_rows
+         (folder_id, entity_type, entity_id, original_sync_status, original_deleted_at, original_updated_at)
+       VALUES (?, 'folder', ?, 'synced', NULL, ?)`
+    )
+    .run(held, held, SEEDED_AT);
+
+  db.claimSignedOutPrivateNotes();
+
+  assertOneFolderHoldsAll(db, { noteIds, home, held });
+});
+
+test("ownership checks are empty signed out and on a single-account device", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  seedNote(db.db, db._standInPrivateSpaceId(), { title: "n", cloudId: "c1" });
+  assert.deepEqual(db.getStandInOwnershipCandidates(), []);
+
+  const single = createFreshDeviceDb(t);
+  if (!single) return;
+  seedNote(single.db, single._standInPrivateSpaceId(), { title: "n", cloudId: "c1" });
+  signIn(single, "a", W1_ACTIVE);
+  assert.deepEqual(single.getStandInOwnershipCandidates(), []);
+});
+
+test("deleteAccountData drops the account's ownership checks", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const id = seedNote(db.db, db._standInPrivateSpaceId(), { title: "n", cloudId: "c1" });
+  signIn(db, "a", W1_ACTIVE);
+  db.resolveStandInOwnership(id, "c1", false);
+
+  db.deleteAccountData("a");
+
+  const { count } = db.db
+    .prepare("SELECT COUNT(*) AS count FROM stand_in_ownership_checks WHERE account_id = 'a'")
+    .get();
+  assert.equal(count, 0);
+});
+
+test("migration leaves a cloud folder unclaimed when only another account's notes use it", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standIn = db._standInPrivateSpaceId();
+  const folderId = seededFolderId(db.db, "Personal");
+  db.db.prepare("UPDATE folders SET cloud_id = 'unknown-owner-folder' WHERE id = ?").run(folderId);
+  const noteId = seedNote(db.db, standIn, {
+    title: "Misrouted note",
+    accountId: "b",
+    folderId,
+    cloudId: "b-note",
+    ownerUserId: "b",
+  });
+
+  const migrated = relaunchFromVersion5(t, db);
+  const folder = folderRow(migrated.db, folderId);
+  const note = noteRow(migrated.db, noteId);
+  assert.equal(folder.account_id, null);
+  assert.equal(folder.space_id, standIn);
+  assert.equal(folder.cloud_id, "unknown-owner-folder");
+  assert.equal(note.account_id, "b");
+  assert.equal(note.space_id, pendingRowId(migrated.db, "b"));
+  assert.notEqual(note.folder_id, folderId);
+  assert.equal(folderRow(migrated.db, note.folder_id).cloud_id, null);
+  assertEveryRowInItsFolderSpace(migrated.db);
+});
+
+test("launch repair places a cloud-bound legacy note in its recorded owner's private space", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standIn = db._standInPrivateSpaceId();
+  const folderId = seededFolderId(db.db, "Personal");
+  db.db.prepare("UPDATE folders SET cloud_id = 'unknown-owner-folder' WHERE id = ?").run(folderId);
+  const noteId = seedNote(db.db, standIn, {
+    title: "Backed up",
+    folderId,
+    cloudId: "account-a-note",
+    ownerUserId: "a",
+  });
+  const deviceNoteId = seedNote(db.db, standIn, { title: "Only local", folderId });
+  db.db.close();
+
+  const reopened = relaunch(t);
+  const repaired = noteRow(reopened.db, noteId);
+  assert.equal(repaired.account_id, "a");
+  assert.equal(repaired.space_id, pendingRowId(reopened.db, "a"));
+  assert.equal(repaired.sync_status, "pending");
+  assert.equal(folderRow(reopened.db, folderId).account_id, null);
+  assert.equal(noteRow(reopened.db, deviceNoteId).space_id, standIn);
+  reopened.db.prepare("UPDATE notes SET title = 'Latest edit' WHERE id = ?").run(noteId);
+  assert.deepEqual(
+    reopened.takeAccountRepairNotes().map(({ id, title }) => ({ id, title })),
+    [{ id: noteId, title: "Latest edit" }]
+  );
+  reopened._repairCloudBoundLegacyRows();
+  assert.deepEqual(reopened.takeAccountRepairNotes(), []);
+  signIn(reopened, "b");
+  assert.equal(reopened.getNote(noteId), null);
+  signIn(reopened, "a");
+  assert.equal(reopened.getNote(noteId).id, noteId);
+  assertEveryRowInItsFolderSpace(reopened.db);
+});
+
+test("repair failure leaves legacy rows intact and retries on the next launch", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const noteId = seedNote(db.db, db._standInPrivateSpaceId(), {
+    title: "Preserved",
+    cloudId: "a-note",
+    ownerUserId: "a",
+  });
+  const before = noteRow(db.db, noteId);
+  db.db.exec(`CREATE TRIGGER interrupt_account_repair BEFORE UPDATE OF account_id ON notes
+    WHEN NEW.account_id = 'a' BEGIN SELECT RAISE(ABORT, 'repair interrupted'); END`);
+  db.db.close();
+  const logged = t.mock.method(debugLogger, "error", () => {});
+  const interrupted = relaunch(t);
+  assert.deepEqual(noteRow(interrupted.db, noteId), before);
+  assert.ok(
+    logged.mock.calls.some(({ arguments: args }) => args[0] === "Legacy row account repair failed")
+  );
+  interrupted.db.exec("DROP TRIGGER interrupt_account_repair");
+  interrupted.db.close();
+  const completed = relaunch(t);
+  assert.equal(noteRow(completed.db, noteId).account_id, "a");
+});
+
+test("folder acknowledgement never attributes another cloud owner's legacy notes", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a");
+  const home = db.getPrivateSpaceId();
+  const folderId = seedFolder(db.db, home, { name: "Legacy folder" });
+  const mine = seedNote(db.db, home, {
+    title: "Mine",
+    folderId,
+    cloudId: "a-note",
+    ownerUserId: "a",
+  });
+  const theirs = seedNote(db.db, home, {
+    title: "Theirs",
+    folderId,
+    cloudId: "b-note",
+    ownerUserId: "b",
+  });
+  const unknown = seedNote(db.db, home, { title: "Unknown", folderId, cloudId: "unknown-note" });
+  const device = seedNote(db.db, home, { title: "Device", folderId });
+
+  db.markFolderSynced(folderId, "a-folder");
+
+  assert.equal(folderRow(db.db, folderId).account_id, "a");
+  assert.equal(noteRow(db.db, mine).account_id, "a");
+  for (const id of [theirs, unknown, device]) assert.equal(noteRow(db.db, id).account_id, null);
+  db._repairCloudBoundLegacyRows();
+  assert.equal(noteRow(db.db, theirs).account_id, "b");
+  assert.equal(noteRow(db.db, theirs).space_id, pendingRowId(db.db, "b"));
+});
+
+test("note acknowledgement attributes an unclaimed row in the account's private space", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a");
+  const noteId = seedNote(db.db, db.getPrivateSpaceId(), { title: "Legacy draft" });
+  const snapshot = db.db.prepare("SELECT * FROM notes WHERE id = ?").get(noteId);
+
+  const ack = db.acknowledgeNoteCreate(noteId, snapshot, "a-note", SEEDED_AT, "a");
+
+  assert.equal(ack.outcome, "synced");
+  assert.equal(noteRow(db.db, noteId).account_id, "a");
+  signIn(db, "b");
+  assert.equal(db.getNote(noteId), null);
+});
+
+test("private default lookups prefer the account's row over an unclaimed namesake", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a");
+  const home = db.getPrivateSpaceId();
+  seedFolder(db.db, home, { name: "Personal", isDefault: 1, cloudId: "unknown-folder" });
+  seedFolder(db.db, home, { name: "Meetings", isDefault: 1, cloudId: "unknown-meetings" });
+  const personal = seedFolder(db.db, home, { name: "Personal", isDefault: 1, accountId: "a" });
+  const meetings = seedFolder(db.db, home, { name: "Meetings", isDefault: 1, accountId: "a" });
+
+  db.ensureAccountDefaultFolders();
+
+  assert.equal(db.saveNote("Mine", "").note.folder_id, personal);
+  assert.equal(db.getMeetingsFolder().id, meetings);
+  assert.deepEqual(
+    db
+      .getFolders()
+      .map(({ id }) => id)
+      .sort(),
+    [personal, meetings].sort()
+  );
+});
+
+test("account deletion releases foreign and device notes before deleting their private space", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "b");
+  const bHome = db.getPrivateSpaceId();
+  signIn(db, "a");
+  const own = db.saveNote("A note", "").note;
+  const foreign = seedNote(db.db, own.space_id, {
+    title: "B note",
+    accountId: "b",
+    folderId: own.folder_id,
+  });
+  const device = seedNote(db.db, own.space_id, { title: "Device note", folderId: own.folder_id });
+  const chat = seedChat(db.db, {
+    title: "B note chat",
+    accountId: "b",
+    folderId: own.folder_id,
+    spaceId: own.space_id,
+  });
+  db.db.prepare("UPDATE agent_conversations SET note_id = ? WHERE id = ?").run(foreign, chat);
+
+  const result = db.deleteAccountData("a");
+
+  assert.deepEqual(result.deletedNoteIds, [own.id]);
+  assert.deepEqual(result.relocatedNotes.map(({ id }) => id).sort(), [foreign, device].sort());
+  assert.equal(noteRow(db.db, foreign).space_id, bHome);
+  assert.equal(noteRow(db.db, foreign).folder_id, null);
+  assert.equal(noteRow(db.db, device).space_id, db._standInPrivateSpaceId());
+  assert.equal(noteRow(db.db, device).folder_id, null);
+  assert.ok(db.db.prepare("SELECT id FROM agent_conversations WHERE id = ?").get(chat));
+  assert.equal(db.db.prepare("SELECT id FROM spaces WHERE id = ?").get(own.space_id), undefined);
+  signIn(db, "b");
+  assert.ok(db.getNotes().some(({ id }) => id === foreign));
+  signIn(db, null);
+  assert.ok(db.getNotes().some(({ id }) => id === device));
+});
+
+test("proven-foreign defaults are replaced in each affected private workspace", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "b", W1_ACTIVE);
+  const activeHome = db.getPrivateSpaceId();
+  const otherHome = db.getPrivateSpaceId("w2");
+  const emptyHome = db.getPrivateSpaceId("w3");
+  const notes = [];
+  for (const [spaceId, cloudId] of [
+    [activeHome, "foreign-personal-w1"],
+    [otherHome, "foreign-personal-w2"],
+  ]) {
+    const folderId = seedFolder(db.db, spaceId, { name: "Personal", isDefault: 1, cloudId });
+    notes.push(seedNote(db.db, spaceId, { title: cloudId, accountId: "b", folderId }));
+  }
+
+  db.ensureAccountDefaultFolders(["foreign-personal-w1", "foreign-personal-w2"]);
+
+  for (const noteId of notes) {
+    const note = noteRow(db.db, noteId);
+    const folder = folderRow(db.db, note.folder_id);
+    assert.equal(folder.account_id, "b");
+    assert.equal(folder.cloud_id, null);
+    assert.equal(folder.space_id, note.space_id);
+    assert.equal(note.sync_status, "pending");
+  }
+  assert.equal(db.getFolders().filter(({ name }) => name === "Personal").length, 2);
+  assert.equal(db.getFolders(emptyHome).length, 0, "unaffected empty workspaces stay lazy");
+  assert.deepEqual(
+    db
+      .takeAccountRepairNotes()
+      .map(({ id }) => id)
+      .sort(),
+    notes.sort()
+  );
+  db.ensureAccountDefaultFolders(["foreign-personal-w1", "foreign-personal-w2"]);
+  assert.deepEqual(db.takeAccountRepairNotes(), []);
+});
+
+test("sole-account sign-in preserves an unproven cloud folder and files its notes separately", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standIn = db._standInPrivateSpaceId();
+  const folderId = seedFolder(db.db, standIn, { name: "Ideas", cloudId: "unknown-folder" });
+  const noteId = seedNote(db.db, standIn, { title: "Device draft", folderId });
+  signIn(db, "a", W1_ACTIVE);
+
+  db.claimSignedOutPrivateNotes();
+
+  const note = noteRow(db.db, noteId);
+  const source = folderRow(db.db, folderId);
+  assert.equal(source.account_id, null);
+  assert.equal(source.space_id, standIn);
+  assert.equal(source.cloud_id, "unknown-folder");
+  assert.equal(note.account_id, "a");
+  assert.equal(note.space_id, db.getDefaultPrivateSpaceId());
+  assert.notEqual(note.folder_id, folderId);
+  assert.equal(folderRow(db.db, note.folder_id).cloud_id, null);
+  assert.deepEqual(db.claimSignedOutPrivateNotes(), { notes: 0, folders: 0 });
+});
+
+test("account deletion preserves unowned folders and foreign container chats from its space", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "b");
+  const bHome = db.getPrivateSpaceId();
+  signIn(db, "a");
+  const aHome = db.getPrivateSpaceId();
+  const unclaimed = seedFolder(db.db, aHome, { name: "Legacy cloud", cloudId: "b-cloud-folder" });
+  const foreign = seedFolder(db.db, aHome, { name: "B folder", accountId: "b" });
+  const deviceNote = seedNote(db.db, aHome, { title: "Device draft", folderId: unclaimed });
+  const foreignNote = seedNote(db.db, aHome, {
+    title: "B draft",
+    folderId: foreign,
+    accountId: "b",
+  });
+  const bChat = seedChat(db.db, {
+    title: "B local history",
+    accountId: "b",
+    spaceId: aHome,
+    folderId: unclaimed,
+  });
+  const deviceChat = seedChat(db.db, {
+    title: "Device local history",
+    accountId: null,
+    spaceId: aHome,
+    folderId: unclaimed,
+  });
+  db.db
+    .prepare(
+      "INSERT INTO agent_messages (conversation_id, role, content) VALUES (?, 'user', 'Kept')"
+    )
+    .run(bChat);
+
+  const result = db.deleteAccountData("a");
+
+  assert.deepEqual(result.deletedFolderIds, []);
+  assert.equal(folderRow(db.db, unclaimed).space_id, db._standInPrivateSpaceId());
+  assert.equal(folderRow(db.db, unclaimed).account_id, null);
+  assert.equal(folderRow(db.db, unclaimed).cloud_id, "b-cloud-folder");
+  assert.equal(folderRow(db.db, foreign).space_id, bHome);
+  assert.equal(noteRow(db.db, deviceNote).folder_id, unclaimed);
+  assert.equal(noteRow(db.db, foreignNote).folder_id, foreign);
+  assert.deepEqual(chatRow(db.db, bChat), { account_id: "b", space_id: bHome, folder_id: null });
+  assert.deepEqual(chatRow(db.db, deviceChat), {
+    account_id: null,
+    space_id: db._standInPrivateSpaceId(),
+    folder_id: unclaimed,
+  });
+  assert.equal(
+    db.db.prepare("SELECT content FROM agent_messages WHERE conversation_id = ?").get(bChat)
+      .content,
+    "Kept"
+  );
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("a repaired foreign note's chat survives deleting its previous container account", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a");
+  const own = db.saveNote("A note", "").note;
+  const noteId = seedNote(db.db, own.space_id, {
+    title: "B legacy",
+    folderId: own.folder_id,
+    cloudId: "b-note",
+    ownerUserId: "b",
+  });
+  const chatId = seedChat(db.db, {
+    title: "B note chat",
+    accountId: "b",
+    spaceId: own.space_id,
+  });
+  db.db.prepare("UPDATE agent_conversations SET note_id = ? WHERE id = ?").run(noteId, chatId);
+
+  db._repairCloudBoundLegacyRows();
+  db.deleteAccountData("a");
+
+  assert.equal(noteRow(db.db, noteId).account_id, "b");
+  assert.deepEqual(chatRow(db.db, chatId), { account_id: "b", space_id: null, folder_id: null });
+});
+
+test("a proven-foreign legacy Videos default gets an owned replacement only in its workspace", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "b", W1_ACTIVE);
+  const home = db.getPrivateSpaceId();
+  const other = db.getPrivateSpaceId("w2");
+  const legacy = seedFolder(db.db, home, { name: "Videos", isDefault: 1, cloudId: "a-videos" });
+  const noteId = seedNote(db.db, home, { title: "B video", accountId: "b", folderId: legacy });
+
+  db.ensureAccountDefaultFolders(["a-videos"]);
+
+  const visible = db.getFolders(home).filter(({ name }) => name === "Videos");
+  assert.equal(visible.length, 1);
+  assert.equal(visible[0].account_id, "b");
+  assert.notEqual(visible[0].id, legacy);
+  assert.equal(noteRow(db.db, noteId).folder_id, visible[0].id);
+  assert.equal(folderRow(db.db, legacy).cloud_id, "a-videos");
+  db.ensureDefaultFolders(other);
+  assert.equal(
+    db.getFolders(other).some(({ name }) => name === "Videos"),
+    false
+  );
+});
+
+test("default repair failures keep startup available and leave repair eligible to retry", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "b");
+  const home = db.getPrivateSpaceId();
+  const folderId = seedFolder(db.db, home, { name: "Personal", isDefault: 1, cloudId: "a-folder" });
+  const noteId = seedNote(db.db, home, { title: "Misplaced", accountId: "b", folderId });
+  db.db.exec(`CREATE TRIGGER interrupt_default_repair BEFORE UPDATE OF folder_id ON notes
+    BEGIN SELECT RAISE(ABORT, 'repair interrupted'); END`);
+  t.mock.method(debugLogger, "error", () => {});
+
+  assert.doesNotThrow(() => db.ensureAccountDefaultFolders(["a-folder"]));
+  assert.equal(noteRow(db.db, noteId).folder_id, folderId);
+  assert.deepEqual(db.takeAccountRepairNotes(), []);
+  assert.equal(
+    db.db
+      .prepare("SELECT COUNT(*) AS count FROM folders WHERE space_id = ? AND account_id = 'b'")
+      .get(home).count,
+    0
+  );
+  db.db.exec("DROP TRIGGER interrupt_default_repair");
+  db.ensureAccountDefaultFolders(["a-folder"]);
+  assert.notEqual(noteRow(db.db, noteId).folder_id, folderId);
+  assert.deepEqual(
+    db.takeAccountRepairNotes().map(({ id }) => id),
+    [noteId]
+  );
+});
+
+test("owners discovered during upgrade repair disable sole-account signed-out visibility", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standIn = db._standInPrivateSpaceId();
+  const knownOwner = seedNote(db.db, standIn, {
+    title: "A cloud note",
+    cloudId: "a-cloud-note",
+    ownerUserId: "a",
+  });
+  const sharedDraft = seedNote(db.db, standIn, { title: "Shared device draft" });
+  assert.deepEqual(db.db.prepare("SELECT account_id FROM device_accounts").all(), []);
+
+  const upgraded = relaunchFromVersion5(t, db);
+  assert.equal(noteRow(upgraded.db, knownOwner).account_id, "a");
+  signIn(upgraded, "b");
+  assert.equal(upgraded.hasOtherAccountRows(), true);
+  assert.deepEqual(upgraded.claimSignedOutPrivateNotes(), { notes: 0, folders: 0 });
+  assert.equal(noteRow(upgraded.db, sharedDraft).account_id, null);
+  upgraded.db
+    .prepare("INSERT INTO transcriptions (text, account_id) VALUES ('B private history', 'b')")
+    .run();
+  const bChat = seedChat(upgraded.db, { title: "B private chat", accountId: "b" });
+  assert.ok(upgraded.getTranscriptions().some(({ text }) => text === "B private history"));
+  assert.ok(upgraded.getAgentConversation(bChat));
+
+  signIn(upgraded, null);
+
+  assert.deepEqual(upgraded.getAccountScope(), { accountId: null, visibleAccountId: null });
+  assert.equal(
+    upgraded.getTranscriptions().some(({ text }) => text === "B private history"),
+    false
+  );
+  assert.equal(upgraded.getAgentConversation(bChat), null);
+  assert.ok(upgraded.getNote(sharedDraft));
+  assert.deepEqual(
+    upgraded.db.prepare("SELECT account_id FROM device_accounts ORDER BY account_id").all(),
+    [{ account_id: "a" }, { account_id: "b" }]
+  );
 });

@@ -342,6 +342,10 @@ const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager")
 const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
+const { createManagedMeetingPolicy } = require("./src/helpers/managedMeetingPolicy");
+const { createManagedDevicePolicy } = require("./src/helpers/managedDevicePolicy");
+const { createMeetingAuditLog } = require("./src/helpers/meetingAuditLog");
+const { installManagedNetworkGuard } = require("./src/helpers/devicePolicyNetwork");
 const { applyOpenWhisprOriginHeader } = require("./src/helpers/sessionHeaders");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
@@ -362,6 +366,8 @@ let parakeetManager = null;
 let diarizationManager = null;
 let trayManager = null;
 let updateManager = null;
+let managedDevicePolicy = null;
+let meetingAuditLog = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
 let linuxKeyManager = null;
@@ -512,6 +518,7 @@ function initializeCoreManagers() {
     binding: accountScopeBinding.read(),
   });
   if (bootAccountId) databaseManager.setActiveAccountId(bootAccountId, { atLaunch: true });
+  databaseManager.ensureAccountDefaultFolders();
   clipboardManager = new ClipboardManager();
   const { createConnectorManager } = require("./src/helpers/connectors/connectorManager");
   const { createPendingActions } = require("./src/helpers/connectors/pendingActions");
@@ -662,6 +669,20 @@ function initializeCoreManagers() {
   );
   appleCalendarManager = new AppleCalendarManager(databaseManager, calendarReminderScheduler);
   const meetingProcessDetector = new MeetingProcessDetector();
+  managedDevicePolicy = createManagedDevicePolicy();
+  const managedMeetingPolicy = createManagedMeetingPolicy({
+    getSnapshot: () => managedDevicePolicy.getSnapshot(),
+  });
+  meetingAuditLog = createMeetingAuditLog({
+    // The effective policy (MDM merged with the workspace) lives in the IPC
+    // handlers below; no recording starts before they exist.
+    isEnabled: () => ipcHandlers?.effectivePolicyManager?.getCurrent().managed === true,
+    getConfiguredPath: () => managedDevicePolicy.getSnapshot().auditLogPath,
+    userDataPath: app.getPath("userData"),
+    appVersion: app.getVersion(),
+    logger: debugLogger,
+  });
+  meetingAuditLog.recoverInterrupted();
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     meetingProcessDetector,
@@ -678,11 +699,17 @@ function initializeCoreManagers() {
       () => meetingProcessDetector.getDetectedProcesses().length > 0
     ),
     windowManager,
-    databaseManager
+    databaseManager,
+    {
+      isMeetingRecordingDisabled: managedMeetingPolicy.isMeetingRecordingDisabled,
+      onStartRefused: (reason, trigger) => meetingAuditLog.recordingRefused({ reason, trigger }),
+    }
   );
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
-  updateManager = new UpdateManager();
+  updateManager = new UpdateManager({
+    getPolicy: (options) => ipcHandlers?.getUpdatePolicy?.(options) ?? { success: false },
+  });
   updateManager.setWindowManager(windowManager);
   windowsKeyManager = new WindowsKeyManager();
   linuxKeyManager = new LinuxKeyManager();
@@ -730,6 +757,9 @@ function initializeCoreManagers() {
     appleCalendarManager,
     connectorManager,
     meetingDetectionEngine,
+    managedMeetingPolicy,
+    managedDevicePolicy,
+    meetingAuditLog,
     audioTapManager,
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,
@@ -798,8 +828,7 @@ function initializeDeferredManagers() {
     });
   }
 
-  googleCalendarManager.start();
-  microsoftCalendarManager.start();
+  ipcHandlers.startPolicyCalendars();
   appleCalendarManager.start();
   meetingDetectionEngine.start();
 }
@@ -834,6 +863,7 @@ function handleEnterpriseAudioLink(url) {
 app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
+  if (handleAffiliateDeepLink(url)) return;
 
   if (url.includes("upgrade-success")) {
     handleUpgradeDeepLink();
@@ -856,6 +886,44 @@ app.on("open-url", (event, url) => {
 
   windowManager?.showControlPanel();
 });
+
+const pendingAffiliateDeepLinks = [];
+let affiliateWindowReady = false;
+
+async function flushPendingAffiliateDeepLink() {
+  if (!pendingAffiliateDeepLinks.length || !affiliateWindowReady || !windowManager) return;
+  const urls = pendingAffiliateDeepLinks.splice(0);
+  try {
+    const affiliateLinks = require("./src/helpers/affiliateLinks");
+    let captured = false;
+    for (const url of urls) {
+      if (affiliateLinks.capture(url, OAUTH_PROTOCOL)) captured = true;
+    }
+    if (!captured) return;
+    await windowManager.createControlPanelWindow();
+    windowManager.showControlPanel();
+    if (isLiveWindow(windowManager.controlPanelWindow)) {
+      windowManager.controlPanelWindow.webContents.send("affiliate-link");
+    }
+  } catch (error) {
+    debugLogger?.error("Creator link window could not be opened", { error: error.message });
+  }
+}
+
+function handleAffiliateDeepLink(url) {
+  try {
+    if (url.length > 4096) return false;
+    const parsed = new URL(url);
+    if (parsed.protocol !== `${OAUTH_PROTOCOL}:` || parsed.hostname !== "affiliate") return false;
+    // Packaged configuration may not be loaded when macOS first delivers open-url.
+    pendingAffiliateDeepLinks.push(url);
+    void flushPendingAffiliateDeepLink();
+    return true;
+  } catch {
+    debugLogger?.error("Creator link could not be saved");
+    return false;
+  }
+}
 
 function isInvitationDeepLink(url) {
   return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("invitations/");
@@ -1256,7 +1324,6 @@ async function startApp() {
           (id) => debugLogger.warn("Refused a catalog download from an untrusted source", { id })
         ),
       }),
-    fetch: (...args) => net.fetch(...args),
     onError: (error) =>
       debugLogger.warn("Model registry update unavailable", { error: error.message }),
   });
@@ -1269,6 +1336,14 @@ async function startApp() {
 
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
+  installManagedNetworkGuard({
+    app,
+    session,
+    isAllowed: (url) => ipcHandlers.isProductNetworkAllowed(url),
+  });
+  await managedDevicePolicy.start();
+  const effectivePolicyReady = ipcHandlers.refreshEffectivePolicy();
+  if (managedDevicePolicy.getSnapshot().localOnly) await effectivePolicyReady;
   await environmentManager.init();
   // After any upgrade the GPU gets one fresh attempt: clear the remembered
   // failure before the whisper pre-warm below resolves its GPU backend.
@@ -1283,6 +1358,7 @@ async function startApp() {
   });
 
   await migrateCookieToBearerToken();
+  void updateManager.refreshPolicy();
   ipcHandlers.loadLocalModelPolicy();
 
   applyOpenWhisprOriginHeader(session.defaultSession);
@@ -1355,11 +1431,15 @@ async function startApp() {
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
+  affiliateWindowReady = true;
+  await flushPendingAffiliateDeepLink();
 
   // Windows/Linux cold start delivers protocol URLs via argv (macOS uses
   // open-url); without this scan a deep link that launches the app is lost.
   const initialProtocolUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
-  if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
+  if (initialProtocolUrl && handleAffiliateDeepLink(initialProtocolUrl)) {
+    await flushPendingNoteDeepLink();
+  } else if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
     // The renderer consumes the saved setup request after settings mount.
   } else if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
     await handleNoteDeepLink(initialProtocolUrl);
@@ -1437,7 +1517,7 @@ async function startApp() {
     if (!isMeetingPress()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
     // Usually pressed mid-call: an open panel updates behind the meeting app.
-    windowManager.startManualMeeting({ activate: false });
+    windowManager.startManualMeeting({ activate: false, startSource: "hotkey" });
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1484,6 +1564,7 @@ async function startApp() {
   }
 
   app.on("browser-window-focus", () => {
+    managedDevicePolicy.refreshOnFocus();
     if (googleCalendarManager) googleCalendarManager.syncOnFocus();
     if (microsoftCalendarManager) microsoftCalendarManager.syncOnFocus();
     if (appleCalendarManager) appleCalendarManager.syncOnFocus();
@@ -1491,6 +1572,7 @@ async function startApp() {
 
   const { powerMonitor } = require("electron");
   powerMonitor.on("resume", () => {
+    void managedDevicePolicy.refresh();
     if (calendarReminderScheduler) calendarReminderScheduler.onWakeFromSleep();
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
@@ -1498,6 +1580,8 @@ async function startApp() {
     if (microsoftCalendarManager) microsoftCalendarManager.onWakeFromSleep();
     if (appleCalendarManager) appleCalendarManager.onWakeFromSleep();
     // Sleep evicts the local GPU model from VRAM; reload it once the driver settles. See #766.
+    // A GPU retry left over from the last wake would fire before then.
+    whisperManager?.cancelWakeGpuRetry();
     if (wakeRewarmTimer) clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = setTimeout(() => {
       wakeRewarmTimer = null;
@@ -1979,7 +2063,7 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.startManualMeeting({ activate: false });
+        windowManager.startManualMeeting({ activate: false, startSource: "hotkey" });
       }
     };
 
@@ -2107,6 +2191,7 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
+      if (handleAffiliateDeepLink(url)) return;
       if (handleEnterpriseAudioLink(url)) return;
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
@@ -2209,9 +2294,13 @@ if (gotSingleInstanceLock) {
   app.on("before-quit", (event) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
+    managedDevicePolicy?.stop();
     if (updateManager && updateManager.isQuittingForUpdate) {
       // Quit must proceed for the installer to run, so no preventDefault;
       // sidecar shutdown is best-effort (the reaper cleans up orphans on relaunch).
+      // The windows haven't closed yet, so a live meeting still ends as app-quit;
+      // a stop the exit cuts short is written from its marker at the next launch.
+      meetingAuditLog?.closeOpenSession();
       performSyncTeardown();
       sidecarRegistry.shutdownAll().catch(() => {});
       return;
@@ -2220,6 +2309,10 @@ if (gotSingleInstanceLock) {
     performSyncTeardown();
     Promise.allSettled([
       sidecarRegistry.shutdownAll(),
+      Promise.race([
+        meetingAuditLog?.closeOpenSession(),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
       Promise.race([
         ipcHandlers?.metaActivation?.shutdown(),
         new Promise((resolve) => setTimeout(resolve, 1500)),
@@ -2233,11 +2326,15 @@ if (gotSingleInstanceLock) {
           : undefined,
         new Promise((resolve) => setTimeout(resolve, 1500)),
       ]),
-    ]).finally(() => app.exit(0));
+    ]).finally(() => {
+      ipcHandlers?._noteFilesSync?.flushSync();
+      app.exit(0);
+    });
   });
 }
 
 function performSyncTeardown() {
+  ipcHandlers?._noteFilesSync?.flushSync();
   registryLoader?.stop();
   disposeRegistryIpc?.();
   disposeRegistryIpc = null;
@@ -2245,6 +2342,7 @@ function performSyncTeardown() {
     clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = null;
   }
+  whisperManager?.cancelWakeGpuRetry();
   clearPendingNoteDeepLink();
   if (authBridgeServer) {
     authBridgeServer.close();

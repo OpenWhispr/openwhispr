@@ -86,6 +86,12 @@ test("account ownership operations forward the account and credential generation
   ]);
 });
 
+test("checkout forwards the generation separately from the Stripe options", async () => {
+  const { api, invocations } = loadPreloadApi();
+  await api.cloudCheckout({ plan: "annual" }, 7);
+  assert.deepEqual(invocations, [["cloud-checkout", { plan: "annual" }, 7]]);
+});
+
 test("sync writes forward the sign-in that read them and the account a chat was sent as", async () => {
   const { api, invocations } = loadPreloadApi();
 
@@ -126,12 +132,21 @@ test("sync writes forward the sign-in that read them and the account a chat was 
   ]);
 });
 
-test("meeting stop forwards the optional expected recording session ID", async () => {
+test("meeting stop forwards the optional expected recording session ID and stop reason", async () => {
   const { api, invocations } = loadPreloadApi();
 
-  await api.meetingTranscriptionStop("meeting-2");
+  await api.meetingTranscriptionStop("meeting-2", "auto-end");
 
-  assert.deepEqual(invocations, [["meeting-transcription-stop", "meeting-2"]]);
+  assert.deepEqual(invocations, [["meeting-transcription-stop", "meeting-2", "auto-end"]]);
+});
+
+test("a meeting start the renderer refuses is forwarded for the audit log", async () => {
+  const { api, invocations } = loadPreloadApi();
+  const details = { noteId: 4, startSource: "record-button", reason: "POLICY_UNRESOLVABLE" };
+
+  await api.meetingRecordingRefused(details);
+
+  assert.deepEqual(invocations, [["meeting-recording-refused", details]]);
 });
 
 test("meeting system-audio availability forwards the scoped session", async () => {
@@ -172,7 +187,8 @@ test("note and folder sync receipts forward their originating sign-in", async ()
   await api.hardDeleteFolder(2, 9);
   const candidates = { notes: ["client-note"], folders: [] };
   await api.getPrivatePlacementBackupCandidates(9);
-  await api.queuePrivatePlacementBackup(9, candidates);
+  await api.getPrivatePlacementBackupRows(9, candidates);
+  await api.queueUnlinkedPrivateFolders(9);
   assert.deepEqual(invocations, [
     ["db-mark-note-creates-attempted", ["client-note"], 9],
     [
@@ -189,7 +205,8 @@ test("note and folder sync receipts forward their originating sign-in", async ()
     ["db-hard-delete-note", 1, 9],
     ["db-hard-delete-folder", 2, 9],
     ["db-get-private-placement-backup-candidates", 9],
-    ["db-queue-private-placement-backup", 9, candidates],
+    ["db-get-private-placement-backup-rows", 9, candidates],
+    ["db-queue-unlinked-private-folders", 9],
   ]);
 });
 

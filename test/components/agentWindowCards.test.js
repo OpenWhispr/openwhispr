@@ -229,6 +229,11 @@ async function mountWindow(t, { platform } = {}) {
     ask,
     askApproval,
     wait,
+    unmount: () =>
+      React.act(async () => {
+        root.unmount();
+        root = null;
+      }),
   };
 }
 
@@ -1595,6 +1600,173 @@ for (const result of ["A fuller introduction.", null]) {
     }
   });
 }
+
+// A take spoken over a writable field in another app, answered with only reads.
+async function caretTake(t, { onlyRead = true, pasted = true, beforeAnswer } = {}) {
+  const view = await mountWindow(t);
+  const probes = [];
+  const pastes = [];
+  const released = [];
+  let hides = 0;
+  Object.assign(view.happyWindow.electronAPI, {
+    captureSelectedText: async (options) => {
+      probes.push(options);
+      return { status: "editable", sessionId: "caret-1" };
+    },
+    pasteAtCapturedTarget: async (...args) => {
+      pastes.push(args);
+      return { success: pasted };
+    },
+    cancelSelectionEdit: async (sessionId) => released.push(sessionId),
+    agentWindowHide: async () => {
+      hides += 1;
+      return true;
+    },
+  });
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () =>
+    globalThis.__voice.callbacks.onTranscript("Write a thank-you note to my team", "submit")
+  );
+  const options = globalThis.__chat.sentOptions[0];
+  if (beforeAnswer) await React.act(async () => beforeAnswer(view));
+  await React.act(async () =>
+    options.onComplete({ assistantId: "a1", content: "**Thanks**, team!", onlyRead })
+  );
+  await view.settle();
+  return { options, probes, pastes, released, hides: () => hides };
+}
+
+test("a voice answer for another app's writable field is typed there as plain text", async (t) => {
+  const { options, probes, pastes, released, hides } = await caretTake(t);
+
+  assert.deepEqual(probes, [{ probeEditable: true }]);
+  assert.equal(options.plainTextResponse, true);
+  assert.deepEqual(pastes, [["caret-1", "Thanks, team!"]]);
+  assert.deepEqual(released, []);
+  assert.equal(hides(), 1, "the window steps aside once the answer is in the field");
+  assert.equal(globalThis.__chat.newChats, 0, "the chat stays for a follow-up");
+});
+
+test("an answer whose turn asked or acted stays in the window", async (t) => {
+  const { pastes, released, hides } = await caretTake(t, { onlyRead: false });
+
+  assert.deepEqual(pastes, []);
+  assert.deepEqual(released, ["caret-1"]);
+  assert.equal(hides(), 0);
+});
+
+test("an answer a newer request overtook stays in the window", async (t) => {
+  const { pastes, released, hides } = await caretTake(t, {
+    beforeAnswer: (view) => view.main.handlers.command({ text: "Another request" }),
+  });
+
+  assert.deepEqual(pastes, []);
+  assert.deepEqual(released, ["caret-1"]);
+  assert.equal(hides(), 0);
+});
+
+test("an answer the field refused stays in the window", async (t) => {
+  const { pastes, hides } = await caretTake(t, { pasted: false });
+
+  assert.equal(pastes.length, 1);
+  assert.equal(hides(), 0);
+  assert.equal(globalThis.__chat.newChats, 0);
+});
+
+for (const action of ["dismiss", "Stop", "account change", "unmount", "newer request"]) {
+  test(`${action} cancels a voice answer while native caret validation is pending`, async (t) => {
+    const view = await mountWindow(t);
+    const Module = require("node:module");
+    const originalLoad = Module._load;
+    Module._load = function loadWithoutElectronLogger(request, parent, isMain) {
+      if (request === "./debugLogger") return { info() {}, debug() {}, warn() {} };
+      return originalLoad.call(this, request, parent, isMain);
+    };
+    let SelectionManager;
+    try {
+      SelectionManager = require("../../src/helpers/selectionManager");
+    } finally {
+      Module._load = originalLoad;
+    }
+    const probe = defer();
+    const pasted = [];
+    const manager = new SelectionManager({
+      clipboardManager: {
+        runClipboardOperation: (operation) => operation(),
+        _pasteText: async (text) => {
+          pasted.push(text);
+          return { pasted: true };
+        },
+      },
+      textEditMonitor: {},
+      platform: "win32",
+      now: () => 1000,
+    });
+    manager.sessions.set("pending-caret", {
+      kind: "caret",
+      target: { kind: "win-hwnd", id: "123" },
+      expiresAt: 2000,
+    });
+    manager._readCurrentSelection = () => probe.promise;
+    Object.assign(view.happyWindow.electronAPI, {
+      captureSelectedText: async () => ({ status: "editable", sessionId: "pending-caret" }),
+      pasteAtCapturedTarget: (...args) => manager.pasteAtCapturedTarget(...args),
+      cancelSelectionEdit: async (sessionId) => manager.cancelSelectionEdit(sessionId),
+    });
+    await React.act(async () => view.main.handlers.hotkey({ external: true }));
+    await React.act(async () =>
+      globalThis.__voice.callbacks.onTranscript("Write a note", "submit")
+    );
+    await view.chat({ busy: true });
+    let delivery;
+    await React.act(async () => {
+      delivery = globalThis.__chat.sentOptions[0].onComplete({
+        content: "Old answer",
+        onlyRead: true,
+      });
+    });
+    if (action === "dismiss") await React.act(async () => view.main.handlers.dismiss());
+    else if (action === "Stop") {
+      await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+      await view.settle();
+      await React.act(async () => view.button("Stop").click());
+      assert.equal(globalThis.__chat.cancels, 1);
+    } else if (action === "account change") {
+      const auth = await view.vite.ssrLoadModule("/lib/authRequestContext.ts");
+      await React.act(async () =>
+        auth.observeAuthTokenStateEvent({ generation: 1, hasToken: true })
+      );
+    } else if (action === "unmount") await view.unmount();
+    else await React.act(async () => view.main.handlers.command({ text: "Newer request" }));
+    await React.act(async () => {
+      probe.resolve({ status: "editable" });
+      await delivery;
+    });
+    await view.settle();
+    assert.deepEqual(
+      pasted,
+      [],
+      "a cancelled answer cannot insert after its native check finishes"
+    );
+  });
+}
+
+test("without auto-paste the press skips the writable-field probe", async (t) => {
+  const view = await mountWindow(t);
+  const settings = await view.vite.ssrLoadModule("/stores/settingsStore.ts");
+  settings.useSettingsStore.setState({ autoPasteEnabled: false });
+  const probes = [];
+  view.happyWindow.electronAPI.captureSelectedText = async (options) => {
+    probes.push(options);
+    return { status: "none" };
+  };
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Write a note", "submit"));
+
+  assert.deepEqual(probes, [{ probeEditable: false }]);
+  assert.equal(globalThis.__chat.sentOptions[0].plainTextResponse, undefined);
+  assert.equal(globalThis.__chat.sentOptions[0].onComplete, undefined);
+});
 
 test("a changed native selection keeps the replacement available without an unguarded paste", async (t) => {
   const view = await mountWindow(t);

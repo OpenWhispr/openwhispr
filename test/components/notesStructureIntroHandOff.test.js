@@ -47,6 +47,9 @@ const MOCKS = {
   `,
   "/hooks/useTeamSpacesCapability": `export const useTeamSpacesCapability = () => false;`,
   "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: true, user: { id: "user-1" } });`,
+  "/stores/deviceNotesStore": `
+    export const useDeviceNotesStore = (select) => select({ viewNoteId: null });
+  `,
   "/stores/noteStore": `
     export const setActiveNoteId = () => {};
     export const useActiveNoteId = () => globalThis.__activeNoteId;

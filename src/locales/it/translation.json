@@ -212,11 +212,18 @@
     "policyAccountChanged": "Il tuo account è cambiato, quindi questa risposta è stata interrotta.",
     "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione.",
     "policyUnresolved": "Le impostazioni della tua organizzazione non sono ancora state caricate. Riprova tra un momento.",
+    "policyBlocked": "La tua organizzazione non consente questa operazione su questo dispositivo.",
     "managedConfigLoading": "Verifica della configurazione gestita della tua organizzazione in corso. Riprova tra un momento.",
     "managedConfigUnavailable": "L'accesso aziendale gestito non è disponibile. Accedi di nuovo o contatta l'amministratore.",
     "managedConfigAmbiguous": "La configurazione gestita della tua organizzazione non è coerente. Contatta l'amministratore.",
     "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore.",
-    "resizePanel": "Ridimensiona il pannello"
+    "resizePanel": "Ridimensiona il pannello",
+    "managedDevice": "Dispositivo gestito",
+    "managedDeviceAndWorkspace": "Dispositivo e spazio di lavoro gestiti",
+    "deviceLocalOnly": "Questo dispositivo usa solo elaborazione locale. Le funzioni cloud non sono disponibili, anche per gli account già connessi.",
+    "deviceSignInRequired": "La tua organizzazione richiede l’accesso su questo dispositivo.",
+    "devicePolicyInvalid": "La policy del dispositivo non è leggibile o non è valida. Contatta l’amministratore. OpenWhispr non può essere usato finché la policy non viene corretta.",
+    "deviceWorkspaceUnavailable": "Questo dispositivo richiede elaborazione locale, ma la policy dello spazio di lavoro dell’account salvato non è disponibile. Esci per continuare senza quell’account o contatta l’amministratore."
   },
   "onboarding": {
     "rehaul": {
@@ -409,7 +416,9 @@
           "modelNotFound": "Il modello selezionato non è disponibile presso questo provider.",
           "providerStatus": "Il provider ha restituito lo stato {{status}}.",
           "timeout": "Il test di connessione è scaduto.",
-          "network": "Impossibile raggiungere il provider."
+          "network": "Impossibile raggiungere il provider.",
+          "invalidHeaders": "Intestazione HTTP non valida. Controlla nome e valore; Content-Type e le intestazioni di trasporto non sono personalizzabili.",
+          "redirected": "Il server ha reindirizzato la richiesta. Inserisci l'indirizzo verso cui reindirizza."
         }
       },
       "local": {
@@ -655,7 +664,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Aggiornamento richiesto",
-      "description": "La tua organizzazione richiede OpenWhispr {{version}} o versioni successive. Aggiorna l'app."
+      "description": "La tua organizzazione richiede OpenWhispr {{version}} o versioni successive. Aggiorna l'app.",
+      "contactIT": "La tua organizzazione richiede OpenWhispr {{version}} o successivo. Contatta il reparto IT per installare una versione approvata."
     },
     "update": {
       "readyTitle": "Aggiornamento pronto da installare",
@@ -949,6 +959,9 @@
     "getKey": "Ottieni chiave ->",
     "endpointUrl": "URL endpoint",
     "azureHint": "Azure AI Foundry: inserisci l'endpoint della tua risorsa (es. https://your-resource.cognitiveservices.azure.com) e imposta Modello con il nome esatto della tua distribuzione.",
+    "browsedProviderHint": "{{current}} è ancora in uso. Scegli un modello per passare a {{provider}}.",
+    "browsedCustomHint": "{{current}} è ancora in uso. Inserisci il nome di un modello per passare al tuo endpoint personalizzato.",
+    "customInUseHint": "Il tuo endpoint personalizzato è ancora in uso. Scegli un modello per passare a {{provider}}.",
     "customProvider": "Personalizzato",
     "fallback": {
       "whisperModelDescription": "Modello",
@@ -1237,7 +1250,8 @@
       "failedUserCheck": "Verifica dell'account utente non riuscita",
       "generic": "Qualcosa è andato storto. Riprova.",
       "invalidCredentials": "E-mail o password non valide",
-      "invalidEmail": "Inserisci un indirizzo email valido"
+      "invalidEmail": "Inserisci un indirizzo email valido",
+      "signInDisabledByDevice": "La tua organizzazione ha disattivato l'accesso su questo dispositivo."
     },
     "getStarted": "Inizia",
     "legal": {
@@ -2269,7 +2283,14 @@
         "restarting": "Riavvio...",
         "title": "Aggiornamenti",
         "versionPlaceholder": "—",
-        "whatsNew": "Novità nella v{{version}}"
+        "whatsNew": "Novità nella v{{version}}",
+        "managedByOrganization": "Gestito dalla tua organizzazione.",
+        "itManaged": "La tua organizzazione gestisce gli aggiornamenti.",
+        "policyLoading": "Caricamento delle impostazioni di aggiornamento…",
+        "policyUnavailable": "Impossibile caricare le impostazioni di aggiornamento. Controlla gli aggiornamenti per riprovare.",
+        "policyChanged": "La politica di aggiornamento è cambiata. Controlla di nuovo gli aggiornamenti.",
+        "managedBadge": "Gestito",
+        "stagedBeforePolicy": "Un aggiornamento è stato preparato prima dell’applicazione di questa politica e potrebbe essere installato alla chiusura dell’app. Contatta il reparto IT prima di chiudere o riavviare."
       },
       "translationHotkey": {
         "title": "Hotkey Traduzione",
@@ -2487,7 +2508,20 @@
     "selfHosted": {
       "endpointUrl": "URL endpoint",
       "serverUrl": "URL server",
-      "apiKeyOptional": "API Key (opzionale)"
+      "apiKeyOptional": "API Key (opzionale)",
+      "headers": "Intestazioni HTTP",
+      "headersHelp": "Inviate con ogni richiesta a questo server, ad esempio una chiave API richiesta da un gateway.",
+      "headerName": "Nome intestazione",
+      "headerValue": "Valore intestazione",
+      "removeHeader": "Rimuovi",
+      "addHeader": "Aggiungi intestazione",
+      "unauthorized": "Il tuo server ha rifiutato la richiesta (401/403). Controlla le intestazioni qui sotto o le impostazioni di autenticazione del server.",
+      "headerErrors": {
+        "missingName": "Inserisci un nome di intestazione.",
+        "invalidName": "I nomi delle intestazioni non possono contenere spazi, due punti o altri separatori.",
+        "reserved": "OpenWhispr imposta già questa intestazione.",
+        "invalidValue": "Questo valore contiene un carattere che un'intestazione non può trasportare, come una virgoletta curva."
+      }
     },
     "workspace": {
       "title": "Area di lavoro",
@@ -3544,6 +3578,24 @@
         "loadError": "Impossibile caricare i team."
       }
     },
+    "deviceNotes": {
+      "title": "Su questo dispositivo",
+      "info": "Queste note non sono assegnate a nessun account. Sposta una nota per conservarla e modificarla.",
+      "infoLabel": "Informazioni sulle note su questo dispositivo",
+      "moveNote": "Sposta nel mio Privato",
+      "moveFolder": "Sposta la cartella nel mio Privato",
+      "moveAll": "Sposta tutto nel mio Privato",
+      "moveAllTo": "Sposta tutto in una cartella",
+      "moved": "Spostata nel tuo Privato",
+      "movedCount_one": "{{count}} nota spostata nel tuo Privato",
+      "movedCount_other": "{{count}} note spostate nel tuo Privato",
+      "moveFailed": "Impossibile spostare questa nota",
+      "moveFolderFailed": "Impossibile spostare queste note",
+      "banner": "Questa nota non è ancora assegnata a un account.",
+      "notesHeading": "Note",
+      "summaryHeading": "Riepilogo AI",
+      "transcriptHeading": "Trascrizione"
+    },
     "structureIntro": {
       "title": "Dove si trovano le tue note",
       "description": "OpenWhispr separa i pensieri privati dal lavoro condiviso, così le note sono visibili alle persone giuste.",
@@ -3653,6 +3705,117 @@
         "taskList": "Elenco di controllo",
         "blockquote": "Citazione",
         "table": "Inserisci tabella"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "Base",
+          "blocks": "Blocchi",
+          "style": "Stile",
+          "tools": "Strumenti"
+        },
+        "slash": {
+          "heading": "Titolo {{level}}",
+          "bulletList": "Elenco puntato",
+          "orderedList": "Elenco numerato",
+          "taskList": "Attività con casella",
+          "quote": "Citazione",
+          "divider": "Separatore",
+          "table": "Tabella",
+          "codeBlock": "Blocco di codice",
+          "codeHint": "Colori della sintassi",
+          "noteLink": "Collega nota",
+          "noteLinkHint": "oppure digita [[",
+          "toggle": "Comprimibile",
+          "callout": "Riquadro: {{type}}",
+          "toc": "Indice",
+          "mathBlock": "Blocco matematico",
+          "inlineMath": "Formula in linea",
+          "inlineMathHint": "oppure digita $$x^2$$",
+          "emoji": "Emoji",
+          "emojiHint": "oppure digita :smile:",
+          "highlight": "Evidenzia",
+          "subscript": "Pedice",
+          "superscript": "Apice",
+          "color": "Colore del testo: {{name}}",
+          "font": "Carattere: {{name}}",
+          "ruby": "Annotazione ruby",
+          "rubyHint": "Lettura sopra il testo",
+          "align": "Allinea: {{dir}}",
+          "find": "Trova e sostituisci",
+          "invisible": "Mostra/nascondi caratteri invisibili"
+        },
+        "callout": {
+          "note": "Nota",
+          "tip": "Suggerimento",
+          "important": "Importante",
+          "warning": "Avviso",
+          "caution": "Attenzione"
+        },
+        "colors": {
+          "default": "Predefinito",
+          "red": "Rosso",
+          "orange": "Arancione",
+          "yellow": "Giallo",
+          "green": "Verde",
+          "blue": "Blu",
+          "purple": "Viola",
+          "gray": "Grigio"
+        },
+        "fonts": {
+          "default": "Predefinito",
+          "serif": "Con grazie",
+          "monospace": "Monospaziato"
+        },
+        "align": {
+          "left": "Sinistra",
+          "center": "Centro",
+          "right": "Destra",
+          "justify": "Giustificato"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, es. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, es. x^2",
+          "emoji": "Nome emoji, es. rocket",
+          "reading": "Lettura, es. かんじ",
+          "textReading": "Testo|lettura, es. 漢字|かんじ",
+          "apply": "Invio per applicare · Esc per annullare",
+          "mathEdit": "Invio per salvare · Esc per annullare · vuoto elimina"
+        },
+        "toolbar": {
+          "highlight": "Evidenzia",
+          "subscript": "Pedice",
+          "superscript": "Apice",
+          "color": "Colore del testo",
+          "font": "Carattere",
+          "alignment": "Allineamento",
+          "ruby": "Testo ruby (lettura sopra i caratteri)"
+        },
+        "find": {
+          "find": "Trova",
+          "replace": "Sostituisci",
+          "all": "Tutti",
+          "previous": "Precedente",
+          "next": "Successivo",
+          "matchCase": "Maiuscole/minuscole",
+          "close": "Chiudi"
+        },
+        "count": "Parole: {{words}} · Caratteri: {{chars}}",
+        "link": {
+          "header": "Collega nota",
+          "empty": "Digita il titolo di una nota…",
+          "create": "Collega a “{{title}}” (nessuna nota ancora)",
+          "open": "Apri “{{title}}”",
+          "missing": "Nessuna nota intitolata “{{title}}”"
+        },
+        "backlinks": {
+          "label": "Collegata da",
+          "more": "+{{count}} altre",
+          "untitled": "Senza titolo"
+        },
+        "toc": {
+          "title": "Indice",
+          "empty": "Aggiungi titoli per creare l'indice."
+        }
       }
     },
     "participants": {
@@ -4729,8 +4892,6 @@
       "request_accessStatus": "Richiesta di accesso...",
       "look_at_screenName": "Guarda lo schermo",
       "look_at_screenStatus": "Lettura dello schermo...",
-      "look_at_screenSuccess": "Schermata letta.",
-      "look_at_screenFailed": "Non è stato possibile leggere la schermata.",
       "request_api_keyName": "Chiave API",
       "request_api_keyStatus": "Richiesta di una chiave API...",
       "open_settingsName": "Impostazioni",
@@ -6282,7 +6443,9 @@
       "timeout": "Il tuo server ha impiegato troppo tempo a rispondere.",
       "unreachable": "Impossibile contattare il tuo server. Verifica che sia in esecuzione.",
       "noResponse": "Nessuna risposta dal tuo server. Verifica la sua chiave API e che sia in esecuzione.",
-      "unknown": "Il tuo server ha restituito un errore imprevisto."
+      "unknown": "Il tuo server ha restituito un errore imprevisto.",
+      "invalidHeaders": "Un'intestazione personalizzata per il tuo server non è valida.",
+      "redirected": "Il tuo server ha reindirizzato la richiesta. Inserisci l'indirizzo verso cui reindirizza."
     },
     "openSettings": "Apri Impostazioni",
     "copyDetails": "Copia dettagli",
@@ -6375,6 +6538,7 @@
       "saveChanges": "Salva modifiche",
       "saved": "Tono e stile salvati",
       "cleanupOff": "La correzione testo è disattivata, quindi questi toni non vengono applicati alla dettatura. L'assistente e le chat li usano comunque.",
+      "customPrompt": "Stai usando un prompt personalizzato per la correzione testo, quindi questi toni non vengono applicati alla dettatura. L'assistente e le chat li usano comunque.",
       "turnOnCleanup": "Attiva correzione testo",
       "enabled": "Toni e voci attivi",
       "enabledDescription": "La correzione testo, l'assistente e le chat usano il tuo tono per ogni tipo di app. Se disattivato, usano il tono standard."
@@ -6475,5 +6639,16 @@
       "bootstrapMismatch": "Il file di bootstrap non corrisponde al tuo account, a questo workspace o alle credenziali configurate.",
       "testLinkOtherWorkspace": "Questo link di test è per un altro workspace. Passa a quel workspace e apri di nuovo il link."
     }
+  },
+  "affiliate": {
+    "remove": "Rimuovi il link del creator",
+    "haveLink": "Hai un link di un creator?",
+    "label": "Link del creator (facoltativo)",
+    "placeholder": "Incolla il link del tuo creator",
+    "saved": "Link del creator salvato.",
+    "checking": "Verifica del link…",
+    "unavailable": "Non è stato possibile verificare il link. Riprova o svuota il campo per continuare.",
+    "privacy": "I link dei creator non sono disponibili con le impostazioni di tracciamento attuali. Svuota il campo per continuare.",
+    "review": "Il tuo link è stato salvato per la verifica."
   }
 }

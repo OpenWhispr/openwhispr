@@ -62,5 +62,43 @@
         "Change my personal reminder to Bring two notebooks."
       ]
     }
+  ],
+  "templateCases": [
+    {
+      "id": "personal-conversation-template-scope",
+      "transcript": "You: Kurzer Aufnahmetest, hörst du mich?\nThem: Ja, ich höre dich. Meine Schwester Lea ist gestern mit ihren beiden Kindern zu Besuch gekommen. Wir haben viel über den alten Garten unserer Großeltern gesprochen.\nYou: An den Birnbaum erinnere ich mich noch genau. Als Kind habe ich darunter gelesen. Seit dem Umzug fehlt mir dieser ruhige Ort.\nThem: Lea geht es ähnlich. Ihr Sohn Jonas zeichnet jetzt Pflanzen und Tiere. Am liebsten malt er die Frösche am Teich, obwohl er früher Angst vor ihnen hatte.\nYou: Bei mir ist es inzwischen das Töpfern. Ich habe letzte Woche eine blaue Schale gemacht, aber die Glasur ist an einer Seite verlaufen. Mir gefällt sie trotzdem, gerade weil sie nicht perfekt ist.\nThem: Ich lese abends wieder Romane. Der historische Roman über eine Familie in Lübeck hat mich an unsere eigenen Familiengeschichten erinnert.\nYou: Solche Geschichten helfen mir, mich mit meiner Familie verbunden zu fühlen, auch wenn wir weit auseinander wohnen. Es war schön, darüber zu sprechen.",
+      "runs": [
+        {
+          "templateKey": "notes.actions.builtin.generateNotes",
+          "requiredMeaning": [
+            "Summarize the personal conversation despite its opening recording test and lack of work topics.",
+            "Do not invent work updates, decisions or action items."
+          ]
+        },
+        {
+          "templateKey": "notes.actions.builtin.oneOnOne",
+          "requiredReply": "NOTHING_TO_SUMMARIZE",
+          "requiredMeaning": [
+            "All material is excluded by this template's instruction to omit personal matters unrelated to work.",
+            "Show the informational notice and preserve any existing summary, title and template metadata."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "one-on-one-work-and-personal-topics",
+      "transcript": "You: I made a blue pottery bowl and visited my grandparents' garden this weekend.\nThem: My sister Lea visited with her children. Her son Jonas is drawing frogs now.\nYou: For Project Atlas, I finished the export fix. I will send the test results by Friday.\nThem: The staging environment is still unavailable. I will restore it by Thursday.\nYou: I have a childcare appointment on Wednesday, so I need to move our work review to Thursday.\nThem: Agreed, let's review the export fix on Thursday.",
+      "runs": [
+        {
+          "templateKey": "notes.actions.builtin.oneOnOne",
+          "requiredMeaning": [
+            "Summarize the completed export fix, staging blocker and each person's commitment with its correct deadline.",
+            "Keep the work-relevant scheduling constraint and the agreed Thursday review.",
+            "Omit the unrelated pottery, grandparents' garden, family visit and drawing hobbies.",
+            "Do not return NOTHING_TO_SUMMARIZE when substantive work content remains."
+          ]
+        }
+      ]
+    }
   ]
 }

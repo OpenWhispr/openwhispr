@@ -328,8 +328,6 @@ function latestLinkButton(state) {
   return linkButton;
 }
 
-const buttonLabels = (state) => state.buttons.map((props) => textOf(props.children));
-
 // Mounts the dialog so its effects run. `setOpen` re-renders it open or closed,
 // as NoteEditor does; `copyLinkOnOpen` is the Share button's link segment;
 // `setNote` re-renders it with the note as the store now has it.

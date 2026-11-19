@@ -8,6 +8,9 @@ import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipa
 import type { LeaderboardParticipationAuthContext } from "../services/LeaderboardService";
 import { useAuth } from "./useAuth";
 
+// Settings and Insights mount often; an answer this recent is still the account's.
+const PARTICIPATION_FRESH_MS = 5 * 60 * 1000;
+
 function currentParticipationContext(userId: string): LeaderboardParticipationAuthContext | null {
   const snapshot = getAuthRequestContextSnapshot();
   const authGeneration = getValidatedAuthGeneration();
@@ -15,7 +18,10 @@ function currentParticipationContext(userId: string): LeaderboardParticipationAu
   return { userId, authGeneration };
 }
 
-export function useLeaderboardParticipation() {
+/** `autoRefresh: false` reads nothing on mount, for a surface that isn't showing the answer yet. */
+export function useLeaderboardParticipation({
+  autoRefresh = true,
+}: { autoRefresh?: boolean } = {}) {
   const { isLoaded, isSignedIn, user } = useAuth();
   const userId = user?.id ?? null;
   const authGeneration = getValidatedAuthGeneration();
@@ -25,23 +31,39 @@ export function useLeaderboardParticipation() {
   const updating = useLeaderboardParticipationStore((state) => state.updating);
   const leavePending = useLeaderboardParticipationStore((state) => state.leavePending);
 
-  const refresh = useCallback(async () => {
-    const store = useLeaderboardParticipationStore.getState();
-    if (!isLoaded || !isSignedIn || !userId || authGeneration == null) {
-      store.reset();
-      return;
-    }
-    const context = currentParticipationContext(userId);
-    if (!context) {
-      store.reset();
-      return;
-    }
-    await store.refresh(context);
-  }, [authGeneration, isLoaded, isSignedIn, userId]);
+  const refresh = useCallback(
+    async ({ keepAnswer = false }: { keepAnswer?: boolean } = {}) => {
+      const store = useLeaderboardParticipationStore.getState();
+      if (!isLoaded || !isSignedIn || !userId || authGeneration == null) {
+        store.reset();
+        return;
+      }
+      const context = currentParticipationContext(userId);
+      if (!context) {
+        store.reset();
+        return;
+      }
+      await store.refresh(context, { keepAnswer });
+    },
+    [authGeneration, isLoaded, isSignedIn, userId]
+  );
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (!autoRefresh) return;
+    const current = useLeaderboardParticipationStore.getState();
+    // The read delivers an owed leave and clears an error, so neither waits. An
+    // unvalidated session never skips: refresh() resets the answer for it.
+    if (
+      userId &&
+      authGeneration != null &&
+      current.answeredUserId === userId &&
+      !current.leavePending &&
+      !current.error &&
+      Date.now() - current.answeredAt < PARTICIPATION_FRESH_MS
+    )
+      return;
+    void refresh({ keepAnswer: true });
+  }, [authGeneration, autoRefresh, refresh, userId]);
 
   const join = useCallback(async () => {
     if (!userId) return false;

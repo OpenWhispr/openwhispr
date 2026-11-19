@@ -23,6 +23,14 @@
 //                      409 note_version_conflict with the current row
 //   serverDate         every answer carries the server clock as an HTTP Date
 //                      header would (whole seconds), read from setClock
+//   folderPlacement    a personal note naming a folder takes the folder's
+//                      private_workspace_id unless it names its own, and one
+//                      that differs is refused (a batch create drops the folder);
+//                      an explicit null is the account's defaultWorkspaceId
+
+// `userId` models one account's note ownership and separates its cloud ids.
+// `adoptDefaultFolders` models the server returning an existing personal
+// default when another device creates the same name in the same workspace.
 
 // The server compares timestamps itself; it must not borrow the client's guard,
 // or a client-side regression would be invisible here.
@@ -123,6 +131,8 @@ function createFakeCloud(config = {}) {
     coalesceOnConflict: true,
     staleWriteGuard: true,
     updatedAtClamp: true,
+    userId: null,
+    adoptDefaultFolders: false,
     revisionGuard: false,
     serverDate: false,
     ...config,
@@ -141,11 +151,12 @@ function createFakeCloud(config = {}) {
   let clock = () => new Date().toISOString();
   // Where a note or folder no write scoped lands, and whose it is.
   let homeSpace = null;
-  let ownerId = null;
+  let ownerId = cfg.userId;
 
   // Real cloud ids are UUIDs; `idSpace` keeps two fake accounts' ids apart too
   // (see createAccountCloud).
-  const nextId = (prefix) => `${cfg.idSpace ?? ""}${prefix}-${String(++seq).padStart(4, "0")}`;
+  const idPrefix = cfg.idSpace ?? (cfg.userId ? `${cfg.userId}-` : "");
+  const nextId = (prefix) => `${idPrefix}${prefix}-${String(++seq).padStart(4, "0")}`;
 
   // The server stores timestamps and serves them back as ISO, whatever format
   // the client sent. Local rows carry SQLite's "YYYY-MM-DD HH:MM:SS", so echoing
@@ -243,6 +254,39 @@ function createFakeCloud(config = {}) {
     if (cfg.revisionGuard && collection === noteCollection) row.revision = 0;
     collection.store.set(row.id, row);
     return row;
+  }
+
+  // As lib/notes-service.ts compares them, a folder from before placement (null) differs from
+  // the default named explicitly.
+  function placeInFolder(input, existing, { dropFolder = false } = {}) {
+    if (!cfg.folderPlacement || !input.folder_id || input.space_id) return input;
+    const folder = folders.get(input.folder_id);
+    if (!folder) return input;
+    const folderPlacement = folder.private_workspace_id ?? null;
+    if (!("private_workspace_id" in input) || existing?.folder_id === input.folder_id) {
+      return { ...input, private_workspace_id: folderPlacement };
+    }
+    if ((input.private_workspace_id ?? cfg.defaultWorkspaceId ?? null) === folderPlacement) {
+      return input;
+    }
+    if (dropFolder) return { ...input, folder_id: null };
+    throw new HttpError(400, "Folder not found");
+  }
+
+  function createFolder(input) {
+    if (cfg.adoptDefaultFolders && input.is_default && !input.space_id) {
+      for (const row of folders.values()) {
+        if (
+          row.is_default &&
+          !row.space_id &&
+          !row.deleted_at &&
+          row.name === input.name &&
+          sameValue(row.private_workspace_id, input.private_workspace_id)
+        )
+          return row;
+      }
+    }
+    return upsertRow(folderCollection, input);
   }
 
   function findByClientId(collection, clientId) {
@@ -478,12 +522,52 @@ function createFakeCloud(config = {}) {
   }
 
   function handle(method, pathname, query, body) {
+    if (method === "GET" && pathname.startsWith("/api/notes/") && pathname.endsWith("/access")) {
+      const cloudId = decodeURIComponent(pathname.slice("/api/notes/".length, -"/access".length));
+      const note = requireLive(noteCollection, cloudId);
+      return {
+        my_permission: "owner",
+        owner: { id: note.user_id ?? ownerId },
+        grants: note.space_id ? [{ source: "space" }] : [],
+      };
+    }
+    // Only a cloud configured with `workspaces` lists them, as /api/workspaces and
+    // /api/workspaces/:id do (a 404 for a workspace the account isn't in).
+    if (method === "GET" && cfg.workspaces && pathname.startsWith("/api/workspaces")) {
+      if (pathname === "/api/workspaces") return { data: structuredClone(cfg.workspaces) };
+      const workspace = cfg.workspaces.find((w) => pathname === `/api/workspaces/${w.id}`);
+      if (!workspace) throw new HttpError(404, "Workspace not found");
+      return { data: structuredClone(workspace) };
+    }
+    // As the API's placement backfill: exactly the id and placement, written only where the
+    // row has none (no bump otherwise), and the row returned as stored.
+    if (method === "PATCH" && body?.placement_backfill === true) {
+      const collection = pathname === "/api/notes/update" ? noteCollection : folderCollection;
+      const keys = Object.keys(body).sort().join(",");
+      if (keys !== "id,placement_backfill,private_workspace_id") {
+        throw new HttpError(400, "Invalid placement backfill", "invalid_placement_backfill");
+      }
+      const row = requireLive(collection, body.id);
+      if (row.private_workspace_id == null) {
+        row.private_workspace_id = body.private_workspace_id;
+        row.updated_at = bump(row);
+        // As relocate_private_folder_children: a folder's notes follow its placement.
+        if (collection === folderCollection) {
+          for (const note of notes.values()) {
+            if (note.folder_id !== row.id || note.space_id || note.deleted_at) continue;
+            note.private_workspace_id = row.private_workspace_id;
+            note.updated_at = bump(note);
+          }
+        }
+      }
+      return row;
+    }
     const route = `${method} ${pathname}`;
     switch (route) {
       case "POST /api/notes/create": {
         const existing = findByClientId(noteCollection, body?.client_note_id);
         return {
-          ...upsertRow(noteCollection, body ?? {}),
+          ...upsertRow(noteCollection, placeInFolder(body ?? {}, existing)),
           row_created: !existing,
           write_applied: !existing?.deleted_at,
         };
@@ -493,7 +577,16 @@ function createFakeCloud(config = {}) {
         const created = [];
         for (const input of inputs) {
           const existing = findByClientId(noteCollection, input.client_note_id);
-          const row = upsertRow(noteCollection, input);
+          const folder = folders.get(input.folder_id);
+          const folderInScope = !input.folder_id || (folder && !folder.deleted_at);
+          const row = upsertRow(
+            noteCollection,
+            placeInFolder(
+              cfg.userId && !folderInScope ? { ...input, folder_id: null } : input,
+              existing,
+              { dropFolder: true }
+            )
+          );
           created.push({ ...row, row_created: !existing, write_applied: !existing?.deleted_at });
         }
         return { created };
@@ -513,7 +606,7 @@ function createFakeCloud(config = {}) {
             { note: structuredClone(row) }
           );
         }
-        return applyWrite(noteCollection, row, updates);
+        return applyWrite(noteCollection, row, placeInFolder(updates, row));
       }
       case "DELETE /api/notes/delete":
         tombstone(noteCollection, body?.id);
@@ -533,13 +626,13 @@ function createFakeCloud(config = {}) {
         return { notes: [] };
 
       case "POST /api/folders/create": {
-        return upsertRow(folderCollection, body ?? {});
+        return createFolder(body ?? {});
       }
       case "POST /api/folders/batch-create": {
         const inputs = Array.isArray(body?.folders) ? body.folders : [];
         const created = [];
         for (const input of inputs) {
-          created.push(upsertRow(folderCollection, input));
+          created.push(createFolder(input));
         }
         return { created };
       }

@@ -15,6 +15,7 @@ import { useSignOut } from "../hooks/useSignOut";
 import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
+import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
 import { useSettings } from "../hooks/useSettings";
 import { recordingRecorderName } from "../utils/noteRecorder";
 import { useAuth } from "../hooks/useAuth";
@@ -30,6 +31,7 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
+import { clearInsightsCache } from "../lib/insightsCache";
 import {
   getSettings,
   selectPolicyEffectiveSettings,
@@ -71,7 +73,10 @@ import {
   DEFAULT_INTEGRATIONS_SECTION,
   type IntegrationsSection,
 } from "./integrations/integrationsSections";
-import { navigateMeetingNotification } from "./meetingNotificationNavigation";
+import {
+  navigateAndLoadMeetingNote,
+  navigateMeetingNotification,
+} from "./meetingNotificationNavigation";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -87,6 +92,8 @@ import {
   setActiveFolderId,
   navigateToContainer,
   ensureNoteLoaded,
+  getActiveNoteIdValue,
+  getNoteFromStore,
   useActiveNoteId,
   initializeNotes,
   subscribeMeetingNotificationFolders,
@@ -117,6 +124,7 @@ import {
 } from "../utils/pendingInvitationToken";
 import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
 import type { SourceNote } from "./chat/useSourceNote";
+import type { MeetingStartSource } from "../types/electron";
 
 const platform = getCachedPlatform();
 
@@ -199,6 +207,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     noteId: number;
     folderId: number | null;
     event: any;
+    startSource?: MeetingStartSource;
     trigger?: string;
     noteSessionId?: string;
   } | null>(null);
@@ -513,6 +522,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 startRecordingForNote(
                   note,
                   recordingRecorderName(note, recordingUser, translate),
+                  "prompt",
                   args.canAutoStart
                 ),
               restoreFromMeetingMode: () => window.electronAPI?.restoreFromMeetingMode?.(),
@@ -539,17 +549,25 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       }
       if (data.noteSessionId)
         meetingNoteSession.current = { id: data.noteSessionId, noteId: data.noteId };
-      setActiveFolderId(data.folderId);
-      setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
+      await navigateAndLoadMeetingNote(data.noteId, data.spaceId, data.folderId);
+      if (
+        !isCurrent() ||
+        getActiveNoteIdValue() !== data.noteId ||
+        !getNoteFromStore(data.noteId) ||
+        (data.noteSessionId && meetingNoteSession.current?.id !== data.noteSessionId)
+      ) {
+        if (data.noteSessionId) void window.electronAPI?.meetingNoteClosed?.(data.noteSessionId);
+        return;
+      }
       setMeetingRecordingRequest({
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
+        startSource: data.startSource,
         trigger: data.trigger,
         noteSessionId: data.noteSessionId,
       });
-      void initializeNotes(null, 50, data.folderId);
       if (
         data.trigger === "hotkey" &&
         useSettingsStore.getState().meetingHotkeyLayoutMode === "side-panel"
@@ -745,6 +763,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           const result = await window.electronAPI.clearTranscriptions();
           if (result.success) {
             clearStore();
+            // Insights is unmounted here, and would otherwise paint the cleared totals.
+            clearInsightsCache();
             syncService.requestSyncAll("manual");
             toast({
               title: t("controlPanel.history.clearAllSuccess"),
@@ -1031,6 +1051,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           try {
             await installUpdate();
           } catch (error) {
+            const policyMessage = updatePolicyMessageKey(error);
+            if (policyMessage) {
+              toast({ title: t(policyMessage) });
+              return;
+            }
             toast({
               title: t("controlPanel.update.couldNotInstallTitle"),
               description: t("controlPanel.update.couldNotInstallDescription"),
@@ -1043,6 +1068,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       try {
         await downloadUpdate();
       } catch (error) {
+        const policyMessage = updatePolicyMessageKey(error);
+        if (policyMessage) {
+          toast({ title: t(policyMessage) });
+          return;
+        }
         toast({
           title: t("controlPanel.update.couldNotDownloadTitle"),
           description: t("controlPanel.update.couldNotDownloadDescription"),
@@ -1229,6 +1259,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             // The side-panel layout (a meeting, or a narrow window with a note open) has no room for it.
             workspaceIntroAllowed={!showSettings && !isSidePanelLayout}
             updateAction={
+              updateStatus.updateMode !== "it_managed" &&
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||
                 updateStatus.updateDownloaded ||
@@ -1296,9 +1327,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                         </p>
                         <p className="text-xs text-amber-700 dark:text-amber-300/80">
                           <BidiInterpolatedText
-                            text={t("controlPanel.updateRequiredByOrg.description", {
-                              version: BIDI_VALUE_TOKEN,
-                            })}
+                            text={t(
+                              updateStatus.updateMode === "it_managed"
+                                ? "controlPanel.updateRequiredByOrg.contactIT"
+                                : "controlPanel.updateRequiredByOrg.description",
+                              {
+                                version: BIDI_VALUE_TOKEN,
+                              }
+                            )}
                             value={policyMinAppVersion}
                           />
                         </p>

@@ -1,4 +1,8 @@
 import "../models/registryBootstrap.js";
+import {
+  parseSelfHostedSttHeaders,
+  serializeSelfHostedSttHeaders,
+} from "../helpers/selfHostedSttHeaders.js";
 import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
@@ -1135,6 +1139,10 @@ function migrateRetiredCloudModels() {
 
 migrateRetiredCloudModels();
 
+export type SelfHostedSttHeader = { name: string; value: string };
+// Dictation and uploads post to different self-hosted servers (#2049).
+export type SelfHostedSttSurface = "dictation" | "upload";
+
 export interface SettingsState
   extends
     TranscriptionSettings,
@@ -1188,6 +1196,7 @@ export interface SettingsState
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
   remoteTranscriptionModel: string;
+  selfHostedSttHeaders: Record<SelfHostedSttSurface, SelfHostedSttHeader[]>;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
   keepLocalModelLoaded: boolean;
@@ -1308,6 +1317,7 @@ export interface SettingsState
   setRemoteTranscriptionType: (type: SelfHostedType) => void;
   setRemoteTranscriptionUrl: (url: string) => void;
   setRemoteTranscriptionModel: (model: string) => void;
+  setSelfHostedSttHeaders: (surface: SelfHostedSttSurface, headers: SelfHostedSttHeader[]) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
   setKeepLocalModelLoaded: (value: boolean) => void;
@@ -1664,6 +1674,7 @@ const SECRET_IPC_SAVERS = {
   deepgram: "saveDeepgramKey",
   assemblyai: "saveAssemblyAIKey",
   customTranscription: "saveCustomTranscriptionKey",
+  selfHostedSttHeaders: "saveSelfHostedSttHeaders",
   cleanupCustom: "saveCleanupCustomKey",
   noteFormattingCustom: "saveNoteFormattingCustomKey",
   translationCustom: "saveTranslationCustomKey",
@@ -1714,6 +1725,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "deepgramApiKey",
   "assemblyaiApiKey",
   "customTranscriptionApiKey",
+  "selfHostedSttHeaders",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
   "noteFormattingCustomApiKey",
@@ -1997,6 +2009,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
   remoteTranscriptionModel: readString("remoteTranscriptionModel", ""),
+  selfHostedSttHeaders: { dictation: [], upload: [] },
   cleanupMode: (() => {
     const v = readString("cleanupMode", "openwhispr");
     if (
@@ -2105,6 +2118,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ) => void,
   setRemoteTranscriptionUrl: createStringSetter("remoteTranscriptionUrl"),
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
+  setSelfHostedSttHeaders: (surface, headers) => {
+    const next = { ...get().selfHostedSttHeaders, [surface]: headers };
+    set({ selfHostedSttHeaders: next });
+    debouncedSaveSecret("selfHostedSttHeaders", serializeSelfHostedSttHeaders(next));
+  },
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
   setKeepLocalModelLoaded: createBooleanSetter("keepLocalModelLoaded"),
@@ -4056,7 +4074,10 @@ export async function initializeSettings(): Promise<void> {
     try {
       const key = await getter();
       if (key !== null && typeof key !== "string") return;
-      useSettingsStore.setState({ [storeKey]: key || "" });
+      useSettingsStore.setState({
+        [storeKey]:
+          storeKey === "selfHostedSttHeaders" ? parseSelfHostedSttHeaders(key) : key || "",
+      });
       invalidateApiKeyCaches();
     } catch {
       logger.warn("Failed to refresh API key", { storeKey }, "settings");
@@ -4097,6 +4118,7 @@ export async function initializeSettings(): Promise<void> {
         cortiClientSecret,
         cortiApiKey,
         tinfoil,
+        selfHostedSttHeaders,
         customTx,
         customRx,
         noteFormattingCustom,
@@ -4123,6 +4145,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getCortiClientSecret?.(),
         window.electronAPI.getCortiKey?.(),
         window.electronAPI.getTinfoilKey?.(),
+        window.electronAPI.getSelfHostedSttHeaders?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
         window.electronAPI.getCleanupCustomKey?.(),
         window.electronAPI.getNoteFormattingCustomKey?.(),
@@ -4151,6 +4174,7 @@ export async function initializeSettings(): Promise<void> {
         cortiClientSecret: cortiClientSecret || "",
         cortiApiKey: cortiApiKey || "",
         tinfoilApiKey: tinfoil || "",
+        selfHostedSttHeaders: parseSelfHostedSttHeaders(selfHostedSttHeaders),
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",
         bedrockAccessKeyId: bedrockAccessKeyId || "",

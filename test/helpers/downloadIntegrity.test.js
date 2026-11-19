@@ -18,6 +18,7 @@ function setup(t, body, offset = 0) {
   require.cache[electron] = {
     exports: {
       app: { isReady: () => false },
+      session: { fromPartition: () => ({}) },
       net: {
         request(options) {
           requests.push(options);

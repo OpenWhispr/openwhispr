@@ -23,6 +23,8 @@ test("the upload folder list follows the active workspace's Private", async (t) 
   installBrowserGlobals(t, {
     initialStorage: { _providerSettingsMigrated: "1", uploadTranscriptionMigrated: "true" },
     window: {
+      // Upload audio lives in the control panel, the window that publishes the workspace scope.
+      location: { search: "?panel=true" },
       electronAPI: {
         getPrivateSpaceId: async () => state.privateSpaceId,
         getFolders: async (spaceId) => {
@@ -98,6 +100,8 @@ test("after a switch, the saved upload's folder picker stays on the note's own P
   installBrowserGlobals(t, {
     initialStorage: { _providerSettingsMigrated: "1", uploadTranscriptionMigrated: "true" },
     window: {
+      // Upload audio lives in the control panel, the window that publishes the workspace scope.
+      location: { search: "?panel=true" },
       electronAPI: {
         getPrivateSpaceId: async () => state.privateSpaceId,
         getFolders: async (spaceId) => {

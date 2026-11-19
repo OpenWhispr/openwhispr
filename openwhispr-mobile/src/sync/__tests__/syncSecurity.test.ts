@@ -273,14 +273,31 @@ it('does not upload a queued note made private during an earlier request', async
   expect(updateNote).toHaveBeenCalledTimes(1);
 });
 
-it('does not attach a mismatched identified batch response to a different local note', async () => {
+it('ignores a mismatched response and retries the note with its own identity', async (): Promise<void> => {
   const created = mockRepo.createNote('Keep', 'pending');
   mockRepo.setNoteClientId(created.id, 'expected-client');
   jest
     .mocked(batchCreateNotes)
     .mockResolvedValueOnce({ created: [{ id: 'unrelated', client_note_id: 'different-client' }] });
-  await pushNotes();
-  expect(mockRepo.getNoteById(created.id)).toMatchObject({ remoteId: null, pendingSync: 1 });
+  await expect(pushNotes()).resolves.toBeUndefined();
+  expect(mockRepo.getNoteById(created.id)).toMatchObject({
+    clientNoteId: 'expected-client',
+    remoteId: null,
+    pendingSync: 1,
+  });
+
+  jest.mocked(batchCreateNotes).mockResolvedValueOnce({
+    created: [{ id: 'remote-expected', client_note_id: 'expected-client' }],
+  });
+  await expect(pushNotes()).resolves.toBeUndefined();
+  expect(batchCreateNotes).toHaveBeenNthCalledWith(2, [
+    expect.objectContaining({ client_note_id: 'expected-client' }),
+  ]);
+  expect(mockRepo.getNoteById(created.id)).toMatchObject({
+    clientNoteId: 'expected-client',
+    remoteId: 'remote-expected',
+    pendingSync: 0,
+  });
 });
 
 it('does not process an old account rejection against new local work', async () => {

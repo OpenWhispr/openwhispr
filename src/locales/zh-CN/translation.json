@@ -212,11 +212,18 @@
     "policyAccountChanged": "您的账户已更改，因此此回答已停止。",
     "policyTranscriptionRestricted": "转录已被您的组织限制。",
     "policyUnresolved": "您所在组织的设置尚未加载完成。请稍后再试。",
+    "policyBlocked": "您所在的组织不允许在此设备上执行此操作。",
     "managedConfigLoading": "正在检查您组织的托管设置。请稍候再试。",
     "managedConfigUnavailable": "托管企业访问不可用。请重新登录或联系管理员。",
     "managedConfigAmbiguous": "您组织的托管设置不一致。请联系管理员。",
     "managedPolicyConflict": "托管访问已被您工作区的策略阻止。请联系管理员。",
-    "resizePanel": "调整面板大小"
+    "resizePanel": "调整面板大小",
+    "managedDevice": "受管理的设备",
+    "managedDeviceAndWorkspace": "受管理的设备和工作区",
+    "deviceLocalOnly": "此设备仅使用本地处理。云端功能不可用，已登录过的账户也不例外。",
+    "deviceSignInRequired": "你的组织要求在此设备上登录。",
+    "devicePolicyInvalid": "无法读取设备策略，或策略无效。请联系管理员。策略修正前，无法使用 OpenWhispr。",
+    "deviceWorkspaceUnavailable": "此设备要求本地处理，但已保存账户的工作区策略不可用。请退出登录以不使用该账户继续，或联系管理员。"
   },
   "onboarding": {
     "rehaul": {
@@ -409,7 +416,9 @@
           "modelNotFound": "所选模型无法从此服务商获得。",
           "providerStatus": "服务商返回了状态码 {{status}}。",
           "timeout": "连接测试超时。",
-          "network": "无法连接到服务商。"
+          "network": "无法连接到服务商。",
+          "invalidHeaders": "HTTP 请求头无效。请检查名称和值；无法自定义 Content-Type 和传输请求头。",
+          "redirected": "服务器重定向了请求。请输入它重定向到的地址。"
         }
       },
       "local": {
@@ -655,7 +664,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "需要更新",
-      "description": "您的组织要求使用 OpenWhispr {{version}} 或更高版本。请更新应用。"
+      "description": "您的组织要求使用 OpenWhispr {{version}} 或更高版本。请更新应用。",
+      "contactIT": "你的组织要求使用 OpenWhispr {{version}} 或更高版本。请联系 IT 部门安装经过批准的版本。"
     },
     "update": {
       "readyTitle": "更新已准备就绪",
@@ -949,6 +959,9 @@
     "getKey": "获取密钥 ->",
     "endpointUrl": "端点 URL",
     "azureHint": "Azure AI Foundry：输入你的资源终结点（例如 https://your-resource.cognitiveservices.azure.com），并将“模型”设置为你的确切部署名称。",
+    "browsedProviderHint": "当前仍在使用 {{current}}。选择一个模型即可切换到 {{provider}}。",
+    "browsedCustomHint": "当前仍在使用 {{current}}。输入模型名称即可切换到你的自定义端点。",
+    "customInUseHint": "当前仍在使用你的自定义端点。选择一个模型即可切换到 {{provider}}。",
     "customProvider": "自定义",
     "fallback": {
       "whisperModelDescription": "模型",
@@ -1235,7 +1248,8 @@
       "failedUserCheck": "检查用户账户失败",
       "generic": "出了点问题，请重试。",
       "invalidCredentials": "邮箱或密码无效",
-      "invalidEmail": "请输入有效的邮箱地址"
+      "invalidEmail": "请输入有效的邮箱地址",
+      "signInDisabledByDevice": "您的组织已在此设备上关闭登录。"
     },
     "getStarted": "开始使用",
     "legal": {
@@ -2269,7 +2283,14 @@
         "restarting": "正在重启...",
         "title": "更新",
         "versionPlaceholder": "—",
-        "whatsNew": "v{{version}} 更新内容"
+        "whatsNew": "v{{version}} 更新内容",
+        "managedByOrganization": "由你的组织管理。",
+        "itManaged": "更新由你的组织管理。",
+        "policyLoading": "正在加载更新设置…",
+        "policyUnavailable": "无法加载更新设置。请检查更新以重试。",
+        "policyChanged": "更新策略已更改。请再次检查更新。",
+        "managedBadge": "受管理",
+        "stagedBeforePolicy": "在此策略生效前已有更新准备就绪，可能会在退出应用时安装。退出或重启前请联系 IT 部门。"
       },
       "translationHotkey": {
         "title": "翻译快捷键",
@@ -2487,7 +2508,20 @@
     "selfHosted": {
       "endpointUrl": "端点 URL",
       "serverUrl": "服务器 URL",
-      "apiKeyOptional": "API Key（可选）"
+      "apiKeyOptional": "API Key（可选）",
+      "headers": "HTTP 请求头",
+      "headersHelp": "随每个发往此服务器的请求一起发送，例如网关要求的 API 密钥。",
+      "headerName": "请求头名称",
+      "headerValue": "请求头值",
+      "removeHeader": "删除",
+      "addHeader": "添加请求头",
+      "unauthorized": "你的服务器拒绝了请求（401/403）。请检查下方的请求头或服务器的认证设置。",
+      "headerErrors": {
+        "missingName": "请输入请求头名称。",
+        "invalidName": "请求头名称不能包含空格、冒号或其他分隔符。",
+        "reserved": "OpenWhispr 会自行设置此请求头。",
+        "invalidValue": "此值包含请求头无法携带的字符，例如弯引号。"
+      }
     },
     "workspace": {
       "title": "工作区",
@@ -3544,6 +3578,24 @@
         "loadError": "无法加载团队。"
       }
     },
+    "deviceNotes": {
+      "title": "在此设备上",
+      "info": "这些笔记尚未分配给任何账户。移动笔记即可保留并编辑。",
+      "infoLabel": "关于此设备上的笔记",
+      "moveNote": "移动到我的私密",
+      "moveFolder": "将文件夹移动到我的私密",
+      "moveAll": "全部移动到我的私密",
+      "moveAllTo": "全部移动到文件夹",
+      "moved": "已移动到你的私密",
+      "movedCount_one": "已将 {{count}} 条笔记移动到你的私密",
+      "movedCount_other": "已将 {{count}} 条笔记移动到你的私密",
+      "moveFailed": "无法移动此笔记",
+      "moveFolderFailed": "无法移动这些笔记",
+      "banner": "此笔记尚未分配给任何账户。",
+      "notesHeading": "笔记",
+      "summaryHeading": "AI 摘要",
+      "transcriptHeading": "转录"
+    },
     "structureIntro": {
       "title": "笔记存放在哪里",
       "description": "OpenWhispr 将个人想法与协作内容分开，让合适的人看到合适的笔记。",
@@ -3653,6 +3705,117 @@
         "taskList": "清单",
         "blockquote": "引用",
         "table": "插入表格"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "基础",
+          "blocks": "区块",
+          "style": "样式",
+          "tools": "工具"
+        },
+        "slash": {
+          "heading": "标题 {{level}}",
+          "bulletList": "项目符号列表",
+          "orderedList": "编号列表",
+          "taskList": "复选框任务",
+          "quote": "引用",
+          "divider": "分隔线",
+          "table": "表格",
+          "codeBlock": "代码块",
+          "codeHint": "语法着色",
+          "noteLink": "链接笔记",
+          "noteLinkHint": "或输入 [[",
+          "toggle": "折叠块",
+          "callout": "标注：{{type}}",
+          "toc": "目录",
+          "mathBlock": "数学公式块",
+          "inlineMath": "行内公式",
+          "inlineMathHint": "或输入 $$x^2$$",
+          "emoji": "表情",
+          "emojiHint": "或输入 :smile:",
+          "highlight": "高亮",
+          "subscript": "下标",
+          "superscript": "上标",
+          "color": "文字颜色：{{name}}",
+          "font": "字体：{{name}}",
+          "ruby": "注音",
+          "rubyHint": "在文字上方显示读音",
+          "align": "对齐：{{dir}}",
+          "find": "查找和替换",
+          "invisible": "显示/隐藏不可见字符"
+        },
+        "callout": {
+          "note": "注意",
+          "tip": "提示",
+          "important": "重要",
+          "warning": "警告",
+          "caution": "小心"
+        },
+        "colors": {
+          "default": "默认",
+          "red": "红色",
+          "orange": "橙色",
+          "yellow": "黄色",
+          "green": "绿色",
+          "blue": "蓝色",
+          "purple": "紫色",
+          "gray": "灰色"
+        },
+        "fonts": {
+          "default": "默认",
+          "serif": "衬线",
+          "monospace": "等宽"
+        },
+        "align": {
+          "left": "左对齐",
+          "center": "居中",
+          "right": "右对齐",
+          "justify": "两端对齐"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX，例如 \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX，例如 x^2",
+          "emoji": "表情名称，例如 rocket",
+          "reading": "读音，例如 かんじ",
+          "textReading": "文字|读音，例如 漢字|かんじ",
+          "apply": "Enter 应用 · Esc 取消",
+          "mathEdit": "Enter 保存 · Esc 取消 · 留空则删除"
+        },
+        "toolbar": {
+          "highlight": "高亮",
+          "subscript": "下标",
+          "superscript": "上标",
+          "color": "文字颜色",
+          "font": "字体",
+          "alignment": "对齐",
+          "ruby": "注音（在文字上方显示读音）"
+        },
+        "find": {
+          "find": "查找",
+          "replace": "替换",
+          "all": "全部",
+          "previous": "上一个",
+          "next": "下一个",
+          "matchCase": "区分大小写",
+          "close": "关闭"
+        },
+        "count": "字词：{{words}} · 字符：{{chars}}",
+        "link": {
+          "header": "链接笔记",
+          "empty": "输入笔记标题…",
+          "create": "链接到“{{title}}”（尚无此笔记）",
+          "open": "打开“{{title}}”",
+          "missing": "没有标题为“{{title}}”的笔记"
+        },
+        "backlinks": {
+          "label": "被以下笔记链接",
+          "more": "另外 {{count}} 条",
+          "untitled": "无标题"
+        },
+        "toc": {
+          "title": "目录",
+          "empty": "添加标题以生成目录。"
+        }
       }
     },
     "participants": {
@@ -4708,8 +4871,6 @@
       "request_accessStatus": "正在请求访问...",
       "look_at_screenName": "查看屏幕",
       "look_at_screenStatus": "正在查看你的屏幕...",
-      "look_at_screenSuccess": "已读取屏幕。",
-      "look_at_screenFailed": "无法读取屏幕。",
       "request_api_keyName": "API 密钥",
       "request_api_keyStatus": "正在请求 API 密钥...",
       "open_settingsName": "设置",
@@ -6261,7 +6422,9 @@
       "timeout": "你的服务器响应超时。",
       "unreachable": "无法连接到你的服务器。请检查它是否正在运行。",
       "noResponse": "未能收到你的服务器的响应。请检查它的 API 密钥以及它是否正在运行。",
-      "unknown": "你的服务器返回了一个意外错误。"
+      "unknown": "你的服务器返回了一个意外错误。",
+      "invalidHeaders": "你的服务器的某个自定义请求头无效。",
+      "redirected": "你的服务器重定向了请求。请输入它重定向到的地址。"
     },
     "openSettings": "打开设置",
     "copyDetails": "复制详情",
@@ -6354,6 +6517,7 @@
       "saveChanges": "保存更改",
       "saved": "语气与风格已保存",
       "cleanupOff": "文本整理已关闭，因此这些语气不会应用到你的听写中。助手和聊天仍会使用它们。",
+      "customPrompt": "你正在为文本整理使用自定义提示词，因此这些语气不会应用到你的听写中。助手和聊天仍会使用它们。",
       "turnOnCleanup": "开启文本整理",
       "enabled": "启用语气与声音",
       "enabledDescription": "文本整理、助手和聊天会为每类应用使用你的语气。关闭时使用标准语气。"
@@ -6454,5 +6618,16 @@
       "bootstrapMismatch": "引导文件与您的账号、此工作区或其配置的凭据不匹配。",
       "testLinkOtherWorkspace": "此测试链接对应的是其他工作区。请切换到该工作区，然后重新打开链接。"
     }
+  },
+  "affiliate": {
+    "remove": "移除创作者链接",
+    "haveLink": "有创作者链接吗？",
+    "label": "创作者链接（可选）",
+    "placeholder": "粘贴创作者的链接",
+    "saved": "创作者链接已保存。",
+    "checking": "正在检查链接…",
+    "unavailable": "无法检查此链接。请重试，或清空输入框以继续。",
+    "privacy": "当前跟踪设置不支持创作者链接。请清空输入框以继续。",
+    "review": "您的链接已保存，等待审核。"
   }
 }

@@ -160,6 +160,46 @@ test("a stable authenticated request is bearer-only and returns parsed data", as
   });
 });
 
+test("every notes and folders request names the client's capabilities", async () => {
+  const state = { current: { token: "token-a", generation: 1 } };
+  const sent = [];
+  const handler = createHandler(state, async (url, init) => {
+    sent.push([url, init.headers["x-openwhispr-capabilities"]]);
+    return new Response("{}");
+  });
+  const routes = [
+    ["GET", "/api/notes/list"],
+    ["GET", "/api/folders/list"],
+    ["POST", "/api/notes/batch-create"],
+    ["PATCH", "/api/notes/update"],
+    ["POST", "/api/folders/batch-create"],
+    ["PATCH", "/api/folders/update"],
+    ["POST", "/api/notes/create"],
+    ["POST", "/api/notes/search"],
+    ["GET", "/api/notes/list?limit=50&since=2026-01-01T00%3A00%3A00.000Z&scope=all&since_id=n1"],
+    ["GET", "/api/notes/list?limit=50&before=2026-01-01T00%3A00%3A00.000Z&before_id=n1"],
+    ["GET", "/api/folders/list?since=2026-01-01T00%3A00%3A00.000Z"],
+    ["POST", "/api/folders/create"],
+    ["DELETE", "/api/notes/delete"],
+    ["DELETE", "/api/notes/delete-all"],
+    ["DELETE", "/api/folders/delete"],
+    ["GET", "/api/notes/cloud-note/share"],
+    ["GET", "/api/notes/cloud-note/access"],
+  ];
+  for (const [method, path] of routes) {
+    await handler({
+      method,
+      path,
+      body: method === "GET" ? undefined : {},
+      expectedAuthGeneration: 1,
+    });
+  }
+  assert.equal(sent.length, routes.length);
+  for (const [, capabilities] of sent) {
+    assert.ok(capabilities.split(",").includes("private-workspace-placement"));
+  }
+});
+
 test("public requests carry neither bearer nor cookies", async () => {
   const state = { current: { token: "token-a", generation: 21 } };
   const handler = createHandler(state, async (_url, options) => {

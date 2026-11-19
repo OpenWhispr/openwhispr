@@ -87,12 +87,14 @@ async function setup(t) {
     noExternal: ["react-i18next"],
     cachePrefix: "openwhispr-settings-workspace-plan-",
     mockModules: {
+      "/stores/affiliateStore": `export const prepareAffiliateCheckout = async () => true;`,
       "react-i18next": "export const useTranslation = () => ({ t: (key) => key });",
       "/useAuth":
         "export const useAuth = () => ({ isSignedIn: true, isLoaded: true, user: { id: 'billing-user' } });",
       "/lib/auth": `export const withSessionRefresh = (operation) => operation();
         export const openAdminConsole = async () => { globalThis.__settingsBillingTest.consoleOpens++; };`,
-      "/lib/authRequestContext": "export const hasValidatedAuthContext = () => true;",
+      "/lib/authRequestContext":
+        "export const hasValidatedAuthContext = () => true; export const getValidatedAuthGeneration = () => 7;",
       "/stores/workspaceStore": `export const useWorkspaceStore = (select) => select({
         refresh: async (options) => { globalThis.__settingsBillingTest.workspaceRefreshes.push(options); }
       });`,

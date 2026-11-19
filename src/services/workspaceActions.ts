@@ -1,4 +1,5 @@
 import { WorkspacesService } from "./WorkspacesService";
+import { clearCachedLeaderboards } from "../lib/insightsCache";
 import { syncService } from "./SyncService";
 import {
   captureWorkspaceAccountGuard,
@@ -15,9 +16,16 @@ const actions = createWorkspaceActions({
   captureAccountGuard: captureWorkspaceAccountGuard,
   api: WorkspacesService,
   store: {
-    forgetWorkspace: (id) => useWorkspaceStore.getState().forgetWorkspace(id),
+    // Leaving or deleting a workspace changes which leaderboards the account can see.
+    forgetWorkspace: (id) => {
+      clearCachedLeaderboards();
+      useWorkspaceStore.getState().forgetWorkspace(id);
+    },
     refresh: (options) => useWorkspaceStore.getState().refresh(options),
-    refreshMembers: (workspaceId) => useWorkspaceStore.getState().refreshMembers(workspaceId),
+    refreshMembers: (workspaceId) => {
+      clearCachedLeaderboards();
+      return useWorkspaceStore.getState().refreshMembers(workspaceId);
+    },
     // An account switch empties the list without an error, which must not read as "not listed".
     listedWorkspaceIds: () => {
       const { loaded, error, workspaces } = useWorkspaceStore.getState();

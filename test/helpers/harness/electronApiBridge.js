@@ -131,6 +131,17 @@ function createElectronApi(db, options = {}) {
       return cloud.request(opts);
     },
 
+    ensureAccountDefaultFolders: async (foreignCloudIds, expectedScope) => {
+      if (
+        !expectedScope ||
+        expectedScope.accountId !== db.activeAccountId ||
+        authState.isStale(expectedScope.authGeneration)
+      ) {
+        throw new Error("Authentication context changed during sync acknowledgement");
+      }
+      return db.ensureAccountDefaultFolders(foreignCloudIds);
+    },
+
     // Auth
     authGetTokenState: async () => {
       scopedAccount(authState.generation);
@@ -141,6 +152,12 @@ function createElectronApi(db, options = {}) {
       syncEvents.push({ name, payload });
       return { success: true };
     },
+
+    getStandInOwnershipCandidates: async () => db.getStandInOwnershipCandidates(),
+    resolveStandInOwnership: async ({ noteId, cloudId, owned, accountId }) =>
+      accountId !== db.activeAccountId
+        ? { success: false, error: "Account changed" }
+        : db.resolveStandInOwnership(noteId, cloudId, owned),
 
     // Notes
     getNote: async (id) => db.getNote(id),
@@ -169,8 +186,10 @@ function createElectronApi(db, options = {}) {
         : db.renewNoteCloudIdentity(id, clientId, cloudId, spaceId),
     getPrivatePlacementBackupCandidates: async (generation) =>
       authState.isStale(generation) ? STALE_SYNC_ACK : db.getPrivatePlacementBackupCandidates(),
-    queuePrivatePlacementBackup: async (generation, candidates) =>
-      authState.isStale(generation) ? STALE_SYNC_ACK : db.queuePrivatePlacementBackup(candidates),
+    getPrivatePlacementBackupRows: async (generation, candidates) =>
+      authState.isStale(generation) ? STALE_SYNC_ACK : db.getPrivatePlacementBackupRows(candidates),
+    queueUnlinkedPrivateFolders: async (generation) =>
+      authState.isStale(generation) ? STALE_SYNC_ACK : db.queueUnlinkedPrivateFolders(),
     markNoteCreatesAttempted: async (clientNoteIds, generation) =>
       generation !== undefined && authState.isStale(generation)
         ? []
@@ -404,6 +423,18 @@ function createElectronApi(db, options = {}) {
       authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.keepNewerDictionaryEdit(id),
     // The real handler re-reads the words to broadcast them; there are no windows here.
     broadcastDictionaryUpdated: async () => ({ success: true }),
+
+    getSharedDictionary: async (workspaceId) => db.getSharedDictionary(workspaceId),
+    applySharedDictionaryPull: async (workspaceId, change) =>
+      db.applySharedDictionaryPull(workspaceId, change),
+    replaceSharedDictionary: async (workspaceId, full) =>
+      db.replaceSharedDictionary(workspaceId, full),
+    applySharedDictionaryHides: async (workspaceId, change) =>
+      db.applySharedDictionaryHides(workspaceId, change),
+    replaceSharedDictionaryHides: async (workspaceId, hidden) =>
+      db.replaceSharedDictionaryHides(workspaceId, hidden),
+    clearSharedDictionary: async (workspaceId) => db.clearSharedDictionary(workspaceId),
+    pruneSharedDictionary: async (keepWorkspaceIds) => db.pruneSharedDictionary(keepWorkspaceIds),
 
     ...(options.snippets ? snippetApi(db, authState) : inertSnippetApi()),
     ...inertAnalyticsApi(),

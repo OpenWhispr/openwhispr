@@ -21,6 +21,15 @@ including status/negation, task-specific deadlines and event order. Concision an
 a successful request are not semantic passes. Record failures and rerun after
 repairs; do not replace this review with substring checks on model output.
 
+For `templateCases`, use the note's template picker and Generate AI Summary,
+or build the request with `compileTemplatePrompt` and `buildNoteRunInput`.
+Run each listed template with thinking enabled and disabled, temperature 0.3
+and the app's 4096-token output budget. Use seed 42 when supported to replay the
+1:1 exclusion regression from #3131. General AI Summary must retain substantive
+personal content; 1:1 must omit unrelated personal topics while retaining work
+and work-relevant personal context. When nothing remains in scope, require the
+marker and verify that regeneration leaves the saved note unchanged.
+
 Deterministic coverage lives in `noteEditPersistence.test.js` (real SQLite,
 including reopen), `noteEditSurfaces.test.js` (mounted note hook/assistant panel,
 real chat pipeline with scripted cloud/BYOK responses), and
