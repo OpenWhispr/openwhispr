@@ -6,7 +6,7 @@
  * handshake surfaces here on a schedule instead of in a customer report
  * (#1624 sat in shipped builds for three days as a swallowed warmup warning).
  * Providers whose request shape is theirs alone rather than the shared
- * OpenAI-compatible multipart (Gemini, batch and Live) send a real
+ * OpenAI-compatible multipart (Gemini, batch and Live; ElevenLabs) send a real
  * transcription through the shipped module for the same reason, and OpenAI's
  * batch default is posted the way the app builds it so a retired model or
  * field surfaces here too.
@@ -28,6 +28,7 @@ import tokenProviders from "../src/helpers/realtimeTokenProviders.js";
 import audioUtils from "../src/utils/audioUtils.js";
 import geminiTranscription from "../src/helpers/geminiTranscription.js";
 import geminiLive from "../src/helpers/geminiLiveStreaming.js";
+import elevenLabsTranscription from "../src/helpers/elevenLabsTranscription.js";
 import AssemblyAiStreaming from "../src/helpers/assemblyAiStreaming.js";
 import DeepgramStreaming from "../src/helpers/deepgramStreaming.js";
 import { loadCanaryCatalog } from "./lib/canary-catalog.mjs";
@@ -36,6 +37,7 @@ const { fetchRealtimeTokenForProvider } = tokenProviders;
 const { pcm16ToWav } = audioUtils;
 const { transcribeWithGemini } = geminiTranscription;
 const { GeminiLiveStreaming } = geminiLive;
+const { transcribeWithElevenLabs } = elevenLabsTranscription;
 
 // The provider's default is what a fresh AssemblyAI selection dictates with
 // (ModelRegistry.getDefaultTranscriptionModel), so that is the id to probe.
@@ -137,6 +139,17 @@ function toWebmOpus(wav) {
 async function probeGeminiBatch(key, audio, contentType) {
   if (!audio) return { ok: false, detail: `could not build ${contentType} fixture` };
   await transcribeWithGemini({ audioBuffer: audio, contentType, apiKey: key }, fetch);
+  return { ok: true };
+}
+
+// The request dictation sends: WebM/Opus, the default model and a keyterm. As with
+// Gemini, completing proves auth, the fields and the decode; silence has no text.
+async function probeElevenLabsBatch(key, audio) {
+  if (!audio) return { ok: false, detail: "could not build audio/webm fixture" };
+  await transcribeWithElevenLabs(
+    { audioBuffer: audio, contentType: "audio/webm", keyterms: ["OpenWhispr"], apiKey: key },
+    fetch
+  );
   return { ok: true };
 }
 
@@ -330,6 +343,11 @@ const PROBES = [
     id: "gemini-batch-webm",
     keyEnv: "STT_CANARY_GEMINI_KEY",
     run: (key) => probeGeminiBatch(key, toWebmOpus(SILENT_WAV()), "audio/webm"),
+  },
+  {
+    id: "elevenlabs-batch-webm",
+    keyEnv: "STT_CANARY_ELEVENLABS_KEY",
+    run: (key) => probeElevenLabsBatch(key, toWebmOpus(SILENT_WAV())),
   },
 ];
 
