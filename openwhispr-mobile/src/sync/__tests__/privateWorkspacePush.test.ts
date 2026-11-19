@@ -428,3 +428,41 @@ it('recovers only the refused placement row in a mixed create response', async (
     pendingSync: 1,
   });
 });
+
+it('files a folder refused for a former workspace in the default, then uploads its notes', async (): Promise<void> => {
+  const folder = mockRepo.createFolder('Projects', undefined, {
+    privateWorkspaceId: 'workspace-B',
+  });
+  mockRepo.setFolderClientId(folder.id, 'mobile-B');
+  const note = mockRepo.createNote('Filed note', 'Keep me', folder.id);
+  mockRepo.setNoteClientId(note.id, 'note-B');
+  jest.mocked(batchCreateFolders).mockResolvedValueOnce({
+    created: [],
+    refused: [{ client_folder_id: 'mobile-B', code: 'private_workspace_not_found' }],
+  });
+
+  await pushFolders();
+  await pushNotes();
+
+  expect(mockRepo.getFolders().find(({ id }): boolean => id === folder.id)).toMatchObject({
+    privateWorkspaceId: null,
+    remoteId: null,
+    pendingSync: 1,
+  });
+  expect(batchCreateNotes).not.toHaveBeenCalled();
+
+  jest.mocked(batchCreateFolders).mockResolvedValueOnce({
+    created: [remoteFolder({ client_folder_id: 'mobile-B' })],
+  });
+  await pushFolders();
+  await pushNotes();
+
+  expect(jest.mocked(batchCreateFolders).mock.calls[1][0][0]).not.toHaveProperty(
+    'private_workspace_id',
+  );
+  expect(jest.mocked(batchCreateNotes).mock.calls[0][0][0]).toMatchObject({
+    client_note_id: 'note-B',
+    folder_id: 'remote-A',
+  });
+  expect(mockRepo.getNoteById(note.id)?.remoteId).toBe('created-note-0');
+});

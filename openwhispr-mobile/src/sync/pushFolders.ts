@@ -300,7 +300,7 @@ export async function pushFolders(
         checkpoint(true);
         const { created, refused = [] } = await batchCreateFolders(chunk.map((c) => c.payload));
         checkpoint();
-        const refusedIds = new Set(refused.map((row) => row.client_folder_id));
+        const refusedByClientId = new Map(refused.map((row) => [row.client_folder_id, row.code]));
         // Match by client_folder_id first — batch responses aren't guaranteed to
         // preserve request order (or to include every row on a partial rejection).
         // Fall back to positional index only when a response row carries no
@@ -318,10 +318,16 @@ export async function pushFolders(
         let unmatched = 0;
         for (let j = 0; j < chunk.length; j += 1) {
           const create = chunk[j];
-          if (
-            refusedIds.has(create.payload.client_folder_id) &&
-            !byClientId.has(create.payload.client_folder_id)
-          ) {
+          const refusal = refusedByClientId.get(create.payload.client_folder_id);
+          if (refusal !== undefined && !byClientId.has(create.payload.client_folder_id)) {
+            if (
+              personalScope &&
+              create.payload.private_workspace_id &&
+              refusal === 'private_workspace_not_found'
+            ) {
+              // Membership caches may be stale. Only the API's refusal authorizes a default retry.
+              notesRepository.resetRejectedFolderPrivateWorkspace(create.pushed);
+            }
             unmatched += 1;
             continue;
           }

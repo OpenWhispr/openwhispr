@@ -202,6 +202,9 @@ export class SyncedNotesRepository implements NotesRepository {
   resetRejectedNotePrivateWorkspace(pushed: Note): void {
     this.local.resetRejectedNotePrivateWorkspace(pushed);
   }
+  resetRejectedFolderPrivateWorkspace(pushed: Folder): void {
+    this.local.resetRejectedFolderPrivateWorkspace(pushed);
+  }
   markFolderPushed(
     localId: number,
     remoteId: string,

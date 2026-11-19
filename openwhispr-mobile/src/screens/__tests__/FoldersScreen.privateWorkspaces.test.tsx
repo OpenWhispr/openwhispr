@@ -174,6 +174,8 @@ it('keeps legacy folders selectable beside a single workspace before a default e
   expect(screen.getByLabelText('Workspace: Personal')).toBeTruthy();
   expect(screen.queryByText('Groceries')).not.toBeNull();
   expect(screen.queryByText('Roadmap notes')).toBeNull();
+  expect(screen.queryByText('Family')).not.toBeNull();
+  expect(screen.queryByText('Engineering')).not.toBeNull();
 
   fireEvent.press(screen.getByTestId(`menu-${ACME}`));
   expect(screen.getByLabelText('Workspace: Acme')).toBeTruthy();
@@ -184,6 +186,8 @@ it('keeps legacy folders selectable beside a single workspace before a default e
   fireEvent.press(screen.getByTestId('menu-unassigned-private'));
   expect(screen.getByLabelText('Workspace: Personal')).toBeTruthy();
   expect(screen.queryByText('Groceries')).not.toBeNull();
+  expect(screen.queryByText('Family')).not.toBeNull();
+  expect(screen.queryByText('Engineering')).not.toBeNull();
   fireEvent.press(screen.getByTestId('fab-note'));
   const [note] = mockRepo.getAllNotes();
   expect(

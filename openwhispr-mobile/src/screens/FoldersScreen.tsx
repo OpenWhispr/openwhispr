@@ -71,13 +71,16 @@ export default function FoldersScreen() {
   }, [isInitialized, initialize]);
 
   // With a Private per workspace the screen shows one workspace at a time, as desktop does:
-  // its Private above and its team spaces below.
+  // its Private above and its team spaces below. The unassigned Personal list belongs to no
+  // workspace, so it keeps every team space in reach.
   const teamSpaces = useMemo(
     () =>
       spaces.filter(
         (s) =>
           s.kind === 'team' &&
-          (privateWorkspaces.length === 0 || s.workspaceId === activePrivateWorkspaceId),
+          (privateWorkspaces.length === 0 ||
+            activePrivateWorkspaceId === null ||
+            s.workspaceId === activePrivateWorkspaceId),
       ),
     [spaces, privateWorkspaces, activePrivateWorkspaceId],
   );

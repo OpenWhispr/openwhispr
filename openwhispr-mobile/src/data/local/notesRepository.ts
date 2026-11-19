@@ -1076,6 +1076,25 @@ export class LocalNotesRepository implements NotesRepository {
       .run();
   }
 
+  resetRejectedFolderPrivateWorkspace(pushed: Folder): void {
+    const current = this.database.select().from(folders).where(eq(folders.id, pushed.id)).get();
+    // The refusal describes the create we sent, never a later placement, identity, or delete.
+    if (
+      !current ||
+      current.clientFolderId !== pushed.clientFolderId ||
+      current.privateWorkspaceId !== pushed.privateWorkspaceId ||
+      current.remoteId ||
+      current.deletedAt
+    ) {
+      return;
+    }
+    this.database
+      .update(folders)
+      .set({ privateWorkspaceId: null, pendingSync: 1, updatedAt: sql`datetime('now')` })
+      .where(eq(folders.id, current.id))
+      .run();
+  }
+
   applyRemoteNote(
     remote: RemoteNote,
     resolveFolder: (serverFolderId: string | null) => number | null,

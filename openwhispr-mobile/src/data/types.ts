@@ -296,6 +296,8 @@ export interface NotesRepository {
   forkNoteToPrivate(noteId: number): void;
   /** Retry a refused folderless create in the default Private, if its identity/filing is unchanged. */
   resetRejectedNotePrivateWorkspace(pushed: Note): void;
+  /** Retry a refused folder create in the default Private, if its identity/placement is unchanged. */
+  resetRejectedFolderPrivateWorkspace(pushed: Folder): void;
   markFolderPushed(
     localId: number,
     remoteId: string,
