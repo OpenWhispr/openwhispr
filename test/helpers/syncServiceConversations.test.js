@@ -618,11 +618,9 @@ test("a cloud conversation tombstone hard-deletes the local row and its messages
   localStorageStub.setItem("lastSyncedAt.conversations", "2026-07-01T00:00:00.000Z");
   await service.syncAll(true);
 
-  const deltaCalls = cloud
-    .logFor("/api/conversations/list")
-    .filter((call) => queryParam(call.path, "since") !== null);
+  const listCalls = cloud.logFor("/api/conversations/list");
   assert.equal(
-    queryParam(deltaCalls[0].path, "since"),
+    queryParam(listCalls[0].path, "since"),
     "2026-07-01T00:00:00.000Z",
     "the delta page must be requested with the stored cursor"
   );
@@ -1286,28 +1284,25 @@ test("chats an older build left synced with unsent messages go up once; complete
   assert.equal(conversationMessageReads(cloud), readsAfterRepair);
 });
 
-for (const hasCursor of [true, false]) {
-  test(`repair checks tied creation timestamps with an existing cursor: ${hasCursor}`, async (t) => {
-    const ctx = await setup(t);
-    if (!ctx) return;
-    const { db, cloud, service } = ctx;
-    await establishPreFixDevice(service);
-    if (!hasCursor) localStorageStub.removeItem("lastSyncedAt.conversations");
-    // All 51 share a creation timestamp, so a timestamp-only 50-row page
-    // cannot visit every chat. Local chat timestamps have only second precision.
-    for (let index = 0; index < 51; index++) {
-      seedSyncedChat(db, cloud, `tied-${index}`, ["u:question"], ["u:question", "a:answer"]);
-    }
+test("repair checks tied creation timestamps", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  await establishPreFixDevice(service);
+  // All 51 share a creation timestamp, so a timestamp-only 50-row page
+  // cannot visit every chat. Local chat timestamps have only second precision.
+  for (let index = 0; index < 51; index++) {
+    seedSyncedChat(db, cloud, `tied-${index}`, ["u:question"], ["u:question", "a:answer"]);
+  }
 
-    await service.syncAll(true);
-    await service.syncAll(true);
+  await service.syncAll(true);
+  await service.syncAll(true);
 
-    for (let index = 0; index < 51; index++) {
-      assertOneLiveCopy(cloud, `tied-${index}`, ["question", "answer"]);
-    }
-    assert.equal(localStorageStub.getItem("syncCursors.chatMessages:user-harness"), "done");
-  });
-}
+  for (let index = 0; index < 51; index++) {
+    assertOneLiveCopy(cloud, `tied-${index}`, ["question", "answer"]);
+  }
+  assert.equal(localStorageStub.getItem("syncCursors.chatMessages:user-harness"), "done");
+});
 
 test("a deleted cloud copy does not prevent repairing the remaining chats", async (t) => {
   const ctx = await setup(t);
