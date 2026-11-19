@@ -9,10 +9,11 @@ const {
 } = require("../lib/rendererTestHarness");
 
 // The editor saves a second after typing stops. When the open note is deleted
-// on another device (or with its folder) inside that second, the save is
-// refused and what was typed would be gone: the editor saves it as a new note
-// in Private instead, unless the note was deleted here. PersonalNotesView is
-// real; NoteEditor is a stub that exposes the props it hands the editor.
+// on another device (or with its folder, or with a teamspace the user lost)
+// inside that second, the save is refused and what was typed would be gone: the
+// editor saves it as a new note in Private instead, unless the note was deleted
+// here. The copy holds only what the save carried, never the rest of the note.
+// PersonalNotesView is real; NoteEditor is a stub that exposes its props.
 
 const OWNER = "account-1";
 const NOTE = {
@@ -162,17 +163,16 @@ test("edits to a note deleted elsewhere before they saved go to a new note in Pr
   const [, title, content, noteType, , , folderId, spaceId, transcript, guard] = saves[0];
   assert.equal(title, "Standup notes");
   assert.equal(content, "Typed just now");
-  assert.equal(noteType, "meeting");
+  assert.equal(noteType, "personal");
   assert.equal(folderId, null, "the Private's default folder, not the deleted one");
   assert.equal(spaceId, PRIVATE.id, "a Private note stays in its own Private");
-  assert.equal(transcript, NOTE.transcript);
+  assert.equal(transcript, null, "only what the save carried");
   assert.deepEqual(guard, { accountId: OWNER, authGeneration: 1 }, "main refuses another account");
-  // The summary the editor showed comes along.
-  assert.deepEqual(kind(view.calls, "update").at(-1), [
-    "update",
-    500,
-    { enhanced_content: "Summary" },
-  ]);
+  assert.deepEqual(
+    kind(view.calls, "update").filter(([, id]) => id === 500),
+    [],
+    "the summary wasn't being saved, so it stays out"
+  );
 
   assert.equal(globalThis.__toasts.length, 1);
   const [toast] = globalThis.__toasts;
@@ -181,7 +181,9 @@ test("edits to a note deleted elsewhere before they saved go to a new note in Pr
   assert.equal(globalThis.__opened[0].id, 500, "Open goes to the copy");
 });
 
-test("a team note's edits go to the active workspace's Private", async (t) => {
+// A teamspace purged (access lost, or deleted) takes its notes: like main keeping unsent work,
+// only the typing in flight survives, never the team note's transcript or summary.
+test("a team note purged with typing in flight keeps only the typed text, in Private", async (t) => {
   const view = await mountView(t);
   globalThis.__note = { ...NOTE, space_id: TEAM.id };
   await view.render();
@@ -189,8 +191,43 @@ test("a team note's edits go to the active workspace's Private", async (t) => {
 
   await closeDeletedNote(view);
 
+  const saves = kind(view.calls, "save");
+  assert.equal(saves.length, 1);
+  const [, title, content, noteType, , , , spaceId, transcript] = saves[0];
+  assert.deepEqual([title, content, noteType, transcript], [NOTE.title, "Typed", "personal", null]);
+  assert.equal(spaceId, null, "main picks the Private");
+  assert.deepEqual(
+    kind(view.calls, "update").filter(([, id]) => id === 500),
+    [],
+    "no summary"
+  );
+});
+
+test("a summary edit in flight is copied alone", async (t) => {
+  const view = await mountView(t);
+  await React.act(async () =>
+    globalThis.__editorProps.enhancement.onChange(NOTE.id, "Edited summary")
+  );
+
+  await closeDeletedNote(view);
+
   const [save] = kind(view.calls, "save");
-  assert.equal(save[7], null, "main picks the Private");
+  assert.deepEqual(save.slice(1, 3), ["", ""], "neither the title nor the notes were being saved");
+  assert.deepEqual(kind(view.calls, "update").at(-1), [
+    "update",
+    500,
+    { enhanced_content: "Edited summary" },
+  ]);
+});
+
+test("a title edit alone isn't worth a copy", async (t) => {
+  const view = await mountView(t);
+  await React.act(async () => globalThis.__editorProps.onTitleChange(NOTE.id, "Renamed"));
+
+  await closeDeletedNote(view);
+
+  assert.equal(kind(view.calls, "save").length, 0);
+  assert.equal(globalThis.__toasts.length, 0);
 });
 
 test("a delayed save refused while the note is open makes one copy, and later edits follow it", async (t) => {

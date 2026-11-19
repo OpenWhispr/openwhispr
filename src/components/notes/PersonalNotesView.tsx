@@ -151,12 +151,21 @@ interface PendingEnhancedSave extends PendingEnhancedSnapshot {
 
 type PendingSaveReason = "switch" | "overview" | "unmount";
 
-// What a copy of a vanished note is made from, read when its save is sent.
+// Read about a vanished note when its save is sent. None of it goes into the copy, which holds
+// only what the save carried.
 interface LostNoteContext {
-  readonly draft: NoteEditorDraft | null;
-  readonly row: NoteItem | null;
+  // Named in the notice.
+  readonly title: string;
+  // Where it lived: a Private note's copy stays in that Private.
+  readonly spaceId: number | null;
   // undefined: whose note it is was never read, so no copy is made.
   readonly ownerAccountId: string | null | undefined;
+}
+
+// Text the user typed in this session: a save carrying none (a title alone, a clear) has
+// nothing worth a copy of its own.
+function carriesTypedText(updates: PendingNoteWrite["updates"]): boolean {
+  return !!updates.content?.trim() || !!updates.enhanced_content?.trim();
 }
 
 interface PersonalNotesViewProps {
@@ -217,8 +226,8 @@ export default function PersonalNotesView({
   const [showAddNotesDialog, setShowAddNotesDialog] = useState(false);
   const pendingDocumentRef = useRef<PendingDocumentSave | null>(null);
   const pendingEnhancedRef = useRef<PendingEnhancedSave | null>(null);
-  // The open note's last stored row and the account it was opened under: what a copy is made
-  // from, and for whom, should the note vanish before a save lands (see rescueLostNoteWrite).
+  // The open note's last stored row and the account it was opened under: where a copy goes, and
+  // for whom, should the note vanish before a save lands (see rescueLostNoteWrite).
   const openNoteRowRef = useRef<NoteItem | null>(null);
   const draftOwnerRef = useRef<{ noteId: number; accountId: string | null } | null>(null);
   // One copy per vanished note, so its later saves land in that copy.
@@ -247,44 +256,34 @@ export default function PersonalNotesView({
   );
 
   // Read when a save is sent: by the time a refusal comes back, the editor may show another note.
-  const lostNoteContext = useCallback(
-    (noteId: number): LostNoteContext => ({
-      draft: draftRef.current?.noteId === noteId ? draftRef.current : null,
-      row: openNoteRowRef.current?.id === noteId ? openNoteRowRef.current : null,
+  const lostNoteContext = useCallback((noteId: number): LostNoteContext => {
+    const draft = draftRef.current?.noteId === noteId ? draftRef.current : null;
+    const row = openNoteRowRef.current?.id === noteId ? openNoteRowRef.current : null;
+    return {
+      title: draft?.title || row?.title || "",
+      spaceId: row?.space_id ?? null,
       ownerAccountId:
         draftOwnerRef.current?.noteId === noteId ? draftOwnerRef.current.accountId : undefined,
-    }),
-    []
-  );
+    };
+  }, []);
 
-  // A new note in Private holding everything the editor showed, made only for the account that
-  // opened the note (a refusal also follows an account switch) and refused by main if the
-  // account changes on the way.
+  // A new note in Private holding only the fields the refused save carried: what was typed here
+  // since the last save. As when main keeps unsent work from a note that lost its teamspace,
+  // nothing else of the note (its transcript, its summary unless that was being saved) leaves
+  // it. Made only for the account that opened the note (a refusal also follows an account
+  // switch), and refused by main if the account changes on the way.
   const copyLostNote = useCallback(
     async (write: PendingNoteWrite, context: LostNoteContext): Promise<NoteItem | null> => {
       const api = window.electronAPI;
       const guard = await api.getNoteWriteGuard?.();
       if (!guard || context.ownerAccountId === undefined) return null;
       if (guard.accountId !== context.ownerAccountId) return null;
-      const { draft, row } = context;
-      const title = draft?.title ?? write.updates.title ?? row?.title ?? "";
-      const content = draft?.content ?? write.updates.content ?? row?.content ?? "";
-      const enhancedContent = draft ? draft.enhancedContent : (row?.enhanced_content ?? null);
+      const { title = "", content = "", enhanced_content: enhancedContent } = write.updates;
       // Its own Private when it was in one; otherwise main's pick, the active workspace's.
-      const source = row ? getSpacesValue().find((space) => space.id === row.space_id) : undefined;
+      const source = getSpacesValue().find((space) => space.id === context.spaceId);
       const save = (spaceId: number | null) =>
         api
-          .saveNote(
-            title,
-            content,
-            row?.note_type ?? "personal",
-            null,
-            null,
-            null,
-            spaceId,
-            row?.transcript || null,
-            guard
-          )
+          .saveNote(title, content, "personal", null, null, null, spaceId, null, guard)
           .catch(() => null);
       let saved = source?.kind === "private" ? await save(source.id) : null;
       if (!saved?.success) saved = await save(null);
@@ -298,9 +297,9 @@ export default function PersonalNotesView({
     []
   );
 
-  // A save refused because its note is gone (deleted on another device, or with its folder)
-  // would drop what was typed since the last save. Those edits go to a new note in Private
-  // instead, unless the note was deleted here.
+  // A save refused because its note is gone (deleted on another device, with its folder, or
+  // with a teamspace the user lost) would drop what was typed since the last save. Those edits
+  // go to a new note in Private instead, unless the note was deleted here.
   const rescueLostNoteWrite = useCallback(
     async (write: PendingNoteWrite, context: LostNoteContext, error?: string): Promise<void> => {
       const api = window.electronAPI;
@@ -319,7 +318,11 @@ export default function PersonalNotesView({
         }
         return;
       }
-      // The first refusal, or the earlier copy failed: this write makes it from its own draft.
+      if (!carriesTypedText(write.updates)) {
+        logger.warn("Note save refused", { noteId: write.noteId, error }, "notes");
+        return;
+      }
+      // The first refusal, or the earlier copy failed: this write makes the copy.
       const attempt = copyLostNote(write, context);
       copies.set(write.noteId, attempt);
       const copy = await attempt;
@@ -331,7 +334,7 @@ export default function PersonalNotesView({
       toast({
         title: t("notes.editor.lostNoteCopy.title"),
         description: t("notes.editor.lostNoteCopy.description", {
-          title: context.draft?.title || context.row?.title || t("notes.list.untitled"),
+          title: context.title || t("notes.list.untitled"),
         }),
         duration: 10000,
         actions: [{ label: t("notes.editor.lostNoteCopy.open"), onClick: () => openNote(copy) }],
