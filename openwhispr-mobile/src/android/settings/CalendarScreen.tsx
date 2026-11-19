@@ -82,6 +82,7 @@ export default function CalendarScreen() {
               key={account.id}
               leading={<GoogleTile />}
               title={name}
+              singleLineTitle
               badge={needsReconnect(account) ? <AmberTag label={t('signedOutTag')} /> : undefined}
               subtitle={accountSummary(account, calendarsByAccountId[account.id] ?? [], t)}
               onPress={() => openCalendarAccount(account.id)}

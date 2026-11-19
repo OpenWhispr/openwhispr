@@ -108,6 +108,10 @@ export function SettingsPage({
         <Text
           accessibilityRole="header"
           numberOfLines={1}
+          // An address as the title (a calendar account) shrinks to fit when it's a little too
+          // long; a longer one is cut in the middle. Android ignores minimumFontScale.
+          adjustsFontSizeToFit={title.length <= 24}
+          ellipsizeMode="middle"
           style={[settings.title, { flex: 1, textAlign: 'center', lineHeight: 24 }]}
         >
           {title}
@@ -325,12 +329,15 @@ export function ListRow({
   accessibilityLabel,
   subtitleStyle,
   titleColor,
+  singleLineTitle,
 }: {
   icon?: LucideIconName;
   leading?: React.ReactNode;
   title: string;
   /** A title in its own colour (the blue "Add Google account"). */
   titleColor?: string;
+  /** One line, cut in the middle (an email address keeps its domain). */
+  singleLineTitle?: boolean;
   badge?: React.ReactNode;
   subtitle?: React.ReactNode;
   value?: string;
@@ -369,9 +376,19 @@ export function ListRow({
       <View
         style={{ flex: 1, gap: 2, justifyContent: 'center', opacity: toggle?.disabled ? 0.4 : 1 }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            // One-line titles keep their badge beside them and shrink instead.
+            flexWrap: singleLineTitle ? 'nowrap' : 'wrap',
+          }}
+        >
           <Text
             textBreakStrategy="balanced"
+            numberOfLines={singleLineTitle ? 1 : undefined}
+            ellipsizeMode="middle"
             style={[settings.rowTitle, { color: titleInk, flexShrink: 1 }]}
           >
             {title}

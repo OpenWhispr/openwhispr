@@ -71,7 +71,11 @@ export default function CalendarAccountScreen() {
             <GoogleTile />
             <View style={{ flex: 1, gap: 2 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text numberOfLines={1} style={[settings.rowTitle, { flexShrink: 1, flex: 1 }]}>
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                  style={[settings.rowTitle, { flexShrink: 1, flex: 1 }]}
+                >
                   {name}
                 </Text>
                 {signedOut ? (
