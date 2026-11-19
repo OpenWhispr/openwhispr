@@ -923,6 +923,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloudSwitchPlan: (opts) => ipcRenderer.invoke("cloud-switch-plan", opts),
   cloudPreviewSwitch: (opts) => ipcRenderer.invoke("cloud-preview-switch", opts),
   cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
+  getNotionStorageConfig: () => ipcRenderer.invoke("notion-storage:get-config"),
+  saveNotionStorageConfig: (config) => ipcRenderer.invoke("notion-storage:save-config", config),
+  testNotionStorageConnection: (params) => ipcRenderer.invoke("notion-storage:test-connection", params),
+  syncAllNotesToNotion: () => ipcRenderer.invoke("notion-storage:sync-all"),
   getAffiliateCandidate: () => ipcRenderer.invoke("affiliate-get-candidate"),
   saveAffiliateCandidate: (input) => ipcRenderer.invoke("affiliate-save-candidate", input),
   resolveAffiliateLink: (link, generation) =>

@@ -38,6 +38,7 @@ const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const affiliateLinks = require("./affiliateLinks");
 const { createNoteFilesSync } = require("./noteFilesSync");
+const { NotionStorageManager } = require("./notionStorage");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
 const { captureAuthFence, createCloudApiRequestHandler } = require("./cloudApiRequest");
 const { MetaActivation } = require("./metaActivation");
@@ -1492,8 +1493,14 @@ class IPCHandlers {
     return this._noteFilesSync;
   }
 
+  get notionStorage() {
+    this._notionStorage ??= new NotionStorageManager();
+    return this._notionStorage;
+  }
+
   _asyncMirrorWrite(note) {
     this.noteFiles.writeNote(note);
+    this.notionStorage.queueNote(note);
   }
 
   _flushAccountRepairMirrors() {
@@ -1524,6 +1531,7 @@ class IPCHandlers {
   _asyncMirrorDelete(noteId, snapshots) {
     const snapshot = snapshots?.get(noteId);
     this.noteFiles.deleteNote(noteId, snapshot?.note, snapshot?.speakerMappings);
+    this.notionStorage.deleteNote(noteId);
   }
 
   // A deleted folder's files go by note id, not with its directory: another
@@ -2342,6 +2350,17 @@ class IPCHandlers {
         .finally(release);
     ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
       this.windowManager.setOnboardingWindowMode(mode)
+    );
+
+    ipcMain.handle("notion-storage:get-config", () => this.notionStorage.getPublicConfig());
+    ipcMain.handle("notion-storage:save-config", (_event, config) =>
+      this.notionStorage.saveConfig(config || {})
+    );
+    ipcMain.handle("notion-storage:test-connection", (_event, params) =>
+      this.notionStorage.testConnection(params?.apiKey, params?.databaseId)
+    );
+    ipcMain.handle("notion-storage:sync-all", () =>
+      this.notionStorage.syncAllNotes(this.databaseManager)
     );
 
     ipcMain.handle("permission-guide-open", (event, state) =>

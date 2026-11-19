@@ -1,5 +1,6 @@
 import CreatorLinkField from "./CreatorLinkField";
 import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
+import { NotionStorageSettings } from "./settings/NotionStorageSettings";
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -5142,6 +5143,12 @@ EOF`,
         description={alertDialog.description}
         onOk={() => {}}
       />
+
+      {activeSection === "general" && (
+        <div className="mb-6">
+          <NotionStorageSettings />
+        </div>
+      )}
 
       {/* Mounted on first visit and kept alive so model-download progress and IPC listeners survive section switches. */}
       {hasMountedSpeechToText && (

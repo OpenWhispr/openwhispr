@@ -1,10 +1,10 @@
 {
-  "appId": "com.gizmolabs.openwhispr",
+  "appId": "com.notionwhisper.app",
   "afterPack": "scripts/afterPack.js",
   "extraMetadata": {
     "windowsTrayIdentity": true
   },
-  "productName": "OpenWhispr",
+  "productName": "NotionWhisper",
   "protocols": {
     "name": "OpenWhispr Protocol",
     "schemes": ["openwhispr"]

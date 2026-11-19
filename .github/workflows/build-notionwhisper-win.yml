@@ -1,0 +1,49 @@
+name: Build NotionWhisper (Windows)
+
+on:
+  push:
+    branches:
+      - notion-whisper
+  workflow_dispatch:
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck & Build Renderer
+        run: |
+          npm run typecheck
+          npm run build:renderer
+
+      - name: Download Windows binaries
+        run: |
+          npm run download:sherpa-onnx
+          npm run download:nircmd
+          npm run download:windows-key-listener
+          npm run download:windows-fast-paste
+          npm run download:windows-mic-listener
+          npm run download:windows-system-audio-helper
+
+      - name: Build Windows Installer (.exe)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --win --config electron-builder.unsigned-win.json
+
+      - name: Upload Windows Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotionWhisper-Windows-Exe
+          path: dist/*.exe
+          if-no-files-found: error
