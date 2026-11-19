@@ -340,6 +340,12 @@ function createElectronApi(db, options = {}) {
       authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
         : db.markConversationCreateAttempted(id),
+    markConversationPending: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.markConversationPending(id),
+    getSyncedLinkedConversations: async (expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.getSyncedLinkedConversations(),
     clearConversationCreateAttempted: async (id) => db.clearConversationCreateAttempted(id),
     acknowledgeConversationCreate: async (id, snapshot, cloudId, accountId, authGeneration) => {
       const sender = syncSender(accountId, authGeneration);

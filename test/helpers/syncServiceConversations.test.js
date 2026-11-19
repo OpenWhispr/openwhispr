@@ -1106,6 +1106,311 @@ test("a linked chat gets no half turn: a reply waiting on the user goes once it 
   assert.equal(db.getAgentConversation(local.id).sync_status, "synced");
 });
 
+test("a message added to a chat that already synced goes up on the next pass", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const conversation = db.createAgentConversation("Synced chat");
+  db.addAgentMessage(conversation.id, "user", "first question");
+  db.addAgentMessage(conversation.id, "assistant", "first answer");
+  await service.syncAll(true);
+  const clientId = db.getAgentConversation(conversation.id).client_conversation_id;
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
+  assertOneLiveCopy(cloud, clientId, ["first question", "first answer"]);
+
+  db.addAgentMessage(conversation.id, "user", "follow-up question");
+  db.addAgentMessage(conversation.id, "assistant", "follow-up answer");
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "pending");
+
+  await service.syncAll(true);
+  assertOneLiveCopy(cloud, clientId, [
+    "first question",
+    "first answer",
+    "follow-up question",
+    "follow-up answer",
+  ]);
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
+});
+
+test("a textless reply that waited past the turn limit goes up once it is completed", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const conversation = db.createAgentConversation("Post the update");
+  db.addAgentMessage(conversation.id, "user", "Post the update");
+  await service.syncAll(true);
+  const clientId = db.getAgentConversation(conversation.id).client_conversation_id;
+
+  // Only a card, left unanswered for longer than a turn may run: the pass treats
+  // the turn as cut off and settles the chat without the empty reply.
+  db.addAgentMessage(conversation.id, "user", "Post it to the team");
+  const startedAt = Date.now() - 2 * 60 * 60 * 1000;
+  const reply = db.addAgentMessage(conversation.id, "assistant", "", {
+    turn: { startedAt, status: "waiting" },
+  });
+  await service.syncAll(true);
+  assertOneLiveCopy(cloud, clientId, ["Post the update", "Post it to the team"]);
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
+
+  db.updateAgentMessage(reply.id, "Posted in #eng.", {
+    turn: { startedAt, finishedAt: Date.now(), status: "complete" },
+  });
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "pending");
+
+  await service.syncAll(true);
+  assertOneLiveCopy(cloud, clientId, ["Post the update", "Post it to the team", "Posted in #eng."]);
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
+});
+
+test("a synced chat renamed on this device sends its new title", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const conversation = db.createAgentConversation("Old title");
+  db.addAgentMessage(conversation.id, "user", "first question");
+  await service.syncAll(true);
+  const clientId = db.getAgentConversation(conversation.id).client_conversation_id;
+
+  db.updateAgentConversationTitle(conversation.id, "New title");
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "pending");
+
+  await service.syncAll(true);
+  assert.equal(cloud.conversation(clientId).title, "New title");
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
+});
+
+test("the chat used last stays on top once a pass pushes it beside an older one", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const usedLast = db.createAgentConversation("Used last");
+  db.addAgentMessage(usedLast.id, "user", "question");
+  const usedEarlier = db.createAgentConversation("Used earlier");
+  db.addAgentMessage(usedEarlier.id, "user", "question");
+  await service.syncAll(true);
+
+  db.addAgentMessage(usedLast.id, "assistant", "answer");
+  db.addAgentMessage(usedEarlier.id, "assistant", "answer");
+  updateConversation(db, usedEarlier.id, { updated_at: LOCAL_EARLY });
+  updateConversation(db, usedLast.id, { updated_at: "2026-07-20 10:05:00" });
+  // The chat lists sort to the second, so the two pushes must land in different ones.
+  let cloudNow = Date.parse("2026-07-20T11:00:00.000Z");
+  cloud.setClock(() => new Date((cloudNow += 1500)).toISOString());
+
+  await service.syncAll(true);
+
+  assert.deepEqual(
+    db.getAgentConversationsWithPreview().map((conversation) => conversation.title),
+    ["Used last", "Used earlier"]
+  );
+});
+
+// A chat an older build left synced with its cloud copy, which may lack some
+// of its messages. "u:text" is a user message, "a:text" an assistant one.
+function seedSyncedChat(db, cloud, clientId, cloudMessages, localMessages) {
+  const parse = (messages) =>
+    messages.map((message) => ({
+      role: message.startsWith("u:") ? "user" : "assistant",
+      content: message.slice(2),
+    }));
+  const cloudRow = cloud.seedConversation({
+    client_conversation_id: clientId,
+    title: clientId,
+    created_at: "2026-07-20T08:00:00.000Z",
+    updated_at: "2026-07-20T09:00:00.000Z",
+    messages: parse(cloudMessages),
+  });
+  const local = db.createAgentConversation(clientId);
+  for (const message of parse(localMessages))
+    db.addAgentMessage(local.id, message.role, message.content);
+  return {
+    cloudRow,
+    local: updateConversation(db, local.id, {
+      client_conversation_id: clientId,
+      cloud_id: cloudRow.id,
+      sync_status: "synced",
+      updated_at: "2026-07-20T09:00:00.000Z",
+    }),
+  };
+}
+
+// An established device updating from a build that never queued a synced chat again.
+async function establishPreFixDevice(service) {
+  await establishCursor(service);
+  localStorageStub.removeItem("syncCursors.chatMessages:user-harness");
+}
+
+function conversationMessageReads(cloud) {
+  return cloud.logFor("/api/conversations/messages").filter((call) => call.method === "GET").length;
+}
+
+test("chats an older build left synced with unsent messages go up once; complete ones stay put", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  await establishPreFixDevice(service);
+  const linkedPair = (...args) => seedSyncedChat(db, cloud, ...args);
+  const broken = linkedPair("client-broken", ["u:q1", "a:a1"], ["u:q1", "a:a1", "u:q2", "a:a2"]);
+  const complete = linkedPair("client-complete", ["u:q1", "a:a1"], ["u:q1", "a:a1"]);
+  // A stopped turn keeps an empty reply here that the cloud never takes, so this
+  // chat holds more messages than its complete copy.
+  const stopped = linkedPair(
+    "client-stopped",
+    ["u:q1", "u:q2", "a:a2"],
+    ["u:q1", "a:", "u:q2", "a:a2"]
+  );
+
+  await service.syncAll(true);
+
+  assertOneLiveCopy(cloud, "client-broken", ["q1", "a1", "q2", "a2"]);
+  assert.equal(db.getAgentConversation(broken.local.id).sync_status, "synced");
+  // Nothing missing means nothing sent: the copy and the chat's place in the list stay.
+  const writesTo = (cloudId) =>
+    cloud.log.filter(
+      (call) =>
+        call.method !== "GET" &&
+        (call.body?.id === cloudId || call.body?.conversation_id === cloudId)
+    );
+  for (const pair of [complete, stopped]) {
+    assert.deepEqual(writesTo(pair.cloudRow.id), []);
+    const row = db.getAgentConversation(pair.local.id);
+    assert.equal(row.sync_status, "synced");
+    assert.equal(row.updated_at, "2026-07-20T09:00:00.000Z");
+  }
+
+  // Once per account.
+  const readsAfterRepair = conversationMessageReads(cloud);
+  await service.syncAll(true);
+  assert.equal(conversationMessageReads(cloud), readsAfterRepair);
+});
+
+test("repair checks tied creation timestamps", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  await establishPreFixDevice(service);
+  // All 51 share a creation timestamp, so a timestamp-only 50-row page
+  // cannot visit every chat. Local chat timestamps have only second precision.
+  for (let index = 0; index < 51; index++) {
+    seedSyncedChat(db, cloud, `tied-${index}`, ["u:question"], ["u:question", "a:answer"]);
+  }
+
+  await service.syncAll(true);
+
+  for (let index = 0; index < 51; index++) {
+    assertOneLiveCopy(cloud, `tied-${index}`, ["question", "answer"]);
+  }
+  assert.equal(localStorageStub.getItem("syncCursors.chatMessages:user-harness"), "done");
+});
+
+test("a deleted cloud copy does not prevent repairing the remaining chats", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  await establishPreFixDevice(service);
+  const deleted = seedSyncedChat(db, cloud, "repair-deleted", ["u:gone"], ["u:gone"]);
+  cloud.deleteConversation(deleted.cloudRow.id);
+  seedSyncedChat(db, cloud, "repair-live", ["u:question"], ["u:question", "a:answer"]);
+
+  await service.syncAll(true);
+
+  assertOneLiveCopy(cloud, "repair-live", ["question", "answer"]);
+  assert.equal(db.getAgentConversation(deleted.local.id), null);
+  assert.equal(localStorageStub.getItem("syncCursors.chatMessages:user-harness"), "done");
+});
+
+test("repair does not finish or queue chats after its sign-in is replaced", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  await establishPreFixDevice(service);
+  const broken = seedSyncedChat(db, cloud, "repair-switch", ["u:q1"], ["u:q1", "a:a1"]);
+  const request = api.cloudApiRequest;
+  api.cloudApiRequest = async (options) => {
+    const result = await request(options);
+    if (options.method === "GET" && options.path.startsWith("/api/conversations/messages")) {
+      api.authState.generation += 1;
+    }
+    return result;
+  };
+
+  await service.syncAll(true);
+
+  assert.notEqual(localStorageStub.getItem("syncCursors.chatMessages:user-harness"), "done");
+  assert.deepEqual(cloudContents(cloud, "repair-switch"), ["q1"]);
+  assert.equal(db.getAgentConversation(broken.local.id).sync_status, "synced");
+});
+
+test("turning Backup off during repair defers its queued uploads until Backup returns", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  await establishPreFixDevice(service);
+  seedSyncedChat(db, cloud, "repair-opt-out", ["u:q1"], ["u:q1", "a:a1"]);
+  const request = api.cloudApiRequest;
+  api.cloudApiRequest = async (options) => {
+    const result = await request(options);
+    if (options.method === "GET" && options.path.startsWith("/api/conversations/messages")) {
+      localStorageStub.setItem("cloudBackupEnabled", "false");
+      api.cloudApiRequest = request;
+    }
+    return result;
+  };
+
+  await service.syncAll(true);
+  assert.deepEqual(cloudContents(cloud, "repair-opt-out"), ["q1"]);
+
+  enableSync();
+  await service.syncAll(true);
+  assertOneLiveCopy(cloud, "repair-opt-out", ["q1", "a1"]);
+});
+
+test("a failed check for unsent chat messages waits before walking the chats again", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  await establishPreFixDevice(service);
+  seedSyncedChat(db, cloud, "client-broken", ["u:q1"], ["u:q1", "a:a1"]);
+  const readsBefore = conversationMessageReads(cloud);
+  cloud.failNext(
+    (call) => call.method === "GET" && call.path.startsWith("/api/conversations/messages"),
+    { status: 503 }
+  );
+
+  await service.syncAll(true);
+  await service.syncAll(true);
+  assert.equal(conversationMessageReads(cloud), readsBefore + 1, "one attempt until the wait ends");
+  assert.deepEqual(cloudContents(cloud, "client-broken"), ["q1"]);
+
+  localStorageStub.setItem("syncCursors.chatMessages:user-harness", String(Date.now() - 1));
+  await service.syncAll(true);
+  assertOneLiveCopy(cloud, "client-broken", ["q1", "a1"]);
+});
+
+test("a pull queues a synced chat whose cloud copy is missing messages", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  await establishCursor(service);
+  // The repair has already run for this account, so only the pull can find the gap.
+  assert.equal(localStorageStub.getItem("syncCursors.chatMessages:user-harness"), "done");
+  const { local } = seedSyncedChat(
+    db,
+    cloud,
+    "client-cut-off",
+    ["u:q1", "a:a1"],
+    ["u:q1", "a:a1", "u:q2", "a:a2"]
+  );
+  localStorageStub.removeItem("lastSyncedAt.conversations");
+
+  await service.syncAll(true);
+  assert.equal(db.getAgentConversation(local.id).sync_status, "pending");
+  assert.deepEqual(cloudContents(cloud, "client-cut-off"), ["q1", "a1"]);
+
+  await service.syncAll(true);
+  assertOneLiveCopy(cloud, "client-cut-off", ["q1", "a1", "q2", "a2"]);
+});
+
 test("a chat linked to another copy, or deleted, keeps its identity", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
