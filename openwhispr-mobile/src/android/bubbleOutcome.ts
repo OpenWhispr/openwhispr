@@ -34,7 +34,9 @@ export function bubbleFailure(
   messages: PipelineMessages,
 ): BubbleFailure {
   const text = (error as Error | undefined)?.message ?? '';
-  if (noSpeech || text === messages.noSpeech) return { message: 'no-speech', keep: false };
+  // The recorder's own silence check, the pipeline's, or the server's 422 ("No speech detected").
+  if (noSpeech || text === messages.noSpeech || /no speech/i.test(text))
+    return { message: 'no-speech', keep: false };
   if (error instanceof UsageLimitError || (error as { status?: number })?.status === 429)
     return { message: 'out-of-words', keep: false };
   if (isAccountRequiredError(error)) return { message: 'sign-in', keep: false };

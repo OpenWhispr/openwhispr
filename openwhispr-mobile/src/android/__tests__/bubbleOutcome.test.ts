@@ -12,6 +12,7 @@ describe('bubbleFailure: each failure gets its own status tab', () => {
   it.each([
     ['silence the recorder flagged', new Error('anything'), true, 'no-speech', false],
     ['silence the pipeline found', new Error(messages.noSpeech), false, 'no-speech', false],
+    ['silence the server found', new Error('No speech detected'), false, 'no-speech', false],
     [
       'the weekly word limit',
       new WordLimitError('Weekly word limit reached'),
