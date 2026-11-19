@@ -105,6 +105,35 @@ test("Scribe dictation filters echoes only against hints accepted with the trans
   }
 });
 
+test("Scribe keeps dictation that uses only one accepted keyterm", async (t) => {
+  const { transcribe } = await setUp(t);
+  const phrase = "review the draft today";
+  const customDictionary = [phrase, "take one tablet by mouth daily"];
+  for (const workspace of [[], ["Qdrant"]]) {
+    for (const text of ["Review the draft.", "Review the draft today."]) {
+      const { result, submittedKeyterms } = await transcribe(
+        "elevenlabs",
+        text,
+        { space: [], workspace },
+        { customDictionary }
+      );
+      assert.deepEqual(submittedKeyterms, [[phrase, ...workspace]]);
+      assert.equal(result.text, text);
+      assert.equal(result.rawText, text);
+    }
+  }
+
+  const shared = { space: ["Los Angeles County"], workspace: [] };
+  const dictation = await transcribe("elevenlabs", "Los Angeles County.", shared, {
+    customDictionary: ["Los Angeles", "County"],
+  });
+  assert.equal(dictation.result.rawText, "Los Angeles County.");
+
+  await assert.rejects(transcribe("elevenlabs", "Piha, Biscuit.", shared), {
+    code: "DICTIONARY_ECHO",
+  });
+});
+
 test("Scribe receives exact-limit dictionary terms and drops longer originals", async (t) => {
   const { transcribe } = await setUp(t);
   const valid = "a".repeat(50);

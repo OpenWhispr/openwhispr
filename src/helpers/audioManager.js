@@ -149,6 +149,7 @@ import {
   analyzeDictionaryPromptFragment,
   dictionaryEchoError,
   matchesDictionaryPrompt,
+  isSingleKeytermUtterance,
   payloadSendsDictionaryBias,
   stripTrailingDictionaryEcho,
 } from "../utils/dictionaryEchoFilter.js";
@@ -581,12 +582,16 @@ const MANAGED_TRANSCRIPTION_SPEC = {
 };
 
 function filterScribeDictionaryEcho(text, acceptedKeyterms, settings) {
-  // Scribe can accept a second request without the hints it rejected on the first.
-  if (acceptedKeyterms.length === 0) return text;
+  if (acceptedKeyterms.length < 2 || isSingleKeytermUtterance(text, acceptedKeyterms)) return text;
   const sentPrompt = acceptedKeyterms.join(", ");
   const personal = new Set(sanitizeElevenLabsKeyterms(getPersonalDictionaryWords(settings)));
-  const personalPrompt = acceptedKeyterms.filter((term) => personal.has(term)).join(", ");
-  if (matchesDictionaryPrompt(text, sentPrompt) || matchesDictionaryPrompt(text, personalPrompt)) {
+  const personalKeyterms = acceptedKeyterms.filter((term) => personal.has(term));
+  if (
+    matchesDictionaryPrompt(text, sentPrompt) ||
+    (personalKeyterms.length > 1 &&
+      personalKeyterms.length < acceptedKeyterms.length &&
+      matchesDictionaryPrompt(text, personalKeyterms.join(", ")))
+  ) {
     throw dictionaryEchoError();
   }
   return stripTrailingDictionaryEcho(text, sentPrompt, acceptedKeyterms);

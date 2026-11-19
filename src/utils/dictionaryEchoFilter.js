@@ -124,6 +124,18 @@ export function matchesDictionaryPrompt(text, dictionaryPrompt) {
   return textComposition >= 0.9 && dictionaryUsage >= 0.7;
 }
 
+// A multiword keyterm can account for most of the dictionary's vocabulary
+// by itself. Saying all or part of that one phrase is ordinary dictation.
+export function isSingleKeytermUtterance(text, keyterms) {
+  const textWords = normalize(text).split(" ");
+  return keyterms.some((term) => {
+    const termWords = normalize(term).split(" ");
+    return (
+      textWords.length <= termWords.length && textWords.every((word) => termWords.includes(word))
+    );
+  });
+}
+
 export function isLikelyDictionaryPromptFragment(text, dictionaryPrompt) {
   return analyzeDictionaryPromptFragment(text, dictionaryPrompt).isPromptFragment;
 }
