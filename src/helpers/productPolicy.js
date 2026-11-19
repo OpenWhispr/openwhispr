@@ -32,7 +32,10 @@ function realtimeSelection(options = {}, provider = options.provider ?? "openai-
   if (provider === "local") return { mode: "local", provider };
   if (provider === "enterprise-realtime")
     return { mode: "enterprise", provider: options.managedContext?.provider };
-  const byok = options.mode === "byok" || ["tinfoil-realtime", "corti-realtime"].includes(provider);
+  // These use the saved key whatever the mode says (SAVED_KEY_PROVIDERS).
+  const byok =
+    options.mode === "byok" ||
+    ["tinfoil-realtime", "corti-realtime", "elevenlabs-realtime"].includes(provider);
   return {
     mode: byok ? "providers" : "openwhispr",
     provider: provider === "orukeet" ? "custom" : provider.replace(/-realtime$/, ""),

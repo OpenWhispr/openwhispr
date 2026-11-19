@@ -193,6 +193,13 @@ test("an empty or pause transcript represents silence", async () => {
   }
 });
 
+test("a spoken pause marker inside a sentence remains literal", async () => {
+  const result = await transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, async () =>
+    Response.json({ text: "press [pause] now" })
+  );
+  assert.equal(result.text, "press [pause] now");
+});
+
 test("malformed successful responses surface a provider error", async () => {
   for (const response of [new Response("<html>"), Response.json({}), Response.json({ text: 0 })]) {
     await assert.rejects(

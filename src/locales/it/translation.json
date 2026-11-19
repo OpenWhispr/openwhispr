@@ -980,7 +980,7 @@
       "docsLink": "Leggi la documentazione"
     },
     "elevenlabs": {
-      "keytermsNote": "Quando detti, le parole del tuo dizionario vengono inviate a ElevenLabs come termini chiave. ElevenLabs addebita il 20% in più per queste dettature."
+      "keytermsNote": "OpenWhispr invia a ElevenLabs i termini compatibili del tuo dizionario. ElevenLabs applica un sovrapprezzo del 20% quando vengono inclusi."
     }
   },
   "hooks": {
@@ -3281,6 +3281,7 @@
         "gemini_3_5_transcribe": "Riconoscimento vocale Gemini di Google",
         "elevenlabs_scribe_v3": "La trascrizione multilingue più accurata",
         "elevenlabs_scribe_v2": "Trascrizione multilingue accurata",
+        "elevenlabs_scribe_v3_live": "Trascrizione dal vivo per la registrazione di note",
         "gemini_3_5_transcribe_live": "Riconoscimento vocale in streaming in tempo reale",
         "corti_transcribe": "Trascrizione medica di livello clinico",
         "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",

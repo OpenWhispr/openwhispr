@@ -980,7 +980,7 @@
       "docsLink": "查看文档"
     },
     "elevenlabs": {
-      "keytermsNote": "听写时，词典中的词语会作为关键词发送给 ElevenLabs。ElevenLabs 对这类听写多收取 20% 的费用。"
+      "keytermsNote": "OpenWhispr 会将词典中符合条件的词条发送给 ElevenLabs。包含这些词条时，ElevenLabs 会加收 20% 的费用。"
     }
   },
   "hooks": {
@@ -3281,6 +3281,7 @@
         "gemini_3_5_transcribe": "Google Gemini 语音转文字",
         "elevenlabs_scribe_v3": "最精准的多语言转录",
         "elevenlabs_scribe_v2": "精准的多语言转录",
+        "elevenlabs_scribe_v3_live": "用于笔记录音的实时转录",
         "gemini_3_5_transcribe_live": "实时流式语音转文字",
         "corti_transcribe": "临床级医疗转录",
         "xai_grok_stt": "xAI 高精度语音识别",

@@ -69,7 +69,10 @@ import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { queueRetiredModelSwitch, recordRetiredModelSwitch } from "./retiredModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
-import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
+import {
+  isNoteRecordingOnlyTranscriptionModel,
+  isUploadOnlyTranscriptionModel,
+} from "../models/appTranscriptionProviders.js";
 import {
   acceptsUnlistedTranscriptionModel,
   getLocalTranscriptionModel,
@@ -181,9 +184,20 @@ function transcriptionProviderModels(
     modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
       ?.models ?? [];
   if (context === "meeting") return models.filter((model) => model.streaming);
+  const batchModels = models.filter(
+    (model) => !isNoteRecordingOnlyTranscriptionModel(providerId, model.id)
+  );
   if (context === "dictation")
-    return models.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
-  return models;
+    return batchModels.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
+  return batchModels;
+}
+
+// A provider can offer a separate Note Recording model that dictation never selects.
+function canInheritDictationProviderForMeeting(providerId: string): boolean {
+  return (
+    MEETING_TRANSCRIPTION_POLICY_CATALOG.byokProviders.includes(providerId) &&
+    transcriptionProviderModels(providerId, "dictation").some((model) => model.streaming)
+  );
 }
 
 function defaultTranscriptionModel(
@@ -2343,7 +2357,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (
       providerId !== s.cloudTranscriptionProvider &&
       providerId !== "openwhispr" &&
-      !meetingProviders.includes(providerId) &&
+      !canInheritDictationProviderForMeeting(providerId) &&
       (s.meetingTranscriptionMode === "openwhispr" || meetingProviders.includes(meetingProvider))
     ) {
       preserveInheritedMeetingSelection(s);
@@ -3014,8 +3028,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     );
     s.setTranscriptionMode(mode);
     const applyToMeeting =
-      mode !== "providers" ||
-      MEETING_TRANSCRIPTION_POLICY_CATALOG.byokProviders.includes(cloudTranscriptionProvider);
+      mode !== "providers" || canInheritDictationProviderForMeeting(cloudTranscriptionProvider);
     if (applyToMeeting) {
       s.setMeetingTranscriptionMode(mode);
       s.setMeetingUseLocalWhisper(useLocalWhisper);

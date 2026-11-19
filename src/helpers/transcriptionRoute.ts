@@ -34,6 +34,7 @@ import {
 } from "../services/transcriptionBaseUrl.ts";
 import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
 import { getRegistryData } from "../models/registryData.js";
+import { isNoteRecordingOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
 import { retiredReplacement } from "../models/modelLifecycle.js";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
@@ -275,7 +276,12 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "custom") return trimmed || "whisper-1";
   if (trimmed) {
     const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
-    if (catalogProvider?.models.some((model) => model.id === trimmed)) return trimmed;
+    // A Note Recording-only model has no batch endpoint, so it falls to the rules below.
+    if (
+      !isNoteRecordingOnlyTranscriptionModel(provider, trimmed) &&
+      catalogProvider?.models.some((model) => model.id === trimmed)
+    )
+      return trimmed;
     const replacement = retiredReplacement("transcriptionProviders", provider, trimmed);
     if (replacement) return replacement;
     const matchesProvider =
@@ -291,7 +297,11 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||
-      (provider === "elevenlabs" && trimmed.startsWith("scribe_")) ||
+      // The realtime models have no batch endpoint; resolving one falls back to scribe_v3.
+      (provider === "elevenlabs" &&
+        trimmed.startsWith("scribe_") &&
+        !trimmed.endsWith("_realtime") &&
+        !trimmed.endsWith("_live")) ||
       (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
       (provider === "assemblyai" &&
         (trimmed.startsWith("universal-") ||

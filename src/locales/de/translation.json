@@ -980,7 +980,7 @@
       "docsLink": "Zur Dokumentation"
     },
     "elevenlabs": {
-      "keytermsNote": "Beim Diktieren werden die Wörter aus Ihrem Wörterbuch als Schlüsselbegriffe an ElevenLabs gesendet. ElevenLabs berechnet für diese Diktate 20 % mehr."
+      "keytermsNote": "OpenWhispr sendet geeignete Wörter aus deinem Wörterbuch an ElevenLabs. Wenn solche Wörter mitgesendet werden, berechnet ElevenLabs 20 % mehr."
     }
   },
   "hooks": {
@@ -3379,6 +3379,7 @@
         "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
         "elevenlabs_scribe_v3": "Präziseste mehrsprachige Transkription",
         "elevenlabs_scribe_v2": "Präzise mehrsprachige Transkription",
+        "elevenlabs_scribe_v3_live": "Live-Transkription für Notizaufnahmen",
         "gemini_3_5_transcribe_live": "Spracherkennung per Echtzeit-Streaming",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",

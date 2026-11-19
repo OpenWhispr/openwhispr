@@ -959,7 +959,7 @@
       "docsLink": "Ver a documentação"
     },
     "elevenlabs": {
-      "keytermsNote": "Ao ditar, as palavras do seu dicionário são enviadas à ElevenLabs como termos-chave. A ElevenLabs cobra 20% a mais por esses ditados."
+      "keytermsNote": "O OpenWhispr envia à ElevenLabs os termos compatíveis do seu dicionário. A ElevenLabs cobra 20% a mais quando esses termos são incluídos."
     }
   },
   "hooks": {
@@ -3266,6 +3266,7 @@
         "gemini_3_5_transcribe": "Fala para texto Gemini do Google",
         "elevenlabs_scribe_v3": "A transcrição multilíngue mais precisa",
         "elevenlabs_scribe_v2": "Transcrição multilíngue precisa",
+        "elevenlabs_scribe_v3_live": "Transcrição ao vivo para gravação de notas",
         "gemini_3_5_transcribe_live": "Fala para texto em streaming em tempo real",
         "corti_transcribe": "Transcrição médica de nível clínico",
         "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI",

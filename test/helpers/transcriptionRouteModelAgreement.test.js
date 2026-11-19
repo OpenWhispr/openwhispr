@@ -2,6 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { registryData: registry } = require("../../src/models/registryData.js");
+const {
+  isNoteRecordingOnlyTranscriptionModel,
+} = require("../../src/models/appTranscriptionProviders.js");
 const load = () => import("../../src/helpers/transcriptionRoute.ts");
 
 // Every model the picker can write must survive a round trip through the resolver, or a user
@@ -29,7 +32,10 @@ test("every shipping registry model survives resolveByokModel", async () => {
     const provider = registry.transcriptionProviders.find((p) => p.id === providerId);
     assert.ok(provider, `registry is missing provider ${providerId}`);
 
-    for (const model of provider.models) {
+    // A Note Recording-only model never reaches a batch request.
+    for (const model of provider.models.filter(
+      (m) => !isNoteRecordingOnlyTranscriptionModel(providerId, m.id)
+    )) {
       assert.equal(
         resolveByokModel(providerId, model.id),
         model.id,
@@ -90,6 +96,13 @@ test("a model belonging to another provider degrades to the provider default", a
     "scribe_v2",
     "a saved v2 selection keeps working"
   );
+  for (const realtime of ["scribe_v3_live", "scribe_v2_realtime"]) {
+    assert.equal(
+      resolveByokModel("elevenlabs", realtime),
+      "scribe_v3",
+      "a realtime model has no batch endpoint"
+    );
+  }
 });
 
 // OpenRouter brokers batch HTTP transcription only — it has no realtime socket.

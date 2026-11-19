@@ -12,6 +12,7 @@ const {
 // xi-api-key and takes model_id / language_code, so it is proxied through main.
 const ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text";
 const DEFAULT_MODEL = "scribe_v3";
+const SILENCE_MARKER = "[pause]";
 
 // ElevenLabs lists Filipino rather than Tagalog, so the app's "tl" goes out as "fil".
 const LANGUAGE_CODES = { tl: "fil" };
@@ -113,10 +114,10 @@ async function transcribeWithElevenLabs(
   // Scribe can answer silence with "[pause]" instead of an empty string.
   const trimmed = data.text.trim();
   return {
-    text: !trimmed || trimmed === "[pause]" ? "" : data.text,
+    text: !trimmed || trimmed === SILENCE_MARKER ? "" : data.text,
     model: resolvedModel,
     acceptedKeyterms: terms,
   };
 }
 
-module.exports = { transcribeWithElevenLabs, sanitizeKeyterms, ELEVENLABS_STT_URL };
+module.exports = { transcribeWithElevenLabs, sanitizeKeyterms, ELEVENLABS_STT_URL, SILENCE_MARKER };

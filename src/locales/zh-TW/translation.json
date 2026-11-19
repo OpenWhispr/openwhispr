@@ -980,7 +980,7 @@
       "docsLink": "查看文件"
     },
     "elevenlabs": {
-      "keytermsNote": "聽寫時，字典中的詞語會作為關鍵詞傳送給 ElevenLabs。ElevenLabs 對這類聽寫多收取 20% 的費用。"
+      "keytermsNote": "OpenWhispr 會將詞典中符合條件的詞條傳送給 ElevenLabs。包含這些詞條時，ElevenLabs 會加收 20% 的費用。"
     }
   },
   "hooks": {
@@ -3281,6 +3281,7 @@
         "gemini_3_5_transcribe": "Google Gemini 語音轉文字",
         "elevenlabs_scribe_v3": "最精準的多語言轉錄",
         "elevenlabs_scribe_v2": "精準的多語言轉錄",
+        "elevenlabs_scribe_v3_live": "用於筆記錄音的即時轉錄",
         "gemini_3_5_transcribe_live": "即時串流語音轉文字",
         "corti_transcribe": "臨床級醫療轉錄",
         "xai_grok_stt": "xAI 高精度語音辨識",

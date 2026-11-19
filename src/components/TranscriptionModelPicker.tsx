@@ -18,6 +18,7 @@ import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownlo
 import {
   getDictationTranscriptionProviders,
   getTranscriptionProviders,
+  getUploadTranscriptionProviders,
   getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
@@ -672,7 +673,7 @@ export default function TranscriptionModelPicker({
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
     if (transcriptionContext !== "upload") return getDictationTranscriptionProviders();
-    return getTranscriptionProviders().filter(
+    return getUploadTranscriptionProviders().filter(
       (provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
@@ -1798,7 +1799,7 @@ export default function TranscriptionModelPicker({
                       </p>
                     )}
                     {displayedCloudProvider === "elevenlabs" &&
-                      transcriptionContext === "dictation" && (
+                      transcriptionContext !== "upload" && (
                         <p className="text-xs text-muted-foreground/70">
                           {t("transcription.elevenlabs.keytermsNote")}
                         </p>

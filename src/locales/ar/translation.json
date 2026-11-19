@@ -283,8 +283,9 @@
         "groq_whisper_large_v3_turbo": "أسرع من الوقت الفعلي بـ216 ضعفًا",
         "mistral_voxtral_mini_latest": "تفريغ سريع متعدد اللغات",
         "gemini_3_5_transcribe": "تحويل الكلام إلى نص من Google Gemini",
-        "elevenlabs_scribe_v3": "أدق تفريغ متعدد اللغات",
-        "elevenlabs_scribe_v2": "تفريغ دقيق متعدد اللغات",
+        "elevenlabs_scribe_v3": "أدق نسخ متعدد اللغات",
+        "elevenlabs_scribe_v2": "نسخ دقيق متعدد اللغات",
+        "elevenlabs_scribe_v3_live": "نسخ مباشر لتسجيل الملاحظات",
         "gemini_3_5_transcribe_live": "تحويل الكلام إلى نص بالبث في الوقت الفعلي",
         "corti_transcribe": "تفريغ طبي بدرجة سريرية",
         "xai_grok_stt": "تعرف على الكلام بدقة عالية من xAI",
@@ -6480,7 +6481,7 @@
       "docsLink": "قراءة الوثائق"
     },
     "elevenlabs": {
-      "keytermsNote": "عند الإملاء، تُرسَل كلمات قاموسك إلى ElevenLabs ككلمات مفتاحية. يتقاضى ElevenLabs رسومًا أعلى بنسبة 20% مقابل هذا الإملاء."
+      "keytermsNote": "يُرسل OpenWhispr الكلمات المؤهلة من قاموسك إلى ElevenLabs. وتزيد رسوم ElevenLabs بنسبة 20٪ عند تضمين هذه الكلمات."
     }
   },
   "cleanupPrompt": "التنظيف",
