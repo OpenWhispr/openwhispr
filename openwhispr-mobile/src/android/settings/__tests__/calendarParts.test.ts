@@ -23,9 +23,7 @@ it('20.2: says how many calendars are on and when it synced', () => {
   expect(accountSummary(account(1), [calendar(1), calendar(0)], t)).toBe(
     'calendarsOn:{"on":1,"total":2} · syncedAgo:{"when":"2 min ago"}',
   );
-  expect(accountSummary(account(1, 'connected', { lastSyncAt: null }), [], t)).toBe(
-    'notSyncedYet',
-  );
+  expect(accountSummary(account(1, 'connected', { lastSyncAt: null }), [], t)).toBe('notSyncedYet');
   expect(accountSummary(account(2, 'needs_reconnect'), [calendar(1)], t)).toBe('reconnectToSee');
 });
 
