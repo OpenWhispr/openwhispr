@@ -942,6 +942,8 @@ export interface Workspace {
   is_default: boolean;
   // Some account's default workspace, the caller's or another member's.
   is_account_default: boolean;
+  // Absent on API responses that predate workspace icons.
+  icon_url?: string | null;
 }
 
 export interface OwnedMemberContent {
