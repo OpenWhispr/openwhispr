@@ -4,6 +4,7 @@ import {
   TOKEN_LIMITS,
   buildApiUrl,
   isGeminiOpenAIBase,
+  normalizeBaseUrl,
 } from "../../../config/constants";
 import { getCloudModel, getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
@@ -40,6 +41,26 @@ const PROBE_TIMEOUT_MS = 2_000;
 
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
 const probedBases = new Set<string>();
+
+// A Custom base typed without /v1 gets one appended (ensureV1Suffix), which is
+// right for a bare server origin but wrong for a gateway that serves the OpenAI
+// API under a path of its own (https://gateway.example/openai). When the /v1
+// form 404s, the request falls back once to the base exactly as typed — same
+// scheme and host, so it was already validated — and the base that answered is
+// remembered for the rest of the session.
+const typedBaseByResolvedBase = new Map<string, string>();
+
+function getCustomBaseCandidates(
+  provider: string,
+  configuredBaseUrl: string | undefined,
+  resolvedBase: string
+): string[] {
+  if (provider !== "custom") return [resolvedBase];
+  const typedBase = normalizeBaseUrl(configuredBaseUrl);
+  if (!typedBase || typedBase === resolvedBase) return [resolvedBase];
+  if (typedBaseByResolvedBase.get(resolvedBase) === typedBase) return [typedBase];
+  return [resolvedBase, typedBase];
+}
 
 function readStoredPreference(base: string): "responses" | "chat" | undefined {
   if (endpointPreferenceCache.has(base)) {
@@ -204,12 +225,23 @@ export const openaiProvider: InferenceProvider = {
       : resolveConfiguredOpenAIBase(resolvedProvider, config.baseUrl);
     const dialect = detectEndpointDialect(openAiBase);
     // These endpoints speak Chat Completions only — no /responses probe needed.
-    let endpointCandidates: Array<{ url: string; type: "responses" | "chat" }>;
-    if (isOpenRouter || dialect || isGeminiOpenAIBase(openAiBase)) {
-      endpointCandidates = [{ url: buildApiUrl(openAiBase, "/chat/completions"), type: "chat" }];
-    } else {
-      await detectServerType(openAiBase);
-      endpointCandidates = getEndpointCandidates(openAiBase);
+    const chatOnly = isOpenRouter || !!dialect || isGeminiOpenAIBase(openAiBase);
+    const endpointCandidates: Array<{ url: string; type: "responses" | "chat"; base: string }> = [];
+    for (const base of getCustomBaseCandidates(resolvedProvider, config.baseUrl, openAiBase)) {
+      if (chatOnly) {
+        endpointCandidates.push({
+          url: buildApiUrl(base, "/chat/completions"),
+          type: "chat",
+          base,
+        });
+      } else {
+        // Only the primary base is probed; a typed-base fallback is reached
+        // only after a 404 and must not cost bare-origin users a request.
+        if (base === openAiBase) await detectServerType(base);
+        for (const candidate of getEndpointCandidates(base)) {
+          endpointCandidates.push({ ...candidate, base });
+        }
+      }
     }
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
     // Only the user's own endpoint is self-hosted; isCustomEndpoint also covers OpenRouter.
@@ -249,8 +281,12 @@ export const openaiProvider: InferenceProvider = {
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
       let lastRetryableError: Error | null = null;
+      // When the typed-base fallback also 404s, the first base's 404 (e.g. an
+      // unknown model) is the more useful error to surface.
+      let resolvedBaseNotFound: Error | null = null;
 
-      for (const { url: endpoint, type } of endpointCandidates) {
+      for (const [index, { url: endpoint, type, base }] of endpointCandidates.entries()) {
+        const nextCandidate = endpointCandidates[index + 1];
         const controller = new AbortController();
         const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
@@ -330,7 +366,7 @@ export const openaiProvider: InferenceProvider = {
                 body: errorData,
                 headers: res.headers,
               });
-              rememberPreference(openAiBase, "chat");
+              rememberPreference(base, "chat");
               logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
                 attemptedEndpoint: endpoint,
                 error: redactProviderBody(errorMessage),
@@ -338,15 +374,30 @@ export const openaiProvider: InferenceProvider = {
               continue;
             }
 
-            throw providerHttpError({
+            const httpError = providerHttpError({
               ...errorContext,
               status: res.status,
               body: errorData,
               headers: res.headers,
             });
+
+            if (res.status === 404 && nextCandidate && nextCandidate.base !== base) {
+              resolvedBaseNotFound ??= httpError;
+              lastError = httpError;
+              logger.logReasoning("OPENAI_BASE_FALLBACK", {
+                attemptedEndpoint: endpoint,
+                nextBase: nextCandidate.base,
+                error: redactProviderBody(errorMessage),
+              });
+              continue;
+            }
+
+            if (res.status === 404 && resolvedBaseNotFound) throw resolvedBaseNotFound;
+            throw httpError;
           }
 
-          rememberPreference(openAiBase, type);
+          rememberPreference(base, type);
+          if (base !== openAiBase) typedBaseByResolvedBase.set(openAiBase, base);
           readingBody = true;
           return await res.json();
         } catch (error) {
