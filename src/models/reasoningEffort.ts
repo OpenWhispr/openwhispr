@@ -28,7 +28,7 @@ export function getReasoningEffortCapability(
   if (OPEN_ENDPOINT_PROVIDERS.has(provider)) {
     const hostOptions = HOST_OPTIONS.find(({ host }) => matchesHost(endpoint, host))?.options;
     if (hostOptions) return { options: hostOptions };
-    const family = getModelFamilyConstraints(model);
+    const family = getModelFamilyConstraints(model, provider === "custom" ? endpoint : undefined);
     if (family?.omitReasoningParams) return null;
     // A Custom turn streams through the AI SDK's Chat Completions options,
     // which take no "max"; OpenRouter's own reasoning object does.
