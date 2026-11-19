@@ -11,5 +11,5 @@ android {
 }
 dependencies {
   // AuthorizationClient: Google's supported Android OAuth path (custom URI redirects are refused).
-  implementation 'com.google.android.gms:play-services-auth:21.3.0'
+  implementation 'com.google.android.gms:play-services-auth:22.0.0'
 }
