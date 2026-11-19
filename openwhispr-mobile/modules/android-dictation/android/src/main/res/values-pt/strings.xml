@@ -46,8 +46,5 @@
   <string name="ow_menu_sign_in_to_use">Entre para usar</string>
   <string name="ow_menu_unavailable">Indisponível</string>
   <string name="ow_menu_opened">Menu aberto</string>
-  <string name="ow_toast_written">Escrito pelo assistente</string>
-  <string name="ow_toast_translated">Traduzido para %1$s</string>
-  <string name="ow_toast_edited">Editado · seleção substituída</string>
   <string name="ow_bubble_hint">Toque para ditar · Segure para mais</string>
 </resources>

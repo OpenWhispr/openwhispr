@@ -46,8 +46,5 @@
   <string name="ow_menu_sign_in_to_use">登录后使用</string>
   <string name="ow_menu_unavailable">不可用</string>
   <string name="ow_menu_opened">菜单已打开</string>
-  <string name="ow_toast_written">由助手撰写</string>
-  <string name="ow_toast_translated">已译成%1$s</string>
-  <string name="ow_toast_edited">已编辑 · 所选内容已替换</string>
   <string name="ow_bubble_hint">轻点听写 · 长按更多</string>
 </resources>

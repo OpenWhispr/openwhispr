@@ -56,9 +56,9 @@ object BubbleMenuPolicy {
   const val HINT_TIMES = 3
   /** "Still writing…" only appears when writing is slow. */
   const val STILL_WRITING_AFTER_MS = 3000L
-  /** How long the bottom toast stays up. */
+  /** How long the bottom toast ("Bubble hidden for 15 minutes · Undo") stays up. */
   const val TOAST_HOLD_MS = 4000L
-  /** How long edited words stay highlighted before the Undo toast rises. */
+  /** How long edited words stay highlighted (selected) before the caret moves after them. */
   const val EDIT_HIGHLIGHT_MS = 1200L
 
   /**

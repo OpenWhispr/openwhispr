@@ -140,7 +140,7 @@ export function startBubblePipeline(): void {
       } else {
         useBubbleResult.setState({ error: '' });
         usePracticeSession.getState().complete(prepared.mode);
-        void native.setStatus('success', { mode: prepared.mode, language: prepared.target });
+        void native.setStatus('success');
       }
     } catch (error) {
       if (stopped(current)) return;

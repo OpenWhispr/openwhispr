@@ -27,7 +27,7 @@ import kotlin.math.abs
  * writing happen inside the bubble's own circle, and the words are pasted at the caret. Holding the
  * bubble opens a menu (Assistant, Translate, Edit selection) drawn in the bubble's own window, which
  * never takes focus, so the text box keeps its caret and selection. Anything the bubble has to say
- * shows in a separate status tab beside it; results of the menu modes offer Undo in a bottom toast.
+ * shows in a separate status tab beside it.
  */
 class DictationService : Service() {
   companion object {
@@ -840,7 +840,7 @@ class DictationService : Service() {
   }
 
   /**
-   * Set by the app: processing; success (with the mode it ran in, which decides the Undo toast);
+   * Set by the app: processing; success (the ✓);
    * retry / retry-kept with the reason the tab names; recover (the text is kept in the app);
    * copied (typing access is off, the words are on the clipboard).
    */
@@ -849,7 +849,7 @@ class DictationService : Service() {
     retryKept = value == "retry-kept"
     when (value) {
       "processing" -> setState(BubbleState.PROCESSING)
-      "success" -> succeed(BubbleMode.fromWire(options["mode"] as? String), options["language"] as? String)
+      "success" -> succeed()
       "retry", "retry-kept", "error" -> fail(StatusMessage.fromWire(options["message"] as? String) ?: StatusMessage.FAILED)
       "recover", "copied" -> {
         setState(BubbleState.RECOVER)
@@ -861,25 +861,17 @@ class DictationService : Service() {
       else -> setState(BubbleState.READY)
     }
   }
-  /** Paste first: the ✓ draws once the words are in the field, then the glass eases back to the icon. */
-  private fun succeed(ran: BubbleMode, language: String?) {
+  /**
+   * Paste first: the ✓ draws once the words are in the field, then the glass eases back to the icon.
+   * Every mode ends this way; the menu modes show no toast (Josh, 19 Nov: they got in the way).
+   */
+  private fun succeed() {
     tab.hide()
     face?.show(BubbleFace.Look.DONE)
     face?.performHapticFeedback(HapticFeedbackConstants.CONFIRM.takeIf { Build.VERSION.SDK_INT >= 30 } ?: HapticFeedbackConstants.CLOCK_TICK)
     mode = BubbleMode.DICTATE
     setState(BubbleState.READY)
     handler.removeCallbacks(settleDone); handler.postDelayed(settleDone, 400)
-    val text = when (ran) {
-      BubbleMode.DICTATE -> return
-      BubbleMode.ASSISTANT -> getString(R.string.ow_toast_written)
-      BubbleMode.TRANSLATE -> getString(R.string.ow_toast_translated, BubbleMenuPolicy.translateTarget(language ?: preferences.getString("translateTarget", null)))
-      BubbleMode.EDIT -> getString(R.string.ow_toast_edited)
-    }
-    val showToast = Runnable {
-      toast.show(text, getString(R.string.ow_bubble_undo), toastBottom()) { InsertionService.instance?.undo() }
-    }
-    // Edited words stay highlighted for 1.2 s before the toast rises.
-    if (ran == BubbleMode.EDIT) handler.postDelayed(showToast, BubbleMenuPolicy.EDIT_HIGHLIGHT_MS) else showToast.run()
   }
   override fun onDestroy() {
     handler.removeCallbacksAndMessages(null); snap?.cancel(); shrinking?.cancel(); recorder?.close(); recorder = null

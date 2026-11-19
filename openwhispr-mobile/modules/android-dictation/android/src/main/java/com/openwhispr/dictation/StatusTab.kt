@@ -224,8 +224,8 @@ class StatusTab(private val context: Context, private val windows: WindowManager
 }
 
 /**
- * The dark toast at the bottom ("Bubble hidden for 15 minutes · Undo", "Edited · selection replaced
- * · Undo"). It rises 200 ms, stays 4 s and sinks 200 ms; Undo runs its action and closes it.
+ * The dark toast at the bottom ("Bubble hidden for 15 minutes · Undo"). It rises 200 ms, stays 4 s
+ * and sinks 200 ms; Undo runs its action and closes it.
  */
 class BottomToast(private val context: Context, private val windows: WindowManager, private val font: Typeface) {
   private val handler = Handler(Looper.getMainLooper())

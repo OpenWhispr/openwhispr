@@ -52,7 +52,7 @@ class InsertionService : AccessibilityService() {
     return BubblePolicy.searchField(labels, classes)
   }
   override fun onInterrupt() { clearTarget() }
-  override fun onDestroy() { handler.removeCallbacks(typingCheck); clearTarget(); dropUndo(); instance = null; DictationService.instance?.onTyping(false, null); DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
+  override fun onDestroy() { handler.removeCallbacks(typingCheck); clearTarget(); instance = null; DictationService.instance?.onTyping(false, null); DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
   /** Moves the caret after edited words still highlighted from [insert], unless the user moved on. */
   private fun settleHighlight(start: Int, end: Int) {
     val node = focusedField() ?: return
@@ -89,31 +89,6 @@ class InsertionService : AccessibilityService() {
     } finally { node.recycle() }
   }
 
-  /** What the last paste changed, so Undo can put the field back exactly as it was. */
-  private data class Undo(val node: AccessibilityNodeInfo, val before: Field, val after: String)
-  private var lastUndo: Undo? = null
-  private fun dropUndo() { lastUndo?.node?.recycle(); lastUndo = null }
-
-  /**
-   * Puts the field back as it was before the last paste: its text and its caret or selection. Only
-   * while the same field is focused and still holds exactly what the paste left; anything typed since
-   * would be lost, so then nothing changes and this returns false.
-   */
-  fun undo(): Boolean {
-    val record = lastUndo ?: return false
-    lastUndo = null
-    val current = focusedField()
-    try {
-      if (current == null || current != record.node || !current.isEditable) return false
-      if (readField(current).text != record.after) return false
-      val restored = current.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
-        putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, record.before.text)
-      })
-      if (restored) select(current, record.before.start, record.before.end)
-      return restored
-    } finally { current?.recycle(); record.node.recycle() }
-  }
-
   private fun select(node: AccessibilityNodeInfo, start: Int, end: Int) =
     node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, Bundle().apply {
       putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, start)
@@ -125,7 +100,6 @@ class InsertionService : AccessibilityService() {
    * selected for 1.2 s, the field's own highlight showing what changed, then the caret moves after them.
    */
   fun insert(text: String, highlight: Boolean = false, complete: (Boolean) -> Unit) {
-    dropUndo()
     val captured = target ?: return complete(false)
     val current = focusedField()
     if (current == null) { clearTarget(); return complete(false) }
@@ -149,11 +123,8 @@ class InsertionService : AccessibilityService() {
     handler.postDelayed({
       val after = runCatching { if (current.refresh()) readField(current).text else null }.getOrNull()
       val verified = after != null && InsertionPlan.landed(currentText, after, text)
-      if (verified) {
-        @Suppress("DEPRECATION")
-        lastUndo = Undo(AccessibilityNodeInfo.obtain(current), Field(currentText, start, end), after!!)
-        if (highlight && wordsStart >= 0) handler.postDelayed({ settleHighlight(wordsStart, plan.cursor) }, BubbleMenuPolicy.EDIT_HIGHLIGHT_MS)
-      }
+      if (verified && highlight && wordsStart >= 0)
+        handler.postDelayed({ settleHighlight(wordsStart, plan.cursor) }, BubbleMenuPolicy.EDIT_HIGHLIGHT_MS)
       current.recycle(); complete(verified)
     }, 150)
   }

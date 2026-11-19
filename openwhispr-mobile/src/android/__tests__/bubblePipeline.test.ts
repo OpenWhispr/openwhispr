@@ -105,10 +105,7 @@ it('a tap dictates, even over highlighted text', async () => {
   mockListeners.onRecording(audio);
   await flush();
   expect(native.insert).toHaveBeenCalledWith('Tomorrow at 4 works.', { highlight: false });
-  expect(native.setStatus).toHaveBeenLastCalledWith('success', {
-    mode: 'dictate',
-    language: undefined,
-  });
+  expect(native.setStatus).toHaveBeenLastCalledWith('success');
   expect(FileSystem.deleteAsync).toHaveBeenCalledWith(audio.uri, { idempotent: true });
 });
 
@@ -131,12 +128,9 @@ it.each([
   mockListeners.onRecording(audio);
   await flush();
   expect(createAndroidJob).toHaveBeenCalledWith(expected, 'Spanish', selection);
-  // Only an edit keeps its new words highlighted; the result names its mode for the Undo toast.
+  // Only an edit keeps its new words highlighted.
   expect(native.insert).toHaveBeenCalledWith('Done.', { highlight: expected === 'edit' });
-  expect(native.setStatus).toHaveBeenLastCalledWith('success', {
-    mode: expected,
-    language: 'Spanish',
-  });
+  expect(native.setStatus).toHaveBeenLastCalledWith('success');
 });
 
 it('a retried take runs in the mode it was recorded in', async () => {
@@ -199,10 +193,7 @@ it('keeps a failed recording so Retry sends the same audio again, then deletes i
   await flush();
   expect(jest.mocked(processAndroidAudio).mock.calls[1][0]).toBe(audio);
   expect(native.insert).toHaveBeenCalledWith('Hello there.', { highlight: false });
-  expect(native.setStatus).toHaveBeenLastCalledWith('success', {
-    mode: 'dictate',
-    language: undefined,
-  });
+  expect(native.setStatus).toHaveBeenLastCalledWith('success');
   expect(FileSystem.deleteAsync).toHaveBeenCalledWith(audio.uri, { idempotent: true });
 });
 

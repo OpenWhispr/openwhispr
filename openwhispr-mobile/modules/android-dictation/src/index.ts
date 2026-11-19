@@ -56,10 +56,6 @@ export type BubbleMessage =
 export interface BubbleStatusOptions {
   /** retry / retry-kept: what the status tab says. */
   message?: BubbleMessage;
-  /** success: the mode it ran in, which decides the Undo toast (none for plain dictation). */
-  mode?: 'dictate' | 'translate' | 'write' | 'edit';
-  /** success in translate mode: the language the toast names. */
-  language?: string;
 }
 export interface BubbleMenuContext {
   /** "Into {target}" under Translate (Settings › Translation). */
