@@ -1,13 +1,6 @@
 import { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  PlatformColor,
-  Pressable,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from 'react-native';
+import { iosColor } from '@/config/colors';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 
@@ -76,7 +69,7 @@ export function SpeakerRenameSheet({
             autoFocus
             selectTextOnFocus
             placeholder="Speaker name"
-            placeholderTextColor={PlatformColor('tertiaryLabel') as unknown as string}
+            placeholderTextColor={iosColor('tertiaryLabel')}
             className="h-12 rounded-lg border border-separator bg-secondarySystemBackground px-3 text-base text-label"
             style={{ fontFamily: AppFont.regular }}
             testID="speaker-rename-input"
