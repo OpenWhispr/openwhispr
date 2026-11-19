@@ -285,6 +285,15 @@ function folderPlacedNoteScope(
   return folderPlaced;
 }
 
+// A pulled folder's server parent, applied once the page is stored
+// (applyCloudFolderParents), guarded by the row as it was stored.
+interface FolderParentLink {
+  cloudId: string;
+  parentCloudId: string | null;
+  snapshot: FolderPushSnapshot;
+  adoptIfPending: boolean;
+}
+
 interface LocalToCloudFolderMap {
   localToCloud: Map<number, string>;
   // Cloud-backed folders with unpushed changes: their migration PATCH failed
@@ -2529,8 +2538,18 @@ export class SyncService {
     const writes = retry?.writes ?? (await this.placementBackfillWrites(authGeneration));
     if (!writes) return;
     const failed: PlacementBackfillWrite[] = [];
+    const parentLinks: FolderParentLink[] = [];
     for (const write of writes) {
-      if (!(await this.writeBackfillPlacement(write, authGeneration))) failed.push(write);
+      if (!(await this.writeBackfillPlacement(write, authGeneration, parentLinks))) {
+        failed.push(write);
+      }
+    }
+    // A subfolder followed before its parent couldn't nest yet; once both are
+    // in their Private, it nests again.
+    if (parentLinks.length > 0) {
+      stopIfPullStale(
+        await window.electronAPI.applyCloudFolderParents?.(parentLinks, authGeneration)
+      );
     }
     if (!this.canSync()) return;
     if (failed.length === 0) {
@@ -2602,7 +2621,8 @@ export class SyncService {
   // final. A placement the server already had is kept, and this device follows it.
   private async writeBackfillPlacement(
     write: PlacementBackfillWrite,
-    authGeneration: number
+    authGeneration: number,
+    parentLinks: FolderParentLink[]
   ): Promise<boolean> {
     const body = { private_workspace_id: write.workspaceId, placement_backfill: true } as const;
     try {
@@ -2611,7 +2631,7 @@ export class SyncService {
           ? await FoldersService.update(write.cloudId, body, authGeneration)
           : await NotesService.update(write.cloudId, body, authGeneration);
       if (cloud.private_workspace_id && cloud.private_workspace_id !== write.workspaceId) {
-        await this.followCloudPlacement(write, cloud, authGeneration);
+        await this.followCloudPlacement(write, cloud, authGeneration, parentLinks);
       }
       return true;
     } catch (err) {
@@ -2628,10 +2648,13 @@ export class SyncService {
 
   // Files the local copy in the Private of the workspace the cloud copy names, as a pull would.
   // A copy edited since it was read is left to the pull, which raises the conflict.
+  // A followed folder's server parent is kept for once the batch is done
+  // (parentLinks), when a parent followed later lands beside it.
   private async followCloudPlacement(
     write: PlacementBackfillWrite,
     cloud: CloudNote | Awaited<ReturnType<typeof FoldersService.update>>,
-    authGeneration: number
+    authGeneration: number,
+    parentLinks: FolderParentLink[]
   ): Promise<void> {
     const local =
       write.kind === "folder"
@@ -2642,13 +2665,21 @@ export class SyncService {
     const space = await this.personalSpaceForCloudRow(cloud, undefined, ctx, authGeneration);
     if (!space) return;
     if (write.kind === "folder") {
-      stopIfPullStale(
-        await window.electronAPI.upsertFolderFromCloud?.(
-          cloud as unknown as Record<string, unknown>,
-          space.id,
-          authGeneration
-        )
+      const folder = cloud as Awaited<ReturnType<typeof FoldersService.update>>;
+      const stored = await window.electronAPI.upsertFolderFromCloud?.(
+        folder as unknown as Record<string, unknown>,
+        space.id,
+        authGeneration
       );
+      stopIfPullStale(stored);
+      if (stored?.cloud_id && folder.parent_folder_id !== undefined) {
+        parentLinks.push({
+          cloudId: stored.cloud_id,
+          parentCloudId: folder.parent_folder_id,
+          snapshot: stored,
+          adoptIfPending: false,
+        });
+      }
       return;
     }
     const note = cloud as CloudNote;
@@ -3547,12 +3578,7 @@ export class SyncService {
       // Parked or failed rows must retry: they hold the cursor back (and fail
       // a backfill) so one bad row never drops the rest of the delta.
       let parkedRows = 0;
-      const parentLinks: Array<{
-        cloudId: string;
-        parentCloudId: string | null;
-        snapshot: FolderPushSnapshot;
-        adoptIfPending: boolean;
-      }> = [];
+      const parentLinks: FolderParentLink[] = [];
       const addParentLink = (
         folder: FolderItem | null | undefined,
         parentCloudId: string | null | undefined

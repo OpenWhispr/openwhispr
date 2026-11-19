@@ -1620,6 +1620,41 @@ test("upsertFolderFromCloud un-nests a folder the pull moves to another space", 
   assert.deepEqual(db.deleteFolder(parent.id).folderIds, [parent.id]);
 });
 
+test("upsertFolderFromCloud keeps a subfolder's parent when both moved to the same space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const parent = db.createFolder("Client A", team.id).folder;
+  const child = db.createFolder("Q1", team.id, parent.id).folder;
+  const stray = db.createFolder("Q2", team.id, parent.id).folder;
+  db.markFolderSynced(parent.id, "cloud-client-a");
+  db.markFolderSynced(child.id, "cloud-q1");
+  db.markFolderSynced(stray.id, "cloud-q2");
+  const pulled = (folder, name) => ({
+    client_folder_id: folder.client_folder_id,
+    id: `cloud-${name.toLowerCase().replace(" ", "-")}`,
+    name,
+    sort_order: 1,
+    parent_folder_id: "cloud-client-a",
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-02T00:00:00.000Z",
+  });
+
+  // The parent hasn't moved yet: the child can't keep it across spaces.
+  const early = db.upsertFolderFromCloud(pulled(stray, "Q2"), privateId);
+  assert.equal(early.space_id, privateId);
+  assert.equal(early.parent_folder_id, null);
+
+  db.upsertFolderFromCloud(
+    { ...pulled(parent, "Client A"), parent_folder_id: null, id: "cloud-client-a" },
+    privateId
+  );
+  const moved = db.upsertFolderFromCloud(pulled(child, "Q1"), privateId);
+  assert.equal(moved.space_id, privateId);
+  assert.equal(moved.parent_folder_id, parent.id, "it moved with its parent");
+});
+
 test("upsertFolderFromCloud never takes over a namesake that is another cloud folder", (t) => {
   const db = createFreshDeviceDb(t);
   if (!db) return;

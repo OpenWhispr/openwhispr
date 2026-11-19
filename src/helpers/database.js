@@ -12445,6 +12445,12 @@ class DatabaseManager {
       const previous = this.db
         .prepare("SELECT id, cloud_id FROM folders WHERE client_folder_id = ?")
         .get(cloudFolder.client_folder_id);
+      const carriedParentId = previous
+        ? this._cloudParentInSpace(cloudFolder, previous.id, spaceId)
+        : null;
+      // A parent never sits in another space, so a space change keeps the
+      // server's parent only when that parent is here too (a Private→Private
+      // move carries subfolders with their parent).
       const stmt = this.db.prepare(`
         INSERT INTO folders (client_folder_id, cloud_id, name, is_default, sort_order, space_id, account_id, sync_status, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)
@@ -12453,7 +12459,8 @@ class DatabaseManager {
           name = excluded.name,
           sort_order = excluded.sort_order,
           space_id = excluded.space_id,
-          parent_folder_id = CASE WHEN space_id = excluded.space_id THEN parent_folder_id END,
+          parent_folder_id = CASE WHEN space_id = excluded.space_id THEN parent_folder_id
+            ELSE ${carriedParentId == null ? "NULL" : Number(carriedParentId)} END,
           account_id = excluded.account_id,
           sync_status = 'synced',
           left_team = 0,
@@ -12552,6 +12559,27 @@ class DatabaseManager {
       debugLogger.error("Error upserting folder from cloud", { error: error.message }, "database");
       throw error;
     }
+  }
+
+  // The local folder a pulled folder's server parent is, when it can hold
+  // folderId in spaceId: a live top-level folder there other than folderId,
+  // which itself is no default and holds no subfolders.
+  _cloudParentInSpace(cloudFolder, folderId, spaceId) {
+    if (!cloudFolder.parent_folder_id || cloudFolder.is_default) return null;
+    const accountScope = this._accountScopeCondition("folders");
+    const parent = this.db
+      .prepare(
+        `SELECT id FROM folders
+         WHERE cloud_id = ? AND space_id = ? AND id != ? AND parent_folder_id IS NULL
+           AND deleted_at IS NULL AND ${accountScope.sql}
+         ORDER BY id LIMIT 1`
+      )
+      .get(cloudFolder.parent_folder_id, spaceId, folderId, ...accountScope.params);
+    if (!parent) return null;
+    const hasSubfolders = this.db
+      .prepare("SELECT 1 FROM folders WHERE parent_folder_id = ? AND deleted_at IS NULL LIMIT 1")
+      .get(folderId);
+    return hasSubfolders ? null : parent.id;
   }
 
   // Pulled folders arrive in updated_at order, so a subfolder can come before
