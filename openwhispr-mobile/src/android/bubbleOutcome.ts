@@ -39,7 +39,14 @@ export function bubbleFailure(
     return { message: 'no-speech', keep: false };
   if (error instanceof UsageLimitError || (error as { status?: number })?.status === 429)
     return { message: 'out-of-words', keep: false };
-  if (isAccountRequiredError(error)) return { message: 'sign-in', keep: false };
+  // The server's ACCOUNT_REQUIRED, a 401 ("Session expired. Please sign in again."), or the app's own
+  // "Sign in to use …" / "Create an account to use …" refusals.
+  if (
+    isAccountRequiredError(error) ||
+    (error as { status?: number })?.status === 401 ||
+    /session expired|sign in (again|to use)|create an account to use/i.test(text)
+  )
+    return { message: 'sign-in', keep: false };
   if (text === messages.speechDownloadNeeded || text === messages.textDownloadNeeded)
     return { message: 'model-needed', keep: false };
   if (/connection/i.test(toFriendlyTranscriptionErrorMessage(error)))

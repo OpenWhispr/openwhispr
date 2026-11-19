@@ -29,6 +29,27 @@ describe('bubbleFailure: each failure gets its own status tab', () => {
     ],
     ['a guest refused by the server', new AccountRequiredError(), false, 'sign-in', false],
     [
+      'a signed-out 401',
+      new Error('Session expired. Please sign in again.'),
+      false,
+      'sign-in',
+      false,
+    ],
+    [
+      'the app refusing a guest',
+      new Error('Sign in to use dictation with cloud processing.'),
+      false,
+      'sign-in',
+      false,
+    ],
+    [
+      'an anonymous session',
+      new Error('Create an account to use dictation with cloud processing.'),
+      false,
+      'sign-in',
+      false,
+    ],
+    [
       'a missing speech model',
       new Error(messages.speechDownloadNeeded),
       false,
