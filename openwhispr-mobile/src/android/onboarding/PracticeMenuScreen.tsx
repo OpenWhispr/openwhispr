@@ -12,8 +12,8 @@ import {
   DoneLine,
   Hint,
   PracticeMenu,
-  PracticeToast,
   SayCard,
+  fieldText,
   useKeyboardAnchor,
 } from './practiceParts';
 import { diffWords, type DiffRun } from './practiceDiff';
@@ -24,7 +24,7 @@ export type MenuPractice = 'assistant' | 'edit';
 
 /**
  * select (edit only) → hold → holding (ring fills) → menu (coach tag on the row) → listening (Say
- * card) → processing → pasted (✓ + toast with Undo) → done (keyboard down, the done line, Next).
+ * card) → processing → pasted (✓) → done (keyboard down, the done line, Next).
  */
 type Phase =
   | 'select'
@@ -36,24 +36,24 @@ type Phase =
   | 'pasted'
   | 'done';
 
-// How long the result toast stays before the practice moves on, as the real bubble's tab.
-const TOAST_MS = 4000;
+// How long the ✓ stays on the pasted result before the practice moves on. No Undo toast: the real
+// bubble shows none after Assistant or Edit selection, so the practice doesn't either (Josh, 20 Nov).
+const PASTED_MS = 2500;
 
 // The email Practice 2 wrote; Practice 3 edits it.
 let writtenEmail = '';
 
 const COPY: Record<
   MenuPractice,
-  { say?: OnboardingKey; toast: OnboardingKey; done: OnboardingKey; hold: OnboardingKey }
+  { say?: OnboardingKey; done: OnboardingKey; hold: OnboardingKey }
 > = {
   assistant: {
     say: 'assistantScript',
-    toast: 'toastWritten',
     done: 'assistantDone',
     hold: 'hintHoldBubble',
   },
   // Practice 3 says what to say in the guidance line beside the bubble, as Practice 1 does (P3d).
-  edit: { toast: 'toastEdited', done: 'editDone', hold: 'hintHoldToEdit' },
+  edit: { done: 'editDone', hold: 'hintHoldToEdit' },
 };
 
 /**
@@ -84,7 +84,6 @@ export function PracticeMenuScreen({
   );
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   const [phase, setPhase] = useState<Phase>(kind === 'edit' ? 'select' : 'hold');
-  const [before, setBefore] = useState<{ text: string } | null>(null);
   const [runs, setRuns] = useState<{ start: number; end: number; runs: DiffRun[] } | null>(null);
   const [nudge, setNudge] = useState(false);
   const [error, setError] = useState('');
@@ -127,10 +126,10 @@ export function PracticeMenuScreen({
     return () => clearTimeout(timer);
   }, [phase]);
 
-  // The toast leaves after 4 s and the practice ends, unless someone tapped outside first.
+  // The practice ends 2.5 s after the paste, or sooner on a tap outside.
   useEffect(() => {
     if (phase !== 'pasted') return;
-    const timer = setTimeout(finish, TOAST_MS);
+    const timer = setTimeout(finish, PASTED_MS);
     return () => clearTimeout(timer);
     // `finish` only reads refs and setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -174,14 +173,12 @@ export function PracticeMenuScreen({
       if (kind === 'assistant') {
         const email = await recorder.current.finishWrite();
         if (!mounted.current) return;
-        setBefore({ text });
         setText(email);
         writtenEmail = email;
       } else {
         const original = text.slice(start, end);
         const replacement = await recorder.current.finishEdit(original, language);
         if (!mounted.current) return;
-        setBefore({ text });
         setText(text.slice(0, start) + replacement + text.slice(end));
         setRuns({ start, end: start + replacement.length, runs: diffWords(original, replacement) });
       }
@@ -198,15 +195,6 @@ export function PracticeMenuScreen({
   const cancel = () => {
     void recorder.current.cancel();
     restart();
-  };
-
-  const undo = () => {
-    if (!before) return;
-    setText(before.text);
-    setBefore(null);
-    setRuns(null);
-    if (kind === 'assistant') writtenEmail = '';
-    setPhase(kind === 'edit' ? 'select' : 'hold');
   };
 
   const bubbleState: BubbleState =
@@ -232,7 +220,7 @@ export function PracticeMenuScreen({
             ? t('hintSayFriendlier')
             : '';
   const done = phase === 'done';
-  // The new words stay marked while the toast shows; the done step shows the email plain (P3g).
+  // The new words stay marked while the ✓ shows; the done step shows the email plain (P3g).
   const highlighted = phase === 'pasted' && runs;
 
   return (
@@ -271,10 +259,10 @@ export function PracticeMenuScreen({
                   editable={!done}
                   // While Practice 3's result shows, the field stays mounted and focused but out of
                   // sight, so the keyboard stays up under the marked copy below.
-                  style={highlighted ? pm.hiddenInput : pm.input}
+                  style={highlighted ? pm.hiddenInput : fieldText}
                 />
                 {highlighted ? (
-                  <Text style={pm.input} accessibilityLiveRegion="polite">
+                  <Text style={fieldText} accessibilityLiveRegion="polite">
                     {text.slice(0, runs.start)}
                     {runs.runs.map((run, index) => (
                       <Text key={index} style={run.changed ? pm.changed : undefined}>
@@ -316,13 +304,9 @@ export function PracticeMenuScreen({
               <View
                 style={{ flex: 1, alignItems: 'flex-end' }}
                 // The guidance never takes a tap meant for the screen behind it.
-                pointerEvents={phase === 'pasted' ? 'box-none' : 'none'}
+                pointerEvents="none"
               >
-                {phase === 'pasted' ? (
-                  <PracticeToast label={copy.toast} onUndo={undo} />
-                ) : hint ? (
-                  <Hint text={hint} />
-                ) : null}
+                {hint ? <Hint text={hint} /> : null}
               </View>
               <PracticeBubble
                 state={bubbleState}
@@ -360,15 +344,6 @@ export function PracticeMenuScreen({
 }
 
 const pm = StyleSheet.create({
-  input: {
-    minHeight: 96,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 17,
-    lineHeight: 24,
-    color: colors.ink,
-    textAlignVertical: 'top',
-  },
   changed: { color: colors.brandMid, textDecorationLine: 'underline' },
   hiddenInput: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   overlay: { position: 'absolute', left: 16, right: 16, gap: 10 },

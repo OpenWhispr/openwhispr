@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/Text';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { CircleButton, GlassButton, PillButton, colors, s } from './kit';
 import { PracticeBubble, type BubbleState } from './PracticeBubble';
-import { AppCard, DoneLine, Hint, useKeyboardAnchor } from './practiceParts';
+import { AppCard, DoneLine, Hint, fieldText, useKeyboardAnchor } from './practiceParts';
 import { PracticeRecorder, requestMicrophone } from './practiceRecorder';
 import { useOnboardingT } from './strings';
 
@@ -145,7 +145,7 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
                   onBlur={onBlur}
                   editable={!done}
                   showSoftInputOnFocus
-                  style={pr.input}
+                  style={fieldText}
                 />
                 {phase === 'blank' && !text ? (
                   <Pressable
@@ -196,16 +196,6 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
 }
 
 const pr = StyleSheet.create({
-  input: {
-    minHeight: 96,
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 14,
-    fontSize: 17,
-    lineHeight: 24,
-    color: colors.ink,
-    textAlignVertical: 'top',
-  },
   overlay: { position: 'absolute', left: 16, right: 16 },
   bubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64 },
 });

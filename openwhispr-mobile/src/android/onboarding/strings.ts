@@ -108,13 +108,10 @@ export const onboardingEnglish = {
   coachPick: 'Pick',
   sayLabel: 'Say',
   assistantScript: '“Write Tim an email asking to move our call to Friday at 4”',
-  toastWritten: 'Written by the assistant',
-  undo: 'Undo',
   assistantDone: 'Well done, you’ve just written [your first email.]',
   hintSelectEmail: 'Now [select] the email',
   hintHoldToEdit: '[Hold] the bubble',
   hintSayFriendlier: 'Say [“make it friendlier”]',
-  toastEdited: 'Edited · selection replaced',
   editDone: 'Well done. [Only what you selected] was rewritten.',
   editEmailSample:
     'Hi Tim,\n\nCould we move our call to Friday at 4pm? Let me know if that works for you.\n\nThanks,\nJosh',

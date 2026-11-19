@@ -26,6 +26,21 @@ const ICONS = {
   gmail: require('./assets/apps/gmail.png'),
 };
 
+/**
+ * The text inside every practice card, typed or pasted: one padding for all three practices, with
+ * room from the card's edges (Josh, 20 Nov), lined up with the header's icon.
+ */
+export const fieldText = {
+  minHeight: 112,
+  paddingHorizontal: 20,
+  paddingTop: 18,
+  paddingBottom: 20,
+  fontSize: 17,
+  lineHeight: 25,
+  color: colors.ink,
+  textAlignVertical: 'top',
+} as const;
+
 /** The app the practice pretends to be: a white glass-edge card with the app's header. */
 export function AppCard({
   app,
@@ -148,32 +163,6 @@ export function SayCard({ quote }: { quote: OnboardingKey }) {
     <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(140)} style={p.say}>
       <Text style={p.sayLabel}>{t('sayLabel').toUpperCase()}</Text>
       <Text style={p.sayQuote}>{t(quote)}</Text>
-    </Animated.View>
-  );
-}
-
-/** The dark toast left of the ✓ bubble once the result is in, with Undo. */
-export function PracticeToast({ label, onUndo }: { label: OnboardingKey; onUndo: () => void }) {
-  const t = useOnboardingT();
-  return (
-    <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(160)}
-      style={p.toast}
-      accessibilityLiveRegion="polite"
-    >
-      <Text style={p.toastLabel} numberOfLines={1}>
-        {t(label)}
-      </Text>
-      <Pressable
-        cssInterop={false}
-        accessibilityRole="button"
-        accessibilityLabel={t('undo')}
-        onPress={onUndo}
-        hitSlop={10}
-      >
-        <Text style={p.toastAction}>{t('undo')}</Text>
-      </Pressable>
     </Animated.View>
   );
 }
@@ -307,7 +296,7 @@ const p = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: colors.surface2,
   },
@@ -331,18 +320,6 @@ const p = StyleSheet.create({
     fontFamily: AppFont.medium,
   },
   sayQuote: { fontSize: 17, lineHeight: 24, color: colors.ink, fontFamily: AppFont.medium },
-  toast: {
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    minHeight: 44,
-    paddingHorizontal: 16,
-    borderRadius: 22,
-    backgroundColor: '#22211F',
-  },
-  toastLabel: { flexShrink: 1, fontSize: 14, color: '#FFFFFF', fontFamily: AppFont.medium },
-  toastAction: { fontSize: 14, color: '#9DB8FF', fontFamily: AppFont.medium },
   menuWrap: { alignSelf: 'flex-end', transformOrigin: 'bottom right' },
   menu: {
     ...glassEdge,
