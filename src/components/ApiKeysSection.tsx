@@ -50,12 +50,15 @@ interface ApiKeysSectionProps {
   onCanCreateChange: (canCreate: boolean) => void;
   /** False while the organization refuses new keys: existing ones can still be revoked. */
   allowCreate?: boolean;
+  /** True while the policy refuses listing and revoking keys too. */
+  listBlocked?: boolean;
 }
 
 export default function ApiKeysSection({
   createRequest = 0,
   onCanCreateChange,
   allowCreate = true,
+  listBlocked = false,
 }: ApiKeysSectionProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -80,7 +83,7 @@ export default function ApiKeysSection({
   // Restored access reloads the list, which a blocked policy may have refused.
   useEffect(() => {
     fetchKeys();
-  }, [allowCreate, fetchKeys]);
+  }, [listBlocked, fetchKeys]);
 
   useEffect(() => {
     onCanCreateChange(allowCreate && !isLoading && keys.length < MAX_API_KEYS);
@@ -120,7 +123,7 @@ export default function ApiKeysSection({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" hidden={listBlocked}>
       {isLoading ? (
         <SettingsPanel>
           {[0, 1].map((i) => (

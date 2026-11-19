@@ -47,7 +47,11 @@ const MOCKS = {
   `,
   "/services/ApiKeysService": `
     export const ApiKeysService = {
-      list: async () => ({ keys: [{ id: "1", name: "Personal test key", scopes: [] }] }),
+      list: async () => {
+        // Main refuses the list while the policy refuses actions.
+        if (globalThis.__apiKeysListRefused) throw new Error("policy blocked");
+        return { keys: [{ id: "1", name: "Personal test key", scopes: [] }] };
+      },
     };
   `,
   "/ui/dialog": `
@@ -566,6 +570,27 @@ test("an org minimum version under IT-managed updates says to contact IT", async
   });
   assert.match(shownText(container), /controlPanel\.updateRequiredByOrg\.contactIT/);
   assert.doesNotMatch(shownText(container), /controlPanel\.updateRequiredByOrg\.description/);
+});
+
+test("a list the policy refused stays hidden until it allows actions, then loads", async (t) => {
+  globalThis.__apiKeysListRefused = true;
+  t.after(() => delete globalThis.__apiKeysListRefused);
+  const { container, setPolicy, setApiAccess, managedPolicy } = await renderView(t, {
+    section: "api",
+  });
+  await setPolicy({ status: "error", policy: null });
+  // Access off below the org minimum: main still refuses the list and revoking.
+  await setPolicy({
+    status: "managed",
+    policy: managedPolicy({ minAppVersion: "9.0.0", features: { apiAccessEnabled: false } }),
+    appVersion: "1.0.0",
+  });
+  assert.match(shownText(container), /integrations\.apiAccessDisabled/);
+  assert.doesNotMatch(shownText(container), /apiKeysSection\.empty|Personal test key/);
+
+  globalThis.__apiKeysListRefused = false;
+  await setApiAccess(false);
+  assert.match(shownText(container), /Personal test key/);
 });
 
 test("with access off the CLI's cloud mode says why, and local mode is unchanged", async (t) => {

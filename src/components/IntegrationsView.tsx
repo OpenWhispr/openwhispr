@@ -7,6 +7,8 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { ensureConnectorStatus, useConnectorStatusStore } from "../stores/connectorStatusStore";
 import { useConnectorAccess } from "../hooks/useConnectorAccess";
 import { useApiAccessRestriction } from "../hooks/usePolicy";
+import { usePolicyStore } from "../stores/policyStore";
+import { isPolicyActionAllowed } from "../stores/policyRules";
 import ApiKeysSection from "./ApiKeysSection";
 import { ConnectorsSection } from "./ConnectorsSection";
 import { BetaBadge } from "./connectors/BetaBadge";
@@ -54,6 +56,7 @@ export default function IntegrationsView({
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
   const connectorAccess = useConnectorAccess();
   const apiRestriction = useApiAccessRestriction();
+  const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
   const readyConnectors = useConnectorStatusStore(
     (state) =>
       CONNECTOR_ROWS.filter((row) => {
@@ -156,17 +159,16 @@ export default function IntegrationsView({
       >
         {apiRestriction && <ApiAccessNotice restriction={apiRestriction} />}
         {/* Existing keys stay listed while access is off, so a leaked one can still be revoked.
-            An update or unresolved policy blocks the list too: hidden, but kept mounted so a
+            A policy that refuses actions blocks the list too: hidden, but kept mounted so a
             remount doesn't replay a settled create request. */}
         {isPaid ? (
           <>
-            <div hidden={apiRestriction === "versionBlocked" || apiRestriction === "unresolved"}>
-              <ApiKeysSection
-                createRequest={createKeyRequest}
-                onCanCreateChange={setCanCreateKey}
-                allowCreate={!apiRestriction}
-              />
-            </div>
+            <ApiKeysSection
+              createRequest={createKeyRequest}
+              onCanCreateChange={setCanCreateKey}
+              allowCreate={!apiRestriction}
+              listBlocked={apiRestriction !== null && !policyActionsAllowed}
+            />
             {!apiRestriction && (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ps-1 text-xs text-muted-foreground">
                 <span>{t("integrations.api.useWith")}</span>
