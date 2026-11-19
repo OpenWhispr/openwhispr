@@ -70,7 +70,9 @@ describe('practice recorder', () => {
     mockFormat.mockRejectedValueOnce(new Error('rate limited'));
     const recorder = new PracticeRecorder();
     await recorder.start();
-    await expect(recorder.finish('list')).resolves.toBe('Hey, are we still on for dinner tonight?');
+    await expect(recorder.finish('email')).resolves.toBe(
+      'Hey, are we still on for dinner tonight?',
+    );
   });
 
   it('does not format the message practice', async () => {

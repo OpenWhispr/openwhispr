@@ -18,7 +18,9 @@ export function diffWords(before: string, after: string): DiffRun[] {
   const b = tokens(after);
   const words = b.map((token, index) => ({ token, index })).filter(({ token }) => !isSpace(token));
   // lcs[i][j]: the longest common run of a[i..] and words[j..].
-  const lcs = Array.from({ length: a.length + 1 }, () => new Array<number>(words.length + 1).fill(0));
+  const lcs = Array.from({ length: a.length + 1 }, () =>
+    new Array<number>(words.length + 1).fill(0),
+  );
   for (let i = a.length - 1; i >= 0; i--)
     for (let j = words.length - 1; j >= 0; j--)
       lcs[i][j] =
@@ -40,7 +42,10 @@ export function diffWords(before: string, after: string): DiffRun[] {
   // A space is changed only between two changed words.
   for (let index = 0; index < b.length; index++) {
     if (changed[index] !== null) continue;
-    const previous = changed.slice(0, index).reverse().find((value) => value !== null);
+    const previous = changed
+      .slice(0, index)
+      .reverse()
+      .find((value) => value !== null);
     const next = changed.slice(index + 1).find((value) => value !== null);
     changed[index] = Boolean(previous && next);
   }

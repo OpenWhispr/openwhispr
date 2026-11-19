@@ -289,10 +289,7 @@ export function PracticeMenuScreen({
         </Pressable>
         {done ? (
           <View style={s.footer}>
-            <GlassButton
-              label={t(kind === 'edit' ? 'continue' : 'next')}
-              onPress={onNext}
-            />
+            <GlassButton label={t(kind === 'edit' ? 'continue' : 'next')} onPress={onNext} />
           </View>
         ) : (
           <View style={[pm.overlay, { bottom: anchor.overlayBottom }]} pointerEvents="box-none">

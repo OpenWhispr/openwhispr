@@ -30,12 +30,8 @@ import {
   OverlayScreen,
   readStatus,
 } from './onboarding/PermissionScreens';
-import {
-  ModeScreen,
-  PrivateReadyScreen,
-  PrivateSetupScreen,
-  ReadyScreen,
-} from './onboarding/EndScreens';
+import { ModeScreen, ReadyScreen } from './onboarding/EndScreens';
+import { DeviceReadyScreen, DeviceSetupScreen } from './onboarding/DeviceSetupScreens';
 import { applyCloudConfig } from './onboarding/setup';
 import { useOnboardingT } from './onboarding/strings';
 
@@ -203,11 +199,11 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
       );
     case 'privateSetup':
       return (
-        <PrivateSetupScreen onBack={back} onReady={advance} onUseCloud={() => void chooseCloud()} />
+        <DeviceSetupScreen onBack={back} onReady={advance} onUseCloud={() => void chooseCloud()} />
       );
     case 'privateReady':
-      return <PrivateReadyScreen onBack={back} onNext={advance} />;
+      return <DeviceReadyScreen onNext={advance} />;
     case 'ready':
-      return <ReadyScreen onDone={finish} />;
+      return <ReadyScreen onDone={finish} onDevice={mode === 'private'} />;
   }
 }

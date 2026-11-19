@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { AccentText, BubbleIcon, GlassButton, Halo, Screen, colors } from './kit';
+import { AccentText, GlassButton, PulseRings, Screen } from './kit';
 import { useOnboardingT } from './strings';
 
 const app = (name: string) => {
@@ -42,30 +41,17 @@ const app = (name: string) => {
 };
 export const appIcon = app;
 
-// Matches the Figma orbit: angle (deg), distance, size, tilt (deg), opacity, all on a 345pt-wide card.
-const ORBIT: [string, number, number, number, number, number][] = [
-  ['gmail', -68, 90, 44, 6, 0.92],
-  ['slack', 8, 98, 40, -6, 0.85],
-  ['whatsapp', 60, 84, 46, 4, 0.95],
-  ['outlook', 124, 100, 40, -8, 0.82],
-  ['chatgpt', 186, 88, 38, 9, 0.78],
-  ['notes', 226, 96, 42, -4, 0.85],
-  ['docs', -84, 160, 38, -7, 0.6],
-  ['calendar', -30, 152, 36, 10, 0.5],
-  ['mail', 16, 146, 42, -9, 0.65],
-  ['teams', 80, 156, 38, 7, 0.55],
-  ['claude', 124, 150, 34, -11, 0.5],
-  ['x', 158, 140, 40, 8, 0.62],
-  ['word', 203, 146, 36, -6, 0.5],
-  ['safari', -128, 150, 44, 5, 0.7],
-];
+// The v3 graphic (Figma 4860:90) exported at 3x, its drop shadow included: 393 x 448 around the
+// 345 x 400 card, which sits 24 in and 6 down. Glows, logos and the two rings at rest are the export;
+// the rings' pulse is drawn on top, centred on the bubble at (172.5, 202).
+const EVERYWHERE = require('./assets/everywhere.png');
+const CARD = { width: 345, height: 400, left: 24, top: 6, imageWidth: 393, imageHeight: 448 };
+const BUBBLE_CENTER = { x: 172.5, y: 202 };
 
 export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const t = useOnboardingT();
   const [width, setWidth] = useState(0);
-  const scale = width / 345;
-  const centerX = width / 2;
-  const centerY = 202 * scale;
+  const scale = width / CARD.width;
   return (
     <Screen onBack={onBack} footer={<GlassButton label={t('continue')} onPress={onNext} />}>
       <AccentText center text={t('appsTitle')} />
@@ -75,67 +61,30 @@ export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () 
         accessible={false}
         importantForAccessibility="no-hide-descendants"
       >
-        <LinearGradient
-          colors={['#7DA2F2', colors.brandMid, colors.brandDeep]}
-          locations={[0, 0.6, 1]}
-          start={{ x: 0.8, y: 0 }}
-          end={{ x: 0.2, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
         {width > 0 ? (
           <>
-            {[96, 150].map((radius) => (
-              <View
-                key={radius}
-                style={[
-                  o.dashed,
-                  {
-                    width: radius * 2 * scale,
-                    height: radius * 2 * scale,
-                    borderRadius: radius * scale,
-                    left: centerX - radius * scale,
-                    top: centerY - radius * scale,
-                  },
-                ]}
-              />
-            ))}
+            <Image
+              source={EVERYWHERE}
+              style={{
+                position: 'absolute',
+                left: -CARD.left * scale,
+                top: -CARD.top * scale,
+                width: CARD.imageWidth * scale,
+                height: CARD.imageHeight * scale,
+              }}
+            />
             <View
-              style={[
-                o.center,
-                {
-                  left: centerX - 60 * scale,
-                  top: centerY - 60 * scale,
-                  width: 120 * scale,
-                  height: 120 * scale,
-                },
-              ]}
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: (BUBBLE_CENTER.x - 56) * scale,
+                top: (BUBBLE_CENTER.y - 56) * scale,
+                width: 112 * scale,
+                height: 112 * scale,
+              }}
             >
-              <Halo size={92 * scale} color="rgba(255,255,255,0.16)" />
-              <BubbleIcon size={68 * scale} />
+              <PulseRings size={112 * scale} color="rgba(255,255,255,0.16)" />
             </View>
-            {ORBIT.map(([name, angle, distance, size, tilt, opacity]) => {
-              const radians = (angle * Math.PI) / 180;
-              const half = (size * scale) / 2;
-              const x = Math.min(
-                width - half - 8,
-                Math.max(half + 8, centerX + distance * scale * Math.cos(radians)),
-              );
-              const y = Math.max(half + 8, centerY + distance * scale * Math.sin(radians));
-              return (
-                <View
-                  key={name}
-                  style={{
-                    position: 'absolute',
-                    left: x - half,
-                    top: y - half,
-                    opacity,
-                    transform: [{ rotate: `${tilt}deg` }],
-                  }}
-                >
-                  <Image source={app(name)} style={{ width: size * scale, height: size * scale }} />
-                </View>
-              );
-            })}
           </>
         ) : null}
       </View>
@@ -144,12 +93,6 @@ export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () 
 }
 
 const o = StyleSheet.create({
-  card: { width: '100%', aspectRatio: 345 / 400, borderRadius: 32, overflow: 'hidden' },
-  dashed: {
-    position: 'absolute',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(255,255,255,0.28)',
-  },
-  center: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  // Not clipped: the export carries the card's own blue shadow below it.
+  card: { width: '100%', aspectRatio: CARD.width / CARD.height, marginBottom: 42 },
 });

@@ -89,7 +89,11 @@ export function PracticeBubble({
 
   if (state === 'pasted')
     return (
-      <Animated.View entering={ZoomIn.duration(200)} style={b.disc} accessibilityLiveRegion="polite">
+      <Animated.View
+        entering={ZoomIn.duration(200)}
+        style={b.disc}
+        accessibilityLiveRegion="polite"
+      >
         <LinearGradient
           colors={GLASS_GRADIENT}
           start={{ x: 0, y: 0 }}

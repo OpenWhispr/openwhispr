@@ -44,7 +44,12 @@ export function AppCard({
         <Image source={ICONS[app]} style={p.appIcon} />
         <Text style={p.appName}>{t(app === 'gmail' ? 'appGmail' : 'appWhatsApp')}</Text>
         <View style={p.send}>
-          <SystemIcon name="paperplane.fill" mdName="SendHorizontal" size={14} color={colors.accent} />
+          <SystemIcon
+            name="paperplane.fill"
+            mdName="SendHorizontal"
+            size={14}
+            color={colors.accent}
+          />
         </View>
         {header}
       </View>
@@ -319,7 +324,12 @@ const p = StyleSheet.create({
   hint: { fontSize: 18, lineHeight: 24, textAlign: 'right', fontFamily: AppFont.medium },
   done: { fontSize: 22, lineHeight: 29, fontFamily: AppFont.bold, letterSpacing: -0.3 },
   say: { ...glassEdge, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14, gap: 6 },
-  sayLabel: { fontSize: 11, letterSpacing: 0.8, color: colors.tertiary, fontFamily: AppFont.medium },
+  sayLabel: {
+    fontSize: 11,
+    letterSpacing: 0.8,
+    color: colors.tertiary,
+    fontFamily: AppFont.medium,
+  },
   sayQuote: { fontSize: 17, lineHeight: 24, color: colors.ink, fontFamily: AppFont.medium },
   toast: {
     flexShrink: 1,
