@@ -5352,7 +5352,7 @@ test("binding and relocating a Private with subfolders in it never throws", (t) 
   const db = createFreshDeviceDb(t);
   if (!db) return;
   const { pending, w1 } = pendingAndW1(db);
-  // A parent that folds into its namesake (D41) lets go of its subfolder.
+  // A parent that folds into its namesake (D41) hands it its subfolder.
   const folded = db.createFolder("Clients", pending).folder;
   const foldedChild = db.createFolder("Acme", pending, folded.id).folder;
   const foldedNote = db.saveNote("Acme plan", "", "personal", null, null, foldedChild.id).note;
@@ -5365,7 +5365,8 @@ test("binding and relocating a Private with subfolders in it never throws", (t) 
 
   assert.equal(folderRow(db.db, folded.id), undefined);
   assert.equal(folderRow(db.db, foldedChild.id).space_id, w1);
-  assert.equal(folderRow(db.db, foldedChild.id).parent_folder_id, null);
+  assert.equal(folderRow(db.db, foldedChild.id).parent_folder_id, namesake.id);
+  assert.equal(folderRow(db.db, foldedChild.id).sync_status, "pending");
   assert.equal(noteRow(db.db, foldedNote.id).folder_id, foldedChild.id);
   assert.ok(folderRow(db.db, namesake.id));
   assert.equal(folderRow(db.db, movedChild.id).space_id, w1);
@@ -5380,6 +5381,101 @@ test("binding and relocating a Private with subfolders in it never throws", (t) 
 
   assert.equal(folderRow(db.db, lostChild.id).space_id, w1);
   assert.equal(folderRow(db.db, lostChild.id).parent_folder_id, lost.id);
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("a merge folds subfolders only into the same-named subfolder of their parent's survivor", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const { pending, w1 } = pendingAndW1(db);
+  const syncedFolder = (name, space, parent = null, cloudId = null) => {
+    const folder = db.createFolder(name, space, parent).folder;
+    if (cloudId) db.markFolderSynced(folder.id, cloudId);
+    return folderRow(db.db, folder.id);
+  };
+  // Both sides hold Clients/Acme; w1 also holds a top-level "Beta", and the
+  // pending side's Clients holds a subfolder "Beta".
+  const pendingClients = syncedFolder("Clients", pending);
+  const pendingAcme = syncedFolder("Acme", pending, pendingClients.id);
+  const pendingBeta = syncedFolder("Beta", pending, pendingClients.id, "cloud-pending-beta");
+  const acmeNote = db.saveNote("Acme plan", "", "personal", null, null, pendingAcme.id).note;
+  const betaNote = db.saveNote("Beta plan", "", "personal", null, null, pendingBeta.id).note;
+  const w1Clients = syncedFolder("Clients", w1, null, "cloud-w1-clients");
+  const w1Acme = syncedFolder("Acme", w1, w1Clients.id);
+  const w1Beta = syncedFolder("Beta", w1, null, "cloud-w1-beta");
+  const w1BetaNote = db.saveNote("W1 beta", "", "personal", null, null, w1Beta.id).note;
+
+  db.bindDefaultPrivateSpace("w1");
+
+  // Clients folds into w1's linked one, Acme into w1's Acme under it.
+  assert.equal(folderRow(db.db, pendingClients.id), undefined);
+  assert.equal(folderRow(db.db, pendingAcme.id), undefined);
+  assert.equal(noteRow(db.db, acmeNote.id).folder_id, w1Acme.id);
+  assert.equal(folderRow(db.db, w1Acme.id).parent_folder_id, w1Clients.id);
+  // A subfolder never folds into a top-level namesake: Beta stays nested,
+  // renamed since names are unique in a space, and its nesting is queued.
+  const beta = folderRow(db.db, pendingBeta.id);
+  assert.equal(beta.space_id, w1);
+  assert.equal(beta.parent_folder_id, w1Clients.id);
+  assert.equal(beta.name, "Beta (2)");
+  assert.equal(beta.sync_status, "pending");
+  assert.equal(beta.cloud_id, "cloud-pending-beta");
+  assert.equal(noteRow(db.db, betaNote.id).folder_id, pendingBeta.id);
+  assert.equal(folderRow(db.db, w1Beta.id).parent_folder_id, null);
+  assert.equal(noteRow(db.db, w1BetaNote.id).folder_id, w1Beta.id);
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("a merge that retires the target's folder moves its subfolders to the survivor", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const { pending, w1 } = pendingAndW1(db);
+  // The pending side's Clients is cloud-linked, w1's is not: w1's is retired.
+  const pendingClients = db.createFolder("Clients", pending).folder;
+  db.markFolderSynced(pendingClients.id, "cloud-clients");
+  const w1Clients = db.createFolder("Clients", w1).folder;
+  const w1Child = db.createFolder("Q1", w1, w1Clients.id).folder;
+  db.markFolderSynced(w1Child.id, "cloud-q1");
+  const childNote = db.saveNote("Q1 plan", "", "personal", null, null, w1Child.id).note;
+  const parentNote = db.saveNote("Clients plan", "", "personal", null, null, w1Clients.id).note;
+
+  db.bindDefaultPrivateSpace("w1");
+
+  assert.equal(folderRow(db.db, w1Clients.id), undefined);
+  const survivor = folderRow(db.db, pendingClients.id);
+  assert.equal(survivor.space_id, w1);
+  assert.equal(survivor.name, "Clients");
+  const child = folderRow(db.db, w1Child.id);
+  assert.equal(child.parent_folder_id, pendingClients.id, "never left top-level");
+  assert.equal(child.sync_status, "pending", "its new nesting syncs");
+  assert.equal(noteRow(db.db, childNote.id).folder_id, w1Child.id);
+  assert.equal(noteRow(db.db, parentNote.id).folder_id, pendingClients.id);
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("relocating a lost workspace's Private keeps a default's subfolders nested", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a", { activeWorkspaceId: "w1", defaultWorkspaceId: "w1" });
+  db.bindDefaultPrivateSpace("w1");
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w2", defaultWorkspaceId: "w1" });
+  const w2 = db.getPrivateSpaceId();
+  const lostPersonal = db.saveNote("Lost idea", "", "personal").note;
+  const personalChild = db.createFolder("Ideas", w2, lostPersonal.folder_id).folder;
+  const childNote = db.saveNote("Idea", "", "personal", null, null, personalChild.id).note;
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w1", defaultWorkspaceId: "w1" });
+  const w1 = db.getDefaultPrivateSpaceId();
+  const w1Personal = db.saveNote("Home idea", "", "personal").note.folder_id;
+
+  db.relocatePrivateSpace("w2", null);
+
+  // The unlinked default folds into w1's Personal, which takes its subfolder.
+  assert.equal(folderRow(db.db, lostPersonal.folder_id), undefined);
+  assert.equal(noteRow(db.db, lostPersonal.id).folder_id, w1Personal);
+  const child = folderRow(db.db, personalChild.id);
+  assert.equal(child.space_id, w1);
+  assert.equal(child.parent_folder_id, w1Personal);
+  assert.equal(noteRow(db.db, childNote.id).folder_id, personalChild.id);
   assertEveryRowInItsFolderSpace(db.db);
 });
 

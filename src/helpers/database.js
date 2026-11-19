@@ -6757,14 +6757,17 @@ class DatabaseManager {
   // retires the emptied row. Cloud identities stay; placement changes queue
   // for Backup. A default folder (Personal, Meetings) and the target's folder
   // of that name (its default, else one the user made) become one: the one
-  // no cloud holds and no held delete needs is retired after its notes and
-  // chats join the other, which takes the target folder's place. A cloud-held
-  // folder always survives, so its link is never lost. With foldNamesakes
-  // (two rows of the same workspace's Private, D41) every folder folds that
-  // way. When both are held, or for any other folder whose name the target
-  // holds (another workspace's Private), the moved folder becomes
-  // "Name (2)" and stops being a default. Returns the live notes moved, and
-  // the live folders moved rather than folded into a namesake.
+  // no cloud holds and no held delete needs is retired after its notes, chats
+  // and subfolders join the other, which takes the target folder's place. A
+  // cloud-held folder always survives, so its link is never lost. With
+  // foldNamesakes (two rows of the same workspace's Private, D41) every folder
+  // folds that way. Folders fold only at the same level: top-level with
+  // top-level, a subfolder with the same-named subfolder of the folder its
+  // parent became. When both are held, or for any other folder whose name the
+  // target holds (another workspace's Private, or another level), the moved
+  // folder becomes "Name (2)" and stops being a default. A subfolder whose
+  // parent changed is queued so its nesting syncs. Returns the live notes
+  // moved, and the live folders moved rather than folded into a namesake.
   _mergePrivateSpace(fromId, toId, accountId, { foldNamesakes = false } = {}) {
     const sourceWorkspace = this.db
       .prepare("SELECT workspace_id FROM spaces WHERE id = ?")
@@ -6783,14 +6786,20 @@ class DatabaseManager {
       folders: 0,
     };
     const moveFolder = this.db.prepare(
-      `UPDATE folders SET space_id = ?, name = ?, is_default = ?, account_id = COALESCE(account_id, ?)${placementUpdate} WHERE id = ?`
+      `UPDATE folders SET space_id = ?, name = ?, is_default = ?, parent_folder_id = ?, account_id = COALESCE(account_id, ?)${placementUpdate} WHERE id = ?`
+    );
+    const queueNesting = this.db.prepare(
+      `UPDATE folders SET sync_status = 'pending', updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND deleted_at IS NULL`
     );
     const targetNamed = this.db.prepare(
       `SELECT id, name, is_default, cloud_id FROM folders
-       WHERE space_id = ? AND name = ? AND deleted_at IS NULL
+       WHERE space_id = ? AND name = ? AND parent_folder_id IS ? AND deleted_at IS NULL
          AND (account_id IS NULL OR account_id IS ?)
        ORDER BY is_default DESC, id LIMIT 1`
     );
+    const childrenOf = this.db.prepare("SELECT id FROM folders WHERE parent_folder_id = ?");
+    const reparent = this.db.prepare("UPDATE folders SET parent_folder_id = ? WHERE id = ?");
     const foldNotes = this.db.prepare(
       `UPDATE notes SET space_id = ?, folder_id = ?, account_id = COALESCE(account_id, ?)${placementUpdate} WHERE folder_id = ?`
     );
@@ -6801,44 +6810,55 @@ class DatabaseManager {
       "SELECT 1 FROM optimistic_folder_delete_rows WHERE folder_id = ? LIMIT 1"
     );
     const retireFolder = this.db.prepare("DELETE FROM folders WHERE id = ?");
+    // Top-level folders first, so each subfolder knows the folder its parent became.
     const folders = this.db
       .prepare(
-        "SELECT id, name, is_default, cloud_id, deleted_at FROM folders WHERE space_id = ? ORDER BY id"
+        `SELECT id, name, is_default, cloud_id, deleted_at, parent_folder_id FROM folders
+         WHERE space_id = ? ORDER BY parent_folder_id IS NOT NULL, id`
       )
       .all(fromId);
+    const becameFolder = new Map();
     const retirable = (row) => row.cloud_id == null && !heldDelete.get(row.id);
+    // A retired folder's subfolders join the survivor first, or deleting it
+    // would leave them top-level (ON DELETE SET NULL) with nothing to sync.
     const fold = (fromFolderId, intoFolderId) => {
       foldNotes.run(toId, intoFolderId, accountId, fromFolderId);
       foldChats.run(toId, intoFolderId, fromFolderId);
+      for (const child of childrenOf.all(fromFolderId)) {
+        reparent.run(intoFolderId, child.id);
+        queueNesting.run(child.id);
+      }
       retireFolder.run(fromFolderId);
     };
     for (const folder of folders) {
+      const parentId =
+        folder.parent_folder_id == null
+          ? null
+          : (becameFolder.get(folder.parent_folder_id) ?? folder.parent_folder_id);
       const target =
         (folder.is_default || foldNamesakes) && !folder.deleted_at
-          ? targetNamed.get(toId, folder.name, accountId)
+          ? targetNamed.get(toId, folder.name, parentId, accountId)
           : null;
       if (target && retirable(folder)) {
+        becameFolder.set(folder.id, target.id);
         fold(folder.id, target.id);
         continue;
       }
+      becameFolder.set(folder.id, folder.id);
       if (!folder.deleted_at) moved.folders += 1;
+      let name = folder.name;
+      let isDefault = folder.is_default;
       if (target && retirable(target)) {
         // Retired first: the survivor takes its name.
         fold(target.id, folder.id);
-        moveFolder.run(toId, target.name, target.is_default, accountId, folder.id);
-        continue;
+        ({ name, is_default: isDefault } = target);
+      } else if (!folder.deleted_at) {
+        // A deleted folder holds no name, and keeps its own for a rollback.
+        name = this._uniqueFolderName(toId, accountId, folder.name, folder.id);
+        if (name !== folder.name) isDefault = 0;
       }
-      // A deleted folder holds no name, and keeps its own for a rollback.
-      const name = folder.deleted_at
-        ? folder.name
-        : this._uniqueFolderName(toId, accountId, folder.name, folder.id);
-      moveFolder.run(
-        toId,
-        name,
-        name === folder.name ? folder.is_default : 0,
-        accountId,
-        folder.id
-      );
+      moveFolder.run(toId, name, isDefault, parentId, accountId, folder.id);
+      if (parentId !== folder.parent_folder_id) queueNesting.run(folder.id);
     }
     this.db
       .prepare(
