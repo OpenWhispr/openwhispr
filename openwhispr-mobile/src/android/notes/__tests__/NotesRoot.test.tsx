@@ -87,6 +87,7 @@ jest.mock('../meetingStart', () => ({
 jest.mock('../folderMenu', () => ({ useFolderMenu: () => ({ open: jest.fn(), sheets: null }) }));
 jest.mock('../pendingDeletes', () => ({ useHiddenNoteIds: () => [] }));
 jest.mock('../rows', () => ({ dayOf: () => 'today', timeOf: () => '10:00' }));
+jest.mock('../CalendarPrompt', () => ({ CalendarPrompt: () => null }));
 
 import NotesRoot from '../NotesRoot';
 import { setNotesScope } from '../library';

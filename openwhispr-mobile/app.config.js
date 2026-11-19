@@ -169,6 +169,20 @@ module.exports = () => {
     android: {
       ...expo.android,
       package: environment.androidPackage,
+      // Google Calendar sign-in returns to <package>:/oauth2redirect (an Android OAuth client).
+      ...(firstNonEmpty(
+        process.env.EXPO_PUBLIC_GOOGLE_CALENDAR_ANDROID_CLIENT_ID,
+        process.env.EXPO_PUBLIC_GOOGLE_CALENDAR_ANDROID_CLIENT_ID_DEV,
+      ) && {
+        intentFilters: [
+          ...(expo.android?.intentFilters ?? []),
+          {
+            action: 'VIEW',
+            category: ['BROWSABLE', 'DEFAULT'],
+            data: [{ scheme: environment.androidPackage, path: '/oauth2redirect' }],
+          },
+        ],
+      }),
     },
     plugins: withBrandFonts(expo.plugins),
     extra: {

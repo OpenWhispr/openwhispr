@@ -315,6 +315,7 @@ export function ListRow({
   subtitle,
   value,
   valueAccent,
+  valueColor,
   trailing,
   toggle,
   onPress,
@@ -331,6 +332,8 @@ export function ListRow({
   subtitle?: React.ReactNode;
   value?: string;
   valueAccent?: boolean;
+  /** A value in its own colour (amber Reconnect). */
+  valueColor?: string;
   /** Replaces the chevron. Pass null for no trailing element. */
   trailing?: React.ReactNode;
   toggle?: { value: boolean; onValueChange: (value: boolean) => void; disabled?: boolean };
@@ -382,7 +385,12 @@ export function ListRow({
       {value !== undefined && (
         <Text
           numberOfLines={1}
-          style={[settings.rowValue, { maxWidth: '45%' }, valueAccent && { color: home.accent }]}
+          style={[
+            settings.rowValue,
+            { maxWidth: '45%' },
+            valueAccent && { color: home.accent },
+            valueColor != null && { color: valueColor },
+          ]}
         >
           {value}
         </Text>

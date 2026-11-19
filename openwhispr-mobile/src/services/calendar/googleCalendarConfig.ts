@@ -1,5 +1,6 @@
 import * as AuthSession from 'expo-auth-session';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 export const GOOGLE_CALENDAR_SCOPES = [
   'openid',
@@ -51,7 +52,28 @@ const deriveGoogleCalendarRedirectScheme = (clientId: string | null | undefined)
   return `com.googleusercontent.apps.${trimmed.slice(0, -suffix.length)}`;
 };
 
+/**
+ * Android signs in with its own Google OAuth client (an Android client for the app's package,
+ * redirecting to `<package>:/oauth2redirect`). Without one the build has no calendar connect.
+ */
+function androidClientId(): string | null {
+  return (
+    firstNonEmpty(
+      process.env.EXPO_PUBLIC_GOOGLE_CALENDAR_ANDROID_CLIENT_ID,
+      process.env.EXPO_PUBLIC_GOOGLE_CALENDAR_ANDROID_CLIENT_ID_DEV,
+    ) ?? null
+  );
+}
+
+function androidRedirectUri(): string {
+  const configured = firstNonEmpty(process.env.EXPO_PUBLIC_GOOGLE_CALENDAR_ANDROID_REDIRECT_URI);
+  if (configured) return configured;
+  const pkg = Constants.expoConfig?.android?.package ?? 'com.gizmolabs.openwhispr';
+  return `${pkg}:/oauth2redirect`;
+}
+
 export function getGoogleCalendarClientId(): string | null {
+  if (Platform.OS === 'android') return androidClientId();
   const openWhispr = Constants.expoConfig?.extra?.openWhispr as OpenWhisprExtra | undefined;
   return (
     firstNonEmpty(
@@ -64,6 +86,7 @@ export function getGoogleCalendarClientId(): string | null {
 }
 
 export function getGoogleCalendarRedirectUri(): string {
+  if (Platform.OS === 'android') return androidRedirectUri();
   const openWhispr = Constants.expoConfig?.extra?.openWhispr as OpenWhisprExtra | undefined;
   const configuredRedirectUri = firstNonEmpty(
     openWhispr?.googleCalendar?.iosRedirectUri,

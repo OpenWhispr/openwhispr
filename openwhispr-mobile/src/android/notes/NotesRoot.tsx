@@ -43,6 +43,7 @@ import { FolderNameSheet, NewSheet, SpaceSheet, TodaySheet } from './sheets';
 import { eventIsNow, hideUpNext, minutesUntil, useUpNext } from './calendar';
 import { startNote, startUpload } from './start';
 import { useMeetingStart } from './meetingStart';
+import { CalendarPrompt } from './CalendarPrompt';
 import { useFolderMenu } from './folderMenu';
 import { useNotesT } from './strings';
 
@@ -161,6 +162,8 @@ export default function NotesRoot() {
           titleHint={t('showNotesFrom')}
           right={<IconButton icon="Search" label={t('search')} onPress={openSearch} />}
         />
+        {/* L5 needs a connected calendar; until then (and until ×) C1 asks for one. */}
+        <CalendarPrompt />
         {next ? (
           <UpNextCard
             event={next}

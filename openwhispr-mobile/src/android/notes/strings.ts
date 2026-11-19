@@ -183,6 +183,19 @@ export const notesEnglish = {
   copyTranscript2: 'Copy what was transcribed',
   tryAgain: 'Try again',
   settingsProcessing: 'Settings → Processing',
+  // Calendar prompt (C1–C4)
+  connectCalendar: 'Connect your calendar',
+  connectCalendarBody: 'See your next meeting here and record it in one tap.',
+  connectGoogle: 'Connect Google Calendar',
+  connectingGoogle: 'Connecting to Google…',
+  connectingGoogleBody: 'Finish signing in in the Chrome tab.',
+  waitingGoogle: 'Waiting for Google…',
+  calendarConnected: 'Google Calendar connected',
+  promptHidden: 'Hidden. Connect in Settings → Calendar.',
+  calendarNotSetUp: 'Calendar isn’t set up in this build yet',
+  calendarSignIn: 'Sign in to connect your calendar',
+  calendarFailed: 'Couldn’t connect Google Calendar. Try again.',
+  hide: 'Hide',
 } as const;
 
 export type NotesKey = keyof typeof notesEnglish;
