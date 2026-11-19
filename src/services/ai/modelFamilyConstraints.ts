@@ -9,7 +9,7 @@
  * like thinkingSuppressionDialects.
  */
 export interface ModelFamilyConstraints {
-  family: "gpt-oss" | "qwen" | "magistral" | "glm-5.3" | "gemini-no-minimal";
+  family: "gpt-oss" | "qwen" | "magistral" | "glm-5.3" | "kimi-k3.1" | "gemini-no-minimal";
   reasoningEffort?: {
     /** Value that best approximates "thinking off" for reasoning_effort. */
     suppressValue: string;
@@ -60,6 +60,14 @@ const FAMILIES: Array<ModelFamilyConstraints & { match: RegExp }> = [
     // "low" is the closest to off. At the server default, max, a long meeting
     // spent the whole 4,096-token notes budget thinking (#2008); at high it fit,
     // so max isn't offered either.
+    reasoningEffort: { suppressValue: "low", defaultValue: "high", options: ["low", "high"] },
+  },
+  {
+    family: "kimi-k3.1",
+    match: /kimi[-_]?k3[-.]1/,
+    // Kimi K3.1 Pro always reasons and takes low|high|max only; anything else,
+    // "none" included, is a 400 (docs.tinfoil.sh/guides/reasoning). Its server
+    // default is max, like GLM-5.3, so high stands in for it under the same caps.
     reasoningEffort: { suppressValue: "low", defaultValue: "high", options: ["low", "high"] },
   },
   {

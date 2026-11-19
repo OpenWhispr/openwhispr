@@ -63,7 +63,8 @@ const PROVIDERS = [
     // reasoning-param rejection there hard-errors (#1611).
     // deepseek-v4-flash was replaced by deepseek-v4-1-flash in Tinfoil's live
     // catalog (canary run 35322067138, 2026-09-18: HTTP 404 "model does not exist").
-    models: ["glm-5-3", "gpt-oss-120b", "deepseek-v4-1-flash", "llama3-3-70b"],
+    // kimi-k3-1-pro replaced kimi-k3 in Tinfoil's live catalog (2026-11-12).
+    models: ["glm-5-3", "kimi-k3-1-pro", "gpt-oss-120b", "deepseek-v4-1-flash", "llama3-3-70b"],
   },
   {
     id: "gemini",
