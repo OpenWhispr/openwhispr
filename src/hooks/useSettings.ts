@@ -245,10 +245,13 @@ function useSettingsLifecycle(): AutoLearnCorrectionsValue {
   const preferredLanguage = useSettingsStore((settings) => settings.preferredLanguage);
   const keepLocalModelLoaded = useSettingsStore((settings) => settings.keepLocalModelLoaded);
   const policySnapshot = usePolicySnapshot();
-  // Settings and policy already trigger renders. Also observe managed route changes
-  // so assigning or removing a managed provider updates the main process.
-  const localServerPrefs = useEnterpriseIdentityStore(
-    useShallow(() => selectLocalServerPrefs(store, policySnapshot))
+  const localServerPrefs = useSettingsStore(
+    useShallow((state) => selectLocalServerPrefs(state, policySnapshot))
+  );
+  // Also observe managed route changes, which change these prefs without a settings
+  // write, so assigning or removing a managed provider updates the main process.
+  useEnterpriseIdentityStore(
+    useShallow(() => selectLocalServerPrefs(useSettingsStore.getState(), policySnapshot))
   );
   const policySettled = isPolicySettled(policySnapshot);
   // A sign-out before the policy fetch starts leaves the policy idle, so only

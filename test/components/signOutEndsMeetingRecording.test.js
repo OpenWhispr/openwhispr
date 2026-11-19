@@ -53,7 +53,11 @@ test("invitation account switch awaits the meeting before signing out", async (t
   );
   assert.ok(button, "the real wrong-account branch offers Switch account");
   await React.act(async () => button.click());
-  assert.deepEqual(calls, ["chat reset", "invitation kept: invite-token", "stop requested: account-change"]);
+  assert.deepEqual(calls, [
+    "chat reset",
+    "invitation kept: invite-token",
+    "stop requested: account-change",
+  ]);
   await React.act(async () => finishStop());
   assert.deepEqual(calls, [
     "chat reset",
@@ -75,7 +79,7 @@ test("shared sign-out asks before ending a meeting and waits before clearing sco
   const vite = await createRendererServer(t, {
     mockModules: {
       "react-i18next": `export const useTranslation = () => ({t: key => key});`,
-      "/stores/meetingRecordingStore": `export const useMeetingRecordingStore = {getState: () => ({isRecording: globalThis.__signOutOwner.recording})}; export const stopRecording = (_sessionId, reason) => {globalThis.__signOutOwner.calls.push(`stop requested: ${reason}`); return globalThis.__signOutOwner.stop.promise;};`,
+      "/stores/meetingRecordingStore": `export const useMeetingRecordingStore = {getState: () => ({isRecording: globalThis.__signOutOwner.recording})}; export const stopRecording = (_sessionId, reason) => {globalThis.__signOutOwner.calls.push("stop requested: " + reason); return globalThis.__signOutOwner.stop.promise;};`,
       "/services/SyncService.js": `export const syncService = {purgeTeamSpacesForSignOut: async () => {globalThis.__signOutOwner.calls.push("purged");}};`,
       "/lib/auth": `export const signOut = async () => {globalThis.__signOutOwner.calls.push("signed out");};`,
       "/stores/chatTurnStore": `export const resetForAccountChange = () => {globalThis.__signOutOwner.calls.push("chat reset");};`,
@@ -104,13 +108,25 @@ test("shared sign-out asks before ending a meeting and waits before clearing sco
   assert.deepEqual(calls, ["chat reset", "stop requested: account-change"]);
   assert.equal(container.querySelector("button").disabled, true);
   await React.act(async () => stop.resolve());
-  assert.deepEqual(calls, ["chat reset", "stop requested: account-change", "purged", "signed out", "reloaded"]);
+  assert.deepEqual(calls, [
+    "chat reset",
+    "stop requested: account-change",
+    "purged",
+    "signed out",
+    "reloaded",
+  ]);
   state.recording = false;
   state.confirm = null;
   calls.length = 0;
   await React.act(async () => container.querySelector("button").click());
   assert.equal(state.confirm, null, "no recording means no confirmation");
-  assert.deepEqual(calls, ["chat reset", "stop requested: account-change", "purged", "signed out", "reloaded"]);
+  assert.deepEqual(calls, [
+    "chat reset",
+    "stop requested: account-change",
+    "purged",
+    "signed out",
+    "reloaded",
+  ]);
 });
 
 test("auth sign-out closes activation before revoking credentials, even offline", async (t) => {

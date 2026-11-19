@@ -68,6 +68,9 @@ const SystemUpdates = React.memo(function SystemUpdates({
       .filter(Boolean)
       .join("\n");
   }, [notes]);
+  const showUpdateDetails =
+    !organizationManagesUpdates &&
+    (isUpdateAvailable || updateStatus.updateDownloaded || releaseNotes.trim());
 
   useEffect(() => {
     let mounted = true;
@@ -152,8 +155,7 @@ const SystemUpdates = React.memo(function SystemUpdates({
           </SettingsPanelRow>
         )}
 
-        {!organizationManagesUpdates &&
-          (isUpdateAvailable || updateStatus.updateDownloaded || releaseNotes.trim()) && (
+        {showUpdateDetails && (
           <SettingsPanelRow>
             <div className="space-y-2.5">
               {isUpdateAvailable && !updateStatus.updateDownloaded && (

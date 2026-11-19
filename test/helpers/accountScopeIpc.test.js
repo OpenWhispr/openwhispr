@@ -3363,10 +3363,16 @@ test("Reset App Data removes guest creator links and interrupted candidate write
   const previousDomain = process.env.OPENWHISPR_AFFILIATE_DOMAIN;
   const previousRevoke = connectorManager.revokeAllStored;
   const previousTokenState = tokenState;
+  const previousAudioStorage = fakeThis.audioStorageManager;
   process.env.OPENWHISPR_AFFILIATE_ENABLED = "true";
   process.env.OPENWHISPR_AFFILIATE_DOMAIN = "try.openwhispr.com";
   connectorManager.revokeAllStored = async () => {};
+  // Reset reports audio it couldn't remove, so the stub answers like an empty folder.
+  fakeThis.audioStorageManager = {
+    deleteAllAudio: () => ({ deleted: 0, failedIds: [], failed: false }),
+  };
   t.after(() => {
+    fakeThis.audioStorageManager = previousAudioStorage;
     if (previousEnabled === undefined) delete process.env.OPENWHISPR_AFFILIATE_ENABLED;
     else process.env.OPENWHISPR_AFFILIATE_ENABLED = previousEnabled;
     if (previousDomain === undefined) delete process.env.OPENWHISPR_AFFILIATE_DOMAIN;

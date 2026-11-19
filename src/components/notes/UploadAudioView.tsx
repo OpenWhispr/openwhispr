@@ -306,6 +306,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       tinfoilApiKey: settings.tinfoilApiKey,
       deepgramApiKey: settings.deepgramApiKey,
       assemblyaiApiKey: settings.assemblyaiApiKey,
+      elevenlabsApiKey: settings.elevenlabsApiKey,
       openrouterApiKey: settings.openrouterApiKey,
       customTranscriptionApiKey: settings.customTranscriptionApiKey,
     }))

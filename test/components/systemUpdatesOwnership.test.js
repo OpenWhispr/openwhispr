@@ -40,7 +40,7 @@ test("System update owner mounts on first visit and retains live state and insta
           return null;
         },
         getAppVersion: async () => ({ version: "1.2.3" }),
-        installUpdate: async () => {},
+        installUpdate: async () => ({ success: true }),
         onUpdateAvailable: (callback) => {
           onAvailable = callback;
           calls.listen++;

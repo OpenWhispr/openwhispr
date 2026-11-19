@@ -89,6 +89,7 @@ export function useVoiceDraft({
       tinfoilApiKey: state.tinfoilApiKey,
       deepgramApiKey: state.deepgramApiKey,
       assemblyaiApiKey: state.assemblyaiApiKey,
+      elevenlabsApiKey: state.elevenlabsApiKey,
       openrouterApiKey: state.openrouterApiKey,
       customTranscriptionApiKey: state.customTranscriptionApiKey,
     }))

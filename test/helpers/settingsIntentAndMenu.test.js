@@ -44,6 +44,7 @@ function loadWindowManager() {
     "./accountScopeBinding": {},
     "./meetingNotificationDestination": {},
     "./linuxWindowInputRegion": {},
+    "./win32WindowShape": {},
     "./externalUrlOpener": {},
     "./hotkeyManager": Stub,
     "./dragManager": Stub,
