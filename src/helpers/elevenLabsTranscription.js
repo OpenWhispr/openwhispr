@@ -1,5 +1,6 @@
 const { net } = require("electron");
 const debugLogger = require("./debugLogger");
+const { sanitizeElevenLabsKeyterms: sanitizeKeyterms } = require("../utils/elevenLabsKeyterms.js");
 const {
   PROVIDER_ERROR_CODES,
   providerHttpError,
@@ -12,38 +13,8 @@ const {
 const ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text";
 const DEFAULT_MODEL = "scribe_v3";
 
-// ElevenLabs rejects the whole request (422) for a single keyterm outside its
-// documented limits, so terms that break them are dropped rather than sent.
-// It takes 1000 keyterms, but bills at least 20 seconds for a request with more
-// than 100, which would multiply the cost of a short dictation.
-const MAX_KEYTERMS = 100;
-// ElevenLabs allows 50 characters. The renderer cuts longer dictionary entries to
-// 50, and a cut-off word is no keyterm, so a term at the limit is dropped too.
-const MAX_KEYTERM_CHARS = 50;
-const MAX_KEYTERM_WORDS = 5;
-const FORBIDDEN_KEYTERM_CHARS = /[<>{}[\]\\]/;
-
 // ElevenLabs lists Filipino rather than Tagalog, so the app's "tl" goes out as "fil".
 const LANGUAGE_CODES = { tl: "fil" };
-
-function sanitizeKeyterms(keyterms) {
-  if (!Array.isArray(keyterms)) return [];
-  const seen = new Set();
-  const terms = [];
-  for (const raw of keyterms) {
-    if (typeof raw !== "string") continue;
-    const term = raw.trim().replace(/\s+/g, " ");
-    if (!term || term.length >= MAX_KEYTERM_CHARS) continue;
-    if (term.split(" ").length > MAX_KEYTERM_WORDS) continue;
-    if (FORBIDDEN_KEYTERM_CHARS.test(term)) continue;
-    const key = term.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    terms.push(term);
-    if (terms.length === MAX_KEYTERMS) break;
-  }
-  return terms;
-}
 
 async function transcribeWithElevenLabs(
   { audioBuffer, model, fileName, contentType, language, keyterms, apiKey, signal },
@@ -62,7 +33,7 @@ async function transcribeWithElevenLabs(
   const audio = new Blob([buffer], { type });
   const languageCode =
     language && language !== "auto" ? (LANGUAGE_CODES[language] ?? language) : null;
-  const terms = sanitizeKeyterms(keyterms);
+  let terms = sanitizeKeyterms(keyterms);
 
   debugLogger.debug(
     "ElevenLabs batch transcription starting",
@@ -72,6 +43,7 @@ async function transcribeWithElevenLabs(
 
   const doFetch = fetchImpl || ((url, init) => net.fetch(url, init));
   const send = async (sentTerms) => {
+    signal?.throwIfAborted();
     const formData = new FormData();
     formData.append("file", audio, fileName || "audio.webm");
     formData.append("model_id", resolvedModel);
@@ -89,7 +61,7 @@ async function transcribeWithElevenLabs(
       body: formData,
       ...(signal ? { signal } : {}),
     });
-    return { response, errorText: response.ok ? "" : await response.text().catch(() => "") };
+    return { response, errorText: response.ok ? "" : await response.text() };
   };
 
   let { response, errorText } = await send(terms);
@@ -101,7 +73,8 @@ async function transcribeWithElevenLabs(
       status: response.status,
       body: redactProviderBody(errorText),
     });
-    ({ response, errorText } = await send([]));
+    terms = [];
+    ({ response, errorText } = await send(terms));
   }
 
   if (!response.ok) {
@@ -119,10 +92,24 @@ async function transcribeWithElevenLabs(
     });
   }
 
-  const data = await response.json().catch(() => null);
-  const text = typeof data?.text === "string" ? data.text : "";
+  const data = await response.json().catch((error) => {
+    if (error instanceof SyntaxError) return null;
+    throw error;
+  });
+  if (typeof data?.text !== "string") {
+    throw providerError(PROVIDER_ERROR_CODES.ERROR, {
+      provider: "ElevenLabs",
+      surface: "transcription",
+      technicalDetails: { underlyingError: "Expected a JSON transcript with a text field." },
+    });
+  }
   // Scribe can answer silence with "[pause]" instead of an empty string.
-  return { text: text.trim() === "[pause]" ? "" : text, model: resolvedModel };
+  const trimmed = data.text.trim();
+  return {
+    text: !trimmed || trimmed === "[pause]" ? "" : data.text,
+    model: resolvedModel,
+    acceptedKeyterms: terms,
+  };
 }
 
 module.exports = { transcribeWithElevenLabs, sanitizeKeyterms, ELEVENLABS_STT_URL };

@@ -124,6 +124,64 @@ test("cancelling while batch segments merge never starts transcription", async (
   assert.equal(manager.lastAudioBlob, null);
 });
 
+for (const [engine, channel, method] of [
+  ["Whisper", "transcribeLocalWhisper", "processWithLocalWhisper"],
+  ["Parakeet", "transcribeLocalParakeet", "processWithLocalParakeet"],
+]) {
+  test(`cancelling ${engine} before a decode failure skips the ElevenLabs fallback`, async (t) => {
+    const { createManager, window } = await loadAudioManager(t, {
+      cachePrefix: "openwhispr-cancel-local-fallback-",
+      settingsKey: "__cancelLocalFallbackSettings",
+      settings: {
+        useLocalWhisper: true,
+        transcriptionMode: "local",
+        allowOpenAIFallback: true,
+        cloudTranscriptionMode: "byok",
+        cloudTranscriptionProvider: "elevenlabs",
+        cloudTranscriptionModel: "scribe_v3",
+      },
+    });
+    const decoding = deferred();
+    const finishDecode = deferred();
+    window.electronAPI[channel] = async () => {
+      decoding.resolve();
+      await finishDecode.promise;
+      return { success: false, error: "decoder unavailable" };
+    };
+    const upload = t.mock.fn(async () => ({ text: "recovered dictation", acceptedKeyterms: [] }));
+    window.electronAPI.proxyElevenlabsTranscription = upload;
+    const manager = createManager({
+      isProcessing: true,
+      getAPIKey: async () => "test-key",
+      processTranscription: async (text) => text,
+      isReasoningAvailable: async () => false,
+    });
+    const audio = new Blob(["dictation"], { type: "audio/webm" });
+    const pipeline = manager._startProcessingPipeline();
+    const pending = manager[method](audio, undefined, {}, () =>
+      manager._shouldAbandonProcessingPipeline(pipeline)
+    );
+    await decoding.promise;
+    assert.equal(manager.cancelProcessing(), true);
+    const nextController = new AbortController();
+    manager._activeTranscriptionAbortController = nextController;
+    finishDecode.resolve();
+
+    await assert.rejects(pending, { name: "AbortError" });
+    assert.equal(upload.mock.callCount(), 0);
+    assert.equal(manager._activeTranscriptionAbortController, nextController);
+
+    const next = await manager[method](audio);
+    assert.equal(next.text, "recovered dictation");
+    assert.equal(next.source, "openai-fallback");
+    assert.equal(upload.mock.callCount(), 1);
+
+    const silence = { code: "NO_SPEECH_DETECTED", error: "No speech detected in audio" };
+    upload.mock.mockImplementation(async () => silence);
+    await assert.rejects(manager[method](audio), { code: silence.code, message: silence.error });
+  });
+}
+
 test("a cancelled older pipeline cannot publish or clear a newer pipeline", async (t) => {
   const { AudioManager } = await loadManagerClass(t);
   const firstTranscription = deferred();

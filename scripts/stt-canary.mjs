@@ -28,16 +28,15 @@ import tokenProviders from "../src/helpers/realtimeTokenProviders.js";
 import audioUtils from "../src/utils/audioUtils.js";
 import geminiTranscription from "../src/helpers/geminiTranscription.js";
 import geminiLive from "../src/helpers/geminiLiveStreaming.js";
-import elevenLabsTranscription from "../src/helpers/elevenLabsTranscription.js";
 import AssemblyAiStreaming from "../src/helpers/assemblyAiStreaming.js";
 import DeepgramStreaming from "../src/helpers/deepgramStreaming.js";
 import { loadCanaryCatalog } from "./lib/canary-catalog.mjs";
+import { probeElevenLabsBatch } from "./lib/elevenlabs-batch-probe.mjs";
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
 const { pcm16ToWav } = audioUtils;
 const { transcribeWithGemini } = geminiTranscription;
 const { GeminiLiveStreaming } = geminiLive;
-const { transcribeWithElevenLabs } = elevenLabsTranscription;
 
 // The provider's default is what a fresh AssemblyAI selection dictates with
 // (ModelRegistry.getDefaultTranscriptionModel), so that is the id to probe.
@@ -139,17 +138,6 @@ function toWebmOpus(wav) {
 async function probeGeminiBatch(key, audio, contentType) {
   if (!audio) return { ok: false, detail: `could not build ${contentType} fixture` };
   await transcribeWithGemini({ audioBuffer: audio, contentType, apiKey: key }, fetch);
-  return { ok: true };
-}
-
-// The request dictation sends: WebM/Opus, the default model and a keyterm. As with
-// Gemini, completing proves auth, the fields and the decode; silence has no text.
-async function probeElevenLabsBatch(key, audio) {
-  if (!audio) return { ok: false, detail: "could not build audio/webm fixture" };
-  await transcribeWithElevenLabs(
-    { audioBuffer: audio, contentType: "audio/webm", keyterms: ["OpenWhispr"], apiKey: key },
-    fetch
-  );
   return { ok: true };
 }
 

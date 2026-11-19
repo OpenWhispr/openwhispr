@@ -51,7 +51,7 @@ test("posts multipart audio with the xi-api-key header to the Scribe endpoint", 
   assert.equal(file.name, "memo.mp3");
   assert.equal(file.type, "audio/mpeg");
   assert.equal(Buffer.from(await file.arrayBuffer()).toString(), "fake-audio-bytes");
-  assert.deepEqual(result, { text: "hello", model: "scribe_v2" });
+  assert.deepEqual(result, { text: "hello", model: "scribe_v2", acceptedKeyterms: [] });
 });
 
 test("auto language sends no language_code, and the model defaults to scribe_v3", async () => {
@@ -69,12 +69,13 @@ test("auto language sends no language_code, and the model defaults to scribe_v3"
 test("dictionary words go out as repeated keyterms parts after sanitising", async () => {
   const { fetchImpl, calls } = makeFetch(200, { text: "ok" });
 
-  await transcribeWithElevenLabs(
-    { audioBuffer: AUDIO, keyterms: ["OpenWhispr", " Kubernetes  cluster "], apiKey: "k" },
+  const result = await transcribeWithElevenLabs(
+    { audioBuffer: AUDIO, keyterms: ["OpenWhispr", " Kubernetes  cluster ", "{tag}"], apiKey: "k" },
     fetchImpl
   );
 
-  assert.deepEqual(calls[0].init.body.getAll("keyterms"), ["OpenWhispr", "Kubernetes cluster"]);
+  assert.deepEqual(result.acceptedKeyterms, ["OpenWhispr", "Kubernetes cluster"]);
+  assert.deepEqual(calls[0].init.body.getAll("keyterms"), result.acceptedKeyterms);
 });
 
 test("sanitizeKeyterms drops terms ElevenLabs would reject the whole request for", () => {
@@ -82,7 +83,7 @@ test("sanitizeKeyterms drops terms ElevenLabs would reject the whole request for
     sanitizeKeyterms([
       "ok",
       "OK",
-      "x".repeat(50),
+      "x".repeat(51),
       "one two three four five six",
       "a <tag>",
       "{brace}",
@@ -95,6 +96,14 @@ test("sanitizeKeyterms drops terms ElevenLabs would reject the whole request for
   );
   assert.deepEqual(sanitizeKeyterms(undefined), []);
   assert.equal(sanitizeKeyterms(Array.from({ length: 150 }, (_, i) => `term${i}`)).length, 100);
+});
+
+test("keyterms can contain exactly 50 Unicode characters", () => {
+  const boundary = "𠮷".repeat(50);
+  assert.deepEqual(sanitizeKeyterms([boundary, boundary + "a", "x".repeat(50)]), [
+    boundary,
+    "x".repeat(50),
+  ]);
 });
 
 test("a missing key fails before any request", async () => {
@@ -140,28 +149,39 @@ test("a 422 validation error is a bad request", async () => {
   );
 });
 
-test("a response without text yields an empty transcript", async () => {
-  const { fetchImpl } = makeFetch(200, { language_code: "eng" });
-  const result = await transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, fetchImpl);
-  assert.equal(result.text, "");
+test("an empty or pause transcript represents silence", async () => {
+  for (const text of ["", "  ", " [pause] "]) {
+    const result = await transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, async () =>
+      Response.json({ text })
+    );
+    assert.equal(result.text, "");
+  }
 });
 
-test("Scribe's [pause] for silence and a body that isn't JSON are empty transcripts", async () => {
-  const pause = makeFetch(200, { text: " [pause] " });
-  const silent = await transcribeWithElevenLabs(
-    { audioBuffer: AUDIO, apiKey: "k" },
-    pause.fetchImpl
-  );
-  assert.equal(silent.text, "");
+test("malformed successful responses surface a provider error", async () => {
+  for (const response of [new Response("<html>"), Response.json({}), Response.json({ text: 0 })]) {
+    await assert.rejects(
+      transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, async () => response),
+      { code: "PROVIDER_ERROR" }
+    );
+  }
+});
 
-  const notJson = async () => ({
-    ok: true,
-    status: 200,
-    headers: new Headers(),
-    json: async () => JSON.parse("<html>"),
-  });
-  const result = await transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, notJson);
-  assert.equal(result.text, "");
+test("a failed or cancelled response read keeps the original error", async () => {
+  for (const error of [
+    new TypeError("network error"),
+    new DOMException("Cancelled", "AbortError"),
+  ]) {
+    await assert.rejects(
+      transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, async () => ({
+        ok: true,
+        json: async () => {
+          throw error;
+        },
+      })),
+      (actual) => actual === error
+    );
+  }
 });
 
 test("Tagalog goes out under the Filipino code ElevenLabs lists", async () => {
@@ -194,6 +214,7 @@ test("a request refused over its keyterms goes again without them", async () => 
 
   assert.equal(result.text, "hello");
   assert.deepEqual(calls, [["state-of-the-art"], []]);
+  assert.deepEqual(result.acceptedKeyterms, []);
 });
 
 test("a refusal that isn't about keyterms is not retried", async () => {
@@ -212,4 +233,41 @@ test("a refusal that isn't about keyterms is not retried", async () => {
     transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, noTerms.fetchImpl)
   );
   assert.equal(noTerms.calls.length, 1);
+});
+
+test("cancelling during a keyterm rejection prevents the second audio upload", async () => {
+  const controller = new AbortController();
+  let uploads = 0;
+  await assert.rejects(
+    transcribeWithElevenLabs(
+      { audioBuffer: AUDIO, keyterms: ["OpenWhispr"], apiKey: "k", signal: controller.signal },
+      async () => {
+        uploads++;
+        controller.abort();
+        return Response.json({ detail: "invalid keyterms" }, { status: 422 });
+      }
+    ),
+    { name: "AbortError" }
+  );
+  assert.equal(uploads, 1);
+});
+
+test("the ElevenLabs canary fails when the successful request omitted its keyterm", async () => {
+  const { probeElevenLabsBatch } = await import("../../scripts/lib/elevenlabs-batch-probe.mjs");
+  const hintLists = [];
+  const rejected = await probeElevenLabsBatch("test-key", AUDIO, async (_url, request) => {
+    const terms = request.body.getAll("keyterms");
+    hintLists.push(terms);
+    return terms.length
+      ? Response.json({ detail: "invalid keyterms" }, { status: 422 })
+      : Response.json({ text: "" });
+  });
+  assert.deepEqual(hintLists, [["OpenWhispr"], []]);
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.detail, /keyterm/i);
+
+  const accepted = await probeElevenLabsBatch("test-key", AUDIO, async () =>
+    Response.json({ text: "[pause]" })
+  );
+  assert.equal(accepted.ok, true);
 });

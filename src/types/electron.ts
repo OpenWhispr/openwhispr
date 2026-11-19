@@ -285,8 +285,9 @@ export interface IpcErrorFields {
  * Proxied-transcription IPC results. `ipcMain.handle` drops custom error props on
  * rejection, so these handlers resolve with a serialized error instead of throwing.
  */
-export type ProxyTranscriptionResult =
-  { text: string; model?: string; error?: undefined } | (IpcErrorFields & { text?: undefined });
+export type ProxyTranscriptionResult<SuccessFields = unknown> =
+  | ({ text: string; model?: string; error?: undefined } & SuccessFields)
+  | (IpcErrorFields & { text?: undefined });
 
 export interface AuthTokenState {
   token: string | null;
@@ -2943,7 +2944,7 @@ declare global {
         model?: string;
         language?: string;
         keyterms?: string[];
-      }) => Promise<ProxyTranscriptionResult>;
+      }) => Promise<ProxyTranscriptionResult<{ acceptedKeyterms: string[] }>>;
 
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
