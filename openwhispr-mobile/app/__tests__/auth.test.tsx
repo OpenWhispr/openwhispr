@@ -8,7 +8,7 @@ let mockAuthScreenProps: {
   reason?: string;
 } = {};
 type MockAuthState = {
-  user: { id: string; email?: string; isAnonymous: boolean } | null;
+  user: { id: string; email?: string; isAnonymous: boolean; emailVerified?: boolean } | null;
   isGuest: boolean;
 };
 let mockAuthState: MockAuthState = { user: null, isGuest: false };
@@ -67,7 +67,10 @@ describe('/auth route', () => {
   });
 
   it('redirects a signed-in user to Home', () => {
-    mockAuthState = { user: { id: 'real-user', isAnonymous: false }, isGuest: false };
+    mockAuthState = {
+      user: { id: 'real-user', isAnonymous: false, emailVerified: true },
+      isGuest: false,
+    };
 
     render(<AuthRoute />);
 
@@ -75,7 +78,10 @@ describe('/auth route', () => {
   });
 
   it('retains the upstream iOS redirect when Android marks a cloud session rejected', () => {
-    mockAuthState = { user: { id: 'real-user', isAnonymous: false }, isGuest: false };
+    mockAuthState = {
+      user: { id: 'real-user', isAnonymous: false, emailVerified: true },
+      isGuest: false,
+    };
     mockSessionRejected = true;
 
     render(<AuthRoute />);
@@ -85,7 +91,7 @@ describe('/auth route', () => {
 
   it('keeps reauthentication open until the rejected session is replaced', () => {
     mockAuthState = {
-      user: { id: 'real-user', email: 'alex@example.com', isAnonymous: false },
+      user: { id: 'real-user', email: 'alex@example.com', isAnonymous: false, emailVerified: true },
       isGuest: false,
     };
     mockSessionRejected = true;
@@ -109,5 +115,20 @@ describe('/auth route', () => {
     mockParams = { reason: 'nonsense' };
     view.rerender(<AndroidAuthRoute />);
     expect(mockAuthScreenProps.reason).toBeUndefined();
+  });
+
+  it('keeps an email account that has not verified on Verify your email (decision 12)', () => {
+    mockAuthState = {
+      user: { id: 'new-user', email: 'alex@example.com', isAnonymous: false, emailVerified: false },
+      isGuest: false,
+    };
+    const view = render(<AndroidAuthRoute />);
+    expect(mockReplace).not.toHaveBeenCalled();
+    mockAuthState = {
+      user: { id: 'new-user', email: 'alex@example.com', isAnonymous: false, emailVerified: true },
+      isGuest: false,
+    };
+    view.rerender(<AndroidAuthRoute />);
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/(record)');
   });
 });

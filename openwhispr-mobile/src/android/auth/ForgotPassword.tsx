@@ -34,7 +34,7 @@ async function sendResetLink(email: string): Promise<ResetRequestOutcome> {
 }
 
 /** Seconds left until `until`, ticking once a second; 0 once it has passed. */
-function useCountdown(until: number): number {
+export function useCountdown(until: number): number {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (until <= Date.now()) return;

@@ -12,12 +12,13 @@ Object.defineProperty(globalThis, 'localStorage', {
 });
 
 type MockAuth = {
-  user: { id: string; email: string; isAnonymous: boolean } | null;
+  user: { id: string; email: string; isAnonymous: boolean; emailVerified?: boolean } | null;
   isLoading: boolean;
   loadingProvider: 'google' | 'microsoft' | null;
   error: string | null;
   signIn: jest.Mock;
   signUp: jest.Mock;
+  signOut: jest.Mock;
   signInWithGoogle: jest.Mock;
   signInWithMicrosoft: jest.Mock;
   continueAsGuest: jest.Mock;
@@ -49,9 +50,15 @@ const mockCheckUser = jest.fn();
 jest.mock('@/lib/authClient', () => ({ checkUserExists: (email: string) => mockCheckUser(email) }));
 const mockRequestReset = jest.fn();
 const mockResetPassword = jest.fn();
+const mockRequestVerification = jest.fn();
 jest.mock('@/lib/authClient.android', () => ({
   requestPasswordResetEmail: (...args: unknown[]) => mockRequestReset(...args),
   resetPasswordWithToken: (...args: unknown[]) => mockResetPassword(...args),
+  requestVerificationEmail: (...args: unknown[]) => mockRequestVerification(...args),
+}));
+const mockVerificationStatus = jest.fn();
+jest.mock('@/lib/apiClient', () => ({
+  api: { get: (...args: unknown[]) => mockVerificationStatus(...args) },
 }));
 const mockToast = jest.fn();
 jest.mock('@/android/settings/kit', () => ({
@@ -99,6 +106,7 @@ beforeEach(() => {
     error: null,
     signIn: jest.fn(),
     signUp: jest.fn(),
+    signOut: jest.fn(async () => mockSetAuth({ user: null })),
     signInWithGoogle: jest.fn(),
     signInWithMicrosoft: jest.fn(),
     continueAsGuest: jest.fn(),
@@ -222,6 +230,52 @@ describe('Android sign-in screen', () => {
     fireEvent.press(view.getByText('Send reset link'));
     expect(mockRequestReset).not.toHaveBeenCalled();
     expect(view.getByText('Enter a full email address, like name@example.com.')).toBeTruthy();
+  });
+});
+
+describe('Android verify email (section 6)', () => {
+  const unverified = {
+    id: 'u',
+    email: 'new@example.com',
+    isAnonymous: false,
+    emailVerified: false,
+  };
+
+  it('waits on Verify your email after sign-up, then says Email verified (6.1, 6.5)', async () => {
+    mockCheckUser.mockResolvedValue('signup');
+    mockVerificationStatus.mockResolvedValue({ verified: false });
+    mockAuth.signUp.mockImplementation(async () => mockSetAuth({ user: unverified }));
+    const view = render(<AuthScreen onClose={jest.fn()} />);
+    fireEvent.changeText(view.getByLabelText('Email address'), 'new@example.com');
+    fireEvent.press(view.getByText('Continue'));
+    await waitFor(() => expect(view.getAllByText('Create account').length).toBeGreaterThan(0));
+    fireEvent.changeText(view.getByLabelText('Password'), 'river-maple-77');
+    await act(async () => fireEvent.press(view.getAllByText('Create account')[1]));
+    expect(view.getByText('Verify your email')).toBeTruthy();
+    expect(view.getByText('Resend in 1:00')).toBeTruthy();
+    expect(view.getByText('Use a different email')).toBeTruthy();
+    expect(mockVerificationStatus).toHaveBeenCalledWith('/api/auth/verification-status');
+
+    mockVerificationStatus.mockResolvedValue({ verified: true });
+    // The next 5 s check sees it.
+    await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy(), { timeout: 7000 });
+    fireEvent.press(view.getByText('Continue'));
+    expect(mockAuth.user?.emailVerified).toBe(true);
+  }, 10000);
+
+  it('offers Resend at once to an account that never verified, and Use another account (6.4)', async () => {
+    mockAuth.user = unverified;
+    mockVerificationStatus.mockResolvedValue({ verified: false });
+    mockRequestVerification.mockResolvedValue({ status: 429, retryAfter: '299' });
+    const view = render(<AuthScreen onClose={jest.fn()} />);
+    expect(view.getByText('Verify your email')).toBeTruthy();
+    await act(async () => fireEvent.press(view.getByText('Resend link')));
+    expect(mockRequestVerification).toHaveBeenCalledWith('new@example.com');
+    expect(view.getByText('Resend in 4:59')).toBeTruthy();
+    expect(mockToast).toHaveBeenCalledWith('Too many tries. Wait a few minutes.', 'neutral');
+    await act(async () => fireEvent.press(view.getByText('Use another account')));
+    expect(mockAuth.signOut).toHaveBeenCalled();
+    expect(view.getByText('Privacy-first\nVoice-to-text AI')).toBeTruthy();
   });
 });
 

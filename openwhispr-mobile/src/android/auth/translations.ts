@@ -85,6 +85,15 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     passwordUpdatedTitle: 'Contraseña actualizada',
     passwordUpdatedBody: 'Ya has iniciado sesión. Usa la contraseña nueva también en tu ordenador.',
     passwordUpdatedSignIn: 'Inicia sesión con tu contraseña nueva. Úsala también en tu ordenador.',
+    verifyTitle: 'Verifica tu correo',
+    verifyBody:
+      'Enviamos un enlace a <b>{{email}}</b>. Tócalo para terminar de crear tu cuenta. Funciona durante 24 horas.',
+    verifyResumedBody:
+      '<b>{{email}}</b> aún no está verificado. Toca el enlace de nuestro correo para terminar, o envía uno nuevo.',
+    verifyHint:
+      'Esperando a que toques el enlace…  ¿No te llega? Revisa el spam o envíalo de nuevo.',
+    verifiedTitle: 'Correo verificado',
+    verifiedBody: 'Has iniciado sesión como <b>{{email}}</b>.',
   },
   fr: {
     back: 'Retour',
@@ -173,6 +182,14 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
       'Vous êtes connecté. Utilisez aussi le nouveau mot de passe sur votre ordinateur.',
     passwordUpdatedSignIn:
       'Connectez-vous avec votre nouveau mot de passe. Utilisez-le aussi sur votre ordinateur.',
+    verifyTitle: 'Vérifiez votre e-mail',
+    verifyBody:
+      'Nous avons envoyé un lien à <b>{{email}}</b>. Touchez-le pour finir de créer votre compte. Il est valable 24 heures.',
+    verifyResumedBody:
+      '<b>{{email}}</b> n’est pas encore vérifié. Touchez le lien de notre e-mail pour terminer, ou envoyez-en un nouveau.',
+    verifyHint: 'En attente du lien…  Rien reçu ? Vérifiez les spams ou renvoyez-le.',
+    verifiedTitle: 'E-mail vérifié',
+    verifiedBody: 'Vous êtes connecté en tant que <b>{{email}}</b>.',
   },
   de: {
     back: 'Zurück',
@@ -259,6 +276,15 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     passwordUpdatedBody: 'Du bist angemeldet. Nutze das neue Passwort auch auf deinem Computer.',
     passwordUpdatedSignIn:
       'Melde dich mit deinem neuen Passwort an. Nutze es auch auf deinem Computer.',
+    verifyTitle: 'Bestätige deine E-Mail',
+    verifyBody:
+      'Wir haben einen Link an <b>{{email}}</b> geschickt. Tippe darauf, um dein Konto fertig einzurichten. Er gilt 24 Stunden.',
+    verifyResumedBody:
+      '<b>{{email}}</b> ist noch nicht bestätigt. Tippe auf den Link in unserer E-Mail oder sende einen neuen.',
+    verifyHint:
+      'Wir warten, bis du auf den Link tippst…  Nichts bekommen? Sieh im Spam nach oder sende ihn erneut.',
+    verifiedTitle: 'E-Mail bestätigt',
+    verifiedBody: 'Du bist als <b>{{email}}</b> angemeldet.',
   },
   pt: {
     back: 'Voltar',
@@ -343,6 +369,14 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     passwordUpdatedTitle: 'Senha atualizada',
     passwordUpdatedBody: 'Você entrou. Use a senha nova também no seu computador.',
     passwordUpdatedSignIn: 'Entre com sua senha nova. Use-a também no seu computador.',
+    verifyTitle: 'Confirme seu e-mail',
+    verifyBody:
+      'Enviamos um link para <b>{{email}}</b>. Toque nele para terminar de criar sua conta. Ele vale por 24 horas.',
+    verifyResumedBody:
+      '<b>{{email}}</b> ainda não foi confirmado. Toque no link do nosso e-mail para terminar ou envie um novo.',
+    verifyHint: 'Esperando você tocar no link…  Não chegou? Veja o spam ou envie de novo.',
+    verifiedTitle: 'E-mail confirmado',
+    verifiedBody: 'Você entrou como <b>{{email}}</b>.',
   },
   it: {
     back: 'Indietro',
@@ -427,6 +461,15 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     passwordUpdatedTitle: 'Password aggiornata',
     passwordUpdatedBody: 'Hai effettuato l’accesso. Usa la nuova password anche sul computer.',
     passwordUpdatedSignIn: 'Accedi con la nuova password. Usala anche sul computer.',
+    verifyTitle: 'Verifica la tua email',
+    verifyBody:
+      'Abbiamo inviato un link a <b>{{email}}</b>. Toccalo per finire di creare l’account. Vale per 24 ore.',
+    verifyResumedBody:
+      '<b>{{email}}</b> non è ancora verificata. Tocca il link nella nostra email per finire, o inviane uno nuovo.',
+    verifyHint:
+      'In attesa che tocchi il link…  Non è arrivato? Controlla lo spam o invialo di nuovo.',
+    verifiedTitle: 'Email verificata',
+    verifiedBody: 'Hai effettuato l’accesso come <b>{{email}}</b>.',
   },
   ru: {
     back: 'Назад',
@@ -510,6 +553,14 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     passwordUpdatedTitle: 'Пароль изменён',
     passwordUpdatedBody: 'Вы вошли. Используйте новый пароль и на компьютере.',
     passwordUpdatedSignIn: 'Войдите с новым паролем. Используйте его и на компьютере.',
+    verifyTitle: 'Подтвердите почту',
+    verifyBody:
+      'Мы отправили ссылку на <b>{{email}}</b>. Нажмите её, чтобы закончить создание аккаунта. Она действует 24 часа.',
+    verifyResumedBody:
+      '<b>{{email}}</b> ещё не подтверждён. Нажмите ссылку в нашем письме или отправьте новую.',
+    verifyHint: 'Ждём, пока вы нажмёте ссылку…  Не пришло? Проверьте спам или отправьте ещё раз.',
+    verifiedTitle: 'Почта подтверждена',
+    verifiedBody: 'Вы вошли как <b>{{email}}</b>.',
   },
   'zh-CN': {
     back: '返回',
@@ -589,6 +640,12 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     passwordUpdatedTitle: '密码已更新',
     passwordUpdatedBody: '你已登录。在电脑上也请使用新密码。',
     passwordUpdatedSignIn: '请用新密码登录。在电脑上也请使用新密码。',
+    verifyTitle: '验证你的邮箱',
+    verifyBody: '我们已向 <b>{{email}}</b> 发送了一个链接。点击它即可完成账户创建，24 小时内有效。',
+    verifyResumedBody: '<b>{{email}}</b> 尚未验证。点击我们邮件中的链接完成验证，或重新发送。',
+    verifyHint: '正在等待你点击链接…  没收到？请查看垃圾邮件，或重新发送。',
+    verifiedTitle: '邮箱已验证',
+    verifiedBody: '你已登录为 <b>{{email}}</b>。',
   },
   'zh-TW': {
     back: '返回',
@@ -668,6 +725,12 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     passwordUpdatedTitle: '密碼已更新',
     passwordUpdatedBody: '你已登入。在電腦上也請使用新密碼。',
     passwordUpdatedSignIn: '請用新密碼登入。在電腦上也請使用新密碼。',
+    verifyTitle: '驗證你的電子郵件',
+    verifyBody: '我們已寄送連結到 <b>{{email}}</b>。點一下即可完成建立帳戶，24 小時內有效。',
+    verifyResumedBody: '<b>{{email}}</b> 尚未驗證。點一下我們郵件中的連結完成驗證，或重新傳送。',
+    verifyHint: '正在等你點連結…  沒收到？請查看垃圾郵件，或重新傳送。',
+    verifiedTitle: '電子郵件已驗證',
+    verifiedBody: '你已登入為 <b>{{email}}</b>。',
   },
   ja: {
     back: '戻る',
@@ -749,6 +812,15 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     passwordUpdatedTitle: 'パスワードを更新しました',
     passwordUpdatedBody: 'サインインしました。パソコンでも新しいパスワードを使ってください。',
     passwordUpdatedSignIn: '新しいパスワードでサインインしてください。パソコンでも使ってください。',
+    verifyTitle: 'メールアドレスを確認',
+    verifyBody:
+      '<b>{{email}}</b> にリンクを送りました。タップしてアカウントの作成を完了してください。有効期間は 24 時間です。',
+    verifyResumedBody:
+      '<b>{{email}}</b> はまだ確認されていません。メールのリンクをタップするか、新しいリンクを送ってください。',
+    verifyHint:
+      'リンクのタップを待っています…  届きませんか？迷惑メールを確認するか、もう一度送信してください。',
+    verifiedTitle: 'メールアドレスを確認しました',
+    verifiedBody: '<b>{{email}}</b> としてサインインしています。',
   },
   ar: {
     back: 'رجوع',
@@ -830,5 +902,14 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     passwordUpdatedTitle: 'تم تحديث كلمة المرور',
     passwordUpdatedBody: 'سجّلت الدخول. استخدم كلمة المرور الجديدة على حاسوبك أيضًا.',
     passwordUpdatedSignIn: 'سجّل الدخول بكلمة المرور الجديدة. استخدمها على حاسوبك أيضًا.',
+    verifyTitle: 'أكّد بريدك الإلكتروني',
+    verifyBody:
+      'أرسلنا رابطًا إلى <b>{{email}}</b>. اضغط عليه لإكمال إنشاء حسابك. يعمل لمدة 24 ساعة.',
+    verifyResumedBody:
+      'لم يتم تأكيد <b>{{email}}</b> بعد. اضغط على الرابط في رسالتنا لإكمال التأكيد، أو أرسل رابطًا جديدًا.',
+    verifyHint:
+      'بانتظار أن تضغط على الرابط…  لم يصلك؟ تحقق من البريد غير المرغوب فيه، أو أرسله مرة أخرى.',
+    verifiedTitle: 'تم تأكيد البريد الإلكتروني',
+    verifiedBody: 'سجّلت الدخول باسم <b>{{email}}</b>.',
   },
 };

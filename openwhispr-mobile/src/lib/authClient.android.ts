@@ -237,3 +237,19 @@ export async function signInWithGoogle(): Promise<SocialAuthResult> {
   await cacheAndroidSessionAfterSignIn(data as { user?: unknown; token?: string | null });
   return { success: true, sessionCookie: (await getStoredSession()) ?? null, error: null };
 }
+
+/** Better Auth's /send-verification-email: a fresh "Verify your email" link (6.2, 6.3). */
+export async function requestVerificationEmail(email: string): Promise<PasswordResetResponse> {
+  let retryAfter: string | null = null;
+  const { error } = await client.sendVerificationEmail({
+    email,
+    fetchOptions: {
+      timeout: 15_000,
+      onError: ({ response }) => {
+        retryAfter = response.headers.get('X-Retry-After');
+      },
+    },
+  });
+  if (!error) return { status: 200 };
+  return { status: error.status || null, code: error.code, retryAfter };
+}

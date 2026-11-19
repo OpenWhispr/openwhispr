@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import AuthScreen, { isAuthReason } from '@/screens/AuthScreen.android';
 import { requiresRealAccount } from '@/lib/accountAccess';
+import { needsEmailVerification } from '@/android/auth/emailVerification';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore.android';
 
@@ -19,7 +20,8 @@ export default function AuthRoute() {
     // done and gets sent on.
     // Android retains the local account while a rejected cloud session is
     // replaced. Do not dismiss its sign-in screen before that succeeds.
-    if (requiresRealAccount(user) || sessionRejected) return;
+    // An email account that hasn't verified stays here on Verify your email (6.1 / 6.4).
+    if (requiresRealAccount(user) || sessionRejected || needsEmailVerification(user)) return;
     if (params.returnTo === 'account') {
       const placement = params.superwallPlacement
         ? `?superwallPlacement=${encodeURIComponent(params.superwallPlacement)}`
