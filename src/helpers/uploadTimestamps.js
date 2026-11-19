@@ -6,11 +6,12 @@
 // missing timestamp is a degraded export, never a failed upload.
 // ESM so dictation (renderer) and file upload (main, via require(esm)) share
 // the gate.
+export function supportsWhisperSegments(provider, model) {
+  return (provider === "openai" && model === "whisper-1") || provider === "groq";
+}
+
 export function timestampRequestFields(provider, model) {
-  if (provider === "openai" && model === "whisper-1") {
-    return { response_format: "verbose_json" };
-  }
-  if (provider === "groq") {
+  if (supportsWhisperSegments(provider, model)) {
     return { response_format: "verbose_json" };
   }
   if (provider === "mistral") {

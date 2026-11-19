@@ -88,7 +88,7 @@ import {
 } from "../services/managedTranscription.ts";
 import { getTranscriptionApiKey } from "../services/fileTranscription";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
-import { timestampRequestFields } from "./uploadTimestamps";
+import { supportsWhisperSegments } from "./uploadTimestamps";
 import { dropNoSpeechSegments } from "./noSpeechSegments";
 import {
   isOrukeetStreaming,
@@ -4321,9 +4321,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       // verbose_json carries the per-segment no-speech scores dropNoSpeechSegments
       // reads; the timestamp gate keeps it to the providers and models that accept it.
-      const requestsSegments =
-        !shouldStream &&
-        timestampRequestFields(route.provider, model)?.response_format === "verbose_json";
+      const requestsSegments = !shouldStream && supportsWhisperSegments(route.provider, model);
       if (requestsSegments) {
         formData.append("response_format", "verbose_json");
       }
@@ -4437,15 +4435,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       } else {
         const rawText = await response.text();
-        logger.debug(
-          "Raw API response body",
-          {
-            rawText: rawText.substring(0, 1000),
-            fullLength: rawText.length,
-          },
-          "transcription"
-        );
-
         try {
           result = JSON.parse(rawText);
         } catch (parseError) {
@@ -4453,7 +4442,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "Failed to parse JSON response",
             {
               parseError: parseError.message,
-              rawText: rawText.substring(0, 500),
+              responseLength: rawText.length,
             },
             "transcription"
           );
@@ -4478,7 +4467,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             hasText: !!result.text,
             textLength: result.text?.length,
             resultKeys: Object.keys(result),
-            fullResult: result,
           },
           "transcription"
         );
@@ -4530,7 +4518,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             blobType: audioBlob.type,
             mimeType,
             extension,
-            resultText: result.text,
             resultKeys: Object.keys(result),
           },
           "transcription"
@@ -4538,8 +4525,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         logger.error(
           "No text in transcription result",
           {
-            result,
-            resultKeys: Object.keys(result),
+            provider,
+            model,
+            segmentCount: result.segments?.length ?? 0,
           },
           "transcription"
         );

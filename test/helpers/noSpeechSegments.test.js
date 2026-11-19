@@ -122,3 +122,23 @@ test("segments that don't cover the whole text are not used to rebuild it", () =
   };
   assert.equal(dropNoSpeechSegments(result), result.text);
 });
+
+test("kept words and paragraphs retain the spacing from the provider transcript", () => {
+  const noise = speech("Thanks!", { no_speech_prob: 0.93, avg_logprob: -1.32 });
+  const result = {
+    text: "Send the report today.\n\nNext item. Thanks!",
+    segments: [speech("Send the report"), speech("today. Next item."), noise],
+  };
+  assert.equal(dropNoSpeechSegments(result), "Send the report today.\n\nNext item.");
+});
+
+test("interior and repeated no-speech spans are removed at their scored positions", () => {
+  const noise = speech("more", { no_speech_prob: 0.93, avg_logprob: -1.32 });
+  assert.equal(
+    dropNoSpeechSegments({
+      text: "more more more\n\n明天开会。",
+      segments: [speech("more"), noise, noise, speech("明天"), speech("开会。")],
+    }),
+    "more\n\n明天开会。"
+  );
+});

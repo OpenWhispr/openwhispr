@@ -738,6 +738,91 @@ const invokeUpload = (payload) => {
   return uploadHandler({ sender: {} }, { filePath: uploadTempFile, ...payload });
 };
 
+const whisperResponse = {
+  text: "Send the report today. Thanks!",
+  segments: [
+    { text: "Send the report", no_speech_prob: 0.01, avg_logprob: -0.2 },
+    { text: "today.", no_speech_prob: 0.01, avg_logprob: -0.2 },
+    { text: "Thanks!", no_speech_prob: 0.99, avg_logprob: -1.5 },
+  ],
+};
+
+function mockWhisperResponse(t, body = whisperResponse) {
+  const original = fetchResponse;
+  t.after(() => {
+    fetchResponse = original;
+  });
+  fetchResponse = () => new Response(JSON.stringify(body));
+}
+
+test("retry: Groq writes only the retained dictation to both history fields", async (t) => {
+  mockWhisperResponse(t);
+  const update = t.mock.method(fakeThis.databaseManager, "updateTranscriptionText");
+  const result = await invoke({
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "groq",
+    cloudTranscriptionModel: "whisper-large-v3",
+    transcriptionMode: "providers",
+  });
+  assert.equal(result.success, true);
+  assert.equal(fetches.at(-1).init.body.get("response_format"), "verbose_json");
+  assert.deepEqual(update.mock.calls[0].arguments, [
+    7,
+    "Send the report today.",
+    "Send the report today.",
+  ]);
+});
+
+test("voice draft: Whisper filters the chat mic while ordinary uploads keep the provider text", async (t) => {
+  mockWhisperResponse(t);
+  const { path: filePath } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, filePath));
+  const settings = {
+    provider: "openai",
+    model: "whisper-1",
+    apiKey: "test-key",
+    transcriptionMode: "providers",
+  };
+  const draft = await handlers.get("transcribe-audio-file-byok")(
+    { sender: {} },
+    { ...settings, filePath, purpose: "dictation" }
+  );
+  assert.deepEqual(draft, { success: true, text: "Send the report today." });
+  assert.match(fetches.at(-1).init.body.toString(), /name="response_format"\r\n\r\nverbose_json/);
+  const upload = await invokeUpload({ ...settings, purpose: "dictation" });
+  assert.deepEqual(upload, { success: true, text: whisperResponse.text });
+  assert.doesNotMatch(fetches.at(-1).init.body.toString(), /name="response_format"/);
+});
+
+test("an all-silence Whisper response leaves history intact and the voice draft empty", async (t) => {
+  const noise = whisperResponse.segments.at(-1);
+  mockWhisperResponse(t, { text: noise.text, segments: [noise] });
+  const update = t.mock.method(fakeThis.databaseManager, "updateTranscriptionText");
+  const retry = await invoke({
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionModel: "whisper-1",
+    transcriptionMode: "providers",
+  });
+  assert.equal(retry.code, "NO_SPEECH_DETECTED");
+  assert.equal(update.mock.callCount(), 0);
+
+  const { path: filePath } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, filePath));
+  const draft = await handlers.get("transcribe-audio-file-byok")(
+    { sender: {} },
+    {
+      filePath,
+      purpose: "dictation",
+      provider: "groq",
+      model: "whisper-large-v3-turbo",
+      apiKey: "test-key",
+      transcriptionMode: "providers",
+    }
+  );
+  assert.deepEqual(draft, { success: true, text: "" });
+});
+
 test("upload: mistral sends x-api-key with a provider-validated model and no language on auto", async () => {
   fetches.length = 0;
   const result = await invokeUpload({

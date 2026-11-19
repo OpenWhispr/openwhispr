@@ -26,13 +26,18 @@ export function dropNoSpeechSegments(result) {
   if (typeof text !== "string" || !Array.isArray(segments) || !segments.length) return text;
   if (!segments.some(isNoSpeechSegment)) return text;
 
-  const segmentText = (segment) => (typeof segment?.text === "string" ? segment.text : "");
-  const compact = (value) => value.replace(/\s+/g, "");
-  if (compact(segments.map(segmentText).join("")) !== compact(text)) return text;
-
-  return segments
-    .filter((segment) => !isNoSpeechSegment(segment))
-    .map(segmentText)
-    .join("")
-    .trim();
+  // Segment strings can omit spaces or normalize paragraphs. Match their
+  // non-whitespace characters in order, but copy kept spans from the original.
+  const originalCharacters = /\S/gu;
+  const kept = [];
+  for (const segment of segments) {
+    if (typeof segment?.text !== "string") return text;
+    const start = originalCharacters.lastIndex;
+    for (const character of segment.text.replace(/\s/g, "")) {
+      if (originalCharacters.exec(text)?.[0] !== character) return text;
+    }
+    if (!isNoSpeechSegment(segment)) kept.push(text.slice(start, originalCharacters.lastIndex));
+  }
+  if (originalCharacters.test(text)) return text;
+  return kept.join("").trim();
 }

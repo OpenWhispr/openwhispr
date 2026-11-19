@@ -2,8 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadAudioManager } = require("./harness/audioManager");
 
-async function loadManager(t, { provider, model, ...settings }) {
+async function loadManager(t, { provider, model, ...settings }, mockModules = {}) {
   const { createManager } = await loadAudioManager(t, {
+    mockModules,
     cachePrefix: "openwhispr-no-speech-segments-test-",
     settingsKey: "__noSpeechSegmentsSettings",
     settings: {
@@ -109,7 +110,21 @@ test("a segment the decoder was confident in is kept despite its no_speech_prob"
 });
 
 test("a transcript of only no-speech segments fails like an empty transcript", async (t) => {
-  const manager = await loadManager(t, { provider: "groq", model: "whisper-large-v3" });
+  const diagnostics = [];
+  globalThis.__recordNoSpeechDiagnostic = (...args) => diagnostics.push(args);
+  t.after(() => {
+    delete globalThis.__recordNoSpeechDiagnostic;
+  });
+  const manager = await loadManager(
+    t,
+    { provider: "groq", model: "whisper-large-v3" },
+    {
+      "/utils/logger": `
+        const record = globalThis.__recordNoSpeechDiagnostic;
+        export default { debug: record, info: record, warn: record, error: record };
+      `,
+    }
+  );
   const responses = [
     { text: "" },
     {
@@ -139,6 +154,12 @@ test("a transcript of only no-speech segments fails like an empty transcript", a
 
   assert.match(errors[0], /^No text transcribed/);
   assert.equal(errors[1], errors[0]);
+  assert.ok(
+    diagnostics.some(
+      ([message, meta]) => message === "No text in transcription result" && meta.segmentCount === 1
+    )
+  );
+  assert.doesNotMatch(JSON.stringify(diagnostics), /Thank you for watching|no_speech_prob/);
 });
 
 for (const { label, settings } of [

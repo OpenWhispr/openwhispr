@@ -338,7 +338,12 @@ const {
   mergeSpeakersWithText,
   formatSpeakerTranscript,
 } = require("./speakerMerge");
-const { timestampRequestFields, mapVerboseSegments } = require("./uploadTimestamps");
+const { dropNoSpeechSegments } = require("./noSpeechSegments");
+const {
+  supportsWhisperSegments,
+  timestampRequestFields,
+  mapVerboseSegments,
+} = require("./uploadTimestamps");
 const { listLocalTranscriptionModels } = require("./localTranscriptionModels");
 
 // Canonicalize allowed dirs so realpath'd inputs match on macOS (/var -> /private/var).
@@ -8002,6 +8007,8 @@ class IPCHandlers {
             formData.append("model", route.model);
             if (route.language) formData.append("language", route.language);
           }
+          const requestsSegments = supportsWhisperSegments(provider, route.model);
+          if (requestsSegments) formData.append("response_format", "verbose_json");
           const headers = {};
           if (provider === "mistral") {
             headers["x-api-key"] = apiKey;
@@ -8029,7 +8036,11 @@ class IPCHandlers {
             });
           }
           const data = await response.json();
-          result = { text: data?.text, source: provider, model: route.model };
+          result = {
+            text: requestsSegments ? dropNoSpeechSegments(data) : data?.text,
+            source: provider,
+            model: route.model,
+          };
         }
 
         if (result?.success === false) {
@@ -11981,7 +11992,8 @@ class IPCHandlers {
       ) => {
         const fs = require("fs");
         const cancel = this._uploadCancelRegistry.register(requestId);
-        return runAudioJob(event, audioFilePurpose(filePath, purpose), cancel, async (signal) => {
+        const resolvedPurpose = audioFilePurpose(filePath, purpose);
+        return runAudioJob(event, resolvedPurpose, cancel, async (signal) => {
           let cleanupUpload = null;
           let providerErrorContext = null;
           try {
@@ -12153,6 +12165,11 @@ class IPCHandlers {
               // that require one (Corti) are handled on their own branch above.
             }
 
+            const filterDictation =
+              resolvedPurpose === "dictation" &&
+              !diarize &&
+              !timestamps &&
+              supportsWhisperSegments(route.provider, route.model);
             if (diarize) {
               // A Custom endpoint may front OpenAI or Mistral, so fall back to the
               // resolved host before giving up on speaker labels.
@@ -12173,7 +12190,7 @@ class IPCHandlers {
                   { provider: route.provider, endpoint: route.endpoint }
                 );
               }
-            } else if (timestamps) {
+            } else if (timestamps || filterDictation) {
               // Providers/models that don't support the request keep the
               // plain-text request untouched (helper returns null).
               const fields = timestampRequestFields(route.provider, route.model);
@@ -12253,7 +12270,8 @@ class IPCHandlers {
                 hasSegments: Array.isArray(data.data?.segments),
               });
             }
-            return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
+            const text = filterDictation ? dropNoSpeechSegments(data.data) : data.data.text;
+            return { success: true, text, ...(segments ? { segments } : {}) };
           } catch (rawError) {
             if (signal.aborted) {
               return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
