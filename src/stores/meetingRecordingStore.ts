@@ -1648,8 +1648,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             previous?.getTracks().forEach((track) => track.stop());
             micSource = nextSource;
             micStream = replacement;
-            logger.info("Meeting microphone capture recovered", {}, "meeting");
           },
+          logger,
+          logScope: "meeting",
         });
         await micRecovery.start(micStream, {
           followDefault: followsSystemDefaultMic(getSettings()),

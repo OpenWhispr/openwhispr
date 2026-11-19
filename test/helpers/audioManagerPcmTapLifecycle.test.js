@@ -100,7 +100,7 @@ test("a replacement microphone is bound into the same tap", async (t) => {
     _previewAudioContext: null,
     _batchPcmTap: { attach: (stream) => rebound.push(stream) },
     _cancelRequestedDuringMicRecovery: false,
-    _stopRequestedDuringMicRecovery: false,
+    _batchStopRequested: false,
     createBatchRecorder: (stream) => recorders.push(stream),
   });
 

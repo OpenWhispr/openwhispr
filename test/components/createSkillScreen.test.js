@@ -85,49 +85,43 @@ async function fill(container, { name = "", description = "", instructions = "" 
   if (instructions) await typeInto(field(container, "instructions"), instructions);
 }
 
-test(
-  "Create stays dimmed until every field is filled, and still explains why on press",
-  async (t) => {
-    const { container, calls } = await renderCreate(t);
-    assert.equal(createButton(container).getAttribute("aria-disabled"), "true");
-    assert.equal(createButton(container).getAttribute("disabled"), null);
+test("Create stays dimmed until every field is filled, and still explains why on press", async (t) => {
+  const { container, calls } = await renderCreate(t);
+  assert.equal(createButton(container).getAttribute("aria-disabled"), "true");
+  assert.equal(createButton(container).getAttribute("disabled"), null);
 
-    await fill(container, { name: "Weekly status report", description: "Writes my update." });
-    assert.equal(createButton(container).getAttribute("aria-disabled"), "true");
-    await click(createButton(container));
-    assert.match(label(container), /skills\.create\.instructionsMissing/);
-    assert.deepEqual(calls.saved, []);
+  await fill(container, { name: "Weekly status report", description: "Writes my update." });
+  assert.equal(createButton(container).getAttribute("aria-disabled"), "true");
+  await click(createButton(container));
+  assert.match(label(container), /skills\.create\.instructionsMissing/);
+  assert.deepEqual(calls.saved, []);
 
-    await fill(container, { instructions: "## Steps\n1. Read notes." });
-    assert.equal(createButton(container).getAttribute("aria-disabled"), "false");
-  }
-);
+  await fill(container, { instructions: "## Steps\n1. Read notes." });
+  assert.equal(createButton(container).getAttribute("aria-disabled"), "false");
+});
 
-test(
-  "pressing Create with gaps shows each message under its field and focuses the first",
-  async (t) => {
-    const { container } = await renderCreate(t);
-    await fill(container, { description: "Writes my update." });
+test("pressing Create with gaps shows each message under its field and focuses the first", async (t) => {
+  const { container } = await renderCreate(t);
+  await fill(container, { description: "Writes my update." });
 
-    await click(createButton(container));
+  await click(createButton(container));
 
-    const name = field(container, "name");
-    assert.equal(focused(container) === name, true);
-    assert.equal(name.getAttribute("aria-invalid"), "true");
-    assert.equal(field(container, "instructions").getAttribute("aria-invalid"), "true");
-    assert.equal(messageFor(container, "name"), "skills.create.nameMissing");
-    assert.equal(messageFor(container, "instructions"), "skills.create.instructionsMissing");
-    assert.equal(field(container, "description").getAttribute("aria-invalid"), null);
+  const name = field(container, "name");
+  assert.equal(focused(container) === name, true);
+  assert.equal(name.getAttribute("aria-invalid"), "true");
+  assert.equal(field(container, "instructions").getAttribute("aria-invalid"), "true");
+  assert.equal(messageFor(container, "name"), "skills.create.nameMissing");
+  assert.equal(messageFor(container, "instructions"), "skills.create.instructionsMissing");
+  assert.equal(field(container, "description").getAttribute("aria-invalid"), null);
 
-    // Fixing a field clears its message
-    await typeInto(name, "Weekly status report");
-    assert.equal(name.getAttribute("aria-invalid"), null);
-    assert.doesNotMatch(label(container), /skills\.create\.nameMissing/);
-  }
-);
+  // Fixing a field clears its message
+  await typeInto(name, "Weekly status report");
+  assert.equal(name.getAttribute("aria-invalid"), null);
+  assert.doesNotMatch(label(container), /skills\.create\.nameMissing/);
+});
 
 test("a filled form creates the skill, clears the draft and toasts", async (t) => {
-  const { container, calls, toasts, store } = await renderCreate(t);
+  const { container, calls, toasts, store, pushes } = await renderCreate(t);
   await fill(container, {
     name: "Weekly status report",
     description: "Writes my update.",
@@ -150,34 +144,32 @@ test("a filled form creates the skill, clears the draft and toasts", async (t) =
   assert.deepEqual(toasts, [
     { title: 'skills.toasts.created{"name":"Weekly status report"}', variant: "success" },
   ]);
+  assert.deepEqual(pushes, ["syncSkillsNow"]);
 });
 
-test(
-  "leaving with unsaved text shows the bar; Keep editing stays and Discard leaves",
-  async (t) => {
-    const { container, calls, store } = await renderCreate(t);
-    await click(button(container, "common.cancel"));
-    assert.equal(calls.back, 1, "an empty form leaves at once");
+test("leaving with unsaved text shows the bar; Keep editing stays and Discard leaves", async (t) => {
+  const { container, calls, store } = await renderCreate(t);
+  await click(button(container, "common.cancel"));
+  assert.equal(calls.back, 1, "an empty form leaves at once");
 
-    await fill(container, { name: "Half done" });
-    await click(button(container, "common.cancel"));
-    assert.equal(
-      label(alert(container)),
-      "skills.create.unsavedskills.create.keepEditingskills.create.discard"
-    );
-    assert.equal(calls.back, 1);
+  await fill(container, { name: "Half done" });
+  await click(button(container, "common.cancel"));
+  assert.equal(
+    label(alert(container)),
+    "skills.create.unsavedskills.create.keepEditingskills.create.discard"
+  );
+  assert.equal(calls.back, 1);
 
-    await click(button(container, "skills.create.keepEditing"));
-    assert.equal(alert(container), null);
-    assert.equal(focused(container) === field(container, "name"), true);
+  await click(button(container, "skills.create.keepEditing"));
+  assert.equal(alert(container), null);
+  assert.equal(focused(container) === field(container, "name"), true);
 
-    await click(button(container, "skills.breadcrumb.root"));
-    assert.ok(alert(container));
-    await click(button(container, "skills.create.discard"));
-    assert.equal(calls.back, 2);
-    assert.equal(store.useSkillsStore.getState().createDraft, null);
-  }
-);
+  await click(button(container, "skills.breadcrumb.root"));
+  assert.ok(alert(container));
+  await click(button(container, "skills.create.discard"));
+  assert.equal(calls.back, 2);
+  assert.equal(store.useSkillsStore.getState().createDraft, null);
+});
 
 test("Esc with unsaved text shows the bar, and Esc again dismisses it", async (t) => {
   const { container, calls } = await renderCreate(t);
@@ -377,7 +369,7 @@ test("a problem with the attached files shows in a toast, named by the file", as
 });
 
 test("a write that fails says why", async (t) => {
-  const { container, toasts, calls } = await renderCreate(t, {
+  const { container, toasts, calls, pushes } = await renderCreate(t, {
     api: { skillsCreate: async () => ({ ok: false, error: "permission" }) },
   });
   await fill(container, { name: "Draft", description: "Does it.", instructions: "Go" });
@@ -393,6 +385,7 @@ test("a write that fails says why", async (t) => {
       variant: "destructive",
     },
   ]);
+  assert.deepEqual(pushes, []);
 });
 
 test("an added file appears as a chip and can be removed", async (t) => {
@@ -506,7 +499,7 @@ test("a Create response from an earlier screen cannot discard a newer draft", as
   let remount;
   const pendingSave = new Promise((resolve) => (completeSave = resolve));
   const created = [];
-  const { container, store, toasts } = await mountSkillsComponent(t, {
+  const { container, store, toasts, pushes } = await mountSkillsComponent(t, {
     modulePath: "/components/skills/CreateSkillScreen.tsx",
     exportName: "CreateSkillScreen",
     api: { skillsCreate: () => pendingSave },
@@ -537,6 +530,7 @@ test("a Create response from an earlier screen cannot discard a newer draft", as
   assert.equal(field(container, "instructions").value, "New text");
   assert.deepEqual(created, []);
   assert.deepEqual(toasts, []);
+  assert.deepEqual(pushes, ["syncSkillsNow"], "the completed write is backed up after leaving");
 });
 
 for (const [outcome, result] of [

@@ -235,7 +235,10 @@ test("ElevenLabs judges dictionary echoes against the keyterms the service recei
       customDictionary: personal,
       sharedDictionaryHints: { space: shared },
     });
-    window.electronAPI.proxyElevenlabsTranscription = async () => ({ text });
+    window.electronAPI.proxyElevenlabsTranscription = async ({ keyterms }) => ({
+      text,
+      acceptedKeyterms: keyterms,
+    });
     const manager = createManager({
       getEffectiveSttLanguage: () => "auto",
       getTranscriptionModel: () => "scribe_v3",

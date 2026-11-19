@@ -598,6 +598,7 @@ class ModelManager {
     options.signal?.throwIfAborted();
     const exactTokens = await this.serverManager.countPromptTokens(messages, {
       disableThinking: options.disableThinking,
+      signal: options.signal,
     });
 
     // A measurement we could not take must never fail the request; the
@@ -678,12 +679,16 @@ class ModelManager {
       this,
       "llm",
       modelId,
-      () => this._policyAllowedRunInference(modelId, prompt, options),
+      () =>
+        this.serverManager.withInferenceReservation(options.signal, (reservation) =>
+          this._policyAllowedRunInference(modelId, prompt, options, reservation)
+        ),
       { onAbort: () => this.cancelInference() }
     );
   }
 
-  async _policyAllowedRunInference(modelId, prompt, options = {}) {
+  async _policyAllowedRunInference(modelId, prompt, requestOptions, reservation) {
+    const options = { ...requestOptions, signal: reservation.signal };
     options.signal?.throwIfAborted();
     this.ensureInitialized();
     const startTime = Date.now();
@@ -788,6 +793,9 @@ class ModelManager {
           signal: options.signal,
         });
         options.signal?.throwIfAborted();
+        // An exact token count can require a larger window. Give up the old
+        // process before asking the scheduler to replace it.
+        reservation.release();
         return this.serverManager.start(modelPath, startOptions);
       };
       // llama.cpp's startup dump is the diagnostic, so it goes to the log here
@@ -845,6 +853,7 @@ class ModelManager {
           throw unavailable(restoreError);
         }
       }
+      reservation.acquire(modelPath);
       this.currentServerModelId = modelId;
     };
 
@@ -852,6 +861,8 @@ class ModelManager {
     // request needs a bigger window than the running one has.
     if (
       !this.serverManager.ready ||
+      this.serverManager.startupPromise ||
+      this.serverManager.modelPath !== modelPath ||
       this.currentServerModelId !== modelId ||
       targetContextSize > (this.serverManager.contextSize || SERVER_CONTEXT_SIZE)
     ) {
@@ -870,6 +881,8 @@ class ModelManager {
         model: modelId,
         contextSize: this.serverManager.contextSize,
       });
+    } else {
+      reservation.acquire(modelPath);
     }
 
     const grantedMaxTokens = await this._ensurePromptFits({
@@ -965,13 +978,13 @@ class ModelManager {
     this.serverManager.cancelInference();
   }
 
-  async prewarmServer(modelId) {
+  async prewarmServer(modelId, dictationSignal) {
     try {
       return await runLocalModelOperation(
         this,
         "llm",
         modelId,
-        () => this._policyAllowedPrewarmServer(modelId),
+        () => this._policyAllowedPrewarmServer(modelId, dictationSignal),
         {
           memoryOnly: true,
           // The pre-warm may be checking whether another model is answering, so
@@ -986,11 +999,14 @@ class ModelManager {
         }
       );
     } catch (error) {
-      if (error.code === "POLICY_UNRESOLVABLE") {
+      if (error.code === "POLICY_UNRESOLVABLE" && !dictationSignal?.aborted) {
         this.localModelPolicy?.runOnceVerdictSettles(() => {
-          // A request in the meantime already started what it needs.
-          if (this.serverManager.ready || this.serverManager.startupPromise) return;
-          this.prewarmServer(modelId).catch((resumeError) => {
+          if (dictationSignal?.aborted) return;
+          // The launch warm-up is redundant once a request starts. An active
+          // recording still needs to hold a matching server through cleanup.
+          if (!dictationSignal && (this.serverManager.ready || this.serverManager.startupPromise))
+            return;
+          this.prewarmServer(modelId, dictationSignal).catch((resumeError) => {
             debugLogger.warn("Resumed llama-server pre-warm failed", {
               error: resumeError.message,
             });
@@ -1001,8 +1017,8 @@ class ModelManager {
     }
   }
 
-  async _policyAllowedPrewarmServer(modelId) {
-    if (!modelId) return false;
+  async _policyAllowedPrewarmServer(modelId, dictationSignal) {
+    if (!modelId || dictationSignal?.aborted) return false;
     this.ensureInitialized();
 
     const modelInfo = this.findModelById(modelId);
@@ -1015,14 +1031,21 @@ class ModelManager {
 
     try {
       // Nobody is waiting on a pre-warm, so it never gets in an answer's way.
-      await this.serverManager.start(
-        modelPath,
-        await this.serverStartOptions(modelInfo, { busyWaitMs: 0 })
-      );
+      const options = await this.serverStartOptions(modelInfo, { busyWaitMs: 0 });
+      if (dictationSignal?.aborted) return false;
+      await this.serverManager.start(modelPath, {
+        ...options,
+        prewarm: dictationSignal ? "dictation" : "background",
+        signal: dictationSignal,
+      });
       this.currentServerModelId = modelId;
+      if (dictationSignal && !dictationSignal.aborted) {
+        this.serverManager.holdForDictation(modelPath, dictationSignal);
+      }
       debugLogger.info("llama-server pre-warmed", { modelId });
       return true;
     } catch (error) {
+      if (dictationSignal && SERVER_LEFT_ALONE_CODES.has(error.code)) return false;
       debugLogger.warn("Failed to pre-warm llama-server", { error: error.message });
       return false;
     }

@@ -199,6 +199,7 @@ const diarizationHost = (endpoint) => {
   } catch {}
   return null;
 };
+const { createLocalCleanupPrewarm } = require("./localCleanupPrewarm");
 const { resolveLocalServerNeeds, shouldStopLocalServer } = require("./localServerPolicy");
 const autoStart = require("./autoStart");
 const { getRelaunchOptions, getRelaunchWaiter } = require("./autoStartPolicy");
@@ -411,7 +412,12 @@ const {
   mergeSpeakersWithText,
   formatSpeakerTranscript,
 } = require("./speakerMerge");
-const { timestampRequestFields, mapVerboseSegments } = require("./uploadTimestamps");
+const { dropNoSpeechSegments } = require("./noSpeechSegments");
+const {
+  supportsWhisperSegments,
+  timestampRequestFields,
+  mapVerboseSegments,
+} = require("./uploadTimestamps");
 const { listLocalTranscriptionModels } = require("./localTranscriptionModels");
 
 // Canonicalize allowed dirs so realpath'd inputs match on macOS (/var -> /private/var).
@@ -528,6 +534,14 @@ async function postMultipart(
       statusCode: response.status,
     });
   }
+}
+
+async function transcribeElevenLabsSpeech(options) {
+  const result = await transcribeWithElevenLabs(options);
+  if (!result.text) {
+    throw Object.assign(new Error("No speech detected in audio"), { code: "NO_SPEECH_DETECTED" });
+  }
+  return result;
 }
 
 function interpretTranscribeResponse(data) {
@@ -822,7 +836,9 @@ class IPCHandlers {
     this.clipboardManager = managers.clipboardManager;
     this.whisperManager = managers.whisperManager;
     this.parakeetManager = managers.parakeetManager;
-    this._initLocalModelPolicy(require("./modelManagerBridge").default);
+    const localModelManager = require("./modelManagerBridge").default;
+    this._initLocalModelPolicy(localModelManager);
+    this.dictationCleanupPrewarm = createLocalCleanupPrewarm(localModelManager);
 
     this.diarizationManager = managers.diarizationManager;
     this.windowManager = managers.windowManager;
@@ -2907,13 +2923,20 @@ class IPCHandlers {
     // in the dictation renderer. Only confirmed renderer state may change the
     // main-process recording gate. Preparing reserves it before the renderer
     // opens the mic; an older attempt cannot release a newer reservation.
-    ipcMain.handle("dictation-lifecycle-state-changed", (event, state, attempt) => {
-      const dictationWindow = this.windowManager.mainWindow;
-      if (!isFromWindow(event, dictationWindow) || typeof attempt !== "string" || !attempt) {
-        return false;
+    ipcMain.handle(
+      "dictation-lifecycle-state-changed",
+      (event, state, attempt, voiceAgentRequested) => {
+        const dictationWindow = this.windowManager.mainWindow;
+        if (!isFromWindow(event, dictationWindow) || typeof attempt !== "string" || !attempt) {
+          return false;
+        }
+        return this.windowManager.setDictationLifecycleState(
+          state,
+          attempt,
+          voiceAgentRequested === true
+        );
       }
-      return this.windowManager.setDictationLifecycleState(state, attempt);
-    });
+    );
 
     // Dictionary handlers
     ipcMain.on("auto-learn-changed", (_event, enabled) => {
@@ -6847,21 +6870,40 @@ class IPCHandlers {
 
     // ElevenLabs Scribe authenticates with xi-api-key and takes model_id /
     // language_code, so it has no OpenAI-compatible path either.
-    handleProviderTranscription(
+    const elevenLabsDictations = new AgentStreamRequestRegistry();
+    const transcribeElevenLabsDictation = createProductHandler(
       "proxy-elevenlabs-transcription",
-      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }, signal) => {
-        return await transcribeWithElevenLabs({
-          signal,
-          audioBuffer: Buffer.from(audioBuffer),
-          model,
-          fileName: "audio.webm",
-          contentType: "audio/webm",
-          language,
-          keyterms,
-          apiKey: this.environmentManager.getElevenlabsKey(),
-        });
-      })
+      serializeIpcError(
+        async (_event, { audioBuffer, model, language, keyterms }, cancelSignal) => {
+          return transcribeElevenLabsSpeech({
+            signal: AbortSignal.any([cancelSignal, this._productRequestContext.getStore().signal]),
+            audioBuffer: Buffer.from(audioBuffer),
+            model,
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+            language,
+            keyterms,
+            apiKey: this.environmentManager.getElevenlabsKey(),
+          });
+        }
+      ),
+      true
     );
+    ipcMain.handle("proxy-elevenlabs-transcription", async (event, options) => {
+      // Register before the policy lookup can yield so an early Cancel cannot miss the upload.
+      const sender = event.sender;
+      const senderId = sender.id;
+      const requestId = crypto.randomUUID();
+      const controller = elevenLabsDictations.begin(senderId, requestId);
+      const abort = () => controller.abort();
+      sender.once("destroyed", abort);
+      try {
+        return await transcribeElevenLabsDictation(event, options, controller.signal);
+      } finally {
+        sender.removeListener("destroyed", abort);
+        elevenLabsDictations.complete(senderId, requestId, controller);
+      }
+    });
 
     // Headers and redirect mode for a request to the self-hosted speech server of `surface`
     // ("dictation" or "upload"), with the custom key for a route that takes one (Orukeet's).
@@ -7412,47 +7454,47 @@ class IPCHandlers {
       return this.environmentManager.saveAllKeysToEnvFile();
     });
 
+    let lastDictationSpeechEngine;
     ipcMain.handle("sync-startup-preferences", async (event, prefs) => {
       const setVars = {};
       const clearVars = [];
+      let speechEngine = null;
 
       if (prefs.useLocalWhisper && prefs.model) {
-        // Local mode with model selected - set provider and model for pre-warming
         setVars.LOCAL_TRANSCRIPTION_PROVIDER = prefs.localTranscriptionProvider;
         if (prefs.language) setVars.DICTATION_LANGUAGE = prefs.language;
         if (isSherpaLocalProvider(prefs.localTranscriptionProvider)) {
+          speechEngine = "parakeet";
           setVars.PARAKEET_MODEL = prefs.model;
           clearVars.push("LOCAL_WHISPER_MODEL");
-          this.whisperManager.stopServer().catch((err) => {
-            debugLogger.error("Failed to stop whisper-server on provider switch", {
-              error: err.message,
-            });
-          });
         } else {
+          speechEngine = "whisper";
           setVars.LOCAL_WHISPER_MODEL = prefs.model;
           clearVars.push("PARAKEET_MODEL");
-          this.parakeetManager.stopServer().catch((err) => {
-            debugLogger.error("Failed to stop parakeet-server on provider switch", {
+        }
+      } else {
+        clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
+        if (!prefs.useLocalWhisper) speechEngine = "cloud";
+      }
+
+      // All windows resend these preferences on LLM route changes. A meeting
+      // can be decoding on either speech server while the dictation route stays put.
+      if (speechEngine !== lastDictationSpeechEngine) {
+        lastDictationSpeechEngine = speechEngine;
+        if (speechEngine === "cloud" || speechEngine === "parakeet") {
+          this.whisperManager.stopServer().catch((err) => {
+            debugLogger.error("Failed to stop whisper-server on dictation switch", {
               error: err.message,
             });
           });
         }
-      } else if (prefs.useLocalWhisper) {
-        // Local mode enabled but no model selected - clear pre-warming vars
-        clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
-      } else {
-        // Cloud mode - stop local servers to free RAM
-        clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
-        this.whisperManager.stopServer().catch((err) => {
-          debugLogger.error("Failed to stop whisper-server on cloud switch", {
-            error: err.message,
+        if (speechEngine === "cloud" || speechEngine === "whisper") {
+          this.parakeetManager.stopServer().catch((err) => {
+            debugLogger.error("Failed to stop parakeet-server on dictation switch", {
+              error: err.message,
+            });
           });
-        });
-        this.parakeetManager.stopServer().catch((err) => {
-          debugLogger.error("Failed to stop parakeet-server on cloud switch", {
-            error: err.message,
-          });
-        });
+        }
       }
 
       // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL clears once
@@ -7468,6 +7510,7 @@ class IPCHandlers {
       // llama-server; signed out, the policy never loads.
       if (prefs.policySettled || !this._hasActiveAccountScope()) {
         const localServer = resolveLocalServerNeeds(prefs);
+        this.dictationCleanupPrewarm.setModel(localServer.cleanup);
 
         if (localServer.cleanup) {
           setVars.CLEANUP_PROVIDER = "local";
@@ -9222,6 +9265,7 @@ class IPCHandlers {
     });
 
     ipcMain.on("cloud-transcribe-cancel", (event) => {
+      elevenLabsDictations.cancelSender(event.sender.id);
       this._cloudTranscriptionRequests.cancelSender(event.sender.id);
     });
 
@@ -9503,10 +9547,9 @@ class IPCHandlers {
           });
           result = { text, source: "gemini", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "elevenlabs") {
-          if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes) {
-            throw new Error(byokSizeCapError(route.sizeCapBytes));
-          }
-          const { text } = await transcribeWithElevenLabs({
+          // No size check: the cap is the upload screen's, not ElevenLabs', and dictation
+          // already sent this recording once at this size.
+          const { text } = await transcribeElevenLabsSpeech({
             signal,
             audioBuffer: buffer,
             model: route.model,
@@ -9585,6 +9628,8 @@ class IPCHandlers {
             formData.append("model", route.model);
             if (route.language) formData.append("language", route.language);
           }
+          const requestsSegments = supportsWhisperSegments(provider, route.model);
+          if (requestsSegments) formData.append("response_format", "verbose_json");
           const headers = {};
           if (provider === "mistral") {
             headers["x-api-key"] = apiKey;
@@ -9615,7 +9660,11 @@ class IPCHandlers {
             );
           }
           const data = await response.json();
-          result = { text: data?.text, source: provider, model: route.model };
+          result = {
+            text: requestsSegments ? dropNoSpeechSegments(data) : data?.text,
+            source: provider,
+            model: route.model,
+          };
         }
 
         assertRetryCurrent();
@@ -13799,7 +13848,8 @@ class IPCHandlers {
       ) => {
         const fs = require("fs");
         const cancel = this._uploadCancelRegistry.register(requestId);
-        return runAudioJob(event, audioFilePurpose(filePath, purpose), cancel, async (signal) => {
+        const resolvedPurpose = audioFilePurpose(filePath, purpose);
+        return runAudioJob(event, resolvedPurpose, cancel, async (signal) => {
           let cleanupUpload = null;
           let providerErrorContext = null;
           try {
@@ -14010,7 +14060,7 @@ class IPCHandlers {
             if (route.transport === "proxied" && route.provider === "elevenlabs") {
               // No language hint, as for the other uploads: a file is often not
               // in the dictation language.
-              const { text } = await transcribeWithElevenLabs({
+              const { text } = await transcribeElevenLabsSpeech({
                 audioBuffer: fs.readFileSync(realByok),
                 signal,
                 model: route.model,
@@ -14052,6 +14102,11 @@ class IPCHandlers {
               // that require one (Corti) are handled on their own branch above.
             }
 
+            const filterDictation =
+              resolvedPurpose === "dictation" &&
+              !diarize &&
+              !timestamps &&
+              supportsWhisperSegments(route.provider, route.model);
             if (diarize) {
               // A Custom endpoint may front OpenAI or Mistral, so fall back to the
               // resolved host before giving up on speaker labels.
@@ -14072,7 +14127,7 @@ class IPCHandlers {
                   { provider: route.provider, endpoint: route.endpoint }
                 );
               }
-            } else if (timestamps) {
+            } else if (timestamps || filterDictation) {
               // Providers/models that don't support the request keep the
               // plain-text request untouched (helper returns null).
               const fields = timestampRequestFields(route.provider, route.model);
@@ -14152,7 +14207,8 @@ class IPCHandlers {
                 hasSegments: Array.isArray(data.data?.segments),
               });
             }
-            return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
+            const text = filterDictation ? dropNoSpeechSegments(data.data) : data.data.text;
+            return { success: true, text, ...(segments ? { segments } : {}) };
           } catch (rawError) {
             if (signal.aborted) {
               return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };

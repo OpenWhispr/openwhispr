@@ -114,6 +114,7 @@ import {
 } from "../utils/dictionaryPromptCap";
 import type { EnterpriseSetupMode } from "../types/enterpriseIdentity";
 import { getManagedScopeResolution } from "./enterpriseIdentityStore";
+import { syncAfterLocalWrite } from "../services/syncAfterLocalWrite";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -188,6 +189,14 @@ function transcriptionProviderModels(
   if (context === "dictation")
     return batchModels.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
   return batchModels;
+}
+
+// A provider can offer a separate Note Recording model that dictation never selects.
+function canInheritDictationProviderForMeeting(providerId: string): boolean {
+  return (
+    MEETING_TRANSCRIPTION_POLICY_CATALOG.byokProviders.includes(providerId) &&
+    transcriptionProviderModels(providerId, "dictation").some((model) => model.streaming)
+  );
 }
 
 function defaultTranscriptionModel(
@@ -1563,6 +1572,16 @@ function createStringSetter(key: string) {
   };
 }
 
+// A blank Note Recording field inherits dictation. A batch-only dictation choice
+// must not replace the provider or model the recorder was already using.
+function preserveInheritedMeetingSelection(previous: SettingsState): void {
+  const current = useSettingsStore.getState();
+  if (!current.meetingCloudTranscriptionProvider)
+    current.setMeetingCloudTranscriptionProvider(previous.cloudTranscriptionProvider);
+  if (!current.meetingCloudTranscriptionModel)
+    current.setMeetingCloudTranscriptionModel(previous.cloudTranscriptionModel);
+}
+
 function persistTranscriptionModelMemory(memory: Record<string, string>) {
   if (isBrowser) localStorage.setItem("transcriptionModelByProvider", JSON.stringify(memory));
   useSettingsStore.setState({ transcriptionModelByProvider: memory });
@@ -1789,13 +1808,6 @@ function createSecretSetter(
 }
 
 export const MAX_TRANSLATION_TARGETS = 5;
-
-// Kick the matching cloud push once a local write has landed in SQLite.
-function syncAfterLocalWrite(method: "syncDictionaryNow" | "syncSnippetsNow"): void {
-  void import("../services/SyncService.js").then(({ syncService }) => {
-    if (syncService.canSync()) void syncService[method]();
-  });
-}
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(
@@ -2337,7 +2349,20 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setPreferredLanguage: createStringSetter("preferredLanguage"),
   setChineseScriptPreference: (value: ChineseScriptPreference) =>
     createStringSetter("chineseScriptPreference")(normalizeChineseScriptPreference(value)),
-  setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),
+  setCloudTranscriptionProvider: (providerId) => {
+    const s = get();
+    const meetingProviders = MEETING_TRANSCRIPTION_POLICY_CATALOG.byokProviders;
+    const meetingProvider = s.meetingCloudTranscriptionProvider || s.cloudTranscriptionProvider;
+    if (
+      providerId !== s.cloudTranscriptionProvider &&
+      providerId !== "openwhispr" &&
+      !canInheritDictationProviderForMeeting(providerId) &&
+      (s.meetingTranscriptionMode === "openwhispr" || meetingProviders.includes(meetingProvider))
+    ) {
+      preserveInheritedMeetingSelection(s);
+    }
+    setStringSetting("cloudTranscriptionProvider", providerId);
+  },
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
 
@@ -2363,7 +2388,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       persistTranscriptionModelMemory(memory);
     }
     const remembered = memory[`${context}:${providerId}`];
-    setStringSetting(keys.provider, providerId);
+    if (context === "dictation") s.setCloudTranscriptionProvider(providerId);
+    else setStringSetting(keys.provider, providerId);
     setStringSetting(
       keys.model,
       remembered &&
@@ -2980,7 +3006,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // for everything (e.g. Corti for medical providers).
   setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => {
     const s = useSettingsStore.getState();
-    s.updateTranscriptionSettings(settings);
+    const { cloudTranscriptionProvider: selectedProvider, ...otherSettings } = settings;
+    if (selectedProvider !== undefined)
+      s.switchCloudTranscriptionProvider("dictation", selectedProvider);
+    s.updateTranscriptionSettings(otherSettings);
     const {
       useLocalWhisper,
       localTranscriptionProvider,
@@ -2997,13 +3026,22 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       cloudTranscriptionProvider
     );
     s.setTranscriptionMode(mode);
-    s.setMeetingTranscriptionMode(mode);
+    const applyToMeeting =
+      mode !== "providers" || canInheritDictationProviderForMeeting(cloudTranscriptionProvider);
+    if (applyToMeeting) {
+      s.setMeetingTranscriptionMode(mode);
+      s.setMeetingUseLocalWhisper(useLocalWhisper);
+      s.setMeetingLocalTranscriptionProvider(localTranscriptionProvider);
+      s.setMeetingCloudTranscriptionMode(cloudTranscriptionMode);
+      s.setMeetingCloudTranscriptionProvider(cloudTranscriptionProvider);
+      s.setMeetingCloudTranscriptionModel(cloudTranscriptionModel);
+    } else {
+      // Onboarding can change the mode and model even when the provider stays the same.
+      preserveInheritedMeetingSelection(s);
+      if (!s.meetingCloudTranscriptionMode)
+        s.setMeetingCloudTranscriptionMode(s.cloudTranscriptionMode);
+    }
     s.setUploadTranscriptionMode(mode);
-    s.setMeetingUseLocalWhisper(useLocalWhisper);
-    s.setMeetingLocalTranscriptionProvider(localTranscriptionProvider);
-    s.setMeetingCloudTranscriptionMode(cloudTranscriptionMode);
-    s.setMeetingCloudTranscriptionProvider(cloudTranscriptionProvider);
-    s.setMeetingCloudTranscriptionModel(cloudTranscriptionModel);
     s.setUploadUseLocalWhisper(useLocalWhisper);
     s.setUploadLocalTranscriptionProvider(localTranscriptionProvider);
     s.setUploadCloudTranscriptionMode(cloudTranscriptionMode);
@@ -3014,7 +3052,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (cloudTranscriptionProvider && cloudTranscriptionModel) {
       const memory = { ...useSettingsStore.getState().transcriptionModelByProvider };
       for (const { context } of TRANSCRIPTION_CONTEXT_KEYS) {
-        memory[`${context}:${cloudTranscriptionProvider}`] = cloudTranscriptionModel;
+        if (context !== "meeting" || applyToMeeting) {
+          memory[`${context}:${cloudTranscriptionProvider}`] = cloudTranscriptionModel;
+        }
       }
       persistTranscriptionModelMemory(memory);
     }

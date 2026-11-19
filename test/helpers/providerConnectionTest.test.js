@@ -1146,7 +1146,8 @@ test("ElevenLabs is checked by a transcription request that carries no audio", a
   assert.equal(request.headers["xi-api-key"], "xi-secret");
   assert.equal(request.headers.Authorization, undefined);
 
-  for (const status of [400, 422]) {
+  // 402 is a key with no credit left: still the user's key.
+  for (const status of [400, 402, 422]) {
     const { calls, fetchImpl } = recordingFetch(() => jsonResponse(status, { detail: {} }));
     const result = await testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, fetchImpl);
     assert.deepEqual(result, { success: true }, String(status));

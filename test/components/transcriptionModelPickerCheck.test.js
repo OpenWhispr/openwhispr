@@ -694,6 +694,50 @@ test("a blank Note Recording provider names the dictation provider it runs on", 
   assert.equal(hint(panel), undefined, "Deepgram is already in use");
 });
 
+test("Dictation Settings keeps a working inherited Note Recording route when selecting Scribe", async (t) => {
+  // Legacy BYOK users could keep the default OpenAI provider without writing a provider key.
+  const panel = await mount(t, {
+    settings: { _providerSettingsMigrated: "", cloudTranscriptionMode: "byok" },
+    overrides: { selectedCloudProvider: "openai", selectedCloudModel: "gpt-4o-mini-transcribe" },
+  });
+  await panel.setProps({ onCloudModelSelect: panel.state().setCloudTranscriptionModel });
+  const { selectResolvedMeetingTranscription } = await panel.vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const { getMeetingStreamingTranscriptionProviders } = await panel.vite.ssrLoadModule(
+    "/models/ModelRegistry.ts"
+  );
+  const { resolveMeetingTranscriptionOptions } =
+    await import("../../src/helpers/meetingTranscriptionRouting.js");
+  const recording = () => {
+    const meeting = selectResolvedMeetingTranscription(panel.state());
+    return resolveMeetingTranscriptionOptions({
+      transcriptionMode: meeting.transcriptionMode,
+      selectedProvider: meeting.cloudTranscriptionProvider,
+      selectedModel: meeting.cloudTranscriptionModel,
+      byokProviders: getMeetingStreamingTranscriptionProviders(),
+    });
+  };
+
+  assert.equal(recording().provider, "openai-realtime");
+  await panel.selectTab("deepgram");
+  await panel.selectModel("nova-3");
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "");
+  assert.equal(panel.state().meetingCloudTranscriptionModel, "");
+  const deepgramRecording = recording();
+  assert.equal(deepgramRecording.provider, "deepgram-realtime");
+  assert.equal(deepgramRecording.model, "nova-3");
+
+  await panel.setProps({ selectedCloudProvider: "deepgram", selectedCloudModel: "nova-3" });
+  await panel.selectTab("elevenlabs");
+  await panel.selectModel("scribe_v2");
+  assert.equal(panel.state().cloudTranscriptionProvider, "elevenlabs");
+  assert.equal(panel.state().cloudTranscriptionModel, "scribe_v2");
+  assert.deepEqual(recording(), deepgramRecording);
+  assert.equal(localStorage.getItem("meetingCloudTranscriptionProvider"), "deepgram");
+  assert.equal(localStorage.getItem("meetingCloudTranscriptionModel"), "nova-3");
+});
+
 test("a browsed Custom tab asks for a model name while the saved provider runs", async (t) => {
   const panel = await mount(t, {
     overrides: { selectedCloudProvider: "openai", selectedCloudModel: "gpt-4o-mini-transcribe" },

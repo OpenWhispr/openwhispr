@@ -563,7 +563,9 @@ async function testElevenLabsKey(request, fetchImpl) {
     request,
     fetchImpl,
     async (response) => {
-      if (response.ok || response.status === 400 || response.status === 422) return null;
+      // 402 is how ElevenLabs now reports a key with no credit left; 401 quota_exceeded
+      // below is the older form of the same answer.
+      if (response.ok || [400, 402, 422].includes(response.status)) return null;
       if (
         response.status === 401 &&
         (await readJson(response))?.detail?.status === "quota_exceeded"

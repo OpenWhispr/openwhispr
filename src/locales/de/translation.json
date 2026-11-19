@@ -2078,6 +2078,21 @@
         "nameHint": "Der Workspace-Name darf bis zu 65 Zeichen lang sein",
         "iconLabel": "Workspace-Icon",
         "iconHint": "Dieses Icon erscheint in Ihrer Seitenleiste und in Benachrichtigungen.",
+        "iconUpload": "Bild hochladen",
+        "iconChange": "Bild ändern",
+        "iconRemove": "Bild entfernen",
+        "iconUploading": "Wird hochgeladen…",
+        "iconUploaded": "Workspace-Icon aktualisiert",
+        "iconRemoved": "Workspace-Icon entfernt",
+        "iconUnsupported": "Wählen Sie ein Bild im Format PNG, JPEG, WebP oder GIF.",
+        "iconTooLarge": "Wählen Sie ein Bild unter 10 MB.",
+        "iconUnreadable": "Dieses Bild konnte nicht gelesen werden. Wählen Sie eine andere Datei.",
+        "iconFailed": "Das Workspace-Icon konnte nicht aktualisiert werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "iconUnavailable": "Workspace-Icons sind gerade nicht verfügbar. Versuchen Sie es später erneut.",
+        "iconRateLimited": "Zu viele Icon-Uploads in der letzten Stunde. Versuchen Sie es später erneut.",
+        "iconSignInChanged": "Das Workspace-Icon konnte nicht aktualisiert werden: Ihre Anmeldung ist abgelaufen oder hat sich geändert. Melden Sie sich erneut an und versuchen Sie es noch einmal.",
+        "iconNotAllowed": "Sie können das Icon von {{workspace}} nicht mehr ändern.",
+        "iconSsoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um das Icon von {{workspace}} zu ändern.",
         "roleLabel": "Ihre Rolle",
         "saved": "Workspace aktualisiert",
         "ownerTitle": "Workspace-Inhaber",
@@ -2540,7 +2555,7 @@
             "Notizen per öffentlichem Link teilen",
             "Persönlicher API-Zugang",
             "MCP-Integration in all deinen Apps",
-            "Mobile App",
+            "Mobile App mit unbegrenzter Cloud",
             "E-Mail-Support"
           ],
           "cta": "Jetzt starten",
@@ -5240,7 +5255,21 @@
       "request_api_keyName": "API-Schlüssel",
       "request_api_keyStatus": "Bitte um einen API-Schlüssel...",
       "open_settingsName": "Einstellungen",
-      "open_settingsStatus": "Verweise auf die Einstellungen..."
+      "open_settingsStatus": "Verweise auf die Einstellungen...",
+      "salesforce_search_recordsName": "Salesforce durchsuchen",
+      "salesforce_search_recordsStatus": "Salesforce wird durchsucht…",
+      "salesforce_get_recordName": "Salesforce-Datensatz",
+      "salesforce_get_recordStatus": "Salesforce-Datensatz wird gelesen…",
+      "salesforce_describe_fieldsName": "Opportunity-Felder",
+      "salesforce_describe_fieldsStatus": "Opportunity-Felder werden gelesen…",
+      "salesforce_get_briefingName": "Kundenbriefing",
+      "salesforce_get_briefingStatus": "Kundenbriefing wird vorbereitet…",
+      "salesforce_export_conversationName": "Salesforce-Aktivität",
+      "salesforce_export_conversationStatus": "Salesforce-Aktivität wird vorbereitet…",
+      "salesforce_update_fieldsName": "Salesforce-Feldänderungen",
+      "salesforce_update_fieldsStatus": "Salesforce-Feldänderungen werden vorbereitet…",
+      "salesforce_present_briefingName": "Briefing-Ergebnisse",
+      "salesforce_present_briefingStatus": "Belege für das Briefing werden ausgewählt…"
     },
     "turn": {
       "reasoning": "Gedankengang",
@@ -5277,7 +5306,8 @@
           "slack": "Ich kann die Nachricht für dich in Slack posten.",
           "linear": "Ich kann Linear-Issues für dich finden und anlegen.",
           "github": "Ich kann GitHub-Issues für dich finden und anlegen.",
-          "calendar": "Ich kann deine Verfügbarkeit prüfen und Zeiten vorschlagen."
+          "calendar": "Ich kann deine Verfügbarkeit prüfen und Zeiten vorschlagen.",
+          "salesforce": "Ich kann Salesforce-Datensätze lesen und geprüfte Besprechungsnotizen darin speichern."
         }
       },
       "access": {
@@ -5499,7 +5529,9 @@
         "default": "An {{destination}} senden",
         "email": "E-Mail an {{destination}}",
         "issue": "Issue in {{destination}} erstellen",
-        "comment": "{{destination}} kommentieren"
+        "comment": "{{destination}} kommentieren",
+        "salesforceActivity": "Gespräch in {{destination}} speichern",
+        "salesforceFields": "Opportunity-Felder für {{destination}} prüfen"
       },
       "identity": "Als {{account}}",
       "identityWithWorkspace": "Als {{account}} in {{workspace}}",
@@ -5590,6 +5622,31 @@
           "refused": "Linear hat die Anfrage abgelehnt. Es wurde nichts gesendet.",
           "unknown_action": "OpenWhispr kann das in Linear nicht. Es wurde nichts gesendet.",
           "generic": "Etwas ist schiefgelaufen. Es wurde nichts an Linear gesendet."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce muss in den Einstellungen erneut verbunden werden.",
+          "connection_changed": "Die Salesforce-Verbindung hat sich vor dem Senden geändert, daher wurde nichts gesendet.",
+          "credential_save_failed": "Die Salesforce-Anmeldung konnte auf diesem Computer nicht gespeichert werden. Es wurde nichts gesendet. Versuche es erneut.",
+          "network": "Salesforce war nicht erreichbar. Es wurde nichts gesendet.",
+          "rate_limited": "Salesforce ist gerade ausgelastet. Versuche es in Kürze erneut.",
+          "forbidden": "Dein Salesforce-Konto darf das nicht. Es wurde nichts gesendet.",
+          "invalid_input": "Salesforce konnte das so nicht annehmen. Es wurde nichts gesendet.",
+          "too_long": "Zu lang für Salesforce. Es wurde nichts gesendet.",
+          "refused": "Salesforce hat die Anfrage abgelehnt. Es wurde nichts gesendet.",
+          "unknown_action": "OpenWhispr kann das in Salesforce nicht. Es wurde nichts gesendet.",
+          "generic": "Etwas ist schiefgelaufen. Es wurde nichts an Salesforce gesendet.",
+          "stale_record": "Salesforce wurde seit dieser Prüfung geändert. Aktualisiere die Vorschau und prüfe erneut.",
+          "source_unavailable": "Die Quellnotiz fehlt oder ist nicht zugänglich.",
+          "export_required": "Speichere die Aktivität in dieser Opportunity, bevor du ihre Felder änderst.",
+          "duplicate_operation": "Dieser Export wurde seit dieser Prüfung erneut gespeichert, oder eine Speicherung läuft noch. Es wurde nichts gesendet. Bereite eine neue Prüfung vor.",
+          "invalid_field": "Wähle bis zu drei bearbeitbare benutzerdefinierte Textfelder der Opportunity.",
+          "storage_unavailable": "Der lokale Exportverlauf ist nicht verfügbar. Es wurde kein neuer Schreibvorgang gestartet.",
+          "task_status_unavailable": "In Salesforce ist kein Status für abgeschlossene Aufgaben verfügbar. Frage deinen Salesforce-Administrator.",
+          "not_found": "Dieser Salesforce-Datensatz existiert nicht mehr oder du hast keinen Zugriff darauf. Es wurde nichts gesendet.",
+          "invalid_reference": "Salesforce konnte das so nicht annehmen. Es wurde nichts gesendet.",
+          "no_fields_selected": "Wähle mindestens ein Feld oder brich ab.",
+          "record_locked": "Dieser Salesforce-Datensatz ist gesperrt, zum Beispiel durch einen Genehmigungsprozess. Es wurde nichts gesendet.",
+          "validation_failed": "Eine Validierungsregel, eine Duplikatsregel oder ein Pflichtfeld in Salesforce hat das verhindert. Prüfe den Datensatz in Salesforce. Es wurde nichts gesendet."
         }
       },
       "email": {
@@ -5618,11 +5675,14 @@
       "openIn": {
         "github": "In GitHub öffnen",
         "gmail": "In Gmail öffnen",
-        "linear": "In Linear öffnen"
+        "linear": "In Linear öffnen",
+        "salesforce": "In Salesforce öffnen"
       },
       "sendLabel": {
         "issue": "Issue erstellen",
-        "comment": "Kommentieren"
+        "comment": "Kommentieren",
+        "salesforceActivity": "Aktivität speichern",
+        "salesforceFields": "Felder speichern"
       },
       "issue": {
         "created": "{{result}} erstellt.",
@@ -5665,7 +5725,26 @@
       "identityChanged": "Wird jetzt als {{account}} gesendet. Drücke Senden, um es zu senden.",
       "connectToSend": "{{name}} verbinden, um das zu senden",
       "edit": "Bearbeiten",
-      "doneEditing": "Bearbeitung fertig"
+      "doneEditing": "Bearbeitung fertig",
+      "salesforce": {
+        "include": "{{field}} einbeziehen",
+        "omitted": "Ausgelassen – dieses Feld wird nicht geändert",
+        "before": "Aktueller Wert",
+        "after": "Vorgeschlagener Ersatz",
+        "empty": "Leer",
+        "limit": "{{count}} / {{max}} Zeichen",
+        "noneSelected": "Wähle mindestens ein Feld oder brich ab.",
+        "tooLong": "Ein ausgewähltes Feld überschreitet seine Zeichenbegrenzung.",
+        "salesforceActivity": {
+          "sent": "Aktivität in {{destination}} gespeichert.",
+          "unknown": "Die Änderungen konnten nicht bestätigt werden. Prüfe {{destination}} in Salesforce, bevor du es erneut versuchst."
+        },
+        "salesforceFields": {
+          "sent": "Felder für {{destination}} gespeichert.",
+          "unknown": "Die Änderungen konnten nicht bestätigt werden. Prüfe {{destination}} in Salesforce, bevor du es erneut versuchst."
+        },
+        "savedLabel": "Gespeichert"
+      }
     },
     "policyOff": "Konnektoren wurden von deiner Organisation deaktiviert.",
     "email": {
@@ -5841,7 +5920,9 @@
         "slack_send_message": "Nachricht an {{destination}}",
         "gmail_send": "E-Mail an {{destination}}",
         "linear_create_issue": "Neues Issue in {{destination}}",
-        "linear_comment": "Kommentar zu {{destination}}"
+        "linear_comment": "Kommentar zu {{destination}}",
+        "salesforce_export_conversation": "Gespräch in {{destination}} speichern",
+        "salesforce_update_fields": "Opportunity-Felder für {{destination}} prüfen"
       },
       "unlabeledActions": {
         "email_draft": "E-Mail-Entwurf",
@@ -5850,7 +5931,9 @@
         "slack_send_message": "Slack-Nachricht",
         "gmail_send": "Gmail-E-Mail",
         "linear_create_issue": "Linear-Issue",
-        "linear_comment": "Linear-Kommentar"
+        "linear_comment": "Linear-Kommentar",
+        "salesforce_export_conversation": "Salesforce-Aktivität",
+        "salesforce_update_fields": "Salesforce-Feldänderungen"
       },
       "states": {
         "pending": "Wartet",
@@ -5952,6 +6035,31 @@
           "refused": "Linear hat die Anfrage abgelehnt.",
           "unknown_action": "In Linear nicht verfügbar.",
           "generic": "Das hat in Linear nicht funktioniert."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce muss erneut verbunden werden.",
+          "connection_changed": "Die Salesforce-Verbindung hat sich geändert. Nichts wurde gesendet.",
+          "credential_save_failed": "Salesforce-Anmeldung konnte auf diesem Computer nicht gespeichert werden.",
+          "network": "Salesforce nicht erreichbar.",
+          "rate_limited": "Salesforce ist gerade ausgelastet.",
+          "forbidden": "In Salesforce nicht erlaubt.",
+          "invalid_input": "Salesforce konnte es nicht annehmen.",
+          "too_long": "Zu lang für Salesforce.",
+          "refused": "Salesforce hat die Anfrage abgelehnt.",
+          "unknown_action": "In Salesforce nicht verfügbar.",
+          "generic": "Das hat in Salesforce nicht funktioniert.",
+          "stale_record": "Salesforce wurde seit dieser Prüfung geändert. Aktualisiere die Vorschau und prüfe erneut.",
+          "source_unavailable": "Die Quellnotiz fehlt oder ist nicht zugänglich.",
+          "export_required": "Speichere die Aktivität in dieser Opportunity, bevor du ihre Felder änderst.",
+          "duplicate_operation": "Dieser Export wurde seit dieser Prüfung erneut gespeichert, oder eine Speicherung läuft noch. Es wurde nichts gesendet.",
+          "invalid_field": "Wähle bis zu drei bearbeitbare benutzerdefinierte Textfelder der Opportunity.",
+          "storage_unavailable": "Der lokale Exportverlauf ist nicht verfügbar. Es wurde kein neuer Schreibvorgang gestartet.",
+          "task_status_unavailable": "In Salesforce ist kein Status für abgeschlossene Aufgaben verfügbar. Frage deinen Salesforce-Administrator.",
+          "not_found": "In Salesforce nicht gefunden.",
+          "invalid_reference": "Salesforce konnte es nicht annehmen.",
+          "no_fields_selected": "Wähle mindestens ein Feld oder brich ab.",
+          "record_locked": "Der Salesforce-Datensatz ist gesperrt.",
+          "validation_failed": "Durch eine Salesforce-Regel oder ein Pflichtfeld blockiert."
         }
       },
       "unknownSent": {
@@ -5964,7 +6072,120 @@
     },
     "beta": "Beta",
     "upsell": "Konnektoren sind in kostenpflichtigen Tarifen enthalten. Upgrade, damit der Assistent in deinen Tools arbeiten kann.",
-    "locked": "In kostenpflichtigen Tarifen enthalten"
+    "locked": "In kostenpflichtigen Tarifen enthalten",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "Geprüfte Gespräche exportieren und Briefings für einen ausgewählten Kunden erstellen. Notizzuordnungen werden nur auf diesem Gerät gespeichert.",
+      "connect": "Verbinden",
+      "reconnect": "Erneut verbinden",
+      "disconnect": "Trennen",
+      "connecting": "Schließe die Verbindung in deinem Browser ab…",
+      "connectedAs": "Verbunden als {{account}} in {{workspace}}",
+      "needsReconnect": "Salesforce muss erneut verbunden werden.",
+      "errors": {
+        "connect_failed": "Salesforce konnte nicht verbunden werden. Versuche es erneut.",
+        "disconnect_failed": "Salesforce konnte nicht getrennt werden. Versuche es erneut.",
+        "oauth_denied": "Salesforce wurde nicht verbunden, da der Zugriff nicht erlaubt wurde.",
+        "oauth_timeout": "Die Verbindung hat zu lange gedauert. Versuche es erneut.",
+        "oauth_state_mismatch": "Dieser Anmeldelink war veraltet. Versuche es erneut.",
+        "ports_busy": "Eine andere App verwendet die Ports, die OpenWhispr zum Verbinden benötigt. Schließe sie und versuche es erneut.",
+        "token_exchange_failed": "Salesforce hat die Verbindung nicht abgeschlossen. Versuche es erneut.",
+        "not_configured": "Salesforce ist in dieser Version nicht verfügbar.",
+        "connection_changed": "Dein Konto oder die Salesforce-Verbindung hat sich während der Verbindung geändert. Versuche es erneut.",
+        "signed_out": "Melde dich bei OpenWhispr an, um Salesforce zu verbinden.",
+        "policy_blocked": "Konnektoren wurden von deiner Organisation deaktiviert.",
+        "policy_unavailable": "Die Einstellungen deiner Organisation konnten nicht geprüft werden. Versuche es erneut.",
+        "permission_not_granted": "Salesforce wurde nicht verbunden, da nicht alle Berechtigungen erteilt wurden. Verbinde erneut und erlaube alle.",
+        "invalid_login_domain": "Gib test.salesforce.com oder die My Domain deiner Firma ein, z. B. deinefirma.my.salesforce.com."
+      },
+      "browser": {
+        "connectedTitle": "Salesforce ist verbunden",
+        "connectedBody": "Du kannst diesen Tab schließen und zu OpenWhispr zurückkehren.",
+        "failedTitle": "Salesforce wurde nicht verbunden",
+        "failedBody": "Kehre zu OpenWhispr zurück, um es erneut zu versuchen."
+      },
+      "notes": {
+        "updateExisting": "Die zuvor gespeicherte Aktivität aktualisieren; es wird keine weitere Aufgabe erstellt.",
+        "earlierAttemptUncertain": "Ein früherer Versuch hat das möglicherweise schon in Salesforce gespeichert. Prüfe den Datensatz dort, bevor du erneut sendest.",
+        "replacesMissing": "Die zuvor gespeicherte Aktivität ist in Salesforce nicht mehr bei diesem Datensatz, oder du kannst sie nicht mehr sehen, daher wird eine neue erstellt.",
+        "editedInSalesforce": "Diese Aktivität wurde in Salesforce bearbeitet, nachdem OpenWhispr sie gespeichert hat. Beim Senden werden diese Änderungen ersetzt.",
+        "sourceNote": "Aus der Notiz „{{title}}“.",
+        "sourceNoteUntitled": "Aus einer Notiz ohne Titel."
+      },
+      "provenance": "Quelle: OpenWhispr — {{title}}{{date}}",
+      "briefing": {
+        "untitledRecord": "Ausgewählter Salesforce-Datensatz",
+        "retrieved": "Abgerufen: {{time}}",
+        "crmFacts": "Aktuelle CRM-Daten",
+        "fields": {
+          "Name": "Name",
+          "PersonName": "Name",
+          "StageName": "Phase",
+          "CloseDate": "Schlusstermin",
+          "Amount": "Betrag",
+          "CurrencyIsoCode": "Währung",
+          "NextStep": "Nächster Schritt",
+          "OwnerId": "Inhaber",
+          "AccountId": "Account",
+          "Type": "Typ",
+          "Industry": "Branche",
+          "Website": "Website",
+          "Phone": "Telefon",
+          "FirstName": "Vorname",
+          "LastName": "Nachname",
+          "Email": "E-Mail",
+          "Title": "Titel",
+          "Company": "Firma",
+          "Status": "Status"
+        },
+        "notReturned": "nicht geliefert",
+        "notRecorded": "nicht erfasst",
+        "linkedNameUnavailable": "verknüpft; Name nicht verfügbar",
+        "gaps": "Lücken und Kundenidentität",
+        "identityNotVerified": "Eine Export-Verknüpfung bestätigt die Kundenidentität nicht. Die Notizen wurden mit dem vom Nutzer gewählten Datensatz verknüpft; Kundennamen und Account-Beziehungen wurden nicht unabhängig abgeglichen.",
+        "missingFieldsNote": "Fehlende oder nicht gelieferte CRM-Felder belegen weder eine Budgetfreigabe noch Zusagen oder Übereinstimmung mit den Besprechungsnotizen.",
+        "unavailableNotes": "Verknüpfte Notizen, die im aktuellen Workspace nicht verfügbar sind: {{count}}.",
+        "partial": "Die Abdeckung ist unvollständig: Anzahl der Notizen, Quelltext, Transkript oder CRM-Ergebnisse waren begrenzt. Was in diesen Auszügen fehlt, muss in den Besprechungen nicht gefehlt haben.",
+        "crmOnly": "Es wurden keine zugänglichen Besprechungsinhalte abgerufen. Dieses Briefing beruht nur auf CRM-Daten.",
+        "notPrepared": "Es wurden keine Besprechungsergebnisse aufbereitet. Die verfügbaren Quellnotizen stehen unten; es wurden keine Schlüsse aus den Besprechungen gezogen.",
+        "findings": "Ergebnisse aus Besprechungen",
+        "findingsExplainer": "Die Quellauszüge stehen unten im Wortlaut. Die Statusangaben sind die Einordnung des Assistenten; bestätigt heißt, dass es in der Notiz steht, nicht dass es unabhängig geprüft wurde. Verantwortliche und Fristen sind nur die im jeweiligen Auszug genannten.",
+        "categories": {
+          "takeaway": "Erkenntnisse",
+          "decision": "Entscheidungen",
+          "commitment": "Zusagen",
+          "proposal": "Vorschläge",
+          "risk": "Risiken",
+          "question": "Offene Fragen"
+        },
+        "status": {
+          "confirmed": "Bestätigt",
+          "proposed": "Vorgeschlagen",
+          "unknown": "Unklar"
+        },
+        "conflict": "Möglicher Widerspruch — ungeklärt",
+        "crmConflictEntry": "Salesforce {{label}}: {{value}}",
+        "sources": "Quellen",
+        "noteCreated": "Notiz erstellt: {{time}}.",
+        "lastEdited": "Zuletzt bearbeitet: {{time}}.",
+        "addedForBriefing": "Für dieses Briefing hinzugefügt.",
+        "exported": "Exportiert: {{time}}.",
+        "savedActivity": "Gespeicherte Salesforce-Aktivität",
+        "sourcesExplainer": "Erstellungszeitpunkte sind keine Besprechungstermine. Gespeicherte Salesforce-Aktivitäten enthalten die exportierte Zusammenfassung; die Notizen können sich seit dem Export geändert haben.",
+        "sections": {
+          "personalNotes": "Persönliche Notizen",
+          "summary": "Gespeicherte KI-Zusammenfassung",
+          "transcript": "Transkript, Zeichen {{start}}–{{end}}"
+        },
+        "prepared": "Salesforce-Briefing erstellt"
+      },
+      "loginDomain": {
+        "toggle": "Sandbox oder Firmendomain verwenden",
+        "label": "Salesforce-Anmeldedomain",
+        "placeholder": "test.salesforce.com oder deinefirma.my.salesforce.com",
+        "hint": "Leer lassen, um dich bei einer Produktionsorganisation anzumelden."
+      }
+    }
   },
   "skills": {
     "pane": {
@@ -6010,6 +6231,7 @@
       "neverRun": "OpenWhispr führt Skripte nie aus",
       "uninstall": "Deinstallieren",
       "uninstallConfirm": "{{name}} deinstallieren? Der Skill wird von diesem Computer entfernt.",
+      "uninstallConfirmSynced": "{{name}} deinstallieren? Der Skill wird von diesem Computer und deinen anderen Geräten entfernt.",
       "problem": "Dieser Skill kann erst verwendet werden, wenn er korrigiert ist: {{reason}}",
       "tryNow": "Jetzt ausprobieren"
     },
@@ -6035,6 +6257,7 @@
     "manage": {
       "title": "Skills verwalten",
       "description": "Schalte Skills ein oder aus oder entferne die, die du nicht nutzt. Jeder wird auf diesem Computer gespeichert.",
+      "descriptionBackedUp": "Schalte Skills ein oder aus oder entferne die, die du nicht nutzt. Jeder wird auf diesem Computer gespeichert und per Cloud-Backup gesichert.",
       "noMatches": "Keine Skills passen zu „{{query}}“.",
       "none": "Noch keine Skills."
     },
@@ -6185,6 +6408,9 @@
       "pasteNote": "Fügt ohne Enter ein, damit du selbst entscheidest, wann es ausgeführt wird.",
       "pasted": "Eingefügt",
       "pasteFailed": "Einfügen fehlgeschlagen. Der Text ist in deiner Zwischenablage."
+    },
+    "sync": {
+      "tooLarge": "Zu groß für das Backup"
     }
   },
   "notesView": {

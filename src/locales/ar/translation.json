@@ -845,7 +845,9 @@
         "default": "إرسال إلى {{destination}}",
         "email": "بريد إلكتروني إلى {{destination}}",
         "issue": "إنشاء مشكلة في {{destination}}",
-        "comment": "التعليق على {{destination}}"
+        "comment": "التعليق على {{destination}}",
+        "salesforceActivity": "حفظ المحادثة في {{destination}}",
+        "salesforceFields": "مراجعة حقول الفرصة في {{destination}}"
       },
       "identity": "بصفتك {{account}}",
       "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
@@ -936,6 +938,31 @@
           "refused": "رفض Linear الطلب. لم يُرسل شيء.",
           "unknown_action": "لا يستطيع OpenWhispr فعل ذلك في Linear. لم يُرسل شيء.",
           "generic": "حدث خطأ ما. لم يُرسل شيء إلى Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "يلزم إعادة ربط Salesforce من الإعدادات.",
+          "connection_changed": "تغيّر اتصال Salesforce قبل الإرسال، لذا لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Salesforce على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى.",
+          "network": "تعذّر الوصول إلى Salesforce. لم يُرسل شيء.",
+          "rate_limited": "Salesforce مشغول حاليًا. حاول مرة أخرى بعد قليل.",
+          "forbidden": "لا يُسمح لحسابك في Salesforce بذلك. لم يُرسل شيء.",
+          "invalid_input": "لم يقبل Salesforce هذا بصيغته الحالية. لم يُرسل شيء.",
+          "too_long": "أطول مما يسمح به Salesforce. لم يُرسل شيء.",
+          "refused": "رفض Salesforce الطلب. لم يُرسل شيء.",
+          "unknown_action": "لا يستطيع OpenWhispr فعل ذلك في Salesforce. لم يُرسل شيء.",
+          "generic": "حدث خطأ ما. لم يُرسل شيء إلى Salesforce.",
+          "stale_record": "تغيرت بيانات Salesforce منذ هذه المراجعة. حدّثها وراجعها مجددًا.",
+          "source_unavailable": "الملاحظة المصدر مفقودة أو يتعذر الوصول إليها.",
+          "export_required": "احفظ النشاط في هذه الفرصة قبل تحديث حقولها.",
+          "duplicate_operation": "حُفظ هذا التصدير مجددًا بعد هذه المراجعة، أو ما زال الحفظ جاريًا. لم يُرسل شيء. جهّز مراجعة جديدة.",
+          "invalid_field": "اختر ما يصل إلى ثلاثة حقول نصية مخصصة وقابلة للتعديل للفرصة.",
+          "storage_unavailable": "سجل التصدير المحلي غير متاح. لم تبدأ أي عملية كتابة جديدة.",
+          "task_status_unavailable": "لا توجد حالة متاحة لمهمة مكتملة في Salesforce. تواصل مع مسؤول Salesforce.",
+          "not_found": "لم يعد سجل Salesforce هذا موجودًا، أو لا يمكنك الوصول إليه. لم يُرسل شيء.",
+          "invalid_reference": "لم يقبل Salesforce هذا بصيغته الحالية. لم يُرسل شيء.",
+          "no_fields_selected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية.",
+          "record_locked": "سجل Salesforce هذا مقفل، مثلًا بسبب عملية موافقة. لم يُرسل شيء.",
+          "validation_failed": "منعت ذلك قاعدة تحقق أو قاعدة تكرار أو حقل مطلوب في Salesforce. تحقق من السجل في Salesforce. لم يُرسل شيء."
         }
       },
       "email": {
@@ -964,11 +991,14 @@
       "openIn": {
         "github": "فتح في GitHub",
         "gmail": "فتح في Gmail",
-        "linear": "فتح في Linear"
+        "linear": "فتح في Linear",
+        "salesforce": "فتح في Salesforce"
       },
       "sendLabel": {
         "issue": "إنشاء مشكلة",
-        "comment": "تعليق"
+        "comment": "تعليق",
+        "salesforceActivity": "حفظ النشاط",
+        "salesforceFields": "حفظ الحقول"
       },
       "issue": {
         "created": "تم إنشاء {{result}}.",
@@ -1011,7 +1041,26 @@
       "identityChanged": "سيُرسل الآن بصفتك {{account}}. اضغط إرسال لإرساله.",
       "connectToSend": "اربط {{name}} لإرسال هذا",
       "edit": "تعديل",
-      "doneEditing": "تم التعديل"
+      "doneEditing": "تم التعديل",
+      "salesforce": {
+        "include": "تضمين {{field}}",
+        "omitted": "مستبعد — لن يتغير هذا الحقل",
+        "before": "القيمة الحالية",
+        "after": "البديل المقترح",
+        "empty": "فارغ",
+        "limit": "{{count}} / {{max}} حرف",
+        "noneSelected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية.",
+        "tooLong": "يتجاوز أحد الحقول المحددة الحد الأقصى للأحرف.",
+        "salesforceActivity": {
+          "sent": "تم حفظ النشاط في {{destination}}.",
+          "unknown": "تعذر تأكيد التغييرات. تحقق من {{destination}} في Salesforce قبل المحاولة مجددًا."
+        },
+        "salesforceFields": {
+          "sent": "تم حفظ الحقول في {{destination}}.",
+          "unknown": "تعذر تأكيد التغييرات. تحقق من {{destination}} في Salesforce قبل المحاولة مجددًا."
+        },
+        "savedLabel": "تم الحفظ"
+      }
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
     "email": {
@@ -1187,7 +1236,9 @@
         "slack_send_message": "رسالة إلى {{destination}}",
         "gmail_send": "رسالة إلكترونية إلى {{destination}}",
         "linear_create_issue": "مشكلة جديدة في {{destination}}",
-        "linear_comment": "تعليق على {{destination}}"
+        "linear_comment": "تعليق على {{destination}}",
+        "salesforce_export_conversation": "حفظ المحادثة في {{destination}}",
+        "salesforce_update_fields": "مراجعة حقول الفرصة في {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "مسودة بريد إلكتروني",
@@ -1196,7 +1247,9 @@
         "slack_send_message": "رسالة Slack",
         "gmail_send": "رسالة Gmail",
         "linear_create_issue": "مشكلة Linear",
-        "linear_comment": "تعليق Linear"
+        "linear_comment": "تعليق Linear",
+        "salesforce_export_conversation": "نشاط Salesforce",
+        "salesforce_update_fields": "تحديثات حقول Salesforce"
       },
       "states": {
         "pending": "قيد الانتظار",
@@ -1298,6 +1351,31 @@
           "refused": "رفض Linear الطلب.",
           "unknown_action": "غير متاح في Linear.",
           "generic": "لم ينجح ذلك في Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "يلزم إعادة ربط Salesforce.",
+          "connection_changed": "تغيّر اتصال Salesforce. لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Salesforce على هذا الكمبيوتر.",
+          "network": "تعذّر الوصول إلى Salesforce.",
+          "rate_limited": "Salesforce مشغول حاليًا.",
+          "forbidden": "غير مسموح به في Salesforce.",
+          "invalid_input": "لم يقبله Salesforce.",
+          "too_long": "أطول مما يسمح به Salesforce.",
+          "refused": "رفض Salesforce الطلب.",
+          "unknown_action": "غير متاح في Salesforce.",
+          "generic": "لم ينجح ذلك في Salesforce.",
+          "stale_record": "تغيرت بيانات Salesforce منذ هذه المراجعة. حدّثها وراجعها مجددًا.",
+          "source_unavailable": "الملاحظة المصدر مفقودة أو يتعذر الوصول إليها.",
+          "export_required": "احفظ النشاط في هذه الفرصة قبل تحديث حقولها.",
+          "duplicate_operation": "حُفظ هذا التصدير مجددًا بعد هذه المراجعة، أو ما زال الحفظ جاريًا. لم يُرسل شيء.",
+          "invalid_field": "اختر ما يصل إلى ثلاثة حقول نصية مخصصة وقابلة للتعديل للفرصة.",
+          "storage_unavailable": "سجل التصدير المحلي غير متاح. لم تبدأ أي عملية كتابة جديدة.",
+          "task_status_unavailable": "لا توجد حالة متاحة لمهمة مكتملة في Salesforce. تواصل مع مسؤول Salesforce.",
+          "not_found": "غير موجود في Salesforce.",
+          "invalid_reference": "لم يقبله Salesforce.",
+          "no_fields_selected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية.",
+          "record_locked": "سجل Salesforce مقفل.",
+          "validation_failed": "منعته قاعدة أو حقل مطلوب في Salesforce."
         }
       },
       "unknownSent": {
@@ -1310,7 +1388,120 @@
     },
     "beta": "تجريبي",
     "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
-    "locked": "متاح ضمن الخطط المدفوعة"
+    "locked": "متاح ضمن الخطط المدفوعة",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "صدّر المحادثات التي تمت مراجعتها وأعد ملخصات لعميل محدد. تُحفظ روابط الملاحظات على هذا الجهاز فقط.",
+      "connect": "ربط",
+      "reconnect": "إعادة الربط",
+      "disconnect": "قطع الربط",
+      "connecting": "أكمل الربط في متصفحك…",
+      "connectedAs": "متصل بصفتك {{account}} في {{workspace}}",
+      "needsReconnect": "يلزم إعادة ربط Salesforce.",
+      "errors": {
+        "connect_failed": "تعذّر ربط Salesforce. حاول مرة أخرى.",
+        "disconnect_failed": "تعذّر قطع ربط Salesforce. حاول مرة أخرى.",
+        "oauth_denied": "لم يتم ربط Salesforce لأن الإذن لم يُمنح.",
+        "oauth_timeout": "استغرق الربط وقتًا طويلاً. حاول مرة أخرى.",
+        "oauth_state_mismatch": "رابط تسجيل الدخول هذا كان قديمًا. حاول مرة أخرى.",
+        "ports_busy": "يستخدم تطبيق آخر المنافذ التي يحتاجها OpenWhispr للربط. أغلقه وحاول مرة أخرى.",
+        "token_exchange_failed": "لم يكمل Salesforce عملية الربط. حاول مرة أخرى.",
+        "not_configured": "Salesforce غير متاح في هذا الإصدار.",
+        "connection_changed": "تغيّر حسابك أو اتصال Salesforce أثناء الربط. حاول مرة أخرى.",
+        "signed_out": "سجّل الدخول إلى OpenWhispr لربط Salesforce.",
+        "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
+        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
+        "permission_not_granted": "لم يتم ربط Salesforce لأن بعض الأذونات لم تُمنح. أعد الربط واسمح بها جميعًا.",
+        "invalid_login_domain": "أدخل test.salesforce.com أو My Domain الخاص بشركتك، مثل yourcompany.my.salesforce.com."
+      },
+      "browser": {
+        "connectedTitle": "تم توصيل Salesforce",
+        "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
+        "failedTitle": "لم يتم توصيل Salesforce",
+        "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
+      },
+      "notes": {
+        "updateExisting": "تحديث النشاط المحفوظ سابقًا؛ لن يتم إنشاء مهمة أخرى.",
+        "earlierAttemptUncertain": "ربما حفظت محاولة سابقة هذا في Salesforce بالفعل. تحقق من السجل هناك قبل الإرسال مجددًا.",
+        "replacesMissing": "لم يعد النشاط المحفوظ سابقًا على هذا السجل في Salesforce، أو لم تعد تستطيع رؤيته، لذا سيُنشأ نشاط جديد.",
+        "editedInSalesforce": "عُدّل هذا النشاط في Salesforce بعد أن حفظه OpenWhispr. سيؤدي الإرسال إلى استبدال هذه التعديلات.",
+        "sourceNote": "من الملاحظة «{{title}}».",
+        "sourceNoteUntitled": "من ملاحظة بلا عنوان."
+      },
+      "provenance": "المصدر: OpenWhispr — {{title}}{{date}}",
+      "briefing": {
+        "untitledRecord": "سجل Salesforce المحدد",
+        "retrieved": "وقت الجلب: {{time}}",
+        "crmFacts": "بيانات CRM الحالية",
+        "fields": {
+          "Name": "الاسم",
+          "PersonName": "الاسم",
+          "StageName": "المرحلة",
+          "CloseDate": "تاريخ الإغلاق",
+          "Amount": "المبلغ",
+          "CurrencyIsoCode": "العملة",
+          "NextStep": "الخطوة التالية",
+          "OwnerId": "المالك",
+          "AccountId": "الحساب",
+          "Type": "النوع",
+          "Industry": "القطاع",
+          "Website": "موقع الويب",
+          "Phone": "الهاتف",
+          "FirstName": "الاسم الأول",
+          "LastName": "اسم العائلة",
+          "Email": "البريد الإلكتروني",
+          "Title": "المسمى الوظيفي",
+          "Company": "الشركة",
+          "Status": "الحالة"
+        },
+        "notReturned": "لم يُرجَع",
+        "notRecorded": "غير مسجّل",
+        "linkedNameUnavailable": "مرتبط؛ الاسم غير متاح",
+        "gaps": "الثغرات وهوية العميل",
+        "identityNotVerified": "لا يثبت ارتباط التصدير هوية العميل. رُبطت الملاحظات بالسجل الذي اختاره المستخدم؛ ولم تُطابَق أسماء العملاء وعلاقات الحسابات بشكل مستقل.",
+        "missingFieldsNote": "حقول CRM الفارغة أو التي لم تُرجَع لا تثبت الموافقة على الميزانية أو الالتزامات أو التوافق مع ملاحظات الاجتماع.",
+        "unavailableNotes": "الملاحظات المرتبطة غير المتاحة في مساحة العمل الحالية: {{count}}.",
+        "partial": "التغطية جزئية: تم تقييد عدد الملاحظات أو النص المصدر أو النص المفرغ أو نتائج CRM. غياب أمر ما عن هذه المقتطفات لا يعني غيابه عن الاجتماعات.",
+        "crmOnly": "لم يُجلب أي محتوى اجتماعات يمكن الوصول إليه. هذا الملخص مبني على CRM فقط.",
+        "notPrepared": "لم تُعَدّ نتائج الاجتماعات. الملاحظات المصدر المتاحة مدرجة أدناه؛ ولم تُستنتج أي خلاصات من الاجتماعات.",
+        "findings": "نتائج الاجتماعات",
+        "findingsExplainer": "المقتطفات المصدر منقولة أدناه. تصنيفات الحالة من تقدير المساعد؛ وتعني «مؤكد» أنه مذكور في الملاحظة، لا أنه تم التحقق منه بشكل مستقل. المسؤولون والمواعيد النهائية هي فقط ما ورد في كل مقتطف.",
+        "categories": {
+          "takeaway": "أبرز النقاط",
+          "decision": "القرارات",
+          "commitment": "الالتزامات",
+          "proposal": "المقترحات",
+          "risk": "المخاطر",
+          "question": "أسئلة مفتوحة"
+        },
+        "status": {
+          "confirmed": "مؤكد",
+          "proposed": "مقترح",
+          "unknown": "غير واضح"
+        },
+        "conflict": "تعارض محتمل — لم يُحسم",
+        "crmConflictEntry": "{{label}} في Salesforce: {{value}}",
+        "sources": "المصادر",
+        "noteCreated": "أُنشئت الملاحظة: {{time}}.",
+        "lastEdited": "آخر تعديل: {{time}}.",
+        "addedForBriefing": "أُضيفت لهذا الملخص.",
+        "exported": "صُدّرت: {{time}}.",
+        "savedActivity": "نشاط Salesforce المحفوظ",
+        "sourcesExplainer": "أوقات الإنشاء ليست مواعيد الاجتماعات. تحتوي أنشطة Salesforce المحفوظة على الملخص المُصدَّر؛ وقد تكون الملاحظات تغيّرت منذ التصدير.",
+        "sections": {
+          "personalNotes": "الملاحظات الشخصية",
+          "summary": "ملخص الذكاء الاصطناعي المحفوظ",
+          "transcript": "النص المفرغ، الأحرف {{start}}–{{end}}"
+        },
+        "prepared": "تم إعداد ملخص Salesforce"
+      },
+      "loginDomain": {
+        "toggle": "استخدام بيئة sandbox أو نطاق الشركة",
+        "label": "نطاق تسجيل الدخول إلى Salesforce",
+        "placeholder": "test.salesforce.com أو yourcompany.my.salesforce.com",
+        "hint": "اتركه فارغًا لتسجيل الدخول إلى مؤسسة الإنتاج."
+      }
+    }
   },
   "skills": {
     "pane": {
@@ -1360,6 +1551,7 @@
       "neverRun": "لا يشغّل OpenWhispr النصوص البرمجية أبدًا",
       "uninstall": "إلغاء التثبيت",
       "uninstallConfirm": "هل تريد إلغاء تثبيت {{name}}؟ ستُزال من هذا الكمبيوتر.",
+      "uninstallConfirmSynced": "هل تريد إلغاء تثبيت {{name}}؟ ستُزال من هذا الكمبيوتر ومن أجهزتك الأخرى.",
       "problem": "لا يمكن استخدام هذه المهارة حتى يتم إصلاحها: {{reason}}",
       "tryNow": "جرّبها الآن"
     },
@@ -1389,6 +1581,7 @@
     "manage": {
       "title": "إدارة المهارات",
       "description": "فعّل المهارات أو أوقفها، أو أزل ما لا تستخدمه منها. تُحفظ كل مهارة على هذا الكمبيوتر.",
+      "descriptionBackedUp": "فعّل المهارات أو أوقفها، أو أزل ما لا تستخدمه منها. تُحفظ كل مهارة على هذا الكمبيوتر وتُنسخ احتياطيًا عبر النسخ الاحتياطي السحابي.",
       "noMatches": "لا توجد مهارات تطابق \"{{query}}\".",
       "none": "لا توجد مهارات بعد."
     },
@@ -1551,6 +1744,9 @@
       "pasteNote": "يلصق دون الضغط على Enter، لتختار أنت متى تشغّله.",
       "pasted": "تم اللصق",
       "pasteFailed": "تعذّر اللصق. النص موجود في الحافظة."
+    },
+    "sync": {
+      "tooLarge": "كبيرة جدًا للنسخ الاحتياطي"
     }
   },
   "auth": {
@@ -2697,7 +2893,21 @@
       "request_api_keyName": "مفتاح API",
       "request_api_keyStatus": "جارٍ طلب مفتاح API...",
       "open_settingsName": "الإعدادات",
-      "open_settingsStatus": "جارٍ توجيهك إلى الإعدادات..."
+      "open_settingsStatus": "جارٍ توجيهك إلى الإعدادات...",
+      "salesforce_search_recordsName": "البحث في Salesforce",
+      "salesforce_search_recordsStatus": "جارٍ البحث في Salesforce…",
+      "salesforce_get_recordName": "سجل Salesforce",
+      "salesforce_get_recordStatus": "جارٍ قراءة سجل Salesforce…",
+      "salesforce_describe_fieldsName": "حقول الفرصة",
+      "salesforce_describe_fieldsStatus": "جارٍ قراءة حقول الفرصة…",
+      "salesforce_get_briefingName": "ملخص العميل",
+      "salesforce_get_briefingStatus": "جارٍ إعداد ملخص العميل…",
+      "salesforce_export_conversationName": "نشاط Salesforce",
+      "salesforce_export_conversationStatus": "جارٍ إعداد نشاط Salesforce…",
+      "salesforce_update_fieldsName": "تحديثات حقول Salesforce",
+      "salesforce_update_fieldsStatus": "جارٍ إعداد تحديثات حقول Salesforce…",
+      "salesforce_present_briefingName": "نتائج الملخص",
+      "salesforce_present_briefingStatus": "جارٍ اختيار أدلة الملخص…"
     },
     "turn": {
       "reasoning": "الاستدلال",
@@ -2734,7 +2944,8 @@
           "slack": "يمكنني نشر الرسالة في Slack نيابةً عنك.",
           "linear": "يمكنني البحث عن مشكلات Linear وإنشاؤها نيابةً عنك.",
           "github": "يمكنني البحث عن مشكلات GitHub وإنشاؤها نيابةً عنك.",
-          "calendar": "يمكنني التحقق من أوقات فراغك واقتراح مواعيد."
+          "calendar": "يمكنني التحقق من أوقات فراغك واقتراح مواعيد.",
+          "salesforce": "يمكنني قراءة سجلات Salesforce وحفظ ملاحظات الاجتماعات المراجَعة فيها."
         }
       },
       "access": {
@@ -4614,6 +4825,21 @@
         "nameHint": "يمكن أن يصل اسم مساحة العمل إلى 65 حرفًا",
         "iconLabel": "أيقونة مساحة العمل",
         "iconHint": "تظهر هذه الأيقونة في الشريط الجانبي والإشعارات.",
+        "iconUpload": "رفع صورة",
+        "iconChange": "تغيير الصورة",
+        "iconRemove": "إزالة الصورة",
+        "iconUploading": "جارٍ الرفع…",
+        "iconUploaded": "تم تحديث أيقونة مساحة العمل",
+        "iconRemoved": "تمت إزالة أيقونة مساحة العمل",
+        "iconUnsupported": "اختر صورة بتنسيق PNG أو JPEG أو WebP أو GIF.",
+        "iconTooLarge": "اختر صورة بحجم أقل من 10 ميغابايت.",
+        "iconUnreadable": "تعذّرت قراءة هذه الصورة. اختر ملفًا آخر.",
+        "iconFailed": "تعذّر تحديث أيقونة مساحة العمل. تحقق من اتصالك وحاول مرة أخرى.",
+        "iconUnavailable": "أيقونات مساحات العمل غير متاحة الآن. حاول مرة أخرى لاحقًا.",
+        "iconRateLimited": "عدد كبير جدًا من عمليات رفع الأيقونات خلال الساعة الماضية. حاول مرة أخرى لاحقًا.",
+        "iconSignInChanged": "تعذّر تحديث أيقونة مساحة العمل: انتهت صلاحية تسجيل دخولك أو تغيّر. سجّل الدخول مرة أخرى ثم أعد المحاولة.",
+        "iconNotAllowed": "لم يعد بإمكانك تغيير أيقونة {{workspace}}.",
+        "iconSsoRequired": "سجّل الدخول باستخدام تسجيل الدخول الموحّد (SSO) الخاص بشركتك لتغيير أيقونة {{workspace}}.",
         "roleLabel": "دورك",
         "saved": "تم تحديث مساحة العمل",
         "ownerTitle": "مالك مساحة العمل",
@@ -5170,7 +5396,7 @@
             "مشاركة الملاحظات بروابط عامة",
             "وصول شخصي عبر API",
             "تكامل MCP في جميع تطبيقاتك",
-            "تطبيق الجوال",
+            "تطبيق الجوال مع سحابة غير محدودة",
             "دعم عبر البريد الإلكتروني"
           ],
           "cta": "البدء",

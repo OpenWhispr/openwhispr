@@ -182,6 +182,7 @@ async function mountSettingsPanel(
   };
 
   return {
+    vite,
     state: () => useSettingsStore.getState(),
     setStore: (patch) => act(() => useSettingsStore.setState(patch)),
     setPolicy: (patch) => act(() => usePolicyStore.setState(patch)),
