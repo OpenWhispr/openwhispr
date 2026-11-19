@@ -22,6 +22,7 @@ let selfHostedHeaders = JSON.stringify({
 let policySnapshot = { success: true, managed: false };
 // A lookup that doesn't answer until the test lets it.
 let policyLookupGate = null;
+let accountWorkspaces = [];
 const broadcasts = [];
 let tokenState = { token: "test-token", generation: 1 };
 let fetchResponse = () => ({
@@ -47,6 +48,9 @@ const electronStub = {
   },
   net: {
     fetch: async (url, init) => {
+      if (String(url).endsWith("/api/workspaces")) {
+        return { ok: true, json: async () => ({ data: accountWorkspaces }) };
+      }
       fetches.push({ url: String(url), init });
       return fetchResponse(String(url), init);
     },
@@ -241,6 +245,10 @@ function buildFakeThis() {
   ]);
   const target = {
     sessionId: "test-session",
+    _enterpriseAudioBinding: null,
+    _enterpriseAudioOwner: null,
+    _enterpriseAudioScope: null,
+    _enterpriseAudioScopeRevision: 0,
     _uploadCancelRegistry:
       require("../../src/helpers/uploadCancelRegistry").createUploadCancelRegistry(),
     audioStorageManager: {
@@ -276,6 +284,7 @@ function buildFakeThis() {
       getMistralKey: () => "mk-mistral",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
+      getAssemblyAIKey: () => "aai-assemblyai",
       getElevenlabsKey: () => "xi-elevenlabs",
       getOpenrouterKey: () => "ork-openrouter",
       getCustomTranscriptionKey: () => "ck-custom",
@@ -291,7 +300,13 @@ function buildFakeThis() {
 
 let retryHandler;
 let fakeThis;
-test.before(async () => {
+test.before(async (t) => {
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  t.after(() => {
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
@@ -931,6 +946,95 @@ test("retry: openrouter goes to OpenRouter with the OpenRouter key", async () =>
   assert.equal(fetches[0].init.headers.Authorization, "Bearer ork-openrouter");
 });
 
+const ASSEMBLYAI_DICTATION = {
+  cloudTranscriptionProvider: "assemblyai",
+  cloudTranscriptionModel: "dictation",
+  cloudTranscriptionMode: "byok",
+  transcriptionMode: "providers",
+};
+const dictationResponse = (body) => () => ({
+  ok: true,
+  status: 200,
+  json: async () => body,
+  text: async () => JSON.stringify(body),
+});
+const defaultFetchResponse = fetchResponse;
+
+test("retry: AssemblyAI Dictation goes to the Dictation API and hands back its rewrite", async () => {
+  fetches.length = 0;
+  textUpdates.length = 0;
+  fetchResponse = dictationResponse({ text: "um hello there", llm_response: "Hello there." });
+  try {
+    const result = await invoke({ ...ASSEMBLYAI_DICTATION, preferredLanguage: "es" });
+    assert.equal(result.success, true);
+    assert.equal(fetches.length, 1);
+    assert.equal(fetches[0].url, "https://dictation.assemblyai.com/v1/transcribe");
+    assert.deepEqual(fetches[0].init.headers, { Authorization: "aai-assemblyai" });
+    const body = fetches[0].init.body;
+    assert.deepEqual(JSON.parse(await body.get("config").text()), { language_codes: ["es"] });
+    assert.equal(body.get("audio").type, "audio/webm");
+    // The row keeps the verbatim transcript; the renderer decides whether the rewrite stands in.
+    assert.deepEqual(textUpdates, [{ id: 7, text: "um hello there" }]);
+    assert.equal(result.cleanedText, "Hello there.");
+  } finally {
+    fetchResponse = defaultFetchResponse;
+  }
+});
+
+test("retry: the recorded route chooses the recognition language and forwards dictionary hints", async (t) => {
+  const db = fakeThis.databaseManager;
+  const row = db.getTranscriptionById(7);
+  const keyterms = ["Quetzalcóatl", "Amaya"];
+  t.after(() => {
+    delete row.route_kind;
+    fetchResponse = defaultFetchResponse;
+  });
+  fetchResponse = dictationResponse({ text: "hola" });
+  for (const [kind, source, expected] of [
+    ["translation", "es-MX", ["es"]],
+    ["translation", "auto", undefined],
+    ["translation", undefined, undefined],
+    [null, "es-MX", ["en"]],
+  ]) {
+    row.route_kind = kind;
+    fetches.length = 0;
+    const result = await invoke({
+      ...ASSEMBLYAI_DICTATION,
+      preferredLanguage: "en-US",
+      translationSourceLanguage: source,
+      keyterms,
+    });
+    assert.equal(result.success, true);
+    assert.equal(fetches.length, 1);
+    const config = JSON.parse(await fetches[0].init.body.get("config").text());
+    assert.deepEqual(config.language_codes, expected);
+    assert.deepEqual(config.keyterms_prompt, keyterms);
+  }
+});
+
+test("retry: AssemblyAI's realtime models still fail closed", async () => {
+  fetches.length = 0;
+  const result = await invoke({ ...ASSEMBLYAI_DICTATION, cloudTranscriptionModel: "" });
+  assert.equal(result.success, false);
+  assert.equal(result.code, "STREAMING_ONLY_PROVIDER");
+  assert.equal(fetches.length, 0);
+});
+
+test("retry: a missing AssemblyAI key is a classified error", async () => {
+  fetches.length = 0;
+  const originalGetKey = fakeThis.environmentManager.getAssemblyAIKey;
+  fakeThis.environmentManager.getAssemblyAIKey = () => "";
+  try {
+    const result = await invoke(ASSEMBLYAI_DICTATION);
+    assert.equal(result.success, false);
+    assert.equal(result.code, "API_KEY_MISSING");
+    assert.deepEqual(result.messageParams, { provider: "AssemblyAI" });
+    assert.equal(fetches.length, 0);
+  } finally {
+    fakeThis.environmentManager.getAssemblyAIKey = originalGetKey;
+  }
+});
+
 test("retry: a missing BYOK key on the generic provider branch is a classified error", async () => {
   fetches.length = 0;
   const originalGetMistralKey = fakeThis.environmentManager.getMistralKey;
@@ -1015,6 +1119,7 @@ test("proxy transcription handlers resolve to structured errors instead of rejec
     for (const channel of [
       "proxy-mistral-transcription",
       "proxy-xai-transcription",
+      "proxy-assemblyai-transcription",
       "proxy-corti-transcription",
       "proxy-elevenlabs-transcription",
     ]) {
@@ -1154,6 +1259,547 @@ test("upload: mistral sends x-api-key with a provider-validated model and no lan
   const body = fetches[0].init.body.toString();
   assert.match(body, /voxtral-mini-latest/);
   assert.doesNotMatch(body, /name="language"/);
+});
+
+test("voice take: AssemblyAI Dictation transcribes through the Dictation API, verbatim", async () => {
+  fetches.length = 0;
+  fetchResponse = dictationResponse({ text: "um what's on my calendar", llm_response: "Tidy." });
+  try {
+    const result = await invokeUpload({
+      apiKey: "aai-from-renderer",
+      model: "dictation",
+      provider: "assemblyai",
+      language: "en",
+      purpose: "dictation",
+      transcriptionMode: "providers",
+    });
+    assert.deepEqual(result, { success: true, text: "um what's on my calendar" });
+    assert.equal(fetches.length, 1);
+    assert.equal(fetches[0].url, "https://dictation.assemblyai.com/v1/transcribe");
+    assert.deepEqual(fetches[0].init.headers, { Authorization: "aai-from-renderer" });
+    assert.equal(fetches[0].init.body.get("audio").type, "audio/webm");
+  } finally {
+    fetchResponse = defaultFetchResponse;
+  }
+});
+
+const assemblyAiSurfaces = {
+  dictation: () =>
+    handlers.get("proxy-assemblyai-transcription")(
+      { sender: {} },
+      { audioBuffer: new Uint8Array([1]) }
+    ),
+  retry: () => invoke(ASSEMBLYAI_DICTATION),
+  voice: () =>
+    invokeUpload({
+      provider: "assemblyai",
+      model: "dictation",
+      transcriptionMode: "providers",
+      purpose: "dictation",
+    }),
+};
+
+test("AssemblyAI Dictation requires permission for transcription and its built-in LLM on every surface", async (t) => {
+  t.after(async () => {
+    policySnapshot = { success: true, managed: false };
+    fetchResponse = defaultFetchResponse;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  fetchResponse = dictationResponse({ text: "verbatim", llm_response: "Rewritten." });
+  for (const [name, run] of Object.entries(assemblyAiSurfaces)) {
+    await t.test(name, async () => {
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policySnapshot = { success: true, managed: true, policy };
+      for (const [sttProviders, llmModes, llmProviders, allowed] of [
+        [["assemblyai"], ["local"], ["assemblyai"], false],
+        [["assemblyai"], ["providers"], ["openai"], false],
+        [["openai"], ["providers"], ["assemblyai"], false],
+        [["assemblyai"], ["providers"], ["assemblyai"], true],
+      ]) {
+        policy.transcription.allowedByokProviders = sttProviders;
+        policy.llm.allowedModes = llmModes;
+        policy.llm.allowedByokProviders = llmProviders;
+        await fakeThis.refreshEffectivePolicy();
+        fetches.length = 0;
+        const result = await run();
+        assert.equal(fetches.length, allowed ? 1 : 0);
+        if (allowed) assert.ok(result.success || result.text);
+        else assert.equal(result.success, false);
+      }
+    });
+  }
+});
+
+test("an enforced enterprise cleanup scope prevents AssemblyAI uploads, including verbatim voice takes", async (t) => {
+  const workspaceId = "workspace-cleanup";
+  fakeThis.databaseManager.activeWorkspaceId = workspaceId;
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+  });
+  const resolve = t.mock.method(
+    fakeThis.enterpriseIdentityManager,
+    "resolveProvider",
+    async (request) => {
+      assert.equal(request.workspaceId, workspaceId);
+      assert.equal(request.inferenceScope, "dictationCleanup");
+      assert.equal(request.setupMode, "manual");
+      return { managed: true };
+    }
+  );
+  for (const run of Object.values(assemblyAiSurfaces)) {
+    fetches.length = 0;
+    const result = await run();
+    assert.equal(result.code, "PROVIDER_POLICY_CONFLICT");
+    assert.equal(fetches.length, 0);
+  }
+  assert.equal(resolve.mock.callCount(), 3);
+});
+
+test("a verified non-enterprise workspace can still upload after its enterprise binding retires", async (t) => {
+  fakeThis.databaseManager.activeWorkspaceId = "workspace-personal";
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+    fetchResponse = defaultFetchResponse;
+  });
+  const resolve = t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    fakeThis._retireEnterpriseAudio();
+    throw Object.assign(new Error("Enterprise subscription required"), {
+      code: "ENTERPRISE_REQUIRED",
+    });
+  });
+  fetchResponse = dictationResponse({ text: "verbatim", llm_response: "Rewritten." });
+  fetches.length = 0;
+  const result = await assemblyAiSurfaces.dictation();
+  assert.equal(result.text, "verbatim");
+  assert.equal(fetches.length, 1);
+  assert.equal(fetches[0].init.signal.aborted, false);
+  assert.equal((await assemblyAiSurfaces.retry()).success, true);
+  assert.equal(resolve.mock.callCount(), 1);
+});
+
+test("canceling a live AssemblyAI request during authorization prevents its upload", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const sender = { id: 42 };
+  fakeThis.databaseManager.activeWorkspaceId = "cancel-during-lookup";
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    started.resolve();
+    await finish.promise;
+    return { managed: false };
+  });
+  fetches.length = 0;
+  const pending = handlers.get("proxy-assemblyai-transcription")(
+    { sender },
+    {
+      audioBuffer: new Uint8Array([1]),
+    }
+  );
+  await started.promise;
+  eventHandlers.get("cloud-transcribe-cancel")({ sender });
+  finish.resolve();
+  assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
+  assert.equal(fetches.length, 0);
+});
+
+test("live AssemblyAI cancellation affects only the sending window and rejects a late provider result", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const sender = { id: 42 };
+  t.after(() => {
+    fetchResponse = defaultFetchResponse;
+  });
+  fetchResponse = async (_url, init) => {
+    started.resolve(init.signal);
+    await finish.promise;
+    return dictationResponse({ text: "late transcript" })();
+  };
+  const pending = handlers.get("proxy-assemblyai-transcription")(
+    { sender },
+    { audioBuffer: new Uint8Array([1]) }
+  );
+  const signal = await started.promise;
+  eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: 43 } });
+  assert.equal(signal.aborted, false);
+  eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: sender.id } });
+  finish.resolve();
+  assert.equal(signal.aborted, true);
+  assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
+});
+
+test("switching personal workspaces aborts an AssemblyAI upload and discards a late body", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const db = fakeThis.databaseManager;
+  db.activeWorkspaceId = "personal-during-upload";
+  db.setActiveWorkspaceScope = ({ activeWorkspaceId }) => {
+    db.activeWorkspaceId = activeWorkspaceId;
+  };
+  t.after(() => {
+    delete db.activeWorkspaceId;
+    delete db.setActiveWorkspaceScope;
+    fetchResponse = defaultFetchResponse;
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    throw Object.assign(new Error("Enterprise subscription required"), {
+      code: "ENTERPRISE_REQUIRED",
+    });
+  });
+  fetchResponse = (_url, init) => ({
+    ok: true,
+    json: async () => {
+      started.resolve(init.signal);
+      await finish.promise;
+      return { text: "stale text", llm_response: "Stale rewrite." };
+    },
+  });
+  textUpdates.length = 0;
+  const pending = assemblyAiSurfaces.retry();
+  const signal = await started.promise;
+  const setWorkspace = handlers.get("set-active-workspace-scope");
+  assert.equal(setWorkspace({}, { activeWorkspaceId: db.activeWorkspaceId }).success, true);
+  assert.equal(signal.aborted, false);
+  assert.equal(setWorkspace({}, { activeWorkspaceId: "enterprise-after-switch" }).success, true);
+  finish.resolve();
+  assert.equal((await pending).code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(signal.aborted, true);
+  assert.deepEqual(textUpdates, []);
+});
+
+for (const surface of ["dictation", "retry"]) {
+  for (const measured of [true, false]) {
+    test(`AssemblyAI ${surface} recovers a long ${measured ? "measured" : "unmeasured"} recording`, async (t) => {
+      const previous = { fetchResponse, splitBehavior };
+      const row = fakeThis.databaseManager.getTranscriptionById(7);
+      const oldDuration = row.audio_duration_ms;
+      t.after(() => {
+        ({ fetchResponse, splitBehavior } = previous);
+        row.audio_duration_ms = oldDuration;
+      });
+      const original = fakeThis.audioStorageManager.getAudioBuffer(7);
+      row.audio_duration_ms = measured ? 1_201_000 : null;
+      splitBehavior = async (input, output) => {
+        assert.deepEqual(fs.readFileSync(input), original);
+        return piecesOf(2)(input, output);
+      };
+      const types = [];
+      fetchResponse = async (_url, init) => {
+        const audio = init.body.get("audio");
+        types.push(audio.type);
+        if (audio.type === "audio/webm") return new Response("Audio Too Large", { status: 413 });
+        const config = JSON.parse(await init.body.get("config").text());
+        assert.deepEqual(config, { language_codes: ["es"], keyterms_prompt: ["Amaya"] });
+        const bytes = new Uint8Array(await audio.arrayBuffer());
+        return dictationResponse({ text: `part ${bytes[0]}`, llm_response: "Chunk rewrite." })();
+      };
+      textUpdates.length = 0;
+      splitCalls.length = 0;
+      const result =
+        surface === "dictation"
+          ? await handlers.get("proxy-assemblyai-transcription")(
+              { sender: { id: 45 } },
+              {
+                audioBuffer: original,
+                mimeType: "audio/webm",
+                language: "es",
+                keyterms: ["Amaya"],
+                durationSeconds: measured ? 1201 : undefined,
+              }
+            )
+          : await invoke({ ...ASSEMBLYAI_DICTATION, preferredLanguage: "es", keyterms: ["Amaya"] });
+      if (surface === "dictation") assert.equal(result.text, "part 0 part 1");
+      else {
+        assert.equal(result.success, true);
+        assert.deepEqual(textUpdates, [{ id: 7, text: "part 0 part 1" }]);
+      }
+      assert.equal(result.cleanedText, undefined);
+      assert.deepEqual(types, [...(measured ? [] : ["audio/webm"]), "audio/mpeg", "audio/mpeg"]);
+      assert.equal(splitCalls.length, 1);
+      assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+    });
+  }
+}
+
+function setupDictationWorkspaceSwitch(t) {
+  const database = fakeThis.databaseManager;
+  const originalToken = tokenState;
+  const { deferred } = require("./harness/deferred");
+  const lookup = deferred();
+  database.activeWorkspaceId = "original-workspace";
+  database.setActiveWorkspaceScope = ({ activeWorkspaceId }) => {
+    database.activeWorkspaceId = activeWorkspaceId;
+  };
+  t.after(async () => {
+    delete database.activeWorkspaceId;
+    delete database.setActiveWorkspaceScope;
+    tokenState = originalToken;
+    policyLookupGate = null;
+    lookup.resolve();
+    fetchResponse = defaultFetchResponse;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    throw Object.assign(new Error("Personal workspace"), { code: "ENTERPRISE_REQUIRED" });
+  });
+  return {
+    holdPolicy() {
+      policyLookupGate = lookup.promise;
+      tokenState = { ...tokenState, generation: tokenState.generation + 1 };
+      void fakeThis.refreshEffectivePolicy();
+      assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
+    },
+    switchWorkspace(activeWorkspaceId) {
+      const result = handlers.get("set-active-workspace-scope")({}, { activeWorkspaceId });
+      assert.equal(result.success, true);
+    },
+    releasePolicy: lookup.resolve,
+  };
+}
+
+test("AssemblyAI work keeps its original workspace while dispatch and routing wait", async (t) => {
+  const workspace = setupDictationWorkspaceSwitch(t);
+  fetchResponse = dictationResponse({ text: "text from the previous workspace" });
+  fetches.length = 0;
+  workspace.holdPolicy();
+  const requests = Object.values(assemblyAiSurfaces).map((run) => run());
+  workspace.switchWorkspace("next-workspace");
+  workspace.switchWorkspace("original-workspace");
+  workspace.releasePolicy();
+  for (const result of await Promise.all(requests)) {
+    assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+  }
+  assert.equal(fetches.length, 0);
+});
+
+test("AssemblyAI checks the dispatch workspace against the database before upload", async (t) => {
+  const workspace = setupDictationWorkspaceSwitch(t);
+  fetches.length = 0;
+  workspace.holdPolicy();
+  const pending = assemblyAiSurfaces.dictation();
+  fakeThis.databaseManager.activeWorkspaceId = "restored-workspace";
+  workspace.releasePolicy();
+  assert.equal((await pending).code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(fetches.length, 0);
+});
+
+test("a repeated workspace notification preserves AssemblyAI and a switch preserves local retries", async (t) => {
+  const workspace = setupDictationWorkspaceSwitch(t);
+  fetchResponse = dictationResponse({ text: "same workspace text" });
+  workspace.holdPolicy();
+  const pending = assemblyAiSurfaces.dictation();
+  workspace.switchWorkspace("original-workspace");
+  workspace.releasePolicy();
+  assert.equal((await pending).text, "same workspace text");
+
+  const local = invoke({
+    ...ASSEMBLYAI_DICTATION,
+    useLocalWhisper: true,
+    transcriptionMode: "local",
+  });
+  workspace.switchWorkspace("next-workspace");
+  assert.equal((await local).success, true);
+});
+
+test("a workspace switch during final policy validation discards the AssemblyAI result", async (t) => {
+  for (const [surface, run] of Object.entries(assemblyAiSurfaces)) {
+    await t.test(surface, async (t) => {
+      const workspace = setupDictationWorkspaceSwitch(t);
+      textUpdates.length = 0;
+      statusUpdates.length = 0;
+      fetchResponse = () => ({
+        ok: true,
+        json: async () => {
+          workspace.holdPolicy();
+          setImmediate(() => {
+            workspace.switchWorkspace("next-workspace");
+            workspace.releasePolicy();
+          });
+          return { text: "previous workspace text", llm_response: "Previous rewrite." };
+        },
+      });
+      const result = await run();
+      assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+      assert.equal(result.text, undefined);
+      assert.equal(result.cleanedText, undefined);
+      assert.deepEqual(textUpdates, []);
+      assert.deepEqual(statusUpdates, []);
+    });
+  }
+});
+
+test("when a later AssemblyAI chunk fails, History keeps the recording and does not save a partial transcript", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  const row = fakeThis.databaseManager.getTranscriptionById(7);
+  const oldDuration = row.audio_duration_ms;
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+    row.audio_duration_ms = oldDuration;
+  });
+  row.audio_duration_ms = 1_201_000;
+  const original = fakeThis.audioStorageManager.getAudioBuffer(7);
+  splitBehavior = piecesOf(3);
+  splitCalls.length = 0;
+  textUpdates.length = 0;
+  let requests = 0;
+  fetchResponse = () =>
+    ++requests === 1
+      ? dictationResponse({ text: "first part" })()
+      : new Response("Unavailable", { status: 503 });
+
+  const result = await invoke(ASSEMBLYAI_DICTATION);
+  assert.equal(result.success, false);
+  assert.equal(result.status, 503);
+  assert.equal(requests, 2);
+  assert.deepEqual(textUpdates, []);
+  assert.deepEqual(fakeThis.audioStorageManager.getAudioBuffer(7), original);
+  assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+});
+
+test("a duration rejection on an unmeasured AssemblyAI voice take retries all pieces in order", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+  });
+  splitBehavior = piecesOf(3);
+  splitCalls.length = 0;
+  let requests = 0;
+  fetchResponse = (_url, init) => {
+    if (++requests === 1) return new Response("Audio exceeds 20 minutes", { status: 413 });
+    assert.equal(init.body.get("audio").type, "audio/mpeg");
+    return dictationResponse({ text: `part ${requests - 1}`, llm_response: "rewrite" })();
+  };
+  const result = await assemblyAiSurfaces.voice();
+  assert.deepEqual(result, { success: true, text: "part 1 part 2 part 3" });
+  assert.equal(requests, 4);
+  assert.equal(splitCalls.length, 1);
+  assert.ok(splitCalls[0].options.segmentDuration < 20 * 60);
+  assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+});
+
+test("a 20-minute AssemblyAI voice take is split before sending any audio", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+  });
+  splitBehavior = piecesOf(2);
+  fetches.length = 0;
+  fetchResponse = async (_url, init) => {
+    const audio = init.body.get("audio");
+    assert.equal(audio.type, "audio/mpeg");
+    const bytes = new Uint8Array(await audio.arrayBuffer());
+    return dictationResponse({ text: `piece ${bytes[0]}` })();
+  };
+  const result = await invokeUpload({
+    provider: "assemblyai",
+    model: "dictation",
+    transcriptionMode: "providers",
+    purpose: "dictation",
+    durationSeconds: 1200,
+  });
+  assert.deepEqual(result, { success: true, text: "piece 0 piece 1" });
+  assert.equal(fetches.length, 2);
+});
+
+test("canceling a long AssemblyAI voice take stops subsequent chunks and cleans split files", async () => {
+  const { deferred } = require("./harness/deferred");
+  const first = deferred();
+  const reply = deferred();
+  await withReplies(
+    (_url, { signal }) => {
+      first.resolve(signal);
+      return reply.promise;
+    },
+    3,
+    async () => {
+      const requestId = "long-voice-take";
+      const pending = invokeUpload({
+        provider: "assemblyai",
+        model: "dictation",
+        purpose: "dictation",
+        durationSeconds: 1201,
+        requestId,
+      });
+      const signal = await first.promise;
+      const cancel = await handlers.get("cancel-upload-transcription")({}, requestId);
+      reply.resolve(dictationResponse({ text: "discarded part" })());
+      const result = await pending;
+      assert.equal(cancel.success, true);
+      assert.equal(signal.aborted, true);
+      assert.equal(result.code, "UPLOAD_CANCELLED");
+      assert.equal(fetches.length, 1);
+      assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+    }
+  );
+});
+
+test("an encoder sliver is folded back into a full-length voice take before upload", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+  });
+  splitCalls.length = 0;
+  splitBehavior = async (input, output, options) => {
+    const pieces = await piecesOf(3)(input, output);
+    if (options.segmentDuration === 600) fs.truncateSync(pieces.chunkPaths[2], 1773);
+    return pieces;
+  };
+  fetches.length = 0;
+  fetchResponse = async (_url, init) => {
+    const audio = init.body.get("audio");
+    if (audio.size < 8000) return new Response("Audio too short", { status: 400 });
+    const bytes = new Uint8Array(await audio.arrayBuffer());
+    return dictationResponse({ text: `piece ${bytes[0]}` })();
+  };
+  const result = await invokeUpload({
+    provider: "assemblyai",
+    model: "dictation",
+    transcriptionMode: "providers",
+    purpose: "dictation",
+    durationSeconds: 1200,
+  });
+  assert.deepEqual(result, { success: true, text: "piece 0 piece 1 piece 2" });
+  assert.equal(fetches.length, 3);
+  assert.equal(splitCalls.length, 2);
+  assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+});
+
+test("AssemblyAI waits for a signed-in workspace to resolve and for both workspace IDs to agree", async (t) => {
+  accountWorkspaces = [{ id: "new-workspace" }];
+  fakeThis._enterpriseAudioScopeRevision++;
+  t.after(() => {
+    accountWorkspaces = [];
+    fakeThis._enterpriseAudioScope = null;
+    delete fakeThis.databaseManager.activeWorkspaceId;
+    fakeThis._enterpriseAudioScopeRevision++;
+  });
+  fetches.length = 0;
+  const pending = await assemblyAiSurfaces.dictation();
+  assert.equal(pending.code, "AUTH_CONTEXT_CHANGED");
+  fakeThis.databaseManager.activeWorkspaceId = "old-workspace";
+  fakeThis._enterpriseAudioScope = { workspaceId: "new-workspace" };
+  const switched = await assemblyAiSurfaces.dictation();
+  assert.equal(switched.code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(fetches.length, 0);
+});
+
+test("a workspace switch during the AssemblyAI cleanup lookup prevents upload", async (t) => {
+  fakeThis.databaseManager.activeWorkspaceId = "first-workspace";
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    fakeThis.databaseManager.activeWorkspaceId = "next-workspace";
+    return { managed: false };
+  });
+  fetches.length = 0;
+  const result = await assemblyAiSurfaces.retry();
+  assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(fetches.length, 0);
 });
 
 test("upload: ElevenLabs gets the file at its own endpoint, with no language hint", async () => {
@@ -1457,55 +2103,68 @@ async function withReplies(reply, pieces, run) {
 
 test("upload: a 30-minute OpenRouter file goes out in 4-minute pieces, comes back whole", async () => {
   let n = 0;
-  await withReplies(() => okReply(`part ${++n}`), 8, async () => {
-    const result = await invokeUpload(OPENROUTER_UPLOAD, OVER_ONE_REQUEST);
-    assert.equal(result.success, true, result.error);
-    assert.equal(result.text, "part 1 part 2 part 3 part 4 part 5 part 6 part 7 part 8");
-    assert.equal(splitCalls[0].options.segmentDuration, 240);
-    assert.equal(fetches.length, 8);
-    fetches.forEach((f, i) => {
-      assert.equal(f.url, "https://openrouter.ai/api/v1/audio/transcriptions");
-      assert.equal(f.init.headers.Authorization, "Bearer ork-openrouter");
-      const body = f.init.body.toString("latin1");
-      assert.match(body, new RegExp(`filename="chunk-00${i}\\.mp3"`));
-      assert.match(body, /name="model"\r\n\r\ngoogle\/chirp-3\r\n/);
-      assert.doesNotMatch(body, /name="(language|prompt)"/);
-    });
-    assert.deepEqual(progressEvents.at(-1), {
-      channel: "upload-transcription-progress",
-      data: { stage: "transcribing", chunksTotal: 8, chunksCompleted: 8 },
-    });
-  });
+  await withReplies(
+    () => okReply(`part ${++n}`),
+    8,
+    async () => {
+      const result = await invokeUpload(OPENROUTER_UPLOAD, OVER_ONE_REQUEST);
+      assert.equal(result.success, true, result.error);
+      assert.equal(result.text, "part 1 part 2 part 3 part 4 part 5 part 6 part 7 part 8");
+      assert.equal(splitCalls[0].options.segmentDuration, 240);
+      assert.equal(fetches.length, 8);
+      fetches.forEach((f, i) => {
+        assert.equal(f.url, "https://openrouter.ai/api/v1/audio/transcriptions");
+        assert.equal(f.init.headers.Authorization, "Bearer ork-openrouter");
+        const body = f.init.body.toString("latin1");
+        assert.match(body, new RegExp(`filename="chunk-00${i}\\.mp3"`));
+        assert.match(body, /name="model"\r\n\r\ngoogle\/chirp-3\r\n/);
+        assert.doesNotMatch(body, /name="(language|prompt)"/);
+      });
+      assert.deepEqual(progressEvents.at(-1), {
+        channel: "upload-transcription-progress",
+        data: { stage: "transcribing", chunksTotal: 8, chunksCompleted: 8 },
+      });
+    }
+  );
 });
 
 test("upload: a Custom endpoint on OpenRouter is sent in pieces with its own key and model", async () => {
-  await withReplies(() => okReply("piece"), 2, async () => {
-    const result = await invokeUpload(
-      {
-        apiKey: "ck-custom",
-        baseUrl: "https://openrouter.ai/api/v1",
-        model: "microsoft/mai-transcribe-2",
-        provider: "custom",
-        language: "",
-        transcriptionMode: "providers",
-      },
-      OVER_ONE_REQUEST
-    );
-    assert.equal(result.success, true, result.error);
-    assert.equal(fetches.length, 2);
-    assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
-    assert.match(
-      fetches[0].init.body.toString("latin1"),
-      /name="model"\r\n\r\nmicrosoft\/mai-transcribe-2\r\n/
-    );
-  });
+  await withReplies(
+    () => okReply("piece"),
+    2,
+    async () => {
+      const result = await invokeUpload(
+        {
+          apiKey: "ck-custom",
+          baseUrl: "https://openrouter.ai/api/v1",
+          model: "microsoft/mai-transcribe-2",
+          provider: "custom",
+          language: "",
+          transcriptionMode: "providers",
+        },
+        OVER_ONE_REQUEST
+      );
+      assert.equal(result.success, true, result.error);
+      assert.equal(fetches.length, 2);
+      assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
+      assert.match(
+        fetches[0].init.body.toString("latin1"),
+        /name="model"\r\n\r\nmicrosoft\/mai-transcribe-2\r\n/
+      );
+    }
+  );
 });
 
 // Pieces fail through the same translated provider errors as a single request.
 test("upload: an OpenRouter piece failure is a classified provider error", async () => {
   const unauthorized = () => {
     const body = { error: { message: "No auth credentials found", code: 401 } };
-    return { ok: false, status: 401, json: async () => body, text: async () => JSON.stringify(body) };
+    return {
+      ok: false,
+      status: 401,
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    };
   };
   await withReplies(unauthorized, 3, async () => {
     const tab = await invokeUpload(OPENROUTER_UPLOAD);
@@ -1524,12 +2183,16 @@ test("upload: an OpenRouter piece failure is a classified provider error", async
     assert.equal(custom.messageKey, "providerErrors.selfHosted.authFailed");
   });
 
-  await withReplies(() => okReply("piece"), 1, async () => {
-    const result = await invokeUpload({ ...OPENROUTER_UPLOAD, apiKey: "" });
-    assert.equal(result.code, "API_KEY_MISSING");
-    assert.deepEqual(result.messageParams, { provider: "OpenRouter" });
-    assert.equal(fetches.length, 0, "a missing key must fail before any piece is sent");
-  });
+  await withReplies(
+    () => okReply("piece"),
+    1,
+    async () => {
+      const result = await invokeUpload({ ...OPENROUTER_UPLOAD, apiKey: "" });
+      assert.equal(result.code, "API_KEY_MISSING");
+      assert.deepEqual(result.messageParams, { provider: "OpenRouter" });
+      assert.equal(fetches.length, 0, "a missing key must fail before any piece is sent");
+    }
+  );
 });
 
 test("upload: running out of OpenRouter credits mid-upload sends no further pieces", async () => {
@@ -1566,14 +2229,18 @@ test("upload: cancelling an OpenRouter upload stops at the piece in flight", asy
 // route. Registered only after that await, the upload never heard it and sent,
 // and billed, every piece.
 test("upload: a Cancel that lands while an OpenRouter upload starts is not lost", async () => {
-  await withReplies(() => okReply("piece"), 3, async () => {
-    const pending = invokeUpload({ ...OPENROUTER_UPLOAD, requestId: "upload-cancel-early" });
-    const cancel = await handlers.get("cancel-upload-transcription")({}, "upload-cancel-early");
-    assert.equal(cancel.success, true, "registered before its first await");
-    const result = await pending;
-    assert.equal(result.code, "UPLOAD_CANCELLED");
-    assert.equal(fetches.length, 0, "no piece is sent");
-  });
+  await withReplies(
+    () => okReply("piece"),
+    3,
+    async () => {
+      const pending = invokeUpload({ ...OPENROUTER_UPLOAD, requestId: "upload-cancel-early" });
+      const cancel = await handlers.get("cancel-upload-transcription")({}, "upload-cancel-early");
+      assert.equal(cancel.success, true, "registered before its first await");
+      const result = await pending;
+      assert.equal(result.code, "UPLOAD_CANCELLED");
+      assert.equal(fetches.length, 0, "no piece is sent");
+    }
+  );
 });
 
 // Electron's net.fetch rejects with a plain Error whose message is the Chromium
@@ -2055,6 +2722,25 @@ test("policy revocation during retry conversion or upload preparation prevents t
   }
 });
 
+test("revoking only the AssemblyAI LLM grant during voice preparation stops the upload", async (t) => {
+  t.after(async () => {
+    prepareUploadBehavior = undefined;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  fetches.length = 0;
+  prepareUploadBehavior = async (sourcePath) => {
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    policy.llm.allowedByokProviders = ["openai"];
+    policySnapshot = { success: true, managed: true, policy };
+    await fakeThis.refreshEffectivePolicy();
+    return { path: sourcePath, cleanup() {} };
+  };
+  const result = await assemblyAiSurfaces.voice();
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  assert.equal(fetches.length, 0);
+});
+
 test("a revoked retry aborts the provider and cannot save an ignored late result", async (t) => {
   const previous = tinfoilBehavior;
   t.after(async () => {
@@ -2116,6 +2802,45 @@ test("a retry that turns remote doesn't upload on a verdict still on its way", a
   assert.equal(fetches.length, 0);
   await retry;
   assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+});
+
+test("voice files cancelled before the product policy verdict send no audio", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const lookup = deferred();
+  const previousTokenState = tokenState;
+  t.after(async () => {
+    policyLookupGate = null;
+    lookup.resolve();
+    tokenState = previousTokenState;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  policyLookupGate = lookup.promise;
+  tokenState = { ...tokenState, generation: tokenState.generation + 1 };
+  const { path: filePath } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, filePath));
+  fetches.length = 0;
+  const event = { sender: {} };
+  const cloud = handlers.get("transcribe-audio-file-cloud")(event, filePath, {
+    purpose: "dictation",
+    requestId: "voice-cloud",
+  });
+  const byok = handlers.get("transcribe-audio-file-byok")(event, {
+    filePath,
+    purpose: "dictation",
+    provider: "assemblyai",
+    model: "dictation",
+    apiKey: "fixture",
+    requestId: "voice-byok",
+  });
+  assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
+  for (const id of ["voice-cloud", "voice-byok"]) {
+    assert.equal((await handlers.get("cancel-upload-transcription")(event, id)).success, true);
+  }
+  lookup.resolve();
+  for (const result of await Promise.all([cloud, byok])) {
+    assert.equal(result.code, "UPLOAD_CANCELLED");
+  }
+  assert.equal(fetches.length, 0);
 });
 
 test("a local retry ignores a retained cloud preference when cloud inference is forbidden", async (t) => {

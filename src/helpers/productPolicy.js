@@ -152,6 +152,12 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
     ].includes(channel)
   )
     return transcription({ mode: "local", provider: "" });
+  if (channel === "proxy-assemblyai-transcription") {
+    return (
+      transcription({ mode: "providers", provider: "assemblyai" }) &&
+      rules.isAssemblyAiRewriteAllowedByPolicy(state)
+    );
+  }
   const proxy = /^proxy-(xai|mistral|corti|tinfoil|gemini|elevenlabs)-transcription$/.exec(channel);
   if (proxy) return transcription({ mode: "providers", provider: proxy[1] });
   if (channel === "cloud-agent-stream-start")

@@ -5,7 +5,7 @@
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
 import { isOrukeetStreaming, isSelfHostedTranscription } from "./selfHostedTranscription.js";
-import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
+import { isStreamingOnlySelection } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
 import bundledRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 
@@ -207,13 +207,14 @@ export function resolveStreamingProviderName({ settings, context, sttConfig, lan
   if (isGeminiLiveSelection(settings)) {
     return "gemini";
   }
-  // Realtime-only providers have no batch endpoint, so BYOK selection alone
-  // routes them, and their renderer channel name is the bare provider id. Ahead
+  // Realtime-only providers have no batch endpoint (AssemblyAI's Dictation model
+  // aside), so BYOK selection of a realtime model alone routes them, and their
+  // renderer channel name is the bare provider id. Ahead
   // of the REALTIME_MODELS check so a stale OpenAI model id in settings can't
   // hijack the provider, matching the tinfoil/corti precedent above.
   if (
     settings.cloudTranscriptionMode === "byok" &&
-    STREAMING_ONLY_PROVIDERS.has(settings.cloudTranscriptionProvider)
+    isStreamingOnlySelection(settings.cloudTranscriptionProvider, settings.cloudTranscriptionModel)
   ) {
     return settings.cloudTranscriptionProvider;
   }

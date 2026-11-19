@@ -22,7 +22,10 @@ import {
   isTranscriptionContextAllowed,
   transcriptionChoiceRefusal,
 } from "../stores/policyRules";
-import { isManagedTranscriptionActive } from "../services/managedTranscription";
+import {
+  allowsPersonalDictationCleanup,
+  isManagedTranscriptionActive,
+} from "../services/managedTranscription";
 import { usePolicyStore } from "../stores/policyStore";
 import { getOnboardingDemoKind } from "../utils/onboardingDemo";
 import {
@@ -49,6 +52,18 @@ const WAYLAND_CLIPBOARD_REASON_KEYS = {
   "wl-copy-failed": "wlCopyFailed",
 };
 const DEMO_AUDIO_LEVEL_INTERVAL_MS = 80;
+
+function isDictationRecordingAllowed(policyState = usePolicyStore.getState()) {
+  return (
+    isManagedTranscriptionActive() ||
+    isTranscriptionContextAllowed(
+      policyState,
+      getSettings(),
+      "dictation",
+      allowsPersonalDictationCleanup
+    )
+  );
+}
 
 // Fetches the STT config for whoever is signed in now. An answer that arrives
 // after invalidateSttConfig (an auth change, or a FEATURE_NOT_ENABLED refusal)
@@ -216,10 +231,7 @@ export const useAudioRecording = (toast, options = {}) => {
       try {
         if (!manager || agentRecordingRef.current) return false;
         const policyState = usePolicyStore.getState();
-        if (
-          !isManagedTranscriptionActive() &&
-          !isTranscriptionContextAllowed(policyState, getSettings(), "dictation")
-        ) {
+        if (!isDictationRecordingAllowed(policyState)) {
           const refusal = transcriptionChoiceRefusal(policyState, getSettings(), "dictation");
           toast({
             title: t(refusal?.messageKey ?? "common.managedByOrg"),
@@ -1266,6 +1278,7 @@ export const useAudioRecording = (toast, options = {}) => {
       )
         return;
       try {
+        if (!isDictationRecordingAllowed()) return;
         await manager.prepareMicCapture?.();
       } catch (error) {
         logger.warn("Mic preparation failed", { error: error?.message });

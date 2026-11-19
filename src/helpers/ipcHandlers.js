@@ -48,7 +48,10 @@ const {
   createWorkspacePolicyManager,
   isScreenContextBlocked,
 } = require("./workspacePolicyManager");
-const { createEnterpriseIdentityManager } = require("./enterpriseIdentityManager");
+const {
+  createEnterpriseIdentityManager,
+  CONFIG_REFRESH_MS,
+} = require("./enterpriseIdentityManager");
 const { createEffectivePolicyManager } = require("./effectivePolicyManager");
 const { devicePolicyNetworkAllowed } = require("./devicePolicyNetwork");
 const {
@@ -222,6 +225,7 @@ const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
+const { transcribeAssemblyAiRecording } = require("./assemblyAiDictation");
 const { transcribeWithElevenLabs } = require("./elevenLabsTranscription");
 const AudioStorageManager = require("./audioStorage");
 const { SkillLibrary } = require("./skills/skillLibrary");
@@ -2135,6 +2139,19 @@ class IPCHandlers {
       return async (event, ...args) => {
         const startedPolicy = this.effectivePolicyManager.getCurrent();
         const operation = { channel, args, remote, accountId: startedPolicy.accountId };
+        // Only the pill's live request belongs to its Cancel button. History and file
+        // uploads can later use the same provider through their own IPC channels.
+        if (channel === "proxy-assemblyai-transcription")
+          operation.liveDictationSenderId = event.sender.id;
+        // Retry and file routing can select a different provider. Capture the
+        // owner before dispatch waits, then enforce it only on the AssemblyAI route.
+        if (
+          channel === "proxy-assemblyai-transcription" ||
+          (channel === "retry-transcription" &&
+            args[1]?.cloudTranscriptionProvider === "assemblyai") ||
+          (channel === "transcribe-audio-file-byok" && args[0]?.provider === "assemblyai")
+        )
+          operation.dictationWorkspaceAtDispatch = captureDictationWorkspace();
         if (channel === "cloud-api-request")
           operation.args = [
             args[0],
@@ -2166,6 +2183,10 @@ class IPCHandlers {
         let streamPolicy;
         const controller = new AbortController();
         operation.signal = controller.signal;
+        const interrupted = () =>
+          controller.signal.reason?.code === "TRANSCRIPTION_CANCELLED"
+            ? { success: false, error: "Cancelled", code: "TRANSCRIPTION_CANCELLED" }
+            : policyBlockedFailure(this.effectivePolicyManager.getCurrent());
         this._productRequests.set(controller, operation);
         try {
           void this.refreshEffectivePolicy(event);
@@ -2176,7 +2197,7 @@ class IPCHandlers {
             this.effectivePolicyManager.getCurrent().accountId !== operation.accountId ||
             !mayStart(operation)
           )
-            return policyBlockedFailure(this.effectivePolicyManager.getCurrent());
+            return interrupted();
           if (streamProperty) {
             const previousStreamPolicy = this._remoteStreamPolicies.get(streamProperty);
             if (
@@ -2214,8 +2235,9 @@ class IPCHandlers {
               error: "Authentication context changed during the request",
             };
           }
-          if (controller.signal.aborted)
-            return policyBlockedFailure(this.effectivePolicyManager.getCurrent());
+          if (controller.signal.aborted) return interrupted();
+          if (operation.dictationCleanupSignal?.aborted)
+            return { success: false, ...ipcErrorFields(operation.dictationCleanupSignal.reason) };
           if (
             (!operation.remote || !snapshot.localOnly) &&
             runningOperationAllowed(
@@ -2263,6 +2285,18 @@ class IPCHandlers {
     const handleProduct = (channel, handler, remote = false) =>
       ipcMain.handle(channel, createProductHandler(channel, handler, remote));
     const handleRemoteProduct = (channel, handler) => handleProduct(channel, handler, true);
+    // Register file work before the product gate can await an effective policy.
+    const handleRemoteFile = (channel, handler) =>
+      ipcMain.handle(channel, (event, ...args) => {
+        const options = channel === "transcribe-audio-file-cloud" ? args[1] : args[0];
+        const { signal, release } = this._uploadCancelRegistry.register(options?.requestId);
+        const guarded = createProductHandler(
+          channel,
+          () => handler({ signal }, event, ...args),
+          true
+        );
+        return guarded(event, ...args).finally(release);
+      });
     const ownProductStream = (streaming) => {
       const operation = this._productRequestContext.getStore();
       if (!operation?.streamPolicy) return streaming;
@@ -2298,7 +2332,10 @@ class IPCHandlers {
                 ? "self-hosted"
                 : "providers";
       const turnsRemote = !operation.remote && mode !== "local";
-      operation.channel = "batch-transcription";
+      operation.channel =
+        route.transport === "proxied" && route.provider === "assemblyai"
+          ? "proxy-assemblyai-transcription"
+          : "batch-transcription";
       operation.args = [{ mode, provider: route.provider ?? "" }];
       operation.remote = mode !== "local";
       if (turnsRemote) {
@@ -3617,6 +3654,10 @@ class IPCHandlers {
         return ACCOUNT_CHANGED_RESULT;
       }
       this.databaseManager.setActiveWorkspaceScope({ activeWorkspaceId, defaultWorkspaceId });
+      observeDictationWorkspace({
+        accountId: getScope().accountId,
+        workspaceId: activeWorkspaceId,
+      });
       return { success: true };
     });
 
@@ -4932,8 +4973,6 @@ class IPCHandlers {
     });
 
     ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
-      // Uploads pass a requestId so cancel-upload-transcription can abort the
-      // local decode; flows without one (voice drafts) register nothing.
       const purpose = audioFilePurpose(filePath, options.purpose);
       const cancel = this._uploadCancelRegistry.register(options.requestId);
       return runAudioJob(event, purpose, cancel, async (signal) => {
@@ -6732,6 +6771,23 @@ class IPCHandlers {
 
         return await response.json();
       })
+    );
+
+    handleProviderTranscription(
+      "proxy-assemblyai-transcription",
+      serializeIpcError(
+        async (event, { audioBuffer, mimeType, durationSeconds, language, keyterms }, signal) => {
+          return await transcribeAssemblyAiDictation(event, {
+            signal,
+            audioBuffer,
+            durationSeconds,
+            contentType: mimeType,
+            language,
+            keyterms,
+            apiKey: this.environmentManager.getAssemblyAIKey(),
+          });
+        }
+      )
     );
 
     handleProviderTranscription(
@@ -8795,6 +8851,19 @@ class IPCHandlers {
     // doesn't retire the running work.
     const sameEnterpriseAudioScope = (previous, next) =>
       previous?.accountId === next.accountId && previous?.workspaceId === next.workspaceId;
+    // Personal uploads also have a workspace owner, even without an enterprise
+    // audio binding. Reconfirming the same personal workspace keeps them alive.
+    let dictationWorkspaceBinding;
+    const observeDictationWorkspace = (scope) => {
+      if (
+        !dictationWorkspaceBinding ||
+        !sameEnterpriseAudioScope(dictationWorkspaceBinding, scope)
+      ) {
+        dictationWorkspaceBinding?.controller.abort(createEnterpriseAudioConfigChangedError());
+        dictationWorkspaceBinding = { ...scope, controller: new AbortController() };
+      }
+      return dictationWorkspaceBinding.controller.signal;
+    };
     const enterpriseAudioStopReason = (previous, next) =>
       !previous
         ? undefined
@@ -8854,6 +8923,7 @@ class IPCHandlers {
           workspaceId: request.workspaceId,
           authGeneration: request.expectedAuthGeneration,
         };
+        observeDictationWorkspace(this._enterpriseAudioScope);
         return this.enterpriseIdentityManager.getConfig(request);
       },
     });
@@ -8865,6 +8935,15 @@ class IPCHandlers {
         scope.workspaceId === snapshot.workspaceId &&
         scope.authGeneration === snapshot.authGeneration
       );
+    };
+    // Give a confirmed personal scope the same freshness window as an enterprise config.
+    let personalDictationScope;
+    const rememberPersonalDictationScope = (scope) => {
+      personalDictationScope = {
+        ...scope,
+        revision: this._enterpriseAudioScopeRevision,
+        expiresAt: Date.now() + CONFIG_REFRESH_MS,
+      };
     };
     this.enterpriseIdentityManager = createEnterpriseIdentityManager({
       cachePath: path.join(app.getPath("userData"), "managed-enterprise-config.json"),
@@ -8891,6 +8970,17 @@ class IPCHandlers {
       },
       broadcast: (snapshot) => {
         if (!matchesEnterpriseAudioScope(snapshot)) return;
+        if (snapshot.code === "ENTERPRISE_REQUIRED") rememberPersonalDictationScope(snapshot);
+        else {
+          if (
+            personalDictationScope &&
+            sameEnterpriseAudioScope(personalDictationScope, snapshot)
+          ) {
+            dictationWorkspaceBinding?.controller.abort(createEnterpriseAudioConfigChangedError());
+            dictationWorkspaceBinding = undefined;
+          }
+          personalDictationScope = null;
+        }
         const old = continuedEnterpriseAudioBinding(snapshot);
         const required = enforcesEnterpriseTranscription(snapshot);
         if (
@@ -8911,6 +9001,105 @@ class IPCHandlers {
       },
       logger: debugLogger,
     });
+    // Even callers that only use verbatim text cause this endpoint to run cleanup.
+    const dictationWorkspace = () => {
+      const databaseWorkspace = this.databaseManager.activeWorkspaceId;
+      const enterpriseWorkspace = this._enterpriseAudioScope?.workspaceId;
+      if (databaseWorkspace && enterpriseWorkspace && databaseWorkspace !== enterpriseWorkspace)
+        throw createEnterpriseAudioConfigChangedError();
+      return databaseWorkspace ?? enterpriseWorkspace ?? null;
+    };
+    const captureDictationWorkspace = () => {
+      try {
+        return observeDictationWorkspace({
+          accountId: getScope().accountId,
+          workspaceId: dictationWorkspace(),
+        });
+      } catch (error) {
+        // A disagreement at dispatch stays a refusal even if the scopes later agree.
+        return AbortSignal.abort(error);
+      }
+    };
+    const getDictationCleanupSignal = async (event, workspaceSignal) => {
+      workspaceSignal.throwIfAborted();
+      const { accountId, authGeneration, authenticated } = getScope();
+      const workspaceId = dictationWorkspace();
+      if (workspaceSignal !== observeDictationWorkspace({ accountId, workspaceId }))
+        throw createEnterpriseAudioConfigChangedError();
+      const revision = this._enterpriseAudioScopeRevision;
+      if (!authenticated && !workspaceId) return workspaceSignal;
+      if (!accountId) throw createEnterpriseAudioConfigChangedError();
+      if (
+        personalDictationScope &&
+        personalDictationScope.accountId === accountId &&
+        personalDictationScope.authGeneration === authGeneration &&
+        personalDictationScope.workspaceId === workspaceId &&
+        personalDictationScope.revision === revision &&
+        personalDictationScope.expiresAt > Date.now()
+      )
+        return workspaceSignal;
+
+      let personal = true;
+      if (workspaceId) {
+        try {
+          const cleanup = await this.enterpriseIdentityManager.resolveProvider({
+            accountId,
+            workspaceId,
+            expectedAuthGeneration: authGeneration,
+            authHeaders: await getAuthHeader(event),
+            inferenceScope: "dictationCleanup",
+            setupMode: "manual",
+          });
+          if (cleanup.managed)
+            throw Object.assign(new Error(i18nMain.t("common.managedPolicyConflict")), {
+              code: "PROVIDER_POLICY_CONFLICT",
+              messageKey: "common.managedPolicyConflict",
+            });
+          personal = false;
+        } catch (error) {
+          if (error.code !== "ENTERPRISE_REQUIRED") throw error;
+        }
+      } else {
+        // At sign-in and during a switch, a missing workspace can still be resolving.
+        if (await getEnterpriseAudioRequest(event, undefined, "load"))
+          throw createEnterpriseAudioConfigChangedError();
+      }
+      workspaceSignal.throwIfAborted();
+      const current = getScope();
+      if (
+        revision !== this._enterpriseAudioScopeRevision ||
+        workspaceId !== dictationWorkspace() ||
+        current.accountId !== accountId ||
+        current.authGeneration !== authGeneration ||
+        current.authenticated !== authenticated
+      )
+        throw createEnterpriseAudioConfigChangedError();
+      if (personal) {
+        rememberPersonalDictationScope({ accountId, workspaceId, authGeneration });
+        return workspaceSignal;
+      }
+      return AbortSignal.any([workspaceSignal, audioRetirement.signal]);
+    };
+    const transcribeAssemblyAiDictation = async (event, options) => {
+      options.signal.throwIfAborted();
+      const operation = this._productRequestContext.getStore();
+      const cleanupSignal = await getDictationCleanupSignal(
+        event,
+        operation.dictationWorkspaceAtDispatch
+      );
+      operation.dictationCleanupSignal = cleanupSignal;
+      const signal = AbortSignal.any([options.signal, cleanupSignal]);
+      signal.throwIfAborted();
+      try {
+        return await transcribeAssemblyAiRecording(
+          { ...options, signal, split: require("./ffmpegUtils").splitAudioFile },
+          proxyFetch
+        );
+      } finally {
+        // A transport can finish reading an already-buffered response after retirement.
+        signal.throwIfAborted();
+      }
+    };
     this.getEnterpriseAudioRequest = getEnterpriseAudioRequest;
     this.enterpriseAudioTransport = enterpriseAudioTransport;
     this.enterpriseAudioRuntime = createEnterpriseAudioRuntime({
@@ -9267,6 +9456,15 @@ class IPCHandlers {
     ipcMain.on("cloud-transcribe-cancel", (event) => {
       elevenLabsDictations.cancelSender(event.sender.id);
       this._cloudTranscriptionRequests.cancelSender(event.sender.id);
+      for (const [controller, operation] of this._productRequests) {
+        if (
+          Number.isInteger(operation.liveDictationSenderId) &&
+          operation.liveDictationSenderId === event.sender.id
+        )
+          controller.abort(
+            Object.assign(createAbortError("Cancelled"), { code: "TRANSCRIPTION_CANCELLED" })
+          );
+      }
     });
 
     handleRemoteProduct("cloud-health-check", async () => {
@@ -9312,7 +9510,8 @@ class IPCHandlers {
           );
         }
       };
-      if (!this.databaseManager.getTranscriptionById(id)) {
+      const recording = this.databaseManager.getTranscriptionById(id);
+      if (!recording) {
         return { success: false, error: "Audio file not found" };
       }
       const buffer = this.audioStorageManager.getAudioBuffer(id);
@@ -9320,7 +9519,10 @@ class IPCHandlers {
       let providerErrorContext = null;
       try {
         let result;
-        const preferredLanguage = settings?.preferredLanguage;
+        const preferredLanguage =
+          recording.route_kind === "translation"
+            ? settings?.translationSourceLanguage
+            : settings?.preferredLanguage;
         const language =
           preferredLanguage && preferredLanguage !== "auto"
             ? preferredLanguage.split("-")[0]
@@ -9332,11 +9534,10 @@ class IPCHandlers {
         // Renderer pre-flight owns policy; retry re-routes stored audio through
         // whatever is selected NOW.
         const route = resolveTranscriptionRoute({
-          settings: settings || {},
+          settings: { ...settings, preferredLanguage },
           policy: productPolicyState(this.effectivePolicyManager.getCurrent(), app.getVersion()),
           providers: transcriptionProviderBaseUrls(),
           managed: settings?.managed,
-          request: { effectiveLanguage: language },
         });
         const usesCloud =
           route.transport !== "managed" &&
@@ -9546,6 +9747,17 @@ class IPCHandlers {
             apiKey: this.environmentManager.getGeminiKey(),
           });
           result = { text, source: "gemini", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "assemblyai") {
+          const { text, cleanedText } = await transcribeAssemblyAiDictation(event, {
+            signal,
+            audioBuffer: buffer,
+            durationSeconds: recording.audio_duration_ms / 1000,
+            contentType: isWavFormat(buffer) ? "audio/wav" : "audio/webm",
+            language: route.language,
+            keyterms: settings?.keyterms,
+            apiKey: this.environmentManager.getAssemblyAIKey(),
+          });
+          result = { text, cleanedText, source: "assemblyai", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "elevenlabs") {
           // No size check: the cap is the upload screen's, not ElevenLabs', and dictation
           // already sent this recording once at this size.
@@ -9694,6 +9906,7 @@ class IPCHandlers {
           throw Object.assign(new Error("Blocked by device policy"), {
             code: "DEVICE_POLICY_BLOCKED",
           });
+        operation.dictationCleanupSignal?.throwIfAborted();
         this.databaseManager.updateTranscriptionText(id, result.text, result.text);
         this.databaseManager.updateTranscriptionStatus(id, "completed");
         const providerName = result.source || "local";
@@ -9708,7 +9921,11 @@ class IPCHandlers {
         const updated = this.databaseManager.getTranscriptionById(id);
         if (updated) {
           setImmediate(() => {
-            if (this.databaseManager.activeAccountId !== accountId) return;
+            if (
+              this.databaseManager.activeAccountId !== accountId ||
+              operation.dictationCleanupSignal?.aborted
+            )
+              return;
             const transcription = this.databaseManager.getTranscriptionById(id);
             if (!transcription) return;
             broadcastToWindows("transcription-updated", transcription);
@@ -9722,6 +9939,7 @@ class IPCHandlers {
           success: true,
           transcription: updated,
           ...(result.warning ? { warning: result.warning } : {}),
+          ...(result.cleanedText ? { cleanedText: result.cleanedText } : {}),
         };
       } catch (rawError) {
         const error = providerErrorContext
@@ -13675,6 +13893,7 @@ class IPCHandlers {
             code: "AUTH_CONTEXT_CHANGED",
           });
         const scope = { accountId, workspaceId, authGeneration: expectedAuthGeneration };
+        observeDictationWorkspace(scope);
         const scopeChanged = !matchesEnterpriseAudioScope(scope);
         if (scopeChanged) {
           this._enterpriseAudioScopeRevision = (this._enterpriseAudioScopeRevision ?? 0) + 1;
@@ -13718,6 +13937,8 @@ class IPCHandlers {
     // renderer moves to ends work another scope owns, even before it resolves.
     ipcMain.handle("clear-managed-enterprise-identity", async (_event, options) => {
       const next = options?.next;
+      if (typeof next?.accountId === "string" && isWorkspaceIdArgument(next.workspaceId))
+        observeDictationWorkspace(next);
       const owner = this._enterpriseAudioOwner;
       if (
         owner &&
@@ -13736,10 +13957,9 @@ class IPCHandlers {
 
     ipcMain.handle("get-note-recording-config", handleNoteRecordingConfigRequest);
 
-    handleRemoteProduct("transcribe-audio-file-cloud", async (event, filePath, opts = {}) => {
+    handleRemoteFile("transcribe-audio-file-cloud", async (cancel, event, filePath, opts = {}) => {
       const requestId = typeof opts?.requestId === "string" ? opts.requestId : null;
       const purpose = audioFilePurpose(filePath, opts.purpose);
-      const cancel = this._uploadCancelRegistry.register(requestId);
       return runAudioJob(event, purpose, cancel, async (signal) => {
         let cleanupUpload = null;
         try {
@@ -13823,12 +14043,14 @@ class IPCHandlers {
       return { success: this._uploadCancelRegistry.cancel(requestId) > 0 };
     });
 
-    handleRemoteProduct(
+    handleRemoteFile(
       "transcribe-audio-file-byok",
       async (
+        cancel,
         event,
         {
           filePath,
+          durationSeconds,
           requestId,
           purpose,
           apiKey,
@@ -13847,7 +14069,6 @@ class IPCHandlers {
         } = {}
       ) => {
         const fs = require("fs");
-        const cancel = this._uploadCancelRegistry.register(requestId);
         const resolvedPurpose = audioFilePurpose(filePath, purpose);
         return runAudioJob(event, resolvedPurpose, cancel, async (signal) => {
           let cleanupUpload = null;
@@ -14003,6 +14224,18 @@ class IPCHandlers {
                 });
               }
               return { success: true, text: data.data.text };
+            }
+
+            if (route.transport === "proxied" && route.provider === "assemblyai") {
+              const { text } = await transcribeAssemblyAiDictation(event, {
+                filePath: realByok,
+                contentType: providerContentType(realByok),
+                durationSeconds,
+                language: route.language,
+                apiKey: apiKey || this.environmentManager.getAssemblyAIKey(),
+                signal,
+              });
+              return { success: true, text };
             }
 
             const fileSize = fs.statSync(realByok).size;

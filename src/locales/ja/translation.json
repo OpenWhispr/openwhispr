@@ -1957,6 +1957,19 @@
       "customSetup": "カスタム設定",
       "customSetupDescription": "独自のプロバイダーと API キーを使用。",
       "description": "文字起こしのクリーンアップ、コマンド処理、エラー修正を行いながら、あなたの話し方を維持します。",
+      "assemblyAiCleanup": {
+        "pickerOn": "AssemblyAI Dictation には通常の整形が含まれています。",
+        "pickerOff": "整形はオフです。OpenWhispr は元の発言を貼り付けます。",
+        "description": "AssemblyAI は整形済みの文章と元の発言の両方を返します。整形をオンにすると整形済みの文章が、オフにすると元の発言が貼り付けられます。",
+        "standard": "通常の音声入力の整形",
+        "included": "音声入力モデルに含まれています。別の整形モデルは不要です。",
+        "advanced": "高度な整形",
+        "summary": "カスタム指示やトーン・スタイル用に保存したプロバイダー",
+        "advancedHelp": "通常の整形は AssemblyAI が行います。カスタム指示やトーン・スタイルの適用に追加の整形が必要なときに OpenWhispr が使うプロバイダーを選択します。",
+        "saved": "保存済み",
+        "modelNeeded": "ローカル整形モデルが必要です",
+        "modelHelp": "トーンやカスタム指示を適用するには、ローカルモデルを選んでダウンロードしてください。通常の整形は AssemblyAI が行います。"
+      },
       "enableTextCleanup": "テキスト補正を有効にする",
       "enableTextCleanupDescription": "AI がフィラーワードを除去し、文法と句読点を整える",
       "modes": {
@@ -3276,6 +3289,7 @@
         "deepgram_nova_3": "Deepgram で最も高精度なリアルタイムモデル",
         "assemblyai_universal_streaming_english": "変化しないリアルタイム文字起こし（英語）",
         "assemblyai_universal_streaming_multilingual": "変化しないリアルタイム文字起こし（多言語）",
+        "assemblyai_dictation": "1回の呼び出しで文字起こしと整形、32言語",
         "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語",
         "assemblyai_universal_3_6_pro": "最高精度のリアルタイム、32言語",
         "mistral_voxtral_mini_transcribe_3_0": "50 以上の言語に対応した高速文字起こし（プレビュー）",

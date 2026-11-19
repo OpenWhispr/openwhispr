@@ -2732,6 +2732,19 @@
       "customSetup": "Configuration personnalisée",
       "customSetupDescription": "Utilisez votre propre fournisseur et clé API.",
       "description": "Corrige les transcriptions, gère les commandes et corrige les erreurs tout en préservant votre ton.",
+      "assemblyAiCleanup": {
+        "pickerOn": "Le nettoyage standard est inclus avec AssemblyAI Dictation.",
+        "pickerOff": "Le nettoyage est désactivé. OpenWhispr collera vos mots d’origine.",
+        "description": "AssemblyAI renvoie le texte corrigé et vos mots d’origine. Activez le nettoyage pour coller le texte corrigé ou désactivez-le pour coller vos mots d’origine.",
+        "standard": "Nettoyage standard de la dictée",
+        "included": "Inclus dans votre modèle de dictée. Aucun modèle de nettoyage supplémentaire n’est nécessaire.",
+        "advanced": "Nettoyage avancé",
+        "summary": "Fournisseur enregistré pour les instructions personnalisées et le ton et le style",
+        "advancedHelp": "AssemblyAI assure le nettoyage standard. Choisissez le fournisseur utilisé par OpenWhispr quand vos instructions ou votre ton et votre style nécessitent un traitement supplémentaire.",
+        "saved": "Enregistré",
+        "modelNeeded": "Modèle de nettoyage local nécessaire",
+        "modelHelp": "Choisissez et téléchargez un modèle local pour appliquer votre ton ou vos instructions. AssemblyAI assure le nettoyage standard."
+      },
       "enableTextCleanup": "Activer la correction de texte",
       "enableTextCleanupDescription": "L'IA supprime les mots de remplissage, corrige la grammaire et la ponctuation",
       "modes": {
@@ -3380,6 +3393,7 @@
         "deepgram_nova_3": "Le modèle temps réel le plus précis de Deepgram",
         "assemblyai_universal_streaming_english": "Transcriptions temps réel immuables, anglais",
         "assemblyai_universal_streaming_multilingual": "Transcriptions temps réel immuables, multilingues",
+        "assemblyai_dictation": "Transcription et nettoyage en un seul appel, 32 langues",
         "assemblyai_universal_3_5_pro": "Précision maximale en temps réel, 18 langues",
         "assemblyai_universal_3_6_pro": "Précision maximale en temps réel, 32 langues",
         "mistral_voxtral_mini_transcribe_3_0": "Transcription rapide dans plus de 50 langues (aperçu)",

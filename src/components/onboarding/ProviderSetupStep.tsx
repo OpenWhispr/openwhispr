@@ -20,7 +20,8 @@ import { isWindowSwitchBlur } from "../../hooks/useFocusHold";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { normalizeBaseUrl } from "../../config/constants";
 import { withHttpsScheme } from "../../utils/urlUtils";
-import { usePolicySnapshot } from "../../hooks/usePolicy";
+import { isByokTranscriptionModelAllowed } from "../../services/managedTranscription";
+import { useByokTranscriptionModelAllowed, usePolicySnapshot } from "../../hooks/usePolicy";
 import {
   filterByokProviderOptionsByPolicy,
   isModeAllowedByPolicy,
@@ -238,6 +239,7 @@ export function ByokProviderStep({
   const { t } = useTranslation();
   const store = useSettingsStore();
   const policy = usePolicySnapshot();
+  const modelAllowed = useByokTranscriptionModelAllowed(policy);
   const assistant = stepId === "byok-assistant";
   const scope = assistant ? "llm" : "transcription";
   const selfHostedAllowed =
@@ -246,12 +248,17 @@ export function ByokProviderStep({
   const providers = useMemo(
     () =>
       filterByokProviderOptionsByPolicy<HostedProvider>(
-        assistant ? modelRegistry.getCloudProviders() : getDictationTranscriptionProviders(),
+        assistant
+          ? modelRegistry.getCloudProviders()
+          : getDictationTranscriptionProviders().map((provider) => ({
+              ...provider,
+              models: provider.models.filter((model) => modelAllowed(provider.id, model.id)),
+            })),
         scope,
         policy
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
-    [assistant, policy, scope, registryVersion]
+    [assistant, modelAllowed, policy, scope, registryVersion]
   );
   // The session's draft wins; without one (onboarding was restarted, or an older build
   // left it blank) the step reopens on what the user already saved. The draft never
@@ -369,6 +376,12 @@ export function ByokProviderStep({
 
   const currentProvider = providers.find((provider) => provider.id === selectedProvider);
   const models = currentProvider?.models ?? [];
+  const visibleModel =
+    assistant || modelAllowed(selectedProvider, selectedModel) ? selectedModel : "";
+  const chooseModel = (model: string): void => {
+    if (assistant || isByokTranscriptionModelAllowed(selectedProvider, model))
+      setSelectedModel(model);
+  };
   const knownCredential = providerCredential(selectedProvider, store);
   // Both halves of the form survive a mode switch, so switching back shows the saved or
   // typed values again; only the shared key field follows the mode.
@@ -383,10 +396,13 @@ export function ByokProviderStep({
   const chooseProvider = (providerId: string) => {
     // Returning to the provider this card opened on restores its model: a legacy
     // one can't be picked again from the list.
+    const provider = providers.find((item) => item.id === providerId);
     const fallbackModel =
-      providerId === seed.provider && seed.model
+      providerId === seed.provider &&
+      seed.model &&
+      (assistant || modelAllowed(providerId, seed.model))
         ? seed.model
-        : pickDefaultModelId(providers.find((item) => item.id === providerId));
+        : pickDefaultModelId(provider);
     setSelectedProvider(providerId);
     setSelectedModel(fallbackModel);
     setDraftApiKey(providerCredential(providerId, store).value);
@@ -407,9 +423,9 @@ export function ByokProviderStep({
           currentProvider &&
           draftCortiClientId.trim() &&
           draftCortiClientSecret.trim() &&
-          selectedModel
+          visibleModel
         )
-      : Boolean(currentProvider && selectedModel && testingKey.trim());
+      : Boolean(currentProvider && visibleModel && testingKey.trim());
 
   const check = useConnectionAutoCheck({
     config: {
@@ -417,7 +433,7 @@ export function ByokProviderStep({
       provider: testingProvider,
       apiKey: testingKey,
       baseUrl: testingBaseUrl,
-      model: selfHosted ? draftCustomModel : selectedModel,
+      model: selfHosted ? draftCustomModel : visibleModel,
       clientId: isCortiTranscription ? draftCortiClientId : undefined,
       clientSecret: isCortiTranscription ? draftCortiClientSecret : undefined,
       environment: store.cortiEnvironment,
@@ -441,6 +457,12 @@ export function ByokProviderStep({
   };
 
   const commitAndProceed = () => {
+    if (
+      !selfHosted &&
+      !assistant &&
+      !isByokTranscriptionModelAllowed(selectedProvider, selectedModel)
+    )
+      return;
     let transcriptionModel: string | undefined = selectedModel;
     if (selfHosted) {
       const committedBaseUrl = withHttpsScheme(draftBaseUrl);
@@ -585,16 +607,16 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.modelLabel")}</FieldLabel>
               <Select
-                value={selectedModel || undefined}
-                onValueChange={setSelectedModel}
+                value={visibleModel || undefined}
+                onValueChange={chooseModel}
                 disabled={!selectedProvider}
               >
                 <SelectTrigger
                   className={`${SELECT_TRIGGER_CLASS} disabled:opacity-100 disabled:[&>svg]:hidden`}
                 >
-                  {selectedModel ? (
+                  {visibleModel ? (
                     <span dir="ltr">
-                      {models.find((model) => model.id === selectedModel)?.name ?? selectedModel}
+                      {models.find((model) => model.id === visibleModel)?.name ?? visibleModel}
                     </span>
                   ) : (
                     <span className="text-[var(--onboarding-text-secondary)]">

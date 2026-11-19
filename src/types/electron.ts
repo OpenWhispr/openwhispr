@@ -2040,6 +2040,8 @@ declare global {
           cohereModel: string;
           whisperModel: string;
           preferredLanguage?: string;
+          translationSourceLanguage?: string;
+          keyterms?: string[];
           transcriptionMode?: InferenceMode;
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
@@ -2055,6 +2057,8 @@ declare global {
         success: boolean;
         transcription?: TranscriptionItem;
         warning?: string;
+        // The transcript as the provider rewrote it (AssemblyAI Dictation).
+        cleanedText?: string;
         error?: string;
         code?: string;
         messageKey?: string;
@@ -3004,6 +3008,13 @@ declare global {
       saveDeepgramKey?: (key: string) => Promise<void>;
       getAssemblyAIKey?: () => Promise<string | null>;
       saveAssemblyAIKey?: (key: string) => Promise<void>;
+      proxyAssemblyAiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        mimeType?: string;
+        durationSeconds?: number | null;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult & { cleanedText?: string }>;
       getElevenlabsKey?: () => Promise<string | null>;
       saveElevenlabsKey?: (key: string) => Promise<void>;
 
@@ -3454,6 +3465,7 @@ declare global {
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;
+        durationSeconds?: number;
         requestId?: string;
         purpose?: "dictation" | "upload";
         apiKey: string;
