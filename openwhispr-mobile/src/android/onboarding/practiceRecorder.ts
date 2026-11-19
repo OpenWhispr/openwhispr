@@ -97,6 +97,28 @@ export class PracticeRecorder {
     }
   }
 
+  /**
+   * Practice 4: the spoken words are an instruction for [selection] ("make it friendlier"), run through
+   * the same Edit selection pipeline the bubble's menu uses. Returns the replacement for the selection.
+   */
+  async finishEdit(selection: string, target: string): Promise<string> {
+    if (!AndroidDictation) throw new Error('Dictation is not available on this device.');
+    this.recording = false;
+    const audio = await AndroidDictation.stopRecording(false);
+    const controller = new AbortController();
+    this.controller = controller;
+    try {
+      const job: AndroidJob = {
+        ...createAndroidJob('edit', target, selection),
+        route: PRACTICE_ROUTE,
+      };
+      return (await processAndroidAudio(audio, job, controller.signal, () => {})).trim();
+    } finally {
+      if (this.controller === controller) this.controller = null;
+      await FileSystem.deleteAsync(audio.uri, { idempotent: true }).catch(() => {});
+    }
+  }
+
   get active(): boolean {
     return this.recording;
   }

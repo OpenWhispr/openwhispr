@@ -8,6 +8,7 @@ export type OnboardingStep =
   | 'practiceMessage'
   | 'practiceEmail'
   | 'practiceList'
+  | 'practiceEdit'
   | 'languages'
   | 'apps'
   | 'overlay'
@@ -27,6 +28,7 @@ const SHARED: OnboardingStep[] = [
   'practiceMessage',
   'practiceEmail',
   'practiceList',
+  'practiceEdit',
   'languages',
   'apps',
   'overlay',

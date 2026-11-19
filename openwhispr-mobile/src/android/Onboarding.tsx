@@ -19,6 +19,7 @@ import {
 } from './onboarding/flow';
 import { HowItWorksScreen, PitchScreen, SplashScreen } from './onboarding/IntroScreens';
 import { PracticeScreen } from './onboarding/PracticeScreen';
+import { PracticeEditScreen } from './onboarding/PracticeEditScreen';
 import { LanguagesScreen } from './onboarding/LanguagesScreen';
 import { AppsScreen } from './onboarding/AppsScreen';
 import {
@@ -164,6 +165,8 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
       return <PracticeScreen key="email" kind="email" onBack={back} onNext={advance} />;
     case 'practiceList':
       return <PracticeScreen key="list" kind="list" onBack={back} onNext={advance} />;
+    case 'practiceEdit':
+      return <PracticeEditScreen onBack={back} onNext={advance} />;
     case 'languages':
       return <LanguagesScreen onBack={back} onNext={advance} />;
     case 'apps':

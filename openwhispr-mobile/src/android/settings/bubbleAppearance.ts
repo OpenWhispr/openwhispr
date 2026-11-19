@@ -4,6 +4,7 @@ import {
   type BubbleAppearance,
 } from '../../../modules/android-dictation/src/appearance';
 import { useConfigStore } from '@/store/useConfigStore';
+import { AndroidDictation } from '../../../modules/android-dictation/src';
 import type { SettingsKey } from './strings';
 
 const KEY = 'android-bubble-appearance-v1';
@@ -48,4 +49,29 @@ export function applyBubbleLook(change: Partial<Look> & { size?: number }) {
 
 export function saveBubbleSize(size: number) {
   void useConfigStore.getState().updateConfig({ androidBubbleSize: size });
+}
+
+export type HoldAction = 'menu' | 'nothing';
+const HOLD_KEY = 'android-bubble-hold-v1';
+
+function savedHold(): HoldAction {
+  try {
+    return localStorage.getItem(HOLD_KEY) === 'nothing' ? 'nothing' : 'menu';
+  } catch {
+    return 'menu';
+  }
+}
+
+/** Settings › Bubble › Hold the bubble: show the menu (default) or nothing. Per phone. */
+export const useHoldAction = create<{ value: HoldAction }>(() => ({ value: savedHold() }));
+
+/** Saves the choice and tells the running bubble, which keeps it for its next start. */
+export function setHoldAction(value: HoldAction) {
+  useHoldAction.setState({ value });
+  try {
+    localStorage.setItem(HOLD_KEY, value);
+  } catch {
+    // The native side keeps its own copy; this one only feeds the screen.
+  }
+  AndroidDictation?.setMenuContext?.({ holdAction: value });
 }
