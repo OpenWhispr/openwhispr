@@ -3692,6 +3692,73 @@ test("a push acknowledgement whose folder isn't the row's keeps the link owed", 
   assert.equal(rawNote(db, patched.id).sync_status, "synced");
 });
 
+test("a note saved into a folder whose delete is pending lands at the top of its space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const privateFolder = db.createFolder("Client").folder;
+  const teamFolder = db.createFolder("Plans", team.id).folder;
+  db.markFolderSynced(privateFolder.id, "cloud-client");
+  db.markFolderSynced(teamFolder.id, "cloud-plans");
+  assert.equal(db.deleteFolder(privateFolder.id).success, true);
+  assert.equal(db.deleteFolder(teamFolder.id).success, true);
+
+  const recorded = db.saveNote("Recording", "transcript", "meeting", null, 60, privateFolder.id);
+  const uploaded = db.saveNote("Upload", "text", "personal", null, null, teamFolder.id);
+
+  assert.deepEqual(recorded.folderFallback, {
+    reason: "folder_deleted",
+    folderId: privateFolder.id,
+  });
+  assert.equal(recorded.note.folder_id, null);
+  assert.equal(recorded.note.space_id, rawFolder(db, privateFolder.id).space_id);
+  assert.equal(uploaded.note.folder_id, null);
+  assert.equal(uploaded.note.space_id, team.id);
+  // The confirmed deletes take neither.
+  db.hardDeleteFolder(privateFolder.id);
+  db.hardDeleteFolder(teamFolder.id);
+  assert.equal(rawNote(db, recorded.note.id).deleted_at, null);
+  assert.equal(rawNote(db, uploaded.note.id).deleted_at, null);
+  assert.equal(db.saveNote("Plain", "x", "personal").folderFallback, undefined);
+});
+
+test("a note can't be moved into a folder whose delete is pending", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const folder = db.createFolder("Client").folder;
+  db.markFolderSynced(folder.id, "cloud-client");
+  const note = db.saveNote("Loose", "body").note;
+  assert.equal(db.deleteFolder(folder.id).success, true);
+
+  assert.deepEqual(db.updateNote(note.id, { folder_id: folder.id }), {
+    success: false,
+    error: "Folder not found",
+  });
+  assert.equal(rawNote(db, note.id).folder_id, note.folder_id);
+});
+
+test("a write into a deleted note is refused and leaves the tombstone as it was", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const deleted = syncedNote(db, "Deleted", null);
+  db.deleteNote(deleted.id);
+  const folder = db.createFolder("Client").folder;
+  db.markFolderSynced(folder.id, "cloud-client");
+  const held = syncedNote(db, "Held", folder.id);
+  db.deleteFolder(folder.id);
+  const tombstone = rawNote(db, deleted.id);
+  const heldRow = rawNote(db, held.id);
+
+  for (const row of [tombstone, heldRow]) {
+    assert.deepEqual(db.updateNote(row.id, { content: "a late save" }), {
+      success: false,
+      error: "Note was deleted",
+      code: "note_deleted",
+    });
+    assert.deepEqual(rawNote(db, row.id), row);
+  }
+});
+
 // A cloud-backed parent holding a subfolder the server has never seen, with a
 // never-sent note, a note whose create was attempted, and one with a cloud id.
 function parentWithUnsyncedSubfolder(db, spaceId = null) {

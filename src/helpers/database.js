@@ -165,6 +165,8 @@ const CLOUD_BOUND_ACK_OUTCOMES = new Set(["synced", "pending", "awaiting-cloud"]
 // got its first cloud id. Any local edit overwrites this with 'pending', so a row
 // holding it has nothing a newer cloud copy could conflict with.
 const FOLDER_LINK_PENDING = "folder_link_pending";
+// updateNote's refusal of a write into a deleted note.
+const NOTE_DELETED = "note_deleted";
 
 // Notes holding work the server may not have: the private fork of a removed or
 // revoked container keeps these and nothing else.
@@ -987,6 +989,11 @@ class DatabaseManager {
           .run(sequence.seq);
       }
     })();
+  }
+
+  // Deleted here, with the DELETE still on its way (or held by a parent's).
+  _folderDeletePending(folder) {
+    return !!folder.deleted_at || this._isFolderDeleteHeld(folder.id);
   }
 
   _getFolderInAccountScope(id, { pendingDelete = false } = {}) {
@@ -5267,11 +5274,19 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
+      let folderFallback = null;
       if (folderId) {
         // D2: a note's space always follows its folder's space.
         const folder = this._getFolderInAccountScope(folderId);
         if (!folder) throw new Error("Folder not found in the active account scope");
         spaceId = folder.space_id;
+        // A folder whose delete is pending would take the note with it when the
+        // delete lands, so a recording or upload finishing there goes to the top
+        // of the folder's space instead.
+        if (this._folderDeletePending(folder)) {
+          folderFallback = { reason: "folder_deleted", folderId };
+          folderId = null;
+        }
       } else {
         if (spaceId == null) spaceId = this.getPrivateSpaceId();
         const space = this.getSpace(spaceId);
@@ -5313,7 +5328,7 @@ class DatabaseManager {
       const fetchStmt = this.db.prepare("SELECT * FROM notes WHERE id = ?");
       const note = fetchStmt.get(result.lastInsertRowid);
 
-      return { success: true, note };
+      return { success: true, note, ...(folderFallback && { folderFallback }) };
     } catch (error) {
       debugLogger.error("Error saving note", { error: error.message }, "notes");
       throw error;
@@ -5623,6 +5638,12 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const previous = this.getNote(id);
       if (!previous) return { success: false, error: "Note not found" };
+      // A tombstone takes no write but one to its own deleted_at: a late save
+      // (a recording's periodic save into a note deleted meanwhile) would queue
+      // text nobody will see, and the delete removes it later anyway.
+      if (previous.deleted_at && updates?.deleted_at === undefined) {
+        return { success: false, error: "Note was deleted", code: NOTE_DELETED };
+      }
       updates = { ...updates };
       // An unlink is stored as "" so it syncs: the cloud keeps a NULL as "unchanged".
       if (updates.calendar_event_id === null && previous.calendar_event_id != null) {
@@ -5687,10 +5708,12 @@ class DatabaseManager {
       // keeps its identity, which an earlier create may have stored.
       if (newIdentity) updates.cloud_create_attempted = 0;
       if (updates.folder_id != null) {
-        // D2: a note's space always follows its folder's space.
+        // D2: a note's space always follows its folder's space. A folder whose
+        // delete is pending would take the note with it when the delete lands.
         const folder = this._getFolderInAccountScope(updates.folder_id);
-        if (folder) updates = { ...updates, space_id: folder.space_id };
-        else return { success: false, error: "Folder not found" };
+        if (folder && !this._folderDeletePending(folder)) {
+          updates = { ...updates, space_id: folder.space_id };
+        } else return { success: false, error: "Folder not found" };
       }
       if (updates.space_id !== undefined) {
         if (!this.getSpace(updates.space_id)) {
