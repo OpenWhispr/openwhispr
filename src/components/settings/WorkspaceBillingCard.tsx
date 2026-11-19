@@ -16,7 +16,7 @@ import { useToast } from "../ui/useToast";
 import { WorkspacesService, type SeatPreview } from "../../services/WorkspacesService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { workspaceCan } from "../../lib/capabilities";
-import { hasActiveWorkspaceSubscription } from "../../lib/workspaceBilling";
+import { hasActiveWorkspaceSubscription, hasSubscription } from "../../lib/workspaceBilling";
 import { formatAmount } from "../../utils/formatAmount";
 import type { Workspace } from "../../types/electron";
 
@@ -40,6 +40,8 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
   // `has_subscription` is also true for a paid plan provisioned without Stripe.
   const subscribed = Boolean(workspace.stripe_subscription_id);
   const canAddSeats = subscribed && hasActiveWorkspaceSubscription(workspace);
+  // A plan OpenWhispr set up without Stripe: a checkout would only be refused (409).
+  const provisioned = !subscribed && hasSubscription(workspace);
   const seatsUsed = workspace.seats_used ?? workspace.seats;
   const seatsTotal = Math.max(workspace.seats, seatsUsed);
   const pct = seatsTotal > 0 ? Math.min(100, (seatsUsed / seatsTotal) * 100) : 0;
@@ -173,6 +175,10 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
                 owner: workspace.billing_manager,
               })
             : t("settingsPage.workspace.billing.ownerOnly")}
+        </p>
+      ) : provisioned ? (
+        <p className="text-xs text-muted-foreground">
+          {t("settingsPage.workspace.billing.provisionedPlan")}
         </p>
       ) : (
         <div className="flex flex-wrap gap-2 pt-1">

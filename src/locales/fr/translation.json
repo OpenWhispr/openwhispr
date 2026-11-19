@@ -212,11 +212,18 @@
     "policyAccountChanged": "Votre compte a changé : cette réponse a donc été interrompue.",
     "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation.",
     "policyUnresolved": "Les paramètres de votre organisation ne sont pas encore chargés. Réessayez dans un instant.",
+    "policyBlocked": "Votre organisation n'autorise pas cette action sur cet appareil.",
     "managedConfigLoading": "Vérification de la configuration gérée de votre organisation en cours. Réessayez dans un instant.",
     "managedConfigUnavailable": "L'accès d'entreprise géré est indisponible. Reconnectez-vous ou contactez votre administrateur.",
     "managedConfigAmbiguous": "La configuration gérée de votre organisation est incohérente. Contactez votre administrateur.",
     "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur.",
-    "resizePanel": "Redimensionner le panneau"
+    "resizePanel": "Redimensionner le panneau",
+    "managedDevice": "Appareil géré",
+    "managedDeviceAndWorkspace": "Appareil et espace de travail gérés",
+    "deviceLocalOnly": "Cet appareil utilise uniquement le traitement local. Les fonctions cloud sont indisponibles, même pour les comptes déjà connectés.",
+    "deviceSignInRequired": "Votre organisation exige une connexion sur cet appareil.",
+    "devicePolicyInvalid": "La politique de l’appareil est illisible ou invalide. Contactez votre administrateur. OpenWhispr reste inutilisable jusqu’à sa correction.",
+    "deviceWorkspaceUnavailable": "Cet appareil exige un traitement local, mais la politique de l’espace de travail du compte enregistré est indisponible. Déconnectez-vous pour continuer sans ce compte ou contactez votre administrateur."
   },
   "onboarding": {
     "rehaul": {
@@ -409,7 +416,9 @@
           "modelNotFound": "Le modèle sélectionné n’est pas disponible auprès de ce fournisseur.",
           "providerStatus": "Le fournisseur a renvoyé le statut {{status}}.",
           "timeout": "Le test de connexion a expiré.",
-          "network": "Le fournisseur est injoignable."
+          "network": "Le fournisseur est injoignable.",
+          "invalidHeaders": "En-tête HTTP invalide. Vérifiez le nom et la valeur ; Content-Type et les en-têtes de transport ne peuvent pas être modifiés.",
+          "redirected": "Le serveur a redirigé la requête. Saisissez l’adresse vers laquelle il redirige."
         }
       },
       "local": {
@@ -655,7 +664,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Mise à jour requise",
-      "description": "Votre organisation exige OpenWhispr {{version}} ou une version plus récente. Veuillez mettre à jour l'application."
+      "description": "Votre organisation exige OpenWhispr {{version}} ou une version plus récente. Veuillez mettre à jour l'application.",
+      "contactIT": "Votre organisation exige OpenWhispr {{version}} ou une version ultérieure. Contactez le service informatique pour installer une version approuvée."
     },
     "update": {
       "readyTitle": "Mise à jour prête à installer",
@@ -949,6 +959,9 @@
     "getKey": "Obtenir la clé ->",
     "endpointUrl": "URL du endpoint",
     "azureHint": "Azure AI Foundry : saisissez l'endpoint de votre ressource (p. ex. https://your-resource.cognitiveservices.azure.com) et définissez Modèle sur le nom exact de votre déploiement.",
+    "browsedProviderHint": "{{current}} est toujours utilisé. Choisissez un modèle pour passer à {{provider}}.",
+    "browsedCustomHint": "{{current}} est toujours utilisé. Saisissez un nom de modèle pour passer à votre endpoint personnalisé.",
+    "customInUseHint": "Votre endpoint personnalisé est toujours utilisé. Choisissez un modèle pour passer à {{provider}}.",
     "customProvider": "Personnalisé",
     "fallback": {
       "whisperModelDescription": "Modèle",
@@ -1235,7 +1248,8 @@
       "failedUserCheck": "Échec de la vérification du compte utilisateur",
       "generic": "Une erreur est survenue. Veuillez réessayer.",
       "invalidCredentials": "E-mail ou mot de passe incorrect",
-      "invalidEmail": "Entrez une adresse e-mail valide"
+      "invalidEmail": "Entrez une adresse e-mail valide",
+      "signInDisabledByDevice": "Votre organisation a désactivé la connexion sur cet appareil."
     },
     "getStarted": "Commencer",
     "legal": {
@@ -1752,13 +1766,7 @@
       "title": "Espace de travail",
       "description": "Collaborez, partagez des notes et gérez l'accès à l'espace de travail au même endroit.",
       "empty": {
-        "title": "Créez votre premier espace de travail",
-        "description": "Les espaces de travail vous permettent de collaborer et partager des notes.",
         "create": "Créer un espace"
-      },
-      "personal": {
-        "title": "Vous êtes dans Personnel",
-        "description": "Choisissez un espace de travail pour gérer ses paramètres."
       },
       "loadError": {
         "title": "Impossible de charger les espaces de travail",
@@ -2036,8 +2044,8 @@
           "leaveBodyLoses": "Vous perdrez l'accès à {{space}} et à ses notes.",
           "leaveBodyAdmins": "Un autre administrateur continuera de gérer ce Teamspace.",
           "deleteNotAllowed": "Vous n'êtes pas autorisé à supprimer {{space}}.",
-          "movedToPersonal_one": "{{count}} note non synchronisée a été déplacée vers votre espace personnel.",
-          "movedToPersonal_other": "{{count}} notes non synchronisées ont été déplacées vers votre espace personnel."
+          "movedToPersonal_one": "{{count}} note non synchronisée a été déplacée vers Privé.",
+          "movedToPersonal_other": "{{count}} notes non synchronisées ont été déplacées vers Privé."
         },
         "addPeople": {
           "loading": "Chargement des teamspaces…",
@@ -2290,6 +2298,7 @@
         "nextInvoice": "Prochaine facture",
         "manageStripe": "Gérer dans Stripe",
         "startSubscription": "Démarrer l'abonnement",
+        "provisionedPlan": "Configuré par OpenWhispr. Contactez l'équipe commerciale pour modifier le forfait ou les places.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -2534,7 +2543,7 @@
             "Partagez des notes via des liens publics",
             "Accès personnel à l'API",
             "Intégration MCP dans toutes vos apps",
-            "Application mobile",
+            "Application mobile avec cloud illimité",
             "Support par e-mail"
           ],
           "cta": "Commencer",
@@ -2576,6 +2585,9 @@
           "askOwner": "Demandez à {{name}} de mettre à niveau votre espace de travail."
         },
         "currentPlan": "Forfait actuel",
+        "yourPersonalPlan": "Votre forfait personnel",
+        "yourWorkspacePlan": "Le forfait de votre espace de travail",
+        "manage": "Gérer",
         "coveredByWorkspace": "Inclus dans votre plan d'espace de travail",
         "upgrade": "Passer au supérieur",
         "downgrade": "Rétrograder",
@@ -3031,7 +3043,14 @@
         "restarting": "Redémarrage...",
         "title": "Mises à jour",
         "versionPlaceholder": "—",
-        "whatsNew": "Nouveautés de la v{{version}}"
+        "whatsNew": "Nouveautés de la v{{version}}",
+        "managedByOrganization": "Géré par votre organisation.",
+        "itManaged": "Votre organisation gère les mises à jour.",
+        "policyLoading": "Chargement des paramètres de mise à jour…",
+        "policyUnavailable": "Impossible de charger les paramètres de mise à jour. Recherchez les mises à jour pour réessayer.",
+        "policyChanged": "La politique de mise à jour a changé. Recherchez à nouveau les mises à jour.",
+        "managedBadge": "Géré",
+        "stagedBeforePolicy": "Une mise à jour a été préparée avant l’application de cette politique et peut s’installer à la fermeture de l’application. Contactez le service informatique avant de quitter ou de redémarrer."
       },
       "translationHotkey": {
         "title": "Raccourci de Traduction",
@@ -3063,9 +3082,8 @@
     "privacy": {
       "cloudBackup": "Sauvegarde cloud",
       "cloudBackupDescription": "Sauvegardez vos transcriptions et notes dans le cloud pour un accès fluide sur tous vos appareils.",
-      "cloudBackupTeamCaveat": "Les notes des teamspaces et celles que vous avez partagées sont toujours synchronisées, quel que soit ce réglage.",
+      "cloudBackupTeamCaveat": "Les notes des teamspaces et celles que vous avez partagées sont toujours synchronisées, quel que soit ce réglage. Les conversations qui utilisent du contenu privé restent sur cet appareil. Les conversations des versions précédentes et celles restaurées depuis une sauvegarde sont aussi exclues.",
       "cloudNotesMigration": "Sauvegarde des notes… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "Toutes les notes sauvegardées",
       "description": "Contrôlez quelles données quittent votre appareil. Tout est désactivé par défaut.",
       "title": "Confidentialité",
       "insightsSync": "Synchroniser les Statistiques personnelles",
@@ -3250,7 +3268,20 @@
     "selfHosted": {
       "endpointUrl": "URL du point d'accès",
       "serverUrl": "URL du serveur",
-      "apiKeyOptional": "Clé API (facultative)"
+      "apiKeyOptional": "Clé API (facultative)",
+      "headers": "En-têtes HTTP",
+      "headersHelp": "Envoyés avec chaque requête à ce serveur, par exemple une clé API demandée par une passerelle.",
+      "headerName": "Nom de l’en-tête",
+      "headerValue": "Valeur de l’en-tête",
+      "removeHeader": "Supprimer",
+      "addHeader": "Ajouter un en-tête",
+      "unauthorized": "Votre serveur a refusé la requête (401/403). Vérifiez les en-têtes ci-dessous ou les réglages d’authentification du serveur.",
+      "headerErrors": {
+        "missingName": "Saisissez un nom d’en-tête.",
+        "invalidName": "Un nom d’en-tête ne peut contenir ni espaces, ni deux-points, ni autres séparateurs.",
+        "reserved": "OpenWhispr définit lui-même cet en-tête.",
+        "invalidValue": "Cette valeur contient un caractère qu’un en-tête ne peut pas transmettre, comme un guillemet typographique."
+      }
     },
     "enterpriseCheckout": {
       "title": "Passer à Enterprise",
@@ -3627,10 +3658,13 @@
     "expand": "Développer la barre latérale"
   },
   "workspaces": {
+    "defaultName": "Espace de travail de {{name}}",
+    "defaultNameFallback": "Mon espace de travail",
     "switcher": {
       "workspaces": "Espaces de travail",
       "add": "Ajouter un espace de travail",
-      "invitePeople": "Inviter des personnes"
+      "invitePeople": "Inviter des personnes",
+      "unavailable": "Les espaces de travail ne sont pas disponibles pour le moment."
     },
     "create": {
       "title": "Créer un espace de travail",
@@ -3760,16 +3794,17 @@
       "leave": {
         "title": "Quitter {{name}} ?",
         "body": "Vous perdrez l'accès à cet espace, à ses équipes et à ses teamspaces. Le propriétaire ou un administrateur de l'espace pourra vous réinviter.",
+        "privateNotes": "Vos notes privées de cet espace de travail seront déplacées vers {{workspace}}.",
         "failed": "Impossible de quitter {{name}}. Vérifiez votre connexion et réessayez."
       },
       "left": {
         "title": "Vous avez quitté {{name}}"
       },
-      "chooseAnother": "Choisissez un autre espace pour continuer.",
-      "chooseWorkspace": "Choisir un espace",
+      "nowIn": "Vous êtes maintenant dans {{workspace}}.",
       "delete": {
         "title": "Supprimer {{name}} ?",
-        "body": "Cela supprime définitivement l'espace, ses notes, ses fichiers, ses équipes et ses teamspaces pour tout le monde. Cette action est irréversible."
+        "body": "Cela supprime définitivement l'espace, ses notes, ses fichiers, ses équipes et ses teamspaces pour tout le monde. Cette action est irréversible.",
+        "privateNotes": "Vos notes privées de cet espace de travail seront déplacées vers {{workspace}}."
       },
       "deleting": {
         "title": "Suppression de {{name}}…",
@@ -4016,7 +4051,7 @@
       "defaultFolderImmutable": "Les dossiers par défaut ne peuvent pas être modifiés.",
       "spaceNameRequired": "Saisissez un nom d’espace.",
       "spaceNotFound": "Cet espace est introuvable.",
-      "privateSpaceImmutable": "Votre espace Personnel ne peut pas être modifié.",
+      "privateSpaceImmutable": "Privé ne peut pas être modifié.",
       "generic": "La modification n’a pas pu être effectuée. Réessayez."
     },
     "sidebar": {
@@ -4025,10 +4060,10 @@
       "templatesAndActions": "Modèles et actions"
     },
     "spaces": {
-      "privateSpaces": "Notes privées",
+      "privateSpaces": "Privé",
       "teamSpaces": "Teamspaces",
-      "personal": "Personnel",
-      "privateTooltip": "Vous seul pouvez voir votre espace personnel",
+      "personal": "Privé",
+      "privateTooltip": "Vous seul pouvez voir les dossiers et les notes qui s'y trouvent.",
       "newSpace": "Nouveau teamspace",
       "nameAndIconLabel": "Nom et icône",
       "changeEmoji": "Changer l'émoji",
@@ -4050,6 +4085,18 @@
       "noSpacesFound": "Aucun espace trouvé",
       "spaceRoot": "Racine de l'espace",
       "moveConfirm": "Déplacer",
+      "copyToPrivate": "Copier dans Privé",
+      "moveToWorkspacePrivate": "Déplacer vers {{workspace}} › Privé",
+      "workspacePrivate": "{{workspace}} › Privé",
+      "confirmCopyTitle": "Copier dans Privé ?",
+      "confirmCopy": "La note reste dans {{space}}.",
+      "copiedToPrivate": "Copiée dans Privé",
+      "couldNotCopyNote": "Impossible de copier la note",
+      "openCopy": "Ouvrir",
+      "noteAlreadyInTeam": "« {{title}} » est déjà dans {{space}}. Utilisez « Copier dans Privé » pour en garder une copie privée.",
+      "folderAlreadyInTeam": "« {{name}} » est déjà dans {{space}}. Utilisez « Copier dans Privé » sur ses notes pour en garder des copies privées.",
+      "workspacesLoading": "Vos workspaces sont encore en cours de chargement. Réessayez dans un instant.",
+      "cantMoveIntoLegacy": "Impossible de déplacer des notes vers {{space}} : il ne fait partie d'aucun workspace.",
       "confirmMoveInTitle": "Déplacer vers {{space}} ?",
       "confirmMoveIn": "Tous les membres de {{space}} pourront voir et modifier cette note. Les notes ne pourront plus être retirées d'un teamspace par la suite.",
       "confirmMoveInFolder": "Tous les membres de {{space}} pourront voir et modifier ce dossier et ses notes. Les dossiers et les notes ne pourront plus être retirés d'un teamspace par la suite.",
@@ -4067,10 +4114,10 @@
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "Vous n'avez plus accès à {{space}}",
       "accessRevokedActiveNote": "Vous n'avez plus accès à {{space}} — « {{title}} » n'est plus disponible sur cet appareil",
-      "movedToPersonal": "Vous n'avez plus accès à {{space}} — « {{title}} » a été déplacée vers votre espace personnel",
-      "updateDeniedNote": "Vous n'avez pas la permission de modifier « {{title}} » — vos modifications non synchronisées ont été enregistrées comme copie dans votre espace personnel",
+      "movedToPersonal": "Vous n'avez plus accès à {{space}} — « {{title}} » a été déplacée vers Privé",
+      "updateDeniedNote": "Vous n'avez pas la permission de modifier « {{title}} » — vos modifications non synchronisées ont été enregistrées comme copie dans Privé",
       "deleteDeniedNote": "« {{title}} » n'a pas été supprimée — seul le propriétaire de la note ou un administrateur peut la supprimer",
-      "updateDeniedFolder": "Vous n'avez pas la permission de modifier « {{name}} » — votre travail non synchronisé a été enregistré dans votre espace personnel",
+      "updateDeniedFolder": "Vous n'avez pas la permission de modifier « {{name}} » — votre travail non synchronisé a été enregistré dans Privé",
       "deleteDeniedFolder": "« {{name}} » n'a pas été supprimé — seul un administrateur peut supprimer un dossier d'espace",
       "conflictBanner": "Une version plus récente de cette note existe.",
       "conflictRefresh": "Actualiser",
@@ -4096,11 +4143,29 @@
         "loadError": "Impossible de charger les équipes."
       }
     },
+    "deviceNotes": {
+      "title": "Sur cet appareil",
+      "info": "Ces notes ne sont associées à aucun compte. Déplacez une note pour la conserver et la modifier.",
+      "infoLabel": "À propos des notes sur cet appareil",
+      "moveNote": "Déplacer vers mon Privé",
+      "moveFolder": "Déplacer le dossier vers mon Privé",
+      "moveAll": "Tout déplacer vers mon Privé",
+      "moveAllTo": "Tout déplacer vers un dossier",
+      "moved": "Déplacée vers votre Privé",
+      "movedCount_one": "{{count}} note déplacée vers votre Privé",
+      "movedCount_other": "{{count}} notes déplacées vers votre Privé",
+      "moveFailed": "Impossible de déplacer cette note",
+      "moveFolderFailed": "Impossible de déplacer ces notes",
+      "banner": "Cette note n'est encore associée à aucun compte.",
+      "notesHeading": "Notes",
+      "summaryHeading": "Résumé IA",
+      "transcriptHeading": "Transcription"
+    },
     "structureIntro": {
       "title": "Où se trouvent vos notes",
       "description": "OpenWhispr sépare les idées privées du travail partagé afin que les bonnes personnes voient les bonnes notes.",
       "personal": {
-        "title": "Espace personnel",
+        "title": "Privé",
         "description": "Vous seul pouvez voir les dossiers et les notes qui s'y trouvent."
       },
       "workspace": {
@@ -4205,6 +4270,117 @@
         "taskList": "Liste de tâches",
         "blockquote": "Citation",
         "table": "Insérer un tableau"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "De base",
+          "blocks": "Blocs",
+          "style": "Style",
+          "tools": "Outils"
+        },
+        "slash": {
+          "heading": "Titre {{level}}",
+          "bulletList": "Liste à puces",
+          "orderedList": "Liste numérotée",
+          "taskList": "Tâche à cocher",
+          "quote": "Citation",
+          "divider": "Séparateur",
+          "table": "Tableau",
+          "codeBlock": "Bloc de code",
+          "codeHint": "Coloration syntaxique",
+          "noteLink": "Lier une note",
+          "noteLinkHint": "ou tapez [[",
+          "toggle": "Bloc repliable",
+          "callout": "Encadré : {{type}}",
+          "toc": "Table des matières",
+          "mathBlock": "Bloc mathématique",
+          "inlineMath": "Formule en ligne",
+          "inlineMathHint": "ou tapez $$x^2$$",
+          "emoji": "Emoji",
+          "emojiHint": "ou tapez :smile:",
+          "highlight": "Surligner",
+          "subscript": "Indice",
+          "superscript": "Exposant",
+          "color": "Couleur du texte : {{name}}",
+          "font": "Police : {{name}}",
+          "ruby": "Annotation ruby",
+          "rubyHint": "Lecture au-dessus du texte",
+          "align": "Aligner : {{dir}}",
+          "find": "Rechercher et remplacer",
+          "invisible": "Afficher/masquer les caractères invisibles"
+        },
+        "callout": {
+          "note": "Remarque",
+          "tip": "Astuce",
+          "important": "Important",
+          "warning": "Avertissement",
+          "caution": "Attention"
+        },
+        "colors": {
+          "default": "Par défaut",
+          "red": "Rouge",
+          "orange": "Orange",
+          "yellow": "Jaune",
+          "green": "Vert",
+          "blue": "Bleu",
+          "purple": "Violet",
+          "gray": "Gris"
+        },
+        "fonts": {
+          "default": "Par défaut",
+          "serif": "Serif",
+          "monospace": "Chasse fixe"
+        },
+        "align": {
+          "left": "Gauche",
+          "center": "Centre",
+          "right": "Droite",
+          "justify": "Justifié"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX, ex. \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX, ex. x^2",
+          "emoji": "Nom de l'emoji, ex. rocket",
+          "reading": "Lecture, ex. かんじ",
+          "textReading": "Texte|lecture, ex. 漢字|かんじ",
+          "apply": "Entrée pour appliquer · Échap pour annuler",
+          "mathEdit": "Entrée pour enregistrer · Échap pour annuler · vide supprime"
+        },
+        "toolbar": {
+          "highlight": "Surligner",
+          "subscript": "Indice",
+          "superscript": "Exposant",
+          "color": "Couleur du texte",
+          "font": "Police",
+          "alignment": "Alignement",
+          "ruby": "Texte ruby (lecture au-dessus des caractères)"
+        },
+        "find": {
+          "find": "Rechercher",
+          "replace": "Remplacer",
+          "all": "Tout",
+          "previous": "Précédent",
+          "next": "Suivant",
+          "matchCase": "Respecter la casse",
+          "close": "Fermer"
+        },
+        "count": "Mots : {{words}} · Caractères : {{chars}}",
+        "link": {
+          "header": "Lier une note",
+          "empty": "Tapez le titre d'une note…",
+          "create": "Lier à « {{title}} » (pas encore de note)",
+          "open": "Ouvrir « {{title}} »",
+          "missing": "Aucune note intitulée « {{title}} »"
+        },
+        "backlinks": {
+          "label": "Liée depuis",
+          "more": "+{{count}} de plus",
+          "untitled": "Sans titre"
+        },
+        "toc": {
+          "title": "Sommaire",
+          "empty": "Ajoutez des titres pour créer la table des matières."
+        }
       }
     },
     "participants": {
@@ -4368,7 +4544,9 @@
       "addExisting": "Ajouter des notes existantes",
       "addCount": "Ajouter {{count}} notes",
       "noResults": "Aucune note correspondante",
-      "noNotesAvailable": "Aucune autre note disponible"
+      "noNotesAvailable": "Aucune autre note disponible",
+      "notAdded_one": "{{count}} note n'a pas pu être ajoutée",
+      "notAdded_other": "{{count}} notes n'ont pas pu être ajoutées"
     },
     "context": {
       "moveToFolder": "Déplacer vers un dossier",
@@ -4819,7 +4997,6 @@
       },
       "locked": {
         "noWorkspace": "Les dictionnaires partagés sont inclus dans Business. Partagez avec tout le monde le jargon, les noms de produits et les acronymes de votre équipe.",
-        "chooseWorkspace": "Vous êtes dans Personnel. Passez à un espace de travail pour utiliser ses mots partagés.",
         "upgradeAdmin": "Les dictionnaires partagés sont inclus dans Business. Passez {{workspace}} à un forfait supérieur pour que tout le monde ait les mêmes mots.",
         "upgradeMember": "Les dictionnaires partagés sont inclus dans Business. Demandez à un administrateur de faire passer {{workspace}} à un forfait supérieur.",
         "paused_one": "Le {{count}} mot partagé de {{workspace}} est en pause. Passez à Business pour l'utiliser à nouveau en dictée.",
@@ -5081,12 +5258,24 @@
       "request_accessStatus": "Demande d'accès...",
       "look_at_screenName": "Regarder l'écran",
       "look_at_screenStatus": "Lecture de votre écran...",
-      "look_at_screenSuccess": "Écran lu.",
-      "look_at_screenFailed": "L'écran n'a pas pu être lu.",
       "request_api_keyName": "Clé API",
       "request_api_keyStatus": "Demande d'une clé API...",
       "open_settingsName": "Réglages",
-      "open_settingsStatus": "Redirection vers les réglages..."
+      "open_settingsStatus": "Redirection vers les réglages...",
+      "salesforce_search_recordsName": "Rechercher dans Salesforce",
+      "salesforce_search_recordsStatus": "Recherche dans Salesforce…",
+      "salesforce_get_recordName": "Enregistrement Salesforce",
+      "salesforce_get_recordStatus": "Lecture de l’enregistrement Salesforce…",
+      "salesforce_describe_fieldsName": "Champs d’opportunité",
+      "salesforce_describe_fieldsStatus": "Lecture des champs d’opportunité…",
+      "salesforce_get_briefingName": "Synthèse client",
+      "salesforce_get_briefingStatus": "Préparation de la synthèse client…",
+      "salesforce_export_conversationName": "Activité Salesforce",
+      "salesforce_export_conversationStatus": "Préparation de l’activité Salesforce…",
+      "salesforce_update_fieldsName": "Mises à jour de champs Salesforce",
+      "salesforce_update_fieldsStatus": "Préparation des mises à jour de champs Salesforce…",
+      "salesforce_present_briefingName": "Conclusions de la synthèse",
+      "salesforce_present_briefingStatus": "Sélection des éléments de la synthèse…"
     },
     "turn": {
       "reasoning": "Raisonnement",
@@ -5123,7 +5312,8 @@
           "slack": "Je peux publier le message sur Slack pour vous.",
           "linear": "Je peux trouver et créer des tickets Linear pour vous.",
           "github": "Je peux trouver et créer des issues GitHub pour vous.",
-          "calendar": "Je peux vérifier vos disponibilités et proposer des créneaux."
+          "calendar": "Je peux vérifier vos disponibilités et proposer des créneaux.",
+          "salesforce": "Je peux lire des enregistrements Salesforce et y enregistrer des notes de réunion vérifiées."
         }
       },
       "access": {
@@ -5345,7 +5535,9 @@
         "default": "Envoyer à {{destination}}",
         "email": "E-mail à {{destination}}",
         "issue": "Créer un ticket dans {{destination}}",
-        "comment": "Commenter {{destination}}"
+        "comment": "Commenter {{destination}}",
+        "salesforceActivity": "Enregistrer la conversation dans {{destination}}",
+        "salesforceFields": "Vérifier les champs de l’opportunité {{destination}}"
       },
       "identity": "En tant que {{account}}",
       "identityWithWorkspace": "En tant que {{account}} dans {{workspace}}",
@@ -5436,6 +5628,31 @@
           "refused": "Linear a refusé la demande. Rien n'a été envoyé.",
           "unknown_action": "OpenWhispr ne peut pas faire cela dans Linear. Rien n'a été envoyé.",
           "generic": "Un problème est survenu. Rien n'a été envoyé à Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce doit être reconnecté dans les Paramètres.",
+          "connection_changed": "La connexion Salesforce a changé avant l'envoi, donc rien n'a été envoyé.",
+          "credential_save_failed": "La connexion Salesforce n'a pas pu être enregistrée sur cet ordinateur. Rien n'a été envoyé. Réessayez.",
+          "network": "Salesforce est injoignable. Rien n'a été envoyé.",
+          "rate_limited": "Salesforce est occupé. Réessayez sous peu.",
+          "forbidden": "Votre compte Salesforce n'est pas autorisé à le faire. Rien n'a été envoyé.",
+          "invalid_input": "Salesforce n'a pas pu l'accepter tel quel. Rien n'a été envoyé.",
+          "too_long": "Trop long pour Salesforce. Rien n'a été envoyé.",
+          "refused": "Salesforce a refusé la demande. Rien n'a été envoyé.",
+          "unknown_action": "OpenWhispr ne peut pas faire cela dans Salesforce. Rien n'a été envoyé.",
+          "generic": "Un problème est survenu. Rien n'a été envoyé à Salesforce.",
+          "stale_record": "Salesforce a changé depuis cette vérification. Actualisez et vérifiez à nouveau.",
+          "source_unavailable": "La note source est introuvable ou inaccessible.",
+          "export_required": "Enregistrez l’activité dans cette opportunité avant de modifier ses champs.",
+          "duplicate_operation": "Cet export a été enregistré de nouveau depuis cette vérification, ou un enregistrement est encore en cours. Rien n'a été envoyé. Préparez une nouvelle vérification.",
+          "invalid_field": "Choisissez jusqu’à trois champs texte personnalisés et modifiables de l’opportunité.",
+          "storage_unavailable": "L’historique local des exportations est indisponible. Aucune nouvelle écriture n’a été lancée.",
+          "task_status_unavailable": "Aucun statut de tâche terminée n’est disponible dans Salesforce. Contactez votre administrateur Salesforce.",
+          "not_found": "Cet enregistrement Salesforce n'existe plus ou vous n'y avez pas accès. Rien n'a été envoyé.",
+          "invalid_reference": "Salesforce n'a pas pu l'accepter tel quel. Rien n'a été envoyé.",
+          "no_fields_selected": "Sélectionnez au moins un champ ou annulez.",
+          "record_locked": "Cet enregistrement Salesforce est verrouillé, par exemple par un processus d'approbation. Rien n'a été envoyé.",
+          "validation_failed": "Une règle de validation, une règle de doublons ou un champ obligatoire Salesforce l'a bloqué. Vérifiez l'enregistrement dans Salesforce. Rien n'a été envoyé."
         }
       },
       "email": {
@@ -5464,11 +5681,14 @@
       "openIn": {
         "github": "Ouvrir dans GitHub",
         "gmail": "Ouvrir dans Gmail",
-        "linear": "Ouvrir dans Linear"
+        "linear": "Ouvrir dans Linear",
+        "salesforce": "Ouvrir dans Salesforce"
       },
       "sendLabel": {
         "issue": "Créer le ticket",
-        "comment": "Commenter"
+        "comment": "Commenter",
+        "salesforceActivity": "Enregistrer l’activité",
+        "salesforceFields": "Enregistrer les champs"
       },
       "issue": {
         "created": "{{result}} créé.",
@@ -5511,7 +5731,26 @@
       "identityChanged": "Sera envoyé en tant que {{account}}. Appuyez sur Envoyer pour l’envoyer.",
       "connectToSend": "Connectez {{name}} pour envoyer ceci",
       "edit": "Modifier",
-      "doneEditing": "Modification terminée"
+      "doneEditing": "Modification terminée",
+      "salesforce": {
+        "include": "Inclure {{field}}",
+        "omitted": "Omis : ce champ ne changera pas",
+        "before": "Valeur actuelle",
+        "after": "Remplacement proposé",
+        "empty": "Vide",
+        "limit": "{{count}} / {{max}} caractères",
+        "noneSelected": "Sélectionnez au moins un champ ou annulez.",
+        "tooLong": "Un champ sélectionné dépasse sa limite de caractères.",
+        "salesforceActivity": {
+          "sent": "Activité enregistrée dans {{destination}}.",
+          "unknown": "Impossible de confirmer les modifications. Vérifiez {{destination}} dans Salesforce avant de réessayer."
+        },
+        "salesforceFields": {
+          "sent": "Champs enregistrés sur {{destination}}.",
+          "unknown": "Impossible de confirmer les modifications. Vérifiez {{destination}} dans Salesforce avant de réessayer."
+        },
+        "savedLabel": "Enregistré"
+      }
     },
     "policyOff": "Votre organisation a désactivé les connecteurs.",
     "email": {
@@ -5687,7 +5926,9 @@
         "slack_send_message": "Message à {{destination}}",
         "gmail_send": "E-mail à {{destination}}",
         "linear_create_issue": "Nouveau ticket dans {{destination}}",
-        "linear_comment": "Commentaire sur {{destination}}"
+        "linear_comment": "Commentaire sur {{destination}}",
+        "salesforce_export_conversation": "Enregistrer la conversation dans {{destination}}",
+        "salesforce_update_fields": "Vérifier les champs de l’opportunité {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "Brouillon d'e-mail",
@@ -5696,7 +5937,9 @@
         "slack_send_message": "Message Slack",
         "gmail_send": "E-mail Gmail",
         "linear_create_issue": "Ticket Linear",
-        "linear_comment": "Commentaire Linear"
+        "linear_comment": "Commentaire Linear",
+        "salesforce_export_conversation": "Activité Salesforce",
+        "salesforce_update_fields": "Mises à jour de champs Salesforce"
       },
       "states": {
         "pending": "En attente",
@@ -5798,6 +6041,31 @@
           "refused": "Linear a refusé la demande.",
           "unknown_action": "Non disponible dans Linear.",
           "generic": "Cela n'a pas fonctionné dans Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce doit être reconnecté.",
+          "connection_changed": "La connexion Salesforce a changé. Rien n'a été envoyé.",
+          "credential_save_failed": "Impossible d'enregistrer la connexion Salesforce sur cet ordinateur.",
+          "network": "Impossible de joindre Salesforce.",
+          "rate_limited": "Salesforce est occupé.",
+          "forbidden": "Non autorisé dans Salesforce.",
+          "invalid_input": "Salesforce n'a pas pu l'accepter.",
+          "too_long": "Trop long pour Salesforce.",
+          "refused": "Salesforce a refusé la demande.",
+          "unknown_action": "Non disponible dans Salesforce.",
+          "generic": "Cela n'a pas fonctionné dans Salesforce.",
+          "stale_record": "Salesforce a changé depuis cette vérification. Actualisez et vérifiez à nouveau.",
+          "source_unavailable": "La note source est introuvable ou inaccessible.",
+          "export_required": "Enregistrez l’activité dans cette opportunité avant de modifier ses champs.",
+          "duplicate_operation": "Cet export a été enregistré de nouveau depuis cette vérification, ou un enregistrement est encore en cours. Rien n'a été envoyé.",
+          "invalid_field": "Choisissez jusqu’à trois champs texte personnalisés et modifiables de l’opportunité.",
+          "storage_unavailable": "L’historique local des exportations est indisponible. Aucune nouvelle écriture n’a été lancée.",
+          "task_status_unavailable": "Aucun statut de tâche terminée n’est disponible dans Salesforce. Contactez votre administrateur Salesforce.",
+          "not_found": "Introuvable dans Salesforce.",
+          "invalid_reference": "Salesforce n'a pas pu l'accepter.",
+          "no_fields_selected": "Sélectionnez au moins un champ ou annulez.",
+          "record_locked": "L'enregistrement Salesforce est verrouillé.",
+          "validation_failed": "Bloqué par une règle ou un champ obligatoire Salesforce."
         }
       },
       "unknownSent": {
@@ -5810,7 +6078,120 @@
     },
     "beta": "Bêta",
     "upsell": "Les connecteurs sont inclus dans les forfaits payants. Passez à un forfait payant pour que l'assistant agisse dans vos outils.",
-    "locked": "Inclus dans les forfaits payants"
+    "locked": "Inclus dans les forfaits payants",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "Exportez des conversations relues et préparez des synthèses pour un client sélectionné. Les associations de notes sont conservées uniquement sur cet appareil.",
+      "connect": "Connecter",
+      "reconnect": "Reconnecter",
+      "disconnect": "Déconnecter",
+      "connecting": "Terminez la connexion dans votre navigateur…",
+      "connectedAs": "Connecté en tant que {{account}} dans {{workspace}}",
+      "needsReconnect": "Salesforce doit être reconnecté.",
+      "errors": {
+        "connect_failed": "Impossible de connecter Salesforce. Réessayez.",
+        "disconnect_failed": "Impossible de déconnecter Salesforce. Réessayez.",
+        "oauth_denied": "Salesforce n'a pas été connecté car l'accès n'a pas été autorisé.",
+        "oauth_timeout": "La connexion a pris trop de temps. Réessayez.",
+        "oauth_state_mismatch": "Ce lien de connexion était périmé. Réessayez.",
+        "ports_busy": "Une autre application utilise les ports dont OpenWhispr a besoin pour se connecter. Fermez-la et réessayez.",
+        "token_exchange_failed": "Salesforce n'a pas terminé la connexion. Réessayez.",
+        "not_configured": "Salesforce n'est pas disponible dans cette version.",
+        "connection_changed": "Votre compte ou la connexion Salesforce a changé pendant la connexion. Réessayez.",
+        "signed_out": "Connectez-vous à OpenWhispr pour connecter Salesforce.",
+        "policy_blocked": "Votre organisation a désactivé les connecteurs.",
+        "policy_unavailable": "Impossible de vérifier les paramètres de votre organisation. Réessayez.",
+        "permission_not_granted": "Salesforce n'a pas été connecté car toutes les autorisations n'ont pas été accordées. Reconnectez-vous et autorisez-les toutes.",
+        "invalid_login_domain": "Saisissez test.salesforce.com ou le My Domain de votre entreprise, par exemple votreentreprise.my.salesforce.com."
+      },
+      "browser": {
+        "connectedTitle": "Salesforce est connecté",
+        "connectedBody": "Vous pouvez fermer cet onglet et retourner à OpenWhispr.",
+        "failedTitle": "Salesforce n'a pas été connecté",
+        "failedBody": "Retournez à OpenWhispr pour réessayer."
+      },
+      "notes": {
+        "updateExisting": "Mettre à jour l’activité déjà enregistrée ; aucune autre tâche ne sera créée.",
+        "earlierAttemptUncertain": "Une tentative précédente l'a peut-être déjà enregistré dans Salesforce. Vérifiez l'enregistrement avant de renvoyer.",
+        "replacesMissing": "L'activité enregistrée précédemment n'est plus sur cet enregistrement Salesforce, ou vous ne pouvez plus la voir ; une nouvelle sera donc créée.",
+        "editedInSalesforce": "Cette activité a été modifiée dans Salesforce après son enregistrement par OpenWhispr. L'envoi remplacera ces modifications.",
+        "sourceNote": "D'après la note « {{title}} ».",
+        "sourceNoteUntitled": "D'après une note sans titre."
+      },
+      "provenance": "Source : OpenWhispr — {{title}}{{date}}",
+      "briefing": {
+        "untitledRecord": "Enregistrement Salesforce sélectionné",
+        "retrieved": "Récupéré : {{time}}",
+        "crmFacts": "Données CRM actuelles",
+        "fields": {
+          "Name": "Nom",
+          "PersonName": "Nom",
+          "StageName": "Étape",
+          "CloseDate": "Date de clôture",
+          "Amount": "Montant",
+          "CurrencyIsoCode": "Devise",
+          "NextStep": "Étape suivante",
+          "OwnerId": "Propriétaire",
+          "AccountId": "Compte",
+          "Type": "Type",
+          "Industry": "Secteur d'activité",
+          "Website": "Site Web",
+          "Phone": "Téléphone",
+          "FirstName": "Prénom",
+          "LastName": "Nom de famille",
+          "Email": "E-mail",
+          "Title": "Fonction",
+          "Company": "Société",
+          "Status": "Statut"
+        },
+        "notReturned": "non renvoyé",
+        "notRecorded": "non renseigné",
+        "linkedNameUnavailable": "lié ; nom indisponible",
+        "gaps": "Lacunes et identité du client",
+        "identityNotVerified": "Une association d'export ne vérifie pas l'identité du client. Les notes ont été liées à l'enregistrement choisi par l'utilisateur ; les noms de clients et les relations de compte n'ont pas été recoupés de façon indépendante.",
+        "missingFieldsNote": "Des champs CRM manquants ou non renvoyés ne prouvent ni une validation de budget, ni des engagements, ni un accord avec les notes de réunion.",
+        "unavailableNotes": "Notes liées indisponibles dans l'espace de travail actuel : {{count}}.",
+        "partial": "La couverture est partielle : le nombre de notes, le texte source, la transcription ou les résultats CRM ont été limités. Ce qui manque dans ces extraits n'était pas forcément absent des réunions.",
+        "crmOnly": "Aucun contenu de réunion accessible n'a été récupéré. Cette synthèse repose uniquement sur le CRM.",
+        "notPrepared": "Les conclusions des réunions n'ont pas été préparées. Les notes sources disponibles figurent ci-dessous ; aucune conclusion n'a été tirée des réunions.",
+        "findings": "Conclusions des réunions",
+        "findingsExplainer": "Les extraits sources sont reproduits ci-dessous. Les statuts sont la classification de l'assistant ; confirmé signifie mentionné dans la note, pas vérifié de façon indépendante. Les responsables et échéances sont uniquement ceux indiqués dans chaque extrait.",
+        "categories": {
+          "takeaway": "Points clés",
+          "decision": "Décisions",
+          "commitment": "Engagements",
+          "proposal": "Propositions",
+          "risk": "Risques",
+          "question": "Questions ouvertes"
+        },
+        "status": {
+          "confirmed": "Confirmé",
+          "proposed": "Proposé",
+          "unknown": "Incertain"
+        },
+        "conflict": "Contradiction possible — non résolue",
+        "crmConflictEntry": "Salesforce {{label}} : {{value}}",
+        "sources": "Sources",
+        "noteCreated": "Note créée : {{time}}.",
+        "lastEdited": "Dernière modification : {{time}}.",
+        "addedForBriefing": "Ajoutée pour cette synthèse.",
+        "exported": "Exportée : {{time}}.",
+        "savedActivity": "Activité Salesforce enregistrée",
+        "sourcesExplainer": "Les dates de création ne sont pas des dates de réunion. Les activités Salesforce enregistrées contiennent le résumé exporté ; les notes ont pu changer depuis l'export.",
+        "sections": {
+          "personalNotes": "Notes personnelles",
+          "summary": "Résumé IA enregistré",
+          "transcript": "Transcription, caractères {{start}}–{{end}}"
+        },
+        "prepared": "Synthèse client Salesforce préparée"
+      },
+      "loginDomain": {
+        "toggle": "Utiliser une sandbox ou le domaine de l'entreprise",
+        "label": "Domaine de connexion Salesforce",
+        "placeholder": "test.salesforce.com ou votreentreprise.my.salesforce.com",
+        "hint": "Laissez vide pour vous connecter à une organisation de production."
+      }
+    }
   },
   "skills": {
     "pane": {
@@ -5856,6 +6237,7 @@
       "neverRun": "OpenWhispr n'exécute jamais de scripts",
       "uninstall": "Désinstaller",
       "uninstallConfirm": "Désinstaller {{name}} ? Elle sera supprimée de cet ordinateur.",
+      "uninstallConfirmSynced": "Désinstaller {{name}} ? Elle sera supprimée de cet ordinateur et de vos autres appareils.",
       "problem": "Cette compétence ne peut pas être utilisée tant qu'elle n'est pas corrigée : {{reason}}",
       "tryNow": "Essayer maintenant"
     },
@@ -5881,6 +6263,7 @@
     "manage": {
       "title": "Gérer les compétences",
       "description": "Activez ou désactivez des compétences, ou supprimez celles que vous n'utilisez pas. Chacune est enregistrée sur cet ordinateur.",
+      "descriptionBackedUp": "Activez ou désactivez des compétences, ou supprimez celles que vous n'utilisez pas. Chacune est enregistrée sur cet ordinateur et dans votre Sauvegarde cloud.",
       "noMatches": "Aucune compétence ne correspond à « {{query}} ».",
       "none": "Aucune compétence pour l'instant."
     },
@@ -6031,6 +6414,9 @@
       "pasteNote": "Colle sans appuyer sur Entrée : vous choisissez quand l'exécuter.",
       "pasted": "Collé",
       "pasteFailed": "Impossible de coller. Le texte est dans votre presse-papiers."
+    },
+    "sync": {
+      "tooLarge": "Trop volumineuse pour être sauvegardée"
     }
   },
   "notesView": {
@@ -6274,7 +6660,9 @@
       "timeout": "Votre serveur a pris trop de temps à répondre.",
       "unreachable": "Impossible de contacter votre serveur. Vérifiez qu’il est en cours d’exécution.",
       "noResponse": "Aucune réponse de votre serveur. Vérifiez sa clé API et qu’il est en cours d’exécution.",
-      "unknown": "Votre serveur a renvoyé une erreur inattendue."
+      "unknown": "Votre serveur a renvoyé une erreur inattendue.",
+      "invalidHeaders": "Un en-tête personnalisé de votre serveur n’est pas valide.",
+      "redirected": "Votre serveur a redirigé la requête. Saisissez l’adresse vers laquelle il redirige."
     },
     "openSettings": "Ouvrir les réglages",
     "copyDetails": "Copier les détails",
@@ -6367,6 +6755,7 @@
       "saveChanges": "Enregistrer les modifications",
       "saved": "Ton et style enregistrés",
       "cleanupOff": "La correction de texte est désactivée, donc ces tons ne s'appliquent pas à votre dictée. L'assistant et les chats les utilisent toujours.",
+      "customPrompt": "Vous utilisez un prompt personnalisé pour la correction de texte, donc ces tons ne s'appliquent pas à votre dictée. L'assistant et les chats les utilisent toujours.",
       "turnOnCleanup": "Activer la correction de texte",
       "enabled": "Tons et voix activés",
       "enabledDescription": "La correction de texte, l'assistant et les chats utilisent votre ton pour chaque type d'app. Si c'est désactivé, le ton standard s'applique."
@@ -6467,5 +6856,16 @@
       "bootstrapMismatch": "Le fichier d’amorçage ne correspond pas à votre compte, à cet espace de travail ou à ses identifiants configurés.",
       "testLinkOtherWorkspace": "Ce lien de test concerne un autre espace de travail. Passez à cet espace de travail et rouvrez le lien."
     }
+  },
+  "affiliate": {
+    "remove": "Supprimer le lien du créateur",
+    "haveLink": "Vous avez un lien de créateur ?",
+    "label": "Lien du créateur (facultatif)",
+    "placeholder": "Collez le lien de votre créateur",
+    "saved": "Lien du créateur enregistré.",
+    "checking": "Vérification de votre lien…",
+    "unavailable": "Impossible de vérifier votre lien. Réessayez ou videz le champ pour continuer.",
+    "privacy": "Les liens de créateurs ne sont pas disponibles avec vos paramètres de suivi actuels. Videz le champ pour continuer.",
+    "review": "Votre lien a été enregistré pour vérification."
   }
 }

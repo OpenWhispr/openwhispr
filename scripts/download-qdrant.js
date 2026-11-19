@@ -13,8 +13,9 @@ const {
 
 const QDRANT_REPO = "qdrant/qdrant";
 
-// Version can be pinned via environment variable for reproducible builds
-const VERSION_OVERRIDE = process.env.QDRANT_VERSION || null;
+// Qdrant publishes releases before their binary build jobs finish. Pin a complete
+// release so every platform packages the same version, independent of upstream timing.
+const QDRANT_VERSION = process.env.QDRANT_VERSION || "v1.20.1";
 
 const BINARIES = {
   "darwin-arm64": {
@@ -47,11 +48,7 @@ let cachedRelease = null;
 async function getRelease() {
   if (cachedRelease) return cachedRelease;
 
-  if (VERSION_OVERRIDE) {
-    cachedRelease = await fetchLatestRelease(QDRANT_REPO, { tagPrefix: VERSION_OVERRIDE });
-  } else {
-    cachedRelease = await fetchLatestRelease(QDRANT_REPO);
-  }
+  cachedRelease = await fetchLatestRelease(QDRANT_REPO, { tag: QDRANT_VERSION });
   return cachedRelease;
 }
 
@@ -122,11 +119,7 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
 }
 
 async function main() {
-  if (VERSION_OVERRIDE) {
-    console.log(`\n[qdrant] Using pinned version: ${VERSION_OVERRIDE}`);
-  } else {
-    console.log("\n[qdrant] Fetching latest release...");
-  }
+  console.log(`\n[qdrant] Using pinned version: ${QDRANT_VERSION}`);
   const release = await getRelease();
 
   if (!release) {

@@ -759,6 +759,7 @@ async function navigationFixture() {
       { id: 4, space_id: 1, name: "Moved" },
     ],
     getSpaces: () => [{ id: 1, name: "Private", kind: "private" }],
+    getPrivateSpaceId: () => 1,
     getMeetingsFolder: () => ({ id: 3 }),
   };
   owner.committedNoteId = 9;

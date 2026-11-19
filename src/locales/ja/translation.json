@@ -212,11 +212,18 @@
     "policyAccountChanged": "アカウントが変更されたため、この回答を停止しました。",
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。",
     "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
+    "policyBlocked": "組織により、このデバイスではこの操作は許可されていません。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
     "managedConfigAmbiguous": "組織のマネージド設定に矛盾があります。管理者にお問い合わせください。",
     "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。",
-    "resizePanel": "パネルのサイズを変更"
+    "resizePanel": "パネルのサイズを変更",
+    "managedDevice": "管理対象デバイス",
+    "managedDeviceAndWorkspace": "管理対象デバイスとワークスペース",
+    "deviceLocalOnly": "このデバイスではローカル処理のみを使用します。以前ログインしたアカウントでもクラウド機能は利用できません。",
+    "deviceSignInRequired": "組織により、このデバイスではログインが必要です。",
+    "devicePolicyInvalid": "デバイスポリシーを読み取れないか、無効です。管理者にお問い合わせください。修正されるまで OpenWhispr は使用できません。",
+    "deviceWorkspaceUnavailable": "このデバイスではローカル処理が必要ですが、保存されたアカウントのワークスペースポリシーを取得できません。ログアウトしてそのアカウントを使わずに続行するか、管理者にお問い合わせください。"
   },
   "onboarding": {
     "rehaul": {
@@ -409,7 +416,9 @@
           "modelNotFound": "選択したモデルはこのプロバイダーでは利用できません。",
           "providerStatus": "プロバイダーがステータス {{status}} を返しました。",
           "timeout": "接続テストがタイムアウトしました。",
-          "network": "プロバイダーに接続できませんでした。"
+          "network": "プロバイダーに接続できませんでした。",
+          "invalidHeaders": "HTTP ヘッダーが無効です。名前と値を確認してください。Content-Type と転送用ヘッダーは変更できません。",
+          "redirected": "サーバーがリクエストをリダイレクトしました。リダイレクト先のアドレスを入力してください。"
         }
       },
       "local": {
@@ -655,7 +664,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "アップデートが必要です",
-      "description": "組織では OpenWhispr {{version}} 以降が必要です。アプリを更新してください。"
+      "description": "組織では OpenWhispr {{version}} 以降が必要です。アプリを更新してください。",
+      "contactIT": "組織では OpenWhispr {{version}} 以降が必要です。承認済みのバージョンのインストールについて IT 部門にお問い合わせください。"
     },
     "update": {
       "readyTitle": "アップデートの準備完了",
@@ -949,6 +959,9 @@
     "getKey": "キーを取得 ->",
     "endpointUrl": "エンドポイント URL",
     "azureHint": "Azure AI Foundry: リソースのエンドポイント（例: https://your-resource.cognitiveservices.azure.com）を入力し、モデルにデプロイの正確な名前を設定してください。",
+    "browsedProviderHint": "引き続き {{current}} が使用されています。{{provider}} に切り替えるにはモデルを選択してください。",
+    "browsedCustomHint": "引き続き {{current}} が使用されています。カスタムエンドポイントに切り替えるにはモデル名を入力してください。",
+    "customInUseHint": "引き続きカスタムエンドポイントが使用されています。{{provider}} に切り替えるにはモデルを選択してください。",
     "customProvider": "カスタム",
     "fallback": {
       "whisperModelDescription": "モデル",
@@ -1237,7 +1250,8 @@
       "failedUserCheck": "ユーザーアカウントの確認に失敗しました",
       "generic": "問題が発生しました。もう一度お試しください。",
       "invalidCredentials": "メールアドレスまたはパスワードが正しくありません",
-      "invalidEmail": "有効なメールアドレスを入力してください"
+      "invalidEmail": "有効なメールアドレスを入力してください",
+      "signInDisabledByDevice": "組織により、このデバイスでのサインインは無効になっています。"
     },
     "getStarted": "はじめる",
     "legal": {
@@ -1769,7 +1783,7 @@
             "公開リンクでノートを共有",
             "個人APIアクセス",
             "すべてのアプリでMCP統合",
-            "モバイルアプリ",
+            "無制限のクラウド付きモバイルアプリ",
             "メールサポート"
           ],
           "cta": "始める",
@@ -1811,6 +1825,9 @@
           "askOwner": "{{name}}さんにワークスペースのアップグレードを依頼してください。"
         },
         "currentPlan": "現在のプラン",
+        "yourPersonalPlan": "あなたの個人プラン",
+        "yourWorkspacePlan": "ワークスペースのプラン",
+        "manage": "管理",
         "coveredByWorkspace": "ワークスペースのプランに含まれています",
         "upgrade": "アップグレード",
         "downgrade": "ダウングレード",
@@ -2266,7 +2283,14 @@
         "restarting": "再起動中...",
         "title": "アップデート",
         "versionPlaceholder": "—",
-        "whatsNew": "v{{version}} の新機能"
+        "whatsNew": "v{{version}} の新機能",
+        "managedByOrganization": "組織によって管理されています。",
+        "itManaged": "更新は組織によって管理されています。",
+        "policyLoading": "更新設定を読み込み中…",
+        "policyUnavailable": "更新設定を読み込めませんでした。アップデートを確認して再試行してください。",
+        "policyChanged": "更新ポリシーが変更されました。もう一度アップデートを確認してください。",
+        "managedBadge": "管理対象",
+        "stagedBeforePolicy": "このポリシーの適用前に更新の準備が完了しており、アプリの終了時にインストールされる可能性があります。終了または再起動する前に IT 部門にお問い合わせください。"
       },
       "translationHotkey": {
         "title": "翻訳ホットキー",
@@ -2298,9 +2322,8 @@
     "privacy": {
       "cloudBackup": "クラウドバックアップ",
       "cloudBackupDescription": "文字起こしとノートをクラウドにバックアップして、すべてのデバイスからシームレスにアクセスできます。",
-      "cloudBackupTeamCaveat": "Teamspace 内のノートと共有したノートは、この設定に関係なく常に同期されます。",
+      "cloudBackupTeamCaveat": "Teamspace 内のノートと共有したノートは、この設定に関係なく常に同期されます。 プライベートな内容を使用するチャットは、このデバイスにのみ保存されます。 以前のバージョンのチャットとバックアップから復元したチャットも対象外です。",
       "cloudNotesMigration": "ノートをバックアップ中… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "すべてのノートがバックアップされました",
       "description": "デバイスからのデータ送信を管理します。初期設定ではすべてオフです。",
       "title": "プライバシー",
       "insightsSync": "個人の統計を同期",
@@ -2485,19 +2508,26 @@
     "selfHosted": {
       "endpointUrl": "エンドポイント URL",
       "serverUrl": "サーバー URL",
-      "apiKeyOptional": "API キー（任意）"
+      "apiKeyOptional": "API キー（任意）",
+      "headers": "HTTP ヘッダー",
+      "headersHelp": "このサーバーへのすべてのリクエストに付けて送信します。たとえばゲートウェイが求める API キーなどです。",
+      "headerName": "ヘッダー名",
+      "headerValue": "ヘッダー値",
+      "removeHeader": "削除",
+      "addHeader": "ヘッダーを追加",
+      "unauthorized": "サーバーがリクエストを拒否しました（401/403）。下のヘッダーか、サーバーの認証設定を確認してください。",
+      "headerErrors": {
+        "missingName": "ヘッダー名を入力してください。",
+        "invalidName": "ヘッダー名にスペース、コロン、その他の区切り文字は使えません。",
+        "reserved": "このヘッダーは OpenWhispr が自動で設定します。",
+        "invalidValue": "この値には、ヘッダーで送れない文字（曲がった引用符など）が含まれています。"
+      }
     },
     "workspace": {
       "title": "ワークスペース",
       "description": "チームメイトとのコラボレーション、ノートの共有、ワークスペースへのアクセス管理を一括で行えます。",
       "empty": {
-        "title": "最初のワークスペースを作成",
-        "description": "ワークスペースでは、チームメイトとのコラボレーションやノートの共有ができます。",
         "create": "ワークスペースを作成"
-      },
-      "personal": {
-        "title": "現在は「個人」です",
-        "description": "設定を管理するワークスペースを選択してください。"
       },
       "loadError": {
         "title": "ワークスペースを読み込めませんでした",
@@ -2775,8 +2805,8 @@
           "leaveBodyLoses": "{{space}} とそのノートにアクセスできなくなります。",
           "leaveBodyAdmins": "別の管理者がこの Teamspace の管理を続けます。",
           "deleteNotAllowed": "{{space}} を削除する権限がありません。",
-          "movedToPersonal_one": "同期されていない {{count}} 件のノートを個人スペースに移動しました。",
-          "movedToPersonal_other": "同期されていない {{count}} 件のノートを個人スペースに移動しました。"
+          "movedToPersonal_one": "同期されていない {{count}} 件のノートをプライベートに移動しました。",
+          "movedToPersonal_other": "同期されていない {{count}} 件のノートをプライベートに移動しました。"
         },
         "addPeople": {
           "loading": "Teamspace を読み込んでいます…",
@@ -3029,6 +3059,7 @@
         "nextInvoice": "次回の請求",
         "manageStripe": "Stripe で管理",
         "startSubscription": "サブスクリプションを開始",
+        "provisionedPlan": "OpenWhispr が設定したプランです。プランやシート数の変更は営業担当にお問い合わせください。",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -3383,7 +3414,7 @@
       "defaultFolderImmutable": "デフォルトフォルダは変更できません。",
       "spaceNameRequired": "スペース名を入力してください。",
       "spaceNotFound": "そのスペースが見つかりませんでした。",
-      "privateSpaceImmutable": "個人用スペースは変更できません。",
+      "privateSpaceImmutable": "プライベートは変更できません。",
       "generic": "変更を完了できませんでした。もう一度お試しください。"
     },
     "sidebar": {
@@ -3392,10 +3423,10 @@
       "templatesAndActions": "テンプレートとアクション"
     },
     "spaces": {
-      "privateSpaces": "プライベートノート",
+      "privateSpaces": "プライベート",
       "teamSpaces": "Teamspaces",
-      "personal": "個人",
-      "privateTooltip": "パーソナルスペースはあなただけが見られます",
+      "personal": "プライベート",
+      "privateTooltip": "ここのフォルダーとノートは自分だけが見ることができます。",
       "newSpace": "新しい Teamspace",
       "nameAndIconLabel": "名前とアイコン",
       "changeEmoji": "絵文字を変更",
@@ -3417,6 +3448,18 @@
       "noSpacesFound": "スペースが見つかりません",
       "spaceRoot": "スペースのルート",
       "moveConfirm": "移動",
+      "copyToPrivate": "プライベートにコピー",
+      "moveToWorkspacePrivate": "{{workspace}} › プライベートに移動",
+      "workspacePrivate": "{{workspace}} › プライベート",
+      "confirmCopyTitle": "プライベートにコピーしますか？",
+      "confirmCopy": "ノートは{{space}}に残ります。",
+      "copiedToPrivate": "プライベートにコピーしました",
+      "couldNotCopyNote": "ノートをコピーできませんでした",
+      "openCopy": "開く",
+      "noteAlreadyInTeam": "「{{title}}」はすでに{{space}}にあります。プライベートなコピーを残すには「プライベートにコピー」を使ってください。",
+      "folderAlreadyInTeam": "「{{name}}」はすでに{{space}}にあります。プライベートなコピーを残すには、その中のノートで「プライベートにコピー」を使ってください。",
+      "workspacesLoading": "ワークスペースを読み込んでいます。しばらくしてからもう一度お試しください。",
+      "cantMoveIntoLegacy": "{{space}}はワークスペースに属していないため、ノートを移動できません。",
       "confirmMoveInTitle": "{{space}}に移動しますか？",
       "confirmMoveIn": "{{space}}の全員がこのノートを表示・編集できるようになります。ノートは後から Teamspace の外に移動できません。",
       "confirmMoveInFolder": "{{space}}の全員がこのフォルダとそのノートを表示・編集できるようになります。フォルダとノートは後から Teamspace の外に移動できません。",
@@ -3434,10 +3477,10 @@
       "noteCount_other": "{{count}} 件のノート",
       "accessRevoked": "{{space}} へのアクセス権がなくなりました",
       "accessRevokedActiveNote": "{{space}} へのアクセス権がなくなりました — 「{{title}}」はこのデバイスでは利用できなくなりました",
-      "movedToPersonal": "{{space}} へのアクセス権がなくなったため、「{{title}}」は個人スペースに移動されました",
-      "updateDeniedNote": "「{{title}}」を変更する権限がありません — 未同期の編集内容は個人スペースにコピーとして保存されました",
+      "movedToPersonal": "{{space}} へのアクセス権がなくなったため、「{{title}}」はプライベートに移動されました",
+      "updateDeniedNote": "「{{title}}」を変更する権限がありません — 未同期の編集内容はプライベートにコピーとして保存されました",
       "deleteDeniedNote": "「{{title}}」は削除されませんでした — 削除できるのはノートの所有者または管理者のみです",
-      "updateDeniedFolder": "「{{name}}」を変更する権限がありません — 未同期の作業内容は個人スペースに保存されました",
+      "updateDeniedFolder": "「{{name}}」を変更する権限がありません — 未同期の作業内容はプライベートに保存されました",
       "deleteDeniedFolder": "「{{name}}」は削除されませんでした — スペースのフォルダを削除できるのは管理者のみです",
       "conflictBanner": "このノートには新しいバージョンがあります。",
       "conflictRefresh": "更新",
@@ -3463,11 +3506,29 @@
         "loadError": "チームを読み込めませんでした。"
       }
     },
+    "deviceNotes": {
+      "title": "このデバイス",
+      "info": "これらのノートはどのアカウントにも割り当てられていません。ノートを残して編集するには移動してください。",
+      "infoLabel": "このデバイス上のノートについて",
+      "moveNote": "自分のプライベートに移動",
+      "moveFolder": "フォルダーを自分のプライベートに移動",
+      "moveAll": "すべて自分のプライベートに移動",
+      "moveAllTo": "すべてフォルダに移動",
+      "moved": "プライベートに移動しました",
+      "movedCount_one": "{{count}} 件のノートをプライベートに移動しました",
+      "movedCount_other": "{{count}} 件のノートをプライベートに移動しました",
+      "moveFailed": "このノートを移動できませんでした",
+      "moveFolderFailed": "これらのノートを移動できませんでした",
+      "banner": "このノートはまだアカウントに割り当てられていません。",
+      "notesHeading": "ノート",
+      "summaryHeading": "AI要約",
+      "transcriptHeading": "文字起こし"
+    },
     "structureIntro": {
       "title": "ノートの保存場所",
       "description": "OpenWhispr は個人的な考えと共同作業を分け、適切な人だけがノートを見られるようにします。",
       "personal": {
-        "title": "個人スペース",
+        "title": "プライベート",
         "description": "ここのフォルダーとノートは自分だけが見ることができます。"
       },
       "workspace": {
@@ -3539,6 +3600,117 @@
         "taskList": "チェックリスト",
         "blockquote": "引用",
         "table": "表を挿入"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "基本",
+          "blocks": "ブロック",
+          "style": "スタイル",
+          "tools": "ツール"
+        },
+        "slash": {
+          "heading": "見出し {{level}}",
+          "bulletList": "箇条書き",
+          "orderedList": "番号付きリスト",
+          "taskList": "チェックボックスのタスク",
+          "quote": "引用",
+          "divider": "区切り線",
+          "table": "表",
+          "codeBlock": "コードブロック",
+          "codeHint": "シンタックスカラー",
+          "noteLink": "ノートへのリンク",
+          "noteLinkHint": "または [[ と入力",
+          "toggle": "折りたたみ",
+          "callout": "コールアウト: {{type}}",
+          "toc": "目次",
+          "mathBlock": "数式ブロック",
+          "inlineMath": "インライン数式",
+          "inlineMathHint": "または $$x^2$$ と入力",
+          "emoji": "絵文字",
+          "emojiHint": "または :smile: と入力",
+          "highlight": "ハイライト",
+          "subscript": "下付き",
+          "superscript": "上付き",
+          "color": "文字色: {{name}}",
+          "font": "フォント: {{name}}",
+          "ruby": "ルビ",
+          "rubyHint": "文字の上に読みを表示",
+          "align": "配置: {{dir}}",
+          "find": "検索と置換",
+          "invisible": "不可視文字の表示/非表示"
+        },
+        "callout": {
+          "note": "メモ",
+          "tip": "ヒント",
+          "important": "重要",
+          "warning": "警告",
+          "caution": "注意"
+        },
+        "colors": {
+          "default": "デフォルト",
+          "red": "赤",
+          "orange": "オレンジ",
+          "yellow": "黄",
+          "green": "緑",
+          "blue": "青",
+          "purple": "紫",
+          "gray": "グレー"
+        },
+        "fonts": {
+          "default": "デフォルト",
+          "serif": "明朝体",
+          "monospace": "等幅"
+        },
+        "align": {
+          "left": "左",
+          "center": "中央",
+          "right": "右",
+          "justify": "両端揃え"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX（例: \\sum_{i=1}^n x_i）",
+          "latexInline": "LaTeX（例: x^2）",
+          "emoji": "絵文字名（例: rocket）",
+          "reading": "読み（例: かんじ）",
+          "textReading": "文字|読み（例: 漢字|かんじ）",
+          "apply": "Enter で適用 · Esc でキャンセル",
+          "mathEdit": "Enter で保存 · Esc でキャンセル · 空にすると削除"
+        },
+        "toolbar": {
+          "highlight": "ハイライト",
+          "subscript": "下付き",
+          "superscript": "上付き",
+          "color": "文字色",
+          "font": "フォント",
+          "alignment": "配置",
+          "ruby": "ルビ（文字の上に読み）"
+        },
+        "find": {
+          "find": "検索",
+          "replace": "置換",
+          "all": "すべて",
+          "previous": "前へ",
+          "next": "次へ",
+          "matchCase": "大文字と小文字を区別",
+          "close": "閉じる"
+        },
+        "count": "単語: {{words}} · 文字: {{chars}}",
+        "link": {
+          "header": "ノートへのリンク",
+          "empty": "ノートのタイトルを入力…",
+          "create": "「{{title}}」へのリンク（ノートはまだありません）",
+          "open": "「{{title}}」を開く",
+          "missing": "「{{title}}」というノートはありません"
+        },
+        "backlinks": {
+          "label": "リンク元",
+          "more": "ほか {{count}} 件",
+          "untitled": "無題"
+        },
+        "toc": {
+          "title": "目次",
+          "empty": "見出しを追加すると目次が作成されます。"
+        }
       }
     },
     "participants": {
@@ -3719,7 +3891,9 @@
       "addExisting": "既存を追加",
       "addCount": "{{count}}件のノートを追加",
       "noResults": "一致するノートがありません",
-      "noNotesAvailable": "他のノートはありません"
+      "noNotesAvailable": "他のノートはありません",
+      "notAdded_one": "{{count}} 件のノートを追加できませんでした",
+      "notAdded_other": "{{count}} 件のノートを追加できませんでした"
     },
     "folders": {
       "defaults": {
@@ -4174,7 +4348,6 @@
       },
       "locked": {
         "noWorkspace": "共有辞書は Business プランに含まれています。チームの専門用語、製品名、略語を全員と共有できます。",
-        "chooseWorkspace": "現在は「個人」です。共有単語を使うにはワークスペースに切り替えてください。",
         "upgradeAdmin": "共有辞書は Business プランに含まれています。{{workspace}} をアップグレードすると、全員が同じ単語を使えます。",
         "upgradeMember": "共有辞書は Business プランに含まれています。{{workspace}} のアップグレードを管理者に依頼してください。",
         "paused_one": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。Business にアップグレードすると、再び音声入力で使えます。",
@@ -4698,12 +4871,24 @@
       "request_accessStatus": "アクセスを依頼しています...",
       "look_at_screenName": "画面を見る",
       "look_at_screenStatus": "画面を確認しています...",
-      "look_at_screenSuccess": "画面を読み取りました。",
-      "look_at_screenFailed": "画面を読み取れませんでした。",
       "request_api_keyName": "API キー",
       "request_api_keyStatus": "API キーを依頼しています...",
       "open_settingsName": "設定",
-      "open_settingsStatus": "設定を案内しています..."
+      "open_settingsStatus": "設定を案内しています...",
+      "salesforce_search_recordsName": "Salesforceを検索",
+      "salesforce_search_recordsStatus": "Salesforceを検索中…",
+      "salesforce_get_recordName": "Salesforceレコード",
+      "salesforce_get_recordStatus": "Salesforceレコードを読み取り中…",
+      "salesforce_describe_fieldsName": "商談項目",
+      "salesforce_describe_fieldsStatus": "商談項目を読み取り中…",
+      "salesforce_get_briefingName": "顧客の概要",
+      "salesforce_get_briefingStatus": "顧客の概要を作成中…",
+      "salesforce_export_conversationName": "Salesforceの活動",
+      "salesforce_export_conversationStatus": "Salesforceの活動を準備中…",
+      "salesforce_update_fieldsName": "Salesforceの項目更新",
+      "salesforce_update_fieldsStatus": "Salesforceの項目更新を準備中…",
+      "salesforce_present_briefingName": "概要の要点",
+      "salesforce_present_briefingStatus": "概要の根拠を選んでいます…"
     },
     "turn": {
       "reasoning": "推論",
@@ -4740,7 +4925,8 @@
           "slack": "代わりに Slack へメッセージを投稿できます。",
           "linear": "Linear の課題を検索・作成できます。",
           "github": "GitHub の Issue を検索・作成できます。",
-          "calendar": "空き時間を確認して、候補の時間を提案できます。"
+          "calendar": "空き時間を確認して、候補の時間を提案できます。",
+          "salesforce": "Salesforce のレコードを読み取り、確認済みの会議メモを保存できます。"
         }
       },
       "access": {
@@ -4962,7 +5148,9 @@
         "default": "{{destination}} に送信",
         "email": "{{destination}} 宛てのメール",
         "issue": "{{destination}} に Issue を作成",
-        "comment": "{{destination}} にコメント"
+        "comment": "{{destination}} にコメント",
+        "salesforceActivity": "会話を{{destination}}に保存",
+        "salesforceFields": "{{destination}}の商談項目を確認"
       },
       "identity": "{{account}} として",
       "identityWithWorkspace": "{{workspace}} の {{account}} として",
@@ -5053,6 +5241,31 @@
           "refused": "Linearがリクエストを拒否しました。何も送信されていません。",
           "unknown_action": "OpenWhisprはLinearでその操作を行えません。何も送信されていません。",
           "generic": "問題が発生しました。Linearには何も送信されていません。"
+        },
+        "salesforce": {
+          "reconnect_needed": "設定でSalesforceを再接続する必要があります。",
+          "connection_changed": "送信前にSalesforceの接続が変わったため、何も送信されませんでした。",
+          "credential_save_failed": "このコンピューターにSalesforceのログイン情報を保存できませんでした。何も送信されていません。もう一度お試しください。",
+          "network": "Salesforceに接続できませんでした。何も送信されていません。",
+          "rate_limited": "Salesforceが混み合っています。しばらくしてからもう一度お試しください。",
+          "forbidden": "お使いのSalesforceアカウントにはその操作が許可されていません。何も送信されていません。",
+          "invalid_input": "Salesforceはこの内容を受け付けませんでした。何も送信されていません。",
+          "too_long": "Salesforceには長すぎます。何も送信されていません。",
+          "refused": "Salesforceがリクエストを拒否しました。何も送信されていません。",
+          "unknown_action": "OpenWhisprはSalesforceでその操作を行えません。何も送信されていません。",
+          "generic": "問題が発生しました。Salesforceには何も送信されていません。",
+          "stale_record": "確認後にSalesforceのデータが変更されました。更新して再確認してください。",
+          "source_unavailable": "元のノートが見つからないか、アクセスできません。",
+          "export_required": "項目を更新する前に、この商談に活動を保存してください。",
+          "duplicate_operation": "このエクスポートはこの確認の後に再度保存されたか、保存がまだ進行中です。何も送信されていません。確認をやり直してください。",
+          "invalid_field": "編集可能な商談のカスタムテキスト項目を最大3つ選択してください。",
+          "storage_unavailable": "ローカルのエクスポート履歴を利用できません。新しい書き込みは開始されていません。",
+          "task_status_unavailable": "Salesforceに利用可能な完了済みタスクの状況がありません。Salesforce管理者にお問い合わせください。",
+          "not_found": "このSalesforceレコードは存在しないか、アクセスできません。何も送信されていません。",
+          "invalid_reference": "Salesforceはこの内容を受け付けませんでした。何も送信されていません。",
+          "no_fields_selected": "項目を1つ以上選択するか、キャンセルしてください。",
+          "record_locked": "このSalesforceレコードは承認プロセスなどによってロックされています。何も送信されていません。",
+          "validation_failed": "Salesforceの入力規則、重複ルール、または必須項目によってブロックされました。Salesforceでレコードを確認してください。何も送信されていません。"
         }
       },
       "email": {
@@ -5081,11 +5294,14 @@
       "openIn": {
         "github": "GitHubで開く",
         "gmail": "Gmailで開く",
-        "linear": "Linearで開く"
+        "linear": "Linearで開く",
+        "salesforce": "Salesforceで開く"
       },
       "sendLabel": {
         "issue": "Issue を作成",
-        "comment": "コメント"
+        "comment": "コメント",
+        "salesforceActivity": "活動を保存",
+        "salesforceFields": "項目を保存"
       },
       "issue": {
         "created": "{{result}} を作成しました。",
@@ -5128,7 +5344,26 @@
       "identityChanged": "{{account}} として送信されます。送信するには「送信」を押してください。",
       "connectToSend": "送信するには {{name}} を接続してください",
       "edit": "編集",
-      "doneEditing": "編集完了"
+      "doneEditing": "編集完了",
+      "salesforce": {
+        "include": "{{field}}を含める",
+        "omitted": "除外 — この項目は変更されません",
+        "before": "現在の値",
+        "after": "変更後の値",
+        "empty": "空欄",
+        "limit": "{{count}} / {{max}}文字",
+        "noneSelected": "項目を1つ以上選択するか、キャンセルしてください。",
+        "tooLong": "選択した項目が文字数制限を超えています。",
+        "salesforceActivity": {
+          "sent": "活動を{{destination}}に保存しました。",
+          "unknown": "変更を確認できませんでした。再試行する前にSalesforceで{{destination}}を確認してください。"
+        },
+        "salesforceFields": {
+          "sent": "{{destination}}の項目を保存しました。",
+          "unknown": "変更を確認できませんでした。再試行する前にSalesforceで{{destination}}を確認してください。"
+        },
+        "savedLabel": "保存済み"
+      }
     },
     "policyOff": "組織によってコネクタが無効にされています。",
     "email": {
@@ -5304,7 +5539,9 @@
         "slack_send_message": "{{destination}} 宛てのメッセージ",
         "gmail_send": "{{destination}} 宛てのメール",
         "linear_create_issue": "{{destination}} の新しいIssue",
-        "linear_comment": "{{destination}} へのコメント"
+        "linear_comment": "{{destination}} へのコメント",
+        "salesforce_export_conversation": "会話を{{destination}}に保存",
+        "salesforce_update_fields": "{{destination}}の商談項目を確認"
       },
       "unlabeledActions": {
         "email_draft": "メール下書き",
@@ -5313,7 +5550,9 @@
         "slack_send_message": "Slackメッセージ",
         "gmail_send": "Gmailのメール",
         "linear_create_issue": "LinearのIssue",
-        "linear_comment": "Linearのコメント"
+        "linear_comment": "Linearのコメント",
+        "salesforce_export_conversation": "Salesforceの活動",
+        "salesforce_update_fields": "Salesforceの項目更新"
       },
       "states": {
         "pending": "待機中",
@@ -5415,6 +5654,31 @@
           "refused": "Linearがリクエストを拒否しました。",
           "unknown_action": "Linearでは利用できません。",
           "generic": "Linearでうまくいきませんでした。"
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforceを再接続する必要があります。",
+          "connection_changed": "Salesforceの接続が変わりました。何も送信されていません。",
+          "credential_save_failed": "このコンピューターにSalesforceのログイン情報を保存できませんでした。",
+          "network": "Salesforceに接続できませんでした。",
+          "rate_limited": "Salesforceが混み合っています。",
+          "forbidden": "Salesforceで許可されていません。",
+          "invalid_input": "Salesforceが受け付けませんでした。",
+          "too_long": "Salesforceには長すぎます。",
+          "refused": "Salesforceがリクエストを拒否しました。",
+          "unknown_action": "Salesforceでは利用できません。",
+          "generic": "Salesforceでうまくいきませんでした。",
+          "stale_record": "確認後にSalesforceのデータが変更されました。更新して再確認してください。",
+          "source_unavailable": "元のノートが見つからないか、アクセスできません。",
+          "export_required": "項目を更新する前に、この商談に活動を保存してください。",
+          "duplicate_operation": "このエクスポートはこの確認の後に再度保存されたか、保存がまだ進行中です。何も送信されていません。",
+          "invalid_field": "編集可能な商談のカスタムテキスト項目を最大3つ選択してください。",
+          "storage_unavailable": "ローカルのエクスポート履歴を利用できません。新しい書き込みは開始されていません。",
+          "task_status_unavailable": "Salesforceに利用可能な完了済みタスクの状況がありません。Salesforce管理者にお問い合わせください。",
+          "not_found": "Salesforceで見つかりません。",
+          "invalid_reference": "Salesforceが受け付けませんでした。",
+          "no_fields_selected": "項目を1つ以上選択するか、キャンセルしてください。",
+          "record_locked": "Salesforceレコードはロックされています。",
+          "validation_failed": "Salesforceのルールまたは必須項目でブロックされました。"
         }
       },
       "unknownSent": {
@@ -5427,7 +5691,120 @@
     },
     "beta": "ベータ",
     "upsell": "コネクタは有料プランに含まれています。アップグレードすると、アシスタントがあなたのツールで操作できるようになります。",
-    "locked": "有料プランに含まれます"
+    "locked": "有料プランに含まれます",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "確認済みの会話をエクスポートし、選択した顧客の概要を作成します。ノートの関連付けはこのデバイスにのみ保存されます。",
+      "connect": "接続",
+      "reconnect": "再接続",
+      "disconnect": "接続を解除",
+      "connecting": "ブラウザで接続を完了してください…",
+      "connectedAs": "{{workspace}} の {{account}} として接続済み",
+      "needsReconnect": "Salesforceを再接続する必要があります。",
+      "errors": {
+        "connect_failed": "Salesforceを接続できませんでした。もう一度お試しください。",
+        "disconnect_failed": "Salesforceの接続を解除できませんでした。もう一度お試しください。",
+        "oauth_denied": "アクセスが許可されなかったため、Salesforceは接続されませんでした。",
+        "oauth_timeout": "接続に時間がかかりすぎました。もう一度お試しください。",
+        "oauth_state_mismatch": "そのサインインリンクは期限切れでした。もう一度お試しください。",
+        "ports_busy": "OpenWhisprが接続に必要なポートを別のアプリが使用しています。そのアプリを閉じてから、もう一度お試しください。",
+        "token_exchange_failed": "Salesforceの接続が完了しませんでした。もう一度お試しください。",
+        "not_configured": "このビルドではSalesforceを利用できません。",
+        "connection_changed": "接続中にアカウントまたはSalesforceの接続が変わりました。もう一度お試しください。",
+        "signed_out": "Salesforceを接続するにはOpenWhisprにサインインしてください。",
+        "policy_blocked": "組織によってコネクタが無効にされています。",
+        "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
+        "permission_not_granted": "すべての権限が許可されなかったため、Salesforceは接続されませんでした。もう一度接続し、すべて許可してください。",
+        "invalid_login_domain": "test.salesforce.com、または yourcompany.my.salesforce.com のような会社の My Domain を入力してください。"
+      },
+      "browser": {
+        "connectedTitle": "Salesforceが接続されました",
+        "connectedBody": "このタブを閉じてOpenWhisprに戻ることができます。",
+        "failedTitle": "Salesforceは接続されませんでした",
+        "failedBody": "OpenWhisprに戻ってもう一度お試しください。"
+      },
+      "notes": {
+        "updateExisting": "保存済みの活動を更新します。別のタスクは作成されません。",
+        "earlierAttemptUncertain": "以前の試行ですでにSalesforceに保存されている可能性があります。もう一度送信する前に、Salesforceでレコードを確認してください。",
+        "replacesMissing": "以前保存した活動はSalesforceのこのレコードにもうないか、表示できなくなったため、新しい活動が作成されます。",
+        "editedInSalesforce": "この活動は、OpenWhisprが保存した後にSalesforceで編集されました。送信するとその編集は置き換えられます。",
+        "sourceNote": "メモ「{{title}}」から。",
+        "sourceNoteUntitled": "タイトルのないメモから。"
+      },
+      "provenance": "出典: OpenWhispr — {{title}}{{date}}",
+      "briefing": {
+        "untitledRecord": "選択したSalesforceレコード",
+        "retrieved": "取得日時: {{time}}",
+        "crmFacts": "現在のCRM情報",
+        "fields": {
+          "Name": "名前",
+          "PersonName": "氏名",
+          "StageName": "フェーズ",
+          "CloseDate": "完了予定日",
+          "Amount": "金額",
+          "CurrencyIsoCode": "通貨",
+          "NextStep": "次のステップ",
+          "OwnerId": "所有者",
+          "AccountId": "取引先",
+          "Type": "種別",
+          "Industry": "業種",
+          "Website": "Web サイト",
+          "Phone": "電話",
+          "FirstName": "名",
+          "LastName": "姓",
+          "Email": "メール",
+          "Title": "役職",
+          "Company": "会社名",
+          "Status": "状況"
+        },
+        "notReturned": "取得されていません",
+        "notRecorded": "未入力",
+        "linkedNameUnavailable": "リンクあり（名前は取得できません）",
+        "gaps": "不足情報と顧客の身元",
+        "identityNotVerified": "エクスポートの関連付けでは顧客の身元は確認されません。メモはユーザーが選んだレコードに関連付けられたもので、顧客名や取引先の関係は個別に照合されていません。",
+        "missingFieldsNote": "CRMの項目が空欄または取得されていなくても、予算承認、約束、会議メモとの一致を示すものではありません。",
+        "unavailableNotes": "現在のワークスペースで利用できない関連メモ: {{count}} 件。",
+        "partial": "対象範囲は一部です。メモの数、元のテキスト、文字起こし、またはCRMの結果が制限されました。これらの抜粋にないことが、会議で話されなかったとは限りません。",
+        "crmOnly": "アクセスできる会議の内容は取得されませんでした。この概要はCRMの情報のみに基づいています。",
+        "notPrepared": "会議の要点はまとめられていません。利用できる元のメモを下に示しています。会議についての結論は導いていません。",
+        "findings": "会議の要点",
+        "findingsExplainer": "元の抜粋を下に示します。ステータスはアシスタントによる分類です。「確認済み」はメモに記載があるという意味で、個別に検証されたものではありません。担当者と期限は各抜粋に書かれているもののみです。",
+        "categories": {
+          "takeaway": "要点",
+          "decision": "決定事項",
+          "commitment": "約束",
+          "proposal": "提案",
+          "risk": "リスク",
+          "question": "未解決の質問"
+        },
+        "status": {
+          "confirmed": "確認済み",
+          "proposed": "提案中",
+          "unknown": "不明"
+        },
+        "conflict": "矛盾の可能性 — 未解決",
+        "crmConflictEntry": "Salesforceの{{label}}: {{value}}",
+        "sources": "出典",
+        "noteCreated": "メモ作成: {{time}}。",
+        "lastEdited": "最終編集: {{time}}。",
+        "addedForBriefing": "この概要用に追加。",
+        "exported": "エクスポート: {{time}}。",
+        "savedActivity": "保存済みのSalesforce活動",
+        "sourcesExplainer": "作成日時は会議の日付ではありません。保存済みのSalesforce活動にはエクスポートした要約が入っています。メモはエクスポート後に変更されている可能性があります。",
+        "sections": {
+          "personalNotes": "個人メモ",
+          "summary": "保存済みの AI 要約",
+          "transcript": "文字起こし {{start}}–{{end}} 文字目"
+        },
+        "prepared": "Salesforceの顧客の概要を作成しました"
+      },
+      "loginDomain": {
+        "toggle": "Sandbox または会社のドメインを使う",
+        "label": "Salesforceのログインドメイン",
+        "placeholder": "test.salesforce.com または yourcompany.my.salesforce.com",
+        "hint": "空欄のままにすると本番組織にログインします。"
+      }
+    }
   },
   "skills": {
     "pane": {
@@ -5473,6 +5850,7 @@
       "neverRun": "OpenWhisprはスクリプトを実行しません",
       "uninstall": "アンインストール",
       "uninstallConfirm": "{{name}}をアンインストールしますか？このコンピューターから削除されます。",
+      "uninstallConfirmSynced": "{{name}}をアンインストールしますか？このコンピューターとほかのデバイスから削除されます。",
       "problem": "このスキルは修正するまで使えません: {{reason}}",
       "tryNow": "今すぐ試す"
     },
@@ -5498,6 +5876,7 @@
     "manage": {
       "title": "スキルを管理",
       "description": "スキルのオン/オフを切り替えたり、使わないスキルを削除したりできます。スキルはすべてこのコンピューターに保存されます。",
+      "descriptionBackedUp": "スキルのオン/オフを切り替えたり、使わないスキルを削除したりできます。スキルはすべてこのコンピューターに保存され、クラウドバックアップにも保存されます。",
       "noMatches": "「{{query}}」に一致するスキルはありません。",
       "none": "スキルはまだありません。"
     },
@@ -5648,6 +6027,9 @@
       "pasteNote": "Enter キーを押さずに貼り付けるので、実行するタイミングは自分で決められます。",
       "pasted": "貼り付けました",
       "pasteFailed": "貼り付けできませんでした。テキストはクリップボードにあります。"
+    },
+    "sync": {
+      "tooLarge": "大きすぎるためバックアップできません"
     }
   },
   "calendar": {
@@ -5886,10 +6268,13 @@
     "missingAudio": "[音声欠落 {{from}}-{{to}}]"
   },
   "workspaces": {
+    "defaultName": "{{name}}のワークスペース",
+    "defaultNameFallback": "マイワークスペース",
     "switcher": {
       "workspaces": "ワークスペース",
       "add": "ワークスペースを追加",
-      "invitePeople": "メンバーを招待"
+      "invitePeople": "メンバーを招待",
+      "unavailable": "ワークスペースは現在利用できません。"
     },
     "create": {
       "title": "ワークスペースを作成",
@@ -6019,16 +6404,17 @@
       "leave": {
         "title": "{{name}} から退出しますか？",
         "body": "このワークスペースと、そのチームおよび Teamspace にアクセスできなくなります。ワークスペースのオーナーまたは管理者があなたを再び招待できます。",
+        "privateNotes": "このワークスペースのプライベートノートは、{{workspace}} に移動されます。",
         "failed": "{{name}} から退出できませんでした。接続を確認して、もう一度お試しください。"
       },
       "left": {
         "title": "{{name}} から退出しました"
       },
-      "chooseAnother": "続行するには別のワークスペースを選択してください。",
-      "chooseWorkspace": "ワークスペースを選択",
+      "nowIn": "現在のワークスペースは {{workspace}} です。",
       "delete": {
         "title": "{{name}} を削除しますか？",
-        "body": "ワークスペースと、そのノート、ファイル、チーム、Teamspace がすべてのユーザーに対して完全に削除されます。この操作は元に戻せません。"
+        "body": "ワークスペースと、そのノート、ファイル、チーム、Teamspace がすべてのユーザーに対して完全に削除されます。この操作は元に戻せません。",
+        "privateNotes": "このワークスペースのプライベートノートは、{{workspace}} に移動されます。"
       },
       "deleting": {
         "title": "{{name}} を削除しています…",
@@ -6247,7 +6633,9 @@
       "timeout": "サーバーからの応答に時間がかかりすぎました。",
       "unreachable": "サーバーに接続できませんでした。サーバーが起動しているか確認してください。",
       "noResponse": "サーバーから応答がありませんでした。APIキーとサーバーが起動しているかを確認してください。",
-      "unknown": "サーバーから予期しないエラーが返されました。"
+      "unknown": "サーバーから予期しないエラーが返されました。",
+      "invalidHeaders": "サーバー用のカスタムヘッダーが無効です。",
+      "redirected": "サーバーがリクエストをリダイレクトしました。リダイレクト先のアドレスを入力してください。"
     },
     "openSettings": "設定を開く",
     "copyDetails": "詳細をコピー",
@@ -6340,6 +6728,7 @@
       "saveChanges": "変更を保存",
       "saved": "トーンとスタイルを保存しました",
       "cleanupOff": "テキスト補正がオフのため、これらのトーンは音声入力に反映されません。アシスタントとチャットでは引き続き使われます。",
+      "customPrompt": "テキスト補正にカスタムプロンプトを使用しているため、これらのトーンは音声入力に反映されません。アシスタントとチャットでは引き続き使われます。",
       "turnOnCleanup": "テキスト補正をオンにする",
       "enabled": "トーンとボイスを有効化",
       "enabledDescription": "テキスト補正、アシスタント、チャットがアプリの種類ごとにあなたのトーンを使います。オフのときは標準のトーンになります。"
@@ -6440,5 +6829,16 @@
       "bootstrapMismatch": "ブートストラップファイルがあなたのアカウント、このワークスペース、またはその設定済み認証情報と一致しません。",
       "testLinkOtherWorkspace": "このテストリンクは別のワークスペース用です。そのワークスペースに切り替えてから、もう一度リンクを開いてください。"
     }
+  },
+  "affiliate": {
+    "remove": "クリエイターリンクを削除",
+    "haveLink": "クリエイターのリンクをお持ちですか？",
+    "label": "クリエイターのリンク（任意）",
+    "placeholder": "クリエイターのリンクを貼り付け",
+    "saved": "クリエイターのリンクを保存しました。",
+    "checking": "リンクを確認中…",
+    "unavailable": "リンクを確認できませんでした。もう一度お試しいただくか、入力欄を空にして続行してください。",
+    "privacy": "現在のトラッキング設定ではクリエイターのリンクを利用できません。入力欄を空にして続行してください。",
+    "review": "リンクを審査用に保存しました。"
   }
 }

@@ -122,7 +122,12 @@ export function accountScopeHasMandatoryReconciliation(): boolean {
 }
 
 export function markAccountScopePurgeRequired(): void {
-  storage()?.setItem(ACCOUNT_SCOPE_PURGE_REQUIRED_KEY, "true");
+  const target = storage();
+  // Every useAuth pass marks the purge again while the purge waits (on the sync lock, say), and
+  // a notify reruns every pass. Notifying for a marker already set made each rerun mark, notify
+  // and ask main for the scope again, a loop that lasted until the purge finished.
+  if (target?.getItem(ACCOUNT_SCOPE_PURGE_REQUIRED_KEY) === "true") return;
+  target?.setItem(ACCOUNT_SCOPE_PURGE_REQUIRED_KEY, "true");
   notify();
 }
 
@@ -241,6 +246,35 @@ export function reconcileAccountScope(
     activeReconcile = null;
   });
   return activeReconcile;
+}
+
+export interface AccountScopeResult {
+  success: boolean;
+  code?: string;
+  error?: string;
+}
+
+let pendingScopeRequest: { key: string; promise: Promise<AccountScopeResult | undefined> } | null =
+  null;
+
+/**
+ * Asks main to scope this account and credential generation. Every useAuth consumer in a window
+ * runs the reconciliation effect, all on the same change, so a request for the scope already on
+ * its way to main shares that request instead of sending its own.
+ */
+export function requestActiveAccountScope(
+  userId: string | null,
+  generation: number
+): Promise<AccountScopeResult | undefined> {
+  const key = JSON.stringify([userId, generation]);
+  if (pendingScopeRequest?.key === key) return pendingScopeRequest.promise;
+  const promise: Promise<AccountScopeResult | undefined> = Promise.resolve(
+    window.electronAPI?.setActiveAccountScope?.(userId, generation)
+  ).finally(() => {
+    if (pendingScopeRequest?.promise === promise) pendingScopeRequest = null;
+  });
+  pendingScopeRequest = { key, promise };
+  return promise;
 }
 
 export function accountScopeRetryDelay(attempt: number): number {

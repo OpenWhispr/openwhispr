@@ -119,6 +119,7 @@
         "macos-globe-listener",
         "macos-fast-paste",
         "macos-mic-listener",
+        "macos-managed-policy",
         "macos-calendar-listener",
         "macos-text-monitor",
         "macos-window-bounds",
