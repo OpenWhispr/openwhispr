@@ -11,15 +11,13 @@ import {
 import { Text } from '@/components/ui/Text';
 import { safeHaptics } from '@/lib/utils';
 import { gloss, glossPressed, home, type } from '../home/kit';
-import { useReduceMotion } from '../settings/kit';
+import { showToast, useReduceMotion } from '../settings/kit';
 import { edgeCard } from '../settings/look';
 import { Field } from './Field';
 import { learnCorrections } from './learned';
 import { showLearnedToast } from './learnedToast';
 import { fixWordInTranscript } from './transcriptFix';
-import { useDictionaryT } from './strings';
-import { showToast } from '../settings/kit';
-import { dictionaryT } from './strings';
+import { dictionaryT, useDictionaryT } from './strings';
 
 export type FixTarget = {
   word: string;
