@@ -7396,47 +7396,47 @@ class IPCHandlers {
       return this.environmentManager.saveAllKeysToEnvFile();
     });
 
+    let lastDictationSpeechEngine;
     ipcMain.handle("sync-startup-preferences", async (event, prefs) => {
       const setVars = {};
       const clearVars = [];
+      let speechEngine = null;
 
       if (prefs.useLocalWhisper && prefs.model) {
-        // Local mode with model selected - set provider and model for pre-warming
         setVars.LOCAL_TRANSCRIPTION_PROVIDER = prefs.localTranscriptionProvider;
         if (prefs.language) setVars.DICTATION_LANGUAGE = prefs.language;
         if (isSherpaLocalProvider(prefs.localTranscriptionProvider)) {
+          speechEngine = "parakeet";
           setVars.PARAKEET_MODEL = prefs.model;
           clearVars.push("LOCAL_WHISPER_MODEL");
-          this.whisperManager.stopServer().catch((err) => {
-            debugLogger.error("Failed to stop whisper-server on provider switch", {
-              error: err.message,
-            });
-          });
         } else {
+          speechEngine = "whisper";
           setVars.LOCAL_WHISPER_MODEL = prefs.model;
           clearVars.push("PARAKEET_MODEL");
-          this.parakeetManager.stopServer().catch((err) => {
-            debugLogger.error("Failed to stop parakeet-server on provider switch", {
+        }
+      } else {
+        clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
+        if (!prefs.useLocalWhisper) speechEngine = "cloud";
+      }
+
+      // All windows resend these preferences on LLM route changes. A meeting
+      // can be decoding on either speech server while the dictation route stays put.
+      if (speechEngine !== lastDictationSpeechEngine) {
+        lastDictationSpeechEngine = speechEngine;
+        if (speechEngine === "cloud" || speechEngine === "parakeet") {
+          this.whisperManager.stopServer().catch((err) => {
+            debugLogger.error("Failed to stop whisper-server on dictation switch", {
               error: err.message,
             });
           });
         }
-      } else if (prefs.useLocalWhisper) {
-        // Local mode enabled but no model selected - clear pre-warming vars
-        clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
-      } else {
-        // Cloud mode - stop local servers to free RAM
-        clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
-        this.whisperManager.stopServer().catch((err) => {
-          debugLogger.error("Failed to stop whisper-server on cloud switch", {
-            error: err.message,
+        if (speechEngine === "cloud" || speechEngine === "whisper") {
+          this.parakeetManager.stopServer().catch((err) => {
+            debugLogger.error("Failed to stop parakeet-server on dictation switch", {
+              error: err.message,
+            });
           });
-        });
-        this.parakeetManager.stopServer().catch((err) => {
-          debugLogger.error("Failed to stop parakeet-server on cloud switch", {
-            error: err.message,
-          });
-        });
+        }
       }
 
       // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL clears once
