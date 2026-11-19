@@ -98,6 +98,8 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifying: 'Verificando tu correo…',
     verifyExpiredBody:
       'Los enlaces de verificación funcionan una vez, durante 24 horas. Pide uno nuevo y abre el correo más reciente.',
+    verifyOfflineTitle: 'No se pudo verificar tu correo',
+    tryAgain: 'Reintentar',
   },
   fr: {
     back: 'Retour',
@@ -198,6 +200,8 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifying: 'Vérification de votre e-mail…',
     verifyExpiredBody:
       'Les liens de vérification ne servent qu’une fois, pendant 24 heures. Demandez-en un nouveau et ouvrez l’e-mail le plus récent.',
+    verifyOfflineTitle: 'Impossible de vérifier votre e-mail',
+    tryAgain: 'Réessayer',
   },
   de: {
     back: 'Zurück',
@@ -297,6 +301,8 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifying: 'Deine E-Mail wird bestätigt…',
     verifyExpiredBody:
       'Bestätigungslinks funktionieren einmal und 24 Stunden lang. Fordere einen neuen an und öffne die neueste E-Mail.',
+    verifyOfflineTitle: 'E-Mail konnte nicht bestätigt werden',
+    tryAgain: 'Erneut versuchen',
   },
   pt: {
     back: 'Voltar',
@@ -393,6 +399,8 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifying: 'Confirmando seu e-mail…',
     verifyExpiredBody:
       'Os links de confirmação funcionam uma vez, por 24 horas. Peça um novo e abra o e-mail mais recente.',
+    verifyOfflineTitle: 'Não foi possível confirmar seu e-mail',
+    tryAgain: 'Tentar de novo',
   },
   it: {
     back: 'Indietro',
@@ -490,6 +498,8 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifying: 'Verifica dell’email…',
     verifyExpiredBody:
       'I link di verifica funzionano una volta, per 24 ore. Chiedine uno nuovo e apri l’email più recente.',
+    verifyOfflineTitle: 'Impossibile verificare l’email',
+    tryAgain: 'Riprova',
   },
   ru: {
     back: 'Назад',
@@ -585,6 +595,8 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifying: 'Подтверждаем почту…',
     verifyExpiredBody:
       'Ссылка подтверждения работает один раз и 24 часа. Запросите новую и откройте самое новое письмо.',
+    verifyOfflineTitle: 'Не удалось подтвердить почту',
+    tryAgain: 'Повторить',
   },
   'zh-CN': {
     back: '返回',
@@ -673,6 +685,8 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifiedSignIn: '你的邮箱已验证。请登录以继续。',
     verifying: '正在验证你的邮箱…',
     verifyExpiredBody: '验证链接只能用一次，24 小时内有效。请重新发送，并打开最新的邮件。',
+    verifyOfflineTitle: '无法验证你的邮箱',
+    tryAgain: '重试',
   },
   'zh-TW': {
     back: '返回',
@@ -761,6 +775,8 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifiedSignIn: '你的電子郵件已驗證。請登入以繼續。',
     verifying: '正在驗證你的電子郵件…',
     verifyExpiredBody: '驗證連結只能用一次，24 小時內有效。請重新傳送，並開啟最新的郵件。',
+    verifyOfflineTitle: '無法驗證你的電子郵件',
+    tryAgain: '重試',
   },
   ja: {
     back: '戻る',
@@ -855,6 +871,8 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifying: 'メールアドレスを確認しています…',
     verifyExpiredBody:
       '確認リンクは 1 回だけ、24 時間有効です。新しいリンクを送って、最新のメールを開いてください。',
+    verifyOfflineTitle: 'メールアドレスを確認できませんでした',
+    tryAgain: '再試行',
   },
   ar: {
     back: 'رجوع',
@@ -949,5 +967,7 @@ export const authTranslations: Record<string, Partial<Record<AuthKey, string>>> 
     verifying: 'جارٍ تأكيد بريدك الإلكتروني…',
     verifyExpiredBody:
       'تعمل روابط التأكيد مرة واحدة لمدة 24 ساعة. اطلب رابطًا جديدًا وافتح أحدث رسالة.',
+    verifyOfflineTitle: 'تعذّر تأكيد بريدك الإلكتروني',
+    tryAgain: 'إعادة المحاولة',
   },
 };

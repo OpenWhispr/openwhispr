@@ -365,6 +365,40 @@ describe('Android verify link screen (6.5, 6.6)', () => {
     expect(view.getByText('Resend in 1:00')).toBeTruthy();
   });
 
+  it('offers Try again, not a new link, when OpenWhispr can’t be reached', async () => {
+    mockAuth.user = signedIn;
+    mockVerifyToken.mockResolvedValueOnce(answer(429)).mockResolvedValueOnce(answer(200));
+    mockVerificationStatus.mockResolvedValue({ verified: false });
+    const view = render(
+      <VerifyLinkScreen
+        token={jwtFor('new@example.com')}
+        onContinue={jest.fn()}
+        onSignIn={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(view.getByText('Couldn’t verify your email')).toBeTruthy());
+    expect(view.queryByText('This link has expired')).toBeNull();
+    expect(view.queryByText('Send a new link')).toBeNull();
+    await act(async () => fireEvent.press(view.getByText('Try again')));
+    await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy());
+    expect(mockVerifyToken).toHaveBeenCalledTimes(2);
+    expect(mockRequestVerification).not.toHaveBeenCalled();
+  });
+
+  it('treats a dropped connection like an unreachable server', async () => {
+    mockAuth.user = signedIn;
+    mockVerifyToken.mockRejectedValue(new TypeError('Network request failed'));
+    mockVerificationStatus.mockResolvedValue(null);
+    const view = render(
+      <VerifyLinkScreen
+        token={jwtFor('new@example.com')}
+        onContinue={jest.fn()}
+        onSignIn={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(view.getByText('Couldn’t verify your email')).toBeTruthy());
+  });
+
   it('skips the expired screen for an account that is verified already', async () => {
     mockAuth.user = signedIn;
     mockVerifyToken.mockResolvedValue(answer(401));

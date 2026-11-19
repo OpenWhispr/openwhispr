@@ -94,6 +94,8 @@ export const authEnglish = {
   verifiedBody: 'You’re signed in as <b>{{email}}</b>.',
   verifiedSignIn: 'Your email is verified. Sign in to continue.',
   verifying: 'Verifying your email…',
+  verifyOfflineTitle: 'Couldn’t verify your email',
+  tryAgain: 'Try again',
   verifyExpiredBody:
     'Verification links work once, for 24 hours. Send a new one and open the newest email.',
 };

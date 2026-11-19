@@ -10,7 +10,7 @@ import { readVerified, tokenEmail, verifyEmailToken } from './emailVerification'
 import { requestVerificationEmail } from '@/lib/authClient.android';
 import { useAuthT } from './strings';
 
-type Stage = 'checking' | 'verified' | 'expired' | 'sent';
+type Stage = 'checking' | 'verified' | 'expired' | 'offline' | 'sent';
 
 /**
  * Opened by the link in "Verify your email" (openwhispr.com/android-verify-email?token=…), so
@@ -40,17 +40,22 @@ export function VerifyLinkScreen({
   const [sentTo, setSentTo] = useState('');
   const started = useRef(false);
 
+  const check = useCallback(async () => {
+    setStage('checking');
+    const outcome = token ? await verifyEmailToken(token) : 'invalid';
+    if (outcome === 'verified') return setStage('verified');
+    // A used link for an account that is verified anyway: say so rather than "expired".
+    if (signedIn && (await readVerified())) return setStage('verified');
+    // A rate limit, a server error or no connection says nothing about the link: offer to try
+    // the same link again, never a new one (which would spend the resend limit).
+    setStage(outcome === 'network' ? 'offline' : 'expired');
+  }, [signedIn, token]);
+
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    void (async () => {
-      const outcome = token ? await verifyEmailToken(token) : 'invalid';
-      if (outcome === 'verified') return setStage('verified');
-      // A used link for an account that is verified anyway: say so rather than "expired".
-      if (signedIn && (await readVerified())) return setStage('verified');
-      setStage('expired');
-    })();
-  }, [signedIn, token]);
+    void check();
+  }, [check]);
 
   // The signed-in account now counts as verified, so the sign-in screens let it go on.
   const finish = useCallback(() => {
@@ -81,6 +86,16 @@ export function VerifyLinkScreen({
           label={signedIn ? t('continue') : t('signIn')}
           onPress={signedIn ? finish : onSignIn}
         />
+      </View>
+    );
+  } else if (stage === 'offline') {
+    body = (
+      <View style={authLayout.content}>
+        <View style={authLayout.stack}>
+          <AuthTitle>{t('verifyOfflineTitle')}</AuthTitle>
+          <AuthLine text={t('networkError')} />
+        </View>
+        <WhiteButton label={t('tryAgain')} onPress={() => void check()} />
       </View>
     );
   } else if (stage === 'sent') {
