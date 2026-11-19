@@ -249,37 +249,40 @@ export function PracticeMenuScreen({
           </View>
           <View style={[s.content, { gap: 12 }]}>
             <AppCard app="gmail">
-              <TextInput
-                ref={input}
-                multiline
-                // Practice 3's result is drawn as runs, so only the new words are blue.
-                value={highlighted ? undefined : text}
-                onChangeText={(value) => {
-                  setText(value);
-                  setRuns(null);
-                }}
-                onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
-                placeholder={t('emailPlaceholder')}
-                placeholderTextColor={colors.tertiary}
-                accessibilityLabel={t('appGmail')}
-                autoFocus
-                showSoftInputOnFocus
-                // Read-only would close the keyboard; the board keeps it up while listening and writing.
-                editable={!done}
-                style={pm.input}
-              >
+              <View>
+                <TextInput
+                  ref={input}
+                  multiline
+                  value={text}
+                  onChangeText={(value) => {
+                    setText(value);
+                    setRuns(null);
+                  }}
+                  onSelectionChange={(event) => setSelection(event.nativeEvent.selection)}
+                  placeholder={t('emailPlaceholder')}
+                  placeholderTextColor={colors.tertiary}
+                  accessibilityLabel={t('appGmail')}
+                  autoFocus
+                  showSoftInputOnFocus
+                  // Read-only would close the keyboard; the board keeps it up while listening and writing.
+                  editable={!done}
+                  caretHidden={Boolean(highlighted)}
+                  style={[pm.input, highlighted && { color: 'transparent' }]}
+                />
                 {highlighted ? (
-                  <>
-                    <Text>{text.slice(0, runs.start)}</Text>
+                  // Practice 3's result: the same text laid over the field, only the new words blue.
+                  // The field stays focused underneath, so the keyboard stays up.
+                  <Text style={[pm.input, pm.overlayText]} pointerEvents="none">
+                    {text.slice(0, runs.start)}
                     {runs.runs.map((run, index) => (
                       <Text key={index} style={run.changed ? pm.changed : undefined}>
                         {run.text}
                       </Text>
                     ))}
-                    <Text>{text.slice(runs.end)}</Text>
-                  </>
+                    {text.slice(runs.end)}
+                  </Text>
                 ) : null}
-              </TextInput>
+              </View>
             </AppCard>
             {error ? (
               <Text accessibilityRole="alert" style={[s.body, { color: '#B42318' }]}>
@@ -305,8 +308,12 @@ export function PracticeMenuScreen({
               />
             ) : null}
             {phase === 'listening' || phase === 'processing' ? <SayCard quote={copy.say} /> : null}
-            <View style={pm.bubbleRow}>
-              <View style={{ flex: 1, alignItems: 'flex-end' }}>
+            <View style={pm.bubbleRow} pointerEvents="box-none">
+              <View
+                style={{ flex: 1, alignItems: 'flex-end' }}
+                // The guidance never takes a tap meant for the screen behind it.
+                pointerEvents={phase === 'pasted' ? 'box-none' : 'none'}
+              >
                 {phase === 'pasted' ? (
                   <PracticeToast label={copy.toast} onUndo={undo} />
                 ) : hint ? (
@@ -359,6 +366,7 @@ const pm = StyleSheet.create({
     textAlignVertical: 'top',
   },
   changed: { color: colors.brandMid, textDecorationLine: 'underline' },
+  overlayText: { position: 'absolute', top: 0, left: 0, right: 0 },
   overlay: { position: 'absolute', left: 16, right: 16, gap: 10 },
   bubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64 },
 });

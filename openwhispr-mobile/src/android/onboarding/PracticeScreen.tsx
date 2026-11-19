@@ -174,8 +174,11 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
           </View>
         ) : phase !== 'blank' ? (
           <View style={[pr.overlay, { bottom: anchor.overlayBottom }]} pointerEvents="box-none">
-            <View style={pr.bubbleRow}>
-              <View style={{ flex: 1 }}>{hint ? <Hint text={hint} /> : null}</View>
+            <View style={pr.bubbleRow} pointerEvents="box-none">
+              {/* "Now tap outside the box" must not catch the tap it asks for. */}
+              <View style={{ flex: 1 }} pointerEvents="none">
+                {hint ? <Hint text={hint} /> : null}
+              </View>
               <PracticeBubble
                 state={bubbleState}
                 onPress={() => {
