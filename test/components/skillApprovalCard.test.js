@@ -400,44 +400,41 @@ const UPDATE = {
 const diffRows = (container) =>
   findAll(container, (node) => typeof node.getAttribute?.("data-diff") === "string");
 
-test(
-  "the update card shows the intent, Removes, Learned from and the diff behind See exact changes",
-  async (t) => {
-    const { container, buttonLabelled } = await mountCard(t, { request: UPDATE });
+test("the update card shows the intent, Removes, Learned from and the diff behind See exact changes", async (t) => {
+  const { container, buttonLabelled } = await mountCard(t, { request: UPDATE });
 
-    const text = container.textContent;
-    for (const part of [
-      "skills.approval.updateHeader",
-      "Enterprise call playbook",
-      UPDATE.intent,
-      "skills.approval.removes",
-      UPDATE.removals[0],
-      'skills.approval.learnedFrom{"title":"Call with Acme","date":"Oct 1"}',
-    ]) {
-      assert.ok(text.includes(part), part);
-    }
-    assert.ok(!text.includes("SSO: Enterprise plan"), "the diff waits behind its toggle");
-    for (const name of ["skills.approval.update", "connectors.approval.edit", "common.skip"]) {
-      assert.ok(buttonLabelled(name), name);
-    }
-
-    await click(buttonLabelled("skills.approval.seeChanges"));
-
-    assert.deepEqual(
-      diffRows(container).map((row) => [row.getAttribute("data-diff"), label(row)]),
-      [
-        [" ", "# Objections"],
-        ["-", "-skills.approval.removed- We don't offer SSO."],
-        ["+", "+skills.approval.added- SSO: Enterprise plan."],
-        [" ", "- Data: see the trust page."],
-      ]
-    );
-    const diffPart = (node) => node.getAttribute?.("data-diff-part") === OBJECTIONS;
-    const diff = findAll(container, diffPart)[0];
-    assert.equal(diff.getAttribute("dir"), "ltr");
-    assert.match(label(diff), /^references\/objections\.md/);
+  const text = container.textContent;
+  for (const part of [
+    "skills.approval.updateHeader",
+    "Enterprise call playbook",
+    UPDATE.intent,
+    "skills.approval.removes",
+    UPDATE.removals[0],
+    'skills.approval.learnedFrom{"title":"Call with Acme","date":"Oct 1"}',
+  ]) {
+    assert.ok(text.includes(part), part);
   }
-);
+  assert.ok(!text.includes("SSO: Enterprise plan"), "the diff waits behind its toggle");
+  for (const name of ["skills.approval.update", "connectors.approval.edit", "common.skip"]) {
+    assert.ok(buttonLabelled(name), name);
+  }
+
+  await click(buttonLabelled("skills.approval.seeChanges"));
+
+  assert.deepEqual(
+    diffRows(container).map((row) => [row.getAttribute("data-diff"), label(row)]),
+    [
+      [" ", "# Objections"],
+      ["-", "-skills.approval.removed- We don't offer SSO."],
+      ["+", "+skills.approval.added- SSO: Enterprise plan."],
+      [" ", "- Data: see the trust page."],
+    ]
+  );
+  const diffPart = (node) => node.getAttribute?.("data-diff-part") === OBJECTIONS;
+  const diff = findAll(container, diffPart)[0];
+  assert.equal(diff.getAttribute("dir"), "ltr");
+  assert.match(label(diff), /^references\/objections\.md/);
+});
 
 test("a note from today reads Learned from … · Today", async (t) => {
   const today = new Date().toISOString().replace("T", " ").slice(0, 19);
@@ -640,6 +637,9 @@ async function mountSummary(t, record, { undoResult = { ok: true }, openSkill } 
 }
 
 test("a reopened chat still offers Undo on an update it saved", async (t) => {
+  const pushes = [];
+  globalThis.__skillPushes = pushes;
+  t.after(() => delete globalThis.__skillPushes);
   const { container, calls, buttonLabelled } = await mountSummary(t, UPDATED_RECORD);
 
   assert.match(container.textContent, /skills\.approval\.updateHeader/);
@@ -651,6 +651,7 @@ test("a reopened chat still offers Undo on an update it saved", async (t) => {
   assert.deepEqual(calls.undo, [["enterprise-call-playbook", "1760950800000"]]);
   assert.match(container.textContent, /skills\.approval\.undone/);
   assert.equal(buttonLabelled("skills.approval.undo"), undefined);
+  assert.deepEqual(pushes, ["syncSkillsNow"]);
 });
 
 test("an Undo made before the chat was switched away stays done", async (t) => {

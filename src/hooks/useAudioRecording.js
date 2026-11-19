@@ -33,8 +33,8 @@ import {
   shouldShowByokStreamingPreview,
 } from "../utils/transcriptionPreview";
 import { canStartDictation } from "../utils/dictationReadiness";
-import { waitForVisualFrames } from "../utils/visualFrame";
 import { recordCleanupFailure } from "../stores/cleanupFailureStore";
+import { subscribeAuthBoundary } from "../lib/authRequestContext";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -63,6 +63,23 @@ function isDictationRecordingAllowed(policyState = usePolicyStore.getState()) {
       allowsPersonalDictationCleanup
     )
   );
+}
+
+// Fetches the STT config for whoever is signed in now. An answer that arrives
+// after invalidateSttConfig (an auth change, or a FEATURE_NOT_ENABLED refusal)
+// may be out of date, so it is dropped. Resolves true when the config was
+// installed; a failed fetch is logged and resolves false.
+async function loadSttConfig(manager) {
+  const generation = manager.sttConfigGeneration;
+  try {
+    const config = await window.electronAPI.getSttConfig?.();
+    if (!config?.success || manager.sttConfigGeneration !== generation) return false;
+    manager.setSttConfig(config);
+    return true;
+  } catch (error) {
+    logger.warn("STT config fetch failed", { error: error?.message });
+    return false;
+  }
 }
 
 export const useAudioRecording = (toast, options = {}) => {
@@ -146,11 +163,20 @@ export const useAudioRecording = (toast, options = {}) => {
   });
 
   const reportLifecycle = useCallback((state, attempt = recordingAttemptRef.current) => {
-    if (!attempt || attempt !== recordingAttemptRef.current) return Promise.resolve(false);
+    if (
+      !attempt ||
+      attempt !== recordingAttemptRef.current ||
+      (attempt.abandoned && state === "recording")
+    ) {
+      return Promise.resolve(false);
+    }
     if (reportedLifecycleRef.current === state) return attempt.admission;
     reportedLifecycleRef.current = state;
+    const voiceAgentRequested = audioManagerRef.current?.voiceAgentRequested === true;
     const reply = Promise.resolve()
-      .then(() => window.electronAPI?.dictationLifecycleStateChanged?.(state, attempt.id))
+      .then(() =>
+        window.electronAPI?.dictationLifecycleStateChanged?.(state, attempt.id, voiceAgentRequested)
+      )
       .then((accepted) => accepted === true)
       .catch((error) => {
         logger.warn("Dictation lifecycle request failed", { error: error?.message });
@@ -234,12 +260,9 @@ export const useAudioRecording = (toast, options = {}) => {
         // microphone; AudioManager confirms the same value once recording.
         setIsAssistantVoice(voiceAgentRequested);
         if (!(await attempt.admission) || !current()) return false;
-        await waitForVisualFrames();
-        if (!current()) return false;
 
-        // Start acquisition only after the compact thinking frame has reached
-        // the compositor. startRecording() joins this prepared capture, so the
-        // device still opens exactly once.
+        // Both routes reuse the prepared mic. Batch dictation buffers pre-roll
+        // once audio arrives, and streaming starts collecting PCM in its worklet.
         void Promise.resolve(manager.prepareMicCapture?.())
           .catch((error) => logger.warn("Mic preparation failed", { error: error?.message }))
           .finally(() => reportManagerLifecycle(manager, attempt));
@@ -299,14 +322,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // refreshed in the background and this recording keeps the old decision.
         if (audioManagerRef.current.isSttConfigStale()) {
           const hadConfig = Boolean(audioManagerRef.current.sttConfig);
-          const configFetch = (async () => {
-            const config = await window.electronAPI.getSttConfig?.();
-            if (config?.success) {
-              audioManagerRef.current.setSttConfig(config);
-            }
-          })().catch((error) => {
-            logger.warn("STT config fetch failed", { error: error?.message });
-          });
+          const configFetch = loadSttConfig(audioManagerRef.current);
           if (!hadConfig && needsSttConfigBeforeStart(getSettings())) {
             await configFetch;
           }
@@ -408,9 +424,8 @@ export const useAudioRecording = (toast, options = {}) => {
       window.electronAPI?.unregisterCancelHotkey?.();
       setIsPreparing(false);
       setIsStopping(true);
-      // Contract to the stable thinking state before MediaRecorder/streaming
-      // finalization can occupy the renderer on slower Windows machines.
-      await waitForVisualFrames();
+      // The thinking state paints alongside finalization rather than ahead of
+      // it, so a busy GPU never holds up the transcript.
 
       if (currentState.isStreaming || currentState.isStreamingStartInProgress) {
         void playStopCue();
@@ -605,6 +620,8 @@ export const useAudioRecording = (toast, options = {}) => {
         isPreparing,
         micCaptureStatus,
       }) => {
+        // A cancelled start may finish opening the mic just before its caller disposes it.
+        if (isRecording && recordingAttemptRef.current?.abandoned) return;
         reportLifecycle(
           isRecording
             ? "recording"
@@ -1169,13 +1186,32 @@ export const useAudioRecording = (toast, options = {}) => {
     const unsubscribePolicy = usePolicyStore.subscribe(() => {
       window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);
     });
-    window.electronAPI.getSttConfig?.().then((config) => {
-      if (config?.success && audioManagerRef.current) {
-        audioManagerRef.current.setSttConfig(config);
-        if (audioManagerRef.current.shouldUseStreaming()) {
-          audioManagerRef.current.warmupStreamingConnection();
+    const loadAndWarmSttConfig = (warmOptions) => {
+      const manager = audioManagerRef.current;
+      loadSttConfig(manager).then((installed) => {
+        // A warm redials the stream, so it is skipped while a dictation runs or
+        // starts; the warm after a finished (not cancelled) recording covers it.
+        const state = manager.getState();
+        if (
+          installed &&
+          audioManagerRef.current === manager &&
+          canStartDictation(state) &&
+          !startLockRef.current &&
+          !state.isPreparing &&
+          manager.shouldUseStreaming()
+        ) {
+          manager.warmupStreamingConnection(warmOptions);
         }
-      }
+      });
+    };
+    loadAndWarmSttConfig();
+    // The config is per account (the Orukeet rollout and its Gemma pipeline pick
+    // accounts), so a sign-in, sign-out or account switch fetches it again
+    // instead of keeping the previous account's copy for the rest of its TTL.
+    // An account change is no reason to open the mic.
+    const unsubscribeAuthBoundary = subscribeAuthBoundary(() => {
+      audioManagerRef.current.invalidateSttConfig();
+      loadAndWarmSttConfig({ warmMic: false });
     });
 
     const handleToggle = async ({
@@ -1235,7 +1271,6 @@ export const useAudioRecording = (toast, options = {}) => {
         reportManagerLifecycle(manager, attempt);
         return;
       }
-      await waitForVisualFrames();
       if (
         generation !== preparationGenerationRef.current ||
         startLockRef.current ||
@@ -1284,6 +1319,7 @@ export const useAudioRecording = (toast, options = {}) => {
       preparationGenerationRef.current += 1;
       if (recordingAttemptRef.current) recordingAttemptRef.current.abandoned = true;
       unsubscribePolicy();
+      unsubscribeAuthBoundary();
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
       disposeTranslationToggle?.();
