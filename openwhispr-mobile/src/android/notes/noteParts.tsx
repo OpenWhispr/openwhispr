@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
+import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
 import { gloss, glossPressed, home } from '../home/kit';
@@ -141,7 +142,7 @@ export function AttendeeCircles({
 
 export type NoteTab = 'enhanced' | 'notes' | 'transcript';
 
-/** Summary | Notes | Transcript on a grey track; the picked tab is white with the glass edge. */
+/** Summary | Notes | Transcript, in Android's one tab style (Dictionary's Words | Snippets). */
 export function NoteTabs({
   tabs,
   value,
@@ -156,56 +157,17 @@ export function NoteTabs({
   testIDPrefix?: string;
 }) {
   return (
-    <View
-      accessibilityRole="tablist"
-      style={{
-        flexDirection: 'row',
-        padding: 3,
-        borderRadius: 14,
-        backgroundColor: look.track,
-      }}
-    >
-      {tabs.map((tab) => {
-        const selected = tab.key === value;
-        return (
-          <Pressable
-            key={tab.key}
-            cssInterop={false}
-            testID={`${testIDPrefix}-${tab.key}`}
-            accessibilityRole="tab"
-            accessibilityState={{ selected, disabled: Boolean(disabled) }}
-            disabled={disabled}
-            onPress={() => onChange(tab.key)}
-            style={[
-              {
-                flex: 1,
-                minHeight: 40,
-                borderRadius: 11,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 4,
-              },
-              selected && edge,
-            ]}
-          >
-            <Text
-              style={{
-                fontSize: 14,
-                lineHeight: 18,
-                fontWeight: selected ? '600' : '500',
-                color: selected ? home.text : home.secondary,
-              }}
-            >
-              {tab.label}
-            </Text>
-            {tab.dot ? (
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF9500' }} />
-            ) : null}
-          </Pressable>
-        );
-      })}
-    </View>
+    <SegmentedControl
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      options={tabs.map((tab) => ({
+        value: tab.key,
+        label: tab.label,
+        dot: tab.dot,
+        testID: `${testIDPrefix}-${tab.key}`,
+      }))}
+    />
   );
 }
 
