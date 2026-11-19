@@ -123,7 +123,9 @@ it.each([
 ])('the menu mode %s (selection "%s") runs as %s', async (mode, selection, expected) => {
   jest
     .mocked(createAndroidJob)
-    .mockImplementationOnce((value: string, target: string) => ({ mode: value, target }) as never);
+    .mockImplementationOnce(
+      (value?: string, target?: string) => ({ mode: value, target }) as never,
+    );
   jest.mocked(processAndroidAudio).mockResolvedValueOnce('Done.');
   mockListeners.onStart({ selection, mode });
   mockListeners.onRecording(audio);
