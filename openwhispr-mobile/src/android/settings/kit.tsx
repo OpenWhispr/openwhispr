@@ -54,11 +54,14 @@ export function SettingsPage({
   right,
   children,
   scroll = true,
+  edgeBack,
 }: {
   title: string;
   right?: { label: string; onPress: () => void };
   children: React.ReactNode;
   scroll?: boolean;
+  /** The desktop glass edge on the back button (hairline, top highlight, soft lift), ink chevron. */
+  edgeBack?: boolean;
 }) {
   const t = useSettingsT();
   // Gestures: edge to edge, the list scrolls under the handle. Buttons: the bar is part of the
@@ -84,18 +87,31 @@ export function SettingsPage({
             accessibilityRole="button"
             accessibilityLabel={t('back')}
             hitSlop={6}
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/(record)'))}
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace('/(tabs)/(record)')
+            }
             style={({ pressed }) => ({
               width: 36,
               height: 36,
               borderRadius: 18,
-              backgroundColor: 'rgba(255,255,255,0.72)',
+              backgroundColor: edgeBack ? home.surface : 'rgba(255,255,255,0.72)',
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pressed ? 0.7 : 1,
+              ...(edgeBack && {
+                borderWidth: 1,
+                borderColor: 'rgba(0,0,0,0.06)',
+                boxShadow:
+                  'inset 0px 1px 0px rgba(255,255,255,0.7), 0px 2px 10px rgba(15,23,42,0.06)',
+              }),
             })}
           >
-            <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color={home.accent} />
+            <SystemIcon
+              name="chevron.left"
+              mdName="ChevronLeft"
+              size={22}
+              color={edgeBack ? home.text : home.accent}
+            />
           </Pressable>
         </View>
         <Text
@@ -762,6 +778,7 @@ export function BottomSheet({
   body,
   children,
   onBack,
+  leading,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -770,6 +787,8 @@ export function BottomSheet({
   children: React.ReactNode;
   /** A page inside the sheet (a list that slid in): a back arrow before the title returns. */
   onBack?: () => void;
+  /** A tile before the title (a task's icon, a provider's logo). */
+  leading?: React.ReactNode;
 }) {
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
@@ -838,7 +857,8 @@ export function BottomSheet({
               }}
             />
             <View style={{ gap: 6 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: leading ? 12 : 8 }}>
+                {leading}
                 {onBack && (
                   <Pressable
                     cssInterop={false}
@@ -852,7 +872,7 @@ export function BottomSheet({
                       name="chevron.left"
                       mdName="ChevronLeft"
                       size={22}
-                      color={home.accent}
+                      color={home.text}
                     />
                   </Pressable>
                 )}

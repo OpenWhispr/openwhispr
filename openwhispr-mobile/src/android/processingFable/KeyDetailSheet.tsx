@@ -11,7 +11,6 @@ import { maskKey } from '../settings/ownKey';
 import { noOrphan } from '../settings/strings';
 import {
   changeSourceKey,
-  placementOf,
   readSourceKey,
   removeSource,
   sourceName,
@@ -21,7 +20,8 @@ import {
   type Source,
 } from './places';
 import { useFableT } from './strings';
-import { ChipRow, Field, Reason, SectionLabel, TaskChip, chipLabel, confirmWithUndo } from './ui';
+import { Tile } from './look';
+import { ChipRow, Field, Reason, SectionLabel, TaskChip, confirmWithUndo, taskChip } from './ui';
 
 /**
  * A saved key's sheet (7D): the key with Change, the tasks it runs, and a red Remove key. The
@@ -106,6 +106,7 @@ export function KeyDetailSheet({
       visible={!!requested}
       onClose={onClose}
       title={custom ? t('customServer') : t('sourceKey', { provider: name })}
+      leading={<Tile kind={custom ? 'idle' : 'logo'} source={source} />}
     >
       {custom && endpoint && (
         <Field label={t('serverAddress')} value={endpoint} locked mark="connected" />
@@ -145,14 +146,7 @@ export function KeyDetailSheet({
           <>
             <ChipRow>
               {tasks.map((task) => (
-                <TaskChip
-                  key={task}
-                  label={chipLabel(
-                    t,
-                    task,
-                    placementOf(config, task, activeMode, cloudAccess).place,
-                  )}
-                />
+                <TaskChip key={task} {...taskChip(t, task, 'key')} />
               ))}
             </ChipRow>
             <Text style={settings.subtitle}>{t('moveHint')}</Text>

@@ -9,7 +9,7 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { home, type } from '../home/kit';
 import { ANDROID_MODELS, useModelDownloads } from '../models';
-import { cardStyle, settings, SettingsPage, showToast } from '../settings/kit';
+import { settings, SettingsPage, showToast } from '../settings/kit';
 import { KEY_CHECK_COLORS } from '../settings/KeyCheckMark';
 import { formatSize, modelName } from '../settings/modelCatalog';
 import { SHEET_TASKS, type SheetTask } from '../settings/ownKey';
@@ -30,16 +30,8 @@ import {
 } from './places';
 import { useFableT, type FableT } from './strings';
 import { TaskSheet } from './TaskSheet';
-import {
-  AddRow,
-  ChipRow,
-  Divider,
-  FlatButton,
-  PlaceHeader,
-  TaskChip,
-  chipLabel,
-  confirmWithUndo,
-} from './ui';
+import { OutlineButton, Tile, edgeCard, sectionLabel } from './look';
+import { AddRow, ChipRow, Divider, PlaceHeader, TaskChip, confirmWithUndo, taskChip } from './ui';
 import type { AndroidModelId } from '../models';
 
 /** The On device card's one progress line while models download for waiting tasks (D2). */
@@ -53,13 +45,13 @@ function DownloadLine({ t }: { t: FableT }) {
   const share = Math.min(1, done / totalBytes);
   return (
     <View style={{ gap: 6 }} accessibilityLiveRegion="polite">
-      <View style={{ height: 4, borderRadius: 2, backgroundColor: home.fill }}>
+      <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.07)' }}>
         <View
           style={{
             width: `${Math.round(share * 100)}%`,
             height: 4,
             borderRadius: 2,
-            backgroundColor: home.accent,
+            experimental_backgroundImage: 'linear-gradient(90deg, #5588f0 0%, #3466e2 100%)',
           }}
         />
       </View>
@@ -98,7 +90,7 @@ function DownloadLine({ t }: { t: FableT }) {
 /** A card per place; its tasks sit inside it. */
 function PlaceCard({ children }: { children: React.ReactNode }) {
   return (
-    <View style={[cardStyle, { paddingHorizontal: 16, paddingVertical: 16, gap: 14 }]}>
+    <View style={[edgeCard, { paddingHorizontal: 16, paddingVertical: 16, gap: 14 }]}>
       {children}
     </View>
   );
@@ -166,7 +158,7 @@ export default function ProcessingScreen() {
       {items.map((item) => (
         <TaskChip
           key={item.task}
-          label={chipLabel(t, item.task, item.place)}
+          {...taskChip(t, item.task, item.place)}
           onPress={() => setTask(item.task)}
         />
       ))}
@@ -175,33 +167,46 @@ export default function ProcessingScreen() {
 
   const cloud = on('cloud');
   const device = on('device');
+  const keyed = on('key');
+  const count = (items: unknown[]) =>
+    items.length ? t('taskCount', { count: items.length }) : undefined;
 
   return (
-    <SettingsPage title={t('processing')}>
+    <SettingsPage title={t('processing')} edgeBack>
       <View style={{ gap: 12 }}>
-        <Text accessibilityRole="header" style={type.section}>
+        <Text accessibilityRole="header" style={sectionLabel}>
           {t('whereProcessed')}
         </Text>
 
         <PlaceCard>
           <PlaceHeader
-            icon="Cloud"
+            place="cloud"
             title={t('cloud')}
             body={t(signedIn ? 'cloudSignedIn' : 'cloudSignedOut')}
+            count={count(cloud)}
           />
           {cloud.length ? chips(cloud) : <Text style={settings.subtitle}>{t('noTasksHere')}</Text>}
           {!signedIn ? (
-            <FlatButton label={t('signIn')} onPress={() => router.push('/auth')} />
+            <OutlineButton label={t('signIn')} onPress={() => router.push('/auth')} />
           ) : (
             !cloud.length && (
-              <FlatButton label={t('useForEverything')} onPress={cloudEverything} disabled={busy} />
+              <OutlineButton
+                label={t('useForEverything')}
+                onPress={cloudEverything}
+                disabled={busy}
+              />
             )
           )}
         </PlaceCard>
 
-        <View style={[cardStyle, { paddingTop: 16 }]}>
+        <View style={[edgeCard, { paddingTop: 16 }]}>
           <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 14 }}>
-            <PlaceHeader icon="Smartphone" title={t('thisPhone')} body={t('deviceBody')} />
+            <PlaceHeader
+              place="device"
+              title={t('thisPhone')}
+              body={t('deviceBody')}
+              count={count(device)}
+            />
             {device.length ? (
               chips(device)
             ) : (
@@ -213,7 +218,7 @@ export default function ProcessingScreen() {
             )}
             <DownloadLine t={t} />
             {!device.length && !queued.size && (
-              <FlatButton
+              <OutlineButton
                 label={t('useForEverything')}
                 onPress={deviceEverything}
                 disabled={busy}
@@ -231,7 +236,7 @@ export default function ProcessingScreen() {
               paddingHorizontal: 16,
               paddingVertical: 14,
               gap: 12,
-              backgroundColor: pressed ? home.fill : undefined,
+              backgroundColor: pressed ? home.canvas : undefined,
             })}
           >
             <View style={{ flex: 1, gap: 2 }}>
@@ -247,13 +252,18 @@ export default function ProcessingScreen() {
           </Pressable>
         </View>
 
-        <View style={[cardStyle, { paddingTop: 16 }]}>
+        <View style={[edgeCard, { paddingTop: 16 }]}>
           <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 14 }}>
-            <PlaceHeader icon="Lock" title={t('ownKey')} body={t('keyPlaceBody')} />
+            <PlaceHeader
+              place="key"
+              title={t('ownKey')}
+              body={t('keyPlaceBody')}
+              count={count(keyed)}
+            />
             {sources && !sources.length && (
               <>
                 <Text style={settings.subtitle}>{t('noKeysYet')}</Text>
-                <FlatButton label={t('addAKey')} onPress={() => setAddKey(true)} />
+                <OutlineButton icon="Plus" label={t('addAKey')} onPress={() => setAddKey(true)} />
               </>
             )}
           </View>
@@ -277,22 +287,26 @@ export default function ProcessingScreen() {
                         paddingHorizontal: 16,
                         paddingVertical: 14,
                         gap: 12,
-                        backgroundColor: pressed ? home.fill : undefined,
+                        backgroundColor: pressed ? home.canvas : undefined,
                       })}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <Tile kind={source === 'custom' ? 'idle' : 'logo'} source={source} />
                         <View style={{ flex: 1, gap: 2 }}>
                           <Text style={settings.title}>{sourceName(source)}</Text>
                           <Text style={settings.subtitle} numberOfLines={1}>
                             {ending}
                           </Text>
                         </View>
-                        <SystemIcon
-                          name="checkmark"
-                          mdName="Check"
-                          size={20}
-                          color={KEY_CHECK_COLORS.connected}
-                        />
+                        {/* A key that runs nothing has no tick, so its line stays one line (9.1). */}
+                        {items.length > 0 && (
+                          <SystemIcon
+                            name="checkmark"
+                            mdName="Check"
+                            size={20}
+                            color={KEY_CHECK_COLORS.connected}
+                          />
+                        )}
                         <SystemIcon
                           name="chevron.right"
                           mdName="ChevronRight"
@@ -300,7 +314,7 @@ export default function ProcessingScreen() {
                           color={home.tertiary}
                         />
                       </View>
-                      {items.length > 0 && chips(items)}
+                      {items.length > 0 && <View style={{ paddingLeft: 48 }}>{chips(items)}</View>}
                     </Pressable>
                   </View>
                 );

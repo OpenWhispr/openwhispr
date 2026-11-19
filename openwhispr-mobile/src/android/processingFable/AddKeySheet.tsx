@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { home, type } from '../home/kit';
-import { BottomSheet, PillAction, TextAction, settings, showToast } from '../settings/kit';
+import { BottomSheet, TextAction, settings, showToast } from '../settings/kit';
 import { useKeyCheck, type KeyCheckResult, type KeyProviderId } from '../settings/keyCheck';
-import { KEY_PROVIDERS, maskKey } from '../settings/ownKey';
+import { KEY_PROVIDERS, maskKey, type SheetTask } from '../settings/ownKey';
 import { isLiveProvider } from '../providers/liveMeeting';
 import {
   SOURCE_GROUPS,
@@ -17,7 +17,18 @@ import {
   type Source,
 } from './places';
 import { useFableT, type FableKey, type FableT } from './strings';
-import { Field, RadioRow, Reason, SectionLabel, SheetCard, SlideIn, TickLine } from './ui';
+import { GlassButton, ProviderMark, Tile } from './look';
+import {
+  ChipRow,
+  Field,
+  RadioRow,
+  Reason,
+  SectionLabel,
+  SheetCard,
+  SlideIn,
+  TaskChip,
+  taskChip,
+} from './ui';
 
 /** What each provider can run, as its row and the line under the field say it. */
 const CAPABILITY: Record<Source, { row: FableKey; line?: FableKey }> = {
@@ -34,6 +45,19 @@ function keyReason(t: FableT, provider: string, result: KeyCheckResult): string 
   if (result.reason === 'managementKey') return t('keyManagement');
   if (result.reason === 'status') return t('keyStatus', { provider, status: result.status });
   return t('keyRefused', { provider });
+}
+
+/** What a key runs, as Processing's chips; read out as the sentence they replace. */
+function Capability({ t, tasks, line }: { t: FableT; tasks: SheetTask[]; line: string }) {
+  return (
+    <View accessible accessibilityLabel={line}>
+      <ChipRow>
+        {tasks.map((task) => (
+          <TaskChip key={task} {...taskChip(t, task, 'key')} />
+        ))}
+      </ChipRow>
+    </View>
+  );
 }
 
 /** The button names the result: "Use for all 5 tasks", "Use for 3 tasks". */
@@ -68,6 +92,12 @@ function ProviderList({
             {group.ids.map((id) => (
               <RadioRow
                 key={id}
+                leading={
+                  <Tile
+                    kind={id !== 'custom' ? 'logo' : id === current ? 'sel' : 'idle'}
+                    source={id}
+                  />
+                }
                 title={sourceName(id)}
                 tag={isLiveProvider(id) ? { label: t('live') } : undefined}
                 subtitle={t(CAPABILITY[id].row)}
@@ -190,7 +220,13 @@ export function AddKeySheet({ visible, onClose }: { visible: boolean; onClose: (
   return (
     <BottomSheet visible={visible} onClose={onClose} title={t('addAKey')}>
       <SlideIn pageKey="main" back>
-        <Field label={t('provider')} value={name} chevron onPress={() => setPage('providers')} />
+        <Field
+          label={t('provider')}
+          value={name}
+          chevron
+          leading={<ProviderMark source={source} size={18} />}
+          onPress={() => setPage('providers')}
+        />
 
         {custom ? (
           <>
@@ -234,22 +270,33 @@ export function AddKeySheet({ visible, onClose }: { visible: boolean; onClose: (
               )}
             </View>
             {found && (
-              <TickLine
-                text={t(
-                  found.speech?.length && found.text?.length
-                    ? 'foundBoth'
-                    : found.speech?.length
-                      ? 'foundSpeech'
-                      : found.text?.length
-                        ? 'foundText'
-                        : 'foundNone',
+              <View style={{ gap: 8 }}>
+                {serverTasks.length > 0 && (
+                  <ChipRow>
+                    {serverTasks.map((task) => (
+                      <TaskChip key={task} {...taskChip(t, task, 'key')} />
+                    ))}
+                  </ChipRow>
                 )}
-              />
+                <Text style={[type.subhead, { fontSize: 14, color: home.secondary }]}>
+                  {t(
+                    found.speech?.length && found.text?.length
+                      ? 'foundBoth'
+                      : found.speech?.length
+                        ? 'foundSpeech'
+                        : found.text?.length
+                          ? 'foundText'
+                          : 'foundNone',
+                  )}
+                </Text>
+              </View>
             )}
           </>
         ) : (
           <>
-            {CAPABILITY[source].line && <TickLine text={t(CAPABILITY[source].line!)} />}
+            {CAPABILITY[source].line && (
+              <Capability t={t} tasks={sourceTasks(source)} line={t(CAPABILITY[source].line!)} />
+            )}
             <View style={{ gap: 8 }}>
               <Field
                 label={t('apiKey')}
@@ -307,18 +354,15 @@ export function AddKeySheet({ visible, onClose }: { visible: boolean; onClose: (
           </>
         )}
 
-        {/* Room for the glass button's lift, so the sheet never clips it. */}
         <View style={{ paddingTop: 4, paddingBottom: 8, gap: 4 }}>
           {custom && !found ? (
-            <PillAction
-              primary
+            <GlassButton
               label={t('checkServer')}
               disabled={!normalizeServer(address) || server.state === 'checking'}
               onPress={server.run}
             />
           ) : (
-            <PillAction
-              primary
+            <GlassButton
               label={buttonLabel(t, count)}
               disabled={!accepted || !count || busy}
               onPress={() => void save(true)}

@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { SystemIcon } from '@/components/ui/SystemIcon';
-import { home } from '../home/kit';
 import { ANDROID_MODELS, type AndroidModelId } from '../models';
-import { BottomSheet, PillAction, TextAction, settings } from '../settings/kit';
+import { BottomSheet, TextAction, settings } from '../settings/kit';
 import { MODEL_ROWS, formatSize, modelName } from '../settings/modelCatalog';
 import { useFableT } from './strings';
+import { GlassButton, Tile } from './look';
 import { SheetCard } from './ui';
 
-const ICON = { speech: 'AudioLines', text: 'Type', diarization: 'UsersRound' } as const;
+const ICON = { speech: 'AudioLines', text: 'CaseSensitive', diarization: 'Users' } as const;
 
 /**
  * D1: "Use for everything" on device with models still to download. Not a picker: the model
@@ -66,9 +65,7 @@ export function DeviceSheet({
                 minHeight: 60,
               }}
             >
-              <View style={{ width: 28, alignItems: 'center' }}>
-                <SystemIcon name="circle" mdName={ICON[row.kind]} size={20} color={home.text} />
-              </View>
+              <Tile kind="idle" icon={ICON[row.kind]} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={settings.title}>{modelName(id)}</Text>
                 <Text style={settings.subtitle}>{line}</Text>
@@ -77,9 +74,8 @@ export function DeviceSheet({
           );
         })}
       </SheetCard>
-      {/* Room for the glass button's lift, so the sheet never clips it. */}
       <View style={{ paddingTop: 4, gap: 4 }}>
-        <PillAction primary label={t('downloadSize', { size })} onPress={onDownload} />
+        <GlassButton label={t('downloadSize', { size })} onPress={onDownload} />
         <TextAction label={t('checkPhoneFirst')} onPress={onCheckFirst} />
       </View>
     </BottomSheet>

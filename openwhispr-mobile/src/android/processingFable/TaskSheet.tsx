@@ -37,6 +37,7 @@ import {
   type Source,
 } from './places';
 import { useFableT, type FableT } from './strings';
+import { TASK_ICON, Tile } from './look';
 import { AddRow, RadioRow, SectionLabel, SheetCard, SlideIn } from './ui';
 import { isLiveProvider } from '../providers/liveMeeting';
 
@@ -237,7 +238,7 @@ export function TaskSheet({
         onBack={() => setPage('main')}
       >
         <SlideIn pageKey="models">
-          <SectionLabel>{sourceName(source)}</SectionLabel>
+          <SectionLabel source={source}>{sourceName(source)}</SectionLabel>
           <SheetCard>
             {keyModels.map((model) => (
               <RadioRow
@@ -262,7 +263,12 @@ export function TaskSheet({
   }
 
   return (
-    <BottomSheet visible={!!requested} onClose={onClose} title={title}>
+    <BottomSheet
+      visible={!!requested}
+      onClose={onClose}
+      title={title}
+      leading={<Tile kind="sel" icon={TASK_ICON[task]} />}
+    >
       <SlideIn pageKey="main" back>
         {cleanupOff && (
           <Text style={[settings.subtitle, { paddingHorizontal: 4 }]}>{t('cleanupIsOff')}</Text>
@@ -293,7 +299,14 @@ export function TaskSheet({
             {keyRows.map((row) => (
               <RadioRow
                 key={row.source}
-                icon={row.source === 'custom' ? 'Server' : 'Lock'}
+                leading={
+                  <Tile
+                    kind={
+                      row.source !== 'custom' ? 'logo' : row.selected && !waiting ? 'sel' : 'idle'
+                    }
+                    source={row.source}
+                  />
+                }
                 title={
                   row.source === 'custom'
                     ? t('customServer')

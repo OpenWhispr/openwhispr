@@ -3,6 +3,8 @@ import type { FableTranslations } from './strings';
 // Missing keys fall back to English. Filled in per locale below.
 export const fableTranslations: FableTranslations = {
   es: {
+    taskCount_one: '{{count}} tarea',
+    taskCount: '{{count}} tareas',
     whereProcessed: 'Dónde se procesa tu voz',
     cloudSignedIn: 'Lo más rápido. Ya iniciaste sesión.',
     cloudSignedOut: 'Lo más rápido. Inicia sesión para usarlo.',
@@ -118,6 +120,8 @@ export const fableTranslations: FableTranslations = {
     testAnother: 'Probar otra grabación',
   },
   fr: {
+    taskCount_one: '{{count}} tâche',
+    taskCount: '{{count}} tâches',
     whereProcessed: 'Où votre voix est traitée',
     cloudSignedIn: 'Le plus rapide. Vous êtes connecté.',
     cloudSignedOut: 'Le plus rapide. Connectez-vous pour l’utiliser.',
@@ -234,6 +238,8 @@ export const fableTranslations: FableTranslations = {
     testAnother: 'Essayer un autre enregistrement',
   },
   de: {
+    taskCount_one: '{{count}} Aufgabe',
+    taskCount: '{{count}} Aufgaben',
     whereProcessed: 'Wo deine Stimme verarbeitet wird',
     cloudSignedIn: 'Am schnellsten. Du bist angemeldet.',
     cloudSignedOut: 'Am schnellsten. Melde dich an, um sie zu nutzen.',
@@ -350,6 +356,8 @@ export const fableTranslations: FableTranslations = {
     testAnother: 'Andere Aufnahme testen',
   },
   pt: {
+    taskCount_one: '{{count}} tarefa',
+    taskCount: '{{count}} tarefas',
     whereProcessed: 'Onde sua voz é processada',
     cloudSignedIn: 'O mais rápido. Você já entrou.',
     cloudSignedOut: 'O mais rápido. Entre para usar.',
@@ -466,6 +474,8 @@ export const fableTranslations: FableTranslations = {
     testAnother: 'Testar outra gravação',
   },
   it: {
+    taskCount_one: '{{count}} attività',
+    taskCount: '{{count}} attività',
     whereProcessed: 'Dove viene elaborata la tua voce',
     cloudSignedIn: 'Il più veloce. Hai già effettuato l’accesso.',
     cloudSignedOut: 'Il più veloce. Accedi per usarlo.',
@@ -581,6 +591,10 @@ export const fableTranslations: FableTranslations = {
     testAnother: 'Prova un’altra registrazione',
   },
   ru: {
+    taskCount_one: '{{count}} задача',
+    taskCount_few: '{{count}} задачи',
+    taskCount_many: '{{count}} задач',
+    taskCount: '{{count}} задач',
     whereProcessed: 'Где обрабатывается ваш голос',
     cloudSignedIn: 'Быстрее всего. Вы вошли в аккаунт.',
     cloudSignedOut: 'Быстрее всего. Войдите, чтобы пользоваться.',
@@ -701,6 +715,7 @@ export const fableTranslations: FableTranslations = {
     testAnother: 'Проверить другую запись',
   },
   'zh-CN': {
+    taskCount: '{{count}} 项任务',
     whereProcessed: '在哪里处理你的语音',
     cloudSignedIn: '最快。你已登录。',
     cloudSignedOut: '最快。登录后即可使用。',
@@ -809,6 +824,7 @@ export const fableTranslations: FableTranslations = {
     testAnother: '再试一段录音',
   },
   'zh-TW': {
+    taskCount: '{{count}} 項任務',
     whereProcessed: '在哪裡處理你的語音',
     cloudSignedIn: '最快。你已登入。',
     cloudSignedOut: '最快。登入後即可使用。',
@@ -917,6 +933,7 @@ export const fableTranslations: FableTranslations = {
     testAnother: '再試一段錄音',
   },
   ja: {
+    taskCount: '{{count}} 個のタスク',
     whereProcessed: '音声をどこで処理するか',
     cloudSignedIn: '最速。サインイン済みです。',
     cloudSignedOut: '最速。使うにはサインインしてください。',
@@ -1029,6 +1046,12 @@ export const fableTranslations: FableTranslations = {
     testAnother: '別の録音で試す',
   },
   ar: {
+    taskCount_zero: 'لا مهام',
+    taskCount_one: 'مهمة واحدة',
+    taskCount_two: 'مهمتان',
+    taskCount_few: '{{count}} مهام',
+    taskCount_many: '{{count}} مهمة',
+    taskCount: '{{count}} مهمة',
     whereProcessed: 'أين تُعالَج مقاطعك الصوتية',
     cloudSignedIn: 'الأسرع. أنت مسجّل الدخول.',
     cloudSignedOut: 'الأسرع. سجّل الدخول لاستخدامه.',

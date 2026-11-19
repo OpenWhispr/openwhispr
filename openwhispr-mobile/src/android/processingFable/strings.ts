@@ -15,6 +15,8 @@ export const fableEnglish = {
   keyPlaceBody: 'Billed by your provider.',
   noTasksHere: 'No tasks here.',
   noTasksYet: 'No tasks here yet.',
+  taskCount_one: '{{count}} task',
+  taskCount: '{{count}} tasks',
   useForEverything: 'Use for everything',
   noKeysYet: 'No keys yet.',
   addAKey: 'Add a key',
@@ -124,7 +126,7 @@ export const fableEnglish = {
 
 export type FableKey = keyof typeof fableEnglish;
 type ExtraPluralKey =
-  `${'keyAddedRuns' | 'serverAddedRuns'}_${'zero' | 'two' | 'few' | 'many' | 'other'}`;
+  `${'keyAddedRuns' | 'serverAddedRuns' | 'taskCount'}_${'zero' | 'two' | 'few' | 'many' | 'other'}`;
 export type FableTranslations = Record<string, Partial<Record<FableKey | ExtraPluralKey, string>>>;
 
 // Deep-merged into Settings' namespace without overwriting any key Settings already has.

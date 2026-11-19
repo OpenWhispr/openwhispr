@@ -7,114 +7,137 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  type ViewStyle,
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { home, type } from '../home/kit';
-import { Badge, cardStyle, settings, showToast, useReduceMotion } from '../settings/kit';
-import { KEY_CHECK_COLORS, KeyCheckMark } from '../settings/KeyCheckMark';
+import { settings, showToast, useReduceMotion } from '../settings/kit';
+import { KeyCheckMark } from '../settings/KeyCheckMark';
 import type { KeyCheckState } from '../settings/keyCheck';
 import { Radio } from '../settings/ModelListRow';
 import { noOrphan } from '../settings/strings';
 import type { SheetTask } from '../settings/ownKey';
-import { TASK_TITLE, type Place } from './places';
+import {
+  CountBadge,
+  PLACE_ICON,
+  ProviderMark,
+  TASK_ICON,
+  Tag,
+  Tile,
+  edgeCard,
+  look,
+  sectionLabel,
+} from './look';
+import { TASK_TITLE, type Place, type Source } from './places';
 import type { FableT } from './strings';
 
-/** A task inside a place's card. Tapping it opens that task's sheet. */
-export function TaskChip({ label, onPress }: { label: string; onPress?: () => void }) {
+/** A task inside a place's card: its icon and name, Meetings with a Live or After tag. */
+export function TaskChip({
+  label,
+  icon,
+  tag,
+  accessibilityLabel,
+  onPress,
+}: {
+  label: string;
+  icon: LucideIconName;
+  tag?: { label: string; neutral?: boolean };
+  accessibilityLabel?: string;
+  onPress?: () => void;
+}) {
+  const body = (
+    <>
+      <SystemIcon name="circle" mdName={icon} size={16} color={home.secondary} />
+      <Text style={[type.subhead, { fontSize: 14, lineHeight: 18, fontWeight: '500' }]}>
+        {label}
+      </Text>
+      {tag && <Tag label={tag.label} neutral={tag.neutral} />}
+    </>
+  );
+  const chip = (pressed: boolean): ViewStyle => ({
+    minHeight: 32,
+    paddingVertical: 6,
+    paddingLeft: 8,
+    paddingRight: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.10)',
+    backgroundColor: pressed ? home.canvas : home.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  });
   if (!onPress)
     return (
-      <View
-        style={{
-          minHeight: 36,
-          paddingHorizontal: 12,
-          borderRadius: 999,
-          justifyContent: 'center',
-          backgroundColor: home.fill,
-        }}
-      >
-        <Text style={[type.subhead, { color: home.text, fontWeight: '500' }]}>{label}</Text>
+      <View accessible accessibilityLabel={accessibilityLabel ?? label} style={chip(false)}>
+        {body}
       </View>
     );
   return (
     <Pressable
       cssInterop={false}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 36,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        justifyContent: 'center',
-        backgroundColor: pressed ? home.borderSubtle : home.fill,
-      })}
+      style={({ pressed }) => chip(pressed)}
     >
-      <Text style={[type.subhead, { color: home.text, fontWeight: '500' }]}>{label}</Text>
+      {body}
     </Pressable>
   );
+}
+
+/** A task's chip as a place shows it: Meetings is Live everywhere but on device (After). */
+export function taskChip(t: FableT, task: SheetTask, place: Place) {
+  return {
+    label: t(TASK_TITLE[task]),
+    icon: TASK_ICON[task],
+    tag:
+      task === 'meeting'
+        ? place === 'device'
+          ? { label: t('after'), neutral: true }
+          : { label: t('live') }
+        : undefined,
+    accessibilityLabel: chipLabel(t, task, place),
+  };
 }
 
 export function ChipRow({ children }: { children: React.ReactNode }) {
   return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{children}</View>;
 }
 
-/** The flat button inside a card ("Use for everything", "Add a key"): tint, accent text. */
-export function FlatButton({
-  label,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      cssInterop={false}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: Boolean(disabled) }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 44,
-        borderRadius: 999,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: home.tint,
-        opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
-      })}
-    >
-      <Text style={[type.subhead, { color: home.accent, fontWeight: '500' }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-/** A place's heading: icon, name and one line under it. */
+/** A place's heading: its tile (glossy while it runs a task), name with "N tasks", one line. */
 export function PlaceHeader({
-  icon,
+  place,
   title,
   body,
+  count,
 }: {
-  icon: LucideIconName;
+  place: Place;
   title: string;
   body: string;
+  /** "3 tasks", shown only while the place runs something. */
+  count?: string;
 }) {
   return (
-    <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-      <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
-        <SystemIcon name="circle" mdName={icon} size={20} color={home.text} />
-      </View>
+    <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+      <Tile kind={count ? 'glass' : 'idle'} icon={PLACE_ICON[place]} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text accessibilityRole="header" style={settings.title}>
-          {title}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Text accessibilityRole="header" style={[settings.title, { flexShrink: 1 }]}>
+            {title}
+          </Text>
+          {count && <CountBadge label={count} />}
+        </View>
         <Text style={settings.subtitle}>{noOrphan(body)}</Text>
       </View>
     </View>
   );
 }
 
-export const Divider = () => <View style={{ height: 1, backgroundColor: home.divider }} />;
+export const Divider = () => (
+  <View style={{ height: 1, marginHorizontal: 14, backgroundColor: look.hairline }} />
+);
 
 /** One choice in a sheet's radio list: icon, title with a tag, a line, the radio on the right. */
 export function RadioRow({
@@ -134,6 +157,7 @@ export function RadioRow({
   selected: boolean;
   disabled?: boolean;
   onPress?: () => void;
+  /** A place's icon in a tile (blue once picked), or a provider's logo. */
   leading?: React.ReactNode;
 }) {
   const reduceMotion = useReduceMotion();
@@ -151,20 +175,15 @@ export function RadioRow({
         paddingHorizontal: 16,
         paddingVertical: 12,
         minHeight: 60,
-        backgroundColor: selected ? home.tint : pressed ? home.fill : undefined,
+        backgroundColor: selected ? look.pickedRow : pressed ? home.canvas : undefined,
         opacity: disabled ? 0.45 : 1,
       })}
     >
-      {leading ??
-        (icon && (
-          <View style={{ width: 28, alignItems: 'center' }}>
-            <SystemIcon name="circle" mdName={icon} size={20} color={home.text} />
-          </View>
-        ))}
+      {leading ?? (icon && <Tile kind={selected ? 'sel' : 'idle'} icon={icon} />)}
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Text style={[settings.title, { flexShrink: 1 }]}>{title}</Text>
-          {tag && <Badge label={tag.label} neutral={tag.neutral} onSelected={selected} />}
+          {tag && <Tag label={tag.label} neutral={tag.neutral} />}
         </View>
         {subtitle ? <Text style={settings.subtitle}>{noOrphan(subtitle)}</Text> : null}
       </View>
@@ -185,13 +204,12 @@ export function AddRow({ label, onPress }: { label: string; onPress: () => void 
         alignItems: 'center',
         gap: 12,
         paddingHorizontal: 16,
-        minHeight: 52,
-        backgroundColor: pressed ? home.fill : undefined,
+        minHeight: 60,
+        paddingVertical: 12,
+        backgroundColor: pressed ? home.canvas : undefined,
       })}
     >
-      <View style={{ width: 28, alignItems: 'center' }}>
-        <SystemIcon name="plus" mdName="Plus" size={20} color={home.accent} />
-      </View>
+      <Tile kind="sel" icon="Plus" />
       <Text style={[settings.title, { color: home.accent }]}>{label}</Text>
     </Pressable>
   );
@@ -201,12 +219,10 @@ export function AddRow({ label, onPress }: { label: string; onPress: () => void 
 export function SheetCard({ children }: { children: React.ReactNode }) {
   const rows = React.Children.toArray(children).filter(Boolean);
   return (
-    <View style={cardStyle}>
+    <View style={edgeCard}>
       {rows.map((row, index) => (
         <React.Fragment key={index}>
-          {index > 0 && (
-            <View style={{ height: 1, marginLeft: 16, backgroundColor: home.divider }} />
-          )}
+          {index > 0 && <Divider />}
           {row}
         </React.Fragment>
       ))}
@@ -214,12 +230,19 @@ export function SheetCard({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** An uppercase label over a sheet's section. */
-export function SectionLabel({ children }: { children: string }) {
-  return (
-    <Text accessibilityRole="header" style={[type.section, { marginBottom: -4 }]}>
+/** An uppercase label over a sheet's section, with the provider's mark when it names one. */
+export function SectionLabel({ children, source }: { children: string; source?: Source }) {
+  const label = (
+    <Text accessibilityRole="header" style={sectionLabel}>
       {children}
     </Text>
+  );
+  if (!source) return <View style={{ marginBottom: -2 }}>{label}</View>;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: -2 }}>
+      <ProviderMark source={source} size={14} />
+      {label}
+    </View>
   );
 }
 
@@ -294,6 +317,7 @@ export function Field({
   keyboardType,
   onPress,
   chevron,
+  leading,
 }: {
   label: string;
   action?: { label: string; onPress: () => void };
@@ -308,23 +332,28 @@ export function Field({
   keyboardType?: 'default' | 'url';
   onPress?: () => void;
   chevron?: boolean;
+  /** The provider's mark before the value (the Provider field). */
+  leading?: React.ReactNode;
 }) {
   const [focused, setFocused] = useState(false);
   const box = (
     <View
       style={{
         minHeight: 50,
-        borderRadius: 14,
-        borderWidth: 1.5,
-        borderColor: failed ? KEY_CHECK_COLORS.failed : focused ? home.accent : home.borderSubtle,
+        borderRadius: 12,
+        // An error's 1.5 px ring takes the extra half pixel from the padding, so nothing shifts.
+        borderWidth: failed ? 1.5 : 1,
+        borderColor: failed ? look.error : focused ? home.accent : 'rgba(0,0,0,0.10)',
         backgroundColor: home.surface,
+        boxShadow: look.edgeShadow,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingLeft: 16,
-        paddingRight: 14,
+        paddingLeft: failed ? 11.5 : 12,
+        paddingRight: failed ? 11.5 : 12,
         gap: 10,
       }}
     >
+      {leading}
       {locked || onPress ? (
         <Text
           style={[settings.title, { flex: 1, fontWeight: '400', paddingVertical: 12 }]}
@@ -359,7 +388,7 @@ export function Field({
   return (
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={[type.footnote, { color: home.secondary }]}>{label}</Text>
+        <Text style={[type.footnote, { color: home.secondary, fontWeight: '500' }]}>{label}</Text>
         {action && (
           <Pressable
             cssInterop={false}
@@ -390,24 +419,12 @@ export function Field({
   );
 }
 
-/** One line with a green tick ("Runs all 5 tasks. Meetings run live."). */
-export function TickLine({ text }: { text: string }) {
-  return (
-    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
-      <View style={{ paddingTop: 1 }}>
-        <SystemIcon name="checkmark" mdName="Check" size={16} color={KEY_CHECK_COLORS.connected} />
-      </View>
-      <Text style={[type.subhead, { color: home.secondary, flex: 1 }]}>{noOrphan(text)}</Text>
-    </View>
-  );
-}
-
 /** The reason under a refused key or an unreachable server, in red or grey. */
 export function Reason({ text, failed }: { text: string; failed: boolean }) {
   return (
     <Text
       accessibilityLiveRegion="polite"
-      style={[type.subhead, { color: failed ? KEY_CHECK_COLORS.failed : home.secondary }]}
+      style={[type.subhead, { fontSize: 14, color: failed ? look.error : home.secondary }]}
     >
       {noOrphan(text)}
     </Text>
