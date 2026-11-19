@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Keyboard, ScrollView, View, type TextInput as TextInputType } from 'react-native';
+import {
+  BackHandler,
+  Keyboard,
+  KeyboardAvoidingView,
+  ScrollView,
+  View,
+  type TextInput as TextInputType,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -31,6 +38,7 @@ import {
 } from '@/android/auth/authErrors';
 import { MIN_PASSWORD_LENGTH } from '@/android/auth/passwordReset';
 import { useAuthT, type AuthKey } from '@/android/auth/strings';
+import { setAuthBackHandler } from '@/android/auth/backPress';
 
 /** Why the app sent someone here; names the title and line (1.2). */
 export type AuthReason = 'sync' | 'share' | 'meeting' | 'cloud' | 'plan' | 'referral';
@@ -219,7 +227,8 @@ export default function AuthScreen({
         return {
           action: 'back' as const,
           label: t('back'),
-          onPress: resetBusy ? undefined : () => go(signInAgainEmail ? 'again' : 'signin'),
+          disabled: resetBusy,
+          onPress: () => go(signInAgainEmail ? 'again' : 'signin'),
         };
       default:
         // Back still cancels while signing in (1.6).
@@ -230,6 +239,23 @@ export default function AuthScreen({
         };
     }
   })();
+
+  // The system back gesture steps back inside the screen before it leaves it.
+  const backRef = useRef<() => boolean>(() => false);
+  backRef.current = () => {
+    if (view === 'start' || view === 'again') return false;
+    if (!('disabled' in header && header.disabled)) header.onPress?.();
+    return true;
+  };
+  useEffect(() => {
+    const press = () => backRef.current();
+    setAuthBackHandler(press);
+    const subscription = BackHandler.addEventListener('hardwareBackPress', press);
+    return () => {
+      subscription.remove();
+      setAuthBackHandler(null);
+    };
+  }, []);
 
   const providers = (only?: SignInMethod) => (
     <View style={authLayout.group}>
@@ -268,7 +294,7 @@ export default function AuthScreen({
             <AuthLine text={t(bodyKey)} />
           ) : null}
         </View>
-        <View style={{ flex: 1, minHeight: 24 }} />
+        <View style={{ flex: 1, minHeight: typing ? 0 : 24 }} />
         {/* The keyboard pushes the stack up; the field and Continue stay above it (1.3). */}
         {typing ? null : providers()}
         {typing ? null : <OrDivider label={t('or')} />}
@@ -413,33 +439,36 @@ export default function AuthScreen({
   return (
     <AuthBackground>
       <StatusBar style="light" />
-      <ScrollView
-        ref={scroll}
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingTop: insets.top,
-          paddingBottom: Math.max(insets.bottom, 8),
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
+      {/* Edge-to-edge Android doesn't resize the window for the keyboard. */}
+      <KeyboardAvoidingView style={{ flex: 1, paddingTop: insets.top }} behavior="height">
         <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
           <AuthHeader {...header} />
         </View>
-        {view === 'forgot' ? (
-          <ForgotPassword
-            initialEmail={email}
-            onBusyChange={setResetBusy}
-            onBackToSignIn={() => go(signInAgainEmail ? 'again' : 'signin')}
-          />
-        ) : view === 'start' || view === 'another' ? (
-          startView()
-        ) : (
-          passwordView()
-        )}
-      </ScrollView>
+        <ScrollView
+          ref={scroll}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            // The keyboard already covers the navigation bar.
+            paddingBottom: keyboardUp ? 8 : Math.max(insets.bottom, 8),
+          }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          {view === 'forgot' ? (
+            <ForgotPassword
+              initialEmail={email}
+              onBusyChange={setResetBusy}
+              onBackToSignIn={() => go(signInAgainEmail ? 'again' : 'signin')}
+            />
+          ) : view === 'start' || view === 'another' ? (
+            startView()
+          ) : (
+            passwordView()
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </AuthBackground>
   );
 }

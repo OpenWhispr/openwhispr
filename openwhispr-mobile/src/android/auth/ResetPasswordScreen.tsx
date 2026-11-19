@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { resetPasswordWithToken } from '@/lib/authClient.android';
@@ -115,93 +115,95 @@ export function ResetPasswordScreen({
   return (
     <AuthBackground>
       <StatusBar style="light" />
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingTop: insets.top,
-          paddingBottom: Math.max(insets.bottom, 8),
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
+      {/* Edge-to-edge Android doesn't resize the window for the keyboard. */}
+      <KeyboardAvoidingView style={{ flex: 1, paddingTop: insets.top }} behavior="height">
         <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
           <AuthHeader label={t('back')} />
         </View>
-        {stage === 'expired' ? (
-          <ForgotPassword
-            initialEmail={email ?? ''}
-            title={t('linkExpiredTitle')}
-            body={t('linkExpiredBody')}
-            sendLabel={t('sendNewLink')}
-            onBackToSignIn={onSignIn}
-          />
-        ) : stage === 'done' ? (
-          <View style={authLayout.content}>
-            <View style={authLayout.stack}>
-              <AuthTitle>{t('passwordUpdatedTitle')}</AuthTitle>
-              <AuthLine text={t(signedIn ? 'passwordUpdatedBody' : 'passwordUpdatedSignIn')} />
-            </View>
-            <WhiteButton
-              label={signedIn ? t('continue') : t('signIn')}
-              onPress={signedIn ? onContinue : onSignIn}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingBottom: Math.max(insets.bottom, 8),
+          }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          {stage === 'expired' ? (
+            <ForgotPassword
+              initialEmail={email ?? ''}
+              title={t('linkExpiredTitle')}
+              body={t('linkExpiredBody')}
+              sendLabel={t('sendNewLink')}
+              onBackToSignIn={onSignIn}
             />
-          </View>
-        ) : (
-          <View style={authLayout.content}>
-            <View style={authLayout.stack}>
-              <AuthTitle>{t('newPasswordTitle')}</AuthTitle>
-              {email ? <AuthLine text={t('newPasswordFor', { email })} /> : null}
-            </View>
-            <View style={authLayout.stack}>
-              <View style={authLayout.group}>
-                <AuthField
-                  value={password}
-                  onChangeText={(value) => {
-                    setPassword(value);
-                    setTooShort(false);
-                  }}
-                  placeholder={t('newPasswordField')}
-                  accessibilityLabel={t('newPasswordField')}
-                  secureTextEntry={!shown}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="new-password"
-                  autoFocus
-                  returnKeyType="done"
-                  onSubmitEditing={() => void save()}
-                  error={tooShort}
-                  faded={saving}
-                  reveal={{
-                    shown,
-                    onToggle: () => setShown((value) => !value),
-                    show: t('showPassword'),
-                    hide: t('hidePassword'),
-                    showLabel: t('showPasswordLabel'),
-                    hideLabel: t('hidePasswordLabel'),
-                  }}
-                />
-                {/* The rule sits quietly under the field and ticks when met; red only after Save. */}
-                {tooShort ? (
-                  <FieldNote error text={t('passwordTooShort')} />
-                ) : (
-                  <View style={{ opacity: saving ? 0.5 : met ? 1 : 0.72 }}>
-                    <FieldNote text={`${met ? '✓ ' : ''}${t('atLeast8')}`} />
-                  </View>
-                )}
+          ) : stage === 'done' ? (
+            <View style={authLayout.content}>
+              <View style={authLayout.stack}>
+                <AuthTitle>{t('passwordUpdatedTitle')}</AuthTitle>
+                <AuthLine text={t(signedIn ? 'passwordUpdatedBody' : 'passwordUpdatedSignIn')} />
               </View>
               <WhiteButton
-                label={t('savePassword')}
-                busy={saving}
-                busyLabel={t('saving')}
-                disabled={!password}
-                onPress={() => void save()}
+                label={signedIn ? t('continue') : t('signIn')}
+                onPress={signedIn ? onContinue : onSignIn}
               />
             </View>
-          </View>
-        )}
-      </ScrollView>
+          ) : (
+            <View style={authLayout.content}>
+              <View style={authLayout.stack}>
+                <AuthTitle>{t('newPasswordTitle')}</AuthTitle>
+                {email ? <AuthLine text={t('newPasswordFor', { email })} /> : null}
+              </View>
+              <View style={authLayout.stack}>
+                <View style={authLayout.group}>
+                  <AuthField
+                    value={password}
+                    onChangeText={(value) => {
+                      setPassword(value);
+                      setTooShort(false);
+                    }}
+                    placeholder={t('newPasswordField')}
+                    accessibilityLabel={t('newPasswordField')}
+                    secureTextEntry={!shown}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="new-password"
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={() => void save()}
+                    error={tooShort}
+                    faded={saving}
+                    reveal={{
+                      shown,
+                      onToggle: () => setShown((value) => !value),
+                      show: t('showPassword'),
+                      hide: t('hidePassword'),
+                      showLabel: t('showPasswordLabel'),
+                      hideLabel: t('hidePasswordLabel'),
+                    }}
+                  />
+                  {/* The rule sits quietly under the field and ticks when met; red only after Save. */}
+                  {tooShort ? (
+                    <FieldNote error text={t('passwordTooShort')} />
+                  ) : (
+                    <View style={{ opacity: saving ? 0.5 : met ? 1 : 0.72 }}>
+                      <FieldNote text={`${met ? '✓ ' : ''}${t('atLeast8')}`} />
+                    </View>
+                  )}
+                </View>
+                <WhiteButton
+                  label={t('savePassword')}
+                  busy={saving}
+                  busyLabel={t('saving')}
+                  disabled={!password}
+                  onPress={() => void save()}
+                />
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </AuthBackground>
   );
 }

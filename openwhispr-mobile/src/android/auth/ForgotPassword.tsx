@@ -118,7 +118,7 @@ export function ForgotPassword({
           <AuthLine text={t('checkEmailBody', { email: email.trim() })} />
         </View>
         <View style={authLayout.stack}>
-          <FieldNote text={t('checkEmailHint')} />
+          <FieldNote quiet text={t('checkEmailHint')} />
           <WhiteButton
             label={t('openEmailApp')}
             onPress={() => {

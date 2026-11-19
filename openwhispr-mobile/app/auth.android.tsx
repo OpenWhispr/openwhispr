@@ -12,7 +12,6 @@ export default function AuthRoute() {
     reason?: string;
   }>();
   const user = useAuthStore((state) => state.user);
-  const isGuest = useAuthStore((state) => state.isGuest);
   const sessionRejected = useUsageStore((state) => state.sessionRejected);
 
   useEffect(() => {
@@ -36,9 +35,9 @@ export default function AuthRoute() {
       reason={isAuthReason(params.reason) ? params.reason : undefined}
       // The server refused this account's session: sign it in again (2.5), keeping its notes.
       signInAgainEmail={sessionRejected && user && !user.isAnonymous ? user.email : undefined}
-      // Also hidden for an anonymous session: the default guest action clears
-      // the session, which would destroy their notes and any subscription.
-      hideGuestContinue={isGuest || !!user}
+      // In the app someone is already using OpenWhispr without an account, so there is no guest
+      // link (1.2); for an anonymous session it would also clear the session, notes and all.
+      hideGuestContinue
       onClose={() => {
         if (router.canGoBack()) {
           router.back();

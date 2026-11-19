@@ -31,7 +31,7 @@ function mockSetAuth(patch: Partial<MockAuth>) {
 }
 jest.mock('@/store/useAuthStore', () => {
   const { useSyncExternalStore } = require('react');
-  const hook = (selector?: (state: MockAuth) => unknown) => {
+  const useMockAuthStore = (selector?: (state: MockAuth) => unknown) => {
     const state = useSyncExternalStore(
       (listener: () => void) => {
         mockListeners.add(listener);
@@ -41,9 +41,9 @@ jest.mock('@/store/useAuthStore', () => {
     );
     return selector ? selector(state) : state;
   };
-  hook.getState = () => mockAuth;
-  hook.setState = (patch: Partial<MockAuth>) => mockSetAuth(patch);
-  return { useAuthStore: hook };
+  useMockAuthStore.getState = () => mockAuth;
+  useMockAuthStore.setState = (patch: Partial<MockAuth>) => mockSetAuth(patch);
+  return { useAuthStore: useMockAuthStore };
 });
 const mockCheckUser = jest.fn();
 jest.mock('@/lib/authClient', () => ({ checkUserExists: (email: string) => mockCheckUser(email) }));
@@ -87,6 +87,7 @@ jest.mock('../../../modules/android-dictation/src', () => ({
 
 import AuthScreen from '@/screens/AuthScreen.android';
 import { ResetPasswordScreen } from '../auth/ResetPasswordScreen';
+import { handleAuthBack } from '../auth/backPress';
 
 beforeEach(() => {
   store.clear();
@@ -193,6 +194,25 @@ describe('Android sign-in screen', () => {
     await act(async () => fireEvent.press(view.getByText('Send reset link')));
     expect(view.getByText('Resend in 4:59')).toBeTruthy();
     expect(mockToast).toHaveBeenCalledWith('Too many tries. Wait a few minutes.', 'neutral');
+  });
+
+  it('steps back inside the screen on the system back gesture before leaving it', () => {
+    const onClose = jest.fn();
+    const view = render(<AuthScreen signInAgainEmail="alex@example.com" onClose={onClose} />);
+    fireEvent.press(view.getByText('Forgot password?'));
+    expect(view.getByText('Reset your password')).toBeTruthy();
+    let used = false;
+    act(() => {
+      used = handleAuthBack();
+    });
+    expect(used).toBe(true);
+    expect(view.getByText('Sign in again')).toBeTruthy();
+    // On its first step the press belongs to whatever hosts the screen.
+    act(() => {
+      used = handleAuthBack();
+    });
+    expect(used).toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('checks the address before sending (3.2)', async () => {

@@ -107,10 +107,13 @@ export function AuthHeader({
   action,
   label,
   onPress,
+  disabled,
 }: {
   action?: 'back' | 'close';
   label: string;
   onPress?: () => void;
+  /** Shown faded and locked, as while a reset link is sending (3.3). */
+  disabled?: boolean;
 }) {
   return (
     <View style={s.header}>
@@ -122,10 +125,12 @@ export function AuthHeader({
         <Pressable
           cssInterop={false}
           onPress={onPress}
+          disabled={disabled}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={label}
-          style={({ pressed }) => [s.circle, pressed && s.pressed]}
+          accessibilityState={{ disabled: Boolean(disabled) }}
+          style={({ pressed }) => [s.circle, disabled && s.faded, pressed && s.pressed]}
         >
           <SystemIcon
             name={action === 'back' ? 'chevron.left' : 'xmark'}
@@ -334,11 +339,24 @@ export const AuthField = forwardRef<
   );
 });
 
-export function FieldNote({ text, error }: { text: string; error?: boolean }) {
+export function FieldNote({
+  text,
+  error,
+  quiet,
+}: {
+  text: string;
+  error?: boolean;
+  /** A hint rather than a rule: regular weight, the body line's white. */
+  quiet?: boolean;
+}) {
   return (
     <Text
       accessibilityLiveRegion={error ? 'polite' : 'none'}
-      style={[s.note, error && { color: authColors.errorText }]}
+      style={[
+        s.note,
+        quiet && { fontFamily: AppFont.regular, color: authColors.line },
+        error && { color: authColors.errorText },
+      ]}
     >
       {text}
     </Text>
