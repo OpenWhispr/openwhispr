@@ -322,3 +322,139 @@ export function FolderNameSheet({
     </BottomSheet>
   );
 }
+
+/**
+ * R0: what will be recorded and where it runs, then one glass Start recording. The meeting
+ * row names the calendar event found (tap to pick another or none); Change goes to Processing.
+ */
+export function StartSheet({
+  visible,
+  onClose,
+  events,
+  event,
+  onPickEvent,
+  onDevice,
+  needsModel,
+  now,
+  onChange,
+  onStart,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  events: GoogleCalendarEvent[];
+  event: GoogleCalendarEvent | null;
+  onPickEvent: (event: GoogleCalendarEvent | null) => void;
+  onDevice: boolean;
+  needsModel: boolean;
+  now: number;
+  onChange: () => void;
+  onStart: () => void;
+}) {
+  const t = useNotesT();
+  const [picking, setPicking] = useState(false);
+  useEffect(() => {
+    if (!visible) setPicking(false);
+  }, [visible]);
+  const people = event
+    ? (parseCalendarParticipants(event.attendeesJson) ?? []).filter((person) => !person.resource)
+        .length
+    : 0;
+  const when = event
+    ? eventIsNow(event, now)
+      ? t('now')
+      : `${timeOf(event.startAt)} · ${t('inMinutes', { count: minutesUntil(event, now) }).toLowerCase()}`
+    : '';
+  if (picking)
+    return (
+      <BottomSheet
+        visible={visible}
+        onClose={onClose}
+        title={t('pickEvent')}
+        onBack={() => setPicking(false)}
+      >
+        <Card>
+          {events.map((value) => (
+            <ListRow
+              key={value.id}
+              icon="Calendar"
+              title={value.summary?.trim() || t('recordMeeting')}
+              subtitle={eventIsNow(value, now) ? t('now') : timeOf(value.startAt)}
+              chevron={false}
+              selected={event?.id === value.id}
+              onPress={() => {
+                onPickEvent(value);
+                setPicking(false);
+              }}
+            />
+          ))}
+          <ListRow
+            icon="CalendarX"
+            iconColor={home.secondary}
+            title={t('noEvent')}
+            subtitle={t('noEventBody')}
+            chevron={false}
+            selected={event == null}
+            onPress={() => {
+              onPickEvent(null);
+              setPicking(false);
+            }}
+          />
+        </Card>
+      </BottomSheet>
+    );
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title={t('recordMeeting')}>
+      <Card>
+        {events.length > 0 ? (
+          <ListRow
+            icon="Calendar"
+            title={event ? event.summary?.trim() || t('recordMeeting') : t('noEvent')}
+            subtitle={
+              event
+                ? [when, 'Google Calendar', people > 1 ? t('people', { count: people }) : null]
+                    .filter(Boolean)
+                    .join(' · ')
+                : t('noEventBody')
+            }
+            onPress={() => setPicking(true)}
+          />
+        ) : null}
+        <ListRow
+          icon={onDevice ? 'Smartphone' : 'Cloud'}
+          title={t(onDevice ? 'onPhone' : 'liveOnCloud')}
+          subtitle={t(onDevice ? 'onPhoneBody' : 'liveOnCloudBody')}
+          chevron={false}
+          right={
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              onPress={onChange}
+              hitSlop={8}
+              style={({ pressed }) => ({ paddingHorizontal: 4, opacity: pressed ? 0.6 : 1 })}
+            >
+              <Text style={{ color: home.accent, fontSize: 16, fontWeight: '600' }}>
+                {t('change')}
+              </Text>
+            </Pressable>
+          }
+        />
+        {onDevice && needsModel ? (
+          <ListRow
+            icon="Download"
+            title={t('needsSpeechModel')}
+            subtitle={t('needsSpeechModelBody')}
+            onPress={onChange}
+          />
+        ) : null}
+      </Card>
+      <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary }}>
+        {t('startFooter')}
+      </Text>
+      <GlassButton
+        label={t('startRecording')}
+        onPress={onStart}
+        disabled={onDevice && needsModel}
+      />
+    </BottomSheet>
+  );
+}

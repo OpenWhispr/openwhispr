@@ -3,6 +3,7 @@ import type React from 'react';
 import { ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { BRAND } from '@/config/colors';
+import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 
 export interface LiveTranscriptListProps {
@@ -51,7 +52,7 @@ export function LiveTranscriptListView({
         <Text
           key={utterance.itemId}
           {...(selectable ? { selectable: true } : {})}
-          className="text-[16px] leading-6 text-label"
+          className="text-[16px] leading-[23px] text-label"
         >
           {utterance.text}
         </Text>
@@ -60,9 +61,11 @@ export function LiveTranscriptListView({
         <Text className="text-[16px] leading-6 text-tertiaryLabel">{partialText}</Text>
       ) : null}
       {!isEmpty && active ? (
-        <View className="flex-row items-center gap-2 pb-2">
-          <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: BRAND }} />
-          <Text className="text-[13px] font-medium text-secondaryLabel">Transcribing…</Text>
+        <View className="flex-row items-center gap-1.5 pb-2">
+          <SystemIcon name="waveform" mdName="AudioLines" size={14} color={BRAND} />
+          <Text className="text-[14px] font-medium" style={{ color: BRAND }}>
+            Listening…
+          </Text>
         </View>
       ) : null}
     </ScrollView>

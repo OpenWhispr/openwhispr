@@ -17,19 +17,6 @@ jest.mock('@/screens/NoteEditorScreen', () => {
   };
 });
 
-jest.mock('@/hooks/useChatSendGate', () => {
-  const ios =
-    jest.requireActual<typeof import('@/hooks/useChatSendGate')>('@/hooks/useChatSendGate');
-  const android = jest.requireActual<typeof import('@/hooks/useChatSendGate.android')>(
-    '@/hooks/useChatSendGate.android',
-  );
-  return {
-    useChatSendGate: () =>
-      require('react-native').Platform.OS === 'android'
-        ? android.useChatSendGate()
-        : ios.useChatSendGate(),
-  };
-});
 import React from 'react';
 import { ProviderExecutionError } from '@/services/providers/ProviderExecutionError';
 import { Alert, Modal, Platform } from 'react-native';
@@ -40,8 +27,10 @@ import { generateNoteTitle } from '@/utils/generateTitle';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { makeContentHash } from '@/lib/utils';
-import { clearLocalReasoningReadinessCache, LocalReasoningError } from '@/lib/localReasoning';
+import { clearLocalReasoningReadinessCache } from '@/lib/localReasoning';
 import { extractCorrections } from '@/lib/correctionLearner';
+import { showToast } from '@/android/settings/kit';
+import { deleteNotesWithUndo } from '@/android/notes/pendingDeletes';
 import type { Action, Note, Segment, Speaker, SpeakerProfile } from '@/data/types';
 import type { Folder, Space } from '@/data';
 import type { UserConfig } from '@/types';
@@ -56,16 +45,10 @@ jest.mock('@/components/notes/EditableMarkdown', () =>
 jest.mock('@/components/notes/GroupedList', () =>
   jest.requireActual('@/components/notes/GroupedList.android'),
 );
-jest.mock('@/components/notes/NoteMetaRow', () =>
-  jest.requireActual('@/components/notes/NoteMetaRow.android'),
-);
 jest.mock('@/components/ui/tabBarClearance', () =>
   jest.requireActual('@/components/ui/tabBarClearance.android'),
 );
 
-let mockRecordingFlags: { isStarting?: boolean; isProcessing?: boolean } = {};
-let mockMenuProcessing = false;
-const mockStartRecording = jest.fn(async () => undefined);
 const mockUpdateNote = jest.fn();
 const mockDeleteNote = jest.fn();
 const mockRetryMeetingTranscription = jest.fn();
@@ -83,6 +66,7 @@ const mockLoadVoiceProfiles = jest.fn();
 
 let mockNote: Note;
 let mockRouteNoteId = '7';
+let mockRouteTab: string | undefined;
 let mockSegments: Segment[];
 let mockSpeakers: Speaker[];
 let mockActions: Action[];
@@ -147,15 +131,26 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 const mockPush = jest.fn();
+const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn(),
-  useLocalSearchParams: () => ({ id: mockRouteNoteId }),
+  useLocalSearchParams: () => ({ id: mockRouteNoteId, tab: mockRouteTab }),
   useRouter: () => ({
     push: mockPush,
     canGoBack: () => true,
-    back: jest.fn(),
+    back: mockBack,
     replace: jest.fn(),
   }),
+}));
+
+jest.mock('@/android/settings/kit', () => ({
+  ...jest.requireActual('@/android/settings/kit'),
+  showToast: jest.fn(),
+}));
+
+jest.mock('@/android/notes/pendingDeletes', () => ({
+  ...jest.requireActual('@/android/notes/pendingDeletes'),
+  deleteNotesWithUndo: jest.fn(),
 }));
 
 jest.mock('expo-clipboard', () => ({
@@ -225,17 +220,6 @@ jest.mock('@/store/useUsageStore', () => {
   return { useUsageStore };
 });
 
-jest.mock('@/hooks/useAudioRecording', () => ({
-  useAudioRecording: () => ({
-    isRecording: false,
-    isProcessing: false,
-    currentText: '',
-    startRecording: mockStartRecording,
-    stopRecording: jest.fn(),
-    ...mockRecordingFlags,
-  }),
-}));
-
 jest.mock('@/hooks/useKeyboardHeight', () => ({
   useKeyboardHeight: () => 0,
 }));
@@ -243,7 +227,6 @@ jest.mock('@/hooks/useKeyboardHeight', () => ({
 jest.mock('@/services/reasoning/ReasoningService', () => ({
   ReasoningService: {
     processText: jest.fn(),
-    chatOverNote: jest.fn(),
   },
   // Off device, so note actions keep the usual dictionary.
   resolveReasoningPlacement: () => ({ localRequired: false }),
@@ -329,51 +312,57 @@ jest.mock('@/components/ui/GlassBackButton', () => ({
     })(),
 }));
 
-jest.mock('@/components/notes/NoteActionsMenu', () => ({
-  NoteActionsMenu: ({
-    actions,
-    processing,
-    onRunAction,
-    onAskNote,
-    askNoteDisabled,
-    onViewTranscript,
-    onDelete,
-  }: {
-    actions: Action[];
-    processing: boolean;
-    onRunAction: (action: Action) => void;
-    onAskNote?: () => void;
-    askNoteDisabled?: boolean;
-    onViewTranscript?: () => void;
-    onDelete: () => void;
-  }) =>
+// The cloud question's latest props, so a test can answer it after the screen has changed.
+let mockCloudSheet: { body: string; onUseCloud: () => void; onDownload?: () => void } | null = null;
+jest.mock('@/android/notes/noteSheets', () => ({
+  ...jest.requireActual('@/android/notes/noteSheets'),
+  // Every action is one tap away, whether or not the template sheet is open.
+  TemplateSheet: ({ actions, onPick }: { actions: Action[]; onPick: (key: string) => void }) =>
     (() => {
-      mockMenuProcessing = processing;
       const { Pressable: MockPressable, Text: MockText, View: MockView } = require('react-native');
       return (
         <MockView>
-          <MockPressable testID="menu-delete-note" onPress={onDelete}>
-            <MockText>Delete test action</MockText>
-          </MockPressable>
           {actions.map((action) => (
             <MockPressable
               key={action.id}
               testID={`run-action-${action.id}`}
-              onPress={() => onRunAction(action)}
+              onPress={() => onPick(action.isDefault === 1 ? 'ai-summary' : `action:${action.id}`)}
             >
               <MockText>{action.name}</MockText>
             </MockPressable>
           ))}
-          {onAskNote ? (
-            <MockText testID="menu-ask-note" accessibilityState={{ disabled: !!askNoteDisabled }}>
-              Ask about this note
-            </MockText>
-          ) : null}
-          {onViewTranscript ? (
-            <MockPressable testID="menu-view-transcript" onPress={onViewTranscript}>
-              <MockText>View Transcript</MockText>
-            </MockPressable>
-          ) : null}
+        </MockView>
+      );
+    })(),
+  NoteMenuSheet: ({ visible, onDelete }: { visible: boolean; onDelete: () => void }) =>
+    (() => {
+      const { Pressable: MockPressable, Text: MockText } = require('react-native');
+      return visible ? (
+        <MockPressable testID="menu-delete-note" onPress={onDelete}>
+          <MockText>Delete</MockText>
+        </MockPressable>
+      ) : null;
+    })(),
+  CloudOnceSheet: ({
+    visible,
+    body,
+    onUseCloud,
+    onDownload,
+  }: {
+    visible: boolean;
+    body: string;
+    onUseCloud: () => void;
+    onDownload?: () => void;
+  }) =>
+    (() => {
+      const { Pressable: MockPressable, Text: MockText, View: MockView } = require('react-native');
+      if (!visible) return null;
+      mockCloudSheet = { body, onUseCloud, onDownload };
+      return (
+        <MockView testID="cloud-once-sheet">
+          <MockText>{body}</MockText>
+          <MockPressable testID="cloud-use-once" onPress={onUseCloud} />
+          {onDownload ? <MockPressable testID="cloud-download" onPress={onDownload} /> : null}
         </MockView>
       );
     })(),
@@ -384,28 +373,6 @@ jest.mock('@/components/notes/MarkdownRenderer', () => ({
     (() => {
       const { Text: MockText } = require('react-native');
       return <MockText>{content}</MockText>;
-    })(),
-}));
-
-jest.mock('@/components/notes/SpeakerTranscript', () => ({
-  SpeakerTranscript: ({
-    blocks,
-    onSpeakerPress,
-  }: {
-    blocks: { text: string }[];
-    onSpeakerPress?: (block: { text: string }) => void;
-  }) =>
-    (() => {
-      const { Text: MockText, View: MockView } = require('react-native');
-      return (
-        <MockView>
-          {blocks.map((block, index) => (
-            <MockText key={index} onPress={() => onSpeakerPress?.(block)}>
-              {block.text}
-            </MockText>
-          ))}
-        </MockView>
-      );
     })(),
 }));
 
@@ -425,81 +392,11 @@ jest.mock('@/components/notes/VoiceprintSuggestionSheet', () => ({
   VoiceprintSuggestionSheet: () => null,
 }));
 
-jest.mock('@/components/notes/TranscriptSheet', () => ({
-  TranscriptSheet: ({
-    visible,
-    shareText,
-    children,
-  }: {
-    visible: boolean;
-    shareText: string;
-    children?: React.ReactNode;
-  }) =>
-    (() => {
-      const { Text: MockText, View: MockView } = require('react-native');
-      return visible ? (
-        <MockView>
-          <MockText testID="transcript-sheet">{shareText}</MockText>
-          {children}
-        </MockView>
-      ) : null;
-    })(),
-}));
-
 jest.mock('@/components/notes/MoveToFolderSheet', () => ({
   MoveToFolderSheet: ({ visible }: { visible: boolean }) =>
     (() => {
       const { Text: MockText } = require('react-native');
       return visible ? <MockText testID="move-sheet">move-sheet</MockText> : null;
-    })(),
-}));
-
-jest.mock('@/components/notes/NoteChatSheet', () => ({
-  NoteChatSheet: ({
-    draft,
-    error,
-    canSend,
-    suggestions,
-    onDraftChange,
-    onSend,
-    onSuggestion,
-    onClose,
-  }: {
-    draft: string;
-    error: string | null;
-    canSend: boolean;
-    suggestions: readonly { label: string; prompt: string }[];
-    onDraftChange: (text: string) => void;
-    onSend: () => void;
-    onSuggestion: (prompt: string) => void;
-    onClose: () => void;
-  }) =>
-    (() => {
-      const {
-        Pressable: MockPressable,
-        Text: MockText,
-        TextInput: MockTextInput,
-        View: MockView,
-      } = require('react-native');
-      return (
-        <MockView>
-          {error ? <MockText testID="chat-error">{error}</MockText> : null}
-          <MockTextInput testID="chat-draft" value={draft} onChangeText={onDraftChange} />
-          <MockPressable
-            testID="chat-send"
-            accessibilityState={{ disabled: !canSend }}
-            onPress={onSend}
-          />
-          <MockPressable testID="chat-close" onPress={onClose} />
-          {suggestions.map((suggestion) => (
-            <MockPressable
-              key={suggestion.label}
-              testID={`chat-suggestion-${suggestion.label}`}
-              onPress={() => onSuggestion(suggestion.prompt)}
-            />
-          ))}
-        </MockView>
-      );
     })(),
 }));
 
@@ -611,18 +508,16 @@ const calendarContextInputForCurrentNote = (): string =>
   });
 
 beforeEach(() => {
-  mockRecordingFlags = {};
   mockDictionaryState.entries = [];
   mockSharedDictionaryTiers = [[], []];
-  mockMenuProcessing = false;
+  mockCloudSheet = null;
   jest.clearAllMocks();
   clearLocalReasoningReadinessCache();
   mockRouteNoteId = '7';
+  mockRouteTab = undefined;
   mockAppleAvailability = 'available';
   mockAuthState.user = { id: 'user-1', email: 'user@example.com', emailVerified: true };
   mockConfigState.config.inference = undefined;
-  mockConfigState.config.dictationAgentEnabled = undefined;
-  mockConfigState.config.noteChatEnabled = undefined;
   mockProcessingModeState.activeMode = 'cloud';
   mockActions = [defaultAction()];
   mockActionsState.actions = mockActions;
@@ -812,41 +707,65 @@ describe('NoteEditorScreen generated meeting context', () => {
     expect(request.text).not.toContain('Unknown speaker');
   });
 
-  it('offers enable local AI alongside cloud once when local intelligence is disabled', async () => {
+  it('asks in a sheet, with a text-model download beside Cloud once, before a private note leaves the phone', async () => {
     mockProcessingModeState.activeMode = 'private';
     mockNote = note({ isPrivate: 1 });
     mockNotesState.notes = [mockNote];
     mockConfigState.config.appleLocalIntelligenceEnabled = false;
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 
-    const { getByTestId } = render(<NoteEditorScreen />);
+    const { getByTestId, queryByTestId } = render(<NoteEditorScreen />);
 
     await act(async () => {
       fireEvent.press(getByTestId('run-action-1'));
     });
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
-    const buttons = alertSpy.mock.calls[0][2] ?? [];
-    expect(buttons.map((button) => button.text)).toEqual([
-      'Cancel',
-      'Enable Local AI',
-      'Use Cloud Once',
-    ]);
+    await waitFor(() => expect(getByTestId('cloud-once-sheet')).toBeTruthy());
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(ReasoningService.processText).not.toHaveBeenCalled();
 
     await act(async () => {
-      buttons[1]?.onPress?.();
+      fireEvent.press(getByTestId('cloud-use-once'));
     });
 
-    await waitFor(() =>
-      expect(mockUpdateConfig).toHaveBeenCalledWith({
-        appleLocalIntelligenceEnabled: true,
-      }),
-    );
     await waitFor(() => expect(ReasoningService.processText).toHaveBeenCalledTimes(1));
+    expect((ReasoningService.processText as jest.Mock).mock.calls[0][0].routing).toMatchObject({
+      isPrivateNote: true,
+      allowCloudFallback: true,
+    });
+    expect(queryByTestId('cloud-once-sheet')).toBeNull();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
 
     alertSpy.mockRestore();
     mockProcessingModeState.activeMode = 'cloud';
   });
+
+  it('sends you to download a text model instead of using Cloud', async () => {
+    mockNote = note({ isPrivate: 1 });
+    mockNotesState.notes = [mockNote];
+    mockConfigState.config.appleLocalIntelligenceEnabled = false;
+
+    const { getByTestId, queryByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('run-action-1'));
+    });
+    await waitFor(() => expect(getByTestId('cloud-download')).toBeTruthy());
+
+    fireEvent.press(getByTestId('cloud-download'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(account)/ai-models');
+    expect(queryByTestId('cloud-once-sheet')).toBeNull();
+    expect(ReasoningService.processText).not.toHaveBeenCalled();
+  });
+
+  // The Summary tab carries an orange dot when the notes changed since it was written.
+  const staleDots = (screen: ReturnType<typeof render>) =>
+    screen
+      .getByTestId('note-tab-enhanced')
+      .findAll(
+        (node: { type: unknown; props: { style?: { backgroundColor?: string } } }) =>
+          typeof node.type === 'string' && node.props.style?.backgroundColor === '#FF9500',
+      );
 
   it('does not mark a freshly generated calendar-context note stale before actions load', () => {
     mockActions = [];
@@ -859,249 +778,17 @@ describe('NoteEditorScreen generated meeting context', () => {
     });
     mockNotesState.notes = [mockNote];
 
-    const { queryByTestId } = render(<NoteEditorScreen />);
-
-    expect(queryByTestId('enhanced-stale-indicator')).toBeNull();
-  });
-});
-
-describe('NoteEditorScreen note chat', () => {
-  const PILL = 'note-ask-pill';
-
-  it('shows the Ask pill instead of the menu entry once a meeting has finished', () => {
-    const { getByTestId, queryByText } = render(<NoteEditorScreen />);
-    expect(getByTestId(PILL)).toBeTruthy();
-    expect(queryByText('Ask about this note')).toBeNull();
+    expect(staleDots(render(<NoteEditorScreen />))).toHaveLength(0);
   });
 
-  it('shows the Ask pill for a synced meeting that kept the local idle status', () => {
-    mockNote = note({ transcriptionStatus: 'idle' });
-    mockNotesState.notes = [mockNote];
-    const { getByTestId } = render(<NoteEditorScreen />);
-    expect(getByTestId(PILL)).toBeTruthy();
-  });
-
-  it('keeps the Ask pill once notes have been generated', () => {
+  it('marks the summary stale once the notes behind it change', () => {
     mockNote = note({
       enhancedContent: 'Generated calendar-aware notes',
-      enhancementPrompt: 'Transform this meeting into notes.',
+      enhancedAtContentHash: makeContentHash('an older version of the notes'),
     });
     mockNotesState.notes = [mockNote];
-    const { getByTestId } = render(<NoteEditorScreen />);
-    expect(getByTestId(PILL)).toBeTruthy();
-  });
 
-  it.each(['recording', 'transcribing', 'diarizing'] as const)(
-    'hides the Ask pill while the meeting is %s',
-    (transcriptionStatus) => {
-      mockNote = note({ transcriptionStatus });
-      mockNotesState.notes = [mockNote];
-      const { queryByTestId } = render(<NoteEditorScreen />);
-      expect(queryByTestId(PILL)).toBeNull();
-    },
-  );
-
-  it('keeps Ask about this note in the menu and note-worded shortcuts for a plain note', () => {
-    mockNote = note({
-      noteType: 'personal',
-      diarizationEnabled: 0,
-      calendarEventId: null,
-      participants: null,
-    });
-    mockNotesState.notes = [mockNote];
-    mockSegments = [];
-    const { getByText, getByTestId, queryByTestId } = render(<NoteEditorScreen />);
-    expect(getByText('Ask about this note')).toBeTruthy();
-    expect(queryByTestId(PILL)).toBeNull();
-    expect(getByTestId('chat-suggestion-Summarize')).toBeTruthy();
-    expect(queryByTestId('chat-suggestion-Key decisions')).toBeNull();
-  });
-
-  it('lets you ask about a plain note that only has generated notes', () => {
-    mockNote = note({
-      noteType: 'personal',
-      diarizationEnabled: 0,
-      calendarEventId: null,
-      participants: null,
-      content: '',
-      enhancedContent: '## Summary',
-    });
-    mockNotesState.notes = [mockNote];
-    mockSegments = [];
-    const { getByTestId } = render(<NoteEditorScreen />);
-    expect(getByTestId('menu-ask-note').props.accessibilityState.disabled).toBe(false);
-  });
-
-  it('disables Ask on an empty plain note', () => {
-    mockNote = note({
-      noteType: 'personal',
-      diarizationEnabled: 0,
-      calendarEventId: null,
-      participants: null,
-      content: '',
-    });
-    mockNotesState.notes = [mockNote];
-    mockSegments = [];
-    const { getByTestId } = render(<NoteEditorScreen />);
-    expect(getByTestId('menu-ask-note').props.accessibilityState.disabled).toBe(true);
-  });
-
-  it('offers note-worded shortcuts for an uploaded recording', () => {
-    mockNote = note({ noteType: 'upload', diarizationEnabled: 0, calendarEventId: null });
-    mockNotesState.notes = [mockNote];
-    const { getByTestId, queryByTestId } = render(<NoteEditorScreen />);
-    expect(getByTestId(PILL)).toBeTruthy();
-    expect(getByTestId('chat-suggestion-Summarize')).toBeTruthy();
-    expect(queryByTestId('chat-suggestion-Key decisions')).toBeNull();
-  });
-
-  it('hides every Ask entry point when note chat is off', () => {
-    Object.assign(mockConfigState.config, { noteChatEnabled: false });
-    const { queryByText, queryByTestId } = render(<NoteEditorScreen />);
-    expect(queryByText('Ask about this note')).toBeNull();
-    expect(queryByTestId(PILL)).toBeNull();
-  });
-
-  it('keeps note chat when only the voice assistant is off', () => {
-    Object.assign(mockConfigState.config, { dictationAgentEnabled: false });
-    const { getByTestId } = render(<NoteEditorScreen />);
-    expect(getByTestId(PILL)).toBeTruthy();
-  });
-
-  it('sends a meeting shortcut prompt immediately when its chip is tapped', async () => {
-    (ReasoningService.chatOverNote as jest.Mock).mockResolvedValue({ text: 'Answer', model: 'x' });
-    const { getByTestId } = render(<NoteEditorScreen />);
-    await act(async () => {
-      fireEvent.press(getByTestId('chat-suggestion-List action items'));
-    });
-    await waitFor(() => expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(1));
-    expect((ReasoningService.chatOverNote as jest.Mock).mock.calls[0][0].question).toBe(
-      'What are the next steps from the meeting above that I need to do?',
-    );
-  });
-
-  it('asks about the note and its generated notes', async () => {
-    mockNote = note({ enhancedContent: '## Summary\n- Launch Friday' });
-    mockNotesState.notes = [mockNote];
-    (ReasoningService.chatOverNote as jest.Mock).mockResolvedValue({ text: 'Answer', model: 'x' });
-    const { getByTestId } = render(<NoteEditorScreen />);
-    await act(async () => {
-      fireEvent.press(getByTestId('chat-suggestion-List action items'));
-    });
-    await waitFor(() => expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(1));
-    const { context } = (ReasoningService.chatOverNote as jest.Mock).mock.calls[0][0];
-    expect(context).toContain('Alice owns the launch checklist.');
-    expect(context).toContain('Generated notes:\n## Summary\n- Launch Friday');
-  });
-
-  it('asks about the note alone when the generated notes push it past the on-device limit', async () => {
-    mockNote = note({ enhancedContent: '## Summary\n- Launch Friday' });
-    mockNotesState.notes = [mockNote];
-    (ReasoningService.chatOverNote as jest.Mock)
-      .mockRejectedValueOnce(new LocalReasoningError('LOCAL_CONTEXT_LIMIT', 'Too large'))
-      .mockResolvedValueOnce({ text: 'Answer', model: 'x' });
-    const { getByTestId } = render(<NoteEditorScreen />);
-    await act(async () => {
-      fireEvent.press(getByTestId('chat-suggestion-List action items'));
-    });
-    await waitFor(() => expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(2));
-    const retry = (ReasoningService.chatOverNote as jest.Mock).mock.calls[1][0];
-    expect(retry.context).toContain('Alice owns the launch checklist.');
-    expect(retry.context).not.toContain('Launch Friday');
-  });
-
-  it('does not ask again once the chat is closed', async () => {
-    mockNote = note({ enhancedContent: '## Summary\n- Launch Friday' });
-    mockNotesState.notes = [mockNote];
-    let failFirstAsk: (error: Error) => void = () => undefined;
-    (ReasoningService.chatOverNote as jest.Mock).mockReturnValueOnce(
-      new Promise((_resolve, reject) => {
-        failFirstAsk = reject;
-      }),
-    );
-    const { getByTestId } = render(<NoteEditorScreen />);
-    await act(async () => {
-      fireEvent.press(getByTestId('chat-suggestion-List action items'));
-    });
-    await waitFor(() => expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(1));
-
-    fireEvent.press(getByTestId('chat-close'));
-    await act(async () => {
-      failFirstAsk(new LocalReasoningError('LOCAL_CONTEXT_LIMIT', 'Too large'));
-    });
-
-    expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(1);
-  });
-
-  it('lets you send a question about a note that only has generated notes', () => {
-    mockNote = note({
-      noteType: 'personal',
-      diarizationEnabled: 0,
-      calendarEventId: null,
-      participants: null,
-      content: '',
-      enhancedContent: '## Summary',
-    });
-    mockNotesState.notes = [mockNote];
-    mockSegments = [];
-    const { getByTestId } = render(<NoteEditorScreen />);
-    expect(getByTestId('chat-send').props.accessibilityState.disabled).toBe(false);
-  });
-
-  it('asks only once when chat fails for another reason', async () => {
-    mockNote = note({ enhancedContent: '## Summary\n- Launch Friday' });
-    mockNotesState.notes = [mockNote];
-    (ReasoningService.chatOverNote as jest.Mock).mockRejectedValueOnce(new Error('offline'));
-    const { getByTestId } = render(<NoteEditorScreen />);
-    await act(async () => {
-      fireEvent.press(getByTestId('chat-suggestion-List action items'));
-    });
-    await waitFor(() => expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(1));
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('NoteEditorScreen note chat errors', () => {
-  it('words an on-device failure in note chat instead of showing the native text', async () => {
-    const chatErrorMessage = jest.requireActual('@/lib/chat/chatErrorMessage');
-    const toChatErrorMessage = jest.spyOn(chatErrorMessage, 'toChatErrorMessage');
-    (ReasoningService.chatOverNote as jest.Mock).mockRejectedValueOnce(
-      new LocalReasoningError('APPLE_LLM_FAILED', 'GenerationError -1'),
-    );
-    const { getByTestId, findByTestId } = render(<NoteEditorScreen />);
-    await act(async () => {
-      fireEvent.press(getByTestId('chat-suggestion-List action items'));
-    });
-
-    expect((await findByTestId('chat-error')).props.children).toBe(
-      chatErrorMessage.CHAT_ON_DEVICE_UNAVAILABLE_MESSAGE,
-    );
-    expect(toChatErrorMessage).toHaveBeenCalledWith(expect.any(LocalReasoningError), {
-      surface: 'noteChat',
-    });
-    toChatErrorMessage.mockRestore();
-  });
-
-  it('says an empty answer came back rather than showing a blank bubble', async () => {
-    const { CHAT_EMPTY_ANSWER_MESSAGE } = jest.requireActual('@/lib/chat/chatErrorMessage');
-    (ReasoningService.chatOverNote as jest.Mock).mockResolvedValueOnce({ text: ' ', model: 'x' });
-    const { getByTestId, findByTestId } = render(<NoteEditorScreen />);
-    await act(async () => {
-      fireEvent.press(getByTestId('chat-suggestion-List action items'));
-    });
-    expect((await findByTestId('chat-error')).props.children).toBe(CHAT_EMPTY_ANSWER_MESSAGE);
-  });
-
-  it('shows another failure’s own text', async () => {
-    (ReasoningService.chatOverNote as jest.Mock).mockRejectedValueOnce(new Error('offline'));
-    const { getByTestId, findByTestId } = render(<NoteEditorScreen />);
-    await act(async () => {
-      fireEvent.press(getByTestId('chat-suggestion-List action items'));
-    });
-    expect((await findByTestId('chat-error')).props.children).toBe('offline');
+    expect(staleDots(render(<NoteEditorScreen />))).toHaveLength(1);
   });
 });
 
@@ -1322,20 +1009,6 @@ describe('NoteEditorScreen On-Device and provider routes', () => {
     const labels = (alertSpy.mock.calls[0][2] ?? []).map((button: { text: string }) => button.text);
     expect(labels).toEqual(['Cancel', 'Enable Local AI', 'Use Groq Once']);
   });
-
-  it('lets a signed-out user chat with a note when chat is On-Device', async () => {
-    mockAuthState.user = null;
-    mockConfigState.config.inference = { noteChat: { mode: 'local' } };
-    (ReasoningService.chatOverNote as jest.Mock).mockResolvedValue({ text: 'Answer', model: 'x' });
-    const { getByTestId } = render(<NoteEditorScreen />);
-    fireEvent.changeText(getByTestId('chat-draft'), 'Who owns the launch?');
-    await act(async () => {
-      fireEvent.press(getByTestId('chat-send'));
-    });
-    await waitFor(() => expect(ReasoningService.chatOverNote).toHaveBeenCalledTimes(1));
-    expect(alertSpy).not.toHaveBeenCalled();
-    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
-  });
 });
 
 describe('NoteEditorScreen body tabs', () => {
@@ -1352,31 +1025,67 @@ describe('NoteEditorScreen body tabs', () => {
     jest.useRealTimers();
   });
 
-  it('shows Transcript and My notes on a meeting before notes are generated', () => {
-    const { getByTestId, queryByTestId, getByText } = render(<NoteEditorScreen />);
-    expect(getByTestId('note-tab-transcript')).toBeTruthy();
+  it('opens a meeting on Summary, with Notes and Transcript beside it, before notes are generated', () => {
+    const { getByTestId, getByText, queryByText } = render(<NoteEditorScreen />);
+    expect(getByTestId('note-tab-enhanced')).toBeTruthy();
     expect(getByTestId('note-tab-notes')).toBeTruthy();
-    expect(queryByTestId('note-tab-enhanced')).toBeNull();
+    expect(getByTestId('write-summary')).toBeTruthy();
+    expect(queryByText('Alice can take the first pass.')).toBeNull();
+
+    fireEvent.press(getByTestId('note-tab-transcript'));
+
     expect(getByText('Alice can take the first pass.')).toBeTruthy();
   });
 
-  it('shows Enhanced and My notes once notes are generated', () => {
+  it('keeps the Transcript tab once notes are generated', () => {
     mockNote = note({ enhancedContent: '## Summary' });
     mockNotesState.notes = [mockNote];
-    const { getByTestId, queryByTestId, getByText } = render(<NoteEditorScreen />);
-    expect(getByTestId('note-tab-enhanced')).toBeTruthy();
-    expect(getByTestId('note-tab-notes')).toBeTruthy();
-    expect(queryByTestId('note-tab-transcript')).toBeNull();
+    const { getByTestId, getByText, queryByTestId } = render(<NoteEditorScreen />);
     expect(getByText('## Summary')).toBeTruthy();
+    expect(getByTestId('note-tab-notes')).toBeTruthy();
+    expect(getByTestId('note-tab-transcript')).toBeTruthy();
+    expect(queryByTestId('write-summary')).toBeNull();
   });
 
-  it('shows no tabs on a plain note without generated notes', () => {
+  it('opens a plain note on Notes, with Summary beside it and no Transcript', () => {
     mockNote = plainNote();
     mockNotesState.notes = [mockNote];
     mockSegments = [];
     const { queryByTestId, getByTestId } = render(<NoteEditorScreen />);
-    expect(queryByTestId('note-tab-notes')).toBeNull();
+    expect(getByTestId('note-tab-enhanced')).toBeTruthy();
+    expect(queryByTestId('note-tab-transcript')).toBeNull();
     expect(getByTestId('note-content-input')).toBeTruthy();
+  });
+
+  it('opens a plain note with generated notes on Summary', () => {
+    mockNote = plainNote({ enhancedContent: '## Summary' });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    const { getByText, queryByTestId } = render(<NoteEditorScreen />);
+    expect(getByText('## Summary')).toBeTruthy();
+    expect(queryByTestId('note-content-input')).toBeNull();
+  });
+
+  it.each([
+    ['transcript', 'Alice can take the first pass.'],
+    ['notes', 'Alice owns the launch checklist.'],
+  ] as const)('opens on the %s tab a link asks for', (tab, shown) => {
+    mockRouteTab = tab;
+    mockNote = note({ enhancedContent: '## Summary' });
+    mockNotesState.notes = [mockNote];
+    const { getByTestId, getByText, queryByText } = render(<NoteEditorScreen />);
+    expect(queryByText('## Summary')).toBeNull();
+    if (tab === 'notes') expect(getByTestId('note-content-input').props.value).toBe(shown);
+    else expect(getByText(shown)).toBeTruthy();
+  });
+
+  it('opens on Summary when a link asks for it', () => {
+    mockRouteTab = 'summary';
+    mockNote = note({ noteType: 'personal', diarizationEnabled: 0, enhancedContent: '## Summary' });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    const { getByText } = render(<NoteEditorScreen />);
+    expect(getByText('## Summary')).toBeTruthy();
   });
 
   it('shows the processing status on the Transcript tab and keeps My notes reachable', () => {
@@ -1384,6 +1093,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNotesState.notes = [mockNote];
     mockSegments = [];
     const { getByText, getByTestId, queryByTestId, queryByText } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('note-tab-transcript'));
     expect(getByText('Transcribing audio...')).toBeTruthy();
     expect(queryByTestId('note-content-input')).toBeNull();
 
@@ -1391,6 +1101,14 @@ describe('NoteEditorScreen body tabs', () => {
 
     expect(getByTestId('note-content-input').props.value).toBe('Alice owns the launch checklist.');
     expect(queryByText('Transcribing audio...')).toBeNull();
+  });
+
+  it('holds off writing a summary while the transcript is still coming', () => {
+    mockNote = note({ transcriptionStatus: 'transcribing' });
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    const { getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId('write-summary').props.accessibilityState.disabled).toBe(true);
   });
 
   it('keeps a failed transcript on its own tab beside the generated notes and My notes', () => {
@@ -1439,13 +1157,16 @@ describe('NoteEditorScreen body tabs', () => {
     });
     mockNotesState.notes = [mockNote];
     const { getByText, getByTestId, queryByTestId } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('note-tab-transcript'));
     expect(getByText('Alice can take the first pass.')).toBeTruthy();
     expect(queryByTestId('note-content-input')).toBeNull();
 
     fireEvent.press(getByTestId('note-tab-notes'));
     expect(getByTestId('note-content-input').props.value).toBe('');
     expect(getByTestId('note-content-input').props.editable).toBe(true);
-    expect(getByTestId('note-content-input').props.placeholder).toBe('Add your own notes…');
+    expect(getByTestId('note-content-input').props.placeholder).toBe(
+      'Type your notes, or dictate with the bubble',
+    );
     fireEvent.changeText(getByTestId('note-content-input'), 'Send the revised checklist.');
     act(() => {
       jest.advanceTimersByTime(800);
@@ -1492,9 +1213,10 @@ describe('NoteEditorScreen body tabs', () => {
     });
     mockNotesState.notes = [mockNote];
     mockSegments = [];
-    const { getByTestId } = render(<NoteEditorScreen />);
+    const { getByTestId, queryByTestId } = render(<NoteEditorScreen />);
     const bodyTab = getByTestId('note-tab-notes');
     expect(within(bodyTab).getByText('Transcript')).toBeTruthy();
+    expect(queryByTestId('note-tab-transcript')).toBeNull();
 
     fireEvent.press(bodyTab);
 
@@ -1545,6 +1267,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNotesState.notes = [mockNote];
     mockSegments = [];
     const { getByTestId } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('note-tab-notes'));
     fireEvent.changeText(getByTestId('note-content-input'), 'Alice owns the launch checklists.');
     act(() => {
       jest.advanceTimersByTime(800);
@@ -1562,16 +1285,16 @@ describe('NoteEditorScreen body tabs', () => {
     expect(getByText('You can edit these notes once the recording stops.')).toBeTruthy();
   });
 
-  it('switches from Transcript to Enhanced when generated notes arrive', () => {
-    const { rerender, getByText, queryByText } = render(<NoteEditorScreen />);
-    expect(getByText('Alice can take the first pass.')).toBeTruthy();
+  it('shows the generated notes on Summary when they arrive', () => {
+    const { rerender, getByText, queryByTestId, getByTestId } = render(<NoteEditorScreen />);
+    expect(getByTestId('write-summary')).toBeTruthy();
 
     mockNote = note({ enhancedContent: '## Summary' });
     mockNotesState.notes = [mockNote];
     rerender(<NoteEditorScreen />);
 
     expect(getByText('## Summary')).toBeTruthy();
-    expect(queryByText('Alice can take the first pass.')).toBeNull();
+    expect(queryByTestId('write-summary')).toBeNull();
   });
 
   it('stays on My notes when generated notes arrive', () => {
@@ -1621,39 +1344,65 @@ describe('NoteEditorScreen replacing generated notes', () => {
   });
   afterEach(() => alertSpy.mockRestore());
 
-  const pressReplace = async (): Promise<void> => {
-    const buttons = (alertSpy.mock.calls[0][2] ?? []) as { text: string; onPress?: () => void }[];
-    await act(async () => {
-      buttons.find((button) => button.text === 'Replace')?.onPress?.();
-    });
+  const undoToast = () => {
+    const [message, tone, action, options] = jest.mocked(showToast).mock.calls.at(-1)!;
+    return { message, tone, action: action!, options };
   };
 
-  it('asks before an action replaces the generated notes', async () => {
+  it('replaces the generated notes at once and offers Undo for 6 s', async () => {
     const { getByTestId } = render(<NoteEditorScreen />);
     await act(async () => {
       fireEvent.press(getByTestId('run-action-1'));
     });
 
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Replace enhanced notes?',
-      'Running this action replaces the current enhanced notes, including any edits.',
-      expect.any(Array),
+    await waitFor(() =>
+      expect(mockUpdateNote).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ enhancedContent: 'Generated calendar-aware notes' }),
+      ),
     );
-    expect(ReasoningService.processText).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+    const toast = undoToast();
+    expect(toast.message).toBe('Summary rewritten as AI Summary');
+    expect(toast.tone).toBe('neutral');
+    expect(toast.action.label).toBe('Undo');
+    expect(toast.options).toEqual({ durationMs: 6000 });
 
-    await pressReplace();
-    await waitFor(() => expect(ReasoningService.processText).toHaveBeenCalledTimes(1));
+    mockUpdateNote.mockClear();
+    act(() => toast.action.onPress());
+    expect(mockUpdateNote).toHaveBeenCalledWith(7, {
+      enhancedContent: '## Summary',
+      enhancementPrompt: null,
+      enhancedAtContentHash: null,
+    });
+
+    // A second tap changes nothing more.
+    act(() => toast.action.onPress());
+    expect(mockUpdateNote).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves the notes alone when the replacement is cancelled', async () => {
+  it('names the template it rewrote with', async () => {
+    mockActionsState.actions = [
+      defaultAction(),
+      defaultAction({ id: 2, name: 'Standup', isDefault: 0 }),
+    ];
     const { getByTestId } = render(<NoteEditorScreen />);
     await act(async () => {
-      fireEvent.press(getByTestId('run-action-1'));
+      fireEvent.press(getByTestId('run-action-2'));
     });
-    const buttons = (alertSpy.mock.calls[0][2] ?? []) as { text: string; style?: string }[];
-    expect(buttons.map((button) => button.text)).toEqual(['Cancel', 'Replace']);
-    expect(buttons[0].style).toBe('cancel');
-    expect(ReasoningService.processText).not.toHaveBeenCalled();
+    await waitFor(() => expect(showToast).toHaveBeenCalled());
+    expect(undoToast().message).toBe('Summary rewritten as Standup');
+  });
+
+  it('offers no Undo when there were no generated notes to replace', async () => {
+    mockNote = note();
+    mockNotesState.notes = [mockNote];
+    const { getByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('write-summary'));
+    });
+    await waitFor(() => expect(mockUpdateNote).toHaveBeenCalled());
+    expect(showToast).not.toHaveBeenCalled();
   });
 
   const runActionOverEdit = async (): Promise<ReturnType<typeof render>> => {
@@ -1663,7 +1412,6 @@ describe('NoteEditorScreen replacing generated notes', () => {
     await act(async () => {
       fireEvent.press(screen.getByTestId('run-action-1'));
     });
-    await pressReplace();
     await waitFor(() => expect(ReasoningService.processText).toHaveBeenCalledTimes(1));
     // Outlast the 800 ms save debounce.
     await act(async () => {
@@ -1684,48 +1432,22 @@ describe('NoteEditorScreen replacing generated notes', () => {
     expect(saved.filter((value) => value === '## Edited')).toHaveLength(1);
   });
 
-  it('asks before replacing notes typed since they were last cleared', async () => {
-    mockUpdateNote.mockImplementation((id: number, updates: Partial<Note>) => {
-      mockNote = { ...mockNote!, ...updates };
-      mockNotesState.notes = [mockNote];
-    });
-    const { getByTestId, rerender } = render(<NoteEditorScreen />);
-    fireEvent.press(getByTestId('enhanced-edit'));
-    fireEvent.changeText(getByTestId('enhanced-editor'), '');
-    // Outlast the 800 ms save debounce, so the cleared notes are what is saved.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 900));
-    });
-    rerender(<NoteEditorScreen />);
-    expect(mockNote?.enhancedContent).toBe('');
-
-    fireEvent.changeText(getByTestId('enhanced-editor'), '## Rewritten');
-    await act(async () => {
-      fireEvent.press(getByTestId('run-action-1'));
-    });
-
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Replace enhanced notes?',
-      expect.any(String),
-      expect.any(Array),
-    );
-    expect(ReasoningService.processText).not.toHaveBeenCalled();
-  });
-
   it('keeps an unsaved edit when the action fails', async () => {
     (ReasoningService.processText as jest.Mock).mockRejectedValueOnce(new Error('offline'));
 
     await runActionOverEdit();
 
     expect(savedEnhanced()).toEqual(['## Edited']);
+    expect(showToast).not.toHaveBeenCalled();
   });
 });
 
 describe('NoteEditorScreen switching notes', () => {
   it('closes an open speaker sheet when another note opens', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    const { getByText, queryByTestId, rerender } = render(<NoteEditorScreen />);
-    fireEvent.press(getByText('Alice can take the first pass.'));
+    const { getByText, getByTestId, queryByTestId, rerender } = render(<NoteEditorScreen />);
+    fireEvent.press(getByTestId('note-tab-transcript'));
+    fireEvent.press(getByText('Speaker 1'));
     const buttons = (alertSpy.mock.calls[0][2] ?? []) as { text: string; onPress?: () => void }[];
     act(() => {
       buttons.find((button) => button.text === 'Rename')?.onPress?.();
@@ -1739,39 +1461,6 @@ describe('NoteEditorScreen switching notes', () => {
 
     expect(queryByTestId('speaker-rename-sheet')).toBeNull();
     alertSpy.mockRestore();
-  });
-});
-
-describe('NoteEditorScreen transcript sheet', () => {
-  it('opens the full transcript from View Transcript', () => {
-    mockNote = note({ enhancedContent: '## Summary' });
-    mockNotesState.notes = [mockNote];
-    const { getByTestId, queryByTestId } = render(<NoteEditorScreen />);
-    expect(queryByTestId('transcript-sheet')).toBeNull();
-
-    fireEvent.press(getByTestId('menu-view-transcript'));
-
-    expect(getByTestId('transcript-sheet').props.children).toContain(
-      'Alice can take the first pass.',
-    );
-  });
-
-  it('offers View Transcript before notes are generated too', () => {
-    const { getByTestId } = render(<NoteEditorScreen />);
-    expect(getByTestId('menu-view-transcript')).toBeTruthy();
-  });
-
-  it('has no View Transcript on a plain note', () => {
-    mockNote = note({
-      noteType: 'personal',
-      diarizationEnabled: 0,
-      calendarEventId: null,
-      participants: null,
-    });
-    mockNotesState.notes = [mockNote];
-    mockSegments = [];
-    const { queryByTestId } = render(<NoteEditorScreen />);
-    expect(queryByTestId('menu-view-transcript')).toBeNull();
   });
 });
 
@@ -1800,21 +1489,21 @@ describe('NoteEditorScreen meta row', () => {
 
   it('shows the attendees and folder of a calendar meeting', () => {
     const { getByTestId, getByText } = render(<NoteEditorScreen />);
-    expect(getByTestId('note-meta-attendees')).toBeTruthy();
-    expect(getByText('Alice')).toBeTruthy();
+    expect(getByTestId('note-attendees').props.accessibilityLabel).toBe('People: Alice Adams');
+    expect(getByText('AA')).toBeTruthy();
     expect(getByText('Meetings')).toBeTruthy();
   });
 
   it('opens the folder picker from the folder chip', () => {
     const { getByTestId, queryByTestId } = render(<NoteEditorScreen />);
     expect(queryByTestId('move-sheet')).toBeNull();
-    fireEvent.press(getByTestId('note-meta-folder'));
+    fireEvent.press(getByTestId('note-folder-chip'));
     expect(getByTestId('move-sheet')).toBeTruthy();
   });
 
   it('lists the attendees from the attendees chip', () => {
     const { getByTestId, getByText } = render(<NoteEditorScreen />);
-    fireEvent.press(getByTestId('note-meta-attendees'));
+    fireEvent.press(getByTestId('note-attendees'));
     expect(getByText('Attendees')).toBeTruthy();
     expect(getByText('Alice Adams')).toBeTruthy();
   });
@@ -1823,14 +1512,14 @@ describe('NoteEditorScreen meta row', () => {
     mockNote = note({ calendarEventId: null, participants: null });
     mockNotesState.notes = [mockNote];
     const { queryByTestId } = render(<NoteEditorScreen />);
-    expect(queryByTestId('note-meta-attendees')).toBeNull();
+    expect(queryByTestId('note-attendees')).toBeNull();
   });
 
   it('offers no folders for a note whose Space is not on this device', () => {
     mockNote = note({ spaceId: 99 });
     mockNotesState.notes = [mockNote];
     const { queryByTestId, queryByText } = render(<NoteEditorScreen />);
-    expect(queryByTestId('note-meta-folder')).toBeNull();
+    expect(queryByTestId('note-folder-chip')).toBeNull();
     expect(queryByText('Meetings')).toBeNull();
   });
 
@@ -1839,7 +1528,7 @@ describe('NoteEditorScreen meta row', () => {
     mockNotesState.notes = [mockNote];
     mockNotesState.spaces = [{ id: 1, kind: 'private', name: 'Private' } as Space];
     const { getByTestId, queryByTestId, rerender } = render(<NoteEditorScreen />);
-    fireEvent.press(getByTestId('note-meta-folder'));
+    fireEvent.press(getByTestId('note-folder-chip'));
     expect(getByTestId('move-sheet')).toBeTruthy();
 
     mockNotesState.spaces = [];
@@ -1854,7 +1543,7 @@ describe('NoteEditorScreen meta row', () => {
 
   it('closes the folder picker when another note opens', () => {
     const { getByTestId, queryByTestId, rerender } = render(<NoteEditorScreen />);
-    fireEvent.press(getByTestId('note-meta-folder'));
+    fireEvent.press(getByTestId('note-folder-chip'));
     expect(getByTestId('move-sheet')).toBeTruthy();
 
     mockRouteNoteId = '8';
@@ -1893,9 +1582,9 @@ describe('NoteEditorScreen meta row', () => {
       mockNote = note({ spaceId: 2, ownerUserId: 'teammate-9', participants });
       mockNotesState.notes = [mockNote];
       const { getByTestId, getByText, queryByText } = render(<NoteEditorScreen />);
-      expect(getByText('Sam +1')).toBeTruthy();
+      expect(getByTestId('note-attendees').props.accessibilityLabel).toBe('People: Sam Lee');
 
-      fireEvent.press(getByTestId('note-meta-attendees'));
+      fireEvent.press(getByTestId('note-attendees'));
       expect(getByText('Sam Lee')).toBeTruthy();
       expect(getByText('You')).toBeTruthy();
       expect(queryByText('Uma User')).toBeNull();
@@ -1906,7 +1595,7 @@ describe('NoteEditorScreen meta row', () => {
       mockNote = note({ spaceId: 2, ownerUserId: 'teammate-9', participants });
       mockNotesState.notes = [mockNote];
       const { getByTestId, getByText, queryByText } = render(<NoteEditorScreen />);
-      fireEvent.press(getByTestId('note-meta-attendees'));
+      fireEvent.press(getByTestId('note-attendees'));
       expect(getByText('Sam Lee')).toBeTruthy();
       expect(getByText('You')).toBeTruthy();
       expect(queryByText('Uma User')).toBeNull();
@@ -1935,8 +1624,8 @@ describe('NoteEditorScreen meta row', () => {
       mockNote = note({ spaceId: 2, ownerUserId: 'user-1', participants: ownCalendar });
       mockNotesState.notes = [mockNote];
       const { getByTestId, getByText, queryByText } = render(<NoteEditorScreen />);
-      expect(getByText('Sam +1')).toBeTruthy();
-      fireEvent.press(getByTestId('note-meta-attendees'));
+      expect(getByTestId('note-attendees').props.accessibilityLabel).toBe('People: Sam Lee');
+      fireEvent.press(getByTestId('note-attendees'));
       expect(getByText('You')).toBeTruthy();
       expect(queryByText('Uma User')).toBeNull();
     });
@@ -2197,22 +1886,6 @@ describe('NoteEditorScreen voice setup', () => {
   });
 });
 
-it.each(['isStarting', 'isProcessing'] as const)(
-  'disables Android note actions during %s',
-  async (flag) => {
-    const original = Platform.OS;
-    Platform.OS = 'android';
-    mockRecordingFlags = { [flag]: true };
-    try {
-      render(<NoteEditorScreen />);
-      await act(async () => undefined);
-      expect(mockMenuProcessing).toBe(true);
-    } finally {
-      Platform.OS = original;
-    }
-  },
-);
-
 let mockEditorLanguage = 'en';
 jest.mock('@/hooks/useAndroidCopy', () => ({
   useAndroidCopy: () => {
@@ -2238,7 +1911,7 @@ jest.mock('@/hooks/useAndroidCopy', () => ({
   },
 }));
 
-it('updates Android editor copy without losing typed content and requires localized delete confirmation', async () => {
+it('keeps typed content across a language change and deletes with Undo instead of a dialog', async () => {
   const original = Platform.OS;
   Platform.OS = 'android';
   mockEditorLanguage = 'en';
@@ -2260,19 +1933,18 @@ it('updates Android editor copy without losing typed content and requires locali
     fireEvent.changeText(view.getByTestId('note-content-input'), 'Keep my typed draft');
     mockEditorLanguage = 'ar';
     view.rerender(<NoteEditorScreen />);
-    expect(view.getByPlaceholderText('العنوان').props.value).toBe('Literal title');
+    expect(view.getByPlaceholderText('Title').props.value).toBe('Literal title');
     expect(view.getByTestId('note-content-input').props.value).toBe('Keep my typed draft');
-    expect(view.getByPlaceholderText('اكتب أو أملِ…')).toBeTruthy();
+
+    fireEvent.press(view.getByLabelText('More'));
     fireEvent.press(view.getByTestId('menu-delete-note'));
+
+    expect(alert).not.toHaveBeenCalled();
+    // The draft is saved before the note goes, so Undo brings it back as typed.
+    expect(mockUpdateNote).toHaveBeenCalledWith(7, { content: 'Keep my typed draft' });
+    expect(mockBack).toHaveBeenCalled();
+    expect(deleteNotesWithUndo).toHaveBeenCalledWith([7], 'Literal title');
     expect(mockDeleteNote).not.toHaveBeenCalled();
-    const [title, , buttons] = alert.mock.calls.at(-1)!;
-    expect(title).toBe('حذف الملاحظة');
-    expect(buttons?.find((b) => b.style === 'cancel')?.text).toBe('إلغاء');
-    expect(buttons?.find((b) => b.style === 'destructive')?.text).toBe('حذف');
-    await act(async () => {
-      await buttons?.find((b) => b.style === 'destructive')?.onPress?.();
-    });
-    expect(mockDeleteNote).toHaveBeenCalledWith(7);
   } finally {
     mockEditorLanguage = 'en';
     Platform.OS = original;
@@ -2353,15 +2025,16 @@ describe('Android delayed AI consent', () => {
   });
 
   it.each(['note', 'account', 'unmount', 'privacy', 'routing'] as const)(
-    'does not run a replacement after the %s changes while confirmation is open',
+    'does not run an action after the %s changes while the cloud question is open',
     async (change) => {
-      mockNote = note({ enhancedContent: '## Keep this draft' });
+      // No local model, so the private note asks before it goes to Cloud.
+      mockConfigState.config.appleLocalIntelligenceEnabled = false;
+      mockNote = note({ isPrivate: 1 });
       mockNotesState.notes = [mockNote];
       const screen = render(<NoteEditorScreen />);
       await act(async () => fireEvent.press(screen.getByTestId('run-action-1')));
-      const confirm = alertSpy.mock.calls[0][2].find(
-        (button: { text: string }) => button.text === 'Replace',
-      ).onPress;
+      await waitFor(() => expect(mockCloudSheet).not.toBeNull());
+      const confirm = mockCloudSheet!.onUseCloud;
       if (change === 'note') {
         mockRouteNoteId = '8';
         mockNote = note({ id: 8, content: 'Different private content', isPrivate: 1 });
@@ -2371,7 +2044,7 @@ describe('Android delayed AI consent', () => {
         mockAuthState.user = { id: 'other-user', email: 'other@example.com', emailVerified: true };
         screen.rerender(<NoteEditorScreen />);
       } else if (change === 'privacy') {
-        mockNote = { ...mockNote, isPrivate: 1 };
+        mockNote = { ...mockNote, isPrivate: 0 };
         mockNotesState.notes = [mockNote];
         screen.rerender(<NoteEditorScreen />);
       } else if (change === 'routing') {
@@ -2388,23 +2061,6 @@ describe('Android delayed AI consent', () => {
     },
   );
 
-  it('does not send a different note through an old cloud-chat confirmation', async () => {
-    mockNote = note({ isPrivate: 1 });
-    mockNotesState.notes = [mockNote];
-    const screen = render(<NoteEditorScreen />);
-    fireEvent.changeText(screen.getByTestId('chat-draft'), 'Summarize this note');
-    await act(async () => fireEvent.press(screen.getByTestId('chat-send')));
-    const confirm = alertSpy.mock.calls[0][2].find(
-      (button: { text: string }) => button.text === 'Use Cloud Once',
-    ).onPress;
-    mockRouteNoteId = '8';
-    mockNote = note({ id: 8, content: 'Different private content', isPrivate: 1 });
-    mockNotesState.notes = [mockNote];
-    screen.rerender(<NoteEditorScreen />);
-    await act(async () => confirm());
-    expect(ReasoningService.chatOverNote).not.toHaveBeenCalled();
-    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
-  });
   it('discards a delayed paywall callback after another note opens', async () => {
     let release: (() => void) | undefined;
     mockRegisterSuperwallGate.mockImplementationOnce(async ({ feature }) => {
@@ -2440,65 +2096,31 @@ describe('Android delayed AI consent', () => {
     expect(mockUpdateNote).not.toHaveBeenCalled();
     expect(generateNoteTitle).not.toHaveBeenCalled();
   });
-  it('allows current replacement consent after an unrelated rerender', async () => {
-    mockNote = note({ enhancedContent: '## Keep until confirmed' });
+  it('allows current cloud consent after an unrelated rerender, without changing privacy', async () => {
+    mockConfigState.config.appleLocalIntelligenceEnabled = false;
+    mockNote = note({ isPrivate: 1 });
     mockNotesState.notes = [mockNote];
     const screen = render(<NoteEditorScreen />);
     await act(async () => fireEvent.press(screen.getByTestId('run-action-1')));
+    await waitFor(() => expect(screen.getByTestId('cloud-once-sheet')).toBeTruthy());
     expect(ReasoningService.processText).not.toHaveBeenCalled();
     mockConfigState.config.preferredLanguage = 'de';
     screen.rerender(<NoteEditorScreen />);
-    const confirm = alertSpy.mock.calls[0][2].find(
-      (button: { text: string }) => button.text === 'Replace',
-    ).onPress;
-    await act(async () => confirm());
+    await act(async () => fireEvent.press(screen.getByTestId('cloud-use-once')));
     expect(ReasoningService.processText).toHaveBeenCalledTimes(1);
-    expect(mockUpdateNote).toHaveBeenCalledWith(
-      7,
-      expect.objectContaining({ enhancedContent: 'Generated calendar-aware notes' }),
-    );
-    expect(mockUpdateConfig).not.toHaveBeenCalled();
-    delete mockConfigState.config.preferredLanguage;
-  });
-
-  it('sends the original private note only after current explicit cloud consent', async () => {
-    mockNote = note({ isPrivate: 1 });
-    mockNotesState.notes = [mockNote];
-    (ReasoningService.chatOverNote as jest.Mock).mockResolvedValueOnce({
-      text: 'Answer',
-      model: 'test',
+    expect(jest.mocked(ReasoningService.processText).mock.calls[0][0].routing).toMatchObject({
+      isPrivateNote: true,
+      allowCloudFallback: true,
     });
-    const screen = render(<NoteEditorScreen />);
-    fireEvent.changeText(screen.getByTestId('chat-draft'), 'Summarize this note');
-    await act(async () => fireEvent.press(screen.getByTestId('chat-send')));
-    expect(ReasoningService.chatOverNote).not.toHaveBeenCalled();
-    const buttons = alertSpy.mock.calls[0][2];
-    expect(buttons[0].style).toBe('cancel');
-    await act(async () =>
-      buttons.find((button: { text: string }) => button.text === 'Use Cloud Once').onPress(),
-    );
-    expect(ReasoningService.chatOverNote).toHaveBeenCalledWith(
-      expect.objectContaining({
-        question: 'Summarize this note',
-        routing: { isPrivateNote: true, allowCloudFallback: true },
-      }),
+    await waitFor(() =>
+      expect(mockUpdateNote).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ enhancedContent: 'Generated calendar-aware notes' }),
+      ),
     );
     expect(mockUpdateConfig).not.toHaveBeenCalled();
     expect(mockNote.isPrivate).toBe(1);
-  });
-
-  it('discards cloud-chat consent after the chat sheet closes', async () => {
-    mockNote = note({ isPrivate: 1 });
-    mockNotesState.notes = [mockNote];
-    const screen = render(<NoteEditorScreen />);
-    fireEvent.changeText(screen.getByTestId('chat-draft'), 'Summarize this note');
-    await act(async () => fireEvent.press(screen.getByTestId('chat-send')));
-    const confirm = alertSpy.mock.calls[0][2].find(
-      (button: { text: string }) => button.text === 'Use Cloud Once',
-    ).onPress;
-    fireEvent.press(screen.getByTestId('chat-close'));
-    await act(async () => confirm());
-    expect(ReasoningService.chatOverNote).not.toHaveBeenCalled();
+    delete mockConfigState.config.preferredLanguage;
   });
 });
 
@@ -2514,53 +2136,6 @@ describe('Android editor consent language', () => {
     Platform.OS = originalPlatform;
     mockEditorLanguage = 'en';
     alert.mockRestore();
-  });
-  it('requires translated replacement confirmation before running the exact selected action', async () => {
-    mockNote = note({ enhancedContent: 'Do not replace before consent' });
-    mockNotesState.notes = [mockNote];
-    const view = render(<NoteEditorScreen />);
-    await act(async () => fireEvent.press(view.getByTestId('run-action-1')));
-    expect(ReasoningService.processText).not.toHaveBeenCalled();
-    const [title, , buttons] = alert.mock.calls[0];
-    expect(title).toBe('استبدال الملاحظات؟');
-    expect(buttons[0]).toMatchObject({ text: 'إلغاء', style: 'cancel' });
-    await act(async () =>
-      buttons.find((button: { text: string }) => button.text === 'استبدال').onPress(),
-    );
-    expect(ReasoningService.processText).toHaveBeenCalledTimes(1);
-    expect(mockUpdateNote).toHaveBeenCalledWith(
-      7,
-      expect.objectContaining({ enhancedContent: 'Generated calendar-aware notes' }),
-    );
-  });
-  it('requires translated one-time cloud consent for private chat without changing privacy', async () => {
-    mockNote = note({ isPrivate: 1 });
-    mockNotesState.notes = [mockNote];
-    (ReasoningService.chatOverNote as jest.Mock).mockResolvedValueOnce({
-      text: 'Literal answer',
-      model: 'test',
-    });
-    const view = render(<NoteEditorScreen />);
-    fireEvent.changeText(view.getByTestId('chat-draft'), 'Literal question');
-    await act(async () => fireEvent.press(view.getByTestId('chat-send')));
-    expect(ReasoningService.chatOverNote).not.toHaveBeenCalled();
-    const [title, body, buttons] = alert.mock.calls[0];
-    expect(title).toBe('استخدام الذكاء الاصطناعي السحابي؟');
-    expect(body).toContain('لن تتغيّر إعدادات خصوصية الملاحظة أو مزامنتها.');
-    expect(buttons[0].text).toBe('إلغاء');
-    await act(async () =>
-      buttons
-        .find((button: { text: string }) => button.text === 'استخدام السحابة مرة واحدة')
-        .onPress(),
-    );
-    expect(ReasoningService.chatOverNote).toHaveBeenCalledWith(
-      expect.objectContaining({
-        question: 'Literal question',
-        routing: { isPrivateNote: true, allowCloudFallback: true },
-      }),
-    );
-    expect(mockNote.isPrivate).toBe(1);
-    expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
   it('translates the action-failure heading while keeping other error detail literal', async () => {
     (ReasoningService.processText as jest.Mock).mockRejectedValueOnce(
@@ -2631,10 +2206,8 @@ describe('NoteEditorScreen provider failure localization', () => {
   async function runFailingAction(error: unknown) {
     (ReasoningService.processText as jest.Mock).mockRejectedValueOnce(error);
     const view = render(<NoteEditorScreen />);
-    fireEvent.press(view.getByTestId('run-action-1'));
-    const buttons = alertSpy.mock.calls[0][2] as { style?: string; onPress?: () => void }[];
-    await act(async () => buttons.find((button) => button.style === 'destructive')?.onPress?.());
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(2));
+    await act(async () => fireEvent.press(view.getByTestId('run-action-1')));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
     return view;
   }
 
@@ -2651,20 +2224,20 @@ describe('NoteEditorScreen provider failure localization', () => {
       const view = await runFailingAction(
         new ProviderExecutionError(code, 'synthetic-private-detail', { status }),
       );
-      expect(alertSpy.mock.calls[1]).toEqual(['فشل الإجراء', expected, [{ text: 'إغلاق' }]]);
+      expect(alertSpy.mock.calls[0]).toEqual(['فشل الإجراء', expected, [{ text: 'إغلاق' }]]);
       expect(mockUpdateNote).not.toHaveBeenCalled();
+      expect(showToast).not.toHaveBeenCalled();
       expect(mockNote.content).toBe('Keep this original note.');
       expect(mockNote.enhancedContent).toBe('## Existing enhanced notes');
       expect(mockNote.title).toBe('Manual title');
-      expect(mockMenuProcessing).toBe(false);
-      fireEvent.press(view.getByTestId('run-action-1'));
-      expect(alertSpy).toHaveBeenCalledTimes(3);
+      await act(async () => fireEvent.press(view.getByTestId('run-action-1')));
+      expect(ReasoningService.processText).toHaveBeenCalledTimes(2);
     },
   );
 
   it('preserves non-provider error detail and localizes the Android dismiss action', async () => {
     await runFailingAction(new Error('Existing local error'));
-    expect(alertSpy.mock.calls[1]).toEqual([
+    expect(alertSpy.mock.calls[0]).toEqual([
       'فشل الإجراء',
       'Existing local error',
       [{ text: 'إغلاق' }],

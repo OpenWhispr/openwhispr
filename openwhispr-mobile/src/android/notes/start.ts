@@ -25,9 +25,10 @@ export function startUpload(place: Place) {
 }
 
 /** Record a meeting: the start sheet's choices are carried to the recorder, which starts at once. */
-export function startMeeting(place: Place & { eventId?: number }) {
+export function startMeeting(place: Place & { eventId?: number; autostart?: boolean }) {
   safeHaptics('light');
   const params = placeParams(place);
   if (place.eventId != null) params.eventId = String(place.eventId);
+  if (place.autostart) params.autostart = '1';
   router.push({ pathname: '/(tabs)/(notes)/meeting-record', params });
 }

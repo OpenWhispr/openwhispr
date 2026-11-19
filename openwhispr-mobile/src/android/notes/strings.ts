@@ -153,6 +153,27 @@ export const notesEnglish = {
     'This note isn’t backed up. Writing the summary sends it to OpenWhispr Cloud once. Its privacy and backup don’t change.',
   useCloudOnce: 'Use Cloud this once',
   downloadTextModel: 'Download a text model',
+  // Start sheet (R0)
+  noEvent: 'No calendar event',
+  noEventBody: 'Name it yourself afterwards',
+  liveOnCloud: 'Live on Cloud',
+  liveOnCloudBody: 'Words appear as people talk',
+  onPhone: 'On this phone',
+  onPhoneBody: 'Afterwards · speakers named',
+  change: 'Change',
+  startRecording: 'Start recording',
+  startFooter: 'Ask before you record people. The phone keeps recording with the screen off.',
+  needsSpeechModel: 'Download a speech model first',
+  needsSpeechModelBody: 'Recording on this phone needs one. Settings → Processing',
+  pickEvent: 'Which meeting?',
+  // Recording (R1)
+  recording: 'Recording · {{time}}',
+  reconnecting: 'Reconnecting · {{time}}',
+  liveTranscript: 'Live transcript',
+  listening: 'Listening…',
+  stopAndSave: 'Stop and save',
+  minimise: 'Back to notes',
+  notesWhileRecording: 'Jot decisions, follow-ups or context while recording…',
 } as const;
 
 export type NotesKey = keyof typeof notesEnglish;

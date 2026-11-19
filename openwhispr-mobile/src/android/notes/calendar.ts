@@ -91,7 +91,6 @@ export function eventInitials(
   return { initials, more: Math.max(0, people.length - limit) };
 }
 
-
 export function useStableNow(): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

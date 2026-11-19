@@ -94,6 +94,8 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   const params = useLocalSearchParams<{
     folderId?: string;
     spaceId?: string;
+    eventId?: string;
+    autostart?: string;
   }>();
   const startedIn = {
     folderId: params.folderId ? Number(params.folderId) : undefined,
@@ -106,7 +108,14 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     noteId: noteId ?? undefined,
     language: getPreferredTranscriptionLanguage(),
   });
-  const { selectedMeetingContext } = useMeetingCalendar(phase);
+  const { selectedMeetingContext, calendarEvents, setSelectedCalendarEventId } =
+    useMeetingCalendar(phase);
+  // The calendar event picked on the Notes Start sheet names the note and links it (Figma R0).
+  const pickedEventId = params.eventId ? Number(params.eventId) : null;
+  useEffect(() => {
+    if (pickedEventId != null && calendarEvents.some((event) => event.id === pickedEventId))
+      setSelectedCalendarEventId(pickedEventId);
+  }, [pickedEventId, calendarEvents, setSelectedCalendarEventId]);
   const startContext = JSON.stringify({
     ...startedIn,
     meeting: selectedMeetingContext,
@@ -616,6 +625,8 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     return (
       <MeetingSetup
         busy={starting}
+        autoStart={params.autostart === '1'}
+        ready={pickedEventId == null || selectedMeetingContext != null}
         onStart={() => {
           if (starting) return;
           void begin(undefined).catch((error) => {
@@ -687,6 +698,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         rawNotes={rawNotes}
         setRawNotes={setRawNotes}
         onStop={finish}
+        title={selectedMeetingContext?.title}
       />
     );
   }
@@ -701,6 +713,8 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         onChangeRawNotes={setRawNotes}
         utterances={cloudMeeting.utterances}
         partialText={cloudMeeting.partialText}
+        title={selectedMeetingContext?.title}
+        peopleCount={selectedMeetingContext?.participants?.length}
         onStop={() => {
           finishCloud().catch(Sentry.captureException);
         }}

@@ -47,6 +47,29 @@ let mockParams = { folderId: '2' };
 
 const mockCancelDownload = jest.fn(async (_id: string) => undefined);
 jest.mock('@/android/meetingRouting', () => ({ meetingOnDevice: () => false }));
+// The R1 layout itself is tested on its own; here only its notes field and Stop matter.
+jest.mock('@/android/notes/RecordingView', () => {
+  const mockReact = require('react');
+  const { Pressable, TextInput, View } = require('react-native');
+  return {
+    RecordingView: (props: {
+      rawNotes: string;
+      onChangeRawNotes: (text: string) => void;
+      onStop: () => void;
+    }) =>
+      mockReact.createElement(
+        View,
+        null,
+        mockReact.createElement(TextInput, {
+          testID: 'meeting-raw-notes',
+          value: props.rawNotes,
+          onChangeText: props.onChangeRawNotes,
+        }),
+        mockReact.createElement(Pressable, { testID: 'meeting-stop', onPress: props.onStop }),
+      ),
+  };
+});
+jest.mock('@/android/notes/strings', () => ({ notesT: (key: string) => key }));
 jest.mock('@/android/providers/liveMeeting', () => ({
   liveMeetingDeps: () => ({}),
   meetingKey: () => null,

@@ -288,13 +288,13 @@ export function SwipeRow({
   // The red: see-through while dragging, solid once armed or past the open buttons.
   const redStyle = useAnimatedStyle(() => {
     const distance = -x.value;
+    const besideMove = !armed.value && distance >= OPEN_OFFSET * 0.9;
     const opacity = armed.value
       ? 1
       : interpolate(distance, [0, OPEN_OFFSET], [0.55, 0.85], Extrapolation.CLAMP);
     // With Move showing, Delete keeps its own 74 dp beside it.
-    const besideMove = !armed.value && distance >= OPEN_OFFSET * 0.9;
     return {
-      opacity: distance > 0 ? opacity : 0,
+      opacity: distance > 0 ? (besideMove ? 1 : opacity) : 0,
       width: besideMove ? ACTION_WIDTH : Math.max(distance, 0),
       alignItems: armed.value ? 'flex-start' : 'center',
     };

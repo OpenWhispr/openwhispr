@@ -635,6 +635,26 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
 
     useEffect(() => flushDraft, [flushDraft]);
 
+    // Flow B: Write a note opens with the title empty and the keyboard up, and a note left
+    // without a word in it is thrown away on the way out.
+    useEffect(() => {
+      if (fresh !== '1') return;
+      const timer = setTimeout(() => titleInputRef.current?.focus(), 350);
+      return () => {
+        clearTimeout(timer);
+        const saved = getNoteById(noteId);
+        if (
+          saved &&
+          !isAudioTranscriptNote(saved) &&
+          isRegenerableNoteTitle(titleRef.current) &&
+          !contentRef.current.trim() &&
+          !saved.enhancedContent?.trim()
+        )
+          deleteNote(noteId);
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [noteId, fresh]);
+
     // Edits to the generated notes save on their own debounce. The pending edit carries its note
     // id, so a flush that runs after switching notes still writes to the note that was edited.
     const pendingEnhancedRef = useRef<{ noteId: number; text: string } | null>(null);
@@ -918,7 +938,8 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
           // A1: on Cloud, the question is a sheet with the other way out beside it.
           if (user && !providerNotes && readiness.status !== 'ready') {
             setCloudSheet({
-              body: notesT('cloudBodyLocal'),
+              // Local Mode says so; a private note on Cloud says why it asks instead.
+              body: notesT(activeMode === 'private' ? 'cloudBodyLocal' : 'cloudBodyPrivate'),
               onUse: runElsewhereOnce,
               onDownload: () => router.push('/(account)/ai-models'),
             });
@@ -998,6 +1019,7 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
         user,
         copyRef,
         router,
+        activeMode,
       ],
     );
 
@@ -1213,6 +1235,8 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     };
     const runTemplate = (key: string) => {
       setTemplateVisible(false);
+      // A summary edit still waiting to save is what Undo must bring back.
+      flushEnhancedSave();
       const own = key.startsWith('action:')
         ? (actions.find((action) => `action:${action.id}` === key) ?? null)
         : null;
@@ -1341,12 +1365,12 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
           >
             <TextInput
               ref={titleInputRef}
-              value={title}
+              // A placeholder title ("Untitled") shows as the empty field it stands for.
+              value={title.trim().toLowerCase() === 'untitled' ? '' : title}
               onChangeText={handleTitleChange}
               placeholder={notesT('titlePlaceholder')}
               placeholderTextColor={homeTokens.tertiary}
               multiline
-              autoFocus={fresh === '1'}
               style={{
                 fontFamily: AppFont.medium,
                 fontSize: 28,

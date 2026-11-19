@@ -4,6 +4,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { usePreventRemove } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { MeetingSetup } from './MeetingSetup';
+import { useMeetingCalendar } from '@/hooks/useMeetingCalendar';
 import { createCloudMeetingContext } from './cloudMeetingContext';
 import { useCloudMeeting, CloudMeetingFinishError } from './useCloudMeeting';
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording.android';
@@ -32,7 +33,12 @@ type Capture = {
 /** Android Cloud lifecycle only; the default screen continues to own Local and iOS. */
 export function CloudMeetingScreen(): React.JSX.Element {
   const { t } = useTranslation('android');
-  const params = useLocalSearchParams<{ folderId?: string; spaceId?: string }>();
+  const params = useLocalSearchParams<{
+    folderId?: string;
+    spaceId?: string;
+    eventId?: string;
+    autostart?: string;
+  }>();
   const [phase, setPhase] = useState<Phase>('prompt');
   const [starting, setStarting] = useState(false);
   const [noteId, setNoteId] = useState<number>();
@@ -55,6 +61,16 @@ export function CloudMeetingScreen(): React.JSX.Element {
   raw.current = rawNotes;
   const lastSaved = useRef('');
   const { register } = useSuperwallGate();
+  // The calendar event picked on the Notes Start sheet names the note and links it (Figma R0).
+  const { calendarEvents, setSelectedCalendarEventId, selectedMeetingContext } =
+    useMeetingCalendar(phase);
+  const pickedEventId = params.eventId ? Number(params.eventId) : null;
+  useEffect(() => {
+    if (pickedEventId != null && calendarEvents.some((event) => event.id === pickedEventId))
+      setSelectedCalendarEventId(pickedEventId);
+  }, [pickedEventId, calendarEvents, setSelectedCalendarEventId]);
+  const meetingContext = useRef(selectedMeetingContext);
+  meetingContext.current = selectedMeetingContext;
   const cloud = useCloudMeeting({
     enabled: phase === 'recording' || phase === 'finalizing' || phase === 'save-failed',
     language: getPreferredTranscriptionLanguage(),
@@ -196,6 +212,9 @@ export function CloudMeetingScreen(): React.JSX.Element {
               folderId: params.folderId ? Number(params.folderId) : undefined,
               spaceId: params.spaceId ? Number(params.spaceId) : undefined,
               diarizationEnabled: false,
+              calendarEventId: meetingContext.current?.calendarEventId ?? null,
+              title: meetingContext.current?.title ?? null,
+              participants: meetingContext.current?.participants ?? null,
             });
             created = note.id;
             const sourceFile = `${directory}meeting-${note.id}.wav`;
@@ -307,6 +326,8 @@ export function CloudMeetingScreen(): React.JSX.Element {
     return (
       <MeetingSetup
         busy={starting}
+        autoStart={params.autostart === '1'}
+        ready={pickedEventId == null || selectedMeetingContext != null}
         onStart={() => {
           begin().catch(Sentry.captureException);
         }}
@@ -323,6 +344,8 @@ export function CloudMeetingScreen(): React.JSX.Element {
         onChangeRawNotes={setRawNotes}
         utterances={cloud.utterances}
         partialText={cloud.partialText}
+        title={selectedMeetingContext?.title}
+        peopleCount={selectedMeetingContext?.participants?.length}
         onStop={() => {
           if (phase === 'cancel-failed')
             cancel(capture.current, true).catch(Sentry.captureException);

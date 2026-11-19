@@ -12,7 +12,7 @@ import { safeHaptics } from '@/lib/utils';
 import { getNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
 import { home } from '../home/kit';
 import { look } from '../settings/look';
-import { BottomSheet } from '../settings/kit';
+import { BottomSheet, useSettingsToast } from '../settings/kit';
 import { useNavigationBar } from '../navigationBar';
 import {
   Card,
@@ -36,7 +36,8 @@ import { NoteRow, SwipeRow } from './rows';
 import { deleteNotesWithUndo } from './pendingDeletes';
 import { NewSheet } from './sheets';
 import { useUpNext } from './calendar';
-import { startMeeting, startNote, startUpload } from './start';
+import { startNote, startUpload } from './start';
+import { useMeetingStart } from './meetingStart';
 import { useNotesT } from './strings';
 
 /**
@@ -105,6 +106,8 @@ export default function FolderNotes() {
   const [selected, setSelected] = useState<number[] | null>(null);
   const [moving, setMoving] = useState<number[] | null>(null);
   const selecting = selected !== null;
+  // The Undo toast sits where New floats; New steps aside until it closes (Figma D1).
+  const undoShowing = useSettingsToast((state) => state.action != null);
 
   // L4: the action bar replaces the tab bar while selecting.
   const navigation = useNavigation();
@@ -123,6 +126,7 @@ export default function FolderNotes() {
   }, [selecting]);
 
   const place = { folderId: folder?.id, spaceId: folder ? undefined : (spaceId ?? undefined) };
+  const meeting = useMeetingStart(place);
   const open = (note: Note) => {
     safeHaptics('selection');
     router.push(`/(tabs)/(notes)/${note.id}`);
@@ -227,7 +231,7 @@ export default function FolderNotes() {
           onShare={() => share(selected)}
           onDelete={() => remove(selected)}
         />
-      ) : (
+      ) : undoShowing ? null : (
         <NewButton onPress={() => setNewVisible(true)} bottom={16} />
       )}
       <NewSheet
@@ -237,11 +241,11 @@ export default function FolderNotes() {
         now={now}
         onRecord={() => {
           setNewVisible(false);
-          startMeeting(place);
+          meeting.open();
         }}
         onRecordEvent={(event) => {
           setNewVisible(false);
-          startMeeting({ ...place, eventId: event.id });
+          meeting.open(event);
         }}
         onWrite={() => {
           setNewVisible(false);
@@ -252,6 +256,7 @@ export default function FolderNotes() {
           startUpload(place);
         }}
       />
+      {meeting.sheet}
       <MoveSheet
         ids={moving}
         fromFolderId={folderId}

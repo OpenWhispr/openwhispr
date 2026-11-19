@@ -14,6 +14,7 @@ import { safeHaptics } from '@/lib/utils';
 import { gloss, glossPressed, home } from '../home/kit';
 import { useNavigationBarCanvas } from '../navigationBar';
 import { tabColors } from '../tabBar';
+import { useSettingsToast } from '../settings/kit';
 import {
   Card,
   IconButton,
@@ -40,7 +41,8 @@ import {
 import { dayOf } from './rows';
 import { FolderNameSheet, NewSheet, SpaceSheet, TodaySheet } from './sheets';
 import { eventIsNow, hideUpNext, minutesUntil, useUpNext } from './calendar';
-import { startMeeting, startNote, startUpload } from './start';
+import { startNote, startUpload } from './start';
+import { useMeetingStart } from './meetingStart';
 import { useFolderMenu } from './folderMenu';
 import { useNotesT } from './strings';
 
@@ -79,6 +81,8 @@ export default function NotesRoot() {
   const { refreshing, onRefresh } = useManualSyncRefresh();
   const { next, events, now } = useUpNext();
   const folderMenu = useFolderMenu();
+  // The Undo toast sits where New floats; New steps aside until it closes (Figma D1).
+  const undoShowing = useSettingsToast((state) => state.action != null);
 
   const [newVisible, setNewVisible] = useState(false);
   const [spacesVisible, setSpacesVisible] = useState(false);
@@ -120,10 +124,12 @@ export default function NotesRoot() {
     router.push({ pathname: '/(tabs)/(notes)/notes', params: { recent: '1' } });
   };
   const openSearch = () => router.push('/android-notes-search');
-  const recordEvent = (event: GoogleCalendarEvent | null) => {
+  const meeting = useMeetingStart({ folderId: targetFolder });
+  // R0: every way to record goes through the Start sheet; L5 and L7 name the meeting.
+  const recordEvent = (event: GoogleCalendarEvent | null | undefined) => {
     setNewVisible(false);
     setTodayVisible(false);
-    startMeeting({ folderId: targetFolder, eventId: event?.id });
+    meeting.open(event);
   };
 
   if (empty && !refreshing) {
@@ -133,10 +139,11 @@ export default function NotesRoot() {
           <NotesHeader title={t('notes')} />
         </View>
         <EmptyNotes
-          onRecord={() => recordEvent(null)}
+          onRecord={() => recordEvent(undefined)}
           onWrite={() => startNote(targetFolder)}
           onUpload={() => startUpload({ folderId: targetFolder })}
         />
+        {meeting.sheet}
       </Page>
     );
   }
@@ -216,13 +223,13 @@ export default function NotesRoot() {
           );
         })}
       </ScrollView>
-      <NewButton onPress={() => setNewVisible(true)} bottom={16} />
+      {undoShowing ? null : <NewButton onPress={() => setNewVisible(true)} bottom={16} />}
       <NewSheet
         visible={newVisible}
         onClose={() => setNewVisible(false)}
         nextEvent={next ?? null}
         now={now}
-        onRecord={() => recordEvent(null)}
+        onRecord={() => recordEvent(undefined)}
         onRecordEvent={recordEvent}
         onWrite={() => {
           setNewVisible(false);
@@ -265,6 +272,7 @@ export default function NotesRoot() {
         }
       />
       {folderMenu.sheets}
+      {meeting.sheet}
     </Page>
   );
 }

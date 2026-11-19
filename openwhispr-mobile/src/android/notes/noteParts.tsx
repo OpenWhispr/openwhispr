@@ -147,11 +147,13 @@ export function NoteTabs({
   value,
   onChange,
   disabled,
+  testIDPrefix = 'note-tab',
 }: {
   tabs: { key: NoteTab; label: string; dot?: boolean }[];
   value: NoteTab;
   onChange: (tab: NoteTab) => void;
   disabled?: boolean;
+  testIDPrefix?: string;
 }) {
   return (
     <View
@@ -169,7 +171,7 @@ export function NoteTabs({
           <Pressable
             key={tab.key}
             cssInterop={false}
-            testID={`note-tab-${tab.key}`}
+            testID={`${testIDPrefix}-${tab.key}`}
             accessibilityRole="tab"
             accessibilityState={{ selected, disabled: Boolean(disabled) }}
             disabled={disabled}

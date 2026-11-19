@@ -717,7 +717,7 @@ export function SettingsToastHost() {
             paddingRight: action ? 4 : 16,
             paddingVertical: action ? 4 : 10,
             borderRadius: action ? 14 : 999,
-            backgroundColor: 'rgba(28,27,25,0.92)',
+            backgroundColor: action ? '#1C1B19' : 'rgba(28,27,25,0.92)',
             borderTopWidth: 1,
             borderTopColor: 'rgba(255,255,255,0.14)',
             // 12 blur, 4 down: the 16 dp margin holds the whole shadow.
