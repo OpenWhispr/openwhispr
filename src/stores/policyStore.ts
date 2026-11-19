@@ -82,9 +82,11 @@ function applyEffectiveSnapshot(
   });
 }
 
-export function refreshEffectivePolicy(): Promise<void> {
+// `refresh` makes main fetch again rather than answer from its cached verdict,
+// for a caller the server just refused.
+export function refreshEffectivePolicy({ refresh = false } = {}): Promise<void> {
   ensurePolicyLifecycleListeners();
-  if (effectiveFetch) return effectiveFetch;
+  if (effectiveFetch && !refresh) return effectiveFetch;
   const read = window.electronAPI.getEffectivePolicy;
   if (!read) {
     usePolicyStore.setState({ deviceReady: true });
@@ -93,7 +95,7 @@ export function refreshEffectivePolicy(): Promise<void> {
   const pending = (async () => {
     const revision = usePolicyStore.getState().revision;
     try {
-      const [snapshot, appVersion] = await Promise.all([read(), readAppVersion()]);
+      const [snapshot, appVersion] = await Promise.all([read({ refresh }), readAppVersion()]);
       applyEffectiveSnapshot(snapshot, appVersion);
     } catch (error) {
       if (usePolicyStore.getState().revision !== revision) return;

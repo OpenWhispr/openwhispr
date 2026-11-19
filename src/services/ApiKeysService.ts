@@ -41,7 +41,8 @@ async function createApiKey(options: CreateApiKeyOptions): Promise<CreateApiKeyR
   } catch (error) {
     // A window still holding an older policy learns that access was turned off,
     // and the API pane then says so instead of offering keys.
-    if (error instanceof CloudApiError && error.status === 403) void refreshEffectivePolicy();
+    if (error instanceof CloudApiError && error.status === 403)
+      void refreshEffectivePolicy({ refresh: true });
     throw error;
   }
 }

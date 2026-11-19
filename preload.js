@@ -932,7 +932,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("affiliate-link", handler);
   },
   getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
-  getEffectivePolicy: () => ipcRenderer.invoke("get-effective-policy"),
+  getEffectivePolicy: (options) => ipcRenderer.invoke("get-effective-policy", options),
   onEffectivePolicyChanged: registerListener(
     "effective-policy-changed",
     (callback) => (_event, snapshot) => callback(snapshot)

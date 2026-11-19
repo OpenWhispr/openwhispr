@@ -136,6 +136,7 @@ async function renderView(
     gcalAccounts = [],
     connectorAccess = { isPaid, blockedByOrg: false, connectorsAllowed: true },
     skillsProps = {},
+    updateMode = "user_choice",
   } = {}
 ) {
   let root = null;
@@ -147,6 +148,7 @@ async function renderView(
     window: {
       electronAPI: {
         getPlatform: () => "darwin",
+        getUpdateStatus: async () => ({ updateMode }),
         openExternal(url) {
           openedUrls.push(url);
         },
@@ -543,9 +545,27 @@ test("an org minimum version or an unresolvable policy says why API and MCP are 
     for (const section of ["api", "mcp"]) {
       await React.act(async () => click(navButton(container, section)));
       assert.match(shownText(container), pattern);
-      assert.doesNotMatch(shownText(container), /apiKeysSection\.createButton|common\.policy/);
+      // The policy blocks listing keys too, so the pane can't say there are none.
+      assert.doesNotMatch(
+        shownText(container),
+        /apiKeysSection\.createButton|common\.policy|Personal test key/
+      );
     }
   }
+});
+
+test("an org minimum version under IT-managed updates says to contact IT", async (t) => {
+  const { container, setPolicy, managedPolicy } = await renderView(t, {
+    section: "api",
+    updateMode: "it_managed",
+  });
+  await setPolicy({
+    status: "managed",
+    policy: managedPolicy({ minAppVersion: "9.0.0" }),
+    appVersion: "1.0.0",
+  });
+  assert.match(shownText(container), /controlPanel\.updateRequiredByOrg\.contactIT/);
+  assert.doesNotMatch(shownText(container), /controlPanel\.updateRequiredByOrg\.description/);
 });
 
 test("with access off the CLI's cloud mode says why, and local mode is unchanged", async (t) => {

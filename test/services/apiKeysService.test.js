@@ -3,13 +3,13 @@ const assert = require("node:assert/strict");
 const { installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 function installCloud(t, response) {
-  const policyReads = { count: 0 };
+  const policyReads = [];
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
         cloudApiRequest: async () => response,
-        getEffectivePolicy: async () => {
-          policyReads.count += 1;
+        getEffectivePolicy: async (options) => {
+          policyReads.push(options);
           return { revision: 0, status: "loading", deviceReady: true };
         },
       },
@@ -32,12 +32,13 @@ test("a refused key creation re-reads the organization's policy", async (t) => {
   });
 
   await assert.rejects(create(), { status: 403 });
-  assert.equal(policyReads.count, 1);
+  // Without `refresh`, main answers from the verdict it cached minutes ago.
+  assert.deepEqual(policyReads, [{ refresh: true }]);
 });
 
 test("any other failure leaves the policy alone", async (t) => {
   const policyReads = installCloud(t, { success: false, status: 500, error: "API error: 500" });
 
   await assert.rejects(create(), { status: 500 });
-  assert.equal(policyReads.count, 0);
+  assert.deepEqual(policyReads, []);
 });

@@ -155,14 +155,18 @@ export default function IntegrationsView({
         }
       >
         {apiRestriction && <ApiAccessNotice restriction={apiRestriction} />}
-        {/* Existing keys stay listed while access is off, so a leaked one can still be revoked. */}
+        {/* Existing keys stay listed while access is off, so a leaked one can still be revoked.
+            An update or unresolved policy blocks the list too: hidden, but kept mounted so a
+            remount doesn't replay a settled create request. */}
         {isPaid ? (
           <>
-            <ApiKeysSection
-              createRequest={createKeyRequest}
-              onCanCreateChange={setCanCreateKey}
-              allowCreate={!apiRestriction}
-            />
+            <div hidden={apiRestriction === "versionBlocked" || apiRestriction === "unresolved"}>
+              <ApiKeysSection
+                createRequest={createKeyRequest}
+                onCanCreateChange={setCanCreateKey}
+                allowCreate={!apiRestriction}
+              />
+            </div>
             {!apiRestriction && (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ps-1 text-xs text-muted-foreground">
                 <span>{t("integrations.api.useWith")}</span>
