@@ -99,6 +99,8 @@ class StatusTab(private val context: Context, private val windows: WindowManager
     if (!replacing) build()
     apply(next)
     place()
+    // Added only once it knows where it goes, so its first frame is already beside the bubble.
+    if (!replacing) window?.let { windows.addView(it, params) }
     shownAt = SystemClock.uptimeMillis(); releasedAt = null
     schedule()
     pill?.announceForAccessibility(listOfNotNull(next.label, next.action).joinToString(" · "))
@@ -152,7 +154,10 @@ class StatusTab(private val context: Context, private val windows: WindowManager
     content.addView(button, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT).apply { marginStart = dp(8f).toInt() })
     holder.addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, dp(40f).toInt()))
     window = holder; pill = content; label = words; action = button
-    windows.addView(holder, params)
+    // Once laid out (and whenever new words change its width), place it again from its real width.
+    content.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+      if (right - left != oldRight - oldLeft && message != null) place()
+    }
   }
 
   private fun text(color: Int) = TextView(context).apply {
@@ -186,11 +191,18 @@ class StatusTab(private val context: Context, private val windows: WindowManager
     }
   }
 
+  /**
+   * Puts the pill 8 dp from the bubble's edge. Uses the pill's laid-out width once it has one: a
+   * measure taken before layout came out short on the A73, and the tab overlapped the bubble.
+   */
   private fun place() {
     val view = window ?: return
-    view.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+    val content = pill ?: return
+    val tabWidth = if (content.width > 0) content.width else {
+      view.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+      view.measuredWidth - 2 * room
+    }
     val gap = dp(8f).toInt()
-    val tabWidth = view.measuredWidth - 2 * room
     params.x = if (dockRight) anchor.left - gap - tabWidth - room else anchor.right + gap - room
     params.y = anchor.centerY() - dp(20f).toInt() - room
     if (view.isAttachedToWindow) runCatching { windows.updateViewLayout(view, params) }
