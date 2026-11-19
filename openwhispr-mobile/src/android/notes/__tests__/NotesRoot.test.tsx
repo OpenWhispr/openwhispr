@@ -60,9 +60,6 @@ jest.mock('../../home/kit', () => ({
   home: { text: '#000', secondary: '#666', tertiary: '#999', accent: '#15d', surface: '#fff' },
   gloss: {},
   glossPressed: {},
-  glassEdge: { borderColor: 'rgba(0,0,0,0.06)', boxShadow: 'none' },
-  TILE_FILL: '#F1F1F0',
-  type: { section: {} },
 }));
 jest.mock('../../navigationBar', () => ({ useNavigationBarCanvas: jest.fn() }));
 jest.mock('../../settings/kit', () => {

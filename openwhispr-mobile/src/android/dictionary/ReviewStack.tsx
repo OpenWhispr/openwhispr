@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -58,6 +58,32 @@ function decide(item: Item, keep: boolean) {
       },
     },
     { durationMs: UNDO_MS, aboveTabBar: true },
+  );
+}
+
+/** Keep: the card's one blue answer, an outline pill like Remove with blue words. */
+function KeepButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      cssInterop={false}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      hitSlop={2}
+      style={({ pressed }) => ({
+        flex: 1,
+        minHeight: 44,
+        borderRadius: 999,
+        paddingHorizontal: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: pressed ? look.idleFill : home.surface,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.12)',
+      })}
+    >
+      <Text style={[type.subhead, { color: home.accent, fontWeight: '500' }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -151,12 +177,7 @@ function TopCard({ item, entering }: { item: Item; entering: boolean }) {
         </View>
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <PillButton label={t('remove')} onPress={() => fly(false)} />
-          <PillButton
-            label={t('keep')}
-            onPress={() => fly(true)}
-            accent
-            style={{ borderColor: 'rgba(0,0,0,0.12)' }}
-          />
+          <KeepButton label={t('keep')} onPress={() => fly(true)} />
         </View>
       </Animated.View>
     </GestureDetector>
