@@ -24,6 +24,12 @@ import { cleanupSavedOnDevice } from '@/lib/aiWorkflows.android';
 import i18n from './strings';
 import * as Crypto from 'expo-crypto';
 import { insightsScope, countSpokenWords, recordInsight } from './insights';
+import {
+  buildSelectionEditUserPrompt,
+  extractSelectionEditReplacement,
+  SELECTION_EDIT_SYSTEM_PROMPT,
+  SelectionEditError,
+} from './selectionEdit';
 
 export type DictationMode = 'dictate' | 'translate' | 'write' | 'edit';
 export class AndroidCleanupError extends Error {
@@ -134,14 +140,18 @@ export function androidActionPrompt(
       NO_CHAT,
       'Return only the message, with no introduction or notes.',
     ].join(' ');
-  return [
-    'You edit the original text by following the spoken editing instruction, and return the edited text.',
-    'When the instruction is about tone, style, length or wording ("make it friendlier", "more formal", "shorter"), rewrite the whole text so the change is clearly noticeable, keeping its meaning, facts, names and language.',
-    'When it asks for a specific change (a word, a name, a sentence), change only that and copy the rest exactly, with the same punctuation, capitalization, spacing and line breaks.',
-    'The result must reflect the instruction: never return the original text unchanged.',
-    NO_CHAT,
-    'Return only the edited text, with no quotes, introduction or notes.',
-  ].join(' ');
+  return SELECTION_EDIT_SYSTEM_PROMPT;
+}
+
+// A question, an unchanged copy or a malformed reply is a failed edit: the selection stays as it
+// was and the bubble offers Retry, with the reason in Home.
+function editReplacement(reply: string, selection: string): string {
+  try {
+    return extractSelectionEditReplacement(reply, selection);
+  } catch (error) {
+    if (!(error instanceof SelectionEditError)) throw error;
+    throw new Error(i18n.t(error.reason === 'question' ? 'editQuestion' : 'editNotApplied'));
+  }
 }
 
 // Loaded on use: the auth store pulls in the auth client, which dictation itself never needs.
@@ -152,7 +162,8 @@ function senderFirstName(): string | null {
   return getAccountFirstName(useAuthStore.getState().user);
 }
 
-// A rewritten selection is about as long as the selection, so a long email must not be cut off.
+// A rewritten selection is about as long as the selection (plus its JSON escaping), so a long email
+// must not be cut off.
 function actionMaxTokens(job: AndroidJob): number {
   if (job.mode !== 'edit') return 384;
   return Math.min(2048, Math.max(384, Math.ceil(job.selection.length / 2)));
@@ -211,7 +222,7 @@ export async function processAndroidAudio(
       const result = await ReasoningService.processText({
         text:
           job.mode === 'edit'
-            ? `Original text:\n${job.selection}\n\nEditing instruction:\n${output.originalText}`
+            ? buildSelectionEditUserPrompt(output.originalText, job.selection)
             : output.originalText,
         systemPrompt: androidActionPrompt(job.mode, job.target, senderFirstName()),
         inferenceScope: 'cleanup',
@@ -223,7 +234,7 @@ export async function processAndroidAudio(
         signal,
         maxTokens: actionMaxTokens(job),
       });
-      text = result.text;
+      text = job.mode === 'edit' ? editReplacement(result.text, job.selection) : result.text;
     }
     assertCurrent();
     if (!text.trim()) throw new Error(i18n.t('noSpeech'));

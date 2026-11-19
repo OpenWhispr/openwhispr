@@ -118,17 +118,19 @@ it('keeps local dictation on its saved route and does not save when history is o
 it('passes the original selected text to local editing without replacing it with the spoken instruction', async () => {
   jest
     .mocked(ReasoningService.processText)
-    .mockResolvedValue({ text: 'Apples and oat milk.', model: 'test' });
+    .mockResolvedValue({ text: '{"replacement":"Apples and oat milk."}', model: 'test' });
   const signal = new AbortController().signal;
-  await processAndroidAudio(
-    audio,
-    createAndroidJob('edit', 'Spanish', 'Apples and milk.'),
-    signal,
-    jest.fn(),
-  );
+  await expect(
+    processAndroidAudio(
+      audio,
+      createAndroidJob('edit', 'Spanish', 'Apples and milk.'),
+      signal,
+      jest.fn(),
+    ),
+  ).resolves.toBe('Apples and oat milk.');
   expect(ReasoningService.processText).toHaveBeenCalledWith(
     expect.objectContaining({
-      text: 'Original text:\nApples and milk.\n\nEditing instruction:\noriginal words',
+      text: 'Selected document (JSON string):\n"Apples and milk."\n\nEditing instruction:\noriginal words\n\nReturn the replacement JSON object.',
       routing: { isPrivateNote: true },
       signal,
       inferenceRoute: { mode: 'local', scope: 'cleanup' },
