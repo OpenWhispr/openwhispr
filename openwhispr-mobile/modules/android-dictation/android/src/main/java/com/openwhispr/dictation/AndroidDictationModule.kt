@@ -64,7 +64,7 @@ class AndroidDictationModule : Module() {
   private val navigationBar = NavigationBar { sendEvent("onNavigationBarChange", it) }
   override fun definition() = ModuleDefinition {
     Name("AndroidDictation")
-    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange")
+    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange", "onFieldEdited", "onLearnedUndo", "onLearnedRedo", "onOpenDictionary")
     OnCreate { DictationService.emit = { event, data -> sendEvent(event, data) } }
     // The bubble pipeline listens, in the app or in a headless task: send what the bubble held.
     AsyncFunction("pipelineReady") {
@@ -208,6 +208,13 @@ class AndroidDictationModule : Module() {
       }
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("setStatus") { value: String -> DictationService.instance?.status(value) }.runOnQueue(Queues.MAIN)
+    // Dictionary's C11: the bubble's "Learned" tab, with strings already translated by JS.
+    AsyncFunction("showLearnedTab") { options: Map<String, Any?> ->
+      val words = (options["words"] as? List<*>)?.filterIsInstance<String>().orEmpty()
+      if (words.isEmpty()) return@AsyncFunction false
+      DictationService.instance?.showLearnedTab(LearnedTabText(words,
+        options["message"] as? String ?: "", options["undo"] as? String ?: "", options["undone"] as? String ?: "")) ?: false
+    }.runOnQueue(Queues.MAIN)
     AsyncFunction("insert") { text: String, promise: Promise ->
       val service = InsertionService.instance
       if (service == null) promise.resolve(false) else service.insert(text) { promise.resolve(it) }

@@ -174,3 +174,25 @@ export function restoreLearned(word: string, info: LearnedInfo) {
   }));
   useDictionaryStore.getState().addLearnedWords([word]);
 }
+
+/**
+ * A word learned a moment ago that the person then fixed again (Saket → Sakett): it goes quietly,
+ * without being blocked, so the newer spelling can take its place.
+ */
+export function forgetLearned(word: string) {
+  useDictionaryStore.getState().removeWord(word);
+  update((state) => {
+    const learned = { ...state.learned };
+    delete learned[lower(word)];
+    return { ...state, learned };
+  });
+}
+
+/** Undo of an Undo on the bubble's pill: the words are allowed again and learned again. */
+export function relearn(words: string[], origin: LearnedOrigin) {
+  allowWords(words);
+  return learnCorrections(
+    words.map((word) => ({ word, from: null })),
+    origin,
+  );
+}

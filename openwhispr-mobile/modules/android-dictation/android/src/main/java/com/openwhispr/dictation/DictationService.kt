@@ -50,6 +50,8 @@ class DictationService : Service() {
   private val font by lazy { runCatching { resources.getFont(R.font.ow_space_grotesk_medium) }.getOrDefault(Typeface.DEFAULT) }
 
   private var root: BubbleRoot? = null
+  /** Dictionary's C11: "Learned “Synty”" · Undo, sliding out from behind the bubble. */
+  private var learnedTab: LearnedTab? = null
   private var layout: WindowManager.LayoutParams? = null
   private var target: FrameLayout? = null
   private var targetCircle: HideTargetView? = null
@@ -174,6 +176,7 @@ class DictationService : Service() {
     }
     val visible = BubblePolicy.visible(appVisible, practiceVisible, InsertionService.instance != null, typing, hidden, busy)
     if (!visible && dragging) endDrag()
+    if (!visible) learnedTab?.hide(false)
     root?.visibility = if (visible) View.VISIBLE else View.GONE
   }
   fun leavePractice() {
@@ -259,6 +262,11 @@ class DictationService : Service() {
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
     createTarget()
+    // Added before the bubble, so the tab slides out from underneath it.
+    learnedTab = LearnedTab(this, windows, font,
+      onUndo = { words -> emit?.invoke("onLearnedUndo", mapOf("words" to words)) },
+      onRedo = { words -> emit?.invoke("onLearnedRedo", mapOf("words" to words)) },
+      onOpen = ::openDictionary).also { it.create() }
     root = view; layout = params
     render()
     windows.addView(view, params)
@@ -287,6 +295,36 @@ class DictationService : Service() {
     // A shrunk bubble keeps the full bubble's centre, so it grows back in place.
     params.y = BubblePolicy.bubbleTop(savedTop, keyboardTop, height, size, dp(16f).toInt(), dp(48f).toInt()) - shadowRoom + (size - shown) / 2
     if (view.isAttachedToWindow) windows.updateViewLayout(view, params)
+    learnedTab?.follow(bubbleRect(), dockRight)
+  }
+
+  /** The Ready bubble's visible circle on screen. */
+  private fun bubbleRect(): android.graphics.Rect {
+    val params = layout ?: return android.graphics.Rect()
+    val left = params.x + shadowRoom; val top = params.y + shadowRoom
+    return android.graphics.Rect(left, top, left + shown, top + shown)
+  }
+
+  /**
+   * Shows the learned tab beside the Ready bubble while it is on screen. A bubble shrunk to a dot
+   * first gives one ring pulse, so the eye finds it. Returns whether it showed.
+   */
+  fun showLearnedTab(text: LearnedTabText): Boolean {
+    val tab = learnedTab ?: return false
+    if (state != BubbleState.READY || root?.isShown != true || dragging) {
+      android.util.Log.i("OpenWhisprLearn", "Learned pill not shown: state=$state shown=${root?.isShown} dragging=$dragging")
+      return false
+    }
+    android.util.Log.i("OpenWhisprLearn", "Learned pill shown (${text.words.size} words)")
+    val dot = appearance.shrinkToDot && shrink >= 1f
+    if (dot && !tab.showing) {
+      (root?.getChildAt(0) as? IconBubble)?.pulse { tab.show(text, bubbleRect(), dockRight, true) }
+    } else tab.show(text, bubbleRect(), dockRight, dot)
+    return true
+  }
+  private fun openDictionary() {
+    emit?.invoke("onOpenDictionary", emptyMap())
+    packageManager.getLaunchIntentForPackage(packageName)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
   }
 
   private fun label(text: Int, color: Int) = TextView(this).apply {
@@ -350,6 +388,8 @@ class DictationService : Service() {
     handler.removeCallbacks(dismissError)
     if (value == BubbleState.RETRY || value == BubbleState.RECOVER) handler.postDelayed(dismissError, ERROR_TIMEOUT_MS)
     if (value != state) {
+      // A new dictation takes the bubble's place; the tab goes at once.
+      if (value != BubbleState.READY) learnedTab?.hide(false)
       state = value; render(); wake()
       val announcement = when (value) {
         BubbleState.LISTENING -> R.string.ow_bubble_listening
@@ -478,6 +518,7 @@ class DictationService : Service() {
   }
   private fun startDrag() {
     dragging = true
+    learnedTab?.hide(false)
     val holder = target ?: return
     val params = targetLayout ?: return
     params.y = (targetCenter().second - dp(44f)).toInt()
@@ -599,6 +640,7 @@ class DictationService : Service() {
   override fun onDestroy() {
     handler.removeCallbacksAndMessages(null); snap?.cancel(); shrinking?.cancel(); recorder?.close(); recorder = null
     target?.let { runCatching { windows.removeView(it) } }; target = null; targetCircle = null
+    learnedTab?.destroy(); learnedTab = null
     root?.let { runCatching { windows.removeView(it) } }; root = null; waveform = null
     InsertionService.instance?.clearTarget(); deliver("onCancel")
     application.unregisterActivityLifecycleCallbacks(screens); HeadlessPipeline.stop(this)
