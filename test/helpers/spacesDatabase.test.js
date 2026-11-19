@@ -646,7 +646,7 @@ test("the identity index refuses a second private row for the same account and w
     .run(randomUUID());
 });
 
-test("migration 6 keeps a single-account device's folder ids and cloud ids", (t) => {
+test("migration 6 keeps attributed folder ids and cloud ids", (t) => {
   const db = createDb(t);
   if (!db) return;
   const standInId = db._standInPrivateSpaceId();
@@ -656,7 +656,7 @@ test("migration 6 keeps a single-account device's folder ids and cloud ids", (t)
   const videos = seededFolderId(sqlite, "Videos");
   sqlite
     .prepare(
-      "UPDATE folders SET cloud_id = 'cloud-' || id, sync_status = 'synced' WHERE id IN (?, ?)"
+      "UPDATE folders SET account_id = 'a', cloud_id = 'cloud-' || id, sync_status = 'synced' WHERE id IN (?, ?)"
     )
     .run(personal, meetings);
   const notes = [
@@ -829,7 +829,6 @@ test("migration 6 moves a folder whole when its only other rows are chats from b
   const standInId = db._standInPrivateSpaceId();
   const sqlite = db.db;
   const meetings = seededFolderId(sqlite, "Meetings");
-  sqlite.prepare("UPDATE folders SET cloud_id = 'cloud-meetings' WHERE id = ?").run(meetings);
   const meetingsBefore = folderRow(sqlite, meetings);
   const aNote = seedNote(sqlite, standInId, { title: "a", accountId: "a", folderId: meetings });
   // Every container chat from before #2924 reads as unattributed until the
@@ -5611,4 +5610,432 @@ test("deleteAccountData drops the account's ownership checks", (t) => {
     .prepare("SELECT COUNT(*) AS count FROM stand_in_ownership_checks WHERE account_id = 'a'")
     .get();
   assert.equal(count, 0);
+});
+
+test("migration leaves a cloud folder unclaimed when only another account's notes use it", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standIn = db._standInPrivateSpaceId();
+  const folderId = seededFolderId(db.db, "Personal");
+  db.db.prepare("UPDATE folders SET cloud_id = 'unknown-owner-folder' WHERE id = ?").run(folderId);
+  const noteId = seedNote(db.db, standIn, {
+    title: "Misrouted note",
+    accountId: "b",
+    folderId,
+    cloudId: "b-note",
+    ownerUserId: "b",
+  });
+
+  const migrated = relaunchFromVersion5(t, db);
+  const folder = folderRow(migrated.db, folderId);
+  const note = noteRow(migrated.db, noteId);
+  assert.equal(folder.account_id, null);
+  assert.equal(folder.space_id, standIn);
+  assert.equal(folder.cloud_id, "unknown-owner-folder");
+  assert.equal(note.account_id, "b");
+  assert.equal(note.space_id, pendingRowId(migrated.db, "b"));
+  assert.notEqual(note.folder_id, folderId);
+  assert.equal(folderRow(migrated.db, note.folder_id).cloud_id, null);
+  assertEveryRowInItsFolderSpace(migrated.db);
+});
+
+test("launch repair places a cloud-bound legacy note in its recorded owner's private space", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standIn = db._standInPrivateSpaceId();
+  const folderId = seededFolderId(db.db, "Personal");
+  db.db.prepare("UPDATE folders SET cloud_id = 'unknown-owner-folder' WHERE id = ?").run(folderId);
+  const noteId = seedNote(db.db, standIn, {
+    title: "Backed up",
+    folderId,
+    cloudId: "account-a-note",
+    ownerUserId: "a",
+  });
+  const deviceNoteId = seedNote(db.db, standIn, { title: "Only local", folderId });
+  db.db.close();
+
+  const reopened = relaunch(t);
+  const repaired = noteRow(reopened.db, noteId);
+  assert.equal(repaired.account_id, "a");
+  assert.equal(repaired.space_id, pendingRowId(reopened.db, "a"));
+  assert.equal(repaired.sync_status, "pending");
+  assert.equal(folderRow(reopened.db, folderId).account_id, null);
+  assert.equal(noteRow(reopened.db, deviceNoteId).space_id, standIn);
+  reopened.db.prepare("UPDATE notes SET title = 'Latest edit' WHERE id = ?").run(noteId);
+  assert.deepEqual(
+    reopened.takeAccountRepairNotes().map(({ id, title }) => ({ id, title })),
+    [{ id: noteId, title: "Latest edit" }]
+  );
+  reopened._repairCloudBoundLegacyRows();
+  assert.deepEqual(reopened.takeAccountRepairNotes(), []);
+  signIn(reopened, "b");
+  assert.equal(reopened.getNote(noteId), null);
+  signIn(reopened, "a");
+  assert.equal(reopened.getNote(noteId).id, noteId);
+  assertEveryRowInItsFolderSpace(reopened.db);
+});
+
+test("repair failure leaves legacy rows intact and retries on the next launch", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const noteId = seedNote(db.db, db._standInPrivateSpaceId(), {
+    title: "Preserved",
+    cloudId: "a-note",
+    ownerUserId: "a",
+  });
+  const before = noteRow(db.db, noteId);
+  db.db.exec(`CREATE TRIGGER interrupt_account_repair BEFORE UPDATE OF account_id ON notes
+    WHEN NEW.account_id = 'a' BEGIN SELECT RAISE(ABORT, 'repair interrupted'); END`);
+  db.db.close();
+  const logged = t.mock.method(debugLogger, "error", () => {});
+  const interrupted = relaunch(t);
+  assert.deepEqual(noteRow(interrupted.db, noteId), before);
+  assert.ok(
+    logged.mock.calls.some(({ arguments: args }) => args[0] === "Legacy row account repair failed")
+  );
+  interrupted.db.exec("DROP TRIGGER interrupt_account_repair");
+  interrupted.db.close();
+  const completed = relaunch(t);
+  assert.equal(noteRow(completed.db, noteId).account_id, "a");
+});
+
+test("folder acknowledgement never attributes another cloud owner's legacy notes", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a");
+  const home = db.getPrivateSpaceId();
+  const folderId = seedFolder(db.db, home, { name: "Legacy folder" });
+  const mine = seedNote(db.db, home, {
+    title: "Mine",
+    folderId,
+    cloudId: "a-note",
+    ownerUserId: "a",
+  });
+  const theirs = seedNote(db.db, home, {
+    title: "Theirs",
+    folderId,
+    cloudId: "b-note",
+    ownerUserId: "b",
+  });
+  const unknown = seedNote(db.db, home, { title: "Unknown", folderId, cloudId: "unknown-note" });
+  const device = seedNote(db.db, home, { title: "Device", folderId });
+
+  db.markFolderSynced(folderId, "a-folder");
+
+  assert.equal(folderRow(db.db, folderId).account_id, "a");
+  assert.equal(noteRow(db.db, mine).account_id, "a");
+  for (const id of [theirs, unknown, device]) assert.equal(noteRow(db.db, id).account_id, null);
+  db._repairCloudBoundLegacyRows();
+  assert.equal(noteRow(db.db, theirs).account_id, "b");
+  assert.equal(noteRow(db.db, theirs).space_id, pendingRowId(db.db, "b"));
+});
+
+test("note acknowledgement attributes an unclaimed row in the account's private space", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a");
+  const noteId = seedNote(db.db, db.getPrivateSpaceId(), { title: "Legacy draft" });
+  const snapshot = db.db.prepare("SELECT * FROM notes WHERE id = ?").get(noteId);
+
+  const ack = db.acknowledgeNoteCreate(noteId, snapshot, "a-note", SEEDED_AT, "a");
+
+  assert.equal(ack.outcome, "synced");
+  assert.equal(noteRow(db.db, noteId).account_id, "a");
+  signIn(db, "b");
+  assert.equal(db.getNote(noteId), null);
+});
+
+test("private default lookups prefer the account's row over an unclaimed namesake", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a");
+  const home = db.getPrivateSpaceId();
+  seedFolder(db.db, home, { name: "Personal", isDefault: 1, cloudId: "unknown-folder" });
+  seedFolder(db.db, home, { name: "Meetings", isDefault: 1, cloudId: "unknown-meetings" });
+  const personal = seedFolder(db.db, home, { name: "Personal", isDefault: 1, accountId: "a" });
+  const meetings = seedFolder(db.db, home, { name: "Meetings", isDefault: 1, accountId: "a" });
+
+  db.ensureAccountDefaultFolders();
+
+  assert.equal(db.saveNote("Mine", "").note.folder_id, personal);
+  assert.equal(db.getMeetingsFolder().id, meetings);
+  assert.deepEqual(
+    db
+      .getFolders()
+      .map(({ id }) => id)
+      .sort(),
+    [personal, meetings].sort()
+  );
+});
+
+test("account deletion releases foreign and device notes before deleting their private space", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "b");
+  const bHome = db.getPrivateSpaceId();
+  signIn(db, "a");
+  const own = db.saveNote("A note", "").note;
+  const foreign = seedNote(db.db, own.space_id, {
+    title: "B note",
+    accountId: "b",
+    folderId: own.folder_id,
+  });
+  const device = seedNote(db.db, own.space_id, { title: "Device note", folderId: own.folder_id });
+  const chat = seedChat(db.db, {
+    title: "B note chat",
+    accountId: "b",
+    folderId: own.folder_id,
+    spaceId: own.space_id,
+  });
+  db.db.prepare("UPDATE agent_conversations SET note_id = ? WHERE id = ?").run(foreign, chat);
+
+  const result = db.deleteAccountData("a");
+
+  assert.deepEqual(result.deletedNoteIds, [own.id]);
+  assert.deepEqual(result.relocatedNotes.map(({ id }) => id).sort(), [foreign, device].sort());
+  assert.equal(noteRow(db.db, foreign).space_id, bHome);
+  assert.equal(noteRow(db.db, foreign).folder_id, null);
+  assert.equal(noteRow(db.db, device).space_id, db._standInPrivateSpaceId());
+  assert.equal(noteRow(db.db, device).folder_id, null);
+  assert.ok(db.db.prepare("SELECT id FROM agent_conversations WHERE id = ?").get(chat));
+  assert.equal(db.db.prepare("SELECT id FROM spaces WHERE id = ?").get(own.space_id), undefined);
+  signIn(db, "b");
+  assert.ok(db.getNotes().some(({ id }) => id === foreign));
+  signIn(db, null);
+  assert.ok(db.getNotes().some(({ id }) => id === device));
+});
+
+test("proven-foreign defaults are replaced in each affected private workspace", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "b", W1_ACTIVE);
+  const activeHome = db.getPrivateSpaceId();
+  const otherHome = db.getPrivateSpaceId("w2");
+  const emptyHome = db.getPrivateSpaceId("w3");
+  const notes = [];
+  for (const [spaceId, cloudId] of [
+    [activeHome, "foreign-personal-w1"],
+    [otherHome, "foreign-personal-w2"],
+  ]) {
+    const folderId = seedFolder(db.db, spaceId, { name: "Personal", isDefault: 1, cloudId });
+    notes.push(seedNote(db.db, spaceId, { title: cloudId, accountId: "b", folderId }));
+  }
+
+  db.ensureAccountDefaultFolders(["foreign-personal-w1", "foreign-personal-w2"]);
+
+  for (const noteId of notes) {
+    const note = noteRow(db.db, noteId);
+    const folder = folderRow(db.db, note.folder_id);
+    assert.equal(folder.account_id, "b");
+    assert.equal(folder.cloud_id, null);
+    assert.equal(folder.space_id, note.space_id);
+    assert.equal(note.sync_status, "pending");
+  }
+  assert.equal(db.getFolders().filter(({ name }) => name === "Personal").length, 2);
+  assert.equal(db.getFolders(emptyHome).length, 0, "unaffected empty workspaces stay lazy");
+  assert.deepEqual(
+    db
+      .takeAccountRepairNotes()
+      .map(({ id }) => id)
+      .sort(),
+    notes.sort()
+  );
+  db.ensureAccountDefaultFolders(["foreign-personal-w1", "foreign-personal-w2"]);
+  assert.deepEqual(db.takeAccountRepairNotes(), []);
+});
+
+test("sole-account sign-in preserves an unproven cloud folder and files its notes separately", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standIn = db._standInPrivateSpaceId();
+  const folderId = seedFolder(db.db, standIn, { name: "Ideas", cloudId: "unknown-folder" });
+  const noteId = seedNote(db.db, standIn, { title: "Device draft", folderId });
+  signIn(db, "a", W1_ACTIVE);
+
+  db.claimSignedOutPrivateNotes();
+
+  const note = noteRow(db.db, noteId);
+  const source = folderRow(db.db, folderId);
+  assert.equal(source.account_id, null);
+  assert.equal(source.space_id, standIn);
+  assert.equal(source.cloud_id, "unknown-folder");
+  assert.equal(note.account_id, "a");
+  assert.equal(note.space_id, db.getDefaultPrivateSpaceId());
+  assert.notEqual(note.folder_id, folderId);
+  assert.equal(folderRow(db.db, note.folder_id).cloud_id, null);
+  assert.deepEqual(db.claimSignedOutPrivateNotes(), { notes: 0, folders: 0 });
+});
+
+test("account deletion preserves unowned folders and foreign container chats from its space", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "b");
+  const bHome = db.getPrivateSpaceId();
+  signIn(db, "a");
+  const aHome = db.getPrivateSpaceId();
+  const unclaimed = seedFolder(db.db, aHome, { name: "Legacy cloud", cloudId: "b-cloud-folder" });
+  const foreign = seedFolder(db.db, aHome, { name: "B folder", accountId: "b" });
+  const deviceNote = seedNote(db.db, aHome, { title: "Device draft", folderId: unclaimed });
+  const foreignNote = seedNote(db.db, aHome, {
+    title: "B draft",
+    folderId: foreign,
+    accountId: "b",
+  });
+  const bChat = seedChat(db.db, {
+    title: "B local history",
+    accountId: "b",
+    spaceId: aHome,
+    folderId: unclaimed,
+  });
+  const deviceChat = seedChat(db.db, {
+    title: "Device local history",
+    accountId: null,
+    spaceId: aHome,
+    folderId: unclaimed,
+  });
+  db.db
+    .prepare(
+      "INSERT INTO agent_messages (conversation_id, role, content) VALUES (?, 'user', 'Kept')"
+    )
+    .run(bChat);
+
+  const result = db.deleteAccountData("a");
+
+  assert.deepEqual(result.deletedFolderIds, []);
+  assert.equal(folderRow(db.db, unclaimed).space_id, db._standInPrivateSpaceId());
+  assert.equal(folderRow(db.db, unclaimed).account_id, null);
+  assert.equal(folderRow(db.db, unclaimed).cloud_id, "b-cloud-folder");
+  assert.equal(folderRow(db.db, foreign).space_id, bHome);
+  assert.equal(noteRow(db.db, deviceNote).folder_id, unclaimed);
+  assert.equal(noteRow(db.db, foreignNote).folder_id, foreign);
+  assert.deepEqual(chatRow(db.db, bChat), { account_id: "b", space_id: bHome, folder_id: null });
+  assert.deepEqual(chatRow(db.db, deviceChat), {
+    account_id: null,
+    space_id: db._standInPrivateSpaceId(),
+    folder_id: unclaimed,
+  });
+  assert.equal(
+    db.db.prepare("SELECT content FROM agent_messages WHERE conversation_id = ?").get(bChat)
+      .content,
+    "Kept"
+  );
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("a repaired foreign note's chat survives deleting its previous container account", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a");
+  const own = db.saveNote("A note", "").note;
+  const noteId = seedNote(db.db, own.space_id, {
+    title: "B legacy",
+    folderId: own.folder_id,
+    cloudId: "b-note",
+    ownerUserId: "b",
+  });
+  const chatId = seedChat(db.db, {
+    title: "B note chat",
+    accountId: "b",
+    spaceId: own.space_id,
+  });
+  db.db.prepare("UPDATE agent_conversations SET note_id = ? WHERE id = ?").run(noteId, chatId);
+
+  db._repairCloudBoundLegacyRows();
+  db.deleteAccountData("a");
+
+  assert.equal(noteRow(db.db, noteId).account_id, "b");
+  assert.deepEqual(chatRow(db.db, chatId), { account_id: "b", space_id: null, folder_id: null });
+});
+
+test("a proven-foreign legacy Videos default gets an owned replacement only in its workspace", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "b", W1_ACTIVE);
+  const home = db.getPrivateSpaceId();
+  const other = db.getPrivateSpaceId("w2");
+  const legacy = seedFolder(db.db, home, { name: "Videos", isDefault: 1, cloudId: "a-videos" });
+  const noteId = seedNote(db.db, home, { title: "B video", accountId: "b", folderId: legacy });
+
+  db.ensureAccountDefaultFolders(["a-videos"]);
+
+  const visible = db.getFolders(home).filter(({ name }) => name === "Videos");
+  assert.equal(visible.length, 1);
+  assert.equal(visible[0].account_id, "b");
+  assert.notEqual(visible[0].id, legacy);
+  assert.equal(noteRow(db.db, noteId).folder_id, visible[0].id);
+  assert.equal(folderRow(db.db, legacy).cloud_id, "a-videos");
+  db.ensureDefaultFolders(other);
+  assert.equal(
+    db.getFolders(other).some(({ name }) => name === "Videos"),
+    false
+  );
+});
+
+test("default repair failures keep startup available and leave repair eligible to retry", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "b");
+  const home = db.getPrivateSpaceId();
+  const folderId = seedFolder(db.db, home, { name: "Personal", isDefault: 1, cloudId: "a-folder" });
+  const noteId = seedNote(db.db, home, { title: "Misplaced", accountId: "b", folderId });
+  db.db.exec(`CREATE TRIGGER interrupt_default_repair BEFORE UPDATE OF folder_id ON notes
+    BEGIN SELECT RAISE(ABORT, 'repair interrupted'); END`);
+  t.mock.method(debugLogger, "error", () => {});
+
+  assert.doesNotThrow(() => db.ensureAccountDefaultFolders(["a-folder"]));
+  assert.equal(noteRow(db.db, noteId).folder_id, folderId);
+  assert.deepEqual(db.takeAccountRepairNotes(), []);
+  assert.equal(
+    db.db
+      .prepare("SELECT COUNT(*) AS count FROM folders WHERE space_id = ? AND account_id = 'b'")
+      .get(home).count,
+    0
+  );
+  db.db.exec("DROP TRIGGER interrupt_default_repair");
+  db.ensureAccountDefaultFolders(["a-folder"]);
+  assert.notEqual(noteRow(db.db, noteId).folder_id, folderId);
+  assert.deepEqual(
+    db.takeAccountRepairNotes().map(({ id }) => id),
+    [noteId]
+  );
+});
+
+test("owners discovered during upgrade repair disable sole-account signed-out visibility", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standIn = db._standInPrivateSpaceId();
+  const knownOwner = seedNote(db.db, standIn, {
+    title: "A cloud note",
+    cloudId: "a-cloud-note",
+    ownerUserId: "a",
+  });
+  const sharedDraft = seedNote(db.db, standIn, { title: "Shared device draft" });
+  assert.deepEqual(db.db.prepare("SELECT account_id FROM device_accounts").all(), []);
+
+  const upgraded = relaunchFromVersion5(t, db);
+  assert.equal(noteRow(upgraded.db, knownOwner).account_id, "a");
+  signIn(upgraded, "b");
+  assert.equal(upgraded.hasOtherAccountRows(), true);
+  assert.deepEqual(upgraded.claimSignedOutPrivateNotes(), { notes: 0, folders: 0 });
+  assert.equal(noteRow(upgraded.db, sharedDraft).account_id, null);
+  upgraded.db
+    .prepare("INSERT INTO transcriptions (text, account_id) VALUES ('B private history', 'b')")
+    .run();
+  const bChat = seedChat(upgraded.db, { title: "B private chat", accountId: "b" });
+  assert.ok(upgraded.getTranscriptions().some(({ text }) => text === "B private history"));
+  assert.ok(upgraded.getAgentConversation(bChat));
+
+  signIn(upgraded, null);
+
+  assert.deepEqual(upgraded.getAccountScope(), { accountId: null, visibleAccountId: null });
+  assert.equal(
+    upgraded.getTranscriptions().some(({ text }) => text === "B private history"),
+    false
+  );
+  assert.equal(upgraded.getAgentConversation(bChat), null);
+  assert.ok(upgraded.getNote(sharedDraft));
+  assert.deepEqual(
+    upgraded.db.prepare("SELECT account_id FROM device_accounts ORDER BY account_id").all(),
+    [{ account_id: "a" }, { account_id: "b" }]
+  );
 });

@@ -11,6 +11,7 @@ import {
   withDefaultFirst,
 } from "../lib/workspaceSwitcher";
 import { isControlPanelWindow } from "../utils/windowContext";
+import { clearCachedLeaderboards } from "../lib/insightsCache";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -204,6 +205,29 @@ function readWorkspaceListCache(
   } catch {
     return null;
   }
+}
+
+/** Restore an offline account's list without attempting an authenticated request. */
+export function hydrateCachedWorkspaces(accountId: string): void {
+  if (
+    accountId !== usePolicyStore.getState().accountId ||
+    useWorkspaceStore.getState().workspaces.length > 0
+  ) {
+    return;
+  }
+  const cached = readWorkspaceListCache(accountId);
+  if (!cached) {
+    useWorkspaceStore.setState({ loaded: true, error: true });
+    return;
+  }
+  const defaultWorkspaceId = resolveDefaultWorkspaceId(cached);
+  useWorkspaceStore.setState({
+    workspaces: withDefaultFirst(cached, defaultWorkspaceId),
+    defaultWorkspaceId,
+    listAccountId: accountId,
+    loaded: true,
+    error: true,
+  });
 }
 
 /**
@@ -477,7 +501,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       if (!current()) return;
       const toRelocate = await confirmedLost([...new Set([...lost, ...orphaned])]);
       if (!current()) return;
-      if (toRelocate.length > 0) await relocateLostWorkspaces(toRelocate, current);
+      if (toRelocate.length > 0) {
+        // A workspace lost elsewhere takes its leaderboard with it.
+        clearCachedLeaderboards();
+        await relocateLostWorkspaces(toRelocate, current);
+      }
     })().finally(() => {
       if (refreshPromise === request) refreshPromise = null;
     });
@@ -489,6 +517,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   createWorkspace: async (name) => {
     const generation = accountGeneration;
     const workspace = await WorkspacesService.create(name);
+    // A new workspace is a new leaderboard scope.
+    clearCachedLeaderboards();
     if (generation === accountGeneration) {
       set((s) => ({ workspaces: [...s.workspaces, workspace] }));
       // A list request sent before the create would answer without it and drop it again.
@@ -775,6 +805,8 @@ export function ensureDefaultWorkspace(
           .getState()
           .workspaces.some((w) => w.id === workspace.id && w.is_default === true);
       if (!listed) {
+        // A new default workspace is a new leaderboard scope.
+        clearCachedLeaderboards();
         listRead = true;
         await useWorkspaceStore.getState().refresh({ fresh: true });
       }
