@@ -131,6 +131,8 @@ export const settingsEnglish = {
   cloud: 'OpenWhispr Cloud',
   cloudBody: 'Fastest. Needs an account.',
   cloudShort: 'Cloud',
+  // Settings' Processing row when tasks run in different places.
+  mixed: 'Mixed',
   thisPhone: 'On device',
   thisPhoneBody: 'Private and works offline. One-time download.',
   ownKey: 'Your own API key',

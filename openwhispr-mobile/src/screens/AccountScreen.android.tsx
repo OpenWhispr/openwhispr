@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
+import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { useSyncStore } from '@/sync/useSyncStore';
 import { requestSync } from '@/sync/syncEngine';
 import { requiresRealAccount } from '@/lib/accountAccess';
@@ -29,17 +30,13 @@ import {
 import { useSettingsT, type SettingsKey } from '@/android/settings/strings';
 import { requestRuntime, usePermissions } from '@/android/settings/permissions';
 import { applyBubbleLook, sizeLabel, useBubbleLook } from '@/android/settings/bubbleAppearance';
+import { processingSummary } from '@/android/processingFable/places';
 
 const HISTORY_LABEL: Record<number, SettingsKey> = {
   [-1]: 'forever',
   30: 'thirtyDays',
   7: 'sevenDays',
   0: 'dontSave',
-};
-const MODE_LABEL: Record<string, SettingsKey> = {
-  cloud: 'cloudShort',
-  private: 'thisPhone',
-  providers: 'ownKey',
 };
 
 export default function SettingsScreen() {
@@ -51,6 +48,7 @@ export default function SettingsScreen() {
   const loadUsage = useUsageStore((s) => s.load);
   const config = useConfigStore((s) => s.config);
   const activeMode = useProcessingModeStore((s) => s.activeMode);
+  const processing = processingSummary(t, config, activeMode, cloudAccessFor(user));
   const sync = useSyncStore();
   const opacity = useBubbleLook((s) => s.opacity);
   const { status, offCount, refresh } = usePermissions();
@@ -290,15 +288,9 @@ export default function SettingsScreen() {
           onPress={() => router.push('/(account)/transcription-language')}
         />
         <ListRow
-          icon={
-            activeMode === 'private'
-              ? 'Smartphone'
-              : activeMode === 'providers'
-                ? 'KeyRound'
-                : 'Cloud'
-          }
+          icon={processing.icon}
           title={t('processing')}
-          value={t(MODE_LABEL[activeMode])}
+          value={processing.label}
           onPress={() => router.push('/(account)/ai-models')}
         />
         <ListRow
