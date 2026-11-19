@@ -154,8 +154,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
-  dictationLifecycleStateChanged: (state, attempt) =>
-    ipcRenderer.invoke("dictation-lifecycle-state-changed", state, attempt),
+  dictationLifecycleStateChanged: (state, attempt, voiceAgentRequested = false) =>
+    ipcRenderer.invoke("dictation-lifecycle-state-changed", state, attempt, voiceAgentRequested),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>
@@ -243,6 +243,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
   skillsApplyUpdate: (update) => ipcRenderer.invoke("skills-apply-update", update),
   skillsMarkUsed: (name) => ipcRenderer.invoke("skills-mark-used", name),
   skillsUndo: (name, versionId) => ipcRenderer.invoke("skills-undo", name, versionId),
+  getPendingSkills: () => ipcRenderer.invoke("skills-get-pending"),
+  getPendingSkillDeletes: () => ipcRenderer.invoke("skills-get-pending-deletes"),
+  exportSkillForCloud: (name) => ipcRenderer.invoke("skills-export-for-cloud", name),
+  getSkillForCloudMerge: (cloudEntry) =>
+    ipcRenderer.invoke("skills-get-for-cloud-merge", cloudEntry),
+  applySkillFromCloud: (cloudEntry, expectedLocal) =>
+    ipcRenderer.invoke("skills-apply-from-cloud", cloudEntry, expectedLocal),
+  markSkillSynced: (name, cloudId, serverUpdatedAt, expectedHash, expectedEnabled) =>
+    ipcRenderer.invoke(
+      "skills-mark-synced",
+      name,
+      cloudId,
+      serverUpdatedAt,
+      expectedHash,
+      expectedEnabled
+    ),
+  hardDeleteSkill: (name) => ipcRenderer.invoke("skills-hard-delete", name),
+  queueSkillCloudDelete: (name, cloudId) =>
+    ipcRenderer.invoke("skills-queue-cloud-delete", name, cloudId),
+  clearSkillCloudId: (name) => ipcRenderer.invoke("skills-clear-cloud-id", name),
+  broadcastSkillsUpdated: () => ipcRenderer.invoke("skills-broadcast-updated"),
   onSkillsChanged: (callback) => {
     const listener = () => callback?.();
     ipcRenderer.on("skills-changed", listener);
@@ -1631,7 +1652,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("connector-recent-actions", connectorId, limit),
   connectorFindContacts: (query) => ipcRenderer.invoke("connector-find-contacts", query),
   connectorNoteAttendees: (request) => ipcRenderer.invoke("connector-note-attendees", request),
-  connectorConnect: (connectorId) => ipcRenderer.invoke("connector-connect", connectorId),
+  connectorConnect: (connectorId, options) =>
+    ipcRenderer.invoke("connector-connect", connectorId, options),
   connectorCancelConnect: (connectorId) =>
     ipcRenderer.invoke("connector-cancel-connect", connectorId),
   connectorDisconnect: (connectorId) => ipcRenderer.invoke("connector-disconnect", connectorId),

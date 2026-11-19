@@ -62,7 +62,7 @@ test("connect needs policy; disconnect never does", async () => {
   await ipcMain.handlers.get("connector-disconnect")({}, "slack");
 
   assert.deepEqual(calls, [
-    ["connect", "slack", "allowed"],
+    ["connect", "slack", "allowed", {}],
     ["disconnect", "slack"],
   ]);
   assert.equal(policyCalls, 1);
@@ -70,6 +70,23 @@ test("connect needs policy; disconnect never does", async () => {
     status: "unavailable",
     reason: "invalid_request",
   });
+  // A typed sign-in domain is the one connect option; the connector checks it.
+  await ipcMain.handlers.get("connector-connect")({}, "salesforce", {
+    loginDomain: "test.salesforce.com",
+    other: "dropped",
+  });
+  assert.deepEqual(calls.at(-1), [
+    "connect",
+    "salesforce",
+    "allowed",
+    { loginDomain: "test.salesforce.com" },
+  ]);
+  for (const options of [{ loginDomain: 7 }, { loginDomain: "x".repeat(301) }])
+    assert.deepEqual(await ipcMain.handlers.get("connector-connect")({}, "salesforce", options), {
+      status: "unavailable",
+      reason: "invalid_request",
+    });
+  assert.equal(calls.length, 3);
 });
 
 test("each channel reaches the manager, with policy only where something can leave", async () => {
@@ -793,7 +810,7 @@ test("a cancel during the policy wait stops the connect before the manager start
   assert.deepEqual(await h("connector-cancel-connect")({}, "github"), { status: "idle" });
   assert.deepEqual(calls, [
     ["cancelConnect", "github"],
-    ["connect", "slack", "allowed"],
+    ["connect", "slack", "allowed", {}],
     ["cancelConnect", "github"],
   ]);
 });

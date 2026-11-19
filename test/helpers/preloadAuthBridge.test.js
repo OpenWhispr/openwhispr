@@ -214,8 +214,12 @@ test("dictation lifecycle reports reach main", async () => {
   const { api, invocations } = loadPreloadApi();
 
   await api.dictationLifecycleStateChanged("preparing", "take-1");
+  await api.dictationLifecycleStateChanged("recording", "take-1", true);
 
-  assert.deepEqual(invocations, [["dictation-lifecycle-state-changed", "preparing", "take-1"]]);
+  assert.deepEqual(invocations, [
+    ["dictation-lifecycle-state-changed", "preparing", "take-1", false],
+    ["dictation-lifecycle-state-changed", "recording", "take-1", true],
+  ]);
 });
 
 test("the agent window's bridges reach their channels and strip the Electron event", async () => {

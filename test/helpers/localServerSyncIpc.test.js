@@ -137,6 +137,31 @@ function sync({ loaded, signedIn = false, policySettled = true, ...scopes }) {
   );
 }
 
+test("only a dictation speech engine change stops servers shared with local meetings", async (t) => {
+  const stopped = [];
+  target.whisperManager = { stopServer: async () => stopped.push("whisper") };
+  target.parakeetManager = { stopServer: async () => stopped.push("parakeet") };
+  t.after(() => {
+    delete target.whisperManager;
+    delete target.parakeetManager;
+  });
+
+  await sync({ cleanupMode: "local", cleanupModel: MODEL });
+  assert.deepEqual(stopped.splice(0), ["whisper", "parakeet"], "apply the initial cloud route");
+  await sync({ cleanupMode: "enterprise", cleanupModel: "managed-model" });
+  assert.deepEqual(stopped, [], "a managed cleanup update must leave the meeting decode alone");
+
+  const local = { useLocalWhisper: true, localTranscriptionProvider: "nvidia", model: "parakeet" };
+  await sync(local);
+  assert.deepEqual(stopped.splice(0), ["whisper"]);
+  await sync({ ...local, language: "de" });
+  assert.deepEqual(stopped, [], "the same engine can be reported by another window");
+  await sync({ ...local, localTranscriptionProvider: "whisper", model: "tiny" });
+  assert.deepEqual(stopped.splice(0), ["parakeet"]);
+  await sync({});
+  assert.deepEqual(stopped, ["whisper", "parakeet"], "an actual cloud switch still retires both");
+});
+
 test("a window sync keeps the server while another scope still needs its model", async () => {
   const cancelled = modelManager.serverManager.cancelledStops;
   await sync({ loaded: MODEL, chatAgentMode: "local", chatAgentModel: MODEL });
@@ -197,4 +222,13 @@ test("a downloaded GPU binary requests an idle stop that preferences cannot canc
   assert.equal(result.success, true);
   assert.equal(stop.mock.callCount(), 1);
   assert.deepEqual(stop.mock.calls[0].arguments, [{ cancelOnReuse: false }]);
+});
+
+test("a settled cleanup route configures recording prewarm and a managed route clears it", async () => {
+  const models = [];
+  target.dictationCleanupPrewarm = { setModel: (modelId) => models.push(modelId) };
+  await sync({ signedIn: true, policySettled: false, cleanupMode: "local", cleanupModel: MODEL });
+  await sync({ signedIn: true, cleanupMode: "local", cleanupModel: MODEL });
+  await sync({ signedIn: true, cleanupMode: "enterprise", cleanupModel: "managed-model" });
+  assert.deepEqual(models, [MODEL, ""]);
 });
