@@ -46,7 +46,8 @@ import {
 } from '../settings/processingDefault';
 import { effectiveSelection } from '../settings/processingTasks';
 import { showToast } from '../settings/kit';
-import { settingsT } from '../settings/strings';
+import { settingsT, type SettingsT } from '../settings/strings';
+import type { LucideIconName } from '@/components/ui/SystemIcon';
 import { fableT } from './strings';
 
 /**
@@ -123,6 +124,31 @@ export function placementOf(
       modelId: selection.modelId,
     };
   return { place: 'cloud' };
+}
+
+/**
+ * Settings' Processing row: one place names it, one key names its source, different keys read
+ * Your own API key, and anything else is Mixed. Text cleanup counts only while it is switched on.
+ */
+export function processingSummary(
+  t: SettingsT,
+  config: UserConfig | null,
+  activeMode: ProcessingMode,
+  cloudAccess: CloudAccess,
+): { label: string; icon: LucideIconName } {
+  const placements = SHEET_TASKS.filter(
+    (task) => task !== 'cleanup' || (config?.cleanupEnabled ?? true),
+  ).map((task) => placementOf(config, task, activeMode, cloudAccess));
+  const [first] = placements;
+  if (placements.some(({ place }) => place !== first.place))
+    return { label: t('mixed'), icon: 'Split' };
+  if (first.place === 'cloud') return { label: t('cloudShort'), icon: 'Cloud' };
+  if (first.place === 'device') return { label: t('thisPhone'), icon: 'Smartphone' };
+  const oneSource = placements.every(({ source }) => source === first.source);
+  return {
+    label: oneSource && first.source ? sourceName(first.source) : t('ownKey'),
+    icon: 'KeyRound',
+  };
 }
 
 /** A provider model's display name ("GPT Transcribe"), else its id. */

@@ -30,6 +30,13 @@ jest.mock('../../../modules/android-dictation/src', () => ({
     openSettings: jest.fn(),
   },
 }));
+jest.mock('expo-sqlite/localStorage/install', () => ({}));
+jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
+jest.mock('@/android/models', () => ({
+  ANDROID_MODELS: {},
+  modelReady: async () => true,
+  useModelDownloads: () => ({}),
+}));
 jest.mock('@/android/settings/permissions', () => ({
   usePermissions: () => ({ status: { enabled: false }, offCount: 1, refresh: jest.fn() }),
   requestRuntime: jest.fn(async () => true),
@@ -142,4 +149,63 @@ it('confirms before signing out', () => {
   const buttons = jest.mocked(Alert.alert).mock.calls.at(-1)![2]!;
   act(() => buttons.find((button) => button.style === 'destructive')!.onPress!());
   expect(mockSignOut).toHaveBeenCalledTimes(1);
+});
+
+describe('the Processing row reads where every task runs', () => {
+  const everyTask = (selection: object) => ({
+    dictation: selection,
+    upload: selection,
+    cleanup: selection,
+    notes: selection,
+    meeting: selection,
+  });
+  const openAi = { mode: 'providers', providerId: 'openai', modelId: 'gpt-4o-mini-transcribe' };
+  const row = (config: object) => {
+    useConfigStore.setState({ config } as never);
+    render(<SettingsScreen />);
+  };
+
+  it('says On device when every task runs on the phone, though the app mode is Cloud', () => {
+    row({ inference: everyTask({ mode: 'local' }) });
+    expect(screen.getByText('thisPhone')).toBeTruthy();
+    expect(screen.queryByText('cloudShort')).toBeNull();
+  });
+
+  it('says Cloud when every task runs on Cloud', () => {
+    row({ inference: everyTask({ mode: 'openwhispr' }) });
+    expect(screen.getByText('cloudShort')).toBeTruthy();
+  });
+
+  it('says Mixed when the tasks are split', () => {
+    row({ inference: { ...everyTask({ mode: 'local' }), meeting: { mode: 'openwhispr' } } });
+    expect(screen.getByText('mixed')).toBeTruthy();
+  });
+
+  it('names the provider when one key runs every task', () => {
+    row({ inference: everyTask(openAi) });
+    expect(screen.getByText('OpenAI')).toBeTruthy();
+  });
+
+  it('says Your own API key when different keys run the tasks', () => {
+    row({
+      inference: {
+        ...everyTask(openAi),
+        cleanup: { mode: 'providers', providerId: 'groq', modelId: 'llama-3.1-8b-instant' },
+      },
+    });
+    expect(screen.getByText('ownKey')).toBeTruthy();
+  });
+
+  it('says Mixed when a key runs some tasks and Cloud the rest', () => {
+    row({ inference: { ...everyTask({ mode: 'openwhispr' }), dictation: openAi } });
+    expect(screen.getByText('mixed')).toBeTruthy();
+  });
+
+  it('leaves out Text cleanup while it is switched off', () => {
+    row({
+      cleanupEnabled: false,
+      inference: { ...everyTask({ mode: 'local' }), cleanup: { mode: 'openwhispr' } },
+    });
+    expect(screen.getByText('thisPhone')).toBeTruthy();
+  });
 });
