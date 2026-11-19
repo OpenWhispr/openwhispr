@@ -44,6 +44,7 @@ jest.mock('expo-router', () => ({
   Stack: () =>
     require('react').createElement(require('react-native').Text, null, 'Workspace ready'),
 }));
+jest.mock('../useKeepRouteAcrossAccounts', () => ({ useKeepRouteAcrossAccounts: () => undefined }));
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 jest.mock('expo-font', () => ({ useFonts: () => [true, null] }));
 jest.mock('@expo-google-fonts/space-grotesk', () => ({}));
