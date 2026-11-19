@@ -31,6 +31,7 @@ import {
 } from "../utils/transcriptionPreview";
 import { canStartDictation } from "../utils/dictationReadiness";
 import { recordCleanupFailure } from "../stores/cleanupFailureStore";
+import { subscribeAuthBoundary } from "../lib/authRequestContext";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -48,6 +49,23 @@ const WAYLAND_CLIPBOARD_REASON_KEYS = {
   "wl-copy-failed": "wlCopyFailed",
 };
 const DEMO_AUDIO_LEVEL_INTERVAL_MS = 80;
+
+// Fetches the STT config for whoever is signed in now. An answer that arrives
+// after invalidateSttConfig (an auth change, or a FEATURE_NOT_ENABLED refusal)
+// may be out of date, so it is dropped. Resolves true when the config was
+// installed; a failed fetch is logged and resolves false.
+async function loadSttConfig(manager) {
+  const generation = manager.sttConfigGeneration;
+  try {
+    const config = await window.electronAPI.getSttConfig?.();
+    if (!config?.success || manager.sttConfigGeneration !== generation) return false;
+    manager.setSttConfig(config);
+    return true;
+  } catch (error) {
+    logger.warn("STT config fetch failed", { error: error?.message });
+    return false;
+  }
+}
 
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
@@ -283,14 +301,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // refreshed in the background and this recording keeps the old decision.
         if (audioManagerRef.current.isSttConfigStale()) {
           const hadConfig = Boolean(audioManagerRef.current.sttConfig);
-          const configFetch = (async () => {
-            const config = await window.electronAPI.getSttConfig?.();
-            if (config?.success) {
-              audioManagerRef.current.setSttConfig(config);
-            }
-          })().catch((error) => {
-            logger.warn("STT config fetch failed", { error: error?.message });
-          });
+          const configFetch = loadSttConfig(audioManagerRef.current);
           if (!hadConfig && needsSttConfigBeforeStart(getSettings())) {
             await configFetch;
           }
@@ -1152,13 +1163,32 @@ export const useAudioRecording = (toast, options = {}) => {
     const unsubscribePolicy = usePolicyStore.subscribe(() => {
       window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);
     });
-    window.electronAPI.getSttConfig?.().then((config) => {
-      if (config?.success && audioManagerRef.current) {
-        audioManagerRef.current.setSttConfig(config);
-        if (audioManagerRef.current.shouldUseStreaming()) {
-          audioManagerRef.current.warmupStreamingConnection();
+    const loadAndWarmSttConfig = (warmOptions) => {
+      const manager = audioManagerRef.current;
+      loadSttConfig(manager).then((installed) => {
+        // A warm redials the stream, so it is skipped while a dictation runs or
+        // starts; the warm after a finished (not cancelled) recording covers it.
+        const state = manager.getState();
+        if (
+          installed &&
+          audioManagerRef.current === manager &&
+          canStartDictation(state) &&
+          !startLockRef.current &&
+          !state.isPreparing &&
+          manager.shouldUseStreaming()
+        ) {
+          manager.warmupStreamingConnection(warmOptions);
         }
-      }
+      });
+    };
+    loadAndWarmSttConfig();
+    // The config is per account (the Orukeet rollout and its Gemma pipeline pick
+    // accounts), so a sign-in, sign-out or account switch fetches it again
+    // instead of keeping the previous account's copy for the rest of its TTL.
+    // An account change is no reason to open the mic.
+    const unsubscribeAuthBoundary = subscribeAuthBoundary(() => {
+      audioManagerRef.current.invalidateSttConfig();
+      loadAndWarmSttConfig({ warmMic: false });
     });
 
     const handleToggle = async ({
@@ -1265,6 +1295,7 @@ export const useAudioRecording = (toast, options = {}) => {
       preparationGenerationRef.current += 1;
       if (recordingAttemptRef.current) recordingAttemptRef.current.abandoned = true;
       unsubscribePolicy();
+      unsubscribeAuthBoundary();
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
       disposeTranslationToggle?.();

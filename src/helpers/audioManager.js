@@ -786,6 +786,9 @@ class AudioManager {
     this.selectionCapturePromise = null;
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
+    // Bumped by invalidateSttConfig, so a fetch issued before it (for the
+    // previous account, say) can't install its answer afterwards.
+    this.sttConfigGeneration = 0;
     this.streamingFallbackReason = null;
     this._streamingFailoverReason = null;
     this._streamingSpeechGateState = null;
@@ -1242,6 +1245,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   invalidateSttConfig() {
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
+    this.sttConfigGeneration += 1;
   }
 
   getStreamingProvider(name) {
