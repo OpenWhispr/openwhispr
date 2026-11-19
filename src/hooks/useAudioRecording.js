@@ -1174,6 +1174,8 @@ export const useAudioRecording = (toast, options = {}) => {
             installed &&
             audioManagerRef.current === manager &&
             canStartDictation(manager.getState()) &&
+            !startLockRef.current &&
+            !manager.getState().isPreparing &&
             manager.shouldUseStreaming()
           ) {
             manager.warmupStreamingConnection(warmOptions);

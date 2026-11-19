@@ -157,6 +157,7 @@ test("an account change replaces the STT config and drops the old account's late
   let root = null;
   let start = null;
   let broadcastScope = null;
+  let targetHold = null;
   const fetches = [];
   globalThis.__sttSwitchManager = null;
   globalThis.__sttSwitchRecording = false;
@@ -192,7 +193,7 @@ test("an account change replaces the STT config and drops the old account's late
           new Promise((resolve) => {
             fetches.push((account) => resolve({ success: true, account }));
           }),
-        captureDictationTarget: async () => {},
+        captureDictationTarget: () => targetHold,
         completeDictationPreview: async () => {},
         hideDictationPreview: async () => {},
         dictationLifecycleStateChanged: async () => true,
@@ -263,4 +264,14 @@ test("an account change replaces the STT config and drops the old account's late
   });
   await answer(fetches.length - 1, "account-c");
   assert.deepEqual(globalThis.__sttSwitchWarms.slice(warmsBeforeSwitch), [{ warmMic: false }]);
+
+  // A start still in its preamble reads idle to the manager, but the stream is the start's to dial.
+  targetHold = new Promise(() => {});
+  await React.act(async () => {
+    start();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    broadcastScope({ accountId: "account-d", authGeneration: 4 });
+  });
+  await answer(fetches.length - 1, "account-d");
+  assert.equal(globalThis.__sttSwitchWarms.length, warmsBeforeSwitch + 1);
 });
