@@ -37,6 +37,10 @@ test("a name or word that is also a date abbreviation is spelled out only beside
     "The 1:1 with Thu moved to Monday, November 24."
   );
   assert.equal(said("It's on Thu at 3 PM."), "It's on Thursday at 3 PM.");
+  assert.equal(
+    said("Pavel Novák and Octávio Sepúlveda meet Marc Augé."),
+    "Pavel Novák and Octávio Sepúlveda meet Marc Augé."
+  );
   assert.equal(said("It moved to the 4th of Jun."), "It moved to the 4th of June.");
 });
 

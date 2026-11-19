@@ -1488,6 +1488,25 @@ test("the voice call hotkey starts a call from a hidden window; the next press e
   assert.equal(view.main.hides, 1, "the window the press opened went away with it");
 });
 
+test("the voice call hotkey hides only a window it opened for the call it ends", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.callHotkey());
+  await view.settle();
+  await React.act(async () => view.main.handlers.dismiss());
+  await view.settle();
+  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
+  await view.settle();
+  await React.act(async () => view.button("Start Voice Agent").click());
+  await view.settle();
+  assert.ok(view.button("End call"), "a call started from the pill runs");
+  const hides = view.main.hides;
+
+  await React.act(async () => view.main.handlers.callHotkey());
+  await view.settle();
+  assert.ok(!view.button("End call"), "the hotkey ended it");
+  assert.equal(view.main.hides, hides, "the window the user opened stays");
+});
+
 test("the voice call hotkey ends a call in the transcript and keeps the window; it starts none over a reply", async (t) => {
   const view = await mountWindow(t);
   const callStatus = () =>

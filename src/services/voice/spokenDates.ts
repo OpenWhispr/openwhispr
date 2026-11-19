@@ -49,7 +49,8 @@ const ALSO_WORDS = new Set(["Jan", "Jun", "Mar", "Mon", "Thu", "Sat", "Sun"]);
 
 const alternation = (words: string[]) => [...words].sort((a, b) => b.length - a.length).join("|");
 const ABBREVIATION_WORDS = alternation(Object.keys(ABBREVIATIONS));
-const ABBREVIATION = new RegExp(`\\b(${ABBREVIATION_WORDS})(\\.)?(?![A-Za-z0-9])`, "g");
+// "Novák" and "Octávio" are names, not "Nov" and "Oct" with letters after them.
+const ABBREVIATION = new RegExp(`\\b(${ABBREVIATION_WORDS})(\\.)?(?![\\p{L}\\p{N}])`, "gu");
 const DATE_WORD = `(?:${alternation([...Object.keys(ABBREVIATIONS), ...Object.values(ABBREVIATIONS), "May"])})\\b`;
 const JOINER = "(?:,|\\s*[-–]|\\s+(?:to|through|and|or))?";
 const DATE_FOLLOWS = new RegExp(`^${JOINER}\\s*(?:\\d|${DATE_WORD})`);

@@ -1102,6 +1102,10 @@ export default function AgentWindow() {
   // The voice call hotkey: a call starts, or the one running ends. A window the
   // press opened goes away with its call, unless the call moved to the transcript.
   const callOpenedWindowRef = useRef(false);
+  // A call that ended, or a window hidden, some other way leaves nothing for the next press to hide.
+  useEffect(() => {
+    if (!state.visible || !state.call || state.call.stopped) callOpenedWindowRef.current = false;
+  }, [state.visible, state.call]);
   const handleCallHotkey = useCallback(() => {
     if (refuseIfRestricted()) return;
     setRefusal(null);
