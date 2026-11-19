@@ -21,6 +21,7 @@ import {
 } from "./selfHostedTranscription.js";
 import {
   acceptsUnlistedTranscriptionModel,
+  isAssemblyAiRewriteAllowedByPolicy,
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
   type PolicyDecisionSnapshot,
@@ -512,6 +513,13 @@ export function resolveTranscriptionRoute({
       );
     }
     if (!isStreamingOnlySelection(provider, model)) {
+      if (managed && !isAssemblyAiRewriteAllowedByPolicy(policy)) {
+        return error(
+          "Transcription is restricted by your organization.",
+          "POLICY_RESTRICTED",
+          "common.policyTranscriptionRestricted"
+        );
+      }
       return {
         transport: "proxied",
         provider: "assemblyai",

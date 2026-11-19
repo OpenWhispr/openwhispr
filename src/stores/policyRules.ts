@@ -31,6 +31,7 @@ const KNOWN_BYOK_PROVIDER_IDS: Record<PolicyScope, ReadonlySet<string>> = {
   ]),
   llm: new Set([
     ...modelRegistryData.cloudProviders.map((provider) => provider.id),
+    "assemblyai", // Its Dictation endpoint always runs a provider-hosted rewrite.
     "custom",
     "openrouter",
   ]),
@@ -538,6 +539,10 @@ export function isLlmSelectionAllowed(
     return isEnterpriseProviderAllowed(state, selection.provider);
   }
   return true;
+}
+
+export function isAssemblyAiRewriteAllowedByPolicy(state: PolicyDecisionSnapshot): boolean {
+  return isLlmSelectionAllowed(state, { mode: "providers", provider: "assemblyai" });
 }
 
 export interface TranscriptionSelection {

@@ -142,8 +142,11 @@ test("cleanup validates completed provider output using the request's prompt set
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
     }).outputText;
     const settingsModule = await vite.ssrLoadModule("/stores/settingsStore.ts");
-    // The retry callback closes over this module-scope import (not a dynamic
-    // `import()`), so it must be supplied as a global rather than via `require`.
+    // Supply the real imports the callback closes over in the renderer.
+    const { providerCleanupStandsIn } = await vite.ssrLoadModule("/helpers/dictationRouting.js");
+    const { canUseAssemblyAiRewrite } = await vite.ssrLoadModule(
+      "/services/managedTranscription.ts"
+    );
     const { providerErrorToastProps } = await vite.ssrLoadModule("/utils/describeProviderError.ts");
     const toasts = [];
     let displayedRow;
@@ -169,6 +172,8 @@ test("cleanup validates completed provider output using the request's prompt set
       toast: (value) => toasts.push(value),
       t: (key) => key,
       providerErrorToastProps,
+      providerCleanupStandsIn,
+      canUseAssemblyAiRewrite,
     });
     await retry(row.id);
     assert.strictEqual(displayedRow, row);
@@ -186,6 +191,32 @@ test("cleanup validates completed provider output using the request's prompt set
     // Toasts are built in the vm's realm; copy them so deepEqual compares values.
     const shown = () => toasts.map((toast) => ({ ...toast }));
     assert.deepEqual(shown(), [{ title: "controlPanel.history.retrySuccess" }]);
+
+    // A provider rewrite is saved with its verbatim source when workspace policy allows it.
+    useSettingsStore.setState({ useCleanupModel: true, toneStyleEnabled: false });
+    window.electronAPI.retryTranscription = async () => ({
+      success: true,
+      transcription: row,
+      cleanedText: CLEAN,
+    });
+    window.electronAPI.updateTranscriptionText = async (id, text, rawText) => {
+      assert.deepEqual([id, text, rawText], [row.id, CLEAN, RAW]);
+      return { success: true, transcription: { ...row, text } };
+    };
+    await retry(row.id);
+    assert.equal(displayedRow.text, CLEAN);
+
+    // If policy changes after transcription, discard the returned rewrite.
+    const { managedPolicy } = require("../helpers/harness/policyFixtures");
+    usePolicyStore.setState({
+      status: "managed",
+      policy: managedPolicy({
+        llm: { allowedModes: ["local", "providers"], allowedByokProviders: ["openai"] },
+      }),
+    });
+    await retry(row.id);
+    assert.strictEqual(displayedRow, row);
+    usePolicyStore.setState({ status: "unmanaged", policy: null });
 
     // A partial result must say so, as dictation does, while still confirming the
     // retry or recovery the user asked for.

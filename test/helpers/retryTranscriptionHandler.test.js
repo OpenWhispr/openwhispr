@@ -20,6 +20,7 @@ let selfHostedHeaders = JSON.stringify({
 let policySnapshot = { success: true, managed: false };
 // A lookup that doesn't answer until the test lets it.
 let policyLookupGate = null;
+let accountWorkspaces = [];
 const broadcasts = [];
 let tokenState = { token: "test-token", generation: 1 };
 let fetchResponse = () => ({
@@ -45,6 +46,9 @@ const electronStub = {
   },
   net: {
     fetch: async (url, init) => {
+      if (String(url).endsWith("/api/workspaces")) {
+        return { ok: true, json: async () => ({ data: accountWorkspaces }) };
+      }
       fetches.push({ url: String(url), init });
       return fetchResponse(String(url), init);
     },
@@ -239,6 +243,10 @@ function buildFakeThis() {
   ]);
   const target = {
     sessionId: "test-session",
+    _enterpriseAudioBinding: null,
+    _enterpriseAudioOwner: null,
+    _enterpriseAudioScope: null,
+    _enterpriseAudioScopeRevision: 0,
     _uploadCancelRegistry:
       require("../../src/helpers/uploadCancelRegistry").createUploadCancelRegistry(),
     audioStorageManager: {
@@ -289,7 +297,13 @@ function buildFakeThis() {
 
 let retryHandler;
 let fakeThis;
-test.before(async () => {
+test.before(async (t) => {
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  t.after(() => {
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
@@ -1053,6 +1067,134 @@ test("voice take: AssemblyAI Dictation transcribes through the Dictation API, ve
   } finally {
     fetchResponse = defaultFetchResponse;
   }
+});
+
+const assemblyAiSurfaces = {
+  dictation: () =>
+    handlers.get("proxy-assemblyai-transcription")(
+      { sender: {} },
+      { audioBuffer: new Uint8Array([1]) }
+    ),
+  retry: () => invoke(ASSEMBLYAI_DICTATION),
+  voice: () =>
+    invokeUpload({
+      provider: "assemblyai",
+      model: "dictation",
+      transcriptionMode: "providers",
+      purpose: "dictation",
+    }),
+};
+
+test("AssemblyAI Dictation requires permission for transcription and its built-in LLM on every surface", async (t) => {
+  t.after(async () => {
+    policySnapshot = { success: true, managed: false };
+    fetchResponse = defaultFetchResponse;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  fetchResponse = dictationResponse({ text: "verbatim", llm_response: "Rewritten." });
+  for (const [name, run] of Object.entries(assemblyAiSurfaces)) {
+    await t.test(name, async () => {
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policySnapshot = { success: true, managed: true, policy };
+      for (const [sttProviders, llmModes, llmProviders, allowed] of [
+        [["assemblyai"], ["local"], ["assemblyai"], false],
+        [["assemblyai"], ["providers"], ["openai"], false],
+        [["openai"], ["providers"], ["assemblyai"], false],
+        [["assemblyai"], ["providers"], ["assemblyai"], true],
+      ]) {
+        policy.transcription.allowedByokProviders = sttProviders;
+        policy.llm.allowedModes = llmModes;
+        policy.llm.allowedByokProviders = llmProviders;
+        await fakeThis.refreshEffectivePolicy();
+        fetches.length = 0;
+        const result = await run();
+        assert.equal(fetches.length, allowed ? 1 : 0);
+        if (allowed) assert.ok(result.success || result.text);
+        else assert.equal(result.success, false);
+      }
+    });
+  }
+});
+
+test("an enforced enterprise cleanup scope prevents AssemblyAI uploads, including verbatim voice takes", async (t) => {
+  const workspaceId = "workspace-cleanup";
+  fakeThis.databaseManager.activeWorkspaceId = workspaceId;
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+  });
+  const resolve = t.mock.method(
+    fakeThis.enterpriseIdentityManager,
+    "resolveProvider",
+    async (request) => {
+      assert.equal(request.workspaceId, workspaceId);
+      assert.equal(request.inferenceScope, "dictationCleanup");
+      assert.equal(request.setupMode, "manual");
+      return { managed: true };
+    }
+  );
+  for (const run of Object.values(assemblyAiSurfaces)) {
+    fetches.length = 0;
+    const result = await run();
+    assert.equal(result.code, "PROVIDER_POLICY_CONFLICT");
+    assert.equal(fetches.length, 0);
+  }
+  assert.equal(resolve.mock.callCount(), 3);
+});
+
+test("a verified non-enterprise workspace can still upload after its enterprise binding retires", async (t) => {
+  fakeThis.databaseManager.activeWorkspaceId = "workspace-personal";
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+    fetchResponse = defaultFetchResponse;
+  });
+  const resolve = t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    fakeThis._retireEnterpriseAudio();
+    throw Object.assign(new Error("Enterprise subscription required"), {
+      code: "ENTERPRISE_REQUIRED",
+    });
+  });
+  fetchResponse = dictationResponse({ text: "verbatim", llm_response: "Rewritten." });
+  fetches.length = 0;
+  const result = await assemblyAiSurfaces.dictation();
+  assert.equal(result.text, "verbatim");
+  assert.equal(fetches.length, 1);
+  assert.equal(fetches[0].init.signal.aborted, false);
+  assert.equal((await assemblyAiSurfaces.retry()).success, true);
+  assert.equal(resolve.mock.callCount(), 1);
+});
+
+test("AssemblyAI waits for a signed-in workspace to resolve and for both workspace IDs to agree", async (t) => {
+  accountWorkspaces = [{ id: "new-workspace" }];
+  fakeThis._enterpriseAudioScopeRevision++;
+  t.after(() => {
+    accountWorkspaces = [];
+    fakeThis._enterpriseAudioScope = null;
+    delete fakeThis.databaseManager.activeWorkspaceId;
+    fakeThis._enterpriseAudioScopeRevision++;
+  });
+  fetches.length = 0;
+  const pending = await assemblyAiSurfaces.dictation();
+  assert.equal(pending.code, "AUTH_CONTEXT_CHANGED");
+  fakeThis.databaseManager.activeWorkspaceId = "old-workspace";
+  fakeThis._enterpriseAudioScope = { workspaceId: "new-workspace" };
+  const switched = await assemblyAiSurfaces.dictation();
+  assert.equal(switched.code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(fetches.length, 0);
+});
+
+test("a workspace switch during the AssemblyAI cleanup lookup prevents upload", async (t) => {
+  fakeThis.databaseManager.activeWorkspaceId = "first-workspace";
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    fakeThis.databaseManager.activeWorkspaceId = "next-workspace";
+    return { managed: false };
+  });
+  fetches.length = 0;
+  const result = await assemblyAiSurfaces.retry();
+  assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(fetches.length, 0);
 });
 
 test("upload: openai diarization fields ride the route, Bearer auth", async () => {
@@ -1925,6 +2067,25 @@ test("policy revocation during retry conversion or upload preparation prevents t
       });
     }
   }
+});
+
+test("revoking only the AssemblyAI LLM grant during voice preparation stops the upload", async (t) => {
+  t.after(async () => {
+    prepareUploadBehavior = undefined;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  fetches.length = 0;
+  prepareUploadBehavior = async (sourcePath) => {
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    policy.llm.allowedByokProviders = ["openai"];
+    policySnapshot = { success: true, managed: true, policy };
+    await fakeThis.refreshEffectivePolicy();
+    return { path: sourcePath, cleanup() {} };
+  };
+  const result = await assemblyAiSurfaces.voice();
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  assert.equal(fetches.length, 0);
 });
 
 test("a revoked retry aborts the provider and cannot save an ignored late result", async (t) => {

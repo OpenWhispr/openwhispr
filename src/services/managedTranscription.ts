@@ -1,9 +1,19 @@
 import { getSettings } from "../stores/settingsStore";
+import { isAssemblyAiRewriteAllowedByPolicy } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import type { ManagedTranscriptionResolution } from "../helpers/transcriptionRoute";
 import {
   getManagedScopeResolution,
   useEnterpriseIdentityStore,
 } from "../stores/enterpriseIdentityStore";
+
+export function canUseAssemblyAiRewrite(): boolean {
+  return (
+    isAssemblyAiRewriteAllowedByPolicy(usePolicyStore.getState()) &&
+    getManagedScopeResolution("dictationCleanup", getSettings().enterpriseSetupMode).kind ===
+      "manual"
+  );
+}
 
 /**
  * True when managed STT resolves for this user. Dictation gates OR this with

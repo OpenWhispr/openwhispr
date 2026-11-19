@@ -48,7 +48,10 @@ const {
   createWorkspacePolicyManager,
   isScreenContextBlocked,
 } = require("./workspacePolicyManager");
-const { createEnterpriseIdentityManager } = require("./enterpriseIdentityManager");
+const {
+  createEnterpriseIdentityManager,
+  CONFIG_REFRESH_MS,
+} = require("./enterpriseIdentityManager");
 const { createEffectivePolicyManager } = require("./effectivePolicyManager");
 const { devicePolicyNetworkAllowed } = require("./devicePolicyNetwork");
 const {
@@ -2282,7 +2285,10 @@ class IPCHandlers {
                 ? "self-hosted"
                 : "providers";
       const turnsRemote = !operation.remote && mode !== "local";
-      operation.channel = "batch-transcription";
+      operation.channel =
+        route.transport === "proxied" && route.provider === "assemblyai"
+          ? "proxy-assemblyai-transcription"
+          : "batch-transcription";
       operation.args = [{ mode, provider: route.provider ?? "" }];
       operation.remote = mode !== "local";
       if (turnsRemote) {
@@ -6714,17 +6720,14 @@ class IPCHandlers {
     handleProviderTranscription(
       "proxy-assemblyai-transcription",
       serializeIpcError(async (event, { audioBuffer, mimeType, language, keyterms }, signal) => {
-        return await transcribeWithAssemblyAiDictation(
-          {
-            signal,
-            audioBuffer,
-            contentType: mimeType,
-            language,
-            keyterms,
-            apiKey: this.environmentManager.getAssemblyAIKey(),
-          },
-          proxyFetch
-        );
+        return await transcribeAssemblyAiDictation(event, {
+          signal,
+          audioBuffer,
+          contentType: mimeType,
+          language,
+          keyterms,
+          apiKey: this.environmentManager.getAssemblyAIKey(),
+        });
       })
     );
 
@@ -8822,6 +8825,15 @@ class IPCHandlers {
         scope.authGeneration === snapshot.authGeneration
       );
     };
+    // Give a confirmed personal scope the same freshness window as an enterprise config.
+    let personalDictationScope;
+    const rememberPersonalDictationScope = (scope) => {
+      personalDictationScope = {
+        ...scope,
+        revision: this._enterpriseAudioScopeRevision,
+        expiresAt: Date.now() + CONFIG_REFRESH_MS,
+      };
+    };
     this.enterpriseIdentityManager = createEnterpriseIdentityManager({
       cachePath: path.join(app.getPath("userData"), "managed-enterprise-config.json"),
       getApiUrl,
@@ -8847,6 +8859,8 @@ class IPCHandlers {
       },
       broadcast: (snapshot) => {
         if (!matchesEnterpriseAudioScope(snapshot)) return;
+        if (snapshot.code === "ENTERPRISE_REQUIRED") rememberPersonalDictationScope(snapshot);
+        else personalDictationScope = null;
         const old = continuedEnterpriseAudioBinding(snapshot);
         const required = enforcesEnterpriseTranscription(snapshot);
         if (
@@ -8867,6 +8881,83 @@ class IPCHandlers {
       },
       logger: debugLogger,
     });
+    // Even callers that only use verbatim text cause this endpoint to run cleanup.
+    const dictationWorkspace = () => {
+      const databaseWorkspace = this.databaseManager.activeWorkspaceId;
+      const enterpriseWorkspace = this._enterpriseAudioScope?.workspaceId;
+      if (databaseWorkspace && enterpriseWorkspace && databaseWorkspace !== enterpriseWorkspace)
+        throw createEnterpriseAudioConfigChangedError();
+      return databaseWorkspace ?? enterpriseWorkspace ?? null;
+    };
+    const getDictationCleanupSignal = async (event) => {
+      const { accountId, authGeneration, authenticated } = getScope();
+      const workspaceId = dictationWorkspace();
+      const revision = this._enterpriseAudioScopeRevision;
+      if (!authenticated && !workspaceId) return;
+      if (!accountId) throw createEnterpriseAudioConfigChangedError();
+      if (
+        personalDictationScope &&
+        personalDictationScope.accountId === accountId &&
+        personalDictationScope.authGeneration === authGeneration &&
+        personalDictationScope.workspaceId === workspaceId &&
+        personalDictationScope.revision === revision &&
+        personalDictationScope.expiresAt > Date.now()
+      )
+        return;
+
+      let personal = true;
+      if (workspaceId) {
+        try {
+          const cleanup = await this.enterpriseIdentityManager.resolveProvider({
+            accountId,
+            workspaceId,
+            expectedAuthGeneration: authGeneration,
+            authHeaders: await getAuthHeader(event),
+            inferenceScope: "dictationCleanup",
+            setupMode: "manual",
+          });
+          if (cleanup.managed)
+            throw Object.assign(new Error(i18nMain.t("common.managedPolicyConflict")), {
+              code: "PROVIDER_POLICY_CONFLICT",
+              messageKey: "common.managedPolicyConflict",
+            });
+          personal = false;
+        } catch (error) {
+          if (error.code !== "ENTERPRISE_REQUIRED") throw error;
+        }
+      } else {
+        // At sign-in and during a switch, a missing workspace can still be resolving.
+        if (await getEnterpriseAudioRequest(event, undefined, "load"))
+          throw createEnterpriseAudioConfigChangedError();
+      }
+      const current = getScope();
+      if (
+        revision !== this._enterpriseAudioScopeRevision ||
+        workspaceId !== dictationWorkspace() ||
+        current.accountId !== accountId ||
+        current.authGeneration !== authGeneration ||
+        current.authenticated !== authenticated
+      )
+        throw createEnterpriseAudioConfigChangedError();
+      if (personal) {
+        rememberPersonalDictationScope({ accountId, workspaceId, authGeneration });
+        return;
+      }
+      return audioRetirement.signal;
+    };
+    const transcribeAssemblyAiDictation = (event, options) =>
+      transcribeWithAssemblyAiDictation(options, async (url, init) => {
+        const retirement = await getDictationCleanupSignal(event);
+        return proxyFetch(
+          url,
+          retirement
+            ? {
+                ...init,
+                signal: AbortSignal.any([init.signal, retirement]),
+              }
+            : init
+        );
+      });
     this.getEnterpriseAudioRequest = getEnterpriseAudioRequest;
     this.enterpriseAudioTransport = enterpriseAudioTransport;
     this.enterpriseAudioRuntime = createEnterpriseAudioRuntime({
@@ -9502,16 +9593,13 @@ class IPCHandlers {
           });
           result = { text, source: "gemini", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "assemblyai") {
-          const { text, cleanedText } = await transcribeWithAssemblyAiDictation(
-            {
-              signal,
-              audioBuffer: buffer,
-              contentType: isWavFormat(buffer) ? "audio/wav" : "audio/webm",
-              language: route.language,
-              apiKey: this.environmentManager.getAssemblyAIKey(),
-            },
-            proxyFetch
-          );
+          const { text, cleanedText } = await transcribeAssemblyAiDictation(event, {
+            signal,
+            audioBuffer: buffer,
+            contentType: isWavFormat(buffer) ? "audio/wav" : "audio/webm",
+            language: route.language,
+            apiKey: this.environmentManager.getAssemblyAIKey(),
+          });
           result = { text, cleanedText, source: "assemblyai", model: route.model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
@@ -13985,16 +14073,13 @@ class IPCHandlers {
 
             if (route.transport === "proxied" && route.provider === "assemblyai") {
               // The verbatim transcript: a voice take is a request, not text to tidy.
-              const { text } = await transcribeWithAssemblyAiDictation(
-                {
-                  audioBuffer: fs.readFileSync(realByok),
-                  signal,
-                  contentType: providerContentType(realByok),
-                  language: route.language,
-                  apiKey: apiKey || this.environmentManager.getAssemblyAIKey(),
-                },
-                proxyFetch
-              );
+              const { text } = await transcribeAssemblyAiDictation(event, {
+                audioBuffer: fs.readFileSync(realByok),
+                signal,
+                contentType: providerContentType(realByok),
+                language: route.language,
+                apiKey: apiKey || this.environmentManager.getAssemblyAIKey(),
+              });
               return { success: true, text };
             }
 

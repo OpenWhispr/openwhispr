@@ -56,13 +56,15 @@ import {
   isAgentAllowed,
   isAudioFeatureAllowed,
   isControlPanelViewAllowed,
-  isModeAllowedByPolicy,
   isPolicyActionAllowed,
   isTranscriptionContextAllowed,
   isUpdateRequiredByOrg,
   transcriptionChoiceRefusal,
 } from "../stores/policyRules";
-import { getManagedTranscriptionResolution } from "../services/managedTranscription";
+import {
+  canUseAssemblyAiRewrite,
+  getManagedTranscriptionResolution,
+} from "../services/managedTranscription";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -950,16 +952,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const isCloud = isCloudCleanupMode();
               // A provider's own rewrite stands in for cleanup, as on a fresh dictation.
               const providerCleanedText =
-                (providerCleanupStandsIn(getSettings(), {
+                result.cleanedText?.trim() &&
+                providerCleanupStandsIn(getSettings(), {
                   cleanupReachable: !!model || isCloud,
-                  providerLlmAllowed: isModeAllowedByPolicy(
-                    usePolicyStore.getState(),
-                    "llm",
-                    "providers"
-                  ),
-                }) &&
-                  result.cleanedText?.trim()) ||
-                "";
+                  providerLlmAllowed: canUseAssemblyAiRewrite(),
+                })
+                  ? result.cleanedText.trim()
+                  : "";
               if (providerCleanedText || model || isCloud) {
                 const reasonedText =
                   providerCleanedText ||

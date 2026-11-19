@@ -66,7 +66,6 @@ import {
   isLlmSelectionAllowed,
   isLocalChoiceRefusal,
   isLocalModelAllowedByPolicy,
-  isModeAllowedByPolicy,
   isTranscriptionContextAllowed,
   isTranscriptionSelectionAllowed,
   localModelRefusal,
@@ -91,6 +90,7 @@ import {
   resolveTranscriptionRoute,
 } from "./transcriptionRoute.ts";
 import {
+  canUseAssemblyAiRewrite,
   getManagedTranscriptionResolution,
   isManagedTranscriptionActive,
 } from "../services/managedTranscription.ts";
@@ -3556,7 +3556,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       !(addressesAgent && (agentReachable || isAgentScopeBlocked(settings))) &&
       providerCleanupStandsIn(settings, {
         cleanupReachable,
-        providerLlmAllowed: isModeAllowedByPolicy(usePolicyStore.getState(), "llm", "providers"),
+        providerLlmAllowed: canUseAssemblyAiRewrite(),
       })
     ) {
       logger.logReasoning("PROVIDER_CLEANUP_USED", { source });
