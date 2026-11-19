@@ -209,8 +209,10 @@ test("an account change replaces the STT config and drops the old account's late
   });
   const { useAudioRecording } = await vite.ssrLoadModule("/hooks/useAudioRecording.js");
 
+  const toast = () => {};
+  const options = { onDemoEvent: () => {} };
   function Harness() {
-    useAudioRecording(() => {}, { onDemoEvent: () => {} });
+    useAudioRecording(toast, options);
     return null;
   }
 
