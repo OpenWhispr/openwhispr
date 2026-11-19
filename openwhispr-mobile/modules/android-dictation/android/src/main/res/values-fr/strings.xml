@@ -32,11 +32,11 @@
   <string name="ow_status_allow">Autoriser</string>
   <string name="ow_status_copied">Copié</string>
   <string name="ow_status_turn_on_typing">Activer la saisie</string>
-  <string name="ow_status_signed_out">Déconnecté</string>
+  <string name="ow_status_signed_out">Vous êtes déconnecté</string>
   <string name="ow_status_sign_in">Se connecter</string>
-  <string name="ow_status_model_needed">Modèle non téléchargé</string>
+  <string name="ow_status_model_needed">Un modèle à télécharger</string>
   <string name="ow_status_download">Télécharger</string>
-  <string name="ow_status_failed">Impossible de terminer</string>
+  <string name="ow_status_failed">Ça n’a pas marché</string>
   <string name="ow_menu_assistant">Assistant</string>
   <string name="ow_menu_assistant_body">Écrit ou répond pour vous</string>
   <string name="ow_menu_translate">Traduire</string>

@@ -32,11 +32,11 @@
   <string name="ow_status_allow">允许</string>
   <string name="ow_status_copied">已复制</string>
   <string name="ow_status_turn_on_typing">开启输入</string>
-  <string name="ow_status_signed_out">已退出登录</string>
+  <string name="ow_status_signed_out">你已退出登录</string>
   <string name="ow_status_sign_in">登录</string>
-  <string name="ow_status_model_needed">模型未下载</string>
+  <string name="ow_status_model_needed">需要下载模型</string>
   <string name="ow_status_download">下载</string>
-  <string name="ow_status_failed">未能完成</string>
+  <string name="ow_status_failed">没有成功</string>
   <string name="ow_menu_assistant">助手</string>
   <string name="ow_menu_assistant_body">替你撰写或回复</string>
   <string name="ow_menu_translate">翻译</string>

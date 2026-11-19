@@ -32,11 +32,11 @@
   <string name="ow_status_allow">許可</string>
   <string name="ow_status_copied">コピーしました</string>
   <string name="ow_status_turn_on_typing">入力をオン</string>
-  <string name="ow_status_signed_out">ログアウト中</string>
+  <string name="ow_status_signed_out">ログアウトしています</string>
   <string name="ow_status_sign_in">ログイン</string>
-  <string name="ow_status_model_needed">モデル未ダウンロード</string>
+  <string name="ow_status_model_needed">モデルのダウンロードが必要</string>
   <string name="ow_status_download">ダウンロード</string>
-  <string name="ow_status_failed">完了できませんでした</string>
+  <string name="ow_status_failed">うまくいきませんでした</string>
   <string name="ow_menu_assistant">アシスタント</string>
   <string name="ow_menu_assistant_body">代わりに書く・返信する</string>
   <string name="ow_menu_translate">翻訳</string>

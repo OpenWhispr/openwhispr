@@ -32,11 +32,11 @@
   <string name="ow_status_allow">سماح</string>
   <string name="ow_status_copied">تم النسخ</string>
   <string name="ow_status_turn_on_typing">تشغيل الكتابة</string>
-  <string name="ow_status_signed_out">تم تسجيل الخروج</string>
+  <string name="ow_status_signed_out">لقد سجّلت الخروج</string>
   <string name="ow_status_sign_in">تسجيل الدخول</string>
-  <string name="ow_status_model_needed">النموذج غير مُنزّل</string>
+  <string name="ow_status_model_needed">يلزم تنزيل نموذج</string>
   <string name="ow_status_download">تنزيل</string>
-  <string name="ow_status_failed">تعذّر الإنهاء</string>
+  <string name="ow_status_failed">لم ينجح ذلك</string>
   <string name="ow_menu_assistant">المساعد</string>
   <string name="ow_menu_assistant_body">يكتب أو يرد نيابة عنك</string>
   <string name="ow_menu_translate">ترجمة</string>

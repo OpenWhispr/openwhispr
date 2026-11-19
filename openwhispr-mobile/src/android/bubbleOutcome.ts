@@ -24,9 +24,9 @@ export interface PipelineMessages {
  * - silence → "Didn't hear you · Try again" (listens again; nothing to keep)
  * - offline or timed out → "No connection · Retry" (the recording is kept)
  * - weekly words used up → "Out of words · See plans"
- * - signed out → "Signed out · Sign in"
- * - a local model not downloaded → "Model not downloaded · Download"
- * - anything else → "Couldn't finish · Try again" (the recording is kept)
+ * - signed out → "You’re signed out · Sign in"
+ * - a local model not downloaded → "Needs a model download · Download"
+ * - anything else → "That didn’t work · Try again" (the recording is kept)
  */
 export function bubbleFailure(
   error: unknown,

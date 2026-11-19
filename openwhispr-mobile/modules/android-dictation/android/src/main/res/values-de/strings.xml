@@ -32,11 +32,11 @@
   <string name="ow_status_allow">Erlauben</string>
   <string name="ow_status_copied">Kopiert</string>
   <string name="ow_status_turn_on_typing">Eingabe einschalten</string>
-  <string name="ow_status_signed_out">Abgemeldet</string>
+  <string name="ow_status_signed_out">Du bist abgemeldet</string>
   <string name="ow_status_sign_in">Anmelden</string>
-  <string name="ow_status_model_needed">Modell nicht geladen</string>
+  <string name="ow_status_model_needed">Modell-Download nötig</string>
   <string name="ow_status_download">Laden</string>
-  <string name="ow_status_failed">Nicht fertig geworden</string>
+  <string name="ow_status_failed">Das hat nicht geklappt</string>
   <string name="ow_menu_assistant">Assistent</string>
   <string name="ow_menu_assistant_body">Schreibt oder antwortet für dich</string>
   <string name="ow_menu_translate">Übersetzen</string>
