@@ -2112,6 +2112,10 @@
         "title": "语音助手快捷键",
         "description": "说出请求，助手会在自己的窗口中回答，并使用你的笔记、日历和网页工具。事先选中的文本会作为上下文一并发送。"
       },
+      "voiceCallHotkey": {
+        "title": "Voice Agent 快捷键",
+        "description": "与助手开始免提语音通话：直接说话并收听回答。再按一次结束通话。"
+      },
       "microphone": {
         "description": "选择用于听写的输入设备",
         "title": "麦克风"

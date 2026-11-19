@@ -2091,6 +2091,10 @@
         "title": "Atalho do assistente de voz",
         "description": "Diga um pedido e o assistente responde na própria janela, usando suas notas, calendário e ferramentas web. O texto que você destacar antes vai junto como contexto."
       },
+      "voiceCallHotkey": {
+        "title": "Atalho do Voice Agent",
+        "description": "Inicia uma chamada sem usar as mãos com o assistente: fale e ouça as respostas. Pressione de novo para encerrar a chamada."
+      },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
         "title": "Microfone"

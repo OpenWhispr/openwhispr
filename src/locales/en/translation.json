@@ -2866,6 +2866,10 @@
         "title": "Voice Assistant Hotkey",
         "description": "Speak a request and the assistant answers in its own window, using your notes, calendar, and web tools. Text you highlight first goes with it as context."
       },
+      "voiceCallHotkey": {
+        "title": "Voice Agent Hotkey",
+        "description": "Start a hands-free call with the assistant: speak, and hear its answers. Press it again to end the call."
+      },
       "microphone": {
         "description": "Select which input device to use for dictation",
         "title": "Microphone"

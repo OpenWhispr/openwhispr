@@ -2866,6 +2866,10 @@
         "title": "Sprachassistent-Hotkey",
         "description": "Sprechen Sie eine Anfrage und der Assistent antwortet in seinem eigenen Fenster, mit Ihren Notizen, Ihrem Kalender und Web-Tools. Vorher markierter Text geht als Kontext mit."
       },
+      "voiceCallHotkey": {
+        "title": "Hotkey für Voice Agent",
+        "description": "Startet ein freihändiges Gespräch mit dem Assistenten: sprechen und die Antworten hören. Erneut drücken, um den Anruf zu beenden."
+      },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
         "title": "Mikrofon"

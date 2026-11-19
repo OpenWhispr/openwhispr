@@ -1491,6 +1491,8 @@ export interface SettingsState
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
   setVoiceAgentKey: (key: string) => Promise<HotkeyRegistrationResult>;
+  voiceCallKey: string;
+  setVoiceCallKey: (key: string) => Promise<HotkeyRegistrationResult>;
   translationKey: string;
   setTranslationKey: (key: string) => Promise<HotkeyRegistrationResult>;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
@@ -1614,7 +1616,7 @@ function createNumberSetter(key: string) {
 // being persisted. Rolls back to the previous key if registration fails.
 // Resolves to false on failure so optimistic UIs (HotkeyListInput) can revert.
 function createRegisteredHotkeySetter(
-  key: "voiceAgentKey" | "translationKey",
+  key: "voiceAgentKey" | "voiceCallKey" | "translationKey",
   label: string,
   getRegisterFn: () => ((hotkey: string) => Promise<HotkeyRegistrationResult>) | undefined,
   fallbackSave?: (hotkey: string) => void
@@ -1901,6 +1903,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   activeDictationKey: null,
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
+  voiceCallKey: readString("voiceCallKey", ""),
   translationKey: readString("translationKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
@@ -2700,6 +2703,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "voiceAgentKey",
     "voice agent hotkey",
     () => window.electronAPI?.updateVoiceAgentHotkey
+  ),
+  setVoiceCallKey: createRegisteredHotkeySetter(
+    "voiceCallKey",
+    "voice call hotkey",
+    () => window.electronAPI?.updateVoiceCallHotkey
   ),
   setTranslationKey: createRegisteredHotkeySetter(
     "translationKey",
@@ -4319,6 +4327,20 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync voice agent hotkey on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync voice call hotkey from main process
+    try {
+      const envKey = await window.electronAPI.getVoiceCallKey?.();
+      if (envKey && envKey !== state.voiceCallKey) {
+        createStringSetter("voiceCallKey")(envKey);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync voice call hotkey on startup",
         { error: (err as Error).message },
         "settings"
       );

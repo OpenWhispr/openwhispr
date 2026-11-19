@@ -2164,6 +2164,10 @@
         "title": "Atajo del asistente de voz",
         "description": "Di una solicitud y el asistente responde en su propia ventana, usando tus notas, calendario y herramientas web. El texto que resaltes antes se envía con ella como contexto."
       },
+      "voiceCallHotkey": {
+        "title": "Atajo de Voice Agent",
+        "description": "Inicia una llamada manos libres con el asistente: habla y escucha sus respuestas. Púlsalo de nuevo para terminar la llamada."
+      },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
         "title": "Micrófono"

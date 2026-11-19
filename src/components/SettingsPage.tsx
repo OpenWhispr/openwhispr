@@ -1297,6 +1297,8 @@ export default function SettingsPage({
   const meetingProcessDetection = useSettingsStore((state) => state.meetingProcessDetection);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
+  const voiceCallKey = useSettingsStore((s) => s.voiceCallKey);
+  const setVoiceCallKey = useSettingsStore((s) => s.setVoiceCallKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
   const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
 
@@ -1538,11 +1540,12 @@ export default function SettingsPage({
         {
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.voiceCallHotkey.title": voiceCallKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [meetingKey, voiceAgentKey, translationKey, t]
+    [meetingKey, voiceAgentKey, voiceCallKey, translationKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -1552,11 +1555,12 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.voiceCallHotkey.title": voiceCallKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, voiceAgentKey, translationKey, t]
+    [dictationKey, voiceAgentKey, voiceCallKey, translationKey, t]
   );
 
   const validateVoiceAgentHotkey = useCallback(
@@ -1566,11 +1570,27 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
+          "settingsPage.general.voiceCallHotkey.title": voiceCallKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, translationKey, t]
+    [dictationKey, meetingKey, voiceCallKey, translationKey, t]
+  );
+
+  const validateVoiceCallHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
+        },
+        t
+      ),
+    [dictationKey, meetingKey, voiceAgentKey, translationKey, t]
   );
 
   const validateTranslationHotkey = useCallback(
@@ -1581,10 +1601,11 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.voiceCallHotkey.title": voiceCallKey,
         },
         t
       ),
-    [dictationKey, meetingKey, voiceAgentKey, t]
+    [dictationKey, meetingKey, voiceAgentKey, voiceCallKey, t]
   );
 
   const {
@@ -4199,7 +4220,7 @@ EOF`,
               </SettingsPanel>
             </div>
 
-            {/* Voice Agent Hotkey */}
+            {/* Voice Assistant Hotkey */}
             {agentAllowedByPolicy && (
               <div>
                 <SectionHeader
@@ -4213,6 +4234,28 @@ EOF`,
                       onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
                       onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
                       validate={validateVoiceAgentHotkey}
+                      disabled={isAgentHotkeyCommitting}
+                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    />
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
+
+            {/* Voice Agent Hotkey: a voice call */}
+            {agentAllowedByPolicy && (
+              <div>
+                <SectionHeader
+                  title={t("settingsPage.general.voiceCallHotkey.title")}
+                  description={t("settingsPage.general.voiceCallHotkey.description")}
+                />
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <HotkeyListInput
+                      value={voiceCallKey}
+                      onChange={(list) => commitAgentHotkey(setVoiceCallKey, list)}
+                      onClear={() => commitAgentHotkey(setVoiceCallKey, "")}
+                      validate={validateVoiceCallHotkey}
                       disabled={isAgentHotkeyCommitting}
                       maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                     />

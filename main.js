@@ -1487,6 +1487,32 @@ async function startApp() {
     hotkeyManager.notifyRestoreFailures(savedVoiceAgentKey, result);
   }
 
+  // Set up voice call hotkey (the assistant window starts a call, or ends the
+  // one running)
+  const isVoiceCallPress = createHotkeyRepeatGate();
+  const voiceCallHotkeyCallback = () => {
+    if (!isVoiceCallPress()) return;
+    windowManager.sendToggleVoiceCall();
+  };
+  windowManager._voiceCallHotkeyCallback = voiceCallHotkeyCallback;
+
+  const savedVoiceCallKey = environmentManager.getVoiceCallKey?.() || "";
+  if (savedVoiceCallKey) {
+    const result = await hotkeyManager.registerSlot(
+      "voiceCall",
+      savedVoiceCallKey,
+      voiceCallHotkeyCallback
+    );
+    if (!result.success) {
+      debugLogger.warn(
+        "Failed to restore voice call hotkey",
+        { hotkey: savedVoiceCallKey },
+        "hotkey"
+      );
+    }
+    hotkeyManager.notifyRestoreFailures(savedVoiceCallKey, result);
+  }
+
   // Set up translation hotkey (dictation cleaned up and translated into the
   // configured target language before pasting)
   const isTranslationPress = createHotkeyRepeatGate();
@@ -1732,16 +1758,25 @@ async function startApp() {
       const voiceAgentUsesGlobe = hotkeyManager
         .getSlotHotkeys("voiceAgent")
         .some(isGlobeLikeHotkey);
+      const voiceCallUsesGlobe = hotkeyManager.getSlotHotkeys("voiceCall").some(isGlobeLikeHotkey);
       const translationUsesGlobe = hotkeyManager
         .getSlotHotkeys("translation")
         .some(isGlobeLikeHotkey);
       if (voiceAgentUsesGlobe) {
         windowManager.sendToggleVoiceAgent();
       }
+      if (voiceCallUsesGlobe) {
+        windowManager.sendToggleVoiceCall();
+      }
       if (translationUsesGlobe) {
         windowManager.sendToggleTranslation();
       }
-      if (!voiceAgentUsesGlobe && !translationUsesGlobe && !dictationUsesGlobe) {
+      if (
+        !voiceAgentUsesGlobe &&
+        !voiceCallUsesGlobe &&
+        !translationUsesGlobe &&
+        !dictationUsesGlobe
+      ) {
         debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE", { currentHotkey });
       }
     });
@@ -1820,6 +1855,9 @@ async function startApp() {
       if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
         windowManager.sendToggleVoiceAgent();
       }
+      if (hotkeyManager.slotHasHotkey("voiceCall", modifier)) {
+        windowManager.sendToggleVoiceCall();
+      }
       if (hotkeyManager.slotHasHotkey("translation", modifier)) {
         windowManager.sendToggleTranslation();
       }
@@ -1889,7 +1927,7 @@ async function startApp() {
       }
     });
 
-    const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "voiceAgent", "translation"];
+    const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "voiceAgent", "voiceCall", "translation"];
     const syncMacNativeHotkeyConfiguration = () => {
       globeKeyManager.setConfiguration(
         hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS)
@@ -1909,6 +1947,9 @@ async function startApp() {
 
       if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
         windowManager.sendToggleVoiceAgent();
+      }
+      if (hotkeyManager.slotHasHotkey("voiceCall", button)) {
+        windowManager.sendToggleVoiceCall();
       }
       if (hotkeyManager.slotHasHotkey("translation", button)) {
         windowManager.sendToggleTranslation();
@@ -2062,6 +2103,8 @@ async function startApp() {
       }
       if (hotkeyManager.slotHasHotkey("voiceAgent", key)) {
         windowManager.sendToggleVoiceAgent();
+      } else if (hotkeyManager.slotHasHotkey("voiceCall", key)) {
+        windowManager.sendToggleVoiceCall();
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {

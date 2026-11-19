@@ -357,6 +357,30 @@ test("a press before the renderer is ready reaches it once it is", () => {
   assert.deepEqual(win.sent, [{ channel: "agent-window-hotkey", payload: { external: true } }]);
 });
 
+test("the voice call hotkey shows the window and leaves the call to the renderer", async () => {
+  created.length = 0;
+  const windowManager = createWindowManager();
+  const manager = new AgentWindowManager(windowManager, { platform: "darwin" });
+  manager.toggleCall();
+  const win = manager.window;
+  manager.markReady(fromAgent(win));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(win.visible);
+  assert.deepEqual(win.sent, [{ channel: "agent-window-call-hotkey", payload: undefined }]);
+  assert.ok(!windowManager.events.includes("captureTarget"), "a call reads no selection");
+
+  for (const blocked of [
+    { _onboardingActive: true },
+    { isDictationActive: () => true },
+    { hotkeyManager: { isInListeningMode: () => true } },
+  ]) {
+    created.length = 0;
+    const idle = new AgentWindowManager(createWindowManager(blocked), { platform: "darwin" });
+    idle.toggleCall();
+    assert.equal(idle.window, null);
+  }
+});
+
 test("layouts keep the bottom-center anchor and only a layout change sets bounds", async () => {
   const { manager, win } = await openedManager();
   const anchorBottom = win.bounds.y + win.bounds.height;

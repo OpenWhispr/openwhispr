@@ -1099,6 +1099,29 @@ export default function AgentWindow() {
     ]
   );
 
+  // The voice call hotkey: a call starts, or the one running ends. A window the
+  // press opened goes away with its call, unless the call moved to the transcript.
+  const callOpenedWindowRef = useRef(false);
+  const handleCallHotkey = useCallback(() => {
+    if (refuseIfRestricted()) return;
+    setRefusal(null);
+    const current = stateRef.current;
+    if (current.call && !current.call.stopped) {
+      endCall();
+      if (callOpenedWindowRef.current && current.layout !== "modal") hideKeepingChatRef.current();
+      callOpenedWindowRef.current = false;
+      return;
+    }
+    // A reply or a take is running: show it, but don't call over it.
+    if (busy || listening || transcribing) {
+      if (!current.visible) dispatch({ type: "show", layout: "modal", input: "voice" });
+      return;
+    }
+    callOpenedWindowRef.current = !current.visible;
+    if (!current.visible) dispatch({ type: "show", layout: "pill", input: "voice" });
+    void startCall();
+  }, [busy, dispatch, endCall, listening, refuseIfRestricted, startCall, transcribing]);
+
   const handleEscape = useCallback(() => {
     const call = stateRef.current.call;
     if (call && !call.stopped) {
@@ -1153,6 +1176,7 @@ export default function AgentWindow() {
   // Main's messages, read through a ref so each listener is registered once.
   const handlersRef = useRef({
     hotkey: handleHotkey,
+    callHotkey: handleCallHotkey,
     escape: handleEscape,
     open: (_layout: AgentWindowLayout) => {},
     command: (_command: AgentWindowCommand) => {},
@@ -1160,6 +1184,7 @@ export default function AgentWindow() {
   });
   handlersRef.current = {
     hotkey: handleHotkey,
+    callHotkey: handleCallHotkey,
     escape: handleEscape,
     open: (layout) => {
       if (refuseIfRestricted()) return;
@@ -1206,6 +1231,10 @@ export default function AgentWindow() {
       api?.onAgentWindowCommand?.((command) => {
         setMovedAway(false);
         handlersRef.current.command(command);
+      }),
+      api?.onAgentWindowCallHotkey?.(() => {
+        setMovedAway(false);
+        handlersRef.current.callHotkey();
       }),
       api?.onAgentWindowDismiss?.(() => handlersRef.current.dismiss()),
       api?.onCancelHotkeyPressed?.(() => handlersRef.current.escape()),
