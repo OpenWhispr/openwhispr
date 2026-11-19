@@ -3,12 +3,12 @@ import { Pressable, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
-  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
+  withSpring,
   withTiming,
-  Extrapolation,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
@@ -244,23 +244,47 @@ export function SwipeRow({
     setOpen(false);
     onDelete();
   };
-  const removeRow = () => {
+  const removeRow = (velocity = 0) => {
     'worklet';
     if (reduceMotion) {
       runOnJS(finishDelete)();
       return;
     }
     phase.value = 1;
-    x.value = withTiming(-rowWidth, { duration: 200, easing: Easing.out(Easing.cubic) }, () => {
-      height.value = withTiming(0, { duration: 180 }, () => runOnJS(finishDelete)());
-    });
+    // One motion: the row carries on off the screen at the speed it was thrown (slower rows take
+    // up to 220 ms), and the gap starts closing before it has quite gone.
+    const remaining = rowWidth + x.value;
+    const speed = Math.max(Math.abs(velocity), 1800);
+    const slide = Math.min(220, Math.max(140, (remaining / speed) * 1000));
+    x.value = withTiming(-rowWidth, { duration: slide, easing: Easing.out(Easing.quad) });
+    height.value = withDelay(
+      slide * 0.6,
+      withTiming(0, { duration: 200, easing: Easing.inOut(Easing.quad) }, (finished) => {
+        if (finished) runOnJS(finishDelete)();
+      }),
+    );
   };
 
   const close = () => {
-    x.value = withTiming(0, { duration: reduceMotion ? 0 : 180 });
+    settle(0);
     setOpen(false);
   };
 
+  // How far a row can rest open: the Delete area (and Move beside it in Notes), never further.
+  // Letting go short of that snaps open or shut; past half the row, or with a quick flick, the row
+  // goes in one motion.
+  const settle = (to: number, velocity = 0) => {
+    'worklet';
+    x.value = reduceMotion
+      ? to
+      : withSpring(to, {
+          damping: 26,
+          stiffness: 320,
+          mass: 0.9,
+          velocity,
+          overshootClamping: true,
+        });
+  };
   const pan = Gesture.Pan()
     .enabled(enabled)
     .activeOffsetX([-12, 12])
@@ -277,20 +301,20 @@ export function SwipeRow({
         runOnJS(tick)(past === 1);
       }
     })
-    .onEnd(() => {
+    .onEnd((event) => {
       const distance = -x.value;
-      if (armed.value === 1) {
+      const flick = event.velocityX < -1100 && distance > OPEN_OFFSET * 0.4;
+      if (armed.value === 1 || flick) {
         armed.value = 0;
-        removeRow();
+        removeRow(event.velocityX);
         return;
       }
-      if (distance > rowWidth * 0.25) {
-        x.value = withTiming(-OPEN_OFFSET, { duration: reduceMotion ? 0 : 180 });
-        runOnJS(setOpen)(true);
-      } else {
-        x.value = withTiming(0, { duration: reduceMotion ? 0 : 180 });
-        runOnJS(setOpen)(false);
-      }
+      // Opening needs a real pull or a leftward flick; anything less closes.
+      const opens =
+        (distance > OPEN_OFFSET * 0.5 && event.velocityX < 400) ||
+        (distance > 12 && event.velocityX < -500);
+      settle(opens ? -OPEN_OFFSET : 0, event.velocityX);
+      runOnJS(setOpen)(opens);
     });
 
   const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
@@ -300,17 +324,15 @@ export function SwipeRow({
   // The red: see-through while dragging, solid once armed or past the open buttons.
   const redStyle = useAnimatedStyle(() => {
     if (phase.value === 1) return { opacity: 1, width: rowWidth, alignItems: 'flex-start' };
-    if (phase.value === 2) return { opacity: 0, width: 0, alignItems: 'center' };
+    if (phase.value === 2) return { opacity: 0, width: 0, alignItems: 'flex-end' };
     const distance = -x.value;
-    const besideMove = !armed.value && distance >= OPEN_OFFSET * 0.9;
-    const opacity = armed.value
-      ? 1
-      : interpolate(distance, [0, OPEN_OFFSET], [0.55, 0.85], Extrapolation.CLAMP);
-    // With Move showing, Delete keeps its own 74 dp beside it.
+    const besideMove = !!onMove && !armed.value && distance >= OPEN_OFFSET * 0.9;
+    // The red fills exactly what the row uncovers. Its bin stays at the row's edge, and jumps to
+    // the far side (under the finger) once letting go would delete.
     return {
-      opacity: distance > 0 ? (besideMove ? 1 : opacity) : 0,
+      opacity: distance > 0 ? 1 : 0,
       width: besideMove ? ACTION_WIDTH : Math.max(distance, 0),
-      alignItems: armed.value ? 'flex-start' : 'center',
+      alignItems: armed.value ? 'flex-start' : 'flex-end',
     };
   });
   const moveStyle = useAnimatedStyle(() => {
