@@ -217,6 +217,9 @@ export function SwipeRow({
   const x = useSharedValue(0);
   const start = useSharedValue(0);
   const armed = useSharedValue(0);
+  // 1 while the row slides away to be deleted, 2 while Undo slides it back: the red behind it
+  // stays full while it goes, and is hidden while it comes back.
+  const phase = useSharedValue(0);
   const height = useSharedValue(-1);
   const [open, setOpen] = useState(false);
   const restoring = useRef(noteId != null ? consumeRestored(noteId) : Boolean(restored));
@@ -226,12 +229,15 @@ export function SwipeRow({
     if (!restoring.current || !measured) return;
     restoring.current = false;
     if (reduceMotion) return;
+    phase.value = 2;
     height.value = 0;
     x.value = -rowWidth;
     height.value = withTiming(measured, { duration: 180 }, () => {
-      x.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) });
+      x.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) }, () => {
+        phase.value = 0;
+      });
     });
-  }, [measured, reduceMotion, rowWidth, height, x]);
+  }, [measured, reduceMotion, rowWidth, height, x, phase]);
 
   const tick = (strong: boolean) => safeHaptics(strong ? 'light' : 'selection');
   const finishDelete = () => {
@@ -244,6 +250,7 @@ export function SwipeRow({
       runOnJS(finishDelete)();
       return;
     }
+    phase.value = 1;
     x.value = withTiming(-rowWidth, { duration: 200, easing: Easing.out(Easing.cubic) }, () => {
       height.value = withTiming(0, { duration: 180 }, () => runOnJS(finishDelete)());
     });
@@ -292,6 +299,8 @@ export function SwipeRow({
   );
   // The red: see-through while dragging, solid once armed or past the open buttons.
   const redStyle = useAnimatedStyle(() => {
+    if (phase.value === 1) return { opacity: 1, width: rowWidth, alignItems: 'flex-start' };
+    if (phase.value === 2) return { opacity: 0, width: 0, alignItems: 'center' };
     const distance = -x.value;
     const besideMove = !armed.value && distance >= OPEN_OFFSET * 0.9;
     const opacity = armed.value
@@ -305,6 +314,7 @@ export function SwipeRow({
     };
   });
   const moveStyle = useAnimatedStyle(() => {
+    if (phase.value !== 0) return { opacity: 0 };
     const distance = -x.value;
     const show = !armed.value && distance >= OPEN_OFFSET * 0.9;
     return { opacity: show ? 1 : 0 };
