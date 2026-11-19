@@ -15,19 +15,23 @@ export type TabRoute = {
   state?: NestedState;
 };
 
+/** Screens that keep the bar: each tab's index, and a Notes folder (Figma L1b). */
+const BAR_SCREENS = new Set(['index', 'notes']);
+
 /**
- * The one rule for when the bar shows: the focused tab is on its index screen. Every pushed
- * screen (a note, Actions, voice profiles, a recorder) hides it without being listed here.
+ * The one rule for when the bar shows: the focused tab is on its index screen (or a Notes
+ * folder). Every other pushed screen (a note, Actions, voice profiles, a recorder) hides it
+ * without being listed here.
  */
 export function isOnTabRoot(route: TabRoute): boolean {
   const nested = route.state;
   if (!nested?.routes.length) {
     // Before the tab's stack mounts, a navigate() into it names its target screen in params.
     const screen = (route.params as { screen?: unknown } | undefined)?.screen;
-    return screen === undefined || screen === 'index';
+    return screen === undefined || (typeof screen === 'string' && BAR_SCREENS.has(screen));
   }
   const index = nested.index ?? nested.routes.length - 1;
-  return nested.routes[index]?.name === 'index';
+  return BAR_SCREENS.has(nested.routes[index]?.name ?? '');
 }
 
 export function shouldShowTabBar({
