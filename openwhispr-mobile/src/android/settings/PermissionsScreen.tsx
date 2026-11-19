@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
-import { home, type } from '../home/kit';
+import { bodyText } from './look';
 import {
   BottomSheet,
   Group,
@@ -67,7 +67,7 @@ export default function SettingsPermissionsScreen() {
         body={t('insertionNotice')}
       >
         <View style={{ gap: 12 }}>
-          <Text textBreakStrategy="balanced" style={[type.subhead, { color: home.secondary }]}>
+          <Text textBreakStrategy="balanced" style={bodyText}>
             {noOrphan(t('insertionNoticeSteps'))}
           </Text>
           <PillAction

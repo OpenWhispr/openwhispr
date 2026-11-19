@@ -46,28 +46,40 @@ jest.mock('../billing', () => ({
   restoreAndroidPurchases: jest.fn(async () => 'payment-pending'),
   refreshAndroidBillingAccess: jest.fn(),
 }));
-jest.mock('../ui', () => {
-  const { Pressable, Text } = require('react-native');
-  const Button = ({
+jest.mock('../settings/look', () => ({ bodyText: {} }));
+jest.mock('../settings/kit', () => {
+  const { Pressable, Text, View } = require('react-native');
+  const PillAction = ({
     label,
     onPress,
     disabled,
+    busy,
   }: {
     label: string;
     onPress: () => void;
     disabled?: boolean;
+    busy?: boolean;
   }) =>
     require('react').createElement(
       Pressable,
-      { onPress, disabled, accessibilityRole: 'button', accessibilityLabel: label },
+      {
+        onPress,
+        disabled: disabled || busy,
+        accessibilityRole: 'button',
+        accessibilityLabel: label,
+      },
       require('react').createElement(Text, null, label),
     );
   return {
-    Card: ({ children }: { children: React.ReactNode }) => children,
-    Button,
-    Row: ({ title, onPress }: { title: string; onPress: () => void }) =>
-      require('react').createElement(Button, { label: title, onPress }),
-    styles: {},
+    Group: ({ children }: { children: React.ReactNode }) =>
+      require('react').createElement(View, null, children),
+    ListRow: ({ title, onPress }: { title: string; onPress?: () => void }) =>
+      onPress
+        ? require('react').createElement(PillAction, { label: title, onPress })
+        : require('react').createElement(Text, null, title),
+    PillAction,
+    cardStyle: {},
+    settings: {},
   };
 });
 beforeEach(() => {

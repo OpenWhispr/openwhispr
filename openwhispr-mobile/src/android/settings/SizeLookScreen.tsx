@@ -14,6 +14,7 @@ import {
   useReduceMotion,
 } from './kit';
 import { useSettingsT } from './strings';
+import { bodyText, look } from './look';
 import {
   BUBBLE_SIZE,
   DEFAULT_LOOK,
@@ -72,9 +73,10 @@ function Preview({
         cardStyle,
         {
           height: 180,
+          borderRadius: 20,
           borderWidth: 0,
           boxShadow: undefined,
-          backgroundColor: 'rgba(21,85,212,0.12)',
+          backgroundColor: look.selFill,
           alignItems: 'center',
           justifyContent: 'center',
         },
@@ -123,10 +125,8 @@ function SliderCard({
   return (
     <View style={[cardStyle, { paddingHorizontal: 16, paddingVertical: 14, gap: 12 }]}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={settings.title}>{title}</Text>
-        <Text style={[settings.title, settings.tabular, { color: home.accent, fontWeight: '400' }]}>
-          {value}
-        </Text>
+        <Text style={bodyText}>{title}</Text>
+        <Text style={[bodyText, settings.tabular, { color: home.accent }]}>{value}</Text>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Text style={[settings.subtitle, settings.tabular]}>{ends[0]}</Text>
@@ -200,7 +200,7 @@ export default function SizeLookScreen() {
           onRelease={(value) => applyBubbleLook({ opacity: value / 100, size })}
         />
       </SliderCard>
-      <Group title={t('whenItShrinks')} inset={16}>
+      <Group title={t('whenItShrinks')} inset={14}>
         <ListRow
           title={t('shrinkIdle')}
           subtitle={t('shrinkIdleBody')}

@@ -18,7 +18,8 @@ import {
   resolveCustomPrompt,
 } from '@/config/prompts/registry';
 import { home, type } from '../home/kit';
-import { PillAction, SettingsPage, TextAction, cardStyle, settings, showToast } from './kit';
+import { PillAction, SettingsPage, TextAction, settings, showToast } from './kit';
+import { bodyText, edgeField } from './look';
 import { useSettingsT } from './strings';
 
 // The prompt is sent with every cleanup; past about 5x the default, latency shows. A caution,
@@ -92,12 +93,12 @@ export default function CleanupPromptScreen() {
           onPress={Keyboard.dismiss}
           style={{ flex: 1, paddingBottom: 16, gap: 16 }}
         >
-          <Text style={[settings.title, { fontWeight: '400' }]}>{t('promptIntro')}</Text>
+          <Text style={bodyText}>{t('promptIntro')}</Text>
           {notice && <Text style={[settings.subtitle]}>{notice}</Text>}
           <View
             style={[
-              cardStyle,
-              { flex: 1, minHeight: 160, paddingTop: 12 },
+              edgeField,
+              { flex: 1, minHeight: 160, paddingTop: 13, overflow: 'hidden' },
               focused && { borderColor: home.accent },
             ]}
           >
@@ -125,7 +126,7 @@ export default function CleanupPromptScreen() {
                 autoCorrect={false}
                 spellCheck={false}
                 accessibilityLabel={t('cleanupPrompt')}
-                style={[type.subhead, { color: home.text, paddingTop: 6 }]}
+                style={{ fontSize: 12, lineHeight: 17, color: home.text, paddingTop: 4 }}
               />
             </ScrollView>
           </View>
@@ -135,7 +136,7 @@ export default function CleanupPromptScreen() {
             )}
             <Text style={settings.subtitle}>{t('promptFooter')}</Text>
           </View>
-          <View style={{ gap: 4 }}>
+          <View style={{ gap: 16 }}>
             <PillAction
               primary
               label={t('savePrompt')}

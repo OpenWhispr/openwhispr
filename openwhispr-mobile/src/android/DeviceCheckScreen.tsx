@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState } from 'react-native';
+import { ActivityIndicator, AppState, View } from 'react-native';
 import { useFocusEffect, router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as DocumentPicker from 'expo-document-picker';
@@ -9,7 +9,8 @@ import { ResultTimes } from './settings/ResultTimes';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ANDROID_MODELS } from './models';
-import { Button, Card, Page, Row, styles, palette } from './ui';
+import { Group, ListRow, PillAction, SettingsPage, cardStyle, settings } from './settings/kit';
+import { bodyText } from './settings/look';
 import {
   deviceGuidance,
   readDeviceProfile,
@@ -129,76 +130,87 @@ export default function DeviceCheckScreen() {
   };
   const gib = (bytes: number) => (bytes / 1024 ** 3).toFixed(1);
   return (
-    <Page title={t('deviceCheck')} back>
-      <Text style={styles.body}>{t('deviceCheckBody')}</Text>
-      <Card>
-        <Text style={styles.heading}>
-          {profile ? `${profile.manufacturer} ${profile.model}` : t('deviceInfoUnavailable')}
-        </Text>
+    <SettingsPage title={t('deviceCheck')}>
+      <Text style={bodyText}>{t('deviceCheckBody')}</Text>
+      <Group
+        title={profile ? `${profile.manufacturer} ${profile.model}` : t('deviceInfoUnavailable')}
+        inset={14}
+      >
         {profile ? (
           <>
-            <Text style={styles.body}>
-              {t('deviceMemory', {
+            <ListRow
+              title={t('deviceMemory', {
                 free: gib(profile.availableMemoryBytes),
                 total: gib(profile.totalMemoryBytes),
               })}
-            </Text>
-            <Text style={styles.body}>
-              {t('deviceStorage', { free: gib(profile.freeStorageBytes) })}
-            </Text>
-            <Text style={styles.caption}>
-              {t('deviceSystem', { version: profile.androidVersion, cores: profile.cpuCores })}
-            </Text>
-            <Text style={styles.caption}>
-              {t(
+              trailing={null}
+            />
+            <ListRow
+              title={t('deviceStorage', { free: gib(profile.freeStorageBytes) })}
+              trailing={null}
+            />
+            <ListRow
+              title={t('deviceSystem', {
+                version: profile.androidVersion,
+                cores: profile.cpuCores,
+              })}
+              trailing={null}
+            />
+            <ListRow
+              title={t(
                 profile.thermalStatus === null
                   ? 'deviceHeatUnknown'
                   : profile.thermalStatus >= 3
                     ? 'deviceHot'
                     : 'deviceHeatNormal',
               )}
-            </Text>
+              trailing={null}
+            />
           </>
         ) : null}
-        <Button
-          secondary
-          disabled={busy}
-          label={t('refreshDevice')}
-          onPress={() => setProfile(readDeviceProfile())}
+      </Group>
+      <PillAction
+        disabled={busy}
+        label={t('refreshDevice')}
+        onPress={() => setProfile(readDeviceProfile())}
+      />
+      <View style={[cardStyle, { padding: 16, gap: 4 }]}>
+        <Text style={settings.rowTitle}>{t('deviceRecommendation')}</Text>
+        <Text style={bodyText}>{t(deviceGuidance(profile, result))}</Text>
+        <Text style={settings.subtitle}>{t('deviceChoiceUnchanged')}</Text>
+      </View>
+      <Group title={t('benchmarkTitle')} inset={14}>
+        <ListRow
+          title={`${ANDROID_MODELS[speechModel].title} + ${ANDROID_MODELS[textModel].title}`}
+          subtitle={t('benchmarkBody')}
+          trailing={null}
         />
-      </Card>
-      <Card>
-        <Text style={styles.heading}>{t('deviceRecommendation')}</Text>
-        <Text style={styles.body}>{t(deviceGuidance(profile, result))}</Text>
-        <Text style={styles.caption}>{t('deviceChoiceUnchanged')}</Text>
-      </Card>
-      <Card>
-        <Text style={styles.heading}>{t('benchmarkTitle')}</Text>
-        <Text style={styles.body}>
-          {ANDROID_MODELS[speechModel].title} + {ANDROID_MODELS[textModel].title}
-        </Text>
-        <Text style={styles.body}>{t('benchmarkBody')}</Text>
-        <Text style={styles.caption}>{t('benchmarkPrivacy')}</Text>
-        {busy ? (
-          <>
-            <ActivityIndicator color={palette.blue} accessibilityLabel={t(stage)} />
-            <Text accessibilityLiveRegion="polite">{t(stage)}</Text>
-            <Button secondary label={t('cancel')} onPress={cancel} />
-          </>
-        ) : (
-          <Button
-            label={t('benchmarkStart')}
-            onPress={() => {
-              void run();
-            }}
-          />
-        )}
-        {error ? (
-          <Text accessibilityRole="alert" style={styles.body}>
-            {error}
+      </Group>
+      <Text style={[settings.subtitle, { paddingHorizontal: 4 }]}>{t('benchmarkPrivacy')}</Text>
+      {busy ? (
+        <View style={{ gap: 12, alignItems: 'center' }}>
+          <ActivityIndicator color={settings.accent} accessibilityLabel={t(stage)} />
+          <Text accessibilityLiveRegion="polite" style={bodyText}>
+            {t(stage)}
           </Text>
-        ) : null}
-      </Card>
+          <View style={{ alignSelf: 'stretch' }}>
+            <PillAction label={t('cancel')} onPress={cancel} />
+          </View>
+        </View>
+      ) : (
+        <PillAction
+          primary
+          label={t('benchmarkStart')}
+          onPress={() => {
+            void run();
+          }}
+        />
+      )}
+      {error ? (
+        <Text accessibilityRole="alert" style={bodyText}>
+          {error}
+        </Text>
+      ) : null}
       {result ? (
         <ResultTimes
           times={{
@@ -210,31 +222,33 @@ export default function DeviceCheckScreen() {
         />
       ) : null}
       {result ? (
-        <Card>
-          <Text style={styles.heading}>{t('benchmarkResult')}</Text>
-          <Text style={styles.body}>
+        <View style={[cardStyle, { padding: 16, gap: 8 }]}>
+          <Text style={settings.rowTitle}>{t('benchmarkResult')}</Text>
+          <Text style={bodyText}>
             {ANDROID_MODELS[result.selection.speech].title} +{' '}
             {ANDROID_MODELS[result.selection.text].title}
           </Text>
-          <Text style={styles.caption}>{t('benchmarkTimingHint')}</Text>
-          <Text style={styles.heading}>{t('benchmarkTranscript')}</Text>
-          <Text selectable style={styles.body}>
+          <Text style={settings.subtitle}>{t('benchmarkTimingHint')}</Text>
+          <Text style={settings.rowTitle}>{t('benchmarkTranscript')}</Text>
+          <Text selectable style={bodyText}>
             {result.transcript}
           </Text>
-          <Text style={styles.heading}>{t('benchmarkCleaned')}</Text>
-          <Text selectable style={styles.body}>
+          <Text style={settings.rowTitle}>{t('benchmarkCleaned')}</Text>
+          <Text selectable style={bodyText}>
             {result.cleanedText}
           </Text>
-          <Text style={styles.caption}>{t('benchmarkAccuracy')}</Text>
-        </Card>
+          <Text style={settings.subtitle}>{t('benchmarkAccuracy')}</Text>
+        </View>
       ) : null}
-      <Row title={t('models')} onPress={() => router.replace('/(account)/ai-models')} />
-      <Row
-        title={t('workflow')}
-        onPress={() =>
-          router.push({ pathname: '/(account)/ai-workflow', params: { scope: 'dictation' } })
-        }
-      />
-    </Page>
+      <Group inset={14}>
+        <ListRow title={t('models')} onPress={() => router.replace('/(account)/ai-models')} />
+        <ListRow
+          title={t('workflow')}
+          onPress={() =>
+            router.push({ pathname: '/(account)/ai-workflow', params: { scope: 'dictation' } })
+          }
+        />
+      </Group>
+    </SettingsPage>
   );
 }

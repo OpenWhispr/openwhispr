@@ -172,7 +172,7 @@ export default function ProcessingScreen() {
     items.length ? t('taskCount', { count: items.length }) : undefined;
 
   return (
-    <SettingsPage title={t('processing')} edgeBack>
+    <SettingsPage title={t('processing')}>
       <View style={{ gap: 12 }}>
         <Text accessibilityRole="header" style={sectionLabel}>
           {t('whereProcessed')}

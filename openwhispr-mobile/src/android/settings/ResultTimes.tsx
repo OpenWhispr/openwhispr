@@ -31,7 +31,7 @@ export function ResultTimes({
     return () => cancelAnimationFrame(frame);
   }, [times, reduceMotion, rows.length]);
   return (
-    <Group title={t('yourResult')} inset={16}>
+    <Group title={t('yourResult')} inset={14}>
       {rows.map(([key, ms], index) => {
         const progress = Math.min(1, Math.max(0, (elapsed - index * STAGGER_MS) / COUNT_MS));
         const shown = (ms / 1000) * Easing.out(Easing.cubic)(progress);

@@ -1,4 +1,4 @@
-import { Pressable, View, type ViewStyle } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
@@ -6,38 +6,16 @@ import { gloss, glossPressed, home, type } from '../home/kit';
 import type { SheetTask } from '../settings/ownKey';
 import type { Place, Source } from './places';
 import { PROVIDER_LOGOS } from './providerLogos';
+import { look as settingsLook } from '../settings/look';
 
 /**
  * Processing in OpenWhispr's design language (Figma sections 8 and 9): the desktop's glass edge
  * on cards and fields, the Home's glossy tile for the place in use, desktop provider logos.
+ * The shared values live in `settings/look.ts`, so Settings and Processing stay one look.
  */
-export const look = {
-  selFill: 'rgba(21,75,212,0.12)',
-  pickedRow: 'rgba(21,75,212,0.08)',
-  idleFill: '#F1F1F0',
-  error: '#D70015',
-  hairline: 'rgba(0,0,0,0.06)',
-  edgeShadow: 'inset 0px 1px 0px rgba(255,255,255,0.7), 0px 2px 10px rgba(15,23,42,0.06)',
-};
+export const look = { ...settingsLook, pickedRow: 'rgba(21,75,212,0.08)' };
 
-/** White card with a hairline, an inner top highlight and a soft lift. */
-export const edgeCard: ViewStyle = {
-  backgroundColor: home.surface,
-  borderRadius: 16,
-  borderWidth: 1,
-  borderColor: look.hairline,
-  overflow: 'hidden',
-  boxShadow: look.edgeShadow,
-};
-
-export const sectionLabel = {
-  fontSize: 11,
-  lineHeight: 14,
-  fontWeight: '500' as const,
-  color: home.tertiary,
-  letterSpacing: 0.66,
-  textTransform: 'uppercase' as const,
-};
+export { edgeCard, sectionLabel } from '../settings/look';
 
 export const PLACE_ICON: Record<Place, LucideIconName> = {
   cloud: 'Cloud',

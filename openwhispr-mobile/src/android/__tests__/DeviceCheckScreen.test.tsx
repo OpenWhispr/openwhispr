@@ -45,13 +45,14 @@ jest.mock('../settings/ResultTimes', () => ({
         .join(' '),
     ),
 }));
-jest.mock('../ui', () => ({
-  Page: ({ children }: any) => children,
-  Card: ({ children }: any) => children,
-  Row: () => null,
-  styles: {},
-  palette: {},
-  Button: ({ label, onPress, disabled }: any) =>
+jest.mock('../settings/look', () => ({ bodyText: {} }));
+jest.mock('../settings/kit', () => ({
+  SettingsPage: ({ children }: any) => children,
+  Group: ({ children }: any) => children,
+  ListRow: () => null,
+  cardStyle: {},
+  settings: {},
+  PillAction: ({ label, onPress, disabled }: any) =>
     require('react').createElement(
       require('react-native').Pressable,
       { onPress, disabled, accessibilityRole: 'button', accessibilityLabel: label },
