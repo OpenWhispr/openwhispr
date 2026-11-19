@@ -25,7 +25,7 @@ export function CalendarPrompt() {
   const accounts = useGoogleCalendarStore((state) => state.accounts);
   const user = useAuthStore((state) => state.user);
   const dismissed = useCalendarPromptDismissed((state) => state.dismissed);
-  const { connecting, connect, cancel } = useConnectGoogle();
+  const { connecting, connect, cancel } = useConnectGoogle({ aboveTabBar: true });
   const load = useGoogleCalendarStore((state) => state.load);
   // Accounts read as none until the store has loaded once; the prompt waits for that.
   const [loaded, setLoaded] = useState(false);
@@ -57,7 +57,7 @@ export function CalendarPrompt() {
             hitSlop={10}
             onPress={() => {
               dismissCalendarPrompt();
-              showToast(t('promptHidden'), 'neutral');
+              showToast(t('promptHidden'), 'neutral', undefined, { aboveTabBar: true });
             }}
             style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
           >
