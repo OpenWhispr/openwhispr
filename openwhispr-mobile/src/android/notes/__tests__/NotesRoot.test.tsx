@@ -53,6 +53,10 @@ jest.mock('@/lib/notes/noteRouteOwner', () => ({
 }));
 jest.mock('@/lib/utils', () => ({ safeHaptics: jest.fn() }));
 jest.mock('../../home/kit', () => ({
+  // Settings' look reads these at import time.
+  glassEdge: { borderColor: 'rgba(0,0,0,0.06)', boxShadow: 'none' },
+  TILE_FILL: '#F1F1F0',
+  type: { section: {} },
   home: { text: '#000', secondary: '#666', tertiary: '#999', accent: '#15d', surface: '#fff' },
   gloss: {},
   glossPressed: {},
