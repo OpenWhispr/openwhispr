@@ -99,7 +99,6 @@ test("registry workflows select only the registry", () => {
   for (const path of [
     ".github/workflows/model-registry.yml",
     ".github/workflows/model-registry-publish.yml",
-    ".github/workflows/model-registry-rollback.yml",
   ]) {
     assert.deepEqual(classifyPaths([path]), {
       desktop: false,

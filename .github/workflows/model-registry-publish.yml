@@ -3,12 +3,22 @@ name: Publish model registry
 # Signs model-registry/ and publishes it to the model-registry-published branch, which
 # installed apps poll. It runs only when the registry folder changes on main, never as
 # part of an app release, and waits for the registry-publish environment's reviewers.
+# Run by hand with a version, it rolls back instead: that version's data is republished
+# under a new version number. Anything retired or added since stays retired, so the
+# result is still a valid publication.
+run-name: ${{ inputs.rollback_to && format('Roll back model registry to version {0}', inputs.rollback_to) || '' }}
+
 on:
   push:
     branches: [main]
     paths:
       - "model-registry/**"
   workflow_dispatch:
+    inputs:
+      rollback_to:
+        description: To roll back, the published version whose data to restore. Empty publishes main.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -36,7 +46,10 @@ jobs:
           node-version-file: source/model-registry/.nvmrc
       - run: npm ci --ignore-scripts && npm test && npm run validate
         working-directory: source/model-registry
-      - run: node scripts/check-compat.cjs && node scripts/check-artifacts.cjs
+      # A rollback republishes data that passed these when it was first published, and must
+      # not wait on a download that has since gone missing.
+      - if: ${{ !inputs.rollback_to }}
+        run: node scripts/check-compat.cjs && node scripts/check-artifacts.cjs
         working-directory: source/model-registry
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -86,59 +99,35 @@ jobs:
           (cd "$GITHUB_WORKSPACE/source/model-registry" &&
             node scripts/verify-publication.cjs "$RUNNER_TEMP/incoming" "$GITHUB_WORKSPACE/publication")
           git merge --ff-only FETCH_HEAD
-          if [ -z "$REGISTRY_PUBLISH_DEPLOY_KEY" ]; then
-            echo "::error::REGISTRY_PUBLISH_DEPLOY_KEY is not set; nothing else may update model-registry-published"
-            exit 1
-          fi
-          key="$RUNNER_TEMP/registry-publish-key"
-          hosts="$RUNNER_TEMP/registry-publish-hosts"
-          (umask 077 && printf '%s\n' "$REGISTRY_PUBLISH_DEPLOY_KEY" > "$key")
-          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$hosts"
-          trap 'rm -f "$key"' EXIT
-          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts"
-          git push "git@github.com:$GITHUB_REPOSITORY.git" HEAD:model-registry-published
-      - name: Sign and publish the registry at main
+          bash "$GITHUB_WORKSPACE/source/model-registry/scripts/with-deploy-key.sh" REGISTRY_PUBLISH_DEPLOY_KEY \
+            git push "git@github.com:$GITHUB_REPOSITORY.git" HEAD:model-registry-published
+      # Nothing else may update model-registry-published, so without the deploy key the step
+      # stops before it signs.
+      - name: Sign and publish the registry at main, or the rollback
         working-directory: source/model-registry
         env:
           PUBLICATION_DIR: ${{ github.workspace }}/publication
           REGISTRY_SIGNING_KEY: ${{ secrets.REGISTRY_SIGNING_KEY }}
           REGISTRY_PUBLISH_DEPLOY_KEY: ${{ secrets.REGISTRY_PUBLISH_DEPLOY_KEY }}
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
         run: |
-          if [ -z "$REGISTRY_PUBLISH_DEPLOY_KEY" ]; then
-            echo "::error::REGISTRY_PUBLISH_DEPLOY_KEY is not set; nothing else may update model-registry-published"
-            exit 1
-          fi
-          key="$RUNNER_TEMP/registry-publish-key"
-          hosts="$RUNNER_TEMP/registry-publish-hosts"
-          (umask 077 && printf '%s\n' "$REGISTRY_PUBLISH_DEPLOY_KEY" > "$key")
-          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$hosts"
-          trap 'rm -f "$key"' EXIT
-          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts"
           git -C "$PUBLICATION_DIR" remote set-url --push origin "git@github.com:$GITHUB_REPOSITORY.git"
-          node scripts/publish.cjs
+          bash scripts/with-deploy-key.sh REGISTRY_PUBLISH_DEPLOY_KEY node scripts/publish.cjs
       # Apps released before the move read OpenWhispr/model-registry's `published` branch.
       # It gets exactly the commit this repository serves, whether or not this run published,
       # and only after that commit is verified: signed, and not older than what they read now.
+      # Without the mirror key, installed apps would stop receiving the catalog.
       - name: Mirror to the address installed apps read
         if: ${{ !cancelled() }}
         working-directory: publication
         env:
           LEGACY_REGISTRY_DEPLOY_KEY: ${{ secrets.LEGACY_REGISTRY_DEPLOY_KEY }}
         run: |
-          if [ -z "$LEGACY_REGISTRY_DEPLOY_KEY" ]; then
-            echo "::error::LEGACY_REGISTRY_DEPLOY_KEY is not set; installed apps would stop receiving the catalog"
-            exit 1
-          fi
           git fetch --quiet origin model-registry-published
           git worktree add --quiet --detach "$RUNNER_TEMP/served" FETCH_HEAD
           git fetch --quiet https://github.com/OpenWhispr/model-registry.git published
           git worktree add --quiet --detach "$RUNNER_TEMP/read-now" FETCH_HEAD
           (cd "$GITHUB_WORKSPACE/source/model-registry" &&
             node scripts/verify-publication.cjs "$RUNNER_TEMP/served" "$RUNNER_TEMP/read-now")
-          key="$RUNNER_TEMP/legacy-registry-key"
-          hosts="$RUNNER_TEMP/legacy-registry-hosts"
-          (umask 077 && printf '%s\n' "$LEGACY_REGISTRY_DEPLOY_KEY" > "$key")
-          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$hosts"
-          trap 'rm -f "$key"' EXIT
-          GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts" \
+          bash "$GITHUB_WORKSPACE/source/model-registry/scripts/with-deploy-key.sh" LEGACY_REGISTRY_DEPLOY_KEY \
             git -C "$RUNNER_TEMP/served" push git@github.com:OpenWhispr/model-registry.git HEAD:refs/heads/published
