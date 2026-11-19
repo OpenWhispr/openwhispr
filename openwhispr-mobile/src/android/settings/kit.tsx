@@ -805,6 +805,7 @@ export function BottomSheet({
   children,
   onBack,
   leading,
+  trailing,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -815,6 +816,8 @@ export function BottomSheet({
   onBack?: () => void;
   /** A tile before the title (a task's icon, a provider's logo). */
   leading?: React.ReactNode;
+  /** After the title, on the right (a close button). */
+  trailing?: React.ReactNode;
 }) {
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
@@ -904,10 +907,15 @@ export function BottomSheet({
                 )}
                 <Text
                   accessibilityRole="header"
-                  style={[settings.title, { fontSize: 20, lineHeight: 26, flexShrink: 1 }]}
+                  style={[
+                    settings.title,
+                    { fontSize: 20, lineHeight: 26, flexShrink: 1 },
+                    trailing ? { flex: 1 } : null,
+                  ]}
                 >
                   {title}
                 </Text>
+                {trailing}
               </View>
               {body && (
                 <Text textBreakStrategy="balanced" style={bodyText}>

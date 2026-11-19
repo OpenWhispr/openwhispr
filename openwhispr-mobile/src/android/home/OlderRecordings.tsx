@@ -7,9 +7,11 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useSheetDragToDismiss } from '@/hooks/useSheetDragToDismiss';
 import type { Transcript } from '@/types';
 import { useHomeT } from './strings';
-import { home, type } from './kit';
+import { home, IconTile, TileButton, type } from './kit';
+import { edge, edgeCard, look } from '../settings/look';
 
 const SHEET_TOP_PEEK = 8;
+const TITLE = { fontSize: 16, lineHeight: 22, fontWeight: '500' as const, color: home.text };
 
 /** Home's entry to recordings saved before accounts: shown signed out, when there are some. */
 export function OlderRecordingsRow({ count, onPress }: { count: number; onPress: () => void }) {
@@ -19,25 +21,25 @@ export function OlderRecordingsRow({ count, onPress }: { count: number; onPress:
       cssInterop={false}
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: home.borderDefault,
-        backgroundColor: home.surface,
-        boxShadow: home.cardShadow,
-        opacity: pressed ? 0.7 : 1,
-      })}
+      style={({ pressed }) => [
+        edgeCard,
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+          paddingLeft: 14,
+          paddingRight: 12,
+          paddingVertical: 12,
+        },
+        pressed && { backgroundColor: look.idleFill },
+      ]}
     >
+      <IconTile icon="Archive" color={home.secondary} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={type.headline}>{t('olderRecordings')}</Text>
+        <Text style={TITLE}>{t('olderRecordings')}</Text>
         <Text style={type.footnote}>{t('savedBeforeAccountsCount', { count })}</Text>
       </View>
-      <SystemIcon name="chevron.right" mdName="ChevronRight" size={22} color={home.text} />
+      <SystemIcon name="chevron.right" mdName="ChevronRight" size={20} color={home.tertiary} />
     </Pressable>
   );
 }
@@ -68,46 +70,28 @@ function OlderRow({
           flexDirection: 'row',
           alignItems: 'center',
           gap: 12,
-          paddingHorizontal: 16,
-          paddingVertical: 14,
+          paddingLeft: 14,
+          paddingRight: 12,
+          paddingVertical: 12,
         }}
       >
         <View style={{ flex: 1, gap: 2 }}>
-          <Text selectable={!audioOnly} numberOfLines={2} style={type.headline}>
+          <Text selectable={!audioOnly} numberOfLines={2} style={TITLE}>
             {audioOnly ? t('audioOnly') : text}
           </Text>
           <Text style={type.footnote}>{longDate(item.createdAt)}</Text>
         </View>
         {audioOnly ? (
-          <View
-            accessible={false}
-            style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <SystemIcon name="waveform" mdName="AudioLines" size={20} color={home.secondary} />
+          <View accessible={false}>
+            <IconTile icon="AudioLines" color={home.secondary} />
           </View>
         ) : (
-          <Pressable
-            cssInterop={false}
-            accessibilityRole="button"
-            accessibilityLabel={t('copy')}
-            onPress={() => onCopy(text)}
-            hitSlop={8}
-            style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              marginRight: -6,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <SystemIcon name="doc.on.doc" mdName="Copy" size={20} color={home.secondary} />
-          </Pressable>
+          <TileButton icon="Copy" label={t('copy')} onPress={() => onCopy(text)} />
         )}
       </View>
       {!last && (
-        <View style={{ paddingLeft: 16 }}>
-          <View style={{ height: 1, backgroundColor: home.divider }} />
+        <View style={{ paddingLeft: 14 }}>
+          <View style={{ height: 1, backgroundColor: look.hairline }} />
         </View>
       )}
     </View>
@@ -156,9 +140,9 @@ export function OlderRecordingsSheet({
               right: 0,
               bottom: 0,
               top: insets.top + SHEET_TOP_PEEK,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              backgroundColor: home.canvas,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              backgroundColor: look.canvas,
               overflow: 'hidden',
             },
             sheetStyle,
@@ -170,9 +154,9 @@ export function OlderRecordingsSheet({
                 style={{
                   alignSelf: 'center',
                   width: 36,
-                  height: 5,
-                  borderRadius: 3,
-                  backgroundColor: home.fill,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: look.track,
                   marginBottom: 14,
                 }}
               />
@@ -196,16 +180,16 @@ export function OlderRecordingsSheet({
                   onPress={onClose}
                   hitSlop={6}
                   style={({ pressed }) => ({
+                    ...edge,
                     width: 36,
                     height: 36,
                     borderRadius: 18,
-                    backgroundColor: 'rgba(255,255,255,0.72)',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    opacity: pressed ? 0.6 : 1,
+                    opacity: pressed ? 0.7 : 1,
                   })}
                 >
-                  <SystemIcon name="xmark" mdName="X" size={20} color={home.accent} />
+                  <SystemIcon name="xmark" mdName="X" size={18} color={home.text} />
                 </Pressable>
               </View>
             </View>
@@ -217,22 +201,14 @@ export function OlderRecordingsSheet({
               gap: 16,
             }}
           >
-            <View style={{ backgroundColor: home.tint, borderRadius: 14, padding: 16, gap: 6 }}>
-              <Text style={type.headline}>{t('savedBeforeAccounts')}</Text>
+            <View style={[edgeCard, { padding: 14, gap: 6 }]}>
+              <Text style={TITLE}>{t('savedBeforeAccounts')}</Text>
               <Text style={[type.footnote, { fontSize: 15, lineHeight: 21 }]}>
                 {t('savedBeforeAccountsBody')}
               </Text>
             </View>
             {items.length ? (
-              <View
-                style={{
-                  backgroundColor: home.surface,
-                  borderWidth: 1,
-                  borderColor: home.borderDefault,
-                  borderRadius: 14,
-                  boxShadow: home.cardShadow,
-                }}
-              >
+              <View style={edgeCard}>
                 {items.map((item, index) => (
                   <OlderRow
                     key={item.id}

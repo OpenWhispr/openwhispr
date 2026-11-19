@@ -94,6 +94,7 @@ function ProviderButton({
   const loadingProvider = useAuthStore((s) => s.loadingProvider);
   return (
     <Pressable
+      cssInterop={false}
       onPress={onPress}
       disabled={isLoading}
       style={({ pressed }) => [
@@ -242,6 +243,7 @@ export default function AuthScreen({
           </View>
           {onClose ? (
             <Pressable
+              cssInterop={false}
               onPress={onClose}
               style={({ pressed }) => [
                 styles.closeButton,
@@ -259,6 +261,7 @@ export default function AuthScreen({
           {authMode ? (
             <View style={styles.authHeader}>
               <Pressable
+                cssInterop={false}
                 onPress={handleBack}
                 style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
                 accessibilityRole="button"
@@ -332,6 +335,7 @@ export default function AuthScreen({
                   accessibilityLabel="Email address"
                 />
                 <Pressable
+                  cssInterop={false}
                   onPress={handleEmailContinue}
                   disabled={!email.trim() || isCheckingEmail}
                   style={({ pressed }) => [
@@ -352,6 +356,7 @@ export default function AuthScreen({
 
                 {!hideGuestContinue ? (
                   <Pressable
+                    cssInterop={false}
                     onPress={handleGuest}
                     disabled={isLoading}
                     style={({ pressed }) => [styles.guestButton, pressed && styles.pressed]}
@@ -398,6 +403,7 @@ export default function AuthScreen({
                   accessibilityLabel="Password"
                 />
                 <Pressable
+                  cssInterop={false}
                   onPress={handleSubmit}
                   disabled={!password || isLoading}
                   style={({ pressed }) => [
@@ -417,6 +423,7 @@ export default function AuthScreen({
                 </Pressable>
 
                 <Pressable
+                  cssInterop={false}
                   onPress={handleToggleMode}
                   style={({ pressed }) => [styles.toggleButton, pressed && styles.pressed]}
                   accessibilityRole="button"

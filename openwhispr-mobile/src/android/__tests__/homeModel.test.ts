@@ -1,10 +1,14 @@
+import type { Transcript } from '@/types';
 import type { InsightEvent } from '../insights';
 import {
   averageWordsPerMinute,
   currentStreakDays,
+  groupHistory,
   homeStats,
   localDate,
+  matchHistory,
   missingPermissions,
+  PERMISSION_ICON,
   relativeDate,
   uploadProgress,
   wordSafeLines,
@@ -190,4 +194,48 @@ it('has every Home string in every language', () => {
       language,
       [],
     ]);
+});
+
+describe('PERMISSION_ICON', () => {
+  it('shows Android’s standing figure for Accessibility, never a wheelchair', () => {
+    expect(PERMISSION_ICON.accessibility).toBe('PersonStanding');
+  });
+});
+
+describe('History page', () => {
+  const now = new Date(2026, 10, 19, 12, 0).getTime();
+  const row = (id: string, at: Date, text = id, extra: Partial<Transcript> = {}): Transcript => ({
+    id,
+    text,
+    createdAt: at.getTime(),
+    updatedAt: at.getTime(),
+    provider: 'openai' as Transcript['provider'],
+    ...extra,
+  });
+  const t = (key: string) => key;
+  const items = [
+    row('older', new Date(2026, 9, 2, 9, 0)),
+    row('today', new Date(2026, 10, 19, 10, 42)),
+    row('week', new Date(2026, 10, 15, 8, 0)),
+    row('yesterday', new Date(2026, 10, 18, 17, 5)),
+    row('today2', new Date(2026, 10, 19, 11, 0)),
+  ];
+
+  it('groups newest first: Today, Yesterday, This week, then by month', () => {
+    const groups = groupHistory(items, t as never, 'en-US', now);
+    expect(groups.map((group) => group.key)).toEqual(['today', 'yesterday', 'week', '2026-9']);
+    expect(groups[0].rows.map((r) => r.item.id)).toEqual(['today2', 'today']);
+    expect(groups[3].title).toBe('October 2026');
+    expect(groups[2].rows[0].meta).toBe('Sunday');
+  });
+
+  it('searches the text, or the failure for a row that wasn’t sent, ignoring case', () => {
+    const rows = [
+      row('a', new Date(now), 'Tomorrow at 4 works'),
+      row('b', new Date(now), '', { status: 'failed', errorMessage: 'Network lost' }),
+    ];
+    expect(matchHistory(rows, ' TOMORROW ').map((r) => r.id)).toEqual(['a']);
+    expect(matchHistory(rows, 'network').map((r) => r.id)).toEqual(['b']);
+    expect(matchHistory(rows, '')).toHaveLength(2);
+  });
 });

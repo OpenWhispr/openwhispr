@@ -1,6 +1,8 @@
 import type { BubbleStatus } from '../../../modules/android-dictation/src';
 import type { InsightEvent } from '../insights';
+import type { Transcript } from '@/types';
 import type { HomeKey } from './strings';
+import type { LucideIconName } from '@/components/ui/SystemIcon';
 
 /**
  * How many lines a short label may take so it wraps only between words: a word too wide for
@@ -55,6 +57,13 @@ export const PERMISSION_LABEL: Record<Permission, HomeKey> = {
   overlay: 'turnOnOverlay',
   accessibility: 'turnOnAccessibility',
   microphone: 'turnOnMicrophone',
+};
+
+/** Lucide icon on each permission's button; accessibility is Android's standing figure, never a wheelchair. */
+export const PERMISSION_ICON: Record<Permission, LucideIconName> = {
+  overlay: 'Layers',
+  accessibility: 'PersonStanding',
+  microphone: 'Mic',
 };
 
 type T = (key: HomeKey, options?: Record<string, unknown>) => string;
@@ -144,4 +153,64 @@ export function averageWordsPerMinute(events: InsightEvent[]): number | null {
 
 export function localDate(now = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+export type HistoryGroup = {
+  key: string;
+  title: string;
+  rows: { item: Transcript; meta: string }[];
+};
+
+const startOfDay = (time: number) => {
+  const day = new Date(time);
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+};
+
+/**
+ * The History page's sections, newest first: Today and Yesterday (rows show the time), This
+ * week (the weekday), then one per month (the date). Rows within a section keep their order.
+ */
+export function groupHistory(
+  items: Transcript[],
+  t: T,
+  language: string,
+  now = Date.now(),
+): HistoryGroup[] {
+  const today = startOfDay(now);
+  const yesterday = startOfDay(today - 1);
+  const weekStart = startOfDay(today - 6 * 86_400_000 + 3_600_000);
+  const time = (at: number) =>
+    new Date(at).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' });
+  const groups: HistoryGroup[] = [];
+  for (const item of [...items].sort((a, b) => b.createdAt - a.createdAt)) {
+    const at = item.createdAt;
+    const date = new Date(at);
+    const [key, title, meta] =
+      at >= today
+        ? ['today', t('today'), time(at)]
+        : at >= yesterday
+          ? ['yesterday', t('yesterday'), time(at)]
+          : at >= weekStart
+            ? ['week', t('thisWeek'), date.toLocaleDateString(language, { weekday: 'long' })]
+            : [
+                `${date.getFullYear()}-${date.getMonth()}`,
+                date.toLocaleDateString(language, { month: 'long', year: 'numeric' }),
+                date.toLocaleDateString(language, { day: 'numeric', month: 'short' }),
+              ];
+    const last = groups[groups.length - 1];
+    if (last?.key === key) last.rows.push({ item, meta });
+    else groups.push({ key, title, rows: [{ item, meta }] });
+  }
+  return groups;
+}
+
+/** Rows whose text (or failure) contains the search, ignoring case. */
+export function matchHistory(items: Transcript[], query: string): Transcript[] {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return items;
+  return items.filter((item) =>
+    (item.status === 'failed' ? item.errorMessage || '' : item.text)
+      .toLocaleLowerCase()
+      .includes(needle),
+  );
 }

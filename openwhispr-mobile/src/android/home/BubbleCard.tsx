@@ -5,7 +5,6 @@ import {
   Image,
   PermissionsAndroid,
   Platform,
-  Switch,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -19,8 +18,10 @@ import {
   type BubbleStatus,
 } from '../../../modules/android-dictation/src';
 import { useHomeT } from './strings';
-import { home, PILL_ICON_CHROME_COMPACT, PillButton, type } from './kit';
-import { missingPermissions, PERMISSION_LABEL, type Permission } from './model';
+import { home, IconTile, PILL_ICON_CHROME_COMPACT, PillButton, type } from './kit';
+import { edgeCard } from '../settings/look';
+import { settings, Toggle } from '../settings/kit';
+import { missingPermissions, PERMISSION_ICON, PERMISSION_LABEL, type Permission } from './model';
 
 const GLOSSY_ICON = require('./assets/glossy-icon.png');
 const FULL_WIDTH = { flex: 0, alignSelf: 'stretch' as const };
@@ -125,15 +126,7 @@ export function BubbleCard({
       : t('bubbleOffBody');
 
   return (
-    <View
-      style={{
-        backgroundColor: home.surface,
-        borderRadius: 20,
-        padding: 16,
-        gap: 14,
-        boxShadow: home.cardShadow,
-      }}
-    >
+    <View style={[edgeCard, { padding: 14, gap: 14 }]}>
       <View
         pointerEvents="none"
         importantForAccessibility="no-hide-descendants"
@@ -147,14 +140,19 @@ export function BubbleCard({
         ))}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Image
-          source={GLOSSY_ICON}
-          style={{ width: 40, height: 40 }}
-          accessibilityIgnoresInvertColors
-          accessible={false}
-        />
+        {/* The glossy mark while the bubble is on; a grey tile while it is off. */}
+        {on ? (
+          <Image
+            source={GLOSSY_ICON}
+            style={{ width: 36, height: 36 }}
+            accessibilityIgnoresInvertColors
+            accessible={false}
+          />
+        ) : (
+          <IconTile icon="AudioLines" color={home.secondary} />
+        )}
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={type.headline}>{title}</Text>
+          <Text style={settings.rowTitle}>{title}</Text>
           <Text
             accessibilityLiveRegion="polite"
             style={[type.footnote, needsPermission && { color: home.accent }]}
@@ -162,21 +160,20 @@ export function BubbleCard({
             {subtitle}
           </Text>
         </View>
-        <Switch
-          accessibilityLabel={t('bubble')}
+        <Toggle
+          label={t('bubble')}
           value={on}
           disabled={switching || !status}
           onValueChange={(value) => {
             void setEnabled(value);
           }}
-          trackColor={{ false: home.fill, true: home.accent }}
-          thumbColor="#FFFFFF"
         />
       </View>
       {needsPermission ? (
         <View style={{ gap: 10 }}>
           <PillButton
-            primary
+            accent
+            icon={PERMISSION_ICON[missing[0]]}
             label={t(PERMISSION_LABEL[missing[0]])}
             onPress={() => {
               grantPermission(missing[0])
