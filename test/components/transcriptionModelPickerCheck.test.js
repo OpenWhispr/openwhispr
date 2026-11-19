@@ -740,6 +740,22 @@ test("a provider the tab can't use is named, not replaced", async (t) => {
       'transcription.providerUnavailable {"provider":"Deepgram"}'
     );
   });
+  for (const context of ["meeting", "upload"]) {
+    await t.test(`${context} left on OpenWhispr Cloud by onboarding`, async (t) => {
+      const { panel, saves } = await scopePicker(t, context, {
+        provider: "openwhispr",
+        settings: dictating("groq", "whisper-large-v3-turbo", {
+          [`${context}CloudTranscriptionProvider`]: "openwhispr",
+        }),
+      });
+      assert.deepEqual(saves, []);
+      assert.deepEqual(savedPair(panel, context), ["openwhispr", ""]);
+      assert.equal(
+        unavailableNotice(panel),
+        'transcription.providerUnavailable {"provider":"settingsPage.transcription.modes.openwhispr"}'
+      );
+    });
+  }
 });
 
 test("picking a model on an inherited tab saves the provider with it", async (t) => {

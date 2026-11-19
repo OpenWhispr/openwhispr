@@ -867,7 +867,9 @@ export default function TranscriptionModelPicker({
     committedCloudProvider !== displayedCloudProvider
       ? committedCloudProvider === "custom"
         ? t("transcription.customProvider")
-        : (providerName(committedCloudProvider) ?? committedCloudProvider)
+        : committedCloudProvider === "openwhispr"
+          ? t("settingsPage.transcription.modes.openwhispr")
+          : (providerName(committedCloudProvider) ?? committedCloudProvider)
       : undefined;
 
   useEffect(() => {
