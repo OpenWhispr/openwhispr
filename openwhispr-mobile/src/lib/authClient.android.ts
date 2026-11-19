@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { storageAdapter } from '@better-auth/expo/client';
 import { sessionFetch } from './sessionFetch.android';
@@ -8,7 +9,12 @@ import {
   createNativeAuthClient,
   mapAuthUser,
   type AuthUser,
+  type SocialAuthResult,
 } from './authClientCore';
+import {
+  isGoogleSignInAvailable,
+  signInWithGoogleSheet,
+} from '../../modules/android-google-authorization/src';
 export type { AuthUser, AuthResult, AnonymousAuthResult, SocialAuthResult } from './authClientCore';
 
 const client = createNativeAuthClient({
@@ -145,10 +151,89 @@ export const {
   signUpWithEmail,
   signInAnonymously,
   signOut,
-  signInWithGoogle,
+  signInWithGoogle: signInWithGoogleInBrowser,
   signInWithApple,
   signInWithMicrosoft,
   deleteAccount,
   initAuthenticatedUser,
   checkUserExists,
 } = createAuthApi(client, { fetch: sessionFetch, afterSignIn: cacheAndroidSessionAfterSignIn });
+
+export type PasswordResetResponse = {
+  status: number | null;
+  code?: string;
+  retryAfter?: string | null;
+};
+
+// The raw answers of Better Auth's two reset endpoints; src/android/auth/passwordReset.ts reads them.
+export async function requestPasswordResetEmail(
+  email: string,
+  redirectTo: string,
+): Promise<PasswordResetResponse> {
+  let retryAfter: string | null = null;
+  const { error } = await client.requestPasswordReset({
+    email,
+    redirectTo,
+    fetchOptions: {
+      timeout: 15_000,
+      onError: ({ response }) => {
+        retryAfter = response.headers.get('X-Retry-After');
+      },
+    },
+  });
+  if (!error) return { status: 200 };
+  return { status: error.status || null, code: error.code, retryAfter };
+}
+
+export async function resetPasswordWithToken(
+  newPassword: string,
+  token: string,
+): Promise<PasswordResetResponse> {
+  const { error } = await client.resetPassword({
+    newPassword,
+    token,
+    fetchOptions: { timeout: 15_000 },
+  });
+  if (!error) return { status: 200 };
+  return { status: error.status || null, code: error.code };
+}
+
+// The API's Google web client (Cloud project openwhispr-desktop). Android's sheet issues the ID
+// token for it, so the API verifies it as it does a browser sign-in; the project's Android clients
+// tie the sheet to this app's package and signing key. Public, like any OAuth client id.
+const GOOGLE_WEB_CLIENT_ID =
+  process.env.EXPO_PUBLIC_GOOGLE_AUTH_WEB_CLIENT_ID ||
+  '296701228479-22st3am22trhukoo8gi0npfgq2c5oco4.apps.googleusercontent.com';
+
+function isCancelled(error: unknown): boolean {
+  return !!error && typeof error === 'object' && 'code' in error && error.code === 'CANCELLED';
+}
+
+/**
+ * Google sign-in through Android's "Sign in with Google" sheet (1.8), then Better Auth's ID-token
+ * sign-in. A build without the sheet, or a sheet that fails, falls back to the browser flow.
+ * Backing out of the sheet is not an error and says nothing.
+ */
+export async function signInWithGoogle(): Promise<SocialAuthResult> {
+  if (!isGoogleSignInAvailable()) return signInWithGoogleInBrowser();
+  const nonce = Crypto.randomUUID();
+  let idToken: string;
+  try {
+    ({ idToken } = await signInWithGoogleSheet(GOOGLE_WEB_CLIENT_ID, nonce));
+  } catch (error) {
+    if (isCancelled(error)) return { success: false, sessionCookie: null, error: null };
+    console.warn('[auth] Google sheet failed, using the browser:', error);
+    return signInWithGoogleInBrowser();
+  }
+  const { data, error } = await client.signIn.social({
+    provider: 'google',
+    idToken: { token: idToken, nonce },
+    callbackURL: '/',
+    fetchOptions: { timeout: 15_000 },
+  });
+  if (error) {
+    return { success: false, sessionCookie: null, error: error.message ?? 'Google sign-in failed' };
+  }
+  await cacheAndroidSessionAfterSignIn(data as { user?: unknown; token?: string | null });
+  return { success: true, sessionCookie: (await getStoredSession()) ?? null, error: null };
+}

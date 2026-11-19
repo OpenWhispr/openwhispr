@@ -1,29 +1,61 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
+  BackHandler,
+  Keyboard,
   KeyboardAvoidingView,
   ScrollView,
-  Platform,
-  StyleSheet,
+  View,
   type TextInput as TextInputType,
 } from 'react-native';
-import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import Svg, { Path } from 'react-native-svg';
+import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { checkUserExists } from '@/lib/authClient';
 import { safeHaptics } from '@/lib/utils';
-import { SystemIcon } from '@/components/ui/SystemIcon';
-import { AppFont } from '@/lib/fonts';
-import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
-import { gloss, glossPressed, home } from '@/android/home/kit';
-import { edge, edgeField, look } from '@/android/settings/look';
+import { showToast } from '@/android/settings/kit';
+import {
+  AuthBackground,
+  AuthField,
+  AuthHeader,
+  AuthLine,
+  AuthTitle,
+  ClearButton,
+  FieldNote,
+  GoogleLogo,
+  Legal,
+  MicrosoftLogo,
+  OrDivider,
+  TextButton,
+  WhiteButton,
+  authLayout,
+} from '@/android/auth/look';
+import { ForgotPassword } from '@/android/auth/ForgotPassword';
+import {
+  lastSignInMethod,
+  placeAuthError,
+  rememberSignInMethod,
+  type SignInMethod,
+} from '@/android/auth/authErrors';
+import { MIN_PASSWORD_LENGTH } from '@/android/auth/passwordReset';
+import { useAuthT, type AuthKey } from '@/android/auth/strings';
+import { setAuthBackHandler } from '@/android/auth/backPress';
 
-type AuthMode = null | 'signin' | 'signup';
+/** Why the app sent someone here; names the title and line (1.2). */
+export type AuthReason = 'sync' | 'share' | 'meeting' | 'cloud' | 'plan' | 'referral';
+
+const REASON_COPY: Record<AuthReason, [AuthKey, AuthKey]> = {
+  sync: ['reasonSyncTitle', 'reasonSyncBody'],
+  share: ['reasonShareTitle', 'reasonShareBody'],
+  meeting: ['reasonMeetingTitle', 'reasonMeetingBody'],
+  cloud: ['reasonCloudTitle', 'reasonCloudBody'],
+  plan: ['reasonPlanTitle', 'reasonPlanBody'],
+  referral: ['reasonReferralTitle', 'reasonReferralBody'],
+};
+
+export function isAuthReason(value: unknown): value is AuthReason {
+  return typeof value === 'string' && value in REASON_COPY;
+}
+
 type AuthScreenProps = {
   hideGuestContinue?: boolean;
   onClose?: () => void;
@@ -34,166 +66,142 @@ type AuthScreenProps = {
    * cloud data and any purchase they just made.
    */
   onGuestContinue?: () => void;
+  /** Onboarding shows Back in the logo row; the app shows Close (1.1 / 1.2). */
+  variant?: 'onboarding' | 'app';
+  reason?: AuthReason;
+  /** The account whose session the server rejected: "Sign in again" (2.5). */
+  signInAgainEmail?: string;
 };
 
-// Full-pill radius shared by every login button.
-const BUTTON_HEIGHT = 50;
-const PILL_RADIUS = BUTTON_HEIGHT / 2;
-const PLACEHOLDER_COLOR = home.tertiary;
-
-function GoogleLogo() {
-  return (
-    <View style={styles.providerLogoBox}>
-      <Svg width={20} height={20} viewBox="0 0 24 24">
-        <Path
-          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-          fill="#4285F4"
-        />
-        <Path
-          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-          fill="#34A853"
-        />
-        <Path
-          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-          fill="#FBBC05"
-        />
-        <Path
-          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-          fill="#EA4335"
-        />
-      </Svg>
-    </View>
-  );
-}
-
-function MicrosoftLogo() {
-  return (
-    <View style={styles.providerLogoBox}>
-      <Svg width={20} height={20} viewBox="0 0 23 23">
-        <Path d="M0 0h11v11H0z" fill="#F25022" />
-        <Path d="M12 0h11v11H12z" fill="#7FBA00" />
-        <Path d="M0 12h11v11H0z" fill="#00A4EF" />
-        <Path d="M12 12h11v11H12z" fill="#FFB900" />
-      </Svg>
-    </View>
-  );
-}
-
-function ProviderButton({
-  logo,
-  label,
-  provider,
-  onPress,
-}: {
-  logo: React.ReactNode;
-  label: string;
-  provider: 'apple' | 'google' | 'microsoft';
-  onPress: () => void;
-}) {
-  const isLoading = useAuthStore((s) => s.isLoading);
-  const loadingProvider = useAuthStore((s) => s.loadingProvider);
-  return (
-    <Pressable
-      cssInterop={false}
-      onPress={onPress}
-      disabled={isLoading}
-      style={({ pressed }) => [
-        styles.providerButton,
-        isLoading ? styles.disabled : pressed && styles.pressed,
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      {loadingProvider === provider ? (
-        <ActivityIndicator size="small" color={home.text} />
-      ) : (
-        <>
-          {logo}
-          <Text style={styles.providerButtonText}>{label}</Text>
-        </>
-      )}
-    </Pressable>
-  );
-}
+type Step = 'start' | 'signin' | 'signup' | 'again' | 'another' | 'forgot';
 
 export default function AuthScreen({
   hideGuestContinue = false,
   onClose,
   onGuestContinue,
+  variant = 'app',
+  reason,
+  signInAgainEmail,
 }: AuthScreenProps = {}) {
+  const t = useAuthT();
   const insets = useSafeAreaInsets();
   const {
+    user,
     signIn,
     signUp,
     signInWithGoogle,
-    signInWithApple,
     signInWithMicrosoft,
     continueAsGuest,
     isLoading,
+    loadingProvider,
     error,
     clearError,
   } = useAuthStore();
 
-  const [email, setEmail] = useState('');
+  const [view, setView] = useState<Step>(signInAgainEmail ? 'again' : 'start');
+  const [email, setEmail] = useState(signInAgainEmail ?? '');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [authMode, setAuthMode] = useState<AuthMode>(null);
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
-  const [isAppleAvailable, setIsAppleAvailable] = useState(false);
-
+  const [passwordError, setPasswordError] = useState<AuthKey | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [keyboardUp, setKeyboardUp] = useState(false);
+  const attempted = useRef<{ email: string; method: SignInMethod } | null>(null);
   const passwordRef = useRef<TextInputType>(null);
   const nameRef = useRef<TextInputType>(null);
+  const scroll = useRef<ScrollView>(null);
 
   useEffect(() => {
-    if (Platform.OS !== 'ios') return;
-    AppleAuthentication.isAvailableAsync()
-      .then(setIsAppleAvailable)
-      .catch(() => setIsAppleAvailable(false));
+    const shown = Keyboard.addListener('keyboardDidShow', () => setKeyboardUp(true));
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboardUp(false));
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
   }, []);
 
-  const handleEmailContinue = useCallback(async () => {
-    const trimmed = email.trim();
-    if (!trimmed) return;
-    safeHaptics('light');
-    setIsCheckingEmail(true);
+  // Errors land where they belong: under the password field (1.5) or the dark toast (1.9).
+  // A cancelled Google picker reports no error and says nothing.
+  useEffect(() => {
+    if (!error) return;
+    const placed = placeAuthError(error);
     clearError();
-    const mode = await checkUserExists(trimmed);
-    setAuthMode(mode);
-    setIsCheckingEmail(false);
-    setTimeout(() => {
-      if (mode === 'signup') {
-        nameRef.current?.focus();
-      } else {
-        passwordRef.current?.focus();
+    if (placed.place === 'password' && (view === 'signin' || view === 'signup' || view === 'again'))
+      setPasswordError(placed.key);
+    else showToast('key' in placed ? t(placed.key) : placed.text, 'neutral');
+  }, [error, clearError, t, view]);
+
+  // How this account signed in, for the next "Sign in again" (2.5 / 2.5b).
+  useEffect(() => {
+    const tried = attempted.current;
+    if (!user || user.isAnonymous || !tried) return;
+    rememberSignInMethod(tried.method === 'email' ? tried.email : user.email, tried.method);
+    attempted.current = null;
+  }, [user]);
+
+  const go = useCallback(
+    (next: Step) => {
+      setView(next);
+      if (next === 'again' && signInAgainEmail) setEmail(signInAgainEmail);
+      setPassword('');
+      setName('');
+      setPasswordError(null);
+      clearError();
+      scroll.current?.scrollTo({ y: 0, animated: false });
+    },
+    [clearError, signInAgainEmail],
+  );
+
+  const run = useCallback(
+    async (action: () => Promise<void>) => {
+      try {
+        await action();
+      } catch {
+        // The store leaves its spinner on when a request throws (offline, timed out).
+        useAuthStore.setState({ isLoading: false, loadingProvider: null });
+        showToast(t('networkError'), 'neutral');
       }
-    }, 100);
-  }, [email, clearError]);
+    },
+    [t],
+  );
+
+  const handleEmailContinue = useCallback(async () => {
+    const address = email.trim();
+    if (!address || checkingEmail) return;
+    safeHaptics('light');
+    setCheckingEmail(true);
+    const mode = await checkUserExists(address);
+    setCheckingEmail(false);
+    go(mode);
+    setTimeout(() => (mode === 'signup' ? nameRef : passwordRef).current?.focus(), 100);
+  }, [checkingEmail, email, go]);
 
   const handleSubmit = useCallback(async () => {
-    if (!password) return;
-    safeHaptics('medium');
-    if (authMode === 'signin') {
-      await signIn(email.trim(), password);
-    } else if (authMode === 'signup') {
-      await signUp(email.trim(), password, name.trim() || undefined);
+    if (!password || isLoading) return;
+    const address = email.trim();
+    if (view === 'signup' && password.length < MIN_PASSWORD_LENGTH) {
+      setPasswordError('passwordTooShort');
+      return;
     }
-  }, [authMode, email, password, name, signIn, signUp]);
+    safeHaptics('medium');
+    setPasswordError(null);
+    attempted.current = { email: address, method: 'email' };
+    await run(() =>
+      view === 'signup'
+        ? signUp(address, password, name.trim() || undefined)
+        : signIn(address, password),
+    );
+  }, [email, isLoading, name, password, run, signIn, signUp, view]);
 
-  const handleGoogle = useCallback(async () => {
-    safeHaptics('light');
-    await signInWithGoogle();
-  }, [signInWithGoogle]);
-
-  const handleApple = useCallback(async () => {
-    if (isLoading) return;
-    safeHaptics('light');
-    await signInWithApple();
-  }, [isLoading, signInWithApple]);
-
-  const handleMicrosoft = useCallback(async () => {
-    safeHaptics('light');
-    await signInWithMicrosoft();
-  }, [signInWithMicrosoft]);
+  const handleProvider = useCallback(
+    async (provider: 'google' | 'microsoft') => {
+      safeHaptics('light');
+      attempted.current = { email: '', method: provider };
+      await run(provider === 'google' ? signInWithGoogle : signInWithMicrosoft);
+    },
+    [run, signInWithGoogle, signInWithMicrosoft],
+  );
 
   const handleGuest = useCallback(async () => {
     safeHaptics('light');
@@ -204,440 +212,263 @@ export default function AuthScreen({
     await continueAsGuest();
   }, [continueAsGuest, onGuestContinue]);
 
-  const handleBack = useCallback(() => {
-    setAuthMode(null);
-    setPassword('');
-    setName('');
-    clearError();
-  }, [clearError]);
+  const busy = isLoading || checkingEmail;
+  const header = (() => {
+    switch (view) {
+      case 'start':
+        return variant === 'onboarding'
+          ? { action: 'back' as const, label: t('back'), onPress: onClose }
+          : { action: 'close' as const, label: t('close'), onPress: onClose };
+      case 'again':
+        return { action: 'back' as const, label: t('back'), onPress: onClose };
+      case 'another':
+        return { action: 'back' as const, label: t('back'), onPress: () => go('again') };
+      case 'forgot':
+        return {
+          action: 'back' as const,
+          label: t('back'),
+          disabled: resetBusy,
+          onPress: () => go(signInAgainEmail ? 'again' : 'signin'),
+        };
+      default:
+        // Back still cancels while signing in (1.6).
+        return {
+          action: 'back' as const,
+          label: t('back'),
+          onPress: () => go(signInAgainEmail ? 'another' : 'start'),
+        };
+    }
+  })();
 
-  const handleToggleMode = useCallback(() => {
-    setAuthMode((prev) => (prev === 'signin' ? 'signup' : 'signin'));
-    setPassword('');
-    clearError();
-  }, [clearError]);
+  // The system back gesture steps back inside the screen before it leaves it.
+  const backRef = useRef<() => boolean>(() => false);
+  backRef.current = () => {
+    if (view === 'start' || view === 'again') return false;
+    if (!('disabled' in header && header.disabled)) header.onPress?.();
+    return true;
+  };
+  useEffect(() => {
+    const press = () => backRef.current();
+    setAuthBackHandler(press);
+    const subscription = BackHandler.addEventListener('hardwareBackPress', press);
+    return () => {
+      subscription.remove();
+      setAuthBackHandler(null);
+    };
+  }, []);
 
-  const headerTitle =
-    authMode === 'signin' ? 'Welcome back' : authMode === 'signup' ? 'Create account' : null;
+  const providers = (only?: SignInMethod) => (
+    <View style={authLayout.group}>
+      {(['google', 'microsoft'] as const)
+        .filter((provider) => !only || only === provider)
+        .map((provider) => {
+          const loading = loadingProvider === provider;
+          return (
+            <WhiteButton
+              key={provider}
+              icon={provider === 'google' ? <GoogleLogo /> : <MicrosoftLogo />}
+              label={t(provider === 'google' ? 'continueWithGoogle' : 'continueWithMicrosoft')}
+              busy={loading}
+              busyLabel={t(provider === 'google' ? 'openingGoogle' : 'openingMicrosoft')}
+              faded={busy && !loading}
+              onPress={() => void handleProvider(provider)}
+            />
+          );
+        })}
+    </View>
+  );
+
+  const startView = () => {
+    const [titleKey, bodyKey] = reason ? REASON_COPY[reason] : [null, null];
+    const typing = emailFocused && keyboardUp;
+    const another = view === 'another';
+    return (
+      <View style={[authLayout.content, { flexGrow: 1 }]}>
+        <View style={authLayout.stack}>
+          <AuthTitle>
+            {another ? t('useAnotherAccount') : titleKey ? t(titleKey) : t('headline')}
+          </AuthTitle>
+          {another && signInAgainEmail ? (
+            <AuthLine text={t('signedOutOf', { email: signInAgainEmail })} />
+          ) : bodyKey ? (
+            <AuthLine text={t(bodyKey)} />
+          ) : null}
+        </View>
+        <View style={{ flex: 1, minHeight: typing ? 0 : 24 }} />
+        {/* The keyboard pushes the stack up; the field and Continue stay above it (1.3). */}
+        {typing ? null : providers()}
+        {typing ? null : <OrDivider label={t('or')} />}
+        <View style={authLayout.stack}>
+          <AuthField
+            value={email}
+            onChangeText={setEmail}
+            placeholder={t('emailPlaceholder')}
+            accessibilityLabel={t('emailPlaceholder')}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            returnKeyType="next"
+            onFocus={() => setEmailFocused(true)}
+            onBlur={() => setEmailFocused(false)}
+            onSubmitEditing={() => void handleEmailContinue()}
+            faded={isLoading}
+          />
+          {email.trim() ? (
+            <WhiteButton
+              label={t('continue')}
+              busy={checkingEmail}
+              faded={isLoading}
+              onPress={() => void handleEmailContinue()}
+            />
+          ) : (
+            <ClearButton
+              label={t('continue')}
+              disabled
+              faded={isLoading}
+              onPress={() => undefined}
+            />
+          )}
+          {!hideGuestContinue && !another ? (
+            <TextButton
+              strong
+              label={t('continueWithoutAccount')}
+              faded={busy}
+              onPress={() => void handleGuest()}
+            />
+          ) : null}
+        </View>
+        <Legal text={t('legal')} />
+      </View>
+    );
+  };
+
+  const passwordView = () => {
+    const signup = view === 'signup';
+    const again = view === 'again';
+    const method = again && signInAgainEmail ? lastSignInMethod(signInAgainEmail) : 'email';
+    const submitting = isLoading && !loadingProvider;
+    return (
+      <View style={authLayout.content}>
+        <View style={authLayout.stack}>
+          <AuthTitle>
+            {again ? t('signInAgain') : signup ? t('createAccount') : t('welcomeBack')}
+          </AuthTitle>
+          <AuthLine text={again ? t('signInAgainAs', { email: email.trim() }) : email.trim()} />
+        </View>
+        <View style={authLayout.stack}>
+          {method !== 'email' ? (
+            // 2.5b: an account that signs in with Google or Microsoft gets its button.
+            providers(method)
+          ) : (
+            <>
+              {signup ? (
+                <AuthField
+                  ref={nameRef}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder={t('namePlaceholder')}
+                  accessibilityLabel={t('namePlaceholder')}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  autoComplete="name"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  faded={submitting}
+                />
+              ) : null}
+              <View style={authLayout.group}>
+                <AuthField
+                  ref={passwordRef}
+                  value={password}
+                  onChangeText={(value) => {
+                    setPassword(value);
+                    setPasswordError(null);
+                  }}
+                  placeholder={t(signup ? 'newPasswordPlaceholder' : 'passwordPlaceholder')}
+                  accessibilityLabel={t('passwordPlaceholder')}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete={signup ? 'new-password' : 'current-password'}
+                  returnKeyType="done"
+                  onSubmitEditing={() => void handleSubmit()}
+                  error={!!passwordError}
+                  faded={submitting}
+                />
+                {passwordError ? <FieldNote error text={t(passwordError)} /> : null}
+              </View>
+              <WhiteButton
+                label={signup ? t('createAccount') : t('signIn')}
+                busy={submitting}
+                busyLabel={signup ? t('creatingAccount') : t('signingIn')}
+                disabled={!password}
+                onPress={() => void handleSubmit()}
+              />
+              {signup ? (
+                <TextButton
+                  label={t('haveAccount')}
+                  faded={submitting}
+                  onPress={() => go('signin')}
+                />
+              ) : (
+                <TextButton
+                  label={t('forgotPassword')}
+                  faded={submitting}
+                  onPress={() => go('forgot')}
+                />
+              )}
+            </>
+          )}
+          {again ? (
+            <TextButton
+              label={t('useAnotherAccount')}
+              faded={isLoading}
+              onPress={() => {
+                go('another');
+                setEmail('');
+              }}
+            />
+          ) : null}
+        </View>
+        {again ? null : <Legal text={t('legal')} />}
+      </View>
+    );
+  };
 
   return (
-    <View style={styles.root}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+    <AuthBackground>
+      <StatusBar style="light" />
+      {/* Edge-to-edge Android doesn't resize the window for the keyboard. */}
+      <KeyboardAvoidingView style={{ flex: 1, paddingTop: insets.top }} behavior="height">
+        <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
+          <AuthHeader {...header} />
+        </View>
         <ScrollView
-          style={styles.flex}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingTop: insets.top + 20, paddingBottom: Math.max(insets.bottom, 16) },
-          ]}
+          ref={scroll}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            // The keyboard already covers the navigation bar.
+            paddingBottom: keyboardUp ? 8 : Math.max(insets.bottom, 8),
+          }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          {/* Brand lockup, top-left */}
-          <View style={styles.brandRow}>
-            <OpenWhisprMark size={32} color={home.accent} />
-            <Text style={styles.brandWord}>OpenWhispr</Text>
-          </View>
-          {onClose ? (
-            <Pressable
-              cssInterop={false}
-              onPress={onClose}
-              style={({ pressed }) => [
-                styles.closeButton,
-                Platform.OS === 'android' && { top: insets.top + 18 },
-                pressed && styles.pressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Close sign in"
-              hitSlop={8}
-            >
-              <SystemIcon name="xmark" mdName="X" size={18} color={home.text} />
-            </Pressable>
-          ) : null}
-
-          {authMode ? (
-            <View style={styles.authHeader}>
-              <Pressable
-                cssInterop={false}
-                onPress={handleBack}
-                style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-                hitSlop={8}
-              >
-                <SystemIcon name="chevron.left" mdName="ChevronLeft" size={20} color={home.text} />
-              </Pressable>
-              <Text accessibilityRole="header" style={styles.headline}>
-                {headerTitle}
-              </Text>
-              {email.trim() ? <Text style={styles.headerSub}>{email.trim()}</Text> : null}
-            </View>
+          {view === 'forgot' ? (
+            <ForgotPassword
+              initialEmail={email}
+              onBusyChange={setResetBusy}
+              onBackToSignIn={() => go(signInAgainEmail ? 'again' : 'signin')}
+            />
+          ) : view === 'start' || view === 'another' ? (
+            startView()
           ) : (
-            <Text accessibilityRole="header" style={styles.headline}>
-              Privacy-first{'\n'}voice-to-text AI
-            </Text>
+            passwordView()
           )}
-
-          {/* Spacer pushes the action stack to the bottom (collapses with keyboard) */}
-          <View style={styles.spacer} />
-
-          <View>
-            {!authMode && (
-              <View style={styles.formGroup}>
-                {Platform.OS === 'ios' && isAppleAvailable ? (
-                  <ProviderButton
-                    provider="apple"
-                    label="Continue with Apple"
-                    onPress={handleApple}
-                    logo={
-                      <View style={styles.providerLogoBox}>
-                        <SystemIcon name="apple.logo" mdName="Apple" size={19} color="#000000" />
-                      </View>
-                    }
-                  />
-                ) : null}
-
-                <ProviderButton
-                  provider="google"
-                  label="Continue with Google"
-                  onPress={handleGoogle}
-                  logo={<GoogleLogo />}
-                />
-
-                <ProviderButton
-                  provider="microsoft"
-                  label="Continue with Microsoft"
-                  onPress={handleMicrosoft}
-                  logo={<MicrosoftLogo />}
-                />
-
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>or</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Email address"
-                  placeholderTextColor={PLACEHOLDER_COLOR}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="email"
-                  returnKeyType="next"
-                  onSubmitEditing={handleEmailContinue}
-                  style={styles.input}
-                  accessibilityLabel="Email address"
-                />
-                <Pressable
-                  cssInterop={false}
-                  onPress={handleEmailContinue}
-                  disabled={!email.trim() || isCheckingEmail}
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    !email.trim() || isCheckingEmail
-                      ? styles.disabled
-                      : pressed && styles.primaryPressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Continue with email"
-                >
-                  {isCheckingEmail ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Continue</Text>
-                  )}
-                </Pressable>
-
-                {!hideGuestContinue ? (
-                  <Pressable
-                    cssInterop={false}
-                    onPress={handleGuest}
-                    disabled={isLoading}
-                    style={({ pressed }) => [styles.guestButton, pressed && styles.pressed]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Continue without an account"
-                  >
-                    <Text style={styles.guestButtonText}>Continue without an account</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            )}
-
-            {authMode && (
-              <View style={styles.formGroup}>
-                {authMode === 'signup' && (
-                  <TextInput
-                    ref={nameRef}
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="Full name (optional)"
-                    placeholderTextColor={PLACEHOLDER_COLOR}
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                    autoComplete="name"
-                    returnKeyType="next"
-                    onSubmitEditing={() => passwordRef.current?.focus()}
-                    style={styles.input}
-                    accessibilityLabel="Full name"
-                  />
-                )}
-                <TextInput
-                  ref={passwordRef}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder={authMode === 'signup' ? 'Create password (8+ chars)' : 'Password'}
-                  placeholderTextColor={PLACEHOLDER_COLOR}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSubmit}
-                  style={styles.input}
-                  accessibilityLabel="Password"
-                />
-                <Pressable
-                  cssInterop={false}
-                  onPress={handleSubmit}
-                  disabled={!password || isLoading}
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    !password || isLoading ? styles.disabled : pressed && styles.primaryPressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel={authMode === 'signin' ? 'Sign in' : 'Create account'}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>
-                      {authMode === 'signin' ? 'Sign In' : 'Create Account'}
-                    </Text>
-                  )}
-                </Pressable>
-
-                <Pressable
-                  cssInterop={false}
-                  onPress={handleToggleMode}
-                  style={({ pressed }) => [styles.toggleButton, pressed && styles.pressed]}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.toggleText}>
-                    {authMode === 'signin'
-                      ? "Don't have an account? Sign up"
-                      : 'Already have an account? Sign in'}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-
-            {error ? (
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
-            <Text style={styles.legal}>
-              By continuing, you agree to our Terms of Service and Privacy Policy
-            </Text>
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </AuthBackground>
   );
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: look.canvas,
-  },
-  flex: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 16,
-  },
-
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 32,
-  },
-  brandWord: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: home.text,
-    letterSpacing: -0.4,
-  },
-  // The settings header's round button: white, the glass edge, an ink glyph.
-  closeButton: {
-    ...edge,
-    position: 'absolute',
-    top: 18,
-    right: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  headline: {
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: '700',
-    color: home.text,
-    marginTop: 28,
-  },
-  authHeader: {
-    marginTop: 28,
-  },
-  headerSub: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: home.secondary,
-    marginTop: 8,
-  },
-  backButton: {
-    ...edge,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-
-  spacer: {
-    flex: 1,
-    minHeight: 32,
-  },
-
-  formGroup: {
-    gap: 20,
-  },
-
-  providerLogoBox: {
-    // Pinned to a fixed left column so all three provider logos line up
-    // vertically, while the label stays centered in the button.
-    position: 'absolute',
-    left: 20,
-    top: 0,
-    bottom: 0,
-    width: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  providerButton: {
-    ...edge,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: BUTTON_HEIGHT,
-    borderRadius: PILL_RADIUS,
-  },
-  providerButtonText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: home.text,
-    fontWeight: '500',
-  },
-
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: look.hairline,
-  },
-  dividerText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: home.secondary,
-  },
-
-  input: {
-    ...edgeField,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    fontFamily: AppFont.regular,
-    fontSize: 16,
-    lineHeight: 21,
-    color: home.text,
-  },
-
-  guestButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-  },
-  guestButtonText: {
-    fontSize: 16,
-    lineHeight: 21,
-    color: home.accent,
-  },
-
-  // The brand glass, flat: no lift. Disabled is the same glass at half strength.
-  primaryButton: {
-    ...gloss,
-    height: BUTTON_HEIGHT,
-    borderRadius: PILL_RADIUS,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryPressed: glossPressed,
-  primaryButtonText: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  toggleButton: {
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  toggleText: {
-    fontSize: 16,
-    lineHeight: 21,
-    color: home.accent,
-  },
-
-  disabled: {
-    opacity: 0.5,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-
-  errorBanner: {
-    ...edgeField,
-    marginTop: 14,
-    padding: 12,
-  },
-  errorText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: look.error,
-  },
-
-  legal: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: home.secondary,
-    marginTop: 20,
-    paddingBottom: 4,
-  },
-});

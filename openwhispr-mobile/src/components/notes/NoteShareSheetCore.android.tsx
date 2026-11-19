@@ -678,7 +678,7 @@ export function createNoteShareSheet(options: SheetPresentation = {}) {
                   accessibilityLabel={copy('noteSharing.signInLabel', 'Sign in to share')}
                   onPress={() => {
                     onClose();
-                    router.push('/auth');
+                    router.push('/auth?reason=share');
                   }}
                 />
               </GroupedList>

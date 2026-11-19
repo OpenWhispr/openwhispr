@@ -43,14 +43,14 @@ it('opens sign-in when nobody is signed in', () => {
   mockAuthState.user = null;
   const { getByText } = render(<ProfileScreen />);
   fireEvent.press(getByText('signIn'));
-  expect(mockRouterPush).toHaveBeenCalledWith('/auth');
+  expect(mockRouterPush).toHaveBeenCalledWith('/auth?reason=sync');
 });
 
 it('offers account creation to an anonymous session, never deletion', () => {
   mockAuthState.user = { id: 'anon', email: 'temp-1@anon.openwhispr.invalid', isAnonymous: true };
   const { getByText, queryByText } = render(<ProfileScreen />);
   fireEvent.press(getByText('createAccount'));
-  expect(mockRouterPush).toHaveBeenCalledWith('/auth');
+  expect(mockRouterPush).toHaveBeenCalledWith('/auth?reason=sync');
   expect(queryByText('deleteAccount')).toBeNull();
 });
 

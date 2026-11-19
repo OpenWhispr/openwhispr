@@ -167,6 +167,17 @@ class AndroidDictationModule : Module() {
       // Settings may already have another page above the requested activity.
       context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
     }
+    // The user's mail app, for "Open email app" after a reset link is sent; Android's chooser when
+    // several are installed. False when none is.
+    Function("openEmailApp") { title: String ->
+      val mail = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_EMAIL)
+      try {
+        context.startActivity(Intent.createChooser(mail, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+      } catch (_: android.content.ActivityNotFoundException) {
+        false
+      }
+    }
     Function("setEnabled") { enabled: Boolean, size: Int ->
       if (enabled) {
         check(android.os.Build.VERSION.SDK_INT >= 26) { "The floating bubble needs Android 8 or newer." }

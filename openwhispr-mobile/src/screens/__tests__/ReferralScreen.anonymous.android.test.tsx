@@ -121,7 +121,7 @@ describe('ReferralScreen with an anonymous session', () => {
 
     fireEvent.press(getByText('Create an account to get your link'));
 
-    expect(mockPush).toHaveBeenCalledWith('/auth');
+    expect(mockPush).toHaveBeenCalledWith('/auth?reason=referral');
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
@@ -131,7 +131,7 @@ describe('ReferralScreen with an anonymous session', () => {
 
     fireEvent.press(getByText('Sign in to get your link'));
 
-    expect(mockPush).toHaveBeenCalledWith('/auth');
+    expect(mockPush).toHaveBeenCalledWith('/auth?reason=referral');
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 });

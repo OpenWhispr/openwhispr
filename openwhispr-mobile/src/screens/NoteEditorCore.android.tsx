@@ -1704,7 +1704,7 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
             onOpenSharing={() => {
               setExportVisible(false);
               if (user) setShareVisible(true);
-              else router.push('/auth');
+              else router.push('/auth?reason=share');
             }}
             onSend={(parts) => {
               setExportVisible(false);
