@@ -222,10 +222,8 @@ export const useAudioRecording = (toast, options = {}) => {
         setIsAssistantVoice(voiceAgentRequested);
         if (!(await attempt.admission) || !current()) return false;
 
-        // Open the mic now rather than after the preparing frame paints: speech
-        // is kept from this point (pre-roll), so the visuals must not delay it.
-        // startRecording() joins this prepared capture, so the device still
-        // opens exactly once.
+        // Both routes reuse the prepared mic. Batch dictation buffers pre-roll
+        // once audio arrives, and streaming starts collecting PCM in its worklet.
         void Promise.resolve(manager.prepareMicCapture?.())
           .catch((error) => logger.warn("Mic preparation failed", { error: error?.message }))
           .finally(() => reportManagerLifecycle(manager, attempt));

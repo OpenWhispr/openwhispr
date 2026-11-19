@@ -797,7 +797,7 @@ class AudioManager {
     this._batchPcmTap = null;
     this._rotatingBatchRecorder = null;
     this._rotationResolve = null;
-    this._stopRequestedDuringMicRecovery = false;
+    this._batchStopRequested = false;
     this._cancelRequestedDuringMicRecovery = false;
     this._streamingFallbackSegments = [];
     this._streamingMicSwapPromise = null;
@@ -1679,7 +1679,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.audioChunks = [];
       this._batchSegments = [];
       this._closeBatchPcmTap();
-      this._stopRequestedDuringMicRecovery = false;
+      this._batchStopRequested = false;
       this._cancelRequestedDuringMicRecovery = false;
       this._receivedAudioData = false;
       const preRollUsable =
@@ -2023,22 +2023,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Honor a stop/cancel that arrived mid-rotation even when the swap failed —
       // dropping it would leave an unstoppable recording (isRecording stuck true).
       const cancelRequested = this._cancelRequestedDuringMicRecovery;
-      const stopRequested = this._stopRequestedDuringMicRecovery;
+      const stopRequested = this._batchStopRequested;
       this._cancelRequestedDuringMicRecovery = false;
-      this._stopRequestedDuringMicRecovery = false;
+      this._batchStopRequested = false;
       if (cancelRequested) this.cancelRecording();
       else if (stopRequested) this.stopRecording();
     }
   }
 
   stopRecording() {
+    if (this._batchStopRequested) return false;
     this.micRecovery.stop();
     if (this._rotatingBatchRecorder) {
-      this._stopRequestedDuringMicRecovery = true;
+      this._batchStopRequested = true;
       return true;
     }
     if (this.mediaRecorder?.state === "recording") {
       this.mediaRecorder.stop();
+      // The recorder becomes inactive before its final audio and stop events arrive.
+      this._batchStopRequested = true;
       return true;
     }
     if (this.isRecording && !this.isStreaming) {
