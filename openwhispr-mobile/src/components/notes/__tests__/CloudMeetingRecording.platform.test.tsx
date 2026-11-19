@@ -16,6 +16,16 @@ jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 64 }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/Button', () => ({ Button: require('react-native').Pressable }));
 jest.mock('@/config/colors', () => ({ BRAND: '#007AFF', iosColor: (name: string) => name }));
+jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
+jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => null }));
+jest.mock('expo-router', () => ({
+  router: { canGoBack: () => true, back: jest.fn() },
+  useNavigation: () => ({ setOptions: jest.fn() }),
+}));
+jest.mock('@/android/navigationBar', () => ({
+  useNavigationBarCanvas: jest.fn(),
+  useNavigationBar: () => ({ buttons: true, inset: 0 }),
+}));
 
 const finalUtterance = { itemId: 'one', text: 'Hello there.' } as RealtimeUtterance;
 const contents = [
@@ -65,18 +75,34 @@ describe.each([
       const empty = content.name === 'empty';
       const active = platform === 'ios' || status !== 'error';
       expect(!!screen.queryByText('Listening… speak to see the transcript.')).toBe(empty && active);
-      expect(!!screen.queryByText('Transcribing…')).toBe(!empty && active);
-      expect(!!screen.queryByText('Connection lost')).toBe(status === 'error');
-      expect(!!screen.queryByText('Reconnecting — recording continues')).toBe(
-        status === 'reconnecting',
+      // Android follows Figma R1: a blue "Listening…" under the live transcript.
+      expect(!!screen.queryByText(platform === 'android' ? 'Listening…' : 'Transcribing…')).toBe(
+        !empty && active,
       );
-      expect(screen.getByText('02:05')).toBeTruthy();
+      expect(!!screen.queryByText('Connection lost')).toBe(status === 'error');
+      // Android shows reconnecting in the status pill itself.
+      if (platform === 'android') {
+        expect(
+          screen.getByText(
+            status === 'reconnecting' ? 'Reconnecting · 02:05' : 'Recording · 02:05',
+          ),
+        ).toBeTruthy();
+      } else {
+        expect(!!screen.queryByText('Reconnecting — recording continues')).toBe(
+          status === 'reconnecting',
+        );
+        expect(screen.getByText('02:05')).toBeTruthy();
+      }
       if (content.utterances.length)
         expect(screen.getByText('Hello there.').props.selectable).toBe(
           platform === 'android' ? true : undefined,
         );
       let footer = screen.getByTestId('meeting-stop');
-      while (footer.parent && footer.props.className !== 'px-4 pt-2') footer = footer.parent;
+      const isFooter = (node: typeof footer) =>
+        platform === 'android'
+          ? node.props.style?.paddingHorizontal === 16 && node.props.style?.paddingTop === 8
+          : node.props.className === 'px-4 pt-2';
+      while (footer.parent && !isFooter(footer)) footer = footer.parent;
       expect(footer.props.style.paddingBottom).toBe(
         keyboard ? (platform === 'android' ? 12 : 192) : 40,
       );
@@ -127,10 +153,11 @@ describe.each([
         {...extra}
       />,
     );
-    const children = screen.getByTestId('meeting-stop').props.children;
-    expect(Array.isArray(children) ? children[0] : children).toBe(
-      platform === 'android' ? 'Retry save' : 'Stop',
-    );
+    if (platform === 'android') expect(screen.getByText('Retry save')).toBeTruthy();
+    else {
+      const children = screen.getByTestId('meeting-stop').props.children;
+      expect(Array.isArray(children) ? children[0] : children).toBe('Stop');
+    }
   });
 
   it.each(contents)(
@@ -142,7 +169,9 @@ describe.each([
       expect(!!screen.queryByText('Listening… speak to see the transcript.')).toBe(
         platform === 'ios' && name === 'empty',
       );
-      expect(!!screen.queryByText('Transcribing…')).toBe(platform === 'ios' && name !== 'empty');
+      expect(!!screen.queryByText(platform === 'android' ? 'Listening…' : 'Transcribing…')).toBe(
+        platform === 'ios' && name !== 'empty',
+      );
     },
   );
 

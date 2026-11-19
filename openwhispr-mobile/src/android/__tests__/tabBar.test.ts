@@ -24,16 +24,17 @@ describe('when the bar shows', () => {
     expect(isOnTabRoot(stack('index'))).toBe(true);
   });
 
-  it.each([
-    '[id]',
-    'actions',
-    'meeting-record',
-    'import-audio',
-    'voice-profiles',
-    'voice-profile',
-    'notes',
-  ])('hides on the pushed screen %s, and on any screen not yet invented', (screen) => {
-    expect(isOnTabRoot(stack('index', screen))).toBe(false);
+  it.each(['[id]', 'actions', 'meeting-record', 'import-audio', 'voice-profiles', 'voice-profile'])(
+    'hides on the pushed screen %s, and on any screen not yet invented',
+    (screen) => {
+      expect(isOnTabRoot(stack('index', screen))).toBe(false);
+    },
+  );
+
+  it('keeps the bar inside a Notes folder (Figma L1b)', () => {
+    expect(isOnTabRoot(stack('index', 'notes'))).toBe(true);
+    expect(isOnTabRoot(stack('index', 'notes', '[id]'))).toBe(false);
+    expect(isOnTabRoot({ name: '(notes)', params: { screen: 'notes' } })).toBe(true);
   });
 
   it('comes back after popping to the first screen', () => {

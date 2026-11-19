@@ -1,0 +1,476 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
+import { Text } from '@/components/ui/Text';
+import { SystemIcon } from '@/components/ui/SystemIcon';
+import type { Folder } from '@/data';
+import type { GoogleCalendarEvent } from '@/data/calendarTypes';
+import { useNotesStore } from '@/store/useNotesStore';
+import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
+import { withNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
+import { safeHaptics } from '@/lib/utils';
+import { gloss, glossPressed, home } from '../home/kit';
+import { useNavigationBarCanvas } from '../navigationBar';
+import { tabColors } from '../tabBar';
+import { useSettingsToast } from '../settings/kit';
+import {
+  Card,
+  IconButton,
+  LinkButton,
+  ListRow,
+  NewButton,
+  NoteTile,
+  NotesHeader,
+  SectionLabel,
+  edgeCard,
+  notesLook,
+} from './look';
+import {
+  defaultFolderFor,
+  notesInScope,
+  privateSpaceId,
+  setNotesScope,
+  teamSpaces,
+  useAllNotes,
+  useLibraryRevision,
+  useNotesScope,
+  type NotesScope,
+} from './library';
+import { dayOf } from './rows';
+import { FolderNameSheet, NewSheet, SpaceSheet, TodaySheet } from './sheets';
+import { eventIsNow, hideUpNext, minutesUntil, useUpNext } from './calendar';
+import { startNote, startUpload } from './start';
+import { useMeetingStart } from './meetingStart';
+import { CalendarPrompt } from './CalendarPrompt';
+import { useFolderMenu } from './folderMenu';
+import { useNotesT } from './strings';
+
+/** Figma L1 (folders first), L2 (empty), L3 (teamspace switcher) and L5–L8 (calendar). */
+export default function NotesRoot() {
+  const t = useNotesT();
+  const scroll = useRef<ScrollView>(null);
+  useScrollToTop(scroll);
+  useNavigationBarCanvas(tabColors.bar);
+  const { folders, spaces, isInitialized, initialize, createFolder } = useNotesStore();
+  useEffect(() => {
+    if (!isInitialized) initialize();
+  }, [isInitialized, initialize]);
+  const revision = useLibraryRevision();
+  const allNotes = useAllNotes(revision);
+  const scope = useNotesScope((state) => state.scope);
+  const teams = useMemo(() => teamSpaces(spaces), [spaces]);
+  const privateId = useMemo(() => privateSpaceId(), []);
+  // A teamspace that went away (left, deleted) drops the switcher back to every space.
+  useEffect(() => {
+    if (scope.kind === 'team' && !teams.some((space) => space.id === scope.spaceId))
+      setNotesScope({ kind: 'all' });
+  }, [scope, teams]);
+  const scopedNotes = useMemo(
+    () => notesInScope(allNotes, scope, privateId),
+    [allNotes, scope, privateId],
+  );
+  const latest = scopedNotes[0] ?? null;
+  // Counted from the notes themselves, so a note waiting out its Undo isn't counted.
+  const counts = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const note of allNotes)
+      if (note.folderId != null) map.set(note.folderId, (map.get(note.folderId) ?? 0) + 1);
+    return map;
+  }, [allNotes]);
+  const { refreshing, onRefresh } = useManualSyncRefresh();
+  const { next, events, now } = useUpNext();
+  const folderMenu = useFolderMenu();
+  // The Undo toast sits where New floats; New steps aside until it closes (Figma D1).
+  const undoShowing = useSettingsToast((state) => state.action != null);
+
+  const [newVisible, setNewVisible] = useState(false);
+  const [spacesVisible, setSpacesVisible] = useState(false);
+  const [todayVisible, setTodayVisible] = useState(false);
+  const [newFolderVisible, setNewFolderVisible] = useState(false);
+
+  const showPrivate = scope.kind !== 'team';
+  const shownTeams =
+    scope.kind === 'all'
+      ? teams
+      : scope.kind === 'team'
+        ? teams.filter((space) => space.id === scope.spaceId)
+        : [];
+  const title =
+    scope.kind === 'all'
+      ? t('notes')
+      : scope.kind === 'private'
+        ? t('private')
+        : (teams.find((space) => space.id === scope.spaceId)?.name ?? t('notes'));
+  const targetFolder = defaultFolderFor(scope, folders);
+  const empty = allNotes.length === 0;
+
+  const openFolder = (folder: Folder) => {
+    safeHaptics('selection');
+    router.push({
+      pathname: '/(tabs)/(notes)/notes',
+      params: withNotesRouteOwner({ folderId: String(folder.id) }),
+    });
+  };
+  const openSpace = (spaceId: number) => {
+    safeHaptics('selection');
+    router.push({
+      pathname: '/(tabs)/(notes)/notes',
+      params: withNotesRouteOwner({ spaceId: String(spaceId) }),
+    });
+  };
+  const openRecent = () => {
+    safeHaptics('selection');
+    router.push({ pathname: '/(tabs)/(notes)/notes', params: { recent: '1' } });
+  };
+  const openSearch = () => router.push('/android-notes-search');
+  const meeting = useMeetingStart({ folderId: targetFolder });
+  // R0: every way to record goes through the Start sheet; L5 and L7 name the meeting.
+  const recordEvent = (event: GoogleCalendarEvent | null | undefined) => {
+    setNewVisible(false);
+    setTodayVisible(false);
+    meeting.open(event);
+  };
+
+  if (empty && !refreshing) {
+    return (
+      <Page>
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+          <NotesHeader title={t('notes')} />
+        </View>
+        <EmptyNotes
+          onRecord={() => recordEvent(undefined)}
+          onWrite={() => startNote(targetFolder)}
+          onUpload={() => startUpload({ folderId: targetFolder })}
+        />
+        {meeting.sheet}
+      </Page>
+    );
+  }
+
+  return (
+    <Page>
+      <ScrollView
+        ref={scroll}
+        contentContainerStyle={{ padding: 16, paddingBottom: 104, gap: 12 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <NotesHeader
+          title={title}
+          onTitlePress={teams.length > 0 ? () => setSpacesVisible(true) : undefined}
+          titleHint={t('showNotesFrom')}
+          right={<IconButton icon="Search" label={t('search')} onPress={openSearch} />}
+        />
+        {/* L5 needs a connected calendar; until then (and until ×) C1 asks for one. */}
+        <CalendarPrompt />
+        {next ? (
+          <UpNextCard
+            event={next}
+            now={now}
+            more={events.filter((event) => event.id !== next.id).length}
+            onRecord={() => recordEvent(next)}
+            onMore={() => setTodayVisible(true)}
+            onHide={() => hideUpNext(next.id)}
+          />
+        ) : null}
+        {latest ? (
+          <Card>
+            <ListRow
+              icon="AudioLines"
+              title={t('recent')}
+              subtitle={`${latest.title?.trim() || t('untitled')} · ${dayOf(latest.updatedAt, t)}`}
+              onPress={openRecent}
+            />
+          </Card>
+        ) : null}
+        {showPrivate && folders.length > 0 ? (
+          <>
+            <SectionLabel label={t('private')} />
+            <Card>
+              {folders.map((folder) => (
+                <ListRow
+                  key={folder.id}
+                  icon="Folder"
+                  title={folder.name}
+                  value={String(counts.get(folder.id) ?? 0)}
+                  onPress={() => openFolder(folder)}
+                  onLongPress={() => folderMenu.open(folder, false)}
+                />
+              ))}
+            </Card>
+          </>
+        ) : null}
+        {shownTeams.map((space) => {
+          const own = useNotesStore.getState().getSpaceFolders(space.id);
+          return (
+            <React.Fragment key={space.id}>
+              <SectionLabel label={scope.kind === 'team' ? t('folders') : space.name} />
+              <Card>
+                {own.length > 0 ? (
+                  own.map((folder) => (
+                    <ListRow
+                      key={folder.id}
+                      icon="Users"
+                      title={folder.name}
+                      value={String(counts.get(folder.id) ?? 0)}
+                      onPress={() => openFolder(folder)}
+                      onLongPress={() => folderMenu.open(folder, true, space.myRole === 'admin')}
+                    />
+                  ))
+                ) : (
+                  <ListRow icon="Users" title={space.name} onPress={() => openSpace(space.id)} />
+                )}
+              </Card>
+            </React.Fragment>
+          );
+        })}
+      </ScrollView>
+      {undoShowing ? null : <NewButton onPress={() => setNewVisible(true)} bottom={16} />}
+      <NewSheet
+        visible={newVisible}
+        onClose={() => setNewVisible(false)}
+        nextEvent={next ?? null}
+        now={now}
+        onRecord={() => recordEvent(undefined)}
+        onRecordEvent={recordEvent}
+        onWrite={() => {
+          setNewVisible(false);
+          startNote(targetFolder);
+        }}
+        onUpload={() => {
+          setNewVisible(false);
+          startUpload({ folderId: targetFolder });
+        }}
+        onNewFolder={() => {
+          setNewVisible(false);
+          setNewFolderVisible(true);
+        }}
+      />
+      <SpaceSheet
+        visible={spacesVisible}
+        onClose={() => setSpacesVisible(false)}
+        scope={scope}
+        spaces={teams}
+        onPick={(picked: NotesScope) => {
+          safeHaptics('selection');
+          setNotesScope(picked);
+          setSpacesVisible(false);
+        }}
+      />
+      <TodaySheet
+        visible={todayVisible}
+        onClose={() => setTodayVisible(false)}
+        events={events}
+        now={now}
+        onRecord={recordEvent}
+      />
+      <FolderNameSheet
+        visible={newFolderVisible}
+        onClose={() => setNewFolderVisible(false)}
+        title={t('newFolder')}
+        submitLabel={t('newFolder')}
+        onSubmit={(name) =>
+          scope.kind === 'team' ? createFolder(name, scope.spaceId) : createFolder(name)
+        }
+      />
+      {folderMenu.sheets}
+      {meeting.sheet}
+    </Page>
+  );
+}
+
+function Page({ children }: { children: React.ReactNode }) {
+  return (
+    <SafeAreaView
+      edges={['top', 'left', 'right']}
+      style={{ flex: 1, backgroundColor: notesLook.canvas }}
+    >
+      {children}
+    </SafeAreaView>
+  );
+}
+
+/** L2: one big round glass mic with a soft halo, and two quiet links. */
+function EmptyNotes({
+  onRecord,
+  onWrite,
+  onUpload,
+}: {
+  onRecord: () => void;
+  onWrite: () => void;
+  onUpload: () => void;
+}) {
+  const t = useNotesT();
+  return (
+    <View
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}
+    >
+      <View
+        style={{
+          width: 168,
+          height: 168,
+          borderRadius: 84,
+          backgroundColor: 'rgba(21,75,212,0.08)',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Pressable
+          cssInterop={false}
+          accessibilityRole="button"
+          accessibilityLabel={t('tapToRecord')}
+          onPress={onRecord}
+          style={({ pressed }) => [
+            {
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+            gloss,
+            pressed && glossPressed,
+          ]}
+        >
+          <SystemIcon name="mic" mdName="Mic" size={40} color="#FFFFFF" />
+        </Pressable>
+      </View>
+      <Text
+        style={{
+          marginTop: 32,
+          fontSize: 20,
+          lineHeight: 26,
+          fontWeight: '500',
+          color: home.text,
+          textAlign: 'center',
+        }}
+      >
+        {t('tapToRecord')}
+      </Text>
+      <Text
+        style={{
+          marginTop: 12,
+          fontSize: 15,
+          lineHeight: 21,
+          color: home.secondary,
+          textAlign: 'center',
+        }}
+      >
+        {t('tapToRecordBody')}
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 16, marginTop: 24 }}>
+        <LinkButton label={t('writeNote')} onPress={onWrite} />
+        <LinkButton label={t('uploadAudio')} onPress={onUpload} />
+      </View>
+    </View>
+  );
+}
+
+/** L5: the next meeting, from an hour before it until it ends. */
+function UpNextCard({
+  event,
+  now,
+  more,
+  onRecord,
+  onMore,
+  onHide,
+}: {
+  event: GoogleCalendarEvent;
+  now: number;
+  more: number;
+  onRecord: () => void;
+  onMore: () => void;
+  onHide: () => void;
+}) {
+  const t = useNotesT();
+  const label = eventIsNow(event, now)
+    ? `${t('upNext')} · ${t('now')}`
+    : `${t('upNext')} · ${t('inMinutes', { count: minutesUntil(event, now) })}`;
+  return (
+    <View
+      style={[
+        edgeCard,
+        { flexDirection: 'row', gap: 12, paddingLeft: 14, paddingRight: 12, paddingVertical: 12 },
+      ]}
+    >
+      <NoteTile icon="Calendar" />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text
+          style={{
+            fontSize: 11,
+            lineHeight: 15,
+            fontWeight: '500',
+            letterSpacing: 0.66,
+            color: home.accent,
+          }}
+        >
+          {label.toUpperCase()}
+        </Text>
+        <Text numberOfLines={1} style={notesLook.rowTitle}>
+          {event.summary?.trim() || t('recordMeeting')}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+          {more > 0 ? (
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              onPress={onMore}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 2,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 13, lineHeight: 18, color: home.accent }}>
+                {t('moreToday', { count: more })}
+              </Text>
+              <SystemIcon
+                name="chevron.right"
+                mdName="ChevronRight"
+                size={14}
+                color={home.accent}
+              />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+      <View style={{ alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
+        <Pressable
+          cssInterop={false}
+          accessibilityRole="button"
+          accessibilityLabel={t('hideUpNext')}
+          onPress={onHide}
+          hitSlop={10}
+          style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+        >
+          <SystemIcon name="xmark" mdName="X" size={16} color={home.tertiary} />
+        </Pressable>
+        <Pressable
+          cssInterop={false}
+          accessibilityRole="button"
+          onPress={onRecord}
+          style={({ pressed }) => [
+            {
+              height: 40,
+              paddingHorizontal: 16,
+              borderRadius: 999,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+            },
+            gloss,
+            pressed && glossPressed,
+          ]}
+        >
+          <SystemIcon name="mic" mdName="Mic" size={16} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontSize: 15, lineHeight: 20, fontWeight: '600' }}>
+            {t('record')}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}

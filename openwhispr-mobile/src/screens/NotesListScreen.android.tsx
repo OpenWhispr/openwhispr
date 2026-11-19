@@ -1,4 +1,2 @@
-import { createNotesListScreen } from './NotesListScreenCore.android';
-import { androidLibraryScreens } from '@/android/libraryScreens';
-
-export default createNotesListScreen(androidLibraryScreens);
+// A folder's notes on Android (Figma L1b), also the Recent list and a folderless teamspace.
+export { default } from '@/android/notes/FolderNotes';

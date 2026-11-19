@@ -3,11 +3,9 @@ import {
   type CloudMeetingRecordingProps,
 } from './CloudMeetingRecordingView.android';
 import { LiveTranscriptList } from './LiveTranscriptList.android';
+import { notesT } from '@/android/notes/strings';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 import type { CloudMeetingStatus } from '@/hooks/useCloudMeeting';
-
-const footerPadding = (keyboardHeight: number, bottomInset: number) =>
-  keyboardHeight > 0 ? 12 : Math.max(bottomInset + 16, 24);
 
 const renderTranscript = (
   utterances: RealtimeUtterance[],
@@ -22,14 +20,13 @@ const renderTranscript = (
 );
 
 export function CloudMeetingRecording({
-  stopLabel = 'Stop',
+  stopLabel = notesT('stopAndSave'),
   ...props
 }: CloudMeetingRecordingProps & { stopLabel?: string }) {
   return (
     <CloudMeetingRecordingView
       {...props}
       stopLabel={stopLabel}
-      footerPadding={footerPadding}
       renderTranscript={renderTranscript}
     />
   );

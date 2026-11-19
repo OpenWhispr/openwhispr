@@ -22,6 +22,7 @@ import { bodyText, edge, edgeCard, look, sectionLabel } from './look';
 import { noOrphan, useSettingsT } from './strings';
 import { useNavigationBar, useNavigationBarCanvas } from '../navigationBar';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { TAB_BAR_HEIGHT } from '../tabBar';
 
 /** Figma "Android · Settings" tokens on top of the shared Home tokens. */
 export const settings = {
@@ -314,6 +315,7 @@ export function ListRow({
   subtitle,
   value,
   valueAccent,
+  valueColor,
   trailing,
   toggle,
   onPress,
@@ -330,6 +332,8 @@ export function ListRow({
   subtitle?: React.ReactNode;
   value?: string;
   valueAccent?: boolean;
+  /** A value in its own colour (amber Reconnect). */
+  valueColor?: string;
   /** Replaces the chevron. Pass null for no trailing element. */
   trailing?: React.ReactNode;
   toggle?: { value: boolean; onValueChange: (value: boolean) => void; disabled?: boolean };
@@ -381,7 +385,12 @@ export function ListRow({
       {value !== undefined && (
         <Text
           numberOfLines={1}
-          style={[settings.rowValue, { maxWidth: '45%' }, valueAccent && { color: home.accent }]}
+          style={[
+            settings.rowValue,
+            { maxWidth: '45%' },
+            valueAccent && { color: home.accent },
+            valueColor != null && { color: valueColor },
+          ]}
         >
           {value}
         </Text>
@@ -630,24 +639,32 @@ const KNOB = 24;
 type ToastTone = 'success' | 'error' | 'neutral';
 /** A snackbar's action. `onClose` runs once it closes without the action: timed out or replaced. */
 type ToastAction = { label: string; onPress: () => void; onClose: () => void };
+/** `durationMs` overrides the default (5 s with an action); `aboveTabBar` lifts it over the tab bar. */
+type ToastOptions = { durationMs?: number; aboveTabBar?: boolean };
 export const useSettingsToast = create<{
   message: string;
   tone: ToastTone;
   id: number;
   action?: ToastAction;
+  options?: ToastOptions;
 }>(() => ({ message: '', tone: 'neutral', id: 0 }));
 /**
  * Confirmations are a dark glass pill at the bottom of the screen. With an action it is a 5 s
  * snackbar (Undo); a newer toast closes the one showing.
  */
-export function showToast(message: string, tone: ToastTone = 'success', action?: ToastAction) {
+export function showToast(
+  message: string,
+  tone: ToastTone = 'success',
+  action?: ToastAction,
+  options?: ToastOptions,
+) {
   useSettingsToast.getState().action?.onClose();
-  useSettingsToast.setState((state) => ({ message, tone, action, id: state.id + 1 }));
+  useSettingsToast.setState((state) => ({ message, tone, action, options, id: state.id + 1 }));
 }
 
 /** Mounted once at the root, so a toast survives the screen that raised it going away. */
 export function SettingsToastHost() {
-  const { message, tone, id, action } = useSettingsToast();
+  const { message, tone, id, action, options } = useSettingsToast();
   const { inset } = useNavigationBar();
   const reduceMotion = useReduceMotion();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -673,7 +690,7 @@ export function SettingsToastHost() {
         useSettingsToast.getState().action?.onClose();
         useSettingsToast.setState({ action: undefined });
       },
-      action ? 5000 : 2400,
+      options?.durationMs ?? (action ? 5000 : 2400),
     );
     return () => clearTimeout(timer);
     // The action belongs to this id; a change of id is what restarts the timer.
@@ -684,7 +701,13 @@ export function SettingsToastHost() {
     // 16 dp above the gesture handle or the button bar, whichever the phone has.
     <View
       pointerEvents="box-none"
-      style={{ position: 'absolute', left: 0, right: 0, bottom: inset, alignItems: 'center' }}
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: inset + (options?.aboveTabBar ? TAB_BAR_HEIGHT : 0),
+        alignItems: 'center',
+      }}
     >
       <Animated.View
         pointerEvents={action ? 'auto' : 'none'}
@@ -702,10 +725,11 @@ export function SettingsToastHost() {
             paddingRight: action ? 4 : 16,
             paddingVertical: action ? 4 : 10,
             borderRadius: action ? 14 : 999,
-            backgroundColor: 'rgba(28,27,25,0.92)',
+            backgroundColor: action ? '#1C1B19' : 'rgba(28,27,25,0.92)',
             borderTopWidth: 1,
             borderTopColor: 'rgba(255,255,255,0.14)',
-            boxShadow: home.floatingShadow,
+            // 12 blur, 4 down: the 16 dp margin holds the whole shadow.
+            boxShadow: '0px 4px 12px rgba(0,0,0,0.18)',
           },
           action && { alignSelf: 'stretch' },
         ]}

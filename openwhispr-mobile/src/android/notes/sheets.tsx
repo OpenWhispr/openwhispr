@@ -1,0 +1,460 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Pressable, TextInput, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
+import type { GoogleCalendarEvent } from '@/data/calendarTypes';
+import type { Space } from '@/data/spacesTypes';
+import { AppFont } from '@/lib/fonts';
+import { home } from '../home/kit';
+import { BottomSheet } from '../settings/kit';
+import { edgeField } from '../settings/look';
+import { GlassButton } from '../processingFable/look';
+import { Card, LinkButton, ListRow, NoteTile, notesLook } from './look';
+import { eventIsNow, eventTimeRange, minutesUntil } from './calendar';
+import { timeOf } from './rows';
+import { useNotesT } from './strings';
+import type { NotesScope } from './library';
+import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
+
+/** A row with a tile, a title and a line under it; used by every sheet here. */
+function SheetRow({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  tint,
+}: {
+  icon: LucideIconName;
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+  tint?: boolean;
+}) {
+  return (
+    <Pressable
+      cssInterop={false}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingLeft: 14,
+        paddingRight: 12,
+        paddingVertical: 12,
+        minHeight: 64,
+        backgroundColor: pressed ? 'rgba(0,0,0,0.04)' : 'transparent',
+      })}
+    >
+      {tint ? (
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            backgroundColor: notesLook.selFill,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <SystemIcon name="circle" mdName={icon} size={20} color={home.accent} />
+        </View>
+      ) : (
+        <NoteTile icon={icon} />
+      )}
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={notesLook.rowTitle}>{title}</Text>
+        {subtitle ? <Text style={notesLook.rowSub}>{subtitle}</Text> : null}
+      </View>
+    </Pressable>
+  );
+}
+
+/** N1 (and L8 with a meeting coming up): the three ways in, and New folder under them. */
+export function NewSheet({
+  visible,
+  onClose,
+  onRecord,
+  onRecordEvent,
+  onWrite,
+  onUpload,
+  onNewFolder,
+  nextEvent,
+  now,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onRecord: () => void;
+  onRecordEvent: (event: GoogleCalendarEvent) => void;
+  onWrite: () => void;
+  onUpload: () => void;
+  onNewFolder?: () => void;
+  nextEvent: GoogleCalendarEvent | null;
+  now: number;
+}) {
+  const t = useNotesT();
+  const eventTitle = nextEvent?.summary?.trim() || t('recordMeeting');
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title={t('new')}>
+      <Card>
+        {nextEvent ? (
+          <SheetRow
+            tint
+            icon="Mic"
+            title={t('recordEvent', { title: `“${eventTitle}”` })}
+            subtitle={
+              eventIsNow(nextEvent, now)
+                ? `${t('now')} · ${eventTimeRange(nextEvent)}`
+                : `${timeOf(nextEvent.startAt)} · ${t('inMinutes', {
+                    count: minutesUntil(nextEvent, now),
+                  }).toLowerCase()}`
+            }
+            onPress={() => onRecordEvent(nextEvent)}
+          />
+        ) : null}
+        <SheetRow
+          icon="Mic"
+          title={t(nextEvent ? 'recordAnother' : 'recordMeeting')}
+          subtitle={t('recordMeetingBody')}
+          onPress={onRecord}
+        />
+        <SheetRow
+          icon="SquarePen"
+          title={t('writeNote')}
+          subtitle={t('writeNoteBody')}
+          onPress={onWrite}
+        />
+        <SheetRow
+          icon="FileUp"
+          title={t('uploadAudio')}
+          subtitle={t('uploadAudioBody')}
+          onPress={onUpload}
+        />
+      </Card>
+      {onNewFolder ? (
+        <View style={{ paddingHorizontal: 4 }}>
+          <LinkButton label={t('newFolder')} icon="FolderPlus" onPress={onNewFolder} />
+        </View>
+      ) : null}
+    </BottomSheet>
+  );
+}
+
+/** L3: "Show notes from" — All spaces (the default), Private, then each teamspace. */
+export function SpaceSheet({
+  visible,
+  onClose,
+  scope,
+  spaces,
+  onPick,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  scope: NotesScope;
+  spaces: Space[];
+  onPick: (scope: NotesScope) => void;
+}) {
+  const t = useNotesT();
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title={t('showNotesFrom')}>
+      <Card>
+        <ListRow
+          icon="Folder"
+          iconColor={home.secondary}
+          title={t('allSpaces')}
+          subtitle={t('allSpacesBody')}
+          chevron={false}
+          selected={scope.kind === 'all'}
+          onPress={() => onPick({ kind: 'all' })}
+        />
+        <ListRow
+          icon="Lock"
+          iconColor={home.secondary}
+          title={t('private')}
+          subtitle={t('onlyYou')}
+          chevron={false}
+          selected={scope.kind === 'private'}
+          onPress={() => onPick({ kind: 'private' })}
+        />
+        {spaces.map((space) => (
+          <ListRow
+            key={space.id}
+            icon="Users"
+            iconColor={home.secondary}
+            title={space.name}
+            subtitle={space.memberCount ? t('people', { count: space.memberCount }) : undefined}
+            chevron={false}
+            selected={scope.kind === 'team' && scope.spaceId === space.id}
+            onPress={() => onPick({ kind: 'team', spaceId: space.id })}
+          />
+        ))}
+      </Card>
+    </BottomSheet>
+  );
+}
+
+/** L7: today's meetings, each with Record. */
+export function TodaySheet({
+  visible,
+  onClose,
+  events,
+  now,
+  onRecord,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  events: GoogleCalendarEvent[];
+  now: number;
+  onRecord: (event: GoogleCalendarEvent) => void;
+}) {
+  const t = useNotesT();
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title={t('todaySheet')}>
+      <Card>
+        {events.map((event) => {
+          const guests = (parseCalendarParticipants(event.attendeesJson) ?? []).filter(
+            (person) => !person.resource,
+          ).length;
+          const when = eventIsNow(event, now)
+            ? t('now')
+            : Date.parse(event.startAt) - now <= 60 * 60 * 1000
+              ? `${timeOf(event.startAt)} · ${t('inMinutes', {
+                  count: minutesUntil(event, now),
+                }).toLowerCase()}`
+              : timeOf(event.startAt);
+          return (
+            <View
+              key={event.id}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingLeft: 16,
+                paddingRight: 8,
+                paddingVertical: 10,
+                minHeight: 64,
+              }}
+            >
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text numberOfLines={1} style={notesLook.rowTitle}>
+                  {event.summary?.trim() || t('recordMeeting')}
+                </Text>
+                <Text style={notesLook.rowSub}>
+                  {guests > 1 ? `${when} · ${t('people', { count: guests })}` : when}
+                </Text>
+              </View>
+              <Pressable
+                cssInterop={false}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('record')} ${event.summary ?? ''}`}
+                onPress={() => onRecord(event)}
+                style={({ pressed }) => ({
+                  minHeight: 44,
+                  paddingHorizontal: 12,
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Text style={{ color: home.accent, fontSize: 16, fontWeight: '500' }}>
+                  {t('record')}
+                </Text>
+              </Pressable>
+            </View>
+          );
+        })}
+      </Card>
+    </BottomSheet>
+  );
+}
+
+/** New folder and Rename folder: one field and a glass button. */
+export function FolderNameSheet({
+  visible,
+  onClose,
+  initialName,
+  title,
+  submitLabel,
+  onSubmit,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  initialName?: string;
+  title: string;
+  submitLabel: string;
+  onSubmit: (name: string) => void;
+}) {
+  const [name, setName] = useState(initialName ?? '');
+  const input = useRef<TextInput>(null);
+  useEffect(() => {
+    if (!visible) return;
+    setName(initialName ?? '');
+    const timer = setTimeout(() => input.current?.focus(), 280);
+    return () => clearTimeout(timer);
+  }, [visible, initialName]);
+  const trimmed = name.trim();
+  const submit = () => {
+    if (!trimmed) return;
+    onSubmit(trimmed);
+    onClose();
+  };
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title={title}>
+      <TextInput
+        ref={input}
+        value={name}
+        onChangeText={setName}
+        placeholder={title}
+        placeholderTextColor={home.tertiary}
+        returnKeyType="done"
+        onSubmitEditing={submit}
+        autoCapitalize="sentences"
+        style={[
+          edgeField,
+          {
+            minHeight: 48,
+            paddingHorizontal: 14,
+            fontSize: 17,
+            color: home.text,
+            fontFamily: AppFont.regular,
+          },
+        ]}
+      />
+      <GlassButton label={submitLabel} onPress={submit} disabled={!trimmed} />
+    </BottomSheet>
+  );
+}
+
+/**
+ * R0: what will be recorded and where it runs, then one glass Start recording. The meeting
+ * row names the calendar event found (tap to pick another or none); Change goes to Processing.
+ */
+export function StartSheet({
+  visible,
+  onClose,
+  events,
+  event,
+  onPickEvent,
+  onDevice,
+  needsModel,
+  now,
+  onChange,
+  onStart,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  events: GoogleCalendarEvent[];
+  event: GoogleCalendarEvent | null;
+  onPickEvent: (event: GoogleCalendarEvent | null) => void;
+  onDevice: boolean;
+  needsModel: boolean;
+  now: number;
+  onChange: () => void;
+  onStart: () => void;
+}) {
+  const t = useNotesT();
+  const [picking, setPicking] = useState(false);
+  useEffect(() => {
+    if (!visible) setPicking(false);
+  }, [visible]);
+  const people = event
+    ? (parseCalendarParticipants(event.attendeesJson) ?? []).filter((person) => !person.resource)
+        .length
+    : 0;
+  const when = event
+    ? eventIsNow(event, now)
+      ? t('now')
+      : `${timeOf(event.startAt)} · ${t('inMinutes', { count: minutesUntil(event, now) }).toLowerCase()}`
+    : '';
+  if (picking)
+    return (
+      <BottomSheet
+        visible={visible}
+        onClose={onClose}
+        title={t('pickEvent')}
+        onBack={() => setPicking(false)}
+      >
+        <Card>
+          {events.map((value) => (
+            <ListRow
+              key={value.id}
+              icon="Calendar"
+              title={value.summary?.trim() || t('recordMeeting')}
+              subtitle={eventIsNow(value, now) ? t('now') : timeOf(value.startAt)}
+              chevron={false}
+              selected={event?.id === value.id}
+              onPress={() => {
+                onPickEvent(value);
+                setPicking(false);
+              }}
+            />
+          ))}
+          <ListRow
+            icon="CalendarX"
+            iconColor={home.secondary}
+            title={t('noEvent')}
+            subtitle={t('noEventBody')}
+            chevron={false}
+            selected={event == null}
+            onPress={() => {
+              onPickEvent(null);
+              setPicking(false);
+            }}
+          />
+        </Card>
+      </BottomSheet>
+    );
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title={t('recordMeeting')}>
+      <Card>
+        {events.length > 0 ? (
+          <ListRow
+            icon="Calendar"
+            title={event ? event.summary?.trim() || t('recordMeeting') : t('noEvent')}
+            subtitle={
+              event
+                ? [when, 'Google Calendar', people > 1 ? t('people', { count: people }) : null]
+                    .filter(Boolean)
+                    .join(' · ')
+                : t('noEventBody')
+            }
+            onPress={() => setPicking(true)}
+          />
+        ) : null}
+        <ListRow
+          icon={onDevice ? 'Smartphone' : 'Cloud'}
+          title={t(onDevice ? 'onPhone' : 'liveOnCloud')}
+          subtitle={t(onDevice ? 'onPhoneBody' : 'liveOnCloudBody')}
+          chevron={false}
+          right={
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              onPress={onChange}
+              hitSlop={8}
+              style={({ pressed }) => ({ paddingHorizontal: 4, opacity: pressed ? 0.6 : 1 })}
+            >
+              <Text style={{ color: home.accent, fontSize: 16, fontWeight: '600' }}>
+                {t('change')}
+              </Text>
+            </Pressable>
+          }
+        />
+        {onDevice && needsModel ? (
+          <ListRow
+            icon="Download"
+            title={t('needsSpeechModel')}
+            subtitle={t('needsSpeechModelBody')}
+            onPress={onChange}
+          />
+        ) : null}
+      </Card>
+      <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary }}>
+        {t('startFooter')}
+      </Text>
+      <GlassButton
+        label={t('startRecording')}
+        onPress={onStart}
+        disabled={onDevice && needsModel}
+      />
+    </BottomSheet>
+  );
+}
