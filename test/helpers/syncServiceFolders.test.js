@@ -1349,7 +1349,7 @@ const rewindFolderCursor = () =>
 const relocatedToasts = () =>
   browserWindow.electronAPI.syncEvents.filter((event) => event.name === "note-relocated");
 
-test("another device's folder delete keeps unsent notes in Personal and removes clean ones", async (t) => {
+test("another device's folder delete keeps every note until the note's own delete arrives", async (t) => {
   const ctx = await setupPersonal(t);
   if (!ctx) return;
   const { db, cloud } = ctx;
@@ -1361,6 +1361,7 @@ test("another device's folder delete keeps unsent notes in Personal and removes 
   const cloudFolderId = folderByName(db, "Client").cloud_id;
   assert.ok(cloudFolderId);
   const editedClientId = noteById(db, edited.id).client_note_id;
+  const editedCloudId = noteById(db, edited.id).cloud_id;
 
   // Offline edits and a brand new note, then the delete lands from elsewhere.
   db.updateNote(edited.id, { title: "Edited offline" });
@@ -1371,29 +1372,123 @@ test("another device's folder delete keeps unsent notes in Personal and removes 
   assert.equal(await service.pullFolders(), true);
 
   assert.equal(folderByName(db, "Client"), null);
-  assert.equal(noteById(db, clean.id), null);
   const privateSpace = db.getPrivateSpaceId();
-  for (const note of [edited, unsent]) {
+  for (const note of [clean, edited, unsent]) {
     const kept = noteById(db, note.id);
+    assert.equal(kept.deleted_at, null, `${note.title} waits for its own delete`);
     assert.equal(kept.space_id, privateSpace);
     assert.equal(kept.folder_id, null);
-    assert.equal(kept.cloud_id, null);
-    assert.equal(kept.sync_status, "pending");
   }
-  assert.notEqual(noteById(db, edited.id).client_note_id, editedClientId);
-  assert.deepEqual(
-    relocatedToasts()
-      .map((event) => event.payload.title)
-      .sort(),
-    ["Edited offline", "Unsent"]
-  );
+  assert.equal(noteById(db, edited.id).client_note_id, editedClientId, "nothing is forked");
+  assert.equal(noteById(db, edited.id).cloud_id, editedCloudId);
+  assert.equal(relocatedToasts().length, 0);
 
-  // The forks go up as new notes; the cascade's tombstone can't reach them.
+  // The note pull brings the server's own tombstones: the clean copy goes, the
+  // unsent edit survives as a new note, and the never-sent note goes up unfiled.
   await service.syncAll(true);
-  assert.equal(noteById(db, edited.id).title, "Edited offline");
-  assert.ok(noteById(db, edited.id).cloud_id);
-  assert.equal(noteById(db, edited.id).sync_status, "synced");
+  await service.syncAll(true);
+  assert.equal(noteById(db, clean.id), null);
+  const fork = noteById(db, edited.id);
+  assert.equal(fork.title, "Edited offline");
+  assert.notEqual(fork.client_note_id, editedClientId);
+  assert.ok(fork.cloud_id);
+  assert.equal(fork.sync_status, "synced");
+  assert.equal(cloud.note(fork.cloud_id).deleted_at, null);
   assert.ok(noteById(db, unsent.id).cloud_id);
+  assert.equal(noteById(db, unsent.id).sync_status, "synced");
+});
+
+test("another device's folder delete keeps a note the server holds unfiled, edits included", async (t) => {
+  const ctx = await setupPersonal(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  // An older build uploaded the note with no folder; this device still files it.
+  const folder = db.createFolder("Client").folder;
+  const cloudFolder = cloud.seedFolder({
+    client_folder_id: folder.client_folder_id,
+    name: "Client",
+    is_default: false,
+    sort_order: 1,
+  });
+  db.markFolderSynced(folder.id, cloudFolder.id);
+  const note = db.saveNote("Unfiled up there", "body", "personal", null, null, folder.id).note;
+  const cloudNote = cloud.seedNote({ client_note_id: note.client_note_id, title: note.title });
+  db.markNoteSynced(note.id, cloudNote.id, cloudNote.updated_at);
+  db.updateNote(note.id, { title: "Edited here" });
+  // The edit comes after the seeded cloud note, or the cloud rejects it as stale.
+  db.db.prepare("UPDATE notes SET updated_at = '2027-01-01 00:00:00'").run();
+  await fromElsewhere(cloud, "DELETE", "/api/folders/delete", { id: cloudFolder.id });
+  rewindFolderCursor();
+
+  await (await newSyncService(t)).syncAll(true);
+
+  const kept = noteById(db, note.id);
+  assert.equal(kept.deleted_at, null);
+  assert.equal(kept.folder_id, null);
+  assert.equal(kept.cloud_id, cloudNote.id, "the same cloud note, not a copy");
+  assert.equal(kept.sync_status, "synced");
+  assert.equal(cloud.note(cloudNote.id).title, "Edited here");
+  assert.equal(cloud.note(cloudNote.id).deleted_at, null);
+  assert.equal(cloud.notes().length, 1, "no duplicate");
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count, 1);
+});
+
+test("a note created into a folder the server already deleted is kept", async (t) => {
+  const ctx = await setupPersonal(t, { userId: TEAM_ACCOUNT });
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const service = await newSyncService(t);
+  const folder = db.createFolder("Client").folder;
+  await service.syncAll(true);
+  const cloudFolderId = folderByName(db, "Client").cloud_id;
+  await fromElsewhere(cloud, "DELETE", "/api/folders/delete", { id: cloudFolderId });
+  rewindFolderCursor();
+  // A debounced push sends it before any pull: the server drops the dead folder.
+  const note = db.saveNote("Late", "body", "personal", null, null, folder.id).note;
+  await service.pushPendingNotes();
+  const cloudNoteId = noteById(db, note.id).cloud_id;
+  assert.equal(cloud.note(cloudNoteId).folder_id, null);
+  assert.equal(noteById(db, note.id).sync_status, "folder_link_pending");
+
+  await service.syncAll(true);
+
+  const kept = noteById(db, note.id);
+  assert.equal(kept.deleted_at, null);
+  assert.equal(kept.folder_id, null);
+  assert.equal(kept.cloud_id, cloudNoteId);
+  assert.equal(kept.sync_status, "synced");
+  assert.equal(cloud.note(cloudNoteId).deleted_at, null);
+  assert.equal(cloud.notes().length, 1);
+});
+
+test("a note uploaded while its folder got its first cloud id sends the link after", async (t) => {
+  const ctx = await setupPersonal(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const service = await newSyncService(t);
+  const folder = db.createFolder("Client").folder;
+  const note = db.saveNote("Racing", "body", "personal", null, null, folder.id).note;
+  // Past its wait, the note uploads without the folder.
+  backdateFolderWait(folder.client_folder_id, 31);
+  t.mock.method(console, "warn", () => {});
+  const api = browserWindow.electronAPI;
+  const request = api.cloudApiRequest;
+  t.mock.method(api, "cloudApiRequest", async (options) => {
+    const response = await request(options);
+    // The folder's create and acknowledgement land while the note's is in flight.
+    if (options.path.startsWith("/api/notes/batch-create")) await service.pushPendingFolders();
+    return response;
+  });
+
+  await service.pushPendingNotes();
+  const cloudFolderId = folderByName(db, "Client").cloud_id;
+  assert.ok(cloudFolderId);
+  assert.equal(noteById(db, note.id).sync_status, "folder_link_pending");
+
+  await service.pushPendingNotes();
+  assert.equal(cloud.note(noteById(db, note.id).cloud_id).folder_id, cloudFolderId);
+  assert.equal(noteById(db, note.id).sync_status, "synced");
+  assert.equal(noteById(db, note.id).folder_id, folder.id);
 });
 
 test("this device's own folder delete, seen again in a pull, resurrects nothing", async (t) => {
@@ -1419,7 +1514,7 @@ test("this device's own folder delete, seen again in a pull, resurrects nothing"
   assert.equal(relocatedToasts().length, 0);
 });
 
-test("a teammate's team folder delete keeps unsent team notes in Personal on a team-only pass", async (t) => {
+test("a teammate's team folder delete keeps unsent team notes in the team on a team-only pass", async (t) => {
   const ctx = await setupPersonal(t);
   if (!ctx) return;
   const { db, cloud } = ctx;
@@ -1434,13 +1529,13 @@ test("a teammate's team folder delete keeps unsent team notes in Personal on a t
   assert.equal(await service.pullFolders(true), true);
 
   const kept = noteById(db, unsent.id);
-  assert.equal(kept.space_id, db.getPrivateSpaceId());
+  assert.equal(kept.space_id, quarter.space_id);
   assert.equal(kept.folder_id, null);
   assert.equal(folderByName(db, "Q1"), null);
   assert.ok(folderByName(db, "Roadmap"));
 });
 
-test("a pulled folder delete that can't keep its unsent notes parks the row and holds the cursor", async (t) => {
+test("a pulled folder delete needs no Private space and holds no cursor back", async (t) => {
   const ctx = await setupPersonal(t);
   if (!ctx) return;
   const { db, cloud } = ctx;
@@ -1452,13 +1547,12 @@ test("a pulled folder delete that can't keep its unsent notes parks the row and 
   await fromElsewhere(cloud, "DELETE", "/api/folders/delete", { id: cloudFolderId });
   rewindFolderCursor();
   const stamp = browserLocalStorage.getItem("lastSyncedAt.folders");
-  t.mock.method(console, "warn", () => {});
-  t.mock.method(db, "_forkTargetSpaceId", () => null);
+  t.mock.method(db, "_forkPrivateSpaceId", () => null);
 
-  assert.equal(await service.pullFolders(), false);
+  assert.equal(await service.pullFolders(), true);
 
-  assert.equal(noteById(db, unsent.id).folder_id, folder.id);
-  assert.equal(browserLocalStorage.getItem("lastSyncedAt.folders"), stamp);
+  assert.equal(noteById(db, unsent.id).folder_id, null);
+  assert.notEqual(browserLocalStorage.getItem("lastSyncedAt.folders"), stamp);
 });
 
 test("a denied delete restores a never-synced subfolder, and never sends it a DELETE", async (t) => {

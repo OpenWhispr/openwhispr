@@ -10890,6 +10890,27 @@ class DatabaseManager {
     }
   }
 
+  // What a push acknowledgement settles a note as. A response naming another
+  // folder than the row's, though that folder has a cloud id, means the server
+  // holds the note elsewhere: it cleared a folder it had deleted or found out of
+  // scope, or the folder got its cloud id while the push was in flight (after its
+  // own acknowledgement queued the links of synced rows). The link goes up again.
+  _settledNoteSyncStatus(current, cloudNote) {
+    if (
+      current.folder_id == null ||
+      !cloudNote ||
+      !Object.prototype.hasOwnProperty.call(cloudNote, "folder_id")
+    ) {
+      return "synced";
+    }
+    const folderCloudId = this.db
+      .prepare("SELECT cloud_id FROM folders WHERE id = ?")
+      .get(current.folder_id)?.cloud_id;
+    return folderCloudId && (cloudNote.folder_id ?? null) !== folderCloudId
+      ? FOLDER_LINK_PENDING
+      : "synced";
+  }
+
   markNoteSynced(id, cloudId, cloudUpdatedAt = null, ownerUserId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -11270,7 +11291,7 @@ class DatabaseManager {
           this.db
             .prepare(
               `UPDATE notes
-               SET sync_status = 'synced', cloud_id = ?, left_team = 0,
+               SET sync_status = ?, cloud_id = ?, left_team = 0,
                    cloud_updated_at = ?, cloud_revision = ?,
                    owner_user_id = ?,
                    content_sync_operation = NULL, enhanced_content_sync_operation = NULL,
@@ -11278,6 +11299,7 @@ class DatabaseManager {
                WHERE id = ? AND client_note_id = ?`
             )
             .run(
+              this._settledNoteSyncStatus(current, cloudNote),
               cloudId,
               cloudUpdatedAt,
               hasNoteRevision(cloudRevision) ? cloudRevision : null,
@@ -11401,12 +11423,13 @@ class DatabaseManager {
           const result = this.db
             .prepare(
               `UPDATE notes
-               SET sync_status = 'synced', left_team = 0, content_sync_operation = NULL, enhanced_content_sync_operation = NULL,
+               SET sync_status = ?, left_team = 0, content_sync_operation = NULL, enhanced_content_sync_operation = NULL,
                    cloud_updated_at = ?, cloud_revision = ?,
                    owner_user_id = COALESCE(?, owner_user_id)
                WHERE id = ? AND client_note_id = ? AND cloud_id = ?`
             )
             .run(
+              this._settledNoteSyncStatus(current, cloudNote),
               nextCloudUpdatedAt,
               incomingRevision,
               ownerUserId,
@@ -12040,40 +12063,30 @@ class DatabaseManager {
     });
   }
 
-  // preserveDirtyNotes is for a tombstone from another device or teammate:
-  // nobody here chose that delete, so unsent notes survive as private forks. A
-  // delete this device made takes its held rows with it. Refused when there is
-  // unsent work and no private space to keep it in.
+  // preserveDirtyNotes is for a tombstone from another device or teammate.
+  // Nobody here chose that delete, and a folder's tombstone never decides a
+  // note's fate: the server tombstones exactly the notes it held in the folder,
+  // and those tombstones arrive in the same pass's note pull, where a clean copy
+  // goes and an unsent edit survives as a new note. Every note of the folder is
+  // unfiled in place, so one the server holds elsewhere (uploaded unfiled, or
+  // with its folder cleared) stays. A delete this device made takes its held
+  // rows with it.
   hardDeleteFolder(id, { preserveDirtyNotes = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const folder = this._getFolderInAccountScope(id, { pendingDelete: true });
       if (!folder) return { success: false, id, error: "Folder not found" };
-      const preserving = preserveDirtyNotes && !folder.deleted_at && !this._isFolderDeleteHeld(id);
-      // The fork target is looked up only when there is something to keep,
-      // since finding it can make the Private row.
-      let forkSpaceId = null;
-      if (preserving) {
-        const accountScope = this._accountScopeCondition("notes");
-        const unsent = this.db
-          .prepare(
-            `SELECT 1 FROM notes WHERE folder_id = ? AND ${NOTE_HAS_UNSENT_WORK} AND ${accountScope.sql}`
-          )
-          .get(id, ...accountScope.params);
-        if (unsent) {
-          forkSpaceId = this._forkTargetSpaceId(folder.space_id);
-          if (forkSpaceId == null) return { success: false, id, error: "Private space is missing" };
-        }
-      }
+      const pulledDelete =
+        preserveDirtyNotes && !folder.deleted_at && !this._isFolderDeleteHeld(id);
       const result = this.db.transaction(() => {
         const removed = [...this._heldUnsyncedSubfolders(id), folder].map((target) =>
-          this._removeFolderRows(target, target.id === id && preserving, forkSpaceId)
+          this._removeFolderRows(target, pulledDelete)
         );
         return {
           changes: removed[removed.length - 1].changes,
           noteIds: removed.flatMap((rows) => rows.noteIds),
           relocatedNotes: removed.flatMap((rows) => rows.relocatedNotes),
-          preservedNotes: removed.flatMap((rows) => rows.preservedNotes),
+          preservedNotes: [],
           unfiledNotes: removed.flatMap((rows) => rows.unfiledNotes),
         };
       })();
@@ -12085,18 +12098,35 @@ class DatabaseManager {
     }
   }
 
-  // Where a container's unsent notes fork: a Private row stays in its own
-  // space; a team row goes to its account's Private for the teamspace's
-  // workspace, else the default Private (_forkPrivateSpaceId).
-  _forkTargetSpaceId(spaceId) {
-    const space = this.db
-      .prepare("SELECT kind, workspace_id FROM spaces WHERE id = ?")
-      .get(spaceId);
-    return space?.kind === "private" ? spaceId : this._forkPrivateSpaceId(space?.workspace_id);
+  // A pulled folder delete's notes, unfiled in place with their identity and
+  // sync state: live notes, and tombstones whose own delete still has to go up.
+  // A link still owed to the folder is moot once it's gone. Rows held by this
+  // device's own delete stay with it. Returns the live notes.
+  _unfileNotesOfPulledFolderDelete(folderId) {
+    const accountScope = this._accountScopeCondition("notes");
+    const noteIds = this.db
+      .prepare(
+        `SELECT id FROM notes
+         WHERE folder_id = ? AND sync_status IS NOT 'folder_delete_pending' AND ${accountScope.sql}`
+      )
+      .all(folderId, ...accountScope.params)
+      .map((row) => row.id);
+    const unfile = this.db.prepare(
+      `UPDATE notes SET folder_id = NULL,
+         sync_status = CASE WHEN sync_status = '${FOLDER_LINK_PENDING}' THEN 'synced' ELSE sync_status END
+       WHERE id = ?`
+    );
+    const getNote = this.db.prepare("SELECT * FROM notes WHERE id = ?");
+    return noteIds
+      .map((noteId) => {
+        unfile.run(noteId);
+        return getNote.get(noteId);
+      })
+      .filter((note) => !note.deleted_at);
   }
 
   // Runs inside hardDeleteFolder's transaction.
-  _removeFolderRows(folder, pulledDelete, forkSpaceId) {
+  _removeFolderRows(folder, pulledDelete) {
     const { id } = folder;
     const childNotes = "SELECT id FROM notes WHERE folder_id = ?";
     const heldNotes =
@@ -12104,23 +12134,15 @@ class DatabaseManager {
     const heldConversations =
       "SELECT entity_id FROM optimistic_folder_delete_rows WHERE folder_id = ? AND entity_type = 'conversation'";
     const released = this._releaseOutOfScopeChildNotes(id);
-    const preservedNotes =
-      pulledDelete && forkSpaceId != null
-        ? this._forkNotesToPrivateSpace(
-            this.db
-              .prepare(`SELECT id FROM notes WHERE folder_id = ? AND ${NOTE_HAS_UNSENT_WORK}`)
-              .all(id)
-              .map((row) => row.id),
-            forkSpaceId
-          )
-        : [];
-    const unfiledNotes = pulledDelete ? this._unfileNotesWithoutFolderLink(folder) : [];
+    const unfiledNotes = pulledDelete ? this._unfileNotesOfPulledFolderDelete(id) : [];
     const accountScope = this._accountScopeCondition("notes");
     const noteIds = this.db
       .prepare(`${childNotes} AND ${accountScope.sql}`)
       .all(id, ...accountScope.params)
       .map((row) => row.id);
-    if (!folder.cloud_id && !pulledDelete) this._tombstoneSentNotesOfUnsyncedFolder(id);
+    // After a pulled delete's unfiling, only rows held by this device's own
+    // delete are left here.
+    if (!folder.cloud_id) this._tombstoneSentNotesOfUnsyncedFolder(id);
     // Note chats normally have note_id only. Retire them while the child
     // rows still identify which chats belong to this folder cleanup, then
     // handle independently folder-scoped conversations.
@@ -12165,8 +12187,7 @@ class DatabaseManager {
     return {
       changes,
       noteIds,
-      relocatedNotes: [...released, ...preservedNotes, ...unfiledNotes],
-      preservedNotes,
+      relocatedNotes: [...released, ...unfiledNotes],
       unfiledNotes,
     };
   }

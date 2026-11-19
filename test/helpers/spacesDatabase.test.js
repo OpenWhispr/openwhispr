@@ -3513,7 +3513,7 @@ function syncedNote(db, title, folderId, overrides = {}) {
 
 const rawFolder = (db, id) => db.db.prepare("SELECT * FROM folders WHERE id = ?").get(id) ?? null;
 
-test("a pulled folder delete keeps unsent notes as private forks and removes clean ones", (t) => {
+test("a pulled folder delete unfiles every note in place and removes only the folder", (t) => {
   const db = createDb(t);
   if (!db) return;
   const folder = db.createFolder("Client").folder;
@@ -3521,33 +3521,51 @@ test("a pulled folder delete keeps unsent notes as private forks and removes cle
   const edited = syncedNote(db, "Edited", folder.id, { sync_status: "pending" });
   const unsent = db.saveNote("Unsent", "only here", "personal", null, null, folder.id).note;
   const clean = syncedNote(db, "Clean", folder.id);
+  const linking = syncedNote(db, "Linking", folder.id, { sync_status: "folder_link_pending" });
+  const deleted = syncedNote(db, "Deleted", folder.id);
+  db.deleteNote(deleted.id);
   const editedChat = db.createAgentConversation("Edited chat", edited.id);
   const cleanChat = db.createAgentConversation("Clean chat", clean.id);
 
   const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
 
   assert.equal(result.success, true);
-  assert.deepEqual(result.noteIds, [clean.id]);
-  assert.deepEqual(result.preservedNotes.map((note) => note.id).sort(), [edited.id, unsent.id]);
-  assert.deepEqual(result.relocatedNotes.map((note) => note.id).sort(), [edited.id, unsent.id]);
-  assert.equal(rawNote(db, clean.id), null);
+  assert.deepEqual(result.noteIds, [], "no note's file goes with the folder");
+  assert.deepEqual(result.preservedNotes, []);
+  const kept = [edited, unsent, clean, linking].map((note) => note.id).sort();
+  assert.deepEqual(result.unfiledNotes.map((note) => note.id).sort(), kept);
+  assert.deepEqual(result.relocatedNotes.map((note) => note.id).sort(), kept);
   assert.equal(rawFolder(db, folder.id), null);
 
-  const fork = db.getNote(edited.id);
-  assert.equal(fork.space_id, db.getPrivateSpaceId());
-  assert.equal(fork.folder_id, null);
-  assert.equal(fork.cloud_id, null);
-  assert.equal(fork.sync_status, "pending");
-  assert.notEqual(fork.client_note_id, edited.client_note_id);
-  assert.equal(fork.content, "Edited body");
-  assert.equal(db.getNote(unsent.id).folder_id, null);
+  for (const [note, status] of [
+    [edited, "pending"],
+    [unsent, "pending"],
+    [clean, "synced"],
+    [linking, "synced"],
+  ]) {
+    const row = rawNote(db, note.id);
+    assert.equal(row.deleted_at, null, `${note.title} is still a note`);
+    assert.equal(row.folder_id, null);
+    assert.equal(row.space_id, note.space_id, `${note.title} stays in its space`);
+    assert.equal(row.client_note_id, note.client_note_id, `${note.title} keeps its identity`);
+    assert.equal(row.cloud_id, note.cloud_id ?? null, `${note.title} keeps its cloud note`);
+    assert.equal(row.sync_status, status);
+  }
+  assert.equal(rawNote(db, edited.id).cloud_id, "cloud-Edited", "the same cloud note, not a copy");
+  assert.equal(rawNote(db, edited.id).content, "Edited body");
+  const tombstone = rawNote(db, deleted.id);
+  assert.ok(tombstone.deleted_at);
+  assert.equal(tombstone.folder_id, null);
+  assert.ok(
+    db.getPendingNoteDeletes().some((note) => note.id === deleted.id),
+    "its own delete still goes up"
+  );
 
   assert.equal(db.getAgentConversation(editedChat.id).note_id, edited.id);
-  assert.deepEqual(db.getConversationsForNote(clean.id), []);
-  assert.ok(!db.getAgentConversations().some((chat) => chat.id === cleanChat.id));
+  assert.equal(db.getAgentConversation(cleanChat.id).note_id, clean.id);
 });
 
-test("a pulled delete of a team folder forks its unsent notes to the private space", (t) => {
+test("a pulled delete of a team folder keeps its notes in the team, unfiled", (t) => {
   const db = createDb(t);
   if (!db) return;
   const team = createTestTeamSpace(db, { name: "Growth" }).space;
@@ -3557,12 +3575,12 @@ test("a pulled delete of a team folder forks its unsent notes to the private spa
 
   const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
 
-  assert.deepEqual(
-    result.preservedNotes.map((note) => note.id),
-    [edited.id]
-  );
-  assert.equal(db.getNote(edited.id).space_id, db.getPrivateSpaceId());
-  assert.equal(db.getNote(edited.id).cloud_id, null);
+  assert.deepEqual(result.preservedNotes, []);
+  const row = rawNote(db, edited.id);
+  assert.equal(row.space_id, team.id);
+  assert.equal(row.folder_id, null);
+  assert.equal(row.cloud_id, "cloud-Edited");
+  assert.equal(row.sync_status, "error");
 });
 
 test("a pulled delete after this device deleted the folder brings nothing back", (t) => {
@@ -3606,9 +3624,10 @@ test("a pulled delete leaves other accounts' notes unforked and undeleted", (t) 
   const result = db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true });
 
   assert.deepEqual(
-    result.preservedNotes.map((note) => note.id),
+    result.unfiledNotes.map((note) => note.id),
     [mine.id]
   );
+  assert.equal(rawNote(db, mine.id).cloud_id, "cloud-Mine");
   const released = rawNote(db, theirs.id);
   assert.equal(released.folder_id, null);
   assert.equal(released.cloud_id, "cloud-Theirs", "another account's note is never forked");
@@ -3616,50 +3635,61 @@ test("a pulled delete leaves other accounts' notes unforked and undeleted", (t) 
   assert.ok(!result.noteIds.includes(theirs.id));
 });
 
-test("a pulled folder delete forks a team note to its workspace's Private and a private one in place", (t) => {
+test("a pulled folder delete needs no Private space to keep unsent notes", (t) => {
   const db = createDb(t);
   if (!db) return;
-  db.setActiveWorkspaceScope({ activeWorkspaceId: "test-workspace", defaultWorkspaceId: "home" });
-  db.bindDefaultPrivateSpace("home");
   const team = createTestTeamSpace(db, { name: "Growth" }).space;
-  const teamFolder = db.createFolder("Plans", team.id).folder;
-  db.markFolderSynced(teamFolder.id, "cloud-plans");
-  const teamEdit = syncedNote(db, "Team edit", teamFolder.id, { sync_status: "pending" });
+  const folder = db.createFolder("Plans", team.id).folder;
+  db.markFolderSynced(folder.id, "cloud-plans");
+  const edited = syncedNote(db, "Edited", folder.id, { sync_status: "pending" });
+  t.mock.method(db, "_forkPrivateSpaceId", () => null);
 
-  db.hardDeleteFolder(teamFolder.id, { preserveDirtyNotes: true });
+  assert.equal(db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true }).success, true);
 
-  const teamFork = rawNote(db, teamEdit.id);
-  assert.equal(teamFork.space_id, db.getPrivateSpaceId("test-workspace"));
-  assert.notEqual(teamFork.space_id, db.getDefaultPrivateSpaceId());
-  assert.equal(teamFork.account_id, "test-account");
-
-  const homeId = db.getDefaultPrivateSpaceId();
-  const homeFolder = db.createFolder("Home folder", homeId).folder;
-  db.markFolderSynced(homeFolder.id, "cloud-home");
-  const homeEdit = syncedNote(db, "Home edit", homeFolder.id, { sync_status: "pending" });
-
-  db.hardDeleteFolder(homeFolder.id, { preserveDirtyNotes: true });
-
-  const homeFork = rawNote(db, homeEdit.id);
-  assert.equal(homeFork.space_id, homeId, "a Private note stays in its own Private");
-  assert.equal(homeFork.folder_id, null);
-  assert.equal(homeFork.account_id, "test-account");
+  assert.equal(rawNote(db, edited.id).folder_id, null);
+  assert.equal(rawNote(db, edited.id).space_id, team.id);
 });
 
-test("a pulled delete with unsent notes and no private space changes nothing", (t) => {
+test("a push acknowledgement whose folder isn't the row's keeps the link owed", (t) => {
   const db = createDb(t);
   if (!db) return;
   const folder = db.createFolder("Client").folder;
+  const created = db.saveNote("Created", "body", "personal", null, null, folder.id).note;
+  const patched = syncedNote(db, "Patched", folder.id, { sync_status: "pending" });
+  // The folder got its cloud id while both pushes were in flight.
   db.markFolderSynced(folder.id, "cloud-client");
-  const edited = syncedNote(db, "Edited", folder.id, { sync_status: "pending" });
-  t.mock.method(db, "_forkTargetSpaceId", () => null);
+  const unfiled = { folder_id: null, content: "body", enhanced_content: null };
 
-  assert.equal(db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true }).success, false);
-  assert.equal(rawNote(db, edited.id).folder_id, folder.id);
+  const createAck = db.acknowledgeNoteCreate(created.id, created, "cloud-created", null, null, {
+    cloudNote: { ...unfiled, id: "cloud-created", client_note_id: created.client_note_id },
+  });
+  assert.equal(createAck.outcome, "synced");
+  assert.equal(rawNote(db, created.id).sync_status, "folder_link_pending");
 
-  db.db.prepare("UPDATE notes SET sync_status = 'synced' WHERE id = ?").run(edited.id);
-  assert.equal(db.hardDeleteFolder(folder.id, { preserveDirtyNotes: true }).success, true);
-  assert.equal(rawNote(db, edited.id), null);
+  const patchAck = db.markNoteSyncedIfUnchanged(
+    patched.id,
+    rawNote(db, patched.id),
+    "cloud-Patched",
+    "2026-01-02T00:00:00.000Z",
+    null,
+    null,
+    { ...unfiled, id: "cloud-Patched", content: "Patched body" }
+  );
+  assert.equal(patchAck.outcome, "synced");
+  assert.equal(rawNote(db, patched.id).sync_status, "folder_link_pending");
+
+  // A response naming the row's folder settles it.
+  db.db.prepare("UPDATE notes SET sync_status = 'pending' WHERE id = ?").run(patched.id);
+  db.markNoteSyncedIfUnchanged(
+    patched.id,
+    rawNote(db, patched.id),
+    "cloud-Patched",
+    "2026-01-03T00:00:00.000Z",
+    null,
+    null,
+    { id: "cloud-Patched", folder_id: "cloud-client", content: "Patched body" }
+  );
+  assert.equal(rawNote(db, patched.id).sync_status, "synced");
 });
 
 // A cloud-backed parent holding a subfolder the server has never seen, with a

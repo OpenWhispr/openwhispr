@@ -3529,7 +3529,7 @@ export class SyncService {
                 parkedRows++;
                 console.warn(`Could not relocate revoked folder ${local.id}:`, result?.error);
               }
-            } else if (await this.applyPulledFolderDelete(local, ctx, authGeneration)) {
+            } else if (await this.applyPulledFolderDelete(local, authGeneration)) {
               this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
             } else {
               parkedRows++;
@@ -3542,7 +3542,7 @@ export class SyncService {
           if (teamOnly && !cloudFolder.space_id) {
             if (!local || local.deleted_at || !isTeamRow(local, ctx)) continue;
             if (cloudFolder.deleted_at) {
-              if (await this.applyPulledFolderDelete(local, ctx, authGeneration)) {
+              if (await this.applyPulledFolderDelete(local, authGeneration)) {
                 this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
               } else {
                 parkedRows++;
@@ -3578,7 +3578,7 @@ export class SyncService {
 
           if (cloudFolder.deleted_at) {
             if (local) {
-              if (await this.applyPulledFolderDelete(local, ctx, authGeneration)) {
+              if (await this.applyPulledFolderDelete(local, authGeneration)) {
                 // A tombstone disambiguates a 404'd push as a genuine delete;
                 // drop any streak so it can't resurrect the folder in Personal.
                 this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
@@ -3727,12 +3727,13 @@ export class SyncService {
     }
   }
 
-  // Applies a folder delete made on another device or by a teammate. Nobody here
-  // chose it, so unsent notes survive in Private; the database still takes this
-  // device's own delete whole. False leaves the row for a later pass.
+  // Applies a folder delete made on another device or by a teammate. Its notes
+  // stay, unfiled in place: the server tombstoned the ones it held in the folder,
+  // and the note pull later in this pass applies those deletes (an unsent edit
+  // survives as a new note). The database still takes this device's own delete
+  // whole. False leaves the row for a later pass.
   private async applyPulledFolderDelete(
     local: FolderItem,
-    ctx: SpaceSyncContext,
     authGeneration: number
   ): Promise<boolean> {
     const result = await window.electronAPI.hardDeleteFolder?.(local.id, authGeneration, {
@@ -3742,10 +3743,6 @@ export class SyncService {
     if (!result?.success) {
       console.warn(`Could not apply deleted folder ${local.id}:`, result?.error);
       return false;
-    }
-    const spaceName = ctx.byId.get(local.space_id)?.name;
-    for (const note of result.preservedNotes ?? []) {
-      this.dispatchNoteRelocated(note.title, spaceName);
     }
     return true;
   }

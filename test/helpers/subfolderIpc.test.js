@@ -606,7 +606,7 @@ test("a pulled nest of a parent un-nests its child first and keeps one copy of i
   assert.ok(!fs.existsSync(path.join(privateDir, "P")));
 });
 
-test("a pulled folder delete rewrites preserved notes' files and removes only the clean ones'", async (t) => {
+test("a pulled folder delete moves every note's file to the top level and removes none", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, privateDir } = ctx;
@@ -627,19 +627,22 @@ test("a pulled folder delete rewrites preserved notes' files and removes only th
   await settle();
 
   assert.ok(result.success);
-  assert.deepEqual(result.noteIds, [clean.id]);
-  assert.equal(markdownMirror.getNotePath(clean.id), null);
-  assert.equal(
-    markdownMirror.getNotePath(unsent.id),
-    notePath(unsent, privateDir),
-    "the preserved note's file moved with it rather than being deleted after the rewrite"
-  );
+  assert.deepEqual(result.noteIds, []);
+  // The server's own note tombstones decide what goes, in the note pull.
+  for (const note of [clean, unsent]) {
+    assert.equal(
+      markdownMirror.getNotePath(note.id),
+      notePath(note, privateDir),
+      `${note.title}'s file moved with it rather than being deleted`
+    );
+  }
   assert.ok(!fs.existsSync(path.join(privateDir, "Client A")));
-  // The preserved note reaches windows before its folder goes, so one showing
-  // it keeps it open.
+  // The notes reach windows before their folder goes, so one showing them
+  // keeps it open.
   assert.deepEqual(
     sent.map(([channel, row]) => [channel, row.id]),
     [
+      ["note-updated", clean.id],
       ["note-updated", unsent.id],
       ["folder-deleted", folder.id],
     ]
