@@ -65,16 +65,18 @@ brew install --cask openwhispr
 
 OpenWhispr is MIT-licensed. Everything that runs on your device is free, with no account and no word limit:
 
-| Free forever (on-device or your own keys) | Free OpenWhispr Cloud allowance | Paid Cloud plans |
+| Free from OpenWhispr (on-device or your own keys) | Free OpenWhispr Cloud | Paid Cloud plans |
 | --- | --- | --- |
 | Local transcription (Whisper, Parakeet, Cohere, Orukeet) | 2,000 hosted words/week | Unlimited cloud transcription |
 | Local AI models and the local AI agent | 5 hours of meeting recordings/month | 20 hours/month (Pro) or unlimited (Business) meeting recordings |
-| Local speaker diarization | | Sync across devices |
-| Local notes, folders, and semantic search | | Public note links and hosted team features |
+| Local speaker diarization | Teamspaces for signed-in users | Sync across devices |
+| Local notes, folders, and semantic search\* | | Public note links |
 | Custom dictionary and 100+ languages | | Personal API access and MCP integration |
-| Unlimited cloud transcription with your own API keys | | Mobile app, workspace roles, and SSO |
+| Cloud transcription with your own API keys (provider charges and limits apply) | | Mobile app, workspace roles, and SSO |
 
 The free Cloud allowance is 2,000 words/week and 5 hours of meeting recordings/month; the remaining Cloud features in the third column require a paid plan. Teamspaces are free for signed-in users; creating a team inside a workspace requires the Business plan. See **Settings → Plans** in the app for current pricing.
+
+\* On Intel Macs, notes search falls back to keyword matching instead of semantic search.
 
 ## Quick start
 
