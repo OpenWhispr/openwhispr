@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { showToast } from '../settings/kit';
 import { notesT } from '../notes/strings';
-import { cancelGoogleCalendarConnect, connectGoogleCalendar } from './connect';
+import { connectGoogleCalendar } from './connect';
 
 /** Connect from either place (Notes C1, Settings 19.2), with the toasts the design gives. */
 export function useConnectGoogle({ aboveTabBar = false }: { aboveTabBar?: boolean } = {}) {
@@ -9,10 +9,8 @@ export function useConnectGoogle({ aboveTabBar = false }: { aboveTabBar?: boolea
   const [connecting, setConnecting] = useState(false);
   return {
     connecting,
-    cancel: () => {
-      cancelGoogleCalendarConnect();
-      setConnecting(false);
-    },
+    // Google's sheet sits over the app and is closed there; this only resets the card.
+    cancel: () => setConnecting(false),
     async connect() {
       if (connecting) return;
       setConnecting(true);
