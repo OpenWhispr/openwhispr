@@ -6,9 +6,9 @@ const path = require("node:path");
 const Module = require("node:module");
 
 // The real folder handler closures over a real DatabaseManager and the real
-// note files mirror (noteFilesSync over markdownMirror). The mirror lays
-// subfolders out flat for now, beside their parents, so a subfolder's notes
-// keep their files through every change to its parent.
+// note files mirror (noteFilesSync over markdownMirror). A subfolder's directory
+// sits inside its parent's, and its notes and the user's files follow it through
+// every change to its parent.
 const { createDb } = require("./harness/db.js");
 const { getUserDataDir, setUserDataDir } = require("./harness/electronStub.js");
 const markdownMirror = require("../../src/helpers/markdownMirror");
@@ -176,7 +176,7 @@ const teamDir = (basePath, name) =>
 const filesUnder = (dirPath) =>
   fs.existsSync(dirPath) ? fs.readdirSync(dirPath, { recursive: true }).sort() : [];
 
-test("creating, renaming and re-parenting a subfolder keeps its directory beside its parent's", async (t) => {
+test("creating, renaming and re-parenting a subfolder keeps its directory inside its parent's", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, privateDir } = ctx;
@@ -185,17 +185,24 @@ test("creating, renaming and re-parenting a subfolder keeps its directory beside
   const child = await createFolder("Q1", null, parent.id);
   await settle();
   assert.equal(child.parent_folder_id, parent.id);
-  assert.ok(fs.statSync(path.join(privateDir, "Q1")).isDirectory());
+  assert.ok(fs.statSync(path.join(privateDir, "Client A", "Q1")).isDirectory());
+  assert.ok(!fs.existsSync(path.join(privateDir, "Q1")));
+  const note = saveMirroredNote(db, "Plan", child.id);
+  await settle();
+  writeUserFile(privateDir, "Client A", "Q1", "photo.png");
 
   await invoke("db-rename-folder", child.id, "Q2");
   await settle();
-  assert.ok(fs.existsSync(path.join(privateDir, "Q2")));
-  assert.ok(!fs.existsSync(path.join(privateDir, "Q1")));
+  assert.equal(markdownMirror.getNotePath(note.id), notePath(note, privateDir, "Client A", "Q2"));
+  assert.ok(fs.existsSync(path.join(privateDir, "Client A", "Q2", "photo.png")));
+  assert.ok(!fs.existsSync(path.join(privateDir, "Client A", "Q1")));
 
   const unnested = await setParent(child.id, null);
   await settle();
   assert.equal(unnested.folder.parent_folder_id, null);
-  assert.ok(fs.existsSync(path.join(privateDir, "Q2")));
+  assert.equal(markdownMirror.getNotePath(note.id), notePath(note, privateDir, "Q2"));
+  assert.ok(fs.existsSync(path.join(privateDir, "Q2", "photo.png")));
+  assert.deepEqual(filesUnder(path.join(privateDir, "Client A")), []);
   assert.deepEqual(sent.at(-1), ["folder-synced", unnested.folder]);
 
   const refused = await setParent(db.getMeetingsFolder().id, parent.id);
@@ -269,7 +276,7 @@ test("deleting a parent announces each deleted folder, subfolders first, and rem
   assert.ok(!fs.existsSync(path.join(privateDir, "Q1")));
 });
 
-test("hard-deleting a parent leaves its surviving subfolder's files where they are", async (t) => {
+test("hard-deleting a parent takes its surviving subfolder's files to the top level", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, privateDir } = ctx;
@@ -278,7 +285,7 @@ test("hard-deleting a parent leaves its surviving subfolder's files where they a
   const child = await createFolder("Q1", null, parent.id);
   const note = saveMirroredNote(db, "Plan", child.id);
   await settle();
-  writeUserFile(privateDir, "Q1", "photo.png");
+  writeUserFile(privateDir, "Client A", "Q1", "photo.png");
 
   assert.ok((await invoke("db-hard-delete-folder", parent.id)).success);
   await settle();
@@ -288,7 +295,7 @@ test("hard-deleting a parent leaves its surviving subfolder's files where they a
   assert.ok(!fs.existsSync(path.join(privateDir, "Client A")));
 });
 
-test("a pulled un-nest announces the folder and leaves its notes' files in place", async (t) => {
+test("a pulled un-nest announces the folder and moves its notes' files to the top level", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, privateDir } = ctx;
@@ -312,6 +319,8 @@ test("a pulled un-nest announces the folder and leaves its notes' files in place
   const unnested = db.getFolders().find((f) => f.id === child.id);
   assert.equal(unnested.parent_folder_id, null);
   assert.deepEqual(sent, [["folder-synced", unnested]]);
+  assert.equal(markdownMirror.getNotePath(note.id), notePath(note, privateDir, "Q1"));
+  assert.ok(!fs.existsSync(path.join(privateDir, "Client A", "Q1")));
 
   await invoke("db-hard-delete-folder", parent.id);
   await settle();
@@ -359,11 +368,15 @@ test("moving a parent out of a team takes its subfolder and the subfolder's note
   const note = saveMirroredNote(db, "Plan", child.id);
   await settle();
 
+  writeUserFile(teamDir(ctx.basePath, "Growth"), "Client A", "Q1", "photo.png");
+
   const moved = await invoke("db-move-folder-to-space", parent.id, db.getPrivateSpaceId());
   await settle();
   assert.ok(moved.success, moved.error);
   assert.equal(db.getFolders().find((f) => f.id === child.id).parent_folder_id, parent.id);
-  assert.equal(markdownMirror.getNotePath(note.id), notePath(note, privateDir, "Q1"));
+  assert.equal(markdownMirror.getNotePath(note.id), notePath(note, privateDir, "Client A", "Q1"));
+  assert.ok(fs.existsSync(path.join(privateDir, "Client A", "Q1", "photo.png")));
+  assert.ok(!fs.existsSync(path.join(teamDir(ctx.basePath, "Growth"), "Client A")));
 });
 
 test("deleting a private subfolder leaves the team's same-named subfolder's files", async (t) => {
@@ -385,11 +398,11 @@ test("deleting a private subfolder leaves the team's same-named subfolder's file
   assert.equal(markdownMirror.getNotePath(deleted.id), null);
   assert.equal(
     markdownMirror.getNotePath(live.id),
-    notePath(live, teamDir(basePath, "Growth"), "Q1")
+    notePath(live, teamDir(basePath, "Growth"), "Client A", "Q1")
   );
 });
 
-test("nesting a folder leaves its notes' files and the user's where they are", async (t) => {
+test("nesting a folder moves its directory, notes and the user's files into its parent's", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, privateDir } = ctx;
@@ -405,8 +418,12 @@ test("nesting a folder leaves its notes' files and the user's where they are", a
   await settle();
   assert.equal(nested.folder.parent_folder_id, parent.id);
   assert.deepEqual(sent, [["folder-synced", nested.folder]]);
-  assert.equal(markdownMirror.getNotePath(note.id), notePath(note, privateDir, "Archive"));
-  assert.ok(fs.existsSync(path.join(privateDir, "Archive", "roadmap.txt")));
+  assert.equal(
+    markdownMirror.getNotePath(note.id),
+    notePath(note, privateDir, "Client A", "Archive")
+  );
+  assert.ok(fs.existsSync(path.join(privateDir, "Client A", "Archive", "roadmap.txt")));
+  assert.ok(!fs.existsSync(path.join(privateDir, "Archive")));
 });
 
 test("deleting a folder removes its and its subfolders' notes' files and keeps the user's own", async (t) => {
@@ -420,15 +437,18 @@ test("deleting a folder removes its and its subfolders' notes' files and keeps t
   const childNote = saveMirroredNote(db, "Child", child.id);
   await settle();
   writeUserFile(privateDir, "P", "contract.pdf");
-  writeUserFile(privateDir, "Q", "photo.png");
+  writeUserFile(privateDir, "P", "Q", "photo.png");
 
   await invoke("db-delete-folder", parent.id);
   await settle();
 
   assert.equal(markdownMirror.getNotePath(parentNote.id), null);
   assert.equal(markdownMirror.getNotePath(childNote.id), null);
-  assert.deepEqual(filesUnder(path.join(privateDir, "P")), ["contract.pdf"]);
-  assert.deepEqual(filesUnder(path.join(privateDir, "Q")), ["photo.png"]);
+  assert.deepEqual(filesUnder(path.join(privateDir, "P")), [
+    "Q",
+    path.join("Q", "photo.png"),
+    "contract.pdf",
+  ]);
 });
 
 test("deleting an unsynced subfolder leaves none of its notes' text behind", async (t) => {
@@ -446,7 +466,7 @@ test("deleting an unsynced subfolder leaves none of its notes' text behind", asy
   await settle();
 
   assert.equal(markdownMirror.getNotePath(note.id), null);
-  assert.deepEqual(filesUnder(path.join(privateDir, "Q")), []);
+  assert.deepEqual(filesUnder(path.join(privateDir, "P")), []);
 });
 
 test("a pulled delete keeps the user's files, and a denied delete restores notes beside them", async (t) => {
@@ -491,7 +511,7 @@ test("purging a space removes its subfolders' notes' files and keeps the user's"
   const synced = saveMirroredNote(db, "Synced", child.id);
   db.markNoteSynced(synced.id, "c-synced");
   await settle();
-  writeUserFile(teamDir(basePath, "purged"), "Q", "photo.png");
+  writeUserFile(teamDir(basePath, "purged"), "P", "Q", "photo.png");
 
   const result = await invoke("db-purge-space", team, {});
   await settle();
@@ -499,7 +519,7 @@ test("purging a space removes its subfolders' notes' files and keeps the user's"
   assert.ok(result.success);
   assert.ok(result.relocatedNotes.some((note) => note.id === unsent.id));
   assert.equal(markdownMirror.getNotePath(synced.id), null);
-  assert.deepEqual(filesUnder(path.join(teamDir(basePath, "purged"), "Q")), ["photo.png"]);
+  assert.deepEqual(filesUnder(path.join(teamDir(basePath, "purged"), "P", "Q")), ["photo.png"]);
   assert.ok(
     !markdownMirror.getNotePath(unsent.id).startsWith(teamDir(basePath, "purged")),
     "the relocated note's only copy is the rewritten one"
@@ -515,17 +535,17 @@ test("deleting an account leaves none of its subfolders' notes' text", async (t)
   const child = await createFolder("Q", null, parent.id);
   const note = saveMirroredNote(db, "Secret", child.id);
   await settle();
-  writeUserFile(privateDir, "Q", "photo.png");
+  writeUserFile(privateDir, "P", "Q", "photo.png");
 
   const result = await invoke("delete-account-data", "test-account", tokenState.generation);
   await settle();
 
   assert.ok(result.success, result.error);
   assert.equal(markdownMirror.getNotePath(note.id), null);
-  assert.deepEqual(filesUnder(path.join(privateDir, "Q")), ["photo.png"]);
+  assert.deepEqual(filesUnder(path.join(privateDir, "P", "Q")), ["photo.png"]);
 });
 
-test("renaming a parent moves its directory and leaves its subfolder's notes in place", async (t) => {
+test("renaming a parent moves its directory with its subfolder's notes and files inside", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, privateDir } = ctx;
@@ -534,13 +554,18 @@ test("renaming a parent moves its directory and leaves its subfolder's notes in 
   const child = await createFolder("Q", null, parent.id);
   const note = saveMirroredNote(db, "Child", child.id);
   await settle();
+  writeUserFile(privateDir, "P", "contract.pdf");
+  writeUserFile(privateDir, "P", "Q", "photo.png");
 
   await invoke("db-rename-folder", parent.id, "R");
   await settle();
 
-  assert.ok(fs.existsSync(path.join(privateDir, "R")));
   assert.ok(!fs.existsSync(path.join(privateDir, "P")));
-  assert.equal(markdownMirror.getNotePath(note.id), notePath(note, privateDir, "Q"));
+  assert.equal(markdownMirror.getNotePath(note.id), notePath(note, privateDir, "R", "Q"));
+  assert.ok(fs.existsSync(path.join(privateDir, "R", "contract.pdf")));
+  assert.ok(fs.existsSync(path.join(privateDir, "R", "Q", "photo.png")));
+  const frontmatter = fs.readFileSync(markdownMirror.getNotePath(note.id), "utf8");
+  assert.match(frontmatter, /^folder: "R\/Q"$/m);
 });
 
 test("a pulled nest of a parent un-nests its child first and keeps one copy of its notes", async (t) => {
@@ -577,6 +602,8 @@ test("a pulled nest of a parent un-nests its child first and keeps one copy of i
     `${note.id}-child-transcript.md`,
     `${note.id}-child.md`,
   ]);
+  assert.deepEqual(filesUnder(path.join(privateDir, "R")), ["P"]);
+  assert.ok(!fs.existsSync(path.join(privateDir, "P")));
 });
 
 test("a pulled folder delete rewrites preserved notes' files and removes only the clean ones'", async (t) => {
