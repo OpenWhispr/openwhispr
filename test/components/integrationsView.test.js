@@ -57,7 +57,7 @@ const MOCKS = {
     export const DialogTitle = DialogContent;
     export const DialogDescription = DialogContent;
     export const DialogFooter = DialogContent;
-    export const ConfirmDialog = () => null;
+    export const ConfirmDialog = ({ open }) => (open ? "CONFIRM REVOKE" : null);
   `,
   "/integrations/CalendarsPane": `
     import React from "react";
@@ -175,15 +175,16 @@ async function renderView(
   );
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   usePolicyStore.setState({ status: "unmanaged" });
+  const setPolicy = (state) => React.act(async () => usePolicyStore.setState(state));
+  const managedPolicy = (overrides = {}) => ({
+    features: { apiAccessEnabled: true },
+    dataRetention: { cloudBackupAllowed: false },
+    ...overrides,
+  });
   const setApiAccess = (enabled) =>
-    React.act(async () => {
-      usePolicyStore.setState({
-        status: "managed",
-        policy: {
-          features: { apiAccessEnabled: enabled },
-          dataRetention: { cloudBackupAllowed: false },
-        },
-      });
+    setPolicy({
+      status: "managed",
+      policy: managedPolicy({ features: { apiAccessEnabled: enabled } }),
     });
   const upgrades = { count: 0 };
   function Harness() {
@@ -198,7 +199,7 @@ async function renderView(
   }
   root = createRoot(container);
   await React.act(async () => root.render(createElement(Harness)));
-  return { container, upgrades, openedUrls, setApiAccess };
+  return { container, upgrades, openedUrls, setApiAccess, setPolicy, managedPolicy };
 }
 
 test("sectionMeta shows counts on a paid plan and plan badges on a free one", async (t) => {
@@ -210,19 +211,19 @@ test("sectionMeta shows counts on a paid plan and plan badges on a free one", as
   );
   const connectors = (isPaid, ready, blockedByOrg = false) => ({ isPaid, blockedByOrg, ready });
   const paid = {
-    apiAccessAllowed: true,
+    apiAccessRestricted: false,
     isPaid: true,
     connectors: connectors(true, 2),
     connectedCalendars: 1,
   };
   const free = {
-    apiAccessAllowed: true,
+    apiAccessRestricted: false,
     isPaid: false,
     connectors: connectors(false, 0),
     connectedCalendars: 1,
   };
   const empty = {
-    apiAccessAllowed: true,
+    apiAccessRestricted: false,
     isPaid: true,
     connectors: connectors(true, 0),
     connectedCalendars: 0,
@@ -243,6 +244,12 @@ test("sectionMeta shows counts on a paid plan and plan badges on a free one", as
   assert.equal(sectionMeta("connectors", empty), null);
   assert.equal(sectionMeta("calendars", empty), null);
 
+  // The organization restricts API access: no plan would unlock it.
+  const restricted = { ...free, apiAccessRestricted: true };
+  assert.equal(sectionMeta("api", restricted), null);
+  assert.equal(sectionMeta("mcp", restricted), null);
+  assert.deepEqual(sectionMeta("cli", restricted), { kind: "badge", badge: "free" });
+
   // The organization turned connectors off: no plan badge and no count, on any plan.
   for (const isPaid of [true, false]) {
     const blocked = { ...paid, isPaid, connectors: connectors(isPaid, 2, true) };
@@ -260,7 +267,7 @@ test("Skills has no nav tag on any plan", async (t) => {
   for (const isPaid of [true, false]) {
     const input = {
       isPaid,
-      apiAccessAllowed: true,
+      apiAccessRestricted: false,
       connectors: { isPaid, blockedByOrg: false, ready: 2 },
       connectedCalendars: 1,
     };
@@ -472,7 +479,7 @@ test("the API header opens the existing creation dialog through its request", as
   assert.match(shownText(container), /apiKeysSection\.create\.title/);
 });
 
-test("revoking API access closes the open dialog and removes actions in both mounted panes", async (t) => {
+test("revoking API access closes the open dialog and keeps only revoking in both mounted panes", async (t) => {
   const { container, setApiAccess } = await renderView(t, { section: "mcp" });
   await React.act(async () => click(buttonWithText(container, "apiKeysSection.createButton")));
   assert.match(shownText(container), /apiKeysSection\.create\.title/);
@@ -480,10 +487,9 @@ test("revoking API access closes the open dialog and removes actions in both mou
   await setApiAccess(false);
   assert.match(shownText(container), /common\.managedByOrg/);
   assert.match(shownText(container), /integrations\.apiAccessDisabled/);
-  assert.doesNotMatch(
-    container.textContent,
-    /Personal test key|apiKeysSection\.create|integrations\.api\.useWith/
-  );
+  // A leaked key can still be revoked while access is off.
+  assert.match(shownText(container), /Personal test key/);
+  assert.doesNotMatch(container.textContent, /apiKeysSection\.create|integrations\.api\.useWith/);
   await React.act(async () => click(navButton(container, "mcp")));
   assert.match(shownText(container), /integrations\.apiAccessDisabled/);
   assert.doesNotMatch(container.textContent, /mcp\.openwhispr\.com|integrations\.mcp\.oauthTitle/);
@@ -492,9 +498,65 @@ test("revoking API access closes the open dialog and removes actions in both mou
   assert.match(shownText(container), /integrations\.mcp\.oauthTitle/);
   await React.act(async () => click(navButton(container, "api")));
   assert.match(shownText(container), /Personal test key/);
-  assert.doesNotMatch(shownText(container), /apiKeysSection\.create\.title/);
+  assert.doesNotMatch(shownText(container), /apiKeysSection\.create\.title|apiAccessDisabled/);
   await React.act(async () => click(buttonWithText(container, "apiKeysSection.createButton")));
   assert.match(shownText(container), /apiKeysSection\.create\.title/);
+});
+
+test("with access off the API pane lists existing keys with revoke, and nothing creates one", async (t) => {
+  const { container, setApiAccess } = await renderView(t, { section: "api" });
+  await setApiAccess(false);
+
+  assert.match(shownText(container), /common\.managedByOrg/);
+  assert.match(shownText(container), /Personal test key/);
+  assert.equal(buttonWithText(container, "apiKeysSection.createButton"), null);
+  const revoke = findElement(
+    container,
+    (node) =>
+      node.tagName === "BUTTON" &&
+      node.getAttribute("aria-label") === "apiKeysSection.revoke.button"
+  );
+  await React.act(async () => click(revoke));
+  assert.match(shownText(container), /CONFIRM REVOKE/);
+});
+
+test("a policy still loading shows the usual API pane, with no notice", async (t) => {
+  const { container, setPolicy } = await renderView(t, { section: "api" });
+  await setPolicy({ status: "loading", policy: null });
+
+  assert.doesNotMatch(container.textContent, /managedByOrg|policy\.unresolved|updateRequiredByOrg/);
+  assert.match(shownText(container), /Personal test key/);
+  assert.ok(buttonWithText(container, "apiKeysSection.createButton"));
+  assert.equal(label(navButton(container, "api")), "integrations.nav.sections.api");
+});
+
+test("an org minimum version or an unresolvable policy says why API and MCP are unavailable", async (t) => {
+  const { container, setPolicy, managedPolicy } = await renderView(t, { section: "api" });
+  for (const [state, pattern] of [
+    [
+      { status: "managed", policy: managedPolicy({ minAppVersion: "9.0.0" }), appVersion: "1.0.0" },
+      /controlPanel\.updateRequiredByOrg\.title.*controlPanel\.updateRequiredByOrg\.description/,
+    ],
+    [{ status: "error", policy: null }, /models\.policy\.unresolved/],
+  ]) {
+    await setPolicy(state);
+    for (const section of ["api", "mcp"]) {
+      await React.act(async () => click(navButton(container, section)));
+      assert.match(shownText(container), pattern);
+      assert.doesNotMatch(shownText(container), /apiKeysSection\.createButton|common\.policy/);
+    }
+  }
+});
+
+test("with access off the CLI's cloud mode says why, and local mode is unchanged", async (t) => {
+  const { container, setApiAccess } = await renderView(t, { section: "cli" });
+  assert.match(shownText(container), /openwhispr auth login/);
+
+  await setApiAccess(false);
+  assert.match(shownText(container), /integrations\.cli\.cloud\.label/);
+  assert.match(shownText(container), /integrations\.apiAccessDisabled/);
+  assert.doesNotMatch(shownText(container), /openwhispr auth login|cli\.cloud\.description/);
+  assert.match(shownText(container), /openwhispr --local notes list/);
 });
 
 test("a managed restriction takes precedence over both free-plan upsells", async (t) => {

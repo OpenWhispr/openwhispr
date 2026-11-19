@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { useSettingsStore } from "../stores/settingsStore";
 import { ensureConnectorStatus, useConnectorStatusStore } from "../stores/connectorStatusStore";
 import { useConnectorAccess } from "../hooks/useConnectorAccess";
-import { useApiAccessAllowed, usePolicySnapshot } from "../hooks/usePolicy";
+import { useApiAccessRestriction } from "../hooks/usePolicy";
 import ApiKeysSection from "./ApiKeysSection";
 import { ConnectorsSection } from "./ConnectorsSection";
 import { BetaBadge } from "./connectors/BetaBadge";
@@ -17,6 +17,7 @@ import { CalendarsPane } from "./integrations/CalendarsPane";
 import { SkillsPane } from "./integrations/SkillsPane";
 import { McpPane } from "./integrations/McpPane";
 import { CliPane } from "./integrations/CliPane";
+import { ApiAccessNotice } from "./integrations/ApiAccessNotice";
 import type { SkillChatStart, SkillOpenRequest } from "../types/skills";
 import {
   INTEGRATIONS_SECTION_ICONS,
@@ -28,30 +29,6 @@ import {
 
 const API_DOCS_URL = "https://docs.openwhispr.com/api/overview";
 const { mcp: McpIcon, cli: CliIcon } = INTEGRATIONS_SECTION_ICONS;
-
-function RestrictedApiPane({ section }: { section: "api" | "mcp" }): ReactElement {
-  const { t } = useTranslation();
-  const { status, policy } = usePolicySnapshot();
-  const managed = status === "managed" && policy !== null;
-  const disabledByOrg = managed && policy.features.apiAccessEnabled === false;
-  return (
-    <IntegrationsPane
-      title={t(`integrations.nav.sections.${section}`)}
-      description={t(`integrations.${section}.description`)}
-    >
-      <div role="status" className="space-y-1 rounded-lg border border-border p-3 text-xs">
-        {disabledByOrg && <p className="font-medium">{t("common.managedByOrg")}</p>}
-        <p className="text-muted-foreground">
-          {disabledByOrg
-            ? t("integrations.apiAccessDisabled")
-            : managed
-              ? t("common.policyBlocked")
-              : t("common.policyUnresolved")}
-        </p>
-      </div>
-    </IntegrationsPane>
-  );
-}
 
 interface IntegrationsViewProps {
   isPaid: boolean;
@@ -76,7 +53,7 @@ export default function IntegrationsView({
   const { t } = useTranslation();
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
   const connectorAccess = useConnectorAccess();
-  const apiAccessAllowed = useApiAccessAllowed();
+  const apiRestriction = useApiAccessRestriction();
   const readyConnectors = useConnectorStatusStore(
     (state) =>
       CONNECTOR_ROWS.filter((row) => {
@@ -101,11 +78,6 @@ export default function IntegrationsView({
   if (!mounted.has(section)) setMounted(new Set(mounted).add(section));
   const [createKeyRequest, setCreateKeyRequest] = useState(0);
   const [canCreateKey, setCanCreateKey] = useState(false);
-  // A key dialog unmounted by policy must only reopen for a new request.
-  useEffect(() => {
-    if (!apiAccessAllowed) setCreateKeyRequest(0);
-  }, [apiAccessAllowed]);
-
   const scroller = useRef<HTMLDivElement>(null);
   const paneElements = useRef<Partial<Record<IntegrationsSection, HTMLDivElement | null>>>({});
   const focusOpenedSection = useRef(false);
@@ -134,7 +106,7 @@ export default function IntegrationsView({
       id,
       sectionMeta(id, {
         isPaid,
-        apiAccessAllowed,
+        apiAccessRestricted: apiRestriction !== null,
         connectors: { ...connectorAccess, ready: readyConnectors },
         connectedCalendars,
       }),
@@ -168,7 +140,8 @@ export default function IntegrationsView({
         description={t("integrations.api.description")}
         docsUrl={API_DOCS_URL}
         actions={
-          isPaid && (
+          isPaid &&
+          !apiRestriction && (
             <Button
               variant="outline"
               size="sm"
@@ -181,35 +154,49 @@ export default function IntegrationsView({
           )
         }
       >
+        {apiRestriction && <ApiAccessNotice restriction={apiRestriction} />}
+        {/* Existing keys stay listed while access is off, so a leaked one can still be revoked. */}
         {isPaid ? (
           <>
-            <ApiKeysSection createRequest={createKeyRequest} onCanCreateChange={setCanCreateKey} />
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ps-1 text-xs text-muted-foreground">
-              <span>{t("integrations.api.useWith")}</span>
-              {(
-                [
-                  ["mcp", McpIcon],
-                  ["cli", CliIcon],
-                ] as const
-              ).map(([id, Icon]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => openSection(id)}
-                  className="inline-flex items-center gap-1 rounded-sm text-primary/80 hover:text-primary outline-none focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors"
-                >
-                  <Icon size={13} />
-                  {titleOf(id)}
-                </button>
-              ))}
-            </div>
+            <ApiKeysSection
+              createRequest={createKeyRequest}
+              onCanCreateChange={setCanCreateKey}
+              allowCreate={!apiRestriction}
+            />
+            {!apiRestriction && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ps-1 text-xs text-muted-foreground">
+                <span>{t("integrations.api.useWith")}</span>
+                {(
+                  [
+                    ["mcp", McpIcon],
+                    ["cli", CliIcon],
+                  ] as const
+                ).map(([id, Icon]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => openSection(id)}
+                    className="inline-flex items-center gap-1 rounded-sm text-primary/80 hover:text-primary outline-none focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors"
+                  >
+                    <Icon size={13} />
+                    {titleOf(id)}
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         ) : (
-          <UpsellBar message={t("integrations.api.proRequired")} onUpgrade={onUpgrade} />
+          !apiRestriction && (
+            <UpsellBar message={t("integrations.api.proRequired")} onUpgrade={onUpgrade} />
+          )
         )}
       </IntegrationsPane>
     ),
-    mcp: (
+    mcp: apiRestriction ? (
+      <IntegrationsPane title={titleOf("mcp")} description={t("integrations.mcp.description")}>
+        <ApiAccessNotice restriction={apiRestriction} />
+      </IntegrationsPane>
+    ) : (
       <McpPane
         title={titleOf("mcp")}
         isPaid={isPaid}
@@ -220,7 +207,14 @@ export default function IntegrationsView({
         }}
       />
     ),
-    cli: <CliPane title={titleOf("cli")} isPaid={isPaid} onUpgrade={onUpgrade} />,
+    cli: (
+      <CliPane
+        title={titleOf("cli")}
+        isPaid={isPaid}
+        onUpgrade={onUpgrade}
+        apiRestriction={apiRestriction}
+      />
+    ),
   };
 
   return (
@@ -265,11 +259,7 @@ export default function IntegrationsView({
                 }}
                 hidden={id !== section}
               >
-                {!apiAccessAllowed && (id === "api" || id === "mcp") ? (
-                  <RestrictedApiPane section={id} />
-                ) : (
-                  panes[id]
-                )}
+                {panes[id]}
               </div>
             ))}
           </div>

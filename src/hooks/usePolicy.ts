@@ -9,9 +9,9 @@ import {
   useSettingsStore,
 } from "../stores/settingsStore";
 import {
+  apiAccessRestriction,
   filterModeOptionsByPolicy,
   getTranscriptionSelection,
-  isApiAccessAllowed,
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
   isAudioFeatureAllowed,
@@ -20,6 +20,7 @@ import {
   isTranscriptionContextAllowed,
   reconcilePolicyModeSelection,
   transcriptionChoiceRefusal,
+  type ApiAccessRestriction,
   type LocalModelRefusal,
   type PolicyDecisionSnapshot,
   type TranscriptionPolicyContext,
@@ -35,9 +36,8 @@ export function usePolicySnapshot(): PolicyDecisionSnapshot {
   return useMemo(() => ({ status, policy, appVersion }), [status, policy, appVersion]);
 }
 
-export function useApiAccessAllowed(): boolean {
-  const isSignedIn = useSettingsStore((state) => state.isSignedIn);
-  return usePolicyStore((state) => isApiAccessAllowed(state, isSignedIn));
+export function useApiAccessRestriction(): ApiAccessRestriction | null {
+  return usePolicyStore(apiAccessRestriction);
 }
 
 interface MeetingAutoTranscriptionAuth {

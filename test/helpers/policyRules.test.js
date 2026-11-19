@@ -57,31 +57,51 @@ const policy = {
   minAppVersion: null,
 };
 
-test("personal API access follows the effective feature independently of backup and agent access", async () => {
-  const { isApiAccessAllowed } = await load();
-  for (const [status, signedIn, expected] of [
-    ["unmanaged", true, true],
-    ["idle", false, true],
-    ["idle", true, false],
-    ["loading", true, false],
-    ["error", true, false],
+test("personal API access names its restriction only once a policy has resolved", async () => {
+  const { apiAccessRestriction } = await load();
+  // Idle and loading show nothing: the API refuses keys itself while access is off.
+  for (const [status, expected] of [
+    ["idle", null],
+    ["loading", null],
+    ["unmanaged", null],
+    ["error", "unresolved"],
+    ["managed", "unresolved"],
   ]) {
-    assert.equal(
-      isApiAccessAllowed({ status, policy: null, appVersion: null }, signedIn),
-      expected
-    );
+    assert.equal(apiAccessRestriction({ status, policy: null, appVersion: null }), expected);
   }
-  for (const features of [{}, { apiAccessEnabled: true }, { apiAccessEnabled: false }]) {
+  for (const [features, expected] of [
+    [{}, null],
+    [{ apiAccessEnabled: true }, null],
+    [{ apiAccessEnabled: false }, "disabled"],
+  ]) {
     const managed = {
       ...policy,
       features: { ...policy.features, agentEnabled: false, ...features },
       dataRetention: { ...policy.dataRetention, cloudBackupAllowed: false },
     };
     assert.equal(
-      isApiAccessAllowed({ status: "managed", policy: managed, appVersion: null }, true),
-      features.apiAccessEnabled !== false
+      apiAccessRestriction({ status: "managed", policy: managed, appVersion: null }),
+      expected
     );
   }
+});
+
+test("an org minimum app version restricts personal API access as an update", async () => {
+  const { apiAccessRestriction } = await load();
+  const withMinimum = (appVersion, features = {}) => ({
+    status: "managed",
+    policy: { ...policy, features: { ...policy.features, ...features }, minAppVersion: "1.11.1" },
+    appVersion,
+  });
+  assert.equal(apiAccessRestriction(withMinimum("1.10.0")), "versionBlocked");
+  assert.equal(apiAccessRestriction(withMinimum("1.11.1")), null);
+  // Without a known version nothing says an update would help.
+  assert.equal(apiAccessRestriction(withMinimum(null)), "unresolved");
+  // Turned off by the organization: updating wouldn't change that.
+  assert.equal(
+    apiAccessRestriction(withMinimum("1.10.0", { apiAccessEnabled: false })),
+    "disabled"
+  );
 });
 
 test("update-required derives from the org minimum and known app version", async () => {

@@ -220,10 +220,21 @@ export function isAgentAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.agentEnabled);
 }
 
-/** A signed-in member's policy must resolve before offering personal keys or MCP setup. */
-export function isApiAccessAllowed(state: PolicyDecisionSnapshot, isSignedIn: boolean): boolean {
-  if (state.status === "idle" && isSignedIn) return false;
-  return managedPolicyDecision(state, (policy) => policy.features.apiAccessEnabled !== false);
+export type ApiAccessRestriction = "disabled" | "versionBlocked" | "unresolved";
+
+/**
+ * Why personal API keys and MCP are unavailable, or null when they aren't
+ * restricted. A policy still loading restricts nothing: most members have no
+ * managed workspace, and the API refuses keys itself while access is off.
+ */
+export function apiAccessRestriction(state: PolicyDecisionSnapshot): ApiAccessRestriction | null {
+  if (state.status === "idle" || state.status === "loading" || state.status === "unmanaged")
+    return null;
+  const policy = managedPolicy(state);
+  if (!policy) return "unresolved";
+  if (policy.features.apiAccessEnabled === false) return "disabled";
+  if (isUpdateRequiredByOrg(state)) return "versionBlocked";
+  return isPolicyActionAllowed(state) ? null : "unresolved";
 }
 
 /** Whether the agent's web_search tool is allowed. */
