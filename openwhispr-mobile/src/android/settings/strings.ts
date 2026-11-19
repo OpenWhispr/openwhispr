@@ -48,7 +48,25 @@ export const settingsEnglish = {
   disconnect: 'Disconnect',
   showEventsFrom: 'Show events from',
   primary: 'Primary',
-  addGoogleAccount: 'Add another Google account',
+  addGoogleAccount: 'Add Google account',
+  // Calendar · several Google accounts (20.1–20.5)
+  accounts: 'Accounts',
+  accountsCount: '{{count}} accounts',
+  signedOutCount: '{{count}} signed out',
+  calendarsOn: '{{on}} of {{total}} calendars on',
+  reconnectToSee: 'Reconnect to see its meetings again',
+  syncAll: 'Sync all accounts',
+  accountsFooter:
+    'Up next on Notes shows meetings from every calendar that is on, across all accounts. Events up to 7 days ahead are kept on this phone.',
+  accountCalendarsFooter:
+    'Turning a calendar off hides its events on Notes. Your other accounts are not affected.',
+  signedOutAccountBody:
+    'Google signed OpenWhispr out of this account. Reconnect to see its meetings again.',
+  otherAccountsStillShow: 'Meetings from your other accounts still show on Notes.',
+  disconnectAccountTitle: 'Disconnect {{email}}?',
+  disconnectAccountBody:
+    'OpenWhispr stops reading this account and removes its events from this phone. Your other accounts stay connected. Notes you already recorded keep their names.',
+  accountDisconnected: '{{email}} disconnected',
   calendarFooter:
     'Up next on Notes uses the calendars that are on. Events up to 7 days ahead are kept on this phone.',
   disconnectTitle: 'Disconnect Google Calendar?',

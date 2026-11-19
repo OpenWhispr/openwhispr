@@ -24,21 +24,35 @@ export function calendarConnectAvailable(): boolean {
   return getGoogleCalendarClientId() != null;
 }
 
-export async function connectGoogleCalendar(): Promise<ConnectOutcome> {
+export type ConnectOptions = {
+  /** Reconnect this account (20.5): Google's sheet is pre-set to it, no picker. */
+  account?: string | null;
+  /** The saved account, and whether it was already connected (20.2 then opens its page). */
+  onConnected?: (accountId: number, existed: boolean) => void;
+};
+
+export async function connectGoogleCalendar(options: ConnectOptions = {}): Promise<ConnectOutcome> {
   const user = useAuthStore.getState().user;
   if (!user || requiresRealAccount(user)) return 'signedOut';
   if (!getGoogleCalendarClientId()) return 'unavailable';
   const store = useGoogleCalendarStore.getState();
   store.setAuthSessionActive(true);
   try {
-    const authorization = await authorizeGoogleCalendarOnAndroid();
+    const authorization = await authorizeGoogleCalendarOnAndroid(undefined, {
+      account: options.account,
+    });
+    const existed = store.accounts.some(
+      (account) => account.googleSubject === authorization.identity.sub,
+    );
     useGoogleCalendarStore.setState({ isConnecting: true, error: null });
+    let accountId: number;
     try {
-      await saveAuthorizedGoogleCalendarAccount(authorization);
+      accountId = (await saveAuthorizedGoogleCalendarAccount(authorization)).id;
     } finally {
       useGoogleCalendarStore.setState({ isConnecting: false });
       await useGoogleCalendarStore.getState().load();
     }
+    options.onConnected?.(accountId, existed);
     return 'connected';
   } catch (error) {
     // Closing Google's sheet goes back quietly (C2 → C1), no error dialog.

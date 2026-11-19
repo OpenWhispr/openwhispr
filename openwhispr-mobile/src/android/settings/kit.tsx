@@ -324,10 +324,13 @@ export function ListRow({
   destructive,
   accessibilityLabel,
   subtitleStyle,
+  titleColor,
 }: {
   icon?: LucideIconName;
   leading?: React.ReactNode;
   title: string;
+  /** A title in its own colour (the blue "Add Google account"). */
+  titleColor?: string;
   badge?: React.ReactNode;
   subtitle?: React.ReactNode;
   value?: string;
@@ -345,6 +348,7 @@ export function ListRow({
   subtitleStyle?: StyleProp<import('react-native').TextStyle>;
 }) {
   const ink = destructive ? look.error : home.text;
+  const titleInk = titleColor ?? ink;
   const body = (
     <>
       {leading ??
@@ -368,7 +372,7 @@ export function ListRow({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Text
             textBreakStrategy="balanced"
-            style={[settings.rowTitle, { color: ink, flexShrink: 1 }]}
+            style={[settings.rowTitle, { color: titleInk, flexShrink: 1 }]}
           >
             {title}
           </Text>

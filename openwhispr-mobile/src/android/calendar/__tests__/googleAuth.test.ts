@@ -75,6 +75,21 @@ describe('connect', () => {
     });
   });
 
+  it('skips the picker when reconnecting a named account (20.5)', async () => {
+    mockAuthorizeGoogle.mockResolvedValueOnce({
+      accessToken: 'tok',
+      grantedScopes: CALENDAR_SCOPES,
+    });
+    await authorizeGoogleCalendarOnAndroid(userinfo({ sub: 'sub-2' }), {
+      account: 'old@example.com',
+    });
+    expect(mockChooseGoogleAccount).not.toHaveBeenCalled();
+    expect(mockAuthorizeGoogle).toHaveBeenCalledWith(expect.any(Array), {
+      account: 'old@example.com',
+      interactive: true,
+    });
+  });
+
   it('treats backing out of the account picker as cancelled', async () => {
     mockChooseGoogleAccount.mockResolvedValueOnce(null);
     await expect(authorizeGoogleCalendarOnAndroid(userinfo({}))).rejects.toMatchObject({

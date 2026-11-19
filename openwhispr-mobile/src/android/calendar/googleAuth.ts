@@ -43,21 +43,24 @@ async function fetchIdentity(
 
 /**
  * Connect: Android's account picker (Play services alone would silently reuse the account it
- * granted last, so "Add another Google account" could never pick a new one), Google's consent
- * sheet for that account, then who the account is.
+ * granted last, so "Add Google account" could never pick a new one), Google's consent sheet for
+ * that account, then who the account is. Reconnecting a signed-out account (Figma 20.5) names
+ * it, so the picker is skipped and Google asks about that account only.
  */
 export async function authorizeGoogleCalendarOnAndroid(
   httpClient: typeof fetch = globalThis.fetch,
+  { account: knownAccount }: { account?: string | null } = {},
 ): Promise<GoogleCalendarAuthorizationResult> {
-  let account: string | null;
-  try {
-    account = await chooseGoogleAccount();
-  } catch (error) {
-    throw new GoogleCalendarAuthError(
-      'authorization_failed',
-      error instanceof Error ? error.message : 'Could not open the account picker',
-    );
-  }
+  let account: string | null = knownAccount ?? null;
+  if (!account)
+    try {
+      account = await chooseGoogleAccount();
+    } catch (error) {
+      throw new GoogleCalendarAuthError(
+        'authorization_failed',
+        error instanceof Error ? error.message : 'Could not open the account picker',
+      );
+    }
   if (!account) throw new GoogleCalendarAuthError('cancelled', 'No Google account was chosen');
   const tokens = await authorizeGoogleCalendarTokens({ account, interactive: true });
   const identity = await fetchIdentity(tokens.accessToken, httpClient);
