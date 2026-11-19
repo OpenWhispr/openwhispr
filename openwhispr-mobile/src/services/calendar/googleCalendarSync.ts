@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type {
   CalendarParticipant,
   CalendarRepository,
@@ -20,6 +21,7 @@ import {
   hasRequiredGoogleCalendarScopes,
   refreshStoredGoogleCalendarToken,
 } from './googleCalendarAuth';
+import { getAndroidGoogleCalendarAccessToken } from './googleCalendarAndroidAuth';
 import {
   addGoogleCalendarBreadcrumb,
   captureGoogleCalendarException,
@@ -32,6 +34,7 @@ const GOOGLE_AUTH_RECONNECT_CODES = new Set([
   'missing_refresh_token',
   'missing_tokens',
   'missing_required_scopes',
+  'consent_required',
 ]);
 const GOOGLE_API_RECONNECT_STATUSES = new Set([401]);
 
@@ -171,6 +174,7 @@ async function getFreshAccessToken(account: GoogleCalendarAccount): Promise<stri
       `Google Calendar requires scopes: ${getGoogleCalendarRequiredScopes().join(' ')}`,
     );
   }
+  if (Platform.OS === 'android') return getAndroidGoogleCalendarAccessToken(account);
   const refreshed = await refreshStoredGoogleCalendarToken({
     clientId,
     googleSubject: account.googleSubject,

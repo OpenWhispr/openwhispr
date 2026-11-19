@@ -1,14 +1,10 @@
 const mockConnect = jest.fn(async () => ({ id: 1 }));
 const mockSetActive = jest.fn();
-const mockPrompt = jest.fn();
+const mockAuthorize = jest.fn();
 const mockSetItem = jest.fn(async () => undefined);
 let mockUser: { id: string } | null = { id: 'u' };
 let mockClientId: string | null = 'client.apps.googleusercontent.com';
 
-jest.mock('expo-web-browser', () => ({
-  maybeCompleteAuthSession: jest.fn(),
-  dismissAuthSession: jest.fn(),
-}));
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(async () => null),
   setItem: (...args: unknown[]) => mockSetItem(...(args as [])),
@@ -19,24 +15,20 @@ jest.mock('@/store/useAuthStore', () => ({
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: (user: unknown) => !user }));
 jest.mock('@/store/useGoogleCalendarStore', () => ({
   useGoogleCalendarStore: {
-    getState: () => ({ connect: mockConnect, setAuthSessionActive: mockSetActive }),
+    getState: () => ({ connectAuthorized: mockConnect, setAuthSessionActive: mockSetActive }),
   },
 }));
 jest.mock('@/services/calendar/googleCalendarConfig', () => ({
-  GOOGLE_AUTH_DISCOVERY: {},
   getGoogleCalendarClientId: () => mockClientId,
 }));
-jest.mock('@/services/calendar/googleCalendarAuth', () => ({
-  buildGoogleCalendarAuthRequest: () => ({
-    promptAsync: mockPrompt,
-    codeVerifier: 'verifier',
-    redirectUri: 'com.gizmolabs.openwhispr:/oauth2redirect',
-  }),
+jest.mock('@/services/calendar/googleCalendarAndroidAuth', () => ({
+  authorizeGoogleCalendarOnAndroid: () => mockAuthorize(),
 }));
 jest.mock('@/services/calendar/googleCalendarTelemetry', () => ({
   captureGoogleCalendarException: jest.fn(),
 }));
 
+import { GoogleCalendarAuthError } from '@/services/calendar/googleCalendarAuth';
 import {
   connectGoogleCalendar,
   dismissCalendarPrompt,
@@ -52,7 +44,7 @@ beforeEach(() => {
 it('says so instead of opening Google when the build has no Android client', async () => {
   mockClientId = null;
   await expect(connectGoogleCalendar()).resolves.toBe('unavailable');
-  expect(mockPrompt).not.toHaveBeenCalled();
+  expect(mockAuthorize).not.toHaveBeenCalled();
 });
 
 it('asks to sign in first', async () => {
@@ -60,22 +52,24 @@ it('asks to sign in first', async () => {
   await expect(connectGoogleCalendar()).resolves.toBe('signedOut');
 });
 
-it('goes back quietly when Google is closed or refused (C2 → C1)', async () => {
-  mockPrompt.mockResolvedValueOnce({ type: 'dismiss' });
+it("goes back quietly when Google's sheet is closed (C2 → C1)", async () => {
+  mockAuthorize.mockRejectedValueOnce(new GoogleCalendarAuthError('cancelled', 'closed'));
   await expect(connectGoogleCalendar()).resolves.toBe('cancelled');
   expect(mockConnect).not.toHaveBeenCalled();
   expect(mockSetActive.mock.calls).toEqual([[true], [false]]);
 });
 
-it('connects through the shared store with the Android redirect', async () => {
-  mockPrompt.mockResolvedValueOnce({ type: 'success', params: { code: 'abc' } });
+it('connects the account Play services authorized through the shared store', async () => {
+  const authorization = { tokens: { accessToken: 't' }, identity: { sub: 's' } };
+  mockAuthorize.mockResolvedValueOnce(authorization);
   await expect(connectGoogleCalendar()).resolves.toBe('connected');
-  expect(mockConnect).toHaveBeenCalledWith({
-    clientId: 'client.apps.googleusercontent.com',
-    code: 'abc',
-    codeVerifier: 'verifier',
-    redirectUri: 'com.gizmolabs.openwhispr:/oauth2redirect',
-  });
+  expect(mockConnect).toHaveBeenCalledWith(authorization);
+});
+
+it('reports a failed sign-in', async () => {
+  mockAuthorize.mockRejectedValueOnce(new GoogleCalendarAuthError('authorization_failed', 'x'));
+  await expect(connectGoogleCalendar()).resolves.toBe('failed');
+  expect(mockSetActive.mock.calls).toEqual([[true], [false]]);
 });
 
 it('remembers × on this phone (C4)', () => {

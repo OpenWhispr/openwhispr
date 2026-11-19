@@ -1,0 +1,15 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+group = 'com.openwhispr.googleauth'
+version = '1.0.0'
+android {
+  namespace 'com.openwhispr.googleauth'
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+dependencies {
+  // AuthorizationClient: Google's supported Android OAuth path (custom URI redirects are refused).
+  implementation 'com.google.android.gms:play-services-auth:22.0.0'
+}
