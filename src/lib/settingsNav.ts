@@ -6,6 +6,7 @@ export type SettingsSectionType =
   | "plansBilling"
   | "workspaceGeneral"
   | "workspacePeople"
+  | "workspaceTeamspaces"
   | "workspaceDeveloper"
   | "speechToText"
   | "llms"
@@ -42,6 +43,7 @@ export const SECTION_ALIASES: Record<string, SettingsSectionType> = {
   prompts: "llms",
   transcription: "speechToText",
   uploadTranscription: "speechToText",
+  noteRecording: "speechToText",
   softwareUpdates: "system",
   privacy: "privacyData",
   permissions: "privacyData",
@@ -52,6 +54,7 @@ export const SECTION_ALIASES: Record<string, SettingsSectionType> = {
 export const LEGACY_SUB_TAB: Record<string, string> = {
   transcription: "dictation",
   uploadTranscription: "upload",
+  noteRecording: "noteRecording",
   dictationAgent: "dictationAgent",
   meetings: "noteFormatting",
   noteFormatting: "noteFormatting",
@@ -65,6 +68,7 @@ export const LEGACY_SUB_TAB: Record<string, string> = {
 const WORKSPACE_SECTIONS: ReadonlySet<SettingsSectionType> = new Set([
   "workspaceGeneral",
   "workspacePeople",
+  "workspaceTeamspaces",
   "workspaceDeveloper",
 ]);
 
@@ -77,7 +81,12 @@ export function buildSettingsNav({
     ? []
     : [
         { id: "workspaceGeneral", group: "workspace" },
-        ...(hasWorkspace ? [{ id: "workspacePeople", group: "workspace" } as const] : []),
+        ...(hasWorkspace
+          ? ([
+              { id: "workspacePeople", group: "workspace" },
+              { id: "workspaceTeamspaces", group: "workspace" },
+            ] as const)
+          : []),
         ...(hasWorkspace && canManageSettings
           ? [{ id: "workspaceDeveloper", group: "workspace" } as const]
           : []),

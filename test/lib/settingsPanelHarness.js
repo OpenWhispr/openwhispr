@@ -49,7 +49,16 @@ const domNode = (trail, page) => ({
  */
 async function mountSettingsPanel(
   t,
-  { module, props, settings = {}, secrets = {}, visible = true, electronAPI = {}, fetch } = {}
+  {
+    module,
+    props,
+    settings = {},
+    secrets = {},
+    visible = true,
+    electronAPI = {},
+    fetch,
+    policy,
+  } = {}
 ) {
   let unmount = async () => {};
   // After hooks run in order: unmount while the window still exists, then stop the clock.
@@ -80,7 +89,8 @@ async function mountSettingsPanel(
     resolveAlias: { "@": path.resolve(__dirname, "../../src") },
     mockModules: {
       "react-i18next": `
-        const t = (key) => key;
+        // Interpolation values ride along, so a test can see what a string names.
+        const t = (key, options) => (options ? key + " " + JSON.stringify(options) : key);
         export function useTranslation() { return { t }; }
         export const initReactI18next = { type: "3rdParty", init() {} };
       `,
@@ -91,6 +101,8 @@ async function mountSettingsPanel(
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   useSettingsStore.setState(secrets);
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  if (policy) usePolicyStore.setState(policy);
   const { default: Panel } = await vite.ssrLoadModule(module);
   const { PanelVisibleProvider } = await vite.ssrLoadModule("/components/ui/usePanelVisible.ts");
   const { ToastContext } = await vite.ssrLoadModule("/components/ui/useToast.ts");
@@ -172,6 +184,7 @@ async function mountSettingsPanel(
   return {
     state: () => useSettingsStore.getState(),
     setStore: (patch) => act(() => useSettingsStore.setState(patch)),
+    setPolicy: (patch) => act(() => usePolicyStore.setState(patch)),
     setProps: (patch) => {
       current = { ...current, ...patch };
       return render();
@@ -196,6 +209,17 @@ async function mountSettingsPanel(
       await leaveFields();
       const tabs = find((node) => node.props?.providers?.some?.((tab) => tab.id === id))[0];
       await act(() => tabs.props.onSelect(id));
+    },
+    selectModel: async (id) => {
+      await leaveFields();
+      const list = find((node) => typeof node.props?.onModelSelect === "function")[0];
+      await act(() => list.props.onModelSelect(id));
+    },
+    // A button takes focus away from the fields, then its click runs.
+    click: async (label, index = 0) => {
+      await leaveFields();
+      const button = find((node) => node.props?.children === label && node.props.onClick)[index];
+      await act(() => button.props.onClick());
     },
     choose: async (value) => {
       await leaveFields();

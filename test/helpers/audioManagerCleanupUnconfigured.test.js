@@ -44,7 +44,12 @@ async function loadRealAudioManager(t) {
     isReasoningAvailable: async () => true,
     finalizeChineseScript: async (text) => text,
   });
-  return { window, manager, setSettings: (next) => useSettingsStore.setState(next) };
+  return {
+    window,
+    manager,
+    usePolicyStore,
+    setSettings: (next) => useSettingsStore.setState(next),
+  };
 }
 
 async function dictate(manager, text) {
@@ -142,4 +147,104 @@ test("the Cloud batch and streaming paths warn when they skip an unreachable cle
   await manager._finalizeStreamingRecording(null);
   assert.equal(streamed.text, "streamed words");
   assert.equal(streamed.cleanupFailure?.messageKey, UNCONFIGURED);
+});
+
+const APPROVED = "qwen3.5-2b-q4_k_m";
+const BLOCKED = "qwen3.5-9b-q4_k_m";
+
+async function loadManagedLlmManager(t, settings) {
+  const { managedPolicy } = require("./harness/policyFixtures");
+  const context = await loadRealAudioManager(t);
+  const { usePolicyStore } = context;
+  const policy = managedPolicy({
+    llm: { allowedModes: ["local"], allowedLocalModels: [APPROVED] },
+  });
+  policy.features = { ...policy.features, agentEnabled: true };
+  usePolicyStore.setState({
+    status: "managed",
+    managed: true,
+    appVersion: "1.11.1",
+    policy,
+    accountId: "account",
+    authGeneration: 1,
+  });
+  context.setSettings({
+    cleanupMode: "local",
+    cleanupProvider: "qwen",
+    cleanupModel: APPROVED,
+    useDictationAgent: true,
+    dictationAgentMode: "local",
+    dictationAgentProvider: "qwen",
+    dictationAgentModel: BLOCKED,
+    ...settings,
+  });
+  const reasoningCalls = [];
+  context.window.electronAPI = {
+    ...context.window.electronAPI,
+    processLocalReasoning: async (text, model) => {
+      reasoningCalls.push(model);
+      return { success: true, text: `CLEANED:${text}` };
+    },
+    cancelLocalReasoning: async () => {},
+  };
+  context.window.localStorage.setItem("agentName", "Sam");
+  Object.assign(context.manager, {
+    consumeToneStyle: async () => null,
+    consumeScreenContext: async () => null,
+    consumeSelectionCapture: async () => ({ status: "none" }),
+    consumeAssistantSelectionContext: () => null,
+  });
+  return { ...context, reasoningCalls };
+}
+
+for (const [label, settings] of [
+  ["with cleanup approved", {}],
+  ["with cleanup off", { useCleanupModel: false }],
+]) {
+  test(`a wake-word command to a blocked assistant goes to the panel, never into the text field, ${label}`, async (t) => {
+    const { manager, reasoningCalls } = await loadManagedLlmManager(t, settings);
+
+    manager.isProcessing = true;
+    await manager.processTranscription("Hey Sam, draft an email to Bob", "test");
+
+    assert.deepEqual(reasoningCalls, []);
+    assert.equal(manager.pendingAssistantConversation?.transcript, "draft an email to Bob");
+  });
+}
+
+test("with the wake word switched off, a blocked assistant changes nothing: it's dictation", async (t) => {
+  const { manager, reasoningCalls } = await loadManagedLlmManager(t, { useDictationAgent: false });
+
+  manager.isProcessing = true;
+  const text = await manager.processTranscription("Hey Sam, draft an email to Bob", "test");
+
+  assert.deepEqual(reasoningCalls, [APPROVED]);
+  assert.match(text, /CLEANED:/);
+  assert.equal(manager.pendingAssistantConversation, undefined);
+});
+
+test("ordinary dictation still gets cleaned up while the assistant is blocked", async (t) => {
+  const { manager, reasoningCalls } = await loadManagedLlmManager(t, {});
+
+  const text = await manager.processTranscription("buy milk and eggs", "test");
+
+  assert.deepEqual(reasoningCalls, [APPROVED]);
+  assert.match(text, /CLEANED:/);
+});
+
+test("a translation that skips a blocked cleanup says so", async (t) => {
+  const { manager } = await loadManagedLlmManager(t, {
+    cleanupModel: BLOCKED,
+    useDictationAgent: false,
+    useDictationTranslation: true,
+    translationMode: "local",
+    translationProvider: "qwen",
+    translationModel: APPROVED,
+    translationTargetLanguage: "fr",
+  });
+  manager.translationRequested = true;
+
+  await manager.processTranscription("hello there", "test");
+
+  assert.equal(manager.pendingCleanupFailure?.messageKey, "models.policy.modelBlocked");
 });

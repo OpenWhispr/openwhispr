@@ -50,11 +50,12 @@ const WITHOUT_SUBFOLDERS = {
 
 // Each folder holds one loaded note, and each space one root note.
 const NOTE_STORE = `
+  const { folders, counts, extraSpaces = [] } = globalThis.__tree;
   const spaces = [
-    { id: 1, kind: "private", name: "Personal", sync_status: "synced" },
-    { id: 2, kind: "team", name: "Engineering", sync_status: "synced" },
+    { id: 1, kind: "private", workspace_id: "a", name: "Personal", sync_status: "synced" },
+    { id: 2, kind: "team", workspace_id: "a", name: "Engineering", sync_status: "synced" },
+    ...extraSpaces,
   ];
-  const { folders, counts } = globalThis.__tree;
   const note = (id, space_id, folder_id, title) =>
     ({ id, space_id, folder_id, title, updated_at: "2026-10-28 09:00:00" });
   const notesByContainer = {
@@ -87,6 +88,7 @@ const NOTE_STORE = `
   export const toggleContainerExpanded = () => {};
   export const revealContainer = () => {};
   export const loadContainerNotes = async () => [];
+  export const openNote = () => {};
   const record = (name) => async (...args) => {
     globalThis.__calls.push([name, ...args]);
     if (globalThis.__folderResult) return globalThis.__folderResult;
@@ -110,7 +112,22 @@ const MOCKS = {
   `,
   "/hooks/useTeamSpacesCapability": "export const useTeamSpacesCapability = () => true;",
   "/hooks/useAuth": "export const useAuth = () => ({ isSignedIn: false, user: null });",
-  "/hooks/useWorkspace": "export const useWorkspace = () => ({ workspaces: [], loaded: true });",
+  "/hooks/useWorkspace": `
+    export const useWorkspace = () => ({ workspaces: [], loaded: true, defaultWorkspaceId: "a" });
+    export const useSpacesInWorkspaceScope = (spaces) => spaces;
+  `,
+  "/stores/deviceNotesStore": `
+    const state = {
+      folders: [],
+      notes: [],
+      viewNoteId: null,
+      load: async () => {},
+      startListening: () => () => {},
+    };
+    export const useDeviceNotesStore = Object.assign((selector) => selector(state), {
+      getState: () => state,
+    });
+  `,
   "/hooks/useCanCreateTeamSpace": "export const useCanCreateTeamSpace = () => false;",
   "/hooks/useDialogs": `
     export const useDialogs = () => ({
@@ -134,8 +151,10 @@ const MOCKS = {
   "/lib/spacePermissions": `
     export const canChangeSpaceNoteScope = () => true;
     export const canDeleteSpaceNote = () => true;
-    export const canMoveBetweenSpaces = () => true;
     export const canMoveOrDeleteSpaceFolder = () => true;
+    // A team note copies into Private; everything else here moves.
+    export const spaceTransferAction = (from, to) =>
+      from.id === to.id ? null : from.kind === "team" && to.kind === "private" ? "copy" : "move";
   `,
   "/lib/capabilities":
     "export const spaceCan = () => true; export const workspaceCan = () => true;",
@@ -363,7 +382,7 @@ test("deleting a parent folder doesn't count a child in another space", async (t
   );
 });
 
-const MOVE_RESTRICTION = "Folders and notes can't be moved back out of a team space later.";
+const MOVE_RESTRICTION = "Folders and notes can't be moved back out of a teamspace later.";
 
 const moveDescription = async (rows, title) => {
   await click(menuItem(rowTitled(rows, title), "Engineering"));
@@ -533,4 +552,44 @@ test("a parent moved to another space can be undone, a subfolder moved on its ow
     ["moveFolderToSpace", 11, 1],
     ["moveFolderToSpace", 12, 2],
   ]);
+});
+
+// The Private section also stands for the pending Private (9) until main binds it: its "Work" is
+// one row with the workspace's own, and so is its "Work / Q1", but never the top-level "Q1".
+test("the Private section nests a pending Private's subfolders under the shared parent row", async (t) => {
+  const rows = await mountTree(t, {
+    extraSpaces: [{ id: 9, kind: "private", workspace_id: null, name: "Personal" }],
+    folders: [
+      folder(11, 1, "Work"),
+      folder(12, 1, "Q1", 11),
+      folder(14, 1, "Q1"),
+      folder(90, 9, "Work"),
+      folder(91, 9, "Q1", 90),
+      folder(92, 9, "Q2", 90),
+    ],
+    counts: {},
+  });
+
+  assert.deepEqual(rowSummary(rows).slice(0, 12), [
+    ["Work", "1", "ps-2"],
+    ["Q1", "2", "ps-8"],
+    ["Q1 note", "3", "ps-14"],
+    ["Q1 note", "3", "ps-14"],
+    ["Q2", "2", "ps-8"],
+    ["Q2 note", "3", "ps-14"],
+    ["Work note", "2", "ps-8"],
+    ["Work note", "2", "ps-8"],
+    ["Q1", "1", "ps-2"],
+    ["Q1 note", "2", "ps-8"],
+    ["Loose note", "1", "ps-[30px]"],
+    ["Engineering", "1", null],
+  ]);
+});
+
+test("a note's Move to menu labels subfolders with their parent", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+
+  const labels = menuLabels(rowTitled(rows, "Loose note"));
+  assert.ok(labels.includes("Work / Q1"));
+  assert.ok(labels.includes("Planning / Roadmap"));
 });

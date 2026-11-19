@@ -42,6 +42,7 @@ async function loadDialog(t) {
   globalThis.__store = {
     members: MEMBERS,
     activeWorkspaceId: "w1",
+    membersWorkspaceId: "w1",
     refreshMembers: async () => {},
   };
   const vite = await createRendererServer(t, {
@@ -196,6 +197,62 @@ test("a roster already in the store is read again, so a member who left isn't of
   assert.doesNotMatch(text, /Mia Member/);
 });
 
+test("a read displaced by another workspace offers Retry instead of no candidates", async (t) => {
+  const { mount } = await loadDialog(t);
+  globalThis.__store.membersWorkspaceId = "w-previous";
+
+  const text = await mount({ kind: "choosing", candidateId: null });
+
+  assert.match(text, /settingsPage\.workspace\.members\.loadError/);
+  assert.match(text, /common\.retry/);
+  assert.doesNotMatch(text, /workspaces\.transfer\.noCandidates/);
+  assert.doesNotMatch(text, /Adam Admin/);
+});
+
+test("losing a loaded roster offers Retry, which restores ownership candidates", async (t) => {
+  const { props, TransferOwnershipDialog } = await loadDialog(t);
+  const container = installHostDom(t);
+  const root = createRoot(container);
+  let reads = 0;
+  globalThis.__store.refreshMembers = async () => {
+    reads++;
+    globalThis.__store.membersWorkspaceId = "w1";
+    globalThis.__store.members = MEMBERS;
+  };
+  const render = () =>
+    root.render(
+      React.createElement(TransferOwnershipDialog, props({ kind: "choosing", candidateId: null }))
+    );
+
+  try {
+    await React.act(async () => render());
+    assert.match(textOf(container), /Adam Admin/);
+
+    globalThis.__store.membersWorkspaceId = "w-other";
+    globalThis.__store.members = [{ user_id: "other", name: "Other Workspace Member" }];
+    await React.act(async () => render());
+
+    assert.match(textOf(container), /settingsPage\.workspace\.members\.loadError/);
+    assert.doesNotMatch(textOf(container), /workspaces\.transfer\.noCandidates/);
+    assert.doesNotMatch(textOf(container), /Other Workspace Member/);
+    assert.equal(globalThis.__actionDialogProps.primary.disabled, true);
+    const findRetry = (node) =>
+      node.nodeName === "BUTTON" && textOf(node) === "common.retry"
+        ? node
+        : [...node.childNodes].map(findRetry).find(Boolean);
+    const retry = findRetry(container);
+    assert.ok(retry);
+    const retryProps = Object.entries(retry).find(([key]) => key.startsWith("__reactProps$"))[1];
+    await React.act(async () => retryProps.onClick());
+
+    assert.equal(reads, 2);
+    assert.match(textOf(container), /Adam Admin/);
+    assert.doesNotMatch(textOf(container), /settingsPage\.workspace\.members\.loadError/);
+  } finally {
+    await React.act(async () => root.unmount());
+  }
+});
+
 // Picking enables Transfer ownership, which sits below the picker: a list opened downward put the
 // second click of a double-click on it, transferring before the confirmation was read.
 test("the candidate list opens upward and never flips over the buttons", async (t) => {
@@ -275,6 +332,7 @@ test("member load failure offers retry", async (t) => {
   globalThis.__store = {
     members: [],
     activeWorkspaceId: "w1",
+    membersWorkspaceId: "w1",
     refreshMembers: async () => {
       calls++;
       throw new Error("offline");
@@ -303,6 +361,7 @@ test("an empty roster loads before the picker is offered", async (t) => {
   globalThis.__store = {
     members: [],
     activeWorkspaceId: "w1",
+    membersWorkspaceId: "w1",
     refreshMembers: () =>
       new Promise((resolve) => {
         release = resolve;

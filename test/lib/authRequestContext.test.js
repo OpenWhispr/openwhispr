@@ -296,12 +296,14 @@ test("after a 401 the credential is never presented offline again", async (t) =>
 
   await failSessionFetch(t, auth);
   assert.deepEqual(auth.getOfflineAccount(), { userId: "user-a", generation: 7 });
+  assert.equal(auth.hasUsableCredential(), true, "unreachable is not refused");
 
   await auth.handleAuthRequestError({
     request: sessionRequest(7, "token-a"),
     response: new Response("", { status: 401 }),
   });
   assert.equal(auth.getOfflineAccount(), null);
+  assert.equal(auth.hasUsableCredential(), false, "a refused credential doesn't count");
 
   await failSessionFetch(t, auth);
   assert.equal(auth.getOfflineAccount(), null);

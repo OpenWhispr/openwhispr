@@ -1,7 +1,8 @@
+import { prepareAffiliateCheckout } from "../stores/affiliateStore";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAuth } from "./useAuth";
 import { withSessionRefresh } from "../lib/auth";
-import { hasValidatedAuthContext } from "../lib/authRequestContext";
+import { getValidatedAuthGeneration, hasValidatedAuthContext } from "../lib/authRequestContext";
 import { UNCONFIRMED_SESSION_CODE } from "../lib/billingPortalError";
 import {
   getUsageState,
@@ -144,14 +145,19 @@ export function useUsage(): UseUsageResult | null {
     }): Promise<{ success: boolean; error?: string }> => {
       if (checkoutInFlightRef.current)
         return { success: false, error: "Checkout already in progress" };
-      if (!hasValidatedAuthContext()) return UNCONFIRMED_SESSION;
+      const generation = getValidatedAuthGeneration();
+      if (generation == null) return UNCONFIRMED_SESSION;
       if (!window.electronAPI?.cloudCheckout || !window.electronAPI?.openExternal) {
         return { success: false, error: "App not ready" };
       }
       checkoutInFlightRef.current = true;
       setCheckoutLoading(true);
       try {
-        const result = await window.electronAPI.cloudCheckout(opts);
+        if (!(await prepareAffiliateCheckout()))
+          return { success: false, error: "REFERRAL_UNAVAILABLE" };
+        if (generation !== getValidatedAuthGeneration()) return UNCONFIRMED_SESSION;
+        const result = await window.electronAPI.cloudCheckout(opts, generation);
+        if (generation !== getValidatedAuthGeneration()) return UNCONFIRMED_SESSION;
         if (result.success && result.url) {
           pendingRefetchRef.current = true;
           await window.electronAPI.openExternal(result.url);

@@ -91,7 +91,7 @@ export function MeetingNotificationFolderPicker({
   useEffect(() => {
     if (mode === "form" && priorMode.current !== "form") {
       setDraft(matchingFolders.length ? "" : query.trim());
-      setSpaceId(context?.spaces.find((s) => s.kind === "private")?.id ?? null);
+      setSpaceId(context?.privateSpaceId ?? null);
       setLocationOpen(false);
       createRequest.current = null;
     }
@@ -99,7 +99,15 @@ export function MeetingNotificationFolderPicker({
     if (focusReady && !busy) {
       (context?.existingNote ? dialogRef : mode === "form" ? nameRef : searchRef).current?.focus();
     }
-  }, [mode, focusReady, busy, context?.spaces, context?.existingNote, matchingFolders, query]);
+  }, [
+    mode,
+    focusReady,
+    busy,
+    context?.privateSpaceId,
+    context?.existingNote,
+    matchingFolders,
+    query,
+  ]);
   useEffect(() => {
     document
       .getElementById(`meeting-folder-option-${active}`)

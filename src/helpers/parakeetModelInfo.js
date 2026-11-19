@@ -1,4 +1,4 @@
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { getRunnableSpeechModel } = require("../models/registryData.js");
 
 const TRANSDUCER_MODEL_FILES = [
   "encoder.int8.onnx",
@@ -15,7 +15,7 @@ const COHERE_TRANSCRIBE_MODEL_FILES = [
 ];
 
 function getModelInfo(modelName) {
-  return modelRegistryData.parakeetModels?.[modelName];
+  return getRunnableSpeechModel("parakeetModels", modelName) ?? undefined;
 }
 
 function getModelRuntime(modelName) {
@@ -59,7 +59,9 @@ function resolveModelLanguage(modelName, language) {
       ? language.trim().replace(/_/g, "-").split("-")[0].toLowerCase()
       : "";
   const supported = getModelInfo(modelName)?.supportedLanguages || [];
-  return supported.includes(base) ? base : "en";
+  if (supported.includes(base)) return base;
+  // English when the model offers it, otherwise a language the model can actually run.
+  return supported.length === 0 || supported.includes("en") ? "en" : supported[0];
 }
 
 module.exports = {

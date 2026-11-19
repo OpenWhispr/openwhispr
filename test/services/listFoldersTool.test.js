@@ -15,9 +15,9 @@ test("list_folders names each subfolder's parent", async () => {
       getSpaces: async () => [{ id: 1, name: "Personal", kind: "private" }],
     },
   };
-  const { listFoldersTool } = await import("../../src/services/tools/listFoldersTool.ts");
+  const { createListFoldersTool } = await import("../../src/services/tools/listFoldersTool.ts");
 
-  const result = await listFoldersTool.execute({});
+  const result = await createListFoldersTool({ spaceIds: [1] }).execute({});
   assert.deepEqual(result.data, [
     { id: 1, name: "Client A", parent: null, space: "Personal" },
     { id: 2, name: "Q1", parent: "Client A", space: "Personal" },

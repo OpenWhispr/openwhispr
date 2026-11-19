@@ -119,7 +119,16 @@ test("resolveFolderId creates a labelled subfolder under its existing parent", a
     folderId: 50,
     created: true,
   });
-  assert.deepEqual(created, [["Q2", 3, 1]]);
+  assert.deepEqual(created, [["Q2", 3, undefined, 1]]);
+});
+
+test("resolveFolderId pins a labelled subfolder's create to the turn's write guard", async () => {
+  const { resolveFolderId } = await load();
+  const created = stubFolders([CLIENT_A, Q1]);
+  const writeGuard = { accountId: "acct", authGeneration: 4 };
+
+  await resolveFolderId("Client A / Q2", { createIfMissing: true, writeGuard }, 3);
+  assert.deepEqual(created, [["Q2", 3, writeGuard, 1]]);
 });
 
 for (const [why, name] of [
@@ -150,7 +159,7 @@ test("resolveFolderId doesn't take a same-named subfolder of another parent for 
   const { resolveFolderId } = await load();
   const clientB = { id: 4, name: "Client B", space_id: 3, parent_folder_id: null };
   stubFolders([CLIENT_A, Q1, clientB]);
-  window.electronAPI.createFolder = async () => ({
+  global.window.electronAPI.createFolder = async () => ({
     success: false,
     error: "A folder with that name already exists",
   });

@@ -20,8 +20,8 @@ function createTrayManager(calls, { dictating = false, meetingRefusal = null } =
     isDictating: () => dictating,
     sendStartDictation: () => calls.push("start-dictation"),
     sendStopDictation: () => calls.push("stop-dictation"),
-    sendOpenAssistantPanel: () => calls.push("assistant"),
-    startManualMeeting: () => calls.push("meeting"),
+    openAgentWindow: () => calls.push("assistant"),
+    startManualMeeting: (options) => calls.push(`meeting from ${options?.startSource}`),
     getMeetingRecordingRefusal: () => meetingRefusal,
   };
   return trayManager;
@@ -45,9 +45,8 @@ test("the tray menu leads with the dictation pill's quick actions", () => {
   listen.click();
   assistant.click();
   meeting.click();
-  // Listening and a meeting start in the main process; only the assistant needs
-  // the renderer, which is the one that can open its panel.
-  assert.deepEqual(calls, ["start-dictation", "assistant", "meeting"]);
+  // Each starts in the main process; the assistant opens its own window.
+  assert.deepEqual(calls, ["start-dictation", "assistant", "meeting from tray"]);
 });
 
 test("the tray's listen item stops the recording it reflects", () => {

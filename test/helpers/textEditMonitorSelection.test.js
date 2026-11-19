@@ -3,6 +3,19 @@ const assert = require("node:assert/strict");
 
 const TextEditMonitor = require("../../src/helpers/textEditMonitor");
 
+test.beforeEach((t) => {
+  t.mock.method(TextEditMonitor.prototype, "resolveBinary", () => ({
+    command: "/bin/sh",
+    args: ["-c", 'echo "NO_ELEMENT"'],
+  }));
+  t.mock.method(
+    TextEditMonitor.prototype,
+    "_getSelectedTextViaAppleScript",
+    (_pid, _timeoutMs, resolve) => resolve({ state: "unavailable" })
+  );
+  t.mock.method(TextEditMonitor.prototype, "_queryMacOSValue", async () => null);
+});
+
 test("activateTargetPid resolves false when no target PID was captured", async () => {
   const m = new TextEditMonitor();
   m.lastTargetPid = null;
@@ -99,26 +112,30 @@ test("getSelectedText identifies an empty writable field", darwinOnly, async () 
   assert.deepEqual(await m.getSelectedText(42), { state: "none", editable: true });
 });
 
-test("isFocusedEditable maps the native verdicts, including the dormant-tree UNKNOWN", darwinOnly, async () => {
-  const withOutput = (line) => {
-    const m = new TextEditMonitor();
-    m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", `echo "${line}"`] });
-    return m;
-  };
+test(
+  "isFocusedEditable maps the native verdicts, including the dormant-tree UNKNOWN",
+  darwinOnly,
+  async () => {
+    const withOutput = (line) => {
+      const m = new TextEditMonitor();
+      m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", `echo "${line}"`] });
+      return m;
+    };
 
-  assert.equal(
-    await withOutput("EDITABLE").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
-    "editable"
-  );
-  assert.equal(
-    await withOutput("NOT_EDITABLE").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
-    "not_editable"
-  );
-  assert.equal(
-    await withOutput("UNKNOWN").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
-    "unknown"
-  );
-});
+    assert.equal(
+      await withOutput("EDITABLE").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
+      "editable"
+    );
+    assert.equal(
+      await withOutput("NOT_EDITABLE").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
+      "not_editable"
+    );
+    assert.equal(
+      await withOutput("UNKNOWN").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
+      "unknown"
+    );
+  }
+);
 
 test("isFocusedEditable answers from a stale binary's first monitor line", darwinOnly, async () => {
   const m = new TextEditMonitor();

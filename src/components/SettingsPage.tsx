@@ -1,6 +1,9 @@
+import CreatorLinkField from "./CreatorLinkField";
 import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { LocalOffInstalledModels } from "./settings/LocalOffInstalledModels";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
@@ -40,6 +43,7 @@ import {
   Languages,
 } from "./icons";
 import { useAuth } from "../hooks/useAuth";
+import { resetForAccountChange as resetChatForAccountChange } from "../stores/chatTurnStore";
 import { AUTH_URL, signOut } from "../lib/auth";
 import { deleteAccount } from "../lib/accountDeletionRequest";
 import { executeAccountDeletion } from "../lib/accountDeletionFlow";
@@ -70,11 +74,13 @@ import { useSignOut } from "../hooks/useSignOut";
 import { useAccountPlan } from "../hooks/useAccountPlan";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
+import { clearInsightsCache } from "../lib/insightsCache";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useClipboard } from "../hooks/useClipboard";
 import { useUpdater } from "../hooks/useUpdater";
+import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
 
 import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
@@ -133,8 +139,10 @@ import {
 } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
+import { discardPendingLocalSetup } from "./onboarding/pendingLocalModels";
 import {
   clearMissingLocalModelSelections,
+  selectedLocalSpeechModelIds,
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
@@ -158,9 +166,17 @@ import { requestSignIn } from "../utils/requestSignIn";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceGeneralSection from "./settings/WorkspaceGeneralSection";
 import WorkspacePeopleSection from "./settings/WorkspacePeopleSection";
+import WorkspaceTeamspacesSection from "./settings/WorkspaceTeamspacesSection";
 import WorkspaceDeveloperSection from "./settings/WorkspaceDeveloperSection";
 import type { SettingsSectionType } from "../lib/settingsNav";
-import { enterpriseTileCta, type EnterpriseTileCta } from "../lib/workspaceBilling";
+import {
+  businessDowngradeAction,
+  enterpriseManageAction,
+  enterpriseTileCta,
+  entitledWorkspacePlans,
+  type EnterpriseTileCta,
+} from "../lib/workspaceBilling";
+import { WorkspacePlanActionButton } from "./settings/WorkspacePlanActionButton";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
@@ -178,8 +194,8 @@ interface SettingsPageProps {
   onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
-  /** Opens the workspace picker in the Settings nav (owned by SettingsModal). */
-  onChooseWorkspace?: () => void;
+  /** Takes the user to a teamspace in Notes (owned by the control panel, which closes Settings). */
+  onOpenTeamspace?: (localSpaceId: number) => void;
 }
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
@@ -536,6 +552,8 @@ function TranscriptionSection({
   const setEnterpriseTranscriptionSetupMode = useSettingsStore(
     (s) => s.setEnterpriseTranscriptionSetupMode
   );
+  const selfHostedHeaders = useSettingsStore((s) => s.selfHostedSttHeaders.dictation);
+  const setSelfHostedSttHeaders = useSettingsStore((s) => s.setSelfHostedSttHeaders);
   const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
   const managedAvailable = useManagedScopeResolution("transcription", "managed");
   const {
@@ -795,6 +813,8 @@ function TranscriptionSection({
               onUrlChange={setRemoteTranscriptionUrl}
               model={remoteTranscriptionModel}
               onModelChange={setRemoteTranscriptionModel}
+              headers={selfHostedHeaders}
+              onHeadersChange={(rows) => setSelfHostedSttHeaders("dictation", rows)}
             />
           )}
         </>
@@ -1014,6 +1034,7 @@ function SpeechToTextTabs({
       <TabPanel active={tab === "dictation"}>{renderDictation()}</TabPanel>
       <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
       <TabPanel active={tab === "upload"}>{renderUpload()}</TabPanel>
+      <LocalOffInstalledModels scope="transcription" />
     </div>
   );
 }
@@ -1075,6 +1096,7 @@ function LlmsTabs({
       {agentAllowed && (
         <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
       )}
+      <LocalOffInstalledModels scope="llm" />
     </div>
   );
 }
@@ -1147,8 +1169,9 @@ export default function SettingsPage({
   activeSection = "general",
   onNavigateToSection,
   initialSubTab,
-  onChooseWorkspace,
+  onOpenTeamspace,
 }: SettingsPageProps) {
+  const registryVersion = useRegistryVersion();
   const { isCompact } = useSettingsLayout();
   const {
     confirmDialog,
@@ -1296,6 +1319,7 @@ export default function SettingsPage({
 
   const [currentVersion, setCurrentVersion] = useState<string>("");
   const [isRemovingModels, setIsRemovingModels] = useState(false);
+  const [retiredLocalModels, setRetiredLocalModels] = useState<Array<{ name: string }>>([]);
   const [cachePathHint, setCachePathHint] = useState(
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
       ? "%USERPROFILE%\\.cache\\openwhispr"
@@ -1323,8 +1347,18 @@ export default function SettingsPage({
     getAppVersion,
   } = useUpdater();
 
+  const organizationManagesUpdates = updateStatus.updateMode === "it_managed";
+  const updatePolicyUnavailable =
+    updateStatus.policyReady === false && updateStatus.policyUnavailable === true;
+  const updatePolicyPending = updateStatus.policyReady === false && !updatePolicyUnavailable;
+  const updateToggleLocked =
+    updatePolicyPending || updateStatus.updateMode === "always_on" || organizationManagesUpdates;
+
   const isUpdateAvailable =
     !updateStatus.isDevelopment && (updateStatus.updateAvailable || updateStatus.updateDownloaded);
+  const showUpdateDetails =
+    !organizationManagesUpdates &&
+    (isUpdateAvailable || updateStatus.updateDownloaded || updateInfo?.releaseNotes);
 
   const migration = useMigration();
 
@@ -1367,7 +1401,7 @@ export default function SettingsPage({
     try {
       await window.electronAPI.deleteAllAudio();
       setAudioStorageUsage({ fileCount: 0, totalBytes: 0 });
-      toast({ title: t("settingsPage.privacy.clearAllAudio"), variant: "default" });
+      toast({ title: t("settingsPage.privacy.clearHistoryAudio"), variant: "default" });
     } catch {
       // silent fail
     }
@@ -1418,6 +1452,16 @@ export default function SettingsPage({
   const enterpriseCta: EnterpriseTileCta = billingWorkspacesLoaded
     ? enterpriseTileCta(billingWorkspaces, activeWorkspaceId)
     : { action: "contactSales", ownerName: null };
+  // The grid's Pro badge is the personal plan; these mark what workspaces provide.
+  const workspacePlans = billingWorkspacesLoaded
+    ? entitledWorkspacePlans(billingWorkspaces)
+    : new Set<string>();
+  const enterpriseAction = billingWorkspacesLoaded
+    ? enterpriseManageAction(billingWorkspaces, activeWorkspaceId)
+    : null;
+  const businessAction = billingWorkspacesLoaded
+    ? businessDowngradeAction(billingWorkspaces, activeWorkspaceId)
+    : null;
   const { accountPlan, isWorkspaceCovered, coveringWorkspaceNames, coveringPlanLabel, planLabel } =
     useAccountPlan(usage);
   const hasShownApproachingToast = useRef(false);
@@ -1554,6 +1598,22 @@ export default function SettingsPage({
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
   const platform = getCachedPlatform();
+
+  const [modelListUpdates, setModelListUpdates] = useState(true);
+  useEffect(() => {
+    window.electronAPI
+      ?.getModelRegistryUpdates?.()
+      .then(setModelListUpdates)
+      .catch(() => {});
+  }, []);
+  const updateModelListUpdates = async (enabled: boolean) => {
+    setModelListUpdates(enabled);
+    const result = await window.electronAPI?.setModelRegistryUpdates?.(enabled);
+    if (result && !result.success) {
+      setModelListUpdates(!enabled);
+      logger.error("Failed to save model list updates", { error: result.error }, "settings");
+    }
+  };
 
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
@@ -1726,6 +1786,37 @@ export default function SettingsPage({
     });
   };
 
+  const refreshRetiredLocalModels = useCallback(async () => {
+    setRetiredLocalModels(
+      (await window.electronAPI?.listRetiredLocalModels?.(selectedLocalSpeechModelIds())) ?? []
+    );
+  }, []);
+
+  useEffect(() => {
+    void refreshRetiredLocalModels().catch(() => {});
+  }, [refreshRetiredLocalModels, registryVersion]);
+
+  const handleRemoveRetiredModels = useCallback(() => {
+    showConfirmDialog({
+      title: t("settingsPage.developer.retiredModels.confirmTitle"),
+      description: t("settingsPage.developer.retiredModels.confirmDescription"),
+      confirmText: t("settingsPage.developer.removeModels.confirmText"),
+      variant: "destructive",
+      onConfirm: async () => {
+        const result = await window.electronAPI?.deleteRetiredLocalModels?.(
+          selectedLocalSpeechModelIds()
+        );
+        await refreshRetiredLocalModels();
+        if (!result?.success) {
+          showAlertDialog({
+            title: t("settingsPage.developer.removeModels.failedTitle"),
+            description: t("settingsPage.developer.retiredModels.failedDescription"),
+          });
+        }
+      },
+    });
+  }, [refreshRetiredLocalModels, showConfirmDialog, showAlertDialog, t]);
+
   const handleRemoveModels = useCallback(() => {
     if (isRemovingModels) return;
 
@@ -1756,6 +1847,7 @@ export default function SettingsPage({
           } else {
             // Every local model is gone, so no local selection can still resolve.
             clearMissingLocalModelSelections(() => false);
+            discardPendingLocalSetup();
             window.dispatchEvent(new Event("openwhispr-models-cleared"));
             showAlertDialog({
               title: t("settingsPage.developer.removeModels.successTitle"),
@@ -1790,7 +1882,7 @@ export default function SettingsPage({
     leavePending: leaderboardLeavePending,
     ready: leaderboardParticipationReady,
     updating: leaderboardParticipationUpdating,
-  } = useLeaderboardParticipation();
+  } = useLeaderboardParticipation({ autoRefresh: activeSection === "privacyData" });
   const [leaderboardPreferencePending, setLeaderboardPreferencePending] = useState(false);
   const updateLeaderboardParticipation = useCallback(
     async (enabled: boolean) => {
@@ -1954,6 +2046,8 @@ export default function SettingsPage({
       return;
     }
 
+    // A background answer must not write under an account whose data is about to go.
+    resetChatForAccountChange();
     setIsDeletingAccount(true);
     try {
       const result = await executeAccountDeletion({
@@ -1969,6 +2063,7 @@ export default function SettingsPage({
             if (!cleanup?.success) {
               throw new Error(cleanup?.error ?? "Could not remove local account data");
             }
+            syncService.forgetAccount(accountId);
           },
           clearWorkspaceSessionState: () => syncService.purgeTeamSpacesForSignOut(),
           signOut,
@@ -2544,6 +2639,7 @@ export default function SettingsPage({
 
                 <div className="space-y-5">
                   <SectionHeader title={t("settingsPage.account.pricing.title")} />
+                  {!usage?.isPersonallySubscribed && <CreatorLinkField />}
                   <div className={`grid gap-1.5 ${isCompact ? "grid-cols-2" : "grid-cols-4"}`}>
                     <div
                       className={cn(
@@ -2682,7 +2778,9 @@ export default function SettingsPage({
                       {proCardCta === "currentPlan" ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary">
-                            {t("settingsPage.account.pricing.currentPlan")}
+                            {workspacePlans.size > 0
+                              ? t("settingsPage.account.pricing.yourPersonalPlan")
+                              : t("settingsPage.account.pricing.currentPlan")}
                           </span>
                         </div>
                       ) : proCardCta === "downgradeToPro" ? (
@@ -2733,7 +2831,14 @@ export default function SettingsPage({
                       ) : null}
                     </div>
 
-                    <div className="rounded-md border-2 border-primary/50 bg-primary/8 dark:border-primary/40 dark:bg-primary/10 p-2.5 flex flex-col relative">
+                    <div
+                      className={cn(
+                        "rounded-md border-2 p-2.5 flex flex-col relative",
+                        workspacePlans.has("business")
+                          ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
+                          : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
+                      )}
+                    >
                       <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
                         {t("settingsPage.account.pricing.business.badge")}
                       </span>
@@ -2796,15 +2901,39 @@ export default function SettingsPage({
                           {t("settingsPage.account.pricing.business.cta")}
                         </Button>
                       ) : (
-                        <div className="mt-2 text-center">
-                          <span className="text-[9px] font-medium text-primary">
-                            {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
-                          </span>
+                        <div className="mt-2 space-y-1 text-center">
+                          {workspacePlans.has("business") ? (
+                            <span className="block text-[9px] font-medium text-primary">
+                              {t("settingsPage.account.pricing.yourWorkspacePlan")}
+                            </span>
+                          ) : !businessAction ? (
+                            <span className="block text-[9px] font-medium text-muted-foreground">
+                              {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
+                            </span>
+                          ) : null}
+                          {businessAction && (
+                            <WorkspacePlanActionButton
+                              action={businessAction}
+                              onRefreshEntitlement={usage?.refetch}
+                              label={
+                                businessAction.kind === "contactSales"
+                                  ? t("settingsPage.account.pricing.enterprise.cta")
+                                  : t("settingsPage.account.pricing.downgrade")
+                              }
+                            />
+                          )}
                         </div>
                       )}
                     </div>
 
-                    <div className="rounded-md border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
+                    <div
+                      className={cn(
+                        "rounded-md p-2.5 flex flex-col",
+                        workspacePlans.has("enterprise")
+                          ? "border-2 border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
+                          : "border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
+                      )}
+                    >
                       <p className="text-xs font-semibold text-foreground">
                         {t("settingsPage.account.pricing.enterprise.name")}
                       </p>
@@ -2837,6 +2966,21 @@ export default function SettingsPage({
                           </li>
                         ))}
                       </ul>
+                      {isSignedIn && workspacePlans.has("enterprise") && (
+                        <div className="mt-2 space-y-1 text-center">
+                          <span className="block text-[9px] font-medium text-primary">
+                            {t("settingsPage.account.pricing.yourWorkspacePlan")}
+                          </span>
+                          {enterpriseAction && (
+                            <WorkspacePlanActionButton
+                              action={enterpriseAction}
+                              onRefreshEntitlement={usage?.refetch}
+                              label={t("settingsPage.account.pricing.manage")}
+                            />
+                          )}
+                        </div>
+                      )}
+                      {/* Another workspace can still be upgraded alongside the current plan. */}
                       {isSignedIn && enterpriseCta.action !== "contactSales" ? (
                         <div className="mt-2 space-y-1">
                           <Button
@@ -2866,7 +3010,7 @@ export default function SettingsPage({
                             {t("settingsPage.account.pricing.enterprise.cta")}
                           </Button>
                         </div>
-                      ) : isSignedIn ? (
+                      ) : isSignedIn && workspacePlans.has("enterprise") ? null : isSignedIn ? (
                         <div className="mt-2 space-y-1">
                           <Button
                             variant="outline"
@@ -3024,15 +3168,15 @@ export default function SettingsPage({
         );
 
       case "workspaceGeneral":
-        return (
-          <WorkspaceGeneralSection
-            onNavigateToSection={onNavigateToSection}
-            onChooseWorkspace={onChooseWorkspace}
-          />
-        );
+        return <WorkspaceGeneralSection onNavigateToSection={onNavigateToSection} />;
 
       case "workspacePeople":
-        return <WorkspacePeopleSection initialSubTab={initialSubTab} />;
+        return (
+          <WorkspacePeopleSection initialSubTab={initialSubTab} onOpenTeamspace={onOpenTeamspace} />
+        );
+
+      case "workspaceTeamspaces":
+        return <WorkspaceTeamspacesSection onOpenTeamspace={onOpenTeamspace} />;
 
       case "workspaceDeveloper":
         return <WorkspaceDeveloperSection />;
@@ -4229,11 +4373,6 @@ EOF`,
                       </div>
                     </div>
                   )}
-                  {!migration && cloudBackupEnabled && isSignedIn && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("settingsPage.privacy.cloudNotesMigrationDone")}
-                    </p>
-                  )}
                   {cloudBackupEnabled &&
                     isSignedIn &&
                     (() => {
@@ -4342,6 +4481,17 @@ EOF`,
                     <Toggle checked={telemetryEnabled} onChange={setTelemetryEnabled} />
                   </SettingsRow>
                 </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.modelListUpdates")}
+                    description={t("settingsPage.privacy.modelListUpdatesDescription")}
+                  >
+                    <Toggle
+                      checked={modelListUpdates}
+                      onChange={(enabled) => void updateModelListUpdates(enabled)}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
@@ -4393,11 +4543,11 @@ EOF`,
                     label={t("settingsPage.privacy.audioStorageUsage")}
                     description={
                       audioStorageUsage.fileCount > 0
-                        ? t("settingsPage.privacy.audioStorageFiles", {
+                        ? t("settingsPage.privacy.audioStorageHistoryFiles", {
                             count: audioStorageUsage.fileCount,
                             size: formatBytes(audioStorageUsage.totalBytes),
                           })
-                        : t("settingsPage.privacy.audioStorageEmpty")
+                        : t("settingsPage.privacy.audioStorageHistoryEmpty")
                     }
                   >
                     <Button
@@ -4407,7 +4557,7 @@ EOF`,
                       disabled={audioStorageUsage.fileCount === 0}
                       onClick={handleClearAllAudio}
                     >
-                      {t("settingsPage.privacy.clearAllAudio")}
+                      {t("settingsPage.privacy.clearHistoryAudio")}
                     </Button>
                   </SettingsRow>
                 </SettingsPanelRow>
@@ -4441,7 +4591,12 @@ EOF`,
                     <select
                       value={transcriptRetentionDays}
                       disabled={!effectiveDataRetentionEnabled}
-                      onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
+                      onChange={(e) => {
+                        setTranscriptRetentionDays(parseInt(e.target.value, 10));
+                        // A shorter period may remove counters, and Insights would otherwise
+                        // open on the kept totals that still count them.
+                        clearInsightsCache();
+                      }}
                       className={RETENTION_SELECT_CLASS}
                     >
                       <option value={0}>
@@ -4573,13 +4728,19 @@ EOF`,
                   <SettingsRow
                     label={t("settingsPage.general.updates.currentVersion")}
                     description={
-                      updateStatus.isDevelopment
-                        ? t("settingsPage.general.updates.devMode")
-                        : !updateStatus.isSupported
-                          ? t("settingsPage.general.updates.managedByPackageManager")
-                          : isUpdateAvailable
-                            ? t("settingsPage.general.updates.newVersionAvailable")
-                            : t("settingsPage.general.updates.latestVersion")
+                      organizationManagesUpdates
+                        ? t("settingsPage.general.updates.itManaged")
+                        : updateStatus.isDevelopment
+                          ? t("settingsPage.general.updates.devMode")
+                          : !updateStatus.isSupported
+                            ? t("settingsPage.general.updates.managedByPackageManager")
+                            : isUpdateAvailable
+                              ? t("settingsPage.general.updates.newVersionAvailable")
+                              : updatePolicyPending
+                                ? t("settingsPage.general.updates.policyLoading")
+                                : updatePolicyUnavailable
+                                  ? t("settingsPage.general.updates.policyUnavailable")
+                                  : t("settingsPage.general.updates.latestVersion")
                     }
                   >
                     <div className="flex items-center gap-2.5">
@@ -4589,7 +4750,11 @@ EOF`,
                       >
                         {currentVersion || t("settingsPage.general.updates.versionPlaceholder")}
                       </span>
-                      {updateStatus.isDevelopment ? (
+                      {organizationManagesUpdates ? (
+                        <Badge variant="outline">
+                          {t("settingsPage.general.updates.managedBadge")}
+                        </Badge>
+                      ) : updateStatus.isDevelopment ? (
                         <Badge variant="warning">
                           {t("settingsPage.general.updates.badges.dev")}
                         </Badge>
@@ -4610,16 +4775,25 @@ EOF`,
                   <SettingsPanelRow>
                     <SettingsRow
                       label={t("settingsPage.general.updates.automaticUpdates")}
-                      description={t("settingsPage.general.updates.automaticUpdatesDescription")}
+                      description={t(
+                        updatePolicyPending
+                          ? "settingsPage.general.updates.policyLoading"
+                          : updateToggleLocked
+                            ? "settingsPage.general.updates.managedByOrganization"
+                            : "settingsPage.general.updates.automaticUpdatesDescription"
+                      )}
                     >
-                      <Toggle checked={autoUpdatesEnabled} onChange={setAutoUpdatesEnabled} />
+                      <Toggle
+                        checked={updateStatus.effectiveAutoUpdatesEnabled ?? autoUpdatesEnabled}
+                        onChange={setAutoUpdatesEnabled}
+                        disabled={updateToggleLocked}
+                        ariaLabel={t("settingsPage.general.updates.automaticUpdates")}
+                      />
                     </SettingsRow>
                   </SettingsPanelRow>
                 )}
 
-                {(isUpdateAvailable ||
-                  updateStatus.updateDownloaded ||
-                  updateInfo?.releaseNotes) && (
+                {showUpdateDetails && (
                   <SettingsPanelRow>
                     <div className="space-y-2.5">
                       {isUpdateAvailable && !updateStatus.updateDownloaded && (
@@ -4628,7 +4802,12 @@ EOF`,
                             onClick={async () => {
                               try {
                                 await downloadUpdate();
-                              } catch {
+                              } catch (error) {
+                                const policyMessage = updatePolicyMessageKey(error);
+                                if (policyMessage) {
+                                  toast({ title: t(policyMessage) });
+                                  return;
+                                }
                                 showAlertDialog({
                                   title: t(
                                     "settingsPage.general.updates.dialogs.downloadFailed.title"
@@ -4685,7 +4864,12 @@ EOF`,
                               onConfirm: async () => {
                                 try {
                                   await installUpdateAction();
-                                } catch {
+                                } catch (error) {
+                                  const policyMessage = updatePolicyMessageKey(error);
+                                  if (policyMessage) {
+                                    toast({ title: t(policyMessage) });
+                                    return;
+                                  }
                                   showAlertDialog({
                                     title: t(
                                       "settingsPage.general.updates.dialogs.installFailed.title"
@@ -4732,12 +4916,20 @@ EOF`,
                   </SettingsPanelRow>
                 )}
               </SettingsPanel>
+              {organizationManagesUpdates && updateStatus.stagedUpdate && (
+                <p role="status" className="mt-3 text-xs text-warning">
+                  {t("settingsPage.general.updates.stagedBeforePolicy")}
+                </p>
+              )}
               <div className="mt-5 flex justify-end">
                 <Button
                   onClick={async () => {
                     try {
                       const result = await checkForUpdates();
-                      if (result && !result.updateAvailable) {
+                      const policyMessage = updatePolicyMessageKey(result);
+                      if (policyMessage) {
+                        toast({ title: t(policyMessage) });
+                      } else if (result && !result.updateAvailable) {
                         toast({
                           title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
                           description: t(
@@ -4755,7 +4947,10 @@ EOF`,
                     }
                   }}
                   disabled={
-                    checkingForUpdates || updateStatus.isDevelopment || !updateStatus.isSupported
+                    checkingForUpdates ||
+                    updatePolicyPending ||
+                    (!organizationManagesUpdates &&
+                      (updateStatus.isDevelopment || !updateStatus.isSupported))
                   }
                   variant="outline"
                   size="sm"
@@ -4816,6 +5011,20 @@ EOF`,
                       </div>
                     </SettingsRow>
                   </SettingsPanelRow>
+                  {retiredLocalModels.length > 0 && (
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.developer.retiredModels.label")}
+                        description={t("settingsPage.developer.retiredModels.description", {
+                          models: retiredLocalModels.map(({ name }) => name).join(", "),
+                        })}
+                      >
+                        <Button variant="destructive" size="sm" onClick={handleRemoveRetiredModels}>
+                          {t("settingsPage.developer.retiredModels.remove")}
+                        </Button>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  )}
                 </SettingsPanel>
 
                 <SettingsPanel>
@@ -4830,6 +5039,7 @@ EOF`,
                             title: t("settingsPage.developer.resetAll.title"),
                             description: t("settingsPage.developer.resetAll.description"),
                             onConfirm: async () => {
+                              resetChatForAccountChange();
                               try {
                                 try {
                                   await signOut();

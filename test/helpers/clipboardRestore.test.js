@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 const childProcess = require("node:child_process");
+const fs = require("node:fs");
 
 const fakeClipboard = {
   text: "",
@@ -80,6 +81,7 @@ function loadClipboardManager({
   cosmicAppId,
   accessibility = true,
   realModifierWait = false,
+  realUinputAccess = false,
 } = {}) {
   delete require.cache[clipboardModulePath];
 
@@ -103,6 +105,10 @@ function loadClipboardManager({
 
   try {
     const LoadedClipboardManager = require("../../src/helpers/clipboard");
+    if (!realUinputAccess) {
+      // Dispatch tests mock the helper, so host permissions must not choose the path.
+      LoadedClipboardManager.prototype._canAccessUinput = () => true;
+    }
     if (!realModifierWait) {
       LoadedClipboardManager.prototype._awaitModifierRelease = async () => ({
         state: "released",
@@ -166,16 +172,22 @@ async function withWaylandEnvironment(desktop, callback) {
   const previous = {
     XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE,
     XDG_CURRENT_DESKTOP: process.env.XDG_CURRENT_DESKTOP,
+    XDG_SESSION_DESKTOP: process.env.XDG_SESSION_DESKTOP,
+    DESKTOP_SESSION: process.env.DESKTOP_SESSION,
     WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY,
     HYPRLAND_INSTANCE_SIGNATURE: process.env.HYPRLAND_INSTANCE_SIGNATURE,
+    SWAYSOCK: process.env.SWAYSOCK,
     DISPLAY: process.env.DISPLAY,
   };
   process.env.XDG_SESSION_TYPE = "wayland";
   process.env.XDG_CURRENT_DESKTOP = desktop;
+  process.env.XDG_SESSION_DESKTOP = desktop;
+  process.env.DESKTOP_SESSION = desktop;
   process.env.WAYLAND_DISPLAY = "wayland-1";
   delete process.env.DISPLAY;
   if (desktop === "Hyprland") process.env.HYPRLAND_INSTANCE_SIGNATURE = "test";
   else delete process.env.HYPRLAND_INSTANCE_SIGNATURE;
+  delete process.env.SWAYSOCK;
   try {
     return await callback();
   } finally {
@@ -201,6 +213,343 @@ function resetClipboard({
   fakeClipboard.buffers = {};
   fakeClipboard.writes = [];
 }
+
+for (const [label, platform, backend, expectedDispatches] of [
+  ["macOS permission check", "darwin", "permission", 0],
+  ["macOS dispatch delay", "darwin", "osascript", 0],
+  ["macOS retry delay", "darwin", "retry", 1],
+  ["Windows fast-paste delay", "win32", "fast", 0],
+  ["Windows fallback delay", "win32", "fallback", 1],
+  ["Windows nircmd delay", "win32", "nircmd", 0],
+  ["Windows PowerShell delay", "win32", "powershell", 0],
+  ["Linux modifier wait", "linux", "modifiers", 0],
+  ["Linux tool delay", "linux", "xdotool", 0],
+  ["Linux fallback delay", "linux", "fallback", 1],
+]) {
+  test(`caret cancellation during ${label} stops pending input and restores its clipboard`, async (t) => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: platform });
+    t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+    const calls = [];
+    let cancel;
+    const failingFirst = ["retry", "fallback"].includes(backend);
+    const spawn = createSpawn(calls, failingFirst ? [platform === "darwin" ? 3 : 1] : []);
+    const Manager = loadClipboardManager({
+      spawn: (...args) => {
+        const child = spawn(...args);
+        if (failingFirst && calls.length === 1) setTimeout(() => cancel(), 0);
+        return child;
+      },
+      spawnSync: createSpawnSync([]),
+    });
+    const clipboardManager = new Manager();
+    clipboardManager.resolveFastPasteBinary = () =>
+      backend === "retry" ? "/mock/mac-paste" : null;
+    clipboardManager.resolveWindowsFastPasteBinary = () =>
+      ["fast", "fallback"].includes(backend) ? "/mock/windows-paste" : null;
+    clipboardManager.getNircmdPath = () => (backend === "powershell" ? null : "/mock/nircmd");
+    clipboardManager.resolveLinuxFastPasteBinary = () =>
+      backend === "fallback" ? "/mock/linux-paste" : null;
+    clipboardManager.commandExists = (command) => command === "xdotool";
+    clipboardManager._isWayland = () => false;
+    let finishWait;
+    if (["permission", "modifiers"].includes(backend)) {
+      const wait = new Promise((resolve) => (finishWait = resolve));
+      if (backend === "permission") clipboardManager.checkAccessibilityPermissions = () => wait;
+      else clipboardManager._awaitModifierRelease = () => wait;
+    }
+    const SelectionManager = require("../../src/helpers/selectionManager");
+    const manager = new SelectionManager({ clipboardManager, textEditMonitor: {}, platform });
+    manager.sessions.set("pending-dispatch", {
+      kind: "caret",
+      target: { kind: "win-hwnd", id: "123" },
+      expiresAt: Date.now() + 10000,
+    });
+    manager._readCurrentSelection = async () => ({ status: "editable" });
+    manager._isCapturedCaretTarget = async () => true;
+    cancel = () => manager.cancelSelectionEdit("pending-dispatch");
+    resetClipboard({
+      text: "original",
+      html: "<b>original</b>",
+      formats: ["text/plain", "text/html"],
+    });
+    const delivery = manager.pasteAtCapturedTarget("pending-dispatch", "Cancelled answer");
+    if (!failingFirst) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      cancel();
+      finishWait?.(backend === "permission" ? true : { state: "released", waitedMs: 500 });
+    }
+    const result = await delivery;
+    assert.deepEqual(result, { success: false, code: "cancelled" });
+    assert.equal(calls.length, expectedDispatches, "no pending or fallback input is dispatched");
+    assert.equal(fakeClipboard.text, "original");
+    assert.equal(fakeClipboard.html, "<b>original</b>");
+  });
+}
+
+test("a cancelled caret dispatch preserves clipboard text copied during its permission wait", async (t) => {
+  withDarwin(t);
+  const calls = [];
+  const Manager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+  const manager = new Manager();
+  manager.resolveFastPasteBinary = () => null;
+  let releasePermissions;
+  manager.checkAccessibilityPermissions = () =>
+    new Promise((resolve) => (releasePermissions = resolve));
+  let cancelled = false;
+  resetClipboard({ text: "original" });
+  const pending = manager._pasteText("Cancelled answer", { isCancelled: () => cancelled });
+  fakeClipboard.writeText("copied meanwhile");
+  cancelled = true;
+  releasePermissions(true);
+  const result = await pending;
+  await result.restoreComplete;
+  assert.equal(result.reason, "cancelled");
+  assert.deepEqual(calls, []);
+  assert.equal(fakeClipboard.text, "copied meanwhile");
+});
+
+test("cancelled Wayland input preserves a newer native clipboard when XWayland is stale", async (t) => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux" });
+  t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+  const Manager = loadClipboardManager();
+  const manager = new Manager();
+  manager.resolveLinuxFastPasteBinary = () => null;
+  manager.commandExists = () => false;
+  let nativeClipboard = "original";
+  manager._readWaylandClipboardText = () => nativeClipboard;
+  manager._writeClipboardWayland = (text) => {
+    nativeClipboard = text;
+    fakeClipboard.writeText(text);
+    return true;
+  };
+  manager._readPrimarySelection = () => "original primary";
+  manager._writePrimarySelection = () => true;
+  let releaseModifiers;
+  manager._awaitModifierRelease = () => new Promise((resolve) => (releaseModifiers = resolve));
+  let cancelled = false;
+  resetClipboard({ text: "original" });
+  await withWaylandEnvironment("niri", async () => {
+    const pending = manager._pasteText("Cancelled answer", { isCancelled: () => cancelled });
+    nativeClipboard = "copied in a native app";
+    assert.equal(fakeClipboard.text, "Cancelled answer");
+    cancelled = true;
+    releaseModifiers({ state: "released", waitedMs: 100 });
+    const result = await pending;
+    await result.restoreComplete;
+    assert.equal(result.reason, "cancelled");
+    assert.equal(nativeClipboard, "copied in a native app");
+  });
+});
+
+for (const userChangedPrimary of [false, true]) {
+  test(`cancelled Linux input restores only its own primary selection (user changed: ${userChangedPrimary})`, async (t) => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "linux" });
+    t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+    const calls = [];
+    const Manager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+    const manager = new Manager();
+    manager.resolveLinuxFastPasteBinary = () => null;
+    manager.commandExists = () => false;
+    let primary = "original primary";
+    manager._readPrimarySelection = () => primary;
+    manager._writePrimarySelection = (text) => {
+      primary = text;
+      return false;
+    };
+    let releaseModifiers;
+    manager._awaitModifierRelease = () => new Promise((resolve) => (releaseModifiers = resolve));
+    let cancelled = false;
+    resetClipboard({ text: "original clipboard" });
+    const pending = manager._pasteText("Cancelled answer", { isCancelled: () => cancelled });
+    assert.equal(primary, "Cancelled answer");
+    if (userChangedPrimary) primary = "selected meanwhile";
+    cancelled = true;
+    releaseModifiers({ state: "released", waitedMs: 100 });
+    const result = await pending;
+    await result.restoreComplete;
+    assert.equal(result.reason, "cancelled");
+    assert.deepEqual(calls, []);
+    assert.equal(fakeClipboard.text, "original clipboard");
+    assert.equal(primary, userChangedPrimary ? "selected meanwhile" : "original primary");
+  });
+}
+
+for (const startedPosting of [false, true]) {
+  test(`portal caret cancellation closes stdin and preserves committed input (posting: ${startedPosting})`, async (t) => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "linux" });
+    t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+    let portal;
+    let inputClosed = false;
+    const dispatched = [];
+    const Manager = loadClipboardManager({
+      spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1 portal-approval-v1") }),
+      spawn: () => {
+        portal = new EventEmitter();
+        portal.stdout = new EventEmitter();
+        portal.stderr = new EventEmitter();
+        portal.stdin = {
+          on() {},
+          end() {
+            inputClosed = true;
+          },
+        };
+        portal.kill = () => assert.fail("portal cancellation must not interrupt a key chord");
+        return portal;
+      },
+    });
+    const clipboardManager = new Manager();
+    clipboardManager.resolveLinuxFastPasteBinary = () => "/mock/linux-paste";
+    clipboardManager.commandExists = () => false;
+    clipboardManager._detectKdeWindowClass = () => "gedit";
+    clipboardManager._readPortalToken = () => null;
+    clipboardManager._canAccessUinput = () => false;
+    clipboardManager._writeClipboardWayland = (text) => {
+      fakeClipboard.writeText(text);
+      return true;
+    };
+    clipboardManager._readWaylandClipboardText = () => fakeClipboard.text;
+    clipboardManager._readPrimarySelection = () => "";
+    clipboardManager._writePrimarySelection = () => true;
+    const SelectionManager = require("../../src/helpers/selectionManager");
+    const manager = new SelectionManager({
+      clipboardManager,
+      textEditMonitor: {},
+      platform: "linux",
+    });
+    manager.sessions.set("portal-caret", {
+      kind: "caret",
+      target: { kind: "atspi-pid", id: "123" },
+      expiresAt: Date.now() + 10000,
+    });
+    manager._readCurrentSelection = async () => ({ status: "editable" });
+    manager._isCapturedCaretTarget = async () => true;
+    resetClipboard({ text: "original" });
+    await withWaylandEnvironment("KDE", async () => {
+      const pending = manager.pasteAtCapturedTarget("portal-caret", "Cancelled answer");
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.ok(portal, "the request is waiting on RemoteDesktop approval");
+      if (startedPosting) dispatched.push("committed input");
+      manager.cancelSelectionEdit("portal-caret");
+      if (!inputClosed && !startedPosting) dispatched.push("late approved input");
+      portal.emit("close", startedPosting ? 0 : inputClosed ? 7 : 0);
+      assert.deepEqual(
+        await pending,
+        startedPosting ? { success: true } : { success: false, code: "cancelled" }
+      );
+      assert.deepEqual(dispatched, startedPosting ? ["committed input"] : []);
+      assert.equal(clipboardManager.portalFailed, false);
+      assert.equal(fakeClipboard.text, "original");
+    });
+  });
+}
+
+test("a cancellable portal never starts an old helper without the safe EOF protocol", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({
+    spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-keysym-v1") }),
+    spawn: createSuccessfulSpawn(calls),
+  });
+  const manager = new Manager();
+  const controller = new AbortController();
+  await assert.rejects(
+    manager._runPortalPaste("/mock/old-paste", { signal: controller.signal }),
+    /portal-cancellation-unavailable/
+  );
+  assert.deepEqual(calls, []);
+});
+
+for (const committed of [false, true]) {
+  test(`a caret portal deadline preserves ${committed ? "committed input" : "working paste fallbacks"}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const calls = [];
+    const successfulSpawn = createSuccessfulSpawn(calls);
+    let markPortalStarted;
+    const portalStarted = new Promise((resolve) => (markPortalStarted = resolve));
+    const Manager = loadClipboardManager({
+      spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1 portal-approval-v1") }),
+      spawn: (command, args) => {
+        if (!args.includes("--portal")) return successfulSpawn(command, args);
+        calls.push({ command, args });
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        child.stdin = {
+          on() {},
+          end() {
+            process.nextTick(() => child.emit("close", committed ? 0 : 7));
+          },
+        };
+        markPortalStarted();
+        return child;
+      },
+    });
+    const manager = new Manager();
+    manager.commandExists = () => false;
+    manager.resolveLinuxFastPasteBinary = () => "/mock/linux-paste";
+    manager._readPortalToken = () => "restore-token";
+    const controller = new AbortController();
+    const options = {
+      signal: controller.signal,
+      isCancelled: () => controller.signal.aborted,
+    };
+
+    await withWaylandEnvironment("GNOME", async () => {
+      const pending = manager.pasteLinux(null, options);
+      await portalStarted;
+      t.mock.timers.tick(2500);
+      const result = await pending;
+      assert.equal(result.method, committed ? "portal" : "uinput");
+      assert.equal(controller.signal.aborted, false);
+      assert.equal(Boolean(manager.portalFailed), !committed);
+      if (!committed) {
+        await manager.pasteLinux(null, options);
+        assert.deepEqual(
+          calls.map((call) => call.args[0]),
+          ["--portal", "--uinput", "--uinput"]
+        );
+      } else assert.equal(calls.length, 1, "committed input must never be pasted twice");
+    });
+  });
+}
+
+test("Wayland test environments isolate desktop metadata and restore it after a failure", async (t) => {
+  const previous = {
+    XDG_SESSION_DESKTOP: process.env.XDG_SESSION_DESKTOP,
+    DESKTOP_SESSION: process.env.DESKTOP_SESSION,
+    SWAYSOCK: process.env.SWAYSOCK,
+  };
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  process.env.XDG_SESSION_DESKTOP = "Hyprland";
+  process.env.DESKTOP_SESSION = "sway";
+  process.env.SWAYSOCK = "/tmp/stale-sway.sock";
+  const { getLinuxSessionInfo } = require("../../src/helpers/linuxSession");
+
+  await assert.rejects(
+    withWaylandEnvironment("COSMIC", async () => {
+      const session = getLinuxSessionInfo();
+      assert.equal(session.isCosmic, true);
+      assert.equal(session.isWlroots, false);
+      assert.equal(process.env.XDG_SESSION_DESKTOP, "COSMIC");
+      assert.equal(process.env.DESKTOP_SESSION, "COSMIC");
+      assert.equal(process.env.SWAYSOCK, undefined);
+      throw new Error("test callback failed");
+    }),
+    { message: "test callback failed" }
+  );
+
+  assert.equal(process.env.XDG_SESSION_DESKTOP, "Hyprland");
+  assert.equal(process.env.DESKTOP_SESSION, "sway");
+  assert.equal(process.env.SWAYSOCK, "/tmp/stale-sway.sock");
+});
 
 test("restore preserves rich clipboard formats atomically", () => {
   resetClipboard({
@@ -792,6 +1141,88 @@ test("GNOME tries uinput before a tokenless portal", async () => {
   ]);
 });
 
+test("GNOME skips inaccessible uinput and falls back to the portal", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._canAccessUinput = () => false;
+
+  const result = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+
+  assert.equal(result.method, "portal");
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+  ]);
+});
+
+test("uinput dispatch rechecks permissions instead of trusting cached access", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux" });
+  t.after(() => Object.defineProperty(process, "platform", platform));
+  let writable = false;
+  const access = t.mock.method(fs, "accessSync", (file, mode) => {
+    assert.equal(file, "/dev/uinput");
+    assert.equal(mode, fs.constants.W_OK);
+    if (!writable) throw new Error("EACCES");
+  });
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+    realUinputAccess: true,
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+
+  assert.equal(manager._canAccessUinput(), false);
+  writable = true;
+  const granted = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+  assert.equal(granted.method, "uinput");
+  assert.equal(manager._canAccessUinput(), true);
+
+  writable = false;
+  const revoked = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+  assert.equal(revoked.method, "portal");
+  assert.equal(manager._canAccessUinput(), false);
+  assert.equal(access.mock.callCount(), 3);
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+  ]);
+});
+
+test("uinput logs dispatch without claiming the target received the paste", async (t) => {
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const info = t.mock.method(debugLogger, "info", () => {});
+  const TestClipboardManager = loadClipboardManager({ spawn: createSuccessfulSpawn([]) });
+  const manager = new TestClipboardManager();
+  const log = t.mock.method(manager, "safeLog", () => {});
+  // Unrelated diagnostics must not make this wording check fail.
+  debugLogger.info("Unrelated diagnostic", { method: "other" }, "clipboard");
+  manager.safeLog("✅ Paste successful using another tool");
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+
+  const result = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+
+  assert.equal(result.method, "uinput");
+  const uinputEvents = info.mock.calls.filter((call) => call.arguments[1]?.method === "uinput");
+  assert.ok(uinputEvents.some((call) => call.arguments[0] === "Paste injection dispatched"));
+  assert.ok(uinputEvents.every((call) => !call.arguments[0].includes("Paste successful")));
+  const uinputMessages = log.mock.calls
+    .map((call) => call.arguments[0])
+    .filter((message) => message.includes("linux-fast-paste (uinput)"));
+  assert.ok(uinputMessages.some((message) => message.includes("injection dispatched")));
+  assert.ok(uinputMessages.every((message) => !message.includes("Paste successful")));
+});
+
 test("GNOME falls back to a tokenless portal after uinput fails", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({
@@ -869,6 +1300,7 @@ test("GNOME pastes through a running ydotoold before the ephemeral uinput device
   manager._readPortalToken = () => null;
   manager._isYdotoolDaemonRunning = () => true;
   manager._isYdotoolLegacy = () => false;
+  manager._canAccessUinput = () => false;
 
   const result = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
 
@@ -968,6 +1400,263 @@ test("KDE tries portal before uinput", async () => {
     ]
   );
 });
+
+for (const legacy of [false, true]) {
+  test(`KDE uses a running ydotoold before ephemeral uinput (${legacy ? "legacy" : "current"})`, async () => {
+    const calls = [];
+    const Manager = loadClipboardManager({ spawn: createSpawn(calls, [1, 0]) });
+    const manager = new Manager();
+    manager.commandExists = (command) => command === "ydotool";
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._readPortalToken = () => null;
+    manager._isYdotoolDaemonRunning = () => true;
+    manager._isYdotoolLegacy = () => legacy;
+
+    const result = await withWaylandEnvironment("KDE", () => manager.pasteLinux(null));
+
+    assert.equal(result.method, "ydotool");
+    assert.deepEqual(calls, [
+      { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+      {
+        command: "ydotool",
+        args: legacy ? ["key", "shift+Insert"] : ["key", "42:1", "110:1", "110:0", "42:0"],
+      },
+    ]);
+  });
+}
+
+test("KDE keeps a successful portal ahead of a running ydotoold", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "ydotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._isYdotoolDaemonRunning = () => true;
+
+  const result = await withWaylandEnvironment("KDE", () => manager.pasteLinux(null));
+
+  assert.equal(result.method, "portal");
+  assert.deepEqual(calls, [
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+  ]);
+});
+
+test("KDE falls back to ephemeral uinput when ydotool fails", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({ spawn: createSpawn(calls, [1, 1, 0]) });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "ydotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._isYdotoolDaemonRunning = () => true;
+  manager._isYdotoolLegacy = () => false;
+
+  const result = await withWaylandEnvironment("KDE", () => manager.pasteLinux(null));
+
+  assert.equal(result.method, "uinput");
+  assert.deepEqual(
+    calls.map(({ command }) => command),
+    ["/tmp/linux-fast-paste", "ydotool", "/tmp/linux-fast-paste"]
+  );
+  assert.deepEqual(calls[2].args, ["--uinput", "--shift-insert"]);
+});
+
+test("KDE does not retry a failed ydotool after the native paths fail", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({ spawn: createSpawn(calls, [1, 1, 1]) });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "ydotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._isYdotoolDaemonRunning = () => true;
+  manager._isYdotoolLegacy = () => false;
+
+  await assert.rejects(
+    withWaylandEnvironment("KDE", () => manager.pasteLinux(null)),
+    {
+      code: "PASTE_SIMULATION_FAILED",
+    }
+  );
+
+  assert.deepEqual(
+    calls.map(({ command }) => command),
+    ["/tmp/linux-fast-paste", "ydotool", "/tmp/linux-fast-paste"]
+  );
+});
+
+for (const [windowClass, expectedFlag] of [
+  ["code", "--shift-insert"],
+  [" Code ", "--shift-insert"],
+  ["code-insiders", "--shift-insert"],
+  [" Code - Insiders ", "--shift-insert"],
+  ["code-oss", "--shift-insert"],
+  ["Code - OSS", "--shift-insert"],
+  ["com.microsoft.vscode", "--shift-insert"],
+  [" Com.Microsoft.VSCode ", "--shift-insert"],
+  ["konsole", "--shift-insert"],
+  [null, "--shift-insert"],
+  ["kitty", "--terminal"],
+  ["firefox", null],
+  ["my-code-editor", null],
+  ["com.microsoft.vscode-other", null],
+  ["code - oss-other", null],
+  ["decode", null],
+]) {
+  for (const desktop of ["KDE", "Hyprland"]) {
+    test(`${desktop} chooses the paste shortcut for ${JSON.stringify(windowClass)} without an X11 PID`, async () => {
+      const calls = [];
+      const TestClipboardManager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+      const manager = new TestClipboardManager();
+      manager.commandExists = (command) => desktop === "Hyprland" && command === "wtype";
+      manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+      manager._readPortalToken = () => null;
+      manager._detectKdeWindowClass = () => windowClass;
+      manager._detectHyprlandWindowClass = () => windowClass;
+
+      await withWaylandEnvironment(desktop, () => manager.pasteLinux(null));
+
+      // KDE's portal uses Shift+Insert for every non-Warp window (#2055).
+      // Hyprland still distinguishes VS Code from unrelated window identities.
+      const wtypeArgs =
+        expectedFlag === "--shift-insert"
+          ? ["-M", "shift", "-k", "Insert", "-m", "shift"]
+          : expectedFlag === "--terminal"
+            ? ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"]
+            : ["-M", "ctrl", "-k", "v", "-m", "ctrl"];
+      assert.deepEqual(calls, [
+        desktop === "KDE"
+          ? { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] }
+          : { command: "wtype", args: wtypeArgs },
+      ]);
+      // VS Code's editor is not a terminal; do not change copy classification.
+      if (
+        windowClass?.trim().toLowerCase().startsWith("code") ||
+        windowClass?.trim().toLowerCase() === "com.microsoft.vscode"
+      ) {
+        assert.equal(manager.isLinuxTerminalWindowClass(windowClass), false);
+      }
+    });
+  }
+}
+
+test("Hyprland keeps VS Code's text paste shortcut when wtype fails", async () => {
+  const calls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(calls, [1, 0], { stdout: ["", "ok\n"] }),
+    spawnSync: (command, args) => {
+      assert.equal(command, "hyprctl");
+      assert.deepEqual(args, ["activewindow", "-j"]);
+      return { status: 0, stdout: Buffer.from(JSON.stringify({ class: "com.microsoft.vscode" })) };
+    },
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "wtype" || command === "hyprctl";
+  manager.resolveLinuxFastPasteBinary = () => null;
+
+  const result = await withWaylandEnvironment("Hyprland", () => {
+    assert.equal(manager._detectHyprlandWindowClass(), "com.microsoft.vscode");
+    return manager.pasteLinux(null);
+  });
+
+  assert.equal(result.method, "hyprland-sendshortcut");
+  assert.deepEqual(calls, [
+    {
+      command: "wtype",
+      args: ["-M", "shift", "-k", "Insert", "-m", "shift"],
+    },
+    {
+      command: "hyprctl",
+      args: [
+        "dispatch",
+        'hl.dsp.send_shortcut({ mods = "SHIFT", key = "Insert", window = "activewindow" })',
+      ],
+    },
+  ]);
+});
+
+for (const [windowClass, modeFlags] of [
+  ["com.microsoft.vscode", ["--shift-insert"]],
+  ["firefox", []],
+]) {
+  test(`KDE preserves the target and paste shortcut for ${windowClass} when portal and uinput fail`, async () => {
+    const calls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSpawn(calls, [1, 1, 0]),
+      spawnSync: (command, args) => {
+        assert.equal(command, "xdotool");
+        const values = {
+          getactivewindow: "123",
+          getwindowclassname: windowClass,
+          getwindowpid: "",
+        };
+        assert.ok(Object.hasOwn(values, args[0]));
+        return { status: 0, stdout: Buffer.from(values[args[0]]) };
+      },
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === "xdotool";
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._readPortalToken = () => null;
+
+    const result = await withWaylandEnvironment("KDE", () => {
+      process.env.DISPLAY = ":99";
+      return manager.pasteLinux(null);
+    });
+
+    assert.equal(result.method, "xtest-xwayland");
+    assert.deepEqual(calls, [
+      { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+      { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+      { command: "/tmp/linux-fast-paste", args: ["--window", "123", ...modeFlags] },
+    ]);
+  });
+}
+
+for (const usePortal of [true, false]) {
+  test(`VS Code uses Shift+Insert via ${usePortal ? "portal" : "xdotool"} when /proc metadata is unreadable`, async (t) => {
+    const fs = require("node:fs");
+    const readFileSync = fs.readFileSync;
+    const readlinkSync = fs.readlinkSync;
+    t.mock.method(fs, "readFileSync", function (file, ...args) {
+      if (file === "/proc/424242/comm") throw new Error("permission denied");
+      return readFileSync.call(this, file, ...args);
+    });
+    t.mock.method(fs, "readlinkSync", function (file, ...args) {
+      if (file === "/proc/424242/exe") throw new Error("permission denied");
+      return readlinkSync.call(this, file, ...args);
+    });
+    const calls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSuccessfulSpawn(calls),
+      spawnSync: (command, args) => {
+        assert.equal(command, "xdotool");
+        const values = {
+          getactivewindow: "123",
+          getwindowclassname: "Code",
+          getwindowpid: "424242",
+        };
+        assert.ok(Object.hasOwn(values, args[0]));
+        return { status: 0, stdout: Buffer.from(values[args[0]]) };
+      },
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === "xdotool";
+    manager.resolveLinuxFastPasteBinary = () => (usePortal ? "/tmp/linux-fast-paste" : null);
+    manager._readPortalToken = () => null;
+
+    await withWaylandEnvironment("KDE", () => {
+      process.env.DISPLAY = ":99";
+      return manager.pasteLinux(null);
+    });
+
+    assert.deepEqual(calls, [
+      usePortal
+        ? { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] }
+        : { command: "xdotool", args: ["windowactivate", "--sync", "123", "key", "shift+Insert"] },
+    ]);
+  });
+}
 
 // On a non-Latin layout KWin can't map XK_v, so the Ctrl+V (or Ctrl+Shift+V) a
 // detected window would get reaches it as Ctrl alone (#2055).
@@ -1977,6 +2666,29 @@ function withDarwin(t) {
   t.after(() => Object.defineProperty(process, "platform", platform));
 }
 
+test("cancellation after successful macOS input preserves its normal clipboard restore delay", async (t) => {
+  withDarwin(t);
+  resetClipboard({ text: "previous clipboard" });
+  const calls = [];
+  let cancelled = false;
+  const spawn = createSuccessfulSpawn(calls);
+  const { manager, restores } = loadMacPasteManager((...args) => {
+    const child = spawn(...args);
+    cancelled = true;
+    return child;
+  });
+  manager.resolveFastPasteBinary = () => null;
+  const result = await manager._pasteText("dictated text", { isCancelled: () => cancelled });
+  await result.restoreComplete;
+  assert.notEqual(
+    result.pasted,
+    false,
+    "already dispatched input cannot be cancelled retroactively"
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(restores[0].options.delayMs, 450);
+});
+
 test("a restored macOS paste leaves the transcript to the binary alone", async (t) => {
   withDarwin(t);
   resetClipboard({ text: "previous clipboard" });
@@ -2136,6 +2848,7 @@ test("intentional macOS clipboard fallback stays silent and does not throw", asy
   resetClipboard();
   const result = await manager._pasteText("manual text", { allowClipboardFallback: true });
   assert.equal(result.pasted, false);
+  assert.equal(result.reason, "accessibility-missing");
   assert.equal(fakeClipboard.text, "manual text");
 });
 
@@ -2219,4 +2932,310 @@ test("_writePrimarySelection on KDE mirrors wl-copy to Electron's X11 selection"
     [["wl-copy", ["--primary", "--", "selection text"]]]
   );
   assert.deepEqual(fakeClipboard.writes, [["writeText", "selection text", "selection"]]);
+});
+
+for (const change of ["application", "selection", "read-only", "sender", "unchanged"]) {
+  test(`caret delivery rechecks ${change} after the Linux modifier wait`, async (t) => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "linux" });
+    t.after(() => Object.defineProperty(process, "platform", platform));
+    const calls = [];
+    const Manager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+    const clipboardManager = new Manager();
+    clipboardManager.resolveLinuxFastPasteBinary = () => null;
+    clipboardManager.commandExists = (command) => command === "wtype";
+    clipboardManager._writeClipboardWayland = (text) => {
+      fakeClipboard.writeText(text);
+      return true;
+    };
+    clipboardManager._readWaylandClipboardText = () => fakeClipboard.text;
+    clipboardManager._readPrimarySelection = () => "";
+    clipboardManager._writePrimarySelection = () => true;
+    let finishWait;
+    let beginWait;
+    const waiting = new Promise((resolve) => (beginWait = resolve));
+    clipboardManager._awaitModifierRelease = () => {
+      beginWait();
+      return new Promise((resolve) => (finishWait = resolve));
+    };
+    let active = { kind: "atspi-pid", id: "42" };
+    let editable = true;
+    let senderFocused = false;
+    const SelectionManager = require("../../src/helpers/selectionManager");
+    const manager = new SelectionManager({
+      clipboardManager,
+      textEditMonitor: {
+        isFocusedEditable: async (target) =>
+          editable && target.pid === active.id ? "editable" : "not_editable",
+      },
+      platform: "linux",
+    });
+    manager._getLinuxTarget = async () => active;
+    manager._readLinuxAtspiSelection = async () => ({ status: "none", target: active });
+    manager._isTerminalPid = async () => active.id === "99";
+    resetClipboard({ text: "original clipboard" });
+    await withWaylandEnvironment("Sway", async () => {
+      await manager.captureTarget();
+      const capture = await manager.captureSelectedText({ probeEditable: true });
+      assert.equal(capture.status, "editable");
+      const pending = manager.pasteAtCapturedTarget(capture.sessionId, "Generated answer", {
+        webContents: { isFocused: () => senderFocused },
+      });
+      await waiting;
+      if (change === "application") active = { kind: "atspi-pid", id: "99" };
+      if (["selection", "read-only"].includes(change)) editable = false;
+      if (change === "sender") senderFocused = true;
+      finishWait({ state: "released", waitedMs: 400 });
+      assert.deepEqual(
+        await pending,
+        change === "unchanged" ? { success: true } : { success: false, code: "target_changed" }
+      );
+      assert.equal(calls.length, change === "unchanged" ? 1 : 0);
+      assert.equal(fakeClipboard.text, "original clipboard");
+    });
+  });
+}
+
+for (const allow of [false, true]) {
+  test(`portal waits for post-consent target validation (${allow ? "allowed" : "changed"})`, async () => {
+    const calls = [];
+    let portal;
+    let validations = 0;
+    const Manager = loadClipboardManager({
+      spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1 portal-approval-v1") }),
+      spawn: (command, args) => {
+        calls.push({ command, args });
+        portal = new EventEmitter();
+        portal.stdout = new EventEmitter();
+        portal.stderr = new EventEmitter();
+        portal.stdin = {
+          on() {},
+          write(value) {
+            assert.equal(value, "1");
+            process.nextTick(() => portal.emit("close", 0));
+          },
+          end() {
+            process.nextTick(() => portal.emit("close", 7));
+          },
+        };
+        process.nextTick(() => portal.stdout.emit("data", "PASTE_READY\n"));
+        return portal;
+      },
+    });
+    const manager = new Manager();
+    manager._readPortalToken = () => null;
+    manager._savePortalToken = () => assert.fail("protocol lines are not restore tokens");
+    const controller = new AbortController();
+    const pending = manager._runPortalPaste("/mock/linux-paste", {
+      signal: controller.signal,
+      validateTarget: async () => ++validations === 1 || allow,
+    });
+    // A legacy implementation cannot authorize or refuse READY; make its failure bounded.
+    const deadline = setTimeout(() => portal.emit("close", 0), 100);
+    try {
+      if (allow) await pending;
+      else await assert.rejects(pending, { code: "PASTE_TARGET_CHANGED" });
+      assert.equal(validations, 2);
+      assert.ok(calls[0].args.includes("--await-paste-approval"));
+    } finally {
+      clearTimeout(deadline);
+    }
+  });
+}
+
+for (const [label, platform, backend] of [
+  ["macOS dispatch delay", "darwin", "osascript"],
+  ["macOS retry", "darwin", "retry"],
+  ["Windows fast-paste delay", "win32", "fast"],
+  ["Windows fallback", "win32", "fallback"],
+  ["Windows nircmd delay", "win32", "nircmd"],
+  ["Windows PowerShell delay", "win32", "powershell"],
+  ["Linux tool delay", "linux", "xdotool"],
+  ["Linux fallback", "linux", "fallback"],
+]) {
+  test(`caret delivery refuses focus drift during ${label}`, async (t) => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: platform });
+    t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+    const calls = [];
+    let active = true;
+    const failsFirst = ["retry", "fallback"].includes(backend);
+    const spawn = createSpawn(calls, failsFirst ? [platform === "darwin" ? 3 : 1] : []);
+    const Manager = loadClipboardManager({
+      spawn: (...args) => {
+        const child = spawn(...args);
+        if (failsFirst && calls.length === 1) setTimeout(() => (active = false), 0);
+        return child;
+      },
+      spawnSync: createSpawnSync([]),
+    });
+    const clipboardManager = new Manager();
+    clipboardManager.resolveFastPasteBinary = () =>
+      backend === "retry" ? "/mock/mac-paste" : null;
+    clipboardManager.resolveWindowsFastPasteBinary = () =>
+      ["fast", "fallback"].includes(backend) ? "/mock/windows-paste" : null;
+    clipboardManager.getNircmdPath = () => (backend === "powershell" ? null : "/mock/nircmd");
+    clipboardManager.resolveLinuxFastPasteBinary = () =>
+      backend === "fallback" ? "/mock/linux-paste" : null;
+    clipboardManager.commandExists = (command) => command === "xdotool";
+    clipboardManager._isWayland = () => false;
+    const target =
+      platform === "darwin"
+        ? { kind: "mac-pid", pid: 42 }
+        : platform === "win32"
+          ? { kind: "win-hwnd", id: "42" }
+          : { kind: "atspi-pid", id: "42" };
+    const SelectionManager = require("../../src/helpers/selectionManager");
+    const manager = new SelectionManager({
+      clipboardManager,
+      textEditMonitor: {
+        isFocusedEditable: async () => "editable",
+        _readFrontmostPid: async () => (active ? 42 : 99),
+      },
+      platform,
+    });
+    manager._readCurrentSelection = async () => ({ status: "editable" });
+    manager._probeTarget = async () => (active ? target : { ...target, id: "99" });
+    manager.sessions.set("caret", { kind: "caret", target, expiresAt: Date.now() + 10000 });
+    resetClipboard({
+      text: "original",
+      html: "<b>original</b>",
+      formats: ["text/plain", "text/html"],
+    });
+    const pending = manager.pasteAtCapturedTarget("caret", "Generated answer");
+    if (!failsFirst) setTimeout(() => (active = false), 0);
+    assert.deepEqual(await pending, { success: false, code: "target_changed" });
+    assert.equal(
+      calls.length,
+      failsFirst ? 1 : 0,
+      "no delayed or fallback input is injected after focus moves"
+    );
+    assert.equal(fakeClipboard.text, "original");
+    assert.equal(fakeClipboard.html, "<b>original</b>");
+  });
+}
+
+for (const cancel of [false, true]) {
+  test(`caret revalidation ${cancel ? "cancellation" : "refusal"} preserves a newer clipboard`, async (t) => {
+    withDarwin(t);
+    const calls = [];
+    const Manager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+    const clipboardManager = new Manager();
+    clipboardManager.resolveFastPasteBinary = () => null;
+    let finishProbe;
+    let beginProbe;
+    const probing = new Promise((resolve) => (beginProbe = resolve));
+    const SelectionManager = require("../../src/helpers/selectionManager");
+    const manager = new SelectionManager({
+      clipboardManager,
+      textEditMonitor: {
+        isFocusedEditable: () => {
+          beginProbe();
+          return new Promise((resolve) => (finishProbe = resolve));
+        },
+        _readFrontmostPid: async () => 42,
+      },
+      platform: "darwin",
+    });
+    manager.sessions.set("caret", {
+      kind: "caret",
+      target: { kind: "mac-pid", pid: 42 },
+      expiresAt: Date.now() + 10000,
+    });
+    manager._readCurrentSelection = async () => ({ status: "editable" });
+    resetClipboard({ text: "original" });
+    const pending = manager.pasteAtCapturedTarget("caret", "Generated answer");
+    await probing;
+    fakeClipboard.writeText("copied meanwhile");
+    if (cancel) manager.cancelSelectionEdit("caret");
+    finishProbe(cancel ? "editable" : "not_editable");
+    assert.deepEqual(await pending, {
+      success: false,
+      code: cancel ? "cancelled" : "target_changed",
+    });
+    assert.deepEqual(calls, []);
+    assert.equal(fakeClipboard.text, "copied meanwhile");
+  });
+}
+
+test("a guarded portal refuses helpers that cannot wait for target approval", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(calls),
+    spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1") }),
+  });
+  const manager = new Manager();
+  await assert.rejects(
+    manager._runPortalPaste("/mock/old-paste", {
+      signal: new AbortController().signal,
+      validateTarget: async () => true,
+    }),
+    /portal-cancellation-unavailable/
+  );
+  assert.deepEqual(calls, []);
+});
+
+for (const native of [false, true]) {
+  test(`guarded ${native ? "native XTest" : "xdotool"} paste cannot reactivate a stale detected window`, async (t) => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "linux" });
+    t.after(() => Object.defineProperty(process, "platform", platform));
+    const calls = [];
+    const Manager = loadClipboardManager({
+      spawn: createSuccessfulSpawn(calls),
+      spawnSync: (_command, args) => ({
+        status: 0,
+        stdout: Buffer.from(args[0] === "getactivewindow" ? "99" : "editor"),
+      }),
+    });
+    const manager = new Manager();
+    manager.commandExists = (command) => command === "xdotool";
+    manager.resolveLinuxFastPasteBinary = () => (native ? "/mock/linux-paste" : null);
+    // Window 99 was briefly foreground during detection; validation has since
+    // confirmed the captured editor is foreground again. No command may restore 99.
+    await manager.pasteLinux(null, { validateTarget: async () => true });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].args.includes("--window"), false);
+    assert.equal(calls[0].args.includes("windowactivate"), false);
+  });
+}
+
+test("a portal whose helper closes during validation never receives a late approval", async () => {
+  let child;
+  let finishValidation;
+  let validationStarted;
+  const started = new Promise((resolve) => (validationStarted = resolve));
+  let validations = 0;
+  const Manager = loadClipboardManager({
+    spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1 portal-approval-v1") }),
+    spawn: () => {
+      child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.stdin = {
+        on() {},
+        end() {},
+        write() {
+          assert.fail("closed helper must not receive approval");
+        },
+      };
+      process.nextTick(() => child.stdout.emit("data", "PASTE_READY\n"));
+      return child;
+    },
+  });
+  const manager = new Manager();
+  manager._readPortalToken = () => null;
+  const pending = manager._runPortalPaste("/mock/linux-paste", {
+    validateTarget: async () => {
+      if (++validations === 1) return true;
+      validationStarted();
+      return new Promise((resolve) => (finishValidation = resolve));
+    },
+  });
+  const rejected = assert.rejects(pending, { code: "PASTE_CANCELLED" });
+  await started;
+  child.emit("close", 7);
+  await rejected;
+  finishValidation(true);
+  await new Promise((resolve) => setImmediate(resolve));
 });

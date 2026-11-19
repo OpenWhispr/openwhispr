@@ -1,5 +1,5 @@
 import { joinFolderPath, splitFolderPath } from "../../components/notes/shared";
-import type { FolderItem, SpaceItem } from "../../types/electron";
+import type { FolderItem, SpaceItem, NoteWriteGuard } from "../../types/electron";
 
 type ResolveFolderResult =
   | { folderId: number; created: boolean; error?: undefined }
@@ -32,7 +32,7 @@ const availableFolders = (folders: FolderItem[]): string =>
 
 export async function resolveFolderId(
   folderName: string,
-  options: { createIfMissing?: boolean } = {},
+  options: { createIfMissing?: boolean; writeGuard?: NoteWriteGuard; signal?: AbortSignal } = {},
   spaceId: number | null = null
 ): Promise<ResolveFolderResult> {
   const normalized = typeof folderName === "string" ? folderName.trim() : "";
@@ -40,7 +40,9 @@ export async function resolveFolderId(
     return { error: "Folder name cannot be empty" };
   }
 
+  if (options.signal?.aborted) return { error: "Note operation cancelled" };
   const folders = await window.electronAPI.getFolders(spaceId);
+  if (options.signal?.aborted) return { error: "Note operation cancelled" };
   const match = findFolder(folders, normalized);
   if (match) return { folderId: match.id, created: false };
 
@@ -57,8 +59,16 @@ export async function resolveFolderId(
 
   const result =
     path && parent
-      ? await window.electronAPI.createFolder(path.name, parent.space_id, parent.id)
-      : await window.electronAPI.createFolder(normalized, spaceId);
+      ? await window.electronAPI.createFolder(
+          path.name,
+          parent.space_id,
+          options.writeGuard,
+          parent.id
+        )
+      : options.writeGuard
+        ? await window.electronAPI.createFolder(normalized, spaceId, options.writeGuard)
+        : await window.electronAPI.createFolder(normalized, spaceId);
+  if (options.signal?.aborted) return { error: "Note operation cancelled" };
   if (result.success && result.folder) {
     return { folderId: result.folder.id, created: true };
   }

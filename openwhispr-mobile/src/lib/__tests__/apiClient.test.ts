@@ -180,6 +180,7 @@ describe('getClientVersionHeader', () => {
       'x-openwhispr-version': '9.9.9',
       'x-openwhispr-policy-version': '1',
       'x-openwhispr-platform': 'mobile',
+      'x-openwhispr-capabilities': 'private-workspace-placement',
     });
   });
 
@@ -188,6 +189,7 @@ describe('getClientVersionHeader', () => {
     expect(apiClient.getClientVersionHeader()).toEqual({
       'x-openwhispr-policy-version': '1',
       'x-openwhispr-platform': 'mobile',
+      'x-openwhispr-capabilities': 'private-workspace-placement',
     });
   });
 });

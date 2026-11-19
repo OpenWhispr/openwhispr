@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
+import { isAwaitingCatalog } from "../models/modelLifecycle.js";
+import { getRegistryData } from "../models/registryData.js";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
+import { LocalModelPolicyNotice } from "./ui/LocalModelPolicyNotice";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
 import { DownloadProgressBar } from "./ui/DownloadProgressBar";
@@ -11,6 +16,7 @@ import { ConfirmDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
 import {
+  getDictationTranscriptionProviders,
   getTranscriptionProviders,
   getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
@@ -23,14 +29,22 @@ import {
   type ColorScheme,
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
-import { useSettingsStore } from "../stores/settingsStore";
+import {
+  selectPolicyEffectiveSettings,
+  selectResolvedMeetingTranscription,
+  selectResolvedUploadTranscription,
+  useSettingsStore,
+} from "../stores/settingsStore";
 import {
   filterByokProviderOptionsByPolicy,
   isProviderAllowedByPolicy,
+  isLocalModelAllowedByPolicy,
+  localModelRowRefusal,
   reconcileCloudProviderSelection,
   shouldPersistProviderFallback,
   type TranscriptionPolicyContext,
 } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import { usePolicySnapshot } from "../hooks/usePolicy";
 import {
   LOCAL_ASR_ORGANIZATIONS,
@@ -76,6 +90,9 @@ interface LocalModelCardProps {
   isDownloading: boolean;
   isCancelling: boolean;
   isInstalling: boolean;
+  policyBlocked?: boolean;
+  policyRefusal?: { labelKey: string; hintKey: string };
+  unavailable?: boolean;
   recommended?: boolean;
   provider: string;
   languageLabel?: string;
@@ -98,6 +115,9 @@ function LocalModelCard({
   isDownloading,
   isCancelling,
   isInstalling,
+  policyBlocked = false,
+  policyRefusal,
+  unavailable = false,
   recommended,
   provider,
   languageLabel,
@@ -110,7 +130,7 @@ function LocalModelCard({
 }: LocalModelCardProps) {
   const { t } = useTranslation();
   const handleClick = () => {
-    if (isDownloaded && !isSelected) {
+    if (!policyBlocked && !unavailable && isDownloaded && !isSelected) {
       onSelect();
     }
   };
@@ -118,9 +138,17 @@ function LocalModelCard({
   return (
     <div
       onClick={handleClick}
+      aria-disabled={policyBlocked || unavailable || undefined}
+      title={
+        policyBlocked
+          ? t(policyRefusal?.hintKey ?? "models.policy.modelBlocked")
+          : unavailable
+            ? t("transcription.parakeet.unavailable")
+            : undefined
+      }
       className={`relative w-full text-start overflow-hidden rounded-md border transition-colors duration-200 group ${
         isSelected ? cardStyles.modelCard.selected : cardStyles.modelCard.default
-      } ${isDownloaded && !isSelected ? "cursor-pointer" : ""}`}
+      } ${isDownloaded && !isSelected && !policyBlocked && !unavailable ? "cursor-pointer" : ""}`}
     >
       <div className="flex items-center gap-1.5 p-2">
         <div className="shrink-0">
@@ -147,8 +175,13 @@ function LocalModelCard({
           <span className="text-xs text-muted-foreground/70 tabular-nums shrink-0">
             {actualSizeMb ? `${actualSizeMb}MB` : size}
           </span>
-          {recommended && (
+          {recommended && !policyBlocked && (
             <span className={cardStyles.badges.recommended}>{t("common.recommended")}</span>
+          )}
+          {policyBlocked && (
+            <span className="text-xs text-muted-foreground">
+              {t(policyRefusal?.labelKey ?? "models.policy.notApproved")}
+            </span>
           )}
           {languageLabel && (
             <span className="text-xs text-muted-foreground/70 font-medium shrink-0">
@@ -160,7 +193,7 @@ function LocalModelCard({
         <div className="flex items-center gap-1.5 shrink-0">
           {isDownloaded ? (
             <>
-              {isSelected && (
+              {isSelected && !policyBlocked && !unavailable && (
                 <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
                   {t("common.active")}
                 </span>
@@ -170,9 +203,10 @@ function LocalModelCard({
                   e.stopPropagation();
                   onDelete();
                 }}
+                aria-label={t("common.delete")}
                 size="icon"
                 variant="ghost"
-                className="size-6 text-muted-foreground/70 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
+                className={`size-6 text-muted-foreground/70 hover:text-destructive ${policyBlocked ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"} transition-[color,opacity,transform] active:scale-95`}
               >
                 <Trash2 size={12} />
               </Button>
@@ -191,7 +225,7 @@ function LocalModelCard({
               <X size={11} className="me-0.5" />
               {isCancelling ? "..." : t("common.cancel")}
             </Button>
-          ) : (
+          ) : policyBlocked || unavailable ? null : (
             <Button
               onClick={(e) => {
                 e.stopPropagation();
@@ -260,8 +294,26 @@ const CLOUD_PROVIDER_TABS = [
   { id: "tinfoil", name: "Tinfoil" },
   { id: "deepgram", name: "Deepgram" },
   { id: "assemblyai", name: "AssemblyAI" },
+  { id: "openrouter", name: "OpenRouter" },
   { id: "custom", name: "Custom" },
 ];
+
+const providerName = (id: string): string | undefined =>
+  CLOUD_PROVIDER_TABS.find((tab) => tab.id === id)?.name;
+
+// Only a model pick saves a browsed tab (on Custom, the first character of its
+// model name), so until then the line under it says which provider still runs.
+function browsedTabHint(t: TFunction, browsedId: string, inUseId: string): string | undefined {
+  if (browsedId === "custom") {
+    const current = providerName(inUseId);
+    return current ? t("transcription.browsedCustomHint", { current }) : undefined;
+  }
+  const provider = providerName(browsedId);
+  if (!provider) return undefined;
+  if (inUseId === "custom") return t("transcription.customInUseHint", { provider });
+  const current = providerName(inUseId);
+  return current ? t("transcription.browsedProviderHint", { current, provider }) : undefined;
+}
 
 interface ProviderCredentialField {
   key:
@@ -276,7 +328,8 @@ interface ProviderCredentialField {
     | "cortiTenant"
     | "tinfoilApiKey"
     | "deepgramApiKey"
-    | "assemblyaiApiKey";
+    | "assemblyaiApiKey"
+    | "openrouterApiKey";
   input: "secret" | "text" | "select";
   labelKey?: string;
   placeholder?: string;
@@ -340,6 +393,10 @@ const PROVIDER_CREDENTIALS: Record<
   assemblyai: {
     consoleUrl: "https://www.assemblyai.com/dashboard/api-keys",
     fields: [{ key: "assemblyaiApiKey", input: "secret" }],
+  },
+  openrouter: {
+    consoleUrl: "https://openrouter.ai/keys",
+    fields: [{ key: "openrouterApiKey", input: "secret" }],
   },
 };
 
@@ -448,6 +505,7 @@ export default function TranscriptionModelPicker({
   mode,
   streamingOnly = false,
 }: TranscriptionModelPickerProps) {
+  const registryVersion = useRegistryVersion();
   const { t } = useTranslation();
   const switchCloudTranscriptionProvider = useSettingsStore(
     (s) => s.switchCloudTranscriptionProvider
@@ -476,6 +534,8 @@ export default function TranscriptionModelPicker({
   const setDeepgramApiKey = useSettingsStore((s) => s.setDeepgramApiKey);
   const assemblyaiApiKey = useSettingsStore((s) => s.assemblyaiApiKey);
   const setAssemblyaiApiKey = useSettingsStore((s) => s.setAssemblyaiApiKey);
+  const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
+  const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
@@ -548,9 +608,30 @@ export default function TranscriptionModelPicker({
     // provider must each leave the sherpa tabs on their own: moving the tab off
     // the disabled entry keeps the UI usable, while committing "whisper"
     // is what actually reroutes transcription on unsupported Macs.
-    if (usesParakeetManager(internalLocalProvider)) setInternalLocalProvider("whisper");
-    if (isSherpaLocalProvider(selectedLocalProvider)) onLocalProviderSelect?.("whisper");
-  }, [internalLocalProvider, onLocalProviderSelect, parakeetCapability, selectedLocalProvider]);
+    if (
+      usesParakeetManager(internalLocalProvider) &&
+      !parakeetModels.some(
+        (model) =>
+          model.downloaded && getASRModelOrganization(model.model) === internalLocalProvider
+      )
+    )
+      setInternalLocalProvider("whisper");
+    // A blocked model stays saved, as policy never rewrites a preference. A blank
+    // one is no choice to preserve (Meeting and Upload default to it).
+    if (
+      isSherpaLocalProvider(selectedLocalProvider) &&
+      (!selectedLocalModel ||
+        isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", selectedLocalModel))
+    )
+      onLocalProviderSelect?.("whisper");
+  }, [
+    internalLocalProvider,
+    onLocalProviderSelect,
+    parakeetCapability,
+    selectedLocalProvider,
+    selectedLocalModel,
+    parakeetModels,
+  ]);
 
   const localModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const parakeetModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -571,12 +652,15 @@ export default function TranscriptionModelPicker({
   // providers note recording can actually run — not every streaming provider.
   // Upload is always http-batch, and the realtime-only providers have no batch
   // route at all (transcriptionRoute fails them closed), so they are hidden there.
+  // Upload is also the only screen that offers upload-only models.
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
-    const providers = getTranscriptionProviders();
-    if (transcriptionContext !== "upload") return providers;
-    return providers.filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id));
-  }, [streamingOnly, transcriptionContext]);
+    if (transcriptionContext !== "upload") return getDictationTranscriptionProviders();
+    return getTranscriptionProviders().filter(
+      (provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+  }, [streamingOnly, transcriptionContext, registryVersion]);
   const cloudProviders = useMemo(
     () => filterByokProviderOptionsByPolicy(availableCloudProviders, "transcription", policyState),
     [availableCloudProviders, policyState]
@@ -592,23 +676,40 @@ export default function TranscriptionModelPicker({
     );
     return filterByokProviderOptionsByPolicy(tabs, "transcription", policyState);
   }, [availableCloudProviders, policyState, streamingOnly, t]);
-  const localProviderTabs = useMemo(
-    () =>
-      LOCAL_PROVIDER_TABS.map((provider) =>
-        usesParakeetManager(provider.id) && parakeetCapability?.supported === false
-          ? {
-              ...provider,
-              disabled: true,
-              disabledLabel: parakeetCapability.minimumMacOSVersion
-                ? t("transcription.parakeet.requiresMacOS", {
-                    version: parakeetCapability.minimumMacOSVersion,
-                  })
-                : t("transcription.parakeet.unavailable"),
-            }
-          : provider
-      ),
-    [parakeetCapability, t]
-  );
+  const policyRestricted = policyState.status === "managed";
+  const localProviderTabs = useMemo(() => {
+    const installedInFamily = (providerId: string): boolean =>
+      usesParakeetManager(providerId)
+        ? parakeetModels.some(
+            (model) => model.downloaded && getASRModelOrganization(model.model) === providerId
+          )
+        : localModels.some((model) => model.downloaded);
+    const approvedInFamily = (providerId: string): boolean =>
+      (usesParakeetManager(providerId)
+        ? Object.keys(PARAKEET_MODEL_INFO).filter(
+            (id) => getASRModelOrganization(id) === providerId
+          )
+        : Object.keys(WHISPER_MODEL_INFO)
+      ).some((id) => isLocalModelAllowedByPolicy(policyState, "transcription", id));
+    return LOCAL_PROVIDER_TABS.filter(
+      (provider) =>
+        !policyRestricted || installedInFamily(provider.id) || approvedInFamily(provider.id)
+    ).map((provider) =>
+      usesParakeetManager(provider.id) &&
+      parakeetCapability?.supported === false &&
+      !installedInFamily(provider.id)
+        ? {
+            ...provider,
+            disabled: true,
+            disabledLabel: parakeetCapability.minimumMacOSVersion
+              ? t("transcription.parakeet.requiresMacOS", {
+                  version: parakeetCapability.minimumMacOSVersion,
+                })
+              : t("transcription.parakeet.unavailable"),
+          }
+        : provider
+    );
+  }, [localModels, parakeetCapability, parakeetModels, policyRestricted, policyState, t]);
 
   useEffect(() => {
     selectedLocalModelRef.current = selectedLocalModel;
@@ -619,7 +720,11 @@ export default function TranscriptionModelPicker({
 
   const validateAndSelectModel = useCallback((loadedModels: LocalModel[]) => {
     const current = selectedLocalModelRef.current;
-    if (!current) return;
+    if (
+      !current ||
+      !isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", current)
+    )
+      return;
 
     // The whisper list loads on a mere browse of the Whisper tab, so the
     // committed selection can be a foreign id (a Parakeet model while nvidia
@@ -627,7 +732,11 @@ export default function TranscriptionModelPicker({
     const currentEntry = loadedModels.find((m) => m.model === current);
     if (!currentEntry || currentEntry.downloaded) return;
 
-    const downloaded = loadedModels.filter((m) => m.downloaded);
+    const downloaded = loadedModels.filter(
+      (m) =>
+        m.downloaded &&
+        isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", m.model)
+    );
     onLocalModelSelectRef.current(downloaded[0]?.model ?? "", "whisper");
   }, []);
 
@@ -685,6 +794,15 @@ export default function TranscriptionModelPicker({
     // Reconcile null means the input needs no correction — echo the browsed
     // input, not the committed pair, or browsing to the Custom tab (always
     // reconciled as valid) would never display it.
+    // A model a pending catalog may still supply stays chosen (see isAwaitingCatalog); a
+    // known model this scope filters out is still reconciled.
+    if (
+      !browsedCloudProvider &&
+      cloudProviders.some((provider) => provider.id === selectedCloudProvider) &&
+      isAwaitingCatalog("transcriptionProviders", selectedCloudModel)
+    ) {
+      return { provider: selectedCloudProvider, model: selectedCloudModel };
+    }
     return (
       reconcileCloudProviderSelection({
         selectedProvider: browsedCloudProvider ?? selectedCloudProvider,
@@ -708,6 +826,18 @@ export default function TranscriptionModelPicker({
   ]);
   const displayedCloudProvider = effectiveCloudSelection.provider;
   const displayedCloudModel = effectiveCloudSelection.model;
+  // A blank Note Recording or Upload provider runs on the dictation one, and a
+  // managed policy runs an allowed provider in place of one it refuses.
+  const providerInUse = useSettingsStore((settings) => {
+    const effective = selectPolicyEffectiveSettings(settings, policyState);
+    if (transcriptionContext === "meeting") {
+      return selectResolvedMeetingTranscription(effective).cloudTranscriptionProvider;
+    }
+    if (transcriptionContext === "upload") {
+      return selectResolvedUploadTranscription(effective).cloudTranscriptionProvider;
+    }
+    return effective.cloudTranscriptionProvider;
+  });
 
   useEffect(() => {
     if (
@@ -743,6 +873,40 @@ export default function TranscriptionModelPicker({
   useEffect(() => {
     loadParakeetModelsRef.current = loadParakeetModels;
   }, [loadParakeetModels]);
+  // Which tabs a restricted member gets depends on what is installed in every
+  // family, not only the one on screen.
+  const [familyInventoryLoaded, setFamilyInventoryLoaded] = useState(false);
+  useEffect(() => {
+    if (!effectiveLocal || !policyRestricted) return;
+    let cancelled = false;
+    hasLoadedRef.current = true;
+    hasLoadedParakeetRef.current = true;
+    void Promise.all([loadLocalModelsRef.current?.(), loadParakeetModelsRef.current?.()]).then(
+      () => {
+        if (!cancelled) setFamilyInventoryLoaded(true);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveLocal, policyRestricted]);
+
+  // Tabs are browse state, so moving off a filtered one saves nothing.
+  const fallbackLocalTab =
+    policyRestricted &&
+    familyInventoryLoaded &&
+    !localProviderTabs.some((provider) => provider.id === internalLocalProvider)
+      ? localProviderTabs.find((provider) => !("disabled" in provider && provider.disabled))?.id
+      : undefined;
+  useEffect(() => {
+    if (fallbackLocalTab) setInternalLocalProvider(fallbackLocalTab);
+  }, [fallbackLocalTab]);
+
+  useEffect(() => {
+    hasLoadedRef.current = false;
+    hasLoadedParakeetRef.current = false;
+  }, [registryVersion]);
+
   useEffect(() => {
     if (!effectiveLocal) return;
 
@@ -753,7 +917,7 @@ export default function TranscriptionModelPicker({
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
     }
-  }, [effectiveLocal, internalLocalProvider]);
+  }, [effectiveLocal, internalLocalProvider, registryVersion]);
 
   useEffect(() => {
     if (effectiveLocal) return;
@@ -1001,6 +1165,7 @@ export default function TranscriptionModelPicker({
 
   const handleWhisperModelSelect = useCallback(
     (modelId: string) => {
+      if (!isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", modelId)) return;
       setInternalLocalProvider("whisper");
       onLocalProviderSelect?.("whisper");
       onLocalModelSelect(modelId, "whisper");
@@ -1010,13 +1175,23 @@ export default function TranscriptionModelPicker({
 
   const handleParakeetModelSelect = useCallback(
     (modelId: string) => {
+      if (
+        parakeetCapability?.supported === false ||
+        !isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", modelId)
+      )
+        return;
       const organization = getASRModelOrganization(modelId);
-      const provider = organization === "cohere" ? "cohere" : "nvidia";
+      // The engine, not the publisher, decides the route: a streaming model published by
+      // Cohere still runs on the NVIDIA/sherpa streaming path.
+      const provider =
+        getRegistryData().parakeetModels[modelId]?.modelType === "cohere-transcribe"
+          ? "cohere"
+          : "nvidia";
       setInternalLocalProvider(organization);
       onLocalProviderSelect?.(provider);
       onLocalModelSelect(modelId, provider);
     },
-    [onLocalModelSelect, onLocalProviderSelect]
+    [onLocalModelSelect, onLocalProviderSelect, parakeetCapability]
   );
 
   const handleBaseUrlBlur = useCallback(() => {
@@ -1032,6 +1207,9 @@ export default function TranscriptionModelPicker({
     }
     if (normalized) {
       for (const provider of cloudProviders) {
+        // Custom endpoints on OpenRouter predate its tab and keep their own key
+        // slot, model id and WAV re-encode, so they are never moved onto it.
+        if (provider.id === "openrouter") continue;
         const providerNormalized = normalizeBaseUrl(provider.baseUrl);
         if (normalized === providerNormalized) {
           switchCloudTranscriptionProvider(transcriptionContext, provider.id);
@@ -1089,6 +1267,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: keyDraft.value("tinfoilApiKey", tinfoilApiKey),
     deepgramApiKey: keyDraft.value("deepgramApiKey", deepgramApiKey),
     assemblyaiApiKey: keyDraft.value("assemblyaiApiKey", assemblyaiApiKey),
+    openrouterApiKey: keyDraft.value("openrouterApiKey", openrouterApiKey),
   };
   const customKey = keyDraft.value("customTranscriptionApiKey", customTranscriptionApiKey);
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
@@ -1104,6 +1283,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: setTinfoilApiKey,
     deepgramApiKey: setDeepgramApiKey,
     assemblyaiApiKey: setAssemblyaiApiKey,
+    openrouterApiKey: setOpenrouterApiKey,
   };
 
   const endpointHold = useFocusHold();
@@ -1111,6 +1291,10 @@ export default function TranscriptionModelPicker({
   const visible = usePanelVisible();
   // A tab that is only being browsed has no model of this panel's: the key alone is checked.
   const panelModel = selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : "";
+  const browsedHint =
+    browsedCloudProvider && displayedCloudProvider !== providerInUse
+      ? browsedTabHint(t, displayedCloudProvider, providerInUse)
+      : undefined;
   const isCustom = displayedCloudProvider === "custom";
   const isCorti = displayedCloudProvider === "corti";
   const providerKey = credentialValues[providerCredentials.fields[0].key];
@@ -1209,17 +1393,25 @@ export default function TranscriptionModelPicker({
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
-    const { icon, invertInDark } = getRemoteProviderIcon(displayedCloudProvider);
-    return currentCloudProvider.models.map((m) => ({
-      value: m.id,
-      label: m.name,
-      description: m.descriptionKey
-        ? t(m.descriptionKey, { defaultValue: m.description })
-        : m.description,
-      icon,
-      invertInDark,
-      legacy: m.legacy,
-    }));
+    const providerIcon = getRemoteProviderIcon(displayedCloudProvider);
+    return currentCloudProvider.models.map((m) => {
+      // OpenRouter brokers other vendors' models, so the id's prefix
+      // ("openai/…", "google/…") names the model better than OpenRouter's own
+      // mark. Vendors we have no icon for keep it, rather than showing none.
+      const slash = displayedCloudProvider === "openrouter" ? m.id.indexOf("/") : -1;
+      const vendorIcon = slash > 0 ? getRemoteProviderIcon(m.id.slice(0, slash)) : null;
+      const { icon, invertInDark } = vendorIcon?.icon ? vendorIcon : providerIcon;
+      return {
+        value: m.id,
+        label: m.name,
+        description: m.descriptionKey
+          ? t(m.descriptionKey, { defaultValue: m.description })
+          : m.description,
+        icon,
+        invertInDark,
+        legacy: m.legacy,
+      };
+    });
   }, [currentCloudProvider, displayedCloudProvider, t]);
 
   const progressDisplay = useMemo(() => {
@@ -1248,6 +1440,7 @@ export default function TranscriptionModelPicker({
                 totalBytes: status.totalBytes,
               }}
               isInstalling={status.phase === "installing"}
+              isVerifying={status.phase === "verifying"}
             />
           );
         })}
@@ -1267,45 +1460,56 @@ export default function TranscriptionModelPicker({
 
     return (
       <div className="space-y-0.5">
-        {modelsToRender.map((model) => {
-          const modelId = model.model;
-          const info = WHISPER_MODEL_INFO[modelId] ?? {
-            name: modelId,
-            description: t("transcription.fallback.whisperModelDescription"),
-            size: t("common.unknown"),
-            recommended: false,
-          };
+        {modelsToRender
+          .filter(
+            (model) =>
+              model.downloaded ||
+              isLocalModelAllowedByPolicy(policyState, "transcription", model.model)
+          )
+          .map((model) => {
+            const modelId = model.model;
+            const info = WHISPER_MODEL_INFO[modelId] ?? {
+              name: modelId,
+              description: t("transcription.fallback.whisperModelDescription"),
+              size: t("common.unknown"),
+              recommended: false,
+            };
 
-          return (
-            <LocalModelCard
-              key={modelId}
-              modelId={modelId}
-              name={info.name}
-              description={info.description}
-              size={info.size}
-              actualSizeMb={model.size_mb}
-              isSelected={modelId === selectedLocalModel}
-              isDownloaded={model.downloaded ?? false}
-              isDownloading={isDownloadingModel(modelId)}
-              isCancelling={isCancellingModel(modelId)}
-              isInstalling={whisperDownloads[modelId]?.phase === "installing"}
-              recommended={info.recommended}
-              provider="whisper"
-              onSelect={() => handleWhisperModelSelect(modelId)}
-              onDelete={() => handleDelete(modelId)}
-              onDownload={() =>
-                downloadModel(modelId, (downloadedId) => {
-                  setLocalModels((prev) =>
-                    prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
-                  );
-                  handleWhisperModelSelect(downloadedId);
-                })
-              }
-              onCancel={() => cancelDownload(modelId)}
-              styles={styles}
-            />
-          );
-        })}
+            return (
+              <LocalModelCard
+                key={modelId}
+                modelId={modelId}
+                name={info.name}
+                description={info.description}
+                size={info.size}
+                actualSizeMb={model.size_mb}
+                isSelected={
+                  modelId === selectedLocalModel &&
+                  isLocalModelAllowedByPolicy(policyState, "transcription", modelId)
+                }
+                policyBlocked={!isLocalModelAllowedByPolicy(policyState, "transcription", modelId)}
+                policyRefusal={localModelRowRefusal(policyState, "transcription")}
+                isDownloaded={model.downloaded ?? false}
+                isDownloading={isDownloadingModel(modelId)}
+                isCancelling={isCancellingModel(modelId)}
+                isInstalling={whisperDownloads[modelId]?.phase === "installing"}
+                recommended={info.recommended}
+                provider="whisper"
+                onSelect={() => handleWhisperModelSelect(modelId)}
+                onDelete={() => handleDelete(modelId)}
+                onDownload={() =>
+                  downloadModel(modelId, (downloadedId) => {
+                    setLocalModels((prev) =>
+                      prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
+                    );
+                    handleWhisperModelSelect(downloadedId);
+                  })
+                }
+                onCancel={() => cancelDownload(modelId)}
+                styles={styles}
+              />
+            );
+          })}
       </div>
     );
   };
@@ -1343,48 +1547,60 @@ export default function TranscriptionModelPicker({
 
     return (
       <div className="space-y-0.5">
-        {modelsToRender.map((model) => {
-          const modelId = model.model;
-          const info = PARAKEET_MODEL_INFO[modelId] ?? {
-            name: modelId,
-            description: t("transcription.fallback.parakeetModelDescription"),
-            modelCardUrl: undefined,
-            size: t("common.unknown"),
-            language: "en",
-            recommended: false,
-          };
+        {modelsToRender
+          .filter(
+            (model) =>
+              model.downloaded ||
+              isLocalModelAllowedByPolicy(policyState, "transcription", model.model)
+          )
+          .map((model) => {
+            const modelId = model.model;
+            const info = PARAKEET_MODEL_INFO[modelId] ?? {
+              name: modelId,
+              description: t("transcription.fallback.parakeetModelDescription"),
+              modelCardUrl: undefined,
+              size: t("common.unknown"),
+              language: "en",
+              recommended: false,
+            };
 
-          return (
-            <LocalModelCard
-              key={modelId}
-              modelId={modelId}
-              name={info.name}
-              description={info.description}
-              size={info.size}
-              actualSizeMb={model.size_mb}
-              isSelected={modelId === selectedLocalModel}
-              isDownloaded={model.downloaded ?? false}
-              isDownloading={isDownloadingParakeetModel(modelId)}
-              isCancelling={isCancellingParakeetModel(modelId)}
-              isInstalling={parakeetDownloads[modelId]?.phase === "installing"}
-              recommended={info.recommended}
-              provider={getASRModelOrganization(modelId)}
-              modelCardUrl={info.modelCardUrl}
-              onSelect={() => handleParakeetModelSelect(modelId)}
-              onDelete={() => handleParakeetDelete(modelId)}
-              onDownload={() =>
-                downloadParakeetModel(modelId, (downloadedId) => {
-                  setParakeetModels((prev) =>
-                    prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
-                  );
-                  handleParakeetModelSelect(downloadedId);
-                })
-              }
-              onCancel={() => cancelParakeetDownload(modelId)}
-              styles={styles}
-            />
-          );
-        })}
+            return (
+              <LocalModelCard
+                key={modelId}
+                modelId={modelId}
+                name={info.name}
+                description={info.description}
+                size={info.size}
+                actualSizeMb={model.size_mb}
+                isSelected={
+                  modelId === selectedLocalModel &&
+                  isLocalModelAllowedByPolicy(policyState, "transcription", modelId)
+                }
+                policyBlocked={!isLocalModelAllowedByPolicy(policyState, "transcription", modelId)}
+                policyRefusal={localModelRowRefusal(policyState, "transcription")}
+                unavailable={parakeetCapability?.supported === false}
+                isDownloaded={model.downloaded ?? false}
+                isDownloading={isDownloadingParakeetModel(modelId)}
+                isCancelling={isCancellingParakeetModel(modelId)}
+                isInstalling={parakeetDownloads[modelId]?.phase === "installing"}
+                recommended={info.recommended}
+                provider={getASRModelOrganization(modelId)}
+                modelCardUrl={info.modelCardUrl}
+                onSelect={() => handleParakeetModelSelect(modelId)}
+                onDelete={() => handleParakeetDelete(modelId)}
+                onDownload={() =>
+                  downloadParakeetModel(modelId, (downloadedId) => {
+                    setParakeetModels((prev) =>
+                      prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
+                    );
+                    handleParakeetModelSelect(downloadedId);
+                  })
+                }
+                onCancel={() => cancelParakeetDownload(modelId)}
+                styles={styles}
+              />
+            );
+          })}
       </div>
     );
   };
@@ -1407,7 +1623,7 @@ export default function TranscriptionModelPicker({
           )}
 
           {providerAllowed(displayedCloudProvider) && (
-            <div>
+            <div className="space-y-2">
               {displayedCloudProvider === "custom" ? (
                 <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
                   <div className="space-y-1.5">
@@ -1540,9 +1756,7 @@ export default function TranscriptionModelPicker({
                     </label>
                     <ModelCardList
                       models={cloudModelOptions}
-                      selectedModel={
-                        selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
-                      }
+                      selectedModel={panelModel}
                       onModelSelect={handleCloudModelSelect}
                       colorScheme="purple"
                     />
@@ -1561,6 +1775,7 @@ export default function TranscriptionModelPicker({
                   </div>
                 </div>
               )}
+              {browsedHint && <p className="text-xs text-muted-foreground">{browsedHint}</p>}
             </div>
           )}
         </>
@@ -1573,6 +1788,13 @@ export default function TranscriptionModelPicker({
             colorScheme="purple"
           />
 
+          <LocalModelPolicyNotice
+            scope="transcription"
+            hasSupportedModel={[
+              ...Object.keys(WHISPER_MODEL_INFO),
+              ...(parakeetCapability?.supported === false ? [] : Object.keys(PARAKEET_MODEL_INFO)),
+            ].some((id) => isLocalModelAllowedByPolicy(policyState, "transcription", id))}
+          />
           {progressDisplay}
 
           {gpuDownloading && internalLocalProvider === "whisper" && (

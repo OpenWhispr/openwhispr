@@ -98,6 +98,85 @@ function createDeferred() {
   return { promise, resolve, reject };
 }
 
+test("revoked Whisper retry cannot dispatch after a peer replacement becomes ready", async (t) => {
+  const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+  for (const accountChange of [false, true]) {
+    let identity = 1;
+    const gate = createLocalModelPolicyGate({
+      getPolicy: async () => ({ success: true, managed: false }),
+      getIdentity: () => identity,
+      getAppVersion: () => "1.11.1",
+    });
+    const pendingStart = createDeferred();
+    const firstRequest = createDeferred();
+    const waitingForReplacement = createDeferred();
+    let manager;
+    let requests = 0;
+    const { server, port } = await startServer((req, res) => {
+      requests++;
+      if (requests === 1) {
+        manager.startGeneration++;
+        manager.startupPromise = {
+          catch: () => {
+            waitingForReplacement.resolve();
+            return pendingStart.promise;
+          },
+        };
+        req.socket.destroy();
+        firstRequest.resolve();
+      } else res.end(JSON.stringify({ text: "prohibited retry" }));
+    });
+    t.after(() => server.close());
+    manager = createManager(port, { useCuda: true });
+    manager.localModelPolicy = gate;
+    manager.localModelIdForPath = () => "base";
+    manager.stop = async () => {
+      manager._stopRequested = true;
+    };
+    const result = manager.transcribe(Buffer.from("audio"));
+    await firstRequest.promise;
+    await waitingForReplacement.promise;
+    if (accountChange) {
+      identity++;
+      gate.cancelJobs();
+      gate.invalidate();
+    } else
+      gate.update({
+        success: true,
+        managed: true,
+        policy: require("./harness/policyFixtures").managedPolicy({
+          transcription: { allowedModes: ["local"], allowedLocalModels: [] },
+        }),
+      });
+    manager._stopRequested = false;
+    manager.ready = true;
+    pendingStart.resolve();
+    await assert.rejects(result, {
+      code: accountChange ? "POLICY_UNRESOLVABLE" : "POLICY_MODEL_BLOCKED",
+    });
+    assert.equal(requests, 1, "revoked audio must not reach the replacement server");
+  }
+});
+
+test("LAN Whisper inference does not apply the built-in local-model catalog", async (t) => {
+  const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+  let requests = 0;
+  const { server, port } = await startServer((_req, res) => {
+    requests++;
+    res.end(JSON.stringify({ text: "LAN result" }));
+  });
+  t.after(() => server.close());
+  const manager = createManager(port, { useCuda: false });
+  manager.isRemote = true;
+  manager.localModelPolicy = createLocalModelPolicyGate({
+    getPolicy: async () => ({ success: false }),
+    getIdentity: () => 1,
+    getAppVersion: () => "1.11.1",
+  });
+  assert.equal((await manager.transcribe(Buffer.from("audio"))).text, "LAN result");
+  assert.equal(requests, 1);
+});
+
 function createManager(port, { useCuda, useVulkan = false, fallbackToVulkan = false }) {
   const manager = new WhisperServerManager();
   manager.ready = true;
@@ -277,6 +356,7 @@ test("the mid-transcription fallback carries the crashed server's error line", a
     {
       reason: "CUDA error: no kernel image is available for execution on the device",
       fallbackBackend: "cpu",
+      proven: false,
     },
   ]);
 });
@@ -314,7 +394,9 @@ test("the mid-transcription reason ignores what earlier requests printed", async
 
   await manager.transcribe(Buffer.from("audio"));
 
-  assert.deepEqual(events, [{ reason: "exit code 0xC0000005", fallbackBackend: "cpu" }]);
+  assert.deepEqual(events, [
+    { reason: "exit code 0xC0000005", fallbackBackend: "cpu", proven: false },
+  ]);
 });
 
 test("falls back to CPU when a peer's replacement is another doomed CUDA server", async (t) => {
@@ -371,6 +453,7 @@ test("falls back to CPU when a peer's replacement is another doomed CUDA server"
     {
       reason: "CUDA error: no kernel image is available for execution on the device",
       fallbackBackend: "cpu",
+      proven: false,
     },
   ]);
   assert.equal(startCalls.length, 1);
@@ -837,4 +920,118 @@ test("does not fall back after an intentional stop", async (t) => {
   assert.equal(requestCount, 1);
   assert.equal(startCalled, false);
   assert.equal(fallbackEvents, 0);
+});
+
+// A GPU setup that already transcribed is known to work on this machine, so its
+// later failure (sleep, a driver reset) is reported as proven: main keeps it off
+// only for the session instead of remembering it in WHISPER_GPU_FAILED. #2265
+test("reports a crash as proven once the backend has transcribed", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 2) {
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: true });
+  manager.gpuProofKey = "gpu:cuda||/tmp/model.bin";
+  manager.start = async () => {
+    manager.useCuda = false;
+    manager.ready = true;
+  };
+
+  const payloads = [];
+  manager.on("cuda-fallback", (payload) => payloads.push(payload));
+
+  await manager.transcribe(Buffer.from("audio"));
+  assert.deepEqual([...manager.transcribedGpuKeys], ["gpu:cuda||/tmp/model.bin"]);
+
+  const result = await manager.transcribe(Buffer.from("audio"));
+
+  assert.equal(result.text, "hello");
+  assert.deepEqual(
+    payloads.map(({ proven }) => proven),
+    [true]
+  );
+});
+
+test("reports a crash as not proven when the setup started but never transcribed", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: false, useVulkan: true });
+  manager.gpuProofKey = "gpu:vulkan:default||/tmp/model.bin";
+  // A build below the card's kernel floor starts fine and crashes at its first
+  // inference (#1578): starting must not count as proof for that crash.
+  manager.startedGpuKeys.add(manager.gpuProofKey);
+  manager.start = async () => {
+    manager.useVulkan = false;
+    manager.ready = true;
+  };
+
+  const payloads = [];
+  manager.on("gpu-fallback", (payload) => payloads.push(payload));
+
+  await manager.transcribe(Buffer.from("audio"));
+
+  assert.deepEqual(
+    payloads.map(({ proven }) => proven),
+    [false]
+  );
+  // The CPU retry that answered is not a GPU success.
+  assert.deepEqual([...manager.transcribedGpuKeys], []);
+});
+
+test("a proven CUDA crash passes its proof to the Vulkan start that follows", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 2) {
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: true, fallbackToVulkan: true });
+  manager.gpuProofKey = "gpu:cuda||/tmp/model.bin";
+  const startOptions = [];
+  manager.start = async (modelPath, options) => {
+    startOptions.push(options);
+    manager.useCuda = false;
+    manager.useVulkan = true;
+    manager.ready = true;
+  };
+
+  await manager.transcribe(Buffer.from("audio"));
+  await manager.transcribe(Buffer.from("audio"));
+
+  assert.equal(startOptions.length, 1);
+  assert.equal(startOptions[0].useVulkan, true);
+  assert.equal(startOptions[0].cascadeProven, true);
 });

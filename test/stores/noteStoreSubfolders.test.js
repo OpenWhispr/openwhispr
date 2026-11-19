@@ -40,7 +40,9 @@ async function loadStore(t) {
           const home = main.folders.find((f) => f.id === folderId);
           return home ? [note(100 + folderId, folderId, home.space_id)] : [];
         },
-        createFolder: async (name, space_id, parentFolderId) => {
+        // Main reads a null guard as a stale write and refuses it.
+        createFolder: async (name, space_id, writeGuard, parentFolderId) => {
+          if (writeGuard !== undefined) return { success: false, error: "Account changed" };
           const created = { ...folder(13, name, parentFolderId), space_id };
           main.folders = [...main.folders, created];
           return { success: true, folder: created };

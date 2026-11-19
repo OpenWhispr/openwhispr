@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { mountSettingsPanel } = require("../lib/settingsPanelHarness");
+const { managedPolicy } = require("../helpers/harness/policyFixtures");
 
 const PICKER = "/components/TranscriptionModelPicker.tsx";
 const KEY = "common.apiKey";
@@ -495,4 +496,226 @@ test("Corti: leaving a field that was already saved lets no answer save one stil
   await panel.wait(500);
   await panel.answer({ success: false, errorCode: "network", unverified: true });
   assert.equal(panel.state().cortiTenant, "", "a half-typed tenant waits until it is left");
+});
+
+function localPicker(
+  t,
+  { policy, whisper = [], parakeet = [], capability = { supported: true }, overrides }
+) {
+  const list = (ids) => async () => ({
+    success: true,
+    models: ids.map((model) => ({ model, downloaded: true })),
+  });
+  return mount(t, {
+    policy,
+    overrides: { mode: "local", useLocalWhisper: true, ...overrides },
+    electronAPI: {
+      ...DOWNLOADS,
+      modelGetActiveDownloads: async () => [],
+      checkParakeetInstallation: async () => capability,
+      listWhisperModels: list(whisper),
+      listParakeetModels: list(parakeet),
+    },
+  });
+}
+const managedTranscription = (transcription) => ({
+  status: "managed",
+  appVersion: "1.11.1",
+  policy: managedPolicy({ transcription }),
+});
+const managedSpeech = (allowedLocalModels) =>
+  managedTranscription({ allowedModes: ["local", "providers"], allowedLocalModels });
+const localTabs = (panel) => panel.find((node) => node.props?.selectedId !== undefined)[0];
+const tabIds = (panel) => localTabs(panel).props.providers.map((tab) => tab.id);
+
+test("a restricted member sees only families with an approved or installed model", async (t) => {
+  const panel = await localPicker(t, {
+    policy: managedSpeech(["base"]),
+    parakeet: ["parakeet-tdt-0.6b-v3"],
+    overrides: { selectedLocalProvider: "whisper", selectedLocalModel: "base" },
+  });
+  assert.deepEqual(tabIds(panel), ["whisper", "nvidia"]);
+  await panel.selectTab("nvidia");
+  assert.equal(localTabs(panel).props.selectedId, "nvidia", "the blocked model can be deleted");
+  const card = panel.find((node) => node.props?.modelId === "parakeet-tdt-0.6b-v3")[0];
+  assert.equal(card.props.policyBlocked, true);
+});
+
+test("a saved family with nothing approved opens on an approved tab without saving", async (t) => {
+  const selected = [];
+  const panel = await localPicker(t, {
+    policy: managedSpeech(["base"]),
+    overrides: {
+      selectedLocalProvider: "nvidia",
+      selectedLocalModel: "orukeet-v0.1.0",
+      onLocalProviderSelect: (id) => selected.push(id),
+      onLocalModelSelect: (id) => selected.push(id),
+    },
+  });
+  assert.deepEqual(tabIds(panel), ["whisper"]);
+  assert.equal(localTabs(panel).props.selectedId, "whisper");
+  assert.deepEqual(selected, []);
+});
+
+for (const transcriptionContext of ["meeting", "upload"]) {
+  test(`the ${transcriptionContext} picker filters its tabs the same way`, async (t) => {
+    const panel = await localPicker(t, {
+      policy: managedSpeech(["orukeet-v0.1.0"]),
+      overrides: { transcriptionContext, selectedLocalProvider: "whisper", selectedLocalModel: "" },
+    });
+    assert.deepEqual(tabIds(panel), ["oruk"]);
+    assert.equal(localTabs(panel).props.selectedId, "oruk");
+  });
+}
+
+test("a guest keeps every tab", async (t) => {
+  const panel = await localPicker(t, {
+    overrides: { selectedLocalProvider: "whisper", selectedLocalModel: "" },
+  });
+  assert.deepEqual(tabIds(panel), ["oruk", "whisper", "nvidia", "cohere"]);
+});
+
+test("an unsupported Mac reroutes a blank sherpa selection to Whisper", async (t) => {
+  const selected = [];
+  await localPicker(t, {
+    capability: { supported: false, minimumMacOSVersion: "15.5" },
+    overrides: {
+      selectedLocalProvider: "nvidia",
+      selectedLocalModel: "",
+      onLocalProviderSelect: (id) => selected.push(id),
+    },
+  });
+  assert.equal(selected[0], "whisper");
+});
+
+test("an unsupported Mac leaves a policy-blocked sherpa selection saved", async (t) => {
+  const selected = [];
+  await localPicker(t, {
+    policy: managedSpeech(["base"]),
+    capability: { supported: false, minimumMacOSVersion: "15.5" },
+    overrides: {
+      selectedLocalProvider: "nvidia",
+      selectedLocalModel: "parakeet-tdt-0.6b-v3",
+      onLocalProviderSelect: (id) => selected.push(id),
+    },
+  });
+  assert.deepEqual(selected, []);
+});
+
+// The harness's `t` returns the key followed by its interpolation values.
+const HINT_KEYS = [
+  "transcription.browsedProviderHint",
+  "transcription.browsedCustomHint",
+  "transcription.customInUseHint",
+];
+const hint = (panel) =>
+  panel.find(
+    (node) =>
+      typeof node.props?.children === "string" &&
+      HINT_KEYS.some((key) => node.props.children.startsWith(key))
+  )[0]?.props.children;
+const managedProviders = (allowedByokProviders) =>
+  managedTranscription({ allowedModes: ["providers"], allowedByokProviders });
+
+test("a browsed tab says the saved provider stays in use until a model is picked", async (t) => {
+  const panel = await mount(t, {
+    settings: {
+      meetingCloudTranscriptionProvider: "openai",
+      meetingCloudTranscriptionModel: "gpt-4o-mini-transcribe",
+    },
+    overrides: {
+      transcriptionContext: "meeting",
+      streamingOnly: true,
+      selectedCloudProvider: "openai",
+      selectedCloudModel: "gpt-4o-mini-transcribe",
+    },
+  });
+  assert.equal(hint(panel), undefined, "the saved provider's own tab needs no hint");
+
+  await panel.selectTab("deepgram");
+  assert.equal(
+    hint(panel),
+    'transcription.browsedProviderHint {"current":"OpenAI","provider":"Deepgram"}'
+  );
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "openai", "browsing saves nothing");
+
+  await panel.selectTab("openai");
+  assert.equal(hint(panel), undefined, "browsing back to the saved tab clears it");
+
+  await panel.selectTab("deepgram");
+  await panel.selectModel("nova-3");
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "deepgram");
+  await panel.setProps({ selectedCloudProvider: "deepgram", selectedCloudModel: "nova-3" });
+  assert.equal(hint(panel), undefined, "a picked model saves the tab");
+});
+
+test("under a managed policy, the line names the provider the policy runs", async (t) => {
+  // OpenAI stays saved, but the policy refuses it and runs Groq, the first one it allows.
+  const panel = await mount(t, {
+    policy: managedProviders(["groq", "deepgram"]),
+    settings: { transcriptionMode: "providers" },
+    overrides: { selectedCloudProvider: "openai", selectedCloudModel: "gpt-4o-mini-transcribe" },
+  });
+  await panel.selectTab("deepgram");
+  assert.equal(
+    hint(panel),
+    'transcription.browsedProviderHint {"current":"Groq","provider":"Deepgram"}'
+  );
+  await panel.selectTab("groq");
+  assert.equal(hint(panel), undefined, "Groq is already in use");
+});
+
+test("a blank Note Recording provider names the dictation provider it runs on", async (t) => {
+  // Note Recording was never set, so it runs on dictation's Deepgram while the picker
+  // shows its first tab; a managed policy leaves that unsaved. The latched flag keeps
+  // the store's load from copying dictation's provider in.
+  const panel = await mount(t, {
+    policy: managedProviders(["openai", "deepgram"]),
+    settings: {
+      meetingFollowsTranscription: "false",
+      meetingTranscriptionMode: "providers",
+      cloudTranscriptionProvider: "deepgram",
+      cloudTranscriptionModel: "nova-3",
+    },
+    overrides: {
+      transcriptionContext: "meeting",
+      streamingOnly: true,
+      selectedCloudProvider: "",
+      selectedCloudModel: "",
+    },
+  });
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "");
+  await panel.selectTab("openai");
+  assert.equal(
+    hint(panel),
+    'transcription.browsedProviderHint {"current":"Deepgram","provider":"OpenAI"}'
+  );
+  await panel.selectTab("deepgram");
+  assert.equal(hint(panel), undefined, "Deepgram is already in use");
+});
+
+test("a browsed Custom tab asks for a model name while the saved provider runs", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "openai", selectedCloudModel: "gpt-4o-mini-transcribe" },
+  });
+  await panel.selectTab("custom");
+  assert.equal(hint(panel), 'transcription.browsedCustomHint {"current":"OpenAI"}');
+});
+
+test("a custom endpoint in use is named as one", async (t) => {
+  const endpoint = "https://stt.example.com/v1";
+  const panel = await mount(t, {
+    settings: {
+      cloudTranscriptionProvider: "custom",
+      cloudTranscriptionModel: "whisper-1",
+      cloudTranscriptionBaseUrl: endpoint,
+    },
+    overrides: {
+      selectedCloudProvider: "custom",
+      selectedCloudModel: "whisper-1",
+      cloudTranscriptionBaseUrl: endpoint,
+    },
+  });
+  await panel.selectTab("openai");
+  assert.equal(hint(panel), 'transcription.customInUseHint {"provider":"OpenAI"}');
 });

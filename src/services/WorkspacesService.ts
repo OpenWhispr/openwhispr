@@ -1,6 +1,15 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete, type DataWrap } from "./cloudApi.js";
+import {
+  CloudApiError,
+  cloudGet,
+  cloudPost,
+  cloudPatch,
+  cloudDelete,
+  type DataWrap,
+} from "./cloudApi.js";
 import type {
   JoinableWorkspace,
+  MemberRemovalPreview,
+  MemberRemovalResult,
   Workspace,
   WorkspaceJoinRequest,
   WorkspaceMember,
@@ -36,6 +45,32 @@ async function create(name: string): Promise<Workspace> {
   return res.data;
 }
 
+/**
+ * The account's default workspace, made with `name` the first time and returned as it is after
+ * that. Null for an Enterprise member (`reason: "enterprise_managed"`), who gets none.
+ */
+async function ensureDefault(name: string): Promise<Workspace | null> {
+  const res = await cloudPost<{ data: Workspace | null; reason?: "enterprise_managed" }>(
+    "/api/workspaces/default",
+    { name }
+  );
+  return res.data ?? null;
+}
+
+/**
+ * Whether the account is no longer in the workspace. A list can leave out one it still has (an
+ * empty or stale answer), so only the workspace's own 404 says so; any other failure throws.
+ */
+async function isLost(workspaceId: string): Promise<boolean> {
+  try {
+    await cloudGet(`/api/workspaces/${workspaceId}`, "no-store");
+    return false;
+  } catch (error) {
+    if (error instanceof CloudApiError && error.status === 404) return true;
+    throw error;
+  }
+}
+
 async function update(workspaceId: string, patch: { name?: string }): Promise<Workspace> {
   const res = await cloudPatch<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}`, patch);
   return res.data;
@@ -60,6 +95,33 @@ async function updateMemberRole(
 
 async function removeMember(workspaceId: string, userId: string): Promise<void> {
   await cloudDelete(`/api/workspaces/${workspaceId}/members/${userId}`);
+}
+
+// The server answers a preview with the same ownership counts a refused removal would, without
+// removing anyone.
+async function previewMemberRemoval(
+  workspaceId: string,
+  userIds: string[]
+): Promise<MemberRemovalPreview> {
+  const res = await cloudPost<DataWrap<MemberRemovalPreview>>(
+    `/api/workspaces/${workspaceId}/members/remove`,
+    { user_ids: userIds, preview: true }
+  );
+  return res.data;
+}
+
+async function removeMembers(
+  workspaceId: string,
+  input: { userIds: string[]; transferTo?: string }
+): Promise<MemberRemovalResult> {
+  const res = await cloudPost<DataWrap<MemberRemovalResult>>(
+    `/api/workspaces/${workspaceId}/members/remove`,
+    {
+      user_ids: input.userIds,
+      ...(input.transferTo ? { transfer_to: input.transferTo } : {}),
+    }
+  );
+  return res.data;
 }
 
 async function billingCheckout(
@@ -159,11 +221,15 @@ export const WorkspacesService = {
   decideJoinRequest,
   list,
   create,
+  ensureDefault,
+  isLost,
   update,
   remove,
   listMembers,
   updateMemberRole,
   removeMember,
+  previewMemberRemoval,
+  removeMembers,
   billingCheckout,
   billingPortal,
   previewSeats,

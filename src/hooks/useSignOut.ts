@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { resetForAccountChange as resetChatForAccountChange } from "../stores/chatTurnStore";
 import { signOut } from "../lib/auth";
 import { syncService } from "../services/SyncService.js";
 import { stopRecording, useMeetingRecordingStore } from "../stores/meetingRecordingStore";
@@ -20,11 +21,12 @@ export function useSignOut({ showConfirmDialog, showAlertDialog }: SignOutDialog
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const performSignOut = useCallback(async () => {
+    resetChatForAccountChange();
     setIsSigningOut(true);
     try {
       // End a live meeting while its note is still in scope: signing out clears
       // the account scope, and anything said after that could not be saved.
-      await stopRecording();
+      await stopRecording(undefined, "account-change");
       // Clear account-scoped renderer/session state before ending the session.
       // Workspace-owned rows remain cached behind their membership boundary.
       await syncService.purgeTeamSpacesForSignOut();

@@ -4219,6 +4219,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     darwinStartActiveTicks = 0
     didRequestStopForCurrentSession = false
 
+    // Invalidate a native start still waiting for local startup, so it cannot record after this timeout.
+    KeyboardHandoffProvider.shared.cancelProcessingJob()
     KeyboardHandoffProvider.shared.clearBackgroundSessionReady()
 
     // A follow-up recording failed to start: the existing card versions are still
@@ -5310,6 +5312,7 @@ private struct KeyboardHandoffProvider {
     if let defaults = UserDefaults(suiteName: appGroupId) {
       let jobId = "\(Int(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString)"
       defaults.set("0", forKey: stopRequestedKey)
+      defaults.removeObject(forKey: cancelRequestedKey)
       defaults.removeObject(forKey: stopRequestedAtMsKey)
       defaults.set("0", forKey: recordingActiveKey)
       defaults.removeObject(forKey: audioLevelKey)
@@ -5384,6 +5387,7 @@ private struct KeyboardHandoffProvider {
   /// the deep link itself never arrives (cold-launch getInitialURL race).
   func markHandoffIntent() {
     guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    defaults.removeObject(forKey: cancelRequestedKey)
     defaults.set(String(Int(Date().timeIntervalSince1970 * 1000)), forKey: handoffIntentAtMsKey)
     defaults.synchronize()
     KeyboardLog.echo("MARKER provider.markHandoffIntent")

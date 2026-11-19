@@ -21,12 +21,15 @@ import { isWindowSwitchBlur, useFocusHold } from "../hooks/useFocusHold";
 import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
 import { useCredentialDraft } from "../hooks/useCredentialDraft";
 import { useTypingPause } from "../hooks/useTypingPause";
+import { offersOpenRouterModel, openRouterModelList } from "../utils/openRouterModels";
+import type { ModelCapability } from "../config/inferenceScopes";
 
 interface ModelOption {
   value: string;
   label: string;
   description?: string;
   ownedBy?: string;
+  eligibleForScope: boolean;
 }
 
 interface OpenAICompatiblePanelProps {
@@ -46,6 +49,8 @@ interface OpenAICompatiblePanelProps {
   getKeyUrl?: string;
   // The connection the panel checks: the user's own server, or OpenRouter.
   provider?: "custom" | "openrouter";
+  // What the scope's requests need; OpenRouter's list leaves out models without it.
+  modelNeeds?: readonly ModelCapability[];
 }
 
 export default function OpenAICompatiblePanel({
@@ -62,6 +67,7 @@ export default function OpenAICompatiblePanel({
   apiKeyRequired = false,
   getKeyUrl,
   provider = "custom",
+  modelNeeds,
 }: OpenAICompatiblePanelProps) {
   const { t } = useTranslation();
   const [draftBase, setDraftBase] = useState(baseUrl);
@@ -76,14 +82,18 @@ export default function OpenAICompatiblePanel({
   const latestBaseRef = useRef<string>(normalizeBaseUrl(baseUrl));
   const keyDraft = useCredentialDraft();
   const apiKey = keyDraft.value("apiKey", savedApiKey);
-  // The list reads the key and the address setter through refs, so neither a key change nor
-  // a parent's new setter on each render reloads it.
+  // OpenRouter's tested list supplies the recommendation ranking for this scope.
+  const testedModels = provider === "openrouter" ? openRouterModelList(modelNeeds) : null;
+  // The list reads the key, the model and the address setter through refs, so neither a key
+  // change, a pick nor a parent's new setter on each render reloads it.
   const apiKeyRef = useRef(apiKey);
+  const modelRef = useRef(model);
   const setBaseUrlRef = useRef(setBaseUrl);
   useEffect(() => {
     apiKeyRef.current = apiKey;
+    modelRef.current = model;
     setBaseUrlRef.current = setBaseUrl;
-  }, [apiKey, setBaseUrl]);
+  }, [apiKey, model, setBaseUrl]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -221,10 +231,10 @@ export default function OpenAICompatiblePanel({
               ? payload.models
               : [];
 
-          // Coerce fields defensively: non-conformant endpoints may return
-          // numeric ids or object descriptions, which would crash the render.
-          return (rawModels as Array<Record<string, unknown>>)
-            .map((item) => {
+          const options = (rawModels as Array<Record<string, unknown>>)
+            .map((item): ModelOption | null => {
+              // Coerce fields defensively: non-conformant endpoints may return
+              // numeric ids or object descriptions, which would crash the render.
               const rawValue = item?.id ?? item?.name;
               if (rawValue === undefined || rawValue === null || rawValue === "") return null;
               const value = String(rawValue);
@@ -235,9 +245,23 @@ export default function OpenAICompatiblePanel({
                   : ownedBy
                     ? t("reasoning.custom.ownerLabel", { owner: ownedBy })
                     : undefined;
-              return { value, label: value, description, ownedBy } as ModelOption;
+              return {
+                value,
+                label: value,
+                description,
+                ownedBy,
+                eligibleForScope:
+                  provider !== "openrouter" || offersOpenRouterModel(item, modelNeeds),
+              };
             })
-            .filter(Boolean) as ModelOption[];
+            .filter(
+              (option): option is ModelOption =>
+                option !== null && (option.eligibleForScope || option.value === modelRef.current)
+            );
+          // A saved pick that is off the list ranks -1, so it leads.
+          return testedModels
+            ? options.sort((a, b) => testedModels.indexOf(a.value) - testedModels.indexOf(b.value))
+            : options;
         };
 
         // When the entered base yields no models, fall back through sibling
@@ -297,7 +321,7 @@ export default function OpenAICompatiblePanel({
         }
       }
     },
-    [baseUrl, lockedBaseUrl, t]
+    [baseUrl, lockedBaseUrl, provider, modelNeeds, testedModels, t]
   );
 
   useEffect(() => {
@@ -366,7 +390,16 @@ export default function OpenAICompatiblePanel({
     loadRemoteModels(undefined, true);
   }, [applyBase, isDraftDirty, trimmedDraft, loadRemoteModels]);
 
-  const displayedModels = isDraftDirty ? [] : modelOptions;
+  // Preserve an incompatible saved pick only while it is selected, without reloading the catalog.
+  const displayedModels = useMemo(
+    (): ModelOption[] =>
+      isDraftDirty
+        ? []
+        : modelOptions.filter(
+            (option): boolean => option.eligibleForScope || option.value === model
+          ),
+    [isDraftDirty, modelOptions, model]
+  );
   const queryUrl = buildApiUrl(hasBase ? normalizedBase : baseUrlPlaceholder, "/models");
 
   return (
@@ -486,11 +519,13 @@ export default function OpenAICompatiblePanel({
             )}
           </>
         )}
-        {displayedModels.length > MODEL_SEARCH_THRESHOLD ? (
+        {displayedModels.length > MODEL_SEARCH_THRESHOLD ||
+        (testedModels && displayedModels.length > 0) ? (
           <SearchableModelList
             models={displayedModels}
             selectedModel={model}
             onModelSelect={setModel}
+            modelRanking={testedModels ?? undefined}
           />
         ) : (
           <ModelCardList

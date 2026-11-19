@@ -1,5 +1,6 @@
 import { clearOfflineAccountProfile, writeOfflineAccountProfile } from "./offlineAccountProfile";
 import { isControlPanelWindow } from "../utils/windowContext";
+import type { ActiveAccountScope } from "../types/electron";
 
 const AUTH_REQUEST_GENERATION = "openWhisprAuthGeneration";
 
@@ -135,6 +136,37 @@ export function subscribeAuthRequestContext(onChange: () => void): () => void {
   return () => subscribers.delete(onChange);
 }
 
+/** Ends account-bound work on a credential or main-process account change. */
+export function subscribeAuthBoundary(onChange: () => void): () => void {
+  let generation = snapshot.observedGeneration;
+  let accountScope: ActiveAccountScope | null | undefined;
+  let active = true;
+  let broadcastReceived = false;
+  const unsubscribeAuth = subscribeAuthRequestContext(() => {
+    if (generation === snapshot.observedGeneration) return;
+    generation = snapshot.observedGeneration;
+    onChange();
+  });
+  const unsubscribeScope = window.electronAPI?.onActiveAccountScopeChanged?.((scope) => {
+    broadcastReceived = true;
+    if (
+      accountScope?.accountId !== scope?.accountId ||
+      accountScope?.authGeneration !== scope?.authGeneration
+    ) {
+      accountScope = scope;
+      onChange();
+    }
+  });
+  void window.electronAPI?.getActiveAccountScope?.().then((scope) => {
+    if (active && !broadcastReceived) accountScope = scope;
+  });
+  return () => {
+    active = false;
+    unsubscribeAuth();
+    unsubscribeScope?.();
+  };
+}
+
 export function getAuthRequestContextSnapshot(): RendererAuthContextSnapshot {
   return snapshot;
 }
@@ -212,7 +244,27 @@ export async function authContextFetch(
   try {
     response = await globalThis.fetch(input, { ...init, credentials: "omit" });
     // Fetch resolves at headers; a broken session body must fence the lease too.
-    if (isGetSessionRequest((init ?? {}) as AuthRequest)) await response.clone().text();
+    if (isGetSessionRequest((init ?? {}) as AuthRequest)) {
+      const body = await response.clone().text();
+      if (response.ok) {
+        if (!isSessionAnswer(body)) {
+          throw Object.assign(
+            new Error("get-session answered with something other than a session"),
+            {
+              code: "AUTH_SESSION_UNREADABLE",
+            }
+          );
+        }
+        // Better-fetch otherwise decodes JSON served as binary into a Blob,
+        // which its success handler would mistake for a signed-out answer.
+        response = new Response(body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+        response.headers.set("Content-Type", "application/json");
+      }
+    }
     await assertAuthRequestCurrent(init);
     return response;
   } catch (error) {
@@ -239,6 +291,28 @@ function isGetSessionRequest(request: AuthRequest): boolean {
   try {
     const path = new URL(String(request.url), window.location.origin).pathname;
     return path.endsWith("/get-session");
+  } catch {
+    return false;
+  }
+}
+
+// Only an explicit no-session answer may clear the account. Proxy error
+// objects and incomplete session envelopes say nothing about the credential.
+function isSessionAnswer(body: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (parsed === null) return true;
+    if (typeof parsed !== "object" || Array.isArray(parsed)) return false;
+    const answer = parsed as { session?: unknown; user?: unknown };
+    if (answer.session === null && answer.user === null) {
+      return Object.keys(parsed).every((key) => key === "session" || key === "user");
+    }
+    return (
+      Boolean(resolvedUserId(parsed)) &&
+      answer.session != null &&
+      typeof answer.session === "object" &&
+      !Array.isArray(answer.session)
+    );
   } catch {
     return false;
   }
@@ -454,6 +528,11 @@ export function sessionAwaitsVerdict(): boolean {
   if (getOfflineAccount()) return true;
   const userId = snapshot.sessionUserId;
   return userId != null && getBoundSessionGeneration(userId) != null && !hasValidatedAuthContext();
+}
+
+/** A credential the server hasn't refused: its owner may be signing in or unreachable, not a guest. */
+export function hasUsableCredential(): boolean {
+  return snapshot.hasToken && snapshot.sessionRejectedGeneration !== snapshot.observedGeneration;
 }
 
 export function getSessionAnsweredAt(): number | null {

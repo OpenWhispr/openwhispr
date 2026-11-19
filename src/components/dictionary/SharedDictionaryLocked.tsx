@@ -33,7 +33,7 @@ const workspaceFirst = (scopes: SharedScope[]): SharedScope[] => [
 const WORKSPACE_ICON = <Building2 className="h-4 w-4 text-primary/80" aria-hidden="true" />;
 const SPACE_ICON = <Users className="h-4 w-4 text-primary/80" aria-hidden="true" />;
 
-// Neither a sign-in nor lost access is fixed by a plan, so they get no lists and no button.
+// A sign-in or lost access isn't fixed by a plan: no lists, no button.
 const ACCESS_BLOCKED = new Set<LockedAccessState>(["ssoRequired", "noAccess"]);
 const LOCK_ICON = <Lock size={15} className="shrink-0 text-primary" aria-hidden="true" />;
 
@@ -46,7 +46,7 @@ export function SharedDictionaryUpsell({
   onUpgrade,
 }: SharedDictionaryUpsellProps): ReactElement {
   const { t } = useTranslation();
-  if (access === "ssoRequired" || access === "noAccess") {
+  if (ACCESS_BLOCKED.has(access)) {
     return (
       <UpsellBar
         icon={LOCK_ICON}

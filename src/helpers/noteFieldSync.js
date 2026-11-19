@@ -80,3 +80,20 @@ export function noteAwaitsCloudResolution(note, serverKeepsRevisions) {
     (serverKeepsRevisions && hasUnrevisionedNoteClear(note))
   );
 }
+
+// A conflict whose cloud copy the note's base already covers was this device's
+// own write: two of its pushes raced, or a pull read the row before the push's
+// answer landed, and that answer has moved the base since. Pushing from the
+// base is safe, because the server still refuses it if anyone else wrote in
+// between. Without revisions on both sides nothing proves it, so it stays.
+export function isStaleNoteConflict(note, cloudNote) {
+  return Boolean(
+    note?.cloud_id &&
+    cloudNote?.id === note.cloud_id &&
+    !note.cloud_create_rejected &&
+    !note.cloud_create_pending &&
+    hasNoteRevision(note.cloud_revision) &&
+    hasNoteRevision(cloudNote.revision) &&
+    cloudNote.revision <= note.cloud_revision
+  );
+}
