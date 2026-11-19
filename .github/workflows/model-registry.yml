@@ -4,7 +4,8 @@ name: Model registry
 # a key made for the run and pushes nothing.
 on:
   pull_request:
-    # labeled/unlabeled re-run the capability-change gate when a maintainer adds the label.
+    # labeled/unlabeled re-run the capability-change gate: only the run that adding the
+    # label starts passes it.
     types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]

@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { assertCompatibleCatalog, capabilityChanges } = require("../lib/schema.cjs");
-const { readCatalog } = require("../lib/catalog.cjs");
+const { readCatalog, capabilityChangeApproved } = require("../lib/catalog.cjs");
 const seed = require("./seed.json");
 
 const base = readCatalog();
@@ -231,4 +231,15 @@ test("request-setting changes on published models are reported for a maintainer 
     },
   ]);
   assert.deepEqual(capabilityChanges(base, base), []);
+});
+
+test("the capability-change label covers only the commits it was added to", () => {
+  const labels = [{ name: "capability-change" }];
+  const event = (action, label) => ({ action, label, pull_request: { labels } });
+  assert.equal(capabilityChangeApproved(event("labeled", { name: "capability-change" })), true);
+  // The label is still on the pull request in each of these, from before the event.
+  assert.equal(capabilityChangeApproved(event("synchronize")), false);
+  assert.equal(capabilityChangeApproved(event("reopened")), false);
+  assert.equal(capabilityChangeApproved(event("labeled", { name: "enhancement" })), false);
+  assert.equal(capabilityChangeApproved(event("unlabeled", { name: "enhancement" })), false);
 });

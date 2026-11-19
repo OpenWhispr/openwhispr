@@ -1,21 +1,20 @@
 const fs = require("node:fs");
-const { readCatalog, assertCompatibleCatalog, capabilityChanges } = require("../lib/catalog.cjs");
+const {
+  readCatalog,
+  assertCompatibleCatalog,
+  capabilityChanges,
+  capabilityChangeApproved,
+} = require("../lib/catalog.cjs");
 const { fetchPublished } = require("../lib/published.cjs");
 const { assertReadersKept } = require("../lib/publication.cjs");
 const { checkCompatibility, droppedClients } = require("../lib/compat.cjs");
 const seed = require("../test/seed.json");
 
-// Published request settings may change only with a maintainer's capability-change label.
-// A push after the label was added invalidates it: the maintainer re-adds it once they
-// have checked the new commits (removing and re-adding re-runs this check).
-function pullRequestLabels() {
+// Null outside a pull request, where there is no label to ask for.
+function pullRequestEvent() {
   if (!process.env.GITHUB_EVENT_PATH) return null;
   const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
-  if (!event.pull_request) return null;
-  const labels = event.pull_request.labels.map((label) => label.name);
-  return event.action === "synchronize"
-    ? labels.filter((label) => label !== "capability-change")
-    : labels;
+  return event.pull_request ? event : null;
 }
 
 (async () => {
@@ -28,10 +27,11 @@ function pullRequestLabels() {
   const changes = capabilityChanges(catalog, previous.data);
   for (const change of changes)
     console.log(`Request settings change: ${change.provider}/${change.id} (${change.fields.join(", ")})`);
-  const labels = pullRequestLabels();
-  if (changes.length && labels && !labels.includes("capability-change"))
+  const event = pullRequestEvent();
+  if (changes.length && event && !capabilityChangeApproved(event))
     throw new Error(
-      "Published models change request settings; a maintainer must add the capability-change label after checking them."
+      "Published models change request settings; a maintainer must add the capability-change label after checking them " +
+        "(if it is already there, remove it and add it again: it covers only the commits it was added to)."
     );
 })().catch((error) => {
   console.error(error.message);
