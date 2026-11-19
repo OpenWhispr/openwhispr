@@ -1086,10 +1086,12 @@ test("the note header hands its event link to the dropdown, changeable only by e
 });
 
 test("transcript exports follow recorder identity rather than note ownership", async (t) => {
-  globalThis.__noteEditorAuth = {
+  const bob = {
     isSignedIn: true,
     user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
   };
+  const signedOut = { isSignedIn: false, user: null };
+  globalThis.__noteEditorAuth = bob;
   t.after(() => {
     delete globalThis.__noteEditorAuth;
     delete globalThis.__noteEditorRosterId;
@@ -1103,11 +1105,15 @@ test("transcript exports follow recorder identity rather than note ownership", a
     "/components/notes/ShareNoteDialog.tsx"
   );
   const formats = ["txt", "srt", "md", "json"];
-  for (const [ownerId, creatorId, expectedLabel] of [
-    ["bob", "alice", "Alice Recorder"],
-    ["alice", "bob", undefined],
-    ["bob", null, "notes.speaker.noteTaker"],
+  for (const [viewer, ownerId, creatorId, expectedLabel] of [
+    [bob, "bob", "alice", "Alice Recorder"],
+    [bob, "alice", "bob", undefined],
+    [bob, "bob", null, undefined],
+    [bob, "alice", null, "notes.speaker.noteTaker"],
+    [bob, null, null, undefined],
+    [signedOut, "alice", "alice", undefined],
   ]) {
+    globalThis.__noteEditorAuth = viewer;
     const exported = [];
     await render(undefined, {
       note: {

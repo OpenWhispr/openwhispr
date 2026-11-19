@@ -552,6 +552,12 @@ export default function NoteEditor({
     [recordedByUser, user?.name, user?.email, noteRecorder, parsedParticipants]
   );
   const recorderLabel = recorderTranscriptLabel(meetingIdentity, recordedByUser, t);
+  // Exports name the recorder only on a note known to be someone else's.
+  const knownRecorderId = recorderId ?? note.owner_user_id;
+  const exportRecorderLabel =
+    !recordedByUser && user?.id && knownRecorderId && knownRecorderId !== user.id
+      ? recorderLabel
+      : undefined;
 
   const mentionPeople = useMemo(
     () => collectKnownPeople(meetingIdentity, speakerMappings, displaySegments),
@@ -1099,7 +1105,7 @@ export default function NoteEditor({
       return (["txt", "srt", "md", "json"] as const).map((format) => ({
         id: format,
         label: t(TRANSCRIPT_EXPORT_LABEL_KEYS[format]),
-        onSelect: () => onExportTranscript(format, recordedByUser ? undefined : recorderLabel),
+        onSelect: () => onExportTranscript(format, exportRecorderLabel),
       }));
     }
     if (!onExportNote) return [];
@@ -1108,7 +1114,7 @@ export default function NoteEditor({
       label: t(NOTE_EXPORT_LABEL_KEYS[format]),
       onSelect: () => onExportNote(format),
     }));
-  }, [viewMode, onExportTranscript, onExportNote, recordedByUser, recorderLabel, t]);
+  }, [viewMode, onExportTranscript, onExportNote, exportRecorderLabel, t]);
 
   return (
     <div className="flex h-full min-h-0">
