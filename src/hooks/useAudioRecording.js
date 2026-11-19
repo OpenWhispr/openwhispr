@@ -148,11 +148,20 @@ export const useAudioRecording = (toast, options = {}) => {
   });
 
   const reportLifecycle = useCallback((state, attempt = recordingAttemptRef.current) => {
-    if (!attempt || attempt !== recordingAttemptRef.current) return Promise.resolve(false);
+    if (
+      !attempt ||
+      attempt !== recordingAttemptRef.current ||
+      (attempt.abandoned && state === "recording")
+    ) {
+      return Promise.resolve(false);
+    }
     if (reportedLifecycleRef.current === state) return attempt.admission;
     reportedLifecycleRef.current = state;
+    const voiceAgentRequested = audioManagerRef.current?.voiceAgentRequested === true;
     const reply = Promise.resolve()
-      .then(() => window.electronAPI?.dictationLifecycleStateChanged?.(state, attempt.id))
+      .then(() =>
+        window.electronAPI?.dictationLifecycleStateChanged?.(state, attempt.id, voiceAgentRequested)
+      )
       .then((accepted) => accepted === true)
       .catch((error) => {
         logger.warn("Dictation lifecycle request failed", { error: error?.message });
@@ -599,6 +608,8 @@ export const useAudioRecording = (toast, options = {}) => {
         isPreparing,
         micCaptureStatus,
       }) => {
+        // A cancelled start may finish opening the mic just before its caller disposes it.
+        if (isRecording && recordingAttemptRef.current?.abandoned) return;
         reportLifecycle(
           isRecording
             ? "recording"
