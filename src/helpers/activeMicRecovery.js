@@ -26,8 +26,8 @@ export const describeAudioInputs = (devices = []) => {
 };
 
 const trackMatchesDefault = (track, device) => {
-  const settings = track.getSettings();
   if (!device) return null;
+  const settings = track.getSettings();
   // Chromium's default device ID is an alias. Only compare physical IDs
   // directly; fall back to the group when either endpoint exposes the alias.
   const isPhysicalId = (id) => id && !CHROMIUM_ALIAS_DEVICE_IDS.has(id);
@@ -57,7 +57,7 @@ export class ActiveMicRecoveryController {
     debounceMs = DEFAULT_DEBOUNCE_MS,
     muteGraceMs = DEFAULT_MUTE_GRACE_MS,
     retryMs = DEFAULT_RETRY_MS,
-    logger = null,
+    logger,
     logScope,
   }) {
     this.mediaDevices = mediaDevices;
@@ -202,15 +202,15 @@ export class ActiveMicRecoveryController {
       return;
     }
 
-    const defaultChanged = previous.defaultKey !== current.defaultKey;
+    const defaultChanged = this.followDefault && previous.defaultKey !== current.defaultKey;
     const activeMissing = !activeTrackIsAvailable(this.track, current);
     if (
-      (this.followDefault && defaultChanged) ||
+      defaultChanged ||
       activeMissing ||
       (this.status === "unavailable" && !this.restoreOnUnmute)
     ) {
       this.log("debug", "Microphone device change needs recovery", {
-        defaultChanged: this.followDefault && defaultChanged,
+        defaultChanged,
         activeMissing,
         status: this.status,
       });
