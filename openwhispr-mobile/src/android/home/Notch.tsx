@@ -12,6 +12,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useHomeT } from './strings';
 import { home } from './kit';
+import { look } from '../settings/look';
 
 const NARROW_WIDTH = 72;
 const NARROW_HEIGHT = 30;
@@ -284,10 +285,15 @@ export function Notch({
           opacity: fade,
           marginTop: -1,
           transform: [{ translateY: drop }],
+          // A white tab with the glass edge and no top line: it overlaps the card's bottom
+          // hairline by 1 px, so the two read as one piece.
           backgroundColor: home.surface,
           borderBottomLeftRadius: bottomRadius,
           borderBottomRightRadius: bottomRadius,
-          boxShadow: home.cardShadow,
+          borderWidth: 1,
+          borderTopWidth: 0,
+          borderColor: look.hairline,
+          boxShadow: '0px 2px 10px rgba(15,23,42,0.06)',
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -303,7 +309,7 @@ export function Notch({
             backgroundColor: home.surface,
           }}
         >
-          <View style={{ flex: 1, backgroundColor: home.canvas, borderTopRightRadius: SHOULDER }} />
+          <View style={{ flex: 1, backgroundColor: look.canvas, borderTopRightRadius: SHOULDER }} />
         </View>
         <View
           style={{
@@ -315,7 +321,7 @@ export function Notch({
             backgroundColor: home.surface,
           }}
         >
-          <View style={{ flex: 1, backgroundColor: home.canvas, borderTopLeftRadius: SHOULDER }} />
+          <View style={{ flex: 1, backgroundColor: look.canvas, borderTopLeftRadius: SHOULDER }} />
         </View>
         {open ? (
           <Animated.View
