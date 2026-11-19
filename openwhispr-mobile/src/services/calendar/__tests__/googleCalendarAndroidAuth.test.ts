@@ -1,9 +1,11 @@
 const mockAuthorizeGoogle = jest.fn();
+const mockChooseGoogleAccount = jest.fn(async (): Promise<string | null> => 'sam@example.com');
 const mockClearGoogleToken = jest.fn(async (_token: string) => undefined);
 const mockSetItem = jest.fn(async () => undefined);
 
 jest.mock('../../../../modules/google-authorization/src', () => ({
   authorizeGoogle: (...args: unknown[]) => mockAuthorizeGoogle(...args),
+  chooseGoogleAccount: () => mockChooseGoogleAccount(),
   clearGoogleToken: (token: string) => mockClearGoogleToken(token),
 }));
 jest.mock('expo-secure-store', () => ({
@@ -47,6 +49,7 @@ it('connects with Google’s sheet and names the account from userinfo', async (
   const result = await authorizeGoogleCalendarOnAndroid(fetchUserinfo);
 
   expect(mockAuthorizeGoogle).toHaveBeenCalledWith(expect.arrayContaining(['openid', 'email']), {
+    account: 'sam@example.com',
     interactive: true,
   });
   expect(fetchUserinfo).toHaveBeenCalledWith('https://openidconnect.googleapis.com/v1/userinfo', {
@@ -58,6 +61,24 @@ it('connects with Google’s sheet and names the account from userinfo', async (
     refreshToken: null,
     scopes: CALENDAR_SCOPES,
   });
+});
+
+it('asks for the account the user picked, so another account can be added', async () => {
+  mockChooseGoogleAccount.mockResolvedValueOnce('work@example.com');
+  mockAuthorizeGoogle.mockResolvedValueOnce({ accessToken: 'tok', grantedScopes: CALENDAR_SCOPES });
+  await authorizeGoogleCalendarOnAndroid(userinfo({ sub: 'sub-2' }));
+  expect(mockAuthorizeGoogle).toHaveBeenCalledWith(expect.any(Array), {
+    account: 'work@example.com',
+    interactive: true,
+  });
+});
+
+it('treats backing out of the account picker as cancelled', async () => {
+  mockChooseGoogleAccount.mockResolvedValueOnce(null);
+  await expect(authorizeGoogleCalendarOnAndroid(userinfo({}))).rejects.toMatchObject({
+    code: 'cancelled',
+  });
+  expect(mockAuthorizeGoogle).not.toHaveBeenCalled();
 });
 
 it('treats a closed sheet as cancelled', async () => {

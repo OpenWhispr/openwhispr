@@ -1,5 +1,6 @@
 import {
   authorizeGoogle,
+  chooseGoogleAccount,
   clearGoogleToken,
   type GoogleAuthorizationErrorCode,
 } from '../../../modules/google-authorization/src';
@@ -98,11 +99,22 @@ async function fetchIdentity(
   };
 }
 
-/** Connect: Google's account and consent sheet, then who the account is. */
+/**
+ * Connect: Android's account picker (Play services alone would silently reuse the account it
+ * granted last, so "Add another Google account" could never pick a new one), Google's consent
+ * sheet for that account, then who the account is.
+ */
 export async function authorizeGoogleCalendarOnAndroid(
   httpClient: typeof fetch = globalThis.fetch,
 ): Promise<GoogleCalendarAuthorizationResult> {
-  const tokens = await authorizeTokens({ interactive: true });
+  let account: string | null;
+  try {
+    account = await chooseGoogleAccount();
+  } catch (error) {
+    throw toAuthError(error);
+  }
+  if (!account) throw new GoogleCalendarAuthError('cancelled', 'No Google account was chosen');
+  const tokens = await authorizeTokens({ account, interactive: true });
   const identity = await fetchIdentity(tokens.accessToken, httpClient);
   return { tokens, identity };
 }

@@ -16,6 +16,7 @@ interface NativeGoogleAuthorization {
     interactive: boolean,
   ): Promise<GoogleAuthorization>;
   clearToken(token: string): Promise<void>;
+  chooseAccount(): Promise<string | null>;
 }
 
 const native =
@@ -37,6 +38,12 @@ export function authorizeGoogle(
 ): Promise<GoogleAuthorization> {
   if (!native) return Promise.reject(new Error('Google authorization is unavailable'));
   return native.authorize(scopes, options.account ?? null, options.interactive);
+}
+
+/** Android's Google account picker; null when the user backs out. */
+export function chooseGoogleAccount(): Promise<string | null> {
+  if (!native) return Promise.reject(new Error('Google authorization is unavailable'));
+  return native.chooseAccount();
 }
 
 export async function clearGoogleToken(token: string): Promise<void> {

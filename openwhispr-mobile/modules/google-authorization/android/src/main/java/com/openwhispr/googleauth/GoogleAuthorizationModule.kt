@@ -1,6 +1,7 @@
 package com.openwhispr.googleauth
 
 import android.accounts.Account
+import android.accounts.AccountManager
 import android.app.Activity
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
@@ -15,6 +16,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 private const val REQUEST_CODE = 0x6C41
+private const val PICK_ACCOUNT_CODE = 0x6C42
 
 /**
  * Google OAuth on Android through Play services' AuthorizationClient. Google no longer accepts
@@ -23,6 +25,7 @@ private const val REQUEST_CODE = 0x6C41
  */
 class GoogleAuthorizationModule : Module() {
   private var pending: Promise? = null
+  private var pendingPick: Promise? = null
 
   override fun definition() = ModuleDefinition {
     Name("GoogleAuthorization")
@@ -56,6 +59,24 @@ class GoogleAuthorizationModule : Module() {
         .addOnFailureListener { error -> promise.reject(codeFor(error), error.message ?: "Google authorization failed", error) }
     }.runOnQueue(Queues.MAIN)
 
+    // Android's account picker. Without it AuthorizationClient silently reuses the account it
+    // granted last, so a second Google account could never be added. Resolves null on cancel.
+    AsyncFunction("chooseAccount") { promise: Promise ->
+      val activity = appContext.currentActivity
+        ?: return@AsyncFunction promise.reject("FAILED", "No activity to show the account picker", null)
+      if (pendingPick != null) return@AsyncFunction promise.reject("FAILED", "Account picker already open", null)
+      pendingPick = promise
+      try {
+        val intent = AccountManager.newChooseAccountIntent(
+          null, null, arrayOf("com.google"), null, null, null, null,
+        )
+        activity.startActivityForResult(intent, PICK_ACCOUNT_CODE)
+      } catch (error: Exception) {
+        pendingPick = null
+        promise.reject("FAILED", error.message ?: "Could not open the account picker", error)
+      }
+    }.runOnQueue(Queues.MAIN)
+
     // Drops a token from Play services' cache so a revoked one isn't handed back.
     AsyncFunction("clearToken") { token: String, promise: Promise ->
       val activity = appContext.currentActivity ?: return@AsyncFunction promise.resolve(null)
@@ -66,6 +87,13 @@ class GoogleAuthorizationModule : Module() {
     }.runOnQueue(Queues.MAIN)
 
     OnActivityResult { activity, payload ->
+      if (payload.requestCode == PICK_ACCOUNT_CODE) {
+        val pick = pendingPick ?: return@OnActivityResult
+        pendingPick = null
+        val name = payload.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)
+        pick.resolve(if (payload.resultCode == Activity.RESULT_OK) name else null)
+        return@OnActivityResult
+      }
       if (payload.requestCode != REQUEST_CODE) return@OnActivityResult
       val promise = pending ?: return@OnActivityResult
       pending = null
