@@ -174,3 +174,16 @@ export function restoreLearned(word: string, info: LearnedInfo) {
   }));
   useDictionaryStore.getState().addLearnedWords([word]);
 }
+
+/**
+ * A word learned a moment ago that the person then fixed again (Saket → Sakett): it goes quietly,
+ * without being blocked, so the newer spelling can take its place.
+ */
+export function forgetLearned(word: string) {
+  useDictionaryStore.getState().removeWord(word);
+  update((state) => {
+    const learned = { ...state.learned };
+    delete learned[lower(word)];
+    return { ...state, learned };
+  });
+}

@@ -2,6 +2,7 @@ const mockListeners: Record<string, (event: never) => void> = {};
 const mockShowTab = jest.fn(() => Promise.resolve(true));
 const mockLearn = jest.fn();
 const mockUnlearn = jest.fn();
+const mockForget = jest.fn();
 const mockNavigate = jest.fn();
 
 jest.mock('../../../../modules/android-dictation/src', () => ({
@@ -19,6 +20,7 @@ jest.mock('../learned', () => ({
   loadLearnedWords: () => Promise.resolve(),
   learnCorrections: (...args: unknown[]) => mockLearn(...args),
   unlearn: (words: string[]) => mockUnlearn(words),
+  forgetLearned: (word: string) => mockForget(word),
 }));
 jest.mock('../strings', () => ({
   dictionaryT: (key: string, options?: { word?: string; count?: number }) =>
@@ -76,4 +78,24 @@ it('Undo on the tab unlearns the words', async () => {
   mockListeners.onLearnedUndo({ words: ['Synty'] } as never);
   await flush();
   expect(mockUnlearn).toHaveBeenCalledWith(['Synty']);
+});
+
+it('a second fix of the same misheard word replaces the first instead of adding a word', async () => {
+  const typed = 'I need to send Sakets PR to Chad for review.';
+  mockLearn.mockReturnValueOnce(['Saket']).mockReturnValueOnce(['Sakett']);
+  mockListeners.onFieldEdited({
+    before: typed,
+    after: 'I need to send Saket PR to Chad for review.',
+  } as never);
+  await flush();
+  mockListeners.onFieldEdited({
+    before: typed,
+    after: 'I need to send Sakett PR to Chad for review.',
+  } as never);
+  await flush();
+  expect(mockForget).toHaveBeenCalledWith('Saket');
+  expect(mockLearn).toHaveBeenLastCalledWith([{ word: 'Sakett', from: 'Sakets' }], { kind: 'app' });
+  expect(mockShowTab).toHaveBeenLastCalledWith(
+    expect.objectContaining({ words: ['Sakett'], message: 'learnedToast:Sakett' }),
+  );
 });

@@ -2,7 +2,8 @@ package com.openwhispr.dictation
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
-import android.animation.ValueAnimator
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -21,8 +22,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.AccelerateInterpolator
-import android.view.animation.DecelerateInterpolator
-import android.view.animation.LinearInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -31,10 +31,10 @@ import android.widget.TextView
 data class LearnedTabText(val words: List<String>, val message: String, val undo: String, val undone: String)
 
 /**
- * Dictionary's C11: after a word is learned from a fix in another app, a slim tab slides out from
- * behind the bubble toward the middle of the screen ("Learned “Synty”" · Undo), holds 4 s with a
- * hairline timer (paused while touched), and slides back under. It never takes focus and the bubble
- * never moves or grows. Its window is added before the bubble's, so it sits underneath it.
+ * Dictionary's C11: after a word is learned from a fix in another app, a pill grows out of the bubble
+ * and settles beside it as its own thing ("Learned “Synty”" · Undo), holds, and shrinks back into
+ * the bubble. Always full size whatever the bubble's size; never takes focus; the bubble never moves
+ * or grows. Its window is added before the bubble's, so while it grows it comes out from under it.
  */
 class LearnedTab(
   private val context: Context,
@@ -47,23 +47,28 @@ class LearnedTab(
   private var window: FrameLayout? = null
   private var params: WindowManager.LayoutParams? = null
   private var pill: LinearLayout? = null
+  private var icon: View? = null
   private var label: TextView? = null
   private var undo: TextView? = null
-  private var timer: View? = null
-  private var hold: ValueAnimator? = null
-  private var slide: ValueAnimator? = null
+  private var motion: Animator? = null
   private var text: LearnedTabText? = null
   private var bubble = Rect()
   private var dockRight = true
-  private var tabHeight = 0
+  private var paused = false
   var showing = false; private set
 
   private fun dp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, context.resources.displayMetrics)
+  private val height get() = dp(44f).toInt()
+  private val gap get() = dp(10f).toInt()
+  /** Room around the pill for its shadow. */
+  private val margin get() = dp(12f).toInt()
+
+  private val hideLater = Runnable { hide() }
 
   /** Adds the (empty, hidden) window. Call before the bubble's window is added. */
   fun create() {
     if (window != null) return
-    val view = FrameLayout(context).apply { visibility = View.GONE; clipChildren = true; clipToPadding = true }
+    val view = FrameLayout(context).apply { visibility = View.GONE; clipChildren = false; clipToPadding = false }
     val layout = WindowManager.LayoutParams(
       WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
       WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -76,64 +81,61 @@ class LearnedTab(
   }
 
   fun destroy() {
-    handler.removeCallbacksAndMessages(null); hold?.cancel(); slide?.cancel()
+    handler.removeCallbacksAndMessages(null); motion?.cancel()
     window?.let { runCatching { windows.removeView(it) } }
     window = null; params = null; showing = false
   }
 
   /**
-   * Shows the tab beside the bubble (or updates it in place when it is already out: "Learned 2
-   * words"). [bubbleRect] is the bubble's visible circle on screen.
+   * Shows the pill beside the bubble, or updates it in place when it is already out ("Learned 2
+   * words"). [bubbleRect] is the bubble's visible circle on screen. [dot] is unused for size now
+   * (the pill keeps one size); the dot's ring pulse happens before this is called.
    */
+  @Suppress("UNUSED_PARAMETER")
   fun show(value: LearnedTabText, bubbleRect: Rect, right: Boolean, dot: Boolean) {
     val root = window ?: return
-    if (showing && text != null && pill != null) {
-      text = value; label?.text = value.message; undo?.visibility = View.VISIBLE
-      label?.setTextColor(BubbleColors.ink)
-      layout(bubbleRect, right); startHold(); return
+    text = value
+    if (showing && pill != null) {
+      label?.text = value.message; label?.setTextColor(BubbleColors.ink)
+      undo?.visibility = View.VISIBLE; icon?.alpha = 1f
+      layout(bubbleRect, right); hold(); return
     }
-    text = value; bubble = Rect(bubbleRect); dockRight = right
-    // As tall as the bubble, never more than 40; the dot gets a 28 tab.
-    tabHeight = if (dot) dp(28f).toInt() else minOf(bubble.height(), dp(40f).toInt())
+    bubble = Rect(bubbleRect); dockRight = right
     root.removeAllViews()
-    root.addView(build(value), FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, tabHeight + 2 * dp(4f).toInt()))
+    root.addView(build(value))
     root.visibility = View.VISIBLE
     layout(bubbleRect, right)
     showing = true
     root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-    slideTo(out = true) { startHold() }
+    grow(out = true) { hold() }
   }
 
-  /** Keeps the tab beside the bubble when the bubble moves (the keyboard opened or closed). */
+  /** Keeps the pill beside the bubble when the bubble moves (the keyboard opened or closed). */
   fun follow(bubbleRect: Rect, right: Boolean) { if (showing) layout(bubbleRect, right) }
 
   fun hide(animate: Boolean = true) {
     if (!showing) return
-    handler.removeCallbacksAndMessages(null); hold?.cancel()
+    handler.removeCallbacksAndMessages(null)
     val done = { window?.visibility = View.GONE; showing = false; text = null }
-    if (!animate) { slide?.cancel(); done(); return }
-    slideTo(out = false) { done() }
+    if (!animate) { motion?.cancel(); done(); return }
+    grow(out = false) { done() }
   }
 
   private fun build(value: LearnedTabText): View {
-    val radius = tabHeight / 2f
-    // The text clears the bubble, which covers the tab's inner end.
-    val inner = bubble.width() / 2 + dp(8f).toInt()
-    val outer = dp(12f).toInt()
-    val textSize = if (tabHeight < dp(32f)) 12f else 13f
     val row = LinearLayout(context).apply {
       orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
       background = GradientDrawable().apply {
-        setColor(BubbleColors.surface); cornerRadius = radius
-        setStroke(1, Color.argb(15, 0, 0, 0))
+        setColor(BubbleColors.surface); cornerRadius = height / 2f
+        setStroke(maxOf(1, dp(1f).toInt()), Color.argb(15, 0, 0, 0))
       }
-      elevation = dp(3f)
-      if (dockRight) setPadding(outer, 0, inner, 0) else setPadding(inner, 0, outer, 0)
-      // Touching the tab pauses its timer; letting go lets it run on.
+      elevation = dp(6f)
+      outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+      setPadding(dp(16f).toInt(), 0, dp(18f).toInt(), 0)
+      // Touching the pill keeps it out; letting go lets the hold run on.
       setOnTouchListener { _, event ->
         when (event.actionMasked) {
-          MotionEvent.ACTION_DOWN -> hold?.pause()
-          MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> hold?.resume()
+          MotionEvent.ACTION_DOWN -> { paused = true; handler.removeCallbacks(hideLater) }
+          MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { paused = false; if (undo?.visibility == View.VISIBLE) hold() }
         }
         false
       }
@@ -141,106 +143,100 @@ class LearnedTab(
     val book = BookGlyph(context)
     val message = TextView(context).apply {
       text = value.message; typeface = font; setTextColor(BubbleColors.ink)
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, textSize); maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f); maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+      gravity = Gravity.CENTER_VERTICAL
       // Tapping the words opens the Dictionary.
       setOnClickListener { onOpen(); hide() }
     }
     val action = TextView(context).apply {
       text = value.undo; typeface = Typeface.create(font, Typeface.BOLD); setTextColor(BubbleColors.accent)
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, textSize)
-      setPadding(dp(8f).toInt(), 0, 0, 0); gravity = Gravity.CENTER_VERTICAL
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f); gravity = Gravity.CENTER_VERTICAL
+      setPadding(dp(12f).toInt(), 0, 0, 0)
       contentDescription = "${value.undo}, ${value.message}"
       setOnClickListener { undone() }
     }
-    val glyph = dp(12f).toInt()
-    row.addView(book, LinearLayout.LayoutParams(glyph, glyph).apply { marginEnd = dp(6f).toInt() })
+    val glyph = dp(16f).toInt()
+    row.addView(book, LinearLayout.LayoutParams(glyph, glyph).apply { marginEnd = dp(8f).toInt() })
     row.addView(message, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT))
     row.addView(action, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT))
-    message.gravity = Gravity.CENTER_VERTICAL
-    // The hairline timer drains along the bottom of the tab.
-    val line = View(context).apply { setBackgroundColor(BubbleColors.accent); pivotX = 0f; alpha = 0.6f }
-    val frame = FrameLayout(context).apply { clipChildren = true; clipToOutline = true; outlineProvider = android.view.ViewOutlineProvider.BACKGROUND }
-    frame.background = row.background
-    row.background = null
-    frame.elevation = row.elevation; row.elevation = 0f
-    frame.addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, tabHeight))
-    frame.addView(line, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(1.5f).toInt(), Gravity.BOTTOM).apply {
-      if (dockRight) { leftMargin = outer; rightMargin = inner } else { leftMargin = inner; rightMargin = outer }
-    })
-    pill = row; label = message; undo = action; timer = line
+    pill = row; icon = book; label = message; undo = action
+    // The window leaves room for the shadow, and reaches to the bubble's centre so the pill can
+    // start under the bubble and grow out of it.
     return FrameLayout(context).apply {
-      setPadding(0, dp(4f).toInt(), 0, dp(4f).toInt()); clipToPadding = false; clipChildren = false
-      addView(frame, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, tabHeight))
+      clipChildren = false; clipToPadding = false
+      addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, height, Gravity.CENTER_VERTICAL))
     }
   }
 
   private fun layout(bubbleRect: Rect, right: Boolean) {
     val root = window ?: return
     val layout = params ?: return
+    val content = root.getChildAt(0) as? FrameLayout ?: return
+    val row = pill ?: return
     bubble = Rect(bubbleRect); dockRight = right
+    row.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+    val reach = gap + bubble.width() / 2
+    content.setPadding(if (right) margin else reach, margin, if (right) reach else margin, margin)
     root.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-    // The window ends at the bubble's centre, so the tab is clipped there: it slides out from under it.
-    layout.x = if (right) bubble.centerX() - root.measuredWidth else bubble.centerX()
-    layout.y = bubble.centerY() - root.measuredHeight / 2
+    // The pill's inner end sits [gap] from the bubble, its middle level with the bubble's.
+    layout.x = if (right) bubble.left - gap - row.measuredWidth - margin else bubble.centerX()
+    layout.y = bubble.centerY() - height / 2 - margin
+    row.pivotX = if (right) row.measuredWidth.toFloat() else 0f
+    row.pivotY = height / 2f
     runCatching { windows.updateViewLayout(root, layout) }
   }
 
-  private fun slideTo(out: Boolean, end: () -> Unit) {
-    val content = window?.getChildAt(0) ?: return end()
-    slide?.cancel()
-    content.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-    val away = (if (dockRight) 1 else -1) * content.measuredWidth.toFloat()
-    val from = if (out) away else content.translationX
-    val to = if (out) 0f else away
-    content.translationX = from
-    slide = ValueAnimator.ofFloat(from, to).apply {
-      duration = if (out) 240 else 200
-      interpolator = if (out) DecelerateInterpolator() else AccelerateInterpolator()
-      addUpdateListener { content.translationX = it.animatedValue as Float }
+  /** Grows the pill out of the bubble (or back into it): from the bubble's middle, small and clear. */
+  private fun grow(out: Boolean, end: () -> Unit) {
+    val row = pill ?: return end()
+    motion?.cancel()
+    val toBubble = (if (dockRight) 1 else -1) * (gap + bubble.width() / 2f)
+    val small = 0.2f
+    if (out) { row.translationX = toBubble; row.scaleX = small; row.scaleY = small; row.alpha = 0f }
+    val set = AnimatorSet().apply {
+      playTogether(
+        ObjectAnimator.ofFloat(row, View.TRANSLATION_X, row.translationX, if (out) 0f else toBubble),
+        ObjectAnimator.ofFloat(row, View.SCALE_X, row.scaleX, if (out) 1f else small),
+        ObjectAnimator.ofFloat(row, View.SCALE_Y, row.scaleY, if (out) 1f else small),
+        ObjectAnimator.ofFloat(row, View.ALPHA, row.alpha, if (out) 1f else 0f),
+      )
+      duration = if (out) GROW_MS else SHRINK_MS
+      interpolator = if (out) OvershootInterpolator(1.1f) else AccelerateInterpolator(1.4f)
       addListener(object : AnimatorListenerAdapter() {
         private var cancelled = false
         override fun onAnimationCancel(animation: Animator) { cancelled = true }
         override fun onAnimationEnd(animation: Animator) { if (!cancelled) end() }
       })
-      start()
     }
+    motion = set
+    set.start()
   }
 
-  private fun startHold() {
-    hold?.cancel()
-    val line = timer ?: return
-    line.visibility = View.VISIBLE; line.scaleX = 1f
-    hold = ValueAnimator.ofFloat(1f, 0f).apply {
-      duration = HOLD_MS; interpolator = LinearInterpolator()
-      addUpdateListener { line.scaleX = it.animatedValue as Float }
-      addListener(object : AnimatorListenerAdapter() {
-        private var cancelled = false
-        override fun onAnimationCancel(animation: Animator) { cancelled = true }
-        override fun onAnimationEnd(animation: Animator) { if (!cancelled) hide() }
-      })
-      start()
-    }
+  private fun hold() {
+    handler.removeCallbacks(hideLater)
+    if (!paused) handler.postDelayed(hideLater, HOLD_MS)
   }
 
-  /** Undo: the words go, the tab says so in grey for 1.2 s and slides back. The fixed text stays. */
+  /** Undo: the words go, the pill says so in grey for 1.2 s and goes back. The fixed text stays. */
   private fun undone() {
     val value = text ?: return
-    hold?.cancel()
+    handler.removeCallbacks(hideLater)
     onUndo(value.words)
     label?.text = "↺  ${value.undone}"; label?.setTextColor(BubbleColors.secondary); label?.setOnClickListener(null)
-    undo?.visibility = View.GONE; timer?.visibility = View.INVISIBLE
-    window?.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+    undo?.visibility = View.GONE; icon?.alpha = 0f
     layout(bubble, dockRight)
-    handler.postDelayed({ hide() }, UNDONE_MS)
+    handler.postDelayed(hideLater, UNDONE_MS)
   }
 
   private companion object {
+    const val GROW_MS = 520L
+    const val SHRINK_MS = 300L
     const val HOLD_MS = 4000L
     const val UNDONE_MS = 1200L
   }
 }
 
-/** A small open book in the accent colour, drawn so the overlay needs no icon font. */
+/** A small closed book in the accent colour, drawn so the overlay needs no icon font. */
 class BookGlyph(context: Context) : View(context) {
   private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     color = BubbleColors.accent; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
@@ -250,7 +246,7 @@ class BookGlyph(context: Context) : View(context) {
     val w = width.toFloat(); val h = height.toFloat()
     stroke.strokeWidth = w / 10f
     val inset = stroke.strokeWidth
-    canvas.drawRoundRect(inset, inset, w - inset, h - inset, w / 8f, w / 8f, stroke)
-    canvas.drawLine(w / 2f, inset, w / 2f, h - inset, stroke)
+    canvas.drawRoundRect(inset + w * 0.12f, inset, w - inset - w * 0.12f, h - inset, w / 8f, w / 8f, stroke)
+    canvas.drawLine(inset + w * 0.3f, inset, inset + w * 0.3f, h - inset, stroke)
   }
 }
