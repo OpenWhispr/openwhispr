@@ -45,6 +45,10 @@ data class TabMessage(
   val onLabel: (() -> Unit)? = null,
   /** Whether it leaves by itself after 4 s; "Still writing…" stays until the words land. */
   val leaves: Boolean = true,
+  /** Grey words, for a settled state such as the Dictionary's "Won't learn “Synty”" after Undo. */
+  val muted: Boolean = false,
+  /** Another 14 dp glyph in place of the brand bars (the Dictionary's book). */
+  val glyph: ((Context) -> View)? = null,
 )
 
 /**
@@ -71,7 +75,8 @@ class StatusTab(private val context: Context, private val windows: WindowManager
   private var releasedAt: Long? = null
   private var message: TabMessage? = null
   private var onGone: (() -> Unit)? = null
-  private val leave = Runnable { hide() }
+  /** Leaving by itself (4 s untouched) is the only way [onGone] runs; an action or [hide] doesn't. */
+  private val leave = Runnable { val gone = onGone; hide(); gone?.invoke() }
 
   val showing get() = message != null
 
@@ -80,11 +85,10 @@ class StatusTab(private val context: Context, private val windows: WindowManager
 
   /**
    * Slides the tab out beside [bubble] (screen coordinates of the bubble's visible circle). A tab
-   * already out changes its words in place. [gone] runs once it has left, by itself or by [hide].
+   * already out changes its words in place. [gone] runs only if it leaves by itself.
    */
   fun show(next: TabMessage, bubble: Rect, right: Boolean, gone: (() -> Unit)? = null) {
     val replacing = message != null && window?.isAttachedToWindow == true
-    if (replacing) onGone?.invoke()
     message = next; onGone = gone; anchor = Rect(bubble); dockRight = right
     if (!replacing) build()
     apply(next)
@@ -107,13 +111,11 @@ class StatusTab(private val context: Context, private val windows: WindowManager
     handler.removeCallbacks(leave)
     val view = window ?: return
     val content = pill
-    val finished = onGone
     message = null; onGone = null
     val remove = { runCatching { windows.removeView(view) }; if (window === view) { window = null; pill = null; label = null; action = null } }
     if (!animate || content == null || !view.isAttachedToWindow) remove()
     else content.animate().translationX(slideFrom()).alpha(0f).setDuration(200).setInterpolator(BubbleMotion.easeIn)
       .withEndAction(remove).start()
-    finished?.invoke()
   }
 
   private fun slideFrom() = if (dockRight) dp(16f) else -dp(16f)
@@ -154,7 +156,13 @@ class StatusTab(private val context: Context, private val windows: WindowManager
   }
 
   private fun apply(next: TabMessage) {
+    pill?.let { content ->
+      val icon = next.glyph?.invoke(context) ?: TabGlyph(context)
+      content.removeViewAt(0)
+      content.addView(icon, 0, LinearLayout.LayoutParams(dp(14f).toInt(), dp(14f).toInt()))
+    }
     label?.apply {
+      setTextColor(if (next.muted) BubbleColors.secondary else BubbleColors.ink)
       text = next.label
       isClickable = next.onLabel != null
       setOnClickListener(next.onLabel?.let { run -> View.OnClickListener { run() } })

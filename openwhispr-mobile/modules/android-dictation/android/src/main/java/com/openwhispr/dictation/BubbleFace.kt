@@ -6,6 +6,7 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.*
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.animation.LinearInterpolator
 import android.view.animation.PathInterpolator
 import androidx.core.graphics.PathParser
