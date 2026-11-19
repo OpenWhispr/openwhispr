@@ -3690,7 +3690,8 @@
       "deleteDescriptionSubfolders": "Esto eliminará permanentemente \"{{name}}\" junto con {{subfolders}} y {{notes}}. Esta acción no se puede deshacer.",
       "subfolderCount_one": "{{count}} subcarpeta",
       "subfolderCount_other": "{{count}} subcarpetas",
-      "deleteConfirm": "Eliminar carpeta y notas"
+      "deleteConfirm": "Eliminar carpeta y notas",
+      "recordingInFolder": "Se está grabando “{{title}}” en esta carpeta. Detén la grabación y luego elimina la carpeta."
     },
     "list": {
       "title": "Notas",
@@ -4024,7 +4025,12 @@
       "recordingDisabledByOrg": "Tu organización ha desactivado la grabación de reuniones.",
       "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta.",
       "stoppedPolicyUnresolved": "La grabación se detuvo porque no se pudieron comprobar los ajustes de tu organización.",
-      "stoppedWorkspaceChanged": "La grabación se detuvo porque cambiaste de espacio de trabajo."
+      "stoppedWorkspaceChanged": "La grabación se detuvo porque cambiaste de espacio de trabajo.",
+      "recordingCopy": {
+        "title": "La grabación pasó a una nota nueva",
+        "description": "“{{title}}” se eliminó durante la grabación. La transcripción se guarda en una nota nueva en Privado.",
+        "open": "Abrir nota"
+      }
     },
     "meetingPill": {
       "returnToNote": "Volver a la grabación",

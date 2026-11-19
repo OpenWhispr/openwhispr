@@ -269,8 +269,8 @@ test("deleting a parent announces each deleted folder, subfolders first, and rem
   await settle();
   assert.ok(result.success);
   assert.deepEqual(sent, [
-    ["folder-deleted", { id: child.id }],
-    ["folder-deleted", { id: parent.id }],
+    ["folder-deleted", { id: child.id, noteIds: [] }],
+    ["folder-deleted", { id: parent.id, noteIds: [] }],
   ]);
   assert.ok(!fs.existsSync(path.join(privateDir, "Client A")));
   assert.ok(!fs.existsSync(path.join(privateDir, "Q1")));

@@ -134,6 +134,14 @@ interface MeetingRecordingState {
   currentMicLevel: number;
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
   windowWidth: number;
+  /** The new note a recording went on in after its note vanished, for the notes view to announce
+   * (it clears this once shown). `lostTitle` names the vanished note. */
+  recordingCopy: {
+    noteId: number;
+    spaceId: number;
+    folderId: number | null;
+    lostTitle: string;
+  } | null;
 }
 
 const MEETING_AUDIO_BUFFER_SIZE = 800;
@@ -511,6 +519,16 @@ let sessionSystemAudioActive = false;
 // True while the recording's own note is deleted mid-recording, so a live save
 // never writes the transcript back onto its tombstone.
 let recordingNoteDeleted = false;
+// The user deleted the recording's note here, so its transcript goes with it. A note
+// deleted any other way (on another device, with its folder) goes on in a copy.
+let recordingNoteDeletedByUser = false;
+// Read as the recording starts: the account a copy may be made for, and where the
+// note lives, so a Private note's copy stays in that Private.
+let recordingOwnerAccountId: string | null | undefined;
+let recordingNoteSpaceId: number | null = null;
+// Each note a recording moved off, by the copy it went on in.
+const recordingNoteCopies = new Map<number, number>();
+let recordingRescue: { lostNoteId: number; promise: Promise<number | null> } | null = null;
 
 export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   isRecording: false,
@@ -540,6 +558,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
+  recordingCopy: null,
 }));
 
 // Org-policy refusals: the main process's own sentinel and the refusal codes it
@@ -1036,6 +1055,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     systemPartialSpeakerIdValue = null;
     sessionSystemAudioActive = false;
     recordingNoteDeleted = false;
+    recordingNoteDeletedByUser = false;
+    recordingOwnerAccountId = undefined;
+    recordingNoteSpaceId = null;
 
     useMeetingRecordingStore.setState({
       isRecording: true,
@@ -1063,6 +1085,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       systemAudioInterrupted: null,
       micCaptureStatus: "inactive",
     });
+    void captureRecordingOwner(args.noteId);
 
     isRecordingFlag = true;
     let systemAudioAvailabilityResolved = false;
@@ -1849,6 +1872,196 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
   return automaticStartCancelled ? "cancelled" : !automaticStartSuppressed;
 }
 
+function rememberRecordingNoteSpace(note: NoteItem | null | undefined): void {
+  if (note && !note.deleted_at && note.id === useMeetingRecordingStore.getState().recordingNoteId) {
+    recordingNoteSpaceId = note.space_id;
+  }
+}
+
+async function captureRecordingOwner(noteId: number | null): Promise<void> {
+  if (noteId == null) return;
+  try {
+    const api = window.electronAPI;
+    const [guard, note] = await Promise.all([api?.getNoteWriteGuard?.(), api?.getNote?.(noteId)]);
+    if (useMeetingRecordingStore.getState().recordingNoteId !== noteId) return;
+    if (guard) recordingOwnerAccountId = guard.accountId;
+    rememberRecordingNoteSpace(note);
+  } catch {
+    // With no owner, a vanished note's transcript stays on screen and is only logged.
+  }
+}
+
+/**
+ * The user is deleting this note here: if it's the one recording, its transcript goes with it
+ * rather than on in a copy. Answers how to take that back, should the delete fail.
+ */
+export function markRecordingNoteDeletedByUser(noteId: number): () => void {
+  if (!isRecordingFlag || noteId !== useMeetingRecordingStore.getState().recordingNoteId) {
+    return () => {};
+  }
+  recordingNoteDeletedByUser = true;
+  return () => {
+    recordingNoteDeletedByUser = false;
+  };
+}
+
+// The recording's note was deleted, on its own or with its folder. Saves to it stop at
+// once; unless the user deleted it here, the recording goes on in a copy.
+function noteLeftRecording(noteId: number): void {
+  if (!isRecordingFlag || noteId !== useMeetingRecordingStore.getState().recordingNoteId) return;
+  recordingNoteDeleted = true;
+  if (!recordingNoteDeletedByUser) void startRecordingRescue(noteId);
+}
+
+/**
+ * The note a live recording's vanished note goes on in (see copyRecordingNote), for the editor's
+ * own unsaved edits to that note. Null when the note isn't one this recording writes to.
+ */
+export function rescueRecordingNote(lostNoteId: number): Promise<number | null> {
+  const known = recordingNoteCopies.has(lostNoteId) || recordingRescue?.lostNoteId === lostNoteId;
+  return known || isRecordingFlag ? startRecordingRescue(lostNoteId) : Promise.resolve(null);
+}
+
+// One copy per vanished note, whoever asks first.
+function startRecordingRescue(lostNoteId: number): Promise<number | null> {
+  const copied = recordingNoteCopies.get(lostNoteId);
+  if (copied != null) return Promise.resolve(copied);
+  if (recordingRescue?.lostNoteId === lostNoteId) return recordingRescue.promise;
+  if (
+    recordingNoteDeletedByUser ||
+    useMeetingRecordingStore.getState().recordingNoteId !== lostNoteId
+  ) {
+    return Promise.resolve(null);
+  }
+  const promise = copyRecordingNote(lostNoteId).catch((error: unknown) => {
+    logger.error(
+      "Could not save a vanished recording note's transcript",
+      { error: (error as Error).message, noteId: lostNoteId },
+      "meeting"
+    );
+    return null;
+  });
+  const rescue = { lostNoteId, promise };
+  recordingRescue = rescue;
+  void promise.then(() => {
+    if (recordingRescue === rescue) recordingRescue = null;
+  });
+  return promise;
+}
+
+// The recording's note vanished (deleted on another device, or with its folder): what this
+// session recorded is saved as a new note in Private, and the recording goes on in it. Like
+// main keeping unsent work, only that leaves the note: not its earlier transcript, notes,
+// title or summary. Made only for the account the recording started under, and refused by
+// main if the account changes on the way. Answers the note the transcript now goes to.
+async function copyRecordingNote(lostNoteId: number): Promise<number | null> {
+  const api = window.electronAPI;
+  const row = await api?.getNote?.(lostNoteId);
+  // Moved or unfiled rather than removed: the recording keeps its note.
+  if (row && !row.deleted_at) {
+    if (useMeetingRecordingStore.getState().recordingNoteId === lostNoteId) {
+      recordingNoteDeleted = false;
+    }
+    return lostNoteId;
+  }
+  if (recordingNoteDeletedByUser) return null;
+  const guard = await api?.getNoteWriteGuard?.();
+  if (
+    !guard ||
+    recordingOwnerAccountId === undefined ||
+    guard.accountId !== recordingOwnerAccountId
+  ) {
+    logger.warn("A recording's note vanished; no copy was made", { noteId: lostNoteId }, "meeting");
+    return null;
+  }
+  const spaces = recordingNoteSpaceId != null ? ((await api?.getSpaces?.()) ?? []) : [];
+  const ownPrivate = spaces.find(
+    (space) => space.id === recordingNoteSpaceId && space.kind === "private"
+  );
+  const { segments, recordingNoteTitle } = useMeetingRecordingStore.getState();
+  const recorded = segments.slice(sessionSeedLength);
+  const transcript = recorded.length > 0 ? serializeTranscriptSegments(recorded) : null;
+  const save = async (spaceId: number | null) =>
+    (await api
+      ?.saveNote?.("", "", "meeting", null, null, null, spaceId, transcript, guard)
+      .catch(() => null)) ?? null;
+  let saved = ownPrivate ? await save(ownPrivate.id) : null;
+  if (!saved?.success) saved = await save(null);
+  const copy = saved?.success ? saved.note : undefined;
+  if (!copy) return null;
+
+  recordingNoteCopies.set(lostNoteId, copy.id);
+  const state = useMeetingRecordingStore.getState();
+  if (state.recordingNoteId === lostNoteId) {
+    // The copy holds none of the note's earlier transcript, so neither does the recording.
+    const ownSegments = state.segments.slice(sessionSeedLength);
+    sessionSeedLength = 0;
+    segmentsRefValue = ownSegments;
+    recordingNoteDeleted = false;
+    recordingNoteSpaceId = copy.space_id;
+    useMeetingRecordingStore.setState({
+      recordingNoteId: copy.id,
+      recordingNoteTitle: copy.title,
+      recordingFolderId: copy.folder_id,
+      segments: ownSegments,
+      transcript: buildTranscriptText(ownSegments),
+    });
+    // Said while the copy was made: saved now rather than at the next 30-second save.
+    if (ownSegments.length !== recorded.length) void persistLiveTranscript();
+  }
+  useMeetingRecordingStore.setState({
+    recordingCopy: {
+      noteId: copy.id,
+      spaceId: copy.space_id,
+      folderId: copy.folder_id,
+      lostTitle: recordingNoteTitle ?? "",
+    },
+  });
+  return copy.id;
+}
+
+// A stop whose note vanished saves to the copy the recording went on in, made now if need
+// be. A note found there after all takes the transcript it was to get (none after a refusal).
+async function persistToRecordingCopy(
+  lostNoteId: number,
+  transcript: string | null
+): Promise<void> {
+  const target = await startRecordingRescue(lostNoteId);
+  if (target == null) return;
+  if (target === lostNoteId) {
+    if (transcript != null) await window.electronAPI?.updateNote?.(target, { transcript });
+    return;
+  }
+  // The copy holds this session's segments only, as the store's now do.
+  const { segments } = useMeetingRecordingStore.getState();
+  if (segments.length > 0) {
+    await window.electronAPI?.updateNote?.(target, {
+      transcript: serializeTranscriptSegments(segments),
+    });
+  }
+}
+
+/**
+ * The note being recorded, when it sits in one of these folders, so deleting them would take
+ * it. Null at once when nothing is recording.
+ */
+export function recordingNoteInFolders(
+  folderIds: ReadonlySet<number>
+): Promise<NoteItem | null> | null {
+  const { isRecording, recordingNoteId } = useMeetingRecordingStore.getState();
+  if (!isRecording || recordingNoteId == null) return null;
+  return (async () => {
+    try {
+      const note = await window.electronAPI?.getNote?.(recordingNoteId);
+      return note && !note.deleted_at && note.folder_id != null && folderIds.has(note.folder_id)
+        ? note
+        : null;
+    } catch {
+      return null;
+    }
+  })();
+}
+
 // Writes the live segments to the recording's note, serialized exactly as the
 // stop path writes them. Shared by the 30-second crash-safety save and the
 // flush before an unload. A no-op once a stop has begun: that
@@ -1856,7 +2069,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
 // recording with no segments), and a second write could overwrite it.
 export async function persistLiveTranscript(): Promise<void> {
   const { recordingNoteId, segments } = useMeetingRecordingStore.getState();
-  if (!isRecordingFlag || recordingNoteDeleted || recordingNoteId == null) return;
+  if (!isRecordingFlag || recordingNoteId == null) return;
+  if (recordingNoteDeleted) {
+    // Gone: the copy the recording goes on in takes the transcript once made.
+    if (!recordingNoteDeletedByUser) void startRecordingRescue(recordingNoteId);
+    return;
+  }
   if (segments.length === 0) return;
   try {
     // Posted before the first await: during beforeunload nothing after it is
@@ -1870,6 +2088,8 @@ export async function persistLiveTranscript(): Promise<void> {
         { error: result.error, noteId: recordingNoteId },
         "meeting"
       );
+      // Refused because the note is gone (main's note_deleted, or no row at all).
+      noteLeftRecording(recordingNoteId);
     }
   } catch (err) {
     logger.error(
@@ -1944,7 +2164,14 @@ export async function stopRecording(
     const persistTranscript = async (transcript: string) => {
       if (recordingNoteId == null) return;
       try {
-        await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
+        if (recordingNoteDeleted && !recordingNoteDeletedByUser) {
+          await persistToRecordingCopy(recordingNoteId, transcript);
+          return;
+        }
+        const result = await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
+        if (result && !result.success && !recordingNoteDeletedByUser) {
+          await persistToRecordingCopy(recordingNoteId, null);
+        }
       } catch (err) {
         logger.error(
           "Failed to persist final meeting transcript",
@@ -2105,12 +2332,14 @@ if (typeof window !== "undefined") {
         recordingNoteId,
         segments: liveSegments,
       } = useMeetingRecordingStore.getState();
-      const { targetNoteId, isCurrentSession } = resolveDiarizationTarget({
+      const resolved = resolveDiarizationTarget({
         payloadNoteId: data?.noteId,
         payloadSessionId: data?.sessionId,
         currentSessionId: diarizationSessionId,
         activeRecordingNoteId: isRecording ? recordingNoteId : null,
       });
+      const { isCurrentSession } = resolved;
+      let targetNoteId = resolved.targetNoteId;
       if (targetNoteId == null) {
         if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
         return;
@@ -2147,6 +2376,13 @@ if (typeof window !== "undefined") {
       const seed = data.sessionId ? seedLengthByDiarizationSession.get(data.sessionId) : undefined;
       const seedLength = seed?.seedLength ?? 0;
       if (data.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
+      // A session that went on in a copy of its vanished note stopped there: main still
+      // names the note it started on.
+      const copyId = recordingNoteCopies.get(targetNoteId);
+      if (copyId != null && seed?.noteId === copyId) {
+        targetNoteId = copyId;
+        persisted = await window.electronAPI?.getNote?.(copyId).catch(() => null);
+      }
       // No note means no safe base to merge into, and writing to a deleted one
       // would resurrect its tombstone in the sidebar, cloud mirror, and vector
       // index.
@@ -2234,20 +2470,23 @@ if (typeof window !== "undefined") {
 }
 
 // Registered once at module load, like the diarization listener above: the
-// note can be deleted from the sidebar while the recording runs on. A team-note
-// delete the server denies revives the same row, and the snapshot pull that
-// follows re-syncs it live, so saves resume. A pull never clears deleted_at, so
-// one racing a real delete re-syncs the tombstone and the guard holds.
+// note can be deleted while the recording runs on, on its own (here or on another
+// device) or with its folder. A team-note delete the server denies revives the
+// same row, and the snapshot pull that follows re-syncs it live, so saves resume.
+// A pull never clears deleted_at, so one racing a real delete re-syncs the
+// tombstone and the guard holds.
 if (typeof window !== "undefined") {
-  window.electronAPI?.onNoteDeleted?.(({ id }) => {
-    if (isRecordingFlag && id === useMeetingRecordingStore.getState().recordingNoteId) {
-      recordingNoteDeleted = true;
-    }
+  window.electronAPI?.onNoteDeleted?.(({ id }) => noteLeftRecording(id));
+  window.electronAPI?.onFolderDeleted?.(({ noteIds }) => {
+    for (const id of noteIds ?? []) noteLeftRecording(id);
   });
+  window.electronAPI?.onNoteUpdated?.((note) => rememberRecordingNoteSpace(note));
   window.electronAPI?.onNoteSynced?.((note) => {
     if (!note.deleted_at && note.id === useMeetingRecordingStore.getState().recordingNoteId) {
       recordingNoteDeleted = false;
+      recordingNoteDeletedByUser = false;
     }
+    rememberRecordingNoteSpace(note);
   });
 }
 

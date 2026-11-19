@@ -3551,10 +3551,12 @@ class IPCHandlers {
       if (result?.success) {
         this.notifyVectorChanges();
         this._mirrorRemovedFolder(result, snapshots);
-        // Subfolders first, as the database deleted them.
+        // Subfolders first, as the database deleted them. Each event names every
+        // note the delete took, so a recording in one of them hears of it.
+        const noteIds = result.noteIds ?? [];
         setImmediate(() => {
           for (const folderId of result.folderIds ?? [id]) {
-            broadcastToWindows("folder-deleted", { id: folderId });
+            broadcastToWindows("folder-deleted", { id: folderId, noteIds });
           }
         });
       }
@@ -4511,7 +4513,7 @@ class IPCHandlers {
           for (const note of [...(result.preservedNotes ?? []), ...(result.unfiledNotes ?? [])]) {
             broadcastToWindows("note-updated", note);
           }
-          broadcastToWindows("folder-deleted", { id });
+          broadcastToWindows("folder-deleted", { id, noteIds: result.noteIds ?? [] });
         });
       }
       return result;

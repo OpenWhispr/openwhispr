@@ -3164,7 +3164,8 @@
       "subfolderCount_few": "{{count}} مجلدات فرعية",
       "subfolderCount_many": "{{count}} مجلدًا فرعيًا",
       "subfolderCount_other": "{{count}} مجلد فرعي",
-      "deleteConfirm": "حذف المجلد والملاحظات"
+      "deleteConfirm": "حذف المجلد والملاحظات",
+      "recordingInFolder": "يجري تسجيل “{{title}}” في هذا المجلد. أوقف التسجيل، ثم احذف المجلد."
     },
     "list": {
       "title": "الملاحظات",
@@ -3498,7 +3499,12 @@
       "recordingDisabledByOrg": "تم تعطيل تسجيل الاجتماعات بواسطة مؤسستك.",
       "stoppedAccountChanged": "توقف التسجيل لأنك سجّلت الخروج أو بدّلت الحساب.",
       "stoppedPolicyUnresolved": "توقف التسجيل لأنه تعذّر التحقق من إعدادات مؤسستك.",
-      "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل."
+      "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل.",
+      "recordingCopy": {
+        "title": "نُقل التسجيل إلى ملاحظة جديدة",
+        "description": "حُذفت “{{title}}” أثناء التسجيل. يُحفظ النص المكتوب في ملاحظة جديدة في «خاص».",
+        "open": "فتح الملاحظة"
+      }
     },
     "meetingPill": {
       "returnToNote": "العودة إلى التسجيل",

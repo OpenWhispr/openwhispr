@@ -4203,7 +4203,8 @@
       "deleteDescriptionSubfolders": "Cette action supprimera définitivement \"{{name}}\", y compris {{subfolders}} et {{notes}}. Cette action est irréversible.",
       "subfolderCount_one": "{{count}} sous-dossier",
       "subfolderCount_other": "{{count}} sous-dossiers",
-      "deleteConfirm": "Supprimer le dossier et les notes"
+      "deleteConfirm": "Supprimer le dossier et les notes",
+      "recordingInFolder": "« {{title}} » est en cours d'enregistrement dans ce dossier. Arrêtez l'enregistrement, puis supprimez le dossier."
     },
     "list": {
       "title": "Notes",
@@ -4537,7 +4538,12 @@
       "recordingDisabledByOrg": "L’enregistrement des réunions est désactivé par votre organisation.",
       "stoppedAccountChanged": "L’enregistrement s’est arrêté, car vous vous êtes déconnecté ou avez changé de compte.",
       "stoppedPolicyUnresolved": "L’enregistrement s’est arrêté, car les paramètres de votre organisation n’ont pas pu être vérifiés.",
-      "stoppedWorkspaceChanged": "L’enregistrement s’est arrêté, car vous avez changé d’espace de travail."
+      "stoppedWorkspaceChanged": "L’enregistrement s’est arrêté, car vous avez changé d’espace de travail.",
+      "recordingCopy": {
+        "title": "Enregistrement déplacé dans une nouvelle note",
+        "description": "« {{title}} » a été supprimée pendant l'enregistrement. La transcription est enregistrée dans une nouvelle note dans Privé.",
+        "open": "Ouvrir la note"
+      }
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",

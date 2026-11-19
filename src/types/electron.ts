@@ -2519,7 +2519,10 @@ declare global {
       onNoteDeleted?: (callback: (payload: { id: number }) => void) => () => void;
       onNoteSynced?: (callback: (note: NoteItem) => void) => () => void;
       onFolderSynced?: (callback: (folder: FolderItem) => void) => () => void;
-      onFolderDeleted?: (callback: (payload: { id: number }) => void) => () => void;
+      // noteIds: the notes the delete took with the folder (main's own delete and pulled ones).
+      onFolderDeleted?: (
+        callback: (payload: { id: number; noteIds?: number[] }) => void
+      ) => () => void;
 
       // Cross-window sync events
       emitSyncEvent?: (name: string, payload?: unknown) => Promise<{ success: boolean }>;

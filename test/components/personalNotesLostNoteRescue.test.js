@@ -38,7 +38,7 @@ const MOCKS = {
       globalThis.__editorProps = props;
       return null;
     }`,
-  "./SpacesTree": `export default () => null;`,
+  "./SpacesTree": `export default (props) => { globalThis.__treeProps = props; return null; };`,
   "/overview/ContainerOverview": `export const ContainerOverview = () => null;`,
   "./NotesStructureIntroDialog": `export default () => null;`,
   "./ActionManagerDialog": `export default () => null;`,
@@ -81,25 +81,65 @@ const MOCKS = {
   `,
 };
 
+// A recording store whose answers the tests set: which notes a recording went on in
+// (globalThis.__recordingCopies) and the deletes it was told were the user's.
+const RECORDING_STORE = `
+  import { create } from "zustand";
+  export const useMeetingRecordingStore = create(() => ({
+    isRecording: false,
+    isTranscribing: false,
+    recordingNoteId: null,
+    recordingCopy: null,
+    diarizationSessionId: null,
+    sessionDiarizationEnabled: true,
+    sessionExpectedCount: 2,
+    userTouchedStepper: false,
+    transcript: "",
+  }));
+  export const useIsMeetingMode = () => false;
+  export const useIsNarrowWindow = () => false;
+  export const startRecording = async () => true;
+  export const stopRecording = async () => ({ stopped: false });
+  export const lockSpeaker = () => {};
+  export const setSessionDiarizationEnabled = () => {};
+  export const setSessionExpectedCount = () => {};
+  export const markRecordingNoteDeletedByUser = (id) => {
+    globalThis.__recordingDeletes.push(["marked", id]);
+    return () => globalThis.__recordingDeletes.push(["unmarked", id]);
+  };
+  export const rescueRecordingNote = async (id) => globalThis.__recordingCopies[id] ?? null;
+`;
+
 const PRIVATE = { id: 1, kind: "private", name: "Private" };
 const TEAM = { id: 2, kind: "team", name: "Engineering" };
 
 // `stored` is the row main holds for the note: null once it is gone.
-async function mountView(t, { stored = null, accountId = OWNER } = {}) {
+async function mountView(t, { stored = null, accountId = OWNER, recording = false } = {}) {
   const calls = [];
-  const state = { stored, accountId, nextId: 500 };
+  const state = { stored, accountId, nextId: 500, deleteSucceeds: true };
   let root;
   globalThis.__note = NOTE;
   globalThis.__spaces = [PRIVATE, TEAM];
   globalThis.__toasts = [];
   globalThis.__opened = [];
   globalThis.__deletedHere = new Set();
+  globalThis.__recordingCopies = {};
+  globalThis.__recordingDeletes = [];
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
-    for (const key of ["__editorProps", "__note", "__spaces", "__toasts", "__opened"]) {
+    for (const key of [
+      "__editorProps",
+      "__treeProps",
+      "__note",
+      "__spaces",
+      "__toasts",
+      "__opened",
+      "__deletedHere",
+      "__recordingCopies",
+      "__recordingDeletes",
+    ]) {
       delete globalThis[key];
     }
-    delete globalThis.__deletedHere;
   });
   installBrowserGlobals(t, {
     window: {
@@ -120,6 +160,7 @@ async function mountView(t, { stored = null, accountId = OWNER } = {}) {
             note: { id, title, content, note_type: noteType, space_id: spaceId ?? 1, transcript },
           };
         },
+        deleteNote: async () => ({ success: state.deleteSucceeds }),
         discardNoteUndo: async () => {},
       },
       setTimeout: (fn, ms) => setTimeout(fn, ms),
@@ -127,8 +168,10 @@ async function mountView(t, { stored = null, accountId = OWNER } = {}) {
   });
   const container = installHostDom(t);
   const vite = await createRendererServer(t, {
-    cachePrefix: "openwhispr-personal-notes-lost-note-",
-    mockModules: MOCKS,
+    cachePrefix: recording
+      ? "openwhispr-personal-notes-lost-recording-note-"
+      : "openwhispr-personal-notes-lost-note-",
+    mockModules: recording ? { ...MOCKS, "/stores/meetingRecordingStore": RECORDING_STORE } : MOCKS,
   });
   const { default: PersonalNotesView } = await vite.ssrLoadModule(
     "/components/notes/PersonalNotesView.tsx"
@@ -138,7 +181,7 @@ async function mountView(t, { stored = null, accountId = OWNER } = {}) {
   await render();
   // Lets the editor read whose note it opened.
   await React.act(() => settle(0));
-  return { calls, state, render };
+  return { calls, state, render, vite };
 }
 
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -287,4 +330,57 @@ test("no copy is made for an account other than the one that opened the note", a
 
   assert.equal(kind(view.calls, "save").length, 0);
   assert.equal(globalThis.__toasts.length, 0);
+});
+
+// The recording goes on in a copy of its own (meetingRecordingStoreVanishedNote.test.js): the
+// edits join it rather than making a second note.
+test("edits to the recording's vanished note go to the note the recording went on in", async (t) => {
+  const view = await mountView(t, { recording: true });
+  globalThis.__recordingCopies[NOTE.id] = 700;
+  await React.act(async () => globalThis.__editorProps.onContentChange(NOTE.id, "Typed"));
+
+  await closeDeletedNote(view);
+
+  assert.equal(kind(view.calls, "save").length, 0, "no second note");
+  assert.deepEqual(kind(view.calls, "update").at(-1), [
+    "update",
+    700,
+    { title: NOTE.title, content: "Typed" },
+  ]);
+  assert.equal(globalThis.__toasts.length, 0, "the recording says it moved");
+});
+
+test("the recording's move to a new note is announced once, with Open", async (t) => {
+  const view = await mountView(t, { recording: true });
+  const { useMeetingRecordingStore } = await view.vite.ssrLoadModule(
+    "/stores/meetingRecordingStore"
+  );
+
+  await React.act(async () =>
+    useMeetingRecordingStore.setState({
+      recordingCopy: { noteId: 700, spaceId: 1, folderId: 9, lostTitle: "Standup" },
+    })
+  );
+
+  assert.equal(globalThis.__toasts.length, 1);
+  const [toast] = globalThis.__toasts;
+  assert.equal(toast.title, "Recording moved to a new note");
+  assert.match(toast.description, /Standup/);
+  toast.actions[0].onClick();
+  assert.deepEqual(globalThis.__opened, [{ id: 700, space_id: 1, folder_id: 9 }]);
+  assert.equal(useMeetingRecordingStore.getState().recordingCopy, null, "said once");
+});
+
+test("deleting a note here tells the recording, and takes that back if the delete fails", async (t) => {
+  const view = await mountView(t, { recording: true });
+
+  await React.act(async () => globalThis.__treeProps.onDeleteNote(NOTE.id));
+  assert.deepEqual(globalThis.__recordingDeletes, [["marked", NOTE.id]]);
+
+  view.state.deleteSucceeds = false;
+  await React.act(async () => globalThis.__treeProps.onDeleteNote(NOTE.id));
+  assert.deepEqual(globalThis.__recordingDeletes.slice(1), [
+    ["marked", NOTE.id],
+    ["unmarked", NOTE.id],
+  ]);
 });

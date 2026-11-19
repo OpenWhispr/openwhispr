@@ -3924,7 +3924,8 @@
       "deleteDescriptionSubfolders": "「{{name}}」と、その中の {{subfolders}} と {{notes}} を完全に削除します。この操作は取り消せません。",
       "subfolderCount_one": "{{count}} 件のサブフォルダ",
       "subfolderCount_other": "{{count}} 件のサブフォルダ",
-      "deleteConfirm": "フォルダとノートを削除"
+      "deleteConfirm": "フォルダとノートを削除",
+      "recordingInFolder": "このフォルダ内の「{{title}}」は録音中です。録音を停止してから、フォルダを削除してください。"
     },
     "list": {
       "title": "ノート",
@@ -4056,7 +4057,12 @@
       "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。",
       "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。",
       "stoppedPolicyUnresolved": "組織の設定を確認できなかったため、録音を停止しました。",
-      "stoppedWorkspaceChanged": "ワークスペースを切り替えたため、録音を停止しました。"
+      "stoppedWorkspaceChanged": "ワークスペースを切り替えたため、録音を停止しました。",
+      "recordingCopy": {
+        "title": "録音を新しいメモに移しました",
+        "description": "「{{title}}」は録音中に削除されました。文字起こしはプライベートの新しいメモに保存されます。",
+        "open": "メモを開く"
+      }
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",

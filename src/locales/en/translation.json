@@ -4197,7 +4197,8 @@
       "deleteDescriptionSubfolders": "This will permanently delete \"{{name}}\", including {{subfolders}} and {{notes}}. This cannot be undone.",
       "subfolderCount_one": "{{count}} subfolder",
       "subfolderCount_other": "{{count}} subfolders",
-      "deleteConfirm": "Delete folder and notes"
+      "deleteConfirm": "Delete folder and notes",
+      "recordingInFolder": "“{{title}}” in this folder is being recorded. Stop the recording, then delete the folder."
     },
     "list": {
       "title": "Notes",
@@ -4531,7 +4532,12 @@
       "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
       "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
       "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked.",
-      "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces."
+      "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces.",
+      "recordingCopy": {
+        "title": "Recording moved to a new note",
+        "description": "“{{title}}” was deleted during the recording. The transcript is saved in a new note in Private.",
+        "open": "Open note"
+      }
     },
     "meetingPill": {
       "returnToNote": "Return to recording",

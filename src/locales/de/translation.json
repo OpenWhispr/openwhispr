@@ -4197,7 +4197,8 @@
       "deleteDescriptionSubfolders": "Dadurch wird \"{{name}}\" dauerhaft gelöscht, einschließlich {{subfolders}} und {{notes}}. Diese Aktion kann nicht rückgängig gemacht werden.",
       "subfolderCount_one": "{{count}} Unterordner",
       "subfolderCount_other": "{{count}} Unterordner",
-      "deleteConfirm": "Ordner und Notizen löschen"
+      "deleteConfirm": "Ordner und Notizen löschen",
+      "recordingInFolder": "„{{title}}“ in diesem Ordner wird gerade aufgenommen. Beende die Aufnahme und lösche den Ordner danach."
     },
     "list": {
       "title": "Notizen",
@@ -4531,7 +4532,12 @@
       "recordingDisabledByOrg": "Die Aufzeichnung von Besprechungen wurde von Ihrer Organisation deaktiviert.",
       "stoppedAccountChanged": "Die Aufnahme wurde beendet, weil Sie sich abgemeldet oder das Konto gewechselt haben.",
       "stoppedPolicyUnresolved": "Die Aufnahme wurde beendet, weil die Einstellungen Ihrer Organisation nicht geprüft werden konnten.",
-      "stoppedWorkspaceChanged": "Die Aufnahme wurde beendet, weil Sie den Workspace gewechselt haben."
+      "stoppedWorkspaceChanged": "Die Aufnahme wurde beendet, weil Sie den Workspace gewechselt haben.",
+      "recordingCopy": {
+        "title": "Aufnahme in eine neue Notiz verschoben",
+        "description": "„{{title}}“ wurde während der Aufnahme gelöscht. Das Transkript wird in einer neuen Notiz in „Privat“ gespeichert.",
+        "open": "Notiz öffnen"
+      }
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",

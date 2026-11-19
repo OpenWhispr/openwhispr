@@ -3644,7 +3644,8 @@
       "deleteDescriptionSubfolders": "Isso excluirá permanentemente \"{{name}}\", incluindo {{subfolders}} e {{notes}}. Esta ação não pode ser desfeita.",
       "subfolderCount_one": "{{count}} subpasta",
       "subfolderCount_other": "{{count}} subpastas",
-      "deleteConfirm": "Excluir pasta e notas"
+      "deleteConfirm": "Excluir pasta e notas",
+      "recordingInFolder": "“{{title}}” nesta pasta está sendo gravada. Pare a gravação e depois exclua a pasta."
     },
     "list": {
       "title": "Notas",
@@ -3978,7 +3979,12 @@
       "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização.",
       "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta.",
       "stoppedPolicyUnresolved": "A gravação parou porque não foi possível verificar as configurações da sua organização.",
-      "stoppedWorkspaceChanged": "A gravação parou porque você trocou de espaço de trabalho."
+      "stoppedWorkspaceChanged": "A gravação parou porque você trocou de espaço de trabalho.",
+      "recordingCopy": {
+        "title": "Gravação movida para uma nova nota",
+        "description": "“{{title}}” foi excluída durante a gravação. A transcrição está sendo salva em uma nova nota em Privado.",
+        "open": "Abrir nota"
+      }
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",

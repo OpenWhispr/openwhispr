@@ -3638,7 +3638,8 @@
       "deleteDescriptionSubfolders": "这将永久删除「{{name}}」，包括其中的 {{subfolders}}和 {{notes}}。此操作无法撤销。",
       "subfolderCount_one": "{{count}} 个子文件夹",
       "subfolderCount_other": "{{count}} 个子文件夹",
-      "deleteConfirm": "删除文件夹和笔记"
+      "deleteConfirm": "删除文件夹和笔记",
+      "recordingInFolder": "此文件夹中的“{{title}}”正在录制。请先停止录制，再删除文件夹。"
     },
     "list": {
       "title": "笔记",
@@ -3972,7 +3973,12 @@
       "recordingDisabledByOrg": "您的组织已禁用会议录音。",
       "stoppedAccountChanged": "由于您已退出登录或切换了账号，录音已停止。",
       "stoppedPolicyUnresolved": "由于无法检查您的组织设置，录音已停止。",
-      "stoppedWorkspaceChanged": "由于您切换了工作区，录音已停止。"
+      "stoppedWorkspaceChanged": "由于您切换了工作区，录音已停止。",
+      "recordingCopy": {
+        "title": "录制已移到新笔记",
+        "description": "“{{title}}”在录制期间被删除。转录内容已保存到“私密”中的一条新笔记。",
+        "open": "打开笔记"
+      }
     },
     "meetingPill": {
       "returnToNote": "返回到录音",

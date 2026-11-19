@@ -3638,7 +3638,8 @@
       "deleteDescriptionSubfolders": "Questa azione eliminerà definitivamente \"{{name}}\" insieme a {{subfolders}} e {{notes}}. Questa operazione non può essere annullata.",
       "subfolderCount_one": "{{count}} sottocartella",
       "subfolderCount_other": "{{count}} sottocartelle",
-      "deleteConfirm": "Elimina cartella e note"
+      "deleteConfirm": "Elimina cartella e note",
+      "recordingInFolder": "“{{title}}” in questa cartella è in registrazione. Interrompi la registrazione, poi elimina la cartella."
     },
     "list": {
       "title": "Note",
@@ -3972,7 +3973,12 @@
       "recordingDisabledByOrg": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
       "stoppedAccountChanged": "La registrazione si è interrotta perché sei uscito dall'account o hai cambiato account.",
       "stoppedPolicyUnresolved": "La registrazione si è interrotta perché non è stato possibile verificare le impostazioni della tua organizzazione.",
-      "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace."
+      "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace.",
+      "recordingCopy": {
+        "title": "Registrazione spostata in una nuova nota",
+        "description": "“{{title}}” è stata eliminata durante la registrazione. La trascrizione viene salvata in una nuova nota in Privato.",
+        "open": "Apri nota"
+      }
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",

@@ -3638,7 +3638,8 @@
       "deleteDescriptionSubfolders": "這將永久刪除「{{name}}」，包括其中的 {{subfolders}}和 {{notes}}。此操作無法復原。",
       "subfolderCount_one": "{{count}} 個子資料夾",
       "subfolderCount_other": "{{count}} 個子資料夾",
-      "deleteConfirm": "刪除資料夾和筆記"
+      "deleteConfirm": "刪除資料夾和筆記",
+      "recordingInFolder": "此資料夾中的「{{title}}」正在錄製。請先停止錄製，再刪除資料夾。"
     },
     "list": {
       "title": "筆記",
@@ -3972,7 +3973,12 @@
       "recordingDisabledByOrg": "您的組織已停用會議錄音。",
       "stoppedAccountChanged": "由於您已登出或切換了帳號，錄音已停止。",
       "stoppedPolicyUnresolved": "由於無法檢查您的組織設定，錄音已停止。",
-      "stoppedWorkspaceChanged": "由於您切換了工作區，錄音已停止。"
+      "stoppedWorkspaceChanged": "由於您切換了工作區，錄音已停止。",
+      "recordingCopy": {
+        "title": "錄製已移到新筆記",
+        "description": "「{{title}}」在錄製期間被刪除。逐字稿已儲存到「私人」中的一則新筆記。",
+        "open": "開啟筆記"
+      }
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",

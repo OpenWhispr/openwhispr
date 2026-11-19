@@ -124,6 +124,7 @@ import {
   useShareCache,
 } from "../../stores/noteStore";
 import { useDeviceNotesStore, type DeviceNotesMoveRequest } from "../../stores/deviceNotesStore";
+import { recordingNoteInFolders } from "../../stores/meetingRecordingStore";
 
 // A folder row's notes: those of every folder it stands for (one, except in the
 // Private section; see privateSectionFolders).
@@ -2471,9 +2472,35 @@ export default function SpacesTree({
     setSettingsOpen(true);
   };
 
+  // A folder holding the note being recorded isn't deleted: the recording would go on writing
+  // into a deleted note, and its transcript would go with the folder. The user stops it first.
+  const refuseDeleteWhileRecording = (recording: NoteItem): void => {
+    toast({
+      title: t("notes.folders.couldNotDelete"),
+      description: t("notes.folders.recordingInFolder", {
+        title: recording.title || t("notes.list.untitled"),
+      }),
+      variant: "destructive",
+    });
+  };
+
   const requestDeleteFolder = (folder: FolderItem) => {
     if (!canManageFolderDestructive(folder)) return;
     // Main deletes the subfolders and all their notes along with the folder.
+    const subfolders = folderNodes.find((node) => node.folder.id === folder.id)?.subfolders ?? [];
+    const folderIds = new Set([folder.id, ...subfolders.map((subfolder) => subfolder.id)]);
+    const recordingCheck = recordingNoteInFolders(folderIds);
+    if (recordingCheck) {
+      void recordingCheck.then((recording) => {
+        if (recording) refuseDeleteWhileRecording(recording);
+        else confirmDeleteFolder(folder, folderIds);
+      });
+      return;
+    }
+    confirmDeleteFolder(folder, folderIds);
+  };
+
+  const confirmDeleteFolder = (folder: FolderItem, folderIds: ReadonlySet<number>): void => {
     const contents = folderContents(folder);
     showConfirmDialog({
       title: t("notes.folders.deleteTitle"),
@@ -2492,6 +2519,12 @@ export default function SpacesTree({
       confirmText: t("notes.folders.deleteConfirm"),
       variant: "destructive",
       onConfirm: async () => {
+        // A recording may have started in the folder while the dialog was open.
+        const recording = await recordingNoteInFolders(folderIds);
+        if (recording) {
+          refuseDeleteWhileRecording(recording);
+          return;
+        }
         const result = await deleteFolder(folder.id);
         if (!result.success && result.error) {
           toast({

@@ -86,6 +86,8 @@ import {
   lockSpeaker,
   setSessionDiarizationEnabled,
   setSessionExpectedCount,
+  markRecordingNoteDeletedByUser,
+  rescueRecordingNote,
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import { startRecordingForNote, useCreateNote } from "../../hooks/useCreateNote";
@@ -308,6 +310,15 @@ export default function PersonalNotesView({
         logger.warn("Note save refused", { noteId: write.noteId, error }, "notes");
         return;
       }
+      // The note being recorded: the edits join the copy the recording goes on in.
+      const recordingCopyId = await rescueRecordingNote(write.noteId);
+      if (recordingCopyId != null && recordingCopyId !== write.noteId) {
+        const result = await api.updateNote(recordingCopyId, write.updates).catch(() => null);
+        if (!result?.success) {
+          logger.warn("Failed to save edits to a recording's new note", { error }, "notes");
+        }
+        return;
+      }
       const copies = lostNoteCopiesRef.current;
       const earlier = copies.get(write.noteId);
       const earlierCopy = earlier ? await earlier : null;
@@ -468,6 +479,26 @@ export default function PersonalNotesView({
   const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
   const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
   const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
+  const recordingCopy = useMeetingRecordingStore((s) => s.recordingCopy);
+
+  // The recording's note vanished and the recording went on in a new note: said once, here.
+  useEffect(() => {
+    if (!recordingCopy) return;
+    useMeetingRecordingStore.setState({ recordingCopy: null });
+    const copy = {
+      id: recordingCopy.noteId,
+      space_id: recordingCopy.spaceId,
+      folder_id: recordingCopy.folderId,
+    };
+    toast({
+      title: t("notes.meeting.recordingCopy.title"),
+      description: t("notes.meeting.recordingCopy.description", {
+        title: recordingCopy.lostTitle || t("notes.list.untitled"),
+      }),
+      duration: 10000,
+      actions: [{ label: t("notes.meeting.recordingCopy.open"), onClick: () => openNote(copy) }],
+    });
+  }, [recordingCopy, t, toast]);
 
   const spaces = useSpaces();
   const viewNoteId = useDeviceNotesStore((s) => s.viewNoteId);
@@ -806,7 +837,16 @@ export default function PersonalNotesView({
       if (shouldCancelPendingSavesForDelete(draftRef.current?.noteId ?? null, id)) {
         cancelPendingSaves(id);
       }
-      await window.electronAPI.deleteNote(id);
+      // Deleting the note being recorded deletes its transcript too, rather than saving it
+      // to a copy as a delete made elsewhere would.
+      const unmark = markRecordingNoteDeletedByUser(id);
+      try {
+        const result = await window.electronAPI.deleteNote(id);
+        if (!result?.success) unmark();
+      } catch (error) {
+        unmark();
+        throw error;
+      }
     },
     [cancelPendingSaves]
   );

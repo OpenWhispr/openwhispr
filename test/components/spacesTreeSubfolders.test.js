@@ -96,13 +96,20 @@ const NOTE_STORE = `
   };
   export const createFolder = record("createFolder");
   export const renameFolder = async () => ({ success: true });
-  export const deleteFolder = async () => ({ success: true });
+  export const deleteFolder = record("deleteFolder");
   export const moveFolderToSpace = record("moveFolderToSpace");
   export const setFolderParent = record("setFolderParent");
 `;
 
 const MOCKS = {
   "/stores/noteStore": NOTE_STORE,
+  // globalThis.__recordingNote: the note being recorded, if any.
+  "/stores/meetingRecordingStore": `
+    export const recordingNoteInFolders = (ids) => {
+      const note = globalThis.__recordingNote;
+      return note ? Promise.resolve(ids.has(note.folder_id) ? note : null) : null;
+    };
+  `,
   "/hooks/useNoteDragAndDrop": `
     export const useNoteDragAndDrop = () => ({
       dragState: { draggingNoteId: null, dragOverKey: null, dropSuccessKey: null },
@@ -208,6 +215,7 @@ async function mountTree(t, tree) {
     delete globalThis.__tree;
     delete globalThis.__calls;
     delete globalThis.__toasts;
+    delete globalThis.__recordingNote;
   });
   const { Window } = await import("happy-dom");
   dom = new Window({ url: "http://localhost:5173" });
@@ -592,4 +600,44 @@ test("a note's Move to menu labels subfolders with their parent", async (t) => {
   const labels = menuLabels(rowTitled(rows, "Loose note"));
   assert.ok(labels.includes("Work / Q1"));
   assert.ok(labels.includes("Planning / Roadmap"));
+});
+
+// Deleting the folder would take the note being recorded, and the recording would go on
+// writing into a deleted note: the user stops it first.
+const RECORDING_REFUSAL =
+  "“Q1 note” in this folder is being recorded. Stop the recording, then delete the folder.";
+
+test("a folder whose subfolder holds the note being recorded isn't deleted", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+  globalThis.__recordingNote = { id: 1012, folder_id: 12, title: "Q1 note" };
+
+  await focus(rowTitled(rows, "Work"));
+  await keyDown("Backspace");
+
+  assert.equal(globalThis.__confirmDialogs.length, 0, "no delete to confirm");
+  assert.equal(globalThis.__toasts.at(-1).title, "Couldn't delete folder");
+  assert.equal(globalThis.__toasts.at(-1).description, RECORDING_REFUSAL);
+});
+
+test("a recording started while the delete waits for its confirm stops the delete", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+
+  await focus(rowTitled(rows, "Work"));
+  await keyDown("Backspace");
+  globalThis.__recordingNote = { id: 1012, folder_id: 12, title: "Q1 note" };
+  await React.act(async () => globalThis.__confirmDialogs.at(-1).onConfirm());
+
+  assert.deepEqual(globalThis.__calls, [], "nothing deleted");
+  assert.equal(globalThis.__toasts.at(-1).description, RECORDING_REFUSAL);
+});
+
+test("a recording in another folder doesn't hold up the delete", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+  globalThis.__recordingNote = { id: 1021, folder_id: 21, title: "Planning note" };
+
+  await focus(rowTitled(rows, "Work"));
+  await keyDown("Backspace");
+  await React.act(async () => globalThis.__confirmDialogs.at(-1).onConfirm());
+
+  assert.deepEqual(globalThis.__calls, [["deleteFolder", 11]]);
 });
