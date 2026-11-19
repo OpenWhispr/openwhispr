@@ -4,8 +4,11 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import type { GoogleCalendarAccount } from '@/data/calendarTypes';
 import { getGoogleCalendarClientId } from '@/services/calendar/googleCalendarConfig';
-import { GoogleCalendarAuthError } from '@/services/calendar/googleCalendarAuth';
-import { authorizeGoogleCalendarOnAndroid } from '@/services/calendar/googleCalendarAndroidAuth';
+import { GoogleCalendarAuthError } from '@/services/calendar/googleCalendarAuth.android';
+import {
+  authorizeGoogleCalendarOnAndroid,
+  saveAuthorizedGoogleCalendarAccount,
+} from './googleAuth';
 import { captureGoogleCalendarException } from '@/services/calendar/googleCalendarTelemetry';
 import { requiresRealAccount } from '@/lib/accountAccess';
 
@@ -29,7 +32,13 @@ export async function connectGoogleCalendar(): Promise<ConnectOutcome> {
   store.setAuthSessionActive(true);
   try {
     const authorization = await authorizeGoogleCalendarOnAndroid();
-    await store.connectAuthorized(authorization);
+    useGoogleCalendarStore.setState({ isConnecting: true, error: null });
+    try {
+      await saveAuthorizedGoogleCalendarAccount(authorization);
+    } finally {
+      useGoogleCalendarStore.setState({ isConnecting: false });
+      await useGoogleCalendarStore.getState().load();
+    }
     return 'connected';
   } catch (error) {
     // Closing Google's sheet goes back quietly (C2 → C1), no error dialog.

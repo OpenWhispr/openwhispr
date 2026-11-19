@@ -2,16 +2,12 @@ import { create } from 'zustand';
 import { calendarRepository } from '@/data/calendarRepository';
 import type { GoogleCalendar, GoogleCalendarAccount } from '@/data/calendarTypes';
 import {
-  connectAuthorizedGoogleCalendarAccount,
   connectGoogleCalendarAccount,
   disconnectGoogleCalendarAccount,
   refreshGoogleCalendarAccount,
 } from '@/services/calendar/GoogleCalendarService';
 import { syncSelectedGoogleCalendarEventWindow } from '@/services/calendar/googleCalendarSync';
-import type {
-  ExchangeGoogleCalendarCodeInput,
-  GoogleCalendarAuthorizationResult,
-} from '@/services/calendar/googleCalendarAuth';
+import type { ExchangeGoogleCalendarCodeInput } from '@/services/calendar/googleCalendarAuth';
 import { getErrorMessage } from '@/lib/utils';
 
 type AccountFlagMap = Record<number, boolean>;
@@ -32,10 +28,6 @@ interface GoogleCalendarState extends CalendarSnapshot {
 
   load: () => Promise<void>;
   connect: (input: ExchangeGoogleCalendarCodeInput) => Promise<GoogleCalendarAccount>;
-  /** Android: an account Play services already authorized. */
-  connectAuthorized: (
-    authorization: GoogleCalendarAuthorizationResult,
-  ) => Promise<GoogleCalendarAccount>;
   refresh: (accountId: number) => Promise<void>;
   disconnect: (accountId: number) => Promise<void>;
   setCalendarSelected: (
@@ -61,25 +53,6 @@ const flag = (state: AccountFlagMap, id: number, value: boolean): AccountFlagMap
   [id]: value,
 });
 
-async function runConnect(
-  set: (partial: Partial<GoogleCalendarState>) => void,
-  connect: () => Promise<GoogleCalendarAccount>,
-): Promise<GoogleCalendarAccount> {
-  set({ isConnecting: true, error: null });
-  try {
-    const account = await connect();
-    set({ ...readSnapshot(), isConnecting: false });
-    return account;
-  } catch (error) {
-    set({
-      ...readSnapshot(),
-      isConnecting: false,
-      error: getErrorMessage(error, 'Failed to connect Google Calendar'),
-    });
-    throw error;
-  }
-}
-
 export const useGoogleCalendarStore = create<GoogleCalendarState>((set) => ({
   accounts: [],
   calendarsByAccountId: {},
@@ -100,9 +73,21 @@ export const useGoogleCalendarStore = create<GoogleCalendarState>((set) => ({
     }
   },
 
-  connect: (input) => runConnect(set, () => connectGoogleCalendarAccount(input)),
-  connectAuthorized: (authorization) =>
-    runConnect(set, () => connectAuthorizedGoogleCalendarAccount(authorization)),
+  connect: async (input) => {
+    set({ isConnecting: true, error: null });
+    try {
+      const account = await connectGoogleCalendarAccount(input);
+      set({ ...readSnapshot(), isConnecting: false });
+      return account;
+    } catch (error) {
+      set({
+        ...readSnapshot(),
+        isConnecting: false,
+        error: getErrorMessage(error, 'Failed to connect Google Calendar'),
+      });
+      throw error;
+    }
+  },
 
   refresh: async (accountId) => {
     set((state) => ({

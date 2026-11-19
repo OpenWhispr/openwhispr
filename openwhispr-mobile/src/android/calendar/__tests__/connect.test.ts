@@ -13,22 +13,26 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: mockUser }) },
 }));
 jest.mock('@/lib/accountAccess', () => ({ requiresRealAccount: (user: unknown) => !user }));
+const mockLoad = jest.fn(async () => undefined);
+const mockSetState = jest.fn();
 jest.mock('@/store/useGoogleCalendarStore', () => ({
   useGoogleCalendarStore: {
-    getState: () => ({ connectAuthorized: mockConnect, setAuthSessionActive: mockSetActive }),
+    getState: () => ({ setAuthSessionActive: mockSetActive, load: mockLoad }),
+    setState: (...args: unknown[]) => mockSetState(...args),
   },
 }));
 jest.mock('@/services/calendar/googleCalendarConfig', () => ({
   getGoogleCalendarClientId: () => mockClientId,
 }));
-jest.mock('@/services/calendar/googleCalendarAndroidAuth', () => ({
+jest.mock('../googleAuth', () => ({
   authorizeGoogleCalendarOnAndroid: () => mockAuthorize(),
+  saveAuthorizedGoogleCalendarAccount: (...args: unknown[]) => mockConnect(...(args as [])),
 }));
 jest.mock('@/services/calendar/googleCalendarTelemetry', () => ({
   captureGoogleCalendarException: jest.fn(),
 }));
 
-import { GoogleCalendarAuthError } from '@/services/calendar/googleCalendarAuth';
+import { GoogleCalendarAuthError } from '@/services/calendar/googleCalendarAuth.android';
 import {
   connectGoogleCalendar,
   dismissCalendarPrompt,
@@ -59,11 +63,16 @@ it("goes back quietly when Google's sheet is closed (C2 → C1)", async () => {
   expect(mockSetActive.mock.calls).toEqual([[true], [false]]);
 });
 
-it('connects the account Play services authorized through the shared store', async () => {
+it('saves the account Play services authorized and reloads the shared store', async () => {
   const authorization = { tokens: { accessToken: 't' }, identity: { sub: 's' } };
   mockAuthorize.mockResolvedValueOnce(authorization);
   await expect(connectGoogleCalendar()).resolves.toBe('connected');
   expect(mockConnect).toHaveBeenCalledWith(authorization);
+  expect(mockSetState.mock.calls).toEqual([
+    [{ isConnecting: true, error: null }],
+    [{ isConnecting: false }],
+  ]);
+  expect(mockLoad).toHaveBeenCalled();
 });
 
 it('reports a failed sign-in', async () => {

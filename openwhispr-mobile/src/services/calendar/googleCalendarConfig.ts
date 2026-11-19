@@ -1,6 +1,5 @@
 import * as AuthSession from 'expo-auth-session';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 
 export const GOOGLE_CALENDAR_SCOPES = [
   'openid',
@@ -52,21 +51,7 @@ const deriveGoogleCalendarRedirectScheme = (clientId: string | null | undefined)
   return `com.googleusercontent.apps.${trimmed.slice(0, -suffix.length)}`;
 };
 
-/**
- * Android signs in through Play services with the project's Android OAuth client (the app's
- * package and signing SHA-1). The ID marks a build as set up; without it there's no connect.
- */
-function androidClientId(): string | null {
-  return (
-    firstNonEmpty(
-      process.env.EXPO_PUBLIC_GOOGLE_CALENDAR_ANDROID_CLIENT_ID,
-      process.env.EXPO_PUBLIC_GOOGLE_CALENDAR_ANDROID_CLIENT_ID_DEV,
-    ) ?? null
-  );
-}
-
 export function getGoogleCalendarClientId(): string | null {
-  if (Platform.OS === 'android') return androidClientId();
   const openWhispr = Constants.expoConfig?.extra?.openWhispr as OpenWhisprExtra | undefined;
   return (
     firstNonEmpty(
