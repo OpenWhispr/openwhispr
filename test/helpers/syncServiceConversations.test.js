@@ -1296,7 +1296,6 @@ test("repair checks tied creation timestamps", async (t) => {
   }
 
   await service.syncAll(true);
-  await service.syncAll(true);
 
   for (let index = 0; index < 51; index++) {
     assertOneLiveCopy(cloud, `tied-${index}`, ["question", "answer"]);

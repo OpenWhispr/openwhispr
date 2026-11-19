@@ -12153,10 +12153,10 @@ class DatabaseManager {
     }
   }
 
-  // A linked chat whose cloud copy the pull found missing some of its messages
-  // goes up on the next push. Builds before this were the cause: they settled
-  // a chat as synced after its first upload, and nothing queued it again. Its
-  // place in the chat list stays until that push lands.
+  // A linked chat whose cloud copy the pull or repair found missing some of its
+  // messages goes up on the next push. Builds before this were the cause: they
+  // settled a chat as synced after its first upload, and nothing queued it
+  // again. Its place in the chat list stays until that push lands.
   markConversationPending(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
