@@ -108,6 +108,56 @@ export async function applyHistoryRetention(): Promise<void> {
     if (item.createdAt <= cutoff) await useTranscriptStore.getState().deleteTranscript(item.id);
   }
 }
+const NO_CHAT =
+  'Never ask a question, explain, comment or reply to the speaker: if the request is unclear, make your best reasonable attempt.';
+
+/**
+ * System prompts for the bubble's hold-menu actions. The speaker's words are data for the task,
+ * never a conversation: a question pasted into their text field replaces what they selected.
+ */
+export function androidActionPrompt(
+  mode: Exclude<DictationMode, 'dictate'>,
+  target: string,
+  sender: string | null,
+): string {
+  if (mode === 'translate')
+    return `Translate the supplied text into ${target}. ${NO_CHAT} Return only the translation.`;
+  if (mode === 'write')
+    return [
+      'Write the message, email or text the speaker asks for, in their voice, ready to send.',
+      'Keep every name, recipient, date and detail from the request; when it names the recipient, greet them by name (for "Write Tim an email…", start with "Hi Tim,").',
+      'Never use placeholders in square brackets such as [Name], [Your Name], [Date] or [Company]: leave out a detail nobody gave and write around it.',
+      sender
+        ? `Sign it from ${sender} when the message takes a sign-off.`
+        : 'When the message takes a sign-off, end with the closing word alone, without a name.',
+      'Do not invent facts the request does not give, and do not add a subject line unless asked.',
+      NO_CHAT,
+      'Return only the message, with no introduction or notes.',
+    ].join(' ');
+  return [
+    'You edit the original text by following the spoken editing instruction, and return the edited text.',
+    'When the instruction is about tone, style, length or wording ("make it friendlier", "more formal", "shorter"), rewrite the whole text so the change is clearly noticeable, keeping its meaning, facts, names and language.',
+    'When it asks for a specific change (a word, a name, a sentence), change only that and copy the rest exactly, with the same punctuation, capitalization, spacing and line breaks.',
+    'The result must reflect the instruction: never return the original text unchanged.',
+    NO_CHAT,
+    'Return only the edited text, with no quotes, introduction or notes.',
+  ].join(' ');
+}
+
+// Loaded on use: the auth store pulls in the auth client, which dictation itself never needs.
+function senderFirstName(): string | null {
+  const { useAuthStore } = require('@/store/useAuthStore') as typeof import('@/store/useAuthStore');
+  const { getAccountFirstName } =
+    require('@/lib/accountDisplay') as typeof import('@/lib/accountDisplay');
+  return getAccountFirstName(useAuthStore.getState().user);
+}
+
+// A rewritten selection is about as long as the selection, so a long email must not be cut off.
+function actionMaxTokens(job: AndroidJob): number {
+  if (job.mode !== 'edit') return 384;
+  return Math.min(2048, Math.max(384, Math.ceil(job.selection.length / 2)));
+}
+
 export async function processAndroidAudio(
   recording: Recording,
   job: AndroidJob,
@@ -158,18 +208,12 @@ export async function processAndroidAudio(
     if (job.mode !== 'dictate') {
       if (job.route.cleanupUnavailable) throw new Error(job.route.cleanupUnavailable);
       stage('cleaning');
-      const instruction =
-        job.mode === 'translate'
-          ? `Translate the supplied text into ${job.target}. Return only the translation.`
-          : job.mode === 'write'
-            ? 'Write the message requested by the user. Return only the message, with no introduction.'
-            : 'Copy the original text exactly, changing only the words requested by the spoken instruction. Do not change any other punctuation, commas, capitalization or spacing. Return only the edited text.';
       const result = await ReasoningService.processText({
         text:
           job.mode === 'edit'
             ? `Original text:\n${job.selection}\n\nEditing instruction:\n${output.originalText}`
             : output.originalText,
-        systemPrompt: instruction,
+        systemPrompt: androidActionPrompt(job.mode, job.target, senderFirstName()),
         inferenceScope: 'cleanup',
         inferenceRoute: job.route.cleanupRoute,
         routing:
@@ -177,7 +221,7 @@ export async function processAndroidAudio(
             ? { sendToChosenProvider: true }
             : { isPrivateNote: job.route.provider === 'local' },
         signal,
-        maxTokens: 384,
+        maxTokens: actionMaxTokens(job),
       });
       text = result.text;
     }

@@ -30,6 +30,9 @@ jest.mock('@/android/models', () => ({ modelReady: jest.fn(async () => true) }))
 jest.mock('@/android/LocalTextModel', () => ({ selectedTextModel: () => 'qwen-small' }));
 jest.mock('@/store/useConfigStore', () => ({ useConfigStore: { getState: jest.fn() } }));
 jest.mock('@/store/useTranscriptStore', () => ({ useTranscriptStore: { getState: jest.fn() } }));
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: { getState: () => ({ user: null }) },
+}));
 
 import {
   createAndroidJob,

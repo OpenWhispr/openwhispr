@@ -7,7 +7,7 @@ jest.mock('../insights', () => ({
   recordInsight: jest.fn(),
   countSpokenWords: (text: string) => text.trim().split(/\s+/).length,
 }));
-import { processAndroidAudio, type DictationMode } from '../pipeline';
+import { androidActionPrompt, processAndroidAudio, type DictationMode } from '../pipeline';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { cleanupTranscript } from '@/lib/cleanupTranscript';
 import type { TranscriptionJobRoute } from '@/lib/inferenceRouting';
@@ -155,6 +155,74 @@ describe.each(['local', 'cloud', 'byok'] as const)('%s speech for Android action
       );
       expect(result).toBe('Requested action result.');
     },
+  );
+});
+
+describe('Android action prompts', () => {
+  const edit = androidActionPrompt('edit', 'Spanish', null);
+  const write = androidActionPrompt('write', 'Spanish', null);
+
+  it('rewrites the whole selection for a style instruction instead of copying it', () => {
+    expect(edit).toMatch(
+      /tone, style, length or wording.*"make it friendlier".*rewrite the whole text/,
+    );
+    expect(edit).toMatch(/never return the original text unchanged/);
+    expect(edit).not.toMatch(/^Copy the original text exactly/);
+  });
+
+  it('keeps a specific edit to the words it names', () => {
+    expect(edit).toMatch(/specific change.*change only that and copy the rest exactly/);
+  });
+
+  it.each(['edit', 'write', 'translate'] as const)(
+    '%s never asks a question or replies to the speaker',
+    (mode) => {
+      expect(androidActionPrompt(mode, 'Spanish', null)).toMatch(
+        /Never ask a question, explain, comment or reply to the speaker/,
+      );
+    },
+  );
+
+  it('write keeps the recipient from the request and leaves no bracket placeholders', () => {
+    expect(write).toMatch(/greet them by name \(for "Write Tim an email…", start with "Hi Tim,"\)/);
+    expect(write).toMatch(/Never use placeholders in square brackets such as \[Name\]/);
+  });
+
+  it('write signs with the account first name, or with the closing word alone', () => {
+    expect(androidActionPrompt('write', 'Spanish', 'Josh')).toMatch(/Sign it from Josh/);
+    expect(write).toMatch(/closing word alone, without a name/);
+    expect(write).not.toMatch(/Sign it from/);
+  });
+
+  it('translate names the target language', () => {
+    expect(androidActionPrompt('translate', 'French', null)).toMatch(
+      /^Translate the supplied text into French\./,
+    );
+  });
+});
+
+it('gives a long selection room for its rewrite', async () => {
+  await processAndroidAudio(
+    audio,
+    {
+      route: routes.byok,
+      mode: 'edit',
+      target: 'Spanish',
+      selection: 'x'.repeat(3000),
+      eventId: 'test-event',
+      accountScope: 'device',
+      historyScope: null,
+      startedAt: '2026-10-15T10:00:00Z',
+      localDate: '2026-10-15',
+    },
+    new AbortController().signal,
+    jest.fn(),
+  );
+  expect(ReasoningService.processText).toHaveBeenCalledWith(
+    expect.objectContaining({
+      maxTokens: 1500,
+      systemPrompt: androidActionPrompt('edit', 'Spanish', null),
+    }),
   );
 });
 
