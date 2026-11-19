@@ -17,7 +17,7 @@ const {
   window: browserWindow,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
-const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { createFakeCloud, deltaSince } = require("./harness/fakeCloud.js");
 const { joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { assertNoContentRegression, snapshotNotes } = require("./harness/invariants.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
@@ -385,7 +385,7 @@ test("S3 a delete travels to the cloud and back down to the other device", async
   const lists = cloud.log.slice(mark).filter((c) => c.path.split("?")[0] === "/api/notes/list");
   assert.equal(
     queryParam(lists[0].path, "since"),
-    bCursor,
+    deltaSince(bCursor),
     "only the delta page carries tombstones, so B must send its cursor"
   );
   assert.equal(noteByClientId(deviceB.db, clientNoteId), null, "the delete must reach B");
@@ -671,7 +671,7 @@ test("S5 a tombstone as the last row of a delta page still hands the next page a
 
   const lists = cloud.logFor("/api/notes/list");
   assert.equal(lists.length, 2, "60 delta rows at a page size of 50 must take two requests");
-  assert.equal(queryParam(lists[0].path, "since"), cursor);
+  assert.equal(queryParam(lists[0].path, "since"), deltaSince(cursor));
   assert.equal(
     queryParam(lists[1].path, "since"),
     boundary.updated_at,

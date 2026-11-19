@@ -18,7 +18,7 @@ const {
   window: windowStub,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
-const { createFakeCloud, createAccountCloud } = require("./harness/fakeCloud.js");
+const { createFakeCloud, createAccountCloud, deltaSince } = require("./harness/fakeCloud.js");
 const { TEAM_SPACE, joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { assertNoContentRegression, snapshotNotes } = require("./harness/invariants.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
@@ -318,7 +318,7 @@ test("a cloud tombstone hard-deletes the local note", async (t) => {
   assert.ok(listCalls.length > 0);
   assert.equal(
     queryParam(listCalls[0].path, "since"),
-    "2026-07-01T00:00:00.000Z",
+    deltaSince("2026-07-01T00:00:00.000Z"),
     "the delta page must be requested with the stored cursor"
   );
   assert.equal(db.getNoteByClientId("client-tombstoned"), null, "the local row must be removed");
@@ -735,7 +735,7 @@ test("an account returning after another account synced gets its cursors back", 
   const secondA = await signInAs(t, db, cloudA, "account-a");
   await secondA.syncAll(true);
   const pulls = cloudA.logFor("/api/notes/list");
-  assert.equal(queryParam(pulls[pulls.length - 1].path, "since"), cursorA);
+  assert.equal(queryParam(pulls[pulls.length - 1].path, "since"), deltaSince(cursorA));
   assert.deepEqual(
     db.getNotes(null, 100, null).map((note) => note.title),
     [],

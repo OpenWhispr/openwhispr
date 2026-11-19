@@ -1032,6 +1032,12 @@ function createFakeCloud(config = {}) {
   };
 }
 
+// The `since` a client's note or folder delta sends for a stored cursor: it
+// re-reads 10 seconds before it (DELTA_READ_OVERLAP_MS in SyncService).
+function deltaSince(cursor) {
+  return new Date(Math.max(0, Date.parse(cursor) - 10_000)).toISOString();
+}
+
 // One cloud per account. Real cloud ids are UUIDs, so two accounts' clouds
 // never hold the same id; each of these mints its ids in a space of its own.
 let accountClouds = 0;
@@ -1039,4 +1045,4 @@ function createAccountCloud(config = {}) {
   return createFakeCloud({ idSpace: `cloud${++accountClouds}-`, ...config });
 }
 
-module.exports = { createFakeCloud, createAccountCloud, normalizeTimestamp };
+module.exports = { createFakeCloud, createAccountCloud, normalizeTimestamp, deltaSince };

@@ -17,7 +17,7 @@ const {
   localStorage: browserLocalStorage,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
-const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { createFakeCloud, deltaSince } = require("./harness/fakeCloud.js");
 const { TEAM_ACCOUNT, TEAM_SPACE, joinTeamSpace } = require("./harness/teamSpace.js");
 const { deferred } = require("./harness/deferred.js");
 
@@ -589,7 +589,7 @@ test("the folders cursor advances and the next pass only receives folders change
   const lists = cloud.logFor("/api/folders/list");
   assert.equal(
     lists[lists.length - 1].path,
-    `/api/folders/list?since=${encodeURIComponent(stamp)}&scope=all`,
+    `/api/folders/list?since=${encodeURIComponent(deltaSince(stamp))}&scope=all`,
     "the stored stamp must be sent as the since cursor"
   );
   assert.ok(folderByName(db, "After The Stamp"), "a folder newer than the cursor must arrive");
@@ -629,7 +629,7 @@ test("a folder tombstone arriving in the delta pull hard-deletes the local folde
   const lists = cloud.logFor("/api/folders/list");
   assert.equal(
     lists[lists.length - 1].path,
-    `/api/folders/list?since=${encodeURIComponent(stamp)}&scope=all`,
+    `/api/folders/list?since=${encodeURIComponent(deltaSince(stamp))}&scope=all`,
     "only the delta list carries tombstones; a snapshot pull would never see this delete"
   );
   assert.equal(
@@ -2174,7 +2174,7 @@ test("an upgraded device links a flat local subfolder and never flattens it", as
   assert.equal(cloud.folder(cloudChildId).parent_folder_id, cloudParentId);
   const lists = cloud.logFor("/api/folders/list");
   assert.equal(lists[0].path, "/api/folders/list", "the backfill is a full list");
-  assert.equal(lists[1].path, `/api/folders/list?since=${encodeURIComponent(stamp)}`);
+  assert.equal(lists[1].path, `/api/folders/list?since=${encodeURIComponent(deltaSince(stamp))}`);
 
   const listCount = lists.length;
   browserLocalStorage.setItem("lastSyncedAt.folders", stamp);

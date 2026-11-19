@@ -476,6 +476,11 @@ const NOTE_FEED_REPLAY_KEY = "noteFeedReplay.v1";
 const NOTE_FEED_REPLAY_TEAM_KEY = "noteFeedReplay.v1.team";
 const NOTE_FEED_REPLAY_ATTEMPTS = 3;
 const FEED_START = "1970-01-01T00:00:00.000Z";
+// Every delta from a stored cursor re-reads this much before it. A server write
+// stamps its rows with its transaction's start but shows them only at commit, so
+// a pull that ran in between stored a cursor past rows it never saw (and other
+// writers can commit out of updated_at order). Re-applied rows are no-ops.
+const DELTA_READ_OVERLAP_MS = 10_000;
 // An account's cursors travel with their clock-recovery marker and replay
 // counters, so another account's pass cannot spend either recovery attempt.
 const ACCOUNT_SYNC_STATE_KEYS = [
@@ -516,11 +521,9 @@ const PARKED_DELETE_KINDS = ["conversations", "transcriptions", "dictionary", "s
 type ParkedDeleteKind = (typeof PARKED_DELETE_KINDS)[number];
 
 const SHARED_DICTIONARY_PAGE_LIMIT = 200;
-// Writers on different lists can commit out of updated_at order, so every
-// delta re-reads this much before the stored cursor; re-applied rows are no-ops.
+// Shared list deltas re-read DELTA_READ_OVERLAP_MS before the stored cursor too.
 // The cursor a pass stores is the FIRST page's server_time: a row deleted (or
 // unhidden) behind a later page of the same pass is then still re-read next time.
-const SHARED_DICTIONARY_READ_OVERLAP_MS = 10_000;
 // Covers both cursor families: lastSyncedAt.sharedDictionary.<ws> and
 // lastSyncedAt.sharedDictionaryHides.<ws>.
 const SHARED_DICTIONARY_CURSOR_PREFIX = "lastSyncedAt.sharedDictionary";
@@ -578,8 +581,45 @@ function removeLocalStorageKeysWithPrefix(prefix: string): void {
   for (const key of keys) localStorage.removeItem(key);
 }
 
+// The delta start for a stored cursor, DELTA_READ_OVERLAP_MS before it. The feed's
+// start stays where it is, and a cursor that doesn't parse is sent as it was.
 function overlappedSince(cursor: string): string {
-  return new Date(Date.parse(cursor) - SHARED_DICTIONARY_READ_OVERLAP_MS).toISOString();
+  const at = Date.parse(cursor);
+  if (!Number.isFinite(at)) return cursor;
+  return new Date(Math.max(0, at - DELTA_READ_OVERLAP_MS)).toISOString();
+}
+
+// Whether a delta row is past the stored cursor, rather than one re-read from the
+// overlap. With no stored cursor every row is new.
+function pastCursor(updatedAt: string | null | undefined, cursor: string | undefined): boolean {
+  if (cursor === undefined) return true;
+  const at = Date.parse(updatedAt ?? "");
+  const bound = Date.parse(cursor);
+  return !Number.isFinite(at) || !Number.isFinite(bound) || at > bound;
+}
+
+// A live note re-read from the overlap at the version this device's copy holds as
+// its base: its own write, or one an earlier pull applied. It was never missed, so
+// it is left alone, as it was before the overlap. Comparing it again could raise a
+// conflict over a newer local edit when the device clock runs behind.
+function heldOverlapNote(
+  local: NoteItem,
+  cloudNote: CloudNote,
+  cursor: string | undefined
+): boolean {
+  return (
+    !pastCursor(cloudNote.updated_at, cursor) &&
+    !cloudNote.deleted_at &&
+    !cloudNote.access_removed &&
+    local.cloud_id === cloudNote.id &&
+    !local.cloud_create_pending &&
+    !local.cloud_create_rejected &&
+    !!local.cloud_updated_at &&
+    normalizeTimestamp(local.cloud_updated_at) === normalizeTimestamp(cloudNote.updated_at) &&
+    (!hasNoteRevision(cloudNote.revision) ||
+      !hasNoteRevision(local.cloud_revision) ||
+      cloudNote.revision === local.cloud_revision)
+  );
 }
 
 const scopeKey = (scope: SharedScope): string => scope.space_id ?? "workspace";
@@ -3630,7 +3670,8 @@ export class SyncService {
       )
         return false;
       const cursorKey = teamOnly ? "lastSyncedAt.folders.team" : "lastSyncedAt.folders";
-      const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
+      const stored = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
+      const since = stored === undefined ? undefined : overlappedSince(stored);
       const startedAtMs = Date.now();
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
       // Without a scope the list holds the account's personal rows alone.
@@ -3647,7 +3688,10 @@ export class SyncService {
         authGeneration,
         "no-store"
       );
-      if (cloudFolders.length > 0) this.teamPassMovedWork = true;
+      // Rows re-read from the overlap were applied before: no work moved.
+      if (cloudFolders.some((folder) => pastCursor(folder.updated_at, stored))) {
+        this.teamPassMovedWork = true;
+      }
       const ctx = await this.buildSpaceContext();
       // Parked or failed rows must retry: they hold the cursor back (and fail
       // a backfill) so one bad row never drops the rest of the delta.
@@ -4347,11 +4391,15 @@ export class SyncService {
       )
         return false;
       const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
+      const stored =
+        snapshot || replayFeed ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
       const since = snapshot
         ? undefined
         : replayFeed
           ? FEED_START
-          : (localStorage.getItem(cursorKey) ?? undefined);
+          : stored === undefined
+            ? undefined
+            : overlappedSince(stored);
       const startedAtMs = Date.now();
       const ctx = await this.buildSpaceContext();
       const { cloudToLocal, personalFolderIn } = await this.buildCloudToLocalFolderMap();
@@ -4386,7 +4434,10 @@ export class SyncService {
               "no-store"
             );
         if (cloudNotes.length === 0) break;
-        this.teamPassMovedWork = true;
+        // Rows re-read from the overlap were applied before: no work moved.
+        if (cloudNotes.some((note) => pastCursor(note.updated_at, stored))) {
+          this.teamPassMovedWork = true;
+        }
 
         for (const cloudNote of cloudNotes) {
           try {
@@ -4396,6 +4447,7 @@ export class SyncService {
               cloudNote.client_note_id,
               cloudNote.id
             );
+            if (local && heldOverlapNote(local, cloudNote, stored)) continue;
 
             if (
               local &&
@@ -5683,7 +5735,7 @@ export class SyncService {
       }
     }
 
-    // Starts before the stored cursor (see SHARED_DICTIONARY_READ_OVERLAP_MS),
+    // Starts before the stored cursor (see DELTA_READ_OVERLAP_MS),
     // with no since_id, and re-applies the overlap idempotently.
     const contributors: SharedContributor[][] = [];
     const adderIds = new Set(
