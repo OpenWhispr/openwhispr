@@ -17,7 +17,7 @@ export const TRANSCRIPTION_AUDIO_CONSTRAINTS = Object.freeze({
 // Chromium lists the Windows default input twice ("default" and the
 // "communications" role alias) under the device's own label. They are aliases,
 // not candidates: matching them makes every Windows mic tie with itself.
-const CHROMIUM_ALIAS_DEVICE_IDS = new Set(["default", "communications"]);
+export const CHROMIUM_ALIAS_DEVICE_IDS = new Set(["default", "communications"]);
 
 export function getMicrophoneSelectionMode(settings = {}) {
   if (MICROPHONE_SELECTION_MODES.includes(settings.microphoneSelectionMode)) {

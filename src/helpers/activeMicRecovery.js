@@ -1,3 +1,5 @@
+import { CHROMIUM_ALIAS_DEVICE_IDS } from "./microphoneSelection";
+
 const DEFAULT_DEBOUNCE_MS = 250;
 const DEFAULT_MUTE_GRACE_MS = 800;
 const DEFAULT_RETRY_MS = 2000;
@@ -28,7 +30,7 @@ const trackMatchesDefault = (track, device) => {
   if (!settings || !device) return null;
   // Chromium's default device ID is an alias. Only compare physical IDs
   // directly; fall back to the group when either endpoint exposes the alias.
-  const isPhysicalId = (id) => id && id !== "default" && id !== "communications";
+  const isPhysicalId = (id) => id && !CHROMIUM_ALIAS_DEVICE_IDS.has(id);
   if (isPhysicalId(settings.deviceId) && isPhysicalId(device.deviceId)) {
     return settings.deviceId === device.deviceId;
   }
