@@ -230,7 +230,7 @@ function GeneralPage({
   }
 
   async function handleIconFile(file: File): Promise<void> {
-    if (!canEdit || iconBusy) return;
+    if (iconBusy) return;
     const validation = checkWorkspaceIconFile(file);
     if (validation !== "ok") {
       showError(
@@ -259,7 +259,6 @@ function GeneralPage({
   }
 
   async function handleIconRemove(): Promise<void> {
-    if (!canEdit || iconBusy) return;
     setIconBusy("remove");
     await applyUpdate(
       (): Promise<Workspace> => WorkspacesService.removeIcon(workspace.id),
