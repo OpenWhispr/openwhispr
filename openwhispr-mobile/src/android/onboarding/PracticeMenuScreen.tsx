@@ -44,7 +44,7 @@ let writtenEmail = '';
 
 const COPY: Record<
   MenuPractice,
-  { say: OnboardingKey; toast: OnboardingKey; done: OnboardingKey; hold: OnboardingKey }
+  { say?: OnboardingKey; toast: OnboardingKey; done: OnboardingKey; hold: OnboardingKey }
 > = {
   assistant: {
     say: 'assistantScript',
@@ -52,7 +52,8 @@ const COPY: Record<
     done: 'assistantDone',
     hold: 'hintHoldBubble',
   },
-  edit: { say: 'editScript', toast: 'toastEdited', done: 'editDone', hold: 'hintHoldToEdit' },
+  // Practice 3 says what to say in the guidance line beside the bubble, as Practice 1 does (P3d).
+  edit: { toast: 'toastEdited', done: 'editDone', hold: 'hintHoldToEdit' },
 };
 
 /**
@@ -227,7 +228,9 @@ export function PracticeMenuScreen({
         ? t(copy.hold)
         : phase === 'holding'
           ? t('hintKeepHolding')
-          : '';
+          : phase === 'listening' && kind === 'edit'
+            ? t('hintSayFriendlier')
+            : '';
   const done = phase === 'done';
   // The new words stay marked while the toast shows; the done step shows the email plain (P3g).
   const highlighted = phase === 'pasted' && runs;
@@ -306,7 +309,9 @@ export function PracticeMenuScreen({
                 onClose={restart}
               />
             ) : null}
-            {phase === 'listening' || phase === 'processing' ? <SayCard quote={copy.say} /> : null}
+            {(phase === 'listening' || phase === 'processing') && copy.say ? (
+              <SayCard quote={copy.say} />
+            ) : null}
             <View style={pm.bubbleRow} pointerEvents="box-none">
               <View
                 style={{ flex: 1, alignItems: 'flex-end' }}
@@ -367,5 +372,5 @@ const pm = StyleSheet.create({
   changed: { color: colors.brandMid, textDecorationLine: 'underline' },
   hiddenInput: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   overlay: { position: 'absolute', left: 16, right: 16, gap: 10 },
-  bubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64 },
+  bubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64 },
 });

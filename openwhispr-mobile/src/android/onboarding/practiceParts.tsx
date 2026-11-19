@@ -321,7 +321,7 @@ const p = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hint: { fontSize: 18, lineHeight: 24, textAlign: 'right', fontFamily: AppFont.medium },
+  hint: { fontSize: 17, lineHeight: 22, textAlign: 'right', fontFamily: AppFont.medium },
   done: { fontSize: 22, lineHeight: 29, fontFamily: AppFont.bold, letterSpacing: -0.3 },
   say: { ...glassEdge, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14, gap: 6 },
   sayLabel: {

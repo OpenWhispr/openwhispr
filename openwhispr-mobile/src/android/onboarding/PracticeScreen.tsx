@@ -207,5 +207,5 @@ const pr = StyleSheet.create({
     textAlignVertical: 'top',
   },
   overlay: { position: 'absolute', left: 16, right: 16 },
-  bubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64 },
+  bubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64 },
 });
