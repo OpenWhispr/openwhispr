@@ -4205,6 +4205,7 @@
       "triggerPlaceholder": "例: カレンダーリンク",
       "replacementLabel": "置換テキスト",
       "replacementPlaceholder": "トリガーを話したときに挿入されるテキスト…",
+      "variablesLabel": "挿入",
       "create": "スニペットを作成",
       "duplicate": "このトリガーのスニペットは既に存在します",
       "emptyTitle": "同じことを言うのは",

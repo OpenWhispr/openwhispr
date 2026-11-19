@@ -4843,6 +4843,7 @@
       "triggerPlaceholder": "ex. mon agenda",
       "replacementLabel": "Remplacement",
       "replacementPlaceholder": "Texte à insérer quand vous dites le déclencheur…",
+      "variablesLabel": "Insérer",
       "create": "Créer le snippet",
       "duplicate": "Un snippet avec ce déclencheur existe déjà",
       "emptyTitle": "Ce que vous ne devriez pas avoir à dire",

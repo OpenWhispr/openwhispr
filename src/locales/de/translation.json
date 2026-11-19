@@ -4836,6 +4836,7 @@
       "triggerPlaceholder": "z. B. mein Kalender",
       "replacementLabel": "Ersetzung",
       "replacementPlaceholder": "Text, der beim Sprechen des Auslösers eingefügt wird …",
+      "variablesLabel": "Einfügen",
       "create": "Snippet erstellen",
       "duplicate": "Ein Snippet mit diesem Auslöser existiert bereits",
       "emptyTitle": "Sag es nur",

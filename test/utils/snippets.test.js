@@ -17,35 +17,80 @@ const {
   toCloudDictionaryFields,
   getCloudLlmDictionaryFields,
   resolveSnippetVariables,
+  snippetLocale,
+  SNIPPET_VARIABLE_NAMES,
 } = require("../../src/utils/snippets.ts");
 
-test("snippet replacements fill date, time, datetime, and locale variables", () => {
-  const now = new Date("2026-11-18T09:05:00Z");
+test("snippet variables are written in the given locale", () => {
+  const now = new Date(2026, 10, 18, 9, 5);
+  const template = "{{date}} | {{time}} | {{datetime}} | {{locale}}";
+  assert.equal(
+    resolveSnippetVariables(template, { now, locale: "en-US" }),
+    "11/18/2026 | 9:05 AM | 11/18/2026, 9:05 AM | en-US"
+  );
+  assert.equal(
+    resolveSnippetVariables(template, { now, locale: "en-GB" }),
+    "18/11/2026 | 09:05 | 18/11/2026, 09:05 | en-GB"
+  );
+  assert.equal(
+    resolveSnippetVariables(template, { now, locale: "de" }),
+    "18.11.2026 | 09:05 | 18.11.2026, 09:05 | de"
+  );
+  assert.equal(
+    resolveSnippetVariables(template, { now, locale: "ja" }),
+    "2026/11/18 | 9:05 | 2026/11/18 9:05 | ja"
+  );
+});
+
+test("every advertised snippet variable is filled", () => {
+  const now = new Date(2026, 10, 18, 9, 5);
+  for (const name of SNIPPET_VARIABLE_NAMES) {
+    assert.doesNotMatch(resolveSnippetVariables(`{{${name}}}`, { now, locale: "en-US" }), /\{\{/);
+  }
+});
+
+test("only exact, known snippet variables are filled", () => {
+  const context = { now: new Date(2026, 10, 18, 9, 5), locale: "en-US" };
+  const literal =
+    "{{clipboard}} {{Date}} {{ date }} {{constructor}} {{__proto__}} {{toString}} {date}";
+  assert.equal(resolveSnippetVariables(literal, context), literal);
+  assert.equal(resolveSnippetVariables("Best regards,\nUmut", context), "Best regards,\nUmut");
+});
+
+test("variables are filled in a snippet's saved text, never in the rest of the dictation", () => {
+  const context = { now: new Date(2026, 10, 18, 9, 5), locale: "en-US" };
+  const snippets = [{ trigger: "stamp", replacement: "Logged {{date}} at {{time}}" }];
+
+  assert.equal(
+    expandSnippets("stamp, then put {{date}} in the template", snippets, context),
+    "Logged 11/18/2026 at 9:05 AM, then put {{date}} in the template"
+  );
+  // The same dictation reads the same whether or not unrelated snippets exist.
+  assert.equal(
+    expandSnippets("put {{date}} in the template", snippets, context),
+    "put {{date}} in the template"
+  );
+  assert.equal(
+    expandSnippets("put {{date}} in the template", [], context),
+    "put {{date}} in the template"
+  );
+});
+
+test("a filled snippet value is never expanded again as a trigger", () => {
+  const context = { now: new Date(2026, 10, 18, 9, 5), locale: "en-US" };
   const snippets = [
-    { trigger: "stamp", replacement: "Logged {{date}} at {{time}} ({{datetime}}) [{{locale}}]" },
+    { trigger: "stamp", replacement: "{{time}}" },
+    { trigger: "AM", replacement: "ante meridiem" },
   ];
-  const result = expandSnippets("stamp", snippets, now);
-  const date = new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-  const time = new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(now);
-  const locale = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en";
-  assert.equal(result, `Logged ${date} at ${time} (${date} ${time}) [${locale}]`);
-  assert.doesNotMatch(result, /\{\{/);
+  assert.equal(expandSnippets("stamp", snippets, context), "9:05 AM");
 });
 
-test("unknown snippet variables are left literal", () => {
-  assert.equal(resolveSnippetVariables("{{clipboard}} {{unknown}}"), "{{clipboard}} {{unknown}}");
-});
-
-test("variable filling is a no-op without placeholders", () => {
-  const plain = "Best regards,\nUmut";
-  assert.equal(resolveSnippetVariables(plain), plain);
+test("snippet dates follow the UI language, taking the system region only for that language", () => {
+  assert.equal(snippetLocale("en", "en-GB"), "en-GB");
+  assert.equal(snippetLocale("de", "en-US"), "de");
+  assert.equal(snippetLocale("zh-CN", "zh-TW"), "zh-CN");
+  assert.equal(snippetLocale(null, "en-GB"), "en-GB");
+  assert.equal(snippetLocale(null, ""), "en");
 });
 
 test("expands a trigger containing Turkish capital İ", () => {

@@ -4277,6 +4277,7 @@
       "triggerPlaceholder": "例如：我的日程链接",
       "replacementLabel": "替换文本",
       "replacementPlaceholder": "说出触发词时插入的文本…",
+      "variablesLabel": "插入",
       "create": "创建片段",
       "duplicate": "已存在使用此触发词的片段",
       "emptyTitle": "同样的话，只说",

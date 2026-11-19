@@ -4383,6 +4383,7 @@
       "triggerPlaceholder": "например, мой календарь",
       "replacementLabel": "Замена",
       "replacementPlaceholder": "Текст, который будет вставлен при произнесении триггера…",
+      "variablesLabel": "Вставить",
       "create": "Создать сниппет",
       "duplicate": "Сниппет с таким триггером уже существует",
       "emptyTitle": "То, что не нужно повторять",

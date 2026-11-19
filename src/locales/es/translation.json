@@ -4330,6 +4330,7 @@
       "triggerPlaceholder": "p. ej. mi agenda",
       "replacementLabel": "Reemplazo",
       "replacementPlaceholder": "Texto que se insertará al decir el disparador…",
+      "variablesLabel": "Insertar",
       "create": "Crear snippet",
       "duplicate": "Ya existe un snippet con este disparador",
       "emptyTitle": "Lo que no deberías tener que decir",
