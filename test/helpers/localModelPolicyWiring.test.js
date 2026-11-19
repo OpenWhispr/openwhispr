@@ -169,7 +169,7 @@ function build({ device } = {}) {
   const fakeThis = new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
-  const llmManager = { serverManager: llamaServer, getModelsDir: () => "/llm" };
+  const llmManager = { servers: [llamaServer], getModelsDir: () => "/llm" };
 
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;

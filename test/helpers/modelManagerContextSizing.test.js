@@ -580,6 +580,7 @@ test("only Apple Silicon is treated as memory the GPU already shares", async (t)
 test("a server too busy to swap stays a busy error, and says how long to wait", async (t) => {
   const { modelManager: manager, serverManager, modelId } = await setup(t);
   manager.currentServerModelId = "another-model";
+  serverManager.modelPath = path.join(manager.modelsDir, "another-model.gguf");
   const asked = [];
   serverManager.isAvailable = () => true;
   serverManager.start = async (_modelPath, options) => {
@@ -597,6 +598,7 @@ test("a server too busy to swap stays a busy error, and says how long to wait", 
 test("a start the caller cancelled stays cancelled and reaches the server with its signal", async (t) => {
   const { modelManager: manager, serverManager, modelId } = await setup(t);
   manager.currentServerModelId = "another-model";
+  serverManager.modelPath = path.join(manager.modelsDir, "another-model.gguf");
   const caller = new AbortController();
   let received;
   serverManager.isAvailable = () => true;
