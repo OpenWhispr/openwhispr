@@ -46,6 +46,7 @@ import { NoteSharingService } from "../../services/NoteSharingService";
 import { fetchSpaceRoster, useSpaceRoster } from "../../hooks/useSpaceRoster";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
+import { NoteBacklinks } from "../ui/editorBlocks/NoteBacklinks";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
 import {
@@ -228,7 +229,8 @@ interface NoteEditorProps {
   onStartRecording: () => void;
   onStopRecording: () => void;
   onExportNote?: (format: "md" | "txt") => void;
-  onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
+  /** recorderLabel names the original recorder when someone else exports the note. */
+  onExportTranscript?: (format: "txt" | "srt" | "json" | "md", recorderLabel?: string) => void;
   enhancement?: Enhancement;
   /** Runs a template, or an action that edits the summary, on this note. */
   onRunNoteAction?: (action: ActionItem) => void;
@@ -550,6 +552,12 @@ export default function NoteEditor({
     [recordedByUser, user?.name, user?.email, noteRecorder, parsedParticipants]
   );
   const recorderLabel = recorderTranscriptLabel(meetingIdentity, recordedByUser, t);
+  // Exports name the recorder only on a note known to be someone else's.
+  const knownRecorderId = recorderId ?? note.owner_user_id;
+  const exportRecorderLabel =
+    !recordedByUser && user?.id && knownRecorderId && knownRecorderId !== user.id
+      ? recorderLabel
+      : undefined;
 
   const mentionPeople = useMemo(
     () => collectKnownPeople(meetingIdentity, speakerMappings, displaySegments),
@@ -1097,7 +1105,7 @@ export default function NoteEditor({
       return (["txt", "srt", "md", "json"] as const).map((format) => ({
         id: format,
         label: t(TRANSCRIPT_EXPORT_LABEL_KEYS[format]),
-        onSelect: () => onExportTranscript(format),
+        onSelect: () => onExportTranscript(format, exportRecorderLabel),
       }));
     }
     if (!onExportNote) return [];
@@ -1106,7 +1114,7 @@ export default function NoteEditor({
       label: t(NOTE_EXPORT_LABEL_KEYS[format]),
       onSelect: () => onExportNote(format),
     }));
-  }, [viewMode, onExportTranscript, onExportNote, t]);
+  }, [viewMode, onExportTranscript, onExportNote, exportRecorderLabel, t]);
 
   return (
     <div className="flex h-full min-h-0">
@@ -1491,6 +1499,12 @@ export default function NoteEditor({
             </div>
           )}
 
+        {/* notes that link here with [[title]]. */}
+        <NoteBacklinks
+          noteId={note.id}
+          title={note.title || ""}
+          className={cn(PAGE_CONTENT_WIDTH_CLASS, "shrink-0 px-5")}
+        />
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (

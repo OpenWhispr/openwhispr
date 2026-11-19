@@ -1,3 +1,4 @@
+import { prepareAffiliateCheckout } from "../stores/affiliateStore";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAuth } from "./useAuth";
 import { withSessionRefresh } from "../lib/auth";
@@ -183,6 +184,9 @@ export function useUsage(): UseUsageResult | null {
       checkoutInFlightRef.current = true;
       setCheckoutLoading(true);
       try {
+        if (!(await prepareAffiliateCheckout()))
+          return { success: false, error: "REFERRAL_UNAVAILABLE" };
+        if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
         const result = await window.electronAPI.cloudCheckout(opts, authGeneration!);
         if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
         if (result.success && result.url) {

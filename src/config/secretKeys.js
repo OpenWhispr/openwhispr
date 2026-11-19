@@ -80,6 +80,13 @@ const BYOK_API_KEYS = [
     save: "saveAssemblyAIKey",
     storeKey: "assemblyaiApiKey",
   },
+  {
+    base: "elevenlabs",
+    env: "ELEVENLABS_API_KEY",
+    get: "getElevenlabsKey",
+    save: "saveElevenlabsKey",
+    storeKey: "elevenlabsApiKey",
+  },
   // Per-scope Custom-endpoint keys. Dictation cleanup's counterpart predates
   // this manifest and keeps its bespoke accessors (CUSTOM_CLEANUP_API_KEY).
   {
@@ -125,6 +132,7 @@ const SECRET_STORE_KEYS_BY_ENV = {
   CORTI_CLIENT_ID: "cortiClientId",
   CORTI_CLIENT_SECRET: "cortiClientSecret",
   CUSTOM_TRANSCRIPTION_API_KEY: "customTranscriptionApiKey",
+  SELF_HOSTED_STT_HEADERS: "selfHostedSttHeaders",
   CUSTOM_CLEANUP_API_KEY: "cleanupCustomApiKey",
   BEDROCK_ACCESS_KEY_ID: "bedrockAccessKeyId",
   BEDROCK_SECRET_ACCESS_KEY: "bedrockSecretAccessKey",

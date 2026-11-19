@@ -1395,6 +1395,8 @@ test("Keep after a refused create keeps and delivers the note's own text", async
 test("the upgrade marks unsynced text from a release as a set, once", (t) => {
   const db = createDb(t);
   if (!db) return;
+  // Reopening attributes cloud-backed rows to the account that pulled them.
+  db.setActiveAccountId(INITIAL.user_id);
   const synced = db.upsertNoteFromCloud(INITIAL, null);
   const edited = db.upsertNoteFromCloud(
     { ...INITIAL, id: "cloud-edited", client_note_id: "client-edited" },

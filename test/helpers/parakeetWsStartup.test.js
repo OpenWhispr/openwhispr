@@ -521,41 +521,51 @@ test(
   "Windows creates the real hotwords directory and file with a current-user-only ACL",
   { skip: process.platform !== "win32" },
   async (t) => {
+    // .NET rather than Get-Acl: when node runs under PowerShell 7, as CI's steps do, the
+    // powershell.exe it starts inherits PowerShell 7's module paths and can't autoload
+    // Microsoft.PowerShell.Security.
     const inspectAcl = `
 $ErrorActionPreference = 'Stop'
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $sid = [System.Security.Principal.SecurityIdentifier]
-$file = $env:OW_TEST_HOTWORDS_FILE
-foreach ($entry in @($file, [System.IO.Path]::GetDirectoryName($file))) {
-  $acl = Get-Acl -LiteralPath $entry
+$file = [System.IO.FileInfo]::new($env:OW_TEST_HOTWORDS_FILE)
+foreach ($entry in @($file, $file.Directory)) {
+  $acl = $entry.GetAccessControl()
   $rules = @($acl.GetAccessRules($true, $true, $sid))
   if (!$acl.AreAccessRulesProtected -or $rules.Count -ne 1 -or
       $rules[0].IdentityReference.Value -ne $user -or
       $rules[0].AccessControlType -ne 'Allow') { exit 1 }
 }
 `;
+    let aclError;
     const { spawns, start, tempDir } = hotwordsServer({
       testContext: t,
       onSpawn({ hotwordsFile }) {
         assert.ok(hotwordsFile, "expected protected hotwords rather than an unbiased fallback");
-        execFileSync(
-          "powershell.exe",
-          [
-            "-NoProfile",
-            "-NonInteractive",
-            "-EncodedCommand",
-            Buffer.from(inspectAcl, "utf16le").toString("base64"),
-          ],
-          {
-            windowsHide: true,
-            timeout: 10000,
-            env: { ...process.env, OW_TEST_HOTWORDS_FILE: hotwordsFile },
-          }
-        );
+        // Thrown from spawn, a failed check would only surface as the no-hotwords fallback.
+        try {
+          execFileSync(
+            "powershell.exe",
+            [
+              "-NoProfile",
+              "-NonInteractive",
+              "-EncodedCommand",
+              Buffer.from(inspectAcl, "utf16le").toString("base64"),
+            ],
+            {
+              windowsHide: true,
+              timeout: 10000,
+              env: { ...process.env, OW_TEST_HOTWORDS_FILE: hotwordsFile },
+            }
+          );
+        } catch (error) {
+          aclError = error;
+        }
       },
     });
     await start({ score: 2, words: ["Ämber Königs"] });
 
+    assert.ifError(aclError);
     assert.equal(spawns.length, 1);
     assert.equal(spawns[0].hotwordsContent, "Ämber Königs\n");
     assert.deepEqual(fs.readdirSync(tempDir), []);

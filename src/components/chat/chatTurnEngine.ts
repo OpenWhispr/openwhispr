@@ -42,6 +42,7 @@ import {
 } from "../../stores/connectorStatusStore";
 import {
   appendDictionarySuffix,
+  appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
   buildMessageContext,
   getAgentSystemPrompt,
@@ -70,10 +71,6 @@ import { getLlmDictionaryWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
-import {
-  createLookAtScreenTool,
-  LOOK_AT_SCREEN_PROMPT,
-} from "../../services/tools/lookAtScreenTool";
 import type { SharedDictionaryWord } from "../../services/tools/dictionaryTool";
 import { setSharedWordsHidden } from "../../services/sharedDictionaryActions";
 import { readActiveWorkspaceId } from "../../stores/workspaceStore";
@@ -105,6 +102,7 @@ import {
   type ToolHistory,
 } from "./historyMessages";
 import { isUnbackedClaim } from "./actionClaims";
+import { readCaretResponse } from "./caretResponse";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
 import type { ConversationClaim } from "./useChatPersistence";
@@ -153,7 +151,7 @@ function estimateModelSizeB(modelId: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-const CONNECTOR_CONNECTION_TARGETS = ["gmail", "slack", "linear", "github"] as const;
+const CONNECTOR_CONNECTION_TARGETS = ["gmail", "slack", "linear", "github", "salesforce"] as const;
 
 // What the user can connect from the chat: connectors this build can connect
 // that aren't ready, and a calendar while none is connected.
@@ -363,11 +361,18 @@ export interface SendToAIOptions {
   removedSkills?: string[];
   /** The app picked a skill for a model without tools; the surface shows its chip. */
   onSkillPicked?: (skill: { name: string; displayName: string }) => void;
+  /** The answer is typed at the user's caret in another app: ask for plain prose. */
+  plainTextResponse?: boolean;
   /** Per-request completion hook used to deliver a finished voice response. */
   onComplete?: (result: {
     assistantId: string;
     content: string;
     toolCalls?: ToolCallInfo[];
+    /**
+     * A finished turn (not paused at the step limit, no unbacked claim) with no
+     * question to the user and no tool that writes or sends: the reply is the whole result.
+     */
+    onlyRead: boolean;
   }) => void | Promise<void>;
   /**
    * Regenerates this reply in place (same message, same saved row) instead of
@@ -967,33 +972,17 @@ export function createChatTurnEngine(
           : !isCloudAgent && (isLocalProvider || isLanAgent || isCustomAgent)
             ? "text"
             : "parts";
-      // In the agent window, a Cloud screenshot is read through look_at_screen
-      // instead of riding with the request: the API sends any request with an
-      // image to its vision model, so small talk would switch models and see
-      // the screen.
-      const cloudScreen =
-        requestedAttachment && isCloudAgent
-          ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
-          : null;
-      const lookAtScreen =
-        cloudScreen && registry && allowInteractions
-          ? createLookAtScreenTool((question) =>
-              ReasoningService.askAboutScreen(
-                question,
-                cloudScreen,
-                LOOK_AT_SCREEN_PROMPT,
-                toolScope.signal
-              )
-            )
-          : null;
-      const offeredTools = registry
-        ? [...registry.getAll(), ...(lookAtScreen ? [lookAtScreen] : [])]
-        : undefined;
+      const offeredTools = registry?.getAll();
+      const requireCaretDisposition = Boolean(
+        options?.plainTextResponse && !registry?.get("ask_user")
+      );
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.
       let systemPrompt = appendDictionarySuffix(
         getAgentSystemPrompt(offeredTools, {
-          unavailable: nameUnavailableCapabilities ? unavailable : [],
+          // An answer typed into another app carries no hint about what to connect.
+          unavailable:
+            nameUnavailableCapabilities && !options?.plainTextResponse ? unavailable : [],
           ...(toolHistory !== "none" ? { toolHistory } : {}),
           openNote: openNoteContext || undefined,
           openNoteTranscriptPreview: currentNote.transcriptPreview,
@@ -1055,17 +1044,28 @@ export function createChatTurnEngine(
           : message
       );
 
-      // A screenshot the resolver kept rides with the command it came with:
-      // BYOK models get it as an image part, the cloud agent (outside the
-      // agent window's look_at_screen) as a dedicated field the server
-      // vision-routes. A dropped one costs nothing but the image — the
-      // command still runs.
+      // A screenshot the resolver kept rides on the first request of the
+      // command it came with, so the answer needs no extra model calls: BYOK
+      // models get it as an image part, the cloud agent as a dedicated field
+      // the server vision-routes. A dropped one costs nothing but the image —
+      // the command still runs.
       const attachment = requestedAttachment && !isCloudAgent ? requestedAttachment : null;
-      const cloudScreenContext = lookAtScreen ? null : cloudScreen;
-      if (requestedAttachment && !lookAtScreen) {
+      const cloudScreenContext =
+        requestedAttachment && isCloudAgent
+          ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
+          : null;
+      let textOnlySystemPrompt = systemPrompt;
+      if (requestedAttachment) {
         // Either way it needs its grounding instruction, as the dictation path
         // pairs the suffix with an attached image.
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
+      }
+      if (options?.plainTextResponse) {
+        systemPrompt = appendPlainTextResponseSuffix(systemPrompt, requireCaretDisposition);
+        textOnlySystemPrompt = appendPlainTextResponseSuffix(
+          textOnlySystemPrompt,
+          requireCaretDisposition
+        );
       }
       if (attachment) {
         transformLastUserMessage(history, (message) => ({
@@ -1090,6 +1090,20 @@ export function createChatTurnEngine(
       let reasoning = "";
       let rawContent = "";
       let fullContent = "";
+      const renderedAnswers = new Map<string, string>();
+      const modelContent = (): string =>
+        withoutEchoedToolTrace(
+          requireCaretDisposition ? readCaretResponse(rawContent).content : rawContent
+        );
+      // A tool's rendered evidence follows the model's own words, kept whole so
+      // a card placed in them (textOffset) never lands inside it. A rule sets
+      // the evidence apart, so nothing the model wrote reads as part of it.
+      const responseContent = (): string => {
+        const text = modelContent();
+        if (!renderedAnswers.size) return text;
+        const answers = [...renderedAnswers.values()].join("\n\n---\n\n");
+        return text.trim() ? `${text}\n\n---\n\n${answers}` : answers;
+      };
       // A tool may report before the stream shows its call (it can ask the
       // user at once), so what it reports waits here for the call.
       const annotations = new Map<string, Partial<ToolCallInfo>>();
@@ -1201,6 +1215,12 @@ export function createChatTurnEngine(
       };
 
       const recordExecutedResult = (id: string, result: ToolResult): void => {
+        // Evidence tools own their answer: a later model paraphrase must not replace verified facts.
+        if (!cancelled() && ownerCurrent() && result.success && result.renderedAnswer) {
+          renderedAnswers.set(result.renderedAnswer.key, result.renderedAnswer.content);
+          fullContent = responseContent();
+          scheduleContentFlush();
+        }
         if (cancelled()) {
           const call = toolCalls.find((call) => call.id === id);
           if (call && !SKILL_CARD_TOOLS.has(call.name)) return;
@@ -1292,6 +1312,7 @@ export function createChatTurnEngine(
       let afterToolCall = false;
       let reasoningAfterToolCall = false;
       let stepLimitReached = false;
+      let finishReason: string | undefined;
       // Where the text of the step now streaming starts, so an answer asked
       // again (an unbacked claim) can be withdrawn.
       let stepTextStart = 0;
@@ -1302,7 +1323,7 @@ export function createChatTurnEngine(
       const replaceAskedReply = (): void => {
         if (askedAgainFrom === null) return;
         rawContent = rawContent.slice(0, askedAgainFrom);
-        fullContent = withoutEchoedToolTrace(rawContent);
+        fullContent = responseContent();
         afterToolCall = true;
         askedAgainFrom = null;
       };
@@ -1347,8 +1368,7 @@ export function createChatTurnEngine(
         if (isCloudAgent) {
           const executeToolCall = registry
             ? async (name: string, argsJson: string, toolCallId: string) => {
-                const tool =
-                  registry.get(name) ?? (name === lookAtScreen?.name ? lookAtScreen : undefined);
+                const tool = registry.get(name);
                 if (!tool)
                   return {
                     data: `Unknown tool: ${name}`,
@@ -1402,7 +1422,9 @@ export function createChatTurnEngine(
                 parameters: t.parameters,
               })),
               executeToolCall,
-              ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
+              ...(cloudScreenContext
+                ? { screenContext: cloudScreenContext, textOnlySystemPrompt }
+                : {}),
               isUnbackedClaim: isUnbacked,
             },
             control.controller.signal
@@ -1456,7 +1478,7 @@ export function createChatTurnEngine(
             if (afterToolCall && rawContent && !/\s$/.test(rawContent)) rawContent += "\n\n";
             afterToolCall = false;
             rawContent += chunk.text;
-            fullContent = withoutEchoedToolTrace(rawContent);
+            fullContent = responseContent();
             scheduleContentFlush();
           } else if (chunk.type === "reasoning") {
             if (reasoningAfterToolCall && reasoning && !/\s$/.test(reasoning)) reasoning += "\n\n";
@@ -1489,11 +1511,10 @@ export function createChatTurnEngine(
                 {
                   id: currentToolCallId(call.id),
                   name: call.name,
-                  // A question to look_at_screen can quote an earlier read.
-                  arguments: call.name === lookAtScreen?.name ? "{}" : call.arguments,
+                  arguments: call.arguments,
                   status: "executing",
                   startedAt: Date.now(),
-                  textOffset: fullContent.length,
+                  textOffset: modelContent().length,
                   ...annotations.get(currentToolCallId(call.id)),
                 },
               ];
@@ -1527,6 +1548,7 @@ export function createChatTurnEngine(
             setAgentState("streaming");
             completeToolActivity();
           } else if (chunk.type === "done") {
+            finishReason = chunk.finishReason;
             // Ended from outside the turn: it stops, rather than counting as answered.
             if (chunk.finishReason === "abort") {
               control.controller.abort();
@@ -1570,10 +1592,25 @@ export function createChatTurnEngine(
 
         saveReply();
         if (hasDeliverableContent) {
+          const calls = currentToolCalls();
           await options?.onComplete?.({
             assistantId,
             content: fullContent,
-            toolCalls: currentToolCalls(),
+            toolCalls: calls,
+            // A rendered answer (a Salesforce briefing) is Markdown with
+            // citations, made to be read here, never typed into another app.
+            onlyRead:
+              renderedAnswers.size === 0 &&
+              !stepLimitReached &&
+              !unbackedClaim &&
+              finishReason === "stop" &&
+              (!requireCaretDisposition ||
+                readCaretResponse(rawContent).disposition === "answer") &&
+              (calls ?? []).every(
+                (call) =>
+                  !call.interaction &&
+                  offeredTools?.some((tool) => tool.name === call.name && tool.readOnly)
+              ),
           });
         }
       } catch (error) {
@@ -1640,7 +1677,7 @@ export function createChatTurnEngine(
               m.id === assistantId
                 ? {
                     ...m,
-                    content: `${t("agentMode.chat.errorPrefix")}: ${failure.description}`,
+                    content: `${renderedAnswers.size ? `${fullContent}\n\n` : ""}${t("agentMode.chat.errorPrefix")}: ${failure.description}`,
                     isStreaming: false,
                     toolCalls: currentToolCalls(),
                     turn: currentTurn(),

@@ -26,6 +26,7 @@ async function mountDialog(t, props, { realView = false } = {}) {
       "__settingsRequests",
       "__toasts",
       "__sendOutcomes",
+      "__authValidated",
     ]) {
       delete globalThis[key];
     }
@@ -103,6 +104,9 @@ async function mountDialog(t, props, { realView = false } = {}) {
             }
           },
         };
+      `,
+      "/lib/authRequestContext": `
+        export const hasValidatedAuthContext = () => globalThis.__authValidated !== false;
       `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = (selector) =>
@@ -189,6 +193,18 @@ test("existing callers keep their props", async (t) => {
     latest().state.sent.map((entry) => entry.email),
     ["a@x.com"]
   );
+});
+
+test("opening without a validated sign-in leaves the workspace list alone", async (t) => {
+  globalThis.__authValidated = false;
+  await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+  });
+
+  assert.equal(globalThis.__refreshCalls, undefined);
 });
 
 test("knownEmails blocks an address already in the workspace", async (t) => {

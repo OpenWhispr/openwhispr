@@ -10,6 +10,8 @@ import {
   resolveDefaultWorkspaceId,
   withDefaultFirst,
 } from "../lib/workspaceSwitcher";
+import { isControlPanelWindow } from "../utils/windowContext";
+import { clearCachedLeaderboards } from "../lib/insightsCache";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -203,6 +205,29 @@ function readWorkspaceListCache(
   } catch {
     return null;
   }
+}
+
+/** Restore an offline account's list without attempting an authenticated request. */
+export function hydrateCachedWorkspaces(accountId: string): void {
+  if (
+    accountId !== usePolicyStore.getState().accountId ||
+    useWorkspaceStore.getState().workspaces.length > 0
+  ) {
+    return;
+  }
+  const cached = readWorkspaceListCache(accountId);
+  if (!cached) {
+    useWorkspaceStore.setState({ loaded: true, error: true });
+    return;
+  }
+  const defaultWorkspaceId = resolveDefaultWorkspaceId(cached);
+  useWorkspaceStore.setState({
+    workspaces: withDefaultFirst(cached, defaultWorkspaceId),
+    defaultWorkspaceId,
+    listAccountId: accountId,
+    loaded: true,
+    error: true,
+  });
 }
 
 /**
@@ -468,12 +493,19 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         });
       }
       // A newer successful list scans main's rows again, including previously failed moves.
-      if (!current()) return;
+      // Only in the control panel, the one window that tells main the workspace scope: the scan
+      // and the moves start by publishing it. A loss another window's list saw first is still
+      // found there, by the scan of main's rows.
+      if (!current() || !isControlPanelWindow()) return;
       const orphaned = rowCheck ? await orphanedPrivateWorkspaces(rowCheck, current) : [];
       if (!current()) return;
       const toRelocate = await confirmedLost([...new Set([...lost, ...orphaned])]);
       if (!current()) return;
-      if (toRelocate.length > 0) await relocateLostWorkspaces(toRelocate, current);
+      if (toRelocate.length > 0) {
+        // A workspace lost elsewhere takes its leaderboard with it.
+        clearCachedLeaderboards();
+        await relocateLostWorkspaces(toRelocate, current);
+      }
     })().finally(() => {
       if (refreshPromise === request) refreshPromise = null;
     });
@@ -485,6 +517,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   createWorkspace: async (name) => {
     const generation = accountGeneration;
     const workspace = await WorkspacesService.create(name);
+    // A new workspace is a new leaderboard scope.
+    clearCachedLeaderboards();
     if (generation !== accountGeneration) return null;
     set((s) => ({ workspaces: [...s.workspaces, workspace] }));
     // A list request sent before the create would answer without it and drop it again.
@@ -563,13 +597,16 @@ export function onWorkspaceScopePublished(
  * Tells main the active and default workspace, so new private notes go to the active workspace's
  * Private and existing ones to the default's. Named for the account whose list chose them: main
  * refuses a scope that arrives after another account signed in. True once main took it.
+ *
+ * Only the control panel sends it, since it owns the workspace choice; another window's store may
+ * not have loaded its list and would send main an empty scope.
  */
 export async function publishWorkspaceScope(
   isCurrent: () => boolean = () => true
 ): Promise<boolean> {
   if (!isCurrent()) return false;
   const api = typeof window !== "undefined" ? window.electronAPI : undefined;
-  if (!api?.setActiveWorkspaceScope) return false;
+  if (!api?.setActiveWorkspaceScope || !isControlPanelWindow()) return false;
   const { activeWorkspaceId, activeWorkspaceProvisional, defaultWorkspaceId, listAccountId } =
     useWorkspaceStore.getState();
   // A provisional pick isn't final (D46): main files unattended notes into the default's Private
@@ -767,6 +804,8 @@ export function ensureDefaultWorkspace(
           .getState()
           .workspaces.some((w) => w.id === workspace.id && w.is_default === true);
       if (!listed) {
+        // A new default workspace is a new leaderboard scope.
+        clearCachedLeaderboards();
         listRead = true;
         await useWorkspaceStore.getState().refresh({ fresh: true });
       }

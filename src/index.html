@@ -4,13 +4,17 @@
     <meta charset="UTF-8" />
     <!--
       Defense in depth against images an injected model reply points at an
-      attacker's server. Remote images are limited to avatar hosts: Gravatar and
-      Google profile photos (Microsoft photos arrive as data: URLs). A meta tag
-      because the packaged build loads from file://, which has no response headers.
+      attacker's server. Remote images are limited to avatar hosts: Gravatar,
+      Google profile photos (Microsoft photos arrive as data: URLs), and the
+      production and preview workspace-icon Blob stores. The stores are named
+      exactly, since anyone can create one under public.blob.vercel-storage.com;
+      a new store must be listed here before the API serves icons from it (until
+      then icons show initials). A meta tag because the packaged build loads from
+      file://, which has no response headers.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="img-src 'self' data: https://www.gravatar.com https://lh3.googleusercontent.com https://lh4.googleusercontent.com https://lh5.googleusercontent.com https://lh6.googleusercontent.com"
+      content="img-src 'self' data: https://www.gravatar.com https://lh3.googleusercontent.com https://lh4.googleusercontent.com https://lh5.googleusercontent.com https://lh6.googleusercontent.com https://ja8ti2toradt16sd.public.blob.vercel-storage.com https://x9ywypmymer60x8e.public.blob.vercel-storage.com"
     />
     <link rel="icon" type="image/png" href="./assets/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

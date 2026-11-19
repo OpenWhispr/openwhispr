@@ -16,6 +16,7 @@ import { useSignOut } from "../hooks/useSignOut";
 import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
+import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
 import { recordingRecorderName } from "../utils/noteRecorder";
 import { useAuth } from "../hooks/useAuth";
 import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
@@ -30,6 +31,7 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
+import { clearInsightsCache } from "../lib/insightsCache";
 import { getSettings, useSettingsStore } from "../stores/settingsStore";
 import {
   startNewChat,
@@ -43,6 +45,8 @@ import { startWorkspaceScopeBridge } from "../stores/workspaceScopeBridge";
 import { useEnsureDefaultWorkspace } from "../hooks/useWorkspace";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
 import { useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
+import { getKeytermDictionaryWords, limitBatchKeyterms } from "../utils/snippets";
+import { providerCleanupStandsIn } from "../helpers/dictationRouting";
 import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
 import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
 import {
@@ -54,7 +58,11 @@ import {
   isUpdateRequiredByOrg,
   transcriptionChoiceRefusal,
 } from "../stores/policyRules";
-import { getManagedTranscriptionResolution } from "../services/managedTranscription";
+import {
+  allowsPersonalDictationCleanup,
+  canUseAssemblyAiRewrite,
+  getManagedTranscriptionResolution,
+} from "../services/managedTranscription";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -67,7 +75,10 @@ import {
   DEFAULT_INTEGRATIONS_SECTION,
   type IntegrationsSection,
 } from "./integrations/integrationsSections";
-import { navigateMeetingNotification } from "./meetingNotificationNavigation";
+import {
+  navigateAndLoadMeetingNote,
+  navigateMeetingNotification,
+} from "./meetingNotificationNavigation";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -82,6 +93,8 @@ import {
   setActiveFolderId,
   navigateToContainer,
   ensureNoteLoaded,
+  getActiveNoteIdValue,
+  getNoteFromStore,
   useActiveNoteId,
   initializeNotes,
   subscribeMeetingNotificationFolders,
@@ -97,6 +110,7 @@ import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import AssistantNoteUndoListener from "./notes/AssistantNoteUndoListener";
+import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { providerErrorActions, providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import SharedDictionaryArrivalToastListener from "./SharedDictionaryArrivalToastListener";
@@ -113,6 +127,7 @@ import {
 } from "../utils/pendingInvitationToken";
 import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
 import type { SourceNote } from "./chat/useSourceNote";
+import type { MeetingStartSource } from "../types/electron";
 
 const platform = getCachedPlatform();
 
@@ -190,6 +205,7 @@ export default function ControlPanel({
     noteId: number;
     folderId: number | null;
     event: any;
+    startSource?: MeetingStartSource;
     trigger?: string;
     noteSessionId?: string;
   } | null>(null);
@@ -473,6 +489,7 @@ export default function ControlPanel({
                 startRecordingForNote(
                   note,
                   recordingRecorderName(note, recordingUser, translate),
+                  "prompt",
                   args.canAutoStart
                 ),
               restoreFromMeetingMode: () => window.electronAPI?.restoreFromMeetingMode?.(),
@@ -499,17 +516,25 @@ export default function ControlPanel({
       }
       if (data.noteSessionId)
         meetingNoteSession.current = { id: data.noteSessionId, noteId: data.noteId };
-      setActiveFolderId(data.folderId);
-      setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
+      await navigateAndLoadMeetingNote(data.noteId, data.spaceId, data.folderId);
+      if (
+        !isCurrent() ||
+        getActiveNoteIdValue() !== data.noteId ||
+        !getNoteFromStore(data.noteId) ||
+        (data.noteSessionId && meetingNoteSession.current?.id !== data.noteSessionId)
+      ) {
+        if (data.noteSessionId) void window.electronAPI?.meetingNoteClosed?.(data.noteSessionId);
+        return;
+      }
       setMeetingRecordingRequest({
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
+        startSource: data.startSource,
         trigger: data.trigger,
         noteSessionId: data.noteSessionId,
       });
-      void initializeNotes(null, 50, data.folderId);
       if (
         data.trigger === "hotkey" &&
         useSettingsStore.getState().meetingHotkeyLayoutMode === "side-panel"
@@ -690,6 +715,8 @@ export default function ControlPanel({
           const result = await window.electronAPI.clearTranscriptions();
           if (result.success) {
             clearStore();
+            // Insights is unmounted here, and would otherwise paint the cleared totals.
+            clearInsightsCache();
             syncService.requestSyncAll("manual");
             toast({
               title: t("controlPanel.history.clearAllSuccess"),
@@ -745,7 +772,15 @@ export default function ControlPanel({
           });
           return;
         }
-        if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
+        if (
+          !managed &&
+          !isTranscriptionContextAllowed(
+            usePolicyStore.getState(),
+            s,
+            "dictation",
+            allowsPersonalDictationCleanup
+          )
+        ) {
           const refusal = transcriptionChoiceRefusal(usePolicyStore.getState(), s, "dictation");
           toast({
             title: t(refusal?.messageKey ?? "common.managedByOrg"),
@@ -768,6 +803,8 @@ export default function ControlPanel({
           cohereModel: s.cohereModel,
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,
+          translationSourceLanguage: s.translationSourceLanguage,
+          keyterms: limitBatchKeyterms(getKeytermDictionaryWords(s)),
           transcriptionMode: s.transcriptionMode,
           remoteTranscriptionType: s.remoteTranscriptionType,
           remoteTranscriptionUrl: s.remoteTranscriptionUrl,
@@ -871,13 +908,24 @@ export default function ControlPanel({
               ]);
               const model = getEffectiveCleanupModel();
               const isCloud = isCloudCleanupMode();
-              if (model || isCloud) {
-                const agentName = getAgentName();
-                const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
-                  disableThinking: getSettings().cleanupDisableThinking,
-                  reasoningEffort: getSettings().cleanupReasoningEffort,
-                  requireCompleteOutput: true,
-                });
+              // A provider's own rewrite stands in for cleanup, as on a fresh dictation.
+              const providerCleanedText =
+                result.cleanedText?.trim() &&
+                providerCleanupStandsIn(getSettings(), {
+                  cleanupReachable: !!model || isCloud,
+                  providerLlmAllowed: canUseAssemblyAiRewrite(),
+                })
+                  ? result.cleanedText.trim()
+                  : "";
+              if (providerCleanedText) assertValidCleanupOutput(rawText, providerCleanedText);
+              if (providerCleanedText || model || isCloud) {
+                const reasonedText =
+                  providerCleanedText ||
+                  (await ReasoningService.processText(rawText, model, getAgentName(), {
+                    disableThinking: getSettings().cleanupDisableThinking,
+                    reasoningEffort: getSettings().cleanupReasoningEffort,
+                    requireCompleteOutput: true,
+                  }));
                 if (hasTextContent(reasonedText) && reasonedText !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
@@ -976,6 +1024,11 @@ export default function ControlPanel({
           try {
             await installUpdate();
           } catch (error) {
+            const policyMessage = updatePolicyMessageKey(error);
+            if (policyMessage) {
+              toast({ title: t(policyMessage) });
+              return;
+            }
             toast({
               title: t("controlPanel.update.couldNotInstallTitle"),
               description: t("controlPanel.update.couldNotInstallDescription"),
@@ -988,6 +1041,11 @@ export default function ControlPanel({
       try {
         await downloadUpdate();
       } catch (error) {
+        const policyMessage = updatePolicyMessageKey(error);
+        if (policyMessage) {
+          toast({ title: t(policyMessage) });
+          return;
+        }
         toast({
           title: t("controlPanel.update.couldNotDownloadTitle"),
           description: t("controlPanel.update.couldNotDownloadDescription"),
@@ -1152,6 +1210,7 @@ export default function ControlPanel({
             // The side-panel layout (a meeting, or a narrow window with a note open) has no room for it.
             workspaceIntroAllowed={!settingsOpen && !isSidePanelLayout}
             updateAction={
+              updateStatus.updateMode !== "it_managed" &&
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||
                 updateStatus.updateDownloaded ||
@@ -1216,9 +1275,14 @@ export default function ControlPanel({
                         </p>
                         <p className="text-xs text-amber-700 dark:text-amber-300/80">
                           <BidiInterpolatedText
-                            text={t("controlPanel.updateRequiredByOrg.description", {
-                              version: BIDI_VALUE_TOKEN,
-                            })}
+                            text={t(
+                              updateStatus.updateMode === "it_managed"
+                                ? "controlPanel.updateRequiredByOrg.contactIT"
+                                : "controlPanel.updateRequiredByOrg.description",
+                              {
+                                version: BIDI_VALUE_TOKEN,
+                              }
+                            )}
                             value={policyMinAppVersion}
                           />
                         </p>

@@ -1,7 +1,9 @@
 const { i18nMain } = require("./i18nMain");
 const { isSpeakerLocked } = require("./speakerAssignmentPolicy");
 
-function resolveSpeaker(seg, speakerMappings) {
+function resolveSpeaker(seg, speakerMappings, recorderLabel) {
+  // Appended recordings keep their own identity; the export label fills legacy segments.
+  const recorderName = seg.recorderName || recorderLabel;
   const mappedName =
     seg.speaker && !(seg.speaker === "you" && seg.recorderName)
       ? speakerMappings[seg.speaker]
@@ -11,15 +13,14 @@ function resolveSpeaker(seg, speakerMappings) {
     const name = seg.speakerName.trim().toLowerCase();
     const isSelfName =
       name === "you" || name === i18nMain.t("transcript.speaker.you").toLowerCase();
-    return isSelfName && seg.recorderName ? seg.recorderName : seg.speakerName;
+    return isSelfName && recorderName ? recorderName : seg.speakerName;
   }
-  if (seg.speaker === "you" && seg.recorderName) return seg.recorderName;
-  if (seg.speaker === "you") return i18nMain.t("transcript.speaker.you");
+  if (seg.speaker === "you") return recorderName || i18nMain.t("transcript.speaker.you");
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
     if (!isNaN(num)) return i18nMain.t("notes.speaker.label", { n: num + 1 });
   }
-  if (seg.source === "mic") return seg.recorderName || i18nMain.t("transcript.speaker.you");
+  if (seg.source === "mic") return recorderName || i18nMain.t("transcript.speaker.you");
   if (seg.source === "system") return i18nMain.t("transcript.speaker.others");
   return i18nMain.t("notes.speaker.unknown");
 }
@@ -152,7 +153,7 @@ function extractMetadata(note) {
   return { title, dateStr, participants };
 }
 
-function formatTxt(note, segments, speakerMappings) {
+function formatTxt(note, segments, speakerMappings, { recorderLabel } = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const { title, dateStr, participants } = extractMetadata(note);
 
@@ -163,7 +164,9 @@ function formatTxt(note, segments, speakerMappings) {
   const untimed = isUntimed(segments);
   for (const seg of merged) {
     if (!untimed) {
-      lines.push(`[${formatTimestamp(seg.timestamp)}] ${resolveSpeaker(seg, speakerMappings)}:`);
+      lines.push(
+        `[${formatTimestamp(seg.timestamp)}] ${resolveSpeaker(seg, speakerMappings, recorderLabel)}:`
+      );
     }
     lines.push(seg.text);
     lines.push("");
@@ -171,7 +174,7 @@ function formatTxt(note, segments, speakerMappings) {
   return lines.join("\n");
 }
 
-function formatSrt(segments, speakerMappings, note = {}) {
+function formatSrt(segments, speakerMappings, note = {}, { recorderLabel } = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   // Upload transcripts carry no speaker identity at all; prefixing every cue
   // with "Unknown Speaker:" would defeat the subtitle use case. Meeting
@@ -188,21 +191,23 @@ function formatSrt(segments, speakerMappings, note = {}) {
     entries.push(`${i + 1}`);
     entries.push(`${formatSrtTimestamp(seg.timestamp)} --> ${formatSrtTimestamp(nextTs)}`);
     entries.push(
-      hasSpeakerIdentity ? `${resolveSpeaker(seg, speakerMappings)}: ${seg.text}` : seg.text
+      hasSpeakerIdentity
+        ? `${resolveSpeaker(seg, speakerMappings, recorderLabel)}: ${seg.text}`
+        : seg.text
     );
     entries.push("");
   }
   return entries.join("\n");
 }
 
-function formatJson(note, segments, speakerMappings) {
+function formatJson(note, segments, speakerMappings, { recorderLabel } = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const { title, dateStr } = extractMetadata(note);
 
   const untimed = isUntimed(segments);
   const speakersSet = new Set();
   if (!untimed) {
-    for (const seg of merged) speakersSet.add(resolveSpeaker(seg, speakerMappings));
+    for (const seg of merged) speakersSet.add(resolveSpeaker(seg, speakerMappings, recorderLabel));
   }
   const lastSeg = merged[merged.length - 1];
 
@@ -222,7 +227,7 @@ function formatJson(note, segments, speakerMappings) {
       },
       speakers: [...speakersSet],
       segments: merged.map((seg) => ({
-        speaker: untimed ? null : resolveSpeaker(seg, speakerMappings),
+        speaker: untimed ? null : resolveSpeaker(seg, speakerMappings, recorderLabel),
         timestamp: seg.timestamp,
         text: seg.text,
       })),
@@ -232,7 +237,7 @@ function formatJson(note, segments, speakerMappings) {
   );
 }
 
-function formatMd(note, segments, speakerMappings) {
+function formatMd(note, segments, speakerMappings, { recorderLabel } = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const { title, dateStr, participants } = extractMetadata(note);
 
@@ -244,7 +249,7 @@ function formatMd(note, segments, speakerMappings) {
   for (const seg of merged) {
     if (!untimed) {
       lines.push(
-        `**${resolveSpeaker(seg, speakerMappings)}** \`${formatTimestamp(seg.timestamp)}\``
+        `**${resolveSpeaker(seg, speakerMappings, recorderLabel)}** \`${formatTimestamp(seg.timestamp)}\``
       );
     }
     lines.push(`${seg.text}`, "");

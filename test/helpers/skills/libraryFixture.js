@@ -41,6 +41,9 @@ function fakeDatabase() {
         row.updatedAt = now();
       }
     },
+    getSkillStateForRecovery(name) {
+      return rows.has(name) ? { ...rows.get(name) } : null;
+    },
     restoreSkillState(name, state) {
       if (state === null) rows.delete(name);
       else rows.set(name, { ...state, name });

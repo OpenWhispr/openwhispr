@@ -195,6 +195,18 @@ export function resolveDictationRouteKind({
   return "skip";
 }
 
+// Whether text a transcription provider already rewrote (AssemblyAI Dictation)
+// stands in for the app's own cleanup, sparing a second model call. The user's
+// cleanup prompt and Tone & Style only reach the app's cleanup, so that runs
+// when it can; with nothing to run it, the provider's text still beats the raw
+// transcript. `providerLlmAllowed` is the org's verdict on a provider-run model:
+// a workspace that keeps AI processing on the device gets no cloud rewrite.
+export function providerCleanupStandsIn(settings, { cleanupReachable, providerLlmAllowed }) {
+  if (!settings.useCleanupModel || !providerLlmAllowed) return false;
+  const usesOwnCleanup = !!settings.customPrompts?.cleanup || !!settings.toneStyleEnabled;
+  return !(cleanupReachable && usesOwnCleanup);
+}
+
 // A dictation skipped while cleanup is switched on goes out raw, which looks like
 // a cleanup that changed nothing, so it carries a notice. `shownKey` names the
 // broken setup the user was last warned about: the same one warns once, while a

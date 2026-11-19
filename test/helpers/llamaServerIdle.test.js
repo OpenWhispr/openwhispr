@@ -525,3 +525,68 @@ for (const reuse of ["preferences", "same-model start"]) {
     assert.equal(stops.length, 1, "the next inference can load the installed GPU binary");
   });
 }
+
+test("a long dictation holds only its model and returns to normal idle unload", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  const take = new AbortController();
+  await manager.start("/cleanup", { prewarm: "dictation" });
+  manager.holdForDictation("/cleanup", take.signal);
+  manager.setKeepResident(true);
+  manager.setKeepResident(false);
+  t.mock.timers.tick(10 * MINUTE);
+  await settle();
+  assert.equal(stops.length, 0);
+  await manager.start("/cleanup");
+  assert.equal(stops.length, 0, "cleanup reuses the prewarmed server");
+  take.abort();
+  t.mock.timers.tick(5 * MINUTE + 1);
+  await settle();
+  assert.equal(stops.length, 1);
+});
+
+test("foreground edits can interrupt a speculative load, even with no busy wait left", async () => {
+  const { manager } = makeManager();
+  const spawn = manager._doStart.bind(manager);
+  const loading = Promise.withResolvers();
+  manager._doStart = async (modelPath, options) => {
+    if (modelPath === "/cleanup") {
+      loading.resolve();
+      await new Promise((_, reject) =>
+        options.startupSignal.addEventListener("abort", () => reject(options.startupSignal.reason))
+      );
+    }
+    await spawn(modelPath, options);
+  };
+  const warming = manager.start("/cleanup", { prewarm: "dictation" });
+  const interrupted = assert.rejects(warming, { code: "LOCAL_MODEL_CANCELLED" });
+  await loading.promise;
+  const launchWarmup = manager.start("/cleanup", { prewarm: "background" });
+  const interruptedLaunch = assert.rejects(launchWarmup, { code: "LOCAL_MODEL_CANCELLED" });
+  await manager.start("/edit", { busyWaitMs: 0 });
+  await Promise.all([interrupted, interruptedLaunch]);
+  assert.equal(manager.modelPath, "/edit");
+  manager.clearIdleTimer();
+});
+
+test("joining a speculative start for inference protects it from a conflicting edit", async () => {
+  const { manager } = makeManager();
+  const ready = Promise.withResolvers();
+  const spawn = manager._doStart.bind(manager);
+  manager._doStart = async (...args) => {
+    await ready.promise;
+    await spawn(...args);
+  };
+  const take = new AbortController();
+  const warming = manager.start("/cleanup", { prewarm: "dictation", signal: take.signal });
+  const inference = manager.start("/cleanup");
+  take.abort();
+  await assert.rejects(manager.start("/edit", { busyWaitMs: 0 }), { code: "LOCAL_MODEL_BUSY" });
+  ready.resolve();
+  await Promise.all([warming, inference]);
+  assert.ok(manager.handoffUntil > 0);
+  await assert.rejects(manager.start("/other", { prewarm: "dictation" }), {
+    code: "LOCAL_MODEL_BUSY",
+  });
+  manager.clearIdleTimer();
+});

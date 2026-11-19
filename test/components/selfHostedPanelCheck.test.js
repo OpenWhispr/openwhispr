@@ -88,3 +88,91 @@ test("the address and model save as they are typed", async (t) => {
     ["model", "whisper "],
   ]);
 });
+
+const HEADER_NAME = "settingsPage.selfHosted.headerName";
+const HEADER_VALUE = "settingsPage.selfHosted.headerValue";
+const withHeaders = (headers, saved) => ({
+  headers,
+  onHeadersChange: (rows) => saved.push(rows),
+});
+
+test("a panel without onHeadersChange has no header rows", async (t) => {
+  const panel = await mount(t, { overrides: { service: "reasoning", onModelChange: undefined } });
+  assert.equal(panel.field(HEADER_NAME), undefined);
+});
+
+test("a typed header is saved when its field is left, not while it is typed", async (t) => {
+  const saved = [];
+  const panel = await mount(t, {
+    overrides: withHeaders([{ name: "X-API-Key", value: "old" }], saved),
+  });
+  await panel.type(HEADER_VALUE, "new");
+  await panel.wait(5000);
+  assert.deepEqual(saved, []);
+  await panel.blur(HEADER_VALUE);
+  assert.deepEqual(saved, [[{ name: "X-API-Key", value: "new" }]]);
+});
+
+test("the check carries the typed headers, and a pass saves them", async (t) => {
+  const saved = [];
+  const panel = await mount(t, {
+    overrides: {
+      url: SERVER,
+      model: "whisper-large-v3",
+      ...withHeaders([{ name: "X-API-Key", value: "" }], saved),
+    },
+  });
+  await panel.type(HEADER_VALUE, "k");
+  await panel.wait(5000);
+  assert.deepEqual(panel.requests().at(-1).headers, [{ name: "X-API-Key", value: "k" }]);
+  assert.deepEqual(saved, []);
+  await panel.answer({ success: true });
+  assert.deepEqual(saved, [[{ name: "X-API-Key", value: "k" }]]);
+});
+
+test("removing a header saves at once", async (t) => {
+  const saved = [];
+  const panel = await mount(t, {
+    overrides: withHeaders(
+      [
+        { name: "X-One", value: "1" },
+        { name: "X-Two", value: "2" },
+      ],
+      saved
+    ),
+  });
+  await panel.click("settingsPage.selfHosted.removeHeader");
+  assert.deepEqual(saved, [[{ name: "X-Two", value: "2" }]]);
+});
+
+test("a header no server takes is named on its row, and the server is not asked", async (t) => {
+  for (const [row, field, problem] of [
+    [{ name: "X-API-Key: abc", value: "" }, HEADER_NAME, "invalidName"],
+    [{ name: "", value: "abc" }, HEADER_NAME, "missingName"],
+    [{ name: "Content-Type", value: "text/plain" }, HEADER_NAME, "reserved"],
+    [{ name: "X-Key", value: "“abc”" }, HEADER_VALUE, "invalidValue"],
+  ]) {
+    await t.test(problem, async (t) => {
+      const panel = await mount(t, {
+        overrides: { url: SERVER, model: "whisper-large-v3", ...withHeaders([row], []) },
+      });
+      await panel.wait(5000);
+      assert.equal(
+        panel.field(field).props.error,
+        `settingsPage.selfHosted.headerErrors.${problem}`
+      );
+      const other = field === HEADER_NAME ? HEADER_VALUE : HEADER_NAME;
+      assert.equal(panel.field(other).props.error, undefined);
+      assert.equal(panel.requests().length, 0);
+    });
+  }
+});
+
+test("with header rows, a refusal points at the headers, not a key field", async (t) => {
+  const panel = await mount(t, {
+    overrides: { url: SERVER, model: "whisper-large-v3", ...withHeaders([], []) },
+  });
+  await panel.wait(0);
+  await panel.answer({ success: false, errorCode: "credentialsRejected", status: 401 });
+  assert.equal(panel.field(MODEL).props.failureReason, "settingsPage.selfHosted.unauthorized");
+});

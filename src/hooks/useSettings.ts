@@ -21,6 +21,7 @@ import {
   isLocalHistoryPolicyResolved,
   isPolicySettled,
 } from "../stores/policyRules";
+import { useEnterpriseIdentityStore } from "../stores/enterpriseIdentityStore";
 import { usePolicyStore } from "../stores/policyStore";
 import { usePolicySnapshot } from "./usePolicy";
 import { subscribeAgentNameChanges } from "../utils/agentName";
@@ -105,6 +106,7 @@ export interface ApiKeySettings {
   tinfoilApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
+  elevenlabsApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
@@ -243,8 +245,10 @@ function useSettingsLifecycle(): AutoLearnCorrectionsValue {
   const preferredLanguage = useSettingsStore((settings) => settings.preferredLanguage);
   const keepLocalModelLoaded = useSettingsStore((settings) => settings.keepLocalModelLoaded);
   const policySnapshot = usePolicySnapshot();
-  const localServerPrefs = useSettingsStore(
-    useShallow((state) => selectLocalServerPrefs(state, policySnapshot))
+  // Settings and policy already trigger renders. Also observe managed route changes
+  // so assigning or removing a managed provider updates the main process.
+  const localServerPrefs = useEnterpriseIdentityStore(
+    useShallow(() => selectLocalServerPrefs(store, policySnapshot))
   );
   const policySettled = isPolicySettled(policySnapshot);
   // A sign-out before the policy fetch starts leaves the policy idle, so only

@@ -11,6 +11,7 @@ import { Download, RefreshCw } from "../icons";
 import { SettingsPanel, SettingsPanelRow, SettingsRow, SectionHeader } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
 import { KeepAlive } from "./KeepAlive";
+import { updatePolicyMessageKey } from "../../utils/updatePolicyMessage";
 
 const SystemUpdates = React.memo(function SystemUpdates({
   showAlertDialog,
@@ -38,6 +39,12 @@ const SystemUpdates = React.memo(function SystemUpdates({
     installUpdate: installUpdateAction,
     getAppVersion,
   } = useUpdater();
+  const organizationManagesUpdates = updateStatus.updateMode === "it_managed";
+  const updatePolicyUnavailable =
+    updateStatus.policyReady === false && updateStatus.policyUnavailable === true;
+  const updatePolicyPending = updateStatus.policyReady === false && !updatePolicyUnavailable;
+  const updateToggleLocked =
+    updatePolicyPending || updateStatus.updateMode === "always_on" || organizationManagesUpdates;
   const isUpdateAvailable =
     !updateStatus.isDevelopment && (updateStatus.updateAvailable || updateStatus.updateDownloaded);
   // Update metadata is not trusted HTML: parse it inertly and render only its
@@ -91,20 +98,28 @@ const SystemUpdates = React.memo(function SystemUpdates({
           <SettingsRow
             label={t("settingsPage.general.updates.currentVersion")}
             description={
-              updateStatus.isDevelopment
-                ? t("settingsPage.general.updates.devMode")
-                : !updateStatus.isSupported
-                  ? t("settingsPage.general.updates.managedByPackageManager")
-                  : isUpdateAvailable
-                    ? t("settingsPage.general.updates.newVersionAvailable")
-                    : t("settingsPage.general.updates.latestVersion")
+              organizationManagesUpdates
+                ? t("settingsPage.general.updates.itManaged")
+                : updateStatus.isDevelopment
+                  ? t("settingsPage.general.updates.devMode")
+                  : !updateStatus.isSupported
+                    ? t("settingsPage.general.updates.managedByPackageManager")
+                    : isUpdateAvailable
+                      ? t("settingsPage.general.updates.newVersionAvailable")
+                      : updatePolicyPending
+                        ? t("settingsPage.general.updates.policyLoading")
+                        : updatePolicyUnavailable
+                          ? t("settingsPage.general.updates.policyUnavailable")
+                          : t("settingsPage.general.updates.latestVersion")
             }
           >
             <div className="flex items-center gap-2.5">
               <span dir="ltr" className="text-xs tabular-nums text-muted-foreground font-mono">
                 {currentVersion || t("settingsPage.general.updates.versionPlaceholder")}
               </span>
-              {updateStatus.isDevelopment ? (
+              {organizationManagesUpdates ? (
+                <Badge variant="outline">{t("settingsPage.general.updates.managedBadge")}</Badge>
+              ) : updateStatus.isDevelopment ? (
                 <Badge variant="warning">{t("settingsPage.general.updates.badges.dev")}</Badge>
               ) : isUpdateAvailable ? (
                 <Badge variant="success">{t("settingsPage.general.updates.badges.update")}</Badge>
@@ -119,18 +134,26 @@ const SystemUpdates = React.memo(function SystemUpdates({
           <SettingsPanelRow>
             <SettingsRow
               label={t("settingsPage.general.updates.automaticUpdates")}
-              description={t("settingsPage.general.updates.automaticUpdatesDescription")}
+              description={t(
+                updatePolicyPending
+                  ? "settingsPage.general.updates.policyLoading"
+                  : updateToggleLocked
+                    ? "settingsPage.general.updates.managedByOrganization"
+                    : "settingsPage.general.updates.automaticUpdatesDescription"
+              )}
             >
               <Toggle
                 ariaLabel={t("settingsPage.general.updates.automaticUpdates")}
-                checked={autoUpdatesEnabled}
+                checked={updateStatus.effectiveAutoUpdatesEnabled ?? autoUpdatesEnabled}
                 onChange={setAutoUpdatesEnabled}
+                disabled={updateToggleLocked}
               />
             </SettingsRow>
           </SettingsPanelRow>
         )}
 
-        {(isUpdateAvailable || updateStatus.updateDownloaded || releaseNotes.trim()) && (
+        {!organizationManagesUpdates &&
+          (isUpdateAvailable || updateStatus.updateDownloaded || releaseNotes.trim()) && (
           <SettingsPanelRow>
             <div className="space-y-2.5">
               {isUpdateAvailable && !updateStatus.updateDownloaded && (
@@ -139,7 +162,12 @@ const SystemUpdates = React.memo(function SystemUpdates({
                     onClick={async () => {
                       try {
                         await downloadUpdate();
-                      } catch {
+                      } catch (error) {
+                        const policyMessage = updatePolicyMessageKey(error);
+                        if (policyMessage) {
+                          toast({ title: t(policyMessage) });
+                          return;
+                        }
                         showAlertDialog({
                           title: t("settingsPage.general.updates.dialogs.downloadFailed.title"),
                           description: t(
@@ -191,7 +219,12 @@ const SystemUpdates = React.memo(function SystemUpdates({
                       onConfirm: async () => {
                         try {
                           await installUpdateAction();
-                        } catch {
+                        } catch (error) {
+                          const policyMessage = updatePolicyMessageKey(error);
+                          if (policyMessage) {
+                            toast({ title: t(policyMessage) });
+                            return;
+                          }
                           showAlertDialog({
                             title: t("settingsPage.general.updates.dialogs.installFailed.title"),
                             description: t(
@@ -233,12 +266,20 @@ const SystemUpdates = React.memo(function SystemUpdates({
           </SettingsPanelRow>
         )}
       </SettingsPanel>
+      {organizationManagesUpdates && updateStatus.stagedUpdate && (
+        <p role="status" className="mt-3 text-xs text-warning">
+          {t("settingsPage.general.updates.stagedBeforePolicy")}
+        </p>
+      )}
       <div className="mt-5 flex justify-end">
         <Button
           onClick={async () => {
             try {
               const result = await checkForUpdates();
-              if (result && !result.updateAvailable) {
+              const policyMessage = updatePolicyMessageKey(result);
+              if (policyMessage) {
+                toast({ title: t(policyMessage) });
+              } else if (result && !result.updateAvailable) {
                 toast({
                   title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
                   description: t("settingsPage.general.updates.dialogs.noUpdates.description"),
@@ -251,7 +292,12 @@ const SystemUpdates = React.memo(function SystemUpdates({
               });
             }
           }}
-          disabled={checkingForUpdates || updateStatus.isDevelopment || !updateStatus.isSupported}
+          disabled={
+            checkingForUpdates ||
+            updatePolicyPending ||
+            (!organizationManagesUpdates &&
+              (updateStatus.isDevelopment || !updateStatus.isSupported))
+          }
           variant="outline"
           size="sm"
         >

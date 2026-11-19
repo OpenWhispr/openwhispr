@@ -221,3 +221,49 @@ test("proxied transcription strips a recital only when the payload carried the d
     assert.equal(result.rawText, recital);
   });
 });
+
+test("ElevenLabs judges dictionary echoes against the keyterms the service receives", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-elevenlabs-echo-test-",
+    settingsKey: "__elevenlabsEchoSettings",
+  });
+  const phrase = "We should meet tomorrow at noon";
+  const transcribe = (personal, shared, text) => {
+    setSettings({
+      cloudTranscriptionProvider: "elevenlabs",
+      transcriptionMode: "providers",
+      customDictionary: personal,
+      sharedDictionaryHints: { space: shared },
+    });
+    window.electronAPI.proxyElevenlabsTranscription = async ({ keyterms }) => ({
+      text,
+      acceptedKeyterms: keyterms,
+    });
+    const manager = createManager({
+      getEffectiveSttLanguage: () => "auto",
+      getTranscriptionModel: () => "scribe_v3",
+      getAPIKey: async () => "key",
+      processTranscription: async (rawText) => rawText,
+      isReasoningAvailable: async () => false,
+    });
+    return manager.processWithOpenAIAPI(new Blob(["audio"], { type: "audio/webm" }));
+  };
+
+  await t.test("a spoken six-word phrase survives when every hint was rejected", async () => {
+    assert.equal((await transcribe([phrase], [], phrase)).text, phrase);
+  });
+  await t.test("a rejected personal hint survives beside a valid shared hint", async () => {
+    assert.equal((await transcribe([phrase], ["Foobar"], phrase)).text, phrase);
+  });
+  await t.test(
+    "a recital is stripped in the order that personal and shared terms were sent",
+    async () => {
+      const result = await transcribe(
+        ["OpenWhispr", "Tailscale"],
+        ["Anthropic", "Stripe"],
+        "We finished early. OpenWhispr, Tailscale."
+      );
+      assert.equal(result.text, "We finished early.");
+    }
+  );
+});

@@ -171,7 +171,9 @@ export function InferenceModeSelector({
   modes,
   activeMode,
   onSelect,
+  selectedLabel,
 }: {
+  selectedLabel?: string;
   modes: InferenceModeOption[];
   activeMode: InferenceMode | null;
   onSelect: (mode: InferenceMode) => void;
@@ -215,7 +217,7 @@ export function InferenceModeSelector({
                   <span className="text-xs font-medium text-foreground">{mode.label}</span>
                   {isActive && !isDisabled && (
                     <span className="text-xs font-medium text-primary bg-primary/10 dark:bg-primary/15 px-1.5 py-px rounded-sm">
-                      {t("common.active")}
+                      {selectedLabel ?? t("common.active")}
                     </span>
                   )}
                   {mode.signInRequired && (

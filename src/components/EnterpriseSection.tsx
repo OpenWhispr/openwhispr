@@ -3,7 +3,7 @@ import { ProviderTabs } from "./ui/ProviderTabs";
 import EnterpriseProviderConfig from "./EnterpriseProviderConfig";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { registryData } from "../models/registryData.js";
-import { useSettingsStore } from "../stores/settingsStore";
+import { LLM_ENTERPRISE_POLICY_PROVIDER_IDS, useSettingsStore } from "../stores/settingsStore";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import {
   filterEnterpriseProviderOptionsByPolicy,
@@ -38,7 +38,11 @@ export default function EnterpriseSection({
     isEnterpriseProviderAllowed(policyState, providerId);
 
   const providerTabs = filterEnterpriseProviderOptionsByPolicy(
-    ENTERPRISE_PROVIDER_TABS,
+    policyState.status === "managed"
+      ? ENTERPRISE_PROVIDER_TABS.filter(({ id }) =>
+          LLM_ENTERPRISE_POLICY_PROVIDER_IDS.some((supportedId) => supportedId === id)
+        )
+      : ENTERPRISE_PROVIDER_TABS,
     policyState
   );
   const selectedEnterprise = providerTabs.some((provider) => provider.id === currentProvider)

@@ -1,4 +1,5 @@
 import { useRegistryVersion } from "../../hooks/useRegistryVersion";
+import type { RefObject } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { SettingsNavigationStore } from "../../stores/settingsNavigationStore";
 import { useTranslation } from "react-i18next";
@@ -46,6 +47,8 @@ const AUTO_REASONING_EFFORT_VALUE = "__auto__";
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
   navigation?: SettingsNavigationStore;
+  selectedLabel?: string;
+  localPickerRef?: RefObject<HTMLDivElement | null>;
   onModeChange?: (mode: InferenceMode) => void;
   /** Restrict the selectable modes (e.g. vision override offers cloud/BYOK only). */
   allowedModes?: InferenceMode[];
@@ -56,6 +59,8 @@ export default function InferenceConfigEditor({
   navigation,
   onModeChange,
   allowedModes,
+  selectedLabel,
+  localPickerRef,
 }: InferenceConfigEditorProps) {
   useRegistryVersion();
   const { t } = useTranslation();
@@ -278,13 +283,26 @@ export default function InferenceConfigEditor({
       {modes.length > 1 && (
         <InferenceModeSelector
           modes={modes}
+          selectedLabel={selectedLabel}
           activeMode={effectiveMode}
           onSelect={handleModeSelect}
         />
       )}
 
       {effectiveMode === "providers" && renderModelSelector("cloud")}
-      {effectiveMode === "local" && renderModelSelector("local")}
+      {effectiveMode === "local" &&
+        (localPickerRef ? (
+          <div
+            ref={localPickerRef}
+            tabIndex={-1}
+            role="group"
+            aria-label={t("models.policy.chooseModel")}
+          >
+            {renderModelSelector("local")}
+          </div>
+        ) : (
+          renderModelSelector("local")
+        ))}
 
       {effectiveMode === "self-hosted" && (
         <OpenAICompatiblePanel

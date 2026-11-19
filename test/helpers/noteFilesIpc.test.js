@@ -110,6 +110,8 @@ function makeDatabase() {
     ].map((note) => ({ deleted_at: null, account_id: null, ...note })),
     workspaceNames: { "w-acme-1111": "Acme", "w-beta-2222": "Beta" },
     outOfScopeNoteIds: new Set(),
+    speakerMappings: new Map(),
+    pendingAccountRepairNoteIds: new Set(),
     mirrorFiles: new Map(),
   };
 
@@ -119,7 +121,25 @@ function makeDatabase() {
 
   return {
     state,
+    db: {
+      prepare: (query) => {
+        assert.equal(
+          query,
+          "SELECT speaker_id, display_name FROM speaker_mappings WHERE note_id = ?"
+        );
+        return { all: (noteId) => state.speakerMappings.get(noteId) ?? [] };
+      },
+      close: () => {},
+    },
     mergedNotes: [],
+    ensureAccountDefaultFolders: () => {},
+    takeAccountRepairNotes: () => {
+      const notes = state.notes.filter(
+        (note) => state.pendingAccountRepairNoteIds.has(note.id) && !note.deleted_at
+      );
+      state.pendingAccountRepairNoteIds.clear();
+      return notes;
+    },
     getMirrorContainers: () => ({
       spaces: state.spaces.filter((row) => !row.deleted_at),
       folders: state.folders.filter((row) => !row.deleted_at),
@@ -331,6 +351,34 @@ test("same-named folders in different workspaces get separate directories", asyn
   assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/General");
   assert.equal(relativeDir(fileOf(101)), "Workspaces/Beta/Teamspaces/Engineering/General");
   assert.equal(relativeDir(fileOf(102)), "Private notes/General");
+});
+
+test("repaired inactive-account transcripts retain their speaker names", async (t) => {
+  const db = useRealDatabase(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const saved = db.saveNote("Repaired meeting", "Meeting notes", "meeting");
+  assert.equal(saved.success, true);
+  const noteId = saved.note.id;
+  db.updateNote(noteId, {
+    transcript: JSON.stringify([
+      { speaker: "SPEAKER_00", timestamp: 0, text: "The decision is recorded." },
+    ]),
+  });
+  db.setSpeakerMapping(noteId, "SPEAKER_00", null, "Dana");
+  db.pendingAccountRepairNoteIds.add(noteId);
+  db.setActiveAccountId("account-b");
+  assert.deepEqual(db.getSpeakerMappings(noteId), [], "the renderer cannot read another account");
+
+  await enableMirror();
+
+  const transcriptPath = allFiles().find(
+    (file) => path.basename(file).startsWith(`${noteId}-`) && file.endsWith("-transcript.md")
+  );
+  assert.ok(transcriptPath);
+  assert.match(fs.readFileSync(transcriptPath, "utf8"), /Dana/);
+  assert.match(fs.readFileSync(transcriptPath, "utf8"), /The decision is recorded/);
+  assert.equal(db.pendingAccountRepairNoteIds.size, 0);
 });
 
 test("renaming a folder leaves another workspace's same-named folder where it is", async () => {
@@ -1019,6 +1067,9 @@ for (const channel of [
       { speaker: "SPEAKER_00", text: "spoken words", start: 0, end: 1 },
     ]);
     const mappings = { SPEAKER_00: "Alice" };
+    db.state.speakerMappings.set(lastNote.id, [
+      { speaker_id: "SPEAKER_00", display_name: "Alice" },
+    ]);
     target._buildSpeakerMappings = (id) =>
       db.state.notes.some((note) => note.id === id) ? mappings : {};
     const { formatMd } = require("../../src/helpers/transcriptFormatter");
@@ -1106,7 +1157,9 @@ for (const transition of ["account switch", "scope sign-out", "token sign-out"])
 
 for (const mode of ["normal", "update", "held delete"]) {
   const updating = mode === "update";
-  test(`${mode} quit synchronously drains queued and deferred note writes once`, async () => {
+  // Every quit, an update's included, also ends a live meeting as app-quit in
+  // the audit log while its windows are still open.
+  test(`${mode} quit synchronously drains queued and deferred note writes once and closes the audit session`, async () => {
     await enableMirror();
     await invoke("db-upsert-note-from-cloud", { id: 100, content: "body at quit" });
     const db = target.databaseManager;
@@ -1127,6 +1180,7 @@ for (const mode of ["normal", "update", "held delete"]) {
     let prevented = false;
     let exited = false;
     let bodyAtExit;
+    let auditCloses = 0;
     const context = {
       app: {
         on: (event, callback) => callbacks.set(event, callback),
@@ -1137,6 +1191,11 @@ for (const mode of ["normal", "update", "held delete"]) {
       },
       ipcHandlers: target,
       sidecarRegistry: { shutdownAll: async () => {} },
+      meetingAuditLog: {
+        closeOpenSession: async () => {
+          auditCloses++;
+        },
+      },
       updateManager: { isQuittingForUpdate: updating, cleanup: () => {} },
       windowManager:
         mode === "held delete"
@@ -1166,6 +1225,7 @@ for (const mode of ["normal", "update", "held delete"]) {
       "registryLoader",
       "disposeRegistryIpc",
       "wakeRewarmTimer",
+      "whisperManager",
       "authBridgeServer",
       "cliBridge",
       "hotkeyManager",
@@ -1182,6 +1242,7 @@ for (const mode of ["normal", "update", "held delete"]) {
       "windowsLoopbackAudioManager",
       "meetingAecManager",
       "textEditMonitor",
+      "managedDevicePolicy",
     ])
       context[name] = null;
     target._cleanupTextEditMonitor = () => {};
@@ -1193,6 +1254,7 @@ for (const mode of ["normal", "update", "held delete"]) {
     });
     assert.match(fs.readFileSync(fileOf(100), "utf8"), /body at quit$/);
     assert.match(fs.readFileSync(fileOf(101), "utf8"), /local body at quit$/);
+    assert.equal(auditCloses, 1);
     const recordsAtQuit = records;
     await settle();
     assert.equal(

@@ -51,6 +51,8 @@ export function UploadTranscriptionPanel({ navigation }: { navigation?: Settings
     setUploadRemoteTranscriptionUrl,
     uploadRemoteTranscriptionModel,
     setUploadRemoteTranscriptionModel,
+    selfHostedSttHeaders,
+    setSelfHostedSttHeaders,
   } = useSettingsStore(
     useShallow((s) => ({
       isSignedIn: s.isSignedIn,
@@ -78,6 +80,8 @@ export function UploadTranscriptionPanel({ navigation }: { navigation?: Settings
       uploadRemoteTranscriptionModel: s.uploadRemoteTranscriptionModel,
       setUploadRemoteTranscriptionModel: s.setUploadRemoteTranscriptionModel,
       enterpriseTranscriptionSetupMode: s.enterpriseTranscriptionSetupMode,
+      selfHostedSttHeaders: s.selfHostedSttHeaders,
+      setSelfHostedSttHeaders: s.setSelfHostedSttHeaders,
     }))
   );
   const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
@@ -253,6 +257,8 @@ export function UploadTranscriptionPanel({ navigation }: { navigation?: Settings
           onUrlChange={setUploadRemoteTranscriptionUrl}
           model={uploadRemoteTranscriptionModel}
           onModelChange={setUploadRemoteTranscriptionModel}
+          headers={selfHostedSttHeaders.upload}
+          onHeadersChange={(rows) => setSelfHostedSttHeaders("upload", rows)}
         />
       )}
     </div>

@@ -1157,3 +1157,34 @@ test("a skill card's outcome is named, never the skill's text or title", async (
       "propose_skill (failed)]"
   );
 });
+
+test("Salesforce history retains separate write outcomes without CRM content or field edits", async () => {
+  const { toolTrace } = await load();
+  const trace = toolTrace([
+    call(
+      "salesforce_search_records",
+      { query: "Private customer" },
+      { metadata: { status: "ok", items: [{ name: "Private result" }] } }
+    ),
+    call(
+      "salesforce_get_briefing",
+      { recordId: "006private", noteId: 7 },
+      { metadata: { status: "ok", items: [{ secret: "private CRM facts" }] } }
+    ),
+    call(
+      "salesforce_export_conversation",
+      { body: "private conversation" },
+      { metadata: { status: "sent", url: "https://acme.my.salesforce.com/00T000000000001" } }
+    ),
+    call(
+      "salesforce_update_fields",
+      { fields: [{ name: "Needs__c", value: "private replacement" }] },
+      { metadata: { status: "failed", final: { value0: "private edits" } } }
+    ),
+  ]);
+  assert.equal(
+    trace,
+    "[Tools used: salesforce_search_records, salesforce_get_briefing, salesforce_export_conversation (sent: https://acme.my.salesforce.com/00T000000000001), salesforce_update_fields (failed)]"
+  );
+  assert.doesNotMatch(trace, /private/i);
+});

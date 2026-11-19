@@ -68,6 +68,10 @@ for (const provider of ["local SDK", "cloud", "local SDK with standard tools"]) 
                   ? { type: "tool_call", ...call }
                   : { type: "content", text: "violet heron" },
               });
+              onChunk({
+                requestId,
+                chunk: { type: "done", finishReason: call ? "tool-calls" : "stop" },
+              });
               onEnd({ requestId });
             });
           },
@@ -260,6 +264,10 @@ for (const provider of ["local SDK", "cloud"]) {
                 ? parallel.map((call) => ({ type: "tool_call", ...call }))
                 : [{ type: "content", text: "done" }])
                 onChunk({ requestId, chunk });
+              onChunk({
+                requestId,
+                chunk: { type: "done", finishReason: first ? "tool-calls" : "stop" },
+              });
               onEnd({ requestId });
             });
           },

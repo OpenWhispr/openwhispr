@@ -48,6 +48,7 @@ async function loadSection(t, { storedTab, realTeamsTab = false } = {}) {
       "react-i18next": `
         export const useTranslation = () => ({ t: (key) => key });
       `,
+      "/lib/authRequestContext": "export const hasValidatedAuthContext = () => true;",
       "/stores/workspaceStore": `
         const state = () => ({
           workspaces: [globalThis.__workspace],

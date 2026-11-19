@@ -120,6 +120,27 @@ export function expandSnippets(text: string, snippets?: Snippet[] | null): strin
     .replace(regex, (match) => resolveReplacement(match, replacements) ?? match);
 }
 
+// Cleanup can change the surrounding prose and casing, but it must preserve
+// the saved text each spoken trigger will insert, in order and with repeats.
+export function preservesSnippetExpansions(
+  spoken: string,
+  rewritten: string,
+  snippets?: Snippet[] | null
+): boolean {
+  const matcher = getMatcher(snippets);
+  if (!matcher) return true;
+  const replacementsIn = (text: string): string[] =>
+    Array.from(text.normalize("NFC").matchAll(matcher.regex), ([match]) =>
+      resolveReplacement(match, matcher.replacements)
+    ).filter((replacement) => replacement !== undefined);
+  const original = replacementsIn(spoken);
+  const candidate = replacementsIn(rewritten);
+  return (
+    original.length === candidate.length &&
+    original.every((replacement, index) => replacement === candidate[index])
+  );
+}
+
 interface DictionaryHintSettings {
   customDictionary?: string[] | null;
   snippets?: Snippet[] | null;
@@ -146,7 +167,9 @@ function dedupeBelow(words: string[], seen: Set<string>): string[] {
 // The personal dictionary words that apply: all of them, except moved words
 // whose shared copies the member hid (see SharedHintWords.suppressedPersonal).
 // Without suppressed words this is the saved list itself.
-function personalDictionary(settings: DictionaryHintSettings | null | undefined): string[] {
+export function getPersonalDictionaryWords(
+  settings: DictionaryHintSettings | null | undefined
+): string[] {
   const dictionary = Array.isArray(settings?.customDictionary) ? settings.customDictionary : [];
   const suppressed = wordList(settings?.sharedDictionaryHints?.suppressedPersonal);
   if (suppressed.length === 0) return dictionary;
@@ -171,7 +194,7 @@ function sharedTiers(
  * dedupe) so a list without shared words is exactly what it always was.
  */
 export function getDictionaryHintTiers(settings?: DictionaryHintSettings | null): string[][] {
-  const dictionary = personalDictionary(settings);
+  const dictionary = getPersonalDictionaryWords(settings);
   const snippets = Array.isArray(settings?.snippets) ? settings.snippets : [];
   const triggers = snippets
     .map((s) => s?.trigger)
@@ -189,7 +212,7 @@ export function getDictionaryHintWords(settings?: DictionaryHintSettings | null)
 }
 
 function effectiveTiers(settings?: DictionaryHintSettings | null): string[][] {
-  const personal = personalDictionary(settings);
+  const personal = getPersonalDictionaryWords(settings);
   return [personal, ...sharedTiers(settings, personal)];
 }
 
@@ -272,6 +295,13 @@ export function getKeytermDictionaryWords(settings?: DictionaryHintSettings | nu
     totalChars: MAX_TOTAL_KEYTERM_CHARS,
     maxWordLength: MAX_KEYTERM_LENGTH,
   });
+}
+
+export function limitBatchKeyterms(words: string[]): string[] {
+  return words
+    .map((word) => word.trim().slice(0, MAX_KEYTERM_LENGTH))
+    .filter(Boolean)
+    .slice(0, MAX_TOTAL_KEYTERMS);
 }
 
 /**

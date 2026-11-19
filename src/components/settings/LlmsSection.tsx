@@ -13,6 +13,7 @@ import PromptStudio from "../ui/PromptStudio";
 import ChatAgentSettings from "./ChatAgentSettings";
 import DictationAgentSettings from "./DictationAgentSettings";
 import DictationTranslationSettings from "./DictationTranslationSettings";
+import DictationCleanupSettings from "./DictationCleanupSettings";
 import GpuDeviceSelector from "./GpuDeviceSelector";
 import InferenceConfigEditor from "./InferenceConfigEditor";
 import { KeepAlive, TabPanel } from "./KeepAlive";
@@ -52,33 +53,14 @@ function CleanupSettings({ navigation }: { navigation: SettingsNavigationStore }
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4">
-        <SettingsPanel>
-          <SettingsPanelRow>
-            <SettingsRow
-              label={t("settingsPage.aiModels.enableTextCleanup")}
-              description={t("settingsPage.aiModels.enableTextCleanupDescription")}
-            >
-              <Toggle
-                ariaLabel={t("settingsPage.aiModels.enableTextCleanup")}
-                checked={useCleanupModel}
-                onChange={setUseCleanupModel}
-              />
-            </SettingsRow>
-          </SettingsPanelRow>
-        </SettingsPanel>
-
-        {useCleanupModel && (
-          <>
-            <InferenceConfigEditor
-              scope="dictationCleanup"
-              navigation={navigation}
-              onModeChange={handleCleanupModeChange}
-            />
-            <GpuDeviceSelector purpose="intelligence" />
-          </>
-        )}
-      </div>
+      <DictationCleanupSettings
+        navigation={navigation}
+        enabled={useCleanupModel}
+        onEnabledChange={setUseCleanupModel}
+        onModeChange={handleCleanupModeChange}
+      >
+        <GpuDeviceSelector purpose="intelligence" />
+      </DictationCleanupSettings>
       <div className="border-t border-border/70 pt-6">
         <SectionHeader
           title={t("settingsPage.prompts.title")}

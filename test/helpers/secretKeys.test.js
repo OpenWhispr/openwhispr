@@ -78,3 +78,46 @@ test("the STT accessors keep the spellings their callers use", () => {
   assert.equal(typeof env.getDeepgramKey, "function");
   assert.equal(typeof env.saveDeepgramKey, "function");
 });
+
+test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
+  // preload.js can't require the manifest under sandbox, so it inlines the
+  // {base, get, save} tuples. Assert they stay in lockstep with the manifest.
+  const preloadSrc = fs.readFileSync(path.join(__dirname, "../../preload.js"), "utf8");
+  const block = preloadSrc.match(/BYOK_KEY_BRIDGES = \[([\s\S]*?)\];/);
+  assert.ok(block, "BYOK_KEY_BRIDGES declared in preload.js");
+  for (const k of BYOK_API_KEYS) {
+    const entry = new RegExp(
+      `\\{\\s*base:\\s*"${k.base}",\\s*get:\\s*"${k.get}",\\s*save:\\s*"${k.save}",?\\s*\\}`
+    );
+    assert.match(block[1], entry, `preload mirrors ${k.base}`);
+  }
+  const bridgeCount = (block[1].match(/base:/g) || []).length;
+  assert.equal(bridgeCount, BYOK_API_KEYS.length, "no extra/missing preload bridges");
+});
+
+test("self-hosted header JSON round-trips through the existing plaintext fallback without dotenv truncation", async () => {
+  const serialized = JSON.stringify({
+    dictation: [{ name: "X-API-Key", value: "secret#with'quotes\"and\\slashes" }],
+    upload: [{ name: "X-Upload", value: "a#b" }],
+  });
+  const previous = process.env.SELF_HOSTED_STT_HEADERS;
+  try {
+    const env = new EnvironmentManager();
+    env.saveSelfHostedSttHeaders(serialized);
+    await env.saveAllKeysToEnvFile();
+    const saved = require("dotenv").parse(fs.readFileSync(path.join(tmpUserData, ".env")));
+    assert.ok(saved.SELF_HOSTED_STT_HEADERS.startsWith("base64:"));
+    process.env.SELF_HOSTED_STT_HEADERS = saved.SELF_HOSTED_STT_HEADERS;
+    assert.equal(new EnvironmentManager().getSelfHostedSttHeaders(), serialized);
+    await env.saveAllKeysToEnvFile();
+    const resaved = require("dotenv").parse(fs.readFileSync(path.join(tmpUserData, ".env")));
+    assert.equal(
+      resaved.SELF_HOSTED_STT_HEADERS,
+      saved.SELF_HOSTED_STT_HEADERS,
+      "no double encoding"
+    );
+  } finally {
+    if (previous === undefined) delete process.env.SELF_HOSTED_STT_HEADERS;
+    else process.env.SELF_HOSTED_STT_HEADERS = previous;
+  }
+});

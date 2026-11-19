@@ -27,6 +27,8 @@ jest.mock('@/lib/apiClient', () => {
 jest.mock('../teamSpacesCapability', () => ({
   setTeamSpacesCapability: jest.fn(),
   setDefaultPrivateWorkspaceId: jest.fn(),
+  setPrivateWorkspacePlacement: jest.fn(),
+  setPrivateWorkspaces: jest.fn(),
 }));
 
 import { syncSpaces } from '../syncSpaces';
@@ -34,7 +36,12 @@ import { spacesRepository } from '@/data';
 import { fetchMySpaces } from '@/data/remote/spacesApi';
 import { fetchMyWorkspaces } from '@/data/remote/workspacesApi';
 import { ApiError } from '@/lib/apiClient';
-import { setDefaultPrivateWorkspaceId, setTeamSpacesCapability } from '../teamSpacesCapability';
+import {
+  setDefaultPrivateWorkspaceId,
+  setPrivateWorkspacePlacement,
+  setPrivateWorkspaces,
+  setTeamSpacesCapability,
+} from '../teamSpacesCapability';
 import type { Space } from '@/data/spacesTypes';
 
 const mockRepo = spacesRepository as jest.Mocked<typeof spacesRepository>;
@@ -177,4 +184,37 @@ test('refreshes default Private placement from this account’s spaces response'
   mockFetchMySpaces.mockResolvedValue({ data: [] });
   await syncSpaces();
   expect(setDefaultPrivateWorkspaceId).toHaveBeenLastCalledWith(null);
+});
+
+test('records whether the API keeps a Private per workspace, and the workspaces for the switcher', async () => {
+  const workspaces = [
+    { id: 'workspace-default', name: 'Mine', is_default: true, plan: 'free', status: 'active' },
+    { id: 'workspace-team', name: 'Acme', is_default: false, plan: 'pro', status: 'active' },
+  ];
+  mockFetchMySpaces.mockResolvedValue({
+    data: [],
+    private_workspace_placement: true,
+    default_workspace_id: 'workspace-default',
+  });
+  mockFetchMyWorkspaces.mockResolvedValue({ data: workspaces });
+  mockRepo.listSpaces.mockReturnValue([]);
+  await syncSpaces();
+  expect(setPrivateWorkspacePlacement).toHaveBeenLastCalledWith(true);
+  expect(setPrivateWorkspaces).toHaveBeenLastCalledWith(workspaces);
+
+  // An API without placement, or a spaces route that is gone, turns it off.
+  mockFetchMySpaces.mockResolvedValue({ data: [] });
+  await syncSpaces();
+  expect(setPrivateWorkspacePlacement).toHaveBeenLastCalledWith(false);
+  mockFetchMySpaces.mockRejectedValue(new ApiError('gone', 404));
+  await syncSpaces();
+  expect(setPrivateWorkspacePlacement).toHaveBeenLastCalledWith(false);
+});
+
+test('keeps the last workspace list when reading it fails', async () => {
+  mockFetchMySpaces.mockResolvedValue({ data: [], private_workspace_placement: true });
+  mockFetchMyWorkspaces.mockRejectedValue(new Error('offline'));
+  mockRepo.listSpaces.mockReturnValue([]);
+  await syncSpaces();
+  expect(setPrivateWorkspaces).not.toHaveBeenCalled();
 });
