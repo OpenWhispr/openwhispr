@@ -198,8 +198,7 @@ jobs:
           resources/bin/linux-system-audio-helper probe | grep '"supportsNativeCapture":true'
 
       - name: Build Application
-        # PRs package only the AppImage; pushes and manual runs build every Linux target.
-        run: npm run build:linux -- ${{ github.event_name == 'pull_request' && 'AppImage' || '' }} --publish never
+        run: npm run build:linux -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
           # Forks and Dependabot get no GH_TOKEN; github.token can't read the private font release.
