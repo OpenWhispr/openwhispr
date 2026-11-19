@@ -85,7 +85,7 @@ export class ActiveMicRecoveryController {
     // Consecutive failed attempts, so a mic that stays gone logs one warning
     // per outage rather than one every retry.
     this.failedAttempts = 0;
-    this.recoveryStartedAt = 0;
+    this.recoveryStartedAt = null;
     this.onDeviceChange = () => this.scheduleEvaluation();
     this.onTrackEnded = () => this.recover("ended");
     this.onTrackMute = () => {
@@ -110,11 +110,7 @@ export class ActiveMicRecoveryController {
   }
 
   log(level, message, meta) {
-    try {
-      this.logger?.[level]?.(message, meta, this.logScope)?.catch?.(() => {});
-    } catch {
-      // Logging must never break capture.
-    }
+    this.logger?.[level]?.(message, meta, this.logScope);
   }
 
   isCurrent(generation) {
@@ -240,13 +236,13 @@ export class ActiveMicRecoveryController {
       this.followDefault &&
       (defaultAtAcquire !== this.inputs.defaultKey || changesAtAcquire !== this.deviceChangeCount);
     let followNewDefault = false;
-    if (this.failedAttempts === 0) this.recoveryStartedAt = Date.now();
-    this.log(this.failedAttempts === 0 ? "info" : "debug", "Microphone recovery started", {
+    this.log(this.recoveryStartedAt === null ? "info" : "debug", "Microphone recovery started", {
       reason,
       status: this.status,
       track: describeTrack(this.track),
       attempt: this.failedAttempts + 1,
     });
+    this.recoveryStartedAt ??= Date.now();
     this.setStatus("reconnecting");
 
     const attempt = async () => {
@@ -306,6 +302,7 @@ export class ActiveMicRecoveryController {
             failedAttempts: this.failedAttempts,
           });
           this.failedAttempts = 0;
+          this.recoveryStartedAt = null;
           this.setStatus("active");
         };
         if (track.muted) {
@@ -367,6 +364,7 @@ export class ActiveMicRecoveryController {
     this.started = false;
     this.generation += 1;
     this.failedAttempts = 0;
+    this.recoveryStartedAt = null;
     this.mediaDevices?.removeEventListener?.("devicechange", this.onDeviceChange);
     this.detachTrack();
     clearTimeout(this.debounceTimer);

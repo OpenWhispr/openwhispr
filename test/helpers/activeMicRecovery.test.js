@@ -724,12 +724,14 @@ test("a late devicechange read cannot rotate the newly selected default again", 
 
 for (const debounceMs of [0, 250]) {
   test(`a default that switches away and back wins over the interim selection (events spaced ${debounceMs} ms)`, async (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout"] });
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
     const { ActiveMicRecoveryController } = await import("../../src/helpers/activeMicRecovery.js");
     const mediaDevices = new FakeMediaDevices([mic("A")]);
     const opened = Promise.withResolvers();
     const original = new FakeTrack({ deviceId: "A" });
     const reasons = [];
+    const lines = [];
+    const record = (level) => (message, meta) => lines.push({ level, message, meta });
     const controller = new ActiveMicRecoveryController({
       mediaDevices,
       acquire: async (reason) => {
@@ -738,6 +740,7 @@ for (const debounceMs of [0, 250]) {
         return new FakeStream(new FakeTrack({ deviceId: mediaDevices.devices[0].deviceId }));
       },
       onRecovered: async () => {},
+      logger: { debug: record("debug"), info: record("info"), warn: record("warn") },
     });
     t.after(() => controller.stop());
     await controller.start(new FakeStream(original));
@@ -753,5 +756,12 @@ for (const debounceMs of [0, 250]) {
     await settleEvents();
     assert.deepEqual(reasons, ["ended", "devicechange"]);
     assert.equal(controller.track.getSettings().deviceId, "A");
+    // Following the new default is part of the same outage.
+    const notable = lines.filter((line) => line.level !== "debug");
+    assert.deepEqual(
+      notable.map((line) => line.message),
+      ["Microphone recovery started", "Microphone recovered"]
+    );
+    assert.equal(notable[1].meta.durationMs, 2 * debounceMs);
   });
 }
