@@ -331,6 +331,34 @@ test("account analytics requests history once per account and not on ordinary re
   );
 });
 
+// The API answers from a copy a few minutes old only when asked. A read after
+// this device changed its own data must never be answered from it.
+test("account analytics asks for the API's copy only for a check", async (t) => {
+  const requests = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return { success: true, data: { ...VALID_SUMMARY, scope: "account", timeZone: "UTC" } };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  await getAccountAnalyticsSummary("account-a");
+  await getAccountAnalyticsSummary("account-a", "allow");
+
+  assert.deepEqual(
+    requests.map((request) =>
+      new URL(request.path, "https://api.openwhispr.com").searchParams.get("cache")
+    ),
+    ["refresh", "allow"]
+  );
+});
+
 test("account analytics retries the history trigger after a failed request", async (t) => {
   const requests = [];
   installBrowserGlobals(t, {

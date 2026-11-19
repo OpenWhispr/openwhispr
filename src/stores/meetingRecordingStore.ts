@@ -14,6 +14,8 @@ import {
   resolveParticipantSpeakerCountSync,
 } from "../utils/participants";
 import type {
+  MeetingStartSource,
+  MeetingStopReason,
   MeetingSystemAudioInterruption,
   NoteItem,
   SystemAudioAccessResult,
@@ -473,6 +475,8 @@ let isRecordingFlag = false;
 let isStartingFlag = false;
 let activeRecordingSessionId: string | null = null;
 const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator();
+// Why the first stop cancelled a start still in progress, for its teardown.
+let startCancelReason: MeetingStopReason | null = null;
 const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
@@ -906,6 +910,7 @@ export interface StartRecordingArgs {
   expectedCount?: number | null;
   expectedCountIsExplicit?: boolean;
   autoEndEligible: boolean;
+  startSource?: MeetingStartSource;
   canAutoStart?: () => boolean;
 }
 
@@ -924,11 +929,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
   const policy = usePolicyStore.getState();
   if (!isMeetingAllowedByPolicy(policy)) {
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
-    reportMeetingError(
-      isAudioFeatureAllowed(policy, "meeting")
-        ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
-        : meetingPolicyRefusalError(policy)
-    );
+    const refusal = isAudioFeatureAllowed(policy, "meeting")
+      ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
+      : meetingPolicyRefusalError(policy);
+    reportMeetingError(refusal);
+    void window.electronAPI?.meetingRecordingRefused?.({
+      noteId: args.noteId,
+      startSource: args.startSource,
+      reason: refusal,
+    });
     return false;
   }
 
@@ -954,6 +963,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     if (await window.electronAPI?.isMeetingRecordingDisabled?.()) {
       logger.warn("Meeting recording disabled by administrator", {}, "meeting");
       reportMeetingError("policyRestricted");
+      void window.electronAPI?.meetingRecordingRefused?.({
+        noteId: args.noteId,
+        startSource: args.startSource,
+        reason: "POLICY_MEETING_RECORDING_DISABLED",
+      });
       recordingDisabled = true;
       return;
     }
@@ -970,6 +984,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     }
     isStartingFlag = true;
     activeRecordingSessionId = sessionId;
+    startCancelReason = null;
     const isCurrentStart = () =>
       startOperation.isCurrent() && activeRecordingSessionId === sessionId;
     let captureStarted = false;
@@ -1069,9 +1084,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     const releaseSession = () => {
       if (activeRecordingSessionId === sessionId) activeRecordingSessionId = null;
     };
+    // A start that is no longer current was cancelled by a stop; otherwise its setup failed.
     const stopScopedMainOnce = () =>
       startOperation.stopMainOnce(async () => {
-        await window.electronAPI?.meetingTranscriptionStop?.(sessionId).catch(() => undefined);
+        await window.electronAPI
+          ?.meetingTranscriptionStop?.(
+            sessionId,
+            startOperation.isCurrent() ? "error" : (startCancelReason ?? "user")
+          )
+          .catch(() => undefined);
       });
     const teardownStart = async () => {
       if (args.canAutoStart && !captureStarted && !startOperation.isCurrent())
@@ -1279,6 +1300,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           autoEndEligible: args.autoEndEligible,
           aecEnabled: getSettings().meetingAecEnabled,
           speakerIndexBase: sessionSpeakerIndexBase,
+          startSource: args.startSource,
         });
       })();
       const [startOutcome, micOutcome, systemCaptureOutcome] = await Promise.allSettled([
@@ -1534,7 +1556,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         logger.error("Meeting transcription stream error", { error: err }, "meeting");
         if (!MEETING_MAIN_STOPS.has(err)) return;
         mainStoppedSessionId = sessionId;
-        if (isRecordingFlag) void stopRecording(sessionId);
+        if (isRecordingFlag) void stopRecording(sessionId, "error");
       });
       if (errorCleanup) ipcCleanups.push(errorCleanup);
 
@@ -1546,7 +1568,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           { error: err },
           "meeting"
         );
-        if (isRecordingFlag) void stopRecording(sessionId);
+        if (isRecordingFlag) void stopRecording(sessionId, "error");
       });
       if (fatalErrorCleanup) ipcCleanups.push(fatalErrorCleanup);
 
@@ -1634,8 +1656,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             previous?.getTracks().forEach((track) => track.stop());
             micSource = nextSource;
             micStream = replacement;
-            logger.info("Meeting microphone capture recovered", {}, "meeting");
           },
+          logger,
+          logScope: "meeting",
         });
         await micRecovery.start(micStream, {
           followDefault: followsSystemDefaultMic(getSettings()),
@@ -1867,9 +1890,13 @@ export interface StopRecordingResult {
   cancelledStart?: boolean;
 }
 
-export async function stopRecording(expectedSessionId?: string): Promise<StopRecordingResult> {
+export async function stopRecording(
+  expectedSessionId?: string,
+  reason: MeetingStopReason = "user"
+): Promise<StopRecordingResult> {
   const canceledStart = meetingRecordingStartCoordinator.cancelActiveStart(expectedSessionId);
   if (canceledStart) {
+    startCancelReason ??= reason;
     isRecordingFlag = false;
     isStartingFlag = false;
     useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
@@ -1953,7 +1980,8 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
         let stoppedDiarizationSessionId: string | null = null;
         try {
           const result = await window.electronAPI?.meetingTranscriptionStop?.(
-            sessionId ?? undefined
+            sessionId ?? undefined,
+            reason
           );
           if (result?.diarizationSessionId) {
             stoppedDiarizationSessionId = result.diarizationSessionId;
@@ -2022,7 +2050,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 export async function stopRecordingForPolicy(): Promise<void> {
   const sessionId = activeRecordingSessionId;
   const reason = meetingPolicyRefusalError(usePolicyStore.getState());
-  const { stopped, cancelledStart } = await stopRecording();
+  const { stopped, cancelledStart } = await stopRecording(undefined, "policy");
   if ((stopped || cancelledStart) && sessionId && mainStoppedSessionId !== sessionId) {
     reportMeetingError(reason);
   }

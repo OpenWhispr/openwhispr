@@ -6,6 +6,7 @@ import { requireConnection } from "../interactionTools";
 import { emailToolModule } from "./emailDraftTool";
 import { linearToolModule } from "./linearTools";
 import { slackToolModule } from "./slackSendMessageTool";
+import { salesforceToolModule } from "./salesforceTools";
 import { githubToolModule } from "./githubTools";
 
 /** What a module may need to build its tools for this send. */
@@ -15,6 +16,7 @@ export interface ConnectorToolEnv {
   currentEmailDraftTarget?: () => EmailDraftTarget;
   /** The chat can ask the user on a card (it offers interactions). */
   asksUser?: boolean;
+  readNote?: ToolDefinition["execute"];
 }
 
 /** One connector's tools. Each connector's own file exports its module. */
@@ -38,6 +40,7 @@ export const CONNECTOR_TOOL_MODULES: readonly ConnectorToolModule[] = [
   slackToolModule,
   linearToolModule,
   githubToolModule,
+  salesforceToolModule,
 ];
 
 export function registerConnectorTools(
@@ -45,11 +48,12 @@ export function registerConnectorTools(
   settings: ConnectorToolSettings,
   modules: readonly ConnectorToolModule[] = CONNECTOR_TOOL_MODULES
 ): void {
-  const { emailDraftTarget, currentEmailDraftTarget, asksUser } = settings;
+  const { emailDraftTarget, currentEmailDraftTarget, asksUser, readNote } = settings;
   const env: ConnectorToolEnv = {
     emailDraftTarget,
     ...(currentEmailDraftTarget ? { currentEmailDraftTarget } : {}),
     ...(asksUser ? { asksUser } : {}),
+    ...(readNote ? { readNote } : {}),
   };
   for (const toolModule of modules) {
     const { connectorId } = toolModule;

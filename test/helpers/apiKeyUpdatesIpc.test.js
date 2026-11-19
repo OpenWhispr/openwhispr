@@ -1574,6 +1574,7 @@ test("a sign-out or account switch during a meeting prepare leaves no warm conne
         setActiveAccountId() {},
         claimSignedOutLocalRows() {},
         claimLegacyRowsOfOnlyAccount() {},
+        ensureAccountDefaultFolders() {},
       };
       await handlers.get("set-active-account-scope")({}, "another-account", authGeneration);
       delete target.databaseManager;
@@ -1896,4 +1897,100 @@ test("provider connection revocation aborts its probe and prevents fallback tran
   assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
   assert.equal(requests.length, 1);
   assert.equal(requests[0].signal.aborted, true);
+});
+
+// #3029: main writes each meeting start, stop and refusal to the local audit log.
+test("meeting starts, stops and refusals reach the audit log with their source and reason", async (t) => {
+  resetMeeting(t);
+  const audit = [];
+  target.meetingAuditLog = {
+    recordingStarted: (entry) => audit.push(["started", entry]),
+    recordingStopped: (entry) => audit.push(["stopped", entry]),
+    recordingRefused: (entry) => audit.push(["refused", entry]),
+  };
+  t.after(() => {
+    delete target.meetingAuditLog;
+  });
+  invoke("save-deepgram-key", "A");
+  const options = {
+    provider: "deepgram-realtime",
+    mode: "byok",
+    noteId: 12,
+    startSource: "record-button",
+  };
+
+  const start = (sessionId) => invoke("meeting-transcription-start", { ...options, sessionId });
+  assert.equal((await start("audit-1")).success, true);
+  await invoke("meeting-transcription-stop", "audit-1", "auto-end");
+  assert.equal((await start("audit-1b")).success, true);
+  await invoke("meeting-transcription-stop", "audit-1b", "app-quit");
+  assert.equal((await start("audit-1c")).success, true);
+  await invoke("meeting-transcription-stop", "audit-1c", "window-lost");
+  assert.equal((await start("audit-1d")).success, true);
+  target._stopMeetingForPolicy("accountChanged");
+  await invoke("meeting-transcription-stop", "audit-1d");
+  assert.equal((await start("audit-1e")).success, true);
+  target._stopMeetingForPolicy("workspaceChanged");
+  await invoke("meeting-transcription-stop", "audit-1e");
+  assert.equal((await start("audit-2")).success, true);
+  setWorkspacePolicy(REVOKED_MEETINGS);
+  await invoke("meeting-transcription-stop", "audit-2");
+  assert.equal((await start("audit-3")).code, "POLICY_MEETING_RECORDING_DISABLED");
+  await invoke("start-manual-meeting");
+  await invoke("meeting-recording-refused", {
+    noteId: 3,
+    startSource: "new-note",
+    reason: "policyRestricted",
+  });
+
+  const disabled = "POLICY_MEETING_RECORDING_DISABLED";
+  assert.deepEqual(audit, [
+    ["started", { sessionId: "audit-1", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-1", reason: "auto-end" }],
+    ["started", { sessionId: "audit-1b", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-1b", reason: null }],
+    ["started", { sessionId: "audit-1c", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-1c", reason: null }],
+    ["started", { sessionId: "audit-1d", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-1d", reason: "account-change" }],
+    ["started", { sessionId: "audit-1e", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-1e", reason: "account-change" }],
+    ["started", { sessionId: "audit-2", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-2", reason: "policy" }],
+    ["refused", { noteId: 12, trigger: "record-button", reason: disabled }],
+    ["refused", { noteId: undefined, trigger: "pill", reason: disabled }],
+    ["refused", { noteId: 3, trigger: "new-note", reason: "policyRestricted" }],
+  ]);
+});
+
+// #3029: a start main refuses for a provider the policy doesn't allow is a
+// policy block too, so it reaches the audit log with its code.
+test("a meeting start the policy blocks for its provider reaches the audit log", async (t) => {
+  resetMeeting(t);
+  const audit = [];
+  target.meetingAuditLog = {
+    recordingStarted: (entry) => audit.push(["started", entry]),
+    recordingStopped: (entry) => audit.push(["stopped", entry]),
+    recordingRefused: (entry) => audit.push(["refused", entry]),
+  };
+  t.after(() => {
+    delete target.meetingAuditLog;
+  });
+  invoke("save-deepgram-key", "A");
+  const policy = defaultDevicePolicy();
+  policy.transcription.allowedByokProviders = ["openai"];
+  setWorkspacePolicy({ success: true, managed: true, policy });
+
+  const result = await invoke("meeting-transcription-start", {
+    provider: "deepgram-realtime",
+    mode: "byok",
+    noteId: 5,
+    startSource: "hotkey",
+    sessionId: "audit-blocked",
+  });
+
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(audit, [
+    ["refused", { noteId: 5, trigger: "hotkey", reason: "DEVICE_POLICY_BLOCKED" }],
+  ]);
 });

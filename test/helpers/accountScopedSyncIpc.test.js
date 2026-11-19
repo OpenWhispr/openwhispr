@@ -541,6 +541,8 @@ test("a push ack or pulled row from a replaced sign-in is refused", async (t) =>
     await invoke("db-mark-snippet-synced", 1, "snip-1", null, null, null, stale),
     await invoke("db-get-snippet-for-cloud-merge", { trigger: "addr" }, stale),
     await invoke("db-hard-delete-snippet", snippet.id, stale),
+    await invoke("db-get-synced-linked-conversations", stale),
+    await invoke("db-mark-conversation-pending", 1, stale),
     await invoke("db-hard-delete-conversation", 1, stale),
     await invoke("db-hard-delete-transcription", 1, stale),
     await invoke("db-hard-delete-dictionary", 1, stale),
@@ -601,6 +603,7 @@ test("a sync write is refused once its sign-in's scope has dropped, token unchan
       null,
       signIn
     ),
+    await invoke("db-get-synced-linked-conversations", signIn),
     await invoke("db-mark-transcription-synced", pending.id, "t-2", signIn),
   ];
   for (const result of late) assert.equal(result?.stale, true);
@@ -721,6 +724,31 @@ test("a create answered with a tombstone re-keys the chat for its sender only", 
   assert.equal(row.account_id, "account-a");
   assert.notEqual(row.client_conversation_id, clientId);
   assert.equal(row.cloud_create_attempted, 0);
+});
+
+test("chat repair candidates exclude other accounts, pending, deleted and device-only chats", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const generation = tokenState.generation;
+  await invoke("set-active-account-scope", "account-b", generation);
+  const otherAccount = db.createAgentConversation("B's chat");
+  db.markConversationSynced(otherAccount.id, "cloud-b");
+  await invoke("set-active-account-scope", "account-a", generation);
+  const eligible = db.createAgentConversation("A's chat");
+  db.markConversationSynced(eligible.id, "cloud-a");
+  const pending = db.createAgentConversation("Pending");
+  db.markConversationSynced(pending.id, "cloud-pending");
+  db.addAgentMessage(pending.id, "user", "Not sent yet");
+  const deleted = db.createAgentConversation("Deleted");
+  db.markConversationSynced(deleted.id, "cloud-deleted");
+  db.deleteAgentConversation(deleted.id);
+  const privateChat = db.createAgentConversation("Device only");
+  db.markConversationSynced(privateChat.id, "cloud-private");
+  db.protectConversation(privateChat.id, [], true, "account-a");
+
+  assert.deepEqual(await invoke("db-get-synced-linked-conversations", generation), [
+    { id: eligible.id, cloud_id: "cloud-a" },
+  ]);
 });
 
 test("a fork or a saved-message edit reaches only the active account's chats", async (t) => {
@@ -1417,6 +1445,7 @@ test("relocate-private-space checks its arguments and the account it was sent fo
   await invoke("bind-default-private-space", "w1", "account-a");
   const home = db.getDefaultPrivateSpaceId();
   const note = db.saveNote("In w2", "").note;
+  const homeFolderIds = db.getFolders(home).map((folder) => folder.id);
   const w2 = note.space_id;
   assert.notEqual(w2, home);
 
@@ -1432,9 +1461,14 @@ test("relocate-private-space checks its arguments and the account it was sent fo
   assert.deepEqual(await invoke("relocate-private-space", "w2", null, "account-a"), {
     success: true,
     notes: 1,
-    folders: 2,
+    folders: 0,
   });
   assert.equal(db.getNote(note.id).space_id, home);
+  assert.deepEqual(
+    db.getFolders(home).map((folder) => folder.id),
+    homeFolderIds,
+    "the moved defaults fold into the account's already seeded defaults"
+  );
   assert.ok(
     broadcasts.some(([channel, space]) => channel === "space-synced" && space.id === home),
     "relocation announces final private scope"

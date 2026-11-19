@@ -95,6 +95,8 @@ import {
 } from "../services/managedTranscription.ts";
 import { getTranscriptionApiKey } from "../services/fileTranscription";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
+import { supportsWhisperSegments } from "./uploadTimestamps";
+import { dropNoSpeechSegments } from "./noSpeechSegments";
 import {
   isOrukeetStreaming,
   isSelfHostedTranscription,
@@ -786,6 +788,9 @@ class AudioManager {
     this.selectionCapturePromise = null;
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
+    // Bumped by invalidateSttConfig, so a fetch issued before it (for the
+    // previous account, say) can't install its answer afterwards.
+    this.sttConfigGeneration = 0;
     this.streamingFallbackReason = null;
     this._streamingFailoverReason = null;
     this._streamingSpeechGateState = null;
@@ -799,7 +804,7 @@ class AudioManager {
     this._batchPcmTap = null;
     this._rotatingBatchRecorder = null;
     this._rotationResolve = null;
-    this._stopRequestedDuringMicRecovery = false;
+    this._batchStopRequested = false;
     this._cancelRequestedDuringMicRecovery = false;
     this._streamingFallbackSegments = [];
     this._streamingMicSwapPromise = null;
@@ -826,6 +831,8 @@ class AudioManager {
       },
       onRecovered: (replacement, previous) => this.replaceActiveMic(replacement, previous),
       onStatusChange: (status) => this.setMicCaptureStatus(status),
+      logger,
+      logScope: "audio",
     });
   }
 
@@ -1240,6 +1247,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   invalidateSttConfig() {
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
+    this.sttConfigGeneration += 1;
   }
 
   getStreamingProvider(name) {
@@ -1681,7 +1689,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.audioChunks = [];
       this._batchSegments = [];
       this._closeBatchPcmTap();
-      this._stopRequestedDuringMicRecovery = false;
+      this._batchStopRequested = false;
       this._cancelRequestedDuringMicRecovery = false;
       this._receivedAudioData = false;
       const preRollUsable =
@@ -2025,22 +2033,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Honor a stop/cancel that arrived mid-rotation even when the swap failed —
       // dropping it would leave an unstoppable recording (isRecording stuck true).
       const cancelRequested = this._cancelRequestedDuringMicRecovery;
-      const stopRequested = this._stopRequestedDuringMicRecovery;
+      const stopRequested = this._batchStopRequested;
       this._cancelRequestedDuringMicRecovery = false;
-      this._stopRequestedDuringMicRecovery = false;
+      this._batchStopRequested = false;
       if (cancelRequested) this.cancelRecording();
       else if (stopRequested) this.stopRecording();
     }
   }
 
   stopRecording() {
+    if (this._batchStopRequested) return false;
     this.micRecovery.stop();
     if (this._rotatingBatchRecorder) {
-      this._stopRequestedDuringMicRecovery = true;
+      this._batchStopRequested = true;
       return true;
     }
     if (this.mediaRecorder?.state === "recording") {
       this.mediaRecorder.stop();
+      // The recorder becomes inactive before its final audio and stop events arrive.
+      this._batchStopRequested = true;
       return true;
     }
     if (this.isRecording && !this.isStreaming) {
@@ -4335,6 +4346,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (shouldStream) {
         formData.append("stream", "true");
       }
+      // verbose_json carries the per-segment no-speech scores dropNoSpeechSegments
+      // reads; the timestamp gate keeps it to the providers and models that accept it.
+      const requestsSegments = !shouldStream && supportsWhisperSegments(route.provider, model);
+      if (requestsSegments) {
+        formData.append("response_format", "verbose_json");
+      }
 
       const apiCallStart = performance.now();
 
@@ -4367,6 +4384,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "model",
             language && language !== "auto" ? "language" : null,
             shouldStream ? "stream" : null,
+            requestsSegments ? "response_format" : null,
           ].filter(Boolean),
         },
         "transcription"
@@ -4455,15 +4473,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       } else {
         const rawText = await response.text();
-        logger.debug(
-          "Raw API response body",
-          {
-            rawText: rawText.substring(0, 1000),
-            fullLength: rawText.length,
-          },
-          "transcription"
-        );
-
         try {
           result = JSON.parse(rawText);
         } catch (parseError) {
@@ -4471,11 +4480,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "Failed to parse JSON response",
             {
               parseError: parseError.message,
-              rawText: rawText.substring(0, 500),
+              responseLength: rawText.length,
             },
             "transcription"
           );
           throw new Error(`Failed to parse API response: ${parseError.message}`);
+        }
+
+        if (requestsSegments) {
+          const spokenText = dropNoSpeechSegments(result);
+          if (spokenText !== result.text) {
+            logger.debug(
+              "Dropped no-speech segments",
+              { originalLength: result.text?.length, keptLength: spokenText?.length },
+              "transcription"
+            );
+            result = { ...result, text: spokenText };
+          }
         }
 
         logger.debug(
@@ -4484,7 +4505,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             hasText: !!result.text,
             textLength: result.text?.length,
             resultKeys: Object.keys(result),
-            fullResult: result,
           },
           "transcription"
         );
@@ -4541,7 +4561,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             blobType: audioBlob.type,
             mimeType,
             extension,
-            resultText: result.text,
             resultKeys: Object.keys(result),
           },
           "transcription"
@@ -4549,8 +4568,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         logger.error(
           "No text in transcription result",
           {
-            result,
-            resultKeys: Object.keys(result),
+            provider,
+            model,
+            segmentCount: result.segments?.length ?? 0,
           },
           "transcription"
         );

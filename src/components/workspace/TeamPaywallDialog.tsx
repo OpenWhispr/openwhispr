@@ -4,6 +4,7 @@ import { Users } from "../icons";
 import { cn } from "../lib/utils";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./dialogButtons";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
+import { hasValidatedAuthContext } from "../../lib/authRequestContext";
 import { teamCreationFor, workspaceCan } from "../../lib/capabilities";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { isolate } from "../../utils/bidiIsolate";
@@ -42,7 +43,9 @@ export default function TeamPaywallDialog({
   // The capability the paywall opened on may be stale (a plan changed on the web or another
   // device, or a webhook that landed late), so each opening reads the workspace again.
   useEffect(() => {
-    if (open) void useWorkspaceStore.getState().refresh({ fresh: true });
+    if (open && hasValidatedAuthContext()) {
+      void useWorkspaceStore.getState().refresh({ fresh: true });
+    }
   }, [open]);
   // Hands over only after this opening saw creating blocked: a server refusal can open the
   // paywall while the list still says allowed, and handing over then would loop.

@@ -83,7 +83,7 @@ class WindowManager {
     // Set by IPCHandlers so its demo session dies with the demo kind on every
     // teardown path (id-matched end, onboarding exit, control panel closed).
     this.onOnboardingDemoTeardown = null;
-    // Set by main.js so the tray's listen item rebuilds with dictation state.
+    // Main observes accepted transitions for cleanup residency and the tray.
     this.onDictationStateChanged = null;
     // Set by IPCHandlers: the org-policy refusal of meeting recording, or null.
     this.getMeetingRecordingRefusal = () => null;
@@ -277,6 +277,9 @@ class WindowManager {
     }
     if (process.platform !== "linux") return false;
     try {
+      // Electron reapplies this flag on every bounds, state and theme change. Clear it for
+      // full-window input and let the helper set the exact clickable area for a collapsed pill.
+      win.setIgnoreMouseEvents(region !== null);
       await this._mainWindowInputRegion().set(region);
       return !win.isDestroyed() && win.isVisible() && !win.isMinimized();
     } catch (error) {
@@ -1055,7 +1058,7 @@ class WindowManager {
     }
   }
 
-  setDictationLifecycleState(state, attempt) {
+  setDictationLifecycleState(state, attempt, voiceAgentRequested = false) {
     const nextState = normalizeDictationLifecycle(state);
     if (attempt !== undefined) {
       if (nextState === DICTATION_LIFECYCLE.PREPARING && !this._dictationAttempt) {
@@ -1070,7 +1073,7 @@ class WindowManager {
     this._dictationLifecycleState = nextState;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.syncUserRecording();
-    this.onDictationStateChanged?.();
+    this.onDictationStateChanged?.(nextState, voiceAgentRequested);
     return true;
   }
 
@@ -1957,12 +1960,12 @@ class WindowManager {
   }
 
   registerMainWindowEvents() {
-    if (!this.mainWindow) {
+    const win = this.mainWindow;
+    if (!win) {
       return;
     }
 
     if (process.platform === "linux" || process.platform === "win32") {
-      const win = this.mainWindow;
       // backgroundThrottling:false keeps document.visibilityState visible even
       // after hide(). Native visibility owns the Linux input-region and the
       // Windows window-shape updates, which pause while the pill is hidden.
@@ -1977,7 +1980,6 @@ class WindowManager {
     }
 
     if (process.platform === "win32") {
-      const win = this.mainWindow;
       const shape = this._win32MainWindowShape();
       win.on("hide", () => shape.set(null));
       for (const event of ["resize", "move"]) {
@@ -1997,7 +1999,7 @@ class WindowManager {
       }
     }, 10000);
 
-    this.mainWindow.once("ready-to-show", () => {
+    win.once("ready-to-show", () => {
       clearTimeout(showTimeout);
       this.enforceMainWindowOnTop();
       if (!this.mainWindow.isVisible() && !this._floatingIconAutoHide) {
@@ -2005,14 +2007,17 @@ class WindowManager {
       }
     });
 
-    this.mainWindow.on("show", () => {
+    win.on("show", () => {
       this.enforceMainWindowOnTop();
       if (process.platform === "win32") this._restoreWin32MainWindowClicks();
     });
 
-    this.mainWindow.on("focus", () => this.enforceMainWindowOnTop());
+    win.on("focus", () => this.enforceMainWindowOnTop());
 
-    this.mainWindow.on("closed", () => {
+    win.on("closed", () => {
+      clearTimeout(showTimeout);
+      if (this.mainWindow !== win) return;
+      this.setDictationLifecycleState(DICTATION_LIFECYCLE.IDLE);
       this.dragManager.cleanup();
       this.mainWindow = null;
     });

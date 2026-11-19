@@ -57,7 +57,10 @@ test("the home grid shows six installed skills, then a See link naming the next 
   const skills = Array.from({ length: 9 }, (_, index) => skill(`skill-${index + 1}`));
   const { container, calls } = await renderHome(t, { skills });
 
-  assert.deepEqual(cardNames(container), [1, 2, 3, 4, 5, 6].map((n) => `skill ${n}`));
+  assert.deepEqual(
+    cardNames(container),
+    [1, 2, 3, 4, 5, 6].map((n) => `skill ${n}`)
+  );
   const seeMore = buttonWithText(container, "skills.pane.seeMore");
   assert.equal(
     label(seeMore),
@@ -130,7 +133,10 @@ test("the empty library shows the empty state and still recommends skills", asyn
   assert.match(container.textContent, /skills\.pane\.empty\.description/);
   assert.deepEqual(recommendedIds(container).sort(), fs.readdirSync(RECOMMENDED_DIR).sort());
   // The header keeps only Add: there is nothing to search or manage yet
-  assert.equal(findElement(container, (node) => node.tagName === "INPUT"), null);
+  assert.equal(
+    findElement(container, (node) => node.tagName === "INPUT"),
+    null
+  );
   assert.equal(
     findElement(container, (node) => ariaLabel(node) === "skills.pane.manage"),
     null
@@ -145,52 +151,49 @@ test("the empty library shows the empty state and still recommends skills", asyn
   assert.equal(calls.upload, 1);
 });
 
-test(
-  "adding a recommended skill uses the localized title and description, plays its icon and toasts",
-  async (t) => {
-    const added = [];
-    let listed = [];
-    const { container, toasts, store } = await renderHome(t, {
-      skills: [],
-      api: {
-        skillsAddRecommended: async (id, copy) => {
-          added.push([id, copy]);
-          listed = [skill(id, { displayName: "Meeting decisions" })];
-          return { ok: true, name: id };
-        },
-        skillsList: async () => ({ skills: listed }),
+test("adding a recommended skill uses the localized title and description, plays its icon and toasts", async (t) => {
+  const added = [];
+  let listed = [];
+  const { container, toasts, store } = await renderHome(t, {
+    skills: [],
+    api: {
+      skillsAddRecommended: async (id, copy) => {
+        added.push([id, copy]);
+        listed = [skill(id, { displayName: "Meeting decisions" })];
+        return { ok: true, name: id };
       },
-    });
-    const add = findElement(
-      container,
-      (node) =>
-        ariaLabel(node) ===
-        'skills.pane.addRecommended{"name":"skills.recommended.meeting-decisions.title"}'
-    );
+      skillsList: async () => ({ skills: listed }),
+    },
+  });
+  const add = findElement(
+    container,
+    (node) =>
+      ariaLabel(node) ===
+      'skills.pane.addRecommended{"name":"skills.recommended.meeting-decisions.title"}'
+  );
 
-    await React.act(async () => dispatch(add, "click"));
+  await React.act(async () => dispatch(add, "click"));
 
-    assert.deepEqual(added, [
-      [
-        "meeting-decisions",
-        {
-          title: "skills.recommended.meeting-decisions.title",
-          description: "skills.recommended.meeting-decisions.description",
-        },
-      ],
-    ]);
-    assert.deepEqual(cardNames(container), ["Meeting decisions"]);
-    assert.equal(store.useSkillsStore.getState().iconPlays["meeting-decisions"], 1);
-    assert.deepEqual(toasts, [
+  assert.deepEqual(added, [
+    [
+      "meeting-decisions",
       {
-        title: 'skills.toasts.added{"name":"skills.recommended.meeting-decisions.title"}',
-        variant: "success",
+        title: "skills.recommended.meeting-decisions.title",
+        description: "skills.recommended.meeting-decisions.description",
       },
-    ]);
-    assert.equal(container.ownerDocument.activeElement === cards(container)[0], true);
-    assert.equal(recommendedIds(container).includes("meeting-decisions"), false);
-  }
-);
+    ],
+  ]);
+  assert.deepEqual(cardNames(container), ["Meeting decisions"]);
+  assert.equal(store.useSkillsStore.getState().iconPlays["meeting-decisions"], 1);
+  assert.deepEqual(toasts, [
+    {
+      title: 'skills.toasts.added{"name":"skills.recommended.meeting-decisions.title"}',
+      variant: "success",
+    },
+  ]);
+  assert.equal(container.ownerDocument.activeElement === cards(container)[0], true);
+  assert.equal(recommendedIds(container).includes("meeting-decisions"), false);
+});
 
 test("a library that can't be read says so and offers Retry", async (t) => {
   let lists = 0;
@@ -245,7 +248,7 @@ test("a Retry that fails again says so", async (t) => {
 
 test("pressing + again while a skill is being added adds it once", async (t) => {
   const added = [];
-  const { container, toasts } = await renderHome(t, {
+  const { container, toasts, pushes } = await renderHome(t, {
     api: {
       skillsAddRecommended: async (id) => {
         added.push(id);
@@ -265,10 +268,11 @@ test("pressing + again while a skill is being added adds it once", async (t) => 
 
   assert.equal(added.length, 1);
   assert.equal(toasts.length, 1);
+  assert.deepEqual(pushes, ["syncSkillsNow"], "backed up once");
 });
 
 test("a failed add says why", async (t) => {
-  const { container, toasts } = await renderHome(t, {
+  const { container, toasts, pushes } = await renderHome(t, {
     api: { skillsAddRecommended: async () => ({ ok: false, error: "noSpace" }) },
   });
   const add = findElement(container, (node) =>
@@ -284,6 +288,7 @@ test("a failed add says why", async (t) => {
       variant: "destructive",
     },
   ]);
+  assert.deepEqual(pushes, []);
 });
 
 test("an add refused because a skill already has that title says so", async (t) => {

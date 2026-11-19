@@ -73,7 +73,10 @@ import {
   DEFAULT_INTEGRATIONS_SECTION,
   type IntegrationsSection,
 } from "./integrations/integrationsSections";
-import { navigateMeetingNotification } from "./meetingNotificationNavigation";
+import {
+  navigateAndLoadMeetingNote,
+  navigateMeetingNotification,
+} from "./meetingNotificationNavigation";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -89,6 +92,8 @@ import {
   setActiveFolderId,
   navigateToContainer,
   ensureNoteLoaded,
+  getActiveNoteIdValue,
+  getNoteFromStore,
   useActiveNoteId,
   initializeNotes,
   subscribeMeetingNotificationFolders,
@@ -119,6 +124,7 @@ import {
 } from "../utils/pendingInvitationToken";
 import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
 import type { SourceNote } from "./chat/useSourceNote";
+import type { MeetingStartSource } from "../types/electron";
 
 const platform = getCachedPlatform();
 
@@ -201,6 +207,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     noteId: number;
     folderId: number | null;
     event: any;
+    startSource?: MeetingStartSource;
     trigger?: string;
     noteSessionId?: string;
   } | null>(null);
@@ -515,6 +522,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 startRecordingForNote(
                   note,
                   recordingRecorderName(note, recordingUser, translate),
+                  "prompt",
                   args.canAutoStart
                 ),
               restoreFromMeetingMode: () => window.electronAPI?.restoreFromMeetingMode?.(),
@@ -541,17 +549,25 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       }
       if (data.noteSessionId)
         meetingNoteSession.current = { id: data.noteSessionId, noteId: data.noteId };
-      setActiveFolderId(data.folderId);
-      setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
+      await navigateAndLoadMeetingNote(data.noteId, data.spaceId, data.folderId);
+      if (
+        !isCurrent() ||
+        getActiveNoteIdValue() !== data.noteId ||
+        !getNoteFromStore(data.noteId) ||
+        (data.noteSessionId && meetingNoteSession.current?.id !== data.noteSessionId)
+      ) {
+        if (data.noteSessionId) void window.electronAPI?.meetingNoteClosed?.(data.noteSessionId);
+        return;
+      }
       setMeetingRecordingRequest({
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
+        startSource: data.startSource,
         trigger: data.trigger,
         noteSessionId: data.noteSessionId,
       });
-      void initializeNotes(null, 50, data.folderId);
       if (
         data.trigger === "hotkey" &&
         useSettingsStore.getState().meetingHotkeyLayoutMode === "side-panel"

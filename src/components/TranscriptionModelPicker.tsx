@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } fro
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { isAwaitingCatalog } from "../models/modelLifecycle.js";
 import { getRegistryData } from "../models/registryData.js";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
@@ -297,6 +298,23 @@ const CLOUD_PROVIDER_TABS = [
   { id: "openrouter", name: "OpenRouter" },
   { id: "custom", name: "Custom" },
 ];
+
+const providerName = (id: string): string | undefined =>
+  CLOUD_PROVIDER_TABS.find((tab) => tab.id === id)?.name;
+
+// Only a model pick saves a browsed tab (on Custom, the first character of its
+// model name), so until then the line under it says which provider still runs.
+function browsedTabHint(t: TFunction, browsedId: string, inUseId: string): string | undefined {
+  if (browsedId === "custom") {
+    const current = providerName(inUseId);
+    return current ? t("transcription.browsedCustomHint", { current }) : undefined;
+  }
+  const provider = providerName(browsedId);
+  if (!provider) return undefined;
+  if (inUseId === "custom") return t("transcription.customInUseHint", { provider });
+  const current = providerName(inUseId);
+  return current ? t("transcription.browsedProviderHint", { current, provider }) : undefined;
+}
 
 interface ProviderCredentialField {
   key:
@@ -760,24 +778,30 @@ export default function TranscriptionModelPicker({
     return queuedLoad;
   }, []);
 
-  // A blank Note Recording or Upload provider is no choice of its own: it runs on what the
-  // store resolves (dictation's provider, or the one a managed policy allows instead).
-  const inheritedCloudSelection = useSettingsStore(
+  // What runs for this tab: a blank Note Recording or Upload provider runs on the dictation
+  // one, and a managed policy runs an allowed provider in place of one it refuses.
+  const cloudSelectionInUse = useSettingsStore(
     useShallow((settings) => {
-      if (selectedCloudProvider || transcriptionContext === "dictation") return null;
       const effective = selectPolicyEffectiveSettings(settings, policyState);
       const resolved =
         transcriptionContext === "meeting"
           ? selectResolvedMeetingTranscription(effective)
-          : selectResolvedUploadTranscription(effective);
+          : transcriptionContext === "upload"
+            ? selectResolvedUploadTranscription(effective)
+            : effective;
       return {
         provider: resolved.cloudTranscriptionProvider,
         model: resolved.cloudTranscriptionModel,
       };
     })
   );
-  const committedCloudProvider = inheritedCloudSelection?.provider ?? selectedCloudProvider;
-  const committedCloudModel = inheritedCloudSelection?.model ?? selectedCloudModel;
+  const providerInUse = cloudSelectionInUse.provider;
+  // A blank Note Recording or Upload provider is no choice of its own: the tab shows what runs.
+  const inheritsCloudSelection = !selectedCloudProvider && transcriptionContext !== "dictation";
+  const committedCloudProvider = inheritsCloudSelection ? providerInUse : selectedCloudProvider;
+  const committedCloudModel = inheritsCloudSelection
+    ? cloudSelectionInUse.model
+    : selectedCloudModel;
 
   const effectiveCloudSelection = useMemo(() => {
     // Every provider's URL counts as known, including policy-blocked ones and
@@ -843,8 +867,7 @@ export default function TranscriptionModelPicker({
     committedCloudProvider !== displayedCloudProvider
       ? committedCloudProvider === "custom"
         ? t("transcription.customProvider")
-        : (CLOUD_PROVIDER_TABS.find((tab) => tab.id === committedCloudProvider)?.name ??
-          committedCloudProvider)
+        : (providerName(committedCloudProvider) ?? committedCloudProvider)
       : undefined;
 
   useEffect(() => {
@@ -1299,6 +1322,10 @@ export default function TranscriptionModelPicker({
   const endpointHold = useFocusHold();
   const editing = useFocusHold();
   const visible = usePanelVisible();
+  const browsedHint =
+    browsedCloudProvider && displayedCloudProvider !== providerInUse
+      ? browsedTabHint(t, displayedCloudProvider, providerInUse)
+      : undefined;
   const isCustom = displayedCloudProvider === "custom";
   const isCorti = displayedCloudProvider === "corti";
   const providerKey = credentialValues[providerCredentials.fields[0].key];
@@ -1633,7 +1660,7 @@ export default function TranscriptionModelPicker({
           )}
 
           {providerAllowed(displayedCloudProvider) && (
-            <div>
+            <div className="space-y-2">
               {displayedCloudProvider === "custom" ? (
                 <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
                   <div className="space-y-1.5">
@@ -1785,6 +1812,7 @@ export default function TranscriptionModelPicker({
                   </div>
                 </div>
               )}
+              {browsedHint && <p className="text-xs text-muted-foreground">{browsedHint}</p>}
             </div>
           )}
         </>

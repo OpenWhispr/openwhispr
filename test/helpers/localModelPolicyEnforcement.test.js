@@ -331,7 +331,7 @@ function warmUpScenarios(t) {
         starts,
         scope: "llm",
         model: "qwen3.5-0.8b-q4_k_m",
-        begin: () => manager.prewarmServer("qwen3.5-0.8b-q4_k_m").catch(() => false),
+        begin: (signal) => manager.prewarmServer("qwen3.5-0.8b-q4_k_m", signal).catch(() => false),
         startedByDictation() {
           manager.serverManager.ready = true;
         },
@@ -412,4 +412,14 @@ test("a resumed warm-up keeps exactly what startup would have warmed", async (t)
   gguf.gate.update({ success: true, managed: false, authGeneration: 1 });
   await settle();
   assert.deepEqual(gguf.starts, [{ modelId: "qwen3.5-0.8b-q4_k_m" }]);
+});
+
+test("an abandoned dictation warm-up is not resumed when policy settles", async (t) => {
+  const scenario = warmUpScenarios(t).gguf();
+  const take = new AbortController();
+  await scenario.begin(take.signal);
+  take.abort();
+  scenario.gate.update({ success: true, managed: false, authGeneration: 1 });
+  await settle();
+  assert.equal(scenario.starts.length, 0);
 });

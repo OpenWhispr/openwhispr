@@ -345,6 +345,7 @@ function bindLocalModelDownload(owner, abort) {
 
 module.exports = {
   createLocalModelPolicyGate,
+  LOCAL_POLICY_CODES,
   isLocalModelPolicyRefusal,
   policyError,
   runLocalModelOperation,
