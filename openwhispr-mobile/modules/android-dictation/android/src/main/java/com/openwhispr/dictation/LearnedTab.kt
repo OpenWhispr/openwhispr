@@ -155,8 +155,8 @@ class LearnedTab(
       contentDescription = "${value.undo}, ${value.message}"
       setOnClickListener { undone() }
     }
-    val glyph = dp(16f).toInt()
-    row.addView(book, LinearLayout.LayoutParams(glyph, glyph).apply { marginEnd = dp(8f).toInt() })
+    val glyph = dp(20f).toInt()
+    row.addView(book, LinearLayout.LayoutParams(glyph, glyph).apply { marginEnd = dp(10f).toInt() })
     row.addView(message, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT))
     row.addView(action, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT))
     pill = row; icon = book; label = message; undo = action
