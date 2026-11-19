@@ -37,7 +37,9 @@ const ROWS: Record<
 };
 const EXTRAS: DeviceExtra[] = ['cleanup', 'assistant', 'speakers'];
 
-const megabytes = (bytes: number) => Math.round(bytes / 1e6);
+// Big models read in tens of megabytes, as the board does (490 MB, 670 MB); small ones exactly (42 MB).
+const megabytes = (bytes: number) =>
+  bytes >= 1e8 ? Math.round(bytes / 1e7) * 10 : Math.round(bytes / 1e6);
 const size = (id: AndroidModelId) => `${megabytes(ANDROID_MODELS[id].bytes)} MB`;
 
 function useModelState(id: AndroidModelId) {
@@ -158,7 +160,7 @@ function SetupRow({ item, divider, added }: { item: Item; divider?: boolean; add
   const megabytesLine =
     on && downloading && progress < 0.98
       ? t('progressOf', {
-          done: megabytes(progress * ANDROID_MODELS[id].bytes),
+          done: Math.round((progress * ANDROID_MODELS[id].bytes) / 1e6),
           total: size(id),
         })
       : size(id);

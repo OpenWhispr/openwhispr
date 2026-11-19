@@ -2,6 +2,8 @@ import { PermissionsAndroid } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { getAccountFirstName } from '@/lib/accountDisplay';
+import { useAuthStore } from '@/store/useAuthStore';
 import { createAndroidJob, processAndroidAudio, type AndroidJob } from '../pipeline';
 
 // Onboarding practice is the free Cloud trial, whatever mode the phone has saved.
@@ -19,6 +21,13 @@ const FORMAT_PROMPTS: Record<PracticeFormat, string> = {
     'Format the dictated text as a short email. Put the greeting on its own line, then a blank line, then the body starting with a capital letter, then a blank line. End with the closing word (such as Thanks or Best) on its own line followed by a comma, and the sender’s name on the line after it. When the speaker corrects themselves, keep only the corrected version. Keep the speaker’s language and wording otherwise. Return only the email, with no subject line and no introduction.',
 };
 
+// Models fill unknown names with "[Name]" or "[Your Name]"; the Gmail card must read as a real email.
+function noPlaceholders(sender: string | null): string {
+  return ` Never leave placeholders in square brackets such as [Name] or [Your Name]: use the names the text gives${
+    sender ? `, sign it from ${sender}` : ''
+  }, and leave out a name nobody gave (a greeting becomes "Hi," and the closing word stands alone).`;
+}
+
 async function formatPractice(
   text: string,
   format: PracticeFormat,
@@ -26,9 +35,10 @@ async function formatPractice(
   signal: AbortSignal,
 ): Promise<string> {
   try {
+    const sender = getAccountFirstName(useAuthStore.getState().user);
     const result = await ReasoningService.processText({
       text,
-      systemPrompt: FORMAT_PROMPTS[format],
+      systemPrompt: FORMAT_PROMPTS[format] + noPlaceholders(sender),
       inferenceScope: 'cleanup',
       inferenceRoute: job.route.cleanupRoute,
       signal,

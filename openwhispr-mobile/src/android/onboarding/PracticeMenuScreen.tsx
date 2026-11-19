@@ -229,7 +229,8 @@ export function PracticeMenuScreen({
           ? t('hintKeepHolding')
           : '';
   const done = phase === 'done';
-  const highlighted = (phase === 'pasted' || done) && runs;
+  // The new words stay marked while the toast shows; the done step shows the email plain (P3g).
+  const highlighted = phase === 'pasted' && runs;
 
   return (
     <SafeAreaView style={s.page} edges={['top', 'bottom', 'left', 'right']}>
@@ -263,7 +264,8 @@ export function PracticeMenuScreen({
                 accessibilityLabel={t('appGmail')}
                 autoFocus
                 showSoftInputOnFocus
-                editable={!done && phase !== 'processing' && phase !== 'listening'}
+                // Read-only would close the keyboard; the board keeps it up while listening and writing.
+                editable={!done}
                 style={pm.input}
               >
                 {highlighted ? (

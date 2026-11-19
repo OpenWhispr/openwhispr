@@ -27,6 +27,9 @@ jest.mock('@/services/reasoning/ReasoningService', () => ({
     processText: (request: { systemPrompt: string }) => mockFormat(request),
   },
 }));
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: { getState: () => ({ user: { name: 'Josh Padoa', email: 'josh@example.com' } }) },
+}));
 jest.mock('../pipeline', () => ({
   createAndroidJob: (mode: string, target?: string, selection?: string) => ({
     mode,
@@ -94,6 +97,17 @@ describe('practice recorder', () => {
       }),
       expect.any(Object),
       expect.any(Function),
+    );
+  });
+
+  it('asks for a real email: no [Name] placeholders, signed with the account first name', async () => {
+    const recorder = new PracticeRecorder();
+    await recorder.start();
+    await recorder.finishWrite();
+    expect(mockFormat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemPrompt: expect.stringMatching(/Never leave placeholders.*sign it from Josh/),
+      }),
     );
   });
 
