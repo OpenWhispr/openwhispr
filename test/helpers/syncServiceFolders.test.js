@@ -1054,6 +1054,106 @@ test("a new subfolder of a parent refused for good goes up top-level, its notes 
   assert.equal(folderByName(db, "Q1").sync_status, "synced");
 });
 
+const nameTakenNotices = () =>
+  browserWindow.electronAPI.syncEvents.filter((event) => event.name === "folder-name-taken");
+
+test("a subfolder create refused for a name taken elsewhere adopts nothing and holds back no other push", async (t) => {
+  const ctx = await setupPersonal(t, { folderNamesPerParent: true });
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const clients = db.createFolder("Clients").folder;
+  const quarter = db.createFolder("Q1", null, clients.id).folder;
+  const other = db.createFolder("Other").folder;
+  const otherNote = db.saveNote("Other plan", "body", "personal", null, null, other.id).note;
+  // Another device made a top-level "Q1" this device hasn't pulled.
+  const elsewhere = cloud.seedFolder({ name: "Q1", is_default: false, sort_order: 1 });
+  t.mock.method(console, "warn", () => {});
+
+  await (await newSyncService(t)).syncAll(true);
+  await (await newSyncService(t)).syncAll(true);
+
+  const q1 = folderByClientId(db, quarter.client_folder_id);
+  assert.equal(q1.cloud_id, null, "no other folder's identity is taken");
+  assert.equal(q1.sync_status, "pending");
+  assert.equal(q1.parent_folder_id, clients.id);
+  assert.equal(nameTakenNotices().length, 1, "the user is told once");
+  assert.equal(cloud.folders().filter((row) => row.name === "Q1").length, 1);
+  // The pulled namesake is another folder, kept apart under a name of its own.
+  const pulled = db.getFolderByCloudId(elsewhere.id);
+  assert.equal(pulled.parent_folder_id, null);
+  assert.equal(pulled.name, "Q1 (2)");
+  assert.ok(folderByName(db, "Clients").cloud_id);
+  assert.ok(folderByName(db, "Other").cloud_id);
+  const cloudOtherNote = cloud.notes().find((n) => n.client_note_id === otherNote.client_note_id);
+  assert.equal(cloudOtherNote.folder_id, folderByName(db, "Other").cloud_id);
+
+  // A rename gets it up, nested.
+  db.renameFolder(quarter.id, "Q1 plans");
+  await (await newSyncService(t)).syncAll(true);
+  const renamed = folderByClientId(db, quarter.client_folder_id);
+  assert.ok(renamed.cloud_id);
+  assert.equal(
+    cloud.folder(renamed.cloud_id).parent_folder_id,
+    folderByName(db, "Clients").cloud_id
+  );
+  assert.equal(renamed.sync_status, "synced");
+});
+
+test("a single subfolder create refused for a name taken elsewhere adopts nothing", async (t) => {
+  const ctx = await setupPersonal(t, { folderNamesPerParent: true });
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const service = await newSyncService(t);
+  const clients = db.createFolder("Clients").folder;
+  await service.syncAll(true);
+  cloud.seedFolder({ name: "Q1", is_default: false, sort_order: 1 });
+  const quarter = db.createFolder("Q1", null, clients.id).folder;
+
+  await service.pushEntity("folder", quarter.id);
+  await service.pushEntity("folder", quarter.id);
+
+  const q1 = folderByClientId(db, quarter.client_folder_id);
+  assert.equal(q1.cloud_id, null);
+  assert.equal(q1.sync_status, "pending");
+  assert.equal(nameTakenNotices().length, 1);
+});
+
+test("a batch create's refused rows settle as a single create's would", async (t) => {
+  const ctx = await setupPersonal(t, { folderNamesPerParent: true });
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const service = await newSyncService(t);
+  const clients = db.createFolder("Clients").folder;
+  await service.syncAll(true);
+  const quarter = db.createFolder("Q1", null, clients.id).folder;
+  const request = browserWindow.electronAPI.cloudApiRequest;
+  t.mock.method(browserWindow.electronAPI, "cloudApiRequest", async (options) => {
+    if (!options.path.startsWith("/api/folders/batch-create")) return request(options);
+    const response = await request({
+      ...options,
+      body: {
+        folders: options.body.folders.filter(
+          (f) => f.client_folder_id !== quarter.client_folder_id
+        ),
+      },
+    });
+    return {
+      ...response,
+      data: {
+        ...response.data,
+        refused: [{ client_folder_id: quarter.client_folder_id, code: "invalid_parent_folder" }],
+      },
+    };
+  });
+
+  await service.syncAll(true);
+
+  // The parent it can't nest under is final for the row: it un-nests here.
+  const q1 = folderByClientId(db, quarter.client_folder_id);
+  assert.equal(q1.parent_folder_id, null);
+  assert.equal(q1.sync_status, "pending");
+});
+
 test("a subfolder still waits for a parent whose push failed for now", async (t) => {
   const ctx = await setupPersonal(t);
   if (!ctx) return;

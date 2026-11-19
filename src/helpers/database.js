@@ -12493,15 +12493,19 @@ class DatabaseManager {
         }
         const existing = this.db
           .prepare(
-            "SELECT id, cloud_id FROM folders WHERE space_id = ? AND name = ? AND account_id IS ? AND deleted_at IS NULL"
+            "SELECT id, cloud_id, parent_folder_id FROM folders WHERE space_id = ? AND name = ? AND account_id IS ? AND deleted_at IS NULL"
           )
           .get(spaceId, cloudFolder.name, accountId);
         if (!existing) throw err;
-        if (existing.cloud_id && existing.cloud_id !== cloudFolder.id) {
+        if (
+          (existing.cloud_id && existing.cloud_id !== cloudFolder.id) ||
+          this._folderAtOtherLevel(existing, cloudFolder)
+        ) {
           // The namesake is another cloud folder (one backed up before
-          // placement beside a placed one, or a rename that hasn't synced):
-          // taking its identity would move its notes. This one keeps a name of
-          // its own here instead.
+          // placement beside a placed one, or a rename that hasn't synced), or
+          // sits under another parent, where the server keeps a same-named
+          // folder apart too: taking its identity would move its notes. This
+          // one keeps a name of its own here instead.
           const holder = this.db
             .prepare("SELECT id FROM folders WHERE client_folder_id = ?")
             .get(cloudFolder.client_folder_id);
@@ -12559,6 +12563,18 @@ class DatabaseManager {
       debugLogger.error("Error upserting folder from cloud", { error: error.message }, "database");
       throw error;
     }
+  }
+
+  // Whether a local folder sits under another parent than the cloud row names.
+  // A row from an API without parents says nothing.
+  _folderAtOtherLevel(local, cloudFolder) {
+    if (cloudFolder.parent_folder_id === undefined) return false;
+    const localParent =
+      local.parent_folder_id == null
+        ? null
+        : (this.db.prepare("SELECT cloud_id FROM folders WHERE id = ?").get(local.parent_folder_id)
+            ?.cloud_id ?? `local:${local.parent_folder_id}`);
+    return localParent !== (cloudFolder.parent_folder_id ?? null);
   }
 
   // The local folder a pulled folder's server parent is, when it can hold

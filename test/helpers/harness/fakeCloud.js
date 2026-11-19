@@ -28,6 +28,11 @@
 //                      that differs is refused (a batch create drops the folder);
 //                      an explicit null is the account's defaultWorkspaceId
 
+// `folderNamesPerParent` models the subfolder API: a personal folder create
+// that names a parent takes a same-named folder only under that parent, and
+// one elsewhere in the account's personal folders (a legacy unplaced one
+// included) answers 409 folder_name_taken with no winner; a batch create
+// returns such refusals per row (`refused`) and creates the rest.
 // `userId` models one account's note ownership and separates its cloud ids.
 // `adoptDefaultFolders` models the server returning an existing personal
 // default when another device creates the same name in the same workspace.
@@ -133,6 +138,7 @@ function createFakeCloud(config = {}) {
     updatedAtClamp: true,
     userId: null,
     adoptDefaultFolders: false,
+    folderNamesPerParent: false,
     revisionGuard: false,
     serverDate: false,
     ...config,
@@ -279,6 +285,14 @@ function createFakeCloud(config = {}) {
   }
 
   function createFolder(input) {
+    if (cfg.folderNamesPerParent && !input.space_id && "parent_folder_id" in input) {
+      for (const row of folders.values()) {
+        if (row.deleted_at || row.space_id || row.name !== input.name) continue;
+        if (row.client_folder_id === input.client_folder_id) continue;
+        if ((row.parent_folder_id ?? null) === (input.parent_folder_id ?? null)) return row;
+        throw new HttpError(409, "Folder name already taken", "folder_name_taken");
+      }
+    }
     if (cfg.adoptDefaultFolders && input.is_default && !input.space_id) {
       for (const row of folders.values()) {
         if (
@@ -640,10 +654,18 @@ function createFakeCloud(config = {}) {
         const inputs = Array.isArray(body?.folders) ? body.folders : [];
         if (inputs.length > 50) throw new HttpError(400, "too many folders", "validation_error");
         const created = [];
+        const refused = [];
         for (const input of inputs) {
-          created.push(createFolder(input));
+          try {
+            created.push(createFolder(input));
+          } catch (error) {
+            if (!cfg.folderNamesPerParent || !(error instanceof HttpError) || !error.code) {
+              throw error;
+            }
+            refused.push({ client_folder_id: input.client_folder_id ?? null, code: error.code });
+          }
         }
-        return { created };
+        return cfg.folderNamesPerParent ? { created, refused } : { created };
       }
       case "PATCH /api/folders/update": {
         const { id, ...updates } = body ?? {};

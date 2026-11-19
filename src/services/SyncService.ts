@@ -1724,7 +1724,7 @@ export class SyncService {
         }
       }
     } else {
-      await this.createCloudFolder(folder, scope, parentFolderId, authGeneration);
+      await this.pushFreshFolder(folder, scope, parentFolderId, ctx, authGeneration);
     }
   }
 
@@ -3467,6 +3467,13 @@ export class SyncService {
         // An unacknowledged row retains its local content and pending state.
         const refusedIds = new Set(refused.map((row) => row.client_folder_id));
         const accepted = chunk.filter(({ folder }) => !refusedIds.has(folder.client_folder_id));
+        for (const row of refused) {
+          const entry = chunk.find(
+            ({ folder }) => folder.client_folder_id === row.client_folder_id
+          );
+          if (entry)
+            await this.settleRefusedFolderCreate(entry.folder, row.code, ctx, authGeneration);
+        }
         // created preserves the order of the rows the server accepted; the
         // cloud may return an existing folder with a different
         // client_folder_id when a same-named default already exists there —
@@ -3523,17 +3530,36 @@ export class SyncService {
       await this.createCloudFolder(folder, scope, parentFolderId, authGeneration);
     } catch (err) {
       if (isAuthContextError(err)) throw err;
-      if (isFolderNameTakenError(err)) {
-        this.recordFolderRefused(folder);
-      } else if (isInvalidParentFolderError(err)) {
-        await this.unnestRefusedFolder(folder, authGeneration);
-      } else if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
-        await this.handleRevokedFolderPush(folder, ctx);
-        this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
-      } else {
+      const code = err instanceof CloudApiError ? err.code : undefined;
+      if (!(await this.settleRefusedFolderCreate(folder, code, ctx, authGeneration))) {
         console.error("Folder create sync failed:", err);
       }
     }
+  }
+
+  // A create the server refused by code, alone or as a batch's refused row. It
+  // adopts no folder: a name taken elsewhere in the Private area (the server
+  // never takes a same-named folder under another parent) waits for the user,
+  // pending, while its subfolders and notes go on (recordFolderRefused); a
+  // parent it can't nest under un-nests it here; a space it may no longer
+  // write moves it to Private. False for any other refusal, left to retry.
+  private async settleRefusedFolderCreate(
+    folder: FolderItem,
+    code: string | undefined,
+    ctx: SpaceSyncContext,
+    authGeneration: number
+  ): Promise<boolean> {
+    if (code === "folder_name_taken") {
+      this.recordFolderRefused(folder);
+    } else if (code === "invalid_parent_folder") {
+      await this.unnestRefusedFolder(folder, authGeneration);
+    } else if (isSpaceAccessErrorCode(code) || isPermissionDenialCode(code)) {
+      await this.handleRevokedFolderPush(folder, ctx);
+      this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
+    } else {
+      return false;
+    }
+    return true;
   }
 
   // backfillParents replays parents onto rows the ordinary pull leaves alone (see
@@ -3720,11 +3746,24 @@ export class SyncService {
           // folder), and the case-insensitive fallback stays reserved for
           // fixed-name defaults so distinct user folders like "work"/"Work"
           // never merge. Team rows skip this — upsertFolderFromCloud's
-          // collision convergence owns those.
+          // collision convergence owns those. Only a folder at the cloud row's
+          // level is adoptable: the server keeps same-named folders under
+          // different parents apart, and taking one would move its notes and
+          // nesting (an API without parents says nothing about levels).
           if (!local && !cloudFolder.space_id) {
             const allFolders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
+            const cloudIdOf = new Map(allFolders.map((f) => [f.id, f.cloud_id]));
+            const atCloudLevel = (f: FolderItem): boolean =>
+              cloudFolder.parent_folder_id === undefined ||
+              (f.parent_folder_id == null
+                ? cloudFolder.parent_folder_id === null
+                : !!cloudFolder.parent_folder_id &&
+                  cloudIdOf.get(f.parent_folder_id) === cloudFolder.parent_folder_id);
             const adoptable = allFolders.filter(
-              (f) => f.space_id === space.id && (!f.cloud_id || f.cloud_id === cloudFolder.id)
+              (f) =>
+                f.space_id === space.id &&
+                (!f.cloud_id || f.cloud_id === cloudFolder.id) &&
+                atCloudLevel(f)
             );
             const nameMatch =
               adoptable.find((f) => f.name === cloudFolder.name) ??
