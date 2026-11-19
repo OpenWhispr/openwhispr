@@ -110,7 +110,11 @@ test("Scribe keeps dictation that uses only one accepted keyterm", async (t) => 
   const phrase = "review the draft today";
   const customDictionary = [phrase, "take one tablet by mouth daily"];
   for (const workspace of [[], ["Qdrant"]]) {
-    for (const text of ["Review the draft.", "Review the draft today."]) {
+    for (const text of [
+      "Review the draft.",
+      "Review the draft today.",
+      "Review, review the draft today.",
+    ]) {
       const { result, submittedKeyterms } = await transcribe(
         "elevenlabs",
         text,
@@ -203,6 +207,23 @@ test("Mistral drops a recital in the personal-first order of its contextBias", a
 
   assert.deepEqual(payload.contextBias, ["Piha", "Biscuit", "Qdrant", "Zentrum"]);
   assert.equal(result.rawText, SPEECH);
+  await assert.rejects(transcribe("mistral", PERSONAL_FIRST), { code: "DICTIONARY_ECHO" });
+  const spoken = await transcribe("mistral", WHISPER_ORDER);
+  assert.equal(spoken.result.rawText, WHISPER_ORDER);
+});
+
+test("Mistral checks the 100 context-bias tokens actually sent", async (t) => {
+  const { transcribe } = await setUp(t);
+  const customDictionary = Array.from({ length: 150 }, (_, i) => `Term${i}`);
+  const hints = { space: [], workspace: [] };
+  const { payload } = await transcribe("mistral", SPEECH, hints, { customDictionary });
+  assert.deepEqual(payload.contextBias, customDictionary.slice(0, 100));
+  await assert.rejects(
+    transcribe("mistral", payload.contextBias.join(", "), hints, { customDictionary }),
+    {
+      code: "DICTIONARY_ECHO",
+    }
+  );
 });
 
 test("a recital out of the sent order is left in the transcript", async (t) => {
@@ -218,6 +239,26 @@ test("a recital out of the sent order is left in the transcript", async (t) => {
   assert.equal(tinfoil.result.rawText, SPEECH);
   const tinfoilPersonalFirst = await transcribe("tinfoil", `${SPEECH} ${PERSONAL_FIRST}`);
   assert.equal(tinfoilPersonalFirst.result.rawText, `${SPEECH} ${PERSONAL_FIRST}`);
+});
+
+test("keyterm providers preserve a spoken name and reject a recital of the same hints", async (t) => {
+  const { transcribe } = await setUp(t);
+  const hints = { space: [], workspace: [] };
+  const customDictionary = ["General Hospital", "Massachusetts"];
+  const name = "Massachusetts General Hospital.";
+
+  for (const provider of KEYTERM_PROVIDERS) {
+    await t.test(provider, async () => {
+      await assert.rejects(
+        transcribe(provider, "General Hospital, Massachusetts.", hints, { customDictionary }),
+        { code: "DICTIONARY_ECHO" }
+      );
+      const { result, payload } = await transcribe(provider, name, hints, { customDictionary });
+      assert.deepEqual(payload.keyterms, customDictionary);
+      assert.equal(result.rawText, name);
+      assert.equal(result.text, name);
+    });
+  }
 });
 
 test("keyterm providers treat a recital of every sent keyterm as an echo", async (t) => {

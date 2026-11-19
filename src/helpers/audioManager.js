@@ -597,6 +597,17 @@ function filterScribeDictionaryEcho(text, acceptedKeyterms, settings) {
   return stripTrailingDictionaryEcho(text, sentPrompt, acceptedKeyterms);
 }
 
+// Mistral caps individual words, which can split a multi-word dictionary entry.
+// Keep the original separators so a surviving phrase is still one echo candidate.
+function mistralDictionaryHead(prompt, wordCount) {
+  if (!prompt || wordCount === 0) return null;
+  for (const word of prompt.matchAll(/[^,\s]+/g)) {
+    wordCount -= 1;
+    if (wordCount === 0) return prompt.slice(0, word.index + word[0].length);
+  }
+  return prompt;
+}
+
 // `echoPrompt` gives the dictionary in the order the payload carries it, for
 // the trailing-echo strip; without one it's the Whisper-order `prompt`.
 const PROXY_TRANSCRIPTION_PROVIDERS = {
@@ -4172,6 +4183,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const proxyDictionaryPrompt = this.getWhisperPrompt(apiSettings);
         const audioBuffer = await optimizedAudio.arrayBuffer();
         requestController.signal.throwIfAborted();
+        const priorityDictionary = this.getCustomDictionaryPromptTiers().flat().join(", ") || null;
         const proxyArgs = {
           audioBuffer,
           model,
@@ -4180,10 +4192,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           managedResolution,
           mimeType: optimizedAudio.type || "audio/webm",
           dictionaryPrompt: proxyDictionaryPrompt,
-          priorityDictionaryPrompt: this.getWhisperPrompt(
-            apiSettings,
-            this.getCustomDictionaryPromptTiers().flat().join(", ") || null
-          ),
+          priorityDictionaryPrompt: this.getWhisperPrompt(apiSettings, priorityDictionary),
           keyterms:
             proxySpec === PROXY_TRANSCRIPTION_PROVIDERS.elevenlabs
               ? sanitizeElevenLabsKeyterms(getEffectiveDictionaryWords(apiSettings))
@@ -4216,9 +4225,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         } else if (payloadSendsDictionaryBias(proxyPayload)) {
           const proxyEchoPrompt = proxySpec.echoPrompt?.(proxyArgs) ?? proxyDictionaryPrompt;
           proxyText = this.stripTrailingDictionaryEcho(proxyText, proxyEchoPrompt);
-          const echoDictionary = proxyPayload.keyterms
-            ? [proxyPayload.keyterms.join(", "), this.getPersonalDictionaryPrompt(apiSettings)]
-            : [];
+          const personalPrompt = this.getPersonalDictionaryPrompt(apiSettings);
+          let echoDictionary = [];
+          if (proxyPayload.contextBias) {
+            // The script instruction, if sent, occupies the first context_bias word.
+            // isDictionaryEcho checks the remaining dictionary with and without it.
+            const scriptBias = this.getWhisperPrompt(apiSettings, null);
+            const wordCount = proxyPayload.contextBias.length - (scriptBias ? 1 : 0);
+            echoDictionary = [priorityDictionary, personalPrompt].map((prompt) =>
+              mistralDictionaryHead(prompt, wordCount)
+            );
+          } else if (proxyPayload.keyterms) {
+            echoDictionary = [proxyPayload.keyterms.join(", "), personalPrompt];
+          }
           if (this.isDictionaryEcho(result.text, ...echoDictionary)) throw dictionaryEchoError();
         }
         if (!proxyText?.trim()) {

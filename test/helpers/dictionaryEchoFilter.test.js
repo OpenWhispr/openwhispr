@@ -125,6 +125,23 @@ test("detects echo with minor Whisper additions among dictionary words", async (
   assert.equal(matchesDictionaryPrompt(echoWithFiller, dict), true);
 });
 
+test("a near-complete recital must cover whole dictionary entries in order", async () => {
+  const { matchesDictionaryPrompt } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const prompt = "General Hospital, Massachusetts, Boston, Salem";
+  assert.equal(matchesDictionaryPrompt("General Hospital, Boston, Salem.", prompt), true);
+  assert.equal(matchesDictionaryPrompt("Salem, Boston General Hospital.", prompt), false);
+});
+
+test("a looped single entry is an echo, but a speaker can repeat part of a phrase", async () => {
+  const { matchesDictionaryPrompt } = await import("../../src/utils/dictionaryEchoFilter.js");
+  const phrase = "review the draft today";
+  assert.equal(matchesDictionaryPrompt("Review, review the draft today.", phrase), false);
+  assert.equal(
+    matchesDictionaryPrompt("Review the draft today. Review the draft today.", phrase),
+    true
+  );
+});
+
 test("does not flag completely unrelated text", async () => {
   const { matchesDictionaryPrompt } = await import("../../src/utils/dictionaryEchoFilter.js");
   assert.equal(
