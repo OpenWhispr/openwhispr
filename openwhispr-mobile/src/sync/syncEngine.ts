@@ -1,6 +1,6 @@
 import { clearPrivateNoteDeletionQueue, pushPrivateNoteDeletes } from './privateNoteDeletion';
 import { createSyncContext } from './createSyncContext';
-import { SyncCancelledError, type SyncCheckpoint } from './syncContext';
+import { SyncCancelledError, SyncStalledError, type SyncCheckpoint } from './syncContext';
 import * as Sentry from '@sentry/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -19,7 +19,12 @@ import { pushDictionary } from './pushDictionary';
 import { pullSnippets } from './pullSnippets';
 import { pushSnippets } from './pushSnippets';
 import { syncSpaces, type SyncSpacesResult } from './syncSpaces';
+import { pullSharedDictionary } from './pullSharedDictionary';
 import { useDictionaryStore } from '@/store/useDictionaryStore';
+import {
+  loadSharedDictionaryIfOwnedBy,
+  useSharedDictionaryStore,
+} from '@/store/useSharedDictionaryStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
 import { runInitialBackfillIfNeeded } from './initialBackfill';
 import { resetAllPullCursors } from './pullCursors';
@@ -32,6 +37,7 @@ import {
 } from './syncIdentity';
 import { useSyncStore } from './useSyncStore';
 import { ApiError, isPolicyCloudBackupBlockedError } from '@/lib/apiClient';
+import { withChatHistory } from '@/lib/chat/withChatHistory';
 
 export type SyncReason = 'after-write' | 'foreground' | 'sign-in' | 'manual';
 
@@ -92,8 +98,25 @@ function stopSyncForPolicyBlock(): void {
 // TypeError/Error. Runs that skip the personal gate happen on every foreground
 // trigger for every unpaid user, the largest segment, so surfacing "offline" as
 // a sync error there would spam status:'error' + Sentry on every one of them.
+// A stalled page walk is a server bug, not a network one.
 function isQuietNetworkError(err: unknown): boolean {
-  return !isPolicyCloudBackupBlockedError(err) && !(err instanceof ApiError);
+  return (
+    !isPolicyCloudBackupBlockedError(err) &&
+    !(err instanceof ApiError) &&
+    !(err instanceof SyncStalledError)
+  );
+}
+
+// A request that never got an answer: expo/fetch's FetchError ("fetch failed:
+// …", not exported; an abort included), or React Native's fetch's TypeError.
+// Narrower than isQuietNetworkError, so a TypeError from a malformed 200 body
+// is reported rather than filed as offline.
+function isFetchFailure(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.message.startsWith('fetch failed') ||
+      (err instanceof TypeError && err.message === 'Network request failed'))
+  );
 }
 
 // Ends the run as a clean idle: no lastError, no captureException, and a
@@ -181,16 +204,19 @@ function reconcileSyncIdentity(auth: ReturnType<typeof useAuthStore.getState>): 
         level: 'info',
       });
       notesRepository.wipeAllSyncableData();
+      // Chat history never syncs, but it quotes the previous user's notes.
+      withChatHistory((chats) => chats.clearChatHistory());
       // The wipe also deleted the previous user's voice profiles; their meeting voice
       // samples held in memory go with them.
       useNotesStore.getState().loadVoiceProfiles();
       useNotesStore.setState({ meetingSpeakerEmbeddingsByNoteId: {} });
       resetSubscriptionCache();
-      // Immediately clear in-memory dictionary + snippets so any UI/transcription
-      // path that reads them between now and the post-pull load() doesn't see the
-      // previous user's data.
+      // Immediately clear in-memory dictionary + snippets + shared words so any
+      // UI/transcription path that reads them between now and the post-pull
+      // load() doesn't see the previous user's data.
       useDictionaryStore.getState().reset();
       useSnippetsStore.getState().reset();
+      useSharedDictionaryStore.getState().reset();
     } else if (lastUserId) {
       // The rows stay, but the server migrated billing only: every remote id
       // and pull cursor on this device still belongs to the anonymous user.
@@ -226,6 +252,41 @@ async function retryPrivateNoteDeletes(checkpoint: SyncCheckpoint): Promise<void
   }
 }
 
+// Shared dictionary words follow workspace membership, never cloud backup or a
+// personal subscription, so this runs for every signed-in account, whichever
+// branch the run takes. Isolated like snippets: a failure here never stops the
+// rest of the run. A missing endpoint is handled (quietly) inside the pull.
+async function syncSharedDictionary(
+  checkpoint: SyncCheckpoint,
+  workspaces: SyncSpacesResult['workspaces'],
+): Promise<void> {
+  try {
+    checkpoint();
+    await pullSharedDictionary(checkpoint, workspaces);
+    checkpoint();
+  } catch (err) {
+    if (err instanceof SyncCancelledError) throw err;
+    if (isFetchFailure(err)) {
+      Sentry.addBreadcrumb({
+        category: 'sync',
+        message: 'shared dictionary pass: network-level error (offline?)',
+        level: 'info',
+        data: { err: String(err) },
+      });
+    } else {
+      Sentry.captureException(err, { tags: { sync: 'shared-dictionary' } });
+    }
+  }
+  // A failed pull falls through to here: if the account changed meanwhile, the
+  // stored words are no longer this user's to publish.
+  checkpoint();
+  useSharedDictionaryStore.getState().load().catch(reportSharedDictionaryLoadError);
+}
+
+function reportSharedDictionaryLoadError(err: unknown): void {
+  Sentry.captureException(err, { tags: { sync: 'shared-dictionary-load' } });
+}
+
 async function runSyncNow(reason: SyncReason): Promise<void> {
   const auth = useAuthStore.getState();
   if (!auth.user || auth.isGuest) return;
@@ -255,6 +316,9 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
     checkpoint();
     reconcileSyncIdentity(auth);
     const userId = auth.user.id;
+    // Stored shared words apply from the start of the run, before any network
+    // call, so offline or slow syncs still dictate with them.
+    loadSharedDictionaryIfOwnedBy(userId).catch(reportSharedDictionaryLoadError);
     await retryPrivateNoteDeletes(checkpoint);
     checkpoint();
     // Paygate: personal sync (everything — private content, dictionary,
@@ -323,6 +387,9 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
       level: 'info',
     });
 
+    await syncSharedDictionary(checkpoint, spacesResult.workspaces);
+    checkpoint();
+
     if (personalSyncAllowed) {
       await runInitialBackfillIfNeeded(userId, checkpoint);
       checkpoint();
@@ -367,21 +434,28 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
       // Dictionary sync is independent of notes/folders. Isolate its errors so a
       // dictionary endpoint outage doesn't block unrelated note uploads — except
       // a policy block, which must stop the whole run the same way it does for
-      // notes/folders (checked first, before the isolating capture below).
-      try {
-        await pullDictionary(checkpoint);
-        checkpoint();
-        checkpoint(true);
-        await pushDictionary(checkpoint);
-        checkpoint();
-      } catch (err) {
-        if (err instanceof SyncCancelledError) throw err;
-        if (isPolicyCloudBackupBlockedError(err)) {
-          stopSyncForPolicyBlock();
-          return;
+      // notes/folders (checked first, before the isolating capture below). The
+      // pull and push are isolated from each other too: local edits don't depend
+      // on the pull, so a stalled or failed pull (the shared_at backfill
+      // included) must not hold them back.
+      const dictionaryPassStopped = async (step: () => Promise<void>): Promise<boolean> => {
+        try {
+          await step();
+          checkpoint();
+          return false;
+        } catch (err) {
+          if (err instanceof SyncCancelledError) throw err;
+          if (isPolicyCloudBackupBlockedError(err)) {
+            stopSyncForPolicyBlock();
+            return true;
+          }
+          Sentry.captureException(err, { tags: { sync: 'dictionary' } });
+          return false;
         }
-        Sentry.captureException(err, { tags: { sync: 'dictionary' } });
-      }
+      };
+      if (await dictionaryPassStopped(() => pullDictionary(checkpoint))) return;
+      checkpoint(true);
+      if (await dictionaryPassStopped(() => pushDictionary(checkpoint))) return;
 
       // Snippets sync is likewise independent. Isolate its errors too (with the
       // same policy-block exception as dictionary above), and skip it entirely
@@ -560,11 +634,13 @@ export function initSyncTriggers(): void {
         resetSubscriptionCache();
         requestSync('sign-in');
       } else {
-        // Sign-out: clear in-memory dictionary + snippets so the previous
-        // user's data doesn't bleed into a guest session or transcription
-        // prompts before the next sync wipes/reloads SQLite.
+        // Sign-out: clear in-memory dictionary + snippets (and the shared
+        // words) so the previous user's data doesn't bleed into a guest
+        // session or transcription prompts before the next sync wipes/reloads
+        // SQLite.
         useDictionaryStore.getState().reset();
         useSnippetsStore.getState().reset();
+        useSharedDictionaryStore.getState().reset();
         // After a real account signs out, whoever signs in next is a new
         // account, not a link, so the next id change has to be free to wipe.
         // An anonymous session signing out keeps the link armed: the rows

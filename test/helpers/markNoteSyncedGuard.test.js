@@ -17,6 +17,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 
 const LOCAL_EARLY = "2026-07-20 10:00:00";
@@ -31,10 +32,12 @@ async function setup(t) {
   const cloud = createFakeCloud();
   const api = createElectronApi(db, { cloud });
   windowStub.electronAPI = api;
+  // Private notes stay on the device (D2): the pushes here are a teamspace's.
+  const team = joinTeamSpace(db, cloud);
   await establishValidatedAuth();
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
-  return { db, cloud, api, service };
+  return { db, cloud, api, service, team };
 }
 
 function updateNote(db, id, fields) {
@@ -93,17 +96,18 @@ test("markNoteSyncedIfUnchanged leaves a row pending when its content changed si
 test("an edit landing during the push survives: the row stays pending and re-pushes", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
-  const { db, cloud, api, service } = ctx;
+  const { db, cloud, api, service, team } = ctx;
 
-  const note = db.saveNote("Racy note", "original body", "personal").note;
+  const note = saveNoteIn(db, team.id, "Racy note", "original body").note;
   updateNote(db, note.id, { created_at: LOCAL_EARLY, updated_at: LOCAL_EARLY });
 
-  // Simulate the race: the edit lands right after the push reads its snapshot.
-  const realGetPending = api.getPendingNotes;
+  // Simulate the race: the edit lands while the create is on the wire. (The
+  // pass reads each note again under its push lock, so an edit landing before
+  // the request simply goes out with it.)
+  const realRequest = api.cloudApiRequest;
   let raced = false;
-  api.getPendingNotes = async (spaceKind) => {
-    const rows = await realGetPending(spaceKind);
-    if (!raced && rows.length > 0) {
+  api.cloudApiRequest = async (options) => {
+    if (!raced && options.method === "POST" && options.path === "/api/notes/batch-create") {
       raced = true;
       updateNote(db, note.id, {
         content: "edited during push",
@@ -111,7 +115,7 @@ test("an edit landing during the push survives: the row stays pending and re-pus
         sync_status: "pending",
       });
     }
-    return rows;
+    return realRequest(options);
   };
 
   await service.syncAll(true);

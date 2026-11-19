@@ -6,7 +6,7 @@
  * handshake surfaces here on a schedule instead of in a customer report
  * (#1624 sat in shipped builds for three days as a swallowed warmup warning).
  * Providers whose request shape is theirs alone rather than the shared
- * OpenAI-compatible multipart (Gemini, batch and Live) send a real
+ * OpenAI-compatible multipart (Gemini, batch and Live; ElevenLabs) send a real
  * transcription through the shipped module for the same reason, and OpenAI's
  * batch default is posted the way the app builds it so a retired model or
  * field surfaces here too.
@@ -30,18 +30,22 @@ import geminiTranscription from "../src/helpers/geminiTranscription.js";
 import geminiLive from "../src/helpers/geminiLiveStreaming.js";
 import AssemblyAiStreaming from "../src/helpers/assemblyAiStreaming.js";
 import DeepgramStreaming from "../src/helpers/deepgramStreaming.js";
-import modelRegistryData from "../src/models/modelRegistryData.json" with { type: "json" };
+import { loadCanaryCatalog } from "./lib/canary-catalog.mjs";
+import { probeElevenLabsBatch } from "./lib/elevenlabs-batch-probe.mjs";
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
 const { pcm16ToWav } = audioUtils;
 const { transcribeWithGemini } = geminiTranscription;
 const { GeminiLiveStreaming } = geminiLive;
 
-// The registry's first model is what a fresh AssemblyAI selection dictates with
+// The provider's default is what a fresh AssemblyAI selection dictates with
 // (ModelRegistry.getDefaultTranscriptionModel), so that is the id to probe.
-const ASSEMBLYAI_DEFAULT_MODEL = modelRegistryData.transcriptionProviders.find(
+// Pass --published to probe the live signed catalog users receive.
+const modelRegistryData = await loadCanaryCatalog();
+const assemblyAi = modelRegistryData.transcriptionProviders.find(
   (provider) => provider.id === "assemblyai"
-).models[0].id;
+);
+const ASSEMBLYAI_DEFAULT_MODEL = assemblyAi.defaultModel ?? assemblyAi.models[0].id;
 
 const HANDSHAKE_TIMEOUT_MS = 15000;
 // Half a second of 16 kHz mono silence: enough for a provider to accept and
@@ -203,7 +207,7 @@ async function probeGeminiLive(key) {
       streaming.sendAudio(pcm.subarray(offset, offset + LIVE_FRAME_BYTES));
       await new Promise((resolve) => setTimeout(resolve, LIVE_FRAME_MS));
     }
-    const { text } = await streaming.disconnect(true);
+    const { text } = await streaming.disconnect();
     if (!/quick brown fox/i.test(text)) {
       return { ok: false, detail: `no usable transcript: ${JSON.stringify(text)}` };
     }
@@ -327,6 +331,11 @@ const PROBES = [
     id: "gemini-batch-webm",
     keyEnv: "STT_CANARY_GEMINI_KEY",
     run: (key) => probeGeminiBatch(key, toWebmOpus(SILENT_WAV()), "audio/webm"),
+  },
+  {
+    id: "elevenlabs-batch-webm",
+    keyEnv: "STT_CANARY_ELEVENLABS_KEY",
+    run: (key) => probeElevenLabsBatch(key, toWebmOpus(SILENT_WAV())),
   },
 ];
 

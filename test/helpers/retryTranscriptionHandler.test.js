@@ -1,7 +1,9 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const fs = require("node:fs");
+const { EventEmitter } = require("node:events");
 const path = require("node:path");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
@@ -10,7 +12,19 @@ const originalLoad = Module._load;
 // Captures every ipcMain.handle registration and every net.fetch request so the
 // registered handler closures can be invoked directly against a fake `this`.
 const handlers = new Map();
+const eventHandlers = new Map();
 const fetches = [];
+let tinfoilBehavior = async () => ({ text: "tinfoil text", model: "tinfoil-model" });
+let selfHostedHeaders = JSON.stringify({
+  dictation: [{ name: "X-API-Key", value: "dictation-key" }],
+  upload: [{ name: "X-API-Key", value: "upload-key" }],
+});
+let policySnapshot = { success: true, managed: false };
+// A lookup that doesn't answer until the test lets it.
+let policyLookupGate = null;
+let accountWorkspaces = [];
+const broadcasts = [];
+let tokenState = { token: "test-token", generation: 1 };
 let fetchResponse = () => ({
   ok: true,
   status: 200,
@@ -29,11 +43,14 @@ const electronStub = {
   },
   ipcMain: {
     handle: (channel, fn) => handlers.set(channel, fn),
-    on: () => {},
+    on: (channel, fn) => eventHandlers.set(channel, fn),
     removeHandler: () => {},
   },
   net: {
     fetch: async (url, init) => {
+      if (String(url).endsWith("/api/workspaces")) {
+        return { ok: true, json: async () => ({ data: accountWorkspaces }) };
+      }
       fetches.push({ url: String(url), init });
       return fetchResponse(String(url), init);
     },
@@ -81,6 +98,33 @@ const CLOUD_CHUNKS = ["chunk-000.mp3", "chunk-001.mp3", "chunk-002.mp3", "chunk-
 // make it slow and dependent on the runner having a usable binary.
 const wavConversions = [];
 let convertBehavior = async () => CONVERTED_WAV;
+let prepareUploadBehavior;
+let localReasoningBehavior = async () => "local output";
+let localReasoningCancel = () => {};
+
+// ffmpeg's segmenter, faked: writes `count` pieces of about a second of 128 kbps
+// MP3 each where it is told (smaller ones read as a sliver and are dropped). A
+// short upload is one piece, so OpenRouter upload tests written before chunking
+// still make exactly one request.
+const splitCalls = [];
+const piecesOf = (count) => async (_inputPath, outputDir) => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const chunkPaths = [];
+  for (let i = 0; i < count; i++) {
+    const piece = path.join(outputDir, `chunk-${String(i).padStart(3, "0")}.mp3`);
+    fs.writeFileSync(piece, Buffer.alloc(16_000, i));
+    chunkPaths.push(piece);
+  }
+  return { chunkPaths, durationSeconds: count * 240 };
+};
+let splitBehavior = piecesOf(1);
+// The OpenWhispr Cloud retry's chunker, faked: four tiny pieces.
+const cloudChunks = async (_inputPath, chunkDir) => {
+  const chunkPaths = CLOUD_CHUNKS.map((name) => path.join(chunkDir, name));
+  for (const chunkPath of chunkPaths) fs.writeFileSync(chunkPath, "audio");
+  return { chunkPaths, durationSeconds: 120 };
+};
 
 const cortiCalls = [];
 const tinfoilCalls = [];
@@ -95,6 +139,23 @@ let cortiBehavior = async () => ({ text: "corti text" });
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
   if (parent?.filename === handlersModulePath) {
+    if (request === "../services/localReasoningBridge")
+      return {
+        default: {
+          processText: (...args) => localReasoningBehavior(...args),
+          cancel: (id) => localReasoningCancel(id),
+        },
+      };
+    if (request === "./providerUploadAudio") {
+      const real = originalLoad.call(this, request, parent, isMain);
+      return {
+        ...real,
+        prepareProviderUpload: (...args) =>
+          prepareUploadBehavior
+            ? prepareUploadBehavior(...args)
+            : real.prepareProviderUpload(...args),
+      };
+    }
     if (request === "./cortiTranscription") {
       return {
         transcribeAudio: async (opts) => {
@@ -107,16 +168,43 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return {
         transcribeWithTinfoil: async (opts) => {
           tinfoilCalls.push(opts);
-          return { text: "tinfoil text", model: "tinfoil-model" };
+          return tinfoilBehavior(opts);
         },
         getTinfoilChatModels: () => [],
       };
     }
+    if (request === "./workspacePolicyManager")
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        createWorkspacePolicyManager: () => ({
+          getPolicy: async ({ expectedAuthGeneration = tokenState.generation }) => {
+            await policyLookupGate;
+            return {
+              ...policySnapshot,
+              accountId: "account-a",
+              authGeneration: expectedAuthGeneration,
+            };
+          },
+          heldPolicy: () => null,
+        }),
+      };
     if (request === "./tokenStore") {
-      return { ...originalLoad.call(this, request, parent, isMain), get: () => "test-token" };
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        get: () => tokenState.token,
+        getState: () => ({ ...tokenState }),
+      };
     }
+    if (request === "./accountScopeBinding")
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        resolveActiveAccountScope: ({ generation }) => ({
+          accountId: "account-a",
+          authGeneration: generation,
+        }),
+      };
     if (request === "./windowBroadcast") {
-      return { broadcastToWindows: () => {} };
+      return { broadcastToWindows: (...args) => broadcasts.push(args) };
     }
     if (request === "./ffmpegUtils") {
       const real = originalLoad.call(this, request, parent, isMain);
@@ -126,10 +214,9 @@ Module._load = function loadWithMocks(request, parent, isMain) {
           wavConversions.push(buffer);
           return convertBehavior(buffer, options);
         },
-        splitAudioFile: async (inputPath, chunkDir) => {
-          const chunkPaths = CLOUD_CHUNKS.map((name) => path.join(chunkDir, name));
-          for (const chunkPath of chunkPaths) fs.writeFileSync(chunkPath, "audio");
-          return { chunkPaths, durationSeconds: 120 };
+        splitAudioFile: (inputPath, outputDir, options) => {
+          splitCalls.push({ inputPath, outputDir, options });
+          return splitBehavior(inputPath, outputDir, options);
         },
       };
     }
@@ -154,9 +241,16 @@ function buildFakeThis() {
   const dbRows = new Map([
     [7, { id: 7, audio_duration_ms: 1200 }],
     [8, { id: 8, audio_duration_ms: 1200 }],
+    [9, { id: 9, audio_duration_ms: 1200 }],
   ]);
   const target = {
     sessionId: "test-session",
+    _enterpriseAudioBinding: null,
+    _enterpriseAudioOwner: null,
+    _enterpriseAudioScope: null,
+    _enterpriseAudioScopeRevision: 0,
+    _uploadCancelRegistry:
+      require("../../src/helpers/uploadCancelRegistry").createUploadCancelRegistry(),
     audioStorageManager: {
       // 7 is a stored WebM recording, 8 one already in WAV, 9 one too large to
       // upload inline.
@@ -170,6 +264,7 @@ function buildFakeThis() {
               : null,
     },
     databaseManager: {
+      activeAccountId: null,
       updateTranscriptionText: (id, text) => textUpdates.push({ id, text }),
       updateTranscriptionStatus: (id, status) => statusUpdates.push({ id, status }),
       updateTranscriptionAudio: () => {},
@@ -189,7 +284,11 @@ function buildFakeThis() {
       getMistralKey: () => "mk-mistral",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
+      getAssemblyAIKey: () => "aai-assemblyai",
+      getElevenlabsKey: () => "xi-elevenlabs",
+      getOpenrouterKey: () => "ork-openrouter",
       getCustomTranscriptionKey: () => "ck-custom",
+      getSelfHostedSttHeaders: () => selfHostedHeaders,
       getCortiClientId: () => "corti-id",
       getCortiClientSecret: () => "corti-secret",
     },
@@ -201,15 +300,29 @@ function buildFakeThis() {
 
 let retryHandler;
 let fakeThis;
-test.before(() => {
+test.before(async (t) => {
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  t.after(() => {
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   fakeThis = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(fakeThis);
+  fakeThis.transcribeLocalFile = Ctor.prototype.transcribeLocalFile.bind(fakeThis);
+  fakeThis._retireDisallowedProductWork =
+    Ctor.prototype._retireDisallowedProductWork.bind(fakeThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
+  await fakeThis.refreshEffectivePolicy();
   retryHandler = handlers.get("retry-transcription");
   assert.ok(retryHandler, "retry-transcription must be registered");
 });
+
+// Tests that switch the token restore an older generation afterwards, which a
+// real token never does; the effective policy re-reads the restored identity.
+test.beforeEach(() => fakeThis.refreshEffectivePolicy());
 
 test.after(() => {
   Module._load = originalLoad;
@@ -521,13 +634,16 @@ const CLOUD_SETTINGS = {
 
 async function withCloudResponse(t, respond, id) {
   const originalFetchResponse = fetchResponse;
+  const originalSplitBehavior = splitBehavior;
   const originalApiUrl = process.env.OPENWHISPR_API_URL;
   t.after(() => {
     fetchResponse = originalFetchResponse;
+    splitBehavior = originalSplitBehavior;
     if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
     else process.env.OPENWHISPR_API_URL = originalApiUrl;
   });
   process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  splitBehavior = cloudChunks;
   fetchResponse = (url, init) => {
     const { status, body } = respond(init);
     return { ok: status === 200, status, text: async () => JSON.stringify(body) };
@@ -535,6 +651,99 @@ async function withCloudResponse(t, respond, id) {
   textUpdates.length = 0;
   return retryHandler({ sender: { window: {} } }, id, CLOUD_SETTINGS);
 }
+
+test("retry: switching accounts while routing never uploads the original account's recording", async (t) => {
+  const originalAudioRead = fakeThis.audioStorageManager.getAudioBuffer;
+  const originalTokenState = tokenState;
+  const originalAccountId = fakeThis.databaseManager.activeAccountId;
+  t.after(() => {
+    fakeThis.audioStorageManager.getAudioBuffer = originalAudioRead;
+    tokenState = originalTokenState;
+    fakeThis.databaseManager.activeAccountId = originalAccountId;
+  });
+  fakeThis.databaseManager.activeAccountId = "account-a";
+  fakeThis.audioStorageManager.getAudioBuffer = (id) => {
+    const audio = originalAudioRead(id);
+    queueMicrotask(() => {
+      tokenState = { token: "token-b", generation: tokenState.generation + 1 };
+      fakeThis.databaseManager.activeAccountId = "account-b";
+    });
+    return audio;
+  };
+  fetches.length = 0;
+  statusUpdates.length = 0;
+
+  const result = await withCloudResponse(t, () => ({ status: 200, body: { text: "A's text" } }), 8);
+
+  assert.equal(result.success, false);
+  assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
+  assert.deepEqual(fetches, [], "B's credential must never upload A's saved audio");
+  assert.deepEqual(textUpdates, []);
+  assert.deepEqual(statusUpdates, []);
+});
+
+test("retry: a decode completed after an account change leaves the original row alone", async (t) => {
+  const originalAccountId = fakeThis.databaseManager.activeAccountId;
+  t.after(() => {
+    fakeThis.databaseManager.activeAccountId = originalAccountId;
+  });
+  fakeThis.databaseManager.activeAccountId = "account-a";
+  await withLocalResult(
+    async () => {
+      fakeThis.databaseManager.activeAccountId = "account-b";
+      return { success: true, text: "A's decoded text" };
+    },
+    PARAKEET_SETTINGS,
+    (result) => {
+      assert.equal(result.success, false);
+      assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
+      assert.deepEqual(textUpdates, []);
+      assert.deepEqual(statusUpdates, []);
+    }
+  );
+});
+
+test("retry: a token rotated for the same account mid-decode still saves the result", async (t) => {
+  const originalTokenState = tokenState;
+  const originalAccountId = fakeThis.databaseManager.activeAccountId;
+  t.after(() => {
+    tokenState = originalTokenState;
+    fakeThis.databaseManager.activeAccountId = originalAccountId;
+  });
+  fakeThis.databaseManager.activeAccountId = "account-a";
+  await withLocalResult(
+    async () => {
+      tokenState = { token: "token-a-rotated", generation: tokenState.generation + 1 };
+      return { success: true, text: "decoded across the rotation" };
+    },
+    PARAKEET_SETTINGS,
+    (result) => {
+      assert.equal(result.success, true);
+      assert.deepEqual(textUpdates, [{ id: 7, text: "decoded across the rotation" }]);
+    }
+  );
+});
+
+test("retry: a queued completion does not broadcast to the next account", async (t) => {
+  await new Promise(setImmediate);
+  const originalAccountId = fakeThis.databaseManager.activeAccountId;
+  t.after(() => {
+    fakeThis.databaseManager.activeAccountId = originalAccountId;
+  });
+  fakeThis.databaseManager.activeAccountId = "account-a";
+  broadcasts.length = 0;
+
+  const result = await invoke(PARAKEET_SETTINGS);
+  assert.equal(result.success, true);
+  fakeThis.databaseManager.activeAccountId = "account-b";
+  await new Promise(setImmediate);
+
+  assert.deepEqual(
+    broadcasts.filter(([channel]) => channel === "transcription-updated"),
+    [],
+    "the queued A result cannot reach B's renderer"
+  );
+});
 
 test("retry: no speech from OpenWhispr Cloud is translated like a local engine's", async (t) => {
   const result = await withCloudResponse(
@@ -580,6 +789,117 @@ test("retry: an empty answer from a BYOK engine is no speech, not a missing engi
   }
 });
 
+test("retry: Scribe's [pause] for silence is no speech, not a transcript", async (t) => {
+  const originalFetchResponse = fetchResponse;
+  t.after(() => {
+    fetchResponse = originalFetchResponse;
+  });
+  fetchResponse = () => ({ ok: true, status: 200, json: async () => ({ text: "[pause]" }) });
+  textUpdates.length = 0;
+  const result = await invoke({
+    cloudTranscriptionProvider: "openrouter",
+    cloudTranscriptionModel: "elevenlabs/scribe-v2",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+  });
+  assert.equal(result.success, false);
+  assert.equal(result.code, "NO_SPEECH_DETECTED");
+  assert.equal(textUpdates.length, 0);
+});
+
+const ELEVENLABS_SETTINGS = {
+  cloudTranscriptionProvider: "elevenlabs",
+  cloudTranscriptionModel: "scribe_v3",
+  cloudTranscriptionMode: "byok",
+  transcriptionMode: "providers",
+  preferredLanguage: "de",
+};
+
+test("retry: ElevenLabs gets the recording at its own endpoint, with the job's abort signal", async () => {
+  fetches.length = 0;
+  const result = await invoke(ELEVENLABS_SETTINGS);
+  assert.equal(result.success, true);
+  assert.equal(fetches.length, 1);
+  assert.equal(fetches[0].url, "https://api.elevenlabs.io/v1/speech-to-text");
+  assert.deepEqual(fetches[0].init.headers, { "xi-api-key": "xi-elevenlabs" });
+  assert.equal(fetches[0].init.body.get("model_id"), "scribe_v3");
+  assert.equal(fetches[0].init.body.get("language_code"), "de");
+  assert.ok(fetches[0].init.signal instanceof AbortSignal);
+});
+
+test("ElevenLabs dictation cancellation stops only the sender's request before a keyterm retry", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const response = deferred();
+  const previous = fetchResponse;
+  t.after(() => {
+    fetchResponse = previous;
+    response.resolve();
+  });
+  fetches.length = 0;
+  fetchResponse = async () => {
+    await response.promise;
+    return Response.json({ detail: "invalid keyterms" }, { status: 422 });
+  };
+
+  const sender = Object.assign(new EventEmitter(), { id: 17 });
+  const pending = handlers.get("proxy-elevenlabs-transcription")(
+    { sender },
+    { audioBuffer: new ArrayBuffer(4), keyterms: ["OpenWhispr"] }
+  );
+  await until(() => fetches.length === 1);
+  const { signal } = fetches[0].init;
+  eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: 18 } });
+  assert.equal(signal.aborted, false);
+  eventHandlers.get("cloud-transcribe-cancel")({ sender });
+  response.resolve();
+  const result = await pending;
+  assert.equal(signal.aborted, true);
+  assert.ok(result.error);
+  assert.equal(fetches.length, 1);
+  assert.equal(sender.listenerCount("destroyed"), 0);
+});
+
+test("a dictation cancelled while policy is loading never reaches ElevenLabs", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const lookup = deferred();
+  const previousToken = tokenState;
+  t.after(async () => {
+    lookup.resolve();
+    policyLookupGate = null;
+    tokenState = previousToken;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  policyLookupGate = lookup.promise;
+  tokenState = { ...tokenState, generation: tokenState.generation + 1 };
+  const refreshing = fakeThis.refreshEffectivePolicy();
+  assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
+  const sender = Object.assign(new EventEmitter(), { id: 17 });
+  fetches.length = 0;
+  const pending = handlers.get("proxy-elevenlabs-transcription")(
+    { sender },
+    { audioBuffer: new ArrayBuffer(4) }
+  );
+  eventHandlers.get("cloud-transcribe-cancel")({ sender });
+  lookup.resolve();
+  await refreshing;
+  assert.ok((await pending).error);
+  assert.equal(fetches.length, 0);
+  assert.equal(sender.listenerCount("destroyed"), 0);
+});
+
+test("retry: a recording over the upload cap still goes to ElevenLabs", async (t) => {
+  const originalAudioRead = fakeThis.audioStorageManager.getAudioBuffer;
+  t.after(() => {
+    fakeThis.audioStorageManager.getAudioBuffer = originalAudioRead;
+  });
+  // Dictation sends a recording of any length, so its retry must too.
+  fakeThis.audioStorageManager.getAudioBuffer = () => Buffer.alloc(26 * 1024 * 1024);
+  fetches.length = 0;
+  const result = await invoke(ELEVENLABS_SETTINGS);
+  assert.equal(result.success, true);
+  assert.equal(fetches.length, 1);
+});
+
 test("retry: a chunked cloud retry that lost a chunk saves the rest and returns the warning", async (t) => {
   const result = await withCloudResponse(
     t,
@@ -611,6 +931,108 @@ test("retry: mistral goes to Mistral with x-api-key", async () => {
   assert.equal(result.success, true);
   assert.match(fetches[0].url, /api\.mistral\.ai/);
   assert.equal(fetches[0].init.headers["x-api-key"], "mk-mistral");
+});
+
+test("retry: openrouter goes to OpenRouter with the OpenRouter key", async () => {
+  fetches.length = 0;
+  const result = await invoke({
+    cloudTranscriptionProvider: "openrouter",
+    cloudTranscriptionModel: "openai/gpt-transcribe",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+  });
+  assert.equal(result.success, true);
+  assert.equal(fetches[0].url, "https://openrouter.ai/api/v1/audio/transcriptions");
+  assert.equal(fetches[0].init.headers.Authorization, "Bearer ork-openrouter");
+});
+
+const ASSEMBLYAI_DICTATION = {
+  cloudTranscriptionProvider: "assemblyai",
+  cloudTranscriptionModel: "dictation",
+  cloudTranscriptionMode: "byok",
+  transcriptionMode: "providers",
+};
+const dictationResponse = (body) => () => ({
+  ok: true,
+  status: 200,
+  json: async () => body,
+  text: async () => JSON.stringify(body),
+});
+const defaultFetchResponse = fetchResponse;
+
+test("retry: AssemblyAI Dictation goes to the Dictation API and hands back its rewrite", async () => {
+  fetches.length = 0;
+  textUpdates.length = 0;
+  fetchResponse = dictationResponse({ text: "um hello there", llm_response: "Hello there." });
+  try {
+    const result = await invoke({ ...ASSEMBLYAI_DICTATION, preferredLanguage: "es" });
+    assert.equal(result.success, true);
+    assert.equal(fetches.length, 1);
+    assert.equal(fetches[0].url, "https://dictation.assemblyai.com/v1/transcribe");
+    assert.deepEqual(fetches[0].init.headers, { Authorization: "aai-assemblyai" });
+    const body = fetches[0].init.body;
+    assert.deepEqual(JSON.parse(await body.get("config").text()), { language_codes: ["es"] });
+    assert.equal(body.get("audio").type, "audio/webm");
+    // The row keeps the verbatim transcript; the renderer decides whether the rewrite stands in.
+    assert.deepEqual(textUpdates, [{ id: 7, text: "um hello there" }]);
+    assert.equal(result.cleanedText, "Hello there.");
+  } finally {
+    fetchResponse = defaultFetchResponse;
+  }
+});
+
+test("retry: the recorded route chooses the recognition language and forwards dictionary hints", async (t) => {
+  const db = fakeThis.databaseManager;
+  const row = db.getTranscriptionById(7);
+  const keyterms = ["Quetzalcóatl", "Amaya"];
+  t.after(() => {
+    delete row.route_kind;
+    fetchResponse = defaultFetchResponse;
+  });
+  fetchResponse = dictationResponse({ text: "hola" });
+  for (const [kind, source, expected] of [
+    ["translation", "es-MX", ["es"]],
+    ["translation", "auto", undefined],
+    ["translation", undefined, undefined],
+    [null, "es-MX", ["en"]],
+  ]) {
+    row.route_kind = kind;
+    fetches.length = 0;
+    const result = await invoke({
+      ...ASSEMBLYAI_DICTATION,
+      preferredLanguage: "en-US",
+      translationSourceLanguage: source,
+      keyterms,
+    });
+    assert.equal(result.success, true);
+    assert.equal(fetches.length, 1);
+    const config = JSON.parse(await fetches[0].init.body.get("config").text());
+    assert.deepEqual(config.language_codes, expected);
+    assert.deepEqual(config.keyterms_prompt, keyterms);
+  }
+});
+
+test("retry: AssemblyAI's realtime models still fail closed", async () => {
+  fetches.length = 0;
+  const result = await invoke({ ...ASSEMBLYAI_DICTATION, cloudTranscriptionModel: "" });
+  assert.equal(result.success, false);
+  assert.equal(result.code, "STREAMING_ONLY_PROVIDER");
+  assert.equal(fetches.length, 0);
+});
+
+test("retry: a missing AssemblyAI key is a classified error", async () => {
+  fetches.length = 0;
+  const originalGetKey = fakeThis.environmentManager.getAssemblyAIKey;
+  fakeThis.environmentManager.getAssemblyAIKey = () => "";
+  try {
+    const result = await invoke(ASSEMBLYAI_DICTATION);
+    assert.equal(result.success, false);
+    assert.equal(result.code, "API_KEY_MISSING");
+    assert.deepEqual(result.messageParams, { provider: "AssemblyAI" });
+    assert.equal(fetches.length, 0);
+  } finally {
+    fakeThis.environmentManager.getAssemblyAIKey = originalGetKey;
+  }
 });
 
 test("retry: a missing BYOK key on the generic provider branch is a classified error", async () => {
@@ -697,11 +1119,14 @@ test("proxy transcription handlers resolve to structured errors instead of rejec
     for (const channel of [
       "proxy-mistral-transcription",
       "proxy-xai-transcription",
+      "proxy-assemblyai-transcription",
       "proxy-corti-transcription",
+      "proxy-elevenlabs-transcription",
     ]) {
       const fn = handlers.get(channel);
       assert.ok(fn, `${channel} must be registered`);
-      const result = await fn({ sender: {} }, { audioBuffer: new ArrayBuffer(4) });
+      const sender = Object.assign(new EventEmitter(), { id: 1 });
+      const result = await fn({ sender }, { audioBuffer: new ArrayBuffer(4) });
       assert.equal(typeof result.error, "string", channel);
     }
   } finally {
@@ -721,12 +1146,101 @@ const pathNode = require("node:path");
 
 const uploadTempFile = pathNode.join(osNode.tmpdir(), "openwhispr-upload-handler-test.webm");
 
-const invokeUpload = (payload) => {
+const progressEvents = [];
+const invokeUpload = (payload, bytes = Buffer.from([1, 2, 3, 4])) => {
   const uploadHandler = handlers.get("transcribe-audio-file-byok");
   assert.ok(uploadHandler, "transcribe-audio-file-byok must be registered");
-  fsNode.writeFileSync(uploadTempFile, Buffer.from([1, 2, 3, 4]));
-  return uploadHandler({ sender: {} }, { filePath: uploadTempFile, ...payload });
+  fsNode.writeFileSync(uploadTempFile, bytes);
+  return uploadHandler(
+    { sender: { send: (channel, data) => progressEvents.push({ channel, data }) } },
+    { filePath: uploadTempFile, ...payload }
+  );
 };
+
+const whisperResponse = {
+  text: "Send the report today. Thanks!",
+  segments: [
+    { text: "Send the report", no_speech_prob: 0.01, avg_logprob: -0.2 },
+    { text: "today.", no_speech_prob: 0.01, avg_logprob: -0.2 },
+    { text: "Thanks!", no_speech_prob: 0.99, avg_logprob: -1.5 },
+  ],
+};
+
+function mockWhisperResponse(t, body = whisperResponse) {
+  const original = fetchResponse;
+  t.after(() => {
+    fetchResponse = original;
+  });
+  fetchResponse = () => new Response(JSON.stringify(body));
+}
+
+test("retry: Groq writes only the retained dictation to both history fields", async (t) => {
+  mockWhisperResponse(t);
+  const update = t.mock.method(fakeThis.databaseManager, "updateTranscriptionText");
+  const result = await invoke({
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "groq",
+    cloudTranscriptionModel: "whisper-large-v3",
+    transcriptionMode: "providers",
+  });
+  assert.equal(result.success, true);
+  assert.equal(fetches.at(-1).init.body.get("response_format"), "verbose_json");
+  assert.deepEqual(update.mock.calls[0].arguments, [
+    7,
+    "Send the report today.",
+    "Send the report today.",
+  ]);
+});
+
+test("voice draft: Whisper filters the chat mic while ordinary uploads keep the provider text", async (t) => {
+  mockWhisperResponse(t);
+  const { path: filePath } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, filePath));
+  const settings = {
+    provider: "openai",
+    model: "whisper-1",
+    apiKey: "test-key",
+    transcriptionMode: "providers",
+  };
+  const draft = await handlers.get("transcribe-audio-file-byok")(
+    { sender: {} },
+    { ...settings, filePath, purpose: "dictation" }
+  );
+  assert.deepEqual(draft, { success: true, text: "Send the report today." });
+  assert.match(fetches.at(-1).init.body.toString(), /name="response_format"\r\n\r\nverbose_json/);
+  const upload = await invokeUpload({ ...settings, purpose: "dictation" });
+  assert.deepEqual(upload, { success: true, text: whisperResponse.text });
+  assert.doesNotMatch(fetches.at(-1).init.body.toString(), /name="response_format"/);
+});
+
+test("an all-silence Whisper response leaves history intact and the voice draft empty", async (t) => {
+  const noise = whisperResponse.segments.at(-1);
+  mockWhisperResponse(t, { text: noise.text, segments: [noise] });
+  const update = t.mock.method(fakeThis.databaseManager, "updateTranscriptionText");
+  const retry = await invoke({
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionModel: "whisper-1",
+    transcriptionMode: "providers",
+  });
+  assert.equal(retry.code, "NO_SPEECH_DETECTED");
+  assert.equal(update.mock.callCount(), 0);
+
+  const { path: filePath } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, filePath));
+  const draft = await handlers.get("transcribe-audio-file-byok")(
+    { sender: {} },
+    {
+      filePath,
+      purpose: "dictation",
+      provider: "groq",
+      model: "whisper-large-v3-turbo",
+      apiKey: "test-key",
+      transcriptionMode: "providers",
+    }
+  );
+  assert.deepEqual(draft, { success: true, text: "" });
+});
 
 test("upload: mistral sends x-api-key with a provider-validated model and no language on auto", async () => {
   fetches.length = 0;
@@ -745,6 +1259,595 @@ test("upload: mistral sends x-api-key with a provider-validated model and no lan
   const body = fetches[0].init.body.toString();
   assert.match(body, /voxtral-mini-latest/);
   assert.doesNotMatch(body, /name="language"/);
+});
+
+test("voice take: AssemblyAI Dictation transcribes through the Dictation API, verbatim", async () => {
+  fetches.length = 0;
+  fetchResponse = dictationResponse({ text: "um what's on my calendar", llm_response: "Tidy." });
+  try {
+    const result = await invokeUpload({
+      apiKey: "aai-from-renderer",
+      model: "dictation",
+      provider: "assemblyai",
+      language: "en",
+      purpose: "dictation",
+      transcriptionMode: "providers",
+    });
+    assert.deepEqual(result, { success: true, text: "um what's on my calendar" });
+    assert.equal(fetches.length, 1);
+    assert.equal(fetches[0].url, "https://dictation.assemblyai.com/v1/transcribe");
+    assert.deepEqual(fetches[0].init.headers, { Authorization: "aai-from-renderer" });
+    assert.equal(fetches[0].init.body.get("audio").type, "audio/webm");
+  } finally {
+    fetchResponse = defaultFetchResponse;
+  }
+});
+
+const assemblyAiSurfaces = {
+  dictation: () =>
+    handlers.get("proxy-assemblyai-transcription")(
+      { sender: {} },
+      { audioBuffer: new Uint8Array([1]) }
+    ),
+  retry: () => invoke(ASSEMBLYAI_DICTATION),
+  voice: () =>
+    invokeUpload({
+      provider: "assemblyai",
+      model: "dictation",
+      transcriptionMode: "providers",
+      purpose: "dictation",
+    }),
+};
+
+test("AssemblyAI Dictation requires permission for transcription and its built-in LLM on every surface", async (t) => {
+  t.after(async () => {
+    policySnapshot = { success: true, managed: false };
+    fetchResponse = defaultFetchResponse;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  fetchResponse = dictationResponse({ text: "verbatim", llm_response: "Rewritten." });
+  for (const [name, run] of Object.entries(assemblyAiSurfaces)) {
+    await t.test(name, async () => {
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policySnapshot = { success: true, managed: true, policy };
+      for (const [sttProviders, llmModes, llmProviders, allowed] of [
+        [["assemblyai"], ["local"], ["assemblyai"], false],
+        [["assemblyai"], ["providers"], ["openai"], false],
+        [["openai"], ["providers"], ["assemblyai"], false],
+        [["assemblyai"], ["providers"], ["assemblyai"], true],
+      ]) {
+        policy.transcription.allowedByokProviders = sttProviders;
+        policy.llm.allowedModes = llmModes;
+        policy.llm.allowedByokProviders = llmProviders;
+        await fakeThis.refreshEffectivePolicy();
+        fetches.length = 0;
+        const result = await run();
+        assert.equal(fetches.length, allowed ? 1 : 0);
+        if (allowed) assert.ok(result.success || result.text);
+        else assert.equal(result.success, false);
+      }
+    });
+  }
+});
+
+test("an enforced enterprise cleanup scope prevents AssemblyAI uploads, including verbatim voice takes", async (t) => {
+  const workspaceId = "workspace-cleanup";
+  fakeThis.databaseManager.activeWorkspaceId = workspaceId;
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+  });
+  const resolve = t.mock.method(
+    fakeThis.enterpriseIdentityManager,
+    "resolveProvider",
+    async (request) => {
+      assert.equal(request.workspaceId, workspaceId);
+      assert.equal(request.inferenceScope, "dictationCleanup");
+      assert.equal(request.setupMode, "manual");
+      return { managed: true };
+    }
+  );
+  for (const run of Object.values(assemblyAiSurfaces)) {
+    fetches.length = 0;
+    const result = await run();
+    assert.equal(result.code, "PROVIDER_POLICY_CONFLICT");
+    assert.equal(fetches.length, 0);
+  }
+  assert.equal(resolve.mock.callCount(), 3);
+});
+
+test("a verified non-enterprise workspace can still upload after its enterprise binding retires", async (t) => {
+  fakeThis.databaseManager.activeWorkspaceId = "workspace-personal";
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+    fetchResponse = defaultFetchResponse;
+  });
+  const resolve = t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    fakeThis._retireEnterpriseAudio();
+    throw Object.assign(new Error("Enterprise subscription required"), {
+      code: "ENTERPRISE_REQUIRED",
+    });
+  });
+  fetchResponse = dictationResponse({ text: "verbatim", llm_response: "Rewritten." });
+  fetches.length = 0;
+  const result = await assemblyAiSurfaces.dictation();
+  assert.equal(result.text, "verbatim");
+  assert.equal(fetches.length, 1);
+  assert.equal(fetches[0].init.signal.aborted, false);
+  assert.equal((await assemblyAiSurfaces.retry()).success, true);
+  assert.equal(resolve.mock.callCount(), 1);
+});
+
+test("canceling a live AssemblyAI request during authorization prevents its upload", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const sender = { id: 42 };
+  fakeThis.databaseManager.activeWorkspaceId = "cancel-during-lookup";
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    started.resolve();
+    await finish.promise;
+    return { managed: false };
+  });
+  fetches.length = 0;
+  const pending = handlers.get("proxy-assemblyai-transcription")(
+    { sender },
+    {
+      audioBuffer: new Uint8Array([1]),
+    }
+  );
+  await started.promise;
+  eventHandlers.get("cloud-transcribe-cancel")({ sender });
+  finish.resolve();
+  assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
+  assert.equal(fetches.length, 0);
+});
+
+test("live AssemblyAI cancellation affects only the sending window and rejects a late provider result", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const sender = { id: 42 };
+  t.after(() => {
+    fetchResponse = defaultFetchResponse;
+  });
+  fetchResponse = async (_url, init) => {
+    started.resolve(init.signal);
+    await finish.promise;
+    return dictationResponse({ text: "late transcript" })();
+  };
+  const pending = handlers.get("proxy-assemblyai-transcription")(
+    { sender },
+    { audioBuffer: new Uint8Array([1]) }
+  );
+  const signal = await started.promise;
+  eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: 43 } });
+  assert.equal(signal.aborted, false);
+  eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: sender.id } });
+  finish.resolve();
+  assert.equal(signal.aborted, true);
+  assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
+});
+
+test("switching personal workspaces aborts an AssemblyAI upload and discards a late body", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const db = fakeThis.databaseManager;
+  db.activeWorkspaceId = "personal-during-upload";
+  db.setActiveWorkspaceScope = ({ activeWorkspaceId }) => {
+    db.activeWorkspaceId = activeWorkspaceId;
+  };
+  t.after(() => {
+    delete db.activeWorkspaceId;
+    delete db.setActiveWorkspaceScope;
+    fetchResponse = defaultFetchResponse;
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    throw Object.assign(new Error("Enterprise subscription required"), {
+      code: "ENTERPRISE_REQUIRED",
+    });
+  });
+  fetchResponse = (_url, init) => ({
+    ok: true,
+    json: async () => {
+      started.resolve(init.signal);
+      await finish.promise;
+      return { text: "stale text", llm_response: "Stale rewrite." };
+    },
+  });
+  textUpdates.length = 0;
+  const pending = assemblyAiSurfaces.retry();
+  const signal = await started.promise;
+  const setWorkspace = handlers.get("set-active-workspace-scope");
+  assert.equal(setWorkspace({}, { activeWorkspaceId: db.activeWorkspaceId }).success, true);
+  assert.equal(signal.aborted, false);
+  assert.equal(setWorkspace({}, { activeWorkspaceId: "enterprise-after-switch" }).success, true);
+  finish.resolve();
+  assert.equal((await pending).code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(signal.aborted, true);
+  assert.deepEqual(textUpdates, []);
+});
+
+for (const surface of ["dictation", "retry"]) {
+  for (const measured of [true, false]) {
+    test(`AssemblyAI ${surface} recovers a long ${measured ? "measured" : "unmeasured"} recording`, async (t) => {
+      const previous = { fetchResponse, splitBehavior };
+      const row = fakeThis.databaseManager.getTranscriptionById(7);
+      const oldDuration = row.audio_duration_ms;
+      t.after(() => {
+        ({ fetchResponse, splitBehavior } = previous);
+        row.audio_duration_ms = oldDuration;
+      });
+      const original = fakeThis.audioStorageManager.getAudioBuffer(7);
+      row.audio_duration_ms = measured ? 1_201_000 : null;
+      splitBehavior = async (input, output) => {
+        assert.deepEqual(fs.readFileSync(input), original);
+        return piecesOf(2)(input, output);
+      };
+      const types = [];
+      fetchResponse = async (_url, init) => {
+        const audio = init.body.get("audio");
+        types.push(audio.type);
+        if (audio.type === "audio/webm") return new Response("Audio Too Large", { status: 413 });
+        const config = JSON.parse(await init.body.get("config").text());
+        assert.deepEqual(config, { language_codes: ["es"], keyterms_prompt: ["Amaya"] });
+        const bytes = new Uint8Array(await audio.arrayBuffer());
+        return dictationResponse({ text: `part ${bytes[0]}`, llm_response: "Chunk rewrite." })();
+      };
+      textUpdates.length = 0;
+      splitCalls.length = 0;
+      const result =
+        surface === "dictation"
+          ? await handlers.get("proxy-assemblyai-transcription")(
+              { sender: { id: 45 } },
+              {
+                audioBuffer: original,
+                mimeType: "audio/webm",
+                language: "es",
+                keyterms: ["Amaya"],
+                durationSeconds: measured ? 1201 : undefined,
+              }
+            )
+          : await invoke({ ...ASSEMBLYAI_DICTATION, preferredLanguage: "es", keyterms: ["Amaya"] });
+      if (surface === "dictation") assert.equal(result.text, "part 0 part 1");
+      else {
+        assert.equal(result.success, true);
+        assert.deepEqual(textUpdates, [{ id: 7, text: "part 0 part 1" }]);
+      }
+      assert.equal(result.cleanedText, undefined);
+      assert.deepEqual(types, [...(measured ? [] : ["audio/webm"]), "audio/mpeg", "audio/mpeg"]);
+      assert.equal(splitCalls.length, 1);
+      assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+    });
+  }
+}
+
+function setupDictationWorkspaceSwitch(t) {
+  const database = fakeThis.databaseManager;
+  const originalToken = tokenState;
+  const { deferred } = require("./harness/deferred");
+  const lookup = deferred();
+  database.activeWorkspaceId = "original-workspace";
+  database.setActiveWorkspaceScope = ({ activeWorkspaceId }) => {
+    database.activeWorkspaceId = activeWorkspaceId;
+  };
+  t.after(async () => {
+    delete database.activeWorkspaceId;
+    delete database.setActiveWorkspaceScope;
+    tokenState = originalToken;
+    policyLookupGate = null;
+    lookup.resolve();
+    fetchResponse = defaultFetchResponse;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    throw Object.assign(new Error("Personal workspace"), { code: "ENTERPRISE_REQUIRED" });
+  });
+  return {
+    holdPolicy() {
+      policyLookupGate = lookup.promise;
+      tokenState = { ...tokenState, generation: tokenState.generation + 1 };
+      void fakeThis.refreshEffectivePolicy();
+      assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
+    },
+    switchWorkspace(activeWorkspaceId) {
+      const result = handlers.get("set-active-workspace-scope")({}, { activeWorkspaceId });
+      assert.equal(result.success, true);
+    },
+    releasePolicy: lookup.resolve,
+  };
+}
+
+test("AssemblyAI work keeps its original workspace while dispatch and routing wait", async (t) => {
+  const workspace = setupDictationWorkspaceSwitch(t);
+  fetchResponse = dictationResponse({ text: "text from the previous workspace" });
+  fetches.length = 0;
+  workspace.holdPolicy();
+  const requests = Object.values(assemblyAiSurfaces).map((run) => run());
+  workspace.switchWorkspace("next-workspace");
+  workspace.switchWorkspace("original-workspace");
+  workspace.releasePolicy();
+  for (const result of await Promise.all(requests)) {
+    assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+  }
+  assert.equal(fetches.length, 0);
+});
+
+test("AssemblyAI checks the dispatch workspace against the database before upload", async (t) => {
+  const workspace = setupDictationWorkspaceSwitch(t);
+  fetches.length = 0;
+  workspace.holdPolicy();
+  const pending = assemblyAiSurfaces.dictation();
+  fakeThis.databaseManager.activeWorkspaceId = "restored-workspace";
+  workspace.releasePolicy();
+  assert.equal((await pending).code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(fetches.length, 0);
+});
+
+test("a repeated workspace notification preserves AssemblyAI and a switch preserves local retries", async (t) => {
+  const workspace = setupDictationWorkspaceSwitch(t);
+  fetchResponse = dictationResponse({ text: "same workspace text" });
+  workspace.holdPolicy();
+  const pending = assemblyAiSurfaces.dictation();
+  workspace.switchWorkspace("original-workspace");
+  workspace.releasePolicy();
+  assert.equal((await pending).text, "same workspace text");
+
+  const local = invoke({
+    ...ASSEMBLYAI_DICTATION,
+    useLocalWhisper: true,
+    transcriptionMode: "local",
+  });
+  workspace.switchWorkspace("next-workspace");
+  assert.equal((await local).success, true);
+});
+
+test("a workspace switch during final policy validation discards the AssemblyAI result", async (t) => {
+  for (const [surface, run] of Object.entries(assemblyAiSurfaces)) {
+    await t.test(surface, async (t) => {
+      const workspace = setupDictationWorkspaceSwitch(t);
+      textUpdates.length = 0;
+      statusUpdates.length = 0;
+      fetchResponse = () => ({
+        ok: true,
+        json: async () => {
+          workspace.holdPolicy();
+          setImmediate(() => {
+            workspace.switchWorkspace("next-workspace");
+            workspace.releasePolicy();
+          });
+          return { text: "previous workspace text", llm_response: "Previous rewrite." };
+        },
+      });
+      const result = await run();
+      assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+      assert.equal(result.text, undefined);
+      assert.equal(result.cleanedText, undefined);
+      assert.deepEqual(textUpdates, []);
+      assert.deepEqual(statusUpdates, []);
+    });
+  }
+});
+
+test("when a later AssemblyAI chunk fails, History keeps the recording and does not save a partial transcript", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  const row = fakeThis.databaseManager.getTranscriptionById(7);
+  const oldDuration = row.audio_duration_ms;
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+    row.audio_duration_ms = oldDuration;
+  });
+  row.audio_duration_ms = 1_201_000;
+  const original = fakeThis.audioStorageManager.getAudioBuffer(7);
+  splitBehavior = piecesOf(3);
+  splitCalls.length = 0;
+  textUpdates.length = 0;
+  let requests = 0;
+  fetchResponse = () =>
+    ++requests === 1
+      ? dictationResponse({ text: "first part" })()
+      : new Response("Unavailable", { status: 503 });
+
+  const result = await invoke(ASSEMBLYAI_DICTATION);
+  assert.equal(result.success, false);
+  assert.equal(result.status, 503);
+  assert.equal(requests, 2);
+  assert.deepEqual(textUpdates, []);
+  assert.deepEqual(fakeThis.audioStorageManager.getAudioBuffer(7), original);
+  assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+});
+
+test("a duration rejection on an unmeasured AssemblyAI voice take retries all pieces in order", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+  });
+  splitBehavior = piecesOf(3);
+  splitCalls.length = 0;
+  let requests = 0;
+  fetchResponse = (_url, init) => {
+    if (++requests === 1) return new Response("Audio exceeds 20 minutes", { status: 413 });
+    assert.equal(init.body.get("audio").type, "audio/mpeg");
+    return dictationResponse({ text: `part ${requests - 1}`, llm_response: "rewrite" })();
+  };
+  const result = await assemblyAiSurfaces.voice();
+  assert.deepEqual(result, { success: true, text: "part 1 part 2 part 3" });
+  assert.equal(requests, 4);
+  assert.equal(splitCalls.length, 1);
+  assert.ok(splitCalls[0].options.segmentDuration < 20 * 60);
+  assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+});
+
+test("a 20-minute AssemblyAI voice take is split before sending any audio", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+  });
+  splitBehavior = piecesOf(2);
+  fetches.length = 0;
+  fetchResponse = async (_url, init) => {
+    const audio = init.body.get("audio");
+    assert.equal(audio.type, "audio/mpeg");
+    const bytes = new Uint8Array(await audio.arrayBuffer());
+    return dictationResponse({ text: `piece ${bytes[0]}` })();
+  };
+  const result = await invokeUpload({
+    provider: "assemblyai",
+    model: "dictation",
+    transcriptionMode: "providers",
+    purpose: "dictation",
+    durationSeconds: 1200,
+  });
+  assert.deepEqual(result, { success: true, text: "piece 0 piece 1" });
+  assert.equal(fetches.length, 2);
+});
+
+test("canceling a long AssemblyAI voice take stops subsequent chunks and cleans split files", async () => {
+  const { deferred } = require("./harness/deferred");
+  const first = deferred();
+  const reply = deferred();
+  await withReplies(
+    (_url, { signal }) => {
+      first.resolve(signal);
+      return reply.promise;
+    },
+    3,
+    async () => {
+      const requestId = "long-voice-take";
+      const pending = invokeUpload({
+        provider: "assemblyai",
+        model: "dictation",
+        purpose: "dictation",
+        durationSeconds: 1201,
+        requestId,
+      });
+      const signal = await first.promise;
+      const cancel = await handlers.get("cancel-upload-transcription")({}, requestId);
+      reply.resolve(dictationResponse({ text: "discarded part" })());
+      const result = await pending;
+      assert.equal(cancel.success, true);
+      assert.equal(signal.aborted, true);
+      assert.equal(result.code, "UPLOAD_CANCELLED");
+      assert.equal(fetches.length, 1);
+      assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+    }
+  );
+});
+
+test("an encoder sliver is folded back into a full-length voice take before upload", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+  });
+  splitCalls.length = 0;
+  splitBehavior = async (input, output, options) => {
+    const pieces = await piecesOf(3)(input, output);
+    if (options.segmentDuration === 600) fs.truncateSync(pieces.chunkPaths[2], 1773);
+    return pieces;
+  };
+  fetches.length = 0;
+  fetchResponse = async (_url, init) => {
+    const audio = init.body.get("audio");
+    if (audio.size < 8000) return new Response("Audio too short", { status: 400 });
+    const bytes = new Uint8Array(await audio.arrayBuffer());
+    return dictationResponse({ text: `piece ${bytes[0]}` })();
+  };
+  const result = await invokeUpload({
+    provider: "assemblyai",
+    model: "dictation",
+    transcriptionMode: "providers",
+    purpose: "dictation",
+    durationSeconds: 1200,
+  });
+  assert.deepEqual(result, { success: true, text: "piece 0 piece 1 piece 2" });
+  assert.equal(fetches.length, 3);
+  assert.equal(splitCalls.length, 2);
+  assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+});
+
+test("AssemblyAI waits for a signed-in workspace to resolve and for both workspace IDs to agree", async (t) => {
+  accountWorkspaces = [{ id: "new-workspace" }];
+  fakeThis._enterpriseAudioScopeRevision++;
+  t.after(() => {
+    accountWorkspaces = [];
+    fakeThis._enterpriseAudioScope = null;
+    delete fakeThis.databaseManager.activeWorkspaceId;
+    fakeThis._enterpriseAudioScopeRevision++;
+  });
+  fetches.length = 0;
+  const pending = await assemblyAiSurfaces.dictation();
+  assert.equal(pending.code, "AUTH_CONTEXT_CHANGED");
+  fakeThis.databaseManager.activeWorkspaceId = "old-workspace";
+  fakeThis._enterpriseAudioScope = { workspaceId: "new-workspace" };
+  const switched = await assemblyAiSurfaces.dictation();
+  assert.equal(switched.code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(fetches.length, 0);
+});
+
+test("a workspace switch during the AssemblyAI cleanup lookup prevents upload", async (t) => {
+  fakeThis.databaseManager.activeWorkspaceId = "first-workspace";
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    fakeThis.databaseManager.activeWorkspaceId = "next-workspace";
+    return { managed: false };
+  });
+  fetches.length = 0;
+  const result = await assemblyAiSurfaces.retry();
+  assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(fetches.length, 0);
+});
+
+test("upload: ElevenLabs gets the file at its own endpoint, with no language hint", async () => {
+  fetches.length = 0;
+  const result = await invokeUpload({
+    apiKey: "xi-from-settings",
+    model: "gpt-4o-mini-transcribe", // stale from another provider: must degrade
+    provider: "elevenlabs",
+    language: "de",
+    transcriptionMode: "providers",
+  });
+  assert.deepEqual(result, { success: true, text: "transcribed" });
+  assert.equal(fetches.length, 1);
+  assert.equal(fetches[0].url, "https://api.elevenlabs.io/v1/speech-to-text");
+  assert.deepEqual(fetches[0].init.headers, { "xi-api-key": "xi-from-settings" });
+  const form = fetches[0].init.body;
+  assert.equal(form.get("model_id"), "scribe_v3");
+  assert.equal(form.has("language_code"), false);
+  assert.equal(form.get("file").name, pathNode.basename(uploadTempFile));
+  assert.ok(fetches[0].init.signal instanceof AbortSignal);
+});
+
+test("ElevenLabs dictation, Retry and Upload distinguish silence from an invalid provider response", async (t) => {
+  const previous = fetchResponse;
+  t.after(() => {
+    fetchResponse = previous;
+  });
+  for (const [response, expectedCode] of [
+    [() => Response.json({ text: "[pause]" }), "NO_SPEECH_DETECTED"],
+    [() => new Response("<html>"), "PROVIDER_ERROR"],
+  ]) {
+    fetchResponse = response;
+    textUpdates.length = 0;
+    const sender = Object.assign(new EventEmitter(), { id: 17 });
+    const dictation = await handlers.get("proxy-elevenlabs-transcription")(
+      { sender },
+      { audioBuffer: new ArrayBuffer(4) }
+    );
+    assert.equal(dictation.code, expectedCode);
+    assert.equal(sender.listenerCount("destroyed"), 0);
+    const retry = await invoke(ELEVENLABS_SETTINGS);
+    const upload = await invokeUpload({ provider: "elevenlabs", transcriptionMode: "providers" });
+    for (const result of [retry, upload]) {
+      assert.equal(result.success, false);
+      assert.equal(result.code, expectedCode);
+    }
+    assert.equal(textUpdates.length, 0, "a failed Retry must preserve the original text");
+  }
 });
 
 test("upload: openai diarization fields ride the route, Bearer auth", async () => {
@@ -909,6 +2012,237 @@ test("upload: a self-hosted Azure endpoint keeps its deployment URL", async () =
   );
 });
 
+// OpenRouter's documented reply when an account's prepaid credit is spent. Retry
+// showed it as raw JSON in its toast; both paths must hand back the translated
+// out-of-credits message instead.
+const outOfCreditsResponse = () => {
+  const body = {
+    error: {
+      code: 402,
+      message: "Insufficient credits. Add more using https://openrouter.ai/credits",
+    },
+  };
+  return {
+    ok: false,
+    status: 402,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  };
+};
+
+const OUT_OF_CREDITS = {
+  code: "OPENROUTER_OUT_OF_CREDITS",
+  messageKey: "hooks.audioRecording.errorDescriptions.openRouterOutOfCredits",
+};
+
+test("retry and upload read an OpenRouter 402 as out of credits", async () => {
+  const previousResponse = fetchResponse;
+  fetchResponse = outOfCreditsResponse;
+  try {
+    const retried = await invoke({
+      cloudTranscriptionProvider: "openrouter",
+      cloudTranscriptionModel: "openai/gpt-transcribe",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+    });
+    assert.equal(retried.success, false);
+    assert.equal(retried.code, OUT_OF_CREDITS.code);
+    assert.equal(retried.messageKey, OUT_OF_CREDITS.messageKey);
+
+    const uploaded = await invokeUpload({
+      apiKey: "ork-openrouter",
+      baseUrl: "",
+      model: "openai/gpt-transcribe",
+      provider: "openrouter",
+      language: "",
+      transcriptionMode: "providers",
+    });
+    assert.equal(uploaded.success, false);
+    assert.equal(uploaded.code, OUT_OF_CREDITS.code);
+    assert.equal(uploaded.messageKey, OUT_OF_CREDITS.messageKey);
+  } finally {
+    fetchResponse = previousResponse;
+  }
+});
+
+const okReply = (text) => ({
+  ok: true,
+  status: 200,
+  json: async () => ({ text }),
+  text: async () => JSON.stringify({ text }),
+});
+const OPENROUTER_UPLOAD = {
+  apiKey: "ork-openrouter",
+  baseUrl: "",
+  model: "google/chirp-3",
+  provider: "openrouter",
+  language: "",
+  transcriptionMode: "providers",
+};
+// 26 MB: over the 25 MB a single OpenRouter request may carry.
+const OVER_ONE_REQUEST = Buffer.alloc(26 * 1024 * 1024);
+
+async function until(predicate) {
+  for (let i = 0; i < 200 && !predicate(); i++) await new Promise((r) => setImmediate(r));
+  assert.ok(predicate(), "condition never became true");
+}
+
+async function withReplies(reply, pieces, run) {
+  const previous = { fetchResponse, splitBehavior };
+  fetches.length = 0;
+  splitCalls.length = 0;
+  progressEvents.length = 0;
+  fetchResponse = reply;
+  splitBehavior = piecesOf(pieces);
+  try {
+    return await run();
+  } finally {
+    ({ fetchResponse, splitBehavior } = previous);
+  }
+}
+
+test("upload: a 30-minute OpenRouter file goes out in 4-minute pieces, comes back whole", async () => {
+  let n = 0;
+  await withReplies(
+    () => okReply(`part ${++n}`),
+    8,
+    async () => {
+      const result = await invokeUpload(OPENROUTER_UPLOAD, OVER_ONE_REQUEST);
+      assert.equal(result.success, true, result.error);
+      assert.equal(result.text, "part 1 part 2 part 3 part 4 part 5 part 6 part 7 part 8");
+      assert.equal(splitCalls[0].options.segmentDuration, 240);
+      assert.equal(fetches.length, 8);
+      fetches.forEach((f, i) => {
+        assert.equal(f.url, "https://openrouter.ai/api/v1/audio/transcriptions");
+        assert.equal(f.init.headers.Authorization, "Bearer ork-openrouter");
+        const body = f.init.body.toString("latin1");
+        assert.match(body, new RegExp(`filename="chunk-00${i}\\.mp3"`));
+        assert.match(body, /name="model"\r\n\r\ngoogle\/chirp-3\r\n/);
+        assert.doesNotMatch(body, /name="(language|prompt)"/);
+      });
+      assert.deepEqual(progressEvents.at(-1), {
+        channel: "upload-transcription-progress",
+        data: { stage: "transcribing", chunksTotal: 8, chunksCompleted: 8 },
+      });
+    }
+  );
+});
+
+test("upload: a Custom endpoint on OpenRouter is sent in pieces with its own key and model", async () => {
+  await withReplies(
+    () => okReply("piece"),
+    2,
+    async () => {
+      const result = await invokeUpload(
+        {
+          apiKey: "ck-custom",
+          baseUrl: "https://openrouter.ai/api/v1",
+          model: "microsoft/mai-transcribe-2",
+          provider: "custom",
+          language: "",
+          transcriptionMode: "providers",
+        },
+        OVER_ONE_REQUEST
+      );
+      assert.equal(result.success, true, result.error);
+      assert.equal(fetches.length, 2);
+      assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
+      assert.match(
+        fetches[0].init.body.toString("latin1"),
+        /name="model"\r\n\r\nmicrosoft\/mai-transcribe-2\r\n/
+      );
+    }
+  );
+});
+
+// Pieces fail through the same translated provider errors as a single request.
+test("upload: an OpenRouter piece failure is a classified provider error", async () => {
+  const unauthorized = () => {
+    const body = { error: { message: "No auth credentials found", code: 401 } };
+    return {
+      ok: false,
+      status: 401,
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    };
+  };
+  await withReplies(unauthorized, 3, async () => {
+    const tab = await invokeUpload(OPENROUTER_UPLOAD);
+    assert.equal(tab.code, "PROVIDER_AUTH_FAILED");
+    assert.equal(tab.messageKey, "providerErrors.authFailed");
+    assert.deepEqual(tab.messageParams, { provider: "OpenRouter" });
+    assert.equal(tab.error, "OpenRouter rejected your API key.");
+
+    const custom = await invokeUpload({
+      ...OPENROUTER_UPLOAD,
+      apiKey: "ck-custom",
+      baseUrl: "https://openrouter.ai/api/v1",
+      provider: "custom",
+    });
+    assert.equal(custom.code, "PROVIDER_AUTH_FAILED");
+    assert.equal(custom.messageKey, "providerErrors.selfHosted.authFailed");
+  });
+
+  await withReplies(
+    () => okReply("piece"),
+    1,
+    async () => {
+      const result = await invokeUpload({ ...OPENROUTER_UPLOAD, apiKey: "" });
+      assert.equal(result.code, "API_KEY_MISSING");
+      assert.deepEqual(result.messageParams, { provider: "OpenRouter" });
+      assert.equal(fetches.length, 0, "a missing key must fail before any piece is sent");
+    }
+  );
+});
+
+test("upload: running out of OpenRouter credits mid-upload sends no further pieces", async () => {
+  let n = 0;
+  const reply = () => (++n === 2 ? outOfCreditsResponse() : okReply(`part ${n}`));
+  await withReplies(reply, 5, async () => {
+    const result = await invokeUpload(OPENROUTER_UPLOAD);
+    assert.equal(result.success, false);
+    assert.equal(result.code, OUT_OF_CREDITS.code);
+    assert.equal(result.messageKey, OUT_OF_CREDITS.messageKey);
+    assert.equal(fetches.length, 2);
+  });
+});
+
+test("upload: cancelling an OpenRouter upload stops at the piece in flight", async () => {
+  const hang = (_url, init) =>
+    new Promise((_resolve, reject) => {
+      init.signal.addEventListener("abort", () =>
+        reject(Object.assign(new Error("Aborted"), { name: "AbortError" }))
+      );
+    });
+  await withReplies(hang, 8, async () => {
+    const pending = invokeUpload({ ...OPENROUTER_UPLOAD, requestId: "upload-cancel-1" });
+    await until(() => fetches.length === 1);
+    const cancel = await handlers.get("cancel-upload-transcription")({}, "upload-cancel-1");
+    assert.equal(cancel.success, true, "the upload registered for cancel");
+    const result = await pending;
+    assert.equal(result.code, "UPLOAD_CANCELLED");
+    assert.equal(fetches.length, 1);
+  });
+});
+
+// A Cancel can reach the main process while the upload is still loading its
+// route. Registered only after that await, the upload never heard it and sent,
+// and billed, every piece.
+test("upload: a Cancel that lands while an OpenRouter upload starts is not lost", async () => {
+  await withReplies(
+    () => okReply("piece"),
+    3,
+    async () => {
+      const pending = invokeUpload({ ...OPENROUTER_UPLOAD, requestId: "upload-cancel-early" });
+      const cancel = await handlers.get("cancel-upload-transcription")({}, "upload-cancel-early");
+      assert.equal(cancel.success, true, "registered before its first await");
+      const result = await pending;
+      assert.equal(result.code, "UPLOAD_CANCELLED");
+      assert.equal(fetches.length, 0, "no piece is sent");
+    }
+  );
+});
+
 // Electron's net.fetch rejects with a plain Error whose message is the Chromium
 // net error and no code; both BYOK handlers must classify it before replying.
 async function withFetchRejecting(message, run) {
@@ -1014,4 +2348,867 @@ test("upload: an HTTP failure logs its status and a redacted body", async (t) =>
   assert.equal(failure.meta.status, 401);
   assert.match(failure.meta.body, /Incorrect API key provided/);
   assert.equal(failure.meta.body.includes("sk-proj-leakedKey12345"), false);
+});
+
+test("file IPCs preserve dictation when uploads are disabled, including cloud source metadata", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalLocal = fakeThis.transcribeLocalFile;
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis.transcribeLocalFile = originalLocal;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({
+    getPolicy: async () => ({
+      success: true,
+      managed: true,
+      policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled: false } },
+    }),
+  });
+  let localCalls = 0;
+  fakeThis.transcribeLocalFile = async () => {
+    localCalls++;
+    return { success: true, text: "dictation" };
+  };
+  fsNode.writeFileSync(uploadTempFile, WAV_BUFFER);
+  // Only a recording main saved as a voice draft may claim to be dictation.
+  const { path: draftFile } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, draftFile));
+
+  for (const channel of [
+    "transcribe-audio-file",
+    "transcribe-audio-file-cloud",
+    "transcribe-audio-file-byok",
+  ]) {
+    const invokeFile = (filePath, purpose) => {
+      const options = {
+        purpose,
+        apiKey: "sk-test",
+        provider: "openai",
+        model: "whisper-1",
+        transcriptionMode: "providers",
+      };
+      return channel.endsWith("-byok")
+        ? handlers.get(channel)({ sender: {} }, { filePath, ...options })
+        : handlers.get(channel)({ sender: {} }, filePath, options);
+    };
+    fetches.length = 0;
+    assert.equal((await invokeFile(draftFile, "dictation")).success, true, channel);
+    if (channel.endsWith("-cloud")) {
+      assert.match(fetches[0].init.body.toString(), /name="source"\r\n\r\ndictation\r\n/);
+    }
+    const networkCalls = fetches.length;
+    for (const [filePath, purpose] of [
+      [uploadTempFile, undefined],
+      [uploadTempFile, "dictation"],
+    ]) {
+      const refused = await invokeFile(filePath, purpose);
+      assert.equal(refused.code, "POLICY_AUDIO_UPLOAD_DISABLED", channel);
+    }
+    assert.equal(fetches.length, networkCalls, channel);
+  }
+  assert.equal(localCalls, 1);
+
+  // A deleted draft's path is an upload again.
+  await handlers.get("delete-temp-audio")({}, draftFile);
+  const deleted = await handlers.get("transcribe-audio-file")({ sender: {} }, draftFile, {
+    purpose: "dictation",
+  });
+  assert.equal(deleted.code, "POLICY_AUDIO_UPLOAD_DISABLED");
+});
+
+test("transcribe-audio-file keeps a local model refusal's code", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalLocal = fakeThis.transcribeLocalFile;
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis.transcribeLocalFile = originalLocal;
+  });
+  fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({
+    getPolicy: async () => ({ success: true, managed: false, policy: null }),
+  });
+  fakeThis.transcribeLocalFile = async () => {
+    throw Object.assign(new Error("Choose a local model"), { code: "POLICY_MODEL_BLOCKED" });
+  };
+  fsNode.writeFileSync(uploadTempFile, WAV_BUFFER);
+
+  const refused = await handlers.get("transcribe-audio-file")({ sender: {} }, uploadTempFile, {});
+
+  assert.equal(refused.success, false);
+  assert.equal(refused.code, "POLICY_MODEL_BLOCKED");
+});
+
+test("cancelling during policy lookup prevents every upload handler's later side effects", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const { deferred } = require("./harness/deferred");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalDiarization = fakeThis.diarizationManager;
+  fakeThis.diarizationManager = { isModelDownloaded: () => true };
+  const local = t.mock.method(fakeThis, "transcribeLocalFile", async () => ({ success: true }));
+  const downloader = require("../../src/helpers/urlAudioDownloader");
+  const download = t.mock.method(downloader, "download", async () => ({ tempPath: "/tmp/audio" }));
+  const diarization = t.mock.method(fakeThis.diarizationManager, "isModelDownloaded", () => true);
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis.diarizationManager = originalDiarization;
+  });
+
+  for (const channel of [
+    "transcribe-audio-file",
+    "transcribe-audio-file-cloud",
+    "transcribe-audio-file-byok",
+    "diarize-audio-file",
+    "download-url-audio",
+  ]) {
+    const policy = deferred();
+    fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({ getPolicy: () => policy.promise });
+    const requestId = `cancel-${channel}`;
+    const options = { requestId };
+    const args = channel.endsWith("-byok")
+      ? [{ filePath: uploadTempFile, ...options }]
+      : channel === "download-url-audio"
+        ? ["https://example.com/audio.mp3", requestId]
+        : [uploadTempFile, options];
+    fetches.length = 0;
+    const pending = handlers.get(channel)({ sender: {} }, ...args);
+    const cancellationChannel =
+      channel === "download-url-audio" ? "cancel-url-download" : "cancel-upload-transcription";
+    assert.equal((await handlers.get(cancellationChannel)({}, requestId)).success, true, channel);
+    policy.resolve({ success: true, managed: false });
+    const result = await pending;
+    assert.equal(result.success, false, channel);
+    assert.equal(
+      result.code,
+      channel === "download-url-audio" ? "DOWNLOAD_CANCELLED" : "UPLOAD_CANCELLED",
+      channel
+    );
+    assert.equal(fetches.length, 0, channel);
+    assert.equal((await handlers.get(cancellationChannel)({}, requestId)).success, false, channel);
+  }
+  assert.equal(local.mock.callCount(), 0);
+  assert.equal(download.mock.callCount(), 0);
+  assert.equal(diarization.mock.callCount(), 0);
+});
+
+test("enterprise credential retirement preserves an actionable string code through IPC serialization", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const { ipcErrorFields } = require("../../src/helpers/ipcErrorFields");
+  const credential = deferred();
+  const activeMeeting = fakeThis._activeEnterpriseAudioMeeting;
+  fakeThis._activeEnterpriseAudioMeeting = false;
+  t.after(() => {
+    fakeThis._activeEnterpriseAudioMeeting = activeMeeting;
+    credential.resolve("rotated-key");
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => ({
+    managed: true,
+    provider: "openai-compatible",
+    generation: 1,
+    version: 1,
+    identity: { accountId: "account-a", workspaceId: "workspace-a" },
+    config: {
+      batch: {
+        endpoint: "https://gateway.test/transcribe",
+        defaultDeployment: "speech",
+        authentication: { type: "bearer", credentialSlot: "http" },
+      },
+    },
+  }));
+  const read = t.mock.method(fakeThis.enterpriseAudioCredentials, "read", () => credential.promise);
+  const request = t.mock.method(fakeThis.enterpriseAudioTransport, "request", async () => {
+    throw new Error("Retired audio must not be sent");
+  });
+  const profile = await fakeThis.enterpriseAudioRuntime.resolve({});
+  const pending = profile.request({});
+  await new Promise(setImmediate);
+  assert.equal(read.mock.callCount(), 1);
+  fakeThis._retireEnterpriseAudio();
+  await assert.rejects(pending, (error) => {
+    const result = ipcErrorFields(error);
+    assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+    assert.equal(result.messageKey, "common.managedConfigUnavailable");
+    assert.equal(result.error, "Enterprise audio configuration changed");
+    return true;
+  });
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("main enterprise audio resolution honors provider and mode policy before HTTP or socket creation", async (t) => {
+  t.after(() => {
+    policySnapshot = { success: true, managed: false };
+  });
+  const resolved = {
+    managed: true,
+    provider: "openai-compatible",
+    mode: "managed_default",
+    allowManualSetup: true,
+    generation: 1,
+    version: 1,
+    identity: { accountId: "account-a", workspaceId: "workspace-a" },
+    config: {
+      batch: {
+        endpoint: "https://gateway.test/transcribe",
+        defaultDeployment: "speech",
+        authentication: { type: "bearer", credentialSlot: "http" },
+      },
+      realtime: {
+        endpoint: "wss://gateway.test/realtime",
+        defaultDeployment: "speech",
+        protocol: "openai-transcription-ga",
+        authentication: { type: "bearer", credentialSlot: "socket" },
+      },
+    },
+  };
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => resolved);
+  t.mock.method(fakeThis.enterpriseAudioCredentials, "read", async () => "device-key");
+  const request = t.mock.method(
+    fakeThis.enterpriseAudioTransport,
+    "request",
+    async () => new Response('{"text":"allowed"}')
+  );
+  const socket = t.mock.method(fakeThis.enterpriseAudioTransport, "createSocket", async () => ({}));
+  for (const transcription of [
+    { allowedModes: ["local"], allowedEnterpriseProviders: [] },
+    { allowedModes: ["local", "enterprise"], allowedEnterpriseProviders: ["azure"] },
+  ]) {
+    policySnapshot = {
+      success: true,
+      managed: true,
+      policy: {
+        ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy(),
+        transcription: {
+          ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy().transcription,
+          ...transcription,
+        },
+      },
+    };
+    for (const operation of ["batch", "realtime"]) {
+      resolved.mode = "managed_default";
+      resolved.allowManualSetup = true;
+      assert.equal(await fakeThis.enterpriseAudioRuntime.resolve({}, operation), null);
+      for (const [mode, allowManualSetup] of [
+        ["managed_required", true],
+        ["managed_default", false],
+      ]) {
+        Object.assign(resolved, { mode, allowManualSetup });
+        await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, operation), {
+          code: "PROVIDER_POLICY_CONFLICT",
+          messageKey: "common.managedPolicyConflict",
+        });
+      }
+    }
+  }
+  assert.equal(request.mock.callCount(), 0);
+  assert.equal(socket.mock.callCount(), 0);
+
+  Object.assign(resolved, { mode: "managed_default", allowManualSetup: true });
+  policySnapshot = { success: true, managed: false };
+  const batch = await fakeThis.enterpriseAudioRuntime.resolve({}, "batch");
+  const realtime = await fakeThis.enterpriseAudioRuntime.resolve({}, "realtime");
+  await batch.request({});
+  await realtime.createSocket();
+  assert.equal(request.mock.callCount(), 1);
+  assert.equal(socket.mock.callCount(), 1);
+  policySnapshot = {
+    success: true,
+    managed: true,
+    policy: {
+      ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy(),
+      transcription: {
+        ...require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy().transcription,
+        allowedModes: ["local"],
+        allowedEnterpriseProviders: [],
+      },
+    },
+  };
+  await assert.rejects(batch.request({}), { code: "MANAGED_CONFIG_CHANGED" });
+  await assert.rejects(realtime.createSocket(), { code: "MANAGED_CONFIG_CHANGED" });
+  assert.equal(request.mock.callCount(), 1);
+  assert.equal(socket.mock.callCount(), 1);
+  policySnapshot = { success: false, code: "POLICY_UNRESOLVABLE" };
+  await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, "realtime"), {
+    code: "POLICY_UNRESOLVABLE",
+  });
+});
+
+test("a valid provider restriction aborts an attested batch request and discards its late result", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const previous = tinfoilBehavior;
+  let signal;
+  t.after(() => {
+    tinfoilBehavior = previous;
+    policySnapshot = { success: true, managed: false };
+    finish.resolve();
+  });
+  policySnapshot = { success: true, managed: false };
+  await fakeThis.refreshEffectivePolicy();
+  tinfoilBehavior = async (options) => {
+    signal = options.signal;
+    started.resolve();
+    await finish.promise;
+    return { text: "late" };
+  };
+  const pending = handlers.get("proxy-tinfoil-transcription")(
+    { sender: {} },
+    { audioBuffer: new Uint8Array([1]) }
+  );
+  await started.promise;
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.transcription.allowedByokProviders = ["openai"];
+  policySnapshot = { success: true, managed: true, policy };
+  await fakeThis.refreshEffectivePolicy();
+  assert.equal(signal.aborted, true);
+  finish.resolve();
+  assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
+});
+
+test("policy revocation during retry conversion or upload preparation prevents transmission", async (t) => {
+  const previousConvert = convertBehavior;
+  t.after(async () => {
+    convertBehavior = previousConvert;
+    prepareUploadBehavior = undefined;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const surface of ["retry", "upload"]) {
+    for (const restriction of ["mode", "provider"]) {
+      await t.test(`${surface}: ${restriction}`, async () => {
+        policySnapshot = { success: true, managed: false };
+        await fakeThis.refreshEffectivePolicy();
+        fetches.length = 0;
+        textUpdates.length = 0;
+        const revoke = async () => {
+          const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+          if (restriction === "mode") policy.transcription.allowedModes = ["local"];
+          else policy.transcription.allowedByokProviders = ["openai"];
+          policySnapshot = { success: true, managed: true, policy };
+          await fakeThis.refreshEffectivePolicy();
+        };
+        convertBehavior = async () => {
+          await revoke();
+          return CONVERTED_WAV;
+        };
+        prepareUploadBehavior = async (sourcePath) => {
+          await revoke();
+          return { path: sourcePath, cleanup() {} };
+        };
+        const result =
+          surface === "retry"
+            ? await invoke({
+                transcriptionMode: "providers",
+                cloudTranscriptionMode: "byok",
+                cloudTranscriptionProvider: "custom",
+                cloudTranscriptionBaseUrl: "https://speech.example.test/v1",
+                cloudTranscriptionModel: "speech",
+              })
+            : await invokeUpload({
+                transcriptionMode: "providers",
+                provider: "custom",
+                baseUrl: "https://speech.example.test/v1",
+                model: "speech",
+              });
+        assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+        assert.equal(fetches.length, 0);
+        assert.equal(textUpdates.length, 0);
+      });
+    }
+  }
+});
+
+test("revoking only the AssemblyAI LLM grant during voice preparation stops the upload", async (t) => {
+  t.after(async () => {
+    prepareUploadBehavior = undefined;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  fetches.length = 0;
+  prepareUploadBehavior = async (sourcePath) => {
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    policy.llm.allowedByokProviders = ["openai"];
+    policySnapshot = { success: true, managed: true, policy };
+    await fakeThis.refreshEffectivePolicy();
+    return { path: sourcePath, cleanup() {} };
+  };
+  const result = await assemblyAiSurfaces.voice();
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  assert.equal(fetches.length, 0);
+});
+
+test("a revoked retry aborts the provider and cannot save an ignored late result", async (t) => {
+  const previous = tinfoilBehavior;
+  t.after(async () => {
+    tinfoilBehavior = previous;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  policySnapshot = { success: true, managed: false };
+  await fakeThis.refreshEffectivePolicy();
+  textUpdates.length = 0;
+  let signal;
+  tinfoilBehavior = async (options) => {
+    signal = options.signal;
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    policy.transcription.allowedByokProviders = ["openai"];
+    policySnapshot = { success: true, managed: true, policy };
+    await fakeThis.refreshEffectivePolicy();
+    return { text: "revoked output" };
+  };
+  const result = await invoke({
+    transcriptionMode: "providers",
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "tinfoil",
+  });
+  assert.equal(signal.aborted, true);
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  assert.equal(textUpdates.length, 0);
+});
+
+test("a retry that turns remote doesn't upload on a verdict still on its way", async (t) => {
+  const { POLICY_TIMEOUT_MS } = require("../../src/helpers/connectors/connectorIpc");
+  const { deferred } = require("./harness/deferred");
+  const lookup = deferred();
+  const previousTokenState = tokenState;
+  t.after(async () => {
+    policyLookupGate = null;
+    lookup.resolve();
+    tokenState = previousTokenState;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  // A rotated token whose lookup hasn't answered, with nothing held.
+  policyLookupGate = lookup.promise;
+  tokenState = { ...tokenState, generation: tokenState.generation + 1 };
+  fetches.length = 0;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  let result;
+  const retry = invoke({
+    transcriptionMode: "providers",
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "mistral",
+  }).then((value) => {
+    result = value;
+  });
+  for (let turn = 0; turn < 20 && !result; turn++) {
+    await new Promise(setImmediate);
+    t.mock.timers.tick(POLICY_TIMEOUT_MS);
+  }
+  assert.equal(fetches.length, 0);
+  await retry;
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+});
+
+test("voice files cancelled before the product policy verdict send no audio", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const lookup = deferred();
+  const previousTokenState = tokenState;
+  t.after(async () => {
+    policyLookupGate = null;
+    lookup.resolve();
+    tokenState = previousTokenState;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  policyLookupGate = lookup.promise;
+  tokenState = { ...tokenState, generation: tokenState.generation + 1 };
+  const { path: filePath } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, filePath));
+  fetches.length = 0;
+  const event = { sender: {} };
+  const cloud = handlers.get("transcribe-audio-file-cloud")(event, filePath, {
+    purpose: "dictation",
+    requestId: "voice-cloud",
+  });
+  const byok = handlers.get("transcribe-audio-file-byok")(event, {
+    filePath,
+    purpose: "dictation",
+    provider: "assemblyai",
+    model: "dictation",
+    apiKey: "fixture",
+    requestId: "voice-byok",
+  });
+  assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
+  for (const id of ["voice-cloud", "voice-byok"]) {
+    assert.equal((await handlers.get("cancel-upload-transcription")(event, id)).success, true);
+  }
+  lookup.resolve();
+  for (const result of await Promise.all([cloud, byok])) {
+    assert.equal(result.code, "UPLOAD_CANCELLED");
+  }
+  assert.equal(fetches.length, 0);
+});
+
+test("a local retry ignores a retained cloud preference when cloud inference is forbidden", async (t) => {
+  t.after(async () => {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.transcription.allowedModes = ["local"];
+  policySnapshot = { success: true, managed: true, policy };
+  await fakeThis.refreshEffectivePolicy();
+  fetches.length = 0;
+  const result = await invoke({
+    transcriptionMode: "local",
+    useLocalWhisper: true,
+    cloudTranscriptionMode: "openwhispr",
+    localTranscriptionProvider: "whisper",
+  });
+  assert.equal(result.success, true);
+  assert.equal(fetches.length, 0);
+});
+
+test("agent-only revocation retires IPC requests and enterprise chat while retaining cleanup", () => {
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.features.agentEnabled = false;
+  const snapshot = { success: true, managed: true, policy };
+  const agentRequests = [
+    { channel: "cloud-reason", args: ["private", { requestPurpose: "agent" }] },
+    {
+      channel: "process-anthropic-reasoning",
+      args: ["private", "model", null, { requiresAgent: true }],
+    },
+    {
+      channel: "process-enterprise-reasoning",
+      args: ["private", "model", null, { provider: "bedrock", requiresAgent: true }],
+    },
+  ].map((operation) => [new AbortController(), operation]);
+  const cleanup = new AbortController();
+  const stream = new AbortController();
+  try {
+    for (const [controller, operation] of agentRequests)
+      fakeThis._productRequests.set(controller, operation);
+    fakeThis._productRequests.set(cleanup, { channel: "cloud-reason", args: ["private", {}] });
+    fakeThis._enterpriseStreamProviders.set("agent-stream", "bedrock");
+    fakeThis.enterpriseStreamAborts.set("agent-stream", stream);
+    fakeThis._retireDisallowedProductWork(snapshot);
+    for (const [controller] of agentRequests) assert.equal(controller.signal.aborted, true);
+    assert.equal(stream.signal.aborted, true);
+    assert.equal(cleanup.signal.aborted, false);
+  } finally {
+    for (const [controller] of agentRequests) fakeThis._productRequests.delete(controller);
+    fakeThis._productRequests.delete(cleanup);
+    fakeThis._enterpriseStreamProviders.delete("agent-stream");
+    fakeThis.enterpriseStreamAborts.delete("agent-stream");
+  }
+});
+
+test("self-hosted Custom retries and uploads do not require BYOK permission", async (t) => {
+  t.after(async () => {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.transcription.allowedModes = ["self-hosted"];
+  policy.transcription.allowedByokProviders = [];
+  policySnapshot = { success: true, managed: true, policy };
+  await fakeThis.refreshEffectivePolicy();
+  fetches.length = 0;
+  const retry = await invoke(
+    {
+      transcriptionMode: "self-hosted",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "custom",
+      cloudTranscriptionBaseUrl: "https://speech.example.test/v1",
+      cloudTranscriptionModel: "speech",
+    },
+    8
+  );
+  assert.equal(retry.success, true);
+  const upload = await invokeUpload({
+    transcriptionMode: "self-hosted",
+    provider: "custom",
+    baseUrl: "https://speech.example.test/v1",
+    model: "speech",
+  });
+  assert.equal(upload.success, true);
+  assert.equal(fetches.length, 2);
+});
+
+test("revoked local agent inference is cancelled by id and leaves ordinary cleanup available", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred(),
+    finish = deferred();
+  const cancelled = [];
+  t.after(async () => {
+    finish.resolve("late");
+    localReasoningBehavior = async () => "local output";
+    localReasoningCancel = () => {};
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  policySnapshot = { success: true, managed: false };
+  await fakeThis.refreshEffectivePolicy();
+  localReasoningBehavior = async (_text, _model, config) => {
+    assert.equal(config.requestId, "agent-job");
+    started.resolve();
+    return finish.promise;
+  };
+  localReasoningCancel = (id) => {
+    cancelled.push(id);
+    finish.resolve("late agent output");
+  };
+  const handler = handlers.get("process-local-reasoning");
+  const pending = handler({ sender: {} }, "private", "local-model", null, {
+    requiresAgent: true,
+    requestId: "agent-job",
+  });
+  await started.promise;
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  policy.features.agentEnabled = false;
+  policySnapshot = { success: true, managed: true, policy };
+  await fakeThis.refreshEffectivePolicy();
+  assert.deepEqual(cancelled, ["agent-job"]);
+  assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
+  localReasoningBehavior = async () => "permitted cleanup";
+  const cleanup = await handler({ sender: {} }, "private", "local-model", null, {
+    requestId: "cleanup-job",
+  });
+  assert.equal(cleanup.success, true);
+  assert.equal(cleanup.text, "permitted cleanup");
+});
+
+test("local transcription retry propagates policy retirement to both native decoders", async (t) => {
+  const previousParakeet = parakeetBehavior,
+    previousWhisper = whisperBehavior;
+  t.after(async () => {
+    parakeetBehavior = previousParakeet;
+    whisperBehavior = previousWhisper;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const provider of ["whisper", "parakeet"]) {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+    const transcribe = async (_buffer, options) => {
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policy.transcription.allowedModes = ["providers"];
+      policySnapshot = { success: true, managed: true, policy };
+      await fakeThis.refreshEffectivePolicy();
+      assert.equal(options.signal.aborted, true);
+      return { success: true, text: "late" };
+    };
+    parakeetBehavior = transcribe;
+    whisperBehavior = transcribe;
+    const result = await invoke({
+      useLocalWhisper: true,
+      transcriptionMode: "local",
+      localTranscriptionProvider: provider,
+    });
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  }
+});
+
+test("fresh local dictation forwards the trusted policy signal to both decoders", async (t) => {
+  const previousWhisper = whisperBehavior,
+    previousParakeet = parakeetBehavior;
+  t.after(async () => {
+    whisperBehavior = previousWhisper;
+    parakeetBehavior = previousParakeet;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const provider of ["whisper", "parakeet"]) {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+    let decoderSignal;
+    const decode = async (_buffer, options) => {
+      decoderSignal = options.signal;
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policy.transcription.allowedModes = ["providers"];
+      policySnapshot = { success: true, managed: true, policy };
+      await fakeThis.refreshEffectivePolicy();
+      return { success: true, text: "late output" };
+    };
+    whisperBehavior = decode;
+    parakeetBehavior = decode;
+    const result = await handlers.get(`transcribe-local-${provider}`)({ sender: {} }, WAV_BUFFER, {
+      model: "tiny",
+      signal: "untrusted",
+    });
+    assert.ok(decoderSignal instanceof AbortSignal);
+    assert.equal(decoderSignal.aborted, true);
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+  }
+});
+
+test("shared local file decoding refuses forbidden inference modes and minimum versions", async (t) => {
+  const previousWhisper = whisperBehavior;
+  let decoded = false;
+  whisperBehavior = async () => {
+    decoded = true;
+    return { success: true, text: "forbidden" };
+  };
+  t.after(async () => {
+    whisperBehavior = previousWhisper;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const restriction of ["mode", "version"]) {
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    if (restriction === "mode") policy.transcription.allowedModes = ["openwhispr"];
+    else policy.minAppVersion = "99.0.0";
+    policySnapshot = { success: true, managed: true, policy };
+    await fakeThis.refreshEffectivePolicy();
+    const result = await fakeThis.transcribeLocalFile(__filename, { provider: "whisper" });
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED", restriction);
+  }
+  assert.equal(decoded, false);
+});
+
+test("shared local file decoding aborts both native decoders when local inference is revoked", async (t) => {
+  const previousWhisper = whisperBehavior;
+  const previousParakeet = parakeetBehavior;
+  t.after(async () => {
+    whisperBehavior = previousWhisper;
+    parakeetBehavior = previousParakeet;
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+  });
+  for (const provider of ["whisper", "nvidia"]) {
+    policySnapshot = { success: true, managed: false };
+    await fakeThis.refreshEffectivePolicy();
+    const decode = async (_buffer, { signal }) => {
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      policy.transcription.allowedModes = ["openwhispr"];
+      policySnapshot = { success: true, managed: true, policy };
+      await fakeThis.refreshEffectivePolicy();
+      assert.equal(signal.aborted, true, provider);
+      return { success: true, text: "late transcript" };
+    };
+    whisperBehavior = decode;
+    parakeetBehavior = decode;
+    const result = await fakeThis.transcribeLocalFile(__filename, { provider });
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED", provider);
+    assert.equal(fakeThis._productRequests.size, 0);
+  }
+});
+
+const selfHostedRetry = {
+  transcriptionMode: "self-hosted",
+  remoteTranscriptionUrl: "http://127.0.0.1:8178/v1",
+  remoteTranscriptionModel: "orukeet-v0.1.0",
+  cloudTranscriptionProvider: "custom",
+};
+const selfHostedUpload = {
+  ...selfHostedRetry,
+  provider: "custom",
+  apiKey: "",
+  baseUrl: "",
+  model: "",
+  language: "",
+};
+
+async function withSelfHostedHeaders(value, run) {
+  const previous = selfHostedHeaders;
+  selfHostedHeaders = value;
+  try {
+    await run();
+  } finally {
+    selfHostedHeaders = previous;
+  }
+}
+
+test("self-hosted retry sends dictation's headers and keeps Orukeet authentication", async () => {
+  fetches.length = 0;
+  assert.equal((await invoke(selfHostedRetry)).success, true);
+  assert.equal(fetches[0].init.redirect, "error");
+  assert.equal(fetches[0].init.headers["x-api-key"], "dictation-key");
+  assert.equal(fetches[0].init.headers.authorization, "Bearer ck-custom");
+  fetches.length = 0;
+  assert.equal(
+    (await invoke({ cloudTranscriptionMode: "byok", cloudTranscriptionProvider: "openai" }))
+      .success,
+    true
+  );
+  assert.equal(new Headers(fetches[0].init.headers).get("x-api-key"), null);
+});
+
+test("a self-hosted upload sends the Upload tab's headers, a voice draft dictation's", async () => {
+  fetches.length = 0;
+  assert.equal((await invokeUpload(selfHostedUpload)).success, true);
+  assert.equal(fetches[0].init.redirect, "error");
+  assert.equal(fetches[0].init.headers["x-api-key"], "upload-key");
+  assert.equal(fetches[0].init.headers.authorization, "Bearer ck-custom");
+  assert.match(fetches[0].init.headers["Content-Type"], /^multipart\/form-data; boundary=/);
+
+  // A renderer's word alone does not make a file a voice draft.
+  fetches.length = 0;
+  assert.equal((await invokeUpload({ ...selfHostedUpload, purpose: "dictation" })).success, true);
+  assert.equal(fetches[0].init.headers["x-api-key"], "upload-key");
+
+  const draft = await handlers.get("save-temp-audio")({}, Buffer.from([1, 2, 3, 4]));
+  try {
+    fetches.length = 0;
+    const result = await handlers.get("transcribe-audio-file-byok")(
+      { sender: { send: () => {} } },
+      { ...selfHostedUpload, filePath: draft.path, purpose: "dictation" }
+    );
+    assert.equal(result.success, true);
+    assert.equal(fetches[0].init.headers["x-api-key"], "dictation-key");
+  } finally {
+    await handlers.get("delete-temp-audio")({}, draft.path);
+  }
+});
+
+test("self-hosted retry and upload without effective custom headers keep redirect follow", async () => {
+  await withSelfHostedHeaders(
+    JSON.stringify({ dictation: [{ name: "", value: "" }], upload: [{ name: " ", value: "" }] }),
+    async () => {
+      const settings = { ...selfHostedRetry, remoteTranscriptionModel: "whisper-1" };
+      fetches.length = 0;
+      assert.equal((await invoke(settings)).success, true);
+      assert.equal(fetches[0].init.redirect, "follow");
+      assert.equal(new Headers(fetches[0].init.headers).has("authorization"), false);
+      fetches.length = 0;
+      assert.equal(
+        (await invokeUpload({ ...selfHostedUpload, remoteTranscriptionModel: "whisper-1" }))
+          .success,
+        true
+      );
+      assert.equal(fetches[0].init.redirect, "follow");
+    }
+  );
+});
+
+test("an invalid stored header fails retry and upload with a Settings link and sends nothing", async () => {
+  await withSelfHostedHeaders(
+    JSON.stringify({
+      dictation: [{ name: "Content-Type", value: "text/plain" }],
+      upload: [{ name: "X-Key", value: "“curly”" }],
+    }),
+    async () => {
+      fetches.length = 0;
+      for (const result of [await invoke(selfHostedRetry), await invokeUpload(selfHostedUpload)]) {
+        assert.equal(result.success, false);
+        assert.equal(result.code, "PROVIDER_INVALID_HEADERS");
+        assert.equal(result.messageKey, "providerErrors.selfHosted.invalidHeaders");
+        assert.equal(result.settingsTarget, "speechToText");
+      }
+      assert.equal(fetches.length, 0);
+    }
+  );
+});
+
+test("a redirect refused for custom headers is named on retry and upload", async () => {
+  const originalFetchResponse = fetchResponse;
+  fetchResponse = () => {
+    // Electron's net.fetch under redirect: "error".
+    throw new Error("Attempted to redirect, but redirect policy was 'error'");
+  };
+  try {
+    for (const result of [await invoke(selfHostedRetry), await invokeUpload(selfHostedUpload)]) {
+      assert.equal(result.success, false);
+      assert.equal(result.code, "PROVIDER_REDIRECTED");
+      assert.equal(result.messageKey, "providerErrors.selfHosted.redirected");
+      assert.equal(result.settingsTarget, "speechToText");
+    }
+  } finally {
+    fetchResponse = originalFetchResponse;
+  }
 });

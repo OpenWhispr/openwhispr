@@ -296,9 +296,6 @@ class TextEditMonitor extends EventEmitter {
           return;
         }
 
-        // The AppleScript never reports an editable caret (only the native
-        // binary emits EDITABLE_NONE:), so this fallback can read selections
-        // but never produce a caret delivery target — panel-first by design.
         const output = stdout.replace(/\n$/, "");
         if (output === "NONE:") {
           resolve({ state: "none" });
@@ -313,17 +310,16 @@ class TextEditMonitor extends EventEmitter {
 
   // Resolves "editable" | "not_editable" | "unknown". "unknown" is macOS-only:
   // the dormant-Chromium signature, where accessibility cannot inspect the
-  // focused field at all. The default timeout reuses SELECTED_TEXT_TIMEOUT_MS
-  // because a dormant tree's verdict only arrives after the same retry ladder.
-  async isFocusedEditable(target, timeoutMs = SELECTED_TEXT_TIMEOUT_MS) {
+  // focused field at all. The timeout reuses SELECTED_TEXT_TIMEOUT_MS because
+  // a dormant tree's verdict only arrives after the same retry ladder.
+  async isFocusedEditable(target) {
     const resolved = this.resolveBinary();
     if (!resolved) return "not_editable";
 
     let args;
     if (process.platform === "darwin") {
-      const pid = target?.kind === "mac-pid" ? target.pid : this.lastTargetPid;
-      if (!pid) return "not_editable";
-      args = [...resolved.args, "--editable-target", String(pid)];
+      if (!target?.pid) return "not_editable";
+      args = [...resolved.args, "--editable-target", String(target.pid)];
     } else if (process.platform === "linux") {
       // The probe answers only for the target process's active window, so a
       // target whose process can't be resolved is never a caret.
@@ -341,7 +337,10 @@ class TextEditMonitor extends EventEmitter {
     const toVerdict = (line) =>
       line === "EDITABLE" ? "editable" : line === "UNKNOWN" ? "unknown" : "not_editable";
     return new Promise((resolve) => {
-      const child = spawn(resolved.command, args, { stdio: ["pipe", "pipe", "ignore"] });
+      const child = spawn(resolved.command, args, {
+        stdio: ["pipe", "pipe", "ignore"],
+        windowsHide: true,
+      });
       let buffered = "";
       let settled = false;
       const settle = (verdict) => {
@@ -353,7 +352,7 @@ class TextEditMonitor extends EventEmitter {
         } catch {}
         resolve(verdict);
       };
-      const timer = setTimeout(() => settle("not_editable"), timeoutMs);
+      const timer = setTimeout(() => settle("not_editable"), SELECTED_TEXT_TIMEOUT_MS);
       child.stdin.on("error", () => {});
       child.stdin.end();
       child.stdout.on("data", (data) => {

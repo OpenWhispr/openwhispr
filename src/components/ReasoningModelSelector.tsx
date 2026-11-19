@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { useTranslation } from "react-i18next";
 import type {
   LlamaServerStatus,
@@ -36,9 +37,11 @@ import {
   filterByokProviderOptionsByPolicy,
   isModeAllowedByPolicy,
   isProviderAllowedByPolicy,
+  isLocalModelAllowedByPolicy,
   reconcileProviderSelection,
 } from "../stores/policyRules";
 import { usePolicySnapshot } from "../hooks/usePolicy";
+import type { ModelCapability } from "../config/inferenceScopes";
 
 type CloudModelOption = {
   value: string;
@@ -75,6 +78,7 @@ interface ReasoningModelSelectorProps {
   setCustomReasoningApiKey?: (key: string) => void;
   setReasoningMode?: (mode: InferenceMode) => void;
   mode?: "cloud" | "local";
+  modelNeeds?: readonly ModelCapability[];
 }
 
 function GpuStatusBadge() {
@@ -349,7 +353,9 @@ export default function ReasoningModelSelector({
   setCustomReasoningApiKey,
   setReasoningMode: setReasoningModeProp,
   mode,
+  modelNeeds,
 }: ReasoningModelSelectorProps) {
+  const registryVersion = useRegistryVersion();
   const { t } = useTranslation();
   const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
   const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
@@ -496,9 +502,11 @@ export default function ReasoningModelSelector({
         descriptionKey: model.descriptionKey,
         specUrl: model.hfRepo ? `https://huggingface.co/${model.hfRepo}` : undefined,
         recommended: model.recommended,
+        legacy: model.legacy,
       })),
     }));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+  }, [registryVersion]);
 
   const openaiModelOptions = useMemo<CloudModelOption[]>(() => {
     const { icon, invertInDark } = getRemoteProviderIcon("openai");
@@ -510,7 +518,8 @@ export default function ReasoningModelSelector({
       icon,
       invertInDark,
     }));
-  }, [t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+  }, [t, registryVersion]);
 
   const selectedCloudModels = useMemo<CloudModelOption[]>(() => {
     if (displayedCloudProvider === "openai") return openaiModelOptions;
@@ -533,18 +542,20 @@ export default function ReasoningModelSelector({
       icon: iconUrl,
       invertInDark,
     }));
-  }, [displayedCloudProvider, openaiModelOptions, tinfoilModels, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+  }, [displayedCloudProvider, openaiModelOptions, tinfoilModels, t, registryVersion]);
 
+  // Keyed by provider IDs, not the list, so a catalog update doesn't reset browsing.
+  const localProviderIds = localProviders.map((p) => p.id).join("\n");
   useEffect(() => {
-    const localProviderIds = localProviders.map((p) => p.id);
-    if (localProviderIds.includes(localReasoningProvider)) {
+    if (localProviderIds.split("\n").includes(localReasoningProvider)) {
       setSelectedMode("local");
       setSelectedLocalProvider(localReasoningProvider);
     } else if (CLOUD_PROVIDER_IDS.includes(localReasoningProvider)) {
       setSelectedMode("cloud");
       setSelectedCloudProvider(localReasoningProvider);
     }
-  }, [localProviders, localReasoningProvider]);
+  }, [localProviderIds, localReasoningProvider]);
 
   // A selection commits only on an explicit click: the model together with
   // the provider tab it was clicked under. Tab switching is pure browsing.
@@ -552,6 +563,12 @@ export default function ReasoningModelSelector({
   // (e.g. a download finishing while another tab is browsed) can never commit
   // a mismatched (provider, model) pair.
   const handleModelSelect = (modelId: string) => {
+    if (
+      effectiveMode === "local" &&
+      modelId &&
+      !isLocalModelAllowedByPolicy(policyState, "llm", modelId)
+    )
+      return;
     if (!modelId) {
       setReasoningModel("");
       return;
@@ -649,6 +666,7 @@ export default function ReasoningModelSelector({
                   lockedBaseUrl
                   apiKeyRequired
                   getKeyUrl={OPENROUTER_KEYS_URL}
+                  modelNeeds={modelNeeds}
                 />
               ) : displayedCloudProvider === "custom" ? (
                 <OpenAICompatiblePanel

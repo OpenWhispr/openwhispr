@@ -67,6 +67,104 @@ test("a 200 is the whole signal for providers with no OpenAI-shaped model list",
   }
 });
 
+test("a transcription test checks the OpenRouter key, not its public catalog", () => {
+  // OpenRouter's catalogs list every model for any caller, so only its key
+  // endpoint can tell a valid key from a mistyped one, whichever scope asks.
+  for (const scope of ["transcription", "reasoning", undefined]) {
+    assert.equal(
+      resolveProviderRequest({ provider: "openrouter", scope, apiKey: "secret" }).endpoint,
+      "https://openrouter.ai/api/v1/key",
+      String(scope)
+    );
+  }
+});
+
+test("the OpenRouter transcription test passes a valid key and rejects a bad one", async () => {
+  // Mirrors OpenRouter: the catalog answers 200 whatever the key, while the key
+  // endpoint answers 401 to a key it doesn't recognise.
+  const openRouter = (keyStatus) => async (url) =>
+    url === "https://openrouter.ai/api/v1/key"
+      ? { ok: keyStatus === 200, status: keyStatus, json: async () => ({ data: {} }) }
+      : { ok: true, status: 200, json: async () => ({ data: [{ id: "openai/gpt-transcribe" }] }) };
+  const config = { provider: "openrouter", scope: "transcription", model: "openai/gpt-transcribe" };
+
+  assert.deepEqual(await testProviderConnection({ ...config, apiKey: "valid" }, openRouter(200)), {
+    success: true,
+  });
+  assert.deepEqual(await testProviderConnection({ ...config, apiKey: "typo" }, openRouter(401)), {
+    success: false,
+    errorCode: "credentialsRejected",
+    error: "The provider rejected these credentials.",
+    status: 401,
+  });
+});
+
+test("a transcription test of a Custom endpoint on OpenRouter asks for its STT catalog", () => {
+  const custom = (scope, baseUrl = "https://openrouter.ai/api/v1") =>
+    resolveProviderRequest({ provider: "custom", scope, baseUrl, apiKey: "" }).endpoints;
+
+  assert.deepEqual(custom("transcription"), [
+    "https://openrouter.ai/api/v1/models?output_modalities=transcription",
+    "https://openrouter.ai/v1/models?output_modalities=transcription",
+  ]);
+  // Chat models are in the default catalog, and no other host splits its list.
+  assert.deepEqual(custom("reasoning"), [
+    "https://openrouter.ai/api/v1/models",
+    "https://openrouter.ai/v1/models",
+  ]);
+  assert.deepEqual(custom("transcription", "https://api.groq.com/openai/v1"), [
+    "https://api.groq.com/openai/v1/models",
+  ]);
+  assert.deepEqual(custom("transcription", "https://notopenrouter.ai/v1"), [
+    "https://notopenrouter.ai/v1/models",
+  ]);
+});
+
+test("a Custom OpenRouter endpoint passes a speech-to-text model it lists", async () => {
+  // Mirrors OpenRouter: STT ids appear only under the output-modality filter.
+  const openRouter = async (url) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      data: url.endsWith("?output_modalities=transcription")
+        ? [{ id: "openai/gpt-4o-transcribe" }]
+        : [{ id: "openai/gpt-4o" }],
+    }),
+  });
+  const config = {
+    provider: "custom",
+    scope: "transcription",
+    baseUrl: "https://openrouter.ai/api/v1",
+    apiKey: "sk-or-key",
+  };
+
+  assert.deepEqual(
+    await testProviderConnection({ ...config, model: "openai/gpt-4o-transcribe" }, openRouter),
+    { success: true }
+  );
+  assert.deepEqual(
+    await testProviderConnection({ ...config, model: "openai/gpt-4o-transcribe-typo" }, openRouter),
+    {
+      success: false,
+      errorCode: "modelNotFound",
+      error: "The selected model is not available from this provider.",
+    }
+  );
+
+  // The catalog answers any caller, so a blank or made-up key must fail on its own.
+  const model = "openai/gpt-4o-transcribe";
+  const rejectsKey = async (url) =>
+    url === "https://openrouter.ai/api/v1/key" ? { ok: false, status: 401 } : openRouter(url);
+  assert.equal(
+    (await testProviderConnection({ ...config, apiKey: "", model }, rejectsKey)).errorCode,
+    "apiKeyRequired"
+  );
+  assert.equal(
+    (await testProviderConnection({ ...config, apiKey: "made-up", model }, rejectsKey)).errorCode,
+    "credentialsRejected"
+  );
+});
+
 test("normalizes custom compatible endpoints", () => {
   assert.equal(
     resolveProviderRequest({ provider: "custom", baseUrl: "localhost:11434/v1", apiKey: "" })
@@ -676,6 +774,7 @@ test("hosted providers refuse redirects; custom servers keep following them", as
     "tinfoil",
     "deepgram",
     "assemblyai",
+    "elevenlabs",
   ];
   for (const provider of hosted) {
     assert.equal(resolveProviderRequest({ provider, apiKey: "k" }).redirect, "error", provider);
@@ -1038,4 +1137,49 @@ test("a model list whose body never arrives is no verdict, not a missing model",
     async () => jsonResponse(200, "not json")
   );
   assert.equal(unreadable.errorCode, "modelNotFound", "a list that can't be read offers nothing");
+});
+
+test("ElevenLabs is checked by a transcription request that carries no audio", async () => {
+  const request = resolveProviderRequest({ provider: "elevenlabs", apiKey: "xi-secret" });
+  assert.equal(request.endpoint, "https://api.elevenlabs.io/v1/speech-to-text");
+  assert.equal(request.endpoint.includes("xi-secret"), false);
+  assert.equal(request.headers["xi-api-key"], "xi-secret");
+  assert.equal(request.headers.Authorization, undefined);
+
+  // 402 is a key with no credit left: still the user's key.
+  for (const status of [400, 402, 422]) {
+    const { calls, fetchImpl } = recordingFetch(() => jsonResponse(status, { detail: {} }));
+    const result = await testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, fetchImpl);
+    assert.deepEqual(result, { success: true }, String(status));
+    assert.equal(calls[0].init.method, "POST");
+    assert.equal(calls[0].init.body.get("model_id"), "scribe_v3");
+    assert.equal(calls[0].init.body.has("file"), false);
+  }
+});
+
+test("ElevenLabs: a refused key fails the check, an exhausted quota does not", async () => {
+  const refused = recordingFetch(() =>
+    jsonResponse(401, { detail: { status: "invalid_api_key", message: "Invalid API key" } })
+  );
+  const result = await testProviderConnection(
+    { provider: "elevenlabs", apiKey: "made-up" },
+    refused.fetchImpl
+  );
+  assert.equal(result.errorCode, "credentialsRejected");
+
+  const quota = recordingFetch(() =>
+    jsonResponse(401, { detail: { status: "quota_exceeded", message: "quota" } })
+  );
+  assert.deepEqual(
+    await testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, quota.fetchImpl),
+    { success: true }
+  );
+
+  const busy = recordingFetch(() => jsonResponse(503, {}));
+  const unverified = await testProviderConnection(
+    { provider: "elevenlabs", apiKey: "k" },
+    busy.fetchImpl
+  );
+  assert.equal(unverified.errorCode, "providerStatus");
+  assert.equal(unverified.unverified, true);
 });

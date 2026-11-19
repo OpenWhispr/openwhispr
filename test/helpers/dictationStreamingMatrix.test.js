@@ -363,15 +363,48 @@ test("closure: shared-channel dictation providers have token entries under their
   }
 });
 
-test("closure: every allowed meeting provider has a token entry", async () => {
+test("closure: every personal meeting provider has a token entry", async () => {
   const { REALTIME_TOKEN_PROVIDERS } = await loadTokens();
   const { ALLOWED_MEETING_PROVIDERS } = await loadMeeting();
   for (const provider of ALLOWED_MEETING_PROVIDERS) {
-    if (provider === "local") continue;
+    // Enterprise uses the profile's socket factory, covered by enterpriseAudioTransport.test.js.
+    if (provider === "local" || provider === "enterprise-realtime") continue;
     assert.equal(
       typeof REALTIME_TOKEN_PROVIDERS[provider],
       "function",
       `${provider} is meeting-allowed but has no token entry`
     );
   }
+});
+
+test("Orukeet options mark only a configured Self-Hosted route for custom headers", async () => {
+  const { buildStreamingSessionOptions } = await loadRouting();
+  const settings = {
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionModel: "orukeet-v0.1.0",
+    cloudTranscriptionBaseUrl: "https://custom.example.com/v1",
+  };
+  for (const transcriptionMode of ["providers", "self-hosted"]) {
+    const options = buildStreamingSessionOptions({
+      providerName: "orukeet",
+      settings: { ...settings, transcriptionMode },
+      language: "auto",
+    });
+    assert.equal(
+      options.transcriptionMode,
+      undefined,
+      "a legacy custom route with no remote URL is not Self-Hosted"
+    );
+  }
+  const options = buildStreamingSessionOptions({
+    providerName: "orukeet",
+    settings: {
+      ...settings,
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: "https://own.example.com/v1",
+    },
+    language: "auto",
+  });
+  assert.equal(options.transcriptionMode, "self-hosted");
 });

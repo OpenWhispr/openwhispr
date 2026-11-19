@@ -4,11 +4,14 @@
 // (gpt-4o-transcribe rejects verbose_json; custom/self-hosted servers may
 // 400 on unknown fields) must keep the plain-text request untouched — a
 // missing timestamp is a degraded export, never a failed upload.
-function timestampRequestFields(provider, model) {
-  if (provider === "openai" && model === "whisper-1") {
-    return { response_format: "verbose_json" };
-  }
-  if (provider === "groq") {
+// ESM so dictation (renderer) and file upload (main, via require(esm)) share
+// the gate.
+export function supportsWhisperSegments(provider, model) {
+  return (provider === "openai" && model === "whisper-1") || provider === "groq";
+}
+
+export function timestampRequestFields(provider, model) {
+  if (supportsWhisperSegments(provider, model)) {
     return { response_format: "verbose_json" };
   }
   if (provider === "mistral") {
@@ -19,8 +22,10 @@ function timestampRequestFields(provider, model) {
 
 // verbose_json (OpenAI/Groq) and Mistral's segment granularity both carry
 // `segments: [{ text, start, end }]`. Null when the response has nothing
-// usable, so callers fall back to the plain transcript.
-function mapVerboseSegments(responseData) {
+// usable, or when the kept segments don't hold every word of the response's
+// text (whitespace aside, so CJK joins match), so callers fall back to the
+// plain transcript rather than store a timed one with words missing.
+export function mapVerboseSegments(responseData) {
   const segments = responseData?.segments;
   if (!Array.isArray(segments)) return null;
 
@@ -37,7 +42,12 @@ function mapVerboseSegments(responseData) {
       end,
     });
   }
-  return mapped.length ? mapped : null;
+  if (!mapped.length) return null;
+  if (typeof responseData.text === "string") {
+    const compact = (value) => value.replace(/\s+/g, "");
+    if (compact(mapped.map((seg) => seg.text).join("")) !== compact(responseData.text)) {
+      return null;
+    }
+  }
+  return mapped;
 }
-
-module.exports = { timestampRequestFields, mapVerboseSegments };

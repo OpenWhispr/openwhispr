@@ -1,5 +1,5 @@
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
-import { mergeTranscriptSegments } from "./transcriptSpeakerState";
+import { mergeTranscriptSegments, type SplitLiveSpeakers } from "./transcriptSpeakerState";
 
 // Routing rules for meeting-diarization-complete events (issue #1495): a result
 // must be persisted to the note that owns the recording session, never to
@@ -90,24 +90,38 @@ export function withoutRemovedSegments<
 
 // Merges main's result into this session's rows only: the first `seedLength`
 // rows are a resumed note's earlier sessions and stay as saved. `removedCount`
-// is how many of this session's rows were dropped.
+// is the net number of rows dropped, including replacement of stop-only text.
 export function mergeSessionDiarization(params: {
   existing: TranscriptSegment[];
   seedLength: number;
+  fallbackTranscript?: string;
   segments: Array<Omit<TranscriptSegment, "id"> & { id?: string }>;
   removedSegments?: RemovedTranscriptSegment[];
+  splitLiveSpeakers?: SplitLiveSpeakers;
 }): { segments: TranscriptSegment[]; removedCount: number } {
-  const { existing, seedLength, segments, removedSegments } = params;
+  const { existing, seedLength, fallbackTranscript, segments, removedSegments, splitLiveSpeakers } =
+    params;
   const seededCount = Math.min(seedLength, existing.length);
   const sessionRows = existing.slice(seededCount);
+  const incoming = segments.map((segment, index) => ({
+    ...segment,
+    id: segment.id || `diarized-${index}`,
+  }));
+  if (fallbackTranscript && sessionRows[0]?.text === fallbackTranscript) {
+    return {
+      segments: [
+        ...existing.slice(0, seededCount),
+        ...mergeTranscriptSegments([], incoming),
+        ...sessionRows.slice(1),
+      ],
+      removedCount: 1 - incoming.length,
+    };
+  }
   const keptRows = withoutRemovedSegments(sessionRows, removedSegments);
   return {
     segments: [
       ...existing.slice(0, seededCount),
-      ...mergeTranscriptSegments(
-        keptRows,
-        segments.map((segment, index) => ({ ...segment, id: segment.id || `diarized-${index}` }))
-      ),
+      ...mergeTranscriptSegments(keptRows, incoming, splitLiveSpeakers),
     ],
     removedCount: sessionRows.length - keptRows.length,
   };

@@ -1,6 +1,7 @@
 import { DEFAULT_CLEANUP_PROMPT } from '@/config/prompts/registry';
 import languageRegistry from '@/config/languageRegistry.json';
 import { TONE_INSTRUCTIONS, TONE_PRIORITY_INSTRUCTION } from '@/services/agent/composerPrompt';
+import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
 import type { ReasoningRequest } from '@/types';
 
 export interface ProviderPrompt {
@@ -38,7 +39,11 @@ export function buildProviderPrompt(request: ReasoningRequest): ProviderPrompt {
   if (language) parts.push(language);
   const words = request.customDictionary?.map((word) => word.trim()).filter(Boolean) ?? [];
   if (words.length) parts.push(DICTIONARY_PREFIX + words.join(', '));
-  const tone = request.tone ? TONE_INSTRUCTIONS[request.tone] : undefined;
+  const shared = request.sharedDictionary?.map((word) => word.trim()).filter(Boolean) ?? [];
+  if (shared.length) parts.push(sharedDictionaryHint(shared));
+  // A custom cleanup prompt is the user's own instruction, which the tone's
+  // priority sentence would override; the server skips the tone the same way.
+  const tone = !customPrompt && request.tone ? TONE_INSTRUCTIONS[request.tone] : undefined;
   if (tone) parts.push(`${tone} ${TONE_PRIORITY_INSTRUCTION}`);
   return {
     systemPrompt: parts.join('\n\n'),

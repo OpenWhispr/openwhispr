@@ -1,3 +1,4 @@
+import { salesforceOutcomeKey } from "../../../utils/salesforceApprovalFields";
 import i18n from "../../../i18n";
 import { useConnectorStatusStore } from "../../../stores/connectorStatusStore";
 import { connectorErrorText } from "../../../utils/connectorErrorCopy";
@@ -6,6 +7,7 @@ import type { ToolResult } from "../ToolRegistry";
 import type {
   ApprovalEdits,
   ApprovalOutcome,
+  ConnectorChoice,
   ConnectorPrepareResult,
 } from "../../../types/connectors";
 
@@ -15,10 +17,21 @@ const NO_RETRY = "Do not retry this action unless the user asks you to.";
 // structured status (the AI SDK path turns failures into a bare error string).
 // data is for the model; displayText is the user's tool step, so it is
 // localized and never carries codes.
-export function needsClarificationResult(message: string, candidates: string[] = []): ToolResult {
+export function needsClarificationResult(
+  message: string,
+  candidates: string[] = [],
+  choices?: ConnectorChoice[],
+  edits: ApprovalEdits = {}
+): ToolResult {
   return {
     success: true,
-    data: { status: "needs_clarification", message, candidates },
+    data: {
+      status: "needs_clarification",
+      message,
+      candidates,
+      ...(choices ? { choices } : {}),
+      ...userEdits(edits),
+    },
     displayText: i18n.t("connectors.toolStatus.needsDetails"),
   };
 }
@@ -35,6 +48,14 @@ export function unavailableResult(
       reason === "policy_blocked" ? "connectors.policyOff" : "connectors.toolStatus.unavailable"
     ),
   };
+}
+
+// A duplicate claim says nothing about how the other call turned out.
+export function duplicateActionResult(): ToolResult {
+  return notSentResult(
+    "duplicate_action",
+    "Another call handles this same action in this request. This call did nothing. Report only the other call's actual outcome; it may still be waiting for the user."
+  );
 }
 
 export function notSentResult(
@@ -94,11 +115,13 @@ export function unknownResult(
 
 export function prepareFailureResult(
   result: Exclude<ConnectorPrepareResult, { status: "ready" }>,
-  connectorId?: string
+  connectorId?: string,
+  /** What the user changed on a card that had to be prepared again. */
+  edits: ApprovalEdits = {}
 ): ToolResult {
   switch (result.status) {
     case "needs_clarification":
-      return needsClarificationResult(result.message, result.candidates);
+      return needsClarificationResult(result.message, result.candidates, result.choices, edits);
     case "failed":
       return failedResult(result.errorCode, result.message, connectorId);
     case "unavailable":
@@ -119,6 +142,8 @@ export interface ApprovalOutcomeOptions {
 // Gmail Sent folder."); an issue or comment names what may not exist; any
 // other keeps the generic line.
 function unknownDisplayText(destination: string, connectorId?: string, verbKey?: string): string {
+  const salesforceKey = salesforceOutcomeKey(verbKey, "unknown");
+  if (salesforceKey) return i18n.t(salesforceKey, { destination });
   const verb = issueVerb(verbKey);
   if (verb) {
     const copy = issueUnknownCopy(verb, destination);
@@ -134,6 +159,8 @@ function unknownDisplayText(destination: string, connectorId?: string, verbKey?:
 }
 
 function sentDisplayText(destination: string, resultLabel?: string, verbKey?: string): string {
+  const salesforceKey = salesforceOutcomeKey(verbKey, "sent");
+  if (salesforceKey) return i18n.t(salesforceKey, { destination });
   const verb = issueVerb(verbKey);
   if (!verb) return i18n.t("connectors.approval.sent", { destination });
   const copy = issueSentCopy(verb, destination, resultLabel);
@@ -142,7 +169,7 @@ function sentDisplayText(destination: string, resultLabel?: string, verbKey?: st
 
 // What the user changed on the card, so the model describes (or proposes
 // again) the email the user settled on, not the one it drafted.
-export function userEdits({ finalText, final }: ApprovalEdits): ApprovalEdits {
+function userEdits({ finalText, final }: ApprovalEdits): ApprovalEdits {
   return {
     ...(finalText !== undefined ? { finalText } : {}),
     ...(final !== undefined ? { final } : {}),
@@ -165,8 +192,11 @@ export function approvalOutcomeResult(
           ...userEdits(outcome),
           // What was created ("ENG-124"), so the model can name it.
           ...(outcome.resultLabel !== undefined ? { reference: outcome.resultLabel } : {}),
+          ...(outcome.outsideThread ? { outsideThread: true } : {}),
         },
-        displayText: sentDisplayText(destination, outcome.resultLabel, options.verbKey),
+        displayText: outcome.outsideThread
+          ? i18n.t("connectors.approval.slack.sentOutsideThread", { destination })
+          : sentDisplayText(destination, outcome.resultLabel, options.verbKey),
       };
     case "cancelled":
       return {
@@ -174,11 +204,15 @@ export function approvalOutcomeResult(
         data: {
           status: "cancelled_by_user",
           guidance: `The user cancelled this action. ${NO_RETRY} Ask what they would like to change if it is unclear.`,
+          ...userEdits(outcome),
         },
         displayText: i18n.t("connectors.approval.cancelled"),
       };
-    case "not_sent":
-      return notSentResult(outcome.reason);
+    case "not_sent": {
+      // With what the user wrote on the card, so a later draft starts from it.
+      const result = notSentResult(outcome.reason);
+      return { ...result, data: { ...(result.data as object), ...userEdits(outcome) } };
+    }
     case "failed":
       return failedResult(
         outcome.errorCode,
@@ -194,7 +228,7 @@ export function approvalOutcomeResult(
           destination,
           checkUrl: outcome.checkUrl,
           ...userEdits(outcome),
-          guidance: `It may or may not have been sent. ${NO_RETRY} ${
+          guidance: `It may or may not have gone through. Say you tried and couldn't confirm it went through. Never say or imply you sent, posted or created it, not even followed by a "but". ${NO_RETRY} ${
             options.unknownGuidance ?? `Tell the user to check ${destination}.`
           }`,
         },

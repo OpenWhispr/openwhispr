@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { useAuth } from "../../hooks/useAuth";
 import WorkspaceBillingCard from "./WorkspaceBillingCard";
 
 export default function WorkspaceBillingOverview({
@@ -10,6 +11,7 @@ export default function WorkspaceBillingOverview({
   onRefreshEntitlement?: () => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const { isSignedIn, isOfflineAccount } = useAuth();
   const { workspaces, activeWorkspaceId, loaded, error, refresh } = useWorkspaceStore(
     useShallow((s) => ({
       workspaces: s.workspaces,
@@ -20,8 +22,8 @@ export default function WorkspaceBillingOverview({
     }))
   );
   useEffect(() => {
-    if (!loaded) void refresh();
-  }, [loaded, refresh]);
+    if (isSignedIn && !isOfflineAccount && !loaded) void refresh();
+  }, [isSignedIn, isOfflineAccount, loaded, refresh]);
 
   const orderedWorkspaces = useMemo(() => {
     if (!activeWorkspaceId) return workspaces;

@@ -3,6 +3,7 @@ import { randomUUID } from '@/lib/uuid';
 import { requestSync } from '@/sync/syncEngine';
 import type { TranscriptionStatus } from '@/lib/diarization/diarizer';
 import type {
+  CreateFolderOptions,
   NotesRepository,
   Note,
   Folder,
@@ -16,6 +17,8 @@ import type {
   RemoteFolder,
   RemoteNote,
   ConflictedNote,
+  ChatCandidateNotes,
+  ChatCandidateOptions,
   Segment,
   NewSegment,
   Speaker,
@@ -65,6 +68,9 @@ export class SyncedNotesRepository implements NotesRepository {
   searchNotes(query: string, folderId?: number): Note[] {
     return this.local.searchNotes(query, folderId);
   }
+  getChatCandidateNotes(terms: string[], options: ChatCandidateOptions): ChatCandidateNotes {
+    return this.local.getChatCandidateNotes(terms, options);
+  }
   getActions(): Action[] {
     return this.local.getActions();
   }
@@ -76,8 +82,8 @@ export class SyncedNotesRepository implements NotesRepository {
   }
 
   // Writes — local-first, mark pending, nudge sync
-  createFolder(name: string, spaceId?: number): Folder {
-    const folder = this.local.createFolder(name, spaceId);
+  createFolder(name: string, spaceId?: number, options?: CreateFolderOptions): Folder {
+    const folder = this.local.createFolder(name, spaceId, options);
     const updated = this.local.setFolderClientId(folder.id, randomUUID());
     requestSync('after-write');
     return updated;
@@ -192,6 +198,12 @@ export class SyncedNotesRepository implements NotesRepository {
   }
   forkNoteToPrivate(noteId: number): void {
     this.local.forkNoteToPrivate(noteId);
+  }
+  resetRejectedNotePrivateWorkspace(pushed: Note): void {
+    this.local.resetRejectedNotePrivateWorkspace(pushed);
+  }
+  resetRejectedFolderPrivateWorkspace(pushed: Folder): void {
+    this.local.resetRejectedFolderPrivateWorkspace(pushed);
   }
   markFolderPushed(
     localId: number,

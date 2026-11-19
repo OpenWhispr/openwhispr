@@ -33,7 +33,7 @@ const MOCKS = {
       globalThis.__editorProps = props;
       return null;
     }`,
-  "./SpacesTree": `export default () => null;`,
+  "./SpacesTree": `export default (props) => { globalThis.__treeProps = props; return null; };`,
   "/overview/ContainerOverview": `export const ContainerOverview = () => null;`,
   "./NotesStructureIntroDialog": `export default () => null;`,
   "./ActionManagerDialog": `export default () => null;`,
@@ -47,14 +47,20 @@ const MOCKS = {
     export const useNotesOnboarding = () => ({ isComplete: true, complete() {} });
   `,
   "/hooks/useTeamSpacesCapability": `export const useTeamSpacesCapability = () => false;`,
-  "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: false, user: globalThis.__user ?? null });`,
+  "/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: globalThis.__user ?? null });`,
+  "/hooks/useSpaceRoster": `
+    export const fetchSpaceRoster = async () => globalThis.__roster ?? [];
+  `,
+  "/stores/deviceNotesStore": `
+    export const useDeviceNotesStore = (select) => select({ viewNoteId: null });
+  `,
   "/stores/noteStore": `
     const note = () => globalThis.__note;
     export const setActiveNoteId = () => {};
     export const useActiveNoteId = () => note().id;
     export const useActiveNote = () => note();
     export const useNotes = () => [];
-    export const useSpaces = () => [];
+    export const useSpaces = () => globalThis.__spaces ?? [];
     export const useFolders = () => [];
     export const useActiveFolderId = () => null;
     export const useActiveContext = () => null;
@@ -66,6 +72,7 @@ const MOCKS = {
     export const revealContainer = () => {};
     export const createFolder = async () => ({ success: false });
     export const getNoteFromStore = () => note();
+    export const markNoteEdited = (id) => globalThis.__editedNotes?.push(id);
   `,
 };
 
@@ -115,6 +122,8 @@ const saves = (calls) => calls.filter(([kind]) => kind === "save");
 // editor's delayed save: an Undo clicked in that second would restore the
 // assistant's previous text over what the user just typed.
 test("editing either document retires the assistant's Undo before the delayed save", async (t) => {
+  globalThis.__editedNotes = [];
+  t.after(() => delete globalThis.__editedNotes);
   const calls = await mountView(t);
 
   await React.act(async () => globalThis.__editorProps.onContentChange(NOTE.id, "Typed"));
@@ -124,6 +133,8 @@ test("editing either document retires the assistant's Undo before the delayed sa
   );
   assert.deepEqual(calls.at(-1), ["discard", NOTE.id]);
   assert.equal(saves(calls).length, 0);
+  // The note store hears of the edit too: a note the tree picked is the user's once edited (D46).
+  assert.deepEqual(globalThis.__editedNotes, [NOTE.id, NOTE.id]);
 });
 
 // Keep on the conflict banner saves the draft first: a delayed save landing
@@ -291,14 +302,18 @@ const USER_AND_INVITEE = [
   { name: "Alice Ng", email: "alice@example.com" },
 ];
 
-async function runSummaryOn(t, note, speakerMappings = []) {
+async function runSummaryOn(t, note, speakerMappings = [], { user, spaces, roster } = {}) {
   const calls = await mountView(t);
   globalThis.window.electronAPI.getSpeakerMappings = async () => speakerMappings;
   globalThis.__noteActionCalls = [];
-  globalThis.__user = { name: "Sam Rivera", email: "sam@example.com" };
+  globalThis.__user = user ?? { name: "Sam Rivera", email: "sam@example.com" };
+  globalThis.__spaces = spaces;
+  globalThis.__roster = roster;
   t.after(() => {
     delete globalThis.__noteActionCalls;
     delete globalThis.__user;
+    delete globalThis.__spaces;
+    delete globalThis.__roster;
   });
   globalThis.__note = { ...NOTE, ...note };
   await calls.rerender();
@@ -309,6 +324,36 @@ async function runSummaryOn(t, note, speakerMappings = []) {
   const [, input, , options] = globalThis.__noteActionCalls[0];
   return { input, options };
 }
+
+test("a calendar-linked summary preserves named titles and only regenerates placeholders", async (t) => {
+  const calls = await mountView(t);
+  const event = { id: "calendar-title-regression", summary: "Weekly Team Sync" };
+  globalThis.window.electronAPI.gcalGetEvent = async () => ({ success: true, event });
+  globalThis.__noteActionCalls = [];
+  t.after(() => {
+    delete globalThis.__noteActionCalls;
+  });
+
+  for (const [title, allowTitleGeneration] of [
+    ["Weekly Team Sync", false],
+    ["My renamed meeting", false],
+    ["New note", true],
+    ["Untitled Note", true],
+    ["", true],
+  ]) {
+    globalThis.__note = { ...NOTE, title, calendar_event_id: event.id };
+    await calls.rerender();
+    // The old rule only renamed the note after its linked event had loaded.
+    assert.equal(globalThis.__editorProps.linkedEvent?.summary, event.summary);
+    globalThis.__noteActionCalls.length = 0;
+    await React.act(async () => {
+      await globalThis.__editorProps.onRunNoteAction(AI_SUMMARY);
+    });
+    assert.equal(globalThis.__noteActionCalls.length, 1);
+    const [, , , options] = globalThis.__noteActionCalls[0];
+    assert.equal(options.allowTitleGeneration, allowTitleGeneration, title);
+  }
+});
 
 test("a transcript stored as plain text runs as one, with the user and the invitees for owner mentions", async (t) => {
   const transcript = "Alice, can you fix the build by Friday? Sure, I'll do it.";
@@ -336,12 +381,137 @@ test("a meeting with speakers keeps its Meeting Context, speaker lines and known
   assert.deepEqual(options.knownPeople, USER_AND_INVITEE);
   assert.ok(
     input.includes(
-      '## Meeting Context\nThe user taking these notes ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>.'
+      '## Meeting Context\nThe note taker ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>.'
     ),
     "the owner and the invitee"
   );
   assert.ok(input.includes("Sam Rivera: I'll send the deck.\nAlice Ng: Ship on Friday."));
 });
+
+// A teammate opening a note shared into a team space didn't record it: the mic
+// lines are the owner's, and the viewer is at most an invitee (#2820).
+const TEAMMATE = { id: "bob-id", name: "Bob Lee", email: "bob@example.com" };
+const TEAM_NOTE = {
+  cloud_id: "cloud-note",
+  owner_user_id: "sam-id",
+  transcript: JSON.stringify([
+    { source: "mic", timestamp: 100, text: "I'll send the deck." },
+    { source: "system", timestamp: 200, text: "Ship on Friday.", speaker: "speaker_0" },
+  ]),
+};
+const TEAM_SPACE = { id: NOTE.space_id, kind: "team", cloud_space_id: "team-space" };
+
+test("a teammate's note names its owner from the space roster, not the viewer", async (t) => {
+  const { input, options } = await runSummaryOn(
+    t,
+    {
+      ...TEAM_NOTE,
+      participants: JSON.stringify([
+        { email: "alice@example.com", displayName: "Alice Ng" },
+        { email: "bob@example.com", displayName: "Bob Lee" },
+      ]),
+    },
+    [{ speaker_id: "speaker_0", display_name: "Alice Ng" }],
+    {
+      user: TEAMMATE,
+      spaces: [TEAM_SPACE],
+      roster: [{ user_id: "sam-id", name: "Sam Rivera", email: "sam@example.com" }],
+    }
+  );
+  assert.ok(
+    input.includes(
+      '## Meeting Context\nThe note taker ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>, Bob Lee <bob@example.com>.'
+    ),
+    "the owner recorded it; the viewer is an invitee"
+  );
+  assert.ok(input.includes("Sam Rivera: I'll send the deck.\nAlice Ng: Ship on Friday."));
+  assert.deepEqual(options.knownPeople, [
+    { name: "Sam Rivera", email: "sam@example.com" },
+    { name: "Alice Ng", email: "alice@example.com" },
+    { name: "Bob Lee", email: "bob@example.com" },
+  ]);
+});
+
+test("without a roster, a teammate's note is attributed to the recorder's calendar self", async (t) => {
+  const { input } = await runSummaryOn(t, { ...TEAM_NOTE, participants: PARTICIPANTS }, [], {
+    user: TEAMMATE,
+  });
+  assert.ok(input.includes("Sam Rivera: I'll send the deck."));
+  assert.ok(!input.includes("Bob Lee"));
+});
+
+test("an unknown recorder is the note taker, never the viewer", async (t) => {
+  const { input } = await runSummaryOn(t, TEAM_NOTE, [], { user: TEAMMATE });
+  assert.ok(input.includes("Note taker: I'll send the deck."));
+  assert.ok(!input.includes("Bob Lee"));
+  assert.ok(!input.includes("The note taker"));
+});
+
+test("generation keeps a viewer-local self mapping distinct from the original recorder", async (t) => {
+  const { input } = await runSummaryOn(
+    t,
+    {
+      ...TEAM_NOTE,
+      transcript: JSON.stringify([
+        { source: "mic", speaker: "you", text: "Original words" },
+        { source: "mic", speaker: "speaker_0", text: "My commitment" },
+      ]),
+    },
+    [{ speaker_id: "speaker_0", display_name: "You" }],
+    {
+      user: TEAMMATE,
+      spaces: [TEAM_SPACE],
+      roster: [{ user_id: "sam-id", name: "Sam Rivera", email: "sam@example.com" }],
+    }
+  );
+  assert.ok(input.includes("Sam Rivera: Original words\nBob Lee: My commitment"));
+});
+
+test("generation attributes a custodian's note to its creator", async (t) => {
+  const { input, options } = await runSummaryOn(
+    t,
+    {
+      ...TEAM_NOTE,
+      owner_user_id: TEAMMATE.id,
+      created_by_user_id: "sam-id",
+    },
+    [],
+    {
+      user: TEAMMATE,
+      spaces: [TEAM_SPACE],
+      roster: [{ user_id: "sam-id", name: "Sam Rivera", email: "sam@example.com" }],
+    }
+  );
+  assert.ok(input.includes('The note taker ("Sam Rivera" in the transcript) is Sam Rivera'));
+  assert.ok(input.includes("Sam Rivera: I'll send the deck."));
+  assert.ok(!input.includes("Bob Lee"));
+  assert.deepEqual(options.knownPeople, [{ name: "Sam Rivera", email: "sam@example.com" }]);
+});
+
+for (const [name, participants, label] of [
+  ["calendar self", PARTICIPANTS, "Sam Rivera"],
+  ["neutral fallback", null, "Note taker"],
+]) {
+  test(`a cleared creator keeps the ${name} in generation instead of the custodian`, async (t) => {
+    const { input } = await runSummaryOn(
+      t,
+      {
+        ...TEAM_NOTE,
+        owner_user_id: TEAMMATE.id,
+        created_by_user_id: null,
+        participants,
+      },
+      [],
+      {
+        user: TEAMMATE,
+        spaces: [TEAM_SPACE],
+        roster: [{ user_id: TEAMMATE.id, name: TEAMMATE.name, email: TEAMMATE.email }],
+      }
+    );
+    assert.ok(input.includes(`${label}: I'll send the deck.`));
+    assert.ok(!input.includes("Bob Lee"));
+  });
+}
 
 test("a note without a transcript keeps the personal-note run", async (t) => {
   const { input, options } = await runSummaryOn(t, { transcript: "", participants: PARTICIPANTS });
@@ -351,8 +521,46 @@ test("a note without a transcript keeps the personal-note run", async (t) => {
   assert.deepEqual(options.knownPeople, []);
 });
 
-// An upload whose provider returned no segments saves its transcript as the
-// note's text and leaves the transcript empty, so that text is the transcript.
+// Uploads whose provider named no speakers store segments with no speaker or
+// source (and with no timing when it returned no segments): nothing shows who
+// speaks, so they must not run as a meeting with every line given to "Them" (#2666).
+test("an upload stored as untimed segments runs as a plain transcript beside the user's notes", async (t) => {
+  const text = "Alice, can you fix the build by Friday? Sure.";
+  const { input, options } = await runSummaryOn(t, {
+    note_type: "upload",
+    transcript: JSON.stringify([{ text }]),
+    participants: PARTICIPANTS,
+  });
+  assert.equal(options.hasPlainTranscript, true);
+  assert.equal(options.isMeetingNote, false);
+  assert.equal(input, `${NOTE.content}\n\n## Meeting Transcript\n${text}`);
+  assert.deepEqual(options.material, { notes: NOTE.content, meetingContext: "", transcript: text });
+  assert.deepEqual(options.knownPeople, USER_AND_INVITEE);
+});
+
+test("an upload with timed segments but no speakers runs as a plain transcript", async (t) => {
+  const transcript = JSON.stringify([
+    { text: "First part.", timestamp: 1_700_000_000_000 },
+    { text: "Second part.", timestamp: 1_700_000_004_000 },
+  ]);
+  const { input, options } = await runSummaryOn(t, { note_type: "upload", transcript });
+  assert.equal(options.hasPlainTranscript, true);
+  assert.equal(options.isMeetingNote, false);
+  assert.ok(input.endsWith("## Meeting Transcript\nFirst part.\n\nSecond part."));
+});
+
+test("an upload with timed speaker segments still runs as a meeting", async (t) => {
+  const transcript = JSON.stringify([
+    { text: "Ship on Friday.", timestamp: 1_700_000_000_000, speaker: "speaker_0" },
+  ]);
+  const { input, options } = await runSummaryOn(t, { note_type: "upload", transcript });
+  assert.equal(options.isMeetingNote, true);
+  assert.ok(!options.hasPlainTranscript);
+  assert.ok(input.includes("Speaker 1: Ship on Friday."));
+});
+
+// Uploads made before the transcript held their text saved it as the note's
+// text and left the transcript empty, so that text is the transcript.
 test("an upload whose transcript is the note's text runs as a plain transcript", async (t) => {
   const content = "Alice, can you fix the build by Friday? Sure.";
   const { input, options } = await runSummaryOn(t, {
@@ -366,4 +574,21 @@ test("an upload whose transcript is the note's text runs as a plain transcript",
   assert.equal(input, `## Meeting Transcript\n${content}`, "not the user's own notes");
   assert.deepEqual(options.material, { notes: "", meetingContext: "", transcript: content });
   assert.deepEqual(options.knownPeople, [{ name: "Sam Rivera", email: "sam@example.com" }]);
+});
+
+test("the tree copy flush writes all pending title, text and summary edits", async (t) => {
+  const calls = await mountView(t);
+  await React.act(async () => globalThis.__editorProps.onTitleChange(NOTE.id, "Latest title"));
+  await React.act(async () => globalThis.__editorProps.onContentChange(NOTE.id, "Latest text"));
+  await React.act(async () =>
+    globalThis.__editorProps.enhancement.onChange(NOTE.id, "Latest summary")
+  );
+  await React.act(async () => globalThis.__treeProps.onFlushPendingSaves(NOTE.id));
+  assert.deepEqual(saves(calls), [
+    [
+      "save",
+      NOTE.id,
+      { title: "Latest title", content: "Latest text", enhanced_content: "Latest summary" },
+    ],
+  ]);
 });

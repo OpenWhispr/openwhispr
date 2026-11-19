@@ -228,6 +228,26 @@ test("Hold hands the portal the keysym", async () => {
   assert.deepEqual(triggers, ["CTRL+XF86Launch7"]);
 });
 
+test("Hold reports each portal down and up for the debug log before acting on it", async () => {
+  const { manager } = loadManager();
+  let portalCallback;
+  manager.globalShortcutsPortal = {
+    registerKeybinding: async (_trigger, callback) => {
+      portalCallback = callback;
+      return true;
+    },
+    unregisterKeybinding: async () => {},
+  };
+  const order = [];
+  manager.onHotkeyEvent = (slotName, action) => order.push(`log:${slotName}:${action}`);
+
+  await manager.registerPushToTalk("Control+F16", (_hotkey, phase) => order.push(phase));
+  portalCallback(undefined, "down");
+  portalCallback(undefined, "up");
+
+  assert.deepEqual(order, ["log:dictation:down", "down", "log:dictation:up", "up"]);
+});
+
 test("Hold falling back to Tap binds the keysym and reads the keymap once", async () => {
   const { manager, calls } = loadManager();
   manager.globalShortcutsPortal = {

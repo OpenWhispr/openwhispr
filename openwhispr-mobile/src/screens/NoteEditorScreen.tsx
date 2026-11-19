@@ -13,7 +13,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useActionsStore } from '@/store/useActionsStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -22,8 +22,10 @@ import { useUsageStore } from '@/store/useUsageStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useDictionaryStore } from '@/store/useDictionaryStore';
 import { extractCorrections } from '@/lib/correctionLearner';
+import { buildDictationHintTiers, buildEffectiveDictionaryWords } from '@/lib/dictationHints';
 import { useActionProcessing } from '@/hooks/useActionProcessing';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
+import { useChatSendGate } from '@/hooks/useChatSendGate';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useUsageLimitRecovery } from '@/hooks/useUsageLimitRecovery';
 import { EditableMarkdown } from '@/components/notes/EditableMarkdown';
@@ -43,13 +45,13 @@ import { shouldOfferVoiceSetup, voiceSetupCandidates } from '@/lib/notes/voiceSe
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
 import { VOICE_ALREADY_TAUGHT_ALERT } from '@/lib/voiceEnrollmentMessages';
 import { NoteChatSheet } from '@/components/notes/NoteChatSheet';
-import { isNoteChatEnabled } from '@/lib/dictationAgent';
 import { SpeakerTranscript } from '@/components/notes/SpeakerTranscript';
 import { TranscriptSheet } from '@/components/notes/TranscriptSheet';
 import { NoteMetaRow } from '@/components/notes/NoteMetaRow';
 import { AttendeesSheet } from '@/components/notes/AttendeesSheet';
 import { MoveToFolderSheet } from '@/components/notes/MoveToFolderSheet';
 import { useMoveNote } from '@/hooks/useMoveNote';
+import { foldersInPrivateWorkspace, privateWorkspaceOf } from '@/lib/privateWorkspaces';
 import {
   formatAttendeeChipLabel,
   formatNoteMetaDate,
@@ -64,6 +66,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { Glass } from '@/components/ui/Glass';
 import { GlassBackButton } from '@/components/ui/GlassBackButton';
+import { TAB_BAR_CLEARANCE } from '@/components/ui/tabBarClearance';
 import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
 import { buildNoteShareContent, exportNote } from '@/lib/noteExport';
 import { AppFont } from '@/lib/fonts';
@@ -82,8 +85,10 @@ import {
   getLocalReasoningUnavailableMessage,
   isLocalContextLimitError,
   isLocalReasoningRequired,
+  LocalReasoningError,
   shouldUseLocalReasoning,
 } from '@/lib/localReasoning';
+import { ChatEmptyAnswerError, toChatErrorMessage } from '@/lib/chat/chatErrorMessage';
 import { providerDisplayName } from '@/lib/mobileProviders';
 import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
 import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
@@ -127,7 +132,24 @@ const transcriptStatusText = (status: string): string => {
   }
 };
 
-export default function NoteEditorScreen() {
+/** Where the editor sits: the screens it opens are pushed onto the same tab's stack. */
+export interface NoteEditorStack {
+  /** Where Back goes when there is nothing to go back to. */
+  root: Href;
+  /** The prefix of the stack's actions and voice-enrollment routes. */
+  routePrefix: string;
+}
+
+const NOTES_EDITOR_STACK: NoteEditorStack = {
+  root: '/(tabs)/(notes)',
+  routePrefix: '/(tabs)/(notes)',
+};
+
+export default function NoteEditorScreen({
+  stack = NOTES_EDITOR_STACK,
+}: {
+  stack?: NoteEditorStack;
+}): React.JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
   const noteId = parseInt(id ?? '', 10);
   const router = useRouter();
@@ -145,6 +167,9 @@ export default function NoteEditorScreen() {
   const resolveConflictKeepMine = useNotesStore((s) => s.resolveConflictKeepMine);
   const resolveConflictUseServer = useNotesStore((s) => s.resolveConflictUseServer);
   const privateFolders = useNotesStore((s) => s.folders);
+  const getAllPrivateFolders = useNotesStore((s) => s.getAllPrivateFolders);
+  const defaultPrivateWorkspaceId = useNotesStore((s) => s.defaultPrivateWorkspaceId);
+  const privateWorkspaces = useNotesStore((s) => s.privateWorkspaces);
   const spaceFolders = useNotesStore((s) => s.spaceFolders);
   const spaces = useNotesStore((s) => s.spaces);
   const getSpaceFolders = useNotesStore((s) => s.getSpaceFolders);
@@ -175,13 +200,8 @@ export default function NoteEditorScreen() {
   const autoLearnEnabled = useConfigStore((s) => s.config?.autoLearnCorrections ?? true);
   const notesMode = useConfigStore((s) => s.config?.inference?.notes?.mode);
   const notesProviderId = useConfigStore((s) => s.config?.inference?.notes?.providerId);
-  const chatMode = useConfigStore((s) => s.config?.inference?.noteChat?.mode);
-  const chatEnabled = useConfigStore((s) => (s.config ? isNoteChatEnabled(s.config) : true));
+  const { chatEnabled, gate: gateChatSend } = useChatSendGate();
   const providerNotes = notesMode === 'providers';
-  // Only an unset or OpenWhispr chat route reaches Cloud, so only it needs an account and the paywall.
-  const cloudChat = chatMode !== 'providers' && chatMode !== 'local';
-  const dictionaryEntries = useDictionaryStore((s) => s.entries);
-  const dictionaryWords = useMemo(() => dictionaryEntries.map((e) => e.word), [dictionaryEntries]);
   const addLearnedWords = useDictionaryStore((s) => s.addLearnedWords);
 
   const actions = useActionsStore((s) => s.actions);
@@ -236,8 +256,6 @@ export default function NoteEditorScreen() {
   const learnedBaselineRef = useRef(note?.content ?? '');
   const autoLearnEnabledRef = useRef(autoLearnEnabled);
   autoLearnEnabledRef.current = autoLearnEnabled;
-  const dictionaryWordsRef = useRef(dictionaryWords);
-  dictionaryWordsRef.current = dictionaryWords;
   const chatAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -371,18 +389,52 @@ export default function NoteEditorScreen() {
   // and its notes must never be moved into private folders.
   const isSpaceUnknown = note?.spaceId != null && !noteSpace;
   const scopeSpaceId = noteSpace?.kind === 'team' ? noteSpace.id : null;
+  // A personal note opened from search may sit in another workspace's Private than the one on
+  // screen: it is offered its own Private's folders, and the others only as explicit moves.
+  const notePrivate = useMemo(() => {
+    if (scopeSpaceId != null || isSpaceUnknown) return null;
+    const all = getAllPrivateFolders();
+    const folder = all.find((f) => f.id === note?.folderId);
+    const placed = folder
+      ? privateWorkspaceOf(folder, defaultPrivateWorkspaceId)
+      : (note?.privateWorkspaceId ?? defaultPrivateWorkspaceId);
+    const listed = privateWorkspaces.map((w) => w.id);
+    // A workspace the account left shows under the default's Private, so its notes move from
+    // there too: a folder created in the lost workspace would be refused.
+    const workspaceId = placed && !listed.includes(placed) ? defaultPrivateWorkspaceId : placed;
+    return {
+      workspaceId,
+      folders: foldersInPrivateWorkspace(all, workspaceId, defaultPrivateWorkspaceId, listed),
+    };
+    // getAllPrivateFolders reads the repository; privateFolders stands in as the reload signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    defaultPrivateWorkspaceId,
+    getAllPrivateFolders,
+    isSpaceUnknown,
+    note?.folderId,
+    note?.privateWorkspaceId,
+    privateFolders,
+    privateWorkspaces,
+    scopeSpaceId,
+  ]);
   const targetFolders = useMemo(
     () =>
-      isSpaceUnknown ? [] : scopeSpaceId != null ? getSpaceFolders(scopeSpaceId) : privateFolders,
+      isSpaceUnknown
+        ? []
+        : scopeSpaceId != null
+          ? getSpaceFolders(scopeSpaceId)
+          : (notePrivate?.folders ?? privateFolders),
     // getSpaceFolders reads the repository, so the store's folder lists stand in as the signal to
     // re-read: every folder reload (create, rename, move, sync) replaces them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [getSpaceFolders, isSpaceUnknown, privateFolders, scopeSpaceId, spaceFolders],
+    [getSpaceFolders, isSpaceUnknown, notePrivate, privateFolders, scopeSpaceId, spaceFolders],
   );
   const folderName = targetFolders.find((folder) => folder.id === note?.folderId)?.name ?? null;
   const move = useMoveNote({
     scopeSpaceId,
     targetFolders,
+    ...(notePrivate ? { privateWorkspaceId: notePrivate.workspaceId } : {}),
     excludeFolderId: note?.folderId ?? null,
   });
   const closeMove = move.close;
@@ -438,8 +490,9 @@ export default function NoteEditorScreen() {
   const lastEnhancementInputHashRef = useRef('');
   const usesSegmentTranscriptRef = useRef(usesSegmentTranscript);
   usesSegmentTranscriptRef.current = usesSegmentTranscript;
-  // Desktop stores an uploaded file's flat transcript as the note body.
-  const contentIsTranscript = note?.noteType === 'upload';
+  // Desktop used to store an uploaded file's flat transcript as the note body. It now
+  // stores it as the transcript, leaving the body for the user's own notes.
+  const contentIsTranscript = note?.noteType === 'upload' && !hasTranscriptSegments;
   // Notes typed beside a recording, never the transcript itself.
   const hasTypedMeetingNotes = isAudioTranscript && !contentIsTranscript;
   const activeSpeaker =
@@ -473,12 +526,13 @@ export default function NoteEditorScreen() {
   const hasEnhancedTab = hasEnhanced || enhancedEditing;
   const bodyTabInput = useMemo(
     () => ({
+      isUpload: note?.noteType === 'upload',
       usesSegmentTranscript,
       transcriptPending,
       contentIsTranscript,
       hasEnhanced: hasEnhancedTab,
     }),
-    [contentIsTranscript, hasEnhancedTab, transcriptPending, usesSegmentTranscript],
+    [contentIsTranscript, hasEnhancedTab, note?.noteType, transcriptPending, usesSegmentTranscript],
   );
   // A private note asks before any AI leaves this iPhone. Local Mode asks too for note chat; note
   // formatting follows its own selection there.
@@ -515,8 +569,8 @@ export default function NoteEditorScreen() {
   );
 
   const openVoiceScript = useCallback(() => {
-    router.push(`/(tabs)/(notes)/voice-enrollment?owner=1&noteId=${noteId}`);
-  }, [noteId, router]);
+    router.push(`${stack.routePrefix}/voice-enrollment?owner=1&noteId=${noteId}`);
+  }, [noteId, router, stack.routePrefix]);
 
   // iOS drops a push made while a page sheet is still sliding away, so it waits for the
   // sheet's onDismiss; Android's Modal has no onDismiss.
@@ -542,7 +596,8 @@ export default function NoteEditorScreen() {
       if (!autoLearnEnabledRef.current) return;
       const baseline = learnedBaselineRef.current;
       if (baseline === newContent) return;
-      const corrections = extractCorrections(baseline, newContent, dictionaryWordsRef.current);
+      // Shared words count as known, so a team word is never learned into Personal.
+      const corrections = extractCorrections(baseline, newContent, buildEffectiveDictionaryWords());
       if (corrections.length > 0) {
         addLearnedWords(corrections);
       }
@@ -736,8 +791,10 @@ export default function NoteEditorScreen() {
     useAudioRecording({
       onComplete: handleDictationComplete,
       onError: handleDictationError,
-      onLocalModelMissing: promptLocalModelFallback,
+      // A declined cloud retry keeps the recording, which the failed history row holds for a retry.
+      onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
       onUsageLimitReached: handleUsageLimitReached,
+      recordsDictation: true,
     });
 
   const handleDictate = useCallback(async () => {
@@ -834,7 +891,7 @@ export default function NoteEditorScreen() {
       lastEnhancementInputHashRef.current = makeContentHash(inputText);
       runAction(action, inputText, {
         inputKind: usesSegmentTranscriptRef.current ? 'meeting-transcript' : 'plain-note',
-        customDictionary: dictionaryWordsRef.current,
+        dictionaryTiers: buildDictationHintTiers(false),
         routing: {
           isPrivateNote: note?.isPrivate === 1,
           ...routing,
@@ -1003,6 +1060,7 @@ export default function NoteEditorScreen() {
           response = await askAbout(sourceContext);
         }
         if (controller.signal.aborted) return;
+        if (!response.text.trim()) throw new ChatEmptyAnswerError();
         setChatMessages((current) => [
           ...current,
           {
@@ -1014,7 +1072,15 @@ export default function NoteEditorScreen() {
         ]);
       } catch (error) {
         if (controller.signal.aborted) return;
-        setChatError(error instanceof Error ? error.message : 'Chat failed');
+        // An on-device error's text comes from the native layer, so it gets the same worded copy as
+        // the Chat tab, and so does an empty answer.
+        setChatError(
+          error instanceof LocalReasoningError || error instanceof ChatEmptyAnswerError
+            ? toChatErrorMessage(error, { surface: 'noteChat' })
+            : error instanceof Error
+              ? error.message
+              : 'Chat failed',
+        );
       } finally {
         if (chatAbortRef.current === controller) {
           chatAbortRef.current = null;
@@ -1027,44 +1093,19 @@ export default function NoteEditorScreen() {
 
   const runChatWithCloudConfirmation = useCallback(
     (question: string, appendUserMessage: boolean) => {
-      if (cloudChat && requiresRealAccount(user)) {
-        showAccountRequiredAlert('AI chat', { cloudOnly: true });
-        return;
-      }
-
-      const gateAndRun = (allowRemoteContent = false) => {
-        if (!cloudChat) {
-          startChatRequest(question, appendUserMessage, allowRemoteContent).catch(() => {});
-          return;
-        }
-        registerSuperwallGate({
-          placement: SUPERWALL_PLACEMENTS.noteChatStart,
-          params: { source: 'note_chat' },
-          requiresAccount: false,
-          feature: () => {
-            startChatRequest(question, appendUserMessage, allowRemoteContent).catch(() => {});
-          },
-        }).catch(() => {});
-      };
-
-      if (chatRequiresCloudConfirmation && chatMode !== 'local') {
-        confirmCloudOnce(
-          'Chat sends this note context to your selected AI service for this request. Your note privacy and sync settings will not change.',
-          () => gateAndRun(true),
-        );
-        return;
-      }
-
-      gateAndRun();
+      gateChatSend(
+        (allowCloudFallback) => {
+          startChatRequest(question, appendUserMessage, allowCloudFallback).catch(() => {});
+        },
+        {
+          consentMessage: chatRequiresCloudConfirmation
+            ? 'Chat sends this note context to your selected AI service for this request. Your note privacy and sync settings will not change.'
+            : null,
+          source: 'note_chat',
+        },
+      );
     },
-    [
-      chatMode,
-      chatRequiresCloudConfirmation,
-      cloudChat,
-      registerSuperwallGate,
-      startChatRequest,
-      user,
-    ],
+    [chatRequiresCloudConfirmation, gateChatSend, startChatRequest],
   );
 
   const handleAskNote = useCallback(() => {
@@ -1110,8 +1151,8 @@ export default function NoteEditorScreen() {
   }, []);
 
   const handleManageActions = useCallback(() => {
-    router.push('/(tabs)/(notes)/actions');
-  }, [router]);
+    router.push(`${stack.routePrefix}/actions`);
+  }, [router, stack.routePrefix]);
 
   const handleDelete = useCallback(() => {
     confirmDestructive('Delete Note', 'This note will be deleted permanently.', () => {
@@ -1208,10 +1249,15 @@ export default function NoteEditorScreen() {
     usesSegmentTranscript && note?.noteType !== 'upload',
   );
 
+  // A deleted note can still be opened from a chat's source link. Both stacks hide the native
+  // header and the tab bar here, so the back button is the only way out.
   if (!note && !isNaN(noteId)) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <Text className="text-tertiaryLabel">Note not found</Text>
+      <View className="flex-1 bg-systemBackground">
+        <TabScreenHeader title="" left={<GlassBackButton fallbackRoute={stack.root} />} />
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-tertiaryLabel">Note not found</Text>
+        </View>
       </View>
     );
   }
@@ -1283,7 +1329,7 @@ export default function NoteEditorScreen() {
       ) : null}
       <TabScreenHeader
         title={title || 'Untitled'}
-        left={<GlassBackButton fallbackRoute="/(tabs)/(notes)" />}
+        left={<GlassBackButton fallbackRoute={stack.root} />}
         right={
           <NoteActionsMenu
             noteId={noteId}
@@ -1618,10 +1664,8 @@ export default function NoteEditorScreen() {
   );
 }
 
-// Approximate height of the iOS 18 floating NativeTabs bar (incl. home-indicator
-// inset). Used to lift the floating mic FAB clear of the tab bar.
-const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 110 : 70;
-const FAB_BOTTOM = TAB_BAR_OFFSET + 32;
+// Lifts the floating mic FAB clear of the tab bar.
+const FAB_BOTTOM = TAB_BAR_CLEARANCE + 32;
 const ASK_PILL_HEIGHT = 52;
 const ASK_PILL_GAP = 12;
 const SYSTEM_RED = '#FF3B30';

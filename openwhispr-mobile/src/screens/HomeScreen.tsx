@@ -191,8 +191,10 @@ export default function HomeScreen() {
       }
       Alert.alert('Error', error.message);
     },
-    onLocalModelMissing: promptLocalModelFallback,
+    // A declined cloud retry keeps the recording, which the failed history row holds for a retry.
+    onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
     onUsageLimitReached: handleUsageLimitReached,
+    recordsDictation: true,
   });
 
   const { currentAmplitude, waveformData } = useAudioWaveform(audioRecorder, isRecording);
@@ -206,7 +208,7 @@ export default function HomeScreen() {
       }
     },
     onError: (error) => Alert.alert('Error', error.message),
-    onLocalModelMissing: promptLocalModelFallback,
+    onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
     onUsageLimitReached: handleUsageLimitReached,
   });
 

@@ -11,7 +11,7 @@ const {
   ORUKEET_SESSION_PATH,
   ORUKEET_PIPELINE_SESSION_PATH,
   ORUKEET_PIPELINE_USAGE_PATH,
-  ORUKEET_LANGUAGE_PREVIEW_URL,
+  ORUKEET_ASR_BASES,
   ORUKEET_PIPELINE_BASES,
   isOrukeetClientToken,
 } = require("./orukeetProtocol");
@@ -39,7 +39,7 @@ function validateSession(data, pipeline = false) {
     };
   }
   if (
-    ![ORUKEET_BASE_URL, ORUKEET_LANGUAGE_PREVIEW_URL].includes(data?.baseUrl) ||
+    !ORUKEET_ASR_BASES.includes(data?.baseUrl) ||
     data?.websocketUrl !==
       `${data?.baseUrl?.replace("https:", "wss:")}/v1/audio/transcriptions/stream` ||
     data?.protocol !== ORUKEET_PCM_PROTOCOL ||

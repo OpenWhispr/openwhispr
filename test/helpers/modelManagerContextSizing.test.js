@@ -38,8 +38,12 @@ function loadModelManager() {
     return originalLoad.call(this, request, parent, isMain);
   };
   try {
-    require("../../src/helpers/modelDirUtils.js");
-    return require("../../src/helpers/modelManagerBridge.js").default;
+    const modelManager = require("../../src/helpers/modelManagerBridge.js").default;
+    // Pin modelsDir to the temp home. getCacheRoot() prefers OPENWHISPR_CACHE_ROOT,
+    // XDG_CACHE_HOME (linux) and USERPROFILE (win32) over the stubbed home, and
+    // migrates model folders when they differ, so it must not run here (#3244).
+    modelManager.getModelsDir = () => path.join(electronHome, ".cache", "openwhispr", "models");
+    return modelManager;
   } finally {
     Module._load = originalLoad;
   }
@@ -68,7 +72,9 @@ async function setup(
     req.on("end", () => {
       let status = 200;
       let payload;
-      if (req.url === "/props") {
+      if (req.url === "/slots") {
+        payload = [];
+      } else if (req.url === "/props") {
         calls.props += 1;
         payload = { default_generation_settings: { n_ctx: serverManager.contextSize } };
       } else if (req.url === "/apply-template") {
@@ -108,6 +114,7 @@ async function setup(
 
   const serverManager = modelManager.serverManager;
   serverManager.cachedServerBinaryPaths = { default: "/stub/llama-server" };
+  serverManager.modelPath = path.join(modelManager.modelsDir, model.fileName);
   serverManager.ready = true;
   serverManager.process = {};
   serverManager.port = server.address().port;
@@ -122,6 +129,7 @@ async function setup(
   serverManager._doStart = async (modelPath, options = {}) => {
     restarts.push(options.contextSize);
     serverManager.ready = true;
+    serverManager.modelPath = modelPath;
     serverManager.process = {};
     serverManager.port = server.address().port;
   };
@@ -571,6 +579,55 @@ test("only Apple Silicon is treated as memory the GPU already shares", async (t)
   assert.ok(discrete.ceiling < unified.ceiling);
 });
 
+test("a server too busy to swap stays a busy error, and says how long to wait", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  manager.currentServerModelId = "another-model";
+  const asked = [];
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    asked.push(options.busyWaitMs);
+    throw Object.assign(new Error("busy"), { code: "LOCAL_MODEL_BUSY" });
+  };
+
+  await assert.rejects(
+    manager.runInference(modelId, SHORT_PROMPT, { busyWaitMs: 1234 }),
+    (error) => error.code === "LOCAL_MODEL_BUSY"
+  );
+  assert.deepEqual(asked, [1234]);
+});
+
+test("a start the caller cancelled stays cancelled and reaches the server with its signal", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  manager.currentServerModelId = "another-model";
+  const caller = new AbortController();
+  let received;
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    received = options.signal;
+    throw Object.assign(new Error("cancelled"), { code: "LOCAL_MODEL_CANCELLED" });
+  };
+
+  await assert.rejects(
+    manager.runInference(modelId, SHORT_PROMPT, { signal: caller.signal }),
+    (error) => error.code === "LOCAL_MODEL_CANCELLED"
+  );
+  caller.abort();
+  assert.equal(received.reason, caller.signal.reason);
+  assert.equal(manager.currentServerModelId, "another-model");
+});
+
+test("a pre-warm never waits on another model's answer", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  const asked = [];
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    asked.push(options.busyWaitMs);
+  };
+
+  await manager.prewarmServer(modelId);
+  assert.deepEqual(asked, [0]);
+});
+
 test("a reply cut off at the token cap keeps its code through the bridge", async (t) => {
   // The bridge rewraps failures; the renderer maps this code to the cleanup toast (#2091).
   const { modelManager, modelId } = await setup(t, { tokenCount: 40, finishReason: "length" });
@@ -583,4 +640,162 @@ test("a reply cut off at the token cap keeps its code through the bridge", async
       return true;
     }
   );
+});
+
+test("a larger request overlapping pre-warm reports busy and can retry at its full context", async (t) => {
+  const { modelManager, modelId, serverManager, calls, restarts } = await setup(t, {
+    tokenCount: 20514,
+  });
+  serverManager.ready = false;
+  serverManager.process = null;
+  serverManager.contextSize = null;
+  modelManager.currentServerModelId = null;
+  const ready = Promise.withResolvers();
+  const joined = Promise.withResolvers();
+  const spawned = Promise.withResolvers();
+  const doStart = serverManager._doStart;
+  serverManager._doStart = async (modelPath, options) => {
+    spawned.resolve();
+    await ready.promise;
+    await doStart(modelPath, options);
+    serverManager.modelPath = modelPath;
+    serverManager.draftModelPath = options.draftModelPath || null;
+  };
+  const start = serverManager.start;
+  t.mock.method(serverManager, "start", function (...args) {
+    const result = start.apply(this, args);
+    if (args[1].contextSize > 16384) joined.resolve();
+    return result;
+  });
+  const warming = modelManager.prewarmServer(modelId);
+  await spawned.promise;
+  const inference = modelManager.runInference(modelId, LONG_PROMPT, {
+    systemPrompt: "Write notes.",
+    busyWaitMs: 0,
+  });
+  const rejected = assert.rejects(inference, { code: "LOCAL_MODEL_BUSY" });
+  await joined.promise;
+  ready.resolve();
+  assert.equal(await warming, true);
+  await rejected;
+  assert.equal(calls.completions, 0);
+  assert.deepEqual(restarts, [16384], "contention must leave the pre-warmed server running");
+  assert.equal(
+    await modelManager.runInference(modelId, LONG_PROMPT, { systemPrompt: "Write notes." }),
+    "done"
+  );
+  assert.deepEqual(restarts, [16384, 32768], "a retry must still be allowed to grow the context");
+  assert.equal(serverManager.contextSize, 32768);
+});
+
+test("a chat cannot replace the warmed model while any selection edit is measuring its prompt", async (t) => {
+  const { modelManager, serverManager, modelId, calls } = await setup(t, { tokenCount: 40 });
+  const take = new AbortController();
+  await modelManager.stopServer();
+  assert.equal(await modelManager.prewarmServer(modelId, take.signal), true);
+
+  const measuring = [Promise.withResolvers(), Promise.withResolvers()];
+  const measured = [Promise.withResolvers(), Promise.withResolvers()];
+  let measurements = 0;
+  t.mock.method(serverManager, "usableContextSize", () => {
+    const index = measurements++;
+    measuring[index].resolve();
+    return measured[index].promise;
+  });
+  const editOptions = { contextSize: 16384, maxTokens: 8192, requireCompleteOutput: true };
+  const cancelEdit = new AbortController();
+  const first = modelManager.runInference(modelId, SHORT_PROMPT, {
+    ...editOptions,
+    signal: cancelEdit.signal,
+  });
+  await measuring[0].promise;
+  const second = modelManager.runInference(modelId, SHORT_PROMPT, editOptions);
+  await measuring[1].promise;
+  take.abort();
+  const startChat = () => serverManager.start("/chat-model", { busyWaitMs: 0 });
+  await assert.rejects(startChat(), { code: "LOCAL_MODEL_BUSY" });
+
+  cancelEdit.abort();
+  measured[0].resolve(16384);
+  await assert.rejects(first, { name: "AbortError" });
+  await assert.rejects(startChat(), { code: "LOCAL_MODEL_BUSY" });
+  measured[1].resolve(16384);
+  assert.equal(await second, "done");
+  assert.equal(calls.completions, 1);
+  await startChat();
+  assert.equal(serverManager.modelPath, "/chat-model");
+});
+
+test("a forced stop during prompt measurement never sends the edit to a replacement model", async (t) => {
+  const { modelManager, serverManager, modelId, calls } = await setup(t, { tokenCount: 40 });
+  const measuring = Promise.withResolvers();
+  const measured = Promise.withResolvers();
+  t.mock.method(serverManager, "usableContextSize", () => {
+    measuring.resolve();
+    return measured.promise;
+  });
+  // Exercise the real stop, without signalling a real child.
+  delete serverManager.stop;
+  serverManager.process = { exitCode: 0, once: (_event, callback) => callback() };
+  const edit = modelManager.runInference(modelId, SHORT_PROMPT, { maxTokens: 8192 });
+  await measuring.promise;
+  await modelManager.stopServer();
+  await serverManager.start("/replacement");
+  measured.resolve(16384);
+  await assert.rejects(edit, { code: "LOCAL_MODEL_CANCELLED" });
+  assert.equal(calls.template, 0);
+  assert.equal(calls.completions, 0);
+  assert.equal(serverManager.modelPath, "/replacement");
+});
+
+test("edits that both need more context can release their old window and share its replacement", async (t) => {
+  const { modelManager, serverManager, modelId, restarts, calls } = await setup(t, {
+    tokenCount: 20000,
+  });
+  const bothMeasuring = Promise.withResolvers();
+  const measure = serverManager.countPromptTokens.bind(serverManager);
+  let pending = 0;
+  t.mock.method(serverManager, "countPromptTokens", async (...args) => {
+    if (++pending === 2) bothMeasuring.resolve();
+    await bothMeasuring.promise;
+    return measure(...args);
+  });
+  const edit = () =>
+    modelManager.runInference(modelId, SHORT_PROMPT, { maxTokens: 8192, busyWaitMs: 2000 });
+  assert.deepEqual(await Promise.all([edit(), edit()]), ["done", "done"]);
+  assert.deepEqual(restarts, [32768]);
+  assert.equal(calls.completions, 2);
+});
+
+test("a binary refresh clears the loaded model after reuse without cancelling the refresh", async (t) => {
+  const { modelManager, serverManager } = await setup(t);
+  const slots = Promise.withResolvers();
+  serverManager._requestJson = () => slots.promise;
+  const stopping = modelManager.stopServerWhenIdle({ cancelOnReuse: false });
+  serverManager.cancelDeferredStop();
+  slots.resolve([]);
+  await stopping;
+
+  assert.equal(serverManager.process, null);
+  assert.equal(modelManager.currentServerModelId, null);
+});
+
+test("disabling cleanup during file validation leaves the stopped server stopped", async (t) => {
+  const { modelManager, serverManager, modelId, restarts } = await setup(t);
+  await modelManager.stopServer();
+  const checking = Promise.withResolvers();
+  const validated = Promise.withResolvers();
+  t.mock.method(modelManager, "checkModelValid", () => {
+    checking.resolve();
+    return validated.promise;
+  });
+  const take = new AbortController();
+  const warming = modelManager.prewarmServer(modelId, take.signal);
+  await checking.promise;
+  take.abort();
+  await modelManager.stopServerWhenIdle();
+  validated.resolve(true);
+  assert.equal(await warming, false);
+  assert.equal(serverManager.ready, false);
+  assert.deepEqual(restarts, []);
 });

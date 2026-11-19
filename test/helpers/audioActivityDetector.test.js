@@ -823,6 +823,133 @@ test("linux: production and sink-monitor streams do not drive meeting prompts", 
   detector.stop();
 });
 
+test("linux: peak-meter streams never prompt at startup or after dismissal", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      {
+        stdout: JSON.stringify([
+          {
+            properties: {
+              "application.process.id": "101",
+              "application.process.binary": "plasmashell",
+              "media.name": "PlasmaPA-VolumeMeter",
+              "stream.monitor": "true",
+            },
+          },
+          {
+            properties: {
+              "application.process.id": "101",
+              "stream.monitor": "true",
+              "stream.capture.sink": "true",
+            },
+          },
+        ]),
+      },
+      {
+        stdout: JSON.stringify([
+          { properties: { "application.process.id": "102", "stream.monitor": "true" } },
+        ]),
+      },
+    ],
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (event) => detections.push(event));
+
+  await detector.start();
+  t.mock.timers.tick(2000);
+  assert.equal(detections.length, 0);
+  assert.equal(detector._sustainedTimer, null);
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: true,
+  });
+
+  detector.dismiss();
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  await flushImmediate();
+  t.mock.timers.tick(5 * 60 * 1000);
+  t.mock.timers.tick(2000);
+  assert.equal(detections.length, 0, "cooldown must not revive a peak-meter prompt");
+  assert.equal(detector._sustainedTimer, null);
+});
+
+test("linux: a peak meter does not hide a real capture from the same process", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const meter = {
+    properties: { "application.process.id": "202", "stream.monitor": "true" },
+  };
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      { stdout: JSON.stringify([meter]) },
+      {
+        stdout: JSON.stringify([
+          meter,
+          { properties: { "application.process.id": "202", "stream.monitor": "false" } },
+        ]),
+      },
+      { stdout: JSON.stringify([meter]) },
+    ],
+  });
+  t.after(() => detector.stop());
+
+  await detector.start();
+  assert.equal(detector._sustainedTimer, null);
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  await flushImmediate();
+  assert.notEqual(detector._sustainedTimer, null, "real mic capture must still prompt");
+
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'remove' on source-output #2\n");
+  await flushImmediate();
+  assert.equal(detector._sustainedTimer, null, "the remaining meter must not keep the timer armed");
+});
+
+test("linux: peak-meter filtering survives a failed exclusion provider", async (t) => {
+  const { detector } = createDetector("linux", {
+    excludedProcessIds: () => {
+      throw new Error("process tree unavailable");
+    },
+    execResponses: [
+      {
+        stdout: JSON.stringify([
+          { properties: { "application.process.id": "101", "stream.monitor": "true" } },
+          { properties: { "stream.monitor": "true" } },
+        ]),
+      },
+    ],
+  });
+  t.after(() => detector.stop());
+
+  await detector.start();
+  assert.equal(detector.getExternalMicState().reliable, false);
+  assert.equal(detector._sustainedTimer, null);
+});
+
+test("linux: polling ignores peak meters but accepts ordinary capture", async () => {
+  const meter = {
+    properties: { "application.process.id": "202", "stream.monitor": "true" },
+  };
+  const { detector } = createDetector("linux", {
+    execResponses: [
+      { stdout: JSON.stringify([meter]) },
+      {
+        stdout: JSON.stringify([
+          meter,
+          { properties: { "application.process.id": "202", "stream.monitor": "false" } },
+        ]),
+      },
+      { stdout: JSON.stringify([{ properties: { "application.process.id": "203" } }]) },
+    ],
+  });
+
+  assert.equal(await detector._checkLinux(), false);
+  assert.equal(await detector._checkLinux(), true);
+  assert.equal(await detector._checkLinux(), true);
+});
+
 test("linux: browser captures prompt and unattributed streams stay in the fallback count", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("linux", {
@@ -1663,3 +1790,153 @@ test("linux: a listing with no attributable stream falls through to the unfilter
   );
   assert.equal(detector._pidScopedCapability, false);
 });
+
+test("a call that ended behind a gate still lets the next call prompt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  for (const [engage, release] of [
+    [(detector) => detector.setUserRecording(true), (detector) => detector.setUserRecording(false)],
+    [(detector) => detector.setMicWarmHold(true), (detector) => detector.setMicWarmHold(false)],
+  ]) {
+    const detector = new AudioActivityDetector(() => []);
+    detector._running = true;
+    detector._eventDriven = true;
+    detector._lastKnownMicState = true;
+    detector._markPrompted();
+    engage(detector);
+    detector._onMicStateChanged(false);
+    release(detector);
+    assert.equal(detector.hasPrompted, true, "the reset still waits out the inactive period");
+    t.mock.timers.tick(60000);
+    assert.equal(detector.hasPrompted, false);
+  }
+});
+
+test("a live call keeps its prompt identity when a gate lifts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._running = true;
+  detector._eventDriven = true;
+  detector._lastKnownMicState = true;
+  detector._markPrompted();
+  detector.setUserRecording(true);
+  detector.setUserRecording(false);
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, true);
+  detector.stop();
+});
+
+test("the reset timer waits for every gate to lift", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._running = true;
+  detector._eventDriven = true;
+  detector._markPrompted();
+  detector.setUserRecording(true);
+  detector.setMicWarmHold(true);
+  detector._onMicStateChanged(false);
+  detector.setUserRecording(false);
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, true, "a warm hold is still up");
+  detector.setMicWarmHold(false);
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, false);
+  detector.stop();
+});
+
+test("a call that returns behind a gate keeps its prompt identity", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._running = true;
+  detector._eventDriven = true;
+  detector._markPrompted();
+  detector._onMicStateChanged(false);
+  detector.setUserRecording(true);
+  detector._onMicStateChanged(true);
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, true);
+  detector.stop();
+});
+
+test("polling lets a prompted call's identity expire across repeated inactive checks", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._isMicActive = async () => false;
+  detector._markPrompted();
+  for (let check = 0; check < 3; check += 1) {
+    await detector._check();
+    t.mock.timers.tick(15000);
+  }
+  await detector._check();
+  assert.equal(detector.hasPrompted, true, "inactive for less than the reset period");
+  t.mock.timers.tick(15000);
+  assert.equal(detector.hasPrompted, false);
+  detector.stop();
+});
+
+test("device activity with no meeting app doesn't hold a prompted call's identity", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(
+    () => [],
+    () => false
+  );
+  detector._running = true;
+  detector._eventDriven = true;
+  detector._markPrompted();
+  detector._onMicStateChanged(false);
+  detector._onMicStateChanged(true, false);
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, false);
+  detector.stop();
+});
+
+test("polling keeps a call's identity while a gate hides whether it came back", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+  const detector = new AudioActivityDetector(() => []);
+  detector._isMicActive = async () => false;
+  detector._markPrompted();
+  await detector._check();
+  detector.setUserRecording(true);
+  await detector._check();
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, true);
+  detector.setUserRecording(false);
+  await detector._check();
+  t.mock.timers.tick(60000);
+  assert.equal(detector.hasPrompted, false, "the next inactive check restarts the timer");
+  detector.stop();
+});
+
+for (const gate of ["setUserRecording", "setMicWarmHold"]) {
+  test(`polling preserves prompt identity when ${gate} engages just before the reset deadline`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+    const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
+    const detector = new AudioActivityDetector(() => []);
+    t.after(() => detector.stop());
+    let active = false;
+    let prompts = 0;
+    detector._isMicActive = async () => active;
+    detector.on("sustained-audio-detected", () => prompts++);
+    detector._markPrompted();
+    await detector._check();
+    t.mock.timers.tick(59000);
+    detector[gate](true);
+    t.mock.timers.tick(1000);
+    assert.equal(detector.hasPrompted, true, "the gate cancels the pending inactivity deadline");
+    active = true;
+    detector[gate](false);
+    await detector._check();
+    await detector._check();
+    assert.equal(prompts, 0, "the returning call keeps its existing prompt identity");
+    active = false;
+    await detector._check();
+    t.mock.timers.tick(60000);
+    assert.equal(detector.hasPrompted, false, "a later inactive period still rearms detection");
+  });
+}

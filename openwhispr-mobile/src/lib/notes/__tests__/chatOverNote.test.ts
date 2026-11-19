@@ -65,3 +65,14 @@ describe('buildNoteChatContext', () => {
     expect(boundChatContext(context).truncated).toBe(false);
   });
 });
+
+it('keeps complete Unicode characters at both transcript excerpt boundaries', () => {
+  const result = boundChatContext(
+    `${'a'.repeat(2999)}😀${'b'.repeat(6000)}😀${'c'.repeat(2999)}`,
+    6000,
+  );
+  expect(result.truncated).toBe(true);
+  expect(result.text).not.toMatch(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u,
+  );
+});

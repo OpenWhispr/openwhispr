@@ -1,9 +1,14 @@
 import { cn } from "../lib/utils";
 import type { FolderItem } from "../../types/electron";
+import type { MeetingRecordingRefusal, PolicyDecisionSnapshot } from "../../stores/policyRules";
 
-export const DEFAULT_FOLDER_NAME = "Personal";
-export const MEETINGS_FOLDER_NAME = "Meetings";
-export const VIDEOS_FOLDER_NAME = "Videos";
+import {
+  DEFAULT_FOLDER_NAME,
+  MEETINGS_FOLDER_NAME,
+  VIDEOS_FOLDER_NAME,
+} from "../../lib/defaultFolderNames";
+
+export { DEFAULT_FOLDER_NAME, MEETINGS_FOLDER_NAME, VIDEOS_FOLDER_NAME };
 
 const DEFAULT_FOLDER_LABEL_KEYS: Record<string, string> = {
   [DEFAULT_FOLDER_NAME]: "notes.folders.defaults.personal",
@@ -34,14 +39,18 @@ export function folderMatchesQuery(
   );
 }
 
+// Folders arrive account-scoped, so an attributed default is the active
+// account's own; a device-owned (NULL account) one only stands in for it.
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
-  return folders.find((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
+  const defaults = folders.filter((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
+  return defaults.find((f) => f.account_id) ?? defaults[0];
 }
 
 // URL downloads route to "Videos" by name: a pre-existing user-created folder with
 // that name is used as-is (the migration never promotes or replaces it).
 export function findVideosFolder(folders: FolderItem[]): FolderItem | undefined {
-  return folders.find((f) => f.name === VIDEOS_FOLDER_NAME);
+  const videos = folders.filter((f) => f.name === VIDEOS_FOLDER_NAME);
+  return videos.find((f) => f.account_id) ?? videos[0];
 }
 
 // URL-download error codes → notes.upload.* i18n keys.
@@ -63,7 +72,42 @@ const TRANSCRIPTION_ERROR_KEYS: Record<string, string> = {
   CHUNK_LOSS_EXCEEDED: "chunkLossExceeded",
   CUSTOM_ENDPOINT_INVALID: "customEndpointInvalid",
   STREAMING_ONLY_PROVIDER: "streamingOnlyProvider",
+  // Server refusals under org policy. Uploads always send their source, so a
+  // purpose refusal here can only be the upload control's.
+  POLICY_AUDIO_UPLOAD_DISABLED: "disabledByOrg",
+  AUDIO_PURPOSE_REQUIRED: "disabledByOrg",
 };
+
+// Why policy refuses a meeting recording, as an i18n key.
+export const MEETING_RECORDING_REFUSAL_KEYS: Record<MeetingRecordingRefusal, string> = {
+  unresolved: "common.policyUnresolved",
+  disabled: "notes.meeting.recordingDisabledByOrg",
+  restricted: "notes.meeting.restrictedByOrg",
+};
+
+// Why policy refuses an upload, as an i18n key.
+export function uploadRestrictionKey(policy: PolicyDecisionSnapshot): string {
+  if (policy.status !== "managed" || !policy.policy) return "common.policyUnresolved";
+  return policy.policy.features.audioUploadEnabled === false
+    ? "notes.upload.disabledByOrg"
+    : "common.policyTranscriptionRestricted";
+}
+
+// Org-policy refusals from main or the server. Every later upload would meet
+// the same refusal, so a batch stops at the first one.
+const UPLOAD_POLICY_REFUSAL_CODES = new Set([
+  "POLICY_AUDIO_UPLOAD_DISABLED",
+  "AUDIO_PURPOSE_REQUIRED",
+  "POLICY_UNRESOLVABLE",
+  "POLICY_MODEL_BLOCKED",
+  "POLICY_LOCAL_MODE_BLOCKED",
+  "POLICY_APP_VERSION_BLOCKED",
+]);
+
+export function isUploadPolicyRefusal(failure: unknown): boolean {
+  const code = (failure as { code?: string } | null | undefined)?.code;
+  return !!code && UPLOAD_POLICY_REFUSAL_CODES.has(code);
+}
 
 // A coded failure arrives either as a returned result (BYOK, local) or as a
 // thrown error — OpenWhispr Cloud rethrows it through withSessionRefresh — so

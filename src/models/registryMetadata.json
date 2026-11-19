@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "manifestVersion": 4,
+  "publicationCommit": "cbfe13e9b315682893acaef1279ae73b074386a5",
+  "sourceCommit": "3131ce77e9b540735729ffa4a48157dfbf2d0652",
+  "contractHashes": {
+    "schema": "279ad1cbee9443b8af734f826c00f8f177f33b52affbf462b46e68ee202b7bb0",
+    "envelope": "ad6476c1f69d0a0a141c4856f456b6ecc1b0abed38dcca57ce10b8aab21b7ca9",
+    "selection": "390b8a538a301f259d1dec8674ed7500c4270259f2a254892467917970b94f41"
+  },
+  "clientContract": "f9a2ff658b1239a25cd8e4eedf2c29f83aa74214aa71d897535fe0b7b2e41403",
+  "catalogSha256": "2ee34912518d1ec191fa5498fbb63f8564648531155dca591e73dfcadd9749f0"
+}

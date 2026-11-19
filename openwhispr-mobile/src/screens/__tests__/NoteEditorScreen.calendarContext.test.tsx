@@ -10,6 +10,7 @@ import { makeContentHash } from '@/lib/utils';
 import { clearLocalReasoningReadinessCache, LocalReasoningError } from '@/lib/localReasoning';
 import { extractCorrections } from '@/lib/correctionLearner';
 import type { Action, Note, Segment, Speaker, SpeakerProfile } from '@/data/types';
+import type { PrivateWorkspace } from '@/lib/privateWorkspaces';
 import type { Folder, Space } from '@/data';
 import type { UserConfig } from '@/types';
 
@@ -58,6 +59,10 @@ const mockNotesState = {
   moveNoteToSpace: jest.fn(),
   createFolder: jest.fn(),
   getSpaceFolders: jest.fn(() => [] as Folder[]),
+  getAllPrivateFolders: jest.fn((): Folder[] => mockNotesState.folders),
+  privateWorkspaces: [] as PrivateWorkspace[],
+  activePrivateWorkspaceId: null as string | null,
+  defaultPrivateWorkspaceId: null as string | null,
   voiceProfiles: [] as SpeakerProfile[],
   meetingSpeakerEmbeddingsByNoteId: {} as Record<number, Record<string, number[]>>,
   claimSpeakerAsMe: mockClaimSpeakerAsMe,
@@ -150,6 +155,11 @@ jest.mock('@/store/useDictionaryStore', () => ({
     selector(mockDictionaryState),
 }));
 
+jest.mock('@/lib/dictationHints', () => ({
+  buildEffectiveDictionaryWords: (): string[] => [],
+  buildDictationHintTiers: (): string[][] => [[], [], []],
+}));
+
 jest.mock('@/store/useUsageStore', () => {
   const usageState = { usage: null, load: jest.fn(async () => ({ status: 'skipped' })) };
   const useUsageStore = (selector?: (state: typeof usageState) => unknown) =>
@@ -177,6 +187,8 @@ jest.mock('@/services/reasoning/ReasoningService', () => ({
     processText: jest.fn(),
     chatOverNote: jest.fn(),
   },
+  // Off device, so note actions keep the usual dictionary.
+  resolveReasoningPlacement: () => ({ localRequired: false }),
 }));
 
 let mockAppleAvailability = 'available';
@@ -249,6 +261,14 @@ jest.mock('@/components/ui/GlassIconButton', () => ({
 
 jest.mock('@/components/ui/SystemIcon', () => ({
   SystemIcon: () => null,
+}));
+
+jest.mock('@/components/ui/GlassBackButton', () => ({
+  GlassBackButton: ({ fallbackRoute }: { fallbackRoute?: string }) =>
+    (() => {
+      const { Text: MockText } = require('react-native');
+      return <MockText testID="back-button">{fallbackRoute}</MockText>;
+    })(),
 }));
 
 jest.mock('@/components/notes/NoteActionsMenu', () => ({
@@ -361,16 +381,21 @@ jest.mock('@/components/notes/TranscriptSheet', () => ({
 }));
 
 jest.mock('@/components/notes/MoveToFolderSheet', () => ({
-  MoveToFolderSheet: ({ visible }: { visible: boolean }) =>
+  MoveToFolderSheet: ({ visible, folders }: { visible: boolean; folders: { name: string }[] }) =>
     (() => {
       const { Text: MockText } = require('react-native');
-      return visible ? <MockText testID="move-sheet">move-sheet</MockText> : null;
+      return visible ? (
+        <MockText testID="move-sheet" accessibilityHint={folders.map((f) => f.name).join('|')}>
+          move-sheet
+        </MockText>
+      ) : null;
     })(),
 }));
 
 jest.mock('@/components/notes/NoteChatSheet', () => ({
   NoteChatSheet: ({
     draft,
+    error,
     canSend,
     suggestions,
     onDraftChange,
@@ -379,6 +404,7 @@ jest.mock('@/components/notes/NoteChatSheet', () => ({
     onClose,
   }: {
     draft: string;
+    error: string | null;
     canSend: boolean;
     suggestions: readonly { label: string; prompt: string }[];
     onDraftChange: (text: string) => void;
@@ -389,11 +415,13 @@ jest.mock('@/components/notes/NoteChatSheet', () => ({
     (() => {
       const {
         Pressable: MockPressable,
+        Text: MockText,
         TextInput: MockTextInput,
         View: MockView,
       } = require('react-native');
       return (
         <MockView>
+          {error ? <MockText testID="chat-error">{error}</MockText> : null}
           <MockTextInput testID="chat-draft" value={draft} onChangeText={onDraftChange} />
           <MockPressable
             testID="chat-send"
@@ -855,6 +883,62 @@ describe('NoteEditorScreen note chat', () => {
   });
 });
 
+describe('NoteEditorScreen note chat errors', () => {
+  it('words an on-device failure in note chat instead of showing the native text', async () => {
+    const chatErrorMessage = jest.requireActual('@/lib/chat/chatErrorMessage');
+    const toChatErrorMessage = jest.spyOn(chatErrorMessage, 'toChatErrorMessage');
+    (ReasoningService.chatOverNote as jest.Mock).mockRejectedValueOnce(
+      new LocalReasoningError('APPLE_LLM_FAILED', 'GenerationError -1'),
+    );
+    const { getByTestId, findByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('chat-suggestion-List action items'));
+    });
+
+    expect((await findByTestId('chat-error')).props.children).toBe(
+      chatErrorMessage.CHAT_ON_DEVICE_UNAVAILABLE_MESSAGE,
+    );
+    expect(toChatErrorMessage).toHaveBeenCalledWith(expect.any(LocalReasoningError), {
+      surface: 'noteChat',
+    });
+    toChatErrorMessage.mockRestore();
+  });
+
+  it('says an empty answer came back rather than showing a blank bubble', async () => {
+    const { CHAT_EMPTY_ANSWER_MESSAGE } = jest.requireActual('@/lib/chat/chatErrorMessage');
+    (ReasoningService.chatOverNote as jest.Mock).mockResolvedValueOnce({ text: ' ', model: 'x' });
+    const { getByTestId, findByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('chat-suggestion-List action items'));
+    });
+    expect((await findByTestId('chat-error')).props.children).toBe(CHAT_EMPTY_ANSWER_MESSAGE);
+  });
+
+  it('shows another failure’s own text', async () => {
+    (ReasoningService.chatOverNote as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    const { getByTestId, findByTestId } = render(<NoteEditorScreen />);
+    await act(async () => {
+      fireEvent.press(getByTestId('chat-suggestion-List action items'));
+    });
+    expect((await findByTestId('chat-error')).props.children).toBe('offline');
+  });
+});
+
+describe('NoteEditorScreen missing note', () => {
+  it('keeps a way back when the note is gone, on either stack', () => {
+    mockNotesState.notes = [];
+    mockRouteNoteId = '99';
+    const { getByText, getByTestId, rerender } = render(<NoteEditorScreen />);
+    expect(getByText('Note not found')).toBeTruthy();
+    expect(getByTestId('back-button').props.children).toBe('/(tabs)/(notes)');
+
+    rerender(
+      <NoteEditorScreen stack={{ root: '/(tabs)/(chat)', routePrefix: '/(tabs)/(chat)/note' }} />,
+    );
+    expect(getByTestId('back-button').props.children).toBe('/(tabs)/(chat)');
+  });
+});
+
 describe('NoteEditorScreen generated titles', () => {
   const personalNote = (title: string): Note =>
     note({
@@ -1114,34 +1198,54 @@ describe('NoteEditorScreen body tabs', () => {
     expect(getByText('Transcript failed')).toBeTruthy();
   });
 
-  it('never shows an uploaded file’s body, the flat copy of its transcript, as My notes', () => {
+  it('lets an upload with a transcript keep editable notes without changing its transcript', () => {
+    jest.useFakeTimers();
     mockNote = note({
       noteType: 'upload',
       calendarEventId: null,
       participants: null,
-      content: 'Alice can take the first pass.',
+      content: '',
     });
     mockNotesState.notes = [mockNote];
-    const { getByText, queryByTestId } = render(<NoteEditorScreen />);
+    const { getByText, getByTestId, queryByTestId } = render(<NoteEditorScreen />);
     expect(getByText('Alice can take the first pass.')).toBeTruthy();
-    expect(queryByTestId('note-tab-notes')).toBeNull();
+    expect(queryByTestId('note-content-input')).toBeNull();
+
+    fireEvent.press(getByTestId('note-tab-notes'));
+    expect(getByTestId('note-content-input').props.value).toBe('');
+    expect(getByTestId('note-content-input').props.editable).toBe(true);
+    expect(getByTestId('note-content-input').props.placeholder).toBe('Add your own notes…');
+    fireEvent.changeText(getByTestId('note-content-input'), 'Send the revised checklist.');
+    act(() => {
+      jest.advanceTimersByTime(800);
+    });
+    expect(mockUpdateNote).toHaveBeenCalledWith(7, { content: 'Send the revised checklist.' });
+    expect(extractCorrections).not.toHaveBeenCalled();
+
+    fireEvent.press(getByTestId('note-tab-transcript'));
+    expect(getByText('Alice can take the first pass.')).toBeTruthy();
     expect(queryByTestId('note-content-input')).toBeNull();
   });
 
-  it('keeps an uploaded file’s transcript as a tab once notes are generated', () => {
+  it('keeps an upload’s transcript tab and typed notes beside generated notes', () => {
     mockNote = note({
       noteType: 'upload',
       calendarEventId: null,
       participants: null,
+      content: 'Send the revised checklist.',
       enhancedContent: '## Summary',
     });
     mockNotesState.notes = [mockNote];
     const { getByText, getByTestId, queryByTestId } = render(<NoteEditorScreen />);
+    expect(getByText('## Summary')).toBeTruthy();
     expect(getByTestId('note-tab-enhanced')).toBeTruthy();
-    expect(queryByTestId('note-tab-notes')).toBeNull();
+    expect(getByTestId('note-tab-transcript')).toBeTruthy();
+
+    fireEvent.press(getByTestId('note-tab-notes'));
+    expect(getByTestId('note-content-input').props.value).toBe('Send the revised checklist.');
+    expect(getByTestId('note-content-input').props.editable).toBe(true);
 
     fireEvent.press(getByTestId('note-tab-transcript'));
-
     expect(getByText('Alice can take the first pass.')).toBeTruthy();
     expect(queryByTestId('note-content-input')).toBeNull();
   });
@@ -1485,6 +1589,63 @@ describe('NoteEditorScreen meta row', () => {
     expect(queryByTestId('note-meta-attendees')).toBeNull();
   });
 
+  it('names a note’s folder in another workspace’s Private than the one on screen', () => {
+    const roadmap = {
+      ...mockNotesState.folders[0],
+      id: 5,
+      name: 'Roadmap',
+      privateWorkspaceId: 'workspace-acme',
+    } as Folder;
+    mockNotesState.getAllPrivateFolders.mockReturnValue([...mockNotesState.folders, roadmap]);
+    mockNote = note({ folderId: 5 });
+    mockNotesState.notes = [mockNote];
+    try {
+      const { getByText, queryByText } = render(<NoteEditorScreen />);
+      expect(getByText('Roadmap')).toBeTruthy();
+      expect(queryByText('Meetings')).toBeNull();
+    } finally {
+      mockNotesState.getAllPrivateFolders.mockImplementation(
+        (): Folder[] => mockNotesState.folders,
+      );
+    }
+  });
+
+  it.each(['workspace-own', null])(
+    'labels departed folders but only offers current Private targets with default %s',
+    (defaultId): void => {
+      const lost = {
+        ...mockNotesState.folders[0],
+        id: 6,
+        name: 'Old team notes',
+        privateWorkspaceId: 'workspace-gone',
+      } as Folder;
+      const lostSibling = { ...lost, id: 7, name: 'Old sibling folder' };
+      mockNotesState.privateWorkspaces = defaultId
+        ? [{ id: defaultId, name: 'Mine', is_default: true }]
+        : [];
+      mockNotesState.defaultPrivateWorkspaceId = defaultId;
+      mockNotesState.getAllPrivateFolders.mockReturnValue([
+        ...mockNotesState.folders,
+        lost,
+        lostSibling,
+      ]);
+      mockNote = note({ folderId: 6 });
+      mockNotesState.notes = [mockNote];
+      try {
+        const { getByText, getByTestId } = render(<NoteEditorScreen />);
+        expect(getByText('Old team notes')).toBeTruthy();
+        fireEvent.press(getByTestId('note-meta-folder'));
+        expect(getByTestId('move-sheet').props.accessibilityHint).toBe('Meetings');
+      } finally {
+        mockNotesState.privateWorkspaces = [];
+        mockNotesState.defaultPrivateWorkspaceId = null;
+        mockNotesState.getAllPrivateFolders.mockImplementation(
+          (): Folder[] => mockNotesState.folders,
+        );
+      }
+    },
+  );
+
   it('offers no folders for a note whose Space is not on this device', () => {
     mockNote = note({ spaceId: 99 });
     mockNotesState.notes = [mockNote];
@@ -1800,6 +1961,24 @@ describe('NoteEditorScreen voice setup', () => {
       fireEvent.press(getByTestId('thats-me-read-script'));
 
       expect(mockPush).toHaveBeenCalledWith('/(tabs)/(notes)/voice-enrollment?owner=1&noteId=7');
+    } finally {
+      Platform.OS = platform;
+    }
+  });
+
+  it('opens the script on the stack the note was opened from', () => {
+    const platform = Platform.OS;
+    Platform.OS = 'android';
+    try {
+      const { getByTestId } = render(
+        <NoteEditorScreen stack={{ root: '/(tabs)/(chat)', routePrefix: '/(tabs)/(chat)/note' }} />,
+      );
+      fireEvent.press(getByTestId('voice-setup-banner-set-up'));
+      fireEvent.press(getByTestId('thats-me-read-script'));
+
+      expect(mockPush).toHaveBeenCalledWith(
+        '/(tabs)/(chat)/note/voice-enrollment?owner=1&noteId=7',
+      );
     } finally {
       Platform.OS = platform;
     }

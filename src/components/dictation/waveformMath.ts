@@ -16,5 +16,5 @@ const LEVEL_EXPONENT = 0.75;
 const toBarLevel = (rms: number) =>
   Math.min(1, Math.pow(Math.max(0, rms) * LEVEL_GAIN, LEVEL_EXPONENT));
 
-export const resolveWaveformBarHeight = (rms: number) =>
-  WAVEFORM_BAR_MIN_PX + toBarLevel(rms) * (WAVEFORM_BAR_MAX_PX - WAVEFORM_BAR_MIN_PX);
+export const resolveWaveformBarHeight = (rms: number, maxPx = WAVEFORM_BAR_MAX_PX) =>
+  WAVEFORM_BAR_MIN_PX + toBarLevel(rms) * (maxPx - WAVEFORM_BAR_MIN_PX);

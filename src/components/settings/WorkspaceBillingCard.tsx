@@ -15,7 +15,8 @@ import {
 import { useToast } from "../ui/useToast";
 import { WorkspacesService, type SeatPreview } from "../../services/WorkspacesService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
-import { hasActiveWorkspaceSubscription } from "../../lib/workspaceBilling";
+import { workspaceCan } from "../../lib/capabilities";
+import { hasActiveWorkspaceSubscription, hasSubscription } from "../../lib/workspaceBilling";
 import { formatAmount } from "../../utils/formatAmount";
 import type { Workspace } from "../../types/electron";
 
@@ -34,9 +35,13 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
     void refresh();
     void onRefreshEntitlement?.();
   });
-  const isOwner = workspace.role === "owner";
-  const hasSubscription = Boolean(workspace.stripe_subscription_id);
-  const canAddSeats = hasSubscription && hasActiveWorkspaceSubscription(workspace);
+  const canManageBilling = workspaceCan(workspace, "manage_billing");
+  // Add seat and Manage in Stripe need a Stripe subscription, so they read the raw id:
+  // `has_subscription` is also true for a paid plan provisioned without Stripe.
+  const subscribed = Boolean(workspace.stripe_subscription_id);
+  const canAddSeats = subscribed && hasActiveWorkspaceSubscription(workspace);
+  // A plan OpenWhispr set up without Stripe: a checkout would only be refused (409).
+  const provisioned = !subscribed && hasSubscription(workspace);
   const seatsUsed = workspace.seats_used ?? workspace.seats;
   const seatsTotal = Math.max(workspace.seats, seatsUsed);
   const pct = seatsTotal > 0 ? Math.min(100, (seatsUsed / seatsTotal) * 100) : 0;
@@ -80,7 +85,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
     try {
       await WorkspacesService.updateSeats(workspace.id, seatPreview.next_quantity);
       setSeatPreview(null);
-      await refresh();
+      await refresh({ fresh: true });
       toast({
         title: t("settingsPage.unifiedBilling.seatUpdated", {
           count: seatPreview.next_quantity,
@@ -163,7 +168,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
         </div>
       )}
 
-      {!isOwner ? (
+      {!canManageBilling ? (
         <p className="text-xs text-muted-foreground">
           {workspace.billing_manager
             ? t("settingsPage.unifiedBilling.managedBy", {
@@ -171,9 +176,13 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
               })
             : t("settingsPage.workspace.billing.ownerOnly")}
         </p>
+      ) : provisioned ? (
+        <p className="text-xs text-muted-foreground">
+          {t("settingsPage.workspace.billing.provisionedPlan")}
+        </p>
       ) : (
         <div className="flex flex-wrap gap-2 pt-1">
-          {hasSubscription ? (
+          {subscribed ? (
             <>
               {canAddSeats && (
                 <Button

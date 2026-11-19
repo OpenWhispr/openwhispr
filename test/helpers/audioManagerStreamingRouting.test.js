@@ -158,6 +158,46 @@ test("managed OpenWhispr Cloud still respects its batch configuration", async (t
   assert.equal(manager.shouldUseStreaming(), false);
 });
 
+test("new BYOK streaming models never override managed cloud routing", async (t) => {
+  const { createManager, vite } = await loadAudioManager(t, {
+    cachePrefix: "registry-streaming-boundary-",
+    settingsKey: "__streamingRoutingSettings",
+  });
+  const manager = createManager();
+  manager.sttConfig = { dictation: { mode: "batch" }, streamingProvider: "openai-realtime" };
+  const store = await vite.ssrLoadModule("/models/registryData.js");
+  const data = structuredClone(store.getRegistryData());
+  for (const provider of ["openai", "gemini"]) {
+    data.transcriptionProviders
+      .find((p) => p.id === provider)
+      .models.push({
+        id: `${provider}-future-live`,
+        name: "Future",
+        description: "Fixture",
+        streaming: true,
+      });
+  }
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  for (const provider of ["openai", "gemini"]) {
+    setSettings({
+      cloudTranscriptionProvider: provider,
+      cloudTranscriptionModel: `${provider}-future-live`,
+      geminiApiKey: "test",
+    });
+    assert.equal(manager.shouldUseStreaming(), true, `${provider} BYOK`);
+    assert.equal(
+      manager.getStreamingProviderName(),
+      provider === "openai" ? "openai-realtime" : "gemini"
+    );
+    setSettings({
+      cloudTranscriptionMode: "openwhispr",
+      cloudTranscriptionProvider: provider,
+      cloudTranscriptionModel: `${provider}-future-live`,
+    });
+    assert.equal(manager.shouldUseStreaming(), false, `${provider} managed batch`);
+  }
+});
+
 test("explicit Orukeet custom endpoint uses PCM streaming without cloud login", async (t) => {
   const manager = await loadManager(t);
   setSettings({
@@ -326,9 +366,12 @@ test("the STT config goes stale after fifteen minutes and immediately when inval
   assert.equal(manager.isSttConfigStale(fetchedAt + 14 * 60 * 1000), false);
   assert.equal(manager.isSttConfigStale(fetchedAt + 15 * 60 * 1000 + 1), true);
 
+  const generation = manager.sttConfigGeneration;
   manager.invalidateSttConfig();
   assert.equal(manager.sttConfig, null);
   assert.equal(manager.isSttConfigStale(fetchedAt), true);
+  // Invalidating also bumps the generation a fetch compares against.
+  assert.equal(manager.sttConfigGeneration, generation + 1);
 });
 
 test("a cloud upload reports why it was batch instead of the managed Orukeet stream", async (t) => {

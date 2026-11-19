@@ -28,7 +28,8 @@ export interface FileTranscriptionResult {
   // audio_duration_seconds. Only transcribeFileWithSpeakers sets it.
   durationSeconds?: number | null;
   // Segment-level timing from BYOK providers that support it (opts.timestamps
-  // or BYOK diarization). Absent whenever the provider returned text only.
+  // or BYOK diarization), with local diarization's speakers when that ran, or
+  // the merged speaker turns when the provider returned text only.
   segments?: Array<{ text: string; start: number; end: number; speaker?: string }>;
 }
 
@@ -67,6 +68,8 @@ export interface TranscriptionApiKeys {
   tinfoilApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
+  elevenlabsApiKey: string;
+  openrouterApiKey: string;
   customTranscriptionApiKey?: string;
 }
 
@@ -88,6 +91,10 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.deepgramApiKey;
     case "assemblyai":
       return keys.assemblyaiApiKey;
+    case "elevenlabs":
+      return keys.elevenlabsApiKey;
+    case "openrouter":
+      return keys.openrouterApiKey;
     case "custom":
       return keys.customTranscriptionApiKey || "";
     default:
@@ -126,7 +133,17 @@ export async function transcribeFile(
   filePath: string,
   cfg: FileTranscriptionConfig,
   diarize: boolean,
-  opts: { requestId?: string; timestamps?: boolean } = {}
+  {
+    durationSeconds,
+    signal,
+    ...opts
+  }: {
+    requestId?: string;
+    signal?: AbortSignal;
+    timestamps?: boolean;
+    purpose?: "dictation" | "upload";
+    durationSeconds?: number;
+  } = {}
 ): Promise<FileTranscriptionResult> {
   // Managed enterprise STT outranks every personal lane, OpenWhispr Cloud and
   // local included: under managed_required no audio may leave the tenant.
@@ -142,6 +159,7 @@ export async function transcribeFile(
 
   if (!managed && cfg.isOpenWhisprCloud) {
     return withSessionRefresh(async () => {
+      signal?.throwIfAborted();
       const r = await window.electronAPI.transcribeAudioFileCloud!(filePath, opts);
       if (!r.success && r.code) {
         throw Object.assign(new Error(r.error || "Cloud transcription failed"), {
@@ -166,6 +184,7 @@ export async function transcribeFile(
       // override its auto language detection.
       ...(provider === "cohere" && cfg.language ? { language: cfg.language } : {}),
       requestId: opts.requestId,
+      purpose: opts.purpose,
     });
   }
 
@@ -183,7 +202,12 @@ export async function transcribeFile(
   // (fail-closed on misconfiguration) instead of stale BYOK settings.
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
+    requestId: opts.requestId,
+    purpose: opts.purpose,
     managed: managed?.kind === "managed" ? managed : undefined,
+    ...(route.transport === "proxied" && route.provider === "assemblyai"
+      ? { durationSeconds }
+      : {}),
     apiKey: cfg.getApiKey(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
@@ -243,6 +267,27 @@ export async function resolveDiarizationSettings({
   };
 }
 
+type SpeakerSpan = { start: number; end: number; speaker: string };
+
+function assignSpeakers(
+  segments: NonNullable<FileTranscriptionResult["segments"]>,
+  speakerSpans: SpeakerSpan[]
+): NonNullable<FileTranscriptionResult["segments"]> {
+  return segments.map((segment) => {
+    let best = speakerSpans[0];
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (const span of speakerSpans) {
+      // Positive: seconds of overlap. Negative: the gap to a span that doesn't overlap.
+      const score = Math.min(segment.end, span.end) - Math.max(segment.start, span.start);
+      if (score > bestScore) {
+        best = span;
+        bestScore = score;
+      }
+    }
+    return { ...segment, speaker: best.speaker };
+  });
+}
+
 // Transcribe and diarize in parallel, then merge speaker labels into the text.
 // Shared by the single-file flow and the batch queue. `durationSeconds` (when the
 // source knows it, e.g. URL downloads) beats inferring duration from segments.
@@ -283,9 +328,20 @@ export async function transcribeFileWithSpeakers(
     const merged = await window.electronAPI.mergeSpeakerText?.(
       diar.segments,
       result.text,
-      durationSeconds || 0
+      measuredDuration || 0
     );
-    if (merged?.success && merged.text) return { ...result, text: merged.text };
+    if (merged?.success && merged.text) {
+      // The transcript keeps who spoke when: the provider's timed segments get
+      // the speaker they overlap most, and without them the merged turns
+      // (placed by their share of the text) stand in.
+      return {
+        ...result,
+        text: merged.text,
+        segments: result.segments
+          ? assignSpeakers(result.segments, diar.segments)
+          : merged.segments,
+      };
+    }
   } catch {
     // Merge failure falls back to the plain transcript.
   }

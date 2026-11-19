@@ -8,7 +8,10 @@ import {
   selectResolvedNoteFormatting,
   type ResolvedNoteFormatting,
 } from "./settingsStore";
+import { localModelRefusal } from "./policyRules";
+import { usePolicyStore } from "./policyStore";
 import { appendDictionarySuffix } from "../config/prompts";
+import { getLlmDictionaryWords } from "../utils/snippets";
 import { generateNoteTitle } from "../utils/generateTitle";
 import { buildNoteFormattingOverrides } from "../helpers/noteFormattingOverrides";
 import { PROVIDER_ERROR_CODES } from "../helpers/providerHttpErrors.js";
@@ -246,8 +249,9 @@ const nothingToSummarizeError = () =>
 
 /**
  * Whether the reply is the marker itself, as models wrap it: in a fence or
- * emphasis, or after a short sentence. A summary that only contains it, such as
- * a section a small model answered with the marker, is still a summary.
+ * emphasis, after a short sentence, or in another letter case. A summary that
+ * only contains it, such as a section a small model answered with the marker,
+ * is still a summary.
  */
 function isNothingToSummarizeReply(reply: string): boolean {
   const lines = stripThinkingTags(reply)
@@ -255,7 +259,7 @@ function isNothingToSummarizeReply(reply: string): boolean {
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("```"));
   const last = lines.pop()?.replace(/^[*_`]+|[*_`.!]+$/g, "");
-  if (last !== NOTHING_TO_SUMMARIZE) return false;
+  if (last?.toUpperCase() !== NOTHING_TO_SUMMARIZE) return false;
   const lead = lines.join("\n");
   return lead.length <= 200 && !/^(?:#|[-*+]\s|\d+[.)]\s)/m.test(lead);
 }
@@ -526,7 +530,17 @@ export function runBackgroundAction(
 
   const modelId = options.modelId;
   if (!modelId && !options.isCloudMode) {
-    pushErrorEvent({ noteId, message: labels.noModel });
+    const blocked = getSettings().policyBlockedLocalScopes?.includes("noteFormatting");
+    pushErrorEvent({
+      noteId,
+      message: labels.noModel,
+      ...(blocked
+        ? {
+            messageKey: localModelRefusal(usePolicyStore.getState(), "llm").messageKey,
+            settingsTarget: "noteFormatting",
+          }
+        : {}),
+    });
     return;
   }
 
@@ -565,7 +579,9 @@ export function runBackgroundAction(
       const systemPrompt = appendDictionarySuffix(
         instructions,
         // Any transcript is speech-to-text, which misspells names.
-        options.isMeetingNote || options.hasPlainTranscript ? settings.customDictionary : undefined,
+        options.isMeetingNote || options.hasPlainTranscript
+          ? getLlmDictionaryWords(settings, { includeTriggers: false })
+          : undefined,
         settings.uiLanguage
       );
       const requestConfig: ReasoningConfig = {
@@ -619,6 +635,12 @@ export function runBackgroundAction(
 
       const before = await window.electronAPI.getNote(noteId);
       if (isCancelled()) return;
+      // The note was deleted while the action ran, so there is nothing to write to.
+      if (!before) {
+        processingFlags.set(noteId, false);
+        clearNoteState(noteId);
+        return;
+      }
 
       const enhancedContent = options.knownPeople?.length
         ? tagActionItemOwners(enhanced, options.knownPeople)

@@ -321,6 +321,18 @@ test("streaming: Gemini gets the chosen thinkingLevel", async (t) => {
   });
 });
 
+test("streaming: suppressed thinking sends low to a Gemini model without minimal", async (t) => {
+  const body = await streamRequestBody(t, {
+    provider: "gemini",
+    model: "gemini-3.8-flash",
+    config: { disableThinking: true },
+  });
+  assert.deepEqual(body.generationConfig.thinkingConfig, {
+    thinkingLevel: "low",
+    includeThoughts: false,
+  });
+});
+
 test("settings: each scope keeps its own effort", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: { _llmScopeKeysMigrated: "1", _dictationAgentSeeded: "1" },

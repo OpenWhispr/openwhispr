@@ -395,3 +395,4 @@ module.exports = GpuBinaryManager;
 module.exports.migrateLegacyBinDir = migrateLegacyBinDir;
 module.exports.detectOrphanedGpuPacks = detectOrphanedGpuPacks;
 module.exports.detectOutdatedGpuPacks = detectOutdatedGpuPacks;
+module.exports.DISK_SPACE_MULTIPLIER = DISK_SPACE_MULTIPLIER;

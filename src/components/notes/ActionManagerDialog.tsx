@@ -4,11 +4,18 @@ import { Sparkles, Trash2, Loader2, Plus, Zap, ChevronUp, ChevronDown, X } from 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Toggle } from "../ui/toggle";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { useToast } from "../ui/useToast";
 import { cn } from "../lib/utils";
-import { useActionsOfKind, initializeActions, getActionName } from "../../stores/actionStore";
-import { NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
+import {
+  useActionsOfKind,
+  initializeActions,
+  getActionName,
+  resolveDefaultTemplate,
+} from "../../stores/actionStore";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { GENERATE_NOTES_KEY, NOTE_ACTION_LIMITS } from "../../helpers/builtinActions";
 import { normalizeSections } from "../../helpers/templatePrompts";
 import { getActionIcon } from "./actionIcons";
 import type { ActionItem, ActionKind, TemplateSection } from "../../types/electron";
@@ -48,6 +55,12 @@ export default function ActionManagerDialog({
   const { toast } = useToast();
   const [kind, setKind] = useState<ActionKind>(initialKind);
   const items = useActionsOfKind(kind);
+  const templates = useActionsOfKind("template");
+  const defaultSummaryTemplateId = useSettingsStore((state) => state.defaultSummaryTemplateId);
+  const setDefaultSummaryTemplateId = useSettingsStore(
+    (state) => state.setDefaultSummaryTemplateId
+  );
+  const defaultTemplate = resolveDefaultTemplate(templates, defaultSummaryTemplateId);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -172,6 +185,14 @@ export default function ActionManagerDialog({
 
   const showEditor = isCreating || selectedId !== null;
   const selectedAction = items.find((a) => a.id === selectedId);
+  const handleDefaultChange = (checked: boolean): void => {
+    if (!selectedAction || !isTemplate || isSaving) return;
+    try {
+      setDefaultSummaryTemplateId(checked ? selectedAction.client_id : GENERATE_NOTES_KEY);
+    } catch {
+      toast({ title: t("notes.templates.defaultSaveFailed"), variant: "destructive" });
+    }
+  };
   const hasUnsavedChanges = isCreating
     ? name.trim() !== "" || prompt.trim() !== "" || savedSections.length > 0
     : selectedAction
@@ -287,6 +308,11 @@ export default function ActionManagerDialog({
                                 {t("notes.actions.builtIn")}
                               </span>
                             )}
+                            {action.client_id === defaultTemplate?.client_id && (
+                              <span className="text-[10px] font-medium px-1 py-px rounded bg-accent/10 text-accent shrink-0">
+                                {t("notes.templates.defaultBadge")}
+                              </span>
+                            )}
                           </div>
                         </div>
                         {action.is_builtin !== 1 && (
@@ -366,6 +392,35 @@ export default function ActionManagerDialog({
 
                 {/* Editor form */}
                 <div className="flex flex-1 flex-col overflow-y-auto px-5 py-4 space-y-3">
+                  {isTemplate &&
+                    (isCreating ? (
+                      <p className="text-xs text-muted-foreground/70">
+                        {t("notes.templates.saveBeforeDefault")}
+                      </p>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium">{t("notes.templates.defaultLabel")}</p>
+                          <p className="text-xs text-muted-foreground/70">
+                            {t("notes.templates.defaultHint")}
+                          </p>
+                        </div>
+                        <Toggle
+                          ariaLabel={t("notes.templates.defaultLabel")}
+                          checked={
+                            !!selectedAction &&
+                            selectedAction.client_id === defaultTemplate?.client_id
+                          }
+                          onChange={handleDefaultChange}
+                          disabled={
+                            isSaving ||
+                            !selectedAction ||
+                            (selectedAction.translation_key === GENERATE_NOTES_KEY &&
+                              selectedAction.client_id === defaultTemplate?.client_id)
+                          }
+                        />
+                      </div>
+                    ))}
                   <Input
                     dir="auto"
                     ref={nameInputRef}

@@ -303,3 +303,248 @@ test("SQLite UTC note timestamps are parsed as UTC before local formatting", () 
 
   assert.equal(parsed.toISOString(), "2026-08-04T13:02:00.000Z");
 });
+
+// An upload whose provider returned no segments stores its text untimed; a
+// "[00:00:00] Unknown speaker" heading or a 3-second cue would be invented.
+test("untimed upload text exports without invented times or speakers", () => {
+  const note = {
+    title: "Lecture",
+    created_at: "2026-01-01T00:00:00Z",
+    audio_duration_seconds: 125.4,
+  };
+  const segments = [{ text: "The whole lecture." }];
+
+  const txt = formatTxt(note, segments, {});
+  assert.ok(txt.endsWith("──────────────────────────────────\n\nThe whole lecture.\n"));
+  assert.doesNotMatch(txt, /\[00:00:00\]/);
+
+  const md = formatMd(note, segments, {});
+  assert.ok(md.endsWith("---\n\nThe whole lecture.\n"));
+  assert.doesNotMatch(md, /00:00:00|Unknown/);
+
+  assert.equal(
+    formatSrt(segments, {}, note),
+    "1\n00:00:00,000 --> 00:02:05,400\nThe whole lecture.\n"
+  );
+  const json = JSON.parse(formatJson(note, segments, {}));
+  assert.equal(json.metadata.duration_seconds, 125);
+  assert.deepEqual(json.speakers, []);
+  assert.equal(json.segments[0].speaker, null);
+});
+
+const recorderSegments = [
+  { source: "mic", speaker: "you", timestamp: 0, text: "Morning." },
+  { source: "system", speaker: "speaker_0", timestamp: 3, text: "Hi." },
+  { source: "mic", timestamp: 6, text: "Unlabelled mic." },
+  { source: "system", speakerName: "You", speaker: "speaker_1", timestamp: 9, text: "Named." },
+];
+const recorderNote = { title: "Standup", created_at: "2026-01-01T00:00:00Z" };
+
+test("without a recorder label the recorder's lines read You, as before", () => {
+  const txt = formatTxt(recorderNote, recorderSegments, {});
+
+  assert.ok(txt.includes("[00:00:00] You:\nMorning."));
+  assert.ok(txt.includes("[00:00:06] You:\nUnlabelled mic."));
+  assert.ok(txt.includes("[00:00:09] You:\nNamed."));
+  assert.equal(txt, formatTxt(recorderNote, recorderSegments, {}, {}));
+});
+
+test("a recorder label names the recorder's lines in every format", () => {
+  const options = { recorderLabel: "Ada Lovelace" };
+
+  const txt = formatTxt(recorderNote, recorderSegments, {}, options);
+  assert.ok(txt.includes("[00:00:00] Ada Lovelace:\nMorning."));
+  assert.ok(txt.includes("[00:00:03] Speaker 1:\nHi."));
+  assert.ok(txt.includes("[00:00:06] Ada Lovelace:\nUnlabelled mic."));
+  assert.ok(txt.includes("[00:00:09] Ada Lovelace:\nNamed."));
+  assert.ok(!/\bYou\b/.test(txt));
+
+  const md = formatMd(recorderNote, recorderSegments, {}, options);
+  assert.match(md, /\*\*Ada Lovelace\*\* `00:00:00`\nMorning\./);
+  assert.ok(!md.includes("**You**"));
+
+  const srt = formatSrt(recorderSegments, {}, recorderNote, options);
+  assert.match(srt, /Ada Lovelace: Morning\./);
+  assert.ok(!srt.includes("You:"));
+
+  const json = JSON.parse(formatJson(recorderNote, recorderSegments, {}, options));
+  assert.deepEqual(json.speakers, ["Ada Lovelace", "Speaker 1"]);
+  assert.equal(json.segments[0].speaker, "Ada Lovelace");
+});
+
+test("a localized You speaker name takes the recorder label", (t) => {
+  changeLanguage("de");
+  t.after(() => changeLanguage("en"));
+
+  const txt = formatTxt(
+    recorderNote,
+    [{ source: "system", speakerName: "Du", speaker: "speaker_0", timestamp: 0, text: "Hallo." }],
+    {},
+    { recorderLabel: "Ada Lovelace" }
+  );
+
+  assert.ok(txt.includes("[00:00:00] Ada Lovelace:\nHallo."));
+});
+
+test("other speaker names and this device's You mapping keep their names", () => {
+  const txt = formatTxt(
+    recorderNote,
+    [
+      { source: "system", speakerName: "Grace", speaker: "speaker_0", timestamp: 0, text: "A." },
+      { source: "system", speaker: "speaker_1", timestamp: 3, text: "B." },
+    ],
+    { speaker_1: "You" },
+    { recorderLabel: "Ada Lovelace" }
+  );
+
+  assert.ok(txt.includes("[00:00:00] Grace:\nA."));
+  assert.ok(txt.includes("[00:00:03] You:\nB."));
+});
+
+test("the export label fills legacy recorder names without replacing session names or local mappings", () => {
+  const segments = [
+    { source: "mic", speaker: "you", text: "Original." },
+    { source: "mic", speaker: "you", recorderName: "Bob", text: "Appended." },
+    { source: "mic", recorderName: "Carol", text: "Unlabelled." },
+    { speaker: "speaker_0", speakerName: "You", text: "Local mapping." },
+    { speaker: "speaker_0", speakerName: "You", speakerLocked: true, text: "Locked legacy." },
+    { speakerName: "You", recorderName: "Dana", speakerLocked: true, text: "Locked session." },
+  ].map((segment, index) => ({ ...segment, timestamp: index * 3 }));
+  const mappings = { speaker_0: "You" };
+  const options = { recorderLabel: "Ada" };
+  const names = ["Ada", "Bob", "Carol", "You", "Ada", "Dana"];
+  const txt = formatTxt(recorderNote, segments, mappings, options);
+  const md = formatMd(recorderNote, segments, mappings, options);
+  const srt = formatSrt(segments, mappings, recorderNote, options);
+  const json = JSON.parse(formatJson(recorderNote, segments, mappings, options));
+
+  assert.deepEqual(
+    json.segments.map((segment) => segment.speaker),
+    names
+  );
+  names.forEach((name, index) => {
+    const timestamp = `00:00:${String(index * 3).padStart(2, "0")}`;
+    assert.ok(txt.includes(`${name}:\n${segments[index].text}`));
+    assert.ok(md.includes(`**${name}** \`${timestamp}\`\n${segments[index].text}`));
+    assert.ok(srt.includes(`${name}: ${segments[index].text}`));
+  });
+});
+
+test("exports keep different recorders' adjacent self lines separate", () => {
+  const note = { title: "Planning", created_at: "2026-01-01T00:00:00Z" };
+  const segments = [
+    { source: "mic", speaker: "you", text: "old", timestamp: 0 },
+    {
+      source: "mic",
+      speaker: "you",
+      recorderName: "Bob",
+      speakerName: "You",
+      text: "new",
+      timestamp: 1,
+    },
+  ];
+  assert.match(formatTxt(note, segments, {}), /Bob:/);
+  assert.match(formatMd(note, segments, {}), /\*\*Bob\*\*/);
+  assert.match(formatSrt(segments, {}, note), /Bob: new/);
+  assert.equal(JSON.parse(formatJson(note, segments, {})).segments[1].speaker, "Bob");
+});
+
+test("exports keep adjacent locked corrections separate from viewer-local self mappings", () => {
+  const note = { title: "Planning", created_at: "2026-01-01T00:00:00Z" };
+  const segment = {
+    source: "mic",
+    speaker: "speaker_0",
+    speakerName: "You",
+    recorderName: "Alice Recorder",
+  };
+  const segments = [
+    { ...segment, text: "Viewer commitment.", timestamp: 0 },
+    { ...segment, text: "Recorder commitment.", timestamp: 1, speakerLocked: true },
+  ];
+  const mappings = { speaker_0: "You" };
+  const json = JSON.parse(formatJson(note, segments, mappings));
+  assert.deepEqual(
+    json.segments.map(({ speaker, text }) => ({ speaker, text })),
+    [
+      { speaker: "You", text: "Viewer commitment." },
+      { speaker: "Alice Recorder", text: "Recorder commitment." },
+    ]
+  );
+  assert.match(formatTxt(note, segments, mappings), /Alice Recorder:\nRecorder commitment\./);
+  assert.match(
+    formatMd(note, segments, mappings),
+    /\*\*Alice Recorder\*\* `00:00:01`\nRecorder commitment\./
+  );
+  assert.match(formatSrt(segments, mappings, note), /Alice Recorder: Recorder commitment\./);
+});
+
+for (const [language, youLabel] of [
+  ["en", "You"],
+  ["de", "Du"],
+]) {
+  test(`exports preserve local mappings, locked corrections and session recorders in ${language}`, (t) => {
+    changeLanguage(language);
+    t.after(() => changeLanguage("en"));
+    const note = { title: "Planning", created_at: "2026-01-01T00:00:00Z" };
+    const segments = [
+      {
+        source: "mic",
+        speaker: "speaker_0",
+        speakerName: "You",
+        recorderName: "Alice Recorder",
+        text: "Viewer commitment.",
+      },
+      {
+        source: "mic",
+        speaker: "speaker_1",
+        speakerName: youLabel,
+        recorderName: "Alice Recorder",
+        speakerLocked: true,
+        text: "Recorder commitment.",
+      },
+      {
+        source: "mic",
+        speaker: "speaker_2",
+        speakerName: "Carol",
+        speakerLockSource: "user",
+        text: "Corrected commitment.",
+      },
+      {
+        source: "mic",
+        speaker: "speaker_3",
+        speakerName: "Old match",
+        text: "Updated match.",
+      },
+      {
+        source: "mic",
+        speaker: "you",
+        speakerName: "You",
+        recorderName: "Bob Recorder",
+        text: "Appended commitment.",
+      },
+    ].map((segment, index) => ({ ...segment, timestamp: index * 3 }));
+    const mappings = {
+      speaker_0: youLabel,
+      speaker_1: youLabel,
+      speaker_2: youLabel,
+      speaker_3: "Updated name",
+      you: "Original recorder",
+    };
+    const expectedNames = [youLabel, "Alice Recorder", "Carol", "Updated name", "Bob Recorder"];
+    const txt = formatTxt(note, segments, mappings);
+    const md = formatMd(note, segments, mappings);
+    const srt = formatSrt(segments, mappings, note);
+    const json = JSON.parse(formatJson(note, segments, mappings));
+    assert.deepEqual(
+      json.segments.map((segment) => segment.speaker),
+      expectedNames
+    );
+    expectedNames.forEach((name, index) => {
+      const text = segments[index].text;
+      const timestamp = `00:00:${String(index * 3).padStart(2, "0")}`;
+      assert.ok(txt.includes(`${name}:\n${text}`));
+      assert.ok(md.includes(`**${name}** \`${timestamp}\`\n${text}`));
+      assert.ok(srt.includes(`${name}: ${text}`));
+    });
+  });
+}

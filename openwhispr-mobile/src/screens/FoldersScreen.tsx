@@ -10,9 +10,11 @@ import { NotesTopBar } from '@/components/notes/NotesTopBar';
 import { GroupedList } from '@/components/notes/GroupedList';
 import { FolderRow } from '@/components/notes/FolderRow';
 import { NoteRow } from '@/components/notes/NoteRow';
+import type { RestoreRow } from '@/components/ui/SwipeableCard';
 import { SectionHeader } from '@/components/notes/SectionHeader';
 import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
 import { SpacesSection } from '@/components/notes/SpacesSection';
+import { PrivateWorkspaceSwitcher } from '@/components/notes/PrivateWorkspaceSwitcher';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { groupNotesByDate } from '@/lib/groupNotesByDate';
 import { safeHaptics } from '@/lib/utils';
@@ -32,6 +34,11 @@ export default function FoldersScreen() {
     folders,
     folderCounts,
     spaces,
+    privateWorkspaces,
+    activePrivateWorkspaceId,
+    defaultPrivateWorkspaceId,
+    setActivePrivateWorkspace,
+    getPrivateNoteFolderId,
     initialize,
     isInitialized,
     setActiveFolderId,
@@ -63,7 +70,20 @@ export default function FoldersScreen() {
     if (!isInitialized) initialize();
   }, [isInitialized, initialize]);
 
-  const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === 'team'), [spaces]);
+  // With a Private per workspace the screen shows one workspace at a time, as desktop does:
+  // its Private above and its team spaces below. The unassigned Personal list belongs to no
+  // workspace, so it keeps every team space in reach.
+  const teamSpaces = useMemo(
+    () =>
+      spaces.filter(
+        (s) =>
+          s.kind === 'team' &&
+          (privateWorkspaces.length === 0 ||
+            activePrivateWorkspaceId === null ||
+            s.workspaceId === activePrivateWorkspaceId),
+      ),
+    [spaces, privateWorkspaces, activePrivateWorkspaceId],
+  );
 
   const { refreshing, onRefresh } = useManualSyncRefresh();
 
@@ -86,11 +106,9 @@ export default function FoldersScreen() {
   );
 
   const handleCompose = useCallback(() => {
-    const defaultFolder = folders.find((f) => f.isDefault) ?? folders[0];
-    if (!defaultFolder) return;
-    const note = createNote(undefined, undefined, defaultFolder.id);
+    const note = createNote(undefined, undefined, getPrivateNoteFolderId());
     router.push(`/(tabs)/(notes)/${note.id}`);
-  }, [folders, createNote]);
+  }, [createNote, getPrivateNoteFolderId]);
 
   const handleNotePress = useCallback(
     (id: number) => {
@@ -102,11 +120,16 @@ export default function FoldersScreen() {
   );
 
   const handleDeleteNote = useCallback(
-    (id: number) => {
-      confirmDestructive('Delete Note', 'This note will be deleted permanently.', () => {
-        safeHaptics('warning');
-        deleteNote(id);
-      });
+    (id: number, restoreRow: RestoreRow) => {
+      confirmDestructive(
+        'Delete Note',
+        'This note will be deleted permanently.',
+        () => {
+          safeHaptics('warning');
+          deleteNote(id);
+        },
+        { onCancel: restoreRow },
+      );
     },
     [deleteNote],
   );
@@ -218,7 +241,7 @@ export default function FoldersScreen() {
                       bucket={bucket.key}
                       tinted
                       onPress={() => handleNotePress(note.id)}
-                      onDelete={() => handleDeleteNote(note.id)}
+                      onDelete={(restoreRow) => handleDeleteNote(note.id, restoreRow)}
                     />
                   ))}
                 </GroupedList>
@@ -227,6 +250,12 @@ export default function FoldersScreen() {
           )
         ) : (
           <>
+            <PrivateWorkspaceSwitcher
+              workspaces={privateWorkspaces}
+              activeId={activePrivateWorkspaceId}
+              defaultId={defaultPrivateWorkspaceId}
+              onSelect={setActivePrivateWorkspace}
+            />
             <SectionHeader label="Private Space" />
             <GroupedList>
               {folders.map((folder) => (
