@@ -10,14 +10,13 @@ const PRACTICE_ROUTE: AndroidJob['route'] = {
   cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
 };
 
-export type PracticeFormat = 'email' | 'list';
+export type PracticeFormat = 'email';
 
-// The cleanup request carries no hint about the field, so the email and list practices
-// ask the cleanup model for the shape the practice shows.
+// The request carries no hint about the field, so the Gmail practice asks the model for the shape
+// the practice shows.
 const FORMAT_PROMPTS: Record<PracticeFormat, string> = {
   email:
     'Format the dictated text as a short email. Put the greeting on its own line, then a blank line, then the body starting with a capital letter, then a blank line. End with the closing word (such as Thanks or Best) on its own line followed by a comma, and the sender’s name on the line after it. When the speaker corrects themselves, keep only the corrected version. Keep the speaker’s language and wording otherwise. Return only the email, with no subject line and no introduction.',
-  list: 'Format the dictated text as a list. If it starts with a heading such as "Things to do today", keep it as the first line ending with a colon. Put each item on its own line starting with "- ", capitalised, without trailing punctuation. Keep the speaker’s language and words. Return only the list, with no introduction.',
 };
 
 async function formatPractice(
@@ -82,14 +81,34 @@ export class PracticeRecorder {
   }
 
   async finish(format?: PracticeFormat): Promise<string> {
+    return this.run(createAndroidJob('dictate'), format);
+  }
+
+  /**
+   * Practice 2: the spoken words are a request ("write Tim an email…"), run through the same
+   * Assistant pipeline the bubble's menu uses, then laid out as the email the Gmail card shows.
+   */
+  async finishWrite(): Promise<string> {
+    return this.run(createAndroidJob('write'), 'email');
+  }
+
+  /**
+   * Practice 3: the spoken words are an instruction for [selection] ("make it friendlier"), run through
+   * the same Edit selection pipeline the bubble's menu uses. Returns the replacement for the selection.
+   */
+  async finishEdit(selection: string, target: string): Promise<string> {
+    return this.run(createAndroidJob('edit', target, selection));
+  }
+
+  private async run(base: AndroidJob, format?: PracticeFormat): Promise<string> {
     if (!AndroidDictation) throw new Error('Dictation is not available on this device.');
     this.recording = false;
     const audio = await AndroidDictation.stopRecording(false);
     const controller = new AbortController();
     this.controller = controller;
     try {
-      const job: AndroidJob = { ...createAndroidJob('dictate'), route: PRACTICE_ROUTE };
-      const text = await processAndroidAudio(audio, job, controller.signal, () => {});
+      const job: AndroidJob = { ...base, route: PRACTICE_ROUTE };
+      const text = (await processAndroidAudio(audio, job, controller.signal, () => {})).trim();
       return format ? await formatPractice(text, format, job, controller.signal) : text;
     } finally {
       if (this.controller === controller) this.controller = null;

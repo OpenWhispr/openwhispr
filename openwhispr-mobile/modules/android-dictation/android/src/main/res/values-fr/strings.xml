@@ -1,5 +1,5 @@
 <resources>
-  <string name="ow_insertion_label">OpenWhispr · Insérer votre texte</string>
+  <string name="ow_insertion_label">OpenWhispr</string>
   <string name="ow_insertion_description">L’accessibilité permet à OpenWhispr d’insérer le résultat dans le champ sélectionné. Ce champ est lu au début de la dictée, puis pendant 45 secondes après qu’OpenWhispr y a saisi du texte, afin qu’un mot que vous corrigez là puisse être ajouté à votre dictionnaire. Aucun autre champ n’est lu et les champs de mot de passe sont exclus. Aucun message n’est envoyé. Elle vérifie aussi si un champ de texte est actif, pour n’afficher la bulle que pendant la saisie.</string>
   <string name="ow_bubble_ready">OpenWhispr est prêt</string>
   <string name="ow_bubble_recording">OpenWhispr · Écoute…</string>

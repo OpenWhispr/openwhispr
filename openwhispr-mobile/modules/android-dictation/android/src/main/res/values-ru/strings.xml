@@ -1,5 +1,5 @@
 <resources>
-  <string name="ow_insertion_label">OpenWhispr · Вставка текста</string>
+  <string name="ow_insertion_label">OpenWhispr</string>
   <string name="ow_insertion_description">Специальные возможности позволяют OpenWhispr вставлять результат в активное поле. Это поле читается, когда вы начинаете диктовать, и ещё в течение 45 секунд после того, как OpenWhispr вводит в него текст, чтобы слово, которое вы там исправите, можно было добавить в ваш словарь. Другие поля не читаются, поля паролей исключены. Приложение не отправляет сообщения. Также проверяется, активно ли текстовое поле, чтобы кнопка появлялась только во время ввода.</string>
   <string name="ow_bubble_ready">OpenWhispr готов</string>
   <string name="ow_bubble_recording">OpenWhispr · Слушаю…</string>

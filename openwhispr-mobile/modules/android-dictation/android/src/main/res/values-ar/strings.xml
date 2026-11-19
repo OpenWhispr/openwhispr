@@ -1,5 +1,5 @@
 <resources>
-  <string name="ow_insertion_label">OpenWhispr · إدراج النص</string>
+  <string name="ow_insertion_label">OpenWhispr</string>
   <string name="ow_insertion_description">تتيح إمكانية الوصول لـ OpenWhispr إدراج النتيجة في الحقل النشط. يُقرأ هذا الحقل عند بدء الإملاء، ومرة أخرى لمدة 45 ثانية بعد أن يكتب OpenWhispr فيه، حتى يمكن إضافة الكلمة التي تصححها هناك إلى قاموسك. لا يُقرأ أي حقل آخر، وحقول كلمات المرور مستثناة. لا يرسل رسائل. كما يتحقق مما إذا كان مربع نص نشطًا، لكي تظهر الفقاعة أثناء الكتابة فقط.</string>
   <string name="ow_bubble_ready">OpenWhispr جاهز</string>
   <string name="ow_bubble_recording">OpenWhispr · جاري الاستماع...</string>
