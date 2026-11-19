@@ -1054,6 +1054,52 @@ test("a new subfolder of a parent refused for good goes up top-level, its notes 
   assert.equal(folderByName(db, "Q1").sync_status, "synced");
 });
 
+test("a subfolder owed its nesting to a parent refused for good isn't sent again for nothing", async (t) => {
+  const ctx = await setupPersonal(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const parent = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("Q1", null, parent.id).folder;
+  const namesParent = (folder) => folder?.client_folder_id === parent.client_folder_id;
+  cloud.failWith(
+    (call) =>
+      call.path.startsWith("/api/folders/") &&
+      (namesParent(call.body) || (call.body?.folders ?? []).some(namesParent)),
+    { status: 409, code: "folder_name_taken", error: "Folder name already taken" }
+  );
+  await (await newSyncService(t)).syncAll(true);
+  const quarterCloudId = folderByClientId(db, quarter.client_folder_id).cloud_id;
+  assert.ok(quarterCloudId, "it went up top-level, its nesting owed");
+  const quarterPatches = () =>
+    cloud.logFor("/api/folders/update").filter((call) => call.body?.id === quarterCloudId);
+  const sent = quarterPatches().length;
+
+  await (await newSyncService(t)).syncAll(true);
+  await (await newSyncService(t)).syncAll(true);
+  assert.equal(quarterPatches().length, sent, "two passes send it nothing");
+  assert.equal(folderByClientId(db, quarter.client_folder_id).sync_status, "pending");
+
+  // An edit of the subfolder goes up once, still top-level, then rests again.
+  const service = await newSyncService(t);
+  db.renameFolder(quarter.id, "Q1 plans");
+  await service.pushEntity("folder", quarter.id);
+  assert.equal(quarterPatches().length, sent + 1);
+  assert.equal(cloud.folder(quarterCloudId).name, "Q1 plans");
+  assert.equal(cloud.folder(quarterCloudId).parent_folder_id ?? null, null);
+  await service.syncAll(true);
+  assert.equal(quarterPatches().length, sent + 1);
+
+  // The parent renamed gets up, and the nesting follows.
+  cloud.clearFailures();
+  db.renameFolder(parent.id, "Client B");
+  await (await newSyncService(t)).syncAll(true);
+  const parentCloudId = folderByName(db, "Client B").cloud_id;
+  assert.ok(parentCloudId);
+  assert.equal(quarterPatches().at(-1).body.parent_folder_id, parentCloudId);
+  assert.equal(cloud.folder(quarterCloudId).parent_folder_id, parentCloudId);
+  assert.equal(folderByClientId(db, quarter.client_folder_id).sync_status, "synced");
+});
+
 const nameTakenNotices = () =>
   browserWindow.electronAPI.syncEvents.filter((event) => event.name === "folder-name-taken");
 

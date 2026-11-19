@@ -281,6 +281,27 @@ function folderRefusalFingerprint(folder: FolderItem): string {
   return JSON.stringify([folderPushFingerprint(folder), folder.parent_folder_id ?? null]);
 }
 
+// A subfolder whose last push went up top-level beside a parent refused for good
+// that still has no cloud row: sending it again would send what already landed.
+// The parent's cloud id, a refusal that ends or an edit of the subfolder (it no
+// longer matches its record) sends it again.
+function nestingStillOwed(
+  folder: FolderItem,
+  {
+    localToCloud,
+    refusedFolderIds,
+    nestingOwedFolderIds,
+  }: Pick<LocalToCloudFolderMap, "localToCloud" | "refusedFolderIds" | "nestingOwedFolderIds">
+): boolean {
+  return (
+    folder.parent_folder_id != null &&
+    !folder.left_team &&
+    nestingOwedFolderIds.has(folder.id) &&
+    refusedFolderIds.has(folder.parent_folder_id) &&
+    !localToCloud.has(folder.parent_folder_id)
+  );
+}
+
 // A note keeps its cloud folder association in both personal and team scope.
 // It never carries a blocked folder: a note that passes one (a note leaving a
 // team, or one past its folder's wait) goes unfiled, and its acknowledgement
@@ -356,6 +377,9 @@ interface LocalToCloudFolderMap {
   // Folders whose last push the server refused for good (a name taken), as the
   // row still stands. Their subfolders stop waiting for them (cloudParentFolderId).
   refusedFolderIds: Set<number>;
+  // Pending folders whose last push landed everything but their parent, as the
+  // row still stands (FOLDER_NESTING_OWED_KEY). They don't hold their notes back.
+  nestingOwedFolderIds: Set<number>;
 }
 
 const PUSH_DEBOUNCE_MS = 2000;
@@ -1765,6 +1789,7 @@ export class SyncService {
     if (parentFolderId === undefined) return;
 
     if (folder.cloud_id) {
+      if (nestingStillOwed(folder, folderMap)) return;
       try {
         await FoldersService.update(
           folder.cloud_id,
@@ -3482,7 +3507,11 @@ export class SyncService {
       const scope = this.resolvePushScope("folder", folder, ctx);
       if (!scope) continue;
       const parentFolderId = this.cloudParentFolderId(folder, folderMap);
-      if (parentFolderId === undefined) {
+      // Still waiting for its parent too: one created this round lets it nest in the next.
+      if (
+        parentFolderId === undefined ||
+        (folder.cloud_id && nestingStillOwed(folder, folderMap))
+      ) {
         waiting.add(folder.id);
         continue;
       }
@@ -6372,6 +6401,7 @@ export class SyncService {
       blockedFolderIds: new Set(blocked.map((f) => f.id)),
       waitingFolders: blocked.filter((f) => !f.cloud_id),
       refusedFolderIds,
+      nestingOwedFolderIds: nestingOwed,
     };
   }
 
