@@ -441,6 +441,7 @@ export function ByokProviderStep({
   };
 
   const commitAndProceed = () => {
+    let transcriptionModel: string | undefined = selectedModel;
     if (selfHosted) {
       const committedBaseUrl = withHttpsScheme(draftBaseUrl);
       if (assistant) {
@@ -452,37 +453,35 @@ export function ByokProviderStep({
       } else if (draftApiKey.trim()) {
         store.setCloudTranscriptionBaseUrl(committedBaseUrl);
         store.setCustomTranscriptionApiKey(draftApiKey);
-        // Switch before setting the model: a switch files the current model under the
-        // outgoing provider and loads the incoming one's, replacing what was typed here.
-        store.switchCloudTranscriptionProvider("dictation", "custom");
-        store.setCloudTranscriptionModel(draftCustomModel);
+        transcriptionModel = draftCustomModel;
         // A Settings server routes ahead of the keyed Custom endpoint, and sends no key.
         store.setRemoteTranscriptionUrl("");
-        store.setCloudTranscriptionMode("byok");
       } else {
         // Key-less, so it is the Settings self-hosted server; the Custom endpoint and its
         // key stay as they were. byok + custom is what derives the self-hosted mode.
-        store.switchCloudTranscriptionProvider("dictation", "custom");
+        transcriptionModel = undefined;
         store.setRemoteTranscriptionUrl(committedBaseUrl);
         store.setRemoteTranscriptionModel(draftCustomModel);
         store.setRemoteTranscriptionType("openai-compatible");
-        store.setCloudTranscriptionMode("byok");
       }
     } else if (assistant) {
       knownCredential.set(draftApiKey);
       store.setChatAgentMode("providers");
       store.switchReasoningProvider("chatIntelligence", selectedProvider, selectedModel);
       store.setChatAgentModel(selectedModel);
+    } else if (isCortiTranscription) {
+      store.setCortiClientId(draftCortiClientId);
+      store.setCortiClientSecret(draftCortiClientSecret);
     } else {
-      if (isCortiTranscription) {
-        store.setCortiClientId(draftCortiClientId);
-        store.setCortiClientSecret(draftCortiClientSecret);
-      } else {
-        knownCredential.set(draftApiKey);
-      }
-      store.setCloudTranscriptionMode("byok");
-      store.switchCloudTranscriptionProvider("dictation", selectedProvider);
-      store.setCloudTranscriptionModel(selectedModel);
+      knownCredential.set(draftApiKey);
+    }
+    if (!assistant) {
+      store.setCloudTranscriptionForAllScopes({
+        useLocalWhisper: false,
+        cloudTranscriptionMode: "byok",
+        cloudTranscriptionProvider: selfHosted ? "custom" : selectedProvider,
+        cloudTranscriptionModel: transcriptionModel,
+      });
     }
     onProceed();
   };
@@ -619,6 +618,12 @@ export function ByokProviderStep({
                 </SelectContent>
               </Select>
             </label>
+
+            {!assistant && currentProvider?.id === "elevenlabs" && (
+              <p className="text-xs text-[var(--onboarding-text-secondary)]">
+                {t("transcription.elevenlabs.keytermsNote")}
+              </p>
+            )}
 
             {isCortiTranscription ? (
               <div className="grid grid-cols-2 gap-2">

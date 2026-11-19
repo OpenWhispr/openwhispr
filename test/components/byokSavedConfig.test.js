@@ -41,13 +41,6 @@ const SETTINGS_SELF_HOSTED = {
 const loadTranscriptionRoute = () => import("../../src/helpers/transcriptionRoute.ts");
 
 async function routeAfterOnboardingSave(step) {
-  // OnboardingFlow's byok-dictation continue runs this fan-out after the step saves.
-  await React.act(async () =>
-    step.state().setCloudTranscriptionForAllScopes({
-      useLocalWhisper: false,
-      cloudTranscriptionMode: "byok",
-    })
-  );
   const { resolveTranscriptionRoute } = await loadTranscriptionRoute();
   return resolveTranscriptionRoute({ settings: step.state() });
 }
@@ -93,6 +86,68 @@ test("a first run opens blank", async (t) => {
     assert.equal(step.value(PLACEHOLDER.endpoint), "");
     assert.equal(step.value(PLACEHOLDER.modelId), "");
   });
+});
+
+test("ElevenLabs onboarding keeps the streaming provider an existing meeting inherits", async (t) => {
+  const step = await mountByokStep(t, {
+    settings: {
+      cloudTranscriptionProvider: "deepgram",
+      cloudTranscriptionModel: "nova-3",
+      cloudTranscriptionMode: "byok",
+      meetingTranscriptionMode: "providers",
+    },
+  });
+  await step.chooseProvider("elevenlabs");
+  await step.type(PLACEHOLDER.hostedKey, "test-elevenlabs-key");
+  await step.passConnectionTest();
+  await step.proceed();
+
+  const dictation = await routeAfterOnboardingSave(step);
+  const upload = await uploadRoute(step);
+  for (const route of [dictation, upload]) {
+    assert.equal(route.provider, "elevenlabs");
+    assert.equal(route.model, "scribe_v3");
+  }
+
+  const { selectResolvedMeetingTranscription } = await step.vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const { getMeetingStreamingTranscriptionProviders } = await step.vite.ssrLoadModule(
+    "/models/ModelRegistry.ts"
+  );
+  const { resolveMeetingTranscriptionOptions } =
+    await import("../../src/helpers/meetingTranscriptionRouting.js");
+  const meeting = selectResolvedMeetingTranscription(step.state());
+  const recording = resolveMeetingTranscriptionOptions({
+    transcriptionMode: meeting.transcriptionMode,
+    selectedProvider: meeting.cloudTranscriptionProvider,
+    selectedModel: meeting.cloudTranscriptionModel,
+    byokProviders: getMeetingStreamingTranscriptionProviders(),
+  });
+  assert.equal(recording.provider, "deepgram-realtime");
+  assert.equal(recording.model, "nova-3");
+  assert.equal(step.state().transcriptionModelByProvider["meeting:elevenlabs"], undefined);
+});
+
+test("the surcharge notice follows the ElevenLabs dictation choice before Proceed", async (t) => {
+  const step = await mountByokStep(t, {});
+  const notice = "transcription.elevenlabs.keytermsNote";
+  assert.equal(step.showsText(notice), false);
+  await step.chooseProvider("elevenlabs");
+  assert.equal(step.showsText(notice), true);
+  await step.toggleSelfHosted();
+  assert.equal(step.showsText(notice), false);
+  await step.toggleSelfHosted();
+  assert.equal(step.showsText(notice), true);
+  await step.chooseProvider("openai");
+  assert.equal(step.showsText(notice), false);
+
+  await step.chooseProvider("elevenlabs");
+  await step.type(PLACEHOLDER.hostedKey, "test-elevenlabs-key");
+  await step.passConnectionTest();
+  await step.proceed();
+  assert.equal(step.state().meetingTranscriptionMode, "openwhispr");
+  assert.equal(step.state().meetingCloudTranscriptionProvider, "openai");
 });
 
 test("a saved hosted provider reopens with its model and key, and the draft stays key-free", async (t) => {
