@@ -84,7 +84,7 @@ test("allow-list rejects unknown and batch-only providers", async () => {
     "openai",
     "deepgram",
     "assemblyai",
-    "mistral-realtime",
+    "unknown-realtime",
     "grok-stt",
     "",
     undefined,

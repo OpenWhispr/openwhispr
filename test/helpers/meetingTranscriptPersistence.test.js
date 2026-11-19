@@ -6,6 +6,74 @@ const load = () => import("../../src/helpers/meetingTranscriptPersistence.ts");
 const segment = (id, text) => ({ id, text, source: "system" });
 const serialize = (segments) => segments.map((s) => s.text).join("|");
 
+test("segments finalized during stop are saved after the early transcript write", async () => {
+  const { persistFinalTranscriptAroundStop } = await load();
+  const original = [segment("a", "hello")];
+  let current = original;
+  const writes = [];
+  await persistFinalTranscriptAroundStop({
+    segments: original,
+    getFinalSegments: () => current,
+    seedLength: 0,
+    serializeSegments: serialize,
+    persist: async (text) => writes.push(text),
+    stop: async () => {
+      current = [...current, segment("b", "last words")];
+    },
+    fallbackTranscript: () => "",
+  });
+  assert.deepEqual(writes, ["hello", "hello|last words"]);
+});
+
+test("a final write waits for the early write so it cannot be overwritten", async () => {
+  const { persistFinalTranscriptAroundStop } = await load();
+  let current = [segment("a", "hello")];
+  let releaseWrite;
+  const earlyWrite = new Promise((resolve) => {
+    releaseWrite = resolve;
+  });
+  const writes = [];
+  const pending = persistFinalTranscriptAroundStop({
+    segments: current,
+    getFinalSegments: () => current,
+    seedLength: 0,
+    serializeSegments: serialize,
+    persist: async (text) => {
+      if (text === "hello") await earlyWrite;
+      writes.push(text);
+    },
+    stop: async () => {
+      current = [...current, segment("b", "last words")];
+    },
+    fallbackTranscript: () => "",
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(writes, []);
+  releaseWrite();
+  await pending;
+  assert.deepEqual(writes, ["hello", "hello|last words"]);
+});
+
+test("stop-time retractions replace the early write, even when no segments remain", async () => {
+  const { persistFinalTranscriptAroundStop } = await load();
+  let current = [segment("a", "duplicate mic text")];
+  const writes = [];
+  await persistFinalTranscriptAroundStop({
+    segments: current,
+    getFinalSegments: () => current,
+    seedLength: 0,
+    serializeSegments: JSON.stringify,
+    persist: async (text) => writes.push(JSON.parse(text)),
+    stop: async () => {
+      current = [];
+    },
+    fallbackTranscript: () => {
+      throw new Error("retracted text must stay removed");
+    },
+  });
+  assert.deepEqual(writes, [[segment("a", "duplicate mic text")], []]);
+});
+
 // The note editor swaps from live segments to the stored transcript the moment
 // isRecording flips, while the main-side stop can take seconds — so the
 // captured segments must be written before that stop is awaited, or the tail

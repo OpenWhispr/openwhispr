@@ -265,7 +265,12 @@ test("valid speech finalized during disconnect still reaches the saved note", as
   streaming.finishOnStop("mic", "One last thing.");
   await store.stopRecording();
   assert.equal(store.useMeetingRecordingStore.getState().transcript, "One last thing.");
-  assert.equal(writes.at(-1).patch.transcript, "One last thing.");
+  // Drained finals now retain their source and timestamps like live finals.
+  const saved = JSON.parse(writes.at(-1).patch.transcript);
+  assert.deepEqual(
+    saved.map(({ text, source }) => ({ text, source })),
+    [{ text: "One last thing.", source: "mic" }]
+  );
 });
 
 test("a wrong-script final arriving during disconnect is not saved", async (t) => {

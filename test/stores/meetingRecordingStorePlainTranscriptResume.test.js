@@ -94,6 +94,26 @@ const final = (text) => ({ text, source: "mic", type: "final", timestamp: Date.n
 const transcriptWrites = (writes) =>
   writes.filter(([, patch]) => typeof patch.transcript === "string").map(([, patch]) => patch);
 
+for (const hasLiveFinal of [false, true]) {
+  test(`stop saves the last server segment without duplication (live final: ${hasLiveFinal})`, async (t) => {
+    const { api, listeners, writes } = createElectronAPI();
+    api.meetingTranscriptionStop = async () => {
+      assert.equal(typeof listeners.segment, "function", "listen until the server finishes");
+      listeners.segment(final("Last words from Mistral."));
+      return { success: true, transcript: "Live words. Last words from Mistral." };
+    };
+    const { store, startRecordingForNote, parseTranscriptSegments } = await load(t, api);
+    await startRecordingForNote(note(OLD_TRANSCRIPT));
+    if (hasLiveFinal) listeners.segment(final("Live words."));
+    await store.stopRecording();
+    assert.equal(listeners.segment, null, "release the listener after draining");
+    assert.deepEqual(
+      parseTranscriptSegments(transcriptWrites(writes).at(-1).transcript).map(({ text }) => text),
+      [OLD_TRANSCRIPT, ...(hasLiveFinal ? ["Live words."] : []), "Last words from Mistral."]
+    );
+  });
+}
+
 test("recording again into a plain-text transcript keeps the old text", async (t) => {
   const { api, listeners, writes } = createElectronAPI();
   const { store, startRecordingForNote, parseTranscriptSegments } = await load(t, api);

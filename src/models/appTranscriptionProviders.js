@@ -70,12 +70,31 @@ const APP_TRANSCRIPTION_PROVIDERS = [
 // migration, since Retry sends the stored id as-is.
 const UPLOAD_ONLY_MODELS = new Map([["openrouter", ["deepgram/nova-3"]]]);
 
+// App-owned transport support, kept outside the synchronized publication. The
+// registry reader retains bundled models missing from a later live catalog.
+const MISTRAL_REALTIME_MODEL = {
+  id: "voxtral-mini-transcribe-realtime-3",
+  name: "Voxtral Mini Transcribe Realtime 3",
+  description: "Live meeting transcription with Mistral",
+  descriptionKey: "models.descriptions.transcription.mistral_voxtral_mini_transcribe_realtime_3",
+  streaming: true,
+};
+
+export function isMeetingOnlyTranscriptionModel(providerId, modelId) {
+  return providerId === "mistral" && modelId === MISTRAL_REALTIME_MODEL.id;
+}
+
 export function withAppTranscriptionProviders(catalog) {
   const listed = new Set(catalog.transcriptionProviders.map((provider) => provider.id));
   return {
     ...catalog,
     transcriptionProviders: [
-      ...catalog.transcriptionProviders,
+      ...catalog.transcriptionProviders.map((provider) =>
+        provider.id === "mistral" &&
+        !provider.models.some((model) => model.id === MISTRAL_REALTIME_MODEL.id)
+          ? { ...provider, models: [...provider.models, { ...MISTRAL_REALTIME_MODEL }] }
+          : provider
+      ),
       ...structuredClone(
         APP_TRANSCRIPTION_PROVIDERS.filter((provider) => !listed.has(provider.id))
       ),

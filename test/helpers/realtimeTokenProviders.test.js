@@ -13,6 +13,7 @@ const deps = (overrides = {}) => ({
   environmentManager: {
     getOpenAIKey: () => "sk-openai",
     getTinfoilKey: () => "tk-tinfoil",
+    getMistralKey: () => "mistral-key",
     getDeepgramKey: () => "dg-key",
     getAssemblyAIKey: () => "aai-key",
     getGeminiKey: () => "gm-key",
@@ -31,6 +32,31 @@ test("provider-less and unknown providers fail closed with the exact #1480 messa
       new Error(`Unsupported realtime token provider: ${provider}`)
     );
   }
+});
+
+test("saved Mistral key is required and shared by both meeting sockets", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  assert.equal(
+    await fetchRealtimeTokenForProvider("mistral-realtime", deps(), { mode: "byok" }),
+    "mistral-key"
+  );
+  assert.deepEqual(
+    await fetchRealtimeTokenForProvider(
+      "mistral-realtime",
+      deps(),
+      { mode: "byok" },
+      { streams: 2 }
+    ),
+    ["mistral-key", "mistral-key"]
+  );
+  await assert.rejects(
+    fetchRealtimeTokenForProvider(
+      "mistral-realtime",
+      deps({ environmentManager: { getMistralKey: () => "" } }),
+      { mode: "byok" }
+    ),
+    /No API key.*Settings/
+  );
 });
 
 test("openai byok returns the key; dual-stream duplicates it", async () => {
