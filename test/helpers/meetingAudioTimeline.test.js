@@ -91,6 +91,7 @@ function harness({ native = true, local = false } = {}) {
     meetingReconnectAudioBuffers: { mic: [], system: [] },
     meetingReconnectAudioBytes: { mic: 0, system: 0 },
     meetingReconnectReplaySources: new Set(),
+    meetingReconnectPromise: null,
     MEETING_RECONNECT_BUFFER_MAX_BYTES: 24000 * 2 * 30,
     MEETING_MIC_BLEED_LOOKBACK_MS: 0,
     meetingMicStatsLogCount: 0,
@@ -281,6 +282,39 @@ for (const provider of ["deepgram", "corti"]) {
     run.watchdog.stop();
   });
 }
+
+test("a stream that drops while a reconnect is under way joins its replay", () => {
+  const run = harness({ native: false });
+  // The mic session expired first and started the reconnect; system was still up then.
+  run.context.meetingReconnectReplaySources.add("mic");
+  run.context.meetingReconnectPromise = Promise.resolve(true);
+  const system = { isConnected: true, sendAudio: () => true };
+  run.context._meetingSystemStreaming = system;
+
+  run.rendererSend(Buffer.alloc(4800, 1), "system", 1000);
+  assert.equal(
+    run.context.meetingReconnectAudioBuffers.system.length,
+    0,
+    "a live stream is not held"
+  );
+
+  system.isConnected = false;
+  system.sendAudio = () => false;
+  run.rendererSend(Buffer.alloc(4800, 2), "system", 1100);
+  run.rendererSend(Buffer.alloc(4800, 3), "system", 1200);
+
+  const replayed = [];
+  const replacement = { isConnected: true, sendAudio: (buffer) => replayed.push(buffer[0]) > 0 };
+  assert.equal(run.context.replaySystemAudio(replacement), true);
+  assert.deepEqual(replayed, [2, 3]);
+});
+
+test("a dropped stream holds nothing when no reconnect is under way", () => {
+  const run = harness({ native: false });
+  run.context._meetingSystemStreaming = { isConnected: false, sendAudio: () => false };
+  run.rendererSend(Buffer.alloc(4800, 1), "system", 1000);
+  assert.equal(run.context.meetingReconnectAudioBuffers.system.length, 0);
+});
 
 for (const provider of ["deepgram", "corti"]) {
   test(`${provider} places renderer audio held through the connect at its capture time, mic and system alike`, () => {

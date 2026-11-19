@@ -52,6 +52,7 @@ const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
 module.exports = {
   STREAMING_CLIENT_BY_PROVIDER,
   ALLOWED_MEETING_PROVIDERS,
+  SAVED_KEY_PROVIDERS,
   getMeetingStreamingClient,
   getMeetingConnectionKey,
 };

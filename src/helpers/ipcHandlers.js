@@ -9507,6 +9507,7 @@ class IPCHandlers {
             throw new Error(byokSizeCapError(route.sizeCapBytes));
           }
           const { text } = await transcribeWithElevenLabs({
+            signal,
             audioBuffer: buffer,
             model: route.model,
             fileName: "audio.webm",
@@ -10208,6 +10209,15 @@ class IPCHandlers {
           return false;
         }
 
+        // A reconnect clears the count only once its sockets have stayed up: a provider
+        // that accepts every handshake and then fails again would otherwise reconnect forever.
+        if (
+          meetingReconnectedAt &&
+          Date.now() - meetingReconnectedAt >= MEETING_RECONNECT_STABLE_MS
+        ) {
+          meetingReconnectCount = 0;
+          meetingReconnectedAt = 0;
+        }
         if (meetingReconnectCount >= MAX_MEETING_RECONNECTS) {
           debugLogger.error("Meeting reconnect limit reached", { count: meetingReconnectCount });
           return false;
@@ -10316,7 +10326,7 @@ class IPCHandlers {
           meetingConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
 
           debugLogger.info("Meeting streams reconnected", { attempt: meetingReconnectCount });
-          meetingReconnectCount = 0;
+          meetingReconnectedAt = Date.now();
           return true;
         } catch (error) {
           debugLogger.error("Meeting stream reconnect failed", {
@@ -10703,7 +10713,9 @@ class IPCHandlers {
     let meetingReconnectPromise = null;
     let meetingFatalErrorSent = false;
     let meetingReconnectCount = 0;
+    let meetingReconnectedAt = 0;
     const MAX_MEETING_RECONNECTS = 5;
+    const MEETING_RECONNECT_STABLE_MS = 10000;
     let meetingConnectionOptions = null;
     this.getMeetingTranscriptionOptions = () => meetingConnectionOptions;
     let meetingConnectionWin = null;
@@ -10878,6 +10890,11 @@ class IPCHandlers {
         }
       }
 
+      // A stream that drops after a reconnect began (two sessions expiring together)
+      // joins that reconnect's replay, or its audio would go nowhere until the swap.
+      if (meetingReconnectPromise && !streaming.isConnected) {
+        meetingReconnectReplaySources.add(source);
+      }
       queueMeetingReconnectAudio(source, outbound, capturedAt);
       const sent = sendMeetingStreamingAudio(streaming, outbound, capturedAt);
       if (synthetic) return;
@@ -11581,6 +11598,7 @@ class IPCHandlers {
       meetingReconnectPromise = null;
       meetingFatalErrorSent = false;
       meetingReconnectCount = 0;
+      meetingReconnectedAt = 0;
       meetingConnectionOptions = null;
       meetingConnectionWin = null;
       meetingConnectionKey = null;
@@ -12005,6 +12023,7 @@ class IPCHandlers {
       meetingDiarizationSegments = [];
       meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
       meetingReconnectCount = 0;
+      meetingReconnectedAt = 0;
       meetingFatalErrorSent = false;
       this.meetingDetectionEngine?.endRecordingSession();
       this.meetingDetectionEngine?.setUserRecording(true);

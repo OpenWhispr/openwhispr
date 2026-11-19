@@ -88,7 +88,6 @@ const APP_TRANSCRIPTION_PROVIDERS = [
         description: "Live transcription for note recording",
         descriptionKey: "models.descriptions.transcription.elevenlabs_scribe_v3_live",
         streaming: true,
-        noteRecordingOnly: true,
       },
     ],
   },
@@ -99,6 +98,11 @@ const APP_TRANSCRIPTION_PROVIDERS = [
 // Adding a model users may already have saved for dictation also needs a saved-selection
 // migration, since Retry sends the stored id as-is.
 const UPLOAD_ONLY_MODELS = new Map([["openrouter", ["deepgram/nova-3"]]]);
+
+// Models that stream only in Note Recording, which have no batch endpoint: dictation,
+// onboarding and Audio Upload never offer them. Kept here for the same reason, so the
+// rule holds once a publication lists the model.
+const NOTE_RECORDING_ONLY_MODELS = new Map([["elevenlabs", ["scribe_v3_live"]]]);
 
 export function withAppTranscriptionProviders(catalog) {
   const listed = new Set(catalog.transcriptionProviders.map((provider) => provider.id));
@@ -115,4 +119,8 @@ export function withAppTranscriptionProviders(catalog) {
 
 export function isUploadOnlyTranscriptionModel(providerId, modelId) {
   return UPLOAD_ONLY_MODELS.get(providerId)?.includes(modelId) ?? false;
+}
+
+export function isNoteRecordingOnlyTranscriptionModel(providerId, modelId) {
+  return NOTE_RECORDING_ONLY_MODELS.get(providerId)?.includes(modelId) ?? false;
 }

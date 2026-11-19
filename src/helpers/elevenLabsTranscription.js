@@ -38,6 +38,9 @@ function sanitizeKeyterms(keyterms) {
   return terms;
 }
 
+// Scribe can answer silence with this marker instead of an empty transcript.
+const SILENCE_MARKER = "[pause]";
+
 async function transcribeWithElevenLabs(
   { audioBuffer, model, fileName, contentType, language, keyterms, apiKey, signal },
   fetchImpl
@@ -96,7 +99,13 @@ async function transcribeWithElevenLabs(
   }
 
   const data = await response.json();
-  return { text: typeof data?.text === "string" ? data.text : "", model: resolvedModel };
+  const text = typeof data?.text === "string" ? data.text : "";
+  return { text: text.trim() === SILENCE_MARKER ? "" : text, model: resolvedModel };
 }
 
-module.exports = { transcribeWithElevenLabs, sanitizeKeyterms, ELEVENLABS_STT_URL };
+module.exports = {
+  transcribeWithElevenLabs,
+  sanitizeKeyterms,
+  ELEVENLABS_STT_URL,
+  SILENCE_MARKER,
+};

@@ -136,3 +136,16 @@ test("a response without text yields an empty transcript", async () => {
   const result = await transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, fetchImpl);
   assert.equal(result.text, "");
 });
+
+test("Scribe's silence marker is an empty transcript", async () => {
+  const { fetchImpl } = makeFetch(200, { text: " [pause] " });
+  const result = await transcribeWithElevenLabs({ audioBuffer: AUDIO, apiKey: "k" }, fetchImpl);
+  assert.equal(result.text, "");
+
+  const spoken = makeFetch(200, { text: "press [pause] now" });
+  const kept = await transcribeWithElevenLabs(
+    { audioBuffer: AUDIO, apiKey: "k" },
+    spoken.fetchImpl
+  );
+  assert.equal(kept.text, "press [pause] now");
+});

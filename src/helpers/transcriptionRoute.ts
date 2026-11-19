@@ -32,6 +32,7 @@ import {
 } from "../services/transcriptionBaseUrl.ts";
 import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
 import { getRegistryData } from "../models/registryData.js";
+import { isNoteRecordingOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
 import { retiredReplacement } from "../models/modelLifecycle.js";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
@@ -228,7 +229,10 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (trimmed) {
     const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
     // A Note Recording-only model has no batch endpoint, so it falls to the rules below.
-    if (catalogProvider?.models.some((model) => model.id === trimmed && !model.noteRecordingOnly))
+    if (
+      !isNoteRecordingOnlyTranscriptionModel(provider, trimmed) &&
+      catalogProvider?.models.some((model) => model.id === trimmed)
+    )
       return trimmed;
     const replacement = retiredReplacement("transcriptionProviders", provider, trimmed);
     if (replacement) return replacement;

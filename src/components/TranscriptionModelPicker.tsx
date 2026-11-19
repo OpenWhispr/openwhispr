@@ -18,6 +18,7 @@ import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownlo
 import {
   getDictationTranscriptionProviders,
   getTranscriptionProviders,
+  getUploadTranscriptionProviders,
   getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
@@ -664,12 +665,9 @@ export default function TranscriptionModelPicker({
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
     if (transcriptionContext !== "upload") return getDictationTranscriptionProviders();
-    return getTranscriptionProviders()
-      .filter((provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id))
-      .map((provider) => ({
-        ...provider,
-        models: provider.models.filter((model) => !model.noteRecordingOnly),
-      }));
+    return getUploadTranscriptionProviders().filter(
+      (provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id)
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
   }, [streamingOnly, transcriptionContext, registryVersion]);
   const cloudProviders = useMemo(

@@ -1,6 +1,6 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
-const { sanitizeKeyterms } = require("./elevenLabsTranscription");
+const { sanitizeKeyterms, SILENCE_MARKER } = require("./elevenLabsTranscription");
 
 const REALTIME_URL = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const REALTIME_MODEL = "scribe_v3_live";
@@ -17,8 +17,12 @@ const PLAIN_COMMIT_GRACE_MS = 1500;
 // continuously, so this only fills gaps such as a paused capture.
 const KEEPALIVE_IDLE_MS = 5000;
 const KEEPALIVE_SILENCE_MS = 100;
-// Keyterms ride in the query string, so the list is kept well short of URL limits.
-const MAX_REALTIME_KEYTERMS = 100;
+// A final commit for audio the server has shown no words for is answered quickly
+// or not at all, so a stop waits only this long for it.
+const QUIET_COMMIT_TIMEOUT_MS = 1000;
+// The realtime endpoint takes fewer and shorter keyterms than the batch one.
+const MAX_REALTIME_KEYTERMS = 50;
+const MAX_REALTIME_KEYTERM_CHARS = 20;
 
 // Errors after which the session cannot continue. The rest are either transient
 // (the server closes the socket and the meeting reconnects) or advisory.
@@ -95,6 +99,8 @@ class ElevenLabsStreaming {
     this.pendingPlainCommit = null;
     this.lastTimestampedCommit = null;
     this.hasUncommittedSpeech = false;
+    // Audio sent since the last commit, which may hold words the server has not shown yet.
+    this.audioSinceCommit = false;
     this.isDisconnecting = false;
     this.preSessionBuffer = [];
     this.preSessionBufferSize = 0;
@@ -125,9 +131,10 @@ class ElevenLabsStreaming {
     if (options.language && options.language !== "auto") {
       params.set("language_code", options.language);
     }
-    for (const term of sanitizeKeyterms(options.keyterms).slice(0, MAX_REALTIME_KEYTERMS)) {
-      params.append("keyterms", term);
-    }
+    const keyterms = sanitizeKeyterms(options.keyterms)
+      .filter((term) => term.length <= MAX_REALTIME_KEYTERM_CHARS)
+      .slice(0, MAX_REALTIME_KEYTERMS);
+    for (const term of keyterms) params.append("keyterms", term);
     return `${REALTIME_URL}?${params}`;
   }
 
@@ -151,6 +158,7 @@ class ElevenLabsStreaming {
     this.accumulatedText = "";
     this.completedSegments = [];
     this.hasUncommittedSpeech = false;
+    this.audioSinceCommit = false;
     this.messageCounts = {};
     this.connectionLossNotified = false;
     if (!this.bufferingAudio) this.beginConnecting();
@@ -289,6 +297,7 @@ class ElevenLabsStreaming {
       case "committed_transcript_with_timestamps":
         // Cleared on arrival: a partial that comes after this belongs to the next commit.
         this.hasUncommittedSpeech = false;
+        this.audioSinceCommit = false;
         this.clearPendingPlainCommit();
         this.lastTimestampedCommit = { text: (message.text || "").trim(), at: Date.now() };
         this.commitSegment(message.text, this.timestampFromWords(message.words));
@@ -297,6 +306,7 @@ class ElevenLabsStreaming {
       // Sent beside the timestamped commit; it only stands in if that never comes.
       case "committed_transcript":
         this.hasUncommittedSpeech = false;
+        this.audioSinceCommit = false;
         this.clearPendingPlainCommit();
         if (this.isEchoOfTimestampedCommit(message.text)) break;
         if (!message.text?.trim()) {
@@ -382,7 +392,7 @@ class ElevenLabsStreaming {
 
   commitSegment(text, timestamp) {
     const trimmed = (text || "").trim();
-    if (trimmed) {
+    if (trimmed && trimmed !== SILENCE_MARKER) {
       this.completedSegments.push(trimmed);
       this.accumulatedText = this.completedSegments.join(" ");
       this.onFinalTranscript?.(this.accumulatedText, timestamp ?? Date.now());
@@ -436,6 +446,7 @@ class ElevenLabsStreaming {
       this.audioBytesSent += chunk.length;
       this.streamMs += this.bytesToMs(chunk.length);
     }
+    this.audioSinceCommit = true;
     this.preSessionBuffer = [];
     this.preSessionBufferSize = 0;
   }
@@ -462,6 +473,7 @@ class ElevenLabsStreaming {
     }
     this.audioBytesSent += pcmBuffer.length;
     this.streamMs += this.bytesToMs(pcmBuffer.length);
+    this.audioSinceCommit = true;
     this.sendChunk(Buffer.from(pcmBuffer));
     return true;
   }
@@ -517,8 +529,12 @@ class ElevenLabsStreaming {
   }
 
   // Waits until every word heard has been committed, or the deadline passes.
-  async waitForFinalCommits() {
+  async waitForFinalCommits(quietCommit = false) {
     const deadline = Date.now() + FINAL_COMMIT_TIMEOUT_MS;
+    if (quietCommit) {
+      await this.waitForCommit(QUIET_COMMIT_TIMEOUT_MS);
+      if (!this.isConnected) return;
+    }
     while (this.hasUncommittedSpeech || this.pendingPlainCommit) {
       const remaining = deadline - Date.now();
       if (remaining <= 0 || !(await this.waitForCommit(remaining))) return;
@@ -528,7 +544,7 @@ class ElevenLabsStreaming {
     }
   }
 
-  async disconnect(closeStream = true) {
+  async disconnect({ commit = true } = {}) {
     const cancelled = new Error("ElevenLabs streaming was stopped before it started");
     if (!this.ws) {
       // A stop before the socket exists must not leave the start's held audio behind.
@@ -539,11 +555,14 @@ class ElevenLabsStreaming {
 
     this.isDisconnecting = true;
 
-    if (closeStream && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
-      // Commit the trailing words and wait for their transcript before closing. A
-      // plain commit still waiting for its timestamped twin is waited for too.
-      if (this.hasUncommittedSpeech) this.finalize();
-      await this.waitForFinalCommits();
+    if (commit && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
+      // Commit the trailing words and wait for their transcript before closing. The
+      // server shows a partial only once it has processed about a second of audio, so
+      // audio it has shown no words for is committed too, with a short wait for the
+      // answer. A plain commit still waiting for its timestamped twin is waited for too.
+      const quietCommit = !this.hasUncommittedSpeech && this.audioSinceCommit;
+      if (this.hasUncommittedSpeech || quietCommit) this.finalize();
+      await this.waitForFinalCommits(quietCommit);
       this.emitPendingPlainCommit();
       const result = { text: this.accumulatedText };
       this.onSessionEnd?.(result);
@@ -552,7 +571,8 @@ class ElevenLabsStreaming {
       return result;
     }
 
-    this.emitPendingPlainCommit();
+    // A caller that asked for no commit takes nothing more from this session.
+    if (commit) this.emitPendingPlainCommit();
     const result = { text: this.accumulatedText };
     this.cleanup();
     this.rejectPending(cancelled);

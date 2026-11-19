@@ -1,7 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { acceptCatalog } = require("../../src/models/registrySchema.cjs");
-const { withAppTranscriptionProviders } = require("../../src/models/appTranscriptionProviders.js");
+const {
+  withAppTranscriptionProviders,
+  isNoteRecordingOnlyTranscriptionModel,
+} = require("../../src/models/appTranscriptionProviders.js");
 const { bundledRegistryData: bundled } = require("../../src/models/registryData.js");
 const vendored = require("../../src/models/modelRegistryData.json");
 
@@ -46,5 +49,34 @@ test("ElevenLabs survives a live catalog that does not list it", () => {
   assert.equal(elevenLabs(applied).batchModel, "scribe_v3");
   const realtime = elevenLabs(applied).models.find((model) => model.id === "scribe_v3_live");
   assert.equal(realtime.streaming, true);
-  assert.equal(realtime.noteRecordingOnly, true, "the realtime model stays out of batch pickers");
+});
+
+test("the Note Recording-only rule holds when a publication lists the model", () => {
+  // A publication can carry no such field, so its copy of the model arrives without one.
+  const published = {
+    ...vendored,
+    transcriptionProviders: [
+      ...vendored.transcriptionProviders,
+      {
+        id: "elevenlabs",
+        name: "ElevenLabs",
+        baseUrl: "https://api.elevenlabs.io/v1",
+        defaultModel: "scribe_v3",
+        batchModel: "scribe_v3",
+        models: [
+          { id: "scribe_v3", name: "Scribe v3", description: "Batch" },
+          { id: "scribe_v3_live", name: "Scribe v3 Live", description: "Live", streaming: true },
+        ],
+      },
+    ],
+  };
+  const applied = acceptCatalog(published, bundled, "1.11.1");
+  const live = applied.transcriptionProviders
+    .find((provider) => provider.id === "elevenlabs")
+    .models.find((model) => model.id === "scribe_v3_live");
+
+  assert.deepEqual(Object.keys(live).sort(), ["description", "id", "name", "streaming"]);
+  assert.equal(isNoteRecordingOnlyTranscriptionModel("elevenlabs", live.id), true);
+  assert.equal(isNoteRecordingOnlyTranscriptionModel("elevenlabs", "scribe_v3"), false);
+  assert.equal(isNoteRecordingOnlyTranscriptionModel("gemini", "scribe_v3_live"), false);
 });

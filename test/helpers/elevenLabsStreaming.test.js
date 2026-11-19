@@ -77,10 +77,15 @@ test("the socket URL asks for 24 kHz PCM, VAD commits and word timestamps", () =
   const pinned = new URL(streaming.buildWebSocketUrl({ language: "bg" }));
   assert.equal(pinned.searchParams.get("language_code"), "bg");
 
+  // The realtime endpoint takes 50 keyterms of at most 20 characters each.
   const many = new URL(
-    streaming.buildWebSocketUrl({ keyterms: Array.from({ length: 300 }, (_, i) => `t${i}`) })
+    streaming.buildWebSocketUrl({
+      keyterms: ["x".repeat(21), "y".repeat(20), ...Array.from({ length: 300 }, (_, i) => `t${i}`)],
+    })
   );
-  assert.equal(many.searchParams.getAll("keyterms").length, 100);
+  const sent = many.searchParams.getAll("keyterms");
+  assert.equal(sent.length, 50);
+  assert.equal(sent[0], "y".repeat(20), "a 21-character term is left out, a 20-character one kept");
 });
 
 test("audio held during the handshake reaches the server first, as base64 chunks", async () => {
@@ -224,6 +229,102 @@ test("stopping with nothing uncommitted closes without a commit", async () => {
       false
     );
     assert.ok(Date.now() - started < 1000, "it did not wait for a transcript");
+  });
+});
+
+test("stopping commits audio the server has shown no words for yet", async () => {
+  await withScribeServer(async (url, sessions) => {
+    const streaming = new ElevenLabsStreaming();
+    pointAt(streaming, url);
+    const finals = [];
+    streaming.onFinalTranscript = (text) => finals.push(text);
+
+    await streaming.connect({ apiKey: "k" });
+    const session = sessions[0];
+    session.socket.on("message", (data) => {
+      if (JSON.parse(data.toString()).commit) {
+        send(session, {
+          message_type: "committed_transcript_with_timestamps",
+          text: "last words",
+          words: [{ text: "last", start: 0.1, end: 0.3, type: "word" }],
+        });
+      }
+    });
+    // Spoken just before the stop: no partial has come back for it.
+    streaming.sendAudio(Buffer.alloc(FRAME_BYTES, 1));
+
+    const result = await streaming.disconnect();
+    assert.ok(
+      session.chunks.some((chunk) => chunk.commit),
+      "a final commit was sent"
+    );
+    assert.deepEqual(finals, ["last words"]);
+    assert.equal(result.text, "last words");
+  });
+});
+
+test("a final commit for quiet audio that is never answered holds the stop only briefly", async () => {
+  await withScribeServer(async (url, sessions) => {
+    const streaming = new ElevenLabsStreaming();
+    pointAt(streaming, url);
+    await streaming.connect({ apiKey: "k" });
+    streaming.sendAudio(Buffer.alloc(FRAME_BYTES));
+
+    const started = Date.now();
+    const result = await streaming.disconnect();
+    const elapsed = Date.now() - started;
+    assert.ok(sessions[0].chunks.some((chunk) => chunk.commit));
+    assert.ok(elapsed >= 900 && elapsed < 2000, `waited ${elapsed} ms`);
+    assert.equal(result.text, "");
+  });
+});
+
+test("a stop that asks for no commit closes at once and delivers nothing more", async () => {
+  await withScribeServer(async (url, sessions) => {
+    const streaming = new ElevenLabsStreaming();
+    pointAt(streaming, url);
+    const finals = [];
+    let ended = 0;
+    streaming.onFinalTranscript = (text) => finals.push(text);
+    streaming.onSessionEnd = () => ended++;
+
+    await streaming.connect({ apiKey: "k" });
+    const session = sessions[0];
+    streaming.sendAudio(Buffer.alloc(FRAME_BYTES, 1));
+    send(session, { message_type: "partial_transcript", text: "half a sen" });
+    send(session, { message_type: "committed_transcript", text: "Waiting for its twin." });
+    await wait(50);
+
+    const started = Date.now();
+    await streaming.disconnect({ commit: false });
+    await wait(50);
+    assert.ok(Date.now() - started < 500, "it did not wait for a transcript");
+    assert.equal(
+      session.chunks.some((chunk) => chunk.commit),
+      false
+    );
+    assert.deepEqual(finals, []);
+    assert.equal(ended, 0);
+    assert.equal(streaming.isConnected, false);
+  });
+});
+
+test("Scribe's silence marker is not a segment", async () => {
+  await withScribeServer(async (url, sessions) => {
+    const streaming = new ElevenLabsStreaming();
+    pointAt(streaming, url);
+    const finals = [];
+    streaming.onFinalTranscript = (text) => finals.push(text);
+
+    await streaming.connect({ apiKey: "k" });
+    send(sessions[0], {
+      message_type: "committed_transcript_with_timestamps",
+      text: "[pause]",
+      words: [],
+    });
+    await wait(50);
+    assert.deepEqual(finals, []);
+    assert.deepEqual(streaming.completedSegments, []);
   });
 });
 

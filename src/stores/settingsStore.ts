@@ -69,7 +69,10 @@ import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { queueRetiredModelSwitch, recordRetiredModelSwitch } from "./retiredModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
-import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
+import {
+  isNoteRecordingOnlyTranscriptionModel,
+  isUploadOnlyTranscriptionModel,
+} from "../models/appTranscriptionProviders.js";
 import {
   acceptsUnlistedTranscriptionModel,
   getTranscriptionSelection,
@@ -174,12 +177,14 @@ const localLlmModelIds = new Set<string>(
 function transcriptionProviderModels(
   providerId: string,
   context: TranscriptionPolicyContext
-): Array<{ id: string; streaming?: boolean; noteRecordingOnly?: boolean }> {
-  const models: Array<{ id: string; streaming?: boolean; noteRecordingOnly?: boolean }> =
+): Array<{ id: string; streaming?: boolean }> {
+  const models: Array<{ id: string; streaming?: boolean }> =
     modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
       ?.models ?? [];
   if (context === "meeting") return models.filter((model) => model.streaming);
-  const batchModels = models.filter((model) => !model.noteRecordingOnly);
+  const batchModels = models.filter(
+    (model) => !isNoteRecordingOnlyTranscriptionModel(providerId, model.id)
+  );
   if (context === "dictation")
     return batchModels.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
   return batchModels;

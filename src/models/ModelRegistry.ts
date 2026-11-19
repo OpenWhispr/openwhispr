@@ -6,7 +6,10 @@ import {
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
 import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
-import { isUploadOnlyTranscriptionModel } from "./appTranscriptionProviders.js";
+import {
+  isNoteRecordingOnlyTranscriptionModel,
+  isUploadOnlyTranscriptionModel,
+} from "./appTranscriptionProviders.js";
 import { pickDefaultModelId } from "./providerDefaultModel";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
@@ -95,8 +98,6 @@ export interface TranscriptionModelDefinition {
   descriptionKey?: string;
   minAppVersion?: string;
   streaming?: boolean;
-  /** Streams only in Note Recording; dictation, onboarding and upload never offer it. */
-  noteRecordingOnly?: boolean;
   legacy?: boolean;
 }
 
@@ -456,8 +457,6 @@ export function getTranscriptionProviders(): TranscriptionProviderData[] {
   return modelRegistry.getTranscriptionProviders();
 }
 
-// Providers as dictation, onboarding and upload offer them: a model that only
-// streams Note Recording would have no request to run there.
 export function getStreamingTranscriptionProviders(): TranscriptionProviderData[] {
   return modelRegistry
     .getTranscriptionProviders()
@@ -472,8 +471,18 @@ export function getDictationTranscriptionProviders(): TranscriptionProviderData[
   return modelRegistry.getTranscriptionProviders().map((p) => ({
     ...p,
     models: p.models.filter(
-      (m) => !m.noteRecordingOnly && !isUploadOnlyTranscriptionModel(p.id, m.id)
+      (m) =>
+        !isNoteRecordingOnlyTranscriptionModel(p.id, m.id) &&
+        !isUploadOnlyTranscriptionModel(p.id, m.id)
     ),
+  }));
+}
+
+// Audio Upload's list: every batch model, upload-only ones included.
+export function getUploadTranscriptionProviders(): TranscriptionProviderData[] {
+  return modelRegistry.getTranscriptionProviders().map((p) => ({
+    ...p,
+    models: p.models.filter((m) => !isNoteRecordingOnlyTranscriptionModel(p.id, m.id)),
   }));
 }
 
