@@ -978,6 +978,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
       "docsLink": "Zur Dokumentation"
+    },
+    "elevenlabs": {
+      "keytermsNote": "Beim Diktieren werden die Wörter aus Ihrem Wörterbuch als Schlüsselbegriffe an ElevenLabs gesendet. ElevenLabs berechnet für diese Diktate 20 % mehr."
     }
   },
   "hooks": {
@@ -3361,6 +3364,8 @@
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
+        "elevenlabs_scribe_v3": "Präziseste mehrsprachige Transkription",
+        "elevenlabs_scribe_v2": "Präzise mehrsprachige Transkription",
         "gemini_3_5_transcribe_live": "Spracherkennung per Echtzeit-Streaming",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",

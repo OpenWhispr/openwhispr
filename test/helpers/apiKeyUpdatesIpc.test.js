@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
-const { once } = require("node:events");
+const { EventEmitter, once } = require("node:events");
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const { deferred } = require("./harness/deferred");
 
@@ -28,7 +28,7 @@ const handlers = new Map();
 const eventHandlers = new Map();
 const keys = new Map();
 const notifications = [];
-const editor = { id: 1 };
+const editor = Object.assign(new EventEmitter(), { id: 1 });
 const windows = [1, 2, 3].map((id) => ({
   id,
   isDestroyed: () => id === 3,
@@ -494,6 +494,7 @@ test("local-only device policy refuses direct remote IPC despite saved keys and 
     "proxy-gemini-transcription",
     "proxy-xai-transcription",
     "proxy-mistral-transcription",
+    "proxy-elevenlabs-transcription",
   ]) {
     assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED", channel);
   }
@@ -1619,14 +1620,13 @@ test("valid inference restrictions retire active provider streams without disabl
   assert.equal(current.policy.features.webSearchEnabled, true);
   assert.equal(current.policy.features.connectorsEnabled, true);
   assert.equal(current.policy.dataRetention.cloudBackupAllowed, true);
-  for (const channel of [
-    "proxy-xai-transcription",
-    "proxy-mistral-transcription",
-    "proxy-corti-transcription",
-    "proxy-tinfoil-transcription",
-    "proxy-gemini-transcription",
-  ])
-    assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED");
+  // Read from the registered handlers, so a provider added without its policy rule fails here.
+  const proxyChannels = [...handlers.keys()].filter((channel) =>
+    /^proxy-.+-transcription$/.test(channel)
+  );
+  assert.ok(proxyChannels.includes("proxy-elevenlabs-transcription"));
+  for (const channel of proxyChannels)
+    assert.equal((await invoke(channel, {})).code, "DEVICE_POLICY_BLOCKED", channel);
   for (const path of [
     "/api/reason",
     "/api/transcribe",

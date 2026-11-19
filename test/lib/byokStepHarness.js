@@ -125,6 +125,7 @@ async function mountByokStep(
   return {
     vite,
     selfHostedChanges,
+    showsText: (text) => find((node) => node.props?.children === text).length > 0,
     state: () => useSettingsStore.getState(),
     setStore: (patch) => act(() => useSettingsStore.setState(patch)),
     value: (placeholder) => input(placeholder)?.props.value,

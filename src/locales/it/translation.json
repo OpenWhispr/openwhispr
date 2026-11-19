@@ -978,6 +978,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil trasmette con Voxtral Mini 4B ed elabora i batch con Voxtral Small 24B.",
       "docsLink": "Leggi la documentazione"
+    },
+    "elevenlabs": {
+      "keytermsNote": "Quando detti, le parole del tuo dizionario vengono inviate a ElevenLabs come termini chiave. ElevenLabs addebita il 20% in più per queste dettature."
     }
   },
   "hooks": {
@@ -3263,6 +3266,8 @@
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
         "gemini_3_5_transcribe": "Riconoscimento vocale Gemini di Google",
+        "elevenlabs_scribe_v3": "La trascrizione multilingue più accurata",
+        "elevenlabs_scribe_v2": "Trascrizione multilingue accurata",
         "gemini_3_5_transcribe_live": "Riconoscimento vocale in streaming in tempo reale",
         "corti_transcribe": "Trascrizione medica di livello clinico",
         "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",
