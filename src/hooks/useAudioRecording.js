@@ -1172,7 +1172,7 @@ export const useAudioRecording = (toast, options = {}) => {
       const manager = audioManagerRef.current;
       loadSttConfig(manager).then((installed) => {
         // A warm redials the stream, so it is skipped while a dictation runs or
-        // starts; the warm after each recording covers it.
+        // starts; the warm after a finished (not cancelled) recording covers it.
         const state = manager.getState();
         if (
           installed &&
