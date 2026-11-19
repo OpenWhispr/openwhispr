@@ -52,6 +52,11 @@ function pointAt(streaming, url) {
 
 const send = (session, message) => session.socket.send(JSON.stringify(message));
 
+async function deliver(streaming, session, message) {
+  send(session, message);
+  await once(streaming.ws, "message");
+}
+
 test("the socket URL asks for 24 kHz PCM, VAD commits and word timestamps", () => {
   const streaming = new ElevenLabsStreaming();
   streaming.sampleRate = 24000;
@@ -697,3 +702,76 @@ test(
     });
   }
 );
+
+test(
+  "Stop keeps the original deadline when an earlier VAD commit arrives",
+  { timeout: 10000 },
+  async (t) => {
+    await withScribeServer(async (url, sessions) => {
+      const streaming = new ElevenLabsStreaming();
+      pointAt(streaming, url);
+      await streaming.connect({ apiKey: "k" });
+      t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 10000 });
+      const session = sessions[0];
+      streaming.sendAudio(Buffer.alloc(4800, 1));
+      await deliver(streaming, session, { message_type: "partial_transcript", text: "Earlier" });
+      streaming.sendAudio(Buffer.alloc(4800, 2));
+      const stopped = streaming.disconnect();
+      await deliver(streaming, session, { message_type: "committed_transcript", text: "Earlier." });
+      await deliver(streaming, session, {
+        message_type: "committed_transcript_with_timestamps",
+        text: "Earlier.",
+      });
+      t.mock.timers.tick(3000);
+      await new Promise(setImmediate);
+      assert.equal(
+        streaming.isConnected,
+        true,
+        "the earlier response did not acknowledge the trailing audio"
+      );
+      await deliver(streaming, session, { message_type: "partial_transcript", text: "Later" });
+      await deliver(streaming, session, { message_type: "committed_transcript", text: "Later." });
+      await deliver(streaming, session, {
+        message_type: "committed_transcript_with_timestamps",
+        text: "Later.",
+      });
+      t.mock.timers.tick(1000);
+      assert.deepEqual(await stopped, { text: "Earlier. Later." });
+    });
+  }
+);
+
+for (const reverseTwinArrives of [false, true]) {
+  const order = reverseTwinArrives ? "with a late plain twin" : "without a plain twin";
+  test(
+    `a plain-only repeat after a new spoken partial survives a timestamp-first result ${order}`,
+    { timeout: 10000 },
+    async (t) => {
+      await withScribeServer(async (url, sessions) => {
+        const streaming = new ElevenLabsStreaming();
+        pointAt(streaming, url);
+        await streaming.connect({ apiKey: "k" });
+        t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 10000 });
+        const session = sessions[0];
+        const phrase = { text: "Yes." };
+        streaming.sendAudio(Buffer.alloc(4800, 1));
+        await deliver(streaming, session, {
+          ...phrase,
+          message_type: "committed_transcript_with_timestamps",
+          words: [{ start: 0.01 }],
+        });
+        streaming.sendAudio(Buffer.alloc(4800, 2));
+        await deliver(streaming, session, { message_type: "partial_transcript", text: "Yes" });
+        if (reverseTwinArrives) {
+          await deliver(streaming, session, { ...phrase, message_type: "committed_transcript" });
+        }
+        const stopped = streaming.disconnect();
+        await deliver(streaming, session, { ...phrase, message_type: "committed_transcript" });
+        t.mock.timers.tick(1500);
+        await new Promise(setImmediate);
+        t.mock.timers.tick(2500);
+        assert.deepEqual(await stopped, { text: "Yes. Yes." });
+      });
+    }
+  );
+}

@@ -8,9 +8,6 @@ const SAMPLE_RATE = 24000;
 const WEBSOCKET_TIMEOUT_MS = 30000;
 // The final commit's transcript; a stop must not hang on a server that never sends it.
 const FINAL_COMMIT_TIMEOUT_MS = 4000;
-// A VAD commit already in flight can answer the final commit first; a partial
-// arriving within this window means later words still wait for their own commit.
-const FINAL_COMMIT_SETTLE_MS = 300;
 // How long a plain committed_transcript waits for its timestamped twin.
 const PLAIN_COMMIT_GRACE_MS = 1500;
 // ElevenLabs closes a socket that hears nothing for 15 s. Meeting audio arrives
@@ -396,19 +393,34 @@ class ElevenLabsStreaming {
         this.commitSegment(text, timestamp ?? fallbackTimestamp);
         return;
       }
-    } else if (
-      this.lastTimestampedCommit?.text === text &&
-      Date.now() - this.lastTimestampedCommit.at < PLAIN_COMMIT_GRACE_MS
-    ) {
-      this.lastTimestampedCommit = null;
-      return;
+    }
+
+    const previous = this.lastTimestampedCommit;
+    const possibleReverseTwin =
+      !timestamped && previous?.text === text && Date.now() - previous.at < PLAIN_COMMIT_GRACE_MS;
+    if (possibleReverseTwin) {
+      // The same words may have been spoken again. A matching new partial in
+      // newer audio lets the plain final stand in if those timestamps never arrive.
+      const partial = this.currentPartial.trim().toLowerCase();
+      if (
+        this.audioBytesSent === previous.audioBytesSent ||
+        !partial ||
+        !text.toLowerCase().startsWith(partial)
+      ) {
+        this.lastTimestampedCommit = null;
+        return;
+      }
     }
 
     // Only the first event for a segment closes its partial. Its twin can arrive
     // after the user has started the next utterance.
     this.currentPartial = "";
     this.emitPendingPlainCommit();
-    this.lastTimestampedCommit = timestamped ? { text, at: Date.now() } : null;
+    if (timestamped) {
+      this.lastTimestampedCommit = { text, at: Date.now(), audioBytesSent: this.audioBytesSent };
+    } else if (!possibleReverseTwin) {
+      this.lastTimestampedCommit = null;
+    }
     if (!text || text === SILENCE_MARKER) this.onPartialTranscript?.("");
     // Without word times, place the segment at the last sample available when the
     // commit arrived. Waiting for its twin must not move the segment past later audio.
@@ -558,23 +570,23 @@ class ElevenLabsStreaming {
     });
   }
 
-  // Waits until every word heard has been committed, or the deadline passes.
-  async waitForFinalCommits(quietCommit = false) {
-    const deadline = Date.now() + FINAL_COMMIT_TIMEOUT_MS;
-    if (quietCommit) {
-      // The first response may be an older VAD commit. Give the final audio the
-      // same short window even when that response arrives immediately.
-      const quietDeadline = Date.now() + QUIET_COMMIT_TIMEOUT_MS;
-      while (this.isConnected && !this.currentPartial && Date.now() < quietDeadline) {
-        if (!(await this.waitForCommit(quietDeadline - Date.now()))) break;
-      }
+  async waitForFinalCommits(requestedCommit) {
+    if (!requestedCommit) {
+      if (this.pendingPlainCommit) await this.waitForCommit(PLAIN_COMMIT_GRACE_MS);
+      return;
     }
-    while (this.isConnected && (this.currentPartial || this.pendingPlainCommit)) {
+
+    const deadline = Date.now() + FINAL_COMMIT_TIMEOUT_MS;
+    if (!this.currentPartial && !this.pendingPlainCommit) {
+      const heardCommit = await this.waitForCommit(QUIET_COMMIT_TIMEOUT_MS);
+      if (!heardCommit && !this.currentPartial && !this.pendingPlainCommit) return;
+    }
+
+    // Scribe does not label the response to our explicit commit. Any response
+    // could be an older VAD segment, so drain to the original deadline.
+    while (this.isConnected) {
       const remaining = deadline - Date.now();
       if (remaining <= 0 || !(await this.waitForCommit(remaining))) return;
-      const settle = Math.min(FINAL_COMMIT_SETTLE_MS, deadline - Date.now());
-      if (settle > 0) await new Promise((resolve) => setTimeout(resolve, settle));
-      if (!this.isConnected) return;
     }
   }
 
@@ -592,9 +604,9 @@ class ElevenLabsStreaming {
     if (commit && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
       // A VAD response acknowledges a segment, not all audio sent before it arrived.
       // Commit even without a partial, since the last samples may still be in flight.
-      const quietCommit = !this.currentPartial && this.audioBytesSent > 0;
-      if (this.currentPartial || quietCommit) this.finalize();
-      await this.waitForFinalCommits(quietCommit);
+      const requestedCommit = Boolean(this.currentPartial || this.audioBytesSent > 0);
+      if (requestedCommit) this.finalize();
+      await this.waitForFinalCommits(requestedCommit);
       this.emitPendingPlainCommit();
       const result = { text: this.accumulatedText };
       this.onSessionEnd?.(result);
