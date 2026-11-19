@@ -12,7 +12,7 @@ test("leaderboard Retry reloads online and confirms offline sessions with or wit
   installBrowserGlobals(t, { window: { clearInterval() {} } });
   const container = installInteractiveDom(t);
   const calls = { auth: 0, access: 0, board: 0, signIn: 0 };
-  const state = { offline: true, calls };
+  const state = { offline: true, calls, workspaceRefreshes: 0 };
   globalThis.__leaderboardRetry = state;
   t.after(() => delete globalThis.__leaderboardRetry);
   t.mock.method(console, "error", () => {});
@@ -35,7 +35,11 @@ test("leaderboard Retry reloads online and confirms offline sessions with or wit
         export const getAuthRequestContextSnapshot = () => ({ sessionUserId: "user-a" });
       `,
       "/stores/workspaceStore": `
-        const state = { loaded: true, workspaces: [] };
+        const state = {
+          loaded: false,
+          workspaces: [],
+          refresh: async () => { globalThis.__leaderboardRetry.workspaceRefreshes += 1; },
+        };
         export const useWorkspaceStore = (select) => select(state);
       `,
       "/stores/policyStore": `
@@ -76,6 +80,7 @@ test("leaderboard Retry reloads online and confirms offline sessions with or wit
     syncAllowedByPolicy: true,
   };
   await act(async () => root.render(createElement(LeaderboardView, props)));
+  assert.equal(state.workspaceRefreshes, 0);
   let retry = findElement(
     container,
     (node) => node.tagName === "BUTTON" && node.textContent === en.insights.leaderboard.retry
@@ -87,6 +92,7 @@ test("leaderboard Retry reloads online and confirms offline sessions with or wit
 
   state.offline = false;
   await act(async () => root.render(createElement(LeaderboardView, props)));
+  assert.equal(state.workspaceRefreshes, 1);
   assert.deepEqual(calls, { auth: 1, access: 1, board: 1, signIn: 0 });
   retry = findElement(
     container,
@@ -98,6 +104,7 @@ test("leaderboard Retry reloads online and confirms offline sessions with or wit
 
   state.offline = true;
   await act(async () => root.render(createElement(LeaderboardView, props)));
+  assert.equal(state.workspaceRefreshes, 1);
   retry = findElement(
     container,
     (node) => node.tagName === "BUTTON" && node.textContent === en.insights.leaderboard.retry

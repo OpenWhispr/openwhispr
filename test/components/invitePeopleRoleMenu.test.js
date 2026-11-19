@@ -93,8 +93,6 @@ async function mountView(t, dispatch = () => {}, draft = "", stateOverrides = {}
         },
         dispatch,
         suggestions: [],
-        seatLine: null,
-        seatCostLine: null,
         cancelLabel: "common.cancel",
         onCancel: () => {},
         onSend: () => {},

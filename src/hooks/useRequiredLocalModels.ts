@@ -19,7 +19,7 @@ export interface RequiredLocalModelsState {
 /**
  * Joins the org's required-download policy with disk truth (the
  * listWhisperModels/listParakeetModels fan-out).
- * Policy updates arrive reactively (workspace-policy-changed → policy store →
+ * Policy updates arrive reactively (effective-policy-changed → policy store →
  * usePolicySnapshot) and re-run the disk check. Shared by the onboarding
  * required-models step and the ControlPanel fleet banner.
  */

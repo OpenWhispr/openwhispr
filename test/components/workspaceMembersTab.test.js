@@ -196,15 +196,19 @@ function rowsByName(markup, members = MEMBERS) {
   );
 }
 
+// The search field lives in the People toolbar; the tab gets its query, its ref and Clear.
+const SEARCH_REF = { current: null };
+
 function tabElement(
   WorkspaceMembersTab,
   workspace,
-  { searchQuery = "", onSearchQueryChange, onOpenTeamspace } = {}
+  { searchQuery = "", onClearSearch, onOpenTeamspace } = {}
 ) {
   return React.createElement(WorkspaceMembersTab, {
     workspace,
     searchQuery,
-    onSearchQueryChange: onSearchQueryChange ?? (() => {}),
+    searchInputRef: SEARCH_REF,
+    onClearSearch: onClearSearch ?? (() => {}),
     onOpenTeamspace,
   });
 }
@@ -380,7 +384,8 @@ test("loading shows the loading copy", async (t) => {
 
   assert.match(text, /settingsPage\.workspace\.people\.loading\.title/);
   assert.match(text, /settingsPage\.workspace\.people\.loading\.body/);
-  assert.doesNotMatch(text, /settingsPage\.workspace\.people\.columns\.name/);
+  // The header row stays, as the design draws it, with the message in the table's body.
+  assert.match(text, /settingsPage\.workspace\.people\.columns\.name/);
 });
 
 test("failed shows Try again", async (t) => {
@@ -399,7 +404,7 @@ test("failed shows Try again", async (t) => {
   assert.match(text, /settingsPage\.workspace\.people\.failed\.title/);
   assert.match(text, /settingsPage\.workspace\.people\.failed\.body/);
   assert.match(text, /workspaces\.exit\.tryAgain/);
-  assert.doesNotMatch(text, /settingsPage\.workspace\.people\.columns\.name/);
+  assert.match(text, /settingsPage\.workspace\.people\.columns\.name/);
 });
 
 const SEARCH_MEMBERS = [
@@ -419,11 +424,8 @@ test("search filters rows by name or email", async (t) => {
   assert.doesNotMatch(markup, /Olivia Owner/);
   assert.doesNotMatch(markup, /Adam Admin/);
   assert.doesNotMatch(markup, /Mia Member/);
-  // Members can search too, so the field does not depend on manage_members.
-  assert.match(markup, /type="search"/);
-  assert.match(markup, /value="rowan"/);
-  // A query to clear keeps Escape from closing the Settings dialog.
-  assert.match(markup, /data-escape-clears/);
+  // The field itself is the People toolbar's.
+  assert.doesNotMatch(markup, /type="search"/);
 });
 
 test("no results shows the query and Clear search", async (t) => {
@@ -433,14 +435,15 @@ test("no results shows the query and Clear search", async (t) => {
     t,
     WorkspaceMembersTab,
     { ...WORKSPACE, role: "admin" },
-    { searchQuery: "  zed  ", onSearchQueryChange: (query) => changes.push(query) }
+    { searchQuery: "  zed  ", onClearSearch: () => changes.push("cleared") }
   );
   const text = textOf(container);
 
   // The trimmed query reaches the title.
   assert.match(text, /settingsPage\.workspace\.people\.search\.noResultsTitle#zed(?!\s)/);
   assert.match(text, /settingsPage\.workspace\.people\.search\.noResultsBody/);
-  assert.doesNotMatch(text, /settingsPage\.workspace\.people\.columns\.name/);
+  // The table keeps its header, and the message sits in its body, as the design draws it.
+  assert.match(text, /settingsPage\.workspace\.people\.columns\.name/);
 
   const clearButton = findNode(
     container,
@@ -450,7 +453,7 @@ test("no results shows the query and Clear search", async (t) => {
   );
   assert.ok(clearButton, "Clear search button");
   await React.act(async () => propsOf(clearButton).onClick());
-  assert.deepEqual(changes, [""]);
+  assert.deepEqual(changes, ["cleared"]);
 });
 
 test("no results waits for the roster", async (t) => {
@@ -470,54 +473,6 @@ test("no results waits for the roster", async (t) => {
   assert.doesNotMatch(text, /noResultsTitle/);
 });
 
-test("an empty query shows a placeholder and no clear button", async (t) => {
-  const WorkspaceMembersTab = await loadMembersTab(t);
-  const markup = render(WorkspaceMembersTab, { ...WORKSPACE, role: "admin" });
-
-  assert.match(markup, /placeholder="settingsPage\.workspace\.people\.search\.placeholder"/);
-  assert.doesNotMatch(markup, /aria-label="settingsPage\.workspace\.people\.search\.clear"/);
-  // An empty field lets Escape close the Settings dialog.
-  assert.doesNotMatch(markup, /data-escape-clears/);
-});
-
-test("Escape clears a non-empty field and is left alone on an empty one", async (t) => {
-  const changes = [];
-  const WorkspaceMembersTab = await loadMembersTab(t);
-  const search = { onSearchQueryChange: (query) => changes.push(query) };
-  const keydown = (events) => ({
-    key: "Escape",
-    preventDefault: () => events.push("preventDefault"),
-    stopPropagation: () => events.push("stopPropagation"),
-  });
-
-  const filled = await mount(
-    t,
-    WorkspaceMembersTab,
-    { ...WORKSPACE, role: "admin" },
-    {
-      ...search,
-      searchQuery: "zed",
-    }
-  );
-  const filledEvents = [];
-  const filledInput = findNode(filled, (node) => node.localName === "input");
-  propsOf(filledInput).onKeyDown(keydown(filledEvents));
-  assert.deepEqual(changes, [""]);
-  assert.deepEqual(filledEvents.sort(), ["preventDefault", "stopPropagation"]);
-
-  changes.length = 0;
-  const emptyEvents = [];
-  await React.act(async () =>
-    mountedRoots
-      .get(t)
-      .render(tabElement(WorkspaceMembersTab, { ...WORKSPACE, role: "admin" }, search))
-  );
-  const emptyInput = findNode(filled, (node) => node.localName === "input");
-  propsOf(emptyInput).onKeyDown(keydown(emptyEvents));
-  assert.deepEqual(changes, []);
-  assert.deepEqual(emptyEvents, []);
-});
-
 test("a roster the store holds for another workspace never shows", async (t) => {
   let calls = 0;
   const WorkspaceMembersTab = await loadMembersTab(t, {
@@ -534,7 +489,7 @@ test("a roster the store holds for another workspace never shows", async (t) => 
   assert.equal(calls, 2);
   // That read was overtaken too: Try again, rather than an empty table or a third read.
   assert.match(text, /settingsPage\.workspace\.people\.failed\.title/);
-  assert.doesNotMatch(text, /settingsPage\.workspace\.people\.columns\.name/);
+  assert.match(text, /settingsPage\.workspace\.people\.columns\.name/);
 });
 
 test("seat usage shows only beside the member rows", async (t) => {
@@ -1002,7 +957,7 @@ test("adding clears the selection, and Open teamspace goes where the page says",
   globalThis.__teamspaceArgs.onOpenTeamspace(42);
   assert.deepEqual(opened, [42]);
 
-  const searchFocus = watchSearchFocus(t, container);
+  const searchFocus = watchSearchFocus(t);
   await React.act(async () => globalThis.__addMenu.onAdded());
   assert.doesNotMatch(barText(container), /selection\.count/);
   assert.equal(addMenuNode(container), null);
@@ -1011,14 +966,12 @@ test("adding clears the selection, and Open teamspace goes where the page says",
 
 // The host DOM has no frames or focus, so the next frame runs at once and the search field counts
 // the times it is focused.
-function watchSearchFocus(t, container) {
-  const [search] = findAll(
-    container,
-    (node) => node.getAttribute("aria-label") === "settingsPage.workspace.people.search.placeholder"
-  );
+function watchSearchFocus(t) {
   const watched = { count: 0 };
-  search.focus = () => {
-    watched.count += 1;
+  SEARCH_REF.current = {
+    focus: () => {
+      watched.count += 1;
+    },
   };
   const original = globalThis.requestAnimationFrame;
   globalThis.requestAnimationFrame = (callback) => {
@@ -1027,6 +980,7 @@ function watchSearchFocus(t, container) {
   };
   t.after(() => {
     globalThis.requestAnimationFrame = original;
+    SEARCH_REF.current = null;
   });
   return watched;
 }
@@ -1097,7 +1051,7 @@ test("the selection clears and the Team column updates", async (t) => {
   await selectTwo(container);
   await React.act(async () => globalThis.__addMenu.onCreateTeam());
   const readsBefore = reads;
-  const searchFocus = watchSearchFocus(t, container);
+  const searchFocus = watchSearchFocus(t);
 
   await React.act(async () =>
     globalThis.__createDialog.onCreated({ id: "t9", name: "Sales" }, { memberCount: 2 })

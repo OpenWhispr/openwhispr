@@ -147,7 +147,11 @@ test("#1340: a Vulkan server that dies at startup reports the createDevice error
 
   assert.equal(manager.useVulkan, false, "the CPU server took over");
   assert.deepEqual(events, [
-    { reason: "vk::PhysicalDevice::createDevice: ErrorDeviceLost", fallbackBackend: "cpu" },
+    {
+      reason: "vk::PhysicalDevice::createDevice: ErrorDeviceLost",
+      fallbackBackend: "cpu",
+      proven: false,
+    },
   ]);
   const warning = fallbackWarning();
   assert.equal(warning.meta.reason, "vk::PhysicalDevice::createDevice: ErrorDeviceLost");
@@ -167,6 +171,7 @@ test("a CUDA server that runs out of memory at startup reports the failed alloca
       reason:
         "ggml_backend_cuda_buffer_type_alloc_buffer: allocating 1533.14 MiB on device 0: cudaMalloc failed: out of memory",
       fallbackBackend: "cpu",
+      proven: false,
     },
   ]);
 });
@@ -193,7 +198,7 @@ test("a CUDA server that comes up without its GPU reports why, not a startup tim
     await manager.start(modelPath, { useCuda: true });
 
     assert.equal(manager.useCuda, false);
-    assert.deepEqual(events, [{ reason, fallbackBackend: "cpu" }]);
+    assert.deepEqual(events, [{ reason, fallbackBackend: "cpu", proven: false }]);
     await manager.stop();
   }
 });
@@ -236,7 +241,9 @@ test("a CUDA server that fails at startup moves to an installed Vulkan pack", as
   assert.equal(manager.useVulkan, true);
   assert.equal(manager.getStatus().gpuBackend, "vulkan");
   assert.equal(manager.gpuFallbackActive, false);
-  assert.deepEqual(events, [["cuda", { reason: LOADER_ERROR.trim(), fallbackBackend: "vulkan" }]]);
+  assert.deepEqual(events, [
+    ["cuda", { reason: LOADER_ERROR.trim(), fallbackBackend: "vulkan", proven: false }],
+  ]);
 });
 
 test("a CUDA pack that fails lands on a bundled CUDA build: the GPU stays on (#2168)", async (t) => {
@@ -253,7 +260,9 @@ test("a CUDA pack that fails lands on a bundled CUDA build: the GPU stays on (#2
   await manager.start(modelPath, { useCuda: true });
 
   assert.equal(manager.useCuda, false);
-  assert.deepEqual(events, [{ reason: LOADER_ERROR.trim(), fallbackBackend: "cuda" }]);
+  assert.deepEqual(events, [
+    { reason: LOADER_ERROR.trim(), fallbackBackend: "cuda", proven: false },
+  ]);
 });
 
 test("a Vulkan pin to a device that is gone is cleared, not saved as a GPU failure (#1606)", async (t) => {
@@ -318,7 +327,9 @@ test("a GPU server that never answers is reported as a startup timeout", async (
 
   await manager.start(modelPath, { useVulkan: true });
 
-  assert.deepEqual(events, [{ reason: "startup timed out after 120 s", fallbackBackend: "cpu" }]);
+  assert.deepEqual(events, [
+    { reason: "startup timed out after 120 s", fallbackBackend: "cpu", proven: false },
+  ]);
 });
 
 test("a GPU binary that cannot be launched reports its error, not exit code -2", async (t) => {
@@ -331,7 +342,9 @@ test("a GPU binary that cannot be launched reports its error, not exit code -2",
   await manager.start(modelPath, { useCuda: true });
 
   assert.equal(manager.useCuda, false, "the CPU server took over");
-  assert.deepEqual(events, [{ reason: "could not launch (ENOENT)", fallbackBackend: "cpu" }]);
+  assert.deepEqual(events, [
+    { reason: "could not launch (ENOENT)", fallbackBackend: "cpu", proven: false },
+  ]);
 });
 
 test("a Vulkan server that crashes on Windows reports the status code in hex", async (t) => {
@@ -346,5 +359,7 @@ test("a Vulkan server that crashes on Windows reports the status code in hex", a
 
   await manager.start(modelPath, { useVulkan: true });
 
-  assert.deepEqual(events, [{ reason: "exit code 0xC0000005", fallbackBackend: "cpu" }]);
+  assert.deepEqual(events, [
+    { reason: "exit code 0xC0000005", fallbackBackend: "cpu", proven: false },
+  ]);
 });

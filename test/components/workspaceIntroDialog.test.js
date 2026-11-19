@@ -87,16 +87,25 @@ test("last step shows Get started and no Skip", async (t) => {
   assert.equal(progressBars(markup), 3);
 });
 
-test("the mock switcher shows the real workspace name", async (t) => {
+test("the mock switcher shows the real workspace name and no Personal entry", async (t) => {
   const { renderDialog } = await loadIntro(t);
 
   const markup = renderDialog({ workspaceName: "Globex Research" });
 
   assert.match(markup, /Globex Research/);
-  assert.match(markup, /notes\.spaces\.personal/);
   assert.match(markup, /workspaces\.switcher\.add/);
+  // Private lives inside every workspace, so the switcher has nothing beside the workspaces.
+  assert.doesNotMatch(markup, /notes\.spaces\.personal/);
   // The mock is decoration; screen readers get the title and body only.
   assert.match(markup, /aria-hidden="true"[^>]*>(?:(?!<\/div>).)*Globex Research/s);
+});
+
+test("the teamspaces step shows Private inside the workspace", async (t) => {
+  const { renderCard } = await loadIntro(t);
+
+  const markup = renderCard({ step: 1, workspaceName: "Globex Research" });
+
+  assert.match(markup, /Globex Research(?:(?!Globex).)*notes\.spaces\.personal/s);
 });
 
 test("illustrations are decorative and sized for their slot", async (t) => {
@@ -134,4 +143,17 @@ test("Next and Get started take the first focus, not Skip", async (t) => {
   assert.equal(first.length, 1);
   assert.match(first[0], /common\.next/);
   assert.match(focused(renderCard({ step: 2 }))[0], /workspaces\.intro\.getStarted/);
+});
+
+test("the Add workspace pill sits below the one-row switcher card, not over it", async (t) => {
+  const { renderCard } = await loadIntro(t);
+
+  const markup = renderCard({ step: 0 });
+
+  const bottomOf = (marker) =>
+    Number(markup.match(new RegExp(`bottom-\\[(\\d+)px\\][^"]*${marker}`))?.[1]);
+  const card = bottomOf("w-\\[254px\\]");
+  const pill = bottomOf("left-\\[calc\\(50%\\+97px\\)\\]");
+  // The pill is about 42px tall: py-1.5 around a 28px icon, plus its border.
+  assert.ok(card - pill >= 42, `card at ${card}px, pill at ${pill}px`);
 });

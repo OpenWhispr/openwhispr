@@ -105,6 +105,7 @@ test.before(async (t) => {
         export const useTranslation = () => ({ t, i18n: { language: "en" } });
       `,
       "/i18n": "export default { t: (key) => key, language: 'en' };",
+      "/lib/authRequestContext": "export const hasValidatedAuthContext = () => true;",
       "/stores/workspaceStore": `
         export const useWorkspaceStore = Object.assign(
           (selector) => selector(globalThis.__store),
@@ -306,6 +307,20 @@ test("a new address says what it costs before the team is made, and Create still
   assert.match(text(dialog()), /Using 8 of 8 seats/);
   assert.match(text(dialog()), /No seats left\. Ask Olivia to add seats\./);
   assert.equal(createButton().disabled, false);
+});
+
+test("Create reads as not ready while People holds text that isn't a chip yet", async (t) => {
+  await mount(t);
+  await type(nameInput(), "Sales");
+  assert.ok(!createButton().className.includes("opacity-60"));
+
+  await type(peopleInput(), "Eth");
+  assert.ok(createButton().className.includes("opacity-60"));
+  // Still pressable: the press stages what was typed.
+  assert.equal(createButton().disabled, false);
+
+  await pickPerson("Ethan");
+  assert.ok(!createButton().className.includes("opacity-60"));
 });
 
 test("an empty name says so and sends nothing", async (t) => {

@@ -24,6 +24,7 @@ import type {
   WorkspaceSpace,
 } from "../../types/electron";
 import SettingsWorkspaceFrame from "./SettingsWorkspaceFrame";
+import { PAGE_DESCRIPTION, PAGE_TITLE } from "./tableTokens";
 import TeamspacesTable from "./TeamspacesTable";
 import { useSettingsWorkspace } from "./useSettingsWorkspace";
 
@@ -129,6 +130,16 @@ function TeamspacesPage({ workspace, onOpenTeamspace }: PageProps): React.ReactE
       .catch(() => undefined)
       .finally(() => setAdminsLoading(false));
   }, [refreshMembers, workspace.id]);
+
+  // A teamspace with no admin of its own shows the workspace's admins in that column, so the roster
+  // is read up front (once per workspace) when one is listed, not only when its menu opens.
+  const adminsReadFor = useRef<string | null>(null);
+  const needsWorkspaceAdmins = status === "ready" && spaces.some((space) => !space.admins?.length);
+  useEffect(() => {
+    if (!needsWorkspaceAdmins || adminsReadFor.current === workspace.id) return;
+    adminsReadFor.current = workspace.id;
+    loadWorkspaceAdmins();
+  }, [needsWorkspaceAdmins, workspace.id, loadWorkspaceAdmins]);
 
   // The teamspace as the local mirror holds it, which is what the dialogs and Notes open. A
   // directory row with no local copy (the sync hasn't brought it yet) says so rather than doing
@@ -239,10 +250,8 @@ function TeamspacesPage({ workspace, onOpenTeamspace }: PageProps): React.ReactE
       {/* The end padding keeps Create clear of the modal's Close, which sits in this corner. */}
       <div className="flex items-start justify-between gap-3 pe-8">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">
-            {t("settingsPage.workspace.teamspaces.title")}
-          </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground/80">
+          <h2 className={PAGE_TITLE}>{t("settingsPage.workspace.teamspaces.title")}</h2>
+          <p className={PAGE_DESCRIPTION}>
             {canCreate
               ? t("settingsPage.workspace.teamspaces.subtitleManage")
               : t("settingsPage.workspace.teamspaces.subtitleView")}

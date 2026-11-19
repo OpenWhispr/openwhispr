@@ -8,12 +8,14 @@ import {
   type UnavailableCapability,
 } from "./agentCapabilities";
 import { NOTE_TAKER_LABEL } from "../utils/transcriptEvidence";
+import { useSettingsStore } from "../stores/settingsStore";
 
 export {
   resolvePrompt,
   getDefaultPromptText,
   appendDictionarySuffix,
   appendScreenContextSuffix,
+  appendPlainTextResponseSuffix,
   wrapCleanupTranscript,
 } from "./prompts/index";
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./prompts/registry";
@@ -26,10 +28,11 @@ export function getCleanupSystemPrompt(
   uiLanguage?: string,
   toneStyle?: DictationToneStyle | null
 ): string {
-  return appendToneStyleSuffix(
-    resolvePrompt("cleanup", { agentName, language, customDictionary, uiLanguage }),
-    toneStyle
-  );
+  const prompt = resolvePrompt("cleanup", { agentName, language, customDictionary, uiLanguage });
+  // A custom cleanup prompt is the user's own instruction, which the tone's
+  // priority sentence would override; Cloud cleanup skips the tone the same way.
+  if (useSettingsStore.getState().customPrompts.cleanup) return prompt;
+  return appendToneStyleSuffix(prompt, toneStyle);
 }
 
 export function getWordBoost(customDictionary?: string[]): string[] {
@@ -109,7 +112,6 @@ const TOOL_GROUPS: Record<string, string> = {
   update_snippets: "The user's snippets and dictionary",
   update_dictionary: "The user's snippets and dictionary",
   copy_to_clipboard: "Clipboard",
-  look_at_screen: "The user's screen",
   load_skill: "The user's skills",
   propose_skill: "The user's skills",
   update_skill: "The user's skills",
