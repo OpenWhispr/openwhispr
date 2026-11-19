@@ -9507,6 +9507,7 @@ class IPCHandlers {
             throw new Error(byokSizeCapError(route.sizeCapBytes));
           }
           const { text } = await transcribeWithElevenLabs({
+            signal,
             audioBuffer: buffer,
             model: route.model,
             fileName: "audio.webm",
