@@ -1557,6 +1557,16 @@ function createStringSetter(key: string) {
   };
 }
 
+// A blank Note Recording field inherits dictation. A batch-only dictation choice
+// must not replace the provider or model the recorder was already using.
+function preserveInheritedMeetingSelection(previous: SettingsState): void {
+  const current = useSettingsStore.getState();
+  if (!current.meetingCloudTranscriptionProvider)
+    current.setMeetingCloudTranscriptionProvider(previous.cloudTranscriptionProvider);
+  if (!current.meetingCloudTranscriptionModel)
+    current.setMeetingCloudTranscriptionModel(previous.cloudTranscriptionModel);
+}
+
 function persistTranscriptionModelMemory(memory: Record<string, string>) {
   if (isBrowser) localStorage.setItem("transcriptionModelByProvider", JSON.stringify(memory));
   useSettingsStore.setState({ transcriptionModelByProvider: memory });
@@ -2331,7 +2341,20 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setPreferredLanguage: createStringSetter("preferredLanguage"),
   setChineseScriptPreference: (value: ChineseScriptPreference) =>
     createStringSetter("chineseScriptPreference")(normalizeChineseScriptPreference(value)),
-  setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),
+  setCloudTranscriptionProvider: (providerId) => {
+    const s = get();
+    const meetingProviders = MEETING_TRANSCRIPTION_POLICY_CATALOG.byokProviders;
+    const meetingProvider = s.meetingCloudTranscriptionProvider || s.cloudTranscriptionProvider;
+    if (
+      providerId !== s.cloudTranscriptionProvider &&
+      providerId !== "openwhispr" &&
+      !meetingProviders.includes(providerId) &&
+      (s.meetingTranscriptionMode === "openwhispr" || meetingProviders.includes(meetingProvider))
+    ) {
+      preserveInheritedMeetingSelection(s);
+    }
+    setStringSetting("cloudTranscriptionProvider", providerId);
+  },
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
 
@@ -2357,7 +2380,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       persistTranscriptionModelMemory(memory);
     }
     const remembered = memory[`${context}:${providerId}`];
-    setStringSetting(keys.provider, providerId);
+    if (context === "dictation") s.setCloudTranscriptionProvider(providerId);
+    else setStringSetting(keys.provider, providerId);
     setStringSetting(
       keys.model,
       remembered &&
@@ -3005,11 +3029,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setMeetingCloudTranscriptionProvider(cloudTranscriptionProvider);
       s.setMeetingCloudTranscriptionModel(cloudTranscriptionModel);
     } else {
-      // An unset meeting field inherits dictation. Pin its value from before the switch.
-      const previousMeeting = selectResolvedMeetingTranscription(s);
-      s.setMeetingCloudTranscriptionMode(previousMeeting.cloudTranscriptionMode);
-      s.setMeetingCloudTranscriptionProvider(previousMeeting.cloudTranscriptionProvider);
-      s.setMeetingCloudTranscriptionModel(previousMeeting.cloudTranscriptionModel);
+      // Onboarding can change the mode and model even when the provider stays the same.
+      preserveInheritedMeetingSelection(s);
+      if (!s.meetingCloudTranscriptionMode)
+        s.setMeetingCloudTranscriptionMode(s.cloudTranscriptionMode);
     }
     s.setUploadTranscriptionMode(mode);
     s.setUploadUseLocalWhisper(useLocalWhisper);
