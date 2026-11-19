@@ -3,6 +3,7 @@ import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import logger from "../../utils/logger";
 import { CLAUSE_TERMINATORS, createSpeechChunker } from "../../services/voice/speechChunker";
+import { spellOutDates } from "../../services/voice/spokenDates";
 import { createPcmPlayer, type PcmPlayer } from "../../services/voice/pcmPlayer";
 import { startMicStream, type MicStream } from "../../services/voice/micStream";
 import {
@@ -323,7 +324,11 @@ export function useVoiceCall({
       // The reply speaks from here: until its audio drains, Stop and Esc stop it.
       setSpeaking(true);
       void api
-        .speak({ utteranceId, text, profile: profileRef.current })
+        .speak({
+          utteranceId,
+          text: spellOutDates(text, profileRef.current.language),
+          profile: profileRef.current,
+        })
         .then((result) => {
           if (chunkIndex === 0 && turn && turnRef.current === turn) {
             turn.ttsQueueWaitMs = result?.queueWaitMs ?? null;

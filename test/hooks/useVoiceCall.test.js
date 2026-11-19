@@ -403,6 +403,16 @@ test("a spoken turn is sent with an observer that speaks its reply in the call's
   assert.deepEqual(calls.spoken[0].profile, { voice: "aurora", speed: 1.25, language: "en" });
 });
 
+test("a reply's short date names are said in full", async (t) => {
+  const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("when is the review");
+  await act(() => lastTurn().speech.onText("It's on Wed, Nov. 19 at 3 PM. "));
+  await act(() => lastTurn().speech.onEnd("complete"));
+
+  assert.deepEqual(spokenTexts(calls), ["It's on Wednesday, November 19 at 3 PM."]);
+});
+
 test("Auto answers in the language spoken, and the reply's language picks the voice's", async (t) => {
   const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t, {
     settings: { voiceCallLanguage: "auto" },

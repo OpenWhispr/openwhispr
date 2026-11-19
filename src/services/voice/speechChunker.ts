@@ -1,3 +1,5 @@
+import { endsWithDateAbbreviation } from "./spokenDates";
+
 interface SpeechChunker {
   push: (delta: string) => string[];
   flush: () => string[];
@@ -53,10 +55,17 @@ export function createSpeechChunker(): SpeechChunker {
       const next = buffer[index + 1];
       if (!isWhitespace(next)) continue;
       if (SENTENCE_TERMINATORS.has(char)) {
+        const before = buffer.slice(0, index);
         const following = buffer.slice(index + 1).trimStart()[0];
         // "e.g. last week" continues the sentence, and so does a list item's number
-        // ("1. Keep"); an uppercase or missing next word ends it.
-        if (char === "." && (isLowercase(following) || /^\d+$/.test(buffer.slice(0, index)))) {
+        // ("1. Keep") and a date ("Nov. 19", waiting for the word after "Nov."); an
+        // uppercase or missing next word ends it.
+        if (
+          char === "." &&
+          (isLowercase(following) ||
+            /^\d+$/.test(before) ||
+            (endsWithDateAbbreviation(before) && (following === undefined || /\d/.test(following))))
+        ) {
           continue;
         }
         return index + 1;
@@ -64,7 +73,9 @@ export function createSpeechChunker(): SpeechChunker {
       if (
         emittedCount === 0 &&
         CLAUSE_TERMINATORS.has(char) &&
-        index + 1 >= FIRST_CHUNK_MIN_CHARS
+        index + 1 >= FIRST_CHUNK_MIN_CHARS &&
+        // "Sat, Nov 22" stays together: "Sat" alone could be the word.
+        !endsWithDateAbbreviation(buffer.slice(0, index))
       ) {
         return index + 1;
       }

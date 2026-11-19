@@ -85,6 +85,23 @@ test("strips markdown, skips headings and drops chunks with nothing speakable", 
   ]);
 });
 
+test("a period after an abbreviated date word doesn't end the sentence", async () => {
+  const { createSpeechChunker } = await load();
+  const chunker = createSpeechChunker();
+  assert.deepEqual(pushAll(chunker, ["Your review is on Nov. ", "19 at 3 PM. Then"]), [
+    "Your review is on Nov. 19 at 3 PM.",
+  ]);
+  assert.deepEqual(chunker.flush(), ["Then"]);
+  const opening = createSpeechChunker();
+  assert.deepEqual(pushAll(opening, ["Your next meeting is on Sat, Nov 22. "]), [
+    "Your next meeting is on Sat, Nov 22.",
+  ]);
+  assert.deepEqual(pushAll(createSpeechChunker(), ["I'm free on Fri. ", "Want to meet? "]), [
+    "I'm free on Fri.",
+    "Want to meet?",
+  ]);
+});
+
 test("reset discards buffered text", async () => {
   const { createSpeechChunker } = await load();
   const chunker = createSpeechChunker();
