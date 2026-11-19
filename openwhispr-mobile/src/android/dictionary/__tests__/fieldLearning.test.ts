@@ -3,6 +3,7 @@ const mockShowTab = jest.fn(() => Promise.resolve(true));
 const mockLearn = jest.fn();
 const mockUnlearn = jest.fn();
 const mockForget = jest.fn();
+const mockRelearn = jest.fn();
 const mockNavigate = jest.fn();
 
 jest.mock('../../../../modules/android-dictation/src', () => ({
@@ -21,6 +22,7 @@ jest.mock('../learned', () => ({
   learnCorrections: (...args: unknown[]) => mockLearn(...args),
   unlearn: (words: string[]) => mockUnlearn(words),
   forgetLearned: (word: string) => mockForget(word),
+  relearn: (...args: unknown[]) => mockRelearn(...args),
 }));
 jest.mock('../strings', () => ({
   dictionaryT: (key: string, options?: { word?: string; count?: number }) =>
@@ -98,4 +100,10 @@ it('a second fix of the same misheard word replaces the first instead of adding 
   expect(mockShowTab).toHaveBeenLastCalledWith(
     expect.objectContaining({ words: ['Sakett'], message: 'learnedToast:Sakett' }),
   );
+});
+
+it('tapping "Won’t learn" learns the words again', async () => {
+  mockListeners.onLearnedRedo({ words: ['Synty'] } as never);
+  await flush();
+  expect(mockRelearn).toHaveBeenCalledWith(['Synty'], { kind: 'app' });
 });

@@ -64,7 +64,7 @@ class AndroidDictationModule : Module() {
   private val navigationBar = NavigationBar { sendEvent("onNavigationBarChange", it) }
   override fun definition() = ModuleDefinition {
     Name("AndroidDictation")
-    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange", "onFieldEdited", "onLearnedUndo", "onOpenDictionary")
+    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error", "onNavigationBarChange", "onFieldEdited", "onLearnedUndo", "onLearnedRedo", "onOpenDictionary")
     OnCreate { DictationService.emit = { event, data -> sendEvent(event, data) } }
     // The bubble pipeline listens, in the app or in a headless task: send what the bubble held.
     AsyncFunction("pipelineReady") {

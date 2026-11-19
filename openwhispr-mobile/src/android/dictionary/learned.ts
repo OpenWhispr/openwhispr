@@ -187,3 +187,12 @@ export function forgetLearned(word: string) {
     return { ...state, learned };
   });
 }
+
+/** Undo of an Undo on the bubble's pill: the words are allowed again and learned again. */
+export function relearn(words: string[], origin: LearnedOrigin) {
+  allowWords(words);
+  return learnCorrections(
+    words.map((word) => ({ word, from: null })),
+    origin,
+  );
+}

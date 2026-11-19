@@ -42,6 +42,7 @@ import {
   keepLearned,
   learnCorrections,
   renameLearned,
+  relearn,
   restoreLearned,
   reviewQueue,
   unlearn,
@@ -169,4 +170,11 @@ describe('learning from fixes', () => {
     const entries = [word('Parakeet', { source: 'learned', addedAt: 5 })];
     expect(reviewQueue(entries, state())).toEqual([]);
   });
+});
+
+it('an Undo can be undone: the word is allowed and learned again', () => {
+  learnCorrections([{ word: 'Synty', from: 'Sinty' }], { kind: 'app' });
+  unlearn(['Synty']);
+  expect(relearn(['Synty'], { kind: 'app' })).toEqual(['Synty']);
+  expect(useDictionaryStore.getState().entries.map((entry) => entry.word)).toEqual(['Synty']);
 });

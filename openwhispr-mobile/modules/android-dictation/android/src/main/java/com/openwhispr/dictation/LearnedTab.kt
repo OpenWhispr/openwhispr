@@ -41,6 +41,8 @@ class LearnedTab(
   private val windows: WindowManager,
   private val font: Typeface,
   private val onUndo: (List<String>) -> Unit,
+  /** Tapping "Won't learn" learns the words again (undo of the undo). */
+  private val onRedo: (List<String>) -> Unit,
   private val onOpen: () -> Unit,
 ) {
   private val handler = Handler(Looper.getMainLooper())
@@ -55,6 +57,8 @@ class LearnedTab(
   private var bubble = Rect()
   private var dockRight = true
   private var paused = false
+  /** Showing "Won't learn" after Undo. */
+  private var undoneShowing = false
   var showing = false; private set
 
   private fun dp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, context.resources.displayMetrics)
@@ -95,9 +99,12 @@ class LearnedTab(
   fun show(value: LearnedTabText, bubbleRect: Rect, right: Boolean, dot: Boolean) {
     val root = window ?: return
     text = value
+    undoneShowing = false
     if (showing && pill != null) {
       label?.text = value.message; label?.setTextColor(BubbleColors.ink)
       undo?.visibility = View.VISIBLE; icon?.kind = PillGlyph.Kind.BOOK
+      label?.setOnClickListener { onOpen(); hide() }
+      pill?.setOnClickListener(null); pill?.isClickable = false
       layout(bubbleRect, right); hold(); return
     }
     bubble = Rect(bubbleRect); dockRight = right
@@ -122,7 +129,7 @@ class LearnedTab(
   }
 
   private fun build(value: LearnedTabText): View {
-    val row = LinearLayout(context).apply {
+    val row = TouchTrackingRow(context).apply {
       orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
       background = GradientDrawable().apply {
         setColor(BubbleColors.surface); cornerRadius = pillHeight / 2f
@@ -131,13 +138,12 @@ class LearnedTab(
       elevation = dp(6f)
       outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
       setPadding(dp(16f).toInt(), 0, dp(18f).toInt(), 0)
-      // Touching the pill keeps it out; letting go lets the hold run on.
-      setOnTouchListener { _, event ->
-        when (event.actionMasked) {
-          MotionEvent.ACTION_DOWN -> { paused = true; handler.removeCallbacks(hideLater) }
-          MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { paused = false; if (undo?.visibility == View.VISIBLE) hold() }
-        }
-        false
+      // Any touch on the pill keeps it out (on its words, its button or its padding alike), and
+      // letting go starts the wait again.
+      onTouching = { touching ->
+        paused = touching
+        handler.removeCallbacks(hideLater)
+        if (!touching) handler.postDelayed(hideLater, if (undoneShowing) UNDONE_MS else HOLD_MS)
       }
     }
     val book = PillGlyph(context)
@@ -227,11 +233,30 @@ class LearnedTab(
     val value = text ?: return
     handler.removeCallbacks(hideLater)
     onUndo(value.words)
-    // Same size and colours as "Learned", with the undo arrow where the book was.
-    label?.text = value.undone; label?.setOnClickListener(null)
+    undoneShowing = true
+    // Same size and colours as "Learned", with the undo arrow where the book was. Tapping it
+    // (anywhere on the pill) learns the words again.
+    label?.text = value.undone
+    label?.setOnClickListener { redone() }
+    pill?.setOnClickListener { redone() }
+    pill?.contentDescription = value.undone
     undo?.visibility = View.GONE; icon?.kind = PillGlyph.Kind.UNDO
     layout(bubble, dockRight)
     handler.postDelayed(hideLater, UNDONE_MS)
+  }
+
+  /** Undo of the undo: the words are learned again and the pill is back to "Learned". */
+  private fun redone() {
+    val value = text ?: return
+    handler.removeCallbacks(hideLater)
+    onRedo(value.words)
+    undoneShowing = false
+    label?.text = value.message
+    label?.setOnClickListener { onOpen(); hide() }
+    pill?.setOnClickListener(null); pill?.isClickable = false; pill?.contentDescription = null
+    undo?.visibility = View.VISIBLE; icon?.kind = PillGlyph.Kind.BOOK
+    layout(bubble, dockRight)
+    hold()
   }
 
   private companion object {
@@ -279,5 +304,17 @@ class PillGlyph(context: Context) : View(context) {
         canvas.drawPath(head, fill)
       }
     }
+  }
+}
+
+/** A row that reports a finger going down on it and coming up, whichever child takes the touch. */
+class TouchTrackingRow(context: Context) : LinearLayout(context) {
+  var onTouching: ((Boolean) -> Unit)? = null
+  override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+    when (event.actionMasked) {
+      MotionEvent.ACTION_DOWN -> onTouching?.invoke(true)
+      MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> onTouching?.invoke(false)
+    }
+    return super.dispatchTouchEvent(event)
   }
 }

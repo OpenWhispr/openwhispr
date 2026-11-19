@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { extractCorrectionPairs } from '@/lib/correctionLearner';
 import { buildEffectiveDictionaryWords } from '@/lib/dictationHints';
 import { AndroidDictation, dictationEvents } from '../../../modules/android-dictation/src';
-import { forgetLearned, learnCorrections, loadLearnedWords, unlearn } from './learned';
+import { forgetLearned, learnCorrections, loadLearnedWords, relearn, unlearn } from './learned';
 import { dictionaryT } from './strings';
 
 /**
@@ -74,6 +74,9 @@ export function observeFieldLearning(): () => void {
     showingUntil = 0;
     void loadLearnedWords().then(() => unlearn(words));
   });
+  const redone = dictationEvents.addListener('onLearnedRedo', ({ words }) => {
+    void loadLearnedWords().then(() => relearn(words, { kind: 'app' }));
+  });
   // The app is coming to the front; its navigator may still be mounting, so this waits a beat.
   const open = dictationEvents.addListener('onOpenDictionary', () => {
     setTimeout(() => {
@@ -87,6 +90,7 @@ export function observeFieldLearning(): () => void {
   return () => {
     edited.remove();
     undone.remove();
+    redone.remove();
     open.remove();
   };
 }

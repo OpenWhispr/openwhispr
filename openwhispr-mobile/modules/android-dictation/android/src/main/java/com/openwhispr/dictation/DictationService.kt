@@ -265,6 +265,7 @@ class DictationService : Service() {
     // Added before the bubble, so the tab slides out from underneath it.
     learnedTab = LearnedTab(this, windows, font,
       onUndo = { words -> emit?.invoke("onLearnedUndo", mapOf("words" to words)) },
+      onRedo = { words -> emit?.invoke("onLearnedRedo", mapOf("words" to words)) },
       onOpen = ::openDictionary).also { it.create() }
     root = view; layout = params
     render()

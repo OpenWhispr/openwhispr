@@ -119,6 +119,8 @@ export const dictationEvents = AndroidDictation
       onFieldEdited: (event: { before: string; after: string }) => void;
       /** Undo on the bubble's learned tab. */
       onLearnedUndo: (event: { words: string[] }) => void;
+      /** "Won't learn" was tapped: learn the words again. */
+      onLearnedRedo: (event: { words: string[] }) => void;
       /** The learned tab's words were tapped: the app opens on the Dictionary. */
       onOpenDictionary: () => void;
       'local-meeting-stopped': (event: { noteId: number; captureId: string }) => void;
