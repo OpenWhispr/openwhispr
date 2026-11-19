@@ -76,3 +76,37 @@ test("a bare Azure resource base still rebuilds from the deployment name", async
     buildAzureTranscriptionUrl(normalizeBaseUrl(bare), "my-deploy")
   );
 });
+
+test("isAzureOpenAIEndpoint supports scheme-less endpoints", async () => {
+  const { isAzureOpenAIEndpoint } = await import("../../src/utils/urlUtils.ts");
+
+  assert.equal(isAzureOpenAIEndpoint("r.cognitiveservices.azure.com/openai/v1"), true);
+  assert.equal(isAzureOpenAIEndpoint("r.openai.azure.com"), true);
+  assert.equal(isAzureOpenAIEndpoint("r.services.ai.azure.com/openai/v1"), true);
+});
+
+test("buildAzureTranscriptionUrl and buildManagedAzureTranscriptionUrl support scheme-less endpoints", async () => {
+  const { buildAzureTranscriptionUrl, buildManagedAzureTranscriptionUrl } =
+    await import("../../src/utils/urlUtils.ts");
+
+  assert.equal(
+    buildAzureTranscriptionUrl(
+      "my-resource.cognitiveservices.azure.com/openai/v1",
+      "gpt-4o-transcribe"
+    ),
+    "https://my-resource.cognitiveservices.azure.com/openai/deployments/gpt-4o-transcribe/audio/transcriptions?api-version=2025-03-01-preview"
+  );
+
+  assert.equal(
+    buildAzureTranscriptionUrl(
+      "r.cognitiveservices.azure.com/openai/deployments/my-deploy/audio/transcriptions?api-version=2024-06-01",
+      "ignored"
+    ),
+    "https://r.cognitiveservices.azure.com/openai/deployments/my-deploy/audio/transcriptions?api-version=2024-06-01"
+  );
+
+  assert.equal(
+    buildManagedAzureTranscriptionUrl("r.openai.azure.com", "whisper", "2024-06-01"),
+    "https://r.openai.azure.com/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01"
+  );
+});
