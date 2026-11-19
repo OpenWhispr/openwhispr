@@ -12,9 +12,6 @@ const debugLogger = require("./debugLogger");
 // rate, so 24 kHz meeting capture is downsampled before it is sent.
 const COMPATIBLE_REALTIME_INPUT_RATE = 16000;
 const DEFAULT_CAPTURE_RATE = 24000;
-// The base class refuses to connect without a key; a keyless local server is
-// sent no Authorization header at all, so this value never leaves the process.
-const NO_API_KEY = "no-api-key";
 // A slow local server can take seconds to finish the last turn, which the base
 // class's fixed 3 s commit wait drops. Stop waits while the server shows
 // progress on a turn, up to a cap.
@@ -128,11 +125,9 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
         }
         const id = this._nameTurn(event.item_id);
         const unbound = this._turns.find((turn) => turn.kind === "vad" && !turn.id);
-        // While stopping, an id-less committed on a server that commits its
-        // silence-closed turns could answer that turn or the stop. It binds the
-        // turn, so a server that answers both settles on the stop's own
-        // transcript. If it answered both at once, stop ends at idle with the
-        // text kept, as it would had it been taken as the ack.
+        // While stopping, an id-less committed from a server that commits
+        // silence-closed turns may be that turn's, not the stop's: bind it to
+        // the turn and keep waiting for the stop's own.
         if (!this._stop || (this._vadCommitShape && unbound)) {
           if (!this._stop) this._vadCommitShape = true;
           if (unbound) unbound.id = id;
@@ -262,7 +257,7 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
       }
     });
 
-    // The base class closes the socket, cleans up and returns the transcript.
+    // Already committed and drained above; the base class only closes and cleans up.
     const result = await super.disconnect({ commit: false });
     this.isDisconnecting = false;
     return result;
@@ -279,7 +274,7 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
     if (!this.isConnected && !this.isConnecting) this._resetTurns();
     return super.connect({
       ...options,
-      apiKey: apiKey || NO_API_KEY,
+      apiKey,
       model,
       // No server mints a session for us, so it is always configured here.
       preconfigured: false,

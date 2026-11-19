@@ -10859,7 +10859,6 @@ class IPCHandlers {
 
       const connectOpts = {
         model: options.model,
-        // Only the self-hosted client reads it; the others dial a fixed host.
         url: options.url,
         language: options.language,
         mode: options.mode,

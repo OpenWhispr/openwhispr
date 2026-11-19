@@ -76,17 +76,12 @@ export function resolveMeetingTranscriptionOptions({
   // reachable from a settings copy the user never made by hand — the 1.6.10
   // follow-flag migration carried dictation choices into Note Recording.
   //
-  // Self-hosted means a server speaking the OpenAI Realtime protocol at a
-  // WebSocket URL the user typed for Note Recording. It never inherits the
-  // dictation HTTP endpoint or a cloud provider selection, and there is no
-  // HTTP fallback: a missing or unsafe URL fails here.
+  // Self-hosted uses only its own realtime URL, never the dictation endpoint or a stale provider.
   if (transcriptionMode === "self-hosted") {
     const url = typeof realtimeUrl === "string" ? realtimeUrl.trim() : "";
     if (!url) throw new Error("selfHostedRealtimeUrlMissing");
     if (!isSecureWebSocketEndpoint(url)) throw new Error("selfHostedRealtimeUrlInvalid");
-    // A blank model would fall through to the OpenAI default model id, which a
-    // self-hosted server either refuses (Speaches needs ?model=) or ignores. A
-    // model already in the URL's query counts.
+    // A model in the URL's query counts.
     const model = typeof realtimeModel === "string" ? realtimeModel.trim() : "";
     if (!model && !new URL(url).searchParams.get("model")?.trim()) {
       throw new Error("selfHostedRealtimeModelMissing");

@@ -4,13 +4,9 @@ const { isPrivateHost } = require("./providerConnectionTest");
 const URL_MISSING = "selfHostedRealtimeUrlMissing";
 const URL_INVALID = "selfHostedRealtimeUrlInvalid";
 
-// Main-process twin of isSecureWebSocketEndpoint in src/utils/urlUtils.ts: wss
-// anywhere, cleartext ws only on a private host, so a key never crosses the
-// public internet unencrypted. Kept free of Electron so the token provider can
-// validate a URL before it releases the saved key. The model goes in the query
-// because these servers ignore the session's transcription model (Speaches
-// refuses the upgrade without it). The intent is always transcription, the
-// only session this client handles; the rest of the query is kept.
+// Main-process twin of isSecureWebSocketEndpoint (src/utils/urlUtils.ts), Electron-free so the
+// token provider can check the URL before releasing the key. The model goes in the query:
+// these servers ignore the session's model, and Speaches refuses the upgrade without it.
 function buildRealtimeUrl(url, model) {
   const raw = typeof url === "string" ? url.trim() : "";
   if (!raw) throw new Error(URL_MISSING);

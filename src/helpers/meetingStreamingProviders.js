@@ -14,8 +14,7 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "corti-realtime": CortiStreaming,
   "elevenlabs-realtime": ElevenLabsStreaming,
   "tinfoil-realtime": TinfoilRealtimeStreaming,
-  // Self-hosted servers speaking the OpenAI Realtime protocol; reached only
-  // from Note Recording's Self-Hosted mode, with the user's own WebSocket URL.
+  // Note Recording's Self-Hosted mode only.
   "openai-compatible-realtime": OpenAICompatibleRealtimeStreaming,
 };
 

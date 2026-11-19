@@ -67,9 +67,6 @@ const urlHasModel = (url: string) => {
   }
 };
 
-// Self-Hosted for Note Recording is a server that speaks the OpenAI Realtime
-// transcription protocol over WebSocket. There is no HTTP fallback, so the URL
-// is a WebSocket URL of its own, not the dictation self-hosted endpoint.
 function MeetingSelfHostedRealtimePanel() {
   const { t } = useTranslation();
   const meetingRealtimeUrl = useSettingsStore((s) => s.meetingRealtimeUrl);
