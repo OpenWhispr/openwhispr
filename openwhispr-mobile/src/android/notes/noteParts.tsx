@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
+import { safeHaptics } from '@/lib/utils';
 import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
@@ -351,14 +352,69 @@ export function NoSummaryCard({
 }
 
 /** E3: who said what, a time beside each name; a voice guess shows "Is this Priya?". */
+const WORD = /(\p{L}[\p{L}\p{N}'’-]*)/u;
+
+/**
+ * A transcript line whose words can be long-pressed (Dictionary's C9). The word being fixed
+ * gets a blue wash. Without `onWordLongPress` the line stays selectable as before.
+ */
+function TranscriptText({
+  text,
+  onWordLongPress,
+  highlight,
+}: {
+  text: string;
+  onWordLongPress?: (word: string, x: number, y: number) => void;
+  highlight?: string | null;
+}) {
+  const style = { fontSize: 16, lineHeight: 23, color: home.text };
+  if (!onWordLongPress)
+    return (
+      <Text selectable style={style}>
+        {text}
+      </Text>
+    );
+  return (
+    <Text style={style}>
+      {text.split(WORD).map((part, index) =>
+        index % 2 === 1 ? (
+          <Text
+            key={index}
+            suppressHighlighting
+            onLongPress={(event) => {
+              safeHaptics('selection');
+              onWordLongPress(part, event.nativeEvent.pageX, event.nativeEvent.pageY);
+            }}
+            style={
+              highlight && part.toLowerCase() === highlight.toLowerCase()
+                ? { backgroundColor: look.selFill, color: home.accent }
+                : undefined
+            }
+          >
+            {part}
+          </Text>
+        ) : (
+          part
+        ),
+      )}
+    </Text>
+  );
+}
+
 export function TranscriptCard({
   blocks,
   onSpeakerPress,
   onCopy,
+  onWordLongPress,
+  highlight,
 }: {
   blocks: TranscriptBlock[];
   onSpeakerPress: (block: TranscriptBlock) => void;
   onCopy?: () => void;
+  /** Long-press a misheard word to fix it everywhere (Dictionary's C9). */
+  onWordLongPress?: (word: string, x: number, y: number) => void;
+  /** The word being fixed right now. */
+  highlight?: string | null;
 }) {
   const t = useNotesT();
   return (
@@ -407,9 +463,11 @@ export function TranscriptCard({
                     </View>
                   ) : null}
                 </Pressable>
-                <Text selectable style={{ fontSize: 16, lineHeight: 23, color: home.text }}>
-                  {block.text}
-                </Text>
+                <TranscriptText
+                  text={block.text}
+                  onWordLongPress={onWordLongPress}
+                  highlight={highlight}
+                />
               </View>
             );
           })

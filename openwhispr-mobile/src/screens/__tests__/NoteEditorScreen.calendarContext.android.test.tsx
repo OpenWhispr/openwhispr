@@ -1,4 +1,13 @@
 // Match Metro's entry selection when one test file changes platforms.
+// Dictionary's long-press fix has its own tests (src/android/dictionary/__tests__).
+jest.mock('@/android/dictionary/FixWord', () => ({
+  FixWordCard: () => null,
+  applyTranscriptFix: jest.fn(),
+}));
+jest.mock('@/android/dictionary/transcriptFix', () => ({ countWord: () => 0 }));
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
 jest.mock('@/screens/NoteEditorScreen', () => {
   const ios = jest.requireActual<typeof import('@/screens/NoteEditorScreen.android')>(
     '@/screens/NoteEditorScreen',
@@ -28,7 +37,9 @@ import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { formatTranscriptForExport } from '@/lib/diarization/transcriptDisplay';
 import { makeContentHash } from '@/lib/utils';
 import { clearLocalReasoningReadinessCache } from '@/lib/localReasoning';
-import { extractCorrections } from '@/lib/correctionLearner';
+import { extractCorrectionPairs } from '@/lib/correctionLearner';
+import { learnCorrections } from '@/android/dictionary/learned';
+import { showLearnedToast } from '@/android/dictionary/learnedToast';
 import { showToast } from '@/android/settings/kit';
 import { deleteNotesWithUndo } from '@/android/notes/pendingDeletes';
 import type { Action, Note, Segment, Speaker, SpeakerProfile } from '@/data/types';
@@ -254,8 +265,12 @@ jest.mock('@/lib/privateMode', () => ({
 }));
 
 jest.mock('@/lib/correctionLearner', () => ({
-  extractCorrections: jest.fn(() => []),
+  extractCorrectionPairs: jest.fn(() => []),
 }));
+jest.mock('@/android/dictionary/learned', () => ({
+  learnCorrections: jest.fn(() => ['Synty']),
+}));
+jest.mock('@/android/dictionary/learnedToast', () => ({ showLearnedToast: jest.fn() }));
 
 jest.mock('@/components/ui/TabScreenHeader', () => ({
   TabScreenHeader: ({
@@ -1172,7 +1187,7 @@ describe('NoteEditorScreen body tabs', () => {
       jest.advanceTimersByTime(800);
     });
     expect(mockUpdateNote).toHaveBeenCalledWith(7, { content: 'Send the revised checklist.' });
-    expect(extractCorrections).not.toHaveBeenCalled();
+    expect(extractCorrectionPairs).not.toHaveBeenCalled();
 
     fireEvent.press(getByTestId('note-tab-transcript'));
     expect(getByText('Alice can take the first pass.')).toBeTruthy();
@@ -1239,7 +1254,7 @@ describe('NoteEditorScreen body tabs', () => {
     expect(mockUpdateNote).toHaveBeenCalledWith(7, {
       content: 'Alice owns the launch checklist and the demo.',
     });
-    expect(extractCorrections).not.toHaveBeenCalled();
+    expect(extractCorrectionPairs).not.toHaveBeenCalled();
   });
 
   it('still learns plain note corrections while treating personal and team words as known', () => {
@@ -1254,7 +1269,7 @@ describe('NoteEditorScreen body tabs', () => {
     act(() => {
       jest.advanceTimersByTime(800);
     });
-    expect(extractCorrections).toHaveBeenCalledWith(
+    expect(extractCorrectionPairs).toHaveBeenCalledWith(
       mockNote.content,
       'Alice owns the launch checklists.',
       ['OpenWhispr', 'Grafana', 'Kubernetes'],
@@ -1272,7 +1287,26 @@ describe('NoteEditorScreen body tabs', () => {
     act(() => {
       jest.advanceTimersByTime(800);
     });
-    expect(extractCorrections).toHaveBeenCalled();
+    expect(extractCorrectionPairs).toHaveBeenCalled();
+  });
+
+  it('learns a fix silently, then says so with Undo (Dictionary C7)', () => {
+    jest.useFakeTimers();
+    (extractCorrectionPairs as jest.Mock).mockReturnValueOnce([{ word: 'Synty', from: 'Sinty' }]);
+    mockNote = plainNote();
+    mockNotesState.notes = [mockNote];
+    mockSegments = [];
+    const { getByTestId } = render(<NoteEditorScreen />);
+    fireEvent.changeText(getByTestId('note-content-input'), 'Call Synty on Friday.');
+    act(() => {
+      jest.advanceTimersByTime(800);
+    });
+    expect(learnCorrections).toHaveBeenCalledWith(
+      [{ word: 'Synty', from: 'Sinty' }],
+      expect.objectContaining({ kind: 'note', noteId: mockNote.id }),
+    );
+    expect(showLearnedToast).toHaveBeenCalledWith(['Synty']);
+    expect(mockAddLearnedWords).not.toHaveBeenCalled();
   });
 
   it('keeps My notes read-only while the meeting is still recording them', () => {

@@ -21,8 +21,11 @@ import { useActionsStore } from '@/store/useActionsStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useConfigStore } from '@/store/useConfigStore';
-import { useDictionaryStore } from '@/store/useDictionaryStore';
-import { extractCorrections } from '@/lib/correctionLearner';
+import { extractCorrectionPairs } from '@/lib/correctionLearner';
+import { learnCorrections } from '@/android/dictionary/learned';
+import { showLearnedToast } from '@/android/dictionary/learnedToast';
+import { applyTranscriptFix, FixWordCard, type FixTarget } from '@/android/dictionary/FixWord';
+import { countWord } from '@/android/dictionary/transcriptFix';
 import { buildDictationHintTiers, buildEffectiveDictionaryWords } from '@/lib/dictationHints';
 import { useActionProcessing } from '@/hooks/useActionProcessing';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
@@ -241,7 +244,6 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     const lifecycle = useLifecycle({ noteId, note, user, sessionCookie, activeMode, getNoteById });
     const { aiContext, captureAIContext } = lifecycle;
     const providerNotes = notesMode === 'providers';
-    const addLearnedWords = useDictionaryStore((s) => s.addLearnedWords);
 
     const actions = useActionsStore((s) => s.actions);
     const initializeActions = useActionsStore((s) => s.initialize);
@@ -264,6 +266,8 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     const [enhancedEditorRevision, setEnhancedEditorRevision] = useState(0);
     const [shareVisible, setShareVisible] = useState(false);
     const [isRetryingTranscript, setIsRetryingTranscript] = useState(false);
+    // Dictionary's C9: the misheard word long-pressed in the transcript, while its card is open.
+    const [fixTarget, setFixTarget] = useState<FixTarget | null>(null);
     const keyboardHeight = useKeyboardHeight();
     const insets = useSafeAreaInsets();
     const [menuVisible, setMenuVisible] = useState(false);
@@ -596,17 +600,24 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
         const baseline = learnedBaselineRef.current;
         if (baseline === newContent) return;
         // Shared words count as known, so a team word is never learned into Personal.
-        const corrections = extractCorrections(
+        const corrections = extractCorrectionPairs(
           baseline,
           newContent,
           buildEffectiveDictionaryWords(),
         );
         if (corrections.length > 0) {
-          addLearnedWords(corrections);
+          // Learned silently, then told after with Undo (Dictionary's C7). A word the person
+          // already said no to stays unlearned.
+          const learned = learnCorrections(corrections, {
+            kind: 'note',
+            noteId,
+            title: titleRef.current,
+          });
+          showLearnedToast(learned);
         }
         learnedBaselineRef.current = newContent;
       },
-      [addLearnedWords],
+      [noteId],
     );
 
     const flushDraft = useCallback((): void => {
@@ -1615,6 +1626,18 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
               <TranscriptCard
                 blocks={transcriptBlocks}
                 onSpeakerPress={handleSpeakerPress}
+                onWordLongPress={(word, x, y) =>
+                  setFixTarget({
+                    word,
+                    x,
+                    y,
+                    count: transcriptBlocks.reduce(
+                      (sum, block) => sum + countWord(block.text, word),
+                      0,
+                    ),
+                  })
+                }
+                highlight={fixTarget?.word}
                 onCopy={() => {
                   Clipboard.setStringAsync(transcriptText)
                     .then(() => showToast(notesT('copied')))
@@ -1627,6 +1650,11 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
             <FormatBar onFormat={formatNotes} onDone={() => contentInputRef.current?.blur()} />
           ) : null}
         </View>
+        <FixWordCard
+          target={fixTarget}
+          onClose={() => setFixTarget(null)}
+          onSave={(from, to) => applyTranscriptFix({ id: noteId, title }, from, to)}
+        />
         <NoteMenuSheet
           visible={menuVisible}
           onClose={() => setMenuVisible(false)}

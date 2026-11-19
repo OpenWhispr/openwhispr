@@ -35,6 +35,7 @@ import { bootAppData, forgetAppData } from './appData';
 import { dictationEvents } from '../../modules/android-dictation/src';
 import { useAccountData } from './accountData';
 import { SettingsToastHost } from './settings/kit';
+import { loadLearnedWords } from './dictionary/learned';
 import { observeBubbleRestore } from './bubbleRestore';
 
 export default function AndroidRoot() {
@@ -52,6 +53,10 @@ export default function AndroidRoot() {
     SpaceGrotesk_700Bold,
   });
   useEffect(() => startBubblePipeline(), []);
+  // Which words the person said no to: read before any fix can teach the dictionary.
+  useEffect(() => {
+    void loadLearnedWords();
+  }, []);
   useEffect(() => {
     // The bubble's "open" on a kept result; a cold launch lands on the record tab anyway.
     const subscription = dictationEvents?.addListener('onOpenResult', () =>
