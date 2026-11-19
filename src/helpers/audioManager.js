@@ -627,6 +627,7 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       language: language !== "auto" ? language : undefined,
       keyterms: keyterms.length > 0 ? keyterms : undefined,
     }),
+    echoPrompt: ({ keyterms }) => keyterms.join(", "),
   },
   xai: {
     displayName: "xAI",

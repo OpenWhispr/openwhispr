@@ -9503,9 +9503,8 @@ class IPCHandlers {
           });
           result = { text, source: "gemini", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "elevenlabs") {
-          if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes) {
-            throw new Error(byokSizeCapError(route.sizeCapBytes));
-          }
+          // No size check: the cap is the upload screen's, not ElevenLabs', and dictation
+          // already sent this recording once at this size.
           const { text } = await transcribeWithElevenLabs({
             signal,
             audioBuffer: buffer,

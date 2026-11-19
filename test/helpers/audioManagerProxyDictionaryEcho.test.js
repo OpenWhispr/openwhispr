@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { loadAudioManager } = require("./harness/audioManager");
 
 // #2581 through the proxied providers: a model recites the dictionary in the
-// order it was sent. Mistral's contextBias and xAI/Gemini's keyterms carry
+// order it was sent. Mistral's contextBias and xAI/Gemini/ElevenLabs' keyterms carry
 // personal words first, Tinfoil's prompt carries them last (Whisper order), so
 // each recital is recognised only against the list in its own sent order.
 
@@ -14,7 +14,10 @@ const PROVIDERS = {
   mistral: "proxyMistralTranscription",
   xai: "proxyXaiTranscription",
   gemini: "proxyGeminiTranscription",
+  elevenlabs: "proxyElevenlabsTranscription",
 };
+
+const KEYTERM_PROVIDERS = ["xai", "gemini", "elevenlabs"];
 
 async function setUp(t) {
   const loaded = await loadAudioManager(t, {
@@ -66,7 +69,7 @@ const WHISPER_ORDER = "Zentrum, Qdrant, Piha, Biscuit.";
 test("keyterm providers drop a recital in the personal-first order they sent", async (t) => {
   const { transcribe } = await setUp(t);
 
-  for (const provider of ["xai", "gemini"]) {
+  for (const provider of KEYTERM_PROVIDERS) {
     await t.test(provider, async () => {
       const { result, payload } = await transcribe(provider, `${SPEECH} ${PERSONAL_FIRST}`);
       assert.deepEqual(payload.keyterms, ["Piha", "Biscuit", "Qdrant", "Zentrum"]);
@@ -106,7 +109,7 @@ test("keyterm providers treat a recital of every sent keyterm as an echo", async
   const hints = { space: [], workspace: Array.from({ length: 60 }, (_, i) => `Termword${i}`) };
   const recital = ["Piha", "Biscuit", ...hints.workspace].join(", ");
 
-  for (const provider of ["xai", "gemini"]) {
+  for (const provider of KEYTERM_PROVIDERS) {
     await t.test(provider, async () => {
       const { payload } = await transcribe(provider, SPEECH, hints);
       assert.equal(payload.keyterms.length, 62);
@@ -119,7 +122,7 @@ test("keyterm providers keep the personal-only echo check", async (t) => {
   const { transcribe } = await setUp(t);
   const hints = { space: [], workspace: [] };
 
-  for (const provider of ["xai", "gemini"]) {
+  for (const provider of KEYTERM_PROVIDERS) {
     await t.test(provider, async () => {
       await assert.rejects(transcribe(provider, "Piha, Biscuit.", hints), /No audio detected/);
       const speech = await transcribe(provider, `${SPEECH} Piha`, hints);

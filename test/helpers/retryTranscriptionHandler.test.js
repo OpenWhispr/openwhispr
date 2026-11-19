@@ -274,6 +274,7 @@ function buildFakeThis() {
       getMistralKey: () => "mk-mistral",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
+      getElevenlabsKey: () => "xi-elevenlabs",
       getOpenrouterKey: () => "ork-openrouter",
       getCustomTranscriptionKey: () => "ck-custom",
       getSelfHostedSttHeaders: () => selfHostedHeaders,
@@ -789,6 +790,39 @@ test("retry: Scribe's [pause] for silence is no speech, not a transcript", async
   assert.equal(textUpdates.length, 0);
 });
 
+const ELEVENLABS_SETTINGS = {
+  cloudTranscriptionProvider: "elevenlabs",
+  cloudTranscriptionModel: "scribe_v3",
+  cloudTranscriptionMode: "byok",
+  transcriptionMode: "providers",
+  preferredLanguage: "de",
+};
+
+test("retry: ElevenLabs gets the recording at its own endpoint, with the job's abort signal", async () => {
+  fetches.length = 0;
+  const result = await invoke(ELEVENLABS_SETTINGS);
+  assert.equal(result.success, true);
+  assert.equal(fetches.length, 1);
+  assert.equal(fetches[0].url, "https://api.elevenlabs.io/v1/speech-to-text");
+  assert.deepEqual(fetches[0].init.headers, { "xi-api-key": "xi-elevenlabs" });
+  assert.equal(fetches[0].init.body.get("model_id"), "scribe_v3");
+  assert.equal(fetches[0].init.body.get("language_code"), "de");
+  assert.ok(fetches[0].init.signal instanceof AbortSignal);
+});
+
+test("retry: a recording over the upload cap still goes to ElevenLabs", async (t) => {
+  const originalAudioRead = fakeThis.audioStorageManager.getAudioBuffer;
+  t.after(() => {
+    fakeThis.audioStorageManager.getAudioBuffer = originalAudioRead;
+  });
+  // Dictation sends a recording of any length, so its retry must too.
+  fakeThis.audioStorageManager.getAudioBuffer = () => Buffer.alloc(26 * 1024 * 1024);
+  fetches.length = 0;
+  const result = await invoke(ELEVENLABS_SETTINGS);
+  assert.equal(result.success, true);
+  assert.equal(fetches.length, 1);
+});
+
 test("retry: a chunked cloud retry that lost a chunk saves the rest and returns the warning", async (t) => {
   const result = await withCloudResponse(
     t,
@@ -920,6 +954,7 @@ test("proxy transcription handlers resolve to structured errors instead of rejec
       "proxy-mistral-transcription",
       "proxy-xai-transcription",
       "proxy-corti-transcription",
+      "proxy-elevenlabs-transcription",
     ]) {
       const fn = handlers.get(channel);
       assert.ok(fn, `${channel} must be registered`);
@@ -971,6 +1006,26 @@ test("upload: mistral sends x-api-key with a provider-validated model and no lan
   const body = fetches[0].init.body.toString();
   assert.match(body, /voxtral-mini-latest/);
   assert.doesNotMatch(body, /name="language"/);
+});
+
+test("upload: ElevenLabs gets the file at its own endpoint, with no language hint", async () => {
+  fetches.length = 0;
+  const result = await invokeUpload({
+    apiKey: "xi-from-settings",
+    model: "gpt-4o-mini-transcribe", // stale from another provider: must degrade
+    provider: "elevenlabs",
+    language: "de",
+    transcriptionMode: "providers",
+  });
+  assert.deepEqual(result, { success: true, text: "transcribed" });
+  assert.equal(fetches.length, 1);
+  assert.equal(fetches[0].url, "https://api.elevenlabs.io/v1/speech-to-text");
+  assert.deepEqual(fetches[0].init.headers, { "xi-api-key": "xi-from-settings" });
+  const form = fetches[0].init.body;
+  assert.equal(form.get("model_id"), "scribe_v3");
+  assert.equal(form.has("language_code"), false);
+  assert.equal(form.get("file").name, pathNode.basename(uploadTempFile));
+  assert.ok(fetches[0].init.signal instanceof AbortSignal);
 });
 
 test("upload: openai diarization fields ride the route, Bearer auth", async () => {
