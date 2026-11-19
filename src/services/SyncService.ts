@@ -224,9 +224,29 @@ function withSentParent(folder: FolderItem, parentFolderId: string | null): Fold
   return { ...folder, parent_folder_id: parentFolderId === null ? null : folder.parent_folder_id };
 }
 
+// What a folder's server row holds after a push of it landed, but its parent.
+// Identity is left out: a create adopts the cloud id (and may adopt a client id).
+function folderPushFingerprint(folder: FolderItem): string {
+  return JSON.stringify([folder.name, !!folder.is_default, folder.sort_order, folder.space_id]);
+}
+
+// What a refused folder push sent, parent included: the refusal stands until one of them changes.
+function folderRefusalFingerprint(folder: FolderItem): string {
+  return JSON.stringify([folderPushFingerprint(folder), folder.parent_folder_id ?? null]);
+}
+
 // A note keeps its cloud folder association in both personal and team scope.
-function pushedFolderId(note: NoteItem, localToCloud: Map<number, string>): string | null {
-  if (!note.folder_id) return null;
+// It never carries a blocked folder: a note that passes one (a note leaving a
+// team, or one past its folder's wait) goes unfiled, and its acknowledgement
+// leaves the link owed (folder_link_pending) for once the folder lands.
+function pushedFolderId(
+  note: NoteItem,
+  {
+    localToCloud,
+    blockedFolderIds,
+  }: Pick<LocalToCloudFolderMap, "localToCloud" | "blockedFolderIds">
+): string | null {
+  if (!note.folder_id || blockedFolderIds.has(note.folder_id)) return null;
   return localToCloud.get(note.folder_id) ?? null;
 }
 
@@ -278,6 +298,9 @@ interface LocalToCloudFolderMap {
   blockedFolderIds: Set<number>;
   // The blocked folders with no cloud id, whose wait has a limit.
   waitingFolders: FolderItem[];
+  // Folders whose last push the server refused for good (a name taken), as the
+  // row still stands. Their subfolders stop waiting for them (cloudParentFolderId).
+  refusedFolderIds: Set<number>;
 }
 
 const PUSH_DEBOUNCE_MS = 2000;
@@ -406,6 +429,15 @@ const FOLDER_UPDATE_404_KEY = "folderUpdate404Counts";
 // the cloud (it keeps being refused) would otherwise withhold them for good.
 const FOLDER_WAIT_STARTED_KEY = "folderWaitStartedAt";
 const FOLDER_WAIT_RELEASE_MS = 30 * 60 * 1000;
+// Folders whose push the server refused for good (folder_name_taken), keyed by
+// local id with what that push sent (folderRefusalFingerprint). A refusal holds
+// only while the row still matches: an edit ends it, and the row waits as usual.
+const FOLDER_PUSH_REFUSED_KEY = "folderPushRefused";
+// Folders whose last push landed everything but their parent (sent top-level
+// while their parent couldn't be named), keyed by local id with what that push
+// held (folderPushFingerprint). Such a row is pending for its nesting alone, so
+// its server row is where its notes belong, and they don't wait for it.
+const FOLDER_NESTING_OWED_KEY = "folderNestingOwed";
 // Set per account once folders pulled before parent_folder_id existed have been
 // replayed: one for the personal rows a full pass covers, one for team rows.
 const FOLDER_PARENTS_BACKFILLED_KEY = "folderParentsBackfilled";
@@ -1630,8 +1662,8 @@ export class SyncService {
     const ctx = await this.buildSpaceContext();
     const scope = this.resolvePushScope("folder", folder, ctx);
     if (!scope) return;
-    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap(ctx);
-    const parentFolderId = this.cloudParentFolderId(folder, localToCloud, blockedFolderIds);
+    const folderMap = await this.buildLocalToCloudFolderMap(ctx);
+    const parentFolderId = this.cloudParentFolderId(folder, folderMap);
     // The parent hasn't reached the cloud yet; a full pass pushes it first.
     if (parentFolderId === undefined) return;
 
@@ -1659,9 +1691,10 @@ export class SyncService {
           folder.cloud_id,
           authGeneration
         );
+        this.recordFolderPushLanded(folder, parentFolderId);
       } catch (err) {
         if (isFolderNameTakenError(err)) {
-          this.dispatchFolderNameTaken(folder.name);
+          this.recordFolderRefused(folder);
         } else if (isInvalidParentFolderError(err)) {
           await this.unnestRefusedFolder(folder, authGeneration);
         } else if (isPermissionDenialError(err)) {
@@ -1694,14 +1727,53 @@ export class SyncService {
   // never waits and retracts top-level, since the server refuses a parent
   // alongside the move while the folder still has team subfolders there; the
   // row stays pending, so its nesting goes up on a later pass.
+  // A parent the server refused for good (a name taken) waits for the user, so
+  // its subfolders stop waiting for it: they name its cloud row, still valid for
+  // nesting, or go up top-level while it has none, their nesting owed.
   private cloudParentFolderId(
     folder: FolderItem,
-    localToCloud: Map<number, string>,
-    blockedFolderIds: Set<number>
+    {
+      localToCloud,
+      blockedFolderIds,
+      refusedFolderIds,
+    }: Pick<LocalToCloudFolderMap, "localToCloud" | "blockedFolderIds" | "refusedFolderIds">
   ): string | null | undefined {
     if (folder.parent_folder_id == null || folder.left_team) return null;
+    if (refusedFolderIds.has(folder.parent_folder_id)) {
+      return localToCloud.get(folder.parent_folder_id) ?? null;
+    }
     if (blockedFolderIds.has(folder.parent_folder_id)) return undefined;
     return localToCloud.get(folder.parent_folder_id);
+  }
+
+  // A folder push the server took: any refusal is over, and a folder sent
+  // top-level while nested here owes its nesting alone.
+  private recordFolderPushLanded(folder: FolderItem, parentFolderId: string | null): void {
+    const refused = this.readLocalRecord<string>(FOLDER_PUSH_REFUSED_KEY);
+    if (String(folder.id) in refused) {
+      delete refused[folder.id];
+      this.writeLocalRecord(FOLDER_PUSH_REFUSED_KEY, refused);
+    }
+    const owed = this.readLocalRecord<string>(FOLDER_NESTING_OWED_KEY);
+    if (parentFolderId === null && folder.parent_folder_id != null) {
+      owed[folder.id] = folderPushFingerprint(folder);
+    } else if (!(String(folder.id) in owed)) {
+      return;
+    } else {
+      delete owed[folder.id];
+    }
+    this.writeLocalRecord(FOLDER_NESTING_OWED_KEY, owed);
+  }
+
+  // folder_name_taken: the row stays pending and is sent again each pass, in
+  // case the clash clears on the server, but tells the user once per refusal.
+  private recordFolderRefused(folder: FolderItem): void {
+    const refused = this.readLocalRecord<string>(FOLDER_PUSH_REFUSED_KEY);
+    const fingerprint = folderRefusalFingerprint(folder);
+    if (refused[folder.id] === fingerprint) return;
+    refused[folder.id] = fingerprint;
+    this.writeLocalRecord(FOLDER_PUSH_REFUSED_KEY, refused);
+    this.dispatchFolderNameTaken(folder.name);
   }
 
   // invalid_parent_folder: un-nest the folder here, which queues it again, so
@@ -1737,7 +1809,12 @@ export class SyncService {
       },
       authGeneration
     );
-    await this.acknowledgeCreatedFolder(folder, cloud, authGeneration);
+    await this.acknowledgeCreatedFolder(
+      withSentParent(folder, parentFolderId),
+      cloud,
+      authGeneration
+    );
+    this.recordFolderPushLanded(folder, parentFolderId);
   }
 
   // Links a pushed folder to the cloud row its create returned. A Private
@@ -1842,10 +1919,8 @@ export class SyncService {
     }
 
     const folderMap = await this.buildLocalToCloudFolderMap(ctx);
-    const { localToCloud, blockedFolderIds } = folderMap;
     const releasedFolderIds = this.releaseWaitingFolders(folderMap.waitingFolders);
     const sharingPrivate = !!sharedNote && !isTeamRow(note, ctx);
-    const folderBlocked = !!note.folder_id && blockedFolderIds.has(note.folder_id);
     if (this.noteWaitsForFolder(note, folderMap, releasedFolderIds) && !sharingPrivate) {
       // The folder's own changes haven't landed (e.g. a cross-space move that
       // 409'd on a name conflict, or a Private folder not uploaded yet): the
@@ -1856,7 +1931,7 @@ export class SyncService {
     const resolvedScope = this.resolvePushScope("note", note, ctx, sharingPrivate);
     if (!resolvedScope) return false;
     // One-note sharing does not consent to uploading or relocating its local folder.
-    const cloudFolderId = folderBlocked ? null : pushedFolderId(note, localToCloud);
+    const cloudFolderId = pushedFolderId(note, folderMap);
     const scope = folderPlacedNoteScope(note, resolvedScope, cloudFolderId, ctx);
 
     const payload = this.notePushPayload(note, cloudFolderId, scope);
@@ -3276,7 +3351,7 @@ export class SyncService {
     if (pending.length === 0) return waiting;
 
     const ctx = await this.buildSpaceContext();
-    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap(ctx);
+    const folderMap = await this.buildLocalToCloudFolderMap(ctx);
     const pushable: Array<{
       folder: FolderItem;
       scope: PushScopeFields;
@@ -3285,7 +3360,7 @@ export class SyncService {
     for (const folder of pending) {
       const scope = this.resolvePushScope("folder", folder, ctx);
       if (!scope) continue;
-      const parentFolderId = this.cloudParentFolderId(folder, localToCloud, blockedFolderIds);
+      const parentFolderId = this.cloudParentFolderId(folder, folderMap);
       if (parentFolderId === undefined) {
         waiting.add(folder.id);
         continue;
@@ -3317,13 +3392,14 @@ export class SyncService {
           folder.cloud_id!,
           authGeneration
         );
+        this.recordFolderPushLanded(folder, parentFolderId);
         this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
       } catch (err) {
         if (isAuthContextError(err)) throw err;
         if (isFolderNameTakenError(err)) {
           // Leave the row pending; retried on the next pass. The 409 also
           // proves the folder is still accessible, so reset any 404 streak.
-          this.dispatchFolderNameTaken(folder.name);
+          this.recordFolderRefused(folder);
           this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
         } else if (isInvalidParentFolderError(err)) {
           await this.unnestRefusedFolder(folder, authGeneration);
@@ -3371,7 +3447,13 @@ export class SyncService {
           continue;
         }
         for (const [i, cloudFolder] of created.entries()) {
-          await this.acknowledgeCreatedFolder(accepted[i].folder, cloudFolder, authGeneration);
+          const { folder, parentFolderId } = accepted[i];
+          await this.acknowledgeCreatedFolder(
+            withSentParent(folder, parentFolderId),
+            cloudFolder,
+            authGeneration
+          );
+          this.recordFolderPushLanded(folder, parentFolderId);
         }
       } catch (err) {
         if (isAuthContextError(err)) throw err;
@@ -3411,7 +3493,7 @@ export class SyncService {
     } catch (err) {
       if (isAuthContextError(err)) throw err;
       if (isFolderNameTakenError(err)) {
-        this.dispatchFolderNameTaken(folder.name);
+        this.recordFolderRefused(folder);
       } else if (isInvalidParentFolderError(err)) {
         await this.unnestRefusedFolder(folder, authGeneration);
       } else if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
@@ -3923,7 +4005,6 @@ export class SyncService {
 
     const ctx = await this.buildSpaceContext();
     const folderMap = await this.buildLocalToCloudFolderMap(ctx);
-    const { localToCloud } = folderMap;
     const folderWait = {
       ...folderMap,
       releasedFolderIds: this.releaseWaitingFolders(folderMap.waitingFolders),
@@ -3948,7 +4029,7 @@ export class SyncService {
         // this PATCH marks the row synced — settling it without content
         // would strand the edit locally and hand the next pull a stale-but-
         // newer cloud copy to overwrite it with.
-        const cloudFolderId = pushedFolderId(note, localToCloud);
+        const cloudFolderId = pushedFolderId(note, folderMap);
         const payload = this.notePushPayload(
           note,
           cloudFolderId,
@@ -4015,7 +4096,7 @@ export class SyncService {
             if (note && scope) {
               unsent.push({
                 note,
-                scope: folderPlacedNoteScope(note, scope, pushedFolderId(note, localToCloud), ctx),
+                scope: folderPlacedNoteScope(note, scope, pushedFolderId(note, folderMap), ctx),
               });
             }
           }
@@ -4032,7 +4113,7 @@ export class SyncService {
             const { created } = await NotesService.batchCreate(
               chunk.map(({ note: n, scope }) => ({
                 client_note_id: n.client_note_id,
-                ...buildNoteCreatePayload(n, pushedFolderId(n, localToCloud)),
+                ...buildNoteCreatePayload(n, pushedFolderId(n, folderMap)),
                 created_at: n.created_at,
                 ...scope,
               })),
@@ -4052,7 +4133,7 @@ export class SyncService {
                 await this.pushFreshNote(
                   note,
                   scope,
-                  pushedFolderId(note, localToCloud),
+                  pushedFolderId(note, folderMap),
                   ctx,
                   authGeneration
                 );
@@ -5869,8 +5950,19 @@ export class SyncService {
     const folders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
     const backup = this.canSync();
     const localToCloud = new Map(folders.filter((f) => f.cloud_id).map((f) => [f.id, f.cloud_id!]));
+    const pending = folders.filter((f) => f.sync_status === "pending");
+    const refusedFolderIds = this.currentFolderRecords(
+      FOLDER_PUSH_REFUSED_KEY,
+      pending,
+      folderRefusalFingerprint
+    );
+    const nestingOwed = this.currentFolderRecords(
+      FOLDER_NESTING_OWED_KEY,
+      pending.filter((f) => f.cloud_id && f.parent_folder_id != null),
+      folderPushFingerprint
+    );
     const unpushed = new Set(
-      folders.filter((f) => f.cloud_id && f.sync_status === "pending").map((f) => f.id)
+      pending.filter((f) => f.cloud_id && !nestingOwed.has(f.id)).map((f) => f.id)
     );
     // With no cloud id: a Private folder while Backup will push it (a subfolder
     // there included), a team subfolder while its parent hasn't reached the cloud.
@@ -5879,13 +5971,34 @@ export class SyncService {
         ? unpushed.has(f.id)
         : ctx.byId.get(f.space_id)?.kind === "private"
           ? backup
-          : this.cloudParentFolderId(f, localToCloud, unpushed) === undefined
+          : this.cloudParentFolderId(f, {
+              localToCloud,
+              blockedFolderIds: unpushed,
+              refusedFolderIds,
+            }) === undefined
     );
     return {
       localToCloud,
       blockedFolderIds: new Set(blocked.map((f) => f.id)),
       waitingFolders: blocked.filter((f) => !f.cloud_id),
+      refusedFolderIds,
     };
+  }
+
+  // The folders a per-folder record still holds for, as the rows stand now. A
+  // record whose row is gone or changed is dropped.
+  private currentFolderRecords(
+    key: string,
+    candidates: FolderItem[],
+    fingerprint: (folder: FolderItem) => string
+  ): Set<number> {
+    const record = this.readLocalRecord<string>(key);
+    const held = new Set(
+      candidates.filter((f) => record[f.id] === fingerprint(f)).map((f) => f.id)
+    );
+    const kept = Object.fromEntries(Object.entries(record).filter(([id]) => held.has(Number(id))));
+    if (Object.keys(kept).length !== Object.keys(record).length) this.writeLocalRecord(key, kept);
+    return held;
   }
 
   // Records when each waiting folder started waiting, forgets the ones no longer
@@ -5908,16 +6021,17 @@ export class SyncService {
   }
 
   // Folders with a cloud id hold their notes until their own changes land. One
-  // without holds them only until the limit, and never holds a note leaving a team:
-  // it stays visible to teammates until its retraction lands, so it goes unfiled.
+  // without holds them only until the limit. Neither holds a note leaving a team:
+  // it stays visible to teammates until its retraction lands, so it goes unfiled
+  // (pushedFolderId) and its folder link follows.
   private noteWaitsForFolder(
     note: NoteItem,
     { localToCloud, blockedFolderIds }: LocalToCloudFolderMap,
     releasedFolderIds: Set<number>
   ): boolean {
-    if (!note.folder_id || !blockedFolderIds.has(note.folder_id)) return false;
+    if (!note.folder_id || !blockedFolderIds.has(note.folder_id) || note.left_team) return false;
     if (localToCloud.has(note.folder_id)) return true;
-    return !note.left_team && !releasedFolderIds.has(note.folder_id);
+    return !releasedFolderIds.has(note.folder_id);
   }
 
   // personalFolderIn(spaceId): a private space's default "Personal" folder,
