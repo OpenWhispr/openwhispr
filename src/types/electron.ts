@@ -2031,6 +2031,8 @@ declare global {
           cohereModel: string;
           whisperModel: string;
           preferredLanguage?: string;
+          translationSourceLanguage?: string;
+          keyterms?: string[];
           transcriptionMode?: InferenceMode;
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
@@ -2994,6 +2996,7 @@ declare global {
       proxyAssemblyAiTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         mimeType?: string;
+        durationSeconds?: number | null;
         language?: string;
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult & { cleanedText?: string }>;
@@ -3445,6 +3448,7 @@ declare global {
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;
+        durationSeconds?: number;
         requestId?: string;
         purpose?: "dictation" | "upload";
         apiKey: string;

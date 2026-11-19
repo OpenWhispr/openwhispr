@@ -49,6 +49,7 @@ import { startWorkspaceScopeBridge } from "../stores/workspaceScopeBridge";
 import { useEnsureDefaultWorkspace } from "../hooks/useWorkspace";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
 import { usePolicySnapshot, useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
+import { getKeytermDictionaryWords, limitBatchKeyterms } from "../utils/snippets";
 import { providerCleanupStandsIn } from "../helpers/dictationRouting";
 import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
 import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
@@ -62,6 +63,7 @@ import {
   transcriptionChoiceRefusal,
 } from "../stores/policyRules";
 import {
+  allowsPersonalDictationCleanup,
   canUseAssemblyAiRewrite,
   getManagedTranscriptionResolution,
 } from "../services/managedTranscription";
@@ -113,6 +115,7 @@ import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import AssistantNoteUndoListener from "./notes/AssistantNoteUndoListener";
+import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { providerErrorActions, providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import SharedDictionaryArrivalToastListener from "./SharedDictionaryArrivalToastListener";
@@ -824,7 +827,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           });
           return;
         }
-        if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
+        if (
+          !managed &&
+          !isTranscriptionContextAllowed(
+            usePolicyStore.getState(),
+            s,
+            "dictation",
+            allowsPersonalDictationCleanup
+          )
+        ) {
           const refusal = transcriptionChoiceRefusal(usePolicyStore.getState(), s, "dictation");
           toast({
             title: t(refusal?.messageKey ?? "common.managedByOrg"),
@@ -847,6 +858,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cohereModel: s.cohereModel,
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,
+          translationSourceLanguage: s.translationSourceLanguage,
+          keyterms: limitBatchKeyterms(getKeytermDictionaryWords(s)),
           transcriptionMode: s.transcriptionMode,
           remoteTranscriptionType: s.remoteTranscriptionType,
           remoteTranscriptionUrl: s.remoteTranscriptionUrl,
@@ -959,6 +972,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 })
                   ? result.cleanedText.trim()
                   : "";
+              if (providerCleanedText) assertValidCleanupOutput(rawText, providerCleanedText);
               if (providerCleanedText || model || isCloud) {
                 const reasonedText =
                   providerCleanedText ||

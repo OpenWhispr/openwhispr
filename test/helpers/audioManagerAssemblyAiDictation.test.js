@@ -44,9 +44,12 @@ test("AssemblyAI Dictation sends the recording and keyterms, and hands back both
       },
       isReasoningAvailable: async () => false,
     })
-    .processWithOpenAIAPI(new Blob([new ArrayBuffer(8)], { type: "audio/webm" }), {});
+    .processWithOpenAIAPI(new Blob([new ArrayBuffer(8)], { type: "audio/webm" }), {
+      durationSeconds: 1201,
+    });
 
   assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].durationSeconds, 1201);
   assert.equal(payloads[0].mimeType, "audio/webm");
   assert.equal(payloads[0].language, undefined, "auto-detect sends no language");
   assert.deepEqual(payloads[0].keyterms, ["Piha"]);
@@ -105,12 +108,81 @@ async function loadCleanupManager(t) {
   return {
     window,
     manager,
+    vite,
     dictate,
     cleanupRequests,
     usePolicyStore,
     setSettings: (next) => useSettingsStore.setState(next),
   };
 }
+
+test("personal STT with optional managed cleanup sends the verbatim text to Bedrock", async (t) => {
+  const { manager, window, vite, setSettings, usePolicyStore } = await loadCleanupManager(t);
+  const {
+    assemblyAiPolicy,
+    loadAssemblyAiDictationCatalog,
+    setManagedBedrockCleanup,
+  } = require("./harness/policyFixtures");
+  await loadAssemblyAiDictationCatalog(vite);
+  usePolicyStore.setState(assemblyAiPolicy(true, true));
+  await setManagedBedrockCleanup(vite, "managed_default");
+  setSettings({
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "assemblyai",
+    cloudTranscriptionModel: "dictation",
+    assemblyaiApiKey: "fixture",
+    enterpriseSetupMode: "auto",
+  });
+  window.electronAPI.proxyAssemblyAiTranscription = async () => ({
+    text: VERBATIM,
+    cleanedText: CLEANED,
+  });
+  const cleanup = t.mock.fn(async () => "Cleaned by Bedrock.");
+  manager.processWithReasoningModel = cleanup;
+  assert.equal(manager.isRecordingAllowedByPolicy(), true);
+  const result = await manager.processWithOpenAIAPI(new Blob(["audio"], { type: "audio/webm" }));
+  assert.equal(result.text, "Cleaned by Bedrock.");
+  assert.deepEqual(cleanup.mock.calls[0].arguments.slice(0, 2), [VERBATIM, "managed-model"]);
+});
+
+test("a spoken snippet survives a provider rewrite for expansion after dictation", async (t) => {
+  const { dictate, cleanupRequests, setSettings } = await loadCleanupManager(t);
+  const { expandSnippets } = require("../../src/utils/snippets.ts");
+  const snippets = [{ trigger: "İmza", replacement: "Best regards,\nUmut" }];
+  setSettings({ snippets });
+
+  const spoken = "um please add (İmza)".normalize("NFD");
+  const result = await dictate(spoken, "Please add my signature.");
+  assert.equal(result, spoken);
+  assert.equal(expandSnippets(result, snippets), "um please add (Best regards,\nUmut)");
+  assert.deepEqual(cleanupRequests, []);
+
+  const preserved = await dictate(spoken, "Please add imza.");
+  assert.equal(expandSnippets(preserved, snippets), "Please add Best regards,\nUmut.");
+
+  const unrelated = "um so imzalar are ready";
+  const rewritten = "Imzalar are ready.";
+  assert.equal(await dictate(unrelated, rewritten), rewritten);
+  assert.equal(await dictate(unrelated, "Imza is ready."), unrelated);
+
+  setSettings({ snippets: [] });
+  assert.equal(await dictate(spoken, "Please add my signature."), "Please add my signature.");
+});
+
+test("provider cleanup retains every spoken snippet in order", async (t) => {
+  const { dictate, setSettings } = await loadCleanupManager(t);
+  setSettings({
+    snippets: [
+      { trigger: "signoff", replacement: "Best regards" },
+      { trigger: "address", replacement: "20 High Street" },
+    ],
+  });
+  const spoken = "um add signoff address signoff";
+  assert.equal(await dictate(spoken, "Add address signoff signoff."), spoken);
+  assert.equal(await dictate(spoken, "Add signoff address."), spoken);
+});
 
 test("text the provider already cleaned replaces the app's own cleanup", async (t) => {
   const { manager, dictate, cleanupRequests } = await loadCleanupManager(t);
@@ -157,6 +229,16 @@ test("translation and assistant requests run on the verbatim transcript", async 
   manager.voiceAgentRequested = false;
 
   assert.equal(cleanupRequests.includes(CLEANED), false);
+});
+
+test("a duplicated AssemblyAI rewrite retains the verbatim dictation", async (t) => {
+  const { manager, dictate, cleanupRequests } = await loadCleanupManager(t);
+  assert.equal(await dictate(VERBATIM, CLEANED + "\n" + CLEANED), VERBATIM);
+  assert.equal(
+    manager.pendingCleanupFailure.messageKey,
+    "hooks.audioRecording.errorDescriptions.cleanupDuplicated"
+  );
+  assert.deepEqual(cleanupRequests, []);
 });
 
 test("the user's own cleanup prompt or tone keeps the app's cleanup", async (t) => {

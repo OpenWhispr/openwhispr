@@ -21,6 +21,7 @@ import {
 } from "./selfHostedTranscription.js";
 import {
   acceptsUnlistedTranscriptionModel,
+  ASSEMBLYAI_DICTATION_MODEL,
   isAssemblyAiRewriteAllowedByPolicy,
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
@@ -110,7 +111,7 @@ export const STREAMING_ONLY_PROVIDERS = new Set(["deepgram", "assemblyai"]);
 // AssemblyAI's Dictation API is the one batch model on a realtime-only provider:
 // it transcribes and cleans up a finished recording in one request, through
 // main. The upload picker still leaves AssemblyAI out.
-export const ASSEMBLYAI_DICTATION_MODEL = "dictation";
+export { ASSEMBLYAI_DICTATION_MODEL };
 
 export function isStreamingOnlySelection(provider: string, model?: string | null): boolean {
   if (provider === "assemblyai" && model === ASSEMBLYAI_DICTATION_MODEL) return false;

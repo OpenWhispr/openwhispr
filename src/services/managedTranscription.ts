@@ -1,5 +1,8 @@
 import { getSettings } from "../stores/settingsStore";
-import { isAssemblyAiRewriteAllowedByPolicy } from "../stores/policyRules";
+import {
+  isAssemblyAiRewriteAllowedByPolicy,
+  isByokTranscriptionAllowed,
+} from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import type { ManagedTranscriptionResolution } from "../helpers/transcriptionRoute";
 import {
@@ -12,6 +15,20 @@ export function canUseAssemblyAiRewrite(): boolean {
     isAssemblyAiRewriteAllowedByPolicy(usePolicyStore.getState()) &&
     getManagedScopeResolution("dictationCleanup", getSettings().enterpriseSetupMode).kind ===
       "manual"
+  );
+}
+
+// Admission mirrors main: an optional managed cleanup can still process the verbatim transcript.
+export function allowsPersonalDictationCleanup(): boolean {
+  return getManagedScopeResolution("dictationCleanup", "manual").kind === "manual";
+}
+
+export function isByokTranscriptionModelAllowed(provider: string, model?: string): boolean {
+  return isByokTranscriptionAllowed(
+    usePolicyStore.getState(),
+    provider,
+    model,
+    allowsPersonalDictationCleanup
   );
 }
 

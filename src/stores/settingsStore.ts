@@ -72,6 +72,7 @@ import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
 import {
   acceptsUnlistedTranscriptionModel,
+  getLocalTranscriptionModel,
   getTranscriptionSelection,
   isLocalModelAllowedByPolicy,
   isPolicyActionAllowed,
@@ -3555,7 +3556,11 @@ export function selectPolicyEffectiveSettings(
     // workspace turned Local off has already moved to an allowed mode.
     if (
       selection.mode === "local" &&
-      !isLocalModelAllowedByPolicy(policyState, "transcription", rawSelection.model ?? "")
+      !isLocalModelAllowedByPolicy(
+        policyState,
+        "transcription",
+        getLocalTranscriptionModel(state, keys.context)
+      )
     ) {
       blockedLocalScopes.push(keys.context);
       for (const field of LOCAL_TRANSCRIPTION_MODEL_FIELDS) {

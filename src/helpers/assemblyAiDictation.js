@@ -47,6 +47,7 @@ async function transcribeWithAssemblyAiDictation(
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   let response;
   try {
+    signal?.throwIfAborted();
     response = await fetchImpl(ASSEMBLYAI_DICTATION_URL, {
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       method: "POST",
@@ -92,4 +93,67 @@ async function transcribeWithAssemblyAiDictation(
   };
 }
 
-module.exports = { transcribeWithAssemblyAiDictation };
+// Live dictation and History supply recorded bytes; chat and agent supply a
+// validated temp file. Only a recording that needs splitting goes through FFmpeg.
+async function transcribeAssemblyAiRecording(
+  { audioBuffer, filePath, contentType, durationSeconds, split, ...options },
+  fetchImpl
+) {
+  const fs = require("node:fs/promises");
+  const path = require("node:path");
+  const { getSafeTempDir } = require("./safeTempDir");
+  const { byokFileSizeLimit } = await import("./transcriptionRoute.ts");
+  const { signal } = options;
+  signal.throwIfAborted();
+  const transcribe = (bytes, type) =>
+    transcribeWithAssemblyAiDictation(
+      { ...options, audioBuffer: bytes, contentType: type },
+      fetchImpl
+    );
+  const size = filePath ? (await fs.stat(filePath)).size : audioBuffer.byteLength;
+  const overDurationLimit = durationSeconds >= 20 * 60;
+  if (!overDurationLimit && size <= byokFileSizeLimit("assemblyai")) {
+    try {
+      const bytes = audioBuffer ?? (await fs.readFile(filePath, { signal }));
+      return await transcribe(bytes, contentType);
+    } catch (error) {
+      // Older History rows can lack a duration, and a capture clock is only an estimate.
+      if (error.status !== 413) throw error;
+    }
+  }
+
+  signal.throwIfAborted();
+  const directory = await fs.mkdtemp(path.join(getSafeTempDir(), "ow-assemblyai-"));
+  try {
+    const input = filePath ?? path.join(directory, "recording");
+    if (!filePath) {
+      const bytes = ArrayBuffer.isView(audioBuffer) ? audioBuffer : new Uint8Array(audioBuffer);
+      await fs.writeFile(input, bytes, { signal });
+    }
+    const splitAt = (seconds, output) =>
+      split(input, output, { segmentDuration: seconds, audioOnly: true, signal });
+    const segmentSeconds = 600;
+    let { chunkPaths } = await splitAt(segmentSeconds, directory);
+    // At an exact cut FFmpeg can leave a final MP3 too short to decode. At
+    // 128 kbps, 8 KB is half a second. Move the last cut a minute earlier
+    // across the preceding pieces so the final audio stays in the transcript.
+    if (chunkPaths.length > 1 && (await fs.stat(chunkPaths.at(-1))).size < 8_000) {
+      const output = path.join(directory, "recut");
+      await fs.mkdir(output);
+      const seconds = segmentSeconds - 60 / (chunkPaths.length - 1);
+      ({ chunkPaths } = await splitAt(seconds, output));
+    }
+    const parts = [];
+    for (const chunkPath of chunkPaths) {
+      signal.throwIfAborted();
+      const { text } = await transcribe(await fs.readFile(chunkPath, { signal }), "audio/mpeg");
+      if (text?.trim()) parts.push(text.trim());
+    }
+    // Cleanup, translation, and snippet matching need the complete utterance.
+    return { text: parts.join(" ") };
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+}
+
+module.exports = { transcribeWithAssemblyAiDictation, transcribeAssemblyAiRecording };

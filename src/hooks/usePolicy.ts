@@ -11,6 +11,7 @@ import {
 import {
   filterModeOptionsByPolicy,
   getTranscriptionSelection,
+  isByokTranscriptionAllowed,
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
   isAudioFeatureAllowed,
@@ -32,6 +33,16 @@ export function usePolicySnapshot(): PolicyDecisionSnapshot {
   const policy = usePolicyStore((state) => state.policy);
   const appVersion = usePolicyStore((state) => state.appVersion);
   return useMemo(() => ({ status, policy, appVersion }), [status, policy, appVersion]);
+}
+
+export function useByokTranscriptionModelAllowed(
+  policy: PolicyDecisionSnapshot
+): (provider: string, model: string) => boolean {
+  const manualCleanup = useManagedScopeResolution("dictationCleanup", "manual").kind === "manual";
+  return useCallback(
+    (provider, model) => isByokTranscriptionAllowed(policy, provider, model, () => manualCleanup),
+    [policy, manualCleanup]
+  );
 }
 
 interface MeetingAutoTranscriptionAuth {

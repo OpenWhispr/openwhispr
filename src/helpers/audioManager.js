@@ -90,6 +90,7 @@ import {
   resolveTranscriptionRoute,
 } from "./transcriptionRoute.ts";
 import {
+  allowsPersonalDictationCleanup,
   canUseAssemblyAiRewrite,
   getManagedTranscriptionResolution,
   isManagedTranscriptionActive,
@@ -172,7 +173,9 @@ import {
 import {
   getDictionaryHintTiers,
   getEffectiveDictionaryWords,
+  preservesSnippetExpansions,
   getKeytermDictionaryWords,
+  limitBatchKeyterms,
   getCloudLlmDictionaryFields,
   getKeywordDictionaryWords,
   getLlmDictionaryWords,
@@ -635,9 +638,10 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
   assemblyai: {
     displayName: "AssemblyAI",
     ipc: () => window.electronAPI?.proxyAssemblyAiTranscription,
-    buildPayload: ({ audioBuffer, mimeType, language, keyterms }) => ({
+    buildPayload: ({ audioBuffer, mimeType, durationSeconds, language, keyterms }) => ({
       audioBuffer,
       mimeType,
+      durationSeconds,
       language: language !== "auto" ? language : undefined,
       keyterms: keyterms.length > 0 ? keyterms : undefined,
     }),
@@ -1225,7 +1229,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const policyState = usePolicyStore.getState();
     return (
       (isManagedTranscriptionActive() ||
-        isTranscriptionContextAllowed(policyState, getSettings(), "dictation")) &&
+        isTranscriptionContextAllowed(
+          policyState,
+          getSettings(),
+          "dictation",
+          allowsPersonalDictationCleanup
+        )) &&
       (!this.voiceAgentRequested || isAgentAllowed(policyState))
     );
   }
@@ -2964,6 +2973,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           "AssemblyAI API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
+        err.messageKey = "hooks.audioRecording.errorDescriptions.providerKeyMissing";
         throw err;
       }
     } else if (provider === "openrouter") {
@@ -3559,6 +3569,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         providerLlmAllowed: canUseAssemblyAiRewrite(),
       })
     ) {
+      try {
+        assertValidCleanupOutput(normalizedText, providerCleanedText);
+      } catch (error) {
+        this.pendingCleanupFailure = cleanupFailureFromError(error);
+        return normalizedText;
+      }
+      if (!preservesSnippetExpansions(normalizedText, providerCleanedText, settings.snippets)) {
+        return normalizedText;
+      }
       logger.logReasoning("PROVIDER_CLEANUP_USED", { source });
       return providerCleanedText;
     }
@@ -4098,6 +4117,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async processWithOpenAIAPI(audioBlob, metadata = {}, wasCancelled = neverCancelled) {
+    if (wasCancelled()) throw new DOMException("Transcription cancelled", "AbortError");
     const timings = {};
     let requestController = null;
     let unsubscribePolicy;
@@ -4146,11 +4166,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             ? "self-hosted"
             : "providers",
         provider: managedResolution?.provider ?? route.provider,
+        model: managedResolution ? managedResolution.deployment : route.model,
       };
       // The recording is already made: only a settled denial stops it, not a
       // verdict that is still loading, as a rotated token's is.
       const stopIfDisallowed = runningPolicyCheck(() => {
-        if (!isTranscriptionSelectionAllowed(usePolicyStore.getState(), selection))
+        if (
+          !isTranscriptionSelectionAllowed(
+            usePolicyStore.getState(),
+            selection,
+            allowsPersonalDictationCleanup
+          )
+        )
           requestController.abort();
       });
       unsubscribePolicy = usePolicyStore.subscribe(stopIfDisallowed);
@@ -4174,6 +4201,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const proxyDictionaryPrompt = this.getWhisperPrompt(apiSettings);
         const proxyArgs = {
           audioBuffer: await optimizedAudio.arrayBuffer(),
+          durationSeconds,
           model,
           language,
           apiSettings,
@@ -4184,10 +4212,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             apiSettings,
             this.getCustomDictionaryPromptTiers().flat().join(", ") || null
           ),
-          keyterms: this.getKeyterms()
-            .map((t) => t.trim().slice(0, 50))
-            .filter(Boolean)
-            .slice(0, 100),
+          keyterms: limitBatchKeyterms(this.getKeyterms()),
         };
         const proxyPayload = proxySpec.buildPayload(proxyArgs);
         // Managed Azure is enterprise: its failures keep their own shape.
@@ -4197,6 +4222,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             : asProviderError(err, { provider: proxySpec.displayName, surface: "transcription" });
         let result;
         try {
+          requestController.signal.throwIfAborted();
           result = await call(proxyPayload);
         } catch (err) {
           throw classifyProxyFailure(err);
@@ -4237,6 +4263,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const source = (await this.isReasoningAvailable())
           ? `${providerName}-reasoned`
           : providerName;
+        stopIfDisallowed();
         requestController.signal.throwIfAborted();
         return {
           success: true,
@@ -4699,6 +4726,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Local-vs-cloud is decided upstream, so useLocalWhisper is forced off here:
   // the local→cloud fallback resolves its cloud endpoint through this too.
   resolveBatchRoute(settings, deploymentName = "") {
+    const provider = settings.cloudTranscriptionProvider || "openai";
     const route = resolveTranscriptionRoute({
       settings: {
         ...settings,
@@ -4708,9 +4736,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       },
       policy: usePolicyStore.getState(),
       providers: getTranscriptionProviders(),
-      hasProviderKey: Boolean(
-        getTranscriptionApiKey(settings.cloudTranscriptionProvider || "openai", settings)
-      ),
+      // Batch-capable selections check main-process credentials in getAPIKey
+      // when the renderer's key has not hydrated yet.
+      hasProviderKey: isStreamingOnlySelection(provider, deploymentName)
+        ? Boolean(getTranscriptionApiKey(provider, settings))
+        : undefined,
       request: { model: deploymentName },
     });
     if (route.transport === "error") {

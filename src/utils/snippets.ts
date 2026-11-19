@@ -120,6 +120,27 @@ export function expandSnippets(text: string, snippets?: Snippet[] | null): strin
     .replace(regex, (match) => resolveReplacement(match, replacements) ?? match);
 }
 
+// Cleanup can change the surrounding prose and casing, but it must preserve
+// the saved text each spoken trigger will insert, in order and with repeats.
+export function preservesSnippetExpansions(
+  spoken: string,
+  rewritten: string,
+  snippets?: Snippet[] | null
+): boolean {
+  const matcher = getMatcher(snippets);
+  if (!matcher) return true;
+  const replacementsIn = (text: string): string[] =>
+    Array.from(text.normalize("NFC").matchAll(matcher.regex), ([match]) =>
+      resolveReplacement(match, matcher.replacements)
+    ).filter((replacement) => replacement !== undefined);
+  const original = replacementsIn(spoken);
+  const candidate = replacementsIn(rewritten);
+  return (
+    original.length === candidate.length &&
+    original.every((replacement, index) => replacement === candidate[index])
+  );
+}
+
 interface DictionaryHintSettings {
   customDictionary?: string[] | null;
   snippets?: Snippet[] | null;
@@ -272,6 +293,13 @@ export function getKeytermDictionaryWords(settings?: DictionaryHintSettings | nu
     totalChars: MAX_TOTAL_KEYTERM_CHARS,
     maxWordLength: MAX_KEYTERM_LENGTH,
   });
+}
+
+export function limitBatchKeyterms(words: string[]): string[] {
+  return words
+    .map((word) => word.trim().slice(0, MAX_KEYTERM_LENGTH))
+    .filter(Boolean)
+    .slice(0, MAX_TOTAL_KEYTERMS);
 }
 
 /**

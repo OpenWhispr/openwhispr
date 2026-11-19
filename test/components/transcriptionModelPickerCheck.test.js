@@ -1,7 +1,12 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { mountSettingsPanel } = require("../lib/settingsPanelHarness");
-const { managedPolicy } = require("../helpers/harness/policyFixtures");
+const {
+  managedPolicy,
+  assemblyAiPolicy,
+  loadAssemblyAiDictationCatalog,
+  setManagedBedrockCleanup,
+} = require("../helpers/harness/policyFixtures");
 
 const PICKER = "/components/TranscriptionModelPicker.tsx";
 const KEY = "common.apiKey";
@@ -718,4 +723,35 @@ test("a custom endpoint in use is named as one", async (t) => {
   });
   await panel.selectTab("openai");
   assert.equal(hint(panel), 'transcription.customInUseHint {"provider":"OpenAI"}');
+});
+
+test("AssemblyAI Dictation needs LLM approval to appear or save, while realtime stays selectable", async (t) => {
+  const selected = [];
+  const panel = await mount(t, {
+    policy: assemblyAiPolicy(true, true),
+    overrides: {
+      selectedCloudProvider: "assemblyai",
+      selectedCloudModel: "dictation",
+      onCloudModelSelect: (id) => selected.push(id),
+    },
+  });
+  await require("react").act(() => loadAssemblyAiDictationCatalog(panel.vite));
+  const list = () => panel.find((node) => typeof node.props?.onModelSelect === "function")[0].props;
+  const ids = () => list().models.map((model) => model.value);
+  assert.ok(ids().includes("dictation"));
+  const staleSelect = list().onModelSelect;
+  await panel.selectModel("dictation");
+  await panel.setPolicy(assemblyAiPolicy(true, false));
+  assert.ok(!ids().includes("dictation"));
+  staleSelect("dictation");
+  assert.ok(ids().includes("universal-3-6-pro"));
+  await panel.selectModel("universal-3-6-pro");
+  await panel.setPolicy(assemblyAiPolicy(false, true));
+  staleSelect("dictation");
+  await panel.setPolicy(assemblyAiPolicy(true, true));
+  await require("react").act(() => setManagedBedrockCleanup(panel.vite));
+  assert.ok(!ids().includes("dictation"));
+  staleSelect("dictation");
+  await panel.selectModel("universal-3-6-pro");
+  assert.deepEqual(selected, ["dictation", "universal-3-6-pro", "universal-3-6-pro"]);
 });

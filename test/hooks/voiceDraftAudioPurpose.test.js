@@ -65,7 +65,7 @@ test("chat mic takes carry dictation purpose through local, cloud and BYOK file 
       "/hooks/useSettings":
         "export const useSettings = () => globalThis.__voiceDraftPurposeSettings;",
       "/stores/settingsStore":
-        "export const useSettingsStore = (selector) => selector(globalThis.__voiceDraftPurposeSettings);",
+        "export const getSettings = () => globalThis.__voiceDraftPurposeSettings; export const useSettingsStore = (selector) => selector(getSettings());",
       "./managedTranscription":
         "export const getManagedTranscriptionResolution = () => null; export const isManagedTranscriptionActive = () => false;",
       "/models/ModelRegistry":
@@ -89,18 +89,27 @@ test("chat mic takes carry dictation purpose through local, cloud and BYOK file 
     return null;
   }
   root = createRoot(container);
+  let now = 100;
+  t.mock.method(performance, "now", () => now);
   for (const lane of ["local", "cloud", "byok"]) {
+    if (lane === "byok") {
+      settings.cloudTranscriptionProvider = "assemblyai";
+      settings.cloudTranscriptionModel = "dictation";
+      settings.assemblyaiApiKey = "fixture";
+    }
     settings.useLocalWhisper = lane === "local";
     settings.cloudTranscriptionMode = lane === "cloud" ? "openwhispr" : "byok";
     await React.act(async () => root.render(React.createElement(Harness)));
     await React.act(async () => voice.start());
     finished = deferred();
+    now += 1201 * 1000;
     await React.act(async () => {
       voice.stop();
       assert.equal(await finished.promise, "Dictated text", errors.join("; "));
     });
     assert.equal(calls.at(-1).lane, lane);
     assert.equal(calls.at(-1).options.purpose, "dictation");
+    if (lane === "byok") assert.equal(calls.at(-1).options.durationSeconds, 1201);
     assert.deepEqual(errors, []);
 
     await transcribeFile(
@@ -116,4 +125,20 @@ test("chat mic takes carry dictation purpose through local, cloud and BYOK file 
     assert.equal(calls.at(-1).options.purpose, undefined, "uploads keep the default purpose");
   }
   assert.equal(calls.length, 6);
+  const {
+    assemblyAiPolicy,
+    setManagedBedrockCleanup,
+  } = require("../helpers/harness/policyFixtures");
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const mic = t.mock.method(navigator.mediaDevices, "getUserMedia");
+  for (const policy of [assemblyAiPolicy(true, false), assemblyAiPolicy(false, true)]) {
+    usePolicyStore.setState(policy);
+    await React.act(async () => assert.equal(await voice.start(), false));
+    assert.match(errors.at(-1), /organization|policyTranscriptionRestricted/i);
+    assert.equal(mic.mock.callCount(), 0);
+  }
+  usePolicyStore.setState(assemblyAiPolicy(true, true));
+  await setManagedBedrockCleanup(vite);
+  await React.act(async () => assert.equal(await voice.start(), false));
+  assert.equal(mic.mock.callCount(), 0);
 });

@@ -41,7 +41,7 @@ const electronStub = {
   },
   ipcMain: {
     handle: (channel, fn) => handlers.set(channel, fn),
-    on: () => {},
+    on: (channel, listener) => handlers.set(channel, listener),
     removeHandler: () => {},
   },
   net: {
@@ -885,6 +885,37 @@ test("retry: AssemblyAI Dictation goes to the Dictation API and hands back its r
   }
 });
 
+test("retry: the recorded route chooses the recognition language and forwards dictionary hints", async (t) => {
+  const db = fakeThis.databaseManager;
+  const row = db.getTranscriptionById(7);
+  const keyterms = ["Quetzalcóatl", "Amaya"];
+  t.after(() => {
+    delete row.route_kind;
+    fetchResponse = defaultFetchResponse;
+  });
+  fetchResponse = dictationResponse({ text: "hola" });
+  for (const [kind, source, expected] of [
+    ["translation", "es-MX", ["es"]],
+    ["translation", "auto", undefined],
+    ["translation", undefined, undefined],
+    [null, "es-MX", ["en"]],
+  ]) {
+    row.route_kind = kind;
+    fetches.length = 0;
+    const result = await invoke({
+      ...ASSEMBLYAI_DICTATION,
+      preferredLanguage: "en-US",
+      translationSourceLanguage: source,
+      keyterms,
+    });
+    assert.equal(result.success, true);
+    assert.equal(fetches.length, 1);
+    const config = JSON.parse(await fetches[0].init.body.get("config").text());
+    assert.deepEqual(config.language_codes, expected);
+    assert.deepEqual(config.keyterms_prompt, keyterms);
+  }
+});
+
 test("retry: AssemblyAI's realtime models still fail closed", async () => {
   fetches.length = 0;
   const result = await invoke({ ...ASSEMBLYAI_DICTATION, cloudTranscriptionModel: "" });
@@ -1161,6 +1192,397 @@ test("a verified non-enterprise workspace can still upload after its enterprise 
   assert.equal(fetches[0].init.signal.aborted, false);
   assert.equal((await assemblyAiSurfaces.retry()).success, true);
   assert.equal(resolve.mock.callCount(), 1);
+});
+
+test("canceling a live AssemblyAI request during authorization prevents its upload", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const sender = { id: 42 };
+  fakeThis.databaseManager.activeWorkspaceId = "cancel-during-lookup";
+  t.after(() => {
+    delete fakeThis.databaseManager.activeWorkspaceId;
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    started.resolve();
+    await finish.promise;
+    return { managed: false };
+  });
+  fetches.length = 0;
+  const pending = handlers.get("proxy-assemblyai-transcription")(
+    { sender },
+    {
+      audioBuffer: new Uint8Array([1]),
+    }
+  );
+  await started.promise;
+  handlers.get("cloud-transcribe-cancel")({ sender });
+  finish.resolve();
+  assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
+  assert.equal(fetches.length, 0);
+});
+
+test("live AssemblyAI cancellation affects only the sending window and rejects a late provider result", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const sender = { id: 42 };
+  t.after(() => {
+    fetchResponse = defaultFetchResponse;
+  });
+  fetchResponse = async (_url, init) => {
+    started.resolve(init.signal);
+    await finish.promise;
+    return dictationResponse({ text: "late transcript" })();
+  };
+  const pending = handlers.get("proxy-assemblyai-transcription")(
+    { sender },
+    { audioBuffer: new Uint8Array([1]) }
+  );
+  const signal = await started.promise;
+  handlers.get("cloud-transcribe-cancel")({ sender: { id: 43 } });
+  assert.equal(signal.aborted, false);
+  handlers.get("cloud-transcribe-cancel")({ sender: { id: sender.id } });
+  finish.resolve();
+  assert.equal(signal.aborted, true);
+  assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
+});
+
+test("switching personal workspaces aborts an AssemblyAI upload and discards a late body", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const started = deferred();
+  const finish = deferred();
+  const db = fakeThis.databaseManager;
+  db.activeWorkspaceId = "personal-during-upload";
+  db.setActiveWorkspaceScope = ({ activeWorkspaceId }) => {
+    db.activeWorkspaceId = activeWorkspaceId;
+  };
+  t.after(() => {
+    delete db.activeWorkspaceId;
+    delete db.setActiveWorkspaceScope;
+    fetchResponse = defaultFetchResponse;
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    throw Object.assign(new Error("Enterprise subscription required"), {
+      code: "ENTERPRISE_REQUIRED",
+    });
+  });
+  fetchResponse = (_url, init) => ({
+    ok: true,
+    json: async () => {
+      started.resolve(init.signal);
+      await finish.promise;
+      return { text: "stale text", llm_response: "Stale rewrite." };
+    },
+  });
+  textUpdates.length = 0;
+  const pending = assemblyAiSurfaces.retry();
+  const signal = await started.promise;
+  const setWorkspace = handlers.get("set-active-workspace-scope");
+  assert.equal(setWorkspace({}, { activeWorkspaceId: db.activeWorkspaceId }).success, true);
+  assert.equal(signal.aborted, false);
+  assert.equal(setWorkspace({}, { activeWorkspaceId: "enterprise-after-switch" }).success, true);
+  finish.resolve();
+  assert.equal((await pending).code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(signal.aborted, true);
+  assert.deepEqual(textUpdates, []);
+});
+
+for (const surface of ["dictation", "retry"]) {
+  for (const measured of [true, false]) {
+    test(`AssemblyAI ${surface} recovers a long ${measured ? "measured" : "unmeasured"} recording`, async (t) => {
+      const previous = { fetchResponse, splitBehavior };
+      const row = fakeThis.databaseManager.getTranscriptionById(7);
+      const oldDuration = row.audio_duration_ms;
+      t.after(() => {
+        ({ fetchResponse, splitBehavior } = previous);
+        row.audio_duration_ms = oldDuration;
+      });
+      const original = fakeThis.audioStorageManager.getAudioBuffer(7);
+      row.audio_duration_ms = measured ? 1_201_000 : null;
+      splitBehavior = async (input, output) => {
+        assert.deepEqual(fs.readFileSync(input), original);
+        return piecesOf(2)(input, output);
+      };
+      const types = [];
+      fetchResponse = async (_url, init) => {
+        const audio = init.body.get("audio");
+        types.push(audio.type);
+        if (audio.type === "audio/webm") return new Response("Audio Too Large", { status: 413 });
+        const config = JSON.parse(await init.body.get("config").text());
+        assert.deepEqual(config, { language_codes: ["es"], keyterms_prompt: ["Amaya"] });
+        const bytes = new Uint8Array(await audio.arrayBuffer());
+        return dictationResponse({ text: `part ${bytes[0]}`, llm_response: "Chunk rewrite." })();
+      };
+      textUpdates.length = 0;
+      splitCalls.length = 0;
+      const result =
+        surface === "dictation"
+          ? await handlers.get("proxy-assemblyai-transcription")(
+              { sender: { id: 45 } },
+              {
+                audioBuffer: original,
+                mimeType: "audio/webm",
+                language: "es",
+                keyterms: ["Amaya"],
+                durationSeconds: measured ? 1201 : undefined,
+              }
+            )
+          : await invoke({ ...ASSEMBLYAI_DICTATION, preferredLanguage: "es", keyterms: ["Amaya"] });
+      if (surface === "dictation") assert.equal(result.text, "part 0 part 1");
+      else {
+        assert.equal(result.success, true);
+        assert.deepEqual(textUpdates, [{ id: 7, text: "part 0 part 1" }]);
+      }
+      assert.equal(result.cleanedText, undefined);
+      assert.deepEqual(types, [...(measured ? [] : ["audio/webm"]), "audio/mpeg", "audio/mpeg"]);
+      assert.equal(splitCalls.length, 1);
+      assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+    });
+  }
+}
+
+function setupDictationWorkspaceSwitch(t) {
+  const database = fakeThis.databaseManager;
+  const originalToken = tokenState;
+  const { deferred } = require("./harness/deferred");
+  const lookup = deferred();
+  database.activeWorkspaceId = "original-workspace";
+  database.setActiveWorkspaceScope = ({ activeWorkspaceId }) => {
+    database.activeWorkspaceId = activeWorkspaceId;
+  };
+  t.after(async () => {
+    delete database.activeWorkspaceId;
+    delete database.setActiveWorkspaceScope;
+    tokenState = originalToken;
+    policyLookupGate = null;
+    lookup.resolve();
+    fetchResponse = defaultFetchResponse;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => {
+    throw Object.assign(new Error("Personal workspace"), { code: "ENTERPRISE_REQUIRED" });
+  });
+  return {
+    holdPolicy() {
+      policyLookupGate = lookup.promise;
+      tokenState = { ...tokenState, generation: tokenState.generation + 1 };
+      void fakeThis.refreshEffectivePolicy();
+      assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
+    },
+    switchWorkspace(activeWorkspaceId) {
+      const result = handlers.get("set-active-workspace-scope")({}, { activeWorkspaceId });
+      assert.equal(result.success, true);
+    },
+    releasePolicy: lookup.resolve,
+  };
+}
+
+test("AssemblyAI work keeps its original workspace while dispatch and routing wait", async (t) => {
+  const workspace = setupDictationWorkspaceSwitch(t);
+  fetchResponse = dictationResponse({ text: "text from the previous workspace" });
+  fetches.length = 0;
+  workspace.holdPolicy();
+  const requests = Object.values(assemblyAiSurfaces).map((run) => run());
+  workspace.switchWorkspace("next-workspace");
+  workspace.switchWorkspace("original-workspace");
+  workspace.releasePolicy();
+  for (const result of await Promise.all(requests)) {
+    assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+  }
+  assert.equal(fetches.length, 0);
+});
+
+test("AssemblyAI checks the dispatch workspace against the database before upload", async (t) => {
+  const workspace = setupDictationWorkspaceSwitch(t);
+  fetches.length = 0;
+  workspace.holdPolicy();
+  const pending = assemblyAiSurfaces.dictation();
+  fakeThis.databaseManager.activeWorkspaceId = "restored-workspace";
+  workspace.releasePolicy();
+  assert.equal((await pending).code, "MANAGED_CONFIG_CHANGED");
+  assert.equal(fetches.length, 0);
+});
+
+test("a repeated workspace notification preserves AssemblyAI and a switch preserves local retries", async (t) => {
+  const workspace = setupDictationWorkspaceSwitch(t);
+  fetchResponse = dictationResponse({ text: "same workspace text" });
+  workspace.holdPolicy();
+  const pending = assemblyAiSurfaces.dictation();
+  workspace.switchWorkspace("original-workspace");
+  workspace.releasePolicy();
+  assert.equal((await pending).text, "same workspace text");
+
+  const local = invoke({
+    ...ASSEMBLYAI_DICTATION,
+    useLocalWhisper: true,
+    transcriptionMode: "local",
+  });
+  workspace.switchWorkspace("next-workspace");
+  assert.equal((await local).success, true);
+});
+
+test("a workspace switch during final policy validation discards the AssemblyAI result", async (t) => {
+  for (const [surface, run] of Object.entries(assemblyAiSurfaces)) {
+    await t.test(surface, async (t) => {
+      const workspace = setupDictationWorkspaceSwitch(t);
+      textUpdates.length = 0;
+      statusUpdates.length = 0;
+      fetchResponse = () => ({
+        ok: true,
+        json: async () => {
+          workspace.holdPolicy();
+          setImmediate(() => {
+            workspace.switchWorkspace("next-workspace");
+            workspace.releasePolicy();
+          });
+          return { text: "previous workspace text", llm_response: "Previous rewrite." };
+        },
+      });
+      const result = await run();
+      assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+      assert.equal(result.text, undefined);
+      assert.equal(result.cleanedText, undefined);
+      assert.deepEqual(textUpdates, []);
+      assert.deepEqual(statusUpdates, []);
+    });
+  }
+});
+
+test("when a later AssemblyAI chunk fails, History keeps the recording and does not save a partial transcript", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  const row = fakeThis.databaseManager.getTranscriptionById(7);
+  const oldDuration = row.audio_duration_ms;
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+    row.audio_duration_ms = oldDuration;
+  });
+  row.audio_duration_ms = 1_201_000;
+  const original = fakeThis.audioStorageManager.getAudioBuffer(7);
+  splitBehavior = piecesOf(3);
+  splitCalls.length = 0;
+  textUpdates.length = 0;
+  let requests = 0;
+  fetchResponse = () =>
+    ++requests === 1
+      ? dictationResponse({ text: "first part" })()
+      : new Response("Unavailable", { status: 503 });
+
+  const result = await invoke(ASSEMBLYAI_DICTATION);
+  assert.equal(result.success, false);
+  assert.equal(result.status, 503);
+  assert.equal(requests, 2);
+  assert.deepEqual(textUpdates, []);
+  assert.deepEqual(fakeThis.audioStorageManager.getAudioBuffer(7), original);
+  assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+});
+
+test("a duration rejection on an unmeasured AssemblyAI voice take retries all pieces in order", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+  });
+  splitBehavior = piecesOf(3);
+  splitCalls.length = 0;
+  let requests = 0;
+  fetchResponse = (_url, init) => {
+    if (++requests === 1) return new Response("Audio exceeds 20 minutes", { status: 413 });
+    assert.equal(init.body.get("audio").type, "audio/mpeg");
+    return dictationResponse({ text: `part ${requests - 1}`, llm_response: "rewrite" })();
+  };
+  const result = await assemblyAiSurfaces.voice();
+  assert.deepEqual(result, { success: true, text: "part 1 part 2 part 3" });
+  assert.equal(requests, 4);
+  assert.equal(splitCalls.length, 1);
+  assert.ok(splitCalls[0].options.segmentDuration < 20 * 60);
+  assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+});
+
+test("a 20-minute AssemblyAI voice take is split before sending any audio", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+  });
+  splitBehavior = piecesOf(2);
+  fetches.length = 0;
+  fetchResponse = async (_url, init) => {
+    const audio = init.body.get("audio");
+    assert.equal(audio.type, "audio/mpeg");
+    const bytes = new Uint8Array(await audio.arrayBuffer());
+    return dictationResponse({ text: `piece ${bytes[0]}` })();
+  };
+  const result = await invokeUpload({
+    provider: "assemblyai",
+    model: "dictation",
+    transcriptionMode: "providers",
+    purpose: "dictation",
+    durationSeconds: 1200,
+  });
+  assert.deepEqual(result, { success: true, text: "piece 0 piece 1" });
+  assert.equal(fetches.length, 2);
+});
+
+test("canceling a long AssemblyAI voice take stops subsequent chunks and cleans split files", async () => {
+  const { deferred } = require("./harness/deferred");
+  const first = deferred();
+  const reply = deferred();
+  await withReplies(
+    (_url, { signal }) => {
+      first.resolve(signal);
+      return reply.promise;
+    },
+    3,
+    async () => {
+      const requestId = "long-voice-take";
+      const pending = invokeUpload({
+        provider: "assemblyai",
+        model: "dictation",
+        purpose: "dictation",
+        durationSeconds: 1201,
+        requestId,
+      });
+      const signal = await first.promise;
+      const cancel = await handlers.get("cancel-upload-transcription")({}, requestId);
+      reply.resolve(dictationResponse({ text: "discarded part" })());
+      const result = await pending;
+      assert.equal(cancel.success, true);
+      assert.equal(signal.aborted, true);
+      assert.equal(result.code, "UPLOAD_CANCELLED");
+      assert.equal(fetches.length, 1);
+      assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
+    }
+  );
+});
+
+test("an encoder sliver is folded back into a full-length voice take before upload", async (t) => {
+  const previous = { fetchResponse, splitBehavior };
+  t.after(() => {
+    ({ fetchResponse, splitBehavior } = previous);
+  });
+  splitCalls.length = 0;
+  splitBehavior = async (input, output, options) => {
+    const pieces = await piecesOf(3)(input, output);
+    if (options.segmentDuration === 600) fs.truncateSync(pieces.chunkPaths[2], 1773);
+    return pieces;
+  };
+  fetches.length = 0;
+  fetchResponse = async (_url, init) => {
+    const audio = init.body.get("audio");
+    if (audio.size < 8000) return new Response("Audio too short", { status: 400 });
+    const bytes = new Uint8Array(await audio.arrayBuffer());
+    return dictationResponse({ text: `piece ${bytes[0]}` })();
+  };
+  const result = await invokeUpload({
+    provider: "assemblyai",
+    model: "dictation",
+    transcriptionMode: "providers",
+    purpose: "dictation",
+    durationSeconds: 1200,
+  });
+  assert.deepEqual(result, { success: true, text: "piece 0 piece 1 piece 2" });
+  assert.equal(fetches.length, 3);
+  assert.equal(splitCalls.length, 2);
+  assert.equal(fs.existsSync(splitCalls[0].outputDir), false);
 });
 
 test("AssemblyAI waits for a signed-in workspace to resolve and for both workspace IDs to agree", async (t) => {
@@ -2149,6 +2571,45 @@ test("a retry that turns remote doesn't upload on a verdict still on its way", a
   assert.equal(fetches.length, 0);
   await retry;
   assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+});
+
+test("voice files cancelled before the product policy verdict send no audio", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const lookup = deferred();
+  const previousTokenState = tokenState;
+  t.after(async () => {
+    policyLookupGate = null;
+    lookup.resolve();
+    tokenState = previousTokenState;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  policyLookupGate = lookup.promise;
+  tokenState = { ...tokenState, generation: tokenState.generation + 1 };
+  const { path: filePath } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, filePath));
+  fetches.length = 0;
+  const event = { sender: {} };
+  const cloud = handlers.get("transcribe-audio-file-cloud")(event, filePath, {
+    purpose: "dictation",
+    requestId: "voice-cloud",
+  });
+  const byok = handlers.get("transcribe-audio-file-byok")(event, {
+    filePath,
+    purpose: "dictation",
+    provider: "assemblyai",
+    model: "dictation",
+    apiKey: "fixture",
+    requestId: "voice-byok",
+  });
+  assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
+  for (const id of ["voice-cloud", "voice-byok"]) {
+    assert.equal((await handlers.get("cancel-upload-transcription")(event, id)).success, true);
+  }
+  lookup.resolve();
+  for (const result of await Promise.all([cloud, byok])) {
+    assert.equal(result.code, "UPLOAD_CANCELLED");
+  }
+  assert.equal(fetches.length, 0);
 });
 
 test("a local retry ignores a retained cloud preference when cloud inference is forbidden", async (t) => {

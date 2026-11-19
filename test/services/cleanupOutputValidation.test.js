@@ -114,7 +114,17 @@ test("cleanup validates completed provider output using the request's prompt set
     });
     window.electronAPI.processLocalReasoning = async () => ({ success: true, text: DUPLICATE });
     const row = { id: 123, text: RAW, raw_text: RAW };
-    window.electronAPI.retryTranscription = async () => ({ success: true, transcription: row });
+    useSettingsStore.setState({
+      translationSourceLanguage: "es",
+      preferredLanguage: "en",
+      customDictionary: ["Amaya", "a".repeat(60)],
+      sharedDictionaryHints: { space: ["Puebla"], workspace: ["Amaya"] },
+    });
+    let retrySettings;
+    window.electronAPI.retryTranscription = async (_id, settings) => {
+      retrySettings = settings;
+      return { success: true, transcription: row };
+    };
     window.electronAPI.updateTranscriptionText = async () =>
       assert.fail("rejected cleanup must not overwrite the row");
     const source = fs.readFileSync(
@@ -142,9 +152,11 @@ test("cleanup validates completed provider output using the request's prompt set
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
     }).outputText;
     const settingsModule = await vite.ssrLoadModule("/stores/settingsStore.ts");
+    const { getKeytermDictionaryWords, limitBatchKeyterms } =
+      await vite.ssrLoadModule("/utils/snippets.ts");
     // Supply the real imports the callback closes over in the renderer.
     const { providerCleanupStandsIn } = await vite.ssrLoadModule("/helpers/dictationRouting.js");
-    const { canUseAssemblyAiRewrite } = await vite.ssrLoadModule(
+    const { allowsPersonalDictationCleanup, canUseAssemblyAiRewrite } = await vite.ssrLoadModule(
       "/services/managedTranscription.ts"
     );
     const { providerErrorToastProps } = await vite.ssrLoadModule("/utils/describeProviderError.ts");
@@ -157,6 +169,8 @@ test("cleanup validates completed provider output using the request's prompt set
         throw new Error(`Unexpected history retry import: ${id}`);
       },
       window,
+      getKeytermDictionaryWords,
+      limitBatchKeyterms,
       getSettings: settingsModule.getSettings,
       getManagedTranscriptionResolution: () => null,
       isTranscriptionContextAllowed: () => true,
@@ -173,9 +187,15 @@ test("cleanup validates completed provider output using the request's prompt set
       t: (key) => key,
       providerErrorToastProps,
       providerCleanupStandsIn,
+      allowsPersonalDictationCleanup,
       canUseAssemblyAiRewrite,
+      assertValidCleanupOutput: (await vite.ssrLoadModule("/utils/cleanupOutput.ts"))
+        .assertValidCleanupOutput,
     });
     await retry(row.id);
+    assert.equal(retrySettings.translationSourceLanguage, "es");
+    assert.equal(retrySettings.preferredLanguage, "en");
+    assert.deepEqual(Array.from(retrySettings.keyterms), ["Amaya", "a".repeat(50), "Puebla"]);
     assert.strictEqual(displayedRow, row);
     assert.ok(
       toasts.some(
@@ -205,6 +225,23 @@ test("cleanup validates completed provider output using the request's prompt set
     };
     await retry(row.id);
     assert.equal(displayedRow.text, CLEAN);
+
+    // A bad provider rewrite must leave the retry's raw row intact.
+    const validRetry = window.electronAPI.retryTranscription;
+    window.electronAPI.retryTranscription = async () => ({
+      success: true,
+      transcription: row,
+      cleanedText: DUPLICATE,
+    });
+    toasts.length = 0;
+    await retry(row.id);
+    assert.strictEqual(displayedRow, row);
+    assert.ok(
+      toasts.some(
+        (toast) => toast.description === "hooks.audioRecording.errorDescriptions.cleanupDuplicated"
+      )
+    );
+    window.electronAPI.retryTranscription = validRetry;
 
     // If policy changes after transcription, discard the returned rewrite.
     const { managedPolicy } = require("../helpers/harness/policyFixtures");
