@@ -1,5 +1,6 @@
 import type { DictionaryEntry } from '@/store/useDictionaryStore';
-import { extractCorrectionPairs, extractCorrections } from '@/lib/correctionLearner';
+import { extractCorrections } from '@/lib/correctionLearner';
+import { extractCorrectionPairs } from '../correctionPairs';
 import { searchWords, sortWords, splitWords } from '../search';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
