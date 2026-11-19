@@ -233,6 +233,22 @@ test("moving a parent to another space carries its subfolder", async (t) => {
   ]);
 });
 
+test("binding the Private section to a workspace carries its nested folders", async (t) => {
+  const fx = await createFixture(t, clientTree);
+  fx.writeUserFile("Private notes/Client A/contract.pdf");
+  fx.writeUserFile("Private notes/Client A/Q1/photo.png");
+
+  await fx.change(() => (fx.state.spaces[0].workspace_id = "w-acme-1111"));
+
+  const section = "Workspaces/Workspace w-acme-1/Private";
+  assert.deepEqual(fx.tree(), [
+    `${section}/Client A/100-brief.md`,
+    `${section}/Client A/Q1/101-plan.md`,
+    `${section}/Client A/Q1/photo.png`,
+    `${section}/Client A/contract.pdf`,
+  ]);
+});
+
 test("a subfolder moved alone to another space leaves its parent and goes at the top level", async (t) => {
   const fx = await createFixture(t, clientTree);
   fx.writeUserFile("Private notes/Client A/Q1/photo.png");
