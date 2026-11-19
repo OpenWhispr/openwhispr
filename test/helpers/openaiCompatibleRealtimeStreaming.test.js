@@ -878,3 +878,48 @@ test("a named turn start replaces an unended blip's for a speech_stopped without
   assert.deepEqual(stamps, [5000]);
   await streaming.disconnect();
 });
+
+test("a stop answered only by a transcript keeps the open turn's start time", async (t) => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  const stamps = [];
+  streaming.onFinalTranscript = (_text, timestamp) => stamps.push(timestamp);
+  let now = 1000;
+  t.mock.method(Date, "now", () => now);
+
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  now = 4000;
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  now = 4500;
+  emit(socket, completed("last words"));
+
+  assert.equal((await stop.stopped).text, "last words");
+  assert.deepEqual(stamps, [1000]);
+});
+
+test("a no-commit teardown during stop ends the stop's wait at once", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, completed("kept turn"));
+  const stop = trackStop(streaming);
+  await tickImmediate();
+
+  const started = Date.now();
+  const teardown = await streaming.disconnect({ commit: false });
+  assert.ok(Date.now() - started < 1000, "the teardown did not wait for the stop's idle timeout");
+  assert.equal(teardown.text, "kept turn");
+  assert.equal((await stop.stopped).text, "kept turn");
+  assert.equal(sentEvents(socket, "input_audio_buffer.commit").length, 1);
+});
+
+test("a named turn's start is dropped when its transcript arrives without the name", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  for (const id of ["a", "b", "c"]) {
+    emit(socket, { type: "input_audio_buffer.speech_started", item_id: id });
+    emit(socket, { type: "input_audio_buffer.speech_stopped", item_id: id });
+    emit(socket, completed(`turn ${id}`));
+  }
+  assert.equal(streaming._startsById.size, 0);
+  await streaming.disconnect();
+});

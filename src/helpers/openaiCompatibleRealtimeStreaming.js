@@ -173,10 +173,17 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
           this.pendingTranscriptions.delete(turn.id);
         }
         // A transcript that matches no known turn while stopping is the
-        // commit's own, from a server that never acks commits.
-        if (!turn && this._stop) this._stop.acked = true;
-        this.speechStartedAt = this._startsById.get(event.item_id) ?? turn?.startedAt ?? null;
+        // commit's own, from a server that never acks commits. It ends the
+        // open turn, so it takes that turn's start.
+        let startedAt = turn?.startedAt;
+        if (!turn && this._stop) {
+          this._stop.acked = true;
+          startedAt = this._openTurn?.startedAt;
+          this._openTurn = null;
+        }
+        this.speechStartedAt = this._startsById.get(event.item_id) ?? startedAt ?? null;
         this._startsById.delete(event.item_id);
+        if (turn?.id) this._startsById.delete(turn.id);
         if (!event.item_id && turn?.id) forwarded = { ...event, item_id: turn.id };
         break;
       }
@@ -206,8 +213,11 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
   _startSessionTimer() {}
 
   async disconnect({ commit = true } = {}) {
-    // A second call while stop is waiting shares that wait.
-    if (this._stopping) return this._stopping;
+    if (this._stopping) {
+      // A teardown that asks for no commit ends the wait; any other call shares it.
+      if (!commit) this._stop?.finish();
+      return this._stopping;
+    }
     if (!commit || this.ws?.readyState !== WebSocket.OPEN || !this.audioBytesSent) {
       return super.disconnect({ commit });
     }
