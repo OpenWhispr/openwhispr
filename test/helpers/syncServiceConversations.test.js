@@ -1181,6 +1181,32 @@ test("a synced chat renamed on this device sends its new title", async (t) => {
   assert.equal(db.getAgentConversation(conversation.id).sync_status, "synced");
 });
 
+test("the chat used last stays on top once a pass pushes it beside an older one", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const usedLast = db.createAgentConversation("Used last");
+  db.addAgentMessage(usedLast.id, "user", "question");
+  const usedEarlier = db.createAgentConversation("Used earlier");
+  db.addAgentMessage(usedEarlier.id, "user", "question");
+  await service.syncAll(true);
+
+  db.addAgentMessage(usedLast.id, "assistant", "answer");
+  db.addAgentMessage(usedEarlier.id, "assistant", "answer");
+  updateConversation(db, usedEarlier.id, { updated_at: LOCAL_EARLY });
+  updateConversation(db, usedLast.id, { updated_at: "2026-07-20 10:05:00" });
+  // The chat lists sort to the second, so the two pushes must land in different ones.
+  let cloudNow = Date.parse("2026-07-20T11:00:00.000Z");
+  cloud.setClock(() => new Date((cloudNow += 1500)).toISOString());
+
+  await service.syncAll(true);
+
+  assert.deepEqual(
+    db.getAgentConversationsWithPreview().map((conversation) => conversation.title),
+    ["Used last", "Used earlier"]
+  );
+});
+
 // A chat an older build left synced with its cloud copy, which may lack some
 // of its messages. "u:text" is a user message, "a:text" an assistant one.
 function seedSyncedChat(db, cloud, clientId, cloudMessages, localMessages) {
@@ -1365,6 +1391,30 @@ test("a failed check for unsent chat messages waits before walking the chats aga
   localStorageStub.setItem("syncCursors.chatMessages:user-harness", String(Date.now() - 1));
   await service.syncAll(true);
   assertOneLiveCopy(cloud, "client-broken", ["q1", "a1"]);
+});
+
+test("a pull queues a synced chat whose cloud copy is missing messages", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  await establishCursor(service);
+  // The repair has already run for this account, so only the pull can find the gap.
+  assert.equal(localStorageStub.getItem("syncCursors.chatMessages:user-harness"), "done");
+  const { local } = seedSyncedChat(
+    db,
+    cloud,
+    "client-cut-off",
+    ["u:q1", "a:a1"],
+    ["u:q1", "a:a1", "u:q2", "a:a2"]
+  );
+  localStorageStub.removeItem("lastSyncedAt.conversations");
+
+  await service.syncAll(true);
+  assert.equal(db.getAgentConversation(local.id).sync_status, "pending");
+  assert.deepEqual(cloudContents(cloud, "client-cut-off"), ["q1", "a1"]);
+
+  await service.syncAll(true);
+  assertOneLiveCopy(cloud, "client-cut-off", ["q1", "a1", "q2", "a2"]);
 });
 
 test("a chat linked to another copy, or deleted, keeps its identity", async (t) => {

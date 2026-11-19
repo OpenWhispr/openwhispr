@@ -11793,6 +11793,8 @@ class DatabaseManager {
       // they consume Private content. The
       // note's teamspace must be one the account is in, as getSpaces lists
       // them (SyncService's isTeamRow); any other note's chat stays too.
+      // A linked chat takes the cloud's time when pushed, so the chat used last
+      // goes last and stays on top of the chat list.
       const scope = this._syncRowScope("agent_conversations");
       return this.db
         .prepare(
@@ -11809,7 +11811,8 @@ class DatabaseManager {
                  AND chat_note_space.deleted_at IS NULL
                  AND chat_note_member.account_id = ?
              ))
-             AND ${scope.sql}`
+             AND ${scope.sql}
+           ORDER BY datetime(updated_at), id`
         )
         .all(this.activeAccountId, ...scope.params);
     } catch (error) {
