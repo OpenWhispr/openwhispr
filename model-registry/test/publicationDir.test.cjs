@@ -62,6 +62,16 @@ test("a published branch is read only when signed and consistent with its histor
 });
 
 test("a branch that published before cannot restart or repeat its numbering", () => {
+  // Put back one version, consistently: the manifest and its history agree on version 1.
+  const back = branch(2);
+  fs.copyFileSync(
+    path.join(back.directory, "v2", "history", "1.json"),
+    path.join(back.directory, "v2", "manifest.json")
+  );
+  fs.rmSync(path.join(back.directory, "v2", "history", "2.json"));
+  back.commit();
+  assert.throws(() => readPublicationDir(back.directory, trusted), /lost or changed a published/);
+
   const { directory, commit } = branch(1);
   fs.rmSync(path.join(directory, "v2"), { recursive: true });
   commit();

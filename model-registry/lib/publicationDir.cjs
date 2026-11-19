@@ -43,6 +43,19 @@ function readPublicationDir(directory, trustedKeys) {
       );
     if (!bytes.equals(fs.readFileSync(path.join(history, `${newest}.json`))))
       throw new Error(`${folder}/manifest.json differs from ${folder}/history/${newest}.json`);
+    // Versions are only ever added. With the newest ones deleted and the manifest put back,
+    // an earlier version would pass every check above and its successor be published twice.
+    const rewritten = git(directory, [
+      "log",
+      "-1",
+      "--no-renames",
+      "--diff-filter=DM",
+      "--format=%H",
+      "--",
+      `${folder}/history`,
+    ]);
+    if (rewritten)
+      throw new Error(`${folder}/history lost or changed a published version in ${rewritten}`);
     return { manifest, bytes };
   }
   if (git(directory, ["log", "-1", "--format=%H", "--", `${folder}/manifest.json`]))
