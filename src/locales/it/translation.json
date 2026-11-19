@@ -978,6 +978,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil trasmette con Voxtral Mini 4B ed elabora i batch con Voxtral Small 24B.",
       "docsLink": "Leggi la documentazione"
+    },
+    "elevenlabs": {
+      "keytermsNote": "OpenWhispr invia a ElevenLabs i termini compatibili del tuo dizionario. ElevenLabs applica un sovrapprezzo del 20% quando vengono inclusi."
     }
   },
   "hooks": {

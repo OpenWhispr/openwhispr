@@ -18,7 +18,7 @@ const START_ARGS = {
 };
 
 function createElectronAPI({ systemAudioMode, systemAudioStrategy }) {
-  const listeners = { systemAudioInterrupted: null, systemAudioResumed: null };
+  const listeners = { systemAudioInterrupted: null, systemAudioResumed: null, fatalError: null };
   const noopListener = () => () => {};
   const api = {
     checkSystemAudioAccess: async () => ({
@@ -40,7 +40,12 @@ function createElectronAPI({ systemAudioMode, systemAudioStrategy }) {
     onMeetingSpeakersMerged: noopListener,
     onMeetingSessionSpeakerConfigUpdated: noopListener,
     onMeetingTranscriptionError: noopListener,
-    onMeetingTranscriptionFatalError: noopListener,
+    onMeetingTranscriptionFatalError: (callback) => {
+      listeners.fatalError = callback;
+      return () => {
+        if (listeners.fatalError === callback) listeners.fatalError = null;
+      };
+    },
     onMeetingSystemAudioSilent: noopListener,
     onMeetingSystemAudioInterrupted: (callback) => {
       listeners.systemAudioInterrupted = callback;
@@ -87,6 +92,7 @@ async function startWithPendingMicrophone(t, startResult) {
   const startMain = api.meetingTranscriptionStart;
   api.meetingTranscriptionStart = async () => {
     mainStarted.resolve();
+    await micRequested.promise;
     return startResult ?? startMain();
   };
   const store = await loadStore(t, api);
@@ -94,13 +100,15 @@ async function startWithPendingMicrophone(t, startResult) {
   const finishStart = async () => {
     microphone.resolve(micStream);
     await starting;
+    // A failed start may finish before the permission result reaches the store.
+    await new Promise((resolve) => setImmediate(resolve));
   };
   t.after(async () => {
     await finishStart();
     await store.stopRecording();
   });
   await Promise.all([mainStarted.promise, micRequested.promise]);
-  return { api, listeners, store, finishStart };
+  return { api, listeners, store, finishStart, micStream };
 }
 
 const stoppedCapture = {
@@ -108,6 +116,46 @@ const stoppedCapture = {
   reason: "no_audio_delivered",
   recovering: false,
 };
+
+test("a fatal provider error stops main while microphone permission is pending", async (t) => {
+  const { api, listeners, store, finishStart, micStream } = await startWithPendingMicrophone(t);
+  const stopMain = t.mock.method(api, "meetingTranscriptionStop");
+  const stopTrack = t.mock.method(micStream.getTracks()[0], "stop");
+  const startupFatal = listeners.fatalError;
+  startupFatal?.("Provider quota exhausted");
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(store.useMeetingRecordingStore.getState().error, "Provider quota exhausted");
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(stopMain.mock.callCount(), 1);
+  assert.equal(stopMain.mock.calls[0].arguments[1], "error");
+
+  await finishStart();
+  assert.equal(
+    stopTrack.mock.callCount(),
+    1,
+    "permission granted after the failure releases the mic"
+  );
+  assert.equal(stopMain.mock.callCount(), 1, "teardown shares the stop sent during setup");
+  assert.equal(listeners.fatalError, null);
+
+  await store.startRecording(START_ARGS);
+  startupFatal("Late failure from the previous session");
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
+  assert.equal(store.useMeetingRecordingStore.getState().error, null);
+
+  const stopped = Promise.withResolvers();
+  api.meetingTranscriptionStop = async () => {
+    stopped.resolve();
+    return { success: true };
+  };
+  listeners.fatalError("Connection lost during recording");
+  await stopped.promise;
+  await store.stopRecording();
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(store.useMeetingRecordingStore.getState().error, "Connection lost during recording");
+  assert.equal(listeners.fatalError, null);
+});
 
 test("the final startup interruption survives a pending microphone permission", async (t) => {
   const { listeners, store, finishStart } = await startWithPendingMicrophone(t);

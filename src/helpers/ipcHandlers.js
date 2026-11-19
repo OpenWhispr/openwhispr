@@ -10146,7 +10146,7 @@ class IPCHandlers {
 
     const sendMeetingStreamingAudio = (streaming, buffer, capturedAt = null) => {
       const firstSampleAt = streaming.audioBytesSent === 0 ? capturedAt : null;
-      const sent = streaming.sendAudio(buffer);
+      const sent = streaming.sendAudio(buffer, capturedAt);
       if (
         sent &&
         streaming.isConnected &&

@@ -978,6 +978,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil streams using Voxtral Mini 4B, and batches with Voxtral Small 24B.",
       "docsLink": "Read the docs"
+    },
+    "elevenlabs": {
+      "keytermsNote": "OpenWhispr sends eligible words from your dictionary to ElevenLabs. ElevenLabs charges 20% more when those words are included."
     }
   },
   "hooks": {

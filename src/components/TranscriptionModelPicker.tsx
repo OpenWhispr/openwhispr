@@ -1783,6 +1783,12 @@ export default function TranscriptionModelPicker({
                         </a>
                       </p>
                     )}
+                    {displayedCloudProvider === "elevenlabs" &&
+                      transcriptionContext !== "upload" && (
+                        <p className="text-xs text-muted-foreground/70">
+                          {t("transcription.elevenlabs.keytermsNote")}
+                        </p>
+                      )}
                   </div>
                 </div>
               )}

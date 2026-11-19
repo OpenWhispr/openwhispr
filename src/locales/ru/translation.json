@@ -978,6 +978,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil использует Voxtral Mini 4B для потоковой обработки и Voxtral Small 24B для пакетной.",
       "docsLink": "Открыть документацию"
+    },
+    "elevenlabs": {
+      "keytermsNote": "OpenWhispr отправляет в ElevenLabs слова из вашего словаря, которые соответствуют требованиям сервиса. Если такие слова включены, ElevenLabs взимает на 20 % больше."
     }
   },
   "hooks": {

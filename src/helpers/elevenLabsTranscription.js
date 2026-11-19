@@ -1,4 +1,5 @@
 const { net } = require("electron");
+const { sanitizeKeyterms } = require("./elevenLabsKeyterms.js");
 const debugLogger = require("./debugLogger");
 const {
   PROVIDER_ERROR_CODES,
@@ -11,32 +12,6 @@ const {
 // xi-api-key and takes model_id / language_code, so it is proxied through main.
 const ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text";
 const DEFAULT_MODEL = "scribe_v3";
-
-// ElevenLabs rejects the whole request (422) for a single keyterm outside its
-// documented limits, so terms that break them are dropped rather than sent.
-const MAX_KEYTERMS = 1000;
-const MAX_KEYTERM_CHARS = 50;
-const MAX_KEYTERM_WORDS = 5;
-const FORBIDDEN_KEYTERM_CHARS = /[<>{}[\]\\]/;
-
-function sanitizeKeyterms(keyterms) {
-  if (!Array.isArray(keyterms)) return [];
-  const seen = new Set();
-  const terms = [];
-  for (const raw of keyterms) {
-    if (typeof raw !== "string") continue;
-    const term = raw.trim().replace(/\s+/g, " ");
-    if (!term || term.length >= MAX_KEYTERM_CHARS) continue;
-    if (term.split(" ").length > MAX_KEYTERM_WORDS) continue;
-    if (FORBIDDEN_KEYTERM_CHARS.test(term)) continue;
-    const key = term.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    terms.push(term);
-    if (terms.length === MAX_KEYTERMS) break;
-  }
-  return terms;
-}
 
 // Scribe can answer silence with this marker instead of an empty transcript.
 const SILENCE_MARKER = "[pause]";

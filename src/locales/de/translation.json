@@ -978,6 +978,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
       "docsLink": "Zur Dokumentation"
+    },
+    "elevenlabs": {
+      "keytermsNote": "OpenWhispr sendet geeignete Wörter aus deinem Wörterbuch an ElevenLabs. Wenn solche Wörter mitgesendet werden, berechnet ElevenLabs 20 % mehr."
     }
   },
   "hooks": {

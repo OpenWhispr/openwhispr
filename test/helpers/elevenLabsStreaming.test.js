@@ -80,7 +80,11 @@ test("the socket URL asks for 24 kHz PCM, VAD commits and word timestamps", () =
   // The realtime endpoint takes 50 keyterms of at most 20 characters each.
   const many = new URL(
     streaming.buildWebSocketUrl({
-      keyterms: ["x".repeat(21), "y".repeat(20), ...Array.from({ length: 300 }, (_, i) => `t${i}`)],
+      keyterms: [
+        ...Array.from({ length: 110 }, (_, i) => `overlong-keyterm-value-${i}`),
+        "y".repeat(20),
+        ...Array.from({ length: 300 }, (_, i) => `t${i}`),
+      ],
     })
   );
   const sent = many.searchParams.getAll("keyterms");
@@ -432,8 +436,8 @@ test("words after a pause filled by keep-alive silence are timed from when audio
 
     try {
       await streaming.connect({ apiKey: "k", sampleRate: 24000 });
-      const startedAt = streaming.sessionStartedAt;
       streaming.sendAudio(Buffer.alloc(48000)); // 1 s
+      const startedAt = streaming.sessionStartedAt;
       streaming.lastSendAt = 0; // the next keep-alive tick sends silence
       await wait(1100);
       assert.equal(streaming.streamMs, 1100);
@@ -541,3 +545,155 @@ test("a client with no start in flight takes no audio", () => {
   streaming.cleanup();
   assert.equal(streaming.sendAudio(Buffer.alloc(FRAME_BYTES)), false);
 });
+
+test("a delayed timestamped copy cannot consume the next utterance at Stop", async () => {
+  await withScribeServer(async (url, sessions) => {
+    const streaming = new ElevenLabsStreaming();
+    pointAt(streaming, url);
+    await streaming.connect({ apiKey: "k" });
+    const session = sessions[0];
+    const first = { text: "First.", message_type: "committed_transcript" };
+    send(session, first);
+    await once(streaming.ws, "message");
+    streaming.sendAudio(Buffer.alloc(FRAME_BYTES, 1));
+    send(session, { message_type: "partial_transcript", text: "Last" });
+    send(session, { ...first, message_type: "committed_transcript_with_timestamps" });
+    await wait(30);
+    session.socket.on("message", (data) => {
+      if (JSON.parse(data).commit) {
+        send(session, {
+          message_type: "committed_transcript_with_timestamps",
+          text: "Last words.",
+        });
+      }
+    });
+    assert.equal((await streaming.disconnect()).text, "First. Last words.");
+  });
+});
+
+test("Stop before a partial waits past an earlier VAD commit", async () => {
+  await withScribeServer(async (url, sessions) => {
+    const streaming = new ElevenLabsStreaming();
+    pointAt(streaming, url);
+    await streaming.connect({ apiKey: "k" });
+    streaming.sendAudio(Buffer.alloc(FRAME_BYTES, 1));
+    const session = sessions[0];
+    session.socket.on("message", (data) => {
+      if (!JSON.parse(data).commit) return;
+      send(session, { message_type: "committed_transcript_with_timestamps", text: "Earlier." });
+      setTimeout(() => {
+        if (session.socket.readyState !== session.socket.OPEN) return;
+        send(session, { message_type: "partial_transcript", text: "Later" });
+        send(session, { message_type: "committed_transcript_with_timestamps", text: "Later." });
+      }, 60);
+    });
+    assert.equal((await streaming.disconnect()).text, "Earlier. Later.");
+  });
+});
+
+test("plain commits survive late twins, repeated phrases and a lost socket", async () => {
+  await withScribeServer(async (url, sessions) => {
+    const streaming = new ElevenLabsStreaming();
+    pointAt(streaming, url);
+    await streaming.connect({ apiKey: "k" });
+    const session = sessions[0];
+    const stable = { message_type: "committed_transcript", text: "Yes." };
+    send(session, stable);
+    await wait(1600);
+    send(session, { ...stable, message_type: "committed_transcript_with_timestamps" });
+    await once(streaming.ws, "message");
+    assert.deepEqual(streaming.completedSegments, ["Yes."], "the late twin adds no row");
+    send(session, stable);
+    send(session, { ...stable, text: "End." });
+    const lost = new Promise((resolve) => {
+      streaming.onConnectionLost = resolve;
+    });
+    session.socket.close(1011);
+    await lost;
+    assert.deepEqual(streaming.completedSegments, ["Yes.", "Yes.", "End."]);
+  });
+});
+
+test("a silence revision clears the live partial", () => {
+  const streaming = new ElevenLabsStreaming();
+  const partials = [];
+  streaming.onPartialTranscript = (text) => partials.push(text);
+  const receive = (message_type, text) =>
+    streaming.handleMessage(JSON.stringify({ message_type, text }));
+  receive("partial_transcript", "Maybe");
+  receive("committed_transcript", "[pause]");
+  receive("committed_transcript_with_timestamps", "[pause]");
+  assert.equal(partials.at(-1), "", "a final silence clears the preceding partial");
+  receive("partial_transcript", "[pause]");
+  assert.equal(partials.at(-1), "");
+  assert.equal(partials.includes("[pause]"), false);
+});
+
+test(
+  "a plain fallback stays on the audio timeline before the next timed utterance",
+  { timeout: 10000 },
+  async () => {
+    await withScribeServer(async (url, sessions) => {
+      const streaming = new ElevenLabsStreaming();
+      pointAt(streaming, url);
+      await streaming.connect({ apiKey: "k" });
+      const nextFinal = () =>
+        new Promise((resolve) => {
+          streaming.onFinalTranscript = (_text, timestamp) =>
+            resolve({ text: streaming.completedSegments.at(-1), timestamp });
+        });
+      const capturedAt = 10000;
+      streaming.sendAudio(Buffer.alloc(4800), capturedAt);
+      const fallback = nextFinal();
+      send(sessions[0], { message_type: "committed_transcript", text: "First." });
+      const first = await fallback;
+      const timed = nextFinal();
+      streaming.sendAudio(Buffer.alloc(4800), capturedAt + 100);
+      send(sessions[0], { message_type: "committed_transcript_with_timestamps", text: "First." });
+      send(sessions[0], {
+        message_type: "committed_transcript_with_timestamps",
+        text: "Second.",
+        words: [{ type: "word", start: 0.1 }],
+      });
+      const second = await timed;
+      assert.deepEqual([first.text, second.text], ["First.", "Second."]);
+      assert.ok(first.timestamp >= capturedAt && first.timestamp < capturedAt + 100);
+      assert.equal(second.timestamp, capturedAt + 100);
+    });
+  }
+);
+
+test(
+  "later word times distinguish a repeated phrase from a late timestamped twin",
+  { timeout: 10000 },
+  async () => {
+    await withScribeServer(async (url, sessions) => {
+      const streaming = new ElevenLabsStreaming();
+      pointAt(streaming, url);
+      await streaming.connect({ apiKey: "k" });
+      const timestamps = [];
+      const capturedAt = 20000;
+      const stable = { message_type: "committed_transcript", text: "Yes." };
+      const fallback = new Promise((resolve) => {
+        streaming.onFinalTranscript = (_text, timestamp) => {
+          timestamps.push(timestamp);
+          resolve();
+        };
+      });
+      streaming.sendAudio(Buffer.alloc(4800), capturedAt);
+      send(sessions[0], stable);
+      await fallback;
+      streaming.sendAudio(Buffer.alloc(4800), capturedAt + 100);
+      send(sessions[0], { message_type: "partial_transcript", text: "Yes" });
+      await once(streaming.ws, "message");
+      const timed = { ...stable, message_type: "committed_transcript_with_timestamps" };
+      send(sessions[0], { ...timed, words: [{ type: "word", start: 0.1 }] });
+      await once(streaming.ws, "message");
+      assert.deepEqual(streaming.completedSegments, ["Yes.", "Yes."]);
+      assert.equal(timestamps[1], capturedAt + 100);
+      send(sessions[0], { ...timed, words: [{ type: "word", start: 0.04 }] });
+      await once(streaming.ws, "message");
+      assert.equal(timestamps.length, 2, "the actual late twin still adds no row");
+    });
+  }
+);

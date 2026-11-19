@@ -82,6 +82,7 @@ test("sanitizeKeyterms drops terms ElevenLabs would reject the whole request for
       "ok",
       "OK",
       "x".repeat(50),
+      "x".repeat(51),
       "one two three four five six",
       "a <tag>",
       "{brace}",
@@ -90,10 +91,10 @@ test("sanitizeKeyterms drops terms ElevenLabs would reject the whole request for
       42,
       "  spaced   out  ",
     ]),
-    ["ok", "spaced out"]
+    ["ok", "x".repeat(50), "spaced out"]
   );
   assert.deepEqual(sanitizeKeyterms(undefined), []);
-  assert.equal(sanitizeKeyterms(Array.from({ length: 1200 }, (_, i) => `term${i}`)).length, 1000);
+  assert.equal(sanitizeKeyterms(Array.from({ length: 1200 }, (_, i) => `term${i}`)).length, 100);
 });
 
 test("a missing key fails before any request", async () => {

@@ -978,6 +978,9 @@
     "tinfoil": {
       "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
       "docsLink": "ドキュメントを見る"
+    },
+    "elevenlabs": {
+      "keytermsNote": "OpenWhispr は辞書の用語のうち条件を満たすものを ElevenLabs に送信します。用語が含まれる場合、ElevenLabs の料金が 20% 高くなります。"
     }
   },
   "hooks": {

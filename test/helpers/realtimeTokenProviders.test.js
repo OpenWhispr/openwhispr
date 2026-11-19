@@ -443,14 +443,17 @@ test("elevenlabs uses the saved key for both streams and fails without one", asy
     },
   });
   assert.equal(
-    await fetchRealtimeTokenForProvider("elevenlabs-realtime", counting, { mode: "byok" }),
+    await fetchRealtimeTokenForProvider("elevenlabs-realtime", counting, {
+      mode: "byok",
+      purpose: "meeting",
+    }),
     "xi-key"
   );
   assert.deepEqual(
     await fetchRealtimeTokenForProvider(
       "elevenlabs-realtime",
       counting,
-      { mode: "byok" },
+      { mode: "byok", purpose: "meeting" },
       { streams: 2 }
     ),
     ["xi-key", "xi-key"]
@@ -461,8 +464,28 @@ test("elevenlabs uses the saved key for both streams and fails without one", asy
     fetchRealtimeTokenForProvider(
       "elevenlabs-realtime",
       deps({ environmentManager: { getElevenlabsKey: () => "" } }),
-      { mode: "byok" }
+      { mode: "byok", purpose: "meeting" }
     ),
     /No ElevenLabs API key configured/
   );
+});
+
+test("ElevenLabs credentials are read only for a meeting", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  let reads = 0;
+  const credentials = deps({
+    environmentManager: {
+      getElevenlabsKey() {
+        reads++;
+        return "test-key";
+      },
+    },
+  });
+  for (const purpose of ["dictation", "upload", undefined]) {
+    await assert.rejects(
+      fetchRealtimeTokenForProvider("elevenlabs-realtime", credentials, { mode: "byok", purpose }),
+      /meeting/i
+    );
+  }
+  assert.equal(reads, 0);
 });

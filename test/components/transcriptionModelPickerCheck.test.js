@@ -719,3 +719,24 @@ test("a custom endpoint in use is named as one", async (t) => {
   await panel.selectTab("openai");
   assert.equal(hint(panel), 'transcription.customInUseHint {"provider":"OpenAI"}');
 });
+
+test("ElevenLabs shows the dictionary surcharge on dictation and Note Recording", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "elevenlabs", selectedCloudModel: "scribe_v3" },
+  });
+  const notices = () =>
+    panel.find((node) => node.props?.children === "transcription.elevenlabs.keytermsNote");
+  assert.equal(notices().length, 1);
+  await panel.setProps({
+    transcriptionContext: "meeting",
+    streamingOnly: true,
+    selectedCloudModel: "scribe_v3_live",
+  });
+  assert.equal(notices().length, 1);
+  await panel.setProps({
+    transcriptionContext: "upload",
+    streamingOnly: false,
+    selectedCloudModel: "scribe_v3",
+  });
+  assert.equal(notices().length, 0);
+});

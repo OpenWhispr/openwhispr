@@ -6,6 +6,7 @@ import {
   TRUNCATED_OUTPUT_MESSAGE_KEY,
 } from "../services/ai/chatRequestBody";
 import logger from "../utils/logger";
+import { sanitizeKeyterms as sanitizeElevenLabsKeyterms } from "./elevenLabsKeyterms.js";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
@@ -616,7 +617,6 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       language,
       keyterms: keyterms.length > 0 ? keyterms : undefined,
     }),
-    echoPrompt: ({ keyterms }) => keyterms.join(", "),
   },
   elevenlabs: {
     displayName: "ElevenLabs",
@@ -636,7 +636,6 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       if (keyterms.length > 0) payload.keyterms = keyterms;
       return payload;
     },
-    echoPrompt: ({ keyterms }) => keyterms.join(", "),
   },
   corti: {
     displayName: "Corti",
@@ -4142,6 +4141,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         const apiCallStart = performance.now();
         const proxyDictionaryPrompt = this.getWhisperPrompt(apiSettings);
+        const keyterms = this.getKeyterms();
         const proxyArgs = {
           audioBuffer: await optimizedAudio.arrayBuffer(),
           model,
@@ -4154,10 +4154,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             apiSettings,
             this.getCustomDictionaryPromptTiers().flat().join(", ") || null
           ),
-          keyterms: this.getKeyterms()
-            .map((t) => t.trim().slice(0, 50))
-            .filter(Boolean)
-            .slice(0, 100),
+          keyterms:
+            provider === "elevenlabs"
+              ? sanitizeElevenLabsKeyterms(keyterms)
+              : keyterms
+                  .map((term) => term.trim().slice(0, 50))
+                  .filter(Boolean)
+                  .slice(0, 100),
         };
         const proxyPayload = proxySpec.buildPayload(proxyArgs);
         // Managed Azure is enterprise: its failures keep their own shape.
@@ -4180,7 +4183,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const sendsDictionaryBias = payloadSendsDictionaryBias(proxyPayload);
         // A recital follows the order the list was sent in, which for
         // contextBias and keyterms is personal words first, not Whisper order.
-        const proxyEchoPrompt = proxySpec.echoPrompt?.(proxyArgs) ?? proxyDictionaryPrompt;
+        const proxyEchoPrompt =
+          proxyPayload.keyterms?.join(", ") ??
+          proxySpec.echoPrompt?.(proxyArgs) ??
+          proxyDictionaryPrompt;
         const proxyText = this.stripTrailingDictionaryEcho(
           result?.text,
           sendsDictionaryBias ? proxyEchoPrompt : null
@@ -4191,7 +4197,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Keyterms carry up to MAX_SHARED_KEYTERMS shared words, not only the
         // Whisper window's, so a whole-text echo is checked against what was sent.
         const echoDictionary = proxyPayload.keyterms
-          ? [proxyPayload.keyterms.join(", "), this.getPersonalDictionaryPrompt(apiSettings)]
+          ? [
+              proxyEchoPrompt,
+              provider === "elevenlabs"
+                ? sanitizeElevenLabsKeyterms(apiSettings.customDictionary)
+                    .filter((term) => proxyPayload.keyterms.includes(term))
+                    .join(", ")
+                : this.getPersonalDictionaryPrompt(apiSettings),
+            ]
           : [];
         if (sendsDictionaryBias && this.isDictionaryEcho(result.text, ...echoDictionary)) {
           throw dictionaryEchoError();

@@ -101,6 +101,11 @@ const REALTIME_TOKEN_PROVIDERS = {
   // OpenWhispr Cloud has no ElevenLabs session to mint, so the saved key is the
   // credential in either mode. The server-side socket sends it as a header.
   "elevenlabs-realtime": async ({ environmentManager }, options, streams) => {
+    if (options.purpose !== "meeting") {
+      throw new Error(
+        "ElevenLabs realtime credentials are only available for meeting transcription."
+      );
+    }
     const apiKey = environmentManager.getElevenlabsKey();
     if (!apiKey) {
       throw new Error("No ElevenLabs API key configured. Add your key in Settings.");
