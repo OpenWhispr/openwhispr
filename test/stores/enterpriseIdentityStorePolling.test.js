@@ -30,6 +30,10 @@ async function boot(t, firstAnswer = refused("ENTERPRISE_REQUIRED")) {
     window: {
       addEventListener: (type, listener) => type === "focus" && (h.focus = listener),
       setInterval: (callback) => ((h.tick = callback), 1),
+      setTimeout: (callback, delay) => ((h.expiry = { callback, delay }), 2),
+      clearTimeout: () => {
+        h.expiry = undefined;
+      },
       electronAPI: {
         onManagedEnterpriseConfigChanged: (callback) => ((h.notify = callback), () => {}),
         onEnterpriseAudioTestRequested: (callback) => ((h.link = callback), () => {}),
@@ -42,9 +46,11 @@ async function boot(t, firstAnswer = refused("ENTERPRISE_REQUIRED")) {
   });
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-identity-polling-" });
   h.policy = (await vite.ssrLoadModule("/stores/policyStore.ts")).usePolicyStore;
-  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
-    "/stores/enterpriseIdentityStore.ts"
-  );
+  const { useEnterpriseIdentityStore, refreshEnterpriseIdentityForUse, getManagedScopeResolution } =
+    await vite.ssrLoadModule("/stores/enterpriseIdentityStore.ts");
+  h.beforeUse = refreshEnterpriseIdentityForUse;
+  h.resolve = getManagedScopeResolution;
+  h.store = useEnterpriseIdentityStore;
   t.mock.method(Date, "now", () => h.now);
   h.policy.setState({ status: "unmanaged" });
   await useEnterpriseIdentityStore.getState().refresh("account-a", "workspace-a", 1);
@@ -53,7 +59,7 @@ async function boot(t, firstAnswer = refused("ENTERPRISE_REQUIRED")) {
   return h;
 }
 
-test("a workspace the API calls non-Enterprise is asked every fifteen minutes, not every five or on focus", async (t) => {
+test("an idle non-Enterprise workspace rechecks at the refusal expiry between periodic ticks", async (t) => {
   const h = await boot(t);
   h.tick();
   h.focus();
@@ -61,8 +67,9 @@ test("a workspace the API calls non-Enterprise is asked every fifteen minutes, n
   h.tick();
   assert.equal(h.requests, 1);
 
+  assert.equal(h.expiry.delay, 1);
   h.now += 1;
-  h.tick();
+  h.expiry.callback();
   assert.equal(h.requests, 2);
   await h.settle();
   h.tick();
@@ -106,4 +113,67 @@ test("an outage or an Enterprise workspace keeps the refresh; another window's a
   h.tick();
   h.focus();
   assert.equal(h.requests, 4);
+});
+
+test("active use and focus share a five-minute recheck even while the idle timer can wait", async (t) => {
+  const h = await boot(t);
+  h.now += 5 * 60_000 - 1;
+  h.focus();
+  await h.beforeUse();
+  assert.equal(h.requests, 1);
+
+  h.now += 1;
+  h.tick();
+  assert.equal(h.requests, 1);
+  const reply = Promise.withResolvers();
+  h.answer = reply.promise;
+  h.focus();
+  const routing = h.beforeUse();
+  assert.ok(routing);
+  assert.equal(h.requests, 2);
+  reply.resolve({
+    ...enterprise,
+    config: {
+      ...enterprise.config,
+      providers: [
+        {
+          provider: "bedrock",
+          mode: "managed_required",
+          allowManualSetup: false,
+          version: 1,
+          config: { scopeDefaults: { dictationCleanup: "managed-model" } },
+        },
+      ],
+    },
+  });
+  await routing;
+  assert.equal(h.resolve("dictationCleanup", "manual").kind, "managed");
+});
+
+test("a transient failure after a device-test link restores ordinary focus retries", async (t) => {
+  const h = await boot(t);
+  h.answer = refused("MANAGED_CONFIG_FAILED");
+  h.link();
+  await h.settle();
+  h.answer = enterprise;
+  h.focus();
+  assert.equal(h.requests, 3);
+});
+
+test("a policy that recovers from an error into managed fetches providers immediately", async (t) => {
+  const h = await boot(t);
+  h.policy.setState({ status: "error" });
+  h.policy.setState({ status: "managed" });
+  assert.equal(h.requests, 2);
+});
+
+test("changing workspace while an active route checks its provider cancels that operation", async (t) => {
+  const h = await boot(t);
+  h.now += 5 * 60_000;
+  const reply = Promise.withResolvers();
+  h.answer = reply.promise;
+  const routing = h.beforeUse();
+  h.store.getState().clear();
+  reply.resolve(enterprise);
+  await assert.rejects(routing, { name: "AbortError" });
 });

@@ -13,6 +13,7 @@ import type {
 } from "../types/enterpriseIdentity";
 import logger from "../utils/logger";
 import {
+  CONFIG_REFRESH_MS,
   resolveManagedEnterpriseScope,
   managedScopesForConfig,
 } from "../helpers/enterpriseManagedConfig.mjs";
@@ -105,7 +106,12 @@ function scopesHeldAfterError(
       persistScopes(accountId, workspaceId, { ...EMPTY_SCOPES, notEnterpriseAt: Date.now() });
     return EMPTY_SCOPES;
   }
-  return config ? summarize(config) : readPersistedScopes(accountId, workspaceId);
+  const persisted = readPersistedScopes(accountId, workspaceId);
+  if (accountId && workspaceId && persisted.notEnterpriseAt !== undefined) {
+    delete persisted.notEnterpriseAt;
+    persistScopes(accountId, workspaceId, persisted);
+  }
+  return config ? summarize(config) : persisted;
 }
 
 /** Scopes that must fail closed when the config is gone: the main process's list, else the last known one. */
@@ -240,7 +246,7 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
           ),
         });
       } finally {
-        if (inFlightKey === key) {
+        if (sequence === requestSequence) {
           inFlightKey = null;
           inFlightPromise = null;
         }
@@ -271,25 +277,58 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
   },
 }));
 
-function refreshCurrentManagedIdentity(): void {
+function refreshCurrentManagedIdentity(): Promise<void> | undefined {
   const state = useEnterpriseIdentityStore.getState();
   if (!state.accountId || !state.workspaceId || state.authGeneration == null) return;
-  void state.refresh(state.accountId, state.workspaceId, state.authGeneration, true);
+  return state.refresh(state.accountId, state.workspaceId, state.authGeneration, true);
 }
 
-// A workspace the API called non-Enterprise has no managed setup to change. Unless a policy
-// manages the account, the app's windows ask about it again every fifteen minutes between
-// them, as often as main reads an unmanaged policy, not each one every five and on every focus.
 const NOT_ENTERPRISE_RECHECK_MS = 15 * 60 * 1000;
 
-function pollManagedIdentity(): void {
+function nonEnterpriseAge(): number | undefined {
   const { accountId, workspaceId } = useEnterpriseIdentityStore.getState();
-  if (usePolicyStore.getState().status === "unmanaged") {
-    const answeredAt = readPersistedScopes(accountId, workspaceId).notEnterpriseAt;
-    const age = typeof answeredAt === "number" ? Date.now() - answeredAt : -1;
-    if (age >= 0 && age < NOT_ENTERPRISE_RECHECK_MS) return;
+  const answeredAt = readPersistedScopes(accountId, workspaceId).notEnterpriseAt;
+  return typeof answeredAt === "number" ? Date.now() - answeredAt : undefined;
+}
+
+// A personal route may have become mandatory Enterprise routing since the last idle poll.
+// Wait for the current identity's answer before choosing a provider.
+export function refreshEnterpriseIdentityForUse(): Promise<void> | undefined {
+  if (usePolicyStore.getState().localOnly) return;
+  const age = nonEnterpriseAge();
+  if (age === undefined) return;
+  const { accountId, workspaceId, authGeneration } = useEnterpriseIdentityStore.getState();
+  let pending = inFlightPromise;
+  if (!pending && (age < 0 || age >= CONFIG_REFRESH_MS)) {
+    pending = refreshCurrentManagedIdentity() ?? null;
   }
-  refreshCurrentManagedIdentity();
+  if (!pending) return;
+  return (async (): Promise<void> => {
+    // A workspace-list refresh may supersede ours. Wait for its answer too.
+    do {
+      await pending;
+      const current = useEnterpriseIdentityStore.getState();
+      if (
+        current.accountId !== accountId ||
+        current.workspaceId !== workspaceId ||
+        current.authGeneration !== authGeneration
+      ) {
+        throw new DOMException(
+          "Enterprise identity changed before provider selection",
+          "AbortError"
+        );
+      }
+      pending = inFlightPromise;
+    } while (pending);
+  })();
+}
+
+function refreshOnFocus(): void {
+  if (usePolicyStore.getState().status === "unmanaged") {
+    const age = nonEnterpriseAge();
+    if (age !== undefined && age >= 0 && age < CONFIG_REFRESH_MS) return;
+  }
+  void refreshCurrentManagedIdentity();
 }
 
 // Bound on first refresh() rather than at module load: the listeners no-op
@@ -299,12 +338,30 @@ function pollManagedIdentity(): void {
 function ensureLifecycleListeners(): void {
   if (lifecycleListenersReady || typeof window === "undefined") return;
   lifecycleListenersReady = true;
-  window.addEventListener("focus", pollManagedIdentity);
-  window.setInterval(pollManagedIdentity, 5 * 60 * 1000);
+  window.addEventListener("focus", refreshOnFocus);
+  let expiryTimer: number | undefined;
+  const poll = (): void => {
+    if (expiryTimer !== undefined) window.clearTimeout(expiryTimer);
+    expiryTimer = undefined;
+    const age = usePolicyStore.getState().status === "unmanaged" ? nonEnterpriseAge() : undefined;
+    if (age !== undefined && age >= 0 && age < NOT_ENTERPRISE_RECHECK_MS) {
+      // The refusal can arrive just after a timer tick. Wake at its expiry instead
+      // of waiting another five minutes. A peer's newer answer is checked on wake.
+      const remaining = NOT_ENTERPRISE_RECHECK_MS - age;
+      if (remaining < CONFIG_REFRESH_MS) expiryTimer = window.setTimeout(poll, remaining);
+      return;
+    }
+    void refreshCurrentManagedIdentity();
+  };
+  window.setInterval(poll, CONFIG_REFRESH_MS);
   // What says the workspace may be Enterprise now asks at once: a policy that starts managing
   // the account, and an administrator's device-test link.
   usePolicyStore.subscribe((policy, previous) => {
-    if (previous.status === "unmanaged" && policy.status === "managed")
+    if (
+      policy.status === "managed" &&
+      previous.status !== "managed" &&
+      (previous.status !== "idle" || nonEnterpriseAge() !== undefined)
+    )
       refreshCurrentManagedIdentity();
   });
   window.electronAPI?.onEnterpriseAudioTestRequested?.(refreshCurrentManagedIdentity);
