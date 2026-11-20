@@ -1,31 +1,36 @@
 # iOS keyboard quality: iteration ledger
 
-Branch `feat/mobile-keyboard-quality`, worktree `worktrees/keyboard-quality`. Started 2026-11-20 23:10 SAST; hard stop 2026-11-21 23:10 SAST.
+Branch `feat/mobile-keyboard-quality`, worktree `worktrees/keyboard-quality`. Started 2026-11-20.
 
-**Next action:** short research pass (competitors, Local dictation spike in the background), then freeze datasets and harnesses.
+**Next action:** Finish the audit of the existing keyboard (Setup step 4) and fill in the criteria table.
 
 ## Criteria
 
-| #   | Criterion                                    | Status     | Current numbers                                                                                                                                                            | Blocked reason |
-| --- | -------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| 1   | Typing parity with iOS                       | partial    | has shift/caps, auto-cap, double-space, 123/#+= pages, light/dark, all widths; no accents, number pad, field rules, text replacements, contractions, clear-learned control |                |
-| 1a  | Space-bar trackpad                           | missing    |                                                                                                                                                                            |                |
-| 1b  | Dynamic hit targets                          | missing    | fixed nearest-key targets today                                                                                                                                            |                |
-| 1c  | Top bar + 3-slot suggestions (A and B)       | partial    | tone, pill, assistant exist; no suggestion bar                                                                                                                             |                |
-| 1d  | Emoji panel                                  | missing    |                                                                                                                                                                            |                |
-| 2   | Haptics                                      | missing    | key clicks exist (playInputClick)                                                                                                                                          |                |
-| 3   | Layouts and languages (en/de, QWERTY/QWERTZ) | missing    | QWERTY only, no typing-language setting                                                                                                                                    |                |
-| 4   | Autocorrect                                  | missing    |                                                                                                                                                                            |                |
-| 5   | Swipe typing                                 | missing    |                                                                                                                                                                            |                |
-| 6   | Performance (8 ms, 40 MB)                    | unmeasured |                                                                                                                                                                            |                |
-| 7   | Existing checks green                        | partial    | baseline: touch 398/398, direct PASS, capitalization PASS; jest, typecheck, lint, format, doctor, simulator build not yet run                                              |                |
-| 8   | Visual review                                | missing    | Apple reference shots committed (ca92b25f6)                                                                                                                                |                |
+| #   | Criterion                          | Status  | Current numbers | Blocked reason |
+| --- | ---------------------------------- | ------- | --------------- | -------------- |
+| 1   | Typing parity with iOS             | audit   |                 |                |
+| 1a  | Space-bar trackpad                 | missing |                 |                |
+| 1b  | Dynamic hit targets                | missing |                 |                |
+| 1c  | Top bar with suggestion bar        | missing |                 |                |
+| 1d  | Emoji panel                        | missing |                 |                |
+| 2   | Haptics                            | missing |                 |                |
+| 3   | Layouts and languages (en/de)      | missing |                 |                |
+| 4   | Autocorrect                        | missing |                 |                |
+| 5   | Swipe typing                       | missing |                 |                |
+| 6   | Performance (latency, memory)      | audit   |                 |                |
+| 7   | Existing checks green              | audit   |                 |                |
+| 8   | Visual review next to iOS keyboard | audit   |                 |                |
+| R   | Research pass + Local-dictation    | todo    |                 |                |
 
 ## Waiting on Chad
 
 Nothing yet.
 
-## Goal prompt (copy)
+## Benchmark test-split hashes
+
+None frozen yet.
+
+## The prompt (verbatim copy)
 
 Goal: make the OpenWhispr iOS keyboard (the monorepo's openwhispr-mobile app: the OpenWhisprKeyboard extension, source in openwhispr-mobile/plugins/keyboard-extension) the best keyboard on iOS: at least as good as Apple's for typing, and better than Raycast's and Superwhisper's for dictation. The acceptance criteria below alone define done. Work through them, then stop and report.
 
@@ -73,30 +78,42 @@ Acceptance criteria (all must pass, or be marked blocked with evidence)
    - every iPhone size from SE to Pro Max, in portrait and landscape
    - honour each field's settings: no autocorrect or learning when autocorrectionType or spellCheckingType is .no, in URL and email keyboards, or for textContentType username, password, oneTimeCode and email; never learn in fields that hide their text
    - iOS text replacements from UILexicon ("omw"), English contractions, and a "Clear learned words" control in the app
-     1a. Space-bar trackpad, as on the iOS keyboard. Press and hold the space bar: the key labels fade with a haptic tick. Dragging moves the cursor one grapheme per small step, with acceleration on fast drags. Lifting your finger ends it and leaves the cursor where it is. A tap still types a space, and a quick swipe across the space bar never starts trackpad mode. Horizontal moves use textDocumentProxy.adjustTextPosition, with a local model of the cursor during the drag, since documentContextBefore/After lag behind. Vertical moves cross hard line breaks only, keeping the column where possible. Test the hold threshold, tap vs hold vs swipe, cursor offsets for a scripted drag, and clean stops at the start and end of the text.
-     1b. Dynamic hit targets, as on the iOS keyboard. The keys look the same, but the touch boundary between neighbouring keys shifts toward the letter the language model expects next. Measure with simulated taps scattered around each intended key's centre (Gaussian, standard deviation a quarter of a key width), over the held-out sentence test split (see Benchmarks):
-   - wrong letters drop by at least 25% compared with fixed targets
-   - a tap in the inner 60% of a key always types that key
-     Update existing touch tests only where they assumed fixed geometry, and list which in the ledger.
-     1c. Top bar: keep tone (left), dictation (centre) and the assistant (right) with today's show and dim rules, and add a 3-slot suggestion bar. At rest, the dictation pill is the largest thing in the strip. While suggestions show, dictation stays a separate tap target of at least 44 pt. Build and screenshot two options:
-   - (A) one strip that shows the three buttons at rest and, while a word is being typed, puts the suggestions between tone and the assistant, with dictation as a mic button
-   - (B) a suggestion row above today's toolbar
-     Compare heights with Apple's keyboard from screenshots, leaving out the system bar below the keys. Aim for no more than 8 pt taller than Apple's with its suggestion bar. Build B even if it exceeds that, for comparison. Pick one, record the screenshots and your reasons, and leave the other easy to switch to. I may overrule the pick.
-     1d. Emoji: third-party keyboards can't open Apple's emoji keyboard, so build our own panel.
-   - Bottom row: `123 | emoji | space | return`, with the globe key added when needsInputModeSwitchKey is true.
-   - Every emoji the running iOS version can draw (filter out ones it can't, since the extension supports iOS 15.1), in Apple's categories with a tab bar, plus Recents.
-   - Search by name in the typing language (English and German CLDR names), with typed keys going into the search field rather than the document.
-   - Skin tones on long-press, with the last choice remembered per emoji.
-   - Recents and skin tones are stored in the App Group.
-   - The suggestion bar offers an emoji for words that have one ("pizza" → 🍕).
-   - Load emoji data lazily and draw glyphs as text, never images.
+
+1a. Space-bar trackpad, as on the iOS keyboard. Press and hold the space bar: the key labels fade with a haptic tick. Dragging moves the cursor one grapheme per small step, with acceleration on fast drags. Lifting your finger ends it and leaves the cursor where it is. A tap still types a space, and a quick swipe across the space bar never starts trackpad mode. Horizontal moves use textDocumentProxy.adjustTextPosition, with a local model of the cursor during the drag, since documentContextBefore/After lag behind. Vertical moves cross hard line breaks only, keeping the column where possible. Test the hold threshold, tap vs hold vs swipe, cursor offsets for a scripted drag, and clean stops at the start and end of the text.
+
+1b. Dynamic hit targets, as on the iOS keyboard. The keys look the same, but the touch boundary between neighbouring keys shifts toward the letter the language model expects next. Measure with simulated taps scattered around each intended key's centre (Gaussian, standard deviation a quarter of a key width), over the held-out sentence test split (see Benchmarks):
+
+- wrong letters drop by at least 25% compared with fixed targets
+- a tap in the inner 60% of a key always types that key
+
+Update existing touch tests only where they assumed fixed geometry, and list which in the ledger.
+
+1c. Top bar: keep tone (left), dictation (centre) and the assistant (right) with today's show and dim rules, and add a 3-slot suggestion bar. At rest, the dictation pill is the largest thing in the strip. While suggestions show, dictation stays a separate tap target of at least 44 pt. Build and screenshot two options:
+
+- (A) one strip that shows the three buttons at rest and, while a word is being typed, puts the suggestions between tone and the assistant, with dictation as a mic button
+- (B) a suggestion row above today's toolbar
+
+Compare heights with Apple's keyboard from screenshots, leaving out the system bar below the keys. Aim for no more than 8 pt taller than Apple's with its suggestion bar. Build B even if it exceeds that, for comparison. Pick one, record the screenshots and your reasons, and leave the other easy to switch to. I may overrule the pick.
+
+1d. Emoji: third-party keyboards can't open Apple's emoji keyboard, so build our own panel.
+
+- Bottom row: `123 | emoji | space | return`, with the globe key added when needsInputModeSwitchKey is true.
+- Every emoji the running iOS version can draw (filter out ones it can't, since the extension supports iOS 15.1), in Apple's categories with a tab bar, plus Recents.
+- Search by name in the typing language (English and German CLDR names), with typed keys going into the search field rather than the document.
+- Skin tones on long-press, with the last choice remembered per emoji.
+- Recents and skin tones are stored in the App Group.
+- The suggestion bar offers an emoji for words that have one ("pizza" → 🍕).
+- Load emoji data lazily and draw glyphs as text, never images.
+
 2. Haptics: a light tap on every key, on by default, with a setting to turn it off. Key clicks follow the system setting. Test by injecting the feedback generator and counting calls, since the simulator can't feel them.
 3. Layouts and languages as described above, with every benchmark passing for en/QWERTY and de/QWERTZ.
 4. Autocorrect: the suggestion bar from 1c, and on-device correction from UITextChecker, UILexicon, bundled frequency lists and learned words. Backspace right after a correction undoes it, and common real-word slips ("form" → "from") are handled where the context makes them clear. On the test split, per language:
    - real misspellings: ≥ 80% corrected to the right word (top-1)
    - synthetic near-miss typos for the language's layout: ≥ 90% top-1
    - over-correction on at least 10,000 tokens of held-out natural text, including names, URLs and slang: ≤ 1% of correct words changed
-     Run the autocorrect benchmark in the iOS simulator, or with a frozen candidate generator, and say which in the ledger, since the Mac's spell checker gives different results.
+
+   Run the autocorrect benchmark in the iOS simulator, or with a frozen candidate generator, and say which in the ledger, since the Mac's spell checker gives different results.
+
 5. Swipe typing, on the 10,000 most common words per language and layout:
    - Simulated paths: Gaussian noise (standard deviation 0.2 key width) at each key centre, corner cutting, 60–120 Hz sampling, ±30% speed.
    - Top-1 ≥ 90% and top-3 ≥ 97%, frequency-weighted (report uniform figures too).
@@ -112,7 +129,9 @@ Acceptance criteria (all must pass, or be marked blocked with evidence)
    - `python3 plugins/keyboard-extension/tests/run-keyboard-touch-tests.py`
    - `bash modules/app-group-storage/tests/run-return-target-tests.sh` and `python3 modules/app-group-storage/tests/run-recording-startup-tests.py` whenever you change the App Group module
    - a simulator build
-     Run targeted tests while iterating; leave the desktop suite and platform builds to PR CI.
+
+   Run targeted tests while iterating; leave the desktop suite and platform builds to PR CI.
+
 8. Visual review: screenshots of each layout in light and dark, on SE and Pro Max, portrait and landscape, next to the iOS keyboard. No clipping, misalignment or contrast problems.
 
 Benchmarks (before tuning anything)
@@ -151,14 +170,18 @@ Whether you finished or hit the time limit, write a final report at the top of t
 - everything under "Waiting on Chad"
 - the Local-dictation research findings
 - a short checklist for me to try on a real phone: haptic feel, swipe feel, trackpad feel, everyday typing in English and German
-  Leave everything committed on feat/mobile-keyboard-quality, unpushed.
+
+Leave everything committed on feat/mobile-keyboard-quality, unpushed.
+
+## Working notes for resuming
+
+- Work only in `/Users/chadpiha/Development/openWhispr/openwhispr/worktrees/keyboard-quality`. Setup step 1 commit: `bd9015a3e` on `feat/mobile-keyboard-direct-dictation`.
+- Node 24: `source ~/.nvm/nvm.sh && nvm use 24` before npm/npx commands.
+- Session start (wall clock): 2026-11-20, see the first log entry.
 
 ## Log (append-only)
 
-### 2026-11-20 23:15 — Setup and audit
+### 2026-11-20 — Setup
 
-- Setup steps 1 and 2 were already done when this session started: the 48-file direct-dictation work is commit `bd9015a3e` on `feat/mobile-keyboard-direct-dictation`, and this worktree and branch exist on it with the `node_modules` symlink. Nothing was changed there.
-- Committed the Apple reference screenshots (`ca92b25f6`).
-- Baseline: `run-keyboard-touch-tests.py` 398/398, `test-keyboard-direct.sh` PASS, `test-keyboard-capitalization.sh` PASS.
-- Network: GitHub raw, npm registry, unicode.org, Tatoeba, Wikipedia and Leipzig Wortschatz all reachable.
-- Audit of `KeyboardViewController.swift` (5,532 lines): keys are `KeyButton`s (UIButton, target-action) in stack views; `KeyboardRowsStack.hitTest` gives each touch to the nearest key; pages are letters / numbers / symbols; the bottom row is `123 | (globe) | space | field keys | return`. No engine code exists: no lexicon, suggestions, autocorrect, swipe, trackpad, emoji, haptics, number pad, accents or QWERTZ. Statuses are in the table above.
+- Committed the direct-dictation work as `bd9015a3e` (48 files, unchanged) on `feat/mobile-keyboard-direct-dictation`.
+- Created `feat/mobile-keyboard-quality` in `worktrees/keyboard-quality`, symlinked `openwhispr-mobile/node_modules`, copied the Apple reference screenshots to `docs/keyboard-screenshots/apple-reference/`.
