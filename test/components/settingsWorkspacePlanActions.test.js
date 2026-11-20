@@ -100,10 +100,12 @@ async function setup(t) {
       "/lib/authRequestContext":
         "export const hasValidatedAuthContext = () => true; export const getValidatedAuthGeneration = () => 7;",
       "/stores/workspaceStore": `const getState = () => ({
+        ...globalThis.__settingsBillingTest.store,
         refresh: async (options) => { globalThis.__settingsBillingTest.workspaceRefreshes.push(options); }
       });
       export const useWorkspaceStore = Object.assign((select) => select(getState()), { getState });`,
       "/services/WorkspacesService": `export const WorkspacesService = {
+        getPeopleCounts: (id) => globalThis.__settingsBillingTest.peopleCounts(id),
         billingCheckout: async (...args) => { globalThis.__settingsBillingTest.checkouts.push(args); return "https://stripe.test/checkout"; },
         billingPortal: async (id) => {
           globalThis.__settingsBillingTest.portalIds.push(id);
@@ -385,6 +387,71 @@ test("the visible workspace card can start Business when the people count is una
   assert.ok(checkout);
   await React.act(async () => checkout.click());
   assert.deepEqual(state.checkouts, [[workspace.id, "monthly", { tier: "business" }]]);
+});
+
+test("workspace billing leaves out only the hidden workspace's card", async (t) => {
+  const { vite, state, root, container } = await setup(t);
+  const { default: WorkspaceBillingOverview } = await vite.ssrLoadModule(
+    "/components/settings/WorkspaceBillingOverview.tsx"
+  );
+  const solo = { id: "solo", name: "My workspace", role: "owner", plan: "free", status: "active" };
+  const acme = { id: "acme", name: "Acme", role: "member", plan: "free", status: "active" };
+  const render = async (workspaces, hiddenWorkspaceId) => {
+    state.store = { workspaces, activeWorkspaceId: solo.id, loaded: true, error: null };
+    await React.act(async () =>
+      root.render(React.createElement(WorkspaceBillingOverview, { hiddenWorkspaceId }))
+    );
+  };
+  await render([solo, acme]);
+  assert.ok(container.textContent.includes(solo.name));
+  assert.ok(container.textContent.includes(acme.name));
+  await render([solo, acme], solo.id);
+  assert.ok(!container.textContent.includes(solo.name));
+  assert.ok(container.textContent.includes(acme.name));
+  await render([solo], solo.id);
+  assert.equal(container.textContent, "", "no workspace billing section is left");
+});
+
+test("the solo check reads checking until each workspace's people count answers", async (t) => {
+  const { vite, state, root, container } = await setup(t);
+  const { useSoloBillingWorkspace } = await vite.ssrLoadModule("/hooks/useSoloBillingWorkspace.ts");
+  const requests = [];
+  state.peopleCounts = (id) => {
+    const request = Promise.withResolvers();
+    requests.push({ id, ...request });
+    return request.promise;
+  };
+  const Host = ({ candidate }) => useSoloBillingWorkspace(candidate);
+  const show = (candidate) =>
+    React.act(async () => root.render(React.createElement(Host, { candidate })));
+
+  await show(undefined);
+  assert.equal(container.textContent, "showCard");
+  assert.equal(requests.length, 0);
+
+  await show({ id: "solo" });
+  assert.equal(container.textContent, "checking");
+  await React.act(async () => requests.at(-1).resolve({ member_count: 1, pending_invitations: 0 }));
+  assert.equal(container.textContent, "solo");
+
+  for (const [index, counts] of [
+    { member_count: 1, pending_invitations: 1 },
+    { member_count: 2, pending_invitations: 0 },
+  ].entries()) {
+    await show({ id: `shared-${index}` });
+    assert.equal(container.textContent, "checking");
+    await React.act(async () => requests.at(-1).resolve(counts));
+    assert.equal(container.textContent, "showCard");
+  }
+
+  await show({ id: "unknown" });
+  assert.equal(container.textContent, "checking");
+  await React.act(async () => requests.at(-1).reject(new Error("Stats unavailable")));
+  assert.equal(container.textContent, "unavailable");
+  assert.deepEqual(
+    requests.map((request) => request.id),
+    ["solo", "shared-0", "shared-1", "unknown"]
+  );
 });
 
 test("returning from Business checkout updates account coverage even after the button unmounts", async (t) => {
