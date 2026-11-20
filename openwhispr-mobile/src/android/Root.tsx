@@ -37,6 +37,7 @@ import { useAccountData } from './accountData';
 import { SettingsToastHost } from './settings/kit';
 import { loadLearnedWords } from './dictionary/learned';
 import { observeBubbleRestore } from './bubbleRestore';
+import { useKeepRouteAcrossAccounts } from './useKeepRouteAcrossAccounts';
 
 export default function AndroidRoot() {
   const { t } = useTranslation();
@@ -52,6 +53,8 @@ export default function AndroidRoot() {
     SpaceGrotesk_600SemiBold,
     SpaceGrotesk_700Bold,
   });
+  // Signing in or out rebuilds the screens; reopen the one the person was on when it is safe.
+  useKeepRouteAcrossAccounts(accountRevision);
   useEffect(() => startBubblePipeline(), []);
   // Which words the person said no to: read before any fix can teach the dictionary.
   useEffect(() => {

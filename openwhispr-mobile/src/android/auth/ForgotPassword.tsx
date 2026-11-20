@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { requestPasswordResetEmail } from '@/lib/authClient.android';
+import { requestPasswordResetEmail, type PasswordResetResponse } from '@/lib/authClient.android';
 import { safeHaptics } from '@/lib/utils';
 import { showToast } from '../settings/kit';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
@@ -25,16 +25,20 @@ import {
 } from './passwordReset';
 import { useAuthT } from './strings';
 
-async function sendResetLink(email: string): Promise<ResetRequestOutcome> {
+type SendLink = (email: string) => Promise<PasswordResetResponse>;
+
+const sendResetEmail: SendLink = (email) => requestPasswordResetEmail(email, RESET_REDIRECT_URL);
+
+async function sendLink(send: SendLink, email: string): Promise<ResetRequestOutcome> {
   try {
-    return readRequestOutcome(await requestPasswordResetEmail(email, RESET_REDIRECT_URL));
+    return readRequestOutcome(await send(email));
   } catch {
     return { kind: 'network' };
   }
 }
 
 /** Seconds left until `until`, ticking once a second; 0 once it has passed. */
-function useCountdown(until: number): number {
+export function useCountdown(until: number): number {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (until <= Date.now()) return;
@@ -56,6 +60,8 @@ export function ForgotPassword({
   sendLabel,
   onBackToSignIn,
   onBusyChange,
+  sendRequest = sendResetEmail,
+  onSent,
 }: {
   initialEmail: string;
   /** 3.10 reuses this form with its own title, line and button. */
@@ -64,6 +70,10 @@ export function ForgotPassword({
   sendLabel?: string;
   onBackToSignIn: () => void;
   onBusyChange?: (busy: boolean) => void;
+  /** What the form sends; a password reset link unless 6.6 asks for a verify link. */
+  sendRequest?: SendLink;
+  /** Takes over after a send instead of "Check your email" (6.6 goes to Verify your email). */
+  onSent?: (email: string) => void;
 }) {
   const t = useAuthT();
   const [email, setEmail] = useState(initialEmail);
@@ -90,10 +100,12 @@ export function ForgotPassword({
       }
       safeHaptics('light');
       setSending(true);
-      const outcome = await sendResetLink(address);
+      const outcome = await sendLink(sendRequest, address);
       if (!mounted.current) return;
       setSending(false);
-      if (outcome.kind === 'sent') {
+      if (outcome.kind === 'sent' && onSent) {
+        onSent(address);
+      } else if (outcome.kind === 'sent') {
         rememberResetEmail(address);
         setResendAt(Date.now() + RESEND_SECONDS * 1000);
         setStage('sent');
@@ -107,7 +119,7 @@ export function ForgotPassword({
         showToast(t(outcome.kind === 'network' ? 'networkError' : 'signInFailed'), 'neutral');
       }
     },
-    [email, t],
+    [email, onSent, sendRequest, t],
   );
 
   if (stage === 'sent') {

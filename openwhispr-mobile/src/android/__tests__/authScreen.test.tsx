@@ -12,12 +12,13 @@ Object.defineProperty(globalThis, 'localStorage', {
 });
 
 type MockAuth = {
-  user: { id: string; email: string; isAnonymous: boolean } | null;
+  user: { id: string; email: string; isAnonymous: boolean; emailVerified?: boolean } | null;
   isLoading: boolean;
   loadingProvider: 'google' | 'microsoft' | null;
   error: string | null;
   signIn: jest.Mock;
   signUp: jest.Mock;
+  signOut: jest.Mock;
   signInWithGoogle: jest.Mock;
   signInWithMicrosoft: jest.Mock;
   continueAsGuest: jest.Mock;
@@ -49,10 +50,37 @@ const mockCheckUser = jest.fn();
 jest.mock('@/lib/authClient', () => ({ checkUserExists: (email: string) => mockCheckUser(email) }));
 const mockRequestReset = jest.fn();
 const mockResetPassword = jest.fn();
+const mockRequestVerification = jest.fn();
 jest.mock('@/lib/authClient.android', () => ({
   requestPasswordResetEmail: (...args: unknown[]) => mockRequestReset(...args),
   resetPasswordWithToken: (...args: unknown[]) => mockResetPassword(...args),
+  requestVerificationEmail: (...args: unknown[]) => mockRequestVerification(...args),
 }));
+const mockVerificationStatus = jest.fn();
+const mockVerifyToken = jest.fn();
+jest.mock('@/lib/sessionFetch.android', () => ({
+  sessionFetch: (...args: unknown[]) => mockVerifyToken(...args),
+}));
+jest.mock('@/lib/apiClient', () => {
+  class ApiError extends Error {
+    status: number;
+    code?: string;
+    constructor(message: string, mockStatus: number, mockCode?: string) {
+      super(message);
+      this.status = mockStatus;
+      this.code = mockCode;
+    }
+  }
+  return {
+    ApiError,
+    BASE_URL: 'https://api.test',
+    getClientVersionHeader: () => ({}),
+    api: {
+      get: (...args: unknown[]) => mockVerificationStatus(...args),
+      post: (...args: unknown[]) => mockVerifyToken(...args),
+    },
+  };
+});
 const mockToast = jest.fn();
 jest.mock('@/android/settings/kit', () => ({
   showToast: (...args: unknown[]) => mockToast(...args),
@@ -88,6 +116,7 @@ jest.mock('../../../modules/android-dictation/src', () => ({
 import AuthScreen from '@/screens/AuthScreen.android';
 import { ResetPasswordScreen } from '../auth/ResetPasswordScreen';
 import { handleAuthBack } from '../auth/backPress';
+import { VerifyLinkScreen } from '../auth/VerifyLinkScreen';
 
 beforeEach(() => {
   store.clear();
@@ -99,6 +128,7 @@ beforeEach(() => {
     error: null,
     signIn: jest.fn(),
     signUp: jest.fn(),
+    signOut: jest.fn(async () => mockSetAuth({ user: null })),
     signInWithGoogle: jest.fn(),
     signInWithMicrosoft: jest.fn(),
     continueAsGuest: jest.fn(),
@@ -222,6 +252,165 @@ describe('Android sign-in screen', () => {
     fireEvent.press(view.getByText('Send reset link'));
     expect(mockRequestReset).not.toHaveBeenCalled();
     expect(view.getByText('Enter a full email address, like name@example.com.')).toBeTruthy();
+  });
+});
+
+describe('Android verify email (section 6)', () => {
+  const unverified = {
+    id: 'u',
+    email: 'new@example.com',
+    isAnonymous: false,
+    emailVerified: false,
+  };
+
+  it('waits on Verify your email after sign-up, then says Email verified (6.1, 6.5)', async () => {
+    mockCheckUser.mockResolvedValue('signup');
+    mockVerificationStatus.mockResolvedValue({ verified: false });
+    mockAuth.signUp.mockImplementation(async () => mockSetAuth({ user: unverified }));
+    const view = render(<AuthScreen onClose={jest.fn()} />);
+    fireEvent.changeText(view.getByLabelText('Email address'), 'new@example.com');
+    fireEvent.press(view.getByText('Continue'));
+    await waitFor(() => expect(view.getAllByText('Create account').length).toBeGreaterThan(0));
+    fireEvent.changeText(view.getByLabelText('Password'), 'river-maple-77');
+    await act(async () => fireEvent.press(view.getAllByText('Create account')[1]));
+    expect(view.getByText('Verify your email')).toBeTruthy();
+    expect(view.getByText('Resend in 1:00')).toBeTruthy();
+    expect(view.getByText('Use a different email')).toBeTruthy();
+    expect(mockVerificationStatus).toHaveBeenCalledWith('/api/auth/verification-status');
+
+    mockVerificationStatus.mockResolvedValue({ verified: true });
+    // The next 5 s check sees it.
+    await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy(), { timeout: 7000 });
+    // 6.5 has no Back: it would sign the new account out.
+    expect(view.queryByLabelText('Back')).toBeNull();
+    fireEvent.press(view.getByText('Continue'));
+    expect(mockAuth.user?.emailVerified).toBe(true);
+  }, 10000);
+
+  it('offers Resend at once to an account that never verified, and Use another account (6.4)', async () => {
+    mockAuth.user = unverified;
+    mockVerificationStatus.mockResolvedValue({ verified: false });
+    mockRequestVerification.mockResolvedValue({ status: 429, retryAfter: '299' });
+    const view = render(<AuthScreen onClose={jest.fn()} />);
+    expect(view.getByText('Verify your email')).toBeTruthy();
+    await act(async () => fireEvent.press(view.getByText('Resend link')));
+    expect(mockRequestVerification).toHaveBeenCalledWith('new@example.com');
+    expect(view.getByText('Resend in 4:59')).toBeTruthy();
+    expect(mockToast).toHaveBeenCalledWith('Too many tries. Wait a few minutes.', 'neutral');
+    await act(async () => fireEvent.press(view.getByText('Use another account')));
+    expect(mockAuth.signOut).toHaveBeenCalled();
+    expect(view.getByText('Privacy-first\nVoice-to-text AI')).toBeTruthy();
+  });
+});
+
+describe('Android verify link screen (6.5, 6.6)', () => {
+  const jwtFor = (email: string) =>
+    `h.${Buffer.from(JSON.stringify({ email })).toString('base64url')}.s`;
+  const signedIn = { id: 'u', email: 'new@example.com', isAnonymous: false, emailVerified: false };
+  const answer = (status: number) => ({ ok: status === 200, status });
+
+  it('verifies the link without the app session and continues as that account', async () => {
+    mockAuth.user = signedIn;
+    mockVerifyToken.mockResolvedValue(answer(200));
+    const onContinue = jest.fn();
+    const token = jwtFor('new@example.com');
+    const view = render(
+      <VerifyLinkScreen token={token} onContinue={onContinue} onSignIn={jest.fn()} />,
+    );
+    await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy());
+    const [url, init] = mockVerifyToken.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.test/api/auth/verify-email');
+    expect(JSON.parse(init.body as string)).toEqual({ token });
+    expect((init.headers as Record<string, string>).Cookie).toBeUndefined();
+    fireEvent.press(view.getByText('Continue'));
+    expect(mockAuth.user?.emailVerified).toBe(true);
+    expect(onContinue).toHaveBeenCalled();
+  });
+
+  it('never touches a phone signed in as another account', async () => {
+    mockAuth.user = { ...signedIn, email: 'someone@example.com' };
+    mockVerifyToken.mockResolvedValue(answer(200));
+    const onSignIn = jest.fn();
+    const view = render(
+      <VerifyLinkScreen
+        token={jwtFor('new@example.com')}
+        onContinue={jest.fn()}
+        onSignIn={onSignIn}
+      />,
+    );
+    await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy());
+    expect(view.getByText('Your email is verified. Sign in to continue.')).toBeTruthy();
+    fireEvent.press(view.getByText('Sign in'));
+    expect(onSignIn).toHaveBeenCalled();
+    expect(mockAuth.user?.emailVerified).toBe(false);
+  });
+
+  it('shows This link has expired, and Send a new link goes to Verify your email', async () => {
+    mockAuth.user = signedIn;
+    mockVerifyToken.mockResolvedValue(answer(401));
+    mockVerificationStatus.mockResolvedValue({ verified: false });
+    mockRequestVerification.mockResolvedValue({ status: 200 });
+    const view = render(
+      <VerifyLinkScreen
+        token={jwtFor('new@example.com')}
+        onContinue={jest.fn()}
+        onSignIn={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(view.getByText('This link has expired')).toBeTruthy());
+    expect(view.getByDisplayValue('new@example.com')).toBeTruthy();
+    await act(async () => fireEvent.press(view.getByText('Send a new link')));
+    expect(mockRequestVerification).toHaveBeenCalledWith('new@example.com');
+    expect(view.getByText('Verify your email')).toBeTruthy();
+    expect(view.getByText('Resend in 1:00')).toBeTruthy();
+  });
+
+  it('offers Try again, not a new link, when OpenWhispr can’t be reached', async () => {
+    mockAuth.user = signedIn;
+    mockVerifyToken.mockResolvedValueOnce(answer(429)).mockResolvedValueOnce(answer(200));
+    mockVerificationStatus.mockResolvedValue({ verified: false });
+    const view = render(
+      <VerifyLinkScreen
+        token={jwtFor('new@example.com')}
+        onContinue={jest.fn()}
+        onSignIn={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(view.getByText('Couldn’t verify your email')).toBeTruthy());
+    expect(view.queryByText('This link has expired')).toBeNull();
+    expect(view.queryByText('Send a new link')).toBeNull();
+    await act(async () => fireEvent.press(view.getByText('Try again')));
+    await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy());
+    expect(mockVerifyToken).toHaveBeenCalledTimes(2);
+    expect(mockRequestVerification).not.toHaveBeenCalled();
+  });
+
+  it('treats a dropped connection like an unreachable server', async () => {
+    mockAuth.user = signedIn;
+    mockVerifyToken.mockRejectedValue(new TypeError('Network request failed'));
+    mockVerificationStatus.mockResolvedValue(null);
+    const view = render(
+      <VerifyLinkScreen
+        token={jwtFor('new@example.com')}
+        onContinue={jest.fn()}
+        onSignIn={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(view.getByText('Couldn’t verify your email')).toBeTruthy());
+  });
+
+  it('skips the expired screen for an account that is verified already', async () => {
+    mockAuth.user = signedIn;
+    mockVerifyToken.mockResolvedValue(answer(401));
+    mockVerificationStatus.mockResolvedValue({ verified: true });
+    const view = render(
+      <VerifyLinkScreen
+        token={jwtFor('new@example.com')}
+        onContinue={jest.fn()}
+        onSignIn={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(view.getByText('Email verified')).toBeTruthy());
   });
 });
 

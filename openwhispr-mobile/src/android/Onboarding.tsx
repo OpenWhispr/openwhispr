@@ -3,6 +3,7 @@ import { Alert, AppState, BackHandler, PermissionsAndroid, Platform } from 'reac
 import { StatusBar } from 'expo-status-bar';
 import AuthScreen from '@/screens/AuthScreen.android';
 import { handleAuthBack } from './auth/backPress';
+import { needsEmailVerification } from './auth/emailVerification';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
@@ -64,7 +65,8 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
   const back = useCallback(() => {
     const previous = previousStep(stepRef.current, mode);
     // Someone already signed in has nothing to do on the sign-in screen.
-    if (previous === 'signin' && user && !user.isAnonymous) go('splash');
+    if (previous === 'signin' && user && !user.isAnonymous && !needsEmailVerification(user))
+      go('splash');
     else if (previous) go(previous);
   }, [go, mode, user]);
 
@@ -81,7 +83,9 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
 
   // A real sign-in on the sign-in screen moves straight on.
   useEffect(() => {
-    if (step === 'signin' && user && !user.isAnonymous) go('pitch');
+    // An email account verifies first, on the sign-in screen (6.1, decision 12).
+    if (step === 'signin' && user && !user.isAnonymous && !needsEmailVerification(user))
+      go('pitch');
   }, [go, step, user]);
 
   // Practice runs on Cloud for free before anyone signs up, as on iOS: someone who skipped
@@ -145,7 +149,13 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
 
   switch (step) {
     case 'splash':
-      return <SplashScreen onStart={() => go(user && !user.isAnonymous ? 'pitch' : 'signin')} />;
+      return (
+        <SplashScreen
+          onStart={() =>
+            go(user && !user.isAnonymous && !needsEmailVerification(user) ? 'pitch' : 'signin')
+          }
+        />
+      );
     case 'signin':
       return (
         <>

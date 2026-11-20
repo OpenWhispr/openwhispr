@@ -39,6 +39,8 @@ import {
 import { MIN_PASSWORD_LENGTH } from '@/android/auth/passwordReset';
 import { useAuthT, type AuthKey } from '@/android/auth/strings';
 import { setAuthBackHandler } from '@/android/auth/backPress';
+import { VerifyEmail } from '@/android/auth/VerifyEmail';
+import { needsEmailVerification } from '@/android/auth/emailVerification';
 
 /** Why the app sent someone here; names the title and line (1.2). */
 export type AuthReason = 'sync' | 'share' | 'meeting' | 'cloud' | 'plan' | 'referral';
@@ -92,6 +94,7 @@ export default function AuthScreen({
     signInWithGoogle,
     signInWithMicrosoft,
     continueAsGuest,
+    signOut,
     isLoading,
     loadingProvider,
     error,
@@ -108,6 +111,8 @@ export default function AuthScreen({
   const [emailFocused, setEmailFocused] = useState(false);
   const [keyboardUp, setKeyboardUp] = useState(false);
   const attempted = useRef<{ email: string; method: SignInMethod } | null>(null);
+  // Created here (6.1) rather than signed in to an account that never verified (6.4).
+  const signedUpHere = useRef(false);
   const passwordRef = useRef<TextInputType>(null);
   const nameRef = useRef<TextInputType>(null);
   const scroll = useRef<ScrollView>(null);
@@ -187,6 +192,7 @@ export default function AuthScreen({
     safeHaptics('medium');
     setPasswordError(null);
     attempted.current = { email: address, method: 'email' };
+    signedUpHere.current = view === 'signup';
     await run(() =>
       view === 'signup'
         ? signUp(address, password, name.trim() || undefined)
@@ -212,8 +218,30 @@ export default function AuthScreen({
     await continueAsGuest();
   }, [continueAsGuest, onGuestContinue]);
 
+  // Decision 12: an email account verifies before going on (6.1–6.5).
+  const verifying = needsEmailVerification(user);
+  // Verified on the website; 6.5 has no Back, only Continue.
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
+  const confirmEmail = useCallback(() => setEmailConfirmed(true), []);
+  useEffect(() => {
+    if (!verifying) setEmailConfirmed(false);
+  }, [verifying]);
+  const leaveVerification = useCallback(() => {
+    void signOut();
+    signedUpHere.current = false;
+    setEmail('');
+    go('start');
+  }, [go, signOut]);
+  const finishVerification = useCallback(() => {
+    // The API says it's verified; the route and onboarding move on once the user says so too.
+    const current = useAuthStore.getState().user;
+    if (current) useAuthStore.setState({ user: { ...current, emailVerified: true } });
+  }, []);
+
   const busy = isLoading || checkingEmail;
   const header = (() => {
+    if (verifying && emailConfirmed) return { label: t('back') };
+    if (verifying) return { action: 'back' as const, label: t('back'), onPress: leaveVerification };
     switch (view) {
       case 'start':
         return variant === 'onboarding'
@@ -243,6 +271,12 @@ export default function AuthScreen({
   // The system back gesture steps back inside the screen before it leaves it.
   const backRef = useRef<() => boolean>(() => false);
   backRef.current = () => {
+    if (verifying) {
+      // Once verified, back goes on rather than signing the new account out.
+      if (emailConfirmed) finishVerification();
+      else leaveVerification();
+      return true;
+    }
     if (view === 'start' || view === 'again') return false;
     if (!('disabled' in header && header.disabled)) header.onPress?.();
     return true;
@@ -456,7 +490,15 @@ export default function AuthScreen({
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          {view === 'forgot' ? (
+          {verifying && user ? (
+            <VerifyEmail
+              email={user.email}
+              resumed={!signedUpHere.current}
+              onLeave={leaveVerification}
+              onContinue={finishVerification}
+              onVerified={confirmEmail}
+            />
+          ) : view === 'forgot' ? (
             <ForgotPassword
               initialEmail={email}
               onBusyChange={setResetBusy}
