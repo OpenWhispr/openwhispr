@@ -150,6 +150,17 @@ const NOTE_PATCH_ACK_FIELDS = [
   "cloud_revision",
   "left_team",
 ];
+// What a pulled delete decided from. Every local write moves sync_status or
+// updated_at (or deleted_at, or the identity), so a row that still matches
+// holds nothing written after the pull read it. Must mirror
+// NoteDeleteExpectation in src/types/electron.ts.
+const NOTE_PULLED_DELETE_FIELDS = [
+  "client_note_id",
+  "cloud_id",
+  "sync_status",
+  "deleted_at",
+  "updated_at",
+];
 // Must mirror FolderPushSnapshot in src/types/electron.ts.
 const FOLDER_ACK_FIELDS = [
   "client_folder_id",
@@ -12082,18 +12093,28 @@ class DatabaseManager {
   }
 
   // Confirmed cloud deletes and access revocation retire note chats; denied
-  // deletes use the restore method above instead.
-  hardDeleteNote(id) {
+  // deletes use the restore method above instead. `expected` is the copy a
+  // pulled delete decided from: a row written since (a save that landed while
+  // the pull was deciding) stays, as `note_changed`, for the pull to decide
+  // again from what it holds now.
+  hardDeleteNote(id, { expected } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(id)) return { success: false, id, error: "Note not found" };
       const result = this.db.transaction(() => {
+        if (expected) {
+          const current = this.db.prepare("SELECT * FROM notes WHERE id = ?").get(id);
+          if (!rowMatchesSnapshot(current, expected, NOTE_PULLED_DELETE_FIELDS)) {
+            return { changed: true };
+          }
+        }
         this._retireConversationsWhere("note_id = ?", [id], {
           scrubSyncedMessages: true,
         });
         this._deleteSpeakerRowsForNotes("SELECT id FROM notes WHERE id = ?", id);
         return this.db.prepare("DELETE FROM notes WHERE id = ?").run(id);
       })();
+      if (result.changed) return { success: false, id, code: "note_changed" };
       return { success: result.changes > 0, id };
     } catch (error) {
       debugLogger.error("Error hard deleting note", { error: error.message }, "database");

@@ -4389,11 +4389,15 @@ class IPCHandlers {
       if (result?.success) this.noteFiles.queueNote(id);
       return result;
     });
-    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration) => {
+    // A pulled delete names the copy it decided from (options.expected); main
+    // leaves a row written since, so its text is decided again, not deleted.
+    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration, options) => {
       if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
         return STALE_SYNC_ACK;
+      const expected =
+        options?.expected && typeof options.expected === "object" ? options.expected : undefined;
       const snapshots = this._captureMirrorDeletionNotes({ id });
-      const result = this.databaseManager.hardDeleteNote(id);
+      const result = this.databaseManager.hardDeleteNote(id, { expected });
       if (result?.success) {
         this.notifyVectorChanges();
         this._asyncMirrorDelete(id, snapshots);

@@ -617,6 +617,13 @@ export type NotePushSnapshot = Pick<
 export type NoteCreateSnapshot = NotePushSnapshot;
 export type NoteUpdateSnapshot = NotePushSnapshot;
 
+// The copy a pulled delete decided from. Must mirror NOTE_PULLED_DELETE_FIELDS
+// in src/helpers/database.js.
+export type NoteDeleteExpectation = Pick<
+  NoteItem,
+  "client_note_id" | "cloud_id" | "sync_status" | "deleted_at" | "updated_at"
+>;
+
 export interface NoteCreateAckResult {
   success: boolean;
   outcome:
@@ -4425,10 +4432,15 @@ declare global {
       restoreNoteAfterDeniedDelete?: (
         id: number
       ) => Promise<{ success: boolean; id: number; pending?: boolean }>;
+      // A pulled delete passes the copy it decided from: a row written since
+      // stays (code "note_changed") for the pull to decide again.
       hardDeleteNote?: (
         id: number,
-        expectedAuthGeneration?: number
-      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
+        expectedAuthGeneration?: number,
+        options?: { expected?: NoteDeleteExpectation }
+      ) => Promise<
+        { success: boolean; id: number; code?: "note_changed"; error?: string } | StaleSyncWrite
+      >;
 
       // An omitted scope includes personal folders for consented Backup.
       getPendingFolders?: (scope?: "private" | "team" | null) => Promise<FolderItem[]>;

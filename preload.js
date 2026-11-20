@@ -1415,8 +1415,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-keep-deleted-note-transcript", id, transcript, writeGuard),
   restoreNoteAfterDeniedDelete: (id) =>
     ipcRenderer.invoke("db-restore-note-after-denied-delete", id),
-  hardDeleteNote: (id, authGeneration) =>
-    ipcRenderer.invoke("db-hard-delete-note", id, authGeneration),
+  hardDeleteNote: (id, authGeneration, options) =>
+    ipcRenderer.invoke("db-hard-delete-note", id, authGeneration, options),
 
   getPendingFolders: (spaceKind) => ipcRenderer.invoke("db-get-pending-folders", spaceKind),
   getFolderByClientId: (clientFolderId) =>

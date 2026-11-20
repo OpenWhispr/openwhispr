@@ -6,6 +6,7 @@ import {
 } from "../helpers/noteFieldSync.js";
 import type {
   DictionaryEntryItem,
+  NoteDeleteExpectation,
   NoteItem,
   FolderItem,
   FolderPushSnapshot,
@@ -190,6 +191,22 @@ function isNoteVersionConflictError(err: unknown): boolean {
 function hasUnpushedNoteEdits(note: NoteItem): boolean {
   return note.sync_status !== "synced" && note.sync_status !== "folder_link_pending";
 }
+
+// The copy a pulled delete decided from; main deletes the row only while it
+// still holds exactly that (NOTE_PULLED_DELETE_FIELDS in database.js).
+function pulledDeleteExpectation(note: NoteItem): NoteDeleteExpectation {
+  return {
+    client_note_id: note.client_note_id,
+    cloud_id: note.cloud_id,
+    sync_status: note.sync_status,
+    deleted_at: note.deleted_at,
+    updated_at: note.updated_at,
+  };
+}
+
+// How often a pulled delete reads a row again after a save changed it under
+// the delete, before leaving it for a later pass.
+const PULLED_DELETE_ATTEMPTS = 3;
 
 function conflictCloudNote(err: unknown): CloudNote | null {
   const details = (err as CloudApiError).details as { note?: CloudNote } | undefined;
@@ -3214,32 +3231,44 @@ export class SyncService {
     if (relocated) this.dispatchNoteRelocated(note.title, spaceName);
   }
 
-  // Applies a note delete made on another device or by a teammate. An edit that
-  // never reached the cloud has no other copy, so it survives as a new note in
-  // the Private a revoked row would go to; this device's own delete and clean
-  // copies just go. False keeps the row for a later pass (no Private to fork
-  // into).
+  // Applies a note delete made on another device or by a teammate, or a team
+  // note's access stub. An edit that never reached the cloud has no other copy,
+  // so it survives as a new note in the Private a revoked row would go to; this
+  // device's own delete and clean copies just go. The pull read the row a few
+  // awaits ago, and a save (the editor's, a recording's) may have landed since:
+  // main deletes only the copy decided from, and a row written meanwhile is read
+  // again and decided from what it holds now. False keeps the row for a later
+  // pass (no Private to fork into, held by a folder delete, or still changing).
   private async applyPulledNoteDelete(
     local: NoteItem,
+    cloudNote: Pick<CloudNote, "id" | "client_note_id">,
     ctx: SpaceSyncContext,
-    authGeneration: number
+    authGeneration: number,
+    spaceName = ctx.byId.get(local.space_id)?.name
   ): Promise<boolean> {
-    if (!local.deleted_at && hasUnpushedNoteEdits(local)) {
-      const privateSpaceId = await this.forkPrivateSpaceId(local.space_id, ctx);
-      if (privateSpaceId == null) {
-        console.warn(`Keeping note ${local.id} deleted elsewhere: its Private is missing`);
-        return false;
+    let row: NoteItem | null = local;
+    for (let attempt = 0; attempt < PULLED_DELETE_ATTEMPTS; attempt++) {
+      if (!row) return true;
+      if (row.folder_delete_pending) return false;
+      if (!row.deleted_at && hasUnpushedNoteEdits(row)) {
+        const privateSpaceId = await this.forkPrivateSpaceId(row.space_id, ctx);
+        if (privateSpaceId == null) {
+          console.warn(`Keeping note ${row.id} gone elsewhere: its Private is missing`);
+          return false;
+        }
+        await this.forkNoteToPrivate(row, privateSpaceId, "pull", spaceName);
+        return true;
       }
-      await this.forkNoteToPrivate(
-        local,
-        privateSpaceId,
-        "pull",
-        ctx.byId.get(local.space_id)?.name
-      );
-      return true;
+      const result = await window.electronAPI.hardDeleteNote?.(row.id, authGeneration, {
+        expected: pulledDeleteExpectation(row),
+      });
+      stopIfPullStale(result);
+      if (result?.code !== "note_changed") return true;
+      row =
+        (await window.electronAPI.getNoteForCloudRow?.(cloudNote.client_note_id, cloudNote.id)) ??
+        null;
     }
-    await window.electronAPI.hardDeleteNote?.(local.id, authGeneration);
-    return true;
+    return false;
   }
 
   // A folder PATCH was rejected because its team is gone or access was
@@ -4641,23 +4670,22 @@ export class SyncService {
             // Redacted stub: the note moved out of one of our teams. Clean local
             // copies are no longer ours to keep; dirty ones ('pending' or
             // 'error') move to the teamspace's workspace's Private so unpushed
-            // work survives (plan §7.2). Only a team copy can lose access: a
-            // private note is this device's own.
+            // work survives (plan §7.2), and wait for a later pass when it is
+            // missing. Only a team copy can lose access: a private note is this
+            // device's own.
             if (cloudNote.access_removed) {
               if (!local || !teamCopy) continue;
-              const privateSpaceId =
-                hasUnpushedNoteEdits(local) && !local.deleted_at
-                  ? await this.forkPrivateSpaceId(local.space_id, ctx)
-                  : null;
-              if (privateSpaceId != null) {
-                await this.forkNoteToPrivate(
+              if (
+                !(await this.applyPulledNoteDelete(
                   local,
-                  privateSpaceId,
-                  "pull",
+                  cloudNote,
+                  ctx,
+                  authGeneration,
                   ctx.byCloudSpaceId.get(cloudNote.previous_space_id ?? "")?.name
-                );
-              } else {
-                await window.electronAPI.hardDeleteNote?.(local.id, authGeneration);
+                ))
+              ) {
+                parkedRows++;
+                continue;
               }
               // The pull disambiguated a 404'd push as a revocation and resolved
               // it, so the fallback fork must stand down. Any unresolved
@@ -4683,7 +4711,7 @@ export class SyncService {
               // owner-only workspace association determines its Private filing.
               if (local && teamCopy && !local.deleted_at) {
                 if (cloudNote.deleted_at) {
-                  if (!(await this.applyPulledNoteDelete(local, ctx, authGeneration))) {
+                  if (!(await this.applyPulledNoteDelete(local, cloudNote, ctx, authGeneration))) {
                     parkedRows++;
                     continue;
                   }
@@ -4727,7 +4755,7 @@ export class SyncService {
 
             if (cloudNote.deleted_at) {
               if (local) {
-                if (!(await this.applyPulledNoteDelete(local, ctx, authGeneration))) {
+                if (!(await this.applyPulledNoteDelete(local, cloudNote, ctx, authGeneration))) {
                   parkedRows++;
                   continue;
                 }

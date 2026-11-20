@@ -276,10 +276,10 @@ function createElectronApi(db, options = {}) {
         ? { success: false, error: "Account changed" }
         : db.keepTranscriptOnDeletedNote(id, transcript),
     restoreNoteAfterDeniedDelete: async (id) => db.restoreNoteAfterDeniedDelete(id),
-    hardDeleteNote: async (id, generation) =>
+    hardDeleteNote: async (id, generation, options) =>
       generation !== undefined && authState.isStale(generation)
         ? STALE_SYNC_ACK
-        : db.hardDeleteNote(id),
+        : db.hardDeleteNote(id, { expected: options?.expected }),
 
     // Folders
     getFolders: async (spaceId) => db.getFolders(spaceId),
