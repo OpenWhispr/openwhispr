@@ -2713,6 +2713,16 @@ class DatabaseManager {
       }
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_folder_id)");
 
+      // Set on a note tombstone that holds text its cloud copy lacks (a
+      // recording's transcript kept after the delete): a denied delete brings
+      // it back pending, so that text is pushed rather than replaced by the
+      // server's copy. Local only; never sent or pulled.
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN restore_pending INTEGER NOT NULL DEFAULT 0");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
       // Last cloud editor (CloudNote.updated_by_user_id); only populated on
       // cloud pull — local edits don't set it. Resolved to a display name via
       // the team roster when rendering note authorship.
@@ -8646,9 +8656,11 @@ class DatabaseManager {
       // note stays a tombstone until its cloud delete lands or a late create
       // receipt links it.
       if (note && !note.cloud_id && !note.cloud_create_attempted) return this.hardDeleteNote(id);
+      // A new delete holds nothing written after it yet (restore_pending).
       const stmt = this.db.prepare(
         `UPDATE notes
-         SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now')
+         SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now'),
+             restore_pending = 0
          WHERE id = ? AND deleted_at IS NULL AND ${accountScope.sql}`
       );
       const result = stmt.run(id, ...accountScope.params);
@@ -12010,10 +12022,9 @@ class DatabaseManager {
 
   // The final transcript of a recording whose note the user deleted here, kept on
   // the tombstone while its cloud delete waits. A confirmed delete removes it with
-  // the note; a denied one brings the note back with it (see
+  // the note; a denied one brings the note back with it (restore_pending, see
   // restoreNoteAfterDeniedDelete). Nothing else of the tombstone changes, so its
-  // delete still goes out. updated_at takes milliseconds, so it never matches the
-  // whole-second deleted_at, even within the same second.
+  // delete still goes out.
   keepTranscriptOnDeletedNote(id, transcript) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -12022,7 +12033,8 @@ class DatabaseManager {
       const result = this.db
         .prepare(
           `UPDATE notes
-           SET transcript = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+           SET transcript = ?, restore_pending = 1,
+               updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
            WHERE id = ? AND deleted_at IS NOT NULL AND cloud_id IS NOT NULL
              AND sync_status = 'pending' AND ${accountScope.sql}
              AND NOT EXISTS (
@@ -12050,10 +12062,11 @@ class DatabaseManager {
   // A denied optimistic delete leaves the server row untouched. Revive the
   // local tombstone in place so its numeric id, chats and speaker rows survive;
   // the deliberately old timestamp lets the mandatory snapshot pull replace
-  // it with the authoritative cloud row. A tombstone written after its delete
-  // (its updated_at no longer the delete's own stamp, see
-  // keepTranscriptOnDeletedNote) comes back pending with that write instead, so
-  // the pull leaves it and the next push sends it.
+  // it with the authoritative cloud row. A tombstone holding text its cloud copy
+  // lacks (restore_pending, see keepTranscriptOnDeletedNote) comes back pending
+  // with that text instead, so the pull leaves it and the next push sends it.
+  // Nothing else marks a tombstone, so a write that only touched it (a folder
+  // delete unfiling it, a pull racing the delete) still takes the server's copy.
   restoreNoteAfterDeniedDelete(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -12061,14 +12074,17 @@ class DatabaseManager {
       return this.db.transaction(() => {
         const tombstone = this.db
           .prepare(
-            `SELECT updated_at IS NOT deleted_at AS edited FROM notes
+            `SELECT restore_pending FROM notes
              WHERE id = ? AND deleted_at IS NOT NULL AND ${accountScope.sql}`
           )
           .get(id, ...accountScope.params);
         if (!tombstone) return { success: false, id };
-        if (tombstone.edited) {
+        if (tombstone.restore_pending) {
           this.db
-            .prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?")
+            .prepare(
+              `UPDATE notes SET deleted_at = NULL, sync_status = 'pending', restore_pending = 0
+               WHERE id = ?`
+            )
             .run(id);
           return { success: true, id, pending: true };
         }
@@ -12423,7 +12439,8 @@ class DatabaseManager {
       .prepare(
         `UPDATE notes
          SET folder_id = NULL, deleted_at = COALESCE(deleted_at, datetime('now')),
-             sync_status = 'pending', updated_at = datetime('now')
+             sync_status = 'pending',
+             updated_at = CASE WHEN deleted_at IS NULL THEN datetime('now') ELSE updated_at END
          WHERE id IN (${placeholders})`
       )
       .run(...noteIds);

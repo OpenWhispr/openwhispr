@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { createDb } = require("../helpers/harness/db.js");
 const { createSyncDevice } = require("../helpers/harness/syncDevice.js");
 const { createAccountCloud } = require("../helpers/harness/fakeCloud.js");
 const { stopSyncTimers } = require("../helpers/harness/browserGlobals.js");
@@ -147,4 +148,95 @@ test("only the recording's account keeps a transcript, and only on a pending del
   const row = noteRow(device.db, noteId);
   assert.equal(row.transcript, BEFORE);
   assert.equal(row.updated_at, stamp);
+});
+
+// Only a kept transcript brings a note back pending. Writes that merely touch a
+// tombstone (moving its updated_at) leave it to take the server's copy.
+function syncedNoteIn(db, folderId) {
+  const note = db.saveNote("Synced note", "server text", "personal", null, null, folderId).note;
+  db.markNoteSynced(note.id, "cloud-1");
+  return db.getNote(note.id);
+}
+
+function assertTakesServerCopy(db, noteId) {
+  const restored = db.restoreNoteAfterDeniedDelete(noteId);
+  assert.equal(restored.success, true);
+  assert.equal(restored.pending, undefined, "not revived as an edit");
+  const row = noteRow(db, noteId);
+  assert.equal(row.deleted_at, null);
+  assert.equal(row.sync_status, "synced", "nothing for a push to send");
+  assert.equal(row.updated_at, "1970-01-01 00:00:00", "so the snapshot pull replaces it");
+}
+
+test("a deleted note a later folder delete unfiled takes the server's copy when denied", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId(OWNER);
+  // A folder the server never saw.
+  const folder = db.createFolder("Local only", db.getDefaultPrivateSpaceId()).folder;
+  const note = syncedNoteIn(db, folder.id);
+  assert.equal(db.deleteNote(note.id).success, true);
+  // Some time passes before the folder goes too.
+  db.db
+    .prepare(
+      "UPDATE notes SET deleted_at = '2026-11-01 10:00:00', updated_at = '2026-11-01 10:00:00' WHERE id = ?"
+    )
+    .run(note.id);
+
+  assert.equal(db.deleteFolder(folder.id).success, true);
+  const tombstone = noteRow(db, note.id);
+  assert.ok(tombstone.deleted_at, "still a tombstone");
+  assert.equal(tombstone.folder_id, null, "out of the folder");
+  assert.equal(tombstone.updated_at, "2026-11-01 10:00:00", "and not written to");
+
+  assertTakesServerCopy(db, note.id);
+});
+
+test("a pull landing on a note deleted meanwhile doesn't make a denied delete keep it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId(OWNER);
+  const note = syncedNoteIn(db, null);
+  assert.equal(db.deleteNote(note.id).success, true);
+  // The pull read it live before the delete and stores the server's row now.
+  db.upsertNoteFromCloud(
+    {
+      id: "cloud-1",
+      client_note_id: note.client_note_id,
+      title: note.title,
+      content: "server text",
+      note_type: "personal",
+      created_at: "2026-11-01T09:00:00.000Z",
+      updated_at: "2026-11-01T10:00:00.000Z",
+    },
+    null,
+    note.space_id
+  );
+  const tombstone = noteRow(db, note.id);
+  assert.ok(tombstone.deleted_at, "its delete still goes out");
+  assert.notEqual(tombstone.updated_at, tombstone.deleted_at);
+
+  assertTakesServerCopy(db, note.id);
+});
+
+test("a kept transcript still revives pending after a folder delete touched its tombstone", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId(OWNER);
+  const folder = db.createFolder("Local only", db.getDefaultPrivateSpaceId()).folder;
+  const note = syncedNoteIn(db, folder.id);
+  assert.equal(db.deleteNote(note.id).success, true);
+  assert.equal(db.keepTranscriptOnDeletedNote(note.id, FINAL).success, true);
+  assert.equal(db.deleteFolder(folder.id).success, true);
+
+  const restored = db.restoreNoteAfterDeniedDelete(note.id);
+  assert.equal(restored.pending, true);
+  const row = noteRow(db, note.id);
+  assert.equal(row.transcript, FINAL);
+  assert.equal(row.sync_status, "pending");
+  assert.equal(row.restore_pending, 0, "the mark goes with the restore");
+
+  // Deleted again, with nothing kept this time: the server's copy.
+  assert.equal(db.deleteNote(note.id).success, true);
+  assertTakesServerCopy(db, note.id);
 });
