@@ -933,9 +933,11 @@ export interface StartRecordingArgs {
 export type StartRecordingResult = boolean | "cancelled";
 
 // Resolves false only when workspace policy refuses the recording or an automatic
-// start loses its consent. An automatic start cancelled before main setup reports
-// "cancelled" so its note session can be released without restoring the layout.
-// Setup failures remain accepted and are reported through the store.
+// start loses its consent. An automatic start cancelled before main setup, or an
+// explicit one cancelled before meeting admission while main's admission check is
+// available, reports "cancelled" so its note session can be released without
+// restoring the layout. Setup failures remain accepted and are reported through
+// the store.
 export async function startRecording(args: StartRecordingArgs): Promise<StartRecordingResult> {
   if (isRecordingFlag && !isStartingFlag) return true;
   // An automatic request must observe a pending start's outcome before its own
