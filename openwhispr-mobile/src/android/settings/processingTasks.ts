@@ -22,13 +22,19 @@ export function phoneModelFor(config: UserConfig | null, task: KeyTask): Android
     : (config?.androidTextModel ?? 'qwen-balanced');
 }
 
-/** What a task runs on: its own choice, or with none saved, what the mode gives it. */
+/**
+ * What a task runs on: its own choice, or with none saved, what the mode gives it. The Assistant
+ * (the bubble's hold menu) ran on Text cleanup's engine before it had a task of its own, so with
+ * nothing saved for it, it still follows Text cleanup.
+ */
 export function effectiveSelection(
   config: UserConfig | null,
   task: KeyTask,
   activeMode: ProcessingMode,
   cloudAccess: CloudAccess,
 ) {
+  if (task === 'agent' && !config?.inference?.agent)
+    return workflowSelection(config, 'cleanup', activeMode, cloudAccess);
   return workflowSelection(config, task, activeMode, cloudAccess);
 }
 

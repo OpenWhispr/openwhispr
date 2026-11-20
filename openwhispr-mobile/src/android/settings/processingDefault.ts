@@ -137,8 +137,8 @@ function keepModeOpen() {
 
 /**
  * Anything that still turns Local Mode on (onboarding, an older build's setting) becomes the
- * On device Default instead: every task is put on the phone, except a cleanup or note
- * formatting choice already saved for a key, which Local Mode honoured too.
+ * On device Default instead: every task is put on the phone, except a cleanup, note formatting
+ * or Assistant choice already saved for a key, which Local Mode honoured too.
  */
 export async function leaveLocalMode(): Promise<void> {
   const config = useConfigStore.getState().config;
@@ -146,7 +146,8 @@ export async function leaveLocalMode(): Promise<void> {
   let next = config;
   for (const task of SHEET_TASKS) {
     const saved = config?.inference?.[task];
-    if ((task === 'cleanup' || task === 'notes') && saved?.mode === 'providers') continue;
+    if ((task === 'cleanup' || task === 'notes' || task === 'agent') && saved?.mode === 'providers')
+      continue;
     change = { ...change, ...taskChange(next, task, { mode: 'local' }) };
     next = { ...next, ...change } as UserConfig;
   }

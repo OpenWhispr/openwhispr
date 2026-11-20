@@ -18,7 +18,7 @@ import type { KeyProviderId } from './keyCheck';
 import { keySelection, setTask } from './processingDefault';
 
 /** The tasks with a Runs on page of their own, in order. Meetings has its own page. */
-export const TASKS = ['dictation', 'upload', 'cleanup', 'notes'] as const;
+export const TASKS = ['dictation', 'upload', 'cleanup', 'notes', 'agent'] as const;
 export type KeyTask = (typeof TASKS)[number];
 /** Every task a key can run, as the key sheet lists them. */
 export const SHEET_TASKS = [...TASKS, 'meeting'] as const;

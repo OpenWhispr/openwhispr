@@ -4,7 +4,7 @@ jest.mock('../models', () => ({
   modelReady: jest.fn(),
   modelSupported: () => true,
 }));
-jest.mock('../settings/bubbleAppearance', () => ({ setHoldAction: jest.fn() }));
+jest.mock('../settings/bubbleAppearance', () => ({ setBubbleAssistant: jest.fn() }));
 jest.mock('@/store/useConfigStore', () => ({ useConfigStore: { getState: () => ({}) } }));
 
 import { modelFor, modelsToDownload } from '../onboarding/deviceSetup';

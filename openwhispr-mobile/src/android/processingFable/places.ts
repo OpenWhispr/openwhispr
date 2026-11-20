@@ -67,6 +67,7 @@ export const TASK_TITLE = {
   upload: 'audioUploads',
   cleanup: 'textCleanup',
   notes: 'noteFormatting',
+  agent: 'assistant',
   meeting: 'meetings',
 } as const;
 

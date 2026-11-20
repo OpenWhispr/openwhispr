@@ -58,16 +58,18 @@ export interface BubbleStatusOptions {
   message?: BubbleMessage;
 }
 export interface BubbleMenuContext {
-  /** "Into {target}" under Translate (Settings › Translation). */
+  /** "Into {target}" under Translate (Settings › Bubble › Assistant › Translate). */
   translateTarget?: string;
   /** Why the Assistant row is greyed: "sign-in", "unavailable", or "" when it can be used. */
   assistantBlock?: '' | 'sign-in' | 'unavailable';
-  /** Settings › Bubble › Hold the bubble. */
-  holdAction?: 'menu' | 'nothing';
+  /** Settings › Bubble › Assistant: "menu" when on, "talk" (hold to talk) when off. */
+  holdAction?: 'menu' | 'talk';
 }
 interface NativeDictation {
   getDeviceProfile(): DeviceProfile;
   getLocale(): string;
+  /** Every language set on the phone, in its order. Missing on builds before the Assistant page. */
+  getLocales?(): string[];
   getStatus(): BubbleStatus;
   openSettings(kind: 'overlay' | 'accessibility' | 'battery' | 'app'): void;
   /** Missing on builds before the sign-in redesign. */

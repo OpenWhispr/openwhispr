@@ -35,9 +35,10 @@ import {
   applyBubbleLook,
   sizeLabel,
   useBubbleLook,
-  useHoldAction,
+  useBubbleAssistant,
 } from '@/android/settings/bubbleAppearance';
 import { processingSummary } from '@/android/processingFable/places';
+import { GlyphTile } from '@/android/settings/BubbleAssistantScreen';
 
 const HISTORY_LABEL: Record<number, SettingsKey> = {
   [-1]: 'forever',
@@ -58,7 +59,7 @@ export default function SettingsScreen() {
   const processing = processingSummary(t, config, activeMode, cloudAccessFor(user));
   const sync = useSyncStore();
   const opacity = useBubbleLook((s) => s.opacity);
-  const holdAction = useHoldAction((s) => s.value);
+  const assistantOn = useBubbleAssistant((s) => s.on);
   const { status, offCount, refresh } = usePermissions();
   const [switching, setSwitching] = useState(false);
   const signedIn = !requiresRealAccount(user);
@@ -288,10 +289,10 @@ export default function SettingsScreen() {
           onPress={() => router.push('/android-size-look')}
         />
         <ListRow
-          icon="Pointer"
-          title={t('holdBubble')}
-          value={t(holdAction === 'nothing' ? 'holdNothing' : 'holdShowMenu')}
-          onPress={() => router.push('/android-hold-bubble')}
+          leading={<GlyphTile name="sparkle" />}
+          title={t('assistant')}
+          value={t(assistantOn ? 'on' : 'off')}
+          onPress={() => router.push('/android-bubble-assistant')}
         />
         <ListRow
           icon="Hand"

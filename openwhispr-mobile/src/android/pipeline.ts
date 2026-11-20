@@ -54,6 +54,39 @@ export interface AndroidJob {
   language?: string;
   tone?: KeyboardTone;
 }
+
+/**
+ * Where the bubble's Assistant, Translate and Edit selection run: the Assistant task on Processing,
+ * or with nothing saved for it, Text cleanup's engine (where they ran before the task existed).
+ */
+export function assistantRoute(route: TranscriptionJobRoute): {
+  route: TranscriptionJobRoute['cleanupRoute'];
+  unavailable?: string;
+  scope: 'agent' | 'cleanup';
+} {
+  if (useConfigStore.getState().config?.inference?.agent)
+    return { route: route.agentRoute, unavailable: route.agentUnavailable, scope: 'agent' };
+  return { route: route.cleanupRoute, unavailable: route.cleanupUnavailable, scope: 'cleanup' };
+}
+
+/**
+ * One log line per bubble Assistant, Translate or Edit take: the task it ran on, where it was sent
+ * and which model answered. Never the words.
+ */
+export function assistantLogLine(
+  mode: DictationMode,
+  assistant: ReturnType<typeof assistantRoute>,
+  answeredBy: string | undefined,
+  elapsedMs: number,
+): string {
+  const route = assistant.route;
+  const target =
+    route?.mode === 'providers'
+      ? `providers provider=${route.providerId ?? '?'} model=${route.modelId ?? '?'}`
+      : (route?.mode ?? 'none');
+  return `[android-assistant] mode=${mode} task=${assistant.scope} route=${target} answeredBy=${answeredBy || '?'} elapsedMs=${elapsedMs}`;
+}
+
 export function createAndroidJob(
   mode: DictationMode = 'dictate',
   target = 'Spanish',
@@ -67,7 +100,7 @@ export function createAndroidJob(
     localDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
     accountScope: insightsScope(),
     historyScope: captureTranscriptScope(),
-    route: snapshotTranscriptionJob('dictation'),
+    route: snapshotTranscriptionJob('dictation', ['cleanup', 'agent']),
     mode,
     target,
     selection,
@@ -94,8 +127,10 @@ export async function ensureAndroidModels(job: AndroidJob): Promise<void> {
   const cleanupRuns =
     config?.cleanupEnabled !== false &&
     (job.route.provider !== 'local' || cleanupSavedOnDevice(config));
+  const textRoute =
+    job.mode === 'dictate' ? job.route.cleanupRoute : assistantRoute(job.route).route;
   if (
-    job.route.cleanupRoute?.mode === 'local' &&
+    textRoute?.mode === 'local' &&
     (job.mode !== 'dictate' || cleanupRuns) &&
     !(await modelReady(selectedTextModel()))
   )
@@ -217,23 +252,32 @@ export async function processAndroidAudio(
       throw new AndroidCleanupError(output.transcription.cleanupWarning, output.originalText);
     let text = output.text;
     if (job.mode !== 'dictate') {
-      if (job.route.cleanupUnavailable) throw new Error(job.route.cleanupUnavailable);
+      const assistant = assistantRoute(job.route);
+      if (assistant.unavailable) throw new Error(assistant.unavailable);
       stage('cleaning');
+      const assistantStartedAt = Date.now();
       const result = await ReasoningService.processText({
         text:
           job.mode === 'edit'
             ? buildSelectionEditUserPrompt(output.originalText, job.selection)
             : output.originalText,
         systemPrompt: androidActionPrompt(job.mode, job.target, senderFirstName()),
-        inferenceScope: 'cleanup',
-        inferenceRoute: job.route.cleanupRoute,
+        inferenceScope: assistant.scope,
+        inferenceRoute: assistant.route,
+        // A saved Assistant task runs where the user put it (Processing); one that follows Text
+        // cleanup keeps words transcribed on the phone there, as before it had a task.
         routing:
-          job.route.cleanupRoute?.mode === 'providers'
+          assistant.route?.mode === 'providers'
             ? { sendToChosenProvider: true }
-            : { isPrivateNote: job.route.provider === 'local' },
+            : assistant.scope === 'agent'
+              ? {}
+              : { isPrivateNote: job.route.provider === 'local' },
         signal,
         maxTokens: actionMaxTokens(job),
       });
+      console.info(
+        assistantLogLine(job.mode, assistant, result.model, Date.now() - assistantStartedAt),
+      );
       text = job.mode === 'edit' ? editReplacement(result.text, job.selection) : result.text;
     }
     assertCurrent();

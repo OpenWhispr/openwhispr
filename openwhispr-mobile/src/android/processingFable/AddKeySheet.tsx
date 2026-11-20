@@ -160,7 +160,7 @@ export function AddKeySheet({ visible, onClose }: { visible: boolean; onClose: (
   const serverTasks = found
     ? [
         ...(found.speech?.length ? (['dictation', 'upload'] as const) : []),
-        ...(found.text?.length ? (['cleanup', 'notes'] as const) : []),
+        ...(found.text?.length ? (['cleanup', 'notes', 'agent'] as const) : []),
       ]
     : [];
   const count = custom ? serverTasks.length : sourceTasks(source).length;

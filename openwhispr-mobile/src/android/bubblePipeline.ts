@@ -10,6 +10,7 @@ import {
 } from '../../modules/android-dictation/src';
 import {
   AndroidCleanupError,
+  assistantRoute,
   createAndroidJob,
   processAndroidAudio,
   type AndroidJob,
@@ -47,12 +48,9 @@ async function dictationJob(selection: string, mode: DictationMode): Promise<And
 /** Why the Assistant can't run right now, for the menu's greyed row: "" when it can. */
 function assistantBlock(): '' | 'sign-in' | 'unavailable' {
   try {
-    const route = snapshotTranscriptionJob('dictation');
-    if (route.cleanupUnavailable) return 'unavailable';
-    if (
-      route.cleanupRoute?.mode === 'openwhispr' &&
-      requiresRealAccount(useAuthStore.getState().user)
-    )
+    const assistant = assistantRoute(snapshotTranscriptionJob('dictation', ['cleanup', 'agent']));
+    if (assistant.unavailable) return 'unavailable';
+    if (assistant.route?.mode === 'openwhispr' && requiresRealAccount(useAuthStore.getState().user))
       return 'sign-in';
     return '';
   } catch {

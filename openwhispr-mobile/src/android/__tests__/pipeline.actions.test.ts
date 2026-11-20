@@ -7,7 +7,12 @@ jest.mock('../insights', () => ({
   recordInsight: jest.fn(),
   countSpokenWords: (text: string) => text.trim().split(/\s+/).length,
 }));
-import { androidActionPrompt, processAndroidAudio, type DictationMode } from '../pipeline';
+import {
+  androidActionPrompt,
+  assistantLogLine,
+  processAndroidAudio,
+  type DictationMode,
+} from '../pipeline';
 import { SELECTION_EDIT_SYSTEM_PROMPT } from '../selectionEdit';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { cleanupTranscript } from '@/lib/cleanupTranscript';
@@ -66,16 +71,14 @@ jest.mock('@/android/LocalTextModel', () => ({ selectedTextModel: () => 'qwen-ba
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: { id: 'test', isAnonymous: false } }) },
 }));
+const mockConfig: { current: Record<string, unknown> } = { current: {} };
+const baseConfig = {
+  androidHistoryDays: 0,
+  cleanupEnabled: true,
+  inference: { cleanup: { mode: 'local' } },
+};
 jest.mock('@/store/useConfigStore', () => ({
-  useConfigStore: {
-    getState: () => ({
-      config: {
-        androidHistoryDays: 0,
-        cleanupEnabled: true,
-        inference: { cleanup: { mode: 'local' } },
-      },
-    }),
-  },
+  useConfigStore: { getState: () => ({ config: mockConfig.current }) },
 }));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ activeMode: 'private' }) },
@@ -120,7 +123,10 @@ const routes: Record<TranscriptionProvider, TranscriptionJobRoute> = {
   },
 };
 const audio = { uri: 'file:///cache/fixture.wav', durationMs: 3000, noSpeech: false };
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockConfig.current = baseConfig;
+});
 
 describe.each(['local', 'cloud', 'byok'] as const)('%s speech for Android actions', (provider) => {
   it.each(['translate', 'write', 'edit'] as const)(
@@ -157,6 +163,7 @@ describe.each(['local', 'cloud', 'byok'] as const)('%s speech for Android action
               ? 'Selected document (JSON string):\n"Apples and milk."\n\nEditing instruction:\noriginal words\n\nReturn the replacement JSON object.'
               : 'original words',
           inferenceRoute: route.cleanupRoute,
+          inferenceScope: 'cleanup',
           signal,
         }),
       );
@@ -330,3 +337,176 @@ it.each(['dictate', 'translate'] as const)(
     );
   },
 );
+
+describe('the Assistant task on Processing', () => {
+  const agentRoute = {
+    mode: 'providers' as const,
+    scope: 'agent' as const,
+    providerId: 'openai',
+    modelId: 'gpt-6-luna',
+    endpoint: 'https://api.openai.com/v1',
+    credentialRef: 'provider.openai',
+  };
+  const job = (mode: DictationMode, route: TranscriptionJobRoute) => ({
+    route,
+    mode,
+    target: 'German',
+    selection: 'Apples and milk.',
+    eventId: 'agent-test',
+    accountScope: 'device',
+    historyScope: null,
+    startedAt: '2026-11-20T10:00:00Z',
+    localDate: '2026-11-20',
+  });
+
+  it.each(['translate', 'write', 'edit'] as const)(
+    'runs %s on the Assistant task once one is saved',
+    async (mode) => {
+      mockConfig.current = {
+        ...baseConfig,
+        inference: { cleanup: { mode: 'local' }, agent: { mode: 'providers' } },
+      };
+      await processAndroidAudio(
+        audio,
+        job(mode, { ...routes.local, agentRoute }),
+        new AbortController().signal,
+        jest.fn(),
+      );
+      expect(ReasoningService.processText).toHaveBeenCalledWith(
+        expect.objectContaining({ inferenceRoute: agentRoute, inferenceScope: 'agent' }),
+      );
+    },
+  );
+
+  it('runs on OpenWhispr Cloud when the Assistant is saved there, though the words were transcribed on the phone', async () => {
+    mockConfig.current = {
+      ...baseConfig,
+      inference: { cleanup: { mode: 'local' }, agent: { mode: 'openwhispr' } },
+    };
+    const cloud = { mode: 'openwhispr' as const, scope: 'agent' as const };
+    await processAndroidAudio(
+      audio,
+      job('write', { ...routes.local, agentRoute: cloud }),
+      new AbortController().signal,
+      jest.fn(),
+    );
+    const request = jest.mocked(ReasoningService.processText).mock.calls[0][0];
+    expect(request).toMatchObject({ inferenceRoute: cloud, inferenceScope: 'agent' });
+    // Not marked private, which would keep it on the phone's model.
+    expect(request.routing).toEqual({});
+  });
+
+  it("keeps an unsaved Assistant's words on the phone when they were transcribed there", async () => {
+    await processAndroidAudio(
+      audio,
+      job('write', routes.local),
+      new AbortController().signal,
+      jest.fn(),
+    );
+    expect(jest.mocked(ReasoningService.processText).mock.calls[0][0].routing).toEqual({
+      isPrivateNote: true,
+    });
+  });
+
+  it('follows Text cleanup while nothing is saved for the Assistant', async () => {
+    await processAndroidAudio(
+      audio,
+      job('write', { ...routes.local, agentRoute }),
+      new AbortController().signal,
+      jest.fn(),
+    );
+    expect(ReasoningService.processText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inferenceRoute: routes.local.cleanupRoute,
+        inferenceScope: 'cleanup',
+      }),
+    );
+  });
+
+  it("refuses with the Assistant task's own reason when it can't run", async () => {
+    mockConfig.current = { ...baseConfig, inference: { agent: { mode: 'providers' } } };
+    await expect(
+      processAndroidAudio(
+        audio,
+        job('translate', {
+          ...routes.local,
+          agentUnavailable: 'Choose a voice assistant provider.',
+        }),
+        new AbortController().signal,
+        jest.fn(),
+      ),
+    ).rejects.toThrow('Choose a voice assistant provider.');
+    expect(ReasoningService.processText).not.toHaveBeenCalled();
+  });
+
+  it('translates into the target saved in Settings', async () => {
+    await processAndroidAudio(
+      audio,
+      job('translate', routes.cloud),
+      new AbortController().signal,
+      jest.fn(),
+    );
+    expect(ReasoningService.processText).toHaveBeenCalledWith(
+      expect.objectContaining({ systemPrompt: expect.stringContaining('into German') }),
+    );
+  });
+});
+
+describe('the Assistant log line', () => {
+  it('names the task, where it was sent and which model answered, never the words', () => {
+    expect(
+      assistantLogLine(
+        'write',
+        {
+          scope: 'agent',
+          route: {
+            mode: 'providers',
+            scope: 'agent',
+            providerId: 'openai',
+            modelId: 'gpt-6-luna',
+            endpoint: 'https://api.openai.com/v1',
+            credentialRef: 'provider.openai',
+          },
+        },
+        'gpt-6-luna',
+        812,
+      ),
+    ).toBe(
+      '[android-assistant] mode=write task=agent route=providers provider=openai model=gpt-6-luna answeredBy=gpt-6-luna elapsedMs=812',
+    );
+    expect(
+      assistantLogLine(
+        'translate',
+        { scope: 'cleanup', route: { mode: 'local', scope: 'cleanup' } },
+        '',
+        40,
+      ),
+    ).toBe('[android-assistant] mode=translate task=cleanup route=local answeredBy=? elapsedMs=40');
+  });
+
+  it('is written for each take, without the spoken or written text', async () => {
+    const info = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+    await processAndroidAudio(
+      audio,
+      {
+        route: routes.cloud,
+        mode: 'write',
+        target: 'Spanish',
+        selection: '',
+        eventId: 'log-test',
+        accountScope: 'device',
+        historyScope: null,
+        startedAt: '2026-11-20T10:00:00Z',
+        localDate: '2026-11-20',
+      },
+      new AbortController().signal,
+      jest.fn(),
+    );
+    const line = info.mock.calls
+      .map((call) => String(call[0]))
+      .find((text) => text.startsWith('[android-assistant]'));
+    expect(line).toMatch(/route=openwhispr answeredBy=test /);
+    expect(line).not.toMatch(/original words|Requested action result/);
+    info.mockRestore();
+  });
+});

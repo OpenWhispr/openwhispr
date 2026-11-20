@@ -109,6 +109,7 @@ const TASK_TITLE: Record<KeyTask, SettingsKey> = {
   upload: 'audioUploads',
   cleanup: 'textCleanup',
   notes: 'noteFormatting',
+  agent: 'assistant',
 };
 
 /**
@@ -180,7 +181,9 @@ export default function ProcessingScreen() {
     ...(onPhone.some((task) => task === 'dictation' || task === 'upload')
       ? ['speech' as const]
       : []),
-    ...(onPhone.some((task) => task === 'cleanup' || task === 'notes') ? ['text' as const] : []),
+    ...(onPhone.some((task) => task === 'cleanup' || task === 'notes' || task === 'agent')
+      ? ['text' as const]
+      : []),
     ...(config?.inference?.meeting?.mode === 'local' ? ['diarization' as const] : []),
   ];
   const speechId: AndroidSpeechModelId = config?.androidSpeechModel ?? 'parakeet-v3';

@@ -188,8 +188,9 @@ describe('Use your own key', () => {
     expect(mockSetCredential).toHaveBeenCalledWith('provider.openai', {
       apiKey: 'sk-proj-abcdefghijklmnop4f2a',
     });
-    // Dictation, uploads, cleanup, notes and meetings, dictation first since it sets the default.
-    expect(mockUpdateConfig).toHaveBeenCalledTimes(5);
+    // Dictation, uploads, cleanup, notes, the Assistant and meetings, dictation first since it
+    // sets the default.
+    expect(mockUpdateConfig).toHaveBeenCalledTimes(6);
     expect(useConfigStore.getState().config?.inference?.meeting).toMatchObject({
       providerId: 'openai',
       modelId: 'gpt-4o-transcribe',

@@ -46,11 +46,12 @@ jest.mock('@/android/settings/permissions', () => ({
   usePermissions: () => ({ status: { enabled: false }, offCount: 1, refresh: jest.fn() }),
   requestRuntime: jest.fn(async () => true),
 }));
+jest.mock('@/android/settings/BubbleAssistantScreen', () => ({ GlyphTile: () => null }));
 jest.mock('@/android/settings/bubbleAppearance', () => ({
   useBubbleLook: (selector: (state: { opacity: number }) => unknown) => selector({ opacity: 0.8 }),
   applyBubbleLook: jest.fn(),
   sizeLabel: () => 'medium',
-  useHoldAction: (selector: (state: { value: string }) => unknown) => selector({ value: 'menu' }),
+  useBubbleAssistant: (selector: (state: { on: boolean }) => unknown) => selector({ on: true }),
 }));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (selector: (state: object) => unknown) =>
@@ -163,6 +164,7 @@ describe('the Processing row reads where every task runs', () => {
     upload: selection,
     cleanup: selection,
     notes: selection,
+    agent: selection,
     meeting: selection,
   });
   const openAi = { mode: 'providers', providerId: 'openai', modelId: 'gpt-4o-mini-transcribe' };
@@ -204,6 +206,13 @@ describe('the Processing row reads where every task runs', () => {
 
   it('says Mixed when a key runs some tasks and Cloud the rest', () => {
     row({ inference: { ...everyTask({ mode: 'openwhispr' }), dictation: openAi } });
+    expect(screen.getByText('mixed')).toBeTruthy();
+  });
+
+  it('counts an Assistant with nothing saved where Text cleanup runs', () => {
+    const { agent: _agent, ...rest } = everyTask({ mode: 'local' });
+    // Cleanup itself is off, so only the Assistant (which still runs on its engine) makes it Mixed.
+    row({ cleanupEnabled: false, inference: { ...rest, cleanup: { mode: 'openwhispr' } } });
     expect(screen.getByText('mixed')).toBeTruthy();
   });
 
