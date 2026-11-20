@@ -50,6 +50,8 @@ test("request-local cleanup templates preserve provider contracts and normal inf
     toneStyle,
     reasoningEffort: "minimal",
   });
+  // Provider selection awaits the enterprise identity first, so the call lands a tick later.
+  while (localCalls.length === 0) await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(localCalls[0][0], wrapCleanupTranscript(text));
   assert.equal(localCalls[0][3].systemPrompt, expected);
   assert.equal(savedPrompt(), "Saved {{agentName}}");
