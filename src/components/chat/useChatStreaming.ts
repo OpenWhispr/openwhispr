@@ -16,8 +16,6 @@ import {
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { useAuth } from "../../hooks/useAuth";
-import { getTitaniumAuthState } from "../../hooks/useTitaniumAuth";
-import { CLOUD_ENABLED } from "../../config/forkRuntime";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
 import { connectorEligibilityFor } from "../../utils/connectorEligibility";
