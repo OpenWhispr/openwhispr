@@ -79,7 +79,13 @@ describe('Processing · Fable’s take', () => {
 
   it('counts the tasks each provider can run, as the key sheet’s button names them', () => {
     expect(places.sourceTasks('openai')).toHaveLength(6);
-    expect(places.sourceTasks('groq')).toEqual(['dictation', 'upload', 'cleanup', 'notes', 'agent']);
+    expect(places.sourceTasks('groq')).toEqual([
+      'dictation',
+      'upload',
+      'cleanup',
+      'notes',
+      'agent',
+    ]);
     expect(places.sourceTasks('deepgram')).toEqual(['dictation', 'upload', 'meeting']);
     expect(places.sourceTasks('assemblyai')).toEqual(['dictation', 'upload', 'meeting']);
     expect(places.sourceTasks('openrouter')).toEqual(['cleanup', 'notes', 'agent']);

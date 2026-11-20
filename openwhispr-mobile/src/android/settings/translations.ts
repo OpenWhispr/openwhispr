@@ -1049,8 +1049,7 @@ export const settingsTranslations: Record<
     insertionNoticeTitle: 'Inserir suas palavras',
     insertionNotice:
       'Para colocar suas palavras no Messages, no Gmail e em outros apps, o OpenWhispr usa a Acessibilidade do Android. Ele lê apenas a caixa de texto em que você dita: quando você começa e por 45 segundos depois que suas palavras entram, para que uma palavra que você corrija ali entre no seu dicionário. Nunca campos de senha, e nunca toca em botões nem envia mensagens.',
-    insertionNoticeSteps:
-      'Na próxima tela, abra Apps instalados → OpenWhispr e ative.',
+    insertionNoticeSteps: 'Na próxima tela, abra Apps instalados → OpenWhispr e ative.',
     permissionOn: '{{name}} está ativado',
     searchLanguages: 'Buscar idiomas',
     autoDetect: 'Detectar automaticamente',
@@ -2239,8 +2238,7 @@ export const settingsTranslations: Record<
     insertionNoticeTitle: '插入你的文字',
     insertionNotice:
       '為了把文字放進 Messages、Gmail 等 App，OpenWhispr 會使用 Android 無障礙功能。它只讀取你正在聽寫的文字框：開始聽寫時，以及文字輸入後的 45 秒內，這樣你在其中修改的字詞就會加入你的字典。絕不讀取密碼欄位，也絕不點選按鈕或傳送訊息。',
-    insertionNoticeSteps:
-      '在下一個畫面中，開啟「已安裝的應用程式」→「OpenWhispr」並開啟。',
+    insertionNoticeSteps: '在下一個畫面中，開啟「已安裝的應用程式」→「OpenWhispr」並開啟。',
     permissionOn: '{{name}}已開啟',
     searchLanguages: '搜尋語言',
     autoDetect: '自動偵測',
@@ -2823,8 +2821,7 @@ export const settingsTranslations: Record<
     insertionNoticeTitle: 'إدراج كلماتك',
     insertionNotice:
       'لإدراج كلماتك في Messages وGmail وتطبيقات أخرى، يستخدم OpenWhispr إمكانية الوصول في Android. يقرأ فقط مربع النص الذي تُملي فيه: عند البدء، ولمدة 45 ثانية بعد إدراج كلماتك، حتى تنضم الكلمة التي تصححها هناك إلى قاموسك. ولا يقرأ حقول كلمات المرور أبدًا، ولا يضغط الأزرار ولا يرسل الرسائل.',
-    insertionNoticeSteps:
-      'في الشاشة التالية، افتح التطبيقات المثبّتة ← OpenWhispr وفعّله.',
+    insertionNoticeSteps: 'في الشاشة التالية، افتح التطبيقات المثبّتة ← OpenWhispr وفعّله.',
     permissionOn: '{{name}} مفعّل',
     searchLanguages: 'البحث في اللغات',
     autoDetect: 'الكشف تلقائيًا',
