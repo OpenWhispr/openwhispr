@@ -205,7 +205,6 @@ const diarizationHost = (endpoint) => {
 const { createLocalCleanupPrewarm } = require("./localCleanupPrewarm");
 const { resolveLocalServerNeeds, shouldStopLocalServer } = require("./localServerPolicy");
 const autoStart = require("./autoStart");
-const { getRelaunchOptions, getRelaunchWaiter } = require("./autoStartPolicy");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
@@ -1674,6 +1673,21 @@ class IPCHandlers {
       { noteId, expectedCount },
       "speaker"
     );
+  }
+
+  // #3030: the account was removed from the workspace that managed this device.
+  // The next launch wipes, before anything opens a file it removes. False when
+  // the removal couldn't be recorded, so the policy lookup asks again.
+  _wipeForWorkspaceRemoval(removal) {
+    if (this._workspaceRemovalWipeRequested) return true;
+    debugLogger.warn("Removed from the managing workspace; wiping local data", {
+      workspaceId: removal.workspaceId,
+    });
+    const { requestWorkspaceRemovalWipe } = require("./localDataWipe");
+    if (!requestWorkspaceRemovalWipe(app.getPath("userData"), removal)) return false;
+    this._workspaceRemovalWipeRequested = true;
+    void this.relaunchApp();
+    return true;
   }
 
   _getPersonalDictionarySafe() {
@@ -5606,6 +5620,12 @@ class IPCHandlers {
       return { success: true, deletedCount };
     });
 
+    // The workspace removal wipe's one-time notice (#3030), for the control panel.
+    ipcMain.handle("take-local-data-wipe-notice", (event) => {
+      if (event.sender !== this.windowManager.controlPanelWindow?.webContents) return null;
+      return require("./localDataWipe").takeWipeNotice(app.getPath("userData"));
+    });
+
     // One-time "GPU pack needs re-downloading" notice recorded before any
     // window existed (#1606). Only the window that shows it can take it.
     ipcMain.handle("take-gpu-pack-migration-notice", (event) => {
@@ -5971,7 +5991,8 @@ class IPCHandlers {
 
     // Under `npm run dev` the Vite server dies with Electron, so a relaunched dev
     // instance would have no renderer: just quit there.
-    ipcMain.handle("relaunch-app", async () => {
+    // After Reset app data, and after recording a workspace removal's wipe (#3030).
+    this.relaunchApp = async () => {
       if (process.env.NODE_ENV === "development") return app.quit();
       // Once Squirrel.Mac holds a downloaded update it installs it on this quit regardless
       // of any flag, so the updater owns that restart instead of racing app.relaunch().
@@ -5983,25 +6004,10 @@ class IPCHandlers {
         if (success) return;
       }
       this.updateManager.deferInstallOnQuit();
-      const { launcherPath, args } = getRelaunchOptions({
-        argv: process.argv,
-        protocol: this.oauthProtocol,
-        appImagePath: process.env.APPIMAGE,
-      });
-      if (launcherPath) {
-        const waiter = getRelaunchWaiter({ launcherPath, args, pid: process.pid });
-        require("child_process")
-          .spawn(waiter.file, waiter.args, {
-            detached: true,
-            stdio: "ignore",
-            cwd: path.dirname(launcherPath), // never inside the directory being removed
-          })
-          .unref();
-      } else {
-        app.relaunch({ args });
-      }
+      autoStart.scheduleRelaunch(this.oauthProtocol);
       app.quit();
-    });
+    };
+    ipcMain.handle("relaunch-app", () => this.relaunchApp());
 
     ipcMain.handle("cleanup-app", async (event) => {
       const fs = require("fs");
@@ -8609,6 +8615,7 @@ class IPCHandlers {
           binding: accountScopeBinding.read(),
         })?.accountId ?? null,
       broadcast: (snapshot) => this.effectivePolicyManager?.updateWorkspace(snapshot),
+      onWorkspaceRemoval: (removal) => this._wipeForWorkspaceRemoval(removal),
       logger: debugLogger,
     });
     let cookieGeneration = null;

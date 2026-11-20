@@ -3898,7 +3898,9 @@
       "failedTitle_one": "Couldn't remove {{count}} member",
       "failedTitle_other": "Couldn't remove {{count}} members",
       "transferDone_one": "Reassigned content and teamspace Admin access to {{name}}. Removed {{count}} member.",
-      "transferDone_other": "Reassigned content and teamspace Admin access to {{name}}. Removed {{count}} members."
+      "transferDone_other": "Reassigned content and teamspace Admin access to {{name}}. Removed {{count}} members.",
+      "wipeDevices": "Wipe OpenWhispr data on their devices",
+      "wipeDevicesHint": "Next time OpenWhispr connects on a device this workspace manages for them, it deletes all notes, recordings and settings there, other accounts' included."
     },
     "cancelInvitation": {
       "title": "Cancel the invitation for {{email}}?",
@@ -5135,6 +5137,10 @@
       "gpuPackMigration": {
         "title": "GPU pack needs re-downloading",
         "description": "This version can't use your earlier GPU pack ({{packs}}). Download it again in Settings to turn GPU acceleration back on."
+      },
+      "localDataWiped": {
+        "title": "Your organization removed this device's OpenWhispr data",
+        "description": "You were removed from your organization's workspace, so OpenWhispr deleted what it stored on this device and started fresh."
       },
       "cleanupFailed": {
         "title": "Cleanup failed",

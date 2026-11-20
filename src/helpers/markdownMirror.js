@@ -332,17 +332,25 @@ class MarkdownMirror {
       .filter((entry) => entry.ownerId === noteId && entry.kind === kind);
   }
 
-  _isPristine(entry) {
+  // A file it can't read counts as edited, unless the caller asks for the error.
+  _isPristine(entry, { throwIfUnreadable = false } = {}) {
+    let filePath;
     try {
-      const filePath = this._absolutePath(entry.relPath);
+      filePath = this._absolutePath(entry.relPath);
       this._assertWritableFilePath(filePath);
       const stats = fs.lstatSync(filePath);
       if (stats.isSymbolicLink() || !stats.isFile()) return false;
-      const text = fs.readFileSync(filePath, "utf-8");
-      return hashOf(text) === entry.hash || hashOf(normalizeLineEndings(text)) === entry.hash;
     } catch {
       return false;
     }
+    let text;
+    try {
+      text = fs.readFileSync(filePath, "utf-8");
+    } catch (error) {
+      if (throwIfUnreadable && error.code !== "ENOENT") throw error;
+      return false;
+    }
+    return hashOf(text) === entry.hash || hashOf(normalizeLineEndings(text)) === entry.hash;
   }
 
   // A name that differs only in case or Unicode form can be the same file, which
@@ -905,6 +913,40 @@ class MarkdownMirror {
     } finally {
       if (fd !== undefined) fs.closeSync(fd);
     }
+  }
+
+  // Erasing local data (#3030) in a folder the user chose removes only the
+  // files the mirror's record lists there that still hold what it wrote, and the
+  // folders that leaves empty. Anything else, an outside edit included, is the
+  // user's. The chosen folder itself stays, and links are never followed. A file
+  // that can't go, or can't be read to tell, doesn't stop the rest; the first
+  // failure is thrown at the end. The record names the folder by its real path,
+  // so one that now leads elsewhere (a link put in its place) isn't the folder
+  // the mirror wrote to.
+  removeMirroredFiles(basePath, entries) {
+    if (fs.realpathSync(basePath) !== basePath) {
+      throw new Error("The notes folder now leads elsewhere");
+    }
+    const mirror = new MarkdownMirror();
+    mirror._baseRealPath = fs.realpathSync.native(basePath);
+    let failure = null;
+    for (const entry of entries) {
+      try {
+        if (mirror._isPristine(entry, { throwIfUnreadable: true }))
+          mirror._removeFile(mirror._absolutePath(entry.relPath));
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    for (let folder of mirror._vacatedDirs) {
+      try {
+        while (folder !== mirror._baseRealPath && mirror._removeDirIfEmpty(folder))
+          folder = path.dirname(folder);
+      } catch {
+        /* Gone already, or not ours to remove. */
+      }
+    }
+    if (failure) throw failure;
   }
 
   // An id alone is common in a user's vault. Require the old mirror's metadata,

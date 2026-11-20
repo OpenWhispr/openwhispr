@@ -88,6 +88,8 @@ test("malformed documents, partial policies and wrong device types fail", () => 
     { Policy: JSON.stringify({ features: { meetingRecordingEnabled: false } }) },
     { RequireSignIn: 0 },
     { DisableMeetingRecording: "true" },
+    { WipeLocalDataOnLaunch: "" },
+    { WipeLocalDataOnLaunch: false },
   ])
     assert.throws(() => normalizeDeviceValues(values));
 });
@@ -203,6 +205,59 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
     }),
     /timed out/
   );
+});
+
+// The macOS helper returns only the keys it lists, so a key missing there is
+// silently never read (b855b63e2 dropped two).
+test("the macOS reader asks for every device key this build reads", () => {
+  const swift = fs.readFileSync(
+    path.join(__dirname, "../../resources/macos-managed-policy.swift"),
+    "utf8"
+  );
+  assert.deepEqual(JSON.parse(/^let keys = (\[.*\])$/m.exec(swift)[1]), [
+    "Policy",
+    "RequireSignIn",
+    "AuditLogPath",
+    "WipeLocalDataOnLaunch",
+    "WipeLocalDataIncludesModels",
+    "DisableMeetingRecording",
+  ]);
+});
+
+// #3030: the offboarding wipe keeps downloaded models unless this key asks.
+test("WipeLocalDataIncludesModels is a strict boolean that defaults to keeping models", async () => {
+  const wipe = { WipeLocalDataOnLaunch: "offboard-1" };
+  assert.equal(normalizeDeviceValues(wipe).wipeLocalDataOnLaunch, "offboard-1");
+  assert.equal(normalizeDeviceValues(wipe).wipeLocalDataIncludesModels, false);
+  assert.equal(
+    normalizeDeviceValues({ ...wipe, WipeLocalDataIncludesModels: true })
+      .wipeLocalDataIncludesModels,
+    true
+  );
+  assert.throws(() => normalizeDeviceValues({ ...wipe, WipeLocalDataIncludesModels: "true" }));
+  // Without a token it does nothing, so it alone doesn't make the device managed.
+  for (const WipeLocalDataIncludesModels of [true, false])
+    assert.equal(normalizeDeviceValues({ WipeLocalDataIncludesModels }).status, "absent");
+  // Deployed on its own it manages nothing, but a workspace removal's wipe still takes models.
+  assert.equal(
+    normalizeDeviceValues({ WipeLocalDataIncludesModels: true }).wipeLocalDataIncludesModels,
+    true
+  );
+  assert.equal(
+    normalizeDeviceValues({ WipeLocalDataIncludesModels: false }).wipeLocalDataIncludesModels,
+    undefined
+  );
+  assert.deepEqual(
+    await registryExport([
+      '"WipeLocalDataOnLaunch"="offboard-1"',
+      '"WipeLocalDataIncludesModels"=dword:00000001',
+    ])(),
+    { WipeLocalDataOnLaunch: "offboard-1", WipeLocalDataIncludesModels: true }
+  );
+  // A REG_SZ is read as null, which leaves the deployment invalid.
+  const wrongType = await registryExport(['"WipeLocalDataIncludesModels"="1"'])();
+  assert.deepEqual(wrongType, { WipeLocalDataIncludesModels: null });
+  assert.throws(() => normalizeDeviceValues(wrongType));
 });
 
 test("a Policy REG_SZ holding line breaks reads as one value", async () => {

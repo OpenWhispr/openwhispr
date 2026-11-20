@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  canChangeWipeChoice,
   needsTransfer,
   ownerCandidates,
   type MemberRemovalEvent,
@@ -20,6 +21,7 @@ import { isolate } from "../../utils/bidiIsolate";
 import { cn } from "../lib/utils";
 import { ChevronsUpDown } from "../icons";
 import MemberAvatar from "../MemberAvatar";
+import { Checkbox } from "../ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,6 +60,7 @@ export function RemoveMembersDialog({
   const runningRef = useRef(false);
   const pickerLabelId = useId();
   const pickerValueId = useId();
+  const wipeHintId = useId();
   // The state moves a refused pick back to you, but the error still names who was refused.
   const [refusedOwnerName, setRefusedOwnerName] = useState("");
 
@@ -75,7 +78,11 @@ export function RemoveMembersDialog({
         if (cancelled) return;
         // The reply reaches here unchecked; one without a member list reads as a failed preview.
         const owners: unknown = preview?.members;
-        dispatch(Array.isArray(owners) ? { type: "previewed", owners } : { type: "previewFailed" });
+        dispatch(
+          Array.isArray(owners)
+            ? { type: "previewed", owners, canWipeDevices: preview?.can_wipe_devices }
+            : { type: "previewFailed" }
+        );
       },
       (error: unknown) => {
         if (cancelled) return;
@@ -94,7 +101,7 @@ export function RemoveMembersDialog({
 
   if (state.kind === "closed") return null;
 
-  const { subjects, owners, transferTo, defaultOwnerId } = state;
+  const { subjects, owners, transferTo, defaultOwnerId, canWipeDevices, wipeDevices } = state;
   const count = subjects.length;
   // Isolated: the dialog and toasts take plain strings, where <bdi> can't go.
   const workspaceName = isolate(workspace.name);
@@ -160,6 +167,9 @@ export function RemoveMembersDialog({
       const result = await removeMembers(workspace.id, {
         userIds: subjects.map((subject) => subject.user_id),
         ...(transferring && transferTo ? { transferTo } : {}),
+        // Always said: where the dialog didn't ask, a policy saved since the
+        // preview mustn't wipe by the server's default.
+        wipeDevices: canWipeDevices && wipeDevices,
       });
       toast(doneToast(result, ownerName));
       dispatch({ type: "succeeded" });
@@ -380,6 +390,21 @@ export function RemoveMembersDialog({
               })}
             </p>
           ) : null}
+        </div>
+      ) : null}
+      {canWipeDevices ? (
+        <div className="flex flex-col gap-1">
+          <Checkbox
+            checked={wipeDevices}
+            disabled={!canChangeWipeChoice(state) || managedRefusal}
+            describedBy={wipeHintId}
+            onChange={(wipe) => dispatch({ type: "setWipeDevices", wipeDevices: wipe })}
+          >
+            {t("workspaces.removeMembers.wipeDevices")}
+          </Checkbox>
+          <p id={wipeHintId} className="ps-7 text-xs text-muted-foreground">
+            {t("workspaces.removeMembers.wipeDevicesHint")}
+          </p>
         </div>
       ) : null}
       {managedSubjects.length > 1 ? (

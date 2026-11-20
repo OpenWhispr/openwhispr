@@ -7,7 +7,8 @@ const { LOCAL_POLICY_CODES } = require("./localModelPolicyGate");
 // A local, append-only record of meeting recordings for an IT log collector
 // (#3029). Meeting audio never reaches the server, and a managed device may run
 // signed out, so the record lives on the device. It holds no titles, names or
-// content: only when a recording started, stopped or was refused, and how.
+// content: only when a recording started, stopped or was refused, and how, and
+// when the device policy wiped the device's local data (#3030).
 
 const DAILY_FILE = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
 // O_NOFOLLOW doesn't exist on Windows, so there the folder's ACLs must keep other
@@ -39,6 +40,8 @@ const STOP_REASONS = new Set([
   "window-lost",
   "app-quit",
 ]);
+// What asked for a local data wipe (#3030).
+const WIPE_TRIGGERS = new Set(["device-policy", "workspace-removal"]);
 // Plus main's device or product policy block and the renderer's own "restricted" refusal.
 const REFUSAL_REASONS = new Set([
   ...AUDIO_POLICY_REFUSAL_CODES,
@@ -309,12 +312,29 @@ function createMeetingAuditLog({
     );
   }
 
+  // #3030: the offboarding wipe, kept with the recordings it outlives. The
+  // trigger is the device policy's token or a removal from the managing
+  // workspace; "incomplete" means some store could not be deleted.
+  function localDataWiped({ trigger, incomplete }) {
+    if (!isEnabled()) return;
+    const dir = directory();
+    const at = now();
+    enqueue(() =>
+      append(dir, at, {
+        event: "local-data.wiped",
+        trigger: allowed(WIPE_TRIGGERS, trigger),
+        reason: incomplete ? "incomplete" : null,
+      })
+    );
+  }
+
   const stopGuarded = guarded(recordingStopped);
 
   return {
     recordingStarted: guarded(recordingStarted),
     recordingStopped: stopGuarded,
     recordingRefused: guarded(recordingRefused),
+    localDataWiped: guarded(localDataWiped),
     recoverInterrupted,
 
     // A quit ends a live recording with the app, before its session is torn down.

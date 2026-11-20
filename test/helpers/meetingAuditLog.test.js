@@ -119,6 +119,30 @@ test("a refusal records its trigger and policy code", async () => {
   assert.equal(refused.sessionId, null);
 });
 
+// #3030: the offboarding wipe is recorded in the same fixed shape.
+test("a local data wipe is one line with its trigger, marked incomplete when a store survived", async () => {
+  const { log } = harness();
+  log.localDataWiped({ trigger: "device-policy", incomplete: false });
+  log.localDataWiped({ trigger: "workspace-removal", incomplete: true });
+  log.localDataWiped({ trigger: "elsewhere", incomplete: false });
+  await log.flush();
+  const wipes = lines();
+  assert.deepEqual(Object.keys(wipes[0]), FIELDS);
+  assert.deepEqual(
+    wipes.map(({ event, trigger, reason, sessionId }) => ({ event, trigger, reason, sessionId })),
+    [
+      { event: "local-data.wiped", trigger: "device-policy", reason: null, sessionId: null },
+      {
+        event: "local-data.wiped",
+        trigger: "workspace-removal",
+        reason: "incomplete",
+        sessionId: null,
+      },
+      { event: "local-data.wiped", trigger: null, reason: null, sessionId: null },
+    ]
+  );
+});
+
 // A local transcription choice the policy refuses is reported with its own code.
 test("a refused local model choice keeps its policy code", async () => {
   const { log } = harness();
@@ -300,6 +324,8 @@ test("a dependency that throws never reaches the recording or the quit, and warn
   assert.doesNotThrow(() =>
     log.recordingRefused({ noteId: 1, trigger: "tray", reason: "POLICY_UNRESOLVABLE" })
   );
+  // The wipe still has its own record to write after this line.
+  assert.doesNotThrow(() => log.localDataWiped({ trigger: "device-policy", incomplete: false }));
   state.configuredPath = null;
 
   log.recordingStarted({ sessionId: "s2", noteId: 2, trigger: "tray" });

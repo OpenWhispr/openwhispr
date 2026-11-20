@@ -5,7 +5,10 @@ const crypto = require("crypto");
 // logic stays local here, but the error taxonomy is shared.
 const { AuthContextError } = require("./cloudApiRequest");
 const { isValidPolicyShape } = require("./policyValidation");
-const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
+const {
+  WORKSPACE_REMOVAL_CAPABILITY,
+  withPolicyRequestHeaders,
+} = require("./policyRequestHeaders");
 const {
   readWorkspacePolicyCache,
   readAccountPolicyCache,
@@ -57,6 +60,7 @@ function createWorkspacePolicyManager({
   tokenStore,
   getValidatedAccountId = () => null,
   broadcast,
+  onWorkspaceRemoval = () => {},
   logger,
   requestTimeoutMs = 10_000,
   successfulRefreshMs = 5 * 60 * 1000,
@@ -187,6 +191,31 @@ function createWorkspacePolicyManager({
     return cached?.managed === true || cached?.requiresManagedPolicy === true;
   }
 
+  // #3030: the server says this account was removed from a managed workspace.
+  // Only a device whose last managed verdict for this credential (or account)
+  // named that workspace acts on it: a removal from some other workspace, or a
+  // sign-in on another device, wipes nothing. The credential's own verdict
+  // still counts once a rejected session has cleared the account label. A
+  // removal the app couldn't record throws, so the verdict that names its
+  // workspace isn't replaced and the next lookup reports it again.
+  function reportRemoval(identity, removal) {
+    if (typeof removal?.workspaceId !== "string" || !validTimestamp(removal.removedAt)) return;
+    const verdicts = [
+      readWorkspacePolicyCache(cachePath, cacheIdentity(identity)),
+      isValidatedAccount(identity) && readAccountPolicyCache(cachePath, identity),
+    ];
+    const managedBy = verdicts.flatMap((verdict) =>
+      verdict?.managed && Array.isArray(verdict.managedBy) ? verdict.managedBy : []
+    );
+    if (!managedBy.includes(removal.workspaceId)) return;
+    const recorded = onWorkspaceRemoval({
+      accountId: identity.accountId,
+      workspaceId: removal.workspaceId,
+      removedAt: removal.removedAt,
+    });
+    if (recorded === false) throw new Error("Could not record the workspace removal");
+  }
+
   function errorSnapshot(identity, code, error, httpStatus) {
     const current = snapshots.get(identityKey(identity));
     return {
@@ -314,7 +343,9 @@ function createWorkspacePolicyManager({
         // server refusal with the verdict the server just contradicted.
         const response = await proxyFetch(`${identity.apiUrl}/api/workspace-policy`, {
           method: "GET",
-          headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion()),
+          headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion(), [
+            WORKSPACE_REMOVAL_CAPABILITY,
+          ]),
           cache: "no-store",
           signal: controller.signal,
         });
@@ -341,8 +372,14 @@ function createWorkspacePolicyManager({
           try {
             errorBody = await response.json();
           } catch {}
+          // The body can arrive after an account switch, which its removal mustn't reach.
+          assertIdentityCurrent(identity);
           if (errorBody?.code === "POLICY_UNRESOLVABLE") {
             throw unresolvablePolicyError(errorBody.error || "Organization policy is unresolvable");
+          }
+          // An admin removal revoked this session.
+          if (response.status === 401 && errorBody?.code === "WORKSPACE_MEMBER_REMOVED") {
+            reportRemoval(identity, errorBody);
           }
           const error = new Error(`API error: ${response.status}`);
           error.status = response.status;
@@ -361,6 +398,13 @@ function createWorkspacePolicyManager({
           }
           throw new Error("Malformed policy response");
         }
+        // Still signed in (directory deprovisioning keeps the session), maybe
+        // still managed by another workspace; read before this verdict replaces
+        // the one that named the removing workspace. The newest removal may be
+        // from a workspace that never managed this device, so every listed one
+        // is checked.
+        const removals = Array.isArray(data.workspaceRemovals) ? data.workspaceRemovals : [];
+        for (const removal of removals) reportRemoval(identity, removal);
         return acceptSuccessfulResponse(identity, data, "network");
       } finally {
         clearTimeout(timeout);

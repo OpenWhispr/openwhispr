@@ -8,8 +8,19 @@ const { isValidPolicyShape } = require("./policyValidation");
 const { registryData } = require("../models/registryData.js");
 
 const execute = promisify(execFile);
-const DEVICE_KEYS = ["Policy", "RequireSignIn", "AuditLogPath", "DisableMeetingRecording"];
-const BOOLEAN_DEVICE_KEYS = ["RequireSignIn", "DisableMeetingRecording"];
+const DEVICE_KEYS = [
+  "Policy",
+  "RequireSignIn",
+  "AuditLogPath",
+  "WipeLocalDataOnLaunch",
+  "WipeLocalDataIncludesModels",
+  "DisableMeetingRecording",
+];
+const BOOLEAN_DEVICE_KEYS = [
+  "RequireSignIn",
+  "WipeLocalDataIncludesModels",
+  "DisableMeetingRecording",
+];
 const MAX_POLICY_BYTES = 1024 * 1024;
 const MODES = ["openwhispr", "providers", "local", "self-hosted", "enterprise"];
 const FOCUS_REFRESH_THROTTLE_MS = 30 * 1000;
@@ -91,21 +102,25 @@ function normalizeDeviceValues(input) {
   const values = Object.fromEntries(
     DEVICE_KEYS.filter((key) => Object.hasOwn(input, key)).map((key) => [key, input[key]])
   );
-  if (
-    Object.keys(values).length === 0 ||
-    (Object.keys(values).length === 1 && values.DisableMeetingRecording === false)
-  ) {
-    return ABSENT_SNAPSHOT;
+  // Values that change nothing on their own don't make a device managed: the
+  // legacy alias left at false, and the models flag without a wipe token. The
+  // flag still says what a workspace removal's wipe takes (localDataWipe.js).
+  const inert = (key) =>
+    (key === "DisableMeetingRecording" && values[key] === false) ||
+    (key === "WipeLocalDataIncludesModels" && typeof values[key] === "boolean");
+  if (Object.keys(values).every(inert)) {
+    return values.WipeLocalDataIncludesModels === true
+      ? { ...ABSENT_SNAPSHOT, wipeLocalDataIncludesModels: true }
+      : ABSENT_SNAPSHOT;
   }
   for (const key of BOOLEAN_DEVICE_KEYS) {
     if (values[key] !== undefined && typeof values[key] !== "boolean")
       throw new Error("Invalid device boolean");
   }
-  if (
-    values.AuditLogPath !== undefined &&
-    (typeof values.AuditLogPath !== "string" || !values.AuditLogPath.trim())
-  )
-    throw new Error("Invalid device string");
+  for (const key of ["AuditLogPath", "WipeLocalDataOnLaunch"]) {
+    if (values[key] !== undefined && (typeof values[key] !== "string" || !values[key].trim()))
+      throw new Error("Invalid device string");
+  }
   const hasPolicy = Object.hasOwn(values, "Policy");
   let policy = defaultDevicePolicy();
   if (hasPolicy) {
@@ -129,6 +144,9 @@ function normalizeDeviceValues(input) {
     localOnly: values.RequireSignIn === false,
     // Where the meeting audit log is written (meetingAuditLog.js).
     auditLogPath: values.AuditLogPath ?? null,
+    // The offboarding wipe's token and whether it takes models (localDataWipe.js).
+    wipeLocalDataOnLaunch: values.WipeLocalDataOnLaunch ?? null,
+    wipeLocalDataIncludesModels: values.WipeLocalDataIncludesModels ?? false,
   };
 }
 

@@ -596,6 +596,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
 
+  // One-time workspace-removal wipe notice
+  takeLocalDataWipeNotice: () => ipcRenderer.invoke("take-local-data-wipe-notice"),
+
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
     ipcRenderer.invoke("transcribe-local-parakeet", audioBlob, options),

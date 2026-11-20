@@ -957,6 +957,8 @@ export interface MemberRemovalPreview {
   members: OwnedMemberContent[];
   already_removed: string[];
   transfer_required: boolean;
+  /** A managed workspace's removal can wipe their devices; absent from an older API. */
+  can_wipe_devices?: boolean;
 }
 
 export interface MemberRemovalResult {
@@ -2633,6 +2635,9 @@ declare global {
       // One-time "GPU pack needs re-downloading" notice, taken by the window that shows it
       takeGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
       onGpuPackMigrationNoticeReady: (callback: () => void) => () => void;
+
+      // One-time workspace-removal wipe notice, taken by the window that shows it
+      takeLocalDataWipeNotice: () => Promise<"workspace-removal" | null>;
 
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
