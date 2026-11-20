@@ -25,7 +25,10 @@ import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
 import { localServerFetch, startLocalServer } from "./ai/localServerFetch";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
-import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
+import {
+  getManagedScopeResolution,
+  refreshEnterpriseIdentityForUse,
+} from "../stores/enterpriseIdentityStore";
 import type { InferenceScope } from "../config/inferenceScopes";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
 import {
@@ -282,12 +285,13 @@ class ReasoningService extends BaseReasoningService {
 
   // Managed enterprise access owns the route. Manual self-hosted and BYOK overrides are
   // dropped so a leftover endpoint or key can never outrank the administrator's provider.
-  private resolveManagedScope<T extends ReasoningConfig, P extends string | undefined>(
+  private async resolveManagedScope<T extends ReasoningConfig, P extends string | undefined>(
     model: string,
     provider: P,
     config: T,
     fallbackScope: InferenceScope
-  ): { model: string; provider: P; config: T; isManaged: boolean } {
+  ): Promise<{ model: string; provider: P; config: T; isManaged: boolean }> {
+    await refreshEnterpriseIdentityForUse();
     const inferenceScope = config.inferenceScope || fallbackScope;
     const managed = getManagedScopeResolution(inferenceScope, getSettings().enterpriseSetupMode);
     if (managed.kind === "error") {
@@ -599,7 +603,12 @@ class ReasoningService extends BaseReasoningService {
     agentName: string | null = null,
     config: ReasoningConfig = {}
   ): Promise<string> {
-    const managed = this.resolveManagedScope(model, config.provider, config, "dictationCleanup");
+    const managed = await this.resolveManagedScope(
+      model,
+      config.provider,
+      config,
+      "dictationCleanup"
+    );
     ({ model, config } = managed);
     const trimmedModel = model?.trim?.() || "";
     const settings = getSettings();
@@ -1047,7 +1056,7 @@ class ReasoningService extends BaseReasoningService {
     tools?: Record<string, import("ai").Tool>,
     signal?: AbortSignal
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-    ({ model, provider, config } = this.resolveManagedScope(
+    ({ model, provider, config } = await this.resolveManagedScope(
       model,
       provider,
       config,

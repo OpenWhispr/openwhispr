@@ -22,7 +22,8 @@ Date.now = () => realNow() + clockOffset;
 const advanceClock = (milliseconds) => {
   clockOffset += milliseconds;
 };
-const SIX_MINUTES = 6 * 60 * 1000;
+// Past the fifteen minutes an unmanaged verdict stays fresh.
+const SIXTEEN_MINUTES = 16 * 60 * 1000;
 
 // The real constructor wiring (_initLocalModelPolicy), token and scope handlers,
 // main policy lookup, policy manager, cache and binding file. Only the network,
@@ -318,7 +319,7 @@ test("switching accounts cancels old-account work before the new verdict, which 
   const oldAccountJob = await app.gate.authorize("transcription", "base");
   const delayedOldAnswer = deferred();
   policyFetch = () => delayedOldAnswer.promise;
-  advanceClock(SIX_MINUTES);
+  advanceClock(SIXTEEN_MINUTES);
   void app.gate.resolve();
   await settle();
 
@@ -413,7 +414,7 @@ test("a blackholed network answers from the held verdict; the refresh's denial s
     return answer.promise;
   };
 
-  advanceClock(SIX_MINUTES);
+  advanceClock(SIXTEEN_MINUTES);
   const startedAt = performance.now();
   app.gate.release(await app.gate.authorize("transcription", "base"));
   app.gate.release(await app.gate.authorize("transcription", "base"));
