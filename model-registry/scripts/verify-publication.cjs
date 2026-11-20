@@ -15,8 +15,10 @@ try {
   // A publication is signed from a registry commit on main. One signed from anywhere else
   // (the old repository, after the move) holds changes main lacks; the next publication
   // from main would silently undo them, so it stops here until they are brought to main.
+  // Main as it is now: a re-run of an older run may meet a publication made after it.
+  execFileSync("git", ["fetch", "--quiet", "origin", "main"], { stdio: "ignore" });
   try {
-    execFileSync("git", ["merge-base", "--is-ancestor", sourceCommit, "HEAD"], { stdio: "ignore" });
+    execFileSync("git", ["merge-base", "--is-ancestor", sourceCommit, "FETCH_HEAD"], { stdio: "ignore" });
   } catch {
     throw new Error(`Version ${manifestVersion} was signed from ${sourceCommit}, which is not on main`);
   }
