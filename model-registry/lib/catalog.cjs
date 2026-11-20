@@ -20,8 +20,12 @@ function readCatalog(root = path.join(__dirname, "..", "registry")) {
 
 // A maintainer's capability-change label approves the commits it was added to, so it counts
 // only in the run that adding it starts. A push, a reopened pull request or any other label
-// change runs without it, until a maintainer removes the label and adds it again.
+// change runs without it, until a maintainer removes the label and adds it again. Anyone who
+// can write may label, so the author's own label, or a workflow's, approves nothing.
 const capabilityChangeApproved = (event) =>
-  event.action === "labeled" && event.label?.name === "capability-change";
+  event.action === "labeled" &&
+  event.label?.name === "capability-change" &&
+  event.sender?.type === "User" &&
+  event.sender.login !== event.pull_request?.user?.login;
 
 module.exports = { ...schema, readCatalog, capabilityChangeApproved };

@@ -235,8 +235,19 @@ test("request-setting changes on published models are reported for a maintainer 
 
 test("the capability-change label covers only the commits it was added to", () => {
   const labels = [{ name: "capability-change" }];
-  const event = (action, label) => ({ action, label, pull_request: { labels } });
+  const reviewer = { login: "reviewer", type: "User" };
+  const event = (action, label, sender = reviewer) => ({
+    action,
+    label,
+    sender,
+    pull_request: { labels, user: { login: "author" } },
+  });
   assert.equal(capabilityChangeApproved(event("labeled", { name: "capability-change" })), true);
+  // Only someone other than the author approves.
+  const approve = (sender) => capabilityChangeApproved(event("labeled", { name: "capability-change" }, sender));
+  assert.equal(approve({ login: "author", type: "User" }), false);
+  assert.equal(approve({ login: "github-actions[bot]", type: "Bot" }), false);
+  assert.equal(approve(null), false);
   // The label is still on the pull request in each of these, from before the event.
   assert.equal(capabilityChangeApproved(event("synchronize")), false);
   assert.equal(capabilityChangeApproved(event("reopened")), false);

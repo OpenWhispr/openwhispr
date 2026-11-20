@@ -30,7 +30,7 @@ function pullRequestEvent() {
   const event = pullRequestEvent();
   if (changes.length && event && !capabilityChangeApproved(event))
     throw new Error(
-      "Published models change request settings; a maintainer must add the capability-change label after checking them " +
+      "Published models change request settings; a maintainer other than the author must add the capability-change label after checking them " +
         "(if it is already there, remove it and add it again: it covers only the commits it was added to)."
     );
 })().catch((error) => {
