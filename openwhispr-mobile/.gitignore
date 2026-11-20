@@ -52,3 +52,6 @@ credentials.json
 skills-lock.json
 # Visual brainstorming companion scratch files
 .superpowers/
+
+# Keyboard data: raw corpus downloads (see plugins/keyboard-extension/tools/fetch-sources.sh)
+plugins/keyboard-extension/data/.cache/

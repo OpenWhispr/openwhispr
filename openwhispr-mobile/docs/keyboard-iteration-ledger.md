@@ -2,25 +2,25 @@
 
 Branch `feat/mobile-keyboard-quality`, worktree `worktrees/keyboard-quality`. Started 2026-11-20.
 
-**Next action:** Finish the audit of the existing keyboard (Setup step 4) and fill in the criteria table.
+**Next action:** Build the benchmark datasets (sentences, misspellings, near-miss typos, swipe word lists) from the downloaded corpora, freeze the test splits, then build the lexicon.
 
 ## Criteria
 
-| #   | Criterion                          | Status  | Current numbers | Blocked reason |
-| --- | ---------------------------------- | ------- | --------------- | -------------- |
-| 1   | Typing parity with iOS             | audit   |                 |                |
-| 1a  | Space-bar trackpad                 | missing |                 |                |
-| 1b  | Dynamic hit targets                | missing |                 |                |
-| 1c  | Top bar with suggestion bar        | missing |                 |                |
-| 1d  | Emoji panel                        | missing |                 |                |
-| 2   | Haptics                            | missing |                 |                |
-| 3   | Layouts and languages (en/de)      | missing |                 |                |
-| 4   | Autocorrect                        | missing |                 |                |
-| 5   | Swipe typing                       | missing |                 |                |
-| 6   | Performance (latency, memory)      | audit   |                 |                |
-| 7   | Existing checks green              | audit   |                 |                |
-| 8   | Visual review next to iOS keyboard | audit   |                 |                |
-| R   | Research pass + Local-dictation    | todo    |                 |                |
+| #   | Criterion                          | Status      | Current numbers                                                                                                                                                                                                                                                           | Blocked reason |
+| --- | ---------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| 1   | Typing parity with iOS             | partial     | Has shift, caps lock (0.33 s double tap), auto-capitalization, double-space period, 123 and #+= pages, light/dark, SE to Pro Max in both orientations. Missing: long-press accents, number pad, field rules for autocorrect, UILexicon, contractions, Clear learned words |                |
+| 1a  | Space-bar trackpad                 | missing     |                                                                                                                                                                                                                                                                           |                |
+| 1b  | Dynamic hit targets                | missing     | Today: fixed nearest-key routing in `KeyboardRowsStack.hitTest`                                                                                                                                                                                                           |                |
+| 1c  | Top bar with suggestion bar        | missing     | Strip is 40 pt + gap; no suggestions                                                                                                                                                                                                                                      |                |
+| 1d  | Emoji panel                        | missing     |                                                                                                                                                                                                                                                                           |                |
+| 2   | Haptics                            | missing     | Input clicks only (`playInputClick`)                                                                                                                                                                                                                                      |                |
+| 3   | Layouts and languages (en/de)      | missing     | QWERTY only, no typing-language setting                                                                                                                                                                                                                                   |                |
+| 4   | Autocorrect                        | missing     |                                                                                                                                                                                                                                                                           |                |
+| 5   | Swipe typing                       | missing     |                                                                                                                                                                                                                                                                           |                |
+| 6   | Performance (latency, memory)      | unmeasured  |                                                                                                                                                                                                                                                                           |                |
+| 7   | Existing checks green              | partial     | Baseline 2026-11-20 23:11: touch tests 398/398, capitalization PASS, direct PASS. Jest, typecheck, lint, format, doctor, simulator build not run yet                                                                                                                      |                |
+| 8   | Visual review next to iOS keyboard | partial     | en/QWERTY keys were matched to Apple's by measurement; no screenshot harness yet                                                                                                                                                                                          |                |
+| R   | Research pass + Local-dictation    | in progress | Competitor pass done (see log); Local-speech spike running on `spike/keyboard-local-speech`                                                                                                                                                                               |                |
 
 ## Waiting on Chad
 
@@ -185,3 +185,26 @@ Leave everything committed on feat/mobile-keyboard-quality, unpushed.
 
 - Committed the direct-dictation work as `bd9015a3e` (48 files, unchanged) on `feat/mobile-keyboard-direct-dictation`.
 - Created `feat/mobile-keyboard-quality` in `worktrees/keyboard-quality`, symlinked `openwhispr-mobile/node_modules`, copied the Apple reference screenshots to `docs/keyboard-screenshots/apple-reference/`.
+
+### 2026-11-20 23:11 SAST — Audit (work clock starts here; 24 h limit is 2026-11-21 23:11)
+
+- Code read: `ios/KeyboardViewController.swift` (5,532 lines, one controller with private key/toolbar types), `tests/KeyboardTouchTests.swift` (appended to the controller file by `run-keyboard-touch-tests.py`, compiled for Mac Catalyst; a run takes about 2 minutes).
+- Keys are `UIButton`s (`KeyButton`) with target-action; `KeyboardRowsStack.hitTest` gives each touch to the nearest key. There are key preview popups but **no long-press accents**. No suggestion bar, trackpad, emoji, spell checking, haptics, number pad or QWERTZ, as the prompt says.
+- Baseline checks: touch tests 398/398, `test-keyboard-capitalization.sh` PASS, `test-keyboard-direct.sh` PASS. Both simulators are booted. npm registry and GitHub both answer.
+
+### 2026-11-20 — Research pass (competitors)
+
+Timing values for Apple's keyboard are not published; the ones below are unverified and need a phone check.
+
+- **Apple** does best: transformer autocorrect with tap-to-revert on the underlined word, inline predictions, invisible key-target resizing, QuickPath swipe with delete-by-word, space-bar trackpad. Weak: iOS 26 wrong-key registration when typing fast (partly fixed in 26.4), over-eager corrections, the only reset wipes every learned word. Unverified timings: long press about 0.5 s, caps-lock double tap about 0.3 s, delete repeat about 0.5 s delay then 0.1 s.
+- **Raycast** does best: a full typing keyboard (suggestion bar with words or emoji, autocorrect on space with tap-original-to-undo, slide to type, trackpad, drag-left on delete for words, haptic strengths, German as a download, autocorrect off in URL/email/username/search fields) and dictation that records in the keyboard from a button in the suggestion bar. Weak: falls back to opening the app when in-keyboard recording is unavailable; dictation is one small button, not the main action.
+- **Superwhisper** does best: record button with waveform, modes. Weak: some buttons open the app and iOS 26.4+ doesn't return, typing reported as less accurate than Apple's, shift misbehaves. Whether it has autocorrect or swipe is unverified.
+- **Wispr Flow** does best: sessions that keep the mic alive, accuracy and formatting. Weak: must open the app to start a session, feels less polished than the native keyboard.
+- **Gboard/SwiftKey**: Gboard decodes taps and glides with a spatial model + lexicon + n-gram LM composed as FSTs under beam search; SHARK2 (Kristensson and Zhai 2004) matches a gesture against per-word templates by shape and location plus an LM. SwiftKey has undo-autocorrect-on-backspace as a toggle and types two languages at once on iOS.
+- **Added to the plan from this:** keep the typed original in the suggestion bar's left slot so a correction can be undone with one tap as well as with backspace; a reverted correction is a negative signal (don't correct that word again); umlaut-insensitive matching for German (`fur` → `für`); delete a swiped word as a unit on backspace; preserve deliberate letter repeats ("soooo"). Not planned for this pass: haptic strength levels, simultaneous two-language typing, drag-left-on-delete (noted as gaps in the final report).
+
+### 2026-11-20 — Data sources chosen
+
+- **Bundled lexicon and language model** (built by our own scripts): Leipzig Corpora Collection 1M-sentence corpora (news, web, Wikipedia) for English and German (CC BY 4.0) plus Tatoeba sentences (CC BY 2.0 FR).
+- **Benchmarks, independent of the bundle:** Universal Dependencies English-EWT and German-GSD (CC BY-SA 4.0) for sentences, over-correction and hit targets; Wikipedia's lists of common misspellings (English "For machines", German "Liste von Tippfehlern", CC BY-SA 4.0) for real misspellings; OpenSubtitles frequency lists (hermitdave/FrequencyWords, CC BY-SA 4.0) for the 10,000 most common words in the swipe benchmark.
+- **Emoji:** Unicode `emoji-test.txt` and CLDR annotations (Unicode License v3).
