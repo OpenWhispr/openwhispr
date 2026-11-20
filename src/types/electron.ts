@@ -3017,6 +3017,8 @@ declare global {
       }) => Promise<ProxyTranscriptionResult & { cleanedText?: string }>;
       getElevenlabsKey?: () => Promise<string | null>;
       saveElevenlabsKey?: (key: string) => Promise<void>;
+      getOpenAICompatibleRealtimeKey?: () => Promise<string | null>;
+      saveOpenAICompatibleRealtimeKey?: (key: string) => Promise<void>;
 
       // Custom endpoint API keys
       getSelfHostedSttHeaders?: () => Promise<string | null>;

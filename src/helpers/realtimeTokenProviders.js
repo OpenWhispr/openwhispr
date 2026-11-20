@@ -6,6 +6,7 @@
 // table is unit-testable without Electron.
 
 const { readPolicyResponseError } = require("./policyResponseError");
+const { buildRealtimeUrl } = require("./selfHostedRealtimeUrl");
 
 const dual = (streams, factory) =>
   streams === 2 ? Promise.all([factory(), factory()]) : factory();
@@ -121,6 +122,19 @@ const REALTIME_TOKEN_PROVIDERS = {
       throw err;
     }
     return duplicate(streams, apiKey);
+  },
+
+  // The key is optional (local servers often run keyless). It is released only for Note
+  // Recording, and buildRealtimeUrl throws first, so a request with no URL, or a ws:// URL
+  // to a public host, never gets the key.
+  "openai-compatible-realtime": async ({ environmentManager }, options, streams) => {
+    if (options.purpose !== "meeting") {
+      throw new Error(
+        "Self-hosted realtime credentials are only available for meeting transcription."
+      );
+    }
+    buildRealtimeUrl(options.url, options.model);
+    return duplicate(streams, environmentManager.getOpenAICompatibleRealtimeKey() || "");
   },
 
   "openai-realtime": async ({ environmentManager, postServerToken }, options, streams) => {

@@ -10526,6 +10526,7 @@ class IPCHandlers {
 
           const connectOpts = {
             model: options.model,
+            url: options.url,
             language: options.language,
             mode: options.mode,
             preconfigured: options.mode !== "byok",
@@ -10858,6 +10859,7 @@ class IPCHandlers {
 
       const connectOpts = {
         model: options.model,
+        url: options.url,
         language: options.language,
         mode: options.mode,
         preconfigured: options.mode !== "byok",

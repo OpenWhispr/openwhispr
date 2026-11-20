@@ -59,6 +59,19 @@ export function isSecureHttpEndpoint(url: string): boolean {
   }
 }
 
+// wss anywhere, cleartext ws only on a private host, so a self-hosted realtime key never
+// crosses the public internet unencrypted. Must agree with buildRealtimeUrl (main process).
+export function isSecureWebSocketEndpoint(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "wss:" || (parsed.protocol === "ws:" && isPrivateHost(parsed.hostname))
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Scheme-less input is read as https: the connection test does the same, so a commit
  * that stores this value stores the URL it validated, and the runtime's
