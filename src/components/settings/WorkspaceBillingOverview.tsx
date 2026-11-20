@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
+import { showsWorkspaceBillingCard } from "../../lib/workspaceBilling";
 import WorkspaceBillingCard from "./WorkspaceBillingCard";
 
 export default function WorkspaceBillingOverview({
@@ -26,8 +27,9 @@ export default function WorkspaceBillingOverview({
   }, [isSignedIn, isOfflineAccount, loaded, refresh]);
 
   const orderedWorkspaces = useMemo(() => {
-    if (!activeWorkspaceId) return workspaces;
-    return [...workspaces].sort((a, b) => {
+    const billable = workspaces.filter(showsWorkspaceBillingCard);
+    if (!activeWorkspaceId) return billable;
+    return billable.sort((a, b) => {
       if (a.id === activeWorkspaceId) return -1;
       if (b.id === activeWorkspaceId) return 1;
       return 0;

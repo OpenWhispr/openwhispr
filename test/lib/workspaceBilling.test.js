@@ -11,6 +11,7 @@ const {
   hasSharedDictionaryPlan,
   hasSubscription,
   isEnterpriseConsoleAvailable,
+  showsWorkspaceBillingCard,
 } = require("../../src/lib/workspaceBilling.ts");
 
 const workspace = (overrides = {}) => ({
@@ -328,4 +329,36 @@ test("businessDowngradeAction: skips ineligible active workspaces and respects b
     kind: "stripePortal",
     workspaceId: "delegated",
   });
+});
+
+test("showsWorkspaceBillingCard: hides an unpaid default workspace nobody else is in", () => {
+  // 1.12.0 gave every user one, and its checkout sat above the Pro upgrade.
+  const solo = workspace({ is_account_default: true, seats_used: 1, has_subscription: false });
+  assert.equal(showsWorkspaceBillingCard(solo), false);
+  assert.equal(showsWorkspaceBillingCard({ ...solo, seats_used: 0 }), false);
+});
+
+test("showsWorkspaceBillingCard: keeps every card with something to bill or manage", () => {
+  const solo = workspace({ is_account_default: true, seats_used: 1, has_subscription: false });
+  // A teammate or a pending invitation makes it a team.
+  assert.equal(showsWorkspaceBillingCard({ ...solo, seats_used: 2 }), true);
+  // A workspace the user created.
+  assert.equal(showsWorkspaceBillingCard({ ...solo, is_account_default: false }), true);
+  // Paid, provisioned, or lapsed: the owner still has billing to see or fix.
+  assert.equal(
+    showsWorkspaceBillingCard({
+      ...solo,
+      plan: "business",
+      stripe_subscription_id: "sub_1",
+      has_subscription: true,
+    }),
+    true
+  );
+  assert.equal(
+    showsWorkspaceBillingCard({ ...solo, plan: "business", has_subscription: true }),
+    true
+  );
+  assert.equal(showsWorkspaceBillingCard({ ...solo, plan: "business", status: "canceled" }), true);
+  // An API that sends no seat count: keep the card rather than guess.
+  assert.equal(showsWorkspaceBillingCard({ ...solo, seats_used: undefined }), true);
 });

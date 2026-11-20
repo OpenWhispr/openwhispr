@@ -30,6 +30,27 @@ export function hasActiveWorkspaceSubscription(
 }
 
 /**
+ * Whether Plans & Billing shows a workspace's card. Every account has a default
+ * workspace, so an unpaid one nobody else is in would put a Business checkout
+ * above the personal plan with nothing to bill. A lapsed plan keeps its card so
+ * the owner can fix it; an unknown seat count keeps it too.
+ */
+export function showsWorkspaceBillingCard(
+  workspace: Pick<
+    Workspace,
+    "plan" | "is_account_default" | "seats_used" | "has_subscription" | "stripe_subscription_id"
+  >
+): boolean {
+  const soloUnpaidDefault =
+    workspace.is_account_default === true &&
+    workspace.plan === "free" &&
+    !hasSubscription(workspace) &&
+    typeof workspace.seats_used === "number" &&
+    workspace.seats_used <= 1;
+  return !soloUnpaidDefault;
+}
+
+/**
  * The paid plans the user's workspaces are currently on, so the Plans grid can
  * mark the tiers a workspace provides, not only the personal plan.
  */
