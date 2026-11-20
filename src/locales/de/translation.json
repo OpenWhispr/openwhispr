@@ -4445,9 +4445,11 @@
         "token_exchange_failed": "Slack hat die Verbindung nicht abgeschlossen. Versuche es erneut.",
         "not_configured": "Slack ist in dieser Version nicht verfügbar.",
         "connection_changed": "Dein Konto oder die Slack-Verbindung hat sich während der Verbindung geändert. Versuche es erneut.",
-        "signed_out": "Melde dich bei {{brand}} an, um Slack zu verbinden.",
+        "signed_out": "Melde dich mit deinem Titanium-Konto an, um Slack zu verbinden.",
         "policy_blocked": "Konnektoren wurden von deiner Organisation deaktiviert.",
-        "policy_unavailable": "Die Einstellungen deiner Organisation konnten nicht geprüft werden. Versuche es erneut."
+        "policy_unavailable": "Die Einstellungen deiner Organisation konnten nicht geprüft werden. Versuche es erneut.",
+        "reauth_required": "Melde dich erneut bei deinem Titanium-Konto an, um Slack zu verbinden.",
+        "plan_required": "Für die Verbindung mit Slack ist eine aktive {{brand}}-Lizenz erforderlich."
       },
       "browser": {
         "connectedTitle": "Slack ist verbunden",
@@ -4476,13 +4478,15 @@
         "token_exchange_failed": "GitHub hat die Verbindung nicht abgeschlossen. Versuche es erneut.",
         "not_configured": "GitHub ist in dieser Version nicht verfügbar.",
         "connection_changed": "Dein Konto oder die GitHub-Verbindung hat sich während der Verbindung geändert. Versuche es erneut.",
-        "signed_out": "Melde dich bei {{brand}} an, um GitHub zu verbinden.",
+        "signed_out": "Melde dich mit deinem Titanium-Konto an, um GitHub zu verbinden.",
         "policy_blocked": "Konnektoren wurden von deiner Organisation deaktiviert.",
         "policy_unavailable": "Die Einstellungen deiner Organisation konnten nicht geprüft werden. Versuche es erneut.",
         "code_expired": "Der Code ist abgelaufen. Versuche es erneut.",
         "device_flow_disabled": "Die Anmeldung bei GitHub mit einem Code ist in dieser Version nicht eingerichtet.",
         "network": "GitHub ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.",
-        "rate_limited": "GitHub ist gerade ausgelastet. Versuche es in einer Minute erneut."
+        "rate_limited": "GitHub ist gerade ausgelastet. Versuche es in einer Minute erneut.",
+        "reauth_required": "Melde dich erneut bei deinem Titanium-Konto an, um GitHub zu verbinden.",
+        "plan_required": "Für die Verbindung mit GitHub ist eine aktive {{brand}}-Lizenz erforderlich."
       },
       "deviceCode": {
         "instructions": "Gib diesen Code auf GitHub ein:",
@@ -4516,12 +4520,14 @@
         "token_exchange_failed": "Google hat die Verbindung nicht abgeschlossen. Versuche es erneut.",
         "not_configured": "Gmail ist in dieser Version nicht verfügbar.",
         "connection_changed": "Dein Konto oder die Gmail-Verbindung hat sich während der Verbindung geändert. Versuche es erneut.",
-        "signed_out": "Melde dich bei {{brand}} an, um Gmail zu verbinden.",
+        "signed_out": "Melde dich mit deinem Titanium-Konto an, um Gmail zu verbinden.",
         "policy_blocked": "Konnektoren wurden von deiner Organisation deaktiviert.",
         "policy_unavailable": "Die Einstellungen deiner Organisation konnten nicht geprüft werden. Versuche es erneut.",
         "permission_not_granted": "Gmail wurde nicht verbunden, da die Berechtigung zum Senden von E-Mails nicht erteilt wurde. Verbinde erneut und lass diese Berechtigung aktiviert.",
         "email_not_verified": "Google hat die E-Mail-Adresse dieses Kontos nicht bestätigt, daher wurde Gmail nicht verbunden.",
-        "domain_policy": "Der Google-Administrator deiner Organisation hat diese App blockiert. Bitte ihn, {{brand}} zuzulassen."
+        "domain_policy": "Der Google-Administrator deiner Organisation hat diese App blockiert. Bitte ihn, {{brand}} zuzulassen.",
+        "reauth_required": "Melde dich erneut bei deinem Titanium-Konto an, um Gmail zu verbinden.",
+        "plan_required": "Für die Verbindung mit Gmail ist eine aktive {{brand}}-Lizenz erforderlich."
       },
       "browser": {
         "connectedTitle": "Gmail ist verbunden",
@@ -4549,10 +4555,12 @@
         "token_exchange_failed": "Linear hat die Verbindung nicht abgeschlossen. Versuche es erneut.",
         "not_configured": "Linear ist in dieser Version nicht verfügbar.",
         "connection_changed": "Dein Konto oder die Linear-Verbindung hat sich während der Verbindung geändert. Versuche es erneut.",
-        "signed_out": "Melde dich bei {{brand}} an, um Linear zu verbinden.",
+        "signed_out": "Melde dich mit deinem Titanium-Konto an, um Linear zu verbinden.",
         "policy_blocked": "Konnektoren wurden von deiner Organisation deaktiviert.",
         "policy_unavailable": "Die Einstellungen deiner Organisation konnten nicht geprüft werden. Versuche es erneut.",
-        "permission_not_granted": "Linear wurde nicht verbunden, da nicht alle Berechtigungen erteilt wurden. Verbinde erneut und erlaube alle."
+        "permission_not_granted": "Linear wurde nicht verbunden, da nicht alle Berechtigungen erteilt wurden. Verbinde erneut und erlaube alle.",
+        "reauth_required": "Melde dich erneut bei deinem Titanium-Konto an, um Linear zu verbinden.",
+        "plan_required": "Für die Verbindung mit Linear ist eine aktive {{brand}}-Lizenz erforderlich."
       },
       "browser": {
         "connectedTitle": "Linear ist verbunden",
@@ -4697,8 +4705,9 @@
       "cardLimit": "Pro Anfrage können nur {{max}} Karten vorbereitet werden."
     },
     "beta": "Beta",
-    "upsell": "Konnektoren sind in kostenpflichtigen Tarifen enthalten. Upgrade, damit der Assistent in deinen Tools arbeiten kann.",
-    "locked": "In kostenpflichtigen Tarifen enthalten"
+    "upsell": "Konnektoren erfordern eine aktive {{brand}}-Lizenz. Melde dich mit deinem Titanium-Konto an, damit der Assistent in deinen Tools arbeiten kann.",
+    "locked": "In einer {{brand}}-Lizenz enthalten",
+    "upsellAction": "Titanium-Konto öffnen"
   },
   "notesView": {
     "searchPlaceholder": "Notizen durchsuchen…",

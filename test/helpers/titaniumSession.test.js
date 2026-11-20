@@ -34,7 +34,9 @@ function makeSession({ exchange, config = CONFIG, now = () => 1_700_000_000_000 
     fetchImpl: async (url, init) => {
       requests.push({ url: String(url), body: JSON.parse(init.body) });
       const { status = 200, body } = exchange(JSON.parse(init.body));
-      return { ok: status < 400, status, json: async () => body };
+      // The portal always echoes appSlug; a test overrides it (or sets undefined) to probe.
+      const echoed = status < 400 ? { appSlug: CONFIG.appSlug, ...body } : body;
+      return { ok: status < 400, status, json: async () => echoed };
     },
   });
   return { session, opened, requests, dir };
@@ -216,4 +218,77 @@ test("an exchange that finishes after a newer sign-in or a sign-out is ignored",
   assert.deepEqual(await inFlight, { ok: false, error: "superseded" });
   assert.equal(session.getState().signedIn, false);
   assert.equal(fs.existsSync(session.filePath), false);
+});
+
+test("the exchange sends app_slug and stores the account id, never exposing it in state", async () => {
+  const { session, opened, requests } = makeSession({
+    exchange: () => ({ body: { licenseKey: VALID_KEY, email: "a@b.test", accountId: "acc_1" } }),
+  });
+  await session.startSignIn();
+  await session.handleCallback(callbackFor(opened[0], { act: "act_1" }));
+  assert.equal(requests[0].body.app_slug, "titanium-whisper");
+  assert.deepEqual(session.getAccountScope(), {
+    accountId: "acc_1",
+    authGeneration: session.generation,
+  });
+  const state = session.getState();
+  assert.equal(state.accountBound, true);
+  assert.ok(!JSON.stringify(state).includes("acc_1"), "raw id stays in main");
+});
+
+test("an exchange without an account id is signed in but unbound", async () => {
+  const { session, opened } = makeSession({
+    exchange: () => ({ body: { licenseKey: VALID_KEY, email: "a@b.test", accountId: "" } }),
+  });
+  await session.startSignIn();
+  await session.handleCallback(callbackFor(opened[0], { act: "act_1" }));
+  assert.equal(session.getState().signedIn, true);
+  assert.equal(session.getState().accountBound, false);
+  assert.equal(session.getAccountScope(), null);
+});
+
+test("the account id round-trips through persist and load; an old file loads unbound", async () => {
+  const { session, opened } = makeSession({
+    exchange: () => ({ body: { licenseKey: null, email: "a@b.test", accountId: "acc_9" } }),
+  });
+  await session.startSignIn();
+  await session.handleCallback(callbackFor(opened[0], { act: "act_1" }));
+  const make = () =>
+    new TitaniumSession({
+      config: CONFIG,
+      urlScheme: "titaniumwhisper",
+      filePath: session.filePath,
+      encrypt: session.encrypt,
+      decrypt: session.decrypt,
+      now: session.now,
+      openExternal: async () => {},
+    });
+  const reloaded = make();
+  reloaded.load();
+  assert.equal(reloaded.getAccountScope().accountId, "acc_9");
+
+  // A session file written before Phase 7 has no accountId.
+  fs.writeFileSync(
+    session.filePath,
+    Buffer.from(`enc:${JSON.stringify({ email: "a@b.test", licenseKey: null })}`)
+  );
+  const legacy = make();
+  legacy.load();
+  assert.equal(legacy.getState().signedIn, true);
+  assert.equal(legacy.getState().accountBound, false);
+  assert.equal(legacy.getAccountScope(), null);
+});
+
+test("a response whose appSlug is missing or different is rejected and stores nothing", async () => {
+  for (const appSlug of [undefined, "other-app"]) {
+    const { session, opened } = makeSession({
+      exchange: () => ({ body: { email: "a@b.test", accountId: "acc_1", appSlug } }),
+    });
+    await session.startSignIn();
+    const result = await session.handleCallback(callbackFor(opened[0], { act: "act_1" }));
+    assert.deepEqual(result, { ok: false, error: "app_mismatch" });
+    assert.equal(session.getState().signedIn, false);
+    assert.equal(session.getAccountScope(), null);
+    assert.equal(fs.existsSync(session.filePath), false);
+  }
 });

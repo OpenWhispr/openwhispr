@@ -4445,9 +4445,11 @@
         "token_exchange_failed": "Slack n'a pas terminé la connexion. Réessayez.",
         "not_configured": "Slack n'est pas disponible dans cette version.",
         "connection_changed": "Votre compte ou la connexion Slack a changé pendant la connexion. Réessayez.",
-        "signed_out": "Connectez-vous à {{brand}} pour connecter Slack.",
+        "signed_out": "Connectez-vous avec votre compte Titanium pour connecter Slack.",
         "policy_blocked": "Votre organisation a désactivé les connecteurs.",
-        "policy_unavailable": "Impossible de vérifier les paramètres de votre organisation. Réessayez."
+        "policy_unavailable": "Impossible de vérifier les paramètres de votre organisation. Réessayez.",
+        "reauth_required": "Reconnectez-vous à votre compte Titanium pour connecter Slack.",
+        "plan_required": "Connecter Slack nécessite une licence {{brand}} active."
       },
       "browser": {
         "connectedTitle": "Slack est connecté",
@@ -4476,13 +4478,15 @@
         "token_exchange_failed": "GitHub n'a pas terminé la connexion. Réessayez.",
         "not_configured": "GitHub n'est pas disponible dans cette version.",
         "connection_changed": "Votre compte ou la connexion GitHub a changé pendant la connexion. Réessayez.",
-        "signed_out": "Connectez-vous à {{brand}} pour connecter GitHub.",
+        "signed_out": "Connectez-vous avec votre compte Titanium pour connecter GitHub.",
         "policy_blocked": "Votre organisation a désactivé les connecteurs.",
         "policy_unavailable": "Impossible de vérifier les paramètres de votre organisation. Réessayez.",
         "code_expired": "Le code a expiré. Réessayez.",
         "device_flow_disabled": "La connexion à GitHub avec un code n'est pas configurée dans cette version.",
         "network": "Impossible de joindre GitHub. Vérifiez votre connexion et réessayez.",
-        "rate_limited": "GitHub est occupé pour le moment. Réessayez dans une minute."
+        "rate_limited": "GitHub est occupé pour le moment. Réessayez dans une minute.",
+        "reauth_required": "Reconnectez-vous à votre compte Titanium pour connecter GitHub.",
+        "plan_required": "Connecter GitHub nécessite une licence {{brand}} active."
       },
       "deviceCode": {
         "instructions": "Saisissez ce code sur GitHub :",
@@ -4516,12 +4520,14 @@
         "token_exchange_failed": "Google n'a pas terminé la connexion. Réessayez.",
         "not_configured": "Gmail n'est pas disponible dans cette version.",
         "connection_changed": "Votre compte ou la connexion Gmail a changé pendant la connexion. Réessayez.",
-        "signed_out": "Connectez-vous à {{brand}} pour connecter Gmail.",
+        "signed_out": "Connectez-vous avec votre compte Titanium pour connecter Gmail.",
         "policy_blocked": "Votre organisation a désactivé les connecteurs.",
         "policy_unavailable": "Impossible de vérifier les paramètres de votre organisation. Réessayez.",
         "permission_not_granted": "Gmail n'a pas été connecté car l'autorisation d'envoyer des e-mails n'a pas été accordée. Reconnectez-vous en laissant cette autorisation cochée.",
         "email_not_verified": "Google n'a pas vérifié l'adresse e-mail de ce compte, Gmail n'a donc pas été connecté.",
-        "domain_policy": "L'administrateur Google de votre organisation a bloqué cette application. Demandez-lui d'autoriser {{brand}}."
+        "domain_policy": "L'administrateur Google de votre organisation a bloqué cette application. Demandez-lui d'autoriser {{brand}}.",
+        "reauth_required": "Reconnectez-vous à votre compte Titanium pour connecter Gmail.",
+        "plan_required": "Connecter Gmail nécessite une licence {{brand}} active."
       },
       "browser": {
         "connectedTitle": "Gmail est connecté",
@@ -4549,10 +4555,12 @@
         "token_exchange_failed": "Linear n'a pas terminé la connexion. Réessayez.",
         "not_configured": "Linear n'est pas disponible dans cette version.",
         "connection_changed": "Votre compte ou la connexion Linear a changé pendant la connexion. Réessayez.",
-        "signed_out": "Connectez-vous à {{brand}} pour connecter Linear.",
+        "signed_out": "Connectez-vous avec votre compte Titanium pour connecter Linear.",
         "policy_blocked": "Votre organisation a désactivé les connecteurs.",
         "policy_unavailable": "Impossible de vérifier les paramètres de votre organisation. Réessayez.",
-        "permission_not_granted": "Linear n'a pas été connecté car toutes les autorisations n'ont pas été accordées. Reconnectez-vous et autorisez-les toutes."
+        "permission_not_granted": "Linear n'a pas été connecté car toutes les autorisations n'ont pas été accordées. Reconnectez-vous et autorisez-les toutes.",
+        "reauth_required": "Reconnectez-vous à votre compte Titanium pour connecter Linear.",
+        "plan_required": "Connecter Linear nécessite une licence {{brand}} active."
       },
       "browser": {
         "connectedTitle": "Linear est connecté",
@@ -4697,8 +4705,9 @@
       "cardLimit": "Seules {{max}} cartes peuvent être préparées par demande."
     },
     "beta": "Bêta",
-    "upsell": "Les connecteurs sont inclus dans les forfaits payants. Passez à un forfait payant pour que l'assistant agisse dans vos outils.",
-    "locked": "Inclus dans les forfaits payants"
+    "upsell": "Les connecteurs nécessitent une licence {{brand}} active. Connectez-vous avec votre compte Titanium pour que l'assistant travaille dans vos outils.",
+    "locked": "Inclus avec une licence {{brand}}",
+    "upsellAction": "Ouvrir le compte Titanium"
   },
   "notesView": {
     "searchPlaceholder": "Rechercher des notes…",

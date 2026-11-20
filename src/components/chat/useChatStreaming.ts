@@ -10,8 +10,6 @@ import { productHelpMetadata } from "../../services/help/productHelp";
 import logger from "../../utils/logger";
 import {
   isAgentAllowed,
-  isConnectorsAllowed,
-  isConnectorsBlockedByOrg,
   isLlmSelectionAllowed,
   isWebSearchAllowed,
   isWebSearchBlockedByOrg,
@@ -22,7 +20,9 @@ import { getTitaniumAuthState } from "../../hooks/useTitaniumAuth";
 import { CLOUD_ENABLED } from "../../config/forkRuntime";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
-import { hasConnectorPlan } from "../../utils/connectorEligibility";
+import { connectorEligibilityFor } from "../../utils/connectorEligibility";
+import { CLOUD_ENABLED, BRAND_NAME } from "../../config/forkRuntime";
+import { getTitaniumAuthState } from "../../hooks/useTitaniumAuth";
 import { gmailSendStatus, resolveEmailDraftTarget } from "../../utils/emailDraftTarget";
 import {
   ensureConnectorStatus,
@@ -429,13 +429,23 @@ export function useChatStreaming({
         const webSearchSignedIn = CLOUD_ENABLED
           ? settings.isSignedIn
           : titaniumAuth.signedIn && titaniumAuth.licensed;
-        const connectorPlan = hasConnectorPlan(getUsageState(), readIsSubscribed());
+        // Fork build: the Titanium session and license; upstream: the OpenWhispr session, plan and org policy.
+        const connectorAccess = connectorEligibilityFor({
+          cloudEnabled: CLOUD_ENABLED,
+          titanium: titaniumAuth,
+          upstream: {
+            isSignedIn: settings.isSignedIn,
+            usage: getUsageState(),
+            isSubscribed: readIsSubscribed(),
+            policy,
+          },
+        });
         let registry: ToolRegistry | null = null;
         let connectorsOffered = false;
         if (supportsTools) {
           const scopeKey = scope ? `${scope.spaceId}:${scope.folderId ?? ""}` : "";
           const connectorsAvailable =
-            allowConnectors && settings.isSignedIn && connectorPlan && isConnectorsAllowed(policy);
+            allowConnectors && connectorAccess.isPaid && connectorAccess.connectorsAllowed;
           // The first send in a window must not miss a connector that is already connected.
           if (connectorsAvailable) await ensureConnectorStatus();
           const connectors = connectorsAvailable
@@ -451,7 +461,7 @@ export function useChatStreaming({
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
           const keepNotesUnchanged = !!options?.keepNotesUnchanged;
-          const cacheKey = `${settings.isSignedIn}-${webSearchSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
+          const cacheKey = `${settings.isSignedIn}-${connectorAccess.isPaid}-${webSearchSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
@@ -482,6 +492,7 @@ export function useChatStreaming({
         const unavailable = resolveUnavailableCapabilities({
           supportsTools,
           isSignedIn: settings.isSignedIn,
+          ...(CLOUD_ENABLED ? {} : { titanium: { brand: BRAND_NAME } }),
           webSearch: {
             allowed: webSearchEnabled,
             blockedByOrg: isWebSearchBlockedByOrg(policy),
@@ -490,15 +501,22 @@ export function useChatStreaming({
           calendarConnected,
           connectors: allowConnectors
             ? {
-                hasPlan: connectorPlan,
-                allowed: isConnectorsAllowed(policy),
-                blockedByOrg: isConnectorsBlockedByOrg(policy),
+                ...(CLOUD_ENABLED
+                  ? {}
+                  : {
+                      signedIn: connectorAccess.reason !== "signedOut",
+                      reauthRequired: connectorAccess.reason === "reauthRequired",
+                    }),
+                hasPlan: connectorAccess.reason !== "planRequired",
+                allowed: connectorAccess.connectorsAllowed,
+                blockedByOrg: connectorAccess.blockedByOrg,
                 statuses: useConnectorStatusStore.getState().statuses,
               }
             : undefined,
           locations: {
-            account: `${t("sidebar.settings")} → ${t("settingsModal.sections.account.label")}`,
-            plans: `${t("sidebar.settings")} → ${t("settingsModal.sections.plansBilling.label")}`,
+            // A fork build hides Account and Plans & Billing: sign-in and the license live in the Titanium account.
+            account: `${t("sidebar.settings")} → ${t(CLOUD_ENABLED ? "settingsModal.sections.account.label" : "settingsModal.sections.titaniumAccount.label")}`,
+            plans: `${t("sidebar.settings")} → ${t(CLOUD_ENABLED ? "settingsModal.sections.plansBilling.label" : "settingsModal.sections.titaniumAccount.label")}`,
             calendars: `${t("sidebar.integrations")} → ${t("integrations.nav.sections.calendars")}`,
             connectors: `${t("sidebar.integrations")} → ${t("integrations.nav.sections.connectors")}`,
             models: `${t("sidebar.settings")} → ${t("settingsModal.sections.llms.label")}`,

@@ -17,6 +17,8 @@ import {
   ShieldCheck,
   Users,
 } from "../icons";
+import { CLOUD_ENABLED } from "../../config/forkRuntime";
+import { cloudFeatureVisible } from "../../config/cloudFeatures";
 import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
 import { reconcileLocalShareState } from "./shareNoteRules";
 import {
@@ -1309,15 +1311,19 @@ export default function NoteEditor({
                   <Lock size={13} className={isShared ? "text-primary" : "text-foreground/60"} />
                   {t("noteEditor.share.button")}
                 </button>
-                <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
-                <button
-                  type="button"
-                  onClick={() => openShare("copy-link")}
-                  aria-label={t("noteEditor.share.dialog.copyLink")}
-                  className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[30px] justify-center")}
-                >
-                  <Link2 size={13} className="text-foreground/60" />
-                </button>
+                {cloudFeatureVisible("shareLink", CLOUD_ENABLED) && (
+                  <>
+                    <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
+                    <button
+                      type="button"
+                      onClick={() => openShare("copy-link")}
+                      aria-label={t("noteEditor.share.dialog.copyLink")}
+                      className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[30px] justify-center")}
+                    >
+                      <Link2 size={13} className="text-foreground/60" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

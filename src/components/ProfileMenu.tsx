@@ -1,3 +1,4 @@
+import { CLOUD_ENABLED } from "../config/forkRuntime";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { CreditCard, Gift, LogOut, UserCircle } from "./icons";
@@ -21,7 +22,8 @@ const itemIconClass = "shrink-0 text-foreground/60";
 
 interface ProfileMenuProps {
   onOpenSettings: (section: string) => void;
-  onOpenReferrals: () => void;
+  /** Omitted when referrals are hidden (a fork build). */
+  onOpenReferrals?: () => void;
   onSignOut: () => void;
 }
 
@@ -44,7 +46,8 @@ export default function ProfileMenu({
     return (
       <button
         type="button"
-        onClick={() => onOpenSettings("account")}
+        // A fork build has no OpenWhispr account section: sign-in lives in the Titanium account.
+        onClick={() => onOpenSettings(CLOUD_ENABLED ? "account" : "titaniumAccount")}
         aria-label={t("common.signIn")}
         title={t("common.signIn")}
         className={triggerClass}
@@ -91,10 +94,12 @@ export default function ProfileMenu({
           <CreditCard size={15} className={itemIconClass} />
           {t("settingsModal.sections.plansBilling.label")}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onOpenReferrals} className={itemClass}>
-          <Gift size={15} className={itemIconClass} />
-          {t("sidebar.referral")}
-        </DropdownMenuItem>
+        {onOpenReferrals && (
+          <DropdownMenuItem onSelect={onOpenReferrals} className={itemClass}>
+            <Gift size={15} className={itemIconClass} />
+            {t("sidebar.referral")}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSignOut} className={itemClass}>
           <LogOut size={15} className={itemIconClass} />
