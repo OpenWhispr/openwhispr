@@ -373,7 +373,7 @@ test("a wipe that leaves a store behind tries once more at the next launch, then
   const failing = () =>
     launchHarness({ snapshot: managed("offboard-1"), clearBrowserData: failingBrowserData });
   assert.equal(await failing().wipe(), true);
-  assert.deepEqual(wipeState(), { retrying: true });
+  assert.deepEqual(wipeState(), { token: "offboard-1", retrying: true });
   // Still incomplete, it's done with, so a store that can never go doesn't
   // wipe the fresh install at every launch.
   const retry = failing();
@@ -385,6 +385,21 @@ test("a wipe that leaves a store behind tries once more at the next launch, then
     auditLines().map((line) => line.reason),
     ["incomplete", "incomplete"]
   );
+});
+
+test("an unreadable policy at the retry still finishes the wipe", async () => {
+  seedDevice();
+  const first = launchHarness({
+    snapshot: managed("offboard-1"),
+    clearBrowserData: failingBrowserData,
+  });
+  assert.equal(await first.wipe(), true);
+  const retry = launchHarness({ readError: new Error("unreadable") });
+  assert.equal(await retry.wipe(), true);
+  assert.ok(retry.calls.includes("browser data"));
+  assert.deepEqual(wipeState(), { token: "offboard-1" });
+  // Done with that token, so a readable policy doesn't wipe again.
+  assert.equal(await launchHarness({ snapshot: managed("offboard-1") }).wipe(), false);
 });
 
 test("a removal's wipe leaves its notice only once nothing was left behind", async () => {

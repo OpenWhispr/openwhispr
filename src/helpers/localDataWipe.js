@@ -303,7 +303,8 @@ async function wipeLocalDataOnLaunch({
   const statePath = path.join(userDataPath, WIPE_STATE_FILE);
   const state = readJson(statePath) ?? {};
   // Only a deployment this build reads and accepts can ask for a wipe or say
-  // how one goes; a recorded removal wipes whatever the device policy says.
+  // how one goes; a recorded removal, like a pending retry, wipes whatever the
+  // device policy says.
   // WipeLocalDataIncludesModels deployed on its own manages nothing, but still
   // says what a removal's wipe takes.
   let device = null;
@@ -318,10 +319,10 @@ async function wipeLocalDataOnLaunch({
   const token = device?.wipeLocalDataOnLaunch ?? null;
   const newToken = token !== null && state.token !== token;
   const removal = state.pendingRemoval ?? null;
-  if (!newToken && !removal) return false;
+  const retrying = state.retrying === true;
+  if (!newToken && !removal && !retrying) return false;
 
   const trigger = removal ? "workspace-removal" : "device-policy";
-  const retrying = state.retrying === true;
   logger.warn("Wiping local data", { trigger, includeModels });
   // main.js loaded .env into this process, and the relaunch inherits its
   // environment: what came from the file goes with the file. So do the saved
@@ -380,7 +381,7 @@ async function wipeLocalDataOnLaunch({
       statePath,
       JSON.stringify(
         !complete && !retrying
-          ? { ...state, retrying: true }
+          ? { ...state, token: newToken ? token : state.token, retrying: true }
           : {
               token: newToken ? token : state.token,
               notice: removal && complete ? "workspace-removal" : state.notice,
