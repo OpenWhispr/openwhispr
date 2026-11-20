@@ -378,14 +378,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [loadTranscriptions]);
 
   useEffect(() => {
-    const { noteFilesEnabled, noteFilesPath } = useSettingsStore.getState();
-    if (!noteFilesEnabled) return;
-    window.electronAPI?.noteFilesSetEnabled?.(true, noteFilesPath || undefined, {
-      skipRebuild: true,
-    });
-  }, []);
-
-  useEffect(() => {
     if (platform !== "darwin") return;
     const check = window.electronAPI?.getPostMigrationState?.();
     if (!check) {
