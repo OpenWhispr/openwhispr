@@ -212,7 +212,7 @@ test("seat confirmations belong to the current billing snapshot and request", as
   );
 
   await t.test(
-    "a preview newer than the known capacity or occupancy refreshes instead of confirming",
+    "a preview newer than the known capacity or occupancy refreshes first, and confirms only while Stripe stays ahead",
     async () => {
       for (const [mismatch, refreshed] of [
         [{ current_quantity: 8 }, { seats: 8 }],

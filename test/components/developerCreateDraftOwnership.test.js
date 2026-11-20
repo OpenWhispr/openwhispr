@@ -109,6 +109,18 @@ test("a transient session refetch failure keeps the one-time secret", async (t) 
   );
   // A failed get-session refetch drops validation without changing the credential.
   await React.act(async () => auth.invalidateValidatedAuthContext());
+  // An HTTP failure (5xx, 429, a proxy's 403) also clears the session's user.
+  await React.act(async () =>
+    auth.handleAuthRequestError({
+      request: {
+        url: "https://auth.openwhispr.test/api/auth/get-session",
+        headers: new Headers({ Authorization: "Bearer fake-token" }),
+        openWhisprAuthGeneration: 1,
+      },
+      response: new Response("", { status: 503 }),
+    })
+  );
+  assert.equal(auth.getAuthRequestContextSnapshot().sessionUserId, null);
   await React.act(async () =>
     created.resolve({ id: "fake", key: "fake-test-only-shown-once", name: "draft" })
   );

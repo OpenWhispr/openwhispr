@@ -10,11 +10,12 @@ export interface DialogCompletion {
   isAccountCurrent: () => boolean;
 }
 
-// A failed session refetch drops validation without changing the account, so
-// validation stays out of the binding: a pending create still lands its result.
+// Signing out and switching accounts always replace the credential generation.
+// A failed session refetch keeps the generation: a network failure clears only the
+// validation, and an HTTP failure other than 401 also clears the session's user. So
+// the generation alone binds the account, and a pending create still lands its result.
 function accountBinding() {
-  const s = getAuthRequestContextSnapshot();
-  return JSON.stringify([s.sessionUserId, s.observedGeneration]);
+  return getAuthRequestContextSnapshot().observedGeneration;
 }
 
 /** Dialog-local completion expires on dismissal; completed writes still reconcile for their account. */
