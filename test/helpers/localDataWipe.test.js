@@ -30,6 +30,8 @@ test.beforeEach(() => {
     cacheRoot: path.join(root, "cache-root"),
     temp: [path.join(root, "temp")],
     bridgeFile: path.join(root, "home", ".openwhispr", "cli-bridge.json"),
+    // XDG_CACHE_HOME's folder, outside the home cache.
+    portalTokenFile: path.join(root, "xdg-cache", "openwhispr", "portal-paste-token"),
   };
 });
 test.afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -56,6 +58,7 @@ function seedDevice() {
     for (const name of [...CACHE_ENTRIES, ...MODEL_CACHE_ENTRIES])
       seed(path.join(cache, name, "item"));
   seed(roots.bridgeFile);
+  seed(roots.portalTokenFile);
   for (const prefix of TEMP_PREFIXES) seed(path.join(roots.temp[0], `${prefix}1.wav`));
   seed(path.join(roots.temp[0], "another-app.tmp"));
 }
@@ -75,6 +78,7 @@ test("removes every store and keeps the audit log, the wipe record and, by defau
   for (const name of [...CACHE_ENTRIES, ...MODEL_CACHE_ENTRIES])
     assert.equal(exists(roots.cacheRoot, name), true, name);
   assert.equal(fs.existsSync(roots.bridgeFile), false);
+  assert.equal(fs.existsSync(roots.portalTokenFile), false);
   assert.deepEqual(fs.readdirSync(roots.temp[0]), ["another-app.tmp"]);
 
   assert.deepEqual(await removeLocalData({ includeModels: true, roots }), []);
@@ -674,6 +678,11 @@ test(
       () => run(path.join(root, "no-such-home")),
       (error) => error.status === 1 && error.stderr.includes("No such home")
     );
+    // A home named without OpenWhispr data in it gets nothing written there.
+    const bare = path.join(root, "bare-home");
+    fs.mkdirSync(bare);
+    run(bare);
+    assert.deepEqual(fs.readdirSync(bare), []);
     run(home);
     // From a version before the mirror kept its record: nothing to name, no failure.
     const older = path.join(root, "older-home");
@@ -763,6 +772,22 @@ test(
     run("--include-models", home);
     assert.deepEqual(fs.readdirSync(userData).sort(), [...KEPT_USER_DATA_ENTRIES].sort());
     assert.deepEqual(fs.readdirSync(cache), []);
+  }
+);
+
+test(
+  "the macOS script keeps the whole audit folder when AuditLogPath lies inside it",
+  { skip: process.platform === "win32" },
+  async () => {
+    const home = path.join(root, "home");
+    const audit = path.join(home, "Library", "Application Support", "OpenWhispr", "audit");
+    seed(path.join(audit, "meeting-audit-it-2026-11-01.jsonl"), "{}\n");
+    const run = macosScript({
+      defaults: `[ "$3" = AuditLogPath ] && echo "${path.join(audit, "it")}" && exit 0\nexit 1`,
+    });
+    fs.mkdirSync(path.join(audit, "it"));
+    run(home);
+    assert.ok(fs.readdirSync(audit).includes("meeting-audit-it-2026-11-01.jsonl"));
   }
 );
 

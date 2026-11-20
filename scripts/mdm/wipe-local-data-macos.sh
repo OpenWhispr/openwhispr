@@ -9,7 +9,7 @@
 # Covers every home under /Users unless homes are named. Downloaded models stay
 # unless --include-models is passed. The audit log stays, as does the record of
 # the last WipeLocalDataOnLaunch token, so the app doesn't wipe a second time,
-# and each home's wipe is recorded there.
+# and each home's wipe is recorded there while its account exists.
 # See docs/mdm-local-data-wipe.md.
 
 set -eo pipefail
@@ -93,11 +93,12 @@ remove_all_except() {
   for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
     [[ -e "$entry" || -L "$entry" ]] || continue
     name="$(basename "$entry")"
+    contains "$name" "$@" && continue
     if [[ -n "$keep" && ("$keep" == "$name" || "$keep" == "$name"/*) ]]; then
       [[ "$keep" == "$name" ]] || remove_all_except "$entry" "${keep#"$name"/}"
       continue
     fi
-    contains "$name" "$@" || remove "$entry"
+    remove "$entry"
   done
 }
 
@@ -218,15 +219,15 @@ configured_audit_dir() {
 # (meetingAuditLog.js): one line in their daily file, in AuditLogPath or else
 # the audit folder the wipe keeps, written as them. A daily file that is a
 # link, has other names or is someone else's is refused, as the app refuses
-# one, and so is AuditLogPath for a home whose account is gone, which only
-# root could write for.
+# one. A home whose account is gone isn't recorded: only root could write
+# there, through any link left in it.
 record_wipe() {
   local user="$1" configured="$2" ts reason=null file dir
+  [[ -n "$run_as" || $EUID -ne 0 ]] || return 0
   [[ "$user" =~ ^[A-Za-z0-9._-]+$ ]] || user=unknown
   ts="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
   [[ "$failed" == 0 ]] || reason='"incomplete"'
   file="meeting-audit-$user-${ts:0:10}.jsonl"
-  [[ -n "$run_as" || $EUID -ne 0 ]] || configured=""
   for dir in ${configured:+"$configured"} "$user_data/audit"; do
     printf '{"ts":"%s","event":"local-data.wiped","sessionId":null,"noteId":null,"trigger":"script","reason":%s,"durationSec":null,"participantsNotified":null,"notificationMethod":null,"externalAttendees":null,"appVersion":null,"deviceUser":"%s"}\n' \
       "$ts" "$reason" "$user" | as_owner_run /bin/sh -c '
@@ -296,7 +297,7 @@ for home in "${homes[@]}"; do
       security delete-generic-password -s OpenWhispr -a secrets-master-key >/dev/null 2>&1 || true
     remove_temp_files "$(launchctl asuser "$uid" sudo -u "$console_user" getconf DARWIN_USER_TEMP_DIR)"
   fi
-  record_wipe "$user" "$audit_dir"
+  [[ ! -d "$user_data" ]] || record_wipe "$user" "$audit_dir"
   [[ "$failed" == 1 ]] || echo "Removed OpenWhispr local data from $home"
   [[ "$failed_before" == 0 ]] || failed=1
 done

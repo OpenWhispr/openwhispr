@@ -80,13 +80,14 @@ function Remove-AllExcept([string]$Dir, [string]$Root, [string[]]$Keep, [string]
     return
   }
   foreach ($item in Get-ChildItem -LiteralPath $Dir -Force) {
-    if ($KeepBelow -and ($KeepBelow -eq $item.Name -or $KeepBelow.StartsWith("$($item.Name)", [StringComparison]::OrdinalIgnoreCase))) {
+    if ($Keep -contains $item.Name) { continue }
+    if ($KeepBelow -and ($KeepBelow -eq $item.Name -or $KeepBelow.StartsWith("$($item.Name)\", [StringComparison]::OrdinalIgnoreCase))) {
       if ($KeepBelow -ne $item.Name) {
         Remove-AllExcept $item.FullName $Root @() $KeepBelow.Substring($item.Name.Length + 1)
       }
       continue
     }
-    if ($Keep -notcontains $item.Name) { Remove-Entry $item }
+    Remove-Entry $item
   }
 }
 

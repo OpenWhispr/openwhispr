@@ -68,7 +68,7 @@ const KEPT_USER_DATA_ENTRIES = [
 // Kept by the offboarding wipe unless WipeLocalDataIncludesModels asks;
 // installed-models.json is what still lists a model the catalog dropped.
 const MODEL_USER_DATA_ENTRIES = ["installed-models.json"];
-const CACHE_ENTRIES = ["qdrant-data", "qdrant-data-dev", "yt-dlp", "portal-paste-token"];
+const CACHE_ENTRIES = ["qdrant-data", "qdrant-data-dev", "yt-dlp"];
 // The models getCacheRoot() holds (modelDirUtils' RELOCATED_SUBDIRS and the VAD
 // copy whisper.js makes). OPENWHISPR_CACHE_ROOT can point that root at a folder
 // other apps share, so only these are removed there.
@@ -106,6 +106,12 @@ function defaultRoots() {
     cacheRoot: getCacheRoot(),
     temp: unique([os.tmpdir(), getSafeTempDir()]),
     bridgeFile: getBridgeFilePath(),
+    // Where clipboard.js keeps the Linux portal's paste permission.
+    portalTokenFile: path.join(
+      process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"),
+      "openwhispr",
+      "portal-paste-token"
+    ),
   };
 }
 
@@ -224,6 +230,7 @@ async function removeLocalData({
     ...homeCacheEntries.map((name) => remove(name, path.join(roots.homeCache, name))),
     ...cacheRootEntries.map((name) => remove(name, path.join(roots.cacheRoot, name))),
     remove("cli-bridge.json", roots.bridgeFile),
+    remove("portal-paste-token", roots.portalTokenFile),
     ...roots.temp.map((directory) => removeTempFiles(directory, remove)),
   ]);
   try {
