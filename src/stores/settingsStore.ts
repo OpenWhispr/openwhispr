@@ -1315,7 +1315,7 @@ export interface SettingsState
   setDictationAgentCloudMode: (value: string) => void;
   setDictationAgentCloudBaseUrl: (value: string) => void;
   setDictationAgentRemoteUrl: (url: string) => void;
-  setDictationAgentCustomApiKey: (key: string) => void;
+  setDictationAgentCustomApiKey: SecretSetter;
 
   setVoiceAgentScreenContext: (value: boolean) => void;
   setToneStyleEnabled: (value: boolean) => void;
@@ -1327,7 +1327,7 @@ export interface SettingsState
   setDictationAgentVisionModel: (value: string) => void;
   setDictationAgentVisionCloudMode: (value: string) => void;
   setDictationAgentVisionCloudBaseUrl: (value: string) => void;
-  setDictationAgentVisionCustomApiKey: (key: string) => void;
+  setDictationAgentVisionCustomApiKey: SecretSetter;
   setDictationAgentVisionDisableThinking: (value: boolean) => void;
 
   setTranscriptionMode: (mode: InferenceMode) => void;
@@ -1371,7 +1371,7 @@ export interface SettingsState
   setNoteFormattingCloudMode: (value: string) => void;
   setNoteFormattingCloudBaseUrl: (value: string) => void;
   setNoteFormattingRemoteUrl: (url: string) => void;
-  setNoteFormattingCustomApiKey: (key: string) => void;
+  setNoteFormattingCustomApiKey: SecretSetter;
 
   setTranslationMode: (mode: InferenceMode) => void;
   setTranslationProvider: (value: string) => void;
@@ -1379,7 +1379,7 @@ export interface SettingsState
   setTranslationCloudMode: (value: string) => void;
   setTranslationCloudBaseUrl: (value: string) => void;
   setTranslationRemoteUrl: (value: string) => void;
-  setTranslationCustomApiKey: (value: string) => void;
+  setTranslationCustomApiKey: SecretSetter;
   setTranslationDisableThinking: (value: boolean) => void;
   setUseDictationTranslation: (value: boolean) => void;
   setTranslationSourceLanguage: (value: string) => void;
@@ -1435,22 +1435,22 @@ export interface SettingsState
   setCleanupProvider: (value: string) => void;
   setUiLanguage: (language: string) => void;
 
-  setOpenaiApiKey: (key: string) => void;
-  setAnthropicApiKey: (key: string) => void;
-  setGeminiApiKey: (key: string) => void;
-  setGroqApiKey: (key: string) => void;
-  setXaiApiKey: (key: string) => void;
-  setMistralApiKey: (key: string) => void;
-  setOpenrouterApiKey: (key: string) => void;
-  setCortiClientId: (key: string) => void;
-  setCortiClientSecret: (key: string) => void;
-  setCortiApiKey: (key: string) => void;
-  setTinfoilApiKey: (key: string) => void;
-  setDeepgramApiKey: (key: string) => void;
-  setAssemblyaiApiKey: (key: string) => void;
-  setElevenlabsApiKey: (key: string) => void;
-  setCustomTranscriptionApiKey: (key: string) => void;
-  setCleanupCustomApiKey: (key: string) => void;
+  setOpenaiApiKey: SecretSetter;
+  setAnthropicApiKey: SecretSetter;
+  setGeminiApiKey: SecretSetter;
+  setGroqApiKey: SecretSetter;
+  setXaiApiKey: SecretSetter;
+  setMistralApiKey: SecretSetter;
+  setOpenrouterApiKey: SecretSetter;
+  setCortiClientId: SecretSetter;
+  setCortiClientSecret: SecretSetter;
+  setCortiApiKey: SecretSetter;
+  setTinfoilApiKey: SecretSetter;
+  setDeepgramApiKey: SecretSetter;
+  setAssemblyaiApiKey: SecretSetter;
+  setElevenlabsApiKey: SecretSetter;
+  setCustomTranscriptionApiKey: SecretSetter;
+  setCleanupCustomApiKey: SecretSetter;
 
   // Corti (BYOK)
   cortiEnvironment: string;
@@ -1480,17 +1480,17 @@ export interface SettingsState
   setEnterpriseTranscriptionSetupMode: (value: EnterpriseSetupMode) => void;
   setBedrockRegion: (value: string) => void;
   setBedrockProfile: (value: string) => void;
-  setBedrockAccessKeyId: (key: string) => void;
-  setBedrockSecretAccessKey: (key: string) => void;
-  setBedrockSessionToken: (key: string) => void;
+  setBedrockAccessKeyId: SecretSetter;
+  setBedrockSecretAccessKey: SecretSetter;
+  setBedrockSessionToken: SecretSetter;
   setAzureEndpoint: (value: string) => void;
-  setAzureApiKey: (key: string) => void;
+  setAzureApiKey: SecretSetter;
   setAzureDeploymentName: (value: string) => void;
   setAzureApiVersion: (value: string) => void;
   setVertexAuthMode: (value: string) => void;
   setVertexProject: (value: string) => void;
   setVertexLocation: (value: string) => void;
-  setVertexApiKey: (key: string) => void;
+  setVertexApiKey: SecretSetter;
 
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
@@ -1555,7 +1555,7 @@ export interface SettingsState
   setChatAgentMode: (mode: InferenceMode) => void;
   setChatAgentCloudBaseUrl: (value: string) => void;
   setChatAgentRemoteUrl: (url: string) => void;
-  setChatAgentCustomApiKey: (key: string) => void;
+  setChatAgentCustomApiKey: SecretSetter;
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
   setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => void;
@@ -1761,6 +1761,7 @@ const SAVER_ENV: Record<RefSecretProvider, string> = {
 const SECRET_ENV_SET = new Set<string>([...Object.values(SAVER_ENV), "CUSTOM_REASONING_API_KEY"]);
 
 export type SecretInputError = "self-reference" | "unknown-ref";
+type SecretSetter = (key: string) => SecretInputError | null;
 
 /**
  * Why `key` can't be saved in `saver`'s field: a $VAR naming the field itself or a
@@ -3490,9 +3491,10 @@ const SECRET_SCOPE_KEY_SETTERS = {
 export function setResolvedLLMConfig(
   scope: InferenceScope,
   patch: Partial<Omit<ResolvedLLMConfig, "scope">>
-): void {
+): SecretInputError | null {
   const def: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
   const updates: Partial<SettingsState> = {};
+  let secretError: SecretInputError | null = null;
   for (const [field, value] of Object.entries(patch)) {
     if (value === undefined) continue;
     const storeKey = def.storeKeys[field as keyof InferenceScopeStoreKeys];
@@ -3500,7 +3502,7 @@ export function setResolvedLLMConfig(
     const secretSetter =
       SECRET_SCOPE_KEY_SETTERS[storeKey as keyof typeof SECRET_SCOPE_KEY_SETTERS];
     if (secretSetter) {
-      useSettingsStore.getState()[secretSetter](value as string);
+      secretError = useSettingsStore.getState()[secretSetter](value as string);
       continue;
     }
     if (isBrowser) {
@@ -3512,6 +3514,7 @@ export function setResolvedLLMConfig(
     (updates as Record<string, unknown>)[storeKey as string] = value;
   }
   if (Object.keys(updates).length > 0) useSettingsStore.setState(updates);
+  return secretError;
 }
 
 export function isCloudChatAgentMode() {

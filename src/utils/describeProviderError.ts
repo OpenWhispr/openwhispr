@@ -35,6 +35,15 @@ export function describeProviderError(error: unknown, t: TFunction): ProviderErr
   };
 }
 
+export function describeSecretRefError(
+  code: string | null | undefined,
+  t: TFunction
+): string | undefined {
+  if (code === "self-reference") return t("apiKeyInput.selfReference");
+  if (code === "unknown-ref") return t("apiKeyInput.unknownRef");
+  return code || undefined;
+}
+
 export function formatProviderErrorDetails(
   details: TechnicalErrorDetailsData,
   t: TFunction

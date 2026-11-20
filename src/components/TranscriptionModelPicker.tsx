@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import SecretRefErrorText from "./ui/SecretRefErrorText";
+import { describeSecretRefError } from "../utils/describeProviderError";
 import { LocalModelPolicyNotice } from "./ui/LocalModelPolicyNotice";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
@@ -69,7 +70,7 @@ import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
 import { ProviderCheckField } from "./ui/ProviderCheckField";
 import { usePanelVisible } from "./ui/usePanelVisible";
-import { useCredentialDraft } from "../hooks/useCredentialDraft";
+import { credentialDraftRefused, useCredentialDraft } from "../hooks/useCredentialDraft";
 import { useFocusHold } from "../hooks/useFocusHold";
 import { useTypingPause } from "../hooks/useTypingPause";
 import {
@@ -1428,7 +1429,7 @@ export default function TranscriptionModelPicker({
   });
   // The field that completes the connection carries the status.
   const checkedCredential = isCorti ? "cortiClientSecret" : providerCredentials.fields[0].key;
-  const refused = check.failure?.errorCode === "credentialsRejected";
+  const refused = credentialDraftRefused(displayedCloudProvider, check.failure?.errorCode);
   // The typed values the check carries, as one string so the effect sees each new set.
   const checkedFields = JSON.stringify(
     isCustom
@@ -1442,12 +1443,13 @@ export default function TranscriptionModelPicker({
     followKeyDraft({
       phase: check.phase,
       checked: JSON.parse(checkedFields),
-      // Someone's own server may refuse a key for other reasons, so its refusal holds nothing back.
-      refused: refused && !isCustom,
+      refused,
     });
-  }, [check.phase, checkedFields, isCustom, refused, followKeyDraft]);
+  }, [check.phase, checkedFields, refused, followKeyDraft]);
   const customFailureReason =
-    !customKey.trim() && refused ? t("reasoning.custom.endpointUnauthorized") : undefined;
+    !customKey.trim() && check.failure?.errorCode === "credentialsRejected"
+      ? t("reasoning.custom.endpointUnauthorized")
+      : undefined;
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
@@ -1757,6 +1759,7 @@ export default function TranscriptionModelPicker({
                 <div className="space-y-2">
                   {providerCredentials.fields.map((field, index) => {
                     const label = field.labelKey ? t(field.labelKey) : t("common.apiKey");
+                    const fieldError = describeSecretRefError(keyDraft.error(field.key), t);
                     return (
                       <div key={field.key} className="space-y-1.5">
                         <div className="flex items-center justify-between">
@@ -1788,7 +1791,8 @@ export default function TranscriptionModelPicker({
                         ) : (
                           <ProviderCheckField
                             aria-label={label}
-                            check={field.key === checkedCredential ? check : undefined}
+                            check={field.key === checkedCredential && !fieldError ? check : undefined}
+                            error={fieldError}
                             invalidOn="credentialsRejected"
                             type={field.input === "secret" ? "password" : "text"}
                             value={credentialValues[field.key]}

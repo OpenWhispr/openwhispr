@@ -21,7 +21,7 @@ import SecretRefErrorText from "./ui/SecretRefErrorText";
 import { usePanelVisible } from "./ui/usePanelVisible";
 import { isWindowSwitchBlur, useFocusHold } from "../hooks/useFocusHold";
 import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
-import { useCredentialDraft } from "../hooks/useCredentialDraft";
+import { credentialDraftRefused, useCredentialDraft } from "../hooks/useCredentialDraft";
 import { useTypingPause } from "../hooks/useTypingPause";
 import { offersOpenRouterModel, openRouterModelList } from "../utils/openRouterModels";
 import type { ModelCapability } from "../config/inferenceScopes";
@@ -130,16 +130,14 @@ export default function OpenAICompatiblePanel({
     delayMs,
   });
   const followKeyDraft = keyDraft.follow;
-  const refused = check.failure?.errorCode === "credentialsRejected";
+  const refused = credentialDraftRefused(provider, check.failure?.errorCode);
   useEffect(() => {
     followKeyDraft({
       phase: check.phase,
       checked: { apiKey },
-      // Someone's own server may refuse a key for other reasons, so only OpenRouter's refusal
-      // holds a key back.
-      refused: refused && provider === "openrouter",
+      refused,
     });
-  }, [check.phase, apiKey, refused, provider, followKeyDraft]);
+  }, [check.phase, apiKey, refused, followKeyDraft]);
 
   useEffect(() => {
     latestBaseRef.current = normalizedBase;
@@ -152,7 +150,9 @@ export default function OpenAICompatiblePanel({
   // The status describes the applied address, so it waits while another one is typed.
   const endpointCheck = isDraftDirty ? { ...check, phase: "idle" as const, failure: null } : check;
   const failureReason =
-    !apiKey.trim() && refused ? t("reasoning.custom.endpointUnauthorized") : undefined;
+    !apiKey.trim() && check.failure?.errorCode === "credentialsRejected"
+      ? t("reasoning.custom.endpointUnauthorized")
+      : undefined;
   // While the check covers the address, its reason under the field replaces the list's line.
   const listErrorShown =
     Boolean(modelsError) && (lockedBaseUrl || !checkReady || check.phase === "connected");

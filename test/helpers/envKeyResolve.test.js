@@ -368,6 +368,23 @@ test(
 );
 
 test(
+  "login bash keeps profile overrides while filling other keys from ~/.bashrc",
+  { skip: !fs.existsSync("/bin/bash") && "bash not installed" },
+  async () => {
+    const { env } = await importFromRealShell(
+      "/bin/bash",
+      {
+        ".bashrc": "export OPENAI_API_KEY=default-account\nexport GROQ_API_KEY=rc-only\n",
+        ".bash_profile": '. "$HOME/.bashrc"\nexport OPENAI_API_KEY=profile-account\n',
+      },
+      ["OPENAI_API_KEY", "GROQ_API_KEY", "CUSTOM_TRANSCRIPTION_API_KEY"]
+    );
+    assert.equal(env.OPENAI_API_KEY, "profile-account");
+    assert.equal(env.GROQ_API_KEY, "rc-only");
+  }
+);
+
+test(
   "real login zsh keeps apostrophes, quotes and # in a value",
   { skip: !fs.existsSync("/bin/zsh") && "zsh not installed" },
   async () => {

@@ -7,12 +7,15 @@ const { createRendererServer, installHappyDom } = require("../lib/rendererTestHa
 // settings store brings the app's i18n with it, so labels are in English.
 async function mountCard(t, payload, electronAPI = {}) {
   let root = null;
+  let happyWindow;
   // Node runs after hooks in registration order: unmount while the DOM exists.
   t.after(() => root && React.act(async () => root.unmount()));
   // Ends the card's wait (and its timer) while the DOM still exists.
   const turn = new AbortController();
   t.after(() => turn.abort());
-  const happyWindow = await installHappyDom(t);
+  // Saving a real provider key starts the renderer's credential cache cleanup timer.
+  t.after(() => happyWindow?.dispatchEvent(new happyWindow.Event("beforeunload")));
+  happyWindow = await installHappyDom(t);
   happyWindow.electronAPI = electronAPI;
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-interaction-card-test-" });
   const store = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
@@ -20,7 +23,12 @@ async function mountCard(t, payload, electronAPI = {}) {
   // The real setter saves through IPC; the test only needs what reaches it.
   const savedKeys = [];
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  useSettingsStore.setState({ setOpenaiApiKey: (value) => savedKeys.push(value) });
+  useSettingsStore.setState({
+    setOpenaiApiKey: (value) => {
+      savedKeys.push(value);
+      return null;
+    },
+  });
   const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
   await i18n.changeLanguage("en");
   store.useAgentInteractionStore.setState({ entries: {} });
@@ -316,6 +324,47 @@ test("an API key is masked, reaches the saver only, and leaves just “key saved
   assert.doesNotMatch(JSON.stringify(card.store.useAgentInteractionStore.getState()), /sk-qa/);
   assert.equal(card.host.textContent, "OpenAI key saved");
   assert.doesNotMatch(card.host.innerHTML, /sk-qa/, "the key is nowhere in the page");
+});
+
+test("an invalid API key reference stays editable until a valid key is submitted", async (t) => {
+  const { promise: persisted, resolve: finishPersistence } = Promise.withResolvers();
+  const saved = [];
+  const card = await mountCard(
+    t,
+    { kind: "apiKey", provider: "groq", providerName: "Groq" },
+    {
+      saveGroqKey: async (key) => {
+        saved.push(key);
+      },
+      saveAllKeysToEnv: async () => finishPersistence(),
+    }
+  );
+  const input = card.host.querySelector("input");
+  await card.type(input, "$GROQ_API_KEY");
+  await card.click(card.button("Save"));
+  for (
+    let i = 0;
+    i < 400 && !card.host.querySelector('[role="alert"]') && !card.results.length;
+    i++
+  ) {
+    await card.wait(25);
+  }
+
+  assert.deepEqual(card.results, []);
+  assert.equal(input.value, "$GROQ_API_KEY");
+  assert.equal(
+    card.host.querySelector('[role="alert"]').textContent,
+    card.i18n.t("apiKeyInput.selfReference")
+  );
+  assert.doesNotMatch(JSON.stringify(card.entry()), /\$GROQ_API_KEY/);
+
+  await card.type(input, "fixture-groq-key");
+  await card.click(card.button("Save"));
+  await card.wait(0);
+  assert.deepEqual(card.results, [{ status: "saved" }]);
+  assert.equal(card.host.textContent, "Groq key saved");
+  await persisted;
+  assert.deepEqual(saved, ["fixture-groq-key"]);
 });
 
 test("a typed key is lost on a remount rather than kept anywhere", async (t) => {

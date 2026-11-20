@@ -64,6 +64,18 @@ test("vertex API-key auth with an unset ref never falls back to ADC", () => {
   );
 });
 
+test("a Bedrock profile takes precedence over stale static credentials in an IPC payload", () => {
+  const runtime = resolveManualEnterpriseRuntime(
+    { bedrockProfile: "company", bedrockRegion: "us-west-2", bedrockSessionToken: "$GROQ_API_KEY" },
+    "bedrock",
+    "model",
+    () => assert.fail("profile authentication does not require a stored credential")
+  );
+  assert.equal(runtime.enterprise.bedrockProfile, "company");
+  assert.equal(runtime.enterprise.bedrockRegion, "us-west-2");
+  assert.equal(runtime.enterprise.bedrockSessionToken, undefined);
+});
+
 test("bedrock keys with unset refs never fall back to ambient AWS credentials", () => {
   assert.throws(
     () =>

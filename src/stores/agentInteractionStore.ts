@@ -472,7 +472,11 @@ export async function submitApiKey(key: string, value: string): Promise<void> {
     settle(key, { status: "unavailable", reason: "policy_blocked" });
     return;
   }
-  useSettingsStore.getState()[API_KEY_SETTERS[provider as ApiKeyProvider]](secret);
+  const error = useSettingsStore.getState()[API_KEY_SETTERS[provider as ApiKeyProvider]](secret);
+  if (error) {
+    patchEntry(key, { error });
+    return;
+  }
   settle(key, { status: "saved" });
 }
 

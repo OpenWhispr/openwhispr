@@ -232,7 +232,12 @@ test("a key goes straight to the settings saver and never into the store or resu
   const store = await loadStore();
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const saved = [];
-  useSettingsStore.setState({ setGroqApiKey: (key) => saved.push(key) });
+  useSettingsStore.setState({
+    setGroqApiKey: (key) => {
+      saved.push(key);
+      return null;
+    },
+  });
   const pending = store.requestInteraction(context("call-7").value, {
     kind: "apiKey",
     provider: "groq",

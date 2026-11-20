@@ -29,7 +29,7 @@ import { ProviderCheckField } from "./ui/ProviderCheckField";
 import SecretRefErrorText from "./ui/SecretRefErrorText";
 import { usePanelVisible } from "./ui/usePanelVisible";
 import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
-import { useCredentialDraft } from "../hooks/useCredentialDraft";
+import { credentialDraftRefused, useCredentialDraft } from "../hooks/useCredentialDraft";
 import { useFocusHold } from "../hooks/useFocusHold";
 import { useTypingPause } from "../hooks/useTypingPause";
 import { getCachedPlatform } from "../utils/platform";
@@ -481,7 +481,7 @@ export default function ReasoningModelSelector({
     delayMs,
   });
   const followKeyDraft = keyDraft.follow;
-  const refused = check.failure?.errorCode === "credentialsRejected";
+  const refused = credentialDraftRefused(displayedCloudProvider, check.failure?.errorCode);
   useEffect(() => {
     followKeyDraft({
       phase: check.phase,

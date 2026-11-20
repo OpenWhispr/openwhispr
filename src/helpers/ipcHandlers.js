@@ -9212,15 +9212,13 @@ class IPCHandlers {
       },
     });
     const resolveEnterpriseRuntime = async (event, provider, model, config = {}) => {
-      const { resolveManualEnterpriseRuntime } = require("./enterpriseProviderErrors");
-      const manual = resolveManualEnterpriseRuntime(
-        config,
-        provider,
-        model,
-        (value) => this.environmentManager.resolveSecretRef(value)
-      );
       const context = config.managedContext;
-      if (!context) return manual;
+      if (!context) {
+        const { resolveManualEnterpriseRuntime } = require("./enterpriseProviderErrors");
+        return resolveManualEnterpriseRuntime(config, provider, model, (value) =>
+          this.environmentManager.resolveSecretRef(value)
+        );
+      }
       const authHeaders = await getAuthHeader(event);
       const resolved = await this.enterpriseIdentityManager.resolveProvider({
         accountId: context.accountId,

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check } from "../../icons";
 import { submitApiKey, type InteractionEntry } from "../../../stores/agentInteractionStore";
 import type { InteractionPayload } from "../../../types/agentInteractions";
+import SecretRefErrorText from "../../ui/SecretRefErrorText";
 import { CARD_FIELD } from "./cardStyles";
 import { SubmitArrowButton } from "./SubmitArrowButton";
 
@@ -43,14 +44,13 @@ export function ApiKeyCard({
           const input = inputRef.current;
           if (!input?.value.trim()) return;
           void submitApiKey(entry.key, input.value);
-          input.value = "";
-          setHasValue(false);
         }}
       >
         <input
           ref={inputRef}
           dir="ltr"
           type="password"
+          aria-invalid={entry.error ? true : undefined}
           autoComplete="off"
           spellCheck={false}
           placeholder={t("agentMode.interactions.apiKey.placeholder")}
@@ -62,6 +62,7 @@ export function ApiKeyCard({
         />
         <SubmitArrowButton label={t("agentMode.interactions.apiKey.save")} disabled={!hasValue} />
       </form>
+      <SecretRefErrorText code={entry.error} />
     </div>
   );
 }

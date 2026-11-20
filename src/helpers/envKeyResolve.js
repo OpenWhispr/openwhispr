@@ -35,24 +35,27 @@ const SHELL_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // and NUL never occurs in an environment value, so every value arrives exactly as
 // the shell holds it (quotes, spaces, `#`, newlines inside) with no shell-quoting
 // to undo. Names come from the allowlist, never from user input.
-//
-// Login bash reads ~/.bash_profile, ~/.bash_login or ~/.profile, and only reaches
-// ~/.bashrc when one of them sources it, so the script sources ~/.bashrc itself
-// (zsh -i already reads ~/.zshrc). Re-reading it after a profile that already did
-// sets the same exports again.
 function buildShellImportScript(shell, names) {
   const safe = (names || []).filter((name) => SHELL_NAME_RE.test(name));
-  const bashrc = /bash$/.test(shell || "")
-    ? 'if [ -r "$HOME/.bashrc" ]; then . "$HOME/.bashrc" >/dev/null 2>&1; fi; '
-    : "";
-  return (
-    bashrc +
-    "printf '%s\\n' '" +
-    ENV_EXPORT_SENTINEL +
-    "'; for __ow_n in " +
-    safe.join(" ") +
-    '; do __ow_v=$(printenv "$__ow_n") && printf \'%s=%s\\0\' "$__ow_n" "$__ow_v"; done; true'
-  );
+  const bash = /bash$/.test(shell || "");
+  const value = bash ? '"${!__ow_n}"' : '"${(P)__ow_n}"';
+  // A login profile can override a default it sourced from ~/.bashrc. Capture
+  // those exports first, then consult ~/.bashrc only for names still missing.
+  return [
+    `printf '%s\\n' '${ENV_EXPORT_SENTINEL}'`,
+    `__ow_emit() { printenv "$__ow_n" >/dev/null && printf '%s=%s\\0' "$__ow_n" ${value}; }`,
+    "__ow_missing=()",
+    `for __ow_n in ${safe.join(" ")}; do __ow_emit || __ow_missing+=("$__ow_n"); done`,
+    ...(bash
+      ? [
+          'if (( ${#__ow_missing[@]} )) && [ -r "$HOME/.bashrc" ]; then',
+          '  . "$HOME/.bashrc" >/dev/null 2>&1',
+          '  for __ow_n in "${__ow_missing[@]}"; do __ow_emit || :; done',
+          "fi",
+        ]
+      : []),
+    "true",
+  ].join("\n");
 }
 
 // Parse the NAME=value\0 records printed after the sentinel. rc noise before the

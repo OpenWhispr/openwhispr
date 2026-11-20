@@ -24,6 +24,42 @@ const SCOPE_SETTINGS = [
 
 const MANAGED_MODEL = "anthropic.claude-sonnet-4-20250514-v1:0";
 
+test("manual inference sends credentials for the selected auth method", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t);
+  const { getEnterpriseCallSettings } = await vite.ssrLoadModule(
+    "/services/ai/enterpriseSettings.ts"
+  );
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({
+    enterpriseSetupMode: "manual",
+    bedrockAuthMode: "sso",
+    bedrockProfile: "company",
+    bedrockAccessKeyId: "access-id",
+    bedrockSecretAccessKey: "$GROQ_API_KEY",
+    bedrockSessionToken: "session-token",
+    vertexAuthMode: "adc",
+    vertexProject: "workspace-project",
+    vertexApiKey: "$GEMINI_API_KEY",
+  });
+  const bedrock = () => getEnterpriseCallSettings("bedrock", "dictationCleanup");
+  const vertex = () => getEnterpriseCallSettings("vertex", "chatIntelligence");
+  assert.equal(bedrock().bedrockProfile, "company");
+  assert.equal(bedrock().bedrockAccessKeyId, "");
+  assert.equal(bedrock().bedrockSecretAccessKey, "");
+  assert.equal(bedrock().bedrockSessionToken, "");
+  assert.equal(vertex().vertexProject, "workspace-project");
+  assert.equal(vertex().apiKey, "");
+  assert.equal(vertex().vertexApiKey, "");
+
+  useSettingsStore.setState({ bedrockAuthMode: "keys", vertexAuthMode: "apikey" });
+  assert.equal(bedrock().bedrockProfile, "");
+  assert.equal(bedrock().bedrockAccessKeyId, "access-id");
+  assert.equal(bedrock().bedrockSecretAccessKey, "$GROQ_API_KEY");
+  assert.equal(bedrock().bedrockSessionToken, "session-token");
+  assert.equal(vertex().apiKey, "$GEMINI_API_KEY");
+});
+
 function managedBedrockConfig() {
   return {
     workspaceId: "workspace-a",
@@ -200,7 +236,7 @@ test("enterprise call settings cannot omit or bypass a resolved managed route", 
     "/stores/enterpriseIdentityStore.ts"
   );
 
-  useSettingsStore.setState({ enterpriseSetupMode: "auto" });
+  useSettingsStore.setState({ enterpriseSetupMode: "auto", azureApiKey: "$GROQ_API_KEY" });
   usePolicyStore.setState({
     status: "managed",
     appVersion: "1.8.1",
@@ -220,6 +256,13 @@ test("enterprise call settings cannot omit or bypass a resolved managed route", 
   const settings = getEnterpriseCallSettings("azure", "dictationCleanup");
   assert.equal(settings.managedContext.provider, "bedrock");
   assert.equal(settings.managedContext.generation, 1);
+  assert.deepEqual(Object.keys(settings), ["managedContext"]);
+
+  useEnterpriseIdentityStore.setState({ accountId: null });
+  assert.throws(
+    () => getEnterpriseCallSettings("azure", "dictationCleanup"),
+    (error) => error.code === "MANAGED_CONFIG_UNAVAILABLE"
+  );
 
   useEnterpriseIdentityStore.setState({
     status: "error",

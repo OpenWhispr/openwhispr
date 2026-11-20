@@ -617,6 +617,15 @@ const PROVIDER_SECRET_FIELDS = {
 // Clone + resolve each secret field in place. Never OR Azure/Vertex keys into
 // a shared apiKey unless that provider is the one being called.
 function resolveManualEnterpriseRuntime(config = {}, provider, model, resolveSecretRef) {
+  // Older renderers send both sources. The Bedrock SDK selects the profile first.
+  if (provider === "bedrock" && config.bedrockProfile) {
+    return {
+      provider,
+      model,
+      apiKey: "",
+      enterprise: { bedrockProfile: config.bedrockProfile, bedrockRegion: config.bedrockRegion },
+    };
+  }
   const { usableSecret, envRefName } = require("./envRef.cjs");
   const resolve = (value) => {
     const out = resolveSecretRef ? resolveSecretRef(value || "") : usableSecret(value);

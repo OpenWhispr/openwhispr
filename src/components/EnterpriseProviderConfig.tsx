@@ -12,6 +12,7 @@ import CustomModelInput from "./ui/CustomModelInput";
 import TestConnectionButton from "./TestConnectionButton";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { useSettingsStore } from "../stores/settingsStore";
+import { getManualEnterpriseCallSettings } from "../services/ai/enterpriseSettings";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { adjustBedrockModelForRegion, BEDROCK_REGIONS } from "../utils/bedrockRegions";
 
@@ -146,19 +147,11 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
     [suggestedModels, store.bedrockRegion]
   );
 
-  const getConnectionConfig = () => ({
-    bedrockRegion: store.bedrockRegion,
-    bedrockProfile: store.bedrockAuthMode === "sso" ? store.bedrockProfile : "",
-    bedrockAccessKeyId: store.bedrockAuthMode === "keys" ? store.bedrockAccessKeyId : "",
-    bedrockSecretAccessKey: store.bedrockAuthMode === "keys" ? store.bedrockSecretAccessKey : "",
-    bedrockSessionToken: store.bedrockAuthMode === "keys" ? store.bedrockSessionToken : "",
-  });
-
   const loadCatalog = async (region: string) => {
     const requestId = ++catalogRequestRef.current;
     setCatalog({ status: "loading" });
     const result = await window.electronAPI?.listBedrockModels?.({
-      ...getConnectionConfig(),
+      ...getManualEnterpriseCallSettings("bedrock", store),
       bedrockRegion: region,
     });
     if (requestId !== catalogRequestRef.current) return;
@@ -185,7 +178,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
   };
 
   const getTestConfig = () => ({
-    ...getConnectionConfig(),
+    ...getManualEnterpriseCallSettings("bedrock", store),
     model: reasoningModel,
   });
 
@@ -366,10 +359,7 @@ function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderCo
   const store = useSettingsStore();
 
   const getTestConfig = () => ({
-    azureEndpoint: store.azureEndpoint,
-    azureApiVersion: store.azureApiVersion,
-    azureApiKey: store.azureApiKey,
-    apiKey: store.azureApiKey,
+    ...getManualEnterpriseCallSettings("azure", store),
     model: store.azureDeploymentName || reasoningModel,
   });
 
@@ -444,10 +434,7 @@ function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderC
   const suggestedModels = useSuggestedModels("vertex");
 
   const getTestConfig = () => ({
-    vertexProject: store.vertexProject,
-    vertexLocation: store.vertexLocation,
-    vertexApiKey: store.vertexAuthMode === "apikey" ? store.vertexApiKey : "",
-    apiKey: store.vertexAuthMode === "apikey" ? store.vertexApiKey : "",
+    ...getManualEnterpriseCallSettings("vertex", store),
     model: reasoningModel,
   });
 

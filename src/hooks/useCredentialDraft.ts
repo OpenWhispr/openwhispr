@@ -11,6 +11,13 @@ export interface CredentialCheckReport {
   refused: boolean;
 }
 
+// A custom server may reject a check for reasons unrelated to the supplied key.
+export function credentialDraftRefused(provider: string, errorCode?: string): boolean {
+  return (
+    errorCode === "secretRefUnset" || (provider !== "custom" && errorCode === "credentialsRejected")
+  );
+}
+
 const refusalKey = (field: string, request: string, value: string) =>
   JSON.stringify([field, request, value]);
 

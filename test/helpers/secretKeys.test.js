@@ -256,9 +256,9 @@ test("committing the shown legacy cleanup alias keeps the shell import it names"
     assert.equal(env.saveCleanupCustomKey("$CUSTOM_REASONING_API_KEY").success, true);
     assert.equal(process.env.CUSTOM_REASONING_API_KEY, "fake-legacy-shell-key");
     assert.equal(env.getCleanupCustomKey(), "fake-legacy-shell-key");
-    // A real new key still replaces the legacy alias.
+    // A real new key replaces Cleanup; the shell export is still a valid target.
     env.saveCleanupCustomKey("fake-new-cleanup-key");
-    assert.equal(process.env.CUSTOM_REASONING_API_KEY, undefined);
+    assert.equal(env.resolveSecretRef("$CUSTOM_REASONING_API_KEY"), "fake-legacy-shell-key");
     assert.equal(env.getCleanupCustomKey(), "fake-new-cleanup-key");
   } finally {
     for (const [k, v] of Object.entries(saved)) {
@@ -266,6 +266,98 @@ test("committing the shown legacy cleanup alias keeps the shell import it names"
       else process.env[k] = v;
     }
   }
+});
+
+function isolateCleanupSettings(t) {
+  const originalEnvironment = process.env;
+  process.env = {};
+  const settingsDir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-cleanup-settings-"));
+  t.mock.method(fakeElectron.app, "getPath", () => settingsDir);
+  t.after(() => {
+    process.env = originalEnvironment;
+    fs.rmSync(settingsDir, { recursive: true, force: true });
+  });
+  return new EnvironmentManager();
+}
+
+test("clearing legacy Cleanup preserves another scope's reference across a restart", async (t) => {
+  const env = isolateCleanupSettings(t);
+  process.env.CUSTOM_REASONING_API_KEY = "fake-legacy-shell-key";
+  env._shellImportedSecrets.add("CUSTOM_REASONING_API_KEY");
+  env.saveCustomTranscriptionKey("${CUSTOM_REASONING_API_KEY}");
+  env.saveCleanupCustomKey("");
+  assert.equal(env.getRawCleanupCustomKey(), "");
+  assert.equal(env.getCleanupCustomKey(), "");
+  assert.equal(env.getCustomTranscriptionKey(), "fake-legacy-shell-key");
+  const saved = require("dotenv").parse(fs.readFileSync((await env.saveAllKeysToEnvFile()).path));
+  assert.equal(saved.CUSTOM_REASONING_API_KEY, undefined);
+  process.env = saved;
+  EnvironmentManager._resetShellImportedSecrets();
+  const restarted = new EnvironmentManager();
+  process.env.CUSTOM_REASONING_API_KEY = "rotated-shell-key";
+  restarted._shellImportedSecrets.add("CUSTOM_REASONING_API_KEY");
+  assert.equal(restarted.getRawCleanupCustomKey(), "");
+  assert.equal(restarted.getCustomTranscriptionKey(), "rotated-shell-key");
+  restarted.saveCleanupCustomKey("$CUSTOM_REASONING_API_KEY");
+  assert.equal(restarted.getCleanupCustomKey(), "rotated-shell-key");
+  restarted.saveCleanupCustomKey("$GROQ_API_KEY");
+  assert.equal(restarted.getCleanupCustomKey(), "");
+  await restarted.clearAllPersistedData();
+  assert.equal(restarted.getRawCleanupCustomKey(), "");
+  process.env.CUSTOM_REASONING_API_KEY = "new-install-legacy-key";
+  assert.equal(restarted.getCleanupCustomKey(), "new-install-legacy-key");
+});
+
+test("Cleanup expands the selected shell field's reference once", (t) => {
+  const env = isolateCleanupSettings(t);
+  process.env.CUSTOM_CLEANUP_API_KEY = "$GROQ_API_KEY";
+  process.env.GROQ_API_KEY = "fake-reference-target";
+  env._shellImportedSecrets.add("CUSTOM_CLEANUP_API_KEY");
+  assert.equal(env.getCleanupCustomKey(), "fake-reference-target");
+});
+
+test("a late shell import cannot undo an explicit clear of Cleanup", async (t) => {
+  const env = isolateCleanupSettings(t);
+  env.saveCleanupCustomKey("");
+  process.env.CUSTOM_REASONING_API_KEY = "late-shell-key";
+  env._shellImportedSecrets.add("CUSTOM_REASONING_API_KEY");
+  assert.equal(env.getRawCleanupCustomKey(), "");
+  assert.equal(env.resolveSecretRef("$CUSTOM_REASONING_API_KEY"), "late-shell-key");
+  await env.saveAllKeysToEnvFile();
+});
+
+test("migration and restart retain encrypted legacy keys referenced by other scopes", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const crypto = require("../../src/helpers/secretCrypto");
+  t.mock.method(crypto, "isAvailable", () => true);
+  t.mock.method(crypto, "encrypt", (value) => Buffer.from(value));
+  t.mock.method(crypto, "decrypt", (data) => ({ value: data.toString(), needsReencrypt: false }));
+  process.env.CUSTOM_REASONING_API_KEY = "legacy-credential";
+  process.env.CUSTOM_TRANSCRIPTION_API_KEY = "${CUSTOM_REASONING_API_KEY}";
+  await env._migrateToSecureStorage();
+  const write = t.mock.method(env, "_saveSecretKey");
+  env.saveCleanupCustomKey("new-cleanup");
+  await Promise.all(write.mock.calls.map((call) => call.result));
+  process.env = {};
+  const restarted = new EnvironmentManager();
+  await restarted._loadAllSecrets();
+  assert.equal(restarted.getCleanupCustomKey(), "new-cleanup");
+  assert.equal(restarted.getCustomTranscriptionKey(), "legacy-credential");
+  const clear = t.mock.method(restarted, "_saveSecretKey");
+  restarted.saveCleanupCustomKey("");
+  await Promise.all(clear.mock.calls.map((call) => call.result));
+  process.env = require("dotenv").parse(fs.readFileSync((await restarted.saveAllKeysToEnvFile()).path));
+  assert.equal(process.env.CUSTOM_REASONING_API_KEY, undefined);
+  await restarted._loadAllSecrets();
+  assert.equal(restarted.getRawCleanupCustomKey(), "");
+  assert.equal(restarted.getCustomTranscriptionKey(), "legacy-credential");
+  restarted.saveCustomTranscriptionKey("");
+  restarted.saveCleanupCustomKey("replacement");
+  await Promise.all(clear.mock.calls.map((call) => call.result));
+  process.env = {};
+  await restarted._loadAllSecrets();
+  assert.equal(restarted.getCleanupCustomKey(), "replacement");
+  assert.equal(restarted.resolveSecretRef("$CUSTOM_REASONING_API_KEY"), "");
 });
 
 test("the self-hosted headers secret is stored but never a $VAR target or shell import", () => {

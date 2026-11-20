@@ -381,6 +381,21 @@ test("Check connection asks for at least 16 output tokens, the Azure Responses A
   }
 });
 
+test("managed Bedrock uses the workspace identity when a personal credential reference is unset", async () => {
+  resolveManagedRuntime = async () => managedBedrockRuntime();
+  generateBehavior = async () => ({ text: "hello", finishReason: "stop" });
+  const result = await handlers.get("test-enterprise-connection")(
+    { sender: sender(3) },
+    "bedrock",
+    {
+      managedContext: managedContext(),
+      bedrockSecretAccessKey: "$GROQ_API_KEY",
+    }
+  );
+  assert.deepEqual(result, { success: true });
+  assert.equal(generateCalls.length, 1);
+});
+
 test("Check connection uses the Bedrock retry policy and disables nested AI SDK retries", async () => {
   let attempts = 0;
   generateBehavior = async () => {

@@ -253,6 +253,29 @@ test("a key someone's own server refuses still saves once its field is left", as
   assert.deepEqual(saved, ["sk-wrong"]);
 });
 
+test("an unset Custom reference stays in the editor and never replaces the saved key", async (t) => {
+  const saved = [];
+  const panel = await mount(t, { props: { ...savingKey(saved), apiKey: "saved" } });
+  await panel.type(OPTIONAL_KEY, "$OPENAI_API_KEY");
+  await panel.blur(OPTIONAL_KEY);
+  await panel.wait(0);
+  await panel.answer({ success: false, errorCode: "secretRefUnset" });
+  assert.equal(panel.field(OPTIONAL_KEY).props.value, "$OPENAI_API_KEY");
+  await panel.unmount();
+  assert.deepEqual(saved, []);
+});
+
+test("the scoped self-hosted key setter passes its validation error back to the editor", async (t) => {
+  const panel = await mountSettingsPanel(t, {
+    module: "/components/settings/InferenceConfigEditor.tsx",
+    props: { scope: "chatIntelligence" },
+    secrets: { chatAgentMode: "self-hosted", chatAgentCustomApiKey: "saved" },
+  });
+  const [editor] = panel.find((node) => node.props?.setApiKey);
+  assert.equal(editor.props.setApiKey("$CHAT_AGENT_CUSTOM_API_KEY"), "self-reference");
+  assert.equal(panel.state().chatAgentCustomApiKey, "saved");
+});
+
 test("a key OpenRouter refuses is never saved", async (t) => {
   const saved = [];
   const live = Object.assign(savingKey(saved), {

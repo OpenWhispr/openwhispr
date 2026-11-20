@@ -21,9 +21,16 @@ const SECRET_KEYS = [...SECRET_ENV_NAMES, ...NON_REF_SECRET_ENV];
 const SECRET_REF_SET = new Set(SECRET_ENV_NAMES);
 
 const SECRET_KEY_SET = new Set(SECRET_KEYS);
+const LEGACY_CLEANUP_KEY = "CUSTOM_REASONING_API_KEY";
+const CLEANUP_FALLBACK_DISABLED = "CUSTOM_CLEANUP_LEGACY_FALLBACK_DISABLED";
+
+function hasLegacyCleanupReference() {
+  return SECRET_ENV_NAMES.some((name) => envRefName(process.env[name]) === LEGACY_CLEANUP_KEY);
+}
 
 const PERSISTED_KEYS = [
   ...SECRET_KEYS,
+  CLEANUP_FALLBACK_DISABLED,
   "LOCAL_TRANSCRIPTION_PROVIDER",
   "PARAKEET_MODEL",
   "DICTATION_LANGUAGE",
@@ -237,12 +244,14 @@ class EnvironmentManager {
     const dir = this._getSecureKeysDir();
     await fsPromises.mkdir(dir, { recursive: true });
 
-    // Adopt renamed key so the value survives migration. Old releases stored
-    // it under CUSTOM_REASONING_API_KEY; new code only encrypts CUSTOM_CLEANUP_API_KEY.
-    if (process.env.CUSTOM_REASONING_API_KEY && !process.env.CUSTOM_CLEANUP_API_KEY) {
-      process.env.CUSTOM_CLEANUP_API_KEY = process.env.CUSTOM_REASONING_API_KEY;
+    // Old releases used the legacy slot for Cleanup. An explicit reference
+    // from any scope needs that slot to survive encryption under its own name.
+    if (process.env[LEGACY_CLEANUP_KEY] && !hasLegacyCleanupReference()) {
+      if (!process.env.CUSTOM_CLEANUP_API_KEY && process.env[CLEANUP_FALLBACK_DISABLED] !== "true") {
+        process.env.CUSTOM_CLEANUP_API_KEY = process.env[LEGACY_CLEANUP_KEY];
+      }
+      delete process.env[LEGACY_CLEANUP_KEY];
     }
-    delete process.env.CUSTOM_REASONING_API_KEY;
 
     const migrated = [];
     try {
@@ -315,8 +324,14 @@ class EnvironmentManager {
     return this._getRawKey(envVarName);
   }
 
+  _cleanupCustomEnvName() {
+    return process.env.CUSTOM_CLEANUP_API_KEY || process.env[CLEANUP_FALLBACK_DISABLED] === "true"
+      ? "CUSTOM_CLEANUP_API_KEY"
+      : LEGACY_CLEANUP_KEY;
+  }
+
   getRawCleanupCustomKey() {
-    return this.getRawKey("CUSTOM_CLEANUP_API_KEY") || this.getRawKey("CUSTOM_REASONING_API_KEY");
+    return this.getRawKey(this._cleanupCustomEnvName());
   }
 
   // What a Settings field shows for `envVarName`: the stored text (a $VAR stays a
@@ -406,26 +421,38 @@ class EnvironmentManager {
   }
 
   getCleanupCustomKey() {
-    // TODO: drop CUSTOM_REASONING_API_KEY fallback after 2 releases.
-    return this._getKey("CUSTOM_CLEANUP_API_KEY") || this._getKey("CUSTOM_REASONING_API_KEY");
+    return this._getKey(this._cleanupCustomEnvName());
   }
 
   saveCleanupCustomKey(key) {
     const trimmed = typeof key === "string" ? key.trim() : "";
     // The field shows a shell-imported legacy alias as $CUSTOM_REASONING_API_KEY.
     // Committing it unchanged keeps the import as it is (never saved, never cleared).
+    const previous = this.getRawCleanupCustomKey();
     if (
       trimmed &&
       !this._getRawKey("CUSTOM_CLEANUP_API_KEY") &&
-      this._shellImportedSecrets.has("CUSTOM_REASONING_API_KEY") &&
-      trimmed === this.getRawCleanupCustomKey()
+      this._shellImportedSecrets.has(LEGACY_CLEANUP_KEY) &&
+      trimmed === previous
     ) {
       return { success: true };
     }
     const result = this._saveKey("CUSTOM_CLEANUP_API_KEY", key);
-    // A reference to the legacy alias needs its target; anything else replaces it.
-    if (result?.success !== false && envRefName(trimmed) !== "CUSTOM_REASONING_API_KEY") {
-      delete process.env.CUSTOM_REASONING_API_KEY;
+    if (!result.success) return result;
+    // Clearing Cleanup must not revoke another field's reference, or re-enable
+    // the implicit legacy fallback when the same shell export returns on launch.
+    if (!trimmed && process.env[CLEANUP_FALLBACK_DISABLED] !== "true") {
+      process.env[CLEANUP_FALLBACK_DISABLED] = "true";
+      this.saveAllKeysToEnvFile().catch((error) => {
+        debugLogger.error("Failed to persist the cleared Cleanup setting", { error: error.message });
+      });
+    }
+    if (
+      process.env[LEGACY_CLEANUP_KEY] &&
+      !this._shellImportedSecrets.has(LEGACY_CLEANUP_KEY) &&
+      !hasLegacyCleanupReference()
+    ) {
+      this._saveKey(LEGACY_CLEANUP_KEY, "");
     }
     return result;
   }
@@ -667,7 +694,10 @@ class EnvironmentManager {
     for (const envVarName of PERSISTED_KEYS) {
       delete process.env[envVarName];
     }
-    delete process.env.CUSTOM_REASONING_API_KEY;
+    this._shellImportedSecrets.clear();
+    for (const name of SECRET_ENV_NAMES) {
+      secretSaveCounts.set(name, (secretSaveCounts.get(name) || 0) + 1);
+    }
 
     await Promise.all([
       fsPromises.rm(path.join(app.getPath("userData"), ".env"), { force: true }),
