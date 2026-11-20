@@ -825,7 +825,9 @@ test("linux: production and sink-monitor streams do not drive meeting prompts", 
 
 // PipeWire marks a peak meter stream.monitor; plain PulseAudio reports the
 // peaks resampler instead.
+// Every PipeWire stream, real captures included, reports the PipeWire resampler.
 const PIPEWIRE_METER = {
+  resample_method: "PipeWire",
   properties: {
     "application.process.id": "101",
     "application.process.binary": "plasmashell",
@@ -873,7 +875,7 @@ test("linux: peak meters neither prompt nor hold the mic for auto-end", async (t
 
 test("linux: a dismissed call does not re-prompt while a peak meter stays open", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
-  const call = { properties: { "application.process.id": "300" } };
+  const call = { resample_method: "PipeWire", properties: { "application.process.id": "300" } };
   const { detector, children } = createDetector("linux", {
     execResponses: [
       { stdout: JSON.stringify([PIPEWIRE_METER, PULSEAUDIO_METER, call]) },
