@@ -110,3 +110,15 @@ export function formatDictionaryPrompt(
 export function promptLimitKeepingPersonal(tiers: string[][], maxChars: number): number {
   return Math.max(maxChars, (tiers[0] ?? []).join(', ').length);
 }
+
+// The speech-to-text hint OpenWhispr Cloud gets for these tiers (TranscriptionService, and the
+// snapshot the keyboard sends itself). Its Groq provider keeps only the head 896 characters, its
+// Whisper decoder reads only the decoder window, and its Gemini route keeps the first
+// PROMPT_HEAD_TERMS terms, so shared words fill at most that; personal words are never cut.
+export function cloudDictationPrompt(tiers: string[][]): string {
+  return formatDictionaryPrompt(tiers, promptLimitKeepingPersonal(tiers, GROQ_PROMPT_CHARS), {
+    sharedChars: sharedDictionaryPromptChars(GROQ_PROMPT_CHARS),
+    sharedWords: MAX_SHARED_KEYTERMS,
+    totalTerms: PROMPT_HEAD_TERMS,
+  });
+}

@@ -11,6 +11,9 @@ private enum TestEnvironment {
   static var landscape = false
   static var tablet = false
   static var proxy = TestTextProxy()
+  /// hasFullAccess: on, as Mac Catalyst reports it (off would cover the keys with the Full
+  /// Access panel).
+  static var fullAccess = true
 
   static func install() {
     func stub(_ cls: AnyClass, _ selector: Selector, _ block: Any) {
@@ -28,6 +31,8 @@ private enum TestEnvironment {
       MainActor.assumeIsolated { tablet ? .pad : .phone }
     }
     stub(UIDevice.self, #selector(getter: UIDevice.userInterfaceIdiom), idiomStub)
+    let fullAccessStub: @convention(block) (AnyObject) -> Bool = { _ in MainActor.assumeIsolated { fullAccess } }
+    stub(UIInputViewController.self, #selector(getter: UIInputViewController.hasFullAccess), fullAccessStub)
   }
 
   static func reset() {
@@ -35,6 +40,34 @@ private enum TestEnvironment {
     landscape = false
     tablet = false
     proxy = TestTextProxy()
+    fullAccess = true
+  }
+}
+
+/// Stands in for DirectDictationRuntime: records what the keyboard asks of it.
+@MainActor
+private final class FakeDirectDictation: DirectDictationControlling {
+  var canRecordHere = true
+  var state: DirectDictationState = .idle
+  var onStateChange: ((DirectDictationState) -> Void)?
+  var onLevel: ((Float) -> Void)?
+  var onText: ((String) -> Void)?
+  var starts = 0
+  var confirms = 0
+  var cancels = 0
+  var appears = 0
+  var disappears = 0
+
+  func attach(to view: UIView) {}
+  func start() { starts += 1 }
+  func confirm() { confirms += 1 }
+  func cancel() { cancels += 1 }
+  func keyboardWillDisappear() { disappears += 1 }
+  func keyboardDidAppear() { appears += 1 }
+
+  func push(_ next: DirectDictationState) {
+    state = next
+    onStateChange?(next)
   }
 }
 
@@ -136,6 +169,19 @@ private extension KeyboardViewController {
   func touchTestTapDelete() { handleBackspaceTapped() }
   func touchTestTapMode() { handleModeKeyTapped() }
   func touchTestQuote(_ character: String) -> String? { smartQuoteSubstitution(for: character) }
+  func touchTestUseDirect(_ direct: DirectDictationControlling) {
+    directDictation = direct
+    attachDirectDictation()
+  }
+  func touchTestRefreshPill() { refreshRecordButton() }
+  func touchTestSetHostIsOwnApp(_ value: Bool) { hostIsOwnApp = value }
+  var touchTestPillTitle: String? { recordButton.configuration?.title }
+  var touchTestPillActions: [String] { recordButton.actions(forTarget: self, forControlEvent: .touchUpInside) ?? [] }
+  var touchTestCanvasShown: Bool { recordingCanvas.isUserInteractionEnabled }
+  func touchTestTapDirectPill() { handleDirectRecordTapped() }
+  func touchTestTapConfirm() { handleStopRecordingTapped() }
+  func touchTestTapCancel() { handleCancelRecordingTapped() }
+  func touchTestDirectWillDisappear() { directKeyboardWillDisappear() }
 }
 
 private struct TouchChecks {
@@ -192,6 +238,7 @@ private enum KeyboardTouchTests {
     checkFieldAwareKeys(&checks)
     checkLayoutChanges(&checks)
     checkTyping(&checks)
+    checkDirectDictation(&checks)
 
     print("Keyboard touch routing: \(checks.count - checks.failures.count)/\(checks.count) passed")
     if !checks.failures.isEmpty {
@@ -681,3 +728,84 @@ private enum KeyboardTouchTests {
     )
   }
 }
+
+/// The pill and the recording canvas when the keyboard records and transcribes itself.
+@MainActor
+private func checkDirectDictation(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: eligible and the app not alive reads Tap to speak", keyboard.touchTestPillTitle == "Tap to speak")
+  checks.check("direct: the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+  keyboard.touchTestTapDirectPill()
+  checks.check("direct: tapping starts once", direct.starts == 1)
+
+  direct.canRecordHere = false
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: not eligible reads Activate", keyboard.touchTestPillTitle == "Activate")
+  checks.check("direct: not eligible keeps the handoff", !keyboard.touchTestPillActions.contains("handleDirectRecordTapped"))
+
+  direct.canRecordHere = true
+  keyboard.touchTestSetHostIsOwnApp(true)
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: an alive app keeps its own path", keyboard.touchTestPillActions == ["handleDarwinRecordTapped"])
+  keyboard.touchTestSetHostIsOwnApp(false)
+  keyboard.touchTestRefreshPill()
+
+  direct.push(.recording)
+  checks.check("direct: recording shows the canvas", keyboard.touchTestCanvasShown)
+  keyboard.touchTestTapConfirm()
+  checks.check("direct: the check mark confirms", direct.confirms == 1)
+  keyboard.touchTestTapCancel()
+  checks.check("direct: the cross cancels", direct.cancels == 1)
+
+  direct.push(.transcribing)
+  checks.check("direct: transcribing hides the canvas", !keyboard.touchTestCanvasShown)
+  checks.check("direct: transcribing reads Transcribing", keyboard.touchTestPillTitle == "Transcribing")
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: a pill refresh keeps Transcribing", keyboard.touchTestPillTitle == "Transcribing")
+
+  direct.push(.failed(.limitReached))
+  checks.check("direct: limit reached reads Limit reached", keyboard.touchTestPillTitle == "Limit reached")
+  direct.push(.failed(.captureUnavailable))
+  checks.check("direct: capture unavailable reads Tap to open app", keyboard.touchTestPillTitle == "Tap to open app")
+  direct.push(.failed(.noSpeech))
+  checks.check("direct: no speech reads No speech", keyboard.touchTestPillTitle == "No speech")
+
+  direct.push(.idle)
+  direct.onText?("hello")
+  checks.check("direct: text goes into the field", TestEnvironment.proxy.inserted == ["hello"])
+
+  // Music started or AirPods connected after the pill was drawn: the tap checks again.
+  direct.canRecordHere = true
+  keyboard.touchTestRefreshPill()
+  direct.canRecordHere = false
+  let startsBefore = direct.starts
+  keyboard.touchTestTapDirectPill()
+  checks.check("direct: a tap after audio started doesn't record here", direct.starts == startsBefore)
+  checks.check("direct: and the pill falls back to Activate", keyboard.touchTestPillTitle == "Activate")
+
+  // start() declined without a state change (still failed): the pill must not be left dead.
+  direct.canRecordHere = true
+  direct.state = .failed(.tryAgain)
+  keyboard.touchTestRefreshPill()
+  keyboard.touchTestTapDirectPill()
+  checks.check("direct: a declined tap leaves a working pill", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+  direct.state = .idle
+
+  // iOS recreated the keyboard mid-take: the new one picks the take up.
+  direct.state = .recording
+  let replacement = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  replacement.touchTestUseDirect(direct)
+  checks.check("direct: a new keyboard shows the take in progress", replacement.touchTestCanvasShown)
+  let disappearsBefore = direct.disappears
+  keyboard.touchTestDirectWillDisappear()
+  checks.check("direct: the replaced keyboard going away doesn't end the take", direct.disappears == disappearsBefore)
+  replacement.touchTestDirectWillDisappear()
+  checks.check("direct: the keyboard that owns the take going away does", direct.disappears == disappearsBefore + 1)
+}
+

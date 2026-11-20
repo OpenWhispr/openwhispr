@@ -336,8 +336,19 @@ function phaseCount(project: Project, targetUuid: string, isa: string) {
 
 function expectKeyboardWiring(project: Project, keyboardTarget = KEYBOARD_TARGET) {
   expect(phaseFiles(project, keyboardTarget, 'PBXSourcesBuildPhase')).toEqual([
+    'DirectAudioEncoder.swift',
+    'DirectAudioRoute.swift',
+    'DirectDictation.swift',
+    'DirectDictationAudio.swift',
+    'DirectDictationConfig.swift',
+    'DirectDictationRequests.swift',
+    'DirectDictationRuntime.swift',
+    'DirectDictationStore.swift',
     'KeyboardCapitalization.swift',
+    'KeyboardCredentialStore.swift',
     'KeyboardViewController.swift',
+    'SnippetExpander.swift',
+    'WebAudioCapture.swift',
   ]);
   expect(phaseFiles(project, keyboardTarget, 'PBXResourcesBuildPhase')).toEqual([]);
   expect(phaseFiles(project, APP_TARGET, 'PBXSourcesBuildPhase')).toEqual([]);
@@ -526,8 +537,19 @@ describe('withKeyboardExtension mods', () => {
       'B30000000000000000000002',
     ]);
     expect(groupChildNames(project, 'B30000000000000000000002')).toEqual([
+      'DirectAudioEncoder.swift',
+      'DirectAudioRoute.swift',
+      'DirectDictation.swift',
+      'DirectDictationAudio.swift',
+      'DirectDictationConfig.swift',
+      'DirectDictationRequests.swift',
+      'DirectDictationRuntime.swift',
+      'DirectDictationStore.swift',
       'KeyboardCapitalization.swift',
+      'KeyboardCredentialStore.swift',
       'KeyboardViewController.swift',
+      'SnippetExpander.swift',
+      'WebAudioCapture.swift',
     ]);
     expect(groupChildNames(project, 'B30000000000000000000004')).toEqual([]);
   });
@@ -541,5 +563,22 @@ describe('withKeyboardExtension mods', () => {
     await config.mods.ios.dangerous({ ...config, modRequest: modRequest(root) });
 
     expect(fs.readFileSync(file, 'utf8')).toBe(appOnly);
+  });
+});
+
+describe('keyboard session credential', () => {
+  // The app writes the item and the keyboard reads it; a typo on either side would silently
+  // keep every keyboard on the handoff.
+  it('names the same Keychain item on both sides', () => {
+    const read = (relative: string) => fs.readFileSync(path.join(__dirname, relative), 'utf8');
+    const keyboard = read('../ios/KeyboardCredentialStore.swift');
+    const app = read('../../../modules/app-group-storage/ios/AppGroupStorageModule.swift');
+    const literal = (source: string, name: string) =>
+      source.match(new RegExp(`static let ${name} = "([^"]+)"`))?.[1];
+
+    expect(literal(keyboard, 'service')).toBe('com.openwhispr.keyboard-session');
+    expect(literal(app, 'keyboardSessionService')).toBe(literal(keyboard, 'service'));
+    expect(literal(keyboard, 'account')).toBe('cookie');
+    expect(literal(app, 'keyboardSessionAccount')).toBe(literal(keyboard, 'account'));
   });
 });

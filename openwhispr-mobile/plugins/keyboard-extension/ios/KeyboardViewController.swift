@@ -1135,6 +1135,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // Detected once at setup (the host is fixed for the extension's lifetime).
   // Avoids calling the heavy private-API host detection on every button refresh.
   private var hostIsOwnApp = false
+  // Records and transcribes in the keyboard when the app isn't running (iOS 26+). Lazy, so the
+  // touch tests can put a fake in before anything reads it.
+  private lazy var directDictation: DirectDictationControlling? = {
+    if #available(iOS 26.0, *) { return DirectDictationRuntime.shared }
+    return nil
+  }()
   private var didRequestCancelForCurrentSession = false
 
   private var layoutMode: KeyboardLayoutMode = .letters
@@ -1328,6 +1334,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     KeyboardHandoffProvider.shared.markShown()
     KeyboardHandoffProvider.shared.storeHostReturnInfo(from: self)
+    attachDirectDictation()
+    // On every way out of here (the review card returns early), and last, so a resumed or
+    // finished direct take isn't repainted by the handoff paths below.
+    defer { directDictation?.keyboardDidAppear() }
     refreshToneButton()
     refreshAgentButton()
     // The review card owns the screen until the user acts on it; don't let a
@@ -1358,6 +1368,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
     logRecordMarker("viewWillDisappear")
+    directKeyboardWillDisappear()
     stopDeleteRepeating()
     issueResetTimer?.invalidate()
     waitForTranscriptTimer?.invalidate()
@@ -3495,6 +3506,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     recordButton.removeTarget(self, action: #selector(handleDarwinRecordTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleStopRecordingTapped), for: .touchUpInside)
+    recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
     recordButton.removeTarget(
       self, action: #selector(handleFullAccessPillTapped), for: .touchUpInside
     )
@@ -3540,6 +3552,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // belt-and-braces for an in-place flip): the panel has nothing to say.
     hideFullAccessPanel(animated: false)
 
+    // A take the keyboard is recording or transcribing itself owns the pill until it ends.
+    if isDirectTakeActive, let direct = directDictation {
+      renderDirectState(direct.state)
+      return
+    }
+
     // Inside OpenWhispr itself, tapping records in place (the app's URL handler
     // detects the self-hosted case and starts recording without switching apps),
     // so show "Tap to speak" with a mic. Elsewhere, a tap hands off to the app,
@@ -3551,13 +3569,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let containingAppForeground = KeyboardHandoffProvider.shared.isContainingAppForeground()
     let selfHosted = hostIsOwnApp || containingAppForeground
     let recordsInPlace = backgroundReady || selfHosted
-    dictationLinkHosting?.view.isUserInteractionEnabled = !recordsInPlace
+    // With the app gone, the keyboard can still record and transcribe itself for Cloud users.
+    // An alive app keeps its own path, which runs the full pipeline.
+    let recordsDirect = !recordsInPlace && (directDictation?.canRecordHere ?? false)
+    dictationLinkHosting?.view.isUserInteractionEnabled = !(recordsInPlace || recordsDirect)
 
     if recordsInPlace {
       recordButton.addTarget(self, action: #selector(handleDarwinRecordTapped), for: .touchUpInside)
+    } else if recordsDirect {
+      recordButton.addTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
     }
 
-    if recordsInPlace {
+    if recordsInPlace || recordsDirect {
       applyRecordButtonStyle(title: "Tap to speak", image: CachedImages.brandLogoMark)
     } else {
       applyRecordButtonStyle(
@@ -3571,7 +3594,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     logRecordMarker(
       "refreshRecordButton",
       extra:
-        "backgroundReady=\(backgroundReady) hostIsOwnApp=\(hostIsOwnApp) containingAppForeground=\(containingAppForeground) selfHosted=\(selfHosted)"
+        "backgroundReady=\(backgroundReady) hostIsOwnApp=\(hostIsOwnApp) containingAppForeground=\(containingAppForeground) selfHosted=\(selfHosted) direct=\(recordsDirect)"
     )
   }
 
@@ -4005,6 +4028,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     recordButton.removeTarget(self, action: #selector(handleDarwinRecordTapped), for: .touchUpInside)
     recordButton.removeTarget(self, action: #selector(handleStopRecordingTapped), for: .touchUpInside)
+    recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
 
     showRecordingCanvas()
     logRecordMarker("enterRecordingMode")
@@ -4107,6 +4131,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func handleStopRecordingTapped() {
+    if isDirectTakeActive {
+      directDictation?.confirm()
+      return
+    }
     didRequestStopForCurrentSession = true
     didRequestCancelForCurrentSession = false
     logRecordMarker("handleStopRecordingTapped.beforeRequest")
@@ -4126,6 +4154,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func handleCancelRecordingTapped() {
+    if isDirectTakeActive {
+      directDictation?.cancel()
+      return
+    }
     didRequestStopForCurrentSession = true
     didRequestCancelForCurrentSession = true
     // Remember the job so the app's follow-up writes for it (the shared
@@ -4149,6 +4181,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// cancel flag at its transcription checkpoints; here we also stop waiting,
   /// remember the job so a late transcript can't slip in, and return to idle.
   @objc private func handleProcessingCancelTapped() {
+    if isDirectTakeActive {
+      directDictation?.cancel()
+      return
+    }
     let provider = KeyboardHandoffProvider.shared
 
     // During agent generation the same X aborts the compose. The app's currency
@@ -4187,6 +4223,92 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     waitForTranscriptTimer?.invalidate()
     waitForTranscriptTimer = nil
     refreshRecordButton()
+  }
+
+  // MARK: - Direct dictation
+
+  // The controller the direct take reports to. iOS can recreate the keyboard within a process,
+  // and the replaced controller's viewWillDisappear may arrive after the new one appeared.
+  private static weak var directOwner: KeyboardViewController?
+
+  private func directKeyboardWillDisappear() {
+    guard Self.directOwner === self else { return }
+    directDictation?.keyboardWillDisappear()
+  }
+
+  private var isDirectTakeActive: Bool {
+    switch directDictation?.state {
+    case .starting?, .recording?, .transcribing?: return true
+    default: return false
+    }
+  }
+
+  /// Hands this controller's view and callbacks to the process-wide direct dictation. iOS
+  /// recreates the controller within a process, so a take in progress shows up again here.
+  private func attachDirectDictation() {
+    guard let direct = directDictation else { return }
+    Self.directOwner = self
+    direct.attach(to: view)
+    direct.onStateChange = { [weak self] state in self?.renderDirectState(state) }
+    direct.onLevel = { [weak self] level in
+      guard let self, self.directDictation?.state == .recording else { return }
+      self.updateVoiceMeterBars(level: level)
+    }
+    direct.onText = { [weak self] text in
+      guard let self else { return }
+      self.insertSmartText(self.formatTranscription(text))
+    }
+    if isDirectTakeActive { renderDirectState(direct.state) }
+  }
+
+  private func renderDirectState(_ state: DirectDictationState) {
+    logRecordMarker("direct.\(state)")
+    switch state {
+    case .starting:
+      showTransientRecordState(title: "Starting", systemImage: "ellipsis", background: Palette.accent, duration: 3.0)
+    case .recording:
+      enterRecordingMode()
+    case .transcribing:
+      hideRecordingCanvas()
+      resetVoiceMeterBars()
+      showLongRunningRecordState(title: "Transcribing")
+    case .failed(let failure):
+      hideRecordingCanvas()
+      resetVoiceMeterBars()
+      processingCancelButton.isHidden = true
+      showIssueState(title: Self.directFailureTitle(failure))
+    case .idle:
+      hideRecordingCanvas()
+      resetVoiceMeterBars()
+      processingCancelButton.isHidden = true
+      refreshRecordButton()
+    }
+  }
+
+  private static func directFailureTitle(_ failure: DirectFailure) -> String {
+    switch failure {
+    case .captureUnavailable, .signInAgain: return "Tap to open app"
+    case .noSpeech: return "No speech"
+    case .setUpInApp: return "Set up in app"
+    case .limitReached: return "Limit reached"
+    case .tryAgain: return "Try again"
+    }
+  }
+
+  @objc private func handleDirectRecordTapped() {
+    recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
+    logRecordMarker("handleDirectRecordTapped")
+    // Music or Bluetooth audio may have started since the pill was drawn; recording here would
+    // stop it for good, so the audio is checked at the tap.
+    guard let direct = directDictation, direct.canRecordHere else {
+      refreshRecordButton()
+      return
+    }
+    let before = direct.state
+    direct.start()
+    // A start that changed nothing (the snapshot changed since the pill was drawn, or it failed
+    // the same way again) sends no state change: put the pill back rather than leave it dead.
+    if direct.state == before && !isDirectTakeActive { refreshRecordButton() }
   }
 
   @objc private func handleDarwinRecordTapped() {

@@ -19,6 +19,8 @@ export default function PreferencesScreen() {
   const keyboardTone = config?.keyboardTone ?? DEFAULT_KEYBOARD_TONE;
   const agentName = config ? getDictationAgentName(config) : 'OpenWhispr';
   const handleToggleAutoLearn = useConfigToggle('autoLearnCorrections');
+  const directDictation = config?.keyboardDirectDictation ?? false;
+  const handleToggleDirectDictation = useConfigToggle('keyboardDirectDictation');
   const [dictationMode, setDictationMode] = useState(() => LiveActivity.isDictationModeEnabled());
 
   return (
@@ -64,6 +66,23 @@ export default function PreferencesScreen() {
           description="Required for keyboard dictation. Tap for setup steps."
           onPress={() => router.push('/keyboard-full-access')}
         />
+        {Platform.OS === 'ios' ? (
+          <SettingsRow
+            iconStyle="line"
+            icon="mic"
+            mdIcon="Mic"
+            title="Dictate without opening OpenWhispr"
+            description="Beta. Records in the keyboard for OpenWhispr Cloud. Bring Your Own Key, Local Mode, a custom cleanup prompt and the assistant still open the app, and so does dictating while music plays or with Bluetooth audio."
+            rightElement={
+              <SettingsSwitch
+                accessibilityLabel="Dictate without opening OpenWhispr"
+                value={directDictation}
+                onValueChange={handleToggleDirectDictation}
+              />
+            }
+            showChevron={false}
+          />
+        ) : null}
         <SettingsRow
           iconStyle="line"
           icon="keyboard"

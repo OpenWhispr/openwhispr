@@ -26,6 +26,8 @@ import { StorageService } from '../services/storage/StorageService';
 
 export type AddTranscriptInput = Omit<Transcript, 'id' | 'createdAt' | 'updatedAt'> & {
   id?: string;
+  /** When it was dictated, for one the keyboard finished while the app was away; else now. */
+  createdAt?: number;
 };
 
 export type FailedTranscriptInput = {
@@ -42,6 +44,7 @@ export type FailedTranscriptInput = {
   keyboardTone?: KeyboardTone;
   jobId?: string;
   errorMessage: string;
+  createdAt?: number;
 };
 
 interface TranscriptState {
@@ -244,8 +247,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         status: 'completed',
         errorMessage: undefined,
         retryCount: transcript.retryCount ?? 0,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: transcript.createdAt ?? now,
+        updatedAt: transcript.createdAt ?? now,
       };
 
       set({ isLoading: true, error: null });
@@ -297,8 +300,8 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         const failedTranscript: Transcript = {
           id,
           text: '',
-          createdAt: now,
-          updatedAt: now,
+          createdAt: transcript.createdAt ?? now,
+          updatedAt: transcript.createdAt ?? now,
           audioUrl,
           audioFileName: transcript.audioFileName,
           audioMimeType: transcript.audioMimeType,

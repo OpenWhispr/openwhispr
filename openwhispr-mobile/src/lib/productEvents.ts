@@ -504,6 +504,7 @@ export function createProductEvents({
     provider,
     source,
     retranscribe,
+    occurredAt: finishedAt,
   }: {
     context: ProductEventsCaptureContext;
     captureId: string;
@@ -511,6 +512,8 @@ export function createProductEvents({
     provider: TranscriptionProvider;
     source: 'dictation' | 'keyboard';
     retranscribe: boolean;
+    /** When the dictation finished, for one the keyboard completed while the app was away. */
+    occurredAt?: number;
   }): Promise<void> {
     const { identity, consentSignal: signal, isPractice: practice } = context;
     if (!identity || identity.isAnonymous || signal === null || words === 0) return;
@@ -529,7 +532,7 @@ export function createProductEvents({
     // A refreshed session can learn the original account's policy while capture is in flight.
     if (!active()) return;
     const counts = !practice && !retranscribe;
-    const occurredAt = new Date(now()).toISOString();
+    const occurredAt = new Date(finishedAt ?? now()).toISOString();
     const queued = await enqueue(
       {
         // One recording is one event, however often a path reports it.
@@ -878,6 +881,7 @@ export function recordDictationCompleted(dictation: {
   provider: TranscriptionProvider;
   source: 'dictation' | 'keyboard';
   retranscribe: boolean;
+  occurredAt?: number;
 }): void {
   runtime?.recordDictationCompleted(dictation).catch(() => undefined);
 }

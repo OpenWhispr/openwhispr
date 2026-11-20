@@ -44,6 +44,9 @@ export interface UserConfig {
   // the first time a hardware keyboard is attached.
   hardwareKeyboardNudgeDismissedAt?: string;
   keyboardTone?: KeyboardTone;
+  // Records and transcribes in the keyboard for OpenWhispr Cloud, without opening the app.
+  // Off by default for the first TestFlight build.
+  keyboardDirectDictation?: boolean;
   // Apple Foundation Models local generation for notes. Default on; users can
   // disable it from AI Models.
   appleLocalIntelligenceEnabled?: boolean;

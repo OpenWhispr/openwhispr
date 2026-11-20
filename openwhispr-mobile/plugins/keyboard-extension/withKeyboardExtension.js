@@ -18,6 +18,17 @@ const EXTENSION_BUNDLE_ID_SUFFIX = 'keyboard';
 const EXTENSION_FILES = [
   { name: 'KeyboardViewController.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'KeyboardCapitalization.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectAudioRoute.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'WebAudioCapture.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationRuntime.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictation.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyboardCredentialStore.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationStore.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationRequests.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'SnippetExpander.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectAudioEncoder.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationAudio.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationConfig.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
 ];
 const BUILD_PHASE_ISA = {
   Sources: 'PBXSourcesBuildPhase',
