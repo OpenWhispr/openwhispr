@@ -18,6 +18,8 @@ import { normalizeToneStyles, type ToneStyles } from "../config/toneStyle";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { sweepRetiredPromptOverrides } from "../config/retiredPrompts";
 import { FORK_DEFAULTS } from "../config/forkDefaults";
+import { CLOUD_ENABLED } from "../config/forkRuntime";
+import { migrateSavedSttUrls } from "../config/forkSttMigration";
 import {
   sweepRetiredCloudModelSelections,
   type RetiredModelProvider,
@@ -895,6 +897,19 @@ function migrateRetiredCloudModels() {
 }
 
 migrateRetiredCloudModels();
+
+// STT-03: saved STT URLs on the old Coolify-generated hostname move to the stable
+// domain. Runs before the store reads them. Only when the hosted cloud is off,
+// the same condition under which the fork default points at our STT API.
+function migrateLegacySttHost() {
+  if (!isBrowser || CLOUD_ENABLED || !FORK_DEFAULTS.transcriptionBaseUrl) return;
+  const changed = migrateSavedSttUrls(localStorage, FORK_DEFAULTS.transcriptionBaseUrl);
+  if (changed.length > 0) {
+    logger.info("Moved saved STT URLs to the stable domain", { keys: changed }, "settings");
+  }
+}
+
+migrateLegacySttHost();
 
 export interface SettingsState
   extends
