@@ -21,6 +21,8 @@ class WavRecorder internal constructor(
   private val createInput: (Int) -> PcmInput,
   /** How much audio each read takes, so [onLevel] fires that often; null reads half the input's buffer. */
   private val readMillis: Int? = null,
+  /** What [onLevel] reports for each read; [BubblePolicy.level] when null. */
+  private val measure: ((ShortArray, Int) -> Float)? = null,
 ) {
   constructor(
     context: Context,
@@ -30,8 +32,9 @@ class WavRecorder internal constructor(
     onFrame: ((ByteArray, Long) -> Unit)? = null,
     onFailure: ((Exception) -> Unit)? = null,
     readMillis: Int? = null,
+    measure: ((ShortArray, Int) -> Float)? = null,
   ) : this(context.cacheDir, sampleRate, destinationFile, maximumSeconds, onFrame, onFailure,
-    { rate -> MicrophoneInput(rate) }, readMillis)
+    { rate -> MicrophoneInput(rate) }, readMillis, measure)
 
   companion object { private val microphoneInUse = AtomicBoolean(false) }
   private var ownsMicrophone = false
@@ -84,7 +87,7 @@ class WavRecorder internal constructor(
               if (count == 0) continue
               val loudness = BubblePolicy.level(buffer, count)
               level = loudness
-              onLevel?.invoke(loudness)
+              onLevel?.invoke(measure?.invoke(buffer, count) ?: loudness)
               val bytes = ByteBuffer.allocate(count * 2).order(ByteOrder.LITTLE_ENDIAN)
               for (i in 0 until count) { bytes.putShort(buffer[i]); peak = maxOf(peak, abs(buffer[i].toInt())) }
               val data = bytes.array()

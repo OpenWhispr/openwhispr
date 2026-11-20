@@ -844,9 +844,9 @@ class DictationService : Service() {
       mode = next
       foreground(true)
       // 20 ms reads, so the bars follow every syllable; the meter keeps them still for room noise.
-      val meter = VoiceMeter()
-      recorder = WavRecorder(this, readMillis = LEVEL_WINDOW_MS).also { recording ->
-        recording.onLevel = { level -> val voice = meter.update(level, LEVEL_WINDOW_MS.toFloat()); handler.post { face?.setLevel(voice) } }
+      val meter = VoiceMeter(windowMs = LEVEL_WINDOW_MS)
+      recorder = WavRecorder(this, readMillis = LEVEL_WINDOW_MS, measure = meter::level).also { recording ->
+        recording.onLevel = { voice -> handler.post { face?.setLevel(voice) } }
         recording.start()
       }
       setState(BubbleState.LISTENING)

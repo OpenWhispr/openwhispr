@@ -1,61 +1,88 @@
 package com.openwhispr.dictation
 
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.log10
 import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
- * Turns the microphone's loudness into how much the listening bubble moves (0 to 1), so it answers the
- * voice and not the room (Josh, 20 Nov: "it needs to feel natural").
+ * Turns the microphone into how much the listening bubble moves (0 to 1), so it answers the voice and
+ * not the room (Josh, 20 Nov: "it needs to feel natural"). Tuned on the A73 against a quiet room, pink
+ * and brown noise, and speech over both.
  *
- * - The room's noise is the quietest moment of the last 1.2 s. Speech always dips between syllables
- *   and words, so a steady hum (a fan, a café, a car) is learned within about a second and a voice is
- *   never mistaken for it.
- * - Only sound clearly above that noise moves the bars, on a gentle curve, so ordinary speech fills
- *   most of the range while the hum leaves them resting.
- * - It rises fast with a syllable and falls back more slowly, like a needle, rather than flickering.
- *
- * [update] takes [BubblePolicy.level]'s 0..1 loudness (-60 to -20 dBFS) for each window of audio.
+ * - [measure] hears only the speech band: a high-pass at [HIGH_PASS_HZ] drops the rumble of fans,
+ *   traffic and air conditioning before the loudness is taken.
+ * - The room's noise is a low percentile of the last [NOISE_WINDOW_MS]. Speech dips between syllables
+ *   and words, so a hum (even one that starts mid-take) is learned in about a second and a voice never is. Until it has
+ *   heard [WARM_UP_MS] of the room the bars rest.
+ * - Only sound clearly above that noise moves the bars, on a gentle curve, rising in about 30 ms and
+ *   falling back in about 160 ms, like a needle rather than a flicker.
  */
-class VoiceMeter {
+class VoiceMeter(private val sampleRate: Int = 16000, private val windowMs: Int = 20) {
+  // RBJ high-pass biquad, Q 0.707.
+  private val b0: Float; private val b1: Float; private val b2: Float; private val a1: Float; private val a2: Float
+  init {
+    val w = 2 * PI * HIGH_PASS_HZ / sampleRate
+    val alpha = sin(w) / (2 * 0.7071)
+    val a0 = 1 + alpha
+    b0 = ((1 + cos(w)) / 2 / a0).toFloat(); b1 = (-(1 + cos(w)) / a0).toFloat(); b2 = b0
+    a1 = (-2 * cos(w) / a0).toFloat(); a2 = ((1 - alpha) / a0).toFloat()
+  }
+  private var x1 = 0f; private var x2 = 0f; private var y1 = 0f; private var y2 = 0f
+
   private val recent = ArrayDeque<Float>()
-  private var floor = Float.NaN
   private var envelope = 0f
 
-  fun update(loudness: Float, windowMs: Float): Float {
-    val db = FLOOR_DB + (CEILING_DB - FLOOR_DB) * loudness.coerceIn(0f, 1f)
-    val heard = (NOISE_WINDOW_MS / windowMs).toInt().coerceAtLeast(1)
-    recent.addLast(db)
-    while (recent.size > heard) recent.removeFirst()
-    val quietest = recent.min()
-    floor = when {
-      // Until it has heard the room for a full window, assume a quiet one, so a first word moves the bars at once.
-      floor.isNaN() || recent.size < heard -> minOf(quietest, START_FLOOR_DB)
-      quietest < floor -> quietest
-      else -> floor + (quietest - floor) * smoothing(windowMs, FLOOR_RISE_MS)
+  /** The speech-band loudness of [count] samples, in dBFS. Call once per window, in order. */
+  fun measure(samples: ShortArray, count: Int): Float {
+    if (count <= 0) return SILENCE_DB
+    var sum = 0.0
+    for (i in 0 until count) {
+      val x = samples[i] / 32768f
+      val y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+      x2 = x1; x1 = x; y2 = y1; y1 = y
+      sum += (y * y).toDouble()
     }
-    val above = db - (floor + MARGIN_DB)
-    val goal = if (db <= GATE_DB) 0f else (above / RANGE_DB).coerceIn(0f, 1f).pow(CURVE)
-    envelope += (goal - envelope) * smoothing(windowMs, if (goal > envelope) ATTACK_MS else RELEASE_MS)
+    val rms = sqrt(sum / count)
+    return if (rms <= 0.0) SILENCE_DB else (20 * log10(rms)).toFloat().coerceAtLeast(SILENCE_DB)
+  }
+
+  /** How much the bars move for a window at [db] dBFS. */
+  fun update(db: Float): Float {
+    if (db > GATE_DB) {
+      recent.addLast(db)
+      while (recent.size > NOISE_WINDOW_MS / windowMs) recent.removeFirst()
+    }
+    val goal = if (db <= GATE_DB || recent.size < WARM_UP_MS / windowMs) 0f else {
+      val room = recent.sorted()[((recent.size - 1) * NOISE_PERCENTILE).toInt()]
+      ((db - room - MARGIN_DB) / RANGE_DB).coerceIn(0f, 1f).pow(CURVE)
+    }
+    val tau = if (goal > envelope) ATTACK_MS else RELEASE_MS
+    envelope += (goal - envelope) * (1f - exp(-windowMs / tau))
     return envelope
   }
 
-  private fun smoothing(windowMs: Float, tau: Float) = 1f - exp(-windowMs / tau)
+  /** [measure] then [update]. */
+  fun level(samples: ShortArray, count: Int): Float = update(measure(samples, count))
 
   companion object {
-    private const val FLOOR_DB = -60f
-    private const val CEILING_DB = -20f
-    /** Quieter than this is silence, whatever the room. */
-    const val GATE_DB = -58f
-    /** How far above the room's noise a sound must be before the bars move. */
+    const val HIGH_PASS_HZ = 250.0
+    const val SILENCE_DB = -90f
+    /** Quieter than this is silence, whatever the room (the microphone's first window reads as silence). */
+    const val GATE_DB = -62f
+    const val NOISE_WINDOW_MS = 1200
+    const val NOISE_PERCENTILE = 0.15f
+    const val WARM_UP_MS = 300
+    /** How far above the room a sound must be before the bars move. */
     const val MARGIN_DB = 5f
     /** Above the margin, this many dB fills the bars. */
-    const val RANGE_DB = 18f
-    /** Below 1 lifts quiet speech, so a normal voice moves the bars well. */
+    const val RANGE_DB = 11f
+    /** Below 1 lifts quieter speech, so a normal voice moves the bars well. */
     const val CURVE = 0.7f
     const val ATTACK_MS = 30f
     const val RELEASE_MS = 160f
-    const val NOISE_WINDOW_MS = 1200f
-    const val FLOOR_RISE_MS = 300f
-    const val START_FLOOR_DB = -50f
   }
 }
