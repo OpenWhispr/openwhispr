@@ -5,12 +5,14 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.*
+import android.os.SystemClock
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.animation.LinearInterpolator
 import android.view.animation.PathInterpolator
 import androidx.core.graphics.PathParser
 import kotlin.math.PI
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.sin
 
@@ -21,6 +23,10 @@ object BubbleMotion {
   val emphasizedAccelerate = PathInterpolator(0.3f, 0f, 0.8f, 0.15f)
   val easeOut = PathInterpolator(0f, 0f, 0.2f, 1f)
   val easeIn = PathInterpolator(0.4f, 0f, 1f, 1f)
+  /** "Remove animations" (animator duration scale 0): motion that only decorates is left out. */
+  fun reduced(context: android.content.Context): Boolean =
+    if (android.os.Build.VERSION.SDK_INT >= 26) !android.animation.ValueAnimator.areAnimatorsEnabled()
+    else android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
 }
 
 /** The filled glyphs the menu and the mode badges use, from the V3 board (14 dp sparkle, 28 dp tiles). */
@@ -106,8 +112,13 @@ class BubbleFace(context: Context) : View(context) {
   private var ringAnimator: ValueAnimator? = null
   private val ticker = ValueAnimator.ofFloat(0f, 1f).apply {
     duration = 1000; repeatCount = ValueAnimator.INFINITE; interpolator = LinearInterpolator()
-    addUpdateListener { level += (target - level) * 0.3f; phase += 0.18f; invalidate() }
+    addUpdateListener { level += (target - level) * 0.3f; phase += 0.18f; stepBars(); invalidate() }
   }
+  /** Levels heard in the last 200 ms, so the side bars can follow what the middle did 40 and 80 ms ago. */
+  private val heard = ArrayDeque<Pair<Long, Float>>()
+  /** The three bars' drawn heights, in dp for a 52 dp bubble (left, middle, right). */
+  private val barHeights = BubblePolicy.bars(0f, 0f, 0f)
+  private var lastStep = 0L
 
   init {
     importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -117,7 +128,32 @@ class BubbleFace(context: Context) : View(context) {
   }
   override fun getAccessibilityClassName(): CharSequence = android.widget.Button::class.java.name
 
-  fun setLevel(value: Float) { target = value.coerceIn(0f, 1f) }
+  fun setLevel(value: Float) {
+    target = value.coerceIn(0f, 1f)
+    val now = SystemClock.uptimeMillis()
+    heard.addLast(now to target)
+    while (heard.size > 2 && heard.first().first < now - 200) heard.removeFirst()
+  }
+  /** The level as it was [lag] ms ago. */
+  private fun heardAgo(lag: Long, now: Long): Float {
+    var value = 0f
+    for ((time, level) in heard) { if (time <= now - lag) value = level else break }
+    return value
+  }
+  /**
+   * Eases each bar toward where the voice puts it, about 90 ms per step, so a pause settles back to the
+   * logo's rest shape in under 200 ms. With animations off the bars hold that shape and only the halo moves.
+   */
+  private fun stepBars() {
+    val now = SystemClock.uptimeMillis()
+    val dt = if (lastStep == 0L) 16L else (now - lastStep).coerceIn(0L, 100L)
+    lastStep = now
+    val goal = if (look != Look.LISTENING || BubbleMotion.reduced(context)) BubblePolicy.bars(0f, 0f, 0f)
+    else BubblePolicy.bars(target, heardAgo(BubblePolicy.SIDE_LAGS_MS[0], now), heardAgo(BubblePolicy.SIDE_LAGS_MS[1], now),
+      sin((System.currentTimeMillis() - started) * 2 * PI / BubblePolicy.BREATH_MS).toFloat())
+    val ease = 1f - exp(-dt / 90f)
+    for (i in 0 until 3) barHeights[i] += (goal[i] - barHeights[i]) * ease
+  }
 
   /** Moves to [next] with the board's timings; [animate] false jumps (Remove animations, a fresh window). */
   fun show(next: Look, animate: Boolean = true) {
@@ -125,7 +161,10 @@ class BubbleFace(context: Context) : View(context) {
     val previous = look
     look = next
     animators.forEach { it.cancel() }; animators.clear()
-    if (next == Look.LISTENING) { started = System.currentTimeMillis(); target = 0f; level = 0f }
+    if (next == Look.LISTENING) {
+      started = System.currentTimeMillis(); target = 0f; level = 0f
+      heard.clear(); lastStep = 0L; BubblePolicy.bars(0f, 0f, 0f).copyInto(barHeights)
+    }
     val glassTo = if (next == Look.ICON) 0f else 1f
     val foldTo = if (next == Look.WRITING) 1f else 0f
     val checkTo = if (next == Look.DONE) 1f else 0f
@@ -247,29 +286,21 @@ class BubbleFace(context: Context) : View(context) {
     }
   }
 
-  /** Five bars that follow the voice, folding into three dots (and a rim arc) while writing. */
+  /** The logo's three bars, following the voice, folding into three rippling dots (and a rim arc) while writing. */
   private fun drawBarsAndDots(canvas: Canvas, cx: Float, cy: Float, r: Float) {
-    val barWidth = r * 0.12f
-    val gap = r * 0.11f
-    val shape = floatArrayOf(0.55f, 0.85f, 1f, 0.85f, 0.55f)
-    val maxBar = r * 0.78f
-    for (i in 0 until 5) {
-      val x = cx + (i - 2) * (barWidth + gap)
-      val wobble = 0.75f + 0.25f * sin(phase + i * 1.3f)
-      val listening = (0.18f + 0.82f * level * shape[i] * wobble).coerceIn(0.18f, 1f) * maxBar
-      // Bars 0, 2 and 4 fold into the dots; 1 and 3 fade.
-      val dotIndex = when (i) { 0 -> 0; 2 -> 1; 4 -> 2; else -> -1 }
-      val ripple = if (dotIndex >= 0) dotRipple(dotIndex) else 0f
-      val dotSize = barWidth * 1.15f
+    // The design's dp are for a 52 dp bubble; every size scales from the radius.
+    val unit = r / 26f
+    val barWidth = BubblePolicy.BAR_WIDTH * unit
+    val dotSize = r * 0.138f
+    for (i in 0 until 3) {
+      val x = cx + (i - 1) * BubblePolicy.BAR_SPACING * unit
+      val listening = barHeights[i] * unit
+      val ripple = dotRipple(i)
       val height = listening + (dotSize - listening) * fold
-      val dx = if (dotIndex >= 0) ((dotIndex - 1) * r * 0.32f - (i - 2) * (barWidth + gap)) * fold else 0f
-      val alpha = if (dotIndex < 0) (1f - fold) else 1f
-      val saved = white.alpha
-      white.alpha = (saved * alpha).toInt()
+      val dx = ((i - 1) * r * 0.32f - (i - 1) * BubblePolicy.BAR_SPACING * unit) * fold
       val y = cy - ripple * r * 0.12f * fold
       val half = barWidth / 2 + (dotSize - barWidth) / 2 * fold
       canvas.drawRoundRect(x + dx - half, y - height / 2, x + dx + half, y + height / 2, half, half, white)
-      white.alpha = saved
     }
     if (fold > 0f && look == Look.WRITING) {
       whiteStroke.strokeWidth = r * 0.07f

@@ -47,6 +47,15 @@ class BubblePolicyTest {
     assertFalse(BubblePolicy.overTarget(540f, 1500f, 540f, 1950f, 120f))
   }
 
+  @Test fun cancelTargetIsWiderThanTheCrossAndYieldsToTheBubble() {
+    // ✕ centred at (400, 1000), 48 dp target at 3x density: 72 px each way.
+    assertTrue(BubblePolicy.overCancel(400f, 1000f, 400f, 1000f, 72f, onBubble = false))
+    assertTrue(BubblePolicy.overCancel(330f, 1070f, 400f, 1000f, 72f, onBubble = false))
+    assertFalse(BubblePolicy.overCancel(300f, 1000f, 400f, 1000f, 72f, onBubble = false))
+    assertFalse(BubblePolicy.overCancel(400f, 1100f, 400f, 1000f, 72f, onBubble = false))
+    assertFalse(BubblePolicy.overCancel(460f, 1000f, 400f, 1000f, 72f, onBubble = true))
+  }
+
   @Test fun bubbleSitsAboveTheKeyboardAndNeverOverIt() {
     // Default: just above the keyboard.
     assertEquals(1200 - 40 - 150, BubblePolicy.bubbleTop(null, 1200, 2400, 150, 40, 100))
@@ -74,11 +83,16 @@ class BubblePolicyTest {
     assertEquals(0f, roomNoise, 0f)
   }
 
-  @Test fun waveformHasSevenBarsTallestInTheMiddleAndNeverFlat() {
-    val bars = BubblePolicy.bars(1f, 0f)
-    assertEquals(7, bars.size)
-    assertTrue(BubblePolicy.bars(0f, 0f).all { it >= 0.15f })
-    assertTrue(bars.all { it in 0.15f..1f })
+  @Test fun listeningDrawsTheLogosThreeBarsAndTheyFollowTheVoice() {
+    // At rest: the logo, 9 / 20 / 9 dp.
+    assertArrayEquals(floatArrayOf(9f, 20f, 9f), BubblePolicy.bars(0f, 0f, 0f), 0.001f)
+    // Full voice: the middle reaches 30 dp, the sides 70 % and 60 % of its growth.
+    assertArrayEquals(floatArrayOf(16f, 30f, 15f), BubblePolicy.bars(1f, 1f, 1f), 0.001f)
+    // Lagging sides: the middle can move before they do.
+    assertArrayEquals(floatArrayOf(12.5f, 30f, 9f), BubblePolicy.bars(1f, 0.5f, 0f), 0.001f)
+    // Silence breathes ±1 dp; a loud voice doesn't.
+    assertArrayEquals(floatArrayOf(10f, 21f, 10f), BubblePolicy.bars(0f, 0f, 0f, breath = 1f), 0.001f)
+    assertArrayEquals(floatArrayOf(16f, 30f, 15f), BubblePolicy.bars(1f, 1f, 1f, breath = 1f), 0.001f)
   }
 
   @Test fun theReadyBubbleShrinksWhenIdleOrOverASearchFieldOnlyWhenThoseAreOn() {

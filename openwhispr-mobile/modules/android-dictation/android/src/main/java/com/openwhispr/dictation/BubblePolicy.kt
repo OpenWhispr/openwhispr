@@ -1,5 +1,6 @@
 package com.openwhispr.dictation
 
+import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.sqrt
 
@@ -107,6 +108,14 @@ object BubblePolicy {
   /** A released bubble settles on the edge its centre is nearest to. */
   fun dockRight(centerX: Float, screenWidth: Int) = centerX >= screenWidth / 2f
 
+  /**
+   * Whether a finger at ([x], [y]) is on the listening ✕: a square target [half] from the ✕'s centre each
+   * way (48 dp across, though the ✕ draws 32 dp). The bubble wins where the two overlap, so a small
+   * bubble's tap still stops rather than cancels.
+   */
+  fun overCancel(x: Float, y: Float, cancelX: Float, cancelY: Float, half: Float, onBubble: Boolean) =
+    !onBubble && abs(x - cancelX) <= half && abs(y - cancelY) <= half
+
   /** Whether the bubble's centre is close enough to the hide target to hide on release. */
   fun overTarget(bubbleX: Float, bubbleY: Float, targetX: Float, targetY: Float, radius: Float): Boolean {
     val dx = bubbleX - targetX
@@ -137,12 +146,30 @@ object BubblePolicy {
   private const val FLOOR_DB = -60.0
   private const val CEILING_DB = -20.0
 
-  private val barShape = floatArrayOf(0.45f, 0.7f, 0.9f, 1f, 0.9f, 0.7f, 0.45f)
-  const val BARS = 7
+  /**
+   * The listening bubble's three bars, in the logo's proportions (section 7, Josh 20 Nov), in dp for a
+   * 52 dp bubble: 5 wide, 10 apart, resting 9 / 20 / 9. The middle bar follows the voice to 30 dp; the
+   * sides follow 70 % and 60 % of its growth, from levels heard [SIDE_LAGS_MS] earlier, so the three
+   * never move in lockstep. In silence they breathe ±1 dp on a 1.6 s cycle ([breath], -1..1).
+   */
+  const val BAR_WIDTH = 5f
+  const val BAR_SPACING = 10f
+  const val MIDDLE_REST = 20f
+  const val SIDE_REST = 9f
+  const val MIDDLE_MAX = 30f
+  const val BREATH_MS = 1600L
+  val SIDE_LAGS_MS = longArrayOf(40L, 80L)
+  private val SIDE_SHARE = floatArrayOf(0.7f, 0.6f)
 
-  /** Bar heights from 0 to 1 for the short listening waveform: tallest in the middle, never flat. */
-  fun bars(level: Float, phase: Float): FloatArray = FloatArray(BARS) { index ->
-    val wobble = 0.75f + 0.25f * kotlin.math.sin(phase + index * 1.3f)
-    (0.15f + 0.85f * level.coerceIn(0f, 1f) * barShape[index] * wobble).coerceIn(0.15f, 1f)
+  /** Heights for left, middle and right from the middle's level and each side's lagged level (0..1). */
+  fun bars(middle: Float, left: Float, right: Float, breath: Float = 0f): FloatArray {
+    val grow = MIDDLE_MAX - MIDDLE_REST
+    val quiet = 1f - maxOf(middle, left, right).coerceIn(0f, 1f)
+    val b = breath.coerceIn(-1f, 1f) * quiet
+    return floatArrayOf(
+      SIDE_REST + grow * SIDE_SHARE[0] * left.coerceIn(0f, 1f) + b,
+      MIDDLE_REST + grow * middle.coerceIn(0f, 1f) + b,
+      SIDE_REST + grow * SIDE_SHARE[1] * right.coerceIn(0f, 1f) + b,
+    )
   }
 }
