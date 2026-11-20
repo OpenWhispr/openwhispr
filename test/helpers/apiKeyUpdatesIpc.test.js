@@ -2048,3 +2048,33 @@ test("a calendar guest revokes the admitted recording and the backend refuses a 
   );
   assert.equal((await invoke("meeting-transcription-start", options)).success, false);
 });
+
+test("an in-person confirmation surfaces the control panel before asking", async (t) => {
+  const policy = defaultDevicePolicy();
+  policy.meetings = { externalAttendees: "blocked", internalDomains: ["internal.test"] };
+  setWorkspacePolicy({ success: true, managed: true, policy });
+  const calls = [];
+  target.databaseManager = { getNote: () => ({ calendar_event_id: null }) };
+  // The meeting hotkey leaves the panel behind the call it was pressed in.
+  target.windowManager = {
+    controlPanelWindow: windows[1],
+    showControlPanel: (options) => calls.push(["panel", options]),
+  };
+  electron.dialog.showMessageBox = async (parent) => {
+    calls.push(["sheet", parent.id]);
+    return { response: 1 };
+  };
+  t.after(() => {
+    delete target.databaseManager;
+    delete target.windowManager;
+    delete electron.dialog.showMessageBox;
+  });
+  assert.equal(
+    (await invoke("check-meeting-recording-start", { sessionId: "in-person", noteId: 41 })).code,
+    "AUDIO_OPERATION_CANCELLED"
+  );
+  assert.deepEqual(calls, [
+    ["panel", undefined],
+    ["sheet", 2],
+  ]);
+});

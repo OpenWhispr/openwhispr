@@ -8755,6 +8755,8 @@ class IPCHandlers {
       confirmInternal: async (owner, signal) => {
         const parent = BrowserWindow.fromWebContents(owner);
         if (!parent || parent.isDestroyed() || signal.aborted) return false;
+        // A meeting hotkey leaves the panel behind the call; the question must be seen.
+        if (parent === this.windowManager.controlPanelWindow) this.windowManager.showControlPanel();
         const { response } = await require("electron").dialog.showMessageBox(parent, {
           type: "question",
           message: i18nMain.t("notes.meeting.internalAttendeesQuestion"),
