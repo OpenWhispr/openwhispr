@@ -25,9 +25,9 @@ const HANGUL_RE = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/;
 // such as 開, 電, 設定 and 資料 are deliberately absent: without a distinct
 // character there is no reliable way to distinguish kanji-only Japanese.
 const SIMPLIFIED_CHINESE_VARIANT_RE =
-  /[这们吗简软网语汉习说发东车门问间书见长爱据实认让给还过边达选进运远违连迟适应际标亲亿优仅从众气请谢听读卖产业电备复历压类总处线证验权转导报记试计机传云丰动务场图库录页价关规办觉坏变删乐广设]/;
+  /[这们吗简软网语汉习说发东车门问间书见长爱据实认让给还过边达选进运远违连迟适应际标亲亿优仅从众气请谢听读卖产业电备复历压类总处线证验权转导报记试计机传云丰动务场图库录页价关规办觉坏变删乐广设么]/;
 const TRADITIONAL_CHINESE_VARIANT_RE =
-  /[這們嗎體說發據實讓邊遲應氣條聽讀寫賣兒經廣樂觀號國學會產歷壓總處證驗權轉傳豐圖錄價關辦覺壞變刪]/;
+  /[這們嗎體說發據實讓邊遲應氣條聽讀寫賣兒經廣樂觀號國學會產歷壓總處證驗權轉傳豐圖錄價關辦覺壞變刪麼麽]/;
 
 /** @typedef {"simplified" | "traditional" | "as-transcribed"} ChineseScriptPreference */
 /** @typedef {"simplified" | "traditional"} ChineseScriptTarget */
@@ -142,7 +142,10 @@ export async function applyChineseScript(text, target) {
   if (!HAN_RE.test(text)) return text;
 
   const { toSimplified, toTraditional } = await getConverters();
-  return target === "simplified" ? toSimplified(text) : toTraditional(text);
+  if (target === "traditional") return toTraditional(text);
+  // twp's Taiwan variant table reverts 么 to 幺, so an already-Simplified 么 is
+  // kept out of the conversion; 麼 and 麽 still become 么 (#2985).
+  return text.split("么").map(toSimplified).join("么");
 }
 
 /**
