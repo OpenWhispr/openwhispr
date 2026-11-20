@@ -14,6 +14,8 @@ const TRUSTED_HF_PUBLISHERS = new Set([
   "mistralai",
   "mradermacher",
   "oruk",
+  // Trial only: not yet in the registry's trusted-publishers.json (see TRIAL-S1-MINI.md).
+  "superwhisper",
   "unsloth",
 ]);
 
