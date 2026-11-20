@@ -30,7 +30,7 @@
 - [x] **AUTH-02**: User signs in from the app: browser opens Titanium hosted login (magic link / passkey / Google), returns via `titaniumwhisper://auth?act=…`, app exchanges `act` for `{licenseKey, email}`
 - [x] **AUTH-03**: License key is verified offline in the Electron main process with `@titanium-labs/license-client` (no Redis on the client), cached under userData, and re-checked on launch (offline-first)
 - [x] **AUTH-04**: Renderer auth state (`useAuth`) reflects Titanium sign-in: signed in, email, sign out (clears cache), replacing the better-auth client
-- [ ] **AUTH-05**: Plan/paid state comes from Titanium (`GET /v1/licenses/lookup` via a server we own) and drives existing `isPaid` gating
+- [x] **AUTH-05**: Plan/paid state comes from Titanium and drives existing `isPaid` gating. Re-homed to Phase 7 (07-01, PR #21): in a fork build a valid offline-verified Titanium license is the paid plan (`connectorEligibility.ts:50-60`, `titaniumSession.js:178-197`, `titaniumConnectorPolicy.js:15`). Deviation: `GET /v1/licenses/lookup` via a server we own is not used (no such call in `src/` or `scripts/`); plan-tier granularity is deferred to v2 (AUTH-08)
 - [x] **AUTH-06**: An authenticated user with `licenseKey: null` sees a clear "no license" state with a link to get one; the app never crashes
 
 ### Transcription on our servers (STT)
@@ -61,6 +61,7 @@
 - **PLAT-01**: macOS build, signing and notarization
 - **PLAT-02**: Linux AppImage
 - **AUTH-07**: Sign in via Titanium OIDC (after Titanium v3.6)
+- **AUTH-08**: Plan tier (trial / pro / business) from `GET /v1/licenses/lookup` via a server we own, if a feature needs more than "has a valid license"
 
 ## Out of Scope
 
@@ -81,7 +82,7 @@
 | BRAND-01..07 | Phase 2 | Complete (PR #11, PR #12). Visible name is "EdgeAssistant"; appId `com.titaniumlabs.titaniumwhisper`, userData "Titanium Whisper" kept |
 | AUTH-01      | Phase 3 | Complete (PR #18 merged 2026-11-20): `titanium-whisper` provisioned (product id bbe843ac-4de5-486c-85e2-1a1b7e533e5f), `titaniumwhisper://auth` allowed. OPEN: dev/staging return_url schemes not yet allowed in the titanium-licensing app row (memlog request 1795213470930-0) |
 | AUTH-02..04  | Phase 3 | Complete in code (PR #11; AUTH-04 as a separate `useTitaniumAuth`); end-to-end UI sign-in round trip not yet run                     |
-| AUTH-05      | Phase 6 | Planned: moved to Phase 6 but in no Phase 6 plan yet (plan lookup needs a server we own)                                            |
+| AUTH-05      | Phase 7 | Complete in code (re-homed from Phase 6, PR #21): fork `isPaid` = valid offline Titanium license (see AUTH-05 evidence). Lookup endpoint not built; tiers deferred to AUTH-08 |
 | AUTH-06      | Phase 3 | Complete in code (PR #11)                                                                                                           |
 | STT-01       | Phase 4 | Complete (stt-api PR #26 merged; prod `TITANIUM_KEYGEN_PRODUCT_ID`/`PUBLIC_KEY` set)                                                |
 | STT-02, 04   | Phase 4 | Complete in code (PR #11); end-to-end dictation with a license key pending PR #18/#19 merges                                        |
@@ -99,4 +100,4 @@
 ---
 
 _Requirements defined: 2026-11-08_
-_Last updated: 2026-11-20 after verifying merged PRs for CI-02, CI-04, AUTH-01, STT-03_
+_Last updated: 2026-11-20 after verifying merged PRs for CI-02, CI-04, AUTH-01, STT-03 and re-homing AUTH-05_
