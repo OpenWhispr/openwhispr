@@ -41,9 +41,8 @@ export default function TranslateIntoScreen() {
   const current = currentTranslateTarget(useConfigStore((s) => s.config?.androidTranslationTarget));
   const saved = useTranslateRecents((s) => s.codes);
   const recent = recentLanguages(current.code, saved);
-  const phone = useMemo(() => phoneLanguages(phoneTags()), []).filter(
-    (item) => !recent.includes(item),
-  );
+  // Every phone language, even one also in Recent, so this group doesn't change with your picks.
+  const phone = useMemo(() => phoneLanguages(phoneTags()), []);
   const results = query.trim() ? searchLanguages(query) : null;
 
   const pick = (language: TranslateLanguage) => {
