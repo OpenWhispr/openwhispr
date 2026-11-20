@@ -56,6 +56,7 @@ import { Notch, NOTCH_REACH } from '@/android/home/Notch';
 import { notchAnnouncement, notchStateFor, type NotchModel } from '@/android/home/notchModel';
 import { OlderRecordingsRow, OlderRecordingsSheet } from '@/android/home/OlderRecordings';
 import { HistoryCard, Stats, Tips } from '@/android/home/Sections';
+import { ToneStyleNudge } from '@/android/style/ToneStyleNudge';
 import { TryItRecorder } from '@/android/home/TryItRecorder';
 import { homeStats, localDate } from '@/android/home/model';
 
@@ -527,6 +528,7 @@ export default function AndroidHome() {
             </View>
           </View>
         ) : null}
+        <ToneStyleNudge words={stats.words} />
         <Tips />
         <Stats
           stats={stats}

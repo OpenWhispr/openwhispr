@@ -147,18 +147,40 @@ it('expires only history entries outside the configured retention window', async
   expect(history.deleteTranscript.mock.calls).toEqual([['old']]);
 });
 
-it('keeps the selected context tone when preferences change during a recording', async () => {
-  config.keyboardTone = 'default';
-  config.androidStyleContext = 'work';
-  config.androidStyleTones = { work: 'formal', personal: 'casual' };
-  const job = createAndroidJob();
-  config.androidStyleContext = 'personal';
+it('cleans in the tone picked for the kind of app the dictation started in', async () => {
+  const style = config as { androidToneStyle?: unknown };
+  style.androidToneStyle = {
+    enabled: true,
+    tones: { personal: 'very_casual', work: 'casual', email: 'excited', other: 'formal' },
+  };
+  const job = createAndroidJob('dictate', 'Spanish', '', 'com.Slack');
+  // A pick changed while the take records doesn't change this take.
+  style.androidToneStyle = { enabled: true, tones: { work: 'formal' } };
   await processAndroidAudio(audio, job, new AbortController().signal, jest.fn());
   expect(transcribeAndCleanup).toHaveBeenCalledWith(
-    expect.objectContaining({ keyboardTone: 'formal' }),
+    expect.objectContaining({ keyboardTone: 'casual', keyboardAppCategory: 'work' }),
     expect.any(Object),
   );
-  expect(createAndroidJob().tone).toBe('casual');
+  style.androidToneStyle = { enabled: true, tones: {} };
+  expect(createAndroidJob('dictate', 'Spanish', '', 'com.google.android.gm')).toMatchObject({
+    tone: 'formal',
+    appCategory: 'email',
+  });
+  expect(createAndroidJob('dictate', 'Spanish', '', 'org.mozilla.firefox')).toMatchObject({
+    tone: 'formal',
+    appCategory: 'other',
+  });
+  delete style.androidToneStyle;
+});
+
+it('leaves the speaker’s own tone while Tone & Style is off', () => {
+  const style = config as { androidToneStyle?: unknown; keyboardTone?: string };
+  style.keyboardTone = 'excited';
+  style.androidToneStyle = { enabled: false, tones: { personal: 'very_casual' } };
+  const job = createAndroidJob('dictate', 'Spanish', '', 'com.whatsapp');
+  expect(job.tone).toBeUndefined();
+  expect(job.appCategory).toBeUndefined();
+  delete style.androidToneStyle;
 });
 
 it('allows speech-only dictation when cleanup is disabled and text weights are missing', async () => {
