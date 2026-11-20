@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.*
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -21,7 +22,19 @@ internal fun overlayParams() = WindowManager.LayoutParams(
   WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
   PixelFormat.TRANSLUCENT,
-).apply { gravity = Gravity.TOP or Gravity.START }
+).apply { gravity = Gravity.TOP or Gravity.START }.withoutMoveAnimation()
+
+/**
+ * Turns off the system's move animation for an overlay window. Android otherwise slides a window from
+ * its old spot whenever it moves while changing size, so the right-docked bubble jumped out and back
+ * each time its ✕ or menu appeared, or a dot grew back under a finger (Josh, 20 Nov). The overlays
+ * place themselves and animate their own content.
+ */
+internal fun WindowManager.LayoutParams.withoutMoveAnimation() = apply {
+  if (Build.VERSION.SDK_INT >= 34) setCanPlayMoveAnimation(false)
+  // PRIVATE_FLAG_NO_MOVE_ANIMATION, which setCanPlayMoveAnimation sets on newer Android.
+  else runCatching { WindowManager.LayoutParams::class.java.getField("privateFlags").let { it.setInt(this, it.getInt(this) or 0x40) } }
+}
 
 /** The three brand-blue bars at the start of the status tab. */
 private class TabGlyph(context: Context) : View(context) {
@@ -82,6 +95,10 @@ class StatusTab(private val context: Context, private val windows: WindowManager
   /** Leaving by itself (4 s untouched) is the only way [onGone] runs; an action or [hide] doesn't. */
   private val leave = Runnable { val gone = onGone; hide(); gone?.invoke() }
 
+  /** Size & look's see-through, which the bubble's status follows too. */
+  var opacity = 1f
+    set(value) { field = value; window?.alpha = value }
+
   val showing get() = message != null
   /** The words out now, so a caller can tell its own tab from another's. */
   val currentLabel get() = message?.label
@@ -130,7 +147,7 @@ class StatusTab(private val context: Context, private val windows: WindowManager
 
   @SuppressLint("ClickableViewAccessibility")
   private fun build() {
-    val holder = FrameLayout(context).apply { setPadding(room, room, room, room); clipToPadding = false; clipChildren = false }
+    val holder = FrameLayout(context).apply { setPadding(room, room, room, room); clipToPadding = false; clipChildren = false; alpha = opacity }
     val content = LinearLayout(context).apply {
       orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
       background = GradientDrawable().apply {

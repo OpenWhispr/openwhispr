@@ -28,6 +28,15 @@ object BubblePolicy {
   const val IDLE_SHRINK_MS = 5000L
 
   /**
+   * How see-through the bubble's window is: Size & look's opacity in every state, listening and writing
+   * included (Josh, 20 Nov), so its ✕, badges and hold ring follow it too. An open menu keeps its floor.
+   */
+  fun windowAlpha(alpha: Float, menuOpen: Boolean) = if (menuOpen) BubbleMenuPolicy.menuAlpha(alpha) else alpha
+
+  /** The status tab's words follow the same setting, with the menu's floor so they stay readable. */
+  fun tabAlpha(alpha: Float) = BubbleMenuPolicy.menuAlpha(alpha)
+
+  /**
    * With shrinking on, the Ready bubble shrinks once it has sat idle, or straight away over a search
    * field (when that's on too) so it doesn't cover the results. Search-field shrinking is part of
    * shrinking, as Settings shows it. Dictating always shows the bubble full size.

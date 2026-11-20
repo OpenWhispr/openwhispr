@@ -140,4 +140,20 @@ class BubblePolicyTest {
     for (state in listOf(BubbleState.READY, BubbleState.RETRY, BubbleState.RECOVER))
       assertFalse(BubblePolicy.keepsPipelineAwake(state, false))
   }
+
+  @Test fun theWindowFollowsSizeAndLookOpacityInEveryState() {
+    // Josh, 20 Nov: listening and writing were solid; the bubble keeps its opacity throughout.
+    val faint = BubbleAppearance(opacity = 0.5f).alpha
+    assertEquals(0.5f, BubblePolicy.windowAlpha(faint, menuOpen = false), 0f)
+    assertEquals(1f, BubblePolicy.windowAlpha(1f, menuOpen = false), 0f)
+    // The open menu keeps its readability floor, and never goes below it.
+    assertEquals(BubbleMenuPolicy.MENU_MIN_ALPHA, BubblePolicy.windowAlpha(faint, menuOpen = true), 0f)
+    assertEquals(0.9f, BubblePolicy.windowAlpha(0.9f, menuOpen = true), 0f)
+  }
+
+  @Test fun theStatusTabFollowsOpacityButStaysReadable() {
+    assertEquals(BubbleMenuPolicy.MENU_MIN_ALPHA, BubblePolicy.tabAlpha(0.3f), 0f)
+    assertEquals(0.95f, BubblePolicy.tabAlpha(0.95f), 0f)
+    assertEquals(1f, BubblePolicy.tabAlpha(1f), 0f)
+  }
 }

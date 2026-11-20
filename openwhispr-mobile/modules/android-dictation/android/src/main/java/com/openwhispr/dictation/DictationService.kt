@@ -123,6 +123,7 @@ class DictationService : Service() {
     savedTop = preferences.getInt("top", -1).takeIf { it >= 0 }
     hiddenUntil = preferences.getLong("hiddenUntil", 0L)
     appearance = readAppearance(preferences)
+    tab.opacity = BubblePolicy.tabAlpha(appearance.alpha)
     if (hidden) handler.postDelayed(unhide, hiddenUntil - System.currentTimeMillis())
     val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
     manager.createNotificationChannel(NotificationChannel("dictation", getString(R.string.ow_bubble_channel), NotificationManager.IMPORTANCE_LOW))
@@ -156,6 +157,7 @@ class DictationService : Service() {
         // setEnabled's size wins over a stored one and is kept, so a restart comes back the same.
         val stored = readAppearance(preferences)
         appearance = if (intent?.hasExtra("size") == true) stored.copy(size = BubblePolicy.restoredSize(intent.getIntExtra("size", BubblePolicy.DEFAULT_SIZE))).also { writeAppearance(preferences, it) } else stored
+        tab.opacity = BubblePolicy.tabAlpha(appearance.alpha)
         if (root == null) createWindow() else render()
         wake()
       }
@@ -258,8 +260,8 @@ class DictationService : Service() {
   fun applyAppearance(value: BubbleAppearance) {
     val resized = value.scale != appearance.scale || value.shrinkToDot != appearance.shrinkToDot
     appearance = value
-    if (resized) render()
-    else if (state == BubbleState.READY) root?.alpha = if (menu != null) BubbleMenuPolicy.menuAlpha(value.alpha) else value.alpha
+    tab.opacity = BubblePolicy.tabAlpha(value.alpha)
+    if (resized) render() else applyAlpha()
     wake()
   }
   /** Brings a shrunk bubble back to full size and restarts the idle countdown. */
@@ -314,7 +316,7 @@ class DictationService : Service() {
       WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-      PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }
+      PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START }.withoutMoveAnimation()
     createTarget()
     // Added before the bubble, so the tab slides out from underneath it.
     learnedTab = LearnedTab(this, windows, font,
@@ -367,14 +369,11 @@ class DictationService : Service() {
     bubble.dot = if (appearance.shrinkToDot) shrink else 0f
     cancel.visibility = if (state == BubbleState.LISTENING) View.VISIBLE else View.GONE
     bubble.contentDescription = getString(if (state == BubbleState.LISTENING) R.string.ow_bubble_stop else R.string.ow_bubble_talk)
-    // The resting bubble is as see-through as Size & look says, its open menu at least 85 %; a take is solid.
-    view.alpha = when {
-      state != BubbleState.READY -> 1f
-      menu != null -> BubbleMenuPolicy.menuAlpha(appearance.alpha)
-      else -> appearance.alpha
-    }
+    applyAlpha()
     place()
   }
+  /** Size & look's see-through, in every state; its open menu at least 85 %. */
+  private fun applyAlpha() { root?.alpha = BubblePolicy.windowAlpha(appearance.alpha, menu != null) }
 
   private fun place() {
     val view = root ?: return
@@ -679,7 +678,7 @@ class DictationService : Service() {
     holder.addView(view, 0, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8f).toInt() })
     // The menu follows Size & look's see-through like the bubble it opens from (Josh, 19 Nov), with
     // a floor so it stays readable (Josh, 20 Nov).
-    if (state == BubbleState.READY) root?.alpha = BubbleMenuPolicy.menuAlpha(appearance.alpha)
+    applyAlpha()
     handler.removeCallbacks(idleShrink)
     place()
     view.grow(dockRight)
@@ -689,7 +688,7 @@ class DictationService : Service() {
     val open = menu ?: return
     menu = null
     (open.parent as? ViewGroup)?.removeView(open)
-    if (state == BubbleState.READY) root?.alpha = appearance.alpha
+    applyAlpha()
     face?.let { release(it) }
     place(); wake()
   }
