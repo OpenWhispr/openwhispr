@@ -220,6 +220,63 @@ test("rejects public HTTP endpoints but allows private hosts", async () => {
   );
 });
 
+test("allowInsecureHttp lets only the reasoning scope reach a public HTTP endpoint", async () => {
+  const baseUrl = "http://myserver.example.com/v1";
+
+  const request = resolveProviderRequest({
+    scope: "reasoning",
+    provider: "custom",
+    baseUrl,
+    allowInsecureHttp: true,
+  });
+  assert.equal(request.endpoint, "http://myserver.example.com/v1/models");
+
+  // Off, or anything but a literal true, keeps the refusal.
+  for (const flag of [false, undefined, "true", 1]) {
+    assert.equal(
+      (
+        await testProviderConnection({
+          scope: "reasoning",
+          provider: "custom",
+          baseUrl,
+          allowInsecureHttp: flag,
+        })
+      ).errorCode,
+      "httpsRequired",
+      String(flag)
+    );
+  }
+
+  // Transcription and unscoped checks ignore the flag.
+  for (const scope of ["transcription", undefined]) {
+    assert.equal(
+      (
+        await testProviderConnection({
+          scope,
+          provider: "custom",
+          baseUrl,
+          allowInsecureHttp: true,
+        })
+      ).errorCode,
+      "httpsRequired",
+      String(scope)
+    );
+  }
+
+  // The opt-in does not widen the scheme check.
+  assert.equal(
+    (
+      await testProviderConnection({
+        scope: "reasoning",
+        provider: "custom",
+        baseUrl: "ftp://myserver.example.com/v1",
+        allowInsecureHttp: true,
+      })
+    ).errorCode,
+    "invalidUrl"
+  );
+});
+
 test("rejects invalid custom endpoints with error codes", async () => {
   assert.deepEqual(await testProviderConnection({ provider: "custom", baseUrl: "" }), {
     success: false,

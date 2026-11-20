@@ -797,7 +797,11 @@
     },
     "custom": {
       "endpointWithProtocol": "プロトコルを含む完全なベース URL を入力してください（例: https://server/v1）。",
-      "httpsRequired": "HTTPS が必要です（ローカルネットワークのみ HTTP を許可）。",
+      "httpsRequired": "HTTPS が必要です（HTTP はローカルネットワークのみ許可）。公開アドレスで暗号化なしの HTTP を使うには、エンドポイント URL の下の「安全でない HTTP を許可」をオンにしてください。",
+      "allowInsecureHttp": {
+        "label": "安全でない HTTP を許可",
+        "help": "このエンドポイントで、公開アドレスへの暗号化されていない http:// 接続を許可します。API キーとテキストは暗号化されずに送信されるため、自分が管理するネットワーク上の信頼できるサーバーにのみ使用してください。"
+      },
       "endpointInvalid": "カスタムエンドポイントが無効か未設定です。設定 → AIモデルでエンドポイントURLを確認してください。",
       "endpointUnauthorized": "エンドポイントがリクエストを拒否しました（401/403）。API キーを追加するか、サーバーの認証設定を調整してください。",
       "endpointTitle": "エンドポイント URL",

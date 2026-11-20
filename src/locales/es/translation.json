@@ -797,7 +797,11 @@
     },
     "custom": {
       "endpointWithProtocol": "Introduce una URL base completa con protocolo (por ejemplo, https://server/v1).",
-      "httpsRequired": "Se requiere HTTPS (HTTP solo para red local).",
+      "httpsRequired": "Se requiere HTTPS (HTTP solo para red local). Para usar HTTP sin cifrar en una dirección pública, activa «Permitir HTTP no seguro» debajo de la URL del endpoint.",
+      "allowInsecureHttp": {
+        "label": "Permitir HTTP no seguro",
+        "help": "Permite que este endpoint use http:// sin cifrar en direcciones públicas. Tu clave de API y el texto se envían sin cifrar, así que úsalo solo con un servidor de confianza en una red que controles."
+      },
       "endpointInvalid": "El endpoint personalizado no es válido o no está configurado. Revisa la URL del endpoint en Ajustes → Modelos de IA.",
       "endpointUnauthorized": "El endpoint rechazó la solicitud (401/403). Agrega una clave API o ajusta la autenticación del servidor.",
       "endpointTitle": "URL del endpoint",

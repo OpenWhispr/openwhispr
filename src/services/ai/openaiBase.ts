@@ -21,6 +21,11 @@ function invalidCustomEndpoint(reason: string, attempted?: string): never {
   });
 }
 
+// The user's opt-in for plain http:// on public hosts, honored only by reasoning endpoints.
+function allowsInsecureReasoningHttp(): boolean {
+  return getSettings().allowInsecureCustomReasoningHttp === true;
+}
+
 export function resolveConfiguredOpenAIBase(provider: string, configuredBaseUrl?: string): string {
   if (provider !== "custom") return API_ENDPOINTS.OPENAI_BASE;
 
@@ -49,7 +54,7 @@ export function resolveConfiguredOpenAIBase(provider: string, configuredBaseUrl?
     return invalidCustomEndpoint("Custom URL is a known non-OpenAI provider", normalized);
   }
 
-  if (!isSecureHttpEndpoint(normalized)) {
+  if (!isSecureHttpEndpoint(normalized, { allowInsecureHttp: allowsInsecureReasoningHttp() })) {
     return invalidCustomEndpoint(
       "HTTPS required (HTTP allowed for local network only)",
       normalized
@@ -76,7 +81,10 @@ export function canBorrowCleanupCustomKey(requestBaseUrl: string | undefined): b
 
 export function resolveSelfHostedOpenAIBase(configuredBaseUrl: string): string {
   const normalized = ensureV1Suffix(configuredBaseUrl.trim());
-  if (!normalized || !isSecureHttpEndpoint(normalized)) {
+  if (
+    !normalized ||
+    !isSecureHttpEndpoint(normalized, { allowInsecureHttp: allowsInsecureReasoningHttp() })
+  ) {
     throw new Error(i18n.t("reasoning.custom.httpsRequired"));
   }
 
