@@ -5,7 +5,7 @@ const { generateKeyPairSync } = require("node:crypto");
 const { readCatalog } = require("../lib/catalog.cjs");
 const { verifyEnvelope } = require("../lib/envelope.cjs");
 const { SCHEMA_VERSION, validateManifest } = require("../lib/schema.cjs");
-const { createPublication } = require("../lib/publication.cjs");
+const { createPublication, assertSigningKey } = require("../lib/publication.cjs");
 const { readPublicationDir } = require("../lib/publicationDir.cjs");
 const { checkCompatibility, droppedClients } = require("../lib/compat.cjs");
 const { rollbackCatalog } = require("../lib/rollback.cjs");
@@ -21,6 +21,8 @@ if (!directory) throw new Error("Publication directory required");
 if (dryRun && process.env.REGISTRY_SIGNING_KEY)
   throw new Error("A dry run must not be given the signing key");
 if (!dryRun && !process.env.REGISTRY_SIGNING_KEY) throw new Error("Signing key required");
+const keyId = "primary-2026-10";
+if (!dryRun) assertSigningKey(process.env.REGISTRY_SIGNING_KEY, keyId, pinned);
 const signer = dryRun
   ? generateKeyPairSync("ed25519", {
       publicKeyEncoding: { type: "spki", format: "pem" },
@@ -63,12 +65,13 @@ const readEnvelope = (file) => verifyEnvelope(fs.readFileSync(file), trusted);
 // Verified, and null only on a branch that has never published: a branch whose manifest
 // was deleted or put back to an older one must not restart or repeat the numbering.
 const previous = readPublicationDir(directory, trusted)?.manifest;
-const data = rollbackTo
-  ? rollbackCatalog(
-      validateManifest(readEnvelope(path.join(output, "history", `${rollbackTo}.json`))).data,
-      previous.data
-    )
-  : readCatalog();
+const restoredFile = rollbackTo && path.join(output, "history", `${rollbackTo}.json`);
+if (restoredFile && !fs.existsSync(restoredFile))
+  throw new Error(`Version ${rollbackTo} has no v${SCHEMA_VERSION} history to roll back to`);
+const restored = restoredFile && validateManifest(readEnvelope(restoredFile));
+if (restored && restored.manifestVersion !== rollbackTo)
+  throw new Error(`history/${rollbackTo}.json holds version ${restored.manifestVersion}`);
+const data = restored ? rollbackCatalog(restored.data, previous.data) : readCatalog();
 const envelope = createPublication({
   data,
   previous,
@@ -78,10 +81,12 @@ const envelope = createPublication({
   headCommit: latestMain(),
   testedClientContracts: checkCompatibility(data),
   droppedClientContracts: droppedClients(),
-  keyId: dryRun ? "dry-run" : "primary-2026-10",
+  keyId: dryRun ? "dry-run" : keyId,
   privateKey: dryRun ? signer.privateKey : process.env.REGISTRY_SIGNING_KEY,
 });
 if (!envelope) {
+  // Still proves the deploy key may push here, so it is not first tried on a real change.
+  git(["push", "--dry-run", "origin", `HEAD:${branch}`], directory);
   console.log(
     `Nothing to publish: version ${previous.manifestVersion} already serves this catalog and its readers.`
   );

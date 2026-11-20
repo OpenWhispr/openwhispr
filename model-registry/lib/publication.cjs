@@ -5,7 +5,7 @@ const {
   validateCatalog,
   validateManifest,
 } = require("./schema.cjs");
-const { signEnvelope } = require("./envelope.cjs");
+const { signEnvelope, verifyEnvelope } = require("./envelope.cjs");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
@@ -36,6 +36,16 @@ function assertReadersKept(testedClientContracts, previous, dropped = []) {
       `Readers tested by the last publication are no longer tested: ${missing.join(", ")}. ` +
         "Vendor them under compat/clients, or list them in compat/dropped-clients.json."
     );
+}
+
+// A run whose catalog is already published never signs, so a wrong key would otherwise pass
+// unnoticed until the first real change, possibly after the old publisher was retired.
+function assertSigningKey(privateKey, keyId, trustedKeys) {
+  try {
+    verifyEnvelope(JSON.stringify(signEnvelope(Buffer.from("{}"), keyId, privateKey)), trustedKeys);
+  } catch {
+    throw new Error(`The signing key is not the private half of the pinned key ${keyId}`);
+  }
 }
 
 // Version 1 publications (before the lifecycle schema) carried a different envelope;
@@ -101,4 +111,4 @@ function createPublication({
   });
   return signEnvelope(Buffer.from(JSON.stringify(manifest)), keyId, privateKey);
 }
-module.exports = { createPublication, readPreviousManifest, readerHashes, assertReadersKept };
+module.exports = { createPublication, readPreviousManifest, readerHashes, assertReadersKept, assertSigningKey };

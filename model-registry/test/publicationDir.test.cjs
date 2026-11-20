@@ -81,6 +81,41 @@ test("a branch that published before cannot restart or repeat its numbering", ()
   assert.equal(readPublicationDir(empty, trusted), null);
 });
 
+test("a merge that puts back an earlier version is refused", () => {
+  const { directory, commit } = branch(1);
+  const git = (...args) => execFileSync("git", args, { cwd: directory, encoding: "utf8" }).trim();
+  const first = git("rev-parse", "HEAD");
+  const previous = readPublicationDir(directory, trusted).manifest;
+  const bytes = JSON.stringify(sign(previous)) + "\n";
+  fs.writeFileSync(path.join(directory, "v2", "manifest.json"), bytes);
+  fs.writeFileSync(path.join(directory, "v2", "history", "2.json"), bytes);
+  commit();
+  // A fast-forward of the branch whose tree is version 1 again. Path-limited history
+  // follows the parent it matches, so the deleted version 2 is never looked at.
+  const merge = git("commit-tree", `${first}^{tree}`, "-p", "HEAD", "-p", first, "-m", "x");
+  git("reset", "--quiet", "--hard", merge);
+  assert.throws(() => readPublicationDir(directory, trusted), /merge commit/);
+});
+
+const symlinks = process.platform === "win32" && "creating symlinks needs privileges on Windows";
+
+test("a published version replaced by a symlink is refused", { skip: symlinks }, () => {
+  const { directory, commit } = branch(2);
+  const first = path.join(directory, "v2", "history", "1.json");
+  fs.rmSync(first);
+  fs.symlinkSync("2.json", first);
+  commit();
+  assert.throws(() => readPublicationDir(directory, trusted), /lost or changed a published/);
+});
+
+test("a manifest that is a symlink is refused", { skip: symlinks }, () => {
+  const { directory } = branch(2);
+  const manifest = path.join(directory, "v2", "manifest.json");
+  fs.rmSync(manifest);
+  fs.symlinkSync(path.join("history", "2.json"), manifest);
+  assert.throws(() => readPublicationDir(directory, trusted), /not a regular file/);
+});
+
 test("a manifest signed by an unpinned key is refused", () => {
   const other = generateKeyPairSync("ed25519");
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "registry-publication-"));

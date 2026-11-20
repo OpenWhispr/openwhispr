@@ -5,6 +5,7 @@ const {
   createPublication,
   readPreviousManifest,
   assertReadersKept,
+  assertSigningKey,
 } = require("../lib/publication.cjs");
 const { verifyEnvelope } = require("../lib/envelope.cjs");
 const { validateManifest } = require("../lib/schema.cjs");
@@ -91,4 +92,12 @@ test("a publication cannot silently stop testing a reader the last one tested", 
       }),
     /no longer tested/
   );
+});
+
+test("a signing key is checked against its pinned public key before anything is published", () => {
+  const other = generateKeyPairSync("ed25519");
+  assert.doesNotThrow(() => assertSigningKey(keys.privateKey, "test", trusted));
+  assert.throws(() => assertSigningKey(other.privateKey, "test", trusted), /not the private half/);
+  assert.throws(() => assertSigningKey("not-a-key", "test", trusted), /not the private half/);
+  assert.throws(() => assertSigningKey(keys.privateKey, "unpinned", trusted), /not the private half/);
 });

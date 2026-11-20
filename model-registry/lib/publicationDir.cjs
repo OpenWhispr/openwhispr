@@ -17,17 +17,27 @@ const git = (directory, args) => {
   }
 };
 
+// A symlink could make one published file stand in for another.
+function readRegularFile(file) {
+  if (!fs.lstatSync(file).isFile()) throw new Error(`${file} is not a regular file`);
+  return fs.readFileSync(file);
+}
+
 // The publication a checkout of the published branch holds, or null for a branch that has
 // never published. The branch is writable by more than the publishing job, so nothing is
 // taken from it on trust: the manifest must carry a pinned key's signature and be the
 // newest entry of its own history, and a branch that once published must still say what.
 // Otherwise a deleted or older manifest would restart or repeat the version numbers.
 function readPublicationDir(directory, trustedKeys) {
+  // Publishing only fast-forwards the branch. A merge would let path-limited history below
+  // follow whichever parent still matches and never see a deleted version.
+  const merge = git(directory, ["rev-list", "--merges", "-1", "HEAD"]);
+  if (merge) throw new Error(`The published branch has a merge commit, ${merge}`);
   const folder = `v${SCHEMA_VERSION}`;
   const output = path.join(directory, folder);
   const file = path.join(output, "manifest.json");
   if (fs.existsSync(file)) {
-    const bytes = fs.readFileSync(file);
+    const bytes = readRegularFile(file);
     const manifest = readPreviousManifest(verifyEnvelope(bytes, trustedKeys));
     const history = path.join(output, "history");
     const versions = (fs.existsSync(history) ? fs.readdirSync(history) : [])
@@ -41,7 +51,7 @@ function readPublicationDir(directory, trustedKeys) {
       throw new Error(
         `${folder}/manifest.json is version ${manifest.manifestVersion}, but its history ends at ${newest}`
       );
-    if (!bytes.equals(fs.readFileSync(path.join(history, `${newest}.json`))))
+    if (!bytes.equals(readRegularFile(path.join(history, `${newest}.json`))))
       throw new Error(`${folder}/manifest.json differs from ${folder}/history/${newest}.json`);
     // Versions are only ever added. With the newest ones deleted and the manifest put back,
     // an earlier version would pass every check above and its successor be published twice.
@@ -49,7 +59,7 @@ function readPublicationDir(directory, trustedKeys) {
       "log",
       "-1",
       "--no-renames",
-      "--diff-filter=DM",
+      "--diff-filter=DMT",
       "--format=%H",
       "--",
       `${folder}/history`,
