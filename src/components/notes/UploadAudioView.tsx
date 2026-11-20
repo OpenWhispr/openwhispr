@@ -20,6 +20,7 @@ import { CARD_SURFACE_CLASS } from "../ui/surfaces";
 import { GRADIENT_CIRCLE } from "../ui/gradientCircle";
 import { Toggle } from "../ui/toggle";
 import EmptyStateCard from "../ui/EmptyStateCard";
+import CreatorLinkField from "../CreatorLinkField";
 import { DropZone } from "../ui/DropZone";
 import { cn } from "../lib/utils";
 import {
@@ -307,6 +308,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    elevenlabsApiKey,
     openrouterApiKey,
     customTranscriptionApiKey,
   } = apiKeys;
@@ -515,6 +517,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 tinfoilApiKey,
                 deepgramApiKey,
                 assemblyaiApiKey,
+                elevenlabsApiKey,
                 openrouterApiKey,
                 customTranscriptionApiKey,
               })
@@ -566,6 +569,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    elevenlabsApiKey,
     openrouterApiKey,
     customTranscriptionApiKey,
     cortiClientId,
@@ -1769,6 +1773,12 @@ function SelectedView({
         <p className="text-center text-[13px] text-muted-foreground">
           {t("notes.upload.largeFileNote")}
         </p>
+      )}
+
+      {(requiresUpgrade || (byokTooLarge && !requiresAccount && !isProUser)) && (
+        <div className="w-full max-w-sm">
+          <CreatorLinkField />
+        </div>
       )}
 
       <div className="flex flex-wrap items-center justify-center gap-2 pt-1">

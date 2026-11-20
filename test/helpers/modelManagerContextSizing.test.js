@@ -38,8 +38,12 @@ function loadModelManager() {
     return originalLoad.call(this, request, parent, isMain);
   };
   try {
-    require("../../src/helpers/modelDirUtils.js");
-    return require("../../src/helpers/modelManagerBridge.js").default;
+    const modelManager = require("../../src/helpers/modelManagerBridge.js").default;
+    // Pin modelsDir to the temp home. getCacheRoot() prefers OPENWHISPR_CACHE_ROOT,
+    // XDG_CACHE_HOME (linux) and USERPROFILE (win32) over the stubbed home, and
+    // migrates model folders when they differ, so it must not run here (#3244).
+    modelManager.getModelsDir = () => path.join(electronHome, ".cache", "openwhispr", "models");
+    return modelManager;
   } finally {
     Module._load = originalLoad;
   }
@@ -110,6 +114,7 @@ async function setup(
 
   const serverManager = modelManager.serverManager;
   serverManager.cachedServerBinaryPaths = { default: "/stub/llama-server" };
+  serverManager.modelPath = path.join(modelManager.modelsDir, model.fileName);
   serverManager.ready = true;
   serverManager.process = {};
   serverManager.port = server.address().port;
@@ -124,6 +129,7 @@ async function setup(
   serverManager._doStart = async (modelPath, options = {}) => {
     restarts.push(options.contextSize);
     serverManager.ready = true;
+    serverManager.modelPath = modelPath;
     serverManager.process = {};
     serverManager.port = server.address().port;
   };
@@ -605,7 +611,8 @@ test("a start the caller cancelled stays cancelled and reaches the server with i
     manager.runInference(modelId, SHORT_PROMPT, { signal: caller.signal }),
     (error) => error.code === "LOCAL_MODEL_CANCELLED"
   );
-  assert.equal(received, caller.signal);
+  caller.abort();
+  assert.equal(received.reason, caller.signal.reason);
   assert.equal(manager.currentServerModelId, "another-model");
 });
 
@@ -681,6 +688,85 @@ test("a larger request overlapping pre-warm reports busy and can retry at its fu
   assert.equal(serverManager.contextSize, 32768);
 });
 
+test("a chat cannot replace the warmed model while any selection edit is measuring its prompt", async (t) => {
+  const { modelManager, serverManager, modelId, calls } = await setup(t, { tokenCount: 40 });
+  const take = new AbortController();
+  await modelManager.stopServer();
+  assert.equal(await modelManager.prewarmServer(modelId, take.signal), true);
+
+  const measuring = [Promise.withResolvers(), Promise.withResolvers()];
+  const measured = [Promise.withResolvers(), Promise.withResolvers()];
+  let measurements = 0;
+  t.mock.method(serverManager, "usableContextSize", () => {
+    const index = measurements++;
+    measuring[index].resolve();
+    return measured[index].promise;
+  });
+  const editOptions = { contextSize: 16384, maxTokens: 8192, requireCompleteOutput: true };
+  const cancelEdit = new AbortController();
+  const first = modelManager.runInference(modelId, SHORT_PROMPT, {
+    ...editOptions,
+    signal: cancelEdit.signal,
+  });
+  await measuring[0].promise;
+  const second = modelManager.runInference(modelId, SHORT_PROMPT, editOptions);
+  await measuring[1].promise;
+  take.abort();
+  const startChat = () => serverManager.start("/chat-model", { busyWaitMs: 0 });
+  await assert.rejects(startChat(), { code: "LOCAL_MODEL_BUSY" });
+
+  cancelEdit.abort();
+  measured[0].resolve(16384);
+  await assert.rejects(first, { name: "AbortError" });
+  await assert.rejects(startChat(), { code: "LOCAL_MODEL_BUSY" });
+  measured[1].resolve(16384);
+  assert.equal(await second, "done");
+  assert.equal(calls.completions, 1);
+  await startChat();
+  assert.equal(serverManager.modelPath, "/chat-model");
+});
+
+test("a forced stop during prompt measurement never sends the edit to a replacement model", async (t) => {
+  const { modelManager, serverManager, modelId, calls } = await setup(t, { tokenCount: 40 });
+  const measuring = Promise.withResolvers();
+  const measured = Promise.withResolvers();
+  t.mock.method(serverManager, "usableContextSize", () => {
+    measuring.resolve();
+    return measured.promise;
+  });
+  // Exercise the real stop, without signalling a real child.
+  delete serverManager.stop;
+  serverManager.process = { exitCode: 0, once: (_event, callback) => callback() };
+  const edit = modelManager.runInference(modelId, SHORT_PROMPT, { maxTokens: 8192 });
+  await measuring.promise;
+  await modelManager.stopServer();
+  await serverManager.start("/replacement");
+  measured.resolve(16384);
+  await assert.rejects(edit, { code: "LOCAL_MODEL_CANCELLED" });
+  assert.equal(calls.template, 0);
+  assert.equal(calls.completions, 0);
+  assert.equal(serverManager.modelPath, "/replacement");
+});
+
+test("edits that both need more context can release their old window and share its replacement", async (t) => {
+  const { modelManager, serverManager, modelId, restarts, calls } = await setup(t, {
+    tokenCount: 20000,
+  });
+  const bothMeasuring = Promise.withResolvers();
+  const measure = serverManager.countPromptTokens.bind(serverManager);
+  let pending = 0;
+  t.mock.method(serverManager, "countPromptTokens", async (...args) => {
+    if (++pending === 2) bothMeasuring.resolve();
+    await bothMeasuring.promise;
+    return measure(...args);
+  });
+  const edit = () =>
+    modelManager.runInference(modelId, SHORT_PROMPT, { maxTokens: 8192, busyWaitMs: 2000 });
+  assert.deepEqual(await Promise.all([edit(), edit()]), ["done", "done"]);
+  assert.deepEqual(restarts, [32768]);
+  assert.equal(calls.completions, 2);
+});
+
 test("a binary refresh clears the loaded model after reuse without cancelling the refresh", async (t) => {
   const { modelManager, serverManager } = await setup(t);
   const slots = Promise.withResolvers();
@@ -692,4 +778,24 @@ test("a binary refresh clears the loaded model after reuse without cancelling th
 
   assert.equal(serverManager.process, null);
   assert.equal(modelManager.currentServerModelId, null);
+});
+
+test("disabling cleanup during file validation leaves the stopped server stopped", async (t) => {
+  const { modelManager, serverManager, modelId, restarts } = await setup(t);
+  await modelManager.stopServer();
+  const checking = Promise.withResolvers();
+  const validated = Promise.withResolvers();
+  t.mock.method(modelManager, "checkModelValid", () => {
+    checking.resolve();
+    return validated.promise;
+  });
+  const take = new AbortController();
+  const warming = modelManager.prewarmServer(modelId, take.signal);
+  await checking.promise;
+  take.abort();
+  await modelManager.stopServerWhenIdle();
+  validated.resolve(true);
+  assert.equal(await warming, false);
+  assert.equal(serverManager.ready, false);
+  assert.deepEqual(restarts, []);
 });

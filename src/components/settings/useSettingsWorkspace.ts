@@ -24,7 +24,7 @@ export interface SettingsWorkspaceState {
 }
 
 export function useSettingsWorkspace(): SettingsWorkspaceState {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isOfflineAccount } = useAuth();
   const { workspaces, activeWorkspaceId, loaded, loading, error, refresh } = useWorkspaceStore(
     useShallow((s) => ({
       workspaces: s.workspaces,
@@ -37,8 +37,8 @@ export function useSettingsWorkspace(): SettingsWorkspaceState {
   );
 
   useEffect(() => {
-    if (isSignedIn && !loaded) void refresh();
-  }, [isSignedIn, loaded, refresh]);
+    if (isSignedIn && !isOfflineAccount && !loaded) void refresh();
+  }, [isSignedIn, isOfflineAccount, loaded, refresh]);
 
   const { retry: retryDefault, retrying } = useRetryDefaultWorkspace();
 

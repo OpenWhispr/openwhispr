@@ -21,6 +21,7 @@ import {
   isLocalHistoryPolicyResolved,
   isPolicySettled,
 } from "../stores/policyRules";
+import { useEnterpriseIdentityStore } from "../stores/enterpriseIdentityStore";
 import { usePolicyStore } from "../stores/policyStore";
 import { usePolicySnapshot } from "./usePolicy";
 
@@ -105,6 +106,7 @@ export interface ApiKeySettings {
   tinfoilApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
+  elevenlabsApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
@@ -239,8 +241,10 @@ function useSettingsInternal() {
   // Every window runs this sync, and the main process stops the shared
   // llama-server from it, so it must see every scope's resolved local model.
   const policySnapshot = usePolicySnapshot();
-  const localServerPrefs = useSettingsStore(
-    useShallow((state) => selectLocalServerPrefs(state, policySnapshot))
+  // Settings and policy already trigger renders. Also observe managed route changes
+  // so assigning or removing a managed provider updates the main process.
+  const localServerPrefs = useEnterpriseIdentityStore(
+    useShallow(() => selectLocalServerPrefs(store, policySnapshot))
   );
   const policySettled = isPolicySettled(policySnapshot);
   // A sign-out before the policy fetch starts leaves the policy idle, so only
@@ -340,6 +344,7 @@ function useSettingsInternal() {
     tinfoilApiKey: store.tinfoilApiKey,
     deepgramApiKey: store.deepgramApiKey,
     assemblyaiApiKey: store.assemblyaiApiKey,
+    elevenlabsApiKey: store.elevenlabsApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,

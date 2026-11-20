@@ -7,6 +7,7 @@ const {
   meetingDestinationContext,
 } = require("./meetingNotificationDestination");
 const { createLinuxWindowInputRegion } = require("./linuxWindowInputRegion");
+const { createWin32WindowShape } = require("./win32WindowShape");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
 const HotkeyManager = require("./hotkeyManager");
@@ -82,7 +83,7 @@ class WindowManager {
     // Set by IPCHandlers so its demo session dies with the demo kind on every
     // teardown path (id-matched end, onboarding exit, control panel closed).
     this.onOnboardingDemoTeardown = null;
-    // Set by main.js so the tray's listen item rebuilds with dictation state.
+    // Main observes accepted transitions for cleanup residency and the tray.
     this.onDictationStateChanged = null;
     // Set by IPCHandlers: the org-policy refusal of meeting recording, or null.
     this.getMeetingRecordingRefusal = () => null;
@@ -257,10 +258,28 @@ class WindowManager {
     return this._linuxWindowInputRegion;
   }
 
+  _win32MainWindowShape() {
+    const win = this.mainWindow;
+    if (this._win32WindowShape?.window !== win) {
+      this._win32WindowShape = { window: win, ...createWin32WindowShape(win) };
+    }
+    return this._win32WindowShape;
+  }
+
   async setMainWindowInputRegion(region) {
     const win = this.mainWindow;
-    if (process.platform !== "linux" || !win || win.isDestroyed()) return false;
+    if (!win || win.isDestroyed()) return false;
+    if (process.platform === "win32") {
+      const visible = win.isVisible() && !win.isMinimized();
+      // A hidden pill shows whole; the renderer shapes it again once shown.
+      this._win32MainWindowShape().set(visible ? region : null);
+      return visible;
+    }
+    if (process.platform !== "linux") return false;
     try {
+      // Electron reapplies this flag on every bounds, state and theme change. Clear it for
+      // full-window input and let the helper set the exact clickable area for a collapsed pill.
+      win.setIgnoreMouseEvents(region !== null);
       await this._mainWindowInputRegion().set(region);
       return !win.isDestroyed() && win.isVisible() && !win.isMinimized();
     } catch (error) {
@@ -513,6 +532,13 @@ class WindowManager {
     }
   }
 
+  _setResizedMainWindowBounds(bounds) {
+    // A Windows shape measured at the old size would cover the wrong part of
+    // the resized window, or none of it, until the resize event clears it.
+    if (process.platform === "win32") this._win32MainWindowShape().prepareResize(bounds);
+    this.mainWindow.setBounds(bounds);
+  }
+
   async _performMainWindowResize(sizeKey, request) {
     // The queue can drain after the window is gone (quit, recreate); the
     // caller's guard ran before enqueueing.
@@ -579,7 +605,7 @@ class WindowManager {
         return { success: false, message: "Window not available" };
       }
       this._lastResizeBounds = restored;
-      this.mainWindow.setBounds(restored);
+      this._setResizedMainWindowBounds(restored);
       this._activeHorizontalDirection = null;
       this._notifyMainWindowHorizontalDirection();
       return { success: true, bounds: restored, changed: true };
@@ -653,7 +679,7 @@ class WindowManager {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return { success: false, message: "Window not available" };
     }
-    this.mainWindow.setBounds(newBounds);
+    this._setResizedMainWindowBounds(newBounds);
     this._lastResizeBounds = newBounds;
     if (sizeKey === "BASE") {
       this._activeHorizontalDirection = null;
@@ -1032,7 +1058,7 @@ class WindowManager {
     }
   }
 
-  setDictationLifecycleState(state, attempt) {
+  setDictationLifecycleState(state, attempt, voiceAgentRequested = false) {
     const nextState = normalizeDictationLifecycle(state);
     if (attempt !== undefined) {
       if (nextState === DICTATION_LIFECYCLE.PREPARING && !this._dictationAttempt) {
@@ -1047,7 +1073,7 @@ class WindowManager {
     this._dictationLifecycleState = nextState;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.syncUserRecording();
-    this.onDictationStateChanged?.();
+    this.onDictationStateChanged?.(nextState, voiceAgentRequested);
     return true;
   }
 
@@ -1934,14 +1960,15 @@ class WindowManager {
   }
 
   registerMainWindowEvents() {
-    if (!this.mainWindow) {
+    const win = this.mainWindow;
+    if (!win) {
       return;
     }
 
-    if (process.platform === "linux") {
-      const win = this.mainWindow;
+    if (process.platform === "linux" || process.platform === "win32") {
       // backgroundThrottling:false keeps document.visibilityState visible even
-      // after hide(). Native visibility owns the Linux input-region updates.
+      // after hide(). Native visibility owns the Linux input-region and the
+      // Windows window-shape updates, which pause while the pill is hidden.
       for (const event of ["show", "hide", "minimize", "restore"]) {
         win.on(event, () => {
           win.webContents.send(
@@ -1949,6 +1976,14 @@ class WindowManager {
             win.isVisible() && !win.isMinimized()
           );
         });
+      }
+    }
+
+    if (process.platform === "win32") {
+      const shape = this._win32MainWindowShape();
+      win.on("hide", () => shape.set(null));
+      for (const event of ["resize", "move"]) {
+        win.on(event, shape.revalidate);
       }
     }
 
@@ -1964,7 +1999,7 @@ class WindowManager {
       }
     }, 10000);
 
-    this.mainWindow.once("ready-to-show", () => {
+    win.once("ready-to-show", () => {
       clearTimeout(showTimeout);
       this.enforceMainWindowOnTop();
       if (!this.mainWindow.isVisible() && !this._floatingIconAutoHide) {
@@ -1972,14 +2007,17 @@ class WindowManager {
       }
     });
 
-    this.mainWindow.on("show", () => {
+    win.on("show", () => {
       this.enforceMainWindowOnTop();
       if (process.platform === "win32") this._restoreWin32MainWindowClicks();
     });
 
-    this.mainWindow.on("focus", () => this.enforceMainWindowOnTop());
+    win.on("focus", () => this.enforceMainWindowOnTop());
 
-    this.mainWindow.on("closed", () => {
+    win.on("closed", () => {
+      clearTimeout(showTimeout);
+      if (this.mainWindow !== win) return;
+      this.setDictationLifecycleState(DICTATION_LIFECYCLE.IDLE);
       this.dragManager.cleanup();
       this.mainWindow = null;
     });

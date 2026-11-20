@@ -1,3 +1,4 @@
+import { startAffiliateAttribution } from "../stores/affiliateStore";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { authClient, getGracePeriodRemainingMs, isWithinGracePeriod } from "../lib/auth";
 import {
@@ -28,6 +29,7 @@ import {
   invalidateValidatedAuthContext,
   subscribeAuthRequestContext,
 } from "../lib/authRequestContext";
+import { clearInsightsCache } from "../lib/insightsCache";
 import {
   clearOfflineAccountProfile,
   readOfflineAccountProfile,
@@ -75,17 +77,28 @@ async function loadAccountDependencies() {
   return { syncService, resetRendererCaches, prepareChatAccountScope };
 }
 
-async function refreshManagedEnterpriseIdentity(accountId: string, authGeneration: number) {
-  const { refreshManagedEnterpriseIdentity: refresh, useWorkspaceStore } =
-    await import("../stores/workspaceStore");
+async function refreshManagedEnterpriseIdentity(
+  accountId: string,
+  authGeneration: number
+): Promise<void> {
+  const {
+    refreshManagedEnterpriseIdentity: refresh,
+    hydrateCachedWorkspaces,
+    useWorkspaceStore,
+  } = await import("../stores/workspaceStore");
   // A newly authenticated employee has no active workspace cached yet. Load
   // memberships first so a single SCIM-provisioned Enterprise workspace is
   // selected and its managed provider config resolves without opening Settings.
-  await useWorkspaceStore.getState().refresh();
+  if (getValidatedAuthGeneration() === authGeneration) {
+    await useWorkspaceStore.getState().refresh();
+  } else {
+    hydrateCachedWorkspaces(accountId);
+  }
   refresh(accountId, authGeneration);
 }
 
 export function useAuth() {
+  useEffect(startAffiliateAttribution, []);
   const localOnly = useSyncExternalStore(
     (listener) => usePolicyStore.subscribe?.(listener) ?? (() => {}),
     () => usePolicyStore.getState().localOnly === true,
@@ -242,6 +255,7 @@ export function useAuth() {
         // this device is still holding for that account is kept: it is queued in
         // storage against that user id and is delivered whenever it signs back in.
         useLeaderboardParticipationStore.getState().reset();
+        clearInsightsCache();
       }
       if (accountScopeRequiresReconciliation(resolvedUserId)) {
         // This legacy marker drives every already-running SyncService window;
@@ -286,6 +300,11 @@ export function useAuth() {
       invalidateValidatedAuthContext();
       scheduleAccountScopeRetry(retryKey);
       logger.error("Account-scoped content reconciliation failed", { error }, "auth");
+      if (!cancelled && transientlyAuthenticated && resolvedUserId) {
+        void import("../stores/workspaceStore").then(({ hydrateCachedWorkspaces }) =>
+          hydrateCachedWorkspaces(resolvedUserId)
+        );
+      }
     });
 
     return () => {
@@ -301,6 +320,7 @@ export function useAuth() {
     rawIsSignedIn,
     resolvedUserId,
     sessionResolutionFailed,
+    transientlyAuthenticated,
   ]);
 
   return {

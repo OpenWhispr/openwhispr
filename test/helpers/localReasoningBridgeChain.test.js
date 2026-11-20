@@ -44,9 +44,12 @@ function loadChain() {
   };
 
   try {
-    require("../../src/helpers/modelDirUtils.js");
     const bridge = require("../../src/services/localReasoningBridge.js").default;
     const modelManager = require("../../src/helpers/modelManagerBridge.js").default;
+    // Pin modelsDir to the temp home. getCacheRoot() prefers OPENWHISPR_CACHE_ROOT,
+    // XDG_CACHE_HOME (linux) and USERPROFILE (win32) over the stubbed home, and
+    // migrates model folders when they differ, so it must not run here (#3244).
+    modelManager.getModelsDir = () => path.join(electronHome, ".cache", "openwhispr", "models");
     return { bridge, modelManager };
   } finally {
     Module._load = originalLoad;
@@ -99,6 +102,7 @@ async function setupChain(t, respond) {
 
   const serverManager = modelManager.serverManager;
   serverManager.cachedServerBinaryPaths = { default: "/stub/llama-server" };
+  serverManager.modelPath = path.join(modelManager.modelsDir, model.fileName);
   serverManager.ready = true;
   serverManager.process = {};
   serverManager.port = server.address().port;

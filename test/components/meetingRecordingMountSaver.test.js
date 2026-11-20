@@ -47,6 +47,8 @@ async function setup(t, { language = "en" } = {}) {
   };
   const noop = () => () => {};
   const writes = [];
+  const sessions = [];
+  const stops = [];
   const api = {
     checkSystemAudioAccess: async () => ({
       granted: true,
@@ -54,13 +56,15 @@ async function setup(t, { language = "en" } = {}) {
       mode: "native",
       strategy: "native",
     }),
-    meetingTranscriptionStart: async () => ({
-      success: true,
-      systemAudioMode: "native",
-      systemAudioStrategy: "native",
-    }),
+    meetingTranscriptionStart: async ({ sessionId }) => {
+      sessions.push(sessionId);
+      return { success: true, systemAudioMode: "native", systemAudioStrategy: "native" };
+    },
     meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
-    meetingTranscriptionStop: async () => ({ success: true }),
+    meetingTranscriptionStop: async (sessionId, reason) => {
+      stops.push([sessionId, reason]);
+      return { success: true };
+    },
     meetingTranscriptionSend() {},
     updateNote: async (id, patch) => {
       writes.push([id, patch]);
@@ -72,9 +76,9 @@ async function setup(t, { language = "en" } = {}) {
     onMeetingSpeakersMerged: noop,
     onMeetingSessionSpeakerConfigUpdated: noop,
     onMeetingTranscriptionError: capture("transcriptionError"),
-    onMeetingTranscriptionFatalError: noop,
+    onMeetingTranscriptionFatalError: capture("fatalError"),
     onMeetingSystemAudioSilent: noop,
-    onMeetingAutoEndRequested: noop,
+    onMeetingAutoEndRequested: capture("autoEnd"),
   };
   installBrowserGlobals(t, {
     initialStorage: { uiLanguage: language },
@@ -106,6 +110,8 @@ async function setup(t, { language = "en" } = {}) {
   const tick = (ms) => React.act(async () => t.mock.timers.tick(ms));
   const savedTranscripts = () => writes.filter(([, patch]) => typeof patch.transcript === "string");
   const streamError = (error) => React.act(async () => listeners.transcriptionError?.(error));
+  const fatalError = (error) => React.act(async () => listeners.fatalError?.(error));
+  const autoEnd = (sessionId) => React.act(async () => listeners.autoEnd?.({ sessionId }));
   return {
     start,
     say,
@@ -117,6 +123,10 @@ async function setup(t, { language = "en" } = {}) {
     toasts,
     store,
     streamError,
+    fatalError,
+    autoEnd,
+    sessions,
+    stops,
     vite,
     setPolicy,
   };
@@ -305,7 +315,7 @@ test("main's refusal and this window's policy stop explain the same recording on
 });
 
 test("main ending a meeting it can no longer check reads as a stop, not a retry", async (t) => {
-  const { start, store, streamError, toasts } = await setup(t);
+  const { start, store, streamError, toasts, stops } = await setup(t);
   await start();
 
   await streamError("POLICY_UNRESOLVABLE");
@@ -315,6 +325,34 @@ test("main ending a meeting it can no longer check reads as a stop, not a retry"
     toasts.at(-1)?.description,
     "Recording stopped because your organization's settings couldn't be checked."
   );
+  await settle(store);
+  assert.deepEqual(
+    stops.map(([, reason]) => reason),
+    ["error"]
+  );
+});
+
+test("a connection loss that ends the recording tells main it ended in error", async (t) => {
+  const { start, store, fatalError, stops } = await setup(t);
+  await start();
+
+  await fatalError("connectionLost");
+  await settle(store);
+
+  assert.deepEqual(
+    stops.map(([, reason]) => reason),
+    ["error"]
+  );
+});
+
+test("main's auto-end request stops the recording it names as auto-end", async (t) => {
+  const { start, store, autoEnd, sessions, stops } = await setup(t);
+  await start();
+
+  await autoEnd(sessions[0]);
+  await settle(store);
+
+  assert.deepEqual(stops, [[sessions[0], "auto-end"]]);
 });
 
 test("a policy flip while the user's own Stop is finishing adds no policy toast", async (t) => {
@@ -338,7 +376,7 @@ test("a policy flip while the user's own Stop is finishing adds no policy toast"
 });
 
 test("a policy flip that cancels a start still in progress says why", async (t) => {
-  const { store, api, toasts, setPolicy } = await setup(t);
+  const { store, api, toasts, setPolicy, stops } = await setup(t);
   const reply = deferred();
   const startMain = api.meetingTranscriptionStart;
   api.meetingTranscriptionStart = async (...args) => {
@@ -366,6 +404,10 @@ test("a policy flip that cancels a start still in progress says why", async (t) 
 
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
   assert.equal(toasts.at(-1)?.description, "Meeting recording is disabled by your organization.");
+  assert.deepEqual(
+    stops.map(([, reason]) => reason),
+    ["policy"]
+  );
 });
 
 // A start waiting on main's reply, so the policy can change while it is under way.

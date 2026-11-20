@@ -28,6 +28,10 @@
 //                      that differs is refused (a batch create drops the folder);
 //                      an explicit null is the account's defaultWorkspaceId
 
+// `userId` models one account's note ownership and separates its cloud ids.
+// `adoptDefaultFolders` models the server returning an existing personal
+// default when another device creates the same name in the same workspace.
+
 // The server compares timestamps itself; it must not borrow the client's guard,
 // or a client-side regression would be invisible here.
 function normalizeTimestamp(value) {
@@ -127,6 +131,8 @@ function createFakeCloud(config = {}) {
     coalesceOnConflict: true,
     staleWriteGuard: true,
     updatedAtClamp: true,
+    userId: null,
+    adoptDefaultFolders: false,
     revisionGuard: false,
     serverDate: false,
     ...config,
@@ -135,6 +141,7 @@ function createFakeCloud(config = {}) {
   const notes = new Map();
   const folders = new Map();
   const conversations = new Map();
+  const skills = new Map();
   const dictionary = new Map();
   const snippets = new Map();
   const transcriptions = new Map();
@@ -145,11 +152,12 @@ function createFakeCloud(config = {}) {
   let clock = () => new Date().toISOString();
   // Where a note or folder no write scoped lands, and whose it is.
   let homeSpace = null;
-  let ownerId = null;
+  let ownerId = cfg.userId;
 
   // Real cloud ids are UUIDs; `idSpace` keeps two fake accounts' ids apart too
   // (see createAccountCloud).
-  const nextId = (prefix) => `${cfg.idSpace ?? ""}${prefix}-${String(++seq).padStart(4, "0")}`;
+  const idPrefix = cfg.idSpace ?? (cfg.userId ? `${cfg.userId}-` : "");
+  const nextId = (prefix) => `${idPrefix}${prefix}-${String(++seq).padStart(4, "0")}`;
 
   // The server stores timestamps and serves them back as ISO, whatever format
   // the client sent. Local rows carry SQLite's "YYYY-MM-DD HH:MM:SS", so echoing
@@ -264,6 +272,22 @@ function createFakeCloud(config = {}) {
     }
     if (dropFolder) return { ...input, folder_id: null };
     throw new HttpError(400, "Folder not found");
+  }
+
+  function createFolder(input) {
+    if (cfg.adoptDefaultFolders && input.is_default && !input.space_id) {
+      for (const row of folders.values()) {
+        if (
+          row.is_default &&
+          !row.space_id &&
+          !row.deleted_at &&
+          row.name === input.name &&
+          sameValue(row.private_workspace_id, input.private_workspace_id)
+        )
+          return row;
+      }
+    }
+    return upsertRow(folderCollection, input);
   }
 
   function findByClientId(collection, clientId) {
@@ -415,6 +439,53 @@ function createFakeCloud(config = {}) {
     return conversation;
   }
 
+  // Skills follow the API's own rules (lib/skill-service.ts there): batch-create upserts on the
+  // name and revives a tombstone, the snapshot walks created_at forwards from `cursor`, and the
+  // delta walks updated_at forwards from `since`, tombstones included.
+  function skillMeta(row) {
+    const { files: _files, ...meta } = row;
+    return meta;
+  }
+
+  function writeSkill(input) {
+    const at = toIso(clock());
+    const existing = [...skills.values()].find((row) => row.name === input.name);
+    const row = existing ?? {
+      id: nextId("skill"),
+      created_at: toIso(input.created_at ?? at),
+    };
+    Object.assign(row, {
+      client_skill_id: input.client_skill_id ?? existing?.client_skill_id ?? null,
+      name: input.name,
+      enabled: input.enabled,
+      content_hash: input.content_hash,
+      files: input.files,
+      deleted_at: null,
+      updated_at: existing ? bump(existing, at) : at,
+      edited_at: toIso(input.edited_at ?? at),
+    });
+    skills.set(row.id, row);
+    return row;
+  }
+
+  function skillPage(query) {
+    const limit = Number(query.get("limit")) || 50;
+    const since = query.get("since");
+    const cursor = query.get("cursor");
+    const key = since ? "updated_at" : "created_at";
+    const bound = normalizeTimestamp(since ?? cursor);
+    const boundId = query.get(since ? "since_id" : "cursor_id");
+    const rows = [...skills.values()]
+      .filter((row) => since || !row.deleted_at)
+      .filter((row) => {
+        if (!bound) return true;
+        const order = compare(normalizeTimestamp(row[key]), bound);
+        return order > 0 || (order === 0 && (!boundId || row.id > boundId));
+      })
+      .sort((a, b) => compare(a[key], b[key]) || compare(a.id, b.id));
+    return { entries: rows.slice(0, limit), hasMore: rows.length > limit };
+  }
+
   // Snapshot paging walks created_at backwards from `before` and hides
   // tombstones; delta paging walks updated_at forwards from `since` and must
   // carry tombstones, since that is how a delete reaches the other device.
@@ -499,6 +570,15 @@ function createFakeCloud(config = {}) {
   }
 
   function handle(method, pathname, query, body) {
+    if (method === "GET" && pathname.startsWith("/api/notes/") && pathname.endsWith("/access")) {
+      const cloudId = decodeURIComponent(pathname.slice("/api/notes/".length, -"/access".length));
+      const note = requireLive(noteCollection, cloudId);
+      return {
+        my_permission: "owner",
+        owner: { id: note.user_id ?? ownerId },
+        grants: note.space_id ? [{ source: "space" }] : [],
+      };
+    }
     // Only a cloud configured with `workspaces` lists them, as /api/workspaces and
     // /api/workspaces/:id do (a 404 for a workspace the account isn't in).
     if (method === "GET" && cfg.workspaces && pathname.startsWith("/api/workspaces")) {
@@ -545,9 +625,15 @@ function createFakeCloud(config = {}) {
         const created = [];
         for (const input of inputs) {
           const existing = findByClientId(noteCollection, input.client_note_id);
+          const folder = folders.get(input.folder_id);
+          const folderInScope = !input.folder_id || (folder && !folder.deleted_at);
           const row = upsertRow(
             noteCollection,
-            placeInFolder(input, existing, { dropFolder: true })
+            placeInFolder(
+              cfg.userId && !folderInScope ? { ...input, folder_id: null } : input,
+              existing,
+              { dropFolder: true }
+            )
           );
           created.push({ ...row, row_created: !existing, write_applied: !existing?.deleted_at });
         }
@@ -588,13 +674,13 @@ function createFakeCloud(config = {}) {
         return { notes: [] };
 
       case "POST /api/folders/create": {
-        return upsertRow(folderCollection, body ?? {});
+        return createFolder(body ?? {});
       }
       case "POST /api/folders/batch-create": {
         const inputs = Array.isArray(body?.folders) ? body.folders : [];
         const created = [];
         for (const input of inputs) {
-          created.push(upsertRow(folderCollection, input));
+          created.push(createFolder(input));
         }
         return { created };
       }
@@ -726,6 +812,30 @@ function createFakeCloud(config = {}) {
           created: inputs.map((input) => upsertKeyedRow(snippetCollection, "trigger", input)),
         };
       }
+      case "GET /api/skills/list":
+        return skillPage(query);
+      case "POST /api/skills/batch-create":
+        return { created: (body?.entries ?? []).map((entry) => skillMeta(writeSkill(entry))) };
+      case "PATCH /api/skills/update": {
+        const row = skills.get(body?.id);
+        if (!row || row.deleted_at) throw new HttpError(404, "Skill not found", "not_found");
+        if (body.enabled != null) row.enabled = body.enabled;
+        if (body.files) Object.assign(row, { files: body.files, content_hash: body.content_hash });
+        row.updated_at = bump(row, clock());
+        // As the API: a switch alone never dates the files back.
+        const editedAt = toIso(body.edited_at ?? row.updated_at);
+        if (body.files || editedAt > row.edited_at) row.edited_at = editedAt;
+        return skillMeta(row);
+      }
+      case "DELETE /api/skills/delete": {
+        const row = skills.get(body?.id);
+        if (!row) throw new HttpError(404, "Skill not found", "not_found");
+        if (!row.deleted_at)
+          Object.assign(tombstone({ store: skills, prefix: "skill" }, row.id), {
+            files: [],
+          });
+        return {};
+      }
       default:
         throw new HttpError(404, `fake cloud has no route for ${route}`, "no_route");
     }
@@ -846,6 +956,9 @@ function createFakeCloud(config = {}) {
     folders: () => [...folders.values()].map((row) => structuredClone(row)),
     conversations: () => [...conversations.values()].map((row) => structuredClone(row)),
     transcriptions: () => [...transcriptions.values()].map((row) => structuredClone(row)),
+    seedSkill: (input) => structuredClone(writeSkill(input)),
+    deleteSkill: (id) => structuredClone(tombstone({ store: skills, prefix: "skill" }, id)),
+    skills: () => [...skills.values()].map((row) => structuredClone(row)),
     note: (id) => {
       const row = notes.get(id) ?? findByClientId(noteCollection, id);
       return row ? structuredClone(row) : null;

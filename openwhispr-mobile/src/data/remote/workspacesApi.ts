@@ -1,9 +1,15 @@
 import { api } from '@/lib/apiClient';
 
-/** Subset of a GET /api/workspaces list entry — the Spaces list only needs the name. */
+/**
+ * Subset of a GET /api/workspaces list entry: the name for the Spaces list, and what the
+ * Private sections need to find the account's default workspace.
+ */
 export interface RemoteWorkspace {
   id: string;
   name: string;
+  is_default?: boolean;
+  plan?: string | null;
+  status?: string | null;
 }
 
 /**

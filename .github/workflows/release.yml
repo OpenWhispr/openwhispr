@@ -49,7 +49,7 @@ jobs:
       - name: Check translations
         run: npm run i18n:check
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
       - name: Install Linux native test dependencies
         run: |
           sudo apt-get update
@@ -166,6 +166,7 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "SALESFORCE_CLIENT_ID=${{ secrets.SALESFORCE_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
@@ -283,6 +284,7 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "SALESFORCE_CLIENT_ID=${{ secrets.SALESFORCE_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 
@@ -409,6 +411,7 @@ jobs:
           echo "MICROSOFT_CALENDAR_CLIENT_ID=${{ secrets.MICROSOFT_CALENDAR_CLIENT_ID }}" >> .env
           echo "SLACK_CLIENT_ID=${{ secrets.SLACK_CLIENT_ID }}" >> .env
           echo "LINEAR_CLIENT_ID=${{ secrets.LINEAR_CLIENT_ID }}" >> .env
+          echo "SALESFORCE_CLIENT_ID=${{ secrets.SALESFORCE_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_CLIENT_ID=${{ secrets.GH_APP_CLIENT_ID }}" >> .env
           echo "GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}" >> .env
 

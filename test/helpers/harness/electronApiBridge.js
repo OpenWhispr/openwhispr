@@ -64,6 +64,51 @@ function inertSnippetApi() {
   };
 }
 
+// The skill sync surface, served by skillsIpc.js over a real SkillLibrary when the test gives
+// one, otherwise empty so a notes pass doesn't trip the binding check.
+function skillApi(library, onBroadcast) {
+  if (!library) {
+    return {
+      getPendingSkills: async () => [],
+      getPendingSkillDeletes: async () => [],
+      exportSkillForCloud: async () => null,
+      getSkillForCloudMerge: async () => null,
+      applySkillFromCloud: async () => false,
+      markSkillSynced: async () => ({ success: true, changes: 1 }),
+      hardDeleteSkill: async () => ({ success: true }),
+      queueSkillCloudDelete: async () => ({ success: true }),
+      clearSkillCloudId: async () => ({ success: true }),
+      broadcastSkillsUpdated: async () => undefined,
+    };
+  }
+  // The real handlers, so what a failing step answers is what SyncService reads.
+  const { registerSkillsIpc } = require("../../../src/helpers/skills/skillsIpc");
+  const handlers = new Map();
+  registerSkillsIpc({
+    ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+    library,
+    shell: {},
+    broadcast: onBroadcast,
+  });
+  const invoke =
+    (channel) =>
+    async (...args) =>
+      handlers.get(channel)({ sender: null }, ...args);
+  return {
+    skillsList: invoke("skills-list"),
+    getPendingSkills: invoke("skills-get-pending"),
+    getPendingSkillDeletes: invoke("skills-get-pending-deletes"),
+    exportSkillForCloud: invoke("skills-export-for-cloud"),
+    getSkillForCloudMerge: invoke("skills-get-for-cloud-merge"),
+    applySkillFromCloud: invoke("skills-apply-from-cloud"),
+    markSkillSynced: invoke("skills-mark-synced"),
+    hardDeleteSkill: invoke("skills-hard-delete"),
+    queueSkillCloudDelete: invoke("skills-queue-cloud-delete"),
+    clearSkillCloudId: invoke("skills-clear-cloud-id"),
+    broadcastSkillsUpdated: invoke("skills-broadcast-updated"),
+  };
+}
+
 // Every analytics binding syncPendingAnalytics reaches for. A missing one does
 // not fail loudly here -- SyncService catches the TypeError and logs it -- so
 // the pass silently does nothing and the test that asserts it drained still
@@ -131,6 +176,17 @@ function createElectronApi(db, options = {}) {
       return cloud.request(opts);
     },
 
+    ensureAccountDefaultFolders: async (foreignCloudIds, expectedScope) => {
+      if (
+        !expectedScope ||
+        expectedScope.accountId !== db.activeAccountId ||
+        authState.isStale(expectedScope.authGeneration)
+      ) {
+        throw new Error("Authentication context changed during sync acknowledgement");
+      }
+      return db.ensureAccountDefaultFolders(foreignCloudIds);
+    },
+
     // Auth
     authGetTokenState: async () => {
       scopedAccount(authState.generation);
@@ -141,6 +197,12 @@ function createElectronApi(db, options = {}) {
       syncEvents.push({ name, payload });
       return { success: true };
     },
+
+    getStandInOwnershipCandidates: async () => db.getStandInOwnershipCandidates(),
+    resolveStandInOwnership: async ({ noteId, cloudId, owned, accountId }) =>
+      accountId !== db.activeAccountId
+        ? { success: false, error: "Account changed" }
+        : db.resolveStandInOwnership(noteId, cloudId, owned),
 
     // Notes
     getNote: async (id) => db.getNote(id),
@@ -323,6 +385,12 @@ function createElectronApi(db, options = {}) {
       authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
         : db.markConversationCreateAttempted(id),
+    markConversationPending: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.markConversationPending(id),
+    getSyncedLinkedConversations: async (expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.getSyncedLinkedConversations(),
     clearConversationCreateAttempted: async (id) => db.clearConversationCreateAttempted(id),
     acknowledgeConversationCreate: async (id, snapshot, cloudId, accountId, authGeneration) => {
       const sender = syncSender(accountId, authGeneration);
@@ -407,7 +475,20 @@ function createElectronApi(db, options = {}) {
     // The real handler re-reads the words to broadcast them; there are no windows here.
     broadcastDictionaryUpdated: async () => ({ success: true }),
 
+    getSharedDictionary: async (workspaceId) => db.getSharedDictionary(workspaceId),
+    applySharedDictionaryPull: async (workspaceId, change) =>
+      db.applySharedDictionaryPull(workspaceId, change),
+    replaceSharedDictionary: async (workspaceId, full) =>
+      db.replaceSharedDictionary(workspaceId, full),
+    applySharedDictionaryHides: async (workspaceId, change) =>
+      db.applySharedDictionaryHides(workspaceId, change),
+    replaceSharedDictionaryHides: async (workspaceId, hidden) =>
+      db.replaceSharedDictionaryHides(workspaceId, hidden),
+    clearSharedDictionary: async (workspaceId) => db.clearSharedDictionary(workspaceId),
+    pruneSharedDictionary: async (keepWorkspaceIds) => db.pruneSharedDictionary(keepWorkspaceIds),
+
     ...(options.snippets ? snippetApi(db, authState) : inertSnippetApi()),
+    ...skillApi(options.skillLibrary, (name) => syncEvents.push({ name })),
     ...inertAnalyticsApi(),
   };
 }

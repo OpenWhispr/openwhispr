@@ -86,6 +86,12 @@ test("account ownership operations forward the account and credential generation
   ]);
 });
 
+test("checkout forwards the generation separately from the Stripe options", async () => {
+  const { api, invocations } = loadPreloadApi();
+  await api.cloudCheckout({ plan: "annual" }, 7);
+  assert.deepEqual(invocations, [["cloud-checkout", { plan: "annual" }, 7]]);
+});
+
 test("sync writes forward the sign-in that read them and the account a chat was sent as", async () => {
   const { api, invocations } = loadPreloadApi();
 
@@ -126,12 +132,21 @@ test("sync writes forward the sign-in that read them and the account a chat was 
   ]);
 });
 
-test("meeting stop forwards the optional expected recording session ID", async () => {
+test("meeting stop forwards the optional expected recording session ID and stop reason", async () => {
   const { api, invocations } = loadPreloadApi();
 
-  await api.meetingTranscriptionStop("meeting-2");
+  await api.meetingTranscriptionStop("meeting-2", "auto-end");
 
-  assert.deepEqual(invocations, [["meeting-transcription-stop", "meeting-2"]]);
+  assert.deepEqual(invocations, [["meeting-transcription-stop", "meeting-2", "auto-end"]]);
+});
+
+test("a meeting start the renderer refuses is forwarded for the audit log", async () => {
+  const { api, invocations } = loadPreloadApi();
+  const details = { noteId: 4, startSource: "record-button", reason: "POLICY_UNRESOLVABLE" };
+
+  await api.meetingRecordingRefused(details);
+
+  assert.deepEqual(invocations, [["meeting-recording-refused", details]]);
 });
 
 test("meeting system-audio availability forwards the scoped session", async () => {
@@ -199,8 +214,12 @@ test("dictation lifecycle reports reach main", async () => {
   const { api, invocations } = loadPreloadApi();
 
   await api.dictationLifecycleStateChanged("preparing", "take-1");
+  await api.dictationLifecycleStateChanged("recording", "take-1", true);
 
-  assert.deepEqual(invocations, [["dictation-lifecycle-state-changed", "preparing", "take-1"]]);
+  assert.deepEqual(invocations, [
+    ["dictation-lifecycle-state-changed", "preparing", "take-1", false],
+    ["dictation-lifecycle-state-changed", "recording", "take-1", true],
+  ]);
 });
 
 test("the agent window's bridges reach their channels and strip the Electron event", async () => {

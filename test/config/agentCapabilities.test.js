@@ -116,6 +116,7 @@ test("each connector that isn't connected or needs a reconnect is named on its o
           // A build without GitHub's client hides it, so it's never named.
           github: { ...READY, connected: false, configured: false },
           gmail: { ...READY, connected: false },
+          salesforce: { ...READY, connected: false },
         },
       },
     })
@@ -126,6 +127,7 @@ test("each connector that isn't connected or needs a reconnect is named on its o
       ["Calendar", "notConnected", LOCATIONS.calendars],
       ["Slack", "notConnected", LOCATIONS.connectors],
       ["Linear", "needsReconnect", LOCATIONS.connectors],
+      ["Salesforce", "notConnected", LOCATIONS.connectors],
     ]
   );
 });
@@ -156,7 +158,7 @@ test("every connector entry is one that sends for the user, and nothing else is"
     signedOut.map((item) => [item.name, item.delivers === true]),
     [
       ["Web search", false],
-      ["Integrations (Email, Slack, Linear, GitHub)", true],
+      ["Integrations (Email, Slack, Linear, GitHub, Salesforce)", true],
     ]
   );
   const notConnected = resolveUnavailableCapabilities(
@@ -258,7 +260,7 @@ test("signed-out connector guidance asks for sign-in instead of connecting", asy
   assert.match(text, /on what sending it needs, as its line below says, never on connecting it/);
   assert.ok(
     text.includes(
-      `- Integrations (Email, Slack, Linear, GitHub): needs the user to sign in to OpenWhispr in ${LOCATIONS.account}.`
+      `- Integrations (Email, Slack, Linear, GitHub, Salesforce): needs the user to sign in to OpenWhispr in ${LOCATIONS.account}.`
     )
   );
   assert.doesNotMatch(text, /Connect Slack and I can post this/);
@@ -317,4 +319,22 @@ test("models without tools point to the existing documentation site", async () =
   ]);
   assert.match(text, /https:\/\/docs\.openwhispr\.com/);
   assert.doesNotMatch(text, /Support → OpenWhispr Help/);
+});
+
+test("Salesforce can offer main's connection card when its configured login is missing", async () => {
+  const { resolveUnavailableCapabilities, CONNECTION_TARGET_NAMES } = await load();
+  const unavailable = resolveUnavailableCapabilities(
+    input({
+      connectionTargets: ["salesforce"],
+      connectors: {
+        ...input().connectors,
+        statuses: { salesforce: { ...READY, connected: false } },
+      },
+    })
+  );
+  assert.equal(CONNECTION_TARGET_NAMES.salesforce, "Salesforce");
+  assert.deepEqual(
+    unavailable.map(({ name, connectTarget }) => ({ name, connectTarget })),
+    [{ name: "Salesforce", connectTarget: "salesforce" }]
+  );
 });

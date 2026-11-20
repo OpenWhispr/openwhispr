@@ -344,6 +344,7 @@ const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { createManagedMeetingPolicy } = require("./src/helpers/managedMeetingPolicy");
 const { createManagedDevicePolicy } = require("./src/helpers/managedDevicePolicy");
+const { createMeetingAuditLog } = require("./src/helpers/meetingAuditLog");
 const { installManagedNetworkGuard } = require("./src/helpers/devicePolicyNetwork");
 const { applyOpenWhisprOriginHeader } = require("./src/helpers/sessionHeaders");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
@@ -366,6 +367,7 @@ let diarizationManager = null;
 let trayManager = null;
 let updateManager = null;
 let managedDevicePolicy = null;
+let meetingAuditLog = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
 let linuxKeyManager = null;
@@ -516,6 +518,7 @@ function initializeCoreManagers() {
     binding: accountScopeBinding.read(),
   });
   if (bootAccountId) databaseManager.setActiveAccountId(bootAccountId, { atLaunch: true });
+  databaseManager.ensureAccountDefaultFolders();
   clipboardManager = new ClipboardManager();
   const { createConnectorManager } = require("./src/helpers/connectors/connectorManager");
   const { createPendingActions } = require("./src/helpers/connectors/pendingActions");
@@ -523,6 +526,7 @@ function initializeCoreManagers() {
   const { createCredentialStore } = require("./src/helpers/connectors/credentialStore");
   const { createConnectorCredentials } = require("./src/helpers/connectors/connectorCredentials");
   const { createConnectors } = require("./src/helpers/connectors/createConnectors");
+  const { createSalesforceNoteReader } = require("./src/helpers/connectors/salesforceNotes");
   const { runOAuthLoopbackFlow, OAuthFlowError } = require("./src/helpers/oauthLoopbackFlow");
   const { broadcastToWindows } = require("./src/helpers/windowBroadcast");
   const { connectorAccountIdFrom } = require("./src/helpers/connectors/connectorIpc");
@@ -550,6 +554,11 @@ function initializeCoreManagers() {
       runOAuthLoopbackFlow,
       OAuthFlowError,
       credentials: connectorCredentials,
+      database: databaseManager,
+      getSalesforceNote: createSalesforceNoteReader({
+        database: databaseManager,
+        getAccountId: getConnectorAccountId,
+      }),
       logger: debugLogger,
       env: process.env,
       openExternal: (url) => require("./src/helpers/externalUrlOpener").openExternalUrl(url),
@@ -670,6 +679,16 @@ function initializeCoreManagers() {
   const managedMeetingPolicy = createManagedMeetingPolicy({
     getSnapshot: () => managedDevicePolicy.getSnapshot(),
   });
+  meetingAuditLog = createMeetingAuditLog({
+    // The effective policy (MDM merged with the workspace) lives in the IPC
+    // handlers below; no recording starts before they exist.
+    isEnabled: () => ipcHandlers?.effectivePolicyManager?.getCurrent().managed === true,
+    getConfiguredPath: () => managedDevicePolicy.getSnapshot().auditLogPath,
+    userDataPath: app.getPath("userData"),
+    appVersion: app.getVersion(),
+    logger: debugLogger,
+  });
+  meetingAuditLog.recoverInterrupted();
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     meetingProcessDetector,
@@ -687,7 +706,10 @@ function initializeCoreManagers() {
     ),
     windowManager,
     databaseManager,
-    { isMeetingRecordingDisabled: managedMeetingPolicy.isMeetingRecordingDisabled }
+    {
+      isMeetingRecordingDisabled: managedMeetingPolicy.isMeetingRecordingDisabled,
+      onStartRefused: (reason, trigger) => meetingAuditLog.recordingRefused({ reason, trigger }),
+    }
   );
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
@@ -743,6 +765,7 @@ function initializeCoreManagers() {
     meetingDetectionEngine,
     managedMeetingPolicy,
     managedDevicePolicy,
+    meetingAuditLog,
     audioTapManager,
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,
@@ -846,6 +869,7 @@ function handleEnterpriseAudioLink(url) {
 app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
+  if (handleAffiliateDeepLink(url)) return;
 
   if (url.includes("upgrade-success")) {
     handleUpgradeDeepLink();
@@ -868,6 +892,44 @@ app.on("open-url", (event, url) => {
 
   windowManager?.showControlPanel();
 });
+
+const pendingAffiliateDeepLinks = [];
+let affiliateWindowReady = false;
+
+async function flushPendingAffiliateDeepLink() {
+  if (!pendingAffiliateDeepLinks.length || !affiliateWindowReady || !windowManager) return;
+  const urls = pendingAffiliateDeepLinks.splice(0);
+  try {
+    const affiliateLinks = require("./src/helpers/affiliateLinks");
+    let captured = false;
+    for (const url of urls) {
+      if (affiliateLinks.capture(url, OAUTH_PROTOCOL)) captured = true;
+    }
+    if (!captured) return;
+    await windowManager.createControlPanelWindow();
+    windowManager.showControlPanel();
+    if (isLiveWindow(windowManager.controlPanelWindow)) {
+      windowManager.controlPanelWindow.webContents.send("affiliate-link");
+    }
+  } catch (error) {
+    debugLogger?.error("Creator link window could not be opened", { error: error.message });
+  }
+}
+
+function handleAffiliateDeepLink(url) {
+  try {
+    if (url.length > 4096) return false;
+    const parsed = new URL(url);
+    if (parsed.protocol !== `${OAUTH_PROTOCOL}:` || parsed.hostname !== "affiliate") return false;
+    // Packaged configuration may not be loaded when macOS first delivers open-url.
+    pendingAffiliateDeepLinks.push(url);
+    void flushPendingAffiliateDeepLink();
+    return true;
+  } catch {
+    debugLogger?.error("Creator link could not be saved");
+    return false;
+  }
+}
 
 function isInvitationDeepLink(url) {
   return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("invitations/");
@@ -1363,6 +1425,11 @@ async function startApp() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
+  windowManager.onDictationStateChanged = (state, voiceAgentRequested) => {
+    ipcHandlers.dictationCleanupPrewarm.setLifecycleState(state, voiceAgentRequested);
+    trayManager?.updateTrayMenu();
+  };
+
   // Create windows FIRST so the user sees UI as soon as possible.
   // A login launch goes to the tray whatever the preference says: the user asked
   // the OS to start us, not to put a window in front of them at every login.
@@ -1375,11 +1442,15 @@ async function startApp() {
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
+  affiliateWindowReady = true;
+  await flushPendingAffiliateDeepLink();
 
   // Windows/Linux cold start delivers protocol URLs via argv (macOS uses
   // open-url); without this scan a deep link that launches the app is lost.
   const initialProtocolUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
-  if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
+  if (initialProtocolUrl && handleAffiliateDeepLink(initialProtocolUrl)) {
+    await flushPendingNoteDeepLink();
+  } else if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
     // The renderer consumes the saved setup request after settings mount.
   } else if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
     await handleNoteDeepLink(initialProtocolUrl);
@@ -1457,7 +1528,7 @@ async function startApp() {
     if (!isMeetingPress()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
     // Usually pressed mid-call: an open panel updates behind the meeting app.
-    windowManager.startManualMeeting({ activate: false });
+    windowManager.startManualMeeting({ activate: false, startSource: "hotkey" });
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1520,6 +1591,8 @@ async function startApp() {
     if (microsoftCalendarManager) microsoftCalendarManager.onWakeFromSleep();
     if (appleCalendarManager) appleCalendarManager.onWakeFromSleep();
     // Sleep evicts the local GPU model from VRAM; reload it once the driver settles. See #766.
+    // A GPU retry left over from the last wake would fire before then.
+    whisperManager?.cancelWakeGpuRetry();
     if (wakeRewarmTimer) clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = setTimeout(() => {
       wakeRewarmTimer = null;
@@ -1599,9 +1672,6 @@ async function startApp() {
 
   trayManager.setWindows(windowManager.mainWindow, windowManager.controlPanelWindow);
   trayManager.setWindowManager(windowManager);
-  // The tray's listen item is a toggle, so it has to rebuild when dictation
-  // starts or stops.
-  windowManager.onDictationStateChanged = () => trayManager.updateTrayMenu();
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 
@@ -2001,7 +2071,7 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.startManualMeeting({ activate: false });
+        windowManager.startManualMeeting({ activate: false, startSource: "hotkey" });
       }
     };
 
@@ -2129,6 +2199,7 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
+      if (handleAffiliateDeepLink(url)) return;
       if (handleEnterpriseAudioLink(url)) return;
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
@@ -2235,6 +2306,9 @@ if (gotSingleInstanceLock) {
     if (updateManager && updateManager.isQuittingForUpdate) {
       // Quit must proceed for the installer to run, so no preventDefault;
       // sidecar shutdown is best-effort (the reaper cleans up orphans on relaunch).
+      // The windows haven't closed yet, so a live meeting still ends as app-quit;
+      // a stop the exit cuts short is written from its marker at the next launch.
+      meetingAuditLog?.closeOpenSession();
       performSyncTeardown();
       sidecarRegistry.shutdownAll().catch(() => {});
       return;
@@ -2243,6 +2317,10 @@ if (gotSingleInstanceLock) {
     performSyncTeardown();
     Promise.allSettled([
       sidecarRegistry.shutdownAll(),
+      Promise.race([
+        meetingAuditLog?.closeOpenSession(),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
       Promise.race([
         ipcHandlers?.metaActivation?.shutdown(),
         new Promise((resolve) => setTimeout(resolve, 1500)),
@@ -2272,6 +2350,7 @@ function performSyncTeardown() {
     clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = null;
   }
+  whisperManager?.cancelWakeGpuRetry();
   clearPendingNoteDeepLink();
   if (authBridgeServer) {
     authBridgeServer.close();

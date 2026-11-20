@@ -99,6 +99,9 @@ test("createConnectors builds Linear once, just before GitHub, from the shared d
 
   const ids = createConnectors(deps).map((connector) => connector.id);
 
-  assert.deepEqual(ids.slice(-2), ["linear", "github"]);
+  assert.deepEqual(ids.slice(ids.indexOf("linear"), ids.indexOf("linear") + 2), [
+    "linear",
+    "github",
+  ]);
   assert.equal(ids.filter((id) => id === "linear").length, 1);
 });

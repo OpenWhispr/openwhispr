@@ -1,4 +1,8 @@
 import "../models/registryBootstrap.js";
+import {
+  parseSelfHostedSttHeaders,
+  serializeSelfHostedSttHeaders,
+} from "../helpers/selfHostedSttHeaders.js";
 import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
@@ -65,9 +69,13 @@ import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { queueRetiredModelSwitch, recordRetiredModelSwitch } from "./retiredModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
-import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
+import {
+  isNoteRecordingOnlyTranscriptionModel,
+  isUploadOnlyTranscriptionModel,
+} from "../models/appTranscriptionProviders.js";
 import {
   acceptsUnlistedTranscriptionModel,
+  getLocalTranscriptionModel,
   getTranscriptionSelection,
   isLocalModelAllowedByPolicy,
   isPolicyActionAllowed,
@@ -107,6 +115,7 @@ import {
 } from "../utils/dictionaryPromptCap";
 import type { EnterpriseSetupMode } from "../types/enterpriseIdentity";
 import { getManagedScopeResolution } from "./enterpriseIdentityStore";
+import { syncAfterLocalWrite } from "../services/syncAfterLocalWrite";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -175,9 +184,20 @@ function transcriptionProviderModels(
     modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
       ?.models ?? [];
   if (context === "meeting") return models.filter((model) => model.streaming);
+  const batchModels = models.filter(
+    (model) => !isNoteRecordingOnlyTranscriptionModel(providerId, model.id)
+  );
   if (context === "dictation")
-    return models.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
-  return models;
+    return batchModels.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
+  return batchModels;
+}
+
+// A provider can offer a separate Note Recording model that dictation never selects.
+function canInheritDictationProviderForMeeting(providerId: string): boolean {
+  return (
+    MEETING_TRANSCRIPTION_POLICY_CATALOG.byokProviders.includes(providerId) &&
+    transcriptionProviderModels(providerId, "dictation").some((model) => model.streaming)
+  );
 }
 
 function defaultTranscriptionModel(
@@ -1135,6 +1155,10 @@ function migrateRetiredCloudModels() {
 
 migrateRetiredCloudModels();
 
+export type SelfHostedSttHeader = { name: string; value: string };
+// Dictation and uploads post to different self-hosted servers (#2049).
+export type SelfHostedSttSurface = "dictation" | "upload";
+
 export interface SettingsState
   extends
     TranscriptionSettings,
@@ -1188,6 +1212,7 @@ export interface SettingsState
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
   remoteTranscriptionModel: string;
+  selfHostedSttHeaders: Record<SelfHostedSttSurface, SelfHostedSttHeader[]>;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
   keepLocalModelLoaded: boolean;
@@ -1308,6 +1333,7 @@ export interface SettingsState
   setRemoteTranscriptionType: (type: SelfHostedType) => void;
   setRemoteTranscriptionUrl: (url: string) => void;
   setRemoteTranscriptionModel: (model: string) => void;
+  setSelfHostedSttHeaders: (surface: SelfHostedSttSurface, headers: SelfHostedSttHeader[]) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
   setKeepLocalModelLoaded: (value: boolean) => void;
@@ -1422,6 +1448,7 @@ export interface SettingsState
   setTinfoilApiKey: (key: string) => void;
   setDeepgramApiKey: (key: string) => void;
   setAssemblyaiApiKey: (key: string) => void;
+  setElevenlabsApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
@@ -1547,6 +1574,16 @@ function createStringSetter(key: string) {
   };
 }
 
+// A blank Note Recording field inherits dictation. A batch-only dictation choice
+// must not replace the provider or model the recorder was already using.
+function preserveInheritedMeetingSelection(previous: SettingsState): void {
+  const current = useSettingsStore.getState();
+  if (!current.meetingCloudTranscriptionProvider)
+    current.setMeetingCloudTranscriptionProvider(previous.cloudTranscriptionProvider);
+  if (!current.meetingCloudTranscriptionModel)
+    current.setMeetingCloudTranscriptionModel(previous.cloudTranscriptionModel);
+}
+
 function persistTranscriptionModelMemory(memory: Record<string, string>) {
   if (isBrowser) localStorage.setItem("transcriptionModelByProvider", JSON.stringify(memory));
   useSettingsStore.setState({ transcriptionModelByProvider: memory });
@@ -1665,7 +1702,9 @@ const SECRET_IPC_SAVERS = {
   tinfoil: "saveTinfoilKey",
   deepgram: "saveDeepgramKey",
   assemblyai: "saveAssemblyAIKey",
+  elevenlabs: "saveElevenlabsKey",
   customTranscription: "saveCustomTranscriptionKey",
+  selfHostedSttHeaders: "saveSelfHostedSttHeaders",
   cleanupCustom: "saveCleanupCustomKey",
   noteFormattingCustom: "saveNoteFormattingCustomKey",
   translationCustom: "saveTranslationCustomKey",
@@ -1716,7 +1755,9 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "tinfoilApiKey",
   "deepgramApiKey",
   "assemblyaiApiKey",
+  "elevenlabsApiKey",
   "customTranscriptionApiKey",
+  "selfHostedSttHeaders",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
   "noteFormattingCustomApiKey",
@@ -1771,13 +1812,6 @@ function createSecretSetter(
 }
 
 export const MAX_TRANSLATION_TARGETS = 5;
-
-// Kick the matching cloud push once a local write has landed in SQLite.
-function syncAfterLocalWrite(method: "syncDictionaryNow" | "syncSnippetsNow"): void {
-  void import("../services/SyncService.js").then(({ syncService }) => {
-    if (syncService.canSync()) void syncService[method]();
-  });
-}
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(
@@ -1846,6 +1880,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   tinfoilApiKey: "",
   deepgramApiKey: "",
   assemblyaiApiKey: "",
+  elevenlabsApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -2001,6 +2036,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
   remoteTranscriptionModel: readString("remoteTranscriptionModel", ""),
+  selfHostedSttHeaders: { dictation: [], upload: [] },
   cleanupMode: (() => {
     const v = readString("cleanupMode", "openwhispr");
     if (
@@ -2109,6 +2145,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ) => void,
   setRemoteTranscriptionUrl: createStringSetter("remoteTranscriptionUrl"),
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
+  setSelfHostedSttHeaders: (surface, headers) => {
+    const next = { ...get().selfHostedSttHeaders, [surface]: headers };
+    set({ selfHostedSttHeaders: next });
+    debouncedSaveSecret("selfHostedSttHeaders", serializeSelfHostedSttHeaders(next));
+  },
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
   setKeepLocalModelLoaded: createBooleanSetter("keepLocalModelLoaded"),
@@ -2313,7 +2354,20 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setPreferredLanguage: createStringSetter("preferredLanguage"),
   setChineseScriptPreference: (value: ChineseScriptPreference) =>
     createStringSetter("chineseScriptPreference")(normalizeChineseScriptPreference(value)),
-  setCloudTranscriptionProvider: createStringSetter("cloudTranscriptionProvider"),
+  setCloudTranscriptionProvider: (providerId) => {
+    const s = get();
+    const meetingProviders = MEETING_TRANSCRIPTION_POLICY_CATALOG.byokProviders;
+    const meetingProvider = s.meetingCloudTranscriptionProvider || s.cloudTranscriptionProvider;
+    if (
+      providerId !== s.cloudTranscriptionProvider &&
+      providerId !== "openwhispr" &&
+      !canInheritDictationProviderForMeeting(providerId) &&
+      (s.meetingTranscriptionMode === "openwhispr" || meetingProviders.includes(meetingProvider))
+    ) {
+      preserveInheritedMeetingSelection(s);
+    }
+    setStringSetting("cloudTranscriptionProvider", providerId);
+  },
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
 
@@ -2339,7 +2393,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       persistTranscriptionModelMemory(memory);
     }
     const remembered = memory[`${context}:${providerId}`];
-    setStringSetting(keys.provider, providerId);
+    if (context === "dictation") s.setCloudTranscriptionProvider(providerId);
+    else setStringSetting(keys.provider, providerId);
     setStringSetting(
       keys.model,
       remembered &&
@@ -2561,6 +2616,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // STT-only, so there is no ReasoningService key cache to invalidate.
   setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
   setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
+  setElevenlabsApiKey: createSecretSetter("elevenlabsApiKey", "elevenlabs"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -2956,7 +3012,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // for everything (e.g. Corti for medical providers).
   setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => {
     const s = useSettingsStore.getState();
-    s.updateTranscriptionSettings(settings);
+    const { cloudTranscriptionProvider: selectedProvider, ...otherSettings } = settings;
+    if (selectedProvider !== undefined)
+      s.switchCloudTranscriptionProvider("dictation", selectedProvider);
+    s.updateTranscriptionSettings(otherSettings);
     const {
       useLocalWhisper,
       localTranscriptionProvider,
@@ -2973,13 +3032,22 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       cloudTranscriptionProvider
     );
     s.setTranscriptionMode(mode);
-    s.setMeetingTranscriptionMode(mode);
+    const applyToMeeting =
+      mode !== "providers" || canInheritDictationProviderForMeeting(cloudTranscriptionProvider);
+    if (applyToMeeting) {
+      s.setMeetingTranscriptionMode(mode);
+      s.setMeetingUseLocalWhisper(useLocalWhisper);
+      s.setMeetingLocalTranscriptionProvider(localTranscriptionProvider);
+      s.setMeetingCloudTranscriptionMode(cloudTranscriptionMode);
+      s.setMeetingCloudTranscriptionProvider(cloudTranscriptionProvider);
+      s.setMeetingCloudTranscriptionModel(cloudTranscriptionModel);
+    } else {
+      // Onboarding can change the mode and model even when the provider stays the same.
+      preserveInheritedMeetingSelection(s);
+      if (!s.meetingCloudTranscriptionMode)
+        s.setMeetingCloudTranscriptionMode(s.cloudTranscriptionMode);
+    }
     s.setUploadTranscriptionMode(mode);
-    s.setMeetingUseLocalWhisper(useLocalWhisper);
-    s.setMeetingLocalTranscriptionProvider(localTranscriptionProvider);
-    s.setMeetingCloudTranscriptionMode(cloudTranscriptionMode);
-    s.setMeetingCloudTranscriptionProvider(cloudTranscriptionProvider);
-    s.setMeetingCloudTranscriptionModel(cloudTranscriptionModel);
     s.setUploadUseLocalWhisper(useLocalWhisper);
     s.setUploadLocalTranscriptionProvider(localTranscriptionProvider);
     s.setUploadCloudTranscriptionMode(cloudTranscriptionMode);
@@ -2990,7 +3058,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (cloudTranscriptionProvider && cloudTranscriptionModel) {
       const memory = { ...useSettingsStore.getState().transcriptionModelByProvider };
       for (const { context } of TRANSCRIPTION_CONTEXT_KEYS) {
-        memory[`${context}:${cloudTranscriptionProvider}`] = cloudTranscriptionModel;
+        if (context !== "meeting" || applyToMeeting) {
+          memory[`${context}:${cloudTranscriptionProvider}`] = cloudTranscriptionModel;
+        }
       }
       persistTranscriptionModelMemory(memory);
     }
@@ -3061,6 +3131,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
     if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
     if (keys.assemblyaiApiKey !== undefined) s.setAssemblyaiApiKey(keys.assemblyaiApiKey);
+    if (keys.elevenlabsApiKey !== undefined) s.setElevenlabsApiKey(keys.elevenlabsApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -3543,7 +3614,11 @@ export function selectPolicyEffectiveSettings(
     // workspace turned Local off has already moved to an allowed mode.
     if (
       selection.mode === "local" &&
-      !isLocalModelAllowedByPolicy(policyState, "transcription", rawSelection.model ?? "")
+      !isLocalModelAllowedByPolicy(
+        policyState,
+        "transcription",
+        getLocalTranscriptionModel(state, keys.context)
+      )
     ) {
       blockedLocalScopes.push(keys.context);
       for (const field of LOCAL_TRANSCRIPTION_MODEL_FIELDS) {
@@ -4062,7 +4137,10 @@ export async function initializeSettings(): Promise<void> {
     try {
       const key = await getter();
       if (key !== null && typeof key !== "string") return;
-      useSettingsStore.setState({ [storeKey]: key || "" });
+      useSettingsStore.setState({
+        [storeKey]:
+          storeKey === "selfHostedSttHeaders" ? parseSelfHostedSttHeaders(key) : key || "",
+      });
       invalidateApiKeyCaches();
     } catch {
       logger.warn("Failed to refresh API key", { storeKey }, "settings");
@@ -4104,6 +4182,7 @@ export async function initializeSettings(): Promise<void> {
         cortiClientSecret,
         cortiApiKey,
         tinfoil,
+        selfHostedSttHeaders,
         customTx,
         customRx,
         noteFormattingCustom,
@@ -4118,6 +4197,7 @@ export async function initializeSettings(): Promise<void> {
         vertexApiKey,
         deepgram,
         assemblyai,
+        elevenlabs,
       ] = await Promise.all([
         window.electronAPI.getOpenAIKey?.(),
         window.electronAPI.getAnthropicKey?.(),
@@ -4131,6 +4211,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getCortiClientSecret?.(),
         window.electronAPI.getCortiKey?.(),
         window.electronAPI.getTinfoilKey?.(),
+        window.electronAPI.getSelfHostedSttHeaders?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
         window.electronAPI.getCleanupCustomKey?.(),
         window.electronAPI.getNoteFormattingCustomKey?.(),
@@ -4145,6 +4226,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getVertexApiKey?.(),
         window.electronAPI.getDeepgramKey?.(),
         window.electronAPI.getAssemblyAIKey?.(),
+        window.electronAPI.getElevenlabsKey?.(),
       ]);
 
       useSettingsStore.setState({
@@ -4160,6 +4242,7 @@ export async function initializeSettings(): Promise<void> {
         cortiClientSecret: cortiClientSecret || "",
         cortiApiKey: cortiApiKey || "",
         tinfoilApiKey: tinfoil || "",
+        selfHostedSttHeaders: parseSelfHostedSttHeaders(selfHostedSttHeaders),
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",
         bedrockAccessKeyId: bedrockAccessKeyId || "",
@@ -4180,6 +4263,7 @@ export async function initializeSettings(): Promise<void> {
         vertexApiKey: vertexApiKey || "",
         deepgramApiKey: deepgram || "",
         assemblyaiApiKey: assemblyai || "",
+        elevenlabsApiKey: elevenlabs || "",
       });
 
       if (localStorage.getItem("_dictationAgentSeeded") === "key-pending") {

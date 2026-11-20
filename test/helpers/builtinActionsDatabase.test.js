@@ -43,6 +43,18 @@ test("no built-in lists its current prompt as a previous default", () => {
   }
 });
 
+// Copied from 1.10.3 as it shipped: a later change to the current rule must not
+// change the previous default an installed row is matched against.
+const SHIPPED_1_10_3_NOTHING_RULE =
+  "For material with no substantive discussion or notes (for example, only greetings, filler, or recording checks), reply with exactly NOTHING_TO_SUMMARIZE and nothing else. This rule overrides the section structure and bullet counts above: do not return an empty response or invent topics, decisions, or action items. Consider both the transcript and any manual notes before applying this rule.";
+
+test("AI Summary still recognizes the flat default 1.10.3 shipped", () => {
+  const summary = BUILTIN_ACTIONS.find((a) => a.translationKey === GENERATE_NOTES_KEY);
+  assert.ok(
+    summary.previousPrompts.some((prompt) => prompt.endsWith(`\n\n${SHIPPED_1_10_3_NOTHING_RULE}`))
+  );
+});
+
 for (const action of BUILTIN_ACTIONS) {
   const { translationKey, name } = action;
 

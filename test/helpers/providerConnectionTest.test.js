@@ -774,6 +774,7 @@ test("hosted providers refuse redirects; custom servers keep following them", as
     "tinfoil",
     "deepgram",
     "assemblyai",
+    "elevenlabs",
   ];
   for (const provider of hosted) {
     assert.equal(resolveProviderRequest({ provider, apiKey: "k" }).redirect, "error", provider);
@@ -1157,4 +1158,49 @@ test("Sarvam checks a subscription key with a file-less transcription request", 
     assert.equal(result.success, success);
     if (status === 403) assert.equal(result.errorCode, "credentialsRejected");
   }
+});
+
+test("ElevenLabs is checked by a transcription request that carries no audio", async () => {
+  const request = resolveProviderRequest({ provider: "elevenlabs", apiKey: "xi-secret" });
+  assert.equal(request.endpoint, "https://api.elevenlabs.io/v1/speech-to-text");
+  assert.equal(request.endpoint.includes("xi-secret"), false);
+  assert.equal(request.headers["xi-api-key"], "xi-secret");
+  assert.equal(request.headers.Authorization, undefined);
+
+  // 402 is a key with no credit left: still the user's key.
+  for (const status of [400, 402, 422]) {
+    const { calls, fetchImpl } = recordingFetch(() => jsonResponse(status, { detail: {} }));
+    const result = await testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, fetchImpl);
+    assert.deepEqual(result, { success: true }, String(status));
+    assert.equal(calls[0].init.method, "POST");
+    assert.equal(calls[0].init.body.get("model_id"), "scribe_v3");
+    assert.equal(calls[0].init.body.has("file"), false);
+  }
+});
+
+test("ElevenLabs: a refused key fails the check, an exhausted quota does not", async () => {
+  const refused = recordingFetch(() =>
+    jsonResponse(401, { detail: { status: "invalid_api_key", message: "Invalid API key" } })
+  );
+  const result = await testProviderConnection(
+    { provider: "elevenlabs", apiKey: "made-up" },
+    refused.fetchImpl
+  );
+  assert.equal(result.errorCode, "credentialsRejected");
+
+  const quota = recordingFetch(() =>
+    jsonResponse(401, { detail: { status: "quota_exceeded", message: "quota" } })
+  );
+  assert.deepEqual(
+    await testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, quota.fetchImpl),
+    { success: true }
+  );
+
+  const busy = recordingFetch(() => jsonResponse(503, {}));
+  const unverified = await testProviderConnection(
+    { provider: "elevenlabs", apiKey: "k" },
+    busy.fetchImpl
+  );
+  assert.equal(unverified.errorCode, "providerStatus");
+  assert.equal(unverified.unverified, true);
 });
