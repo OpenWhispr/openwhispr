@@ -7,11 +7,11 @@
 
 - [x] **Phase 1: Fork CI & sync runbook** — CI builds are cloud-disabled, upstream-only jobs off, one green Windows build+test job
 - [x] **Phase 2: Titanium Whisper rebrand** — name, identity, icons, links, userData migration
-- [ ] **Phase 3: Titanium sign-in** — browser login → deep link → exchange → offline license in Electron main (code merged, PR #11; UI round trip and AUTH-01 PR #18 pending)
-- [ ] **Phase 4: stt-api on Titanium auth** — license-key bearer on stt-api, stable domain, app sends key, language guard (code merged; stable domain PR #19 in review; end-to-end dictation pending)
-- [ ] **Phase 5: Self-hosted transcription parity** — WS streaming client, diarization/timestamps, cleanup via stt-api (planned, 2 plans)
-- [ ] **Phase 6: Hosted services** — web search endpoint, Slack/Linear OAuth relay, calendar OAuth clients (planned, 4 plans)
-- [ ] **Phase 7: Connectors on Titanium accounts** — connectors keyed to Titanium account id; capability text; dropped features hidden (planned, 3 plans)
+- [ ] **Phase 3: Titanium sign-in** — browser login → deep link → exchange → offline license in Electron main (code merged, PRs #11/#18; dev/staging return URLs allowed 2026-11-20; live UI round trip pending dev-mode E2E)
+- [ ] **Phase 4: stt-api on Titanium auth** — license-key bearer on stt-api, stable domain, app sends key, language guard (code merged, stable domain PR #19 merged; end-to-end dictation pending dev-mode E2E)
+- [x] **Phase 5: Self-hosted transcription parity** — WS streaming client, diarization/timestamps, cleanup via stt-api (2/2 plans; re-verified 2026-11-20)
+- [ ] **Phase 6: Hosted services** — web search endpoint, Slack/Linear OAuth relay, calendar OAuth clients (2/4 complete; 06-03 BLOCKED at 12b gate 4, 06-04 PARTIAL)
+- [x] **Phase 7: Connectors on Titanium accounts** — connectors keyed to Titanium account id; capability text; dropped features hidden (3/3 plans; gaps PR #28)
 
 ## Phase Details
 
@@ -80,8 +80,8 @@
 **Plans:** 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md - stt-api: WS streaming, diarization/timestamps and cleanup wire contracts, served in prod (wave 1)
-- [ ] 05-02-PLAN.md - desktop: stt-api streaming client for meetings and live preview, upload timestamps/speakers, cleanup via stt-api by default (wave 2)
+- [x] 05-01-PLAN.md - stt-api: WS streaming, diarization/timestamps and cleanup wire contracts, served in prod (wave 1)
+- [x] 05-02-PLAN.md - desktop: stt-api streaming client for meetings and live preview, upload timestamps/speakers, cleanup via stt-api by default (wave 2)
 
 ### Phase 6: Hosted services
 
@@ -97,8 +97,8 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 06-01-PLAN.md - stt-api: Slack/Linear OAuth relay routes + license-gated Tavily web search (wave 1)
-- [ ] 06-02-PLAN.md - desktop: calendar local result page, SERVICES_URL relay base, fork web search, build-time client ids (wave 1)
+- [x] 06-01-PLAN.md - stt-api: Slack/Linear OAuth relay routes + license-gated Tavily web search (wave 1)
+- [x] 06-02-PLAN.md - desktop: calendar local result page, SERVICES_URL relay base, fork web search, build-time client ids (wave 1)
 - [ ] 06-03-PLAN.md - portal: Entra, Google, Slack, Linear OAuth clients into Pass (wave 1)
 - [ ] 06-04-PLAN.md - prove in production: deploy, signed fork build, live OAuth round trips, packaged web search (wave 2)
 
@@ -116,9 +116,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 07-01-PLAN.md - main: Titanium accountId + app_slug in session, fork connector policy (license = paid plan), account-change reset, keygenProductId (wave 1)
-- [ ] 07-02-PLAN.md - renderer: Titanium connector eligibility, capability text to Titanium account, 9-locale copy, sign-in copy guard test, Gmail row (wave 2)
-- [ ] 07-03-PLAN.md - dropped features: cloudFeatures registry, gate every entry point, mount-site guard test (wave 1)
+- [x] 07-01-PLAN.md - main: Titanium accountId + app_slug in session, fork connector policy (license = paid plan), account-change reset, keygenProductId (wave 1)
+- [x] 07-02-PLAN.md - renderer: Titanium connector eligibility, capability text to Titanium account, 9-locale copy, sign-in copy guard test, Gmail row (wave 2)
+- [x] 07-03-PLAN.md - dropped features: cloudFeatures registry, gate every entry point, mount-site guard test (wave 1)
 
 ## Progress
 
