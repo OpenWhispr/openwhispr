@@ -1230,7 +1230,12 @@
     },
     "welcomeSubtitle": "Сила вашего голоса. На ваших условиях.",
     "welcomeTitle": "Добро пожаловать в {{brand}}",
-    "sessionExpired": "Сессия истекла. Пожалуйста, войдите снова."
+    "sessionExpired": "Сессия истекла. Пожалуйста, войдите снова.",
+    "titanium": {
+      "signIn": "Войти через Titanium",
+      "subtitle": "Войдите в аккаунт Titanium, чтобы использовать облачную расшифровку {{brand}}.",
+      "signedInAs": "Вы вошли как {{email}}"
+    }
   },
   "cleanupPrompt": "Очистка",
   "developerSection": {

@@ -1230,7 +1230,12 @@
     },
     "welcomeSubtitle": "你的声音，由你掌控。",
     "welcomeTitle": "欢迎使用 {{brand}}",
-    "sessionExpired": "会话已过期，请重新登录。"
+    "sessionExpired": "会话已过期，请重新登录。",
+    "titanium": {
+      "signIn": "使用 Titanium 登录",
+      "subtitle": "使用 Titanium 账号登录，即可使用 {{brand}} 云端转录。",
+      "signedInAs": "已登录：{{email}}"
+    }
   },
   "cleanupPrompt": "文本整理",
   "developerSection": {

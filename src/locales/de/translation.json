@@ -1230,7 +1230,12 @@
     },
     "welcomeSubtitle": "Die Kraft Ihrer Stimme. Zu Ihren Bedingungen.",
     "welcomeTitle": "Willkommen bei {{brand}}",
-    "sessionExpired": "Sitzung abgelaufen"
+    "sessionExpired": "Sitzung abgelaufen",
+    "titanium": {
+      "signIn": "Mit Titanium anmelden",
+      "subtitle": "Melde dich mit deinem Titanium-Konto an, um die Cloud-Transkription von {{brand}} zu nutzen.",
+      "signedInAs": "Angemeldet als {{email}}"
+    }
   },
   "calendar": {
     "title": "Google Kalender",

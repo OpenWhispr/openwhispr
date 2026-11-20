@@ -1230,7 +1230,12 @@
     },
     "welcomeSubtitle": "El poder de tu voz. En tus términos.",
     "welcomeTitle": "Bienvenido a {{brand}}",
-    "sessionExpired": "Sesión expirada"
+    "sessionExpired": "Sesión expirada",
+    "titanium": {
+      "signIn": "Iniciar sesión con Titanium",
+      "subtitle": "Inicia sesión con tu cuenta de Titanium para usar la transcripción en la nube de {{brand}}.",
+      "signedInAs": "Sesión iniciada como {{email}}"
+    }
   },
   "cleanupPrompt": "Corrección",
   "developerSection": {

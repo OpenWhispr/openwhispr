@@ -1209,7 +1209,12 @@
       "protocolUnavailable": "Login pelo navegador indisponível — registre novamente o protocolo openwhispr:// nas configurações de Aplicativos Padrão do sistema."
     },
     "welcomeSubtitle": "O poder da sua voz. Nos seus termos.",
-    "welcomeTitle": "Boas-vindas ao {{brand}}"
+    "welcomeTitle": "Boas-vindas ao {{brand}}",
+    "titanium": {
+      "signIn": "Entrar com Titanium",
+      "subtitle": "Entre com sua conta Titanium para usar a transcrição na nuvem do {{brand}}.",
+      "signedInAs": "Conectado como {{email}}"
+    }
   },
   "cleanupPrompt": "Limpeza",
   "developerSection": {

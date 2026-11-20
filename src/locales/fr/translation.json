@@ -1230,7 +1230,12 @@
     },
     "welcomeSubtitle": "Le pouvoir de votre voix. À vos conditions.",
     "welcomeTitle": "Bienvenue sur {{brand}}",
-    "sessionExpired": "Session expirée. Veuillez relancer le processus d'inscription."
+    "sessionExpired": "Session expirée. Veuillez relancer le processus d'inscription.",
+    "titanium": {
+      "signIn": "Se connecter avec Titanium",
+      "subtitle": "Connectez-vous avec votre compte Titanium pour utiliser la transcription cloud de {{brand}}.",
+      "signedInAs": "Connecté en tant que {{email}}"
+    }
   },
   "calendar": {
     "title": "Google Agenda",

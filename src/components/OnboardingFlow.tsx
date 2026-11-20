@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "./icons";
-import { CLOUD_ENABLED } from "../config/forkRuntime";
+import { CLOUD_ENABLED, TITANIUM_ENABLED } from "../config/forkRuntime";
+import { shouldOfferAuthStep } from "../helpers/titanium/titaniumOnboardingPolicy.js";
 import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
 import { hasUseCaseIntent } from "./onboarding/useCases";
@@ -335,7 +336,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // Without a hosted account backend there is nothing to sign in to: take the guest
   // path and never show the auth step.
   useEffect(() => {
-    if (resolveAuthPathForCloud(CLOUD_ENABLED, session.authPath) === session.authPath) return;
+    const offerAuth = shouldOfferAuthStep({
+      cloudEnabled: CLOUD_ENABLED,
+      titaniumEnabled: TITANIUM_ENABLED,
+    });
+    if (resolveAuthPathForCloud(offerAuth, session.authPath) === session.authPath) return;
     setAuthPath("guest");
     if (currentStepId === "auth") goTo("permissions");
   }, [currentStepId, goTo, session.authPath, setAuthPath]);

@@ -1230,7 +1230,12 @@
       "protocolUnavailable": "ブラウザでのサインインを利用できません — システムの「既定のアプリ」設定で openwhispr:// プロトコルを再登録してください。"
     },
     "welcomeSubtitle": "あなたの声の力を、あなたのやり方で。",
-    "welcomeTitle": "{{brand}} へようこそ"
+    "welcomeTitle": "{{brand}} へようこそ",
+    "titanium": {
+      "signIn": "Titanium でサインイン",
+      "subtitle": "Titanium アカウントでサインインして、{{brand}} のクラウド文字起こしを利用します。",
+      "signedInAs": "{{email}} としてサインイン中"
+    }
   },
   "cleanupPrompt": "クリーンアップ",
   "developerSection": {

@@ -8,6 +8,9 @@ import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
 import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
+import { useTitaniumAuth } from "./hooks/useTitaniumAuth";
+import { CLOUD_ENABLED, TITANIUM_ENABLED } from "./config/forkRuntime";
+import { resolveNeedsReauth } from "./helpers/titanium/titaniumOnboardingPolicy.js";
 import { useControlPanelWindowDrag } from "./hooks/useControlPanelWindowDrag";
 import { useTheme } from "./hooks/useTheme";
 import { mirrorActiveAccountScope } from "./lib/accountScopeMirror";
@@ -44,6 +47,7 @@ export default function AppRouter() {
 
 function MainApp() {
   const { isSignedIn, isGracePeriodOnly, isLoaded: authLoaded } = useAuth();
+  const titanium = useTitaniumAuth();
   const policyStatus = usePolicyStore((state) => state.status);
   const policyResolved =
     !isSignedIn ||
@@ -92,6 +96,9 @@ function MainApp() {
 
   useEffect(() => {
     if (!authLoaded) return;
+    // With Titanium as the account system, wait for its first answer so a
+    // signed-in user is never shown the reauthentication screen.
+    if (TITANIUM_ENABLED && !CLOUD_ENABLED && !titanium.loaded) return;
 
     const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
     const authSkipped =
@@ -110,7 +117,16 @@ function MainApp() {
     if (isControlPanel) {
       if (!resolved) {
         setShowOnboarding(true);
-      } else if (!isSignedIn && !authSkipped) {
+      } else if (
+        resolveNeedsReauth({
+          titaniumEnabled: TITANIUM_ENABLED,
+          cloudEnabled: CLOUD_ENABLED,
+          titaniumSignedIn: titanium.signedIn,
+          titaniumLoaded: titanium.loaded,
+          upstreamSignedIn: isSignedIn,
+          authSkipped,
+        })
+      ) {
         setNeedsReauth(true);
       }
     }
@@ -122,7 +138,15 @@ function MainApp() {
     }
 
     setIsLoading(false);
-  }, [authLoaded, isControlPanel, isDictationPanel, isGracePeriodOnly, isSignedIn]);
+  }, [
+    authLoaded,
+    isControlPanel,
+    isDictationPanel,
+    isGracePeriodOnly,
+    isSignedIn,
+    titanium.signedIn,
+    titanium.loaded,
+  ]);
 
   useEffect(() => {
     if (!isControlPanel || !authLoaded) return;

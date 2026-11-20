@@ -1230,7 +1230,12 @@
     },
     "welcomeSubtitle": "你的聲音，由你掌控。",
     "welcomeTitle": "歡迎使用 {{brand}}",
-    "sessionExpired": "工作階段已過期，請重新登入。"
+    "sessionExpired": "工作階段已過期，請重新登入。",
+    "titanium": {
+      "signIn": "使用 Titanium 登入",
+      "subtitle": "使用 Titanium 帳號登入，即可使用 {{brand}} 雲端轉錄。",
+      "signedInAs": "已登入：{{email}}"
+    }
   },
   "cleanupPrompt": "文字整理",
   "developerSection": {
