@@ -103,9 +103,11 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
         preview.current_quantity !== workspace.seats ||
         (workspace.seats_used != null && preview.seats_used !== workspace.seats_used)
       ) {
-        // The server already knows a newer capacity: refresh before offering another quote.
+        // The server already knows a newer capacity: refresh first. A refresh that changes the
+        // snapshot hides this quote; one that changes nothing (Stripe ahead of the stored
+        // seats) still offers it, so Add seat is never a dead end.
         await refresh();
-        return;
+        if (request !== seatRequest.current) return;
       }
       setSeatPreviewResult({ snapshot: seatSnapshot, request, preview });
     } catch (error) {

@@ -214,13 +214,29 @@ test("seat confirmations belong to the current billing snapshot and request", as
   await t.test(
     "a preview newer than the known capacity or occupancy refreshes instead of confirming",
     async () => {
-      for (const mismatch of [{ current_quantity: 8 }, { seats_used: 1 }]) {
+      for (const [mismatch, refreshed] of [
+        [{ current_quantity: 8 }, { seats: 8 }],
+        [{ seats_used: 1 }, { seats_used: 1 }],
+      ]) {
         const refreshes = state.refreshes;
+        state.refreshedWorkspace = { ...workspace, ...refreshed };
         await resolve(await requestQuote(), { ...quote(), ...mismatch });
         assert.equal(dialog().open, false);
         assert.equal(state.refreshes, refreshes + 1);
         assert.equal(add().disabled, false);
+        state.refreshedWorkspace = null;
+        await publish(workspace);
       }
+
+      // Stripe ahead of the stored seats: the refresh changes nothing, so the quote is offered.
+      const refreshes = state.refreshes;
+      await resolve(await requestQuote(), { ...quote(), current_quantity: 8, next_quantity: 9 });
+      assert.equal(state.refreshes, refreshes + 1);
+      assert.equal(dialog().open, true);
+      await React.act(async () => confirm().onClick());
+      assert.deepEqual(state.updates.splice(0), [{ id: "ws-1", quantity: 9 }]);
+      assert.equal(dialog().open, false);
+
       const pending = await requestQuote();
       await React.act(async () => pending.reject(new Error("current failure")));
       assert.equal(state.toasts.at(-1).variant, "destructive");
