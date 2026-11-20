@@ -679,7 +679,7 @@ test("an error body that never arrives is a timeout or a network failure", async
     [aborted, "timeout"],
     [new TypeError("terminated"), "network"],
   ]) {
-    for (const provider of ["gemini", "xai", "corti"]) {
+    for (const provider of ["gemini", "xai", "corti", "elevenlabs"]) {
       const fetchImpl = async () => ({
         ok: false,
         status: 400,
@@ -1139,6 +1139,17 @@ test("a model list whose body never arrives is no verdict, not a missing model",
   assert.equal(unreadable.errorCode, "modelNotFound", "a list that can't be read offers nothing");
 });
 
+// What ElevenLabs answers a request that carries no audio, once it has accepted the key.
+const ELEVENLABS_NO_AUDIO = {
+  detail: {
+    type: "validation_error",
+    code: "invalid_parameters",
+    message: "Must provide either file or a URL parameter.",
+    status: "invalid_parameters",
+    param: "file",
+  },
+};
+
 test("ElevenLabs is checked by a transcription request that carries no audio", async () => {
   const request = resolveProviderRequest({ provider: "elevenlabs", apiKey: "xi-secret" });
   assert.equal(request.endpoint, "https://api.elevenlabs.io/v1/speech-to-text");
@@ -1148,7 +1159,7 @@ test("ElevenLabs is checked by a transcription request that carries no audio", a
 
   // 402 is a key with no credit left: still the user's key.
   for (const status of [400, 402, 422]) {
-    const { calls, fetchImpl } = recordingFetch(() => jsonResponse(status, { detail: {} }));
+    const { calls, fetchImpl } = recordingFetch(() => jsonResponse(status, ELEVENLABS_NO_AUDIO));
     const result = await testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, fetchImpl);
     assert.deepEqual(result, { success: true }, String(status));
     assert.equal(calls[0].init.method, "POST");
@@ -1166,6 +1177,35 @@ test("ElevenLabs: a refused key fails the check, an exhausted quota does not", a
     refused.fetchImpl
   );
   assert.equal(result.errorCode, "credentialsRejected");
+
+  // Other made-up keys get the 400 of the missing audio, and only the error's code says the
+  // key was the reason.
+  for (const [reason, message] of [
+    ["invalid_api_key", "API key is invalid."],
+    ["invalid_api_key_prefix", "API key must start with 'sk_'."],
+    ["invalid_api_key_length", "API key must be exactly 51 characters, got 13."],
+  ]) {
+    const detail = {
+      type: "authentication_error",
+      code: "invalid_api_key",
+      message,
+      status: reason,
+      param: "api_key",
+    };
+    for (const status of [400, 422]) {
+      const fetchImpl = async () => jsonResponse(status, { detail });
+      assert.deepEqual(
+        await testProviderConnection({ provider: "elevenlabs", apiKey: "made-up" }, fetchImpl),
+        {
+          success: false,
+          errorCode: "credentialsRejected",
+          error: "The provider rejected these credentials.",
+          status,
+        },
+        `${status} ${reason}`
+      );
+    }
+  }
 
   const quota = recordingFetch(() =>
     jsonResponse(401, { detail: { status: "quota_exceeded", message: "quota" } })
