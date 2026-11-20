@@ -16,10 +16,8 @@ import {
   currentTranslateTarget,
   languageForLocale,
   phoneLanguages,
-  recentLanguages,
   saveTranslateTarget,
   searchLanguages,
-  useTranslateRecents,
 } from '../settings/translateLanguages';
 import registry from '@/config/languageRegistry.json';
 
@@ -86,26 +84,11 @@ describe('Translate into', () => {
     ]);
   });
 
-  it('keeps the last three picks, the current one first', () => {
-    expect(codes(recentLanguages('es', []))).toEqual(['es']);
-    expect(codes(recentLanguages('de', ['de', 'fr', 'es', 'it']))).toEqual(['de', 'fr', 'es']);
-    expect(codes(recentLanguages('ja', ['de', 'nope']))).toEqual(['ja', 'de']);
-  });
-
-  it('saves a pick to the config the bubble reads, and to this phone’s recents', async () => {
-    useTranslateRecents.setState({ codes: ['fr', 'es', 'it'] });
+  it('saves a pick to the config the bubble reads', async () => {
     await saveTranslateTarget(TRANSLATE_LANGUAGES.find((item) => item.code === 'de')!);
     expect(mockUpdateConfig).toHaveBeenCalledWith({
       androidTranslationTarget: { code: 'de', label: 'German' },
     });
-    // Spanish was the target (nothing saved), so it comes straight after the new pick.
-    expect(useTranslateRecents.getState().codes).toEqual(['de', 'es', 'fr']);
-  });
-
-  it('keeps the language it replaces in Recent, even the Spanish it started on', async () => {
-    useTranslateRecents.setState({ codes: [] });
-    await saveTranslateTarget(TRANSLATE_LANGUAGES.find((item) => item.code === 'de')!);
-    expect(useTranslateRecents.getState().codes).toEqual(['de', 'es']);
   });
 });
 

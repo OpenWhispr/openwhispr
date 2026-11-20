@@ -30,7 +30,6 @@ export const settingsEnglish = {
   changeSelected: 'Change what’s selected',
   translateInto: 'Translate into',
   clearSearch: 'Clear search',
-  recent: 'Recent',
   onYourPhone: 'On your phone',
   allLanguages: 'All languages',
   noLanguageCalled: 'No language called “{{query}}”',

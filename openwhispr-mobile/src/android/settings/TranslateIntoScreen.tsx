@@ -13,10 +13,8 @@ import {
   TRANSLATE_LANGUAGES,
   currentTranslateTarget,
   phoneLanguages,
-  recentLanguages,
   saveTranslateTarget,
   searchLanguages,
-  useTranslateRecents,
   type TranslateLanguage,
 } from './translateLanguages';
 
@@ -32,17 +30,17 @@ function phoneTags(): string[] {
 }
 
 /**
- * Settings › Bubble › Assistant › Translate: the language Translate writes in. Search, then the last
- * picks, the phone's languages and all 60. Tapping one saves it and goes back. Spanish until picked.
+ * Settings › Bubble › Assistant › Translate: the language Translate writes in. Search, then the
+ * phone's languages and the rest of the 60, each once. Tapping one saves it and goes back. Spanish
+ * until picked.
  */
 export default function TranslateIntoScreen() {
   const t = useSettingsT();
   const [query, setQuery] = useState('');
   const current = currentTranslateTarget(useConfigStore((s) => s.config?.androidTranslationTarget));
-  const saved = useTranslateRecents((s) => s.codes);
-  const recent = recentLanguages(current.code, saved);
-  // Every phone language, even one also in Recent, so this group doesn't change with your picks.
   const phone = useMemo(() => phoneLanguages(phoneTags()), []);
+  // All languages leaves out the phone's, which are listed above it.
+  const rest = useMemo(() => TRANSLATE_LANGUAGES.filter((item) => !phone.includes(item)), [phone]);
   const results = query.trim() ? searchLanguages(query) : null;
 
   const pick = (language: TranslateLanguage) => {
@@ -123,16 +121,13 @@ export default function TranslateIntoScreen() {
         )
       ) : (
         <>
-          <Group title={t('recent')} inset={14}>
-            {recent.map(row)}
-          </Group>
           {phone.length > 0 && (
             <Group title={t('onYourPhone')} inset={14}>
               {phone.map(row)}
             </Group>
           )}
           <Group title={t('allLanguages')} inset={14}>
-            {TRANSLATE_LANGUAGES.map(row)}
+            {rest.map(row)}
           </Group>
         </>
       )}

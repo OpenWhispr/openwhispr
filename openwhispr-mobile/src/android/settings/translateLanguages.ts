@@ -1,4 +1,3 @@
-import { create } from 'zustand';
 import registry from '@/config/languageRegistry.json';
 import { useConfigStore } from '@/store/useConfigStore';
 
@@ -6,8 +5,6 @@ export type TranslateLanguage = { code: string; label: string; native: string };
 
 /** What Translate writes in until someone picks a language (the pipeline's own default). */
 export const DEFAULT_TRANSLATE_TARGET = { code: 'es', label: 'Spanish' } as const;
-const MAX_RECENTS = 3;
-const RECENTS_KEY = 'android-translate-recents-v1';
 
 // Each language's own name, so "Deutsch" finds German. The list is the app's copy of desktop's
 // language registry (src/config/languageRegistry.json) without Auto-detect.
@@ -97,7 +94,19 @@ const ALIASES: Record<string, string> = {
 
 // English locales that spell the British way ("colour"), so the phone's English (South Africa)
 // offers English (UK).
-const BRITISH_SPELLING = new Set(['gb', 'ie', 'au', 'nz', 'za', 'in', 'sg', 'hk', 'mt', 'ke', 'ng']);
+const BRITISH_SPELLING = new Set([
+  'gb',
+  'ie',
+  'au',
+  'nz',
+  'za',
+  'in',
+  'sg',
+  'hk',
+  'mt',
+  'ke',
+  'ng',
+]);
 
 /** The list's language for one of the phone's locale tags ("de-AT" → German), if it has one. */
 export function languageForLocale(tag: string): TranslateLanguage | undefined {
@@ -151,27 +160,6 @@ export function searchLanguages(query: string): TranslateLanguage[] {
   return [...starts, ...words, ...contains];
 }
 
-function savedRecents(): string[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]');
-    return Array.isArray(value) ? value.filter((code) => byCode.has(code)) : [];
-  } catch {
-    return [];
-  }
-}
-
-/** The last picks on this phone, newest first. */
-export const useTranslateRecents = create<{ codes: string[] }>(() => ({ codes: savedRecents() }));
-
-/** Recent: the current target first, then the other last picks, three at most. */
-export function recentLanguages(current: string, saved: readonly string[]): TranslateLanguage[] {
-  return [current, ...saved]
-    .filter((code, index, all) => all.indexOf(code) === index)
-    .map((code) => byCode.get(code))
-    .filter((item): item is TranslateLanguage => !!item)
-    .slice(0, MAX_RECENTS);
-}
-
 /** The language Translate writes in: the saved one, or Spanish. */
 export function currentTranslateTarget(saved: { code: string; label: string } | undefined): {
   code: string;
@@ -180,24 +168,8 @@ export function currentTranslateTarget(saved: { code: string; label: string } | 
   return saved?.code && saved.label ? saved : DEFAULT_TRANSLATE_TARGET;
 }
 
-/**
- * Saves the pick to the account config (the bubble reads it from there) and to this phone's recents.
- * The language it replaces stays in Recent too, even the Spanish it started on, which was never
- * picked (Translate is going from Spanish to German, so Spanish is a recent language).
- */
+/** Saves the pick to the account config; the bubble reads it from there. */
 export async function saveTranslateTarget(language: TranslateLanguage): Promise<void> {
-  const previous = currentTranslateTarget(
-    useConfigStore.getState().config?.androidTranslationTarget,
-  ).code;
-  const codes = [language.code, previous, ...useTranslateRecents.getState().codes]
-    .filter((code, index, all) => all.indexOf(code) === index)
-    .slice(0, MAX_RECENTS);
-  useTranslateRecents.setState({ codes });
-  try {
-    localStorage.setItem(RECENTS_KEY, JSON.stringify(codes));
-  } catch {
-    // Recents are a convenience; the pick itself is saved below.
-  }
   await useConfigStore
     .getState()
     .updateConfig({ androidTranslationTarget: { code: language.code, label: language.label } });
