@@ -24,7 +24,7 @@ const {
 } = require("./lib/download-utils");
 
 // Fork-built helper releases (same tags as upstream). SIDECAR_RELEASE_REPO overrides.
-const REPO = process.env.SIDECAR_RELEASE_REPO || "finedesignz/openwhispr";
+const REPO = process.env.SIDECAR_RELEASE_REPO || "finedesignz/edgeassistant";
 const TAG_PREFIX = "windows-mic-listener-v";
 const ZIP_NAME = "windows-mic-listener-win32-x64.zip";
 const BINARY_NAME = "windows-mic-listener.exe";

@@ -17,7 +17,7 @@ const {
 } = require("./lib/download-utils");
 
 // Fork-built helper releases (same tags as upstream). SIDECAR_RELEASE_REPO overrides.
-const REPO = process.env.SIDECAR_RELEASE_REPO || "finedesignz/openwhispr";
+const REPO = process.env.SIDECAR_RELEASE_REPO || "finedesignz/edgeassistant";
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
 const PLATFORM_CONFIG = {
