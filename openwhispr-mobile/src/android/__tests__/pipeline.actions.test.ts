@@ -231,7 +231,7 @@ describe('Edit selection replies that must not be pasted', () => {
 
   it('fails a question about the selection instead of pasting an answer', async () => {
     reply('{"replacement":"__OPENWHISPR_SELECTION_QUESTION__"}');
-    await expect(run()).rejects.toThrow(/sounded like a question/);
+    await expect(run()).rejects.toThrow(/a question, not an edit/);
   });
 
   it.each([
@@ -240,7 +240,7 @@ describe('Edit selection replies that must not be pasted', () => {
     ['partial JSON', '{"replacement":"Apples and'],
   ])('fails %s', async (_label, text) => {
     reply(text);
-    await expect(run()).rejects.toThrow(/wasn.t changed/);
+    await expect(run()).rejects.toThrow(/Nothing changed/);
   });
 
   it('pastes the decoded replacement', async () => {
