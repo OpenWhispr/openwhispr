@@ -5,7 +5,12 @@ const { convertToPcm16 } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { pcm16ToWav } = require("../utils/audioUtils");
 const { SARVAM_MODE, sarvamKeyterms, sarvamLanguage } = require("../utils/sarvam");
-const { providerError, providerHttpError, PROVIDER_ERROR_CODES } = require("./providerHttpErrors");
+const {
+  asProviderError,
+  providerError,
+  providerHttpError,
+  PROVIDER_ERROR_CODES,
+} = require("./providerHttpErrors");
 
 const SARVAM_URL = "https://api.sarvam.ai/speech-to-text";
 const BYTES_PER_SECOND = 16000 * 2;
@@ -55,12 +60,19 @@ async function sendPiece(
       body = await response.text();
     } catch (error) {
       signal?.throwIfAborted();
-      if (error?.code === "DEVICE_POLICY_BLOCKED" || attempt >= 2) throw error;
+      if (error?.code === "DEVICE_POLICY_BLOCKED") throw error;
+      if (attempt >= 2)
+        throw asProviderError(error, { provider: "Sarvam AI", surface: "transcription", model });
       await delay(wait, undefined, { signal });
       continue;
     }
     if (response.ok) {
-      const { transcript } = JSON.parse(body);
+      let transcript;
+      try {
+        ({ transcript } = JSON.parse(body));
+      } catch {
+        // Checked below.
+      }
       if (typeof transcript !== "string")
         throw new Error("Sarvam AI returned an invalid transcript.");
       return transcript.trim();

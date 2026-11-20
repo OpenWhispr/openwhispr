@@ -179,7 +179,7 @@ export type TranscriptionRoute =
         "tinfoil" | "mistral" | "sarvam" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs";
       model: string | null;
       language?: string;
-      sizeCapBytes: number;
+      sizeCapBytes: number | null;
       cortiEnvironment?: string;
       cortiTenant?: string;
     }
@@ -466,8 +466,9 @@ export function resolveTranscriptionRoute({
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }
+  // Sarvam audio is converted locally and sent in 30-second pieces, so no file cap applies.
   if (provider === "sarvam")
-    return { transport: "proxied", provider, model, language, sizeCapBytes: BYOK_FILE_SIZE_LIMIT };
+    return { transport: "proxied", provider, model, language, sizeCapBytes: null };
   if (provider === "gemini") {
     return {
       transport: "proxied",

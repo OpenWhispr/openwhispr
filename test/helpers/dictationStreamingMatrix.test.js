@@ -420,3 +420,24 @@ test("Orukeet options mark only a configured Self-Hosted route for custom header
   });
   assert.equal(options.transcriptionMode, "self-hosted");
 });
+
+test("options: sarvam resolves a model left by another provider before connecting", async () => {
+  const { buildStreamingSessionOptions } = await loadRouting();
+  const build = (cloudTranscriptionModel) =>
+    buildStreamingSessionOptions({
+      providerName: "sarvam",
+      settings: settingsWith({
+        cloudTranscriptionProvider: "sarvam",
+        cloudTranscriptionMode: "byok",
+        cloudTranscriptionModel,
+        customDictionary: ["OpenWhispr"],
+      }),
+      language: "hi",
+    });
+  const stale = build("gpt-4o-mini-transcribe");
+  assert.equal(stale.model, "saaras:v4");
+  assert.deepEqual(stale.keyterms, ["OpenWhispr"]);
+  const v3 = build("saaras:v3");
+  assert.equal(v3.model, "saaras:v3");
+  assert.equal(v3.keyterms, undefined);
+});

@@ -9755,8 +9755,6 @@ class IPCHandlers {
           });
           result = { text, source: "corti", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "sarvam") {
-          if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes)
-            throw new Error(byokSizeCapError(route.sizeCapBytes));
           const { text } = await transcribeWithSarvam({
             audioBuffer: buffer,
             model: route.model,
@@ -14245,10 +14243,9 @@ class IPCHandlers {
             }
 
             if (route.transport === "proxied" && route.provider === "sarvam") {
-              if (route.sizeCapBytes && fs.statSync(sourcePath).size > route.sizeCapBytes) {
-                return { success: false, error: byokSizeCapError(route.sizeCapBytes) };
-              }
               providerErrorContext = byokErrorContext;
+              // Other providers answer a silent file with empty text, which the upload view
+              // and the chat mic each report in their own way.
               const { text } = await transcribeWithSarvam({
                 filePath: sourcePath,
                 model: route.model,
@@ -14260,6 +14257,9 @@ class IPCHandlers {
                 maxRetryWaitMs: 60_000,
                 onProgress: (payload) =>
                   event.sender.send("upload-transcription-progress", payload),
+              }).catch((error) => {
+                if (error.code === "NO_SPEECH_DETECTED") return { text: "" };
+                throw error;
               });
               return { success: true, text };
             }

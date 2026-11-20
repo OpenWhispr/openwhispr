@@ -141,6 +141,14 @@ test("proxied providers carry their quirks as route data", async () => {
   assert.equal(elevenlabs.model, "scribe_v3");
   assert.equal(elevenlabs.sizeCapBytes, 25 * 1024 * 1024);
   assert.equal("endpoint" in elevenlabs, false, "the key never reaches an OpenAI-shaped endpoint");
+
+  const sarvam = await resolve({
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "whisper-1",
+  });
+  assert.equal(sarvam.transport, "proxied");
+  assert.equal(sarvam.model, "saaras:v4", "a model left by another provider resets");
+  assert.equal(sarvam.sizeCapBytes, null, "Sarvam audio goes out in 30-second pieces");
 });
 
 test("byokFileSizeLimit matches the per-provider route caps", async () => {

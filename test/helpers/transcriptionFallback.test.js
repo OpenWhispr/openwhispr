@@ -156,3 +156,22 @@ test("a device policy's refusal is a policy refusal, so local fallback doesn't r
   assert.equal(isTranscriptionPolicyRefusal({ code: "POLICY_MODE_BLOCKED" }), true);
   assert.equal(isTranscriptionPolicyRefusal({ code: "NETWORK_POLICY_ERROR" }), false);
 });
+
+test("a refused Sarvam key or spent budget is shown at start instead of failing over", async () => {
+  const { resolveStreamingStartFallback } = await load();
+  const start = (code) =>
+    resolveStreamingStartFallback({
+      providerName: "sarvam",
+      cloudTranscriptionMode: "byok",
+      result: { success: false, code },
+    });
+  for (const code of [
+    "API_KEY_MISSING",
+    "PROVIDER_AUTH_FAILED",
+    "PROVIDER_ACCESS_DENIED",
+    "PROVIDER_QUOTA_EXHAUSTED",
+  ])
+    assert.equal(start(code), null, code);
+  for (const code of [undefined, "PROVIDER_UNREACHABLE", "PROVIDER_TIMEOUT"])
+    assert.equal(start(code), "session_unavailable", code);
+});

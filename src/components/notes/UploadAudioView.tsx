@@ -371,21 +371,23 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const isSelfHosted = transcriptionMode === "self-hosted" && !useLocalWhisper;
   const isByok = !useLocalWhisper && !isOpenWhisprCloud;
   // OpenRouter uploads (its tab, or a Custom endpoint on its host) go out in
-  // 4-minute pieces, so no whole-file cap applies and progress is per piece.
+  // 4-minute pieces and Sarvam's in 30-second ones, so no whole-file cap applies
+  // and progress is per piece.
   const uploadInPieces =
     isByok &&
     !managedActive &&
-    uploadsInChunks(
-      resolveTranscriptionRoute({
-        settings: {
-          transcriptionMode,
-          remoteTranscriptionUrl,
-          cloudTranscriptionProvider,
-          cloudTranscriptionModel,
-          cloudTranscriptionBaseUrl,
-        },
-      })
-    );
+    ((!isSelfHosted && cloudTranscriptionProvider === "sarvam") ||
+      uploadsInChunks(
+        resolveTranscriptionRoute({
+          settings: {
+            transcriptionMode,
+            remoteTranscriptionUrl,
+            cloudTranscriptionProvider,
+            cloudTranscriptionModel,
+            cloudTranscriptionBaseUrl,
+          },
+        })
+      ));
   // Managed audio never reaches the saved personal provider, so its diarize notes don't apply.
   const byokDiarizeProvider =
     isByok && !managedActive && !isSelfHosted ? cloudTranscriptionProvider : null;
@@ -407,8 +409,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (managedActive || useLocalWhisper) {
       // Managed audio is prepared/chunked to its endpoint cap; local decoding has no size limit.
     } else if (isSelfHosted || cloudTranscriptionProvider === "custom" || uploadInPieces) {
-      // Self-hosted / custom endpoints set their own limits; OpenRouter uploads go
-      // out in pieces far under its per-request cap
+      // Self-hosted / custom endpoints set their own limits; OpenRouter and Sarvam
+      // uploads go out in pieces far under their per-request caps
     } else if (isByok) {
       byokTooLarge = file.sizeBytes > byokMaxFileSize;
       if (byokTooLarge && !isSignedIn) {
@@ -804,7 +806,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
     // Managed, OpenRouter and Sarvam uploads go out in pieces, and a single piece
     // reports nothing until it is done, so the simulated bar covers it.
-    const uploadsPieces = managedActive || uploadInPieces || byokDiarizeProvider === "sarvam";
+    const uploadsPieces = managedActive || uploadInPieces;
     const useChunkProgress = uploadsPieces || (isOpenWhisprCloud && isLargeFile);
 
     if (useChunkProgress) {

@@ -169,3 +169,64 @@ test("meeting loss triggers recovery only for an active socket, and policy cance
     );
   }
 });
+
+test("a refused key or spent budget fails the start with the provider's account error", async () => {
+  for (const [event, code] of [
+    [{ code: "invalid_subscription_key", status_code: 401 }, "PROVIDER_AUTH_FAILED"],
+    [{ code: "seat_budget_exhausted_error", status_code: 429 }, "PROVIDER_QUOTA_EXHAUSTED"],
+  ]) {
+    const stream = new SarvamRealtimeStreaming(Socket);
+    const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+    stream.ws.receive({ event: "error", is_fatal: true, message: "refused", ...event });
+    // A meeting must not reconnect into the same refusal.
+    await assert.rejects(ready, { code, fatal: true });
+  }
+  const stream = new SarvamRealtimeStreaming(Socket);
+  const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+  stream.ws.receive({ event: "error", is_fatal: true, code: "invalid_request", message: "bad" });
+  await assert.rejects(ready, (error) => error.message === "bad" && !error.fatal);
+});
+
+test("a close before completion names the reason Sarvam gave", async () => {
+  const stream = new SarvamRealtimeStreaming(Socket);
+  const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+  stream.ws.emit("close", 1008, Buffer.from("inactivity_timeout"));
+  await assert.rejects(ready, /\(1008: inactivity_timeout\)/);
+});
+
+test("meeting finals with string offsets keep their audio time", async () => {
+  const stream = new SarvamMeetingStreaming(Socket);
+  const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+  stream.ws.receive({ event: "session.begin" });
+  await ready;
+  stream.sessionStartedAt = 10000;
+  const finals = [];
+  stream.onFinalTranscript = (text, timestamp) => finals.push([text, timestamp]);
+  stream.ws.receive({ event: "transcript.final", utterance_idx: 0, text: "एक", start_s: "2.25" });
+  assert.deepEqual(finals, [["एक", 12250]]);
+  await stream.disconnect({ commit: false });
+});
+
+test("a meeting stop gives up on a missing last final after 5 s without reporting an error", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  const stream = new SarvamMeetingStreaming(Socket);
+  const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+  stream.ws.receive({ event: "session.begin" });
+  await ready;
+  stream.sendAudio(Buffer.alloc(960));
+  const errors = [];
+  stream.onError = (error) => errors.push(error);
+  let stopped = false;
+  const stop = stream.disconnect().then((result) => {
+    stopped = true;
+    return result;
+  });
+  t.mock.timers.tick(4999);
+  await Promise.resolve();
+  assert.equal(stopped, false);
+  t.mock.timers.tick(1);
+  const result = await stop;
+  assert.equal(result.text, "");
+  assert.equal(stream.ws.readyState, 3);
+  assert.deepEqual(errors, []);
+});

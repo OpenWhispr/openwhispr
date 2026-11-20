@@ -1206,6 +1206,30 @@ test("Sarvam uploads and history retries use normal transcription even with stal
   ]);
 });
 
+test("a silent Sarvam upload returns empty text as other providers do; a retry still reports no speech", async (t) => {
+  if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath())
+    return t.skip("ffmpeg unavailable");
+  const { pcm16ToWav } = require("../../src/utils/audioUtils");
+  const wav = pcm16ToWav(Buffer.alloc(32000));
+  t.mock.method(fakeThis.audioStorageManager, "getAudioBuffer", () => wav);
+  const previousResponse = fetchResponse;
+  t.after(() => {
+    fetchResponse = previousResponse;
+  });
+  fetchResponse = () => Response.json({ transcript: " " });
+
+  const upload = await invokeUpload({ provider: "sarvam", transcriptionMode: "providers" }, wav);
+  assert.equal(upload.success, true);
+  assert.equal(upload.text, "");
+  const retry = await invoke({
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+  });
+  assert.equal(retry.success, false);
+  assert.equal(retry.code, "NO_SPEECH_DETECTED");
+});
+
 const whisperResponse = {
   text: "Send the report today. Thanks!",
   segments: [

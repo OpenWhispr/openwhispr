@@ -211,3 +211,40 @@ mediaTest("a dropped response body retries the same clip", async () => {
   assert.equal(text, "recovered");
   assert.equal(calls, 2);
 });
+
+mediaTest(
+  "a garbled success, a spent seat budget and repeated timeouts surface as provider errors",
+  async () => {
+    await assert.rejects(
+      transcribeWithSarvam({
+        audioBuffer: audio(1),
+        apiKey: "dummy",
+        fetchImpl: async () => new Response("<html>gateway</html>"),
+      }),
+      /invalid transcript/
+    );
+    let calls = 0;
+    await assert.rejects(
+      transcribeWithSarvam({
+        audioBuffer: audio(1),
+        apiKey: "dummy",
+        fetchImpl: async () => {
+          calls++;
+          return Response.json({ error: { code: "seat_budget_exhausted_error" } }, { status: 429 });
+        },
+      }),
+      { code: "PROVIDER_QUOTA_EXHAUSTED" }
+    );
+    assert.equal(calls, 1, "waiting does not clear a spent budget");
+    await assert.rejects(
+      transcribeWithSarvam({
+        audioBuffer: audio(1),
+        apiKey: "dummy",
+        fetchImpl: async () => {
+          throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+        },
+      }),
+      { code: "PROVIDER_TIMEOUT" }
+    );
+  }
+);

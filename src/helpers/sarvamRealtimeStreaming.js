@@ -1,7 +1,7 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
 const { SARVAM_MODE, sarvamLanguage, sarvamKeyterms } = require("../utils/sarvam");
-const { providerError, PROVIDER_ERROR_CODES } = require("./providerHttpErrors");
+const { providerError, providerHttpError, PROVIDER_ERROR_CODES } = require("./providerHttpErrors");
 const { downsample24kTo16k } = require("../utils/audioUtils");
 
 // Sarvam discards an audio frame over 16,000 bytes, and a stalled main process can
@@ -9,6 +9,27 @@ const { downsample24kTo16k } = require("../utils/audioUtils");
 const MAX_FRAME_BYTES = 8000;
 // Sarvam closes a socket that receives nothing for 60 seconds.
 const KEEPALIVE_MS = 20000;
+// A refused key or spent budget fails every reconnect and batch retry the same way.
+const ACCOUNT_FAILURES = new Set([
+  PROVIDER_ERROR_CODES.AUTH_FAILED,
+  PROVIDER_ERROR_CODES.ACCESS_DENIED,
+  PROVIDER_ERROR_CODES.QUOTA_EXHAUSTED,
+]);
+// Matches the other meeting clients: stop keeps the finals that already arrived.
+const MEETING_STOP_WAIT_MS = 5000;
+
+function fatalError(message) {
+  if (!Number.isInteger(message.status_code))
+    return new Error(message.message || "Sarvam transcription failed");
+  const error = providerHttpError({
+    provider: "Sarvam AI",
+    surface: "transcription",
+    status: message.status_code,
+    body: JSON.stringify(message),
+  });
+  if (ACCOUNT_FAILURES.has(error.code)) error.fatal = true;
+  return error;
+}
 
 class SarvamRealtimeStreaming {
   constructor(WebSocketImpl = WebSocket) {
@@ -57,9 +78,13 @@ class SarvamRealtimeStreaming {
       }
     });
     ws.on("error", (error) => this.fail(error));
-    ws.on("close", (code) => {
+    ws.on("close", (code, reason) => {
       if (!this.closed)
-        this.fail(new Error(`Sarvam connection closed before completion (${code})`));
+        this.fail(
+          new Error(
+            `Sarvam connection closed before completion (${code}${reason?.length ? `: ${reason}` : ""})`
+          )
+        );
     });
     return this.ready.promise;
   }
@@ -98,8 +123,7 @@ class SarvamRealtimeStreaming {
         this.close();
         break;
       case "error":
-        if (message.is_fatal !== false)
-          throw new Error(message.message || "Sarvam transcription failed");
+        if (message.is_fatal !== false) throw fatalError(message);
         debugLogger.warn("Sarvam reported a recoverable error", {
           code: message.code,
           message: message.message,
@@ -147,6 +171,7 @@ class SarvamRealtimeStreaming {
 
   fail(error) {
     if (this.closed) return;
+    debugLogger.warn("Sarvam stream failed", { error: error.message, code: error.code });
     this.failure = error;
     const wasConnected = this.isConnected;
     this.ready?.reject(error);
@@ -205,15 +230,28 @@ class SarvamMeetingStreaming extends SarvamRealtimeStreaming {
   emitFinal(text, startSeconds) {
     if (!text) return;
     this.completedSegments.push(text);
+    // Sarvam's schema types start_s as a string.
+    const seconds = parseFloat(startSeconds);
     const timestamp =
-      this.sessionStartedAt !== null && Number.isFinite(startSeconds)
-        ? this.sessionStartedAt + Math.round(startSeconds * 1000)
+      this.sessionStartedAt !== null && Number.isFinite(seconds)
+        ? this.sessionStartedAt + Math.round(seconds * 1000)
         : Date.now();
     this.onFinalTranscript?.(text, timestamp);
   }
 
   async disconnect({ commit = true } = {}) {
-    if (commit && this.isConnected && this.audioBytesSent) return this.finalize();
+    if (commit && this.isConnected && this.audioBytesSent) {
+      // The meeting is ending either way, so a lost tail is not reported as an error.
+      this.onError = null;
+      const giveUp = setTimeout(() => super.disconnect(), MEETING_STOP_WAIT_MS);
+      try {
+        return await this.finalize();
+      } catch {
+        // The finals delivered so far stand.
+      } finally {
+        clearTimeout(giveUp);
+      }
+    }
     return super.disconnect();
   }
 }

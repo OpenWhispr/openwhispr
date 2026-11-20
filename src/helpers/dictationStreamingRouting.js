@@ -7,7 +7,7 @@
 import { getEffectiveDictionaryWords } from "../utils/snippets.ts";
 import { sarvamKeyterms } from "../utils/sarvam.js";
 import { isOrukeetStreaming, isSelfHostedTranscription } from "./selfHostedTranscription.js";
-import { isStreamingOnlySelection } from "./transcriptionRoute.ts";
+import { isStreamingOnlySelection, resolveByokModel } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
 import bundledRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 
@@ -260,6 +260,8 @@ export function buildStreamingSessionOptions({
     tenant: settings.cortiTenant,
   };
   if (providerName === "sarvam") {
+    // A model left over from another provider resolves as the batch fallback's does.
+    options.model = resolveByokModel("sarvam", options.model);
     options.keyterms =
       options.model === "saaras:v4"
         ? sarvamKeyterms(getEffectiveDictionaryWords(settings))
