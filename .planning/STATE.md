@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: "Titanium Whisper on Titanium servers"
 project_code: TIWH
-current_phase: 5
-current_phase_name: "Self-hosted transcription parity"
-status: milestone_active
-last_updated: "2026-11-18"
-last_activity: 2026-11-18
-last_activity_desc: "Phases 1-4 code merged; leftovers in review (PRs #17, #18, #19); phases 5-7 planned"
+current_phase: 7
+current_phase_name: "Connectors on Titanium accounts"
+status: milestone_complete_with_gaps
+last_updated: "2026-11-20"
+last_activity: 2026-11-20
+last_activity_desc: "Phases 1-7 merged; v1.10.5 signed draft release; gaps in v1.0-MILESTONE-AUDIT.md"
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 7
   total_plans: 14
-  completed_plans: 4
-  percent: 29
+  completed_plans: 13
+  percent: 93
 ---
 
 # Project State
