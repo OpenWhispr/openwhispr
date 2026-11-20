@@ -362,7 +362,7 @@ test("the Business tile reached from Shared Dictionary buys the selected workspa
   assert.deepEqual(state.openedUrls, ["https://stripe.test/checkout"]);
 });
 
-test("the visible workspace card can start Business when the people count is unavailable", async (t) => {
+test("a free workspace's billing card starts a monthly Business checkout", async (t) => {
   const { vite, state, root, container } = await setup(t);
   const { default: WorkspaceBillingCard } = await vite.ssrLoadModule(
     "/components/settings/WorkspaceBillingCard.tsx"

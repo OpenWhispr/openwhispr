@@ -2937,7 +2937,7 @@ export default function SettingsPage({
                                 key={soloBusinessWorkspace.id}
                                 workspaceId={soloBusinessWorkspace.id}
                                 interval={billingState.business ? "annual" : "monthly"}
-                                className="w-full h-6 inline-flex items-center justify-center gap-1 rounded-md bg-primary text-[10px] font-medium text-primary-foreground disabled:opacity-50"
+                                className="w-full h-6 inline-flex items-center justify-center gap-1 rounded-full bg-primary text-[10px] font-medium text-primary-foreground hover:brightness-110 disabled:opacity-50"
                               />
                             </>
                           )}

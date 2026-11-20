@@ -67,8 +67,8 @@ export default function TeamPaywallDialog({
     else if (sawBlocked.current) onAvailable?.();
   }, [open, blocked, onAvailable]);
 
+  // A named section remounts Settings, so this also works from inside Settings.
   const handleUpgrade = (): void => {
-    // A named section remounts Settings, so this also works from inside Settings.
     onOpenChange(false);
     void window.electronAPI?.openSettingsSection?.("plansBilling");
   };
