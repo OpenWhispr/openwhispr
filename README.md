@@ -89,6 +89,8 @@ npm run dev
 
 Requires Node.js 24+. See the [full documentation](https://docs.openwhispr.com/quickstart) for setup guides, platform-specific instructions, and build details.
 
+The list of models the desktop app offers lives in [`model-registry`](model-registry/); see its [`CONTRIBUTING.md`](model-registry/CONTRIBUTING.md) to add or correct a model.
+
 The commands above run the desktop application, which remains at the repository root. The Expo mobile application lives in [`openwhispr-mobile`](openwhispr-mobile/) with its own dependencies, lockfile, build configuration, and release process. See the [mobile README](openwhispr-mobile/README.md) for its setup instructions.
 
 ## Documentation

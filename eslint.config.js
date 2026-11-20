@@ -11,6 +11,7 @@ module.exports = [
       "build/**",
       "openwhispr-mobile/**", // mobile has its own ESLint configuration
       "src/**", // src has its own config
+      "model-registry/compat/**", // frozen copies of released catalog readers
     ],
   },
   // Main process files (CommonJS)
@@ -40,5 +41,10 @@ module.exports = [
       "prefer-const": "off",
       "no-var": "off",
     },
+  },
+  // The catalog reader's selection helper is an ES module shared with the renderer.
+  {
+    files: ["model-registry/lib/registrySelection.js"],
+    languageOptions: { sourceType: "module" },
   },
 ];

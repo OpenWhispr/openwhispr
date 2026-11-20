@@ -76,16 +76,16 @@
     "format": "npm run format:js",
     "format:check": "eslint . && cd src && eslint . && prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "lint": "eslint . && cd src && eslint .",
-    "test": "node --import tsx --test \"test/**/*.test.js\"",
+    "test": "node --import tsx --test \"test/**/*.test.js\" \"model-registry/test/*.test.cjs\"",
     "typecheck": "cd src && tsc --noEmit",
     "quality-check": "npm run model-registry:verify && npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",
     "preview": "cd src && vite preview",
     "clean": "node cleanup.js",
     "compile:managed-policy": "node scripts/build-macos-managed-policy.js",
-    "model-registry:verify": "node scripts/sync-model-registry.mjs --check",
+    "model-registry:verify": "node scripts/sync-model-registry.mjs --check && node model-registry/scripts/validate.cjs && node model-registry/scripts/check-compat.cjs",
     "model-registry:sync": "node scripts/sync-model-registry.mjs",
-    "model-registry:release-check": "node scripts/sync-model-registry.mjs --release-check"
+    "model-registry:pin-release": "node scripts/sync-model-registry.mjs --pin-release"
   },
   "keywords": [
     "dictation",

@@ -1,2 +1,7 @@
 openwhispr-mobile/patches/*.patch -whitespace
 patches/*.patch text eol=lf
+# The model catalog and its reader are compared and hashed byte for byte, so a CRLF
+# checkout (the default on Windows) would fail model-registry:verify and the release pin.
+model-registry/** text=auto eol=lf
+src/models/modelRegistryData.json text eol=lf
+src/models/registry* text eol=lf
