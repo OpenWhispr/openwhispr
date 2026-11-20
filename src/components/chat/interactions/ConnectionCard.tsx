@@ -19,6 +19,7 @@ import githubMark from "../../../assets/icons/github.svg";
 import googleCalendarMark from "../../../assets/icons/google-calendar.svg";
 import microsoftCalendarMark from "../../../assets/icons/microsoft-calendar.svg";
 import appleCalendarMark from "../../../assets/icons/apple-calendar.svg";
+import salesforceMark from "../../../assets/icons/salesforce.svg";
 import { PILL_BUTTON, ROUND_BUTTON } from "./cardStyles";
 
 // Each service's brand mark; Linear's and GitHub's are one colour and follow the theme.
@@ -27,6 +28,7 @@ const TARGET_LOGOS: Partial<Record<ConnectionTarget, { src: string; monochrome?:
   slack: { src: slackMark },
   linear: { src: linearMark, monochrome: true },
   github: { src: githubMark, monochrome: true },
+  salesforce: { src: salesforceMark },
   google: { src: googleCalendarMark },
   microsoft: { src: microsoftCalendarMark },
   apple: { src: appleCalendarMark },
@@ -133,6 +135,7 @@ const DEFAULT_REASONS: Record<ConnectionTarget, string> = {
   slack: "agentMode.interactions.connection.reasons.slack",
   linear: "agentMode.interactions.connection.reasons.linear",
   github: "agentMode.interactions.connection.reasons.github",
+  salesforce: "agentMode.interactions.connection.reasons.salesforce",
   google: "agentMode.interactions.connection.reasons.calendar",
   microsoft: "agentMode.interactions.connection.reasons.calendar",
   apple: "agentMode.interactions.connection.reasons.calendar",

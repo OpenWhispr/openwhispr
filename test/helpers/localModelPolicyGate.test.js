@@ -396,7 +396,10 @@ test("a verdict landing before the rules load isn't read as a denial, and is app
   assert.deepEqual(decisions, [null]);
 });
 
-test("the periodic refresh reaches the server on every tick, inside the policy manager's freshness window", async (t) => {
+// The gate's five-minute timer over a real policy manager. Each tick lands just inside the
+// manager's freshness window, where the last answer still reads as fresh, and returns how
+// many requests have reached the server.
+async function periodicRefresh(t, data) {
   const fs = require("node:fs");
   const os = require("node:os");
   const path = require("node:path");
@@ -414,10 +417,7 @@ test("the periodic refresh reaches the server on every tick, inside the policy m
     getAppVersion: () => "1.11.1",
     proxyFetch: async () => {
       fetches++;
-      return new Response(
-        JSON.stringify({ data: { managed: false, policy: null, policyUpdatedAt: null } }),
-        { status: 200 }
-      );
+      return new Response(JSON.stringify({ data }), { status: 200 });
     },
     tokenStore: { getState: () => ({ token: "token", generation: 1 }) },
     now: () => clock,
@@ -434,13 +434,27 @@ test("the periodic refresh reaches the server on every tick, inside the policy m
 
   await gate.resolve();
   assert.equal(fetches, 1);
-  for (let tick = 2; tick <= 6; tick++) {
-    // A timer firing just inside the window would find the last answer still fresh.
+  return async () => {
     clock += FIVE_MINUTES - 1000;
     t.mock.timers.tick(FIVE_MINUTES);
     await settle();
-    assert.equal(fetches, tick);
-  }
+    return fetches;
+  };
+}
+
+test("the periodic refresh reads a managed verdict on every tick, inside the policy manager's freshness window", async (t) => {
+  const tick = await periodicRefresh(t, {
+    managed: true,
+    policy: managedPolicy(),
+    policyUpdatedAt: "2026-08-05T00:00:00.000Z",
+  });
+  for (let fetches = 2; fetches <= 6; fetches++) assert.equal(await tick(), fetches);
+});
+
+test("the periodic refresh reads an unmanaged verdict only once it is fifteen minutes old", async (t) => {
+  const tick = await periodicRefresh(t, { managed: false, policy: null, policyUpdatedAt: null });
+  assert.deepEqual([await tick(), await tick(), await tick()], [1, 1, 1]);
+  assert.equal(await tick(), 2);
 });
 
 test("a lookup replaced for the same credential answers from its replacement", async () => {

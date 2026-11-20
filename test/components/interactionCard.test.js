@@ -539,3 +539,25 @@ test("a question waiting under the key of a settled answer card shows instead of
   assert.equal(card.host.querySelector("[data-approval-card]"), null);
   t.after(() => approvals.useConnectorApprovalStore.setState({ entries: {} }));
 });
+
+test("Salesforce's connection card names the workflow and starts its OAuth connection", async (t) => {
+  const connects = [];
+  const card = await mountCard(
+    t,
+    { kind: "connection", target: "salesforce" },
+    {
+      connectorConnect: (target) => {
+        connects.push(target);
+        return new Promise(() => {});
+      },
+      connectorCancelConnect: async (target) => connects.push(`cancel:${target}`),
+    }
+  );
+  assert.match(card.host.textContent, /Connect Salesforce/);
+  assert.match(card.host.textContent, /read Salesforce records and save reviewed meeting notes/);
+  await card.click(card.button("Yes"));
+  assert.deepEqual(connects, ["salesforce"]);
+  await card.click(card.button("Cancel"));
+  assert.deepEqual(connects, ["salesforce", "cancel:salesforce"]);
+  assert.deepEqual(card.results, [{ status: "cancelled" }]);
+});

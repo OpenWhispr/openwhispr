@@ -1,3 +1,4 @@
+import { refreshEnterpriseIdentityForUse } from "../stores/enterpriseIdentityStore";
 import { withSessionRefresh } from "../lib/auth";
 import {
   resolveTranscriptionRoute,
@@ -68,6 +69,7 @@ export interface TranscriptionApiKeys {
   tinfoilApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
+  elevenlabsApiKey: string;
   openrouterApiKey: string;
   customTranscriptionApiKey?: string;
 }
@@ -90,6 +92,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.deepgramApiKey;
     case "assemblyai":
       return keys.assemblyaiApiKey;
+    case "elevenlabs":
+      return keys.elevenlabsApiKey;
     case "openrouter":
       return keys.openrouterApiKey;
     case "custom":
@@ -130,10 +134,23 @@ export async function transcribeFile(
   filePath: string,
   cfg: FileTranscriptionConfig,
   diarize: boolean,
-  opts: { requestId?: string; timestamps?: boolean; purpose?: "dictation" | "upload" } = {}
+  {
+    durationSeconds,
+    signal,
+    ...opts
+  }: {
+    requestId?: string;
+    signal?: AbortSignal;
+    timestamps?: boolean;
+    purpose?: "dictation" | "upload";
+    durationSeconds?: number;
+  } = {}
 ): Promise<FileTranscriptionResult> {
   // Managed enterprise STT outranks every personal lane, OpenWhispr Cloud and
   // local included: under managed_required no audio may leave the tenant.
+  const refresh = refreshEnterpriseIdentityForUse();
+  if (refresh) await refresh;
+  signal?.throwIfAborted();
   const managed = getManagedTranscriptionResolution();
   if (managed?.kind === "error") {
     return {
@@ -146,6 +163,7 @@ export async function transcribeFile(
 
   if (!managed && cfg.isOpenWhisprCloud) {
     return withSessionRefresh(async () => {
+      signal?.throwIfAborted();
       const r = await window.electronAPI.transcribeAudioFileCloud!(filePath, opts);
       if (!r.success && r.code) {
         throw Object.assign(new Error(r.error || "Cloud transcription failed"), {
@@ -191,6 +209,9 @@ export async function transcribeFile(
     requestId: opts.requestId,
     purpose: opts.purpose,
     managed: managed?.kind === "managed" ? managed : undefined,
+    ...(route.transport === "proxied" && route.provider === "assemblyai"
+      ? { durationSeconds }
+      : {}),
     apiKey: cfg.getApiKey(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
@@ -279,8 +300,14 @@ export async function transcribeFileWithSpeakers(
   cfg: FileTranscriptionConfig,
   diarization: DiarizationSettings,
   durationSeconds?: number | null,
-  opts: { requestId?: string; timestamps?: boolean } = {}
+  {
+    isCancelled,
+    ...opts
+  }: { requestId?: string; timestamps?: boolean; isCancelled?: () => boolean } = {}
 ): Promise<FileTranscriptionResult> {
+  const refresh = refreshEnterpriseIdentityForUse();
+  if (refresh) await refresh;
+  if (isCancelled?.()) return { success: false, code: "AUDIO_OPERATION_CANCELLED" };
   const byokDiarize = shouldUseByokDiarize(cfg, diarization.enabled);
   const diarizePromise =
     diarization.enabled && diarization.localModelsReady && !byokDiarize

@@ -29,7 +29,15 @@ export interface InteractionQuestion {
 
 /** A connector, a calendar provider, or `calendar` to let the user pick the provider. */
 export type ConnectionTarget =
-  "gmail" | "slack" | "linear" | "github" | "google" | "microsoft" | "apple" | "calendar";
+  | "gmail"
+  | "slack"
+  | "linear"
+  | "github"
+  | "salesforce"
+  | "google"
+  | "microsoft"
+  | "apple"
+  | "calendar";
 
 export type InteractionPayload =
   | { kind: "questions"; questions: InteractionQuestion[] }

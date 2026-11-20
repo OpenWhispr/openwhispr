@@ -77,7 +77,7 @@ function buildPolicy({ llmModes, llmEnterpriseProviders = [] }) {
 // access used to win the route, so prompts left through the employee's own server while the UI
 // reported "Managed by your organization" — silently defeating managed_required.
 test("managed enterprise access outranks a leftover self-hosted route", async (t) => {
-  installBrowserGlobals(t);
+  const { window } = installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-managed-routing-test-",
   });
@@ -149,6 +149,41 @@ test("managed enterprise access outranks a leftover self-hosted route", async (t
       { message: REASONING_RESTRICTED }
     );
   });
+
+  await t.test(
+    "the first cleanup after five idle minutes uses the newly required provider",
+    async (t) => {
+      let now = 0;
+      t.mock.method(Date, "now", () => now);
+      usePolicyStore.setState({ status: "unmanaged", managed: false, policy: null });
+      const scope = { accountId: "account-a", workspaceId: "workspace-a", authGeneration: 1 };
+      window.electronAPI.getManagedEnterpriseConfig = async () => ({
+        ...scope,
+        success: false,
+        code: "ENTERPRISE_REQUIRED",
+      });
+      await useEnterpriseIdentityStore
+        .getState()
+        .refresh(scope.accountId, scope.workspaceId, scope.authGeneration);
+      now += 5 * 60_000;
+      window.electronAPI.getManagedEnterpriseConfig = async () => ({
+        ...scope,
+        success: true,
+        config: managedBedrockConfig(),
+      });
+      const enterprise = t.mock.fn(async () => ({ success: true, text: "Managed result" }));
+      window.electronAPI.processEnterpriseReasoning = enterprise;
+      t.mock.method(globalThis, "fetch", async () => {
+        throw new Error("Unexpected personal request");
+      });
+      const text = await reasoningService.processText("fixture", "", null, {
+        inferenceScope: "dictationCleanup",
+        systemPrompt: "Use the fixture",
+      });
+      assert.equal(text, "Managed result");
+      assert.equal(enterprise.mock.calls[0].arguments[3].managedContext.provider, "bedrock");
+    }
+  );
 });
 
 test("enterprise call settings cannot omit or bypass a resolved managed route", async (t) => {

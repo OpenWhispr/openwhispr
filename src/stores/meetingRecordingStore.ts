@@ -1,3 +1,4 @@
+import { refreshEnterpriseIdentityForUse } from "./enterpriseIdentityStore";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
@@ -14,6 +15,8 @@ import {
   resolveParticipantSpeakerCountSync,
 } from "../utils/participants";
 import type {
+  MeetingStartSource,
+  MeetingStopReason,
   MeetingSystemAudioInterruption,
   NoteItem,
   SystemAudioAccessResult,
@@ -171,8 +174,16 @@ const isSegmentWithinIdentificationWindow = (
 
 // MeetingRecordingMount translates the `managedConfig:<key>` sentinel.
 const describeMeetingSetupError = (err: unknown): string => {
-  const { message, messageKey } = (err ?? {}) as { message?: string; messageKey?: unknown };
-  return typeof messageKey === "string" ? `managedConfig:${messageKey}` : String(message);
+  const { code, error, message, messageKey } = (err ?? {}) as {
+    code?: string;
+    error?: string;
+    message?: string;
+    messageKey?: string;
+  };
+  if (code === "AUTH_EXPIRED" || code === "AUTH_REQUIRED") return "signInRequired";
+  if (code && MEETING_POLICY_REFUSALS.has(code)) return code;
+  if (messageKey) return `managedConfig:${messageKey}`;
+  return message || error || "Failed to start meeting transcription";
 };
 
 const getMeetingTranscriptionOptions = () => {
@@ -473,6 +484,8 @@ let isRecordingFlag = false;
 let isStartingFlag = false;
 let activeRecordingSessionId: string | null = null;
 const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator();
+// Why the first stop cancelled a start still in progress, for its teardown.
+let startCancelReason: MeetingStopReason | null = null;
 const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
@@ -906,6 +919,7 @@ export interface StartRecordingArgs {
   expectedCount?: number | null;
   expectedCountIsExplicit?: boolean;
   autoEndEligible: boolean;
+  startSource?: MeetingStartSource;
   canAutoStart?: () => boolean;
 }
 
@@ -921,39 +935,57 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
   // note session can be released. Live recordings and explicit starts stay accepted.
   if (isStartingFlag && !args.canAutoStart) return true;
   if (args.canAutoStart && !args.canAutoStart()) return false;
-  const policy = usePolicyStore.getState();
-  if (!isMeetingAllowedByPolicy(policy)) {
-    logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
-    reportMeetingError(
-      isAudioFeatureAllowed(policy, "meeting")
-        ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
-        : meetingPolicyRefusalError(policy)
-    );
-    return false;
-  }
-
-  // Resolve the managed route before any capture so a failure never lights the mic indicator.
-  const managed = getManagedTranscriptionResolution("realtime");
-  if (managed?.kind === "error") {
-    logger.warn(
-      "Meeting recording blocked by managed audio setup",
-      { code: managed.code },
-      "meeting"
-    );
-    reportMeetingError(describeMeetingSetupError(managed));
-    return true;
-  }
-
   const sessionId = createMeetingRecordingSessionId();
   let automaticStartSuppressed = false;
   let automaticStartCancelled = false;
   let recordingDisabled = false;
   await meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {
     if (isRecordingFlag || isStartingFlag) return;
+    const refresh = refreshEnterpriseIdentityForUse();
+    if (refresh) {
+      await refresh;
+      if (!startOperation.isCurrent()) {
+        automaticStartCancelled = Boolean(args.canAutoStart);
+        return;
+      }
+    }
+    const policy = usePolicyStore.getState();
+    if (!isMeetingAllowedByPolicy(policy)) {
+      logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
+      const refusal = isAudioFeatureAllowed(policy, "meeting")
+        ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
+        : meetingPolicyRefusalError(policy);
+      reportMeetingError(refusal);
+      void window.electronAPI?.meetingRecordingRefused?.({
+        noteId: args.noteId,
+        startSource: args.startSource,
+        reason: refusal,
+      });
+      recordingDisabled = true;
+      return;
+    }
+
+    // Resolve the managed route before any capture so a failure never lights the mic indicator.
+    const managed = getManagedTranscriptionResolution("realtime");
+    if (managed?.kind === "error") {
+      logger.warn(
+        "Meeting recording blocked by managed audio setup",
+        { code: managed.code },
+        "meeting"
+      );
+      reportMeetingError(describeMeetingSetupError(managed));
+      return;
+    }
+
     // Asked inside the start, so a stop during the lookup still cancels it.
     if (await window.electronAPI?.isMeetingRecordingDisabled?.()) {
       logger.warn("Meeting recording disabled by administrator", {}, "meeting");
       reportMeetingError("policyRestricted");
+      void window.electronAPI?.meetingRecordingRefused?.({
+        noteId: args.noteId,
+        startSource: args.startSource,
+        reason: "POLICY_MEETING_RECORDING_DISABLED",
+      });
       recordingDisabled = true;
       return;
     }
@@ -970,6 +1002,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     }
     isStartingFlag = true;
     activeRecordingSessionId = sessionId;
+    startCancelReason = null;
     const isCurrentStart = () =>
       startOperation.isCurrent() && activeRecordingSessionId === sessionId;
     let captureStarted = false;
@@ -1069,9 +1102,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     const releaseSession = () => {
       if (activeRecordingSessionId === sessionId) activeRecordingSessionId = null;
     };
+    // A start that is no longer current was cancelled by a stop; otherwise its setup failed.
     const stopScopedMainOnce = () =>
       startOperation.stopMainOnce(async () => {
-        await window.electronAPI?.meetingTranscriptionStop?.(sessionId).catch(() => undefined);
+        await window.electronAPI
+          ?.meetingTranscriptionStop?.(
+            sessionId,
+            startOperation.isCurrent() ? "error" : (startCancelReason ?? "user")
+          )
+          .catch(() => undefined);
       });
     const teardownStart = async () => {
       if (args.canAutoStart && !captureStarted && !startOperation.isCurrent())
@@ -1210,10 +1249,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           const ctx = new AudioContext({ sampleRate: 24000 });
           micContext = ctx;
           await detachFromOutputDevice(ctx);
-          if (!isCurrentStart()) {
-            await teardownStart();
-            return null;
-          }
+          if (!isCurrentStart()) return null;
 
           await createAudioPipeline({
             stream: micResult,
@@ -1271,6 +1307,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           if (args.canAutoStart && !startOperation.isCurrent()) automaticStartCancelled = true;
           return;
         }
+        // A provider can fail after connecting while a device permission prompt is still open.
+        const fatalCleanup = window.electronAPI?.onMeetingTranscriptionFatalError?.((error) => {
+          if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+          reportMeetingError(error);
+          logger.error("Meeting transcription stopped after connection loss", { error }, "meeting");
+          if (isStartingFlag) void stopScopedMainOnce();
+          void stopRecording(sessionId, "error");
+        });
+        if (fatalCleanup) ipcCleanups.push(fatalCleanup);
         startOperation.markMainStartAttempted();
         return window.electronAPI?.meetingTranscriptionStart?.({
           ...meetingTranscriptionOptions,
@@ -1279,64 +1324,55 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           autoEndEligible: args.autoEndEligible,
           aecEnabled: getSettings().meetingAecEnabled,
           speakerIndexBase: sessionSpeakerIndexBase,
+          startSource: args.startSource,
         });
       })();
-      const [startOutcome, micOutcome, systemCaptureOutcome] = await Promise.allSettled([
-        mainStartPromise,
+      // Observe device failures while main connects. A refusal can finish before either
+      // permission prompt, and a stream granted afterward belongs to the failed session.
+      const captureOutcomes = Promise.allSettled([
         micCapturePromise,
-        systemCapturePromise,
+        systemCapturePromise.then((capture) => {
+          if (isCurrentStart()) setupSystemCaptureResult = capture;
+          else stopMediaStream(capture.stream);
+        }),
       ] as const);
-
-      if (systemCaptureOutcome.status === "fulfilled") {
-        setupSystemCaptureResult = systemCaptureOutcome.value;
-      }
+      const startResult = await mainStartPromise;
       if (automaticStartSuppressed) {
         await endSuppressedStart();
         return;
       }
-      if (startOutcome.status === "rejected") throw startOutcome.reason;
-      if (micOutcome.status === "rejected") throw micOutcome.reason;
-      if (systemCaptureOutcome.status === "rejected") throw systemCaptureOutcome.reason;
-
-      const startResult = startOutcome.value;
-      const micResult = micOutcome.value;
-      const initialSystemCaptureResult = setupSystemCaptureResult;
-      let systemCaptureResult = initialSystemCaptureResult;
-
-      const streamsMs = performance.now() - startTime;
       if (!isCurrentStart()) {
-        logger.info("Meeting transcription aborted during setup (stop called)", {}, "meeting");
         await teardownStart();
         return;
       }
-
       if (!startResult?.success) {
         logger.error(
           "Meeting transcription IPC start failed",
           { error: startResult?.error, code: startResult?.code },
           "meeting"
         );
-        const needsSignIn =
-          startResult?.code === "AUTH_EXPIRED" || startResult?.code === "AUTH_REQUIRED";
-        reportMeetingError(
-          needsSignIn
-            ? "signInRequired"
-            : startResult?.code && MEETING_POLICY_REFUSALS.has(startResult.code)
-              ? startResult.code
-              : describeMeetingSetupError({
-                  message: startResult?.error || "Failed to start meeting transcription",
-                  messageKey: startResult?.messageKey,
-                }),
-          { isRecording: false, isTranscribing: false }
-        );
-        stopMediaStream(systemCaptureResult.stream);
-        setupSystemCaptureResult = { stream: null, error: null };
+        reportMeetingError(describeMeetingSetupError(startResult), {
+          isRecording: false,
+          isTranscribing: false,
+        });
+        releaseSession();
+        stopMediaStream(setupSystemCaptureResult.stream);
         isRecordingFlag = false;
         isStartingFlag = false;
         await cleanup();
-        releaseSession();
         return;
       }
+
+      const [micOutcome, systemCaptureOutcome] = await captureOutcomes;
+      if (!isCurrentStart()) {
+        await teardownStart();
+        return;
+      }
+      if (micOutcome.status === "rejected") throw micOutcome.reason;
+      if (systemCaptureOutcome.status === "rejected") throw systemCaptureOutcome.reason;
+      const micResult = micOutcome.value;
+      let systemCaptureResult = setupSystemCaptureResult;
+      const streamsMs = performance.now() - startTime;
       adoptSpeakerIndexBase(startResult.speakerIndexBase);
       const systemAudioMode = startResult.systemAudioMode || initialSystemAudioAccess.mode;
       const systemAudioStrategy = startResult.systemAudioStrategy || initialSystemAudioStrategy;
@@ -1534,21 +1570,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         logger.error("Meeting transcription stream error", { error: err }, "meeting");
         if (!MEETING_MAIN_STOPS.has(err)) return;
         mainStoppedSessionId = sessionId;
-        if (isRecordingFlag) void stopRecording(sessionId);
+        if (isRecordingFlag) void stopRecording(sessionId, "error");
       });
       if (errorCleanup) ipcCleanups.push(errorCleanup);
-
-      const fatalErrorCleanup = window.electronAPI?.onMeetingTranscriptionFatalError?.((err) => {
-        if (activeRecordingSessionId !== sessionId) return;
-        reportMeetingError(err);
-        logger.error(
-          "Meeting transcription stopped after connection loss",
-          { error: err },
-          "meeting"
-        );
-        if (isRecordingFlag) void stopRecording(sessionId);
-      });
-      if (fatalErrorCleanup) ipcCleanups.push(fatalErrorCleanup);
 
       // One-shot from main (~45s in) when the system tap has streamed only
       // silence; main never emits it for mic-only sessions, but gate on this
@@ -1634,8 +1658,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
             previous?.getTracks().forEach((track) => track.stop());
             micSource = nextSource;
             micStream = replacement;
-            logger.info("Meeting microphone capture recovered", {}, "meeting");
           },
+          logger,
+          logScope: "meeting",
         });
         await micRecovery.start(micStream, {
           followDefault: followsSystemDefaultMic(getSettings()),
@@ -1809,6 +1834,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         "meeting"
       );
     } catch (err) {
+      if (!isCurrentStart()) {
+        await teardownStart();
+        return;
+      }
+      releaseSession();
       logger.error(
         "Meeting transcription setup failed",
         { error: (err as Error).message },
@@ -1867,9 +1897,13 @@ export interface StopRecordingResult {
   cancelledStart?: boolean;
 }
 
-export async function stopRecording(expectedSessionId?: string): Promise<StopRecordingResult> {
+export async function stopRecording(
+  expectedSessionId?: string,
+  reason: MeetingStopReason = "user"
+): Promise<StopRecordingResult> {
   const canceledStart = meetingRecordingStartCoordinator.cancelActiveStart(expectedSessionId);
   if (canceledStart) {
+    startCancelReason ??= reason;
     isRecordingFlag = false;
     isStartingFlag = false;
     useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
@@ -1953,7 +1987,8 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
         let stoppedDiarizationSessionId: string | null = null;
         try {
           const result = await window.electronAPI?.meetingTranscriptionStop?.(
-            sessionId ?? undefined
+            sessionId ?? undefined,
+            reason
           );
           if (result?.diarizationSessionId) {
             stoppedDiarizationSessionId = result.diarizationSessionId;
@@ -2022,7 +2057,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 export async function stopRecordingForPolicy(): Promise<void> {
   const sessionId = activeRecordingSessionId;
   const reason = meetingPolicyRefusalError(usePolicyStore.getState());
-  const { stopped, cancelledStart } = await stopRecording();
+  const { stopped, cancelledStart } = await stopRecording(undefined, "policy");
   if ((stopped || cancelledStart) && sessionId && mainStoppedSessionId !== sessionId) {
     reportMeetingError(reason);
   }

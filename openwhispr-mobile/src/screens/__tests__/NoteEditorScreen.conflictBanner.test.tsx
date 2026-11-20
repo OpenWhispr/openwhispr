@@ -12,6 +12,7 @@ import type {
   Speaker,
   SpeakerProfile,
 } from '@/data/types';
+import type { PrivateWorkspace } from '@/lib/privateWorkspaces';
 import type { Folder, Space } from '@/data';
 
 const mockUpdateNote = jest.fn();
@@ -56,6 +57,10 @@ const mockNotesState = {
   moveNoteToSpace: jest.fn(),
   createFolder: jest.fn(),
   getSpaceFolders: jest.fn(() => [] as Folder[]),
+  getAllPrivateFolders: jest.fn((): Folder[] => mockNotesState.folders),
+  privateWorkspaces: [] as PrivateWorkspace[],
+  activePrivateWorkspaceId: null as string | null,
+  defaultPrivateWorkspaceId: null as string | null,
   voiceProfiles: [] as SpeakerProfile[],
   meetingSpeakerEmbeddingsByNoteId: {} as Record<number, Record<string, number[]>>,
   claimSpeakerAsMe: jest.fn(),

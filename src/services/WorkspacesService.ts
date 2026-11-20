@@ -2,6 +2,7 @@ import {
   CloudApiError,
   cloudGet,
   cloudPost,
+  cloudPostForAuthGeneration,
   cloudPatch,
   cloudDelete,
   type DataWrap,
@@ -73,6 +74,24 @@ async function isLost(workspaceId: string): Promise<boolean> {
 
 async function update(workspaceId: string, patch: { name?: string }): Promise<Workspace> {
   const res = await cloudPatch<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}`, patch);
+  return res.data;
+}
+
+async function uploadIcon(
+  workspaceId: string,
+  data: string,
+  authGeneration: number
+): Promise<Workspace> {
+  const res = await cloudPostForAuthGeneration<DataWrap<Workspace>>(
+    `/api/workspaces/${workspaceId}/icon`,
+    { data },
+    authGeneration
+  );
+  return res.data;
+}
+
+async function removeIcon(workspaceId: string): Promise<Workspace> {
+  const res = await cloudDelete<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}/icon`);
   return res.data;
 }
 
@@ -224,6 +243,8 @@ export const WorkspacesService = {
   ensureDefault,
   isLost,
   update,
+  uploadIcon,
+  removeIcon,
   remove,
   listMembers,
   updateMemberRole,

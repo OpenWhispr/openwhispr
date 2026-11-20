@@ -269,9 +269,12 @@ function createLocalModelPolicyGate({
     release(lease) {
       leases.delete(lease);
     },
+    // Each tick reads the verdict past the policy manager's freshness window. An unmanaged
+    // one restricts nothing, so it is only read again once the manager calls it stale.
     startPeriodicRefresh(intervalMs) {
       const timer = setInterval(() => {
-        void this.resolve({ refresh: true }).catch(() => {});
+        const refresh = !(hasCurrentVerdict() && !snapshot.managed);
+        void this.resolve({ refresh }).catch(() => {});
       }, intervalMs);
       timer.unref?.();
       return timer;
@@ -345,6 +348,7 @@ function bindLocalModelDownload(owner, abort) {
 
 module.exports = {
   createLocalModelPolicyGate,
+  LOCAL_POLICY_CODES,
   isLocalModelPolicyRefusal,
   policyError,
   runLocalModelOperation,

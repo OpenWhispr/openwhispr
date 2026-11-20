@@ -35,6 +35,7 @@ export const createMemoryRepository = (): { repo: LocalNotesRepository; db: Test
       pending_sync INTEGER NOT NULL DEFAULT 0,
       is_private INTEGER NOT NULL DEFAULT 0,
       space_id INTEGER,
+      private_workspace_id TEXT,
       owner_user_id TEXT,
       updated_by_user_id TEXT,
       cloud_updated_at TEXT,

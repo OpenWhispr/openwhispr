@@ -879,10 +879,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
       }
     } else if (currentStepId === "byok-dictation") {
-      settingsStore.setCloudTranscriptionForAllScopes({
-        useLocalWhisper: false,
-        cloudTranscriptionMode: "byok",
-      });
       // When policy disallows the assistant, its step is off-route and no
       // LLM gets configured. Turn cleanup off so dictations do not route to a
       // default provider with no credential behind it.

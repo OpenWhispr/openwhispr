@@ -170,6 +170,22 @@ function installTransactionShim(sqlite) {
     };
 }
 
+test("account deletion removes only its Salesforce export associations", (t) => {
+  const { manager, sqlite } = createDatabaseManager();
+  t.after(() => sqlite.close());
+  sqlite.exec(`CREATE TABLE salesforce_exports (account_id TEXT, activity_id TEXT);
+    INSERT INTO salesforce_exports VALUES ('account-a', 'task-a'), ('account-b', 'task-b');`);
+  manager.setActiveAccountId("account-a");
+  manager.deleteAccountData("account-a");
+  assert.deepEqual(
+    sqlite
+      .prepare("SELECT activity_id FROM salesforce_exports")
+      .all()
+      .map((row) => row.activity_id),
+    ["task-b"]
+  );
+});
+
 test("account scope shows the account's own personal rows and workspace rows, legacy rows only signed out", (t) => {
   const { manager, sqlite } = createDatabaseManager();
   t.after(() => sqlite.close());

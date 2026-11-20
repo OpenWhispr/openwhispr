@@ -115,7 +115,7 @@ test("technical output values remain LTR inside an Arabic document", () => {
     ["src/components/ui/ModelCardList.tsx", /<span\s+dir="ltr"[\s\S]*?\{model\.label\}/],
     [
       "src/components/onboarding/ProviderSetupStep.tsx",
-      /<span\s+dir="ltr">\s*\{models\.find[\s\S]*?\?\? selectedModel\}/,
+      /<span\s+dir="ltr">\s*\{models\.find\([^{}]*?=== (\w+)\)\?\.name \?\? \1\}\s*<\/span>/,
     ],
     [
       "src/components/onboarding/RequiredModelDownloadStep.tsx",
