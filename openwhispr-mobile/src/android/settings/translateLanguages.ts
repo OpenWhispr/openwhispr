@@ -95,6 +95,10 @@ const ALIASES: Record<string, string> = {
   'zh-sg': 'zh-CN',
 };
 
+// English locales that spell the British way ("colour"), so the phone's English (South Africa)
+// offers English (UK).
+const BRITISH_SPELLING = new Set(['gb', 'ie', 'au', 'nz', 'za', 'in', 'sg', 'hk', 'mt', 'ke', 'ng']);
+
 /** The list's language for one of the phone's locale tags ("de-AT" → German), if it has one. */
 export function languageForLocale(tag: string): TranslateLanguage | undefined {
   const parts = tag.replaceAll('_', '-').split('-').filter(Boolean);
@@ -110,7 +114,7 @@ export function languageForLocale(tag: string): TranslateLanguage | undefined {
     const alias = ALIASES[`zh-${script ?? next ?? 'hans'}`] ?? 'zh-CN';
     return byCode.get(alias);
   }
-  if (lang === 'en') return byCode.get(next === 'gb' ? 'en-GB' : 'en-US');
+  if (lang === 'en') return byCode.get(next && BRITISH_SPELLING.has(next) ? 'en-GB' : 'en-US');
   return byCode.get(ALIASES[lang] ?? lang);
 }
 

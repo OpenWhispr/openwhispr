@@ -68,7 +68,10 @@ describe('Translate into', () => {
     expect(languageForLocale('de-AT')?.code).toBe('de');
     expect(languageForLocale('en-US')?.code).toBe('en-US');
     expect(languageForLocale('en-GB')?.code).toBe('en-GB');
-    expect(languageForLocale('en-AU')?.code).toBe('en-US');
+    expect(languageForLocale('en-AU')?.code).toBe('en-GB');
+    expect(languageForLocale('en-ZA')?.code).toBe('en-GB');
+    expect(languageForLocale('en-CA')?.code).toBe('en-US');
+    expect(languageForLocale('en')?.code).toBe('en-US');
     expect(languageForLocale('pt_BR')?.code).toBe('pt');
     expect(languageForLocale('zh-Hant-TW')?.code).toBe('zh-TW');
     expect(languageForLocale('zh-Hans-CN')?.code).toBe('zh-CN');
