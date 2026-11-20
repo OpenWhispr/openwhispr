@@ -122,3 +122,20 @@ test("the key goes only to an https URL whose exact origin is a configured https
     _setSessionForTest(null);
   }
 });
+
+test("the default allowlist ignores a runtime VITE_SERVICES_URL override", () => {
+  const saved = process.env.VITE_SERVICES_URL;
+  process.env.VITE_SERVICES_URL = "https://attacker.example";
+  _setSessionForTest(signedIn);
+  try {
+    assert.equal(titaniumServiceKeyFor("https://attacker.example/v1/agent/web-search"), null);
+    assert.equal(
+      titaniumServiceKeyFor("https://stt.titaniumlabs.us/v1/agent/web-search"),
+      "key/abc.sig"
+    );
+  } finally {
+    _setSessionForTest(null);
+    if (saved === undefined) delete process.env.VITE_SERVICES_URL;
+    else process.env.VITE_SERVICES_URL = saved;
+  }
+});

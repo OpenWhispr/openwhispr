@@ -74,7 +74,10 @@ function httpsOriginOf(url) {
  * (e.g. an http override) allows nothing. A Custom endpoint the user points
  * elsewhere never receives the Titanium credential.
  */
-function titaniumServiceKeyFor(url, forkConfig = require("../../config/forkConfig")) {
+// The allowlist comes from the shipped fork.config.json, never from runtime
+// VITE_* overrides: an overridden SERVICES_URL still receives requests, but
+// never the license key.
+function titaniumServiceKeyFor(url, forkConfig = require("../../config/fork.config.json")) {
   if (!session) return null;
   const requested = httpsOriginOf(url);
   if (!requested) return null;
