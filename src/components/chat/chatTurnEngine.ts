@@ -151,7 +151,7 @@ function estimateModelSizeB(modelId: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-const CONNECTOR_CONNECTION_TARGETS = ["gmail", "slack", "linear", "github"] as const;
+const CONNECTOR_CONNECTION_TARGETS = ["gmail", "slack", "linear", "github", "salesforce"] as const;
 
 // What the user can connect from the chat: connectors this build can connect
 // that aren't ready, and a calendar while none is connected.
@@ -1090,10 +1090,20 @@ export function createChatTurnEngine(
       let reasoning = "";
       let rawContent = "";
       let fullContent = "";
-      const responseContent = (): string =>
+      const renderedAnswers = new Map<string, string>();
+      const modelContent = (): string =>
         withoutEchoedToolTrace(
           requireCaretDisposition ? readCaretResponse(rawContent).content : rawContent
         );
+      // A tool's rendered evidence follows the model's own words, kept whole so
+      // a card placed in them (textOffset) never lands inside it. A rule sets
+      // the evidence apart, so nothing the model wrote reads as part of it.
+      const responseContent = (): string => {
+        const text = modelContent();
+        if (!renderedAnswers.size) return text;
+        const answers = [...renderedAnswers.values()].join("\n\n---\n\n");
+        return text.trim() ? `${text}\n\n---\n\n${answers}` : answers;
+      };
       // A tool may report before the stream shows its call (it can ask the
       // user at once), so what it reports waits here for the call.
       const annotations = new Map<string, Partial<ToolCallInfo>>();
@@ -1205,6 +1215,12 @@ export function createChatTurnEngine(
       };
 
       const recordExecutedResult = (id: string, result: ToolResult): void => {
+        // Evidence tools own their answer: a later model paraphrase must not replace verified facts.
+        if (!cancelled() && ownerCurrent() && result.success && result.renderedAnswer) {
+          renderedAnswers.set(result.renderedAnswer.key, result.renderedAnswer.content);
+          fullContent = responseContent();
+          scheduleContentFlush();
+        }
         if (cancelled()) {
           const call = toolCalls.find((call) => call.id === id);
           if (call && !SKILL_CARD_TOOLS.has(call.name)) return;
@@ -1498,7 +1514,7 @@ export function createChatTurnEngine(
                   arguments: call.arguments,
                   status: "executing",
                   startedAt: Date.now(),
-                  textOffset: fullContent.length,
+                  textOffset: modelContent().length,
                   ...annotations.get(currentToolCallId(call.id)),
                 },
               ];
@@ -1581,7 +1597,10 @@ export function createChatTurnEngine(
             assistantId,
             content: fullContent,
             toolCalls: calls,
+            // A rendered answer (a Salesforce briefing) is Markdown with
+            // citations, made to be read here, never typed into another app.
             onlyRead:
+              renderedAnswers.size === 0 &&
               !stepLimitReached &&
               !unbackedClaim &&
               finishReason === "stop" &&
@@ -1658,7 +1677,7 @@ export function createChatTurnEngine(
               m.id === assistantId
                 ? {
                     ...m,
-                    content: `${t("agentMode.chat.errorPrefix")}: ${failure.description}`,
+                    content: `${renderedAnswers.size ? `${fullContent}\n\n` : ""}${t("agentMode.chat.errorPrefix")}: ${failure.description}`,
                     isStreaming: false,
                     toolCalls: currentToolCalls(),
                     turn: currentTurn(),

@@ -8,6 +8,14 @@ export interface ConnectorPreviewNote {
   values?: Record<string, string>;
 }
 
+export interface SalesforcePreviewField {
+  key: string;
+  name: string;
+  label: string;
+  before: string;
+  maxLength: number;
+}
+
 export interface ConnectorPreview {
   /** i18n suffix under connectors.approval.headers (e.g. "default", "post"). */
   verbKey: string;
@@ -22,6 +30,7 @@ export interface ConnectorPreview {
    * connector sets `body` to the same text as `fields.body`.
    */
   fields?: Record<string, string | string[]>;
+  salesforceFields?: SalesforcePreviewField[];
 }
 
 /** What Send commits: a fields preview's fields, otherwise title and body. */

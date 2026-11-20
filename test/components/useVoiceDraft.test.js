@@ -27,6 +27,7 @@ async function mountVoiceDraft(
   t.after(() => root && React.act(async () => root.unmount()));
   const transcribed = [];
   const deleted = [];
+  const cancelled = [];
   globalThis.__voiceDraftTranscribed = transcribed;
   globalThis.__voiceDraftGate = gate;
   t.after(() => {
@@ -43,6 +44,7 @@ async function mountVoiceDraft(
         },
         saveTempAudio: async () => ({ path: "/tmp/take.webm" }),
         deleteTempAudio: async (path) => deleted.push(path),
+        cancelUploadTranscription: async (id) => cancelled.push(id),
         getSystemDefaultMicrophone: async () => null,
         agentWindowSetVoiceState: async (state, attempt) => {
           bridge.push(`voice:${state}`);
@@ -87,8 +89,8 @@ async function mountVoiceDraft(
       "/hooks/useSettings": `import { useSettingsStore } from "/stores/settingsStore.ts";
         export const useSettings = () => useSettingsStore();`,
       "/services/fileTranscription": `
-        export const transcribeFile = async (_path, config) => {
-          globalThis.__voiceDraftTranscribed.push(config);
+        export const transcribeFile = async (_path, config, _diarize, options) => {
+          globalThis.__voiceDraftTranscribed.push({ ...config, requestId: options.requestId });
           const text = (await globalThis.__voiceDraftGate) ?? "hello there";
           return { success: true, text };
         };
@@ -130,6 +132,7 @@ async function mountVoiceDraft(
     opened,
     transcribed,
     deleted,
+    cancelled,
     transcripts,
     bridge,
     unmount: () => React.act(async () => root.unmount()).then(() => (root = null)),
@@ -177,6 +180,11 @@ test("voice drafts discard pending acquisition and local or BYOK transcription a
             await settle();
           });
           if (opening) assert.equal(await opening, "failed");
+          if (phase === "transcribing") {
+            const id = h.transcribed[0].requestId;
+            assert.ok(id, "the take received a cancellation id");
+            assert.deepEqual(h.cancelled, [id]);
+          }
           if (phase === "preparing") {
             assert.deepEqual(
               h.transcribed,
@@ -305,6 +313,9 @@ test("cancel abandons a transcription: its text never arrives and the next take 
 
   await recordTake(harness);
   await React.act(async () => harness.voice().cancel());
+  const id = harness.transcribed[0].requestId;
+  assert.ok(id);
+  assert.deepEqual(harness.cancelled, [id]);
   assert.equal(harness.voice().status, "idle");
 
   let next;
@@ -319,6 +330,25 @@ test("cancel abandons a transcription: its text never arrives and the next take 
   });
   assert.deepEqual(harness.transcripts, []);
   assert.equal(harness.voice().status, "recording", "the new take keeps recording");
+});
+
+test("unmount cancels the dispatched transcription and still removes the recorded file", async (t) => {
+  const transcription = deferred();
+  const harness = await mountVoiceDraft(t, {
+    settings: SIGNED_IN_CLOUD,
+    getUserMedia: (_constraints, stream) => stream,
+    gate: transcription.promise,
+  });
+
+  await recordTake(harness);
+  await harness.unmount();
+  const id = harness.transcribed[0].requestId;
+  assert.ok(id);
+  assert.deepEqual(harness.cancelled, [id]);
+  transcription.resolve("abandoned take");
+  await settle();
+  assert.deepEqual(harness.transcripts, []);
+  assert.deepEqual(harness.deleted, ["/tmp/take.webm"]);
 });
 
 test("a microphone that won't open is reported apart from a failed transcription", async (t) => {

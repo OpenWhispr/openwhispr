@@ -40,6 +40,9 @@ import type {
   NoteAttendeesRequest,
 } from "./connectors";
 import type {
+  CloudSkillEntry,
+  CloudSkillMeta,
+  SkillCloudExport,
   SkillCommitResult,
   SkillCreateInput,
   SkillDetail,
@@ -50,6 +53,8 @@ import type {
   SkillRef,
   SkillSaveResult,
   SkillSummary,
+  SkillSyncRow,
+  SkillSyncUnavailable,
   SkillUpdate,
   SkillUploadItem,
   SkillUploadPreview,
@@ -285,8 +290,9 @@ export interface IpcErrorFields {
  * Proxied-transcription IPC results. `ipcMain.handle` drops custom error props on
  * rejection, so these handlers resolve with a serialized error instead of throwing.
  */
-export type ProxyTranscriptionResult =
-  { text: string; model?: string; error?: undefined } | (IpcErrorFields & { text?: undefined });
+export type ProxyTranscriptionResult<SuccessFields = unknown> =
+  | ({ text: string; model?: string; error?: undefined } & SuccessFields)
+  | (IpcErrorFields & { text?: undefined });
 
 export interface AuthTokenState {
   token: string | null;
@@ -937,6 +943,8 @@ export interface Workspace {
   is_default: boolean;
   // Some account's default workspace, the caller's or another member's.
   is_account_default: boolean;
+  // Absent on API responses that predate workspace icons.
+  icon_url?: string | null;
 }
 
 export interface OwnedMemberContent {
@@ -1915,7 +1923,8 @@ declare global {
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
         state: "idle" | "preparing" | "recording" | "processing",
-        attempt: string
+        attempt: string,
+        voiceAgentRequested?: boolean
       ) => Promise<boolean>;
 
       // STT config
@@ -2031,6 +2040,8 @@ declare global {
           cohereModel: string;
           whisperModel: string;
           preferredLanguage?: string;
+          translationSourceLanguage?: string;
+          keyterms?: string[];
           transcriptionMode?: InferenceMode;
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
@@ -2046,6 +2057,8 @@ declare global {
         success: boolean;
         transcription?: TranscriptionItem;
         warning?: string;
+        // The transcript as the provider rewrote it (AssemblyAI Dictation).
+        cleanedText?: string;
         error?: string;
         code?: string;
         messageKey?: string;
@@ -2188,7 +2201,9 @@ declare global {
       ) => Promise<{ success: boolean; error?: string }>;
       exportTranscript: (
         noteId: number,
-        format: "txt" | "srt" | "json" | "md"
+        format: "txt" | "srt" | "json" | "md",
+        /** recorderLabel names the original recorder when someone else exports the note. */
+        options?: { recorderLabel?: string }
       ) => Promise<{ success: boolean; error?: string }>;
       exportDictionary: (words: string[]) => Promise<{ success: boolean; error?: string }>;
       searchNotes: (
@@ -2936,6 +2951,12 @@ declare global {
         language?: string;
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
+      proxyElevenlabsTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult<{ acceptedKeyterms: string[] }>>;
 
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
@@ -2987,6 +3008,15 @@ declare global {
       saveDeepgramKey?: (key: string) => Promise<void>;
       getAssemblyAIKey?: () => Promise<string | null>;
       saveAssemblyAIKey?: (key: string) => Promise<void>;
+      proxyAssemblyAiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        mimeType?: string;
+        durationSeconds?: number | null;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult & { cleanedText?: string }>;
+      getElevenlabsKey?: () => Promise<string | null>;
+      saveElevenlabsKey?: (key: string) => Promise<void>;
 
       // Custom endpoint API keys
       getSelfHostedSttHeaders?: () => Promise<string | null>;
@@ -3435,6 +3465,7 @@ declare global {
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;
+        durationSeconds?: number;
         requestId?: string;
         purpose?: "dictation" | "upload";
         apiKey: string;
@@ -3868,7 +3899,11 @@ declare global {
       connectorNoteAttendees?: (
         request: NoteAttendeesRequest
       ) => Promise<{ attendees: NoteAttendee[]; unavailableReason?: string }>;
-      connectorConnect?: (connectorId: string) => Promise<ConnectorConnectResult>;
+      /** `loginDomain`: Salesforce's sandbox or My Domain sign-in host, when not the default. */
+      connectorConnect?: (
+        connectorId: string,
+        options?: { loginDomain?: string }
+      ) => Promise<ConnectorConnectResult>;
       /**
        * Stops this connector's connect in progress, whichever account started it
        * (including one still waiting on policy); the connect ends as oauth_cancelled.
@@ -4468,6 +4503,14 @@ declare global {
         id: number,
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** Queues a linked chat whose cloud copy is missing messages for the next push. */
+      markConversationPending?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      getSyncedLinkedConversations?: (
+        expectedAuthGeneration: number
+      ) => Promise<Array<{ id: number; cloud_id: string }> | StaleSyncWrite>;
       clearConversationCreateAttempted?: (id: number) => Promise<void>;
       acknowledgeConversationCreate?: (
         id: number,
@@ -4635,6 +4678,32 @@ declare global {
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
+
+      getPendingSkills?: () => Promise<SkillSyncRow[]>;
+      getPendingSkillDeletes?: () => Promise<SkillSyncRow[]>;
+      exportSkillForCloud?: (name: string) => Promise<SkillCloudExport>;
+      getSkillForCloudMerge?: (
+        cloudEntry: CloudSkillMeta
+      ) => Promise<SkillSyncRow | null | SkillSyncUnavailable>;
+      /** False when the entry was skipped for good; a failed write answers why. */
+      applySkillFromCloud?: (
+        cloudEntry: CloudSkillEntry,
+        expectedLocal: SkillSyncRow | null
+      ) => Promise<boolean | { ok: false; error: SkillWriteError }>;
+      markSkillSynced?: (
+        name: string,
+        cloudId: string,
+        serverUpdatedAt: string | undefined,
+        expectedHash: string,
+        expectedEnabled: boolean
+      ) => Promise<{ success: boolean; changes: number } | null>;
+      hardDeleteSkill?: (name: string) => Promise<{ success: boolean } | null>;
+      queueSkillCloudDelete?: (
+        name: string,
+        cloudId: string
+      ) => Promise<{ success: boolean } | null>;
+      clearSkillCloudId?: (name: string) => Promise<{ success: boolean } | null>;
+      broadcastSkillsUpdated?: () => Promise<void>;
     };
 
     api?: {

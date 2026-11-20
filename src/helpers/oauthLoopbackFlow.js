@@ -56,8 +56,9 @@ function codedError(code, message, extra = {}) {
 //   (e.g. "gcal_error"); the success param is derived from the same prefix.
 // - redirectHost / ports / callbackPath — shape redirect_uri for providers
 //   that match it exactly (fixed ports are tried in order); the server
-//   always listens on 127.0.0.1. With a callbackPath, only that path is a
-//   callback.
+//   always listens on 127.0.0.1, and on ::1 too (best effort) when
+//   redirectHost is "localhost", since a browser may resolve that to IPv6
+//   first. With a callbackPath, only that path is a callback.
 // - renderResultPage({ ok }) — answer the browser from this server instead
 //   of the hosted page, for providers that page doesn't know.
 // - publicRedirectUri — for providers that require an HTTPS redirect: the
@@ -111,7 +112,7 @@ function runOAuthLoopbackFlow({
       res.end("<html><body><h3>Invalid request.</h3></body></html>");
     };
 
-    const server = http.createServer(async (req, res) => {
+    const handleRequest = async (req, res) => {
       // Accepted requests can outlive server.close(), so only the first
       // terminal callback may settle the flow or exchange a code.
       if (callbackClaimed) {
@@ -176,7 +177,9 @@ function runOAuthLoopbackFlow({
         cleanup();
         reject(err);
       }
-    });
+    };
+    const server = http.createServer(handleRequest);
+    const ipv6Server = redirectHost === "localhost" ? http.createServer(handleRequest) : null;
 
     let timeoutId;
     let listenErrorHandler = null;
@@ -185,6 +188,7 @@ function runOAuthLoopbackFlow({
       clearTimeout(timeoutId);
       signal?.removeEventListener("abort", onAbort);
       if (server.listening) server.close();
+      if (ipv6Server?.listening) ipv6Server.close();
     };
 
     const onAbort = () => {
@@ -205,6 +209,9 @@ function runOAuthLoopbackFlow({
       }
       if (listenErrorHandler) server.off("error", listenErrorHandler);
       server.on("error", (err) => {
+        // Claimed first, so an IPv6 bind still pending closes when it lands
+        // and no late callback can finish a flow that already failed.
+        callbackClaimed = true;
         cleanup();
         reject(err);
       });
@@ -212,7 +219,28 @@ function runOAuthLoopbackFlow({
       // failed browser launch surfaces as the flow timeout.
       const port = server.address().port;
       if (publicRedirectUri) state = `v1.${port}.${nonce}`;
-      openExternalUrl(buildAuthUrl(redirectUriFor(port), state, codeChallenge)).catch(() => {});
+      const openBrowser = () => {
+        if (callbackClaimed) return;
+        openExternalUrl(buildAuthUrl(redirectUriFor(port), state, codeChallenge)).catch(() => {});
+      };
+      if (!ipv6Server) {
+        openBrowser();
+        return;
+      }
+      // Best effort: without IPv6 the browser falls back to 127.0.0.1. With
+      // the port taken on ::1 by another app, a browser that tries ::1 first
+      // reaches that app, and the flow times out. The handler stays on for
+      // errors after listening.
+      let opened = false;
+      const openOnce = () => {
+        if (opened) return;
+        opened = true;
+        // Given up while this bound: it must not keep the port.
+        if (callbackClaimed && ipv6Server.listening) ipv6Server.close();
+        openBrowser();
+      };
+      ipv6Server.on("error", openOnce);
+      ipv6Server.listen(port, "::1", openOnce);
     });
 
     // A port in use falls through to the next one in the list.

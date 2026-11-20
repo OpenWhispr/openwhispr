@@ -25,9 +25,11 @@ async function setup(t) {
   const calls = { prepare: [], start: [], access: 0, mic: 0 };
   const noop = () => () => {};
   installMicCaptureGlobals(t);
+  const micRequested = Promise.withResolvers();
   const acquire = navigator.mediaDevices.getUserMedia;
   navigator.mediaDevices.getUserMedia = async (...args) => {
     calls.mic += 1;
+    micRequested.resolve();
     return acquire(...args);
   };
   installBrowserGlobals(t, {
@@ -44,6 +46,7 @@ async function setup(t) {
         },
         meetingTranscriptionStart: async (options) => {
           calls.start.push(options);
+          await micRequested.promise;
           return { success: false, error: "stopped by test" };
         },
         meetingTranscriptionStop: async () => ({ success: true }),

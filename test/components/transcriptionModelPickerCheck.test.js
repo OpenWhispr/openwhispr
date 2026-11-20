@@ -1,7 +1,12 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { mountSettingsPanel } = require("../lib/settingsPanelHarness");
-const { managedPolicy } = require("../helpers/harness/policyFixtures");
+const {
+  managedPolicy,
+  assemblyAiPolicy,
+  loadAssemblyAiDictationCatalog,
+  setManagedBedrockCleanup,
+} = require("../helpers/harness/policyFixtures");
 
 const PICKER = "/components/TranscriptionModelPicker.tsx";
 const KEY = "common.apiKey";
@@ -694,6 +699,50 @@ test("a blank Note Recording provider names the dictation provider it runs on", 
   assert.equal(hint(panel), undefined, "Deepgram is already in use");
 });
 
+test("Dictation Settings keeps a working inherited Note Recording route when selecting Scribe", async (t) => {
+  // Legacy BYOK users could keep the default OpenAI provider without writing a provider key.
+  const panel = await mount(t, {
+    settings: { _providerSettingsMigrated: "", cloudTranscriptionMode: "byok" },
+    overrides: { selectedCloudProvider: "openai", selectedCloudModel: "gpt-4o-mini-transcribe" },
+  });
+  await panel.setProps({ onCloudModelSelect: panel.state().setCloudTranscriptionModel });
+  const { selectResolvedMeetingTranscription } = await panel.vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const { getMeetingStreamingTranscriptionProviders } = await panel.vite.ssrLoadModule(
+    "/models/ModelRegistry.ts"
+  );
+  const { resolveMeetingTranscriptionOptions } =
+    await import("../../src/helpers/meetingTranscriptionRouting.js");
+  const recording = () => {
+    const meeting = selectResolvedMeetingTranscription(panel.state());
+    return resolveMeetingTranscriptionOptions({
+      transcriptionMode: meeting.transcriptionMode,
+      selectedProvider: meeting.cloudTranscriptionProvider,
+      selectedModel: meeting.cloudTranscriptionModel,
+      byokProviders: getMeetingStreamingTranscriptionProviders(),
+    });
+  };
+
+  assert.equal(recording().provider, "openai-realtime");
+  await panel.selectTab("deepgram");
+  await panel.selectModel("nova-3");
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "");
+  assert.equal(panel.state().meetingCloudTranscriptionModel, "");
+  const deepgramRecording = recording();
+  assert.equal(deepgramRecording.provider, "deepgram-realtime");
+  assert.equal(deepgramRecording.model, "nova-3");
+
+  await panel.setProps({ selectedCloudProvider: "deepgram", selectedCloudModel: "nova-3" });
+  await panel.selectTab("elevenlabs");
+  await panel.selectModel("scribe_v2");
+  assert.equal(panel.state().cloudTranscriptionProvider, "elevenlabs");
+  assert.equal(panel.state().cloudTranscriptionModel, "scribe_v2");
+  assert.deepEqual(recording(), deepgramRecording);
+  assert.equal(localStorage.getItem("meetingCloudTranscriptionProvider"), "deepgram");
+  assert.equal(localStorage.getItem("meetingCloudTranscriptionModel"), "nova-3");
+});
+
 test("a browsed Custom tab asks for a model name while the saved provider runs", async (t) => {
   const panel = await mount(t, {
     overrides: { selectedCloudProvider: "openai", selectedCloudModel: "gpt-4o-mini-transcribe" },
@@ -718,4 +767,85 @@ test("a custom endpoint in use is named as one", async (t) => {
   });
   await panel.selectTab("openai");
   assert.equal(hint(panel), 'transcription.customInUseHint {"provider":"OpenAI"}');
+});
+
+test("ElevenLabs shows the dictionary surcharge on dictation and Note Recording", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "elevenlabs", selectedCloudModel: "scribe_v3" },
+  });
+  const notices = () =>
+    panel.find((node) => node.props?.children === "transcription.elevenlabs.keytermsNote");
+  assert.equal(notices().length, 1);
+  await panel.setProps({
+    transcriptionContext: "meeting",
+    streamingOnly: true,
+    selectedCloudModel: "scribe_v3_live",
+  });
+  assert.equal(notices().length, 1);
+  await panel.setProps({
+    transcriptionContext: "upload",
+    streamingOnly: false,
+    selectedCloudModel: "scribe_v3",
+  });
+  assert.equal(notices().length, 0);
+});
+
+test("AssemblyAI Dictation needs LLM approval to appear or save, while realtime stays selectable", async (t) => {
+  const selected = [];
+  const panel = await mount(t, {
+    policy: assemblyAiPolicy(true, true),
+    overrides: {
+      selectedCloudProvider: "assemblyai",
+      selectedCloudModel: "dictation",
+      onCloudModelSelect: (id) => selected.push(id),
+    },
+  });
+  await require("react").act(() => loadAssemblyAiDictationCatalog(panel.vite));
+  const list = () => panel.find((node) => typeof node.props?.onModelSelect === "function")[0].props;
+  const ids = () => list().models.map((model) => model.value);
+  assert.ok(ids().includes("dictation"));
+  const staleSelect = list().onModelSelect;
+  await panel.selectModel("dictation");
+  await panel.setPolicy(assemblyAiPolicy(true, false));
+  assert.ok(!ids().includes("dictation"));
+  staleSelect("dictation");
+  assert.ok(ids().includes("universal-3-6-pro"));
+  await panel.selectModel("universal-3-6-pro");
+  await panel.setPolicy(assemblyAiPolicy(false, true));
+  staleSelect("dictation");
+  await panel.setPolicy(assemblyAiPolicy(true, true));
+  await require("react").act(() => setManagedBedrockCleanup(panel.vite));
+  assert.ok(!ids().includes("dictation"));
+  staleSelect("dictation");
+  await panel.selectModel("universal-3-6-pro");
+  assert.deepEqual(selected, ["dictation", "universal-3-6-pro", "universal-3-6-pro"]);
+});
+
+test("the dictation picker explains the current cleanup setting only for selected AssemblyAI batch dictation", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "assemblyai", selectedCloudModel: "dictation" },
+    secrets: {
+      transcriptionMode: "providers",
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "assemblyai",
+      cloudTranscriptionModel: "dictation",
+      useCleanupModel: true,
+    },
+  });
+  await require("react").act(() => loadAssemblyAiDictationCatalog(panel.vite));
+  const hint = () =>
+    panel.find(
+      (n) =>
+        typeof n.props?.children === "string" &&
+        n.props.children.startsWith("settingsPage.aiModels.assemblyAiCleanup.picker")
+    )[0]?.props.children;
+  assert.equal(hint(), "settingsPage.aiModels.assemblyAiCleanup.pickerOn");
+  await panel.setStore({ useCleanupModel: false });
+  assert.equal(hint(), "settingsPage.aiModels.assemblyAiCleanup.pickerOff");
+  await panel.selectTab("openai");
+  assert.equal(hint(), undefined);
+  await panel.selectTab("assemblyai");
+  await panel.setProps({ transcriptionContext: "upload" });
+  assert.equal(hint(), undefined);
 });

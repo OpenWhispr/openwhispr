@@ -957,6 +957,9 @@
     "tinfoil": {
       "transportNote": "O Tinfoil transmite com o Voxtral Mini 4B e processa em lote com o Voxtral Small 24B.",
       "docsLink": "Ver a documentação"
+    },
+    "elevenlabs": {
+      "keytermsNote": "O OpenWhispr envia à ElevenLabs os termos compatíveis do seu dicionário. A ElevenLabs cobra 20% a mais quando esses termos são incluídos."
     }
   },
   "hooks": {
@@ -1783,7 +1786,7 @@
             "Compartilhe notas com links públicos",
             "Acesso pessoal à API",
             "Integração MCP em todos os seus apps",
-            "Aplicativo móvel",
+            "Aplicativo móvel com nuvem ilimitada",
             "Suporte por e-mail"
           ],
           "cta": "Começar",
@@ -1933,6 +1936,19 @@
       "customSetup": "Configuração personalizada",
       "customSetupDescription": "Use seu próprio provedor e chave API.",
       "description": "Limpe transcrições, processe comandos e corrija erros preservando seu tom de voz.",
+      "assemblyAiCleanup": {
+        "pickerOn": "A revisão padrão está incluída no AssemblyAI Dictation.",
+        "pickerOff": "A revisão está desativada. O OpenWhispr colará suas palavras originais.",
+        "description": "O AssemblyAI devolve tanto o texto revisado quanto as palavras originais. Mantenha a revisão ativada para colar o texto revisado ou desative-a para colar as palavras originais.",
+        "standard": "Revisão padrão do ditado",
+        "included": "Incluída no modelo de ditado. Não é necessário um modelo de revisão separado.",
+        "advanced": "Revisão avançada",
+        "summary": "Provedor salvo para instruções personalizadas e tom e estilo",
+        "advancedHelp": "O AssemblyAI faz a revisão padrão. Escolha o provedor que o OpenWhispr usa quando suas instruções ou seu tom e estilo exigem uma revisão adicional.",
+        "saved": "Salvo",
+        "modelNeeded": "É necessário um modelo de revisão local",
+        "modelHelp": "Escolha e baixe um modelo local para aplicar seu tom ou suas instruções. O AssemblyAI faz a revisão padrão."
+      },
       "enableTextCleanup": "Ativar limpeza de texto",
       "enableTextCleanupDescription": "A IA remove palavras de preenchimento, corrige gramática e pontuação",
       "modes": {
@@ -2815,6 +2831,21 @@
         "nameHint": "O nome do espaço de trabalho pode ter até 65 caracteres",
         "iconLabel": "Ícone do espaço de trabalho",
         "iconHint": "Este ícone aparece na sua barra lateral e nas notificações.",
+        "iconUpload": "Enviar imagem",
+        "iconChange": "Alterar imagem",
+        "iconRemove": "Remover imagem",
+        "iconUploading": "Enviando…",
+        "iconUploaded": "Ícone do espaço de trabalho atualizado",
+        "iconRemoved": "Ícone do espaço de trabalho removido",
+        "iconUnsupported": "Escolha uma imagem PNG, JPEG, WebP ou GIF.",
+        "iconTooLarge": "Escolha uma imagem com menos de 10 MB.",
+        "iconUnreadable": "Não foi possível ler essa imagem. Escolha outro arquivo.",
+        "iconFailed": "Não foi possível atualizar o ícone do espaço de trabalho. Verifique sua conexão e tente novamente.",
+        "iconUnavailable": "Os ícones de espaço de trabalho não estão disponíveis no momento. Tente novamente mais tarde.",
+        "iconRateLimited": "Muitos envios de ícone na última hora. Tente novamente mais tarde.",
+        "iconSignInChanged": "Não foi possível atualizar o ícone do espaço de trabalho: seu login expirou ou mudou. Entre novamente e tente outra vez.",
+        "iconNotAllowed": "Você não pode mais alterar o ícone de {{workspace}}.",
+        "iconSsoRequired": "Entre com o login único (SSO) da sua empresa para alterar o ícone de {{workspace}}.",
         "roleLabel": "Sua função",
         "saved": "Espaço de trabalho atualizado",
         "ownerTitle": "Proprietário do espaço de trabalho",
@@ -3233,6 +3264,9 @@
         "groq_whisper_large_v3": "Modelo Large v3, rápido e preciso",
         "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida",
         "gemini_3_5_transcribe": "Fala para texto Gemini do Google",
+        "elevenlabs_scribe_v3": "A transcrição multilíngue mais precisa",
+        "elevenlabs_scribe_v2": "Transcrição multilíngue precisa",
+        "elevenlabs_scribe_v3_live": "Transcrição ao vivo para gravação de notas",
         "gemini_3_5_transcribe_live": "Fala para texto em streaming em tempo real",
         "corti_transcribe": "Transcrição médica de nível clínico",
         "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI",
@@ -3240,6 +3274,7 @@
         "deepgram_nova_3": "O modelo em tempo real mais preciso da Deepgram",
         "assemblyai_universal_streaming_english": "Transcrições em tempo real imutáveis, em inglês",
         "assemblyai_universal_streaming_multilingual": "Transcrições em tempo real imutáveis, multilíngues",
+        "assemblyai_dictation": "Transcrição e limpeza em uma única chamada, 32 idiomas",
         "assemblyai_universal_3_5_pro": "Máxima precisão em tempo real, 18 idiomas",
         "assemblyai_universal_3_6_pro": "Máxima precisão em tempo real, 32 idiomas",
         "mistral_voxtral_mini_transcribe_3_0": "Transcrição rápida em mais de 50 idiomas (prévia)",
@@ -4901,7 +4936,21 @@
       "request_api_keyName": "Chave de API",
       "request_api_keyStatus": "Pedindo uma chave de API...",
       "open_settingsName": "Configurações",
-      "open_settingsStatus": "Indicando as configurações..."
+      "open_settingsStatus": "Indicando as configurações...",
+      "salesforce_search_recordsName": "Pesquisar no Salesforce",
+      "salesforce_search_recordsStatus": "Pesquisando no Salesforce…",
+      "salesforce_get_recordName": "Registro do Salesforce",
+      "salesforce_get_recordStatus": "Lendo registro do Salesforce…",
+      "salesforce_describe_fieldsName": "Campos da oportunidade",
+      "salesforce_describe_fieldsStatus": "Lendo campos da oportunidade…",
+      "salesforce_get_briefingName": "Resumo do cliente",
+      "salesforce_get_briefingStatus": "Preparando resumo do cliente…",
+      "salesforce_export_conversationName": "Atividade do Salesforce",
+      "salesforce_export_conversationStatus": "Preparando atividade do Salesforce…",
+      "salesforce_update_fieldsName": "Atualizações de campos do Salesforce",
+      "salesforce_update_fieldsStatus": "Preparando atualizações de campos do Salesforce…",
+      "salesforce_present_briefingName": "Conclusões do resumo",
+      "salesforce_present_briefingStatus": "Selecionando evidências do resumo…"
     },
     "turn": {
       "reasoning": "Raciocínio",
@@ -4938,7 +4987,8 @@
           "slack": "Posso publicar a mensagem no Slack para você.",
           "linear": "Posso encontrar e criar issues do Linear para você.",
           "github": "Posso encontrar e criar issues do GitHub para você.",
-          "calendar": "Posso verificar sua disponibilidade e sugerir horários."
+          "calendar": "Posso verificar sua disponibilidade e sugerir horários.",
+          "salesforce": "Posso ler registros do Salesforce e salvar neles notas de reunião revisadas."
         }
       },
       "access": {
@@ -5160,7 +5210,9 @@
         "default": "Enviar para {{destination}}",
         "email": "E-mail para {{destination}}",
         "issue": "Criar issue em {{destination}}",
-        "comment": "Comentar em {{destination}}"
+        "comment": "Comentar em {{destination}}",
+        "salesforceActivity": "Salvar conversa em {{destination}}",
+        "salesforceFields": "Revisar campos da oportunidade em {{destination}}"
       },
       "identity": "Como {{account}}",
       "identityWithWorkspace": "Como {{account}} em {{workspace}}",
@@ -5251,6 +5303,31 @@
           "refused": "O Linear recusou a solicitação. Nada foi enviado.",
           "unknown_action": "O OpenWhispr não pode fazer isso no Linear. Nada foi enviado.",
           "generic": "Algo deu errado. Nada foi enviado ao Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "O Salesforce precisa ser reconectado nas Configurações.",
+          "connection_changed": "A conexão do Salesforce mudou antes do envio, então nada foi enviado.",
+          "credential_save_failed": "Não foi possível salvar o login do Salesforce neste computador. Nada foi enviado. Tente novamente.",
+          "network": "Não foi possível acessar o Salesforce. Nada foi enviado.",
+          "rate_limited": "O Salesforce está ocupado. Tente novamente em breve.",
+          "forbidden": "Sua conta do Salesforce não tem permissão para isso. Nada foi enviado.",
+          "invalid_input": "O Salesforce não pôde aceitar isso como está. Nada foi enviado.",
+          "too_long": "Longo demais para o Salesforce. Nada foi enviado.",
+          "refused": "O Salesforce recusou a solicitação. Nada foi enviado.",
+          "unknown_action": "O OpenWhispr não pode fazer isso no Salesforce. Nada foi enviado.",
+          "generic": "Algo deu errado. Nada foi enviado ao Salesforce.",
+          "stale_record": "O Salesforce mudou desde esta revisão. Atualize e revise novamente.",
+          "source_unavailable": "A nota de origem está ausente ou inacessível.",
+          "export_required": "Salve a atividade nesta oportunidade antes de atualizar seus campos.",
+          "duplicate_operation": "Esta exportação foi salva de novo depois desta revisão, ou ainda está sendo salva. Nada foi enviado. Prepare uma nova revisão.",
+          "invalid_field": "Escolha até três campos de texto personalizados e editáveis da oportunidade.",
+          "storage_unavailable": "O histórico local de exportações está indisponível. Nenhuma nova gravação foi iniciada.",
+          "task_status_unavailable": "O Salesforce não tem um status de tarefa concluída disponível. Consulte seu administrador do Salesforce.",
+          "not_found": "Este registro do Salesforce não existe mais ou você não tem acesso a ele. Nada foi enviado.",
+          "invalid_reference": "O Salesforce não pôde aceitar isso como está. Nada foi enviado.",
+          "no_fields_selected": "Selecione pelo menos um campo ou cancele.",
+          "record_locked": "Este registro do Salesforce está bloqueado, por exemplo por um processo de aprovação. Nada foi enviado.",
+          "validation_failed": "Uma regra de validação, uma regra de duplicidade ou um campo obrigatório do Salesforce impediu isso. Verifique o registro no Salesforce. Nada foi enviado."
         }
       },
       "email": {
@@ -5279,11 +5356,14 @@
       "openIn": {
         "github": "Abrir no GitHub",
         "gmail": "Abrir no Gmail",
-        "linear": "Abrir no Linear"
+        "linear": "Abrir no Linear",
+        "salesforce": "Abrir no Salesforce"
       },
       "sendLabel": {
         "issue": "Criar issue",
-        "comment": "Comentar"
+        "comment": "Comentar",
+        "salesforceActivity": "Salvar atividade",
+        "salesforceFields": "Salvar campos"
       },
       "issue": {
         "created": "{{result}} criada.",
@@ -5326,7 +5406,26 @@
       "identityChanged": "Agora será enviado como {{account}}. Pressione Enviar para enviar.",
       "connectToSend": "Conecte o {{name}} para enviar isto",
       "edit": "Editar",
-      "doneEditing": "Edição concluída"
+      "doneEditing": "Edição concluída",
+      "salesforce": {
+        "include": "Incluir {{field}}",
+        "omitted": "Omitido — este campo não será alterado",
+        "before": "Valor atual",
+        "after": "Substituição proposta",
+        "empty": "Vazio",
+        "limit": "{{count}} / {{max}} caracteres",
+        "noneSelected": "Selecione pelo menos um campo ou cancele.",
+        "tooLong": "Um campo selecionado excede o limite de caracteres.",
+        "salesforceActivity": {
+          "sent": "Atividade salva em {{destination}}.",
+          "unknown": "Não foi possível confirmar as alterações. Verifique {{destination}} no Salesforce antes de tentar novamente."
+        },
+        "salesforceFields": {
+          "sent": "Campos salvos em {{destination}}.",
+          "unknown": "Não foi possível confirmar as alterações. Verifique {{destination}} no Salesforce antes de tentar novamente."
+        },
+        "savedLabel": "Salvo"
+      }
     },
     "policyOff": "Sua organização desativou os conectores.",
     "email": {
@@ -5502,7 +5601,9 @@
         "slack_send_message": "Mensagem para {{destination}}",
         "gmail_send": "E-mail para {{destination}}",
         "linear_create_issue": "Nova issue em {{destination}}",
-        "linear_comment": "Comentário em {{destination}}"
+        "linear_comment": "Comentário em {{destination}}",
+        "salesforce_export_conversation": "Salvar conversa em {{destination}}",
+        "salesforce_update_fields": "Revisar campos da oportunidade em {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "Rascunho de e-mail",
@@ -5511,7 +5612,9 @@
         "slack_send_message": "Mensagem do Slack",
         "gmail_send": "E-mail do Gmail",
         "linear_create_issue": "Issue do Linear",
-        "linear_comment": "Comentário do Linear"
+        "linear_comment": "Comentário do Linear",
+        "salesforce_export_conversation": "Atividade do Salesforce",
+        "salesforce_update_fields": "Atualizações de campos do Salesforce"
       },
       "states": {
         "pending": "Aguardando",
@@ -5613,6 +5716,31 @@
           "refused": "O Linear recusou a solicitação.",
           "unknown_action": "Não disponível no Linear.",
           "generic": "Não funcionou no Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "O Salesforce precisa ser reconectado.",
+          "connection_changed": "A conexão do Salesforce mudou. Nada foi enviado.",
+          "credential_save_failed": "Não foi possível salvar o login do Salesforce neste computador.",
+          "network": "Não foi possível acessar o Salesforce.",
+          "rate_limited": "O Salesforce está ocupado.",
+          "forbidden": "Não permitido no Salesforce.",
+          "invalid_input": "O Salesforce não pôde aceitar.",
+          "too_long": "Longo demais para o Salesforce.",
+          "refused": "O Salesforce recusou a solicitação.",
+          "unknown_action": "Não disponível no Salesforce.",
+          "generic": "Não funcionou no Salesforce.",
+          "stale_record": "O Salesforce mudou desde esta revisão. Atualize e revise novamente.",
+          "source_unavailable": "A nota de origem está ausente ou inacessível.",
+          "export_required": "Salve a atividade nesta oportunidade antes de atualizar seus campos.",
+          "duplicate_operation": "Esta exportação foi salva de novo depois desta revisão, ou ainda está sendo salva. Nada foi enviado.",
+          "invalid_field": "Escolha até três campos de texto personalizados e editáveis da oportunidade.",
+          "storage_unavailable": "O histórico local de exportações está indisponível. Nenhuma nova gravação foi iniciada.",
+          "task_status_unavailable": "O Salesforce não tem um status de tarefa concluída disponível. Consulte seu administrador do Salesforce.",
+          "not_found": "Não encontrado no Salesforce.",
+          "invalid_reference": "O Salesforce não pôde aceitar.",
+          "no_fields_selected": "Selecione pelo menos um campo ou cancele.",
+          "record_locked": "O registro do Salesforce está bloqueado.",
+          "validation_failed": "Bloqueado por uma regra ou um campo obrigatório do Salesforce."
         }
       },
       "unknownSent": {
@@ -5625,7 +5753,120 @@
     },
     "beta": "Beta",
     "upsell": "Os conectores estão incluídos nos planos pagos. Faça upgrade para o assistente trabalhar nas suas ferramentas.",
-    "locked": "Incluído nos planos pagos"
+    "locked": "Incluído nos planos pagos",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "Exporte conversas revisadas e prepare resumos para um cliente selecionado. As associações de notas são armazenadas apenas neste dispositivo.",
+      "connect": "Conectar",
+      "reconnect": "Reconectar",
+      "disconnect": "Desconectar",
+      "connecting": "Termine de conectar no seu navegador…",
+      "connectedAs": "Conectado como {{account}} em {{workspace}}",
+      "needsReconnect": "O Salesforce precisa ser reconectado.",
+      "errors": {
+        "connect_failed": "Não foi possível conectar o Salesforce. Tente novamente.",
+        "disconnect_failed": "Não foi possível desconectar o Salesforce. Tente novamente.",
+        "oauth_denied": "O Salesforce não foi conectado porque o acesso não foi permitido.",
+        "oauth_timeout": "A conexão demorou demais. Tente novamente.",
+        "oauth_state_mismatch": "Esse link de login estava desatualizado. Tente novamente.",
+        "ports_busy": "Outro aplicativo está usando as portas que o OpenWhispr precisa para conectar. Feche-o e tente novamente.",
+        "token_exchange_failed": "O Salesforce não concluiu a conexão. Tente novamente.",
+        "not_configured": "O Salesforce não está disponível nesta versão.",
+        "connection_changed": "Sua conta ou a conexão do Salesforce mudou durante a conexão. Tente novamente.",
+        "signed_out": "Entre no OpenWhispr para conectar o Salesforce.",
+        "policy_blocked": "Sua organização desativou os conectores.",
+        "policy_unavailable": "Não foi possível verificar as configurações da sua organização. Tente novamente.",
+        "permission_not_granted": "O Salesforce não foi conectado porque nem todas as permissões foram concedidas. Conecte novamente e permita todas.",
+        "invalid_login_domain": "Digite test.salesforce.com ou o My Domain da sua empresa, como suaempresa.my.salesforce.com."
+      },
+      "browser": {
+        "connectedTitle": "O Salesforce está conectado",
+        "connectedBody": "Você pode fechar esta aba e voltar para o OpenWhispr.",
+        "failedTitle": "O Salesforce não foi conectado",
+        "failedBody": "Volte para o OpenWhispr para tentar novamente."
+      },
+      "notes": {
+        "updateExisting": "Atualizar a atividade salva anteriormente; nenhuma outra tarefa será criada.",
+        "earlierAttemptUncertain": "Uma tentativa anterior pode já ter salvado isso no Salesforce. Verifique o registro lá antes de enviar novamente.",
+        "replacesMissing": "A atividade salva anteriormente não está mais neste registro do Salesforce, ou você não pode mais vê-la, então uma nova será criada.",
+        "editedInSalesforce": "Esta atividade foi editada no Salesforce depois que o OpenWhispr a salvou. Ao enviar, essas edições serão substituídas.",
+        "sourceNote": "Da nota “{{title}}”.",
+        "sourceNoteUntitled": "De uma nota sem título."
+      },
+      "provenance": "Fonte: OpenWhispr — {{title}}{{date}}",
+      "briefing": {
+        "untitledRecord": "Registro do Salesforce selecionado",
+        "retrieved": "Obtido: {{time}}",
+        "crmFacts": "Dados atuais do CRM",
+        "fields": {
+          "Name": "Nome",
+          "PersonName": "Nome",
+          "StageName": "Fase",
+          "CloseDate": "Data de fechamento",
+          "Amount": "Valor",
+          "CurrencyIsoCode": "Moeda",
+          "NextStep": "Próxima etapa",
+          "OwnerId": "Proprietário",
+          "AccountId": "Conta",
+          "Type": "Tipo",
+          "Industry": "Setor",
+          "Website": "Site",
+          "Phone": "Telefone",
+          "FirstName": "Primeiro nome",
+          "LastName": "Sobrenome",
+          "Email": "Email",
+          "Title": "Cargo",
+          "Company": "Empresa",
+          "Status": "Status"
+        },
+        "notReturned": "não retornado",
+        "notRecorded": "não registrado",
+        "linkedNameUnavailable": "vinculado; nome indisponível",
+        "gaps": "Lacunas e identidade do cliente",
+        "identityNotVerified": "Uma associação de exportação não verifica a identidade do cliente. As notas foram vinculadas ao registro escolhido pelo usuário; nomes de clientes e relações de conta não foram conferidos de forma independente.",
+        "missingFieldsNote": "Campos do CRM ausentes ou não retornados não comprovam aprovação de orçamento, compromissos nem concordância com as notas da reunião.",
+        "unavailableNotes": "Notas vinculadas indisponíveis no espaço de trabalho atual: {{count}}.",
+        "partial": "A cobertura é parcial: o número de notas, o texto de origem, a transcrição ou os resultados do CRM foram limitados. O que não aparece nestes trechos não necessariamente ficou de fora das reuniões.",
+        "crmOnly": "Nenhum conteúdo de reunião acessível foi obtido. Este resumo se baseia só no CRM.",
+        "notPrepared": "As conclusões das reuniões não foram preparadas. As notas de origem disponíveis estão listadas abaixo; nenhuma conclusão foi deduzida.",
+        "findings": "Conclusões das reuniões",
+        "findingsExplainer": "Os trechos de origem estão reproduzidos abaixo. Os status são a classificação do assistente; confirmado significa registrado na nota, não verificado de forma independente. Responsáveis e prazos são apenas os informados em cada trecho.",
+        "categories": {
+          "takeaway": "Pontos principais",
+          "decision": "Decisões",
+          "commitment": "Compromissos",
+          "proposal": "Propostas",
+          "risk": "Riscos",
+          "question": "Perguntas em aberto"
+        },
+        "status": {
+          "confirmed": "Confirmado",
+          "proposed": "Proposto",
+          "unknown": "Indefinido"
+        },
+        "conflict": "Possível contradição — não resolvida",
+        "crmConflictEntry": "Salesforce {{label}}: {{value}}",
+        "sources": "Fontes",
+        "noteCreated": "Nota criada: {{time}}.",
+        "lastEdited": "Última edição: {{time}}.",
+        "addedForBriefing": "Adicionada para este resumo.",
+        "exported": "Exportada: {{time}}.",
+        "savedActivity": "Atividade salva no Salesforce",
+        "sourcesExplainer": "Datas de criação não são datas de reunião. As atividades salvas no Salesforce contêm o resumo exportado; as notas podem ter mudado desde a exportação.",
+        "sections": {
+          "personalNotes": "Notas pessoais",
+          "summary": "Resumo de IA salvo",
+          "transcript": "Transcrição, caracteres {{start}}–{{end}}"
+        },
+        "prepared": "Resumo do cliente do Salesforce preparado"
+      },
+      "loginDomain": {
+        "toggle": "Usar um sandbox ou o domínio da empresa",
+        "label": "Domínio de login do Salesforce",
+        "placeholder": "test.salesforce.com ou suaempresa.my.salesforce.com",
+        "hint": "Deixe em branco para entrar em uma organização de produção."
+      }
+    }
   },
   "skills": {
     "pane": {
@@ -5671,6 +5912,7 @@
       "neverRun": "O OpenWhispr nunca executa scripts",
       "uninstall": "Desinstalar",
       "uninstallConfirm": "Desinstalar {{name}}? Ela será removida deste computador.",
+      "uninstallConfirmSynced": "Desinstalar {{name}}? Ela será removida deste computador e dos seus outros dispositivos.",
       "problem": "Esta habilidade não pode ser usada até ser corrigida: {{reason}}",
       "tryNow": "Experimentar agora"
     },
@@ -5696,6 +5938,7 @@
     "manage": {
       "title": "Gerenciar habilidades",
       "description": "Ative ou desative habilidades, ou remova as que você não usa. Cada uma fica salva neste computador.",
+      "descriptionBackedUp": "Ative ou desative habilidades, ou remova as que você não usa. Cada uma fica salva neste computador e no Backup na nuvem.",
       "noMatches": "Nenhuma habilidade corresponde a \"{{query}}\".",
       "none": "Nenhuma habilidade ainda."
     },
@@ -5846,6 +6089,9 @@
       "pasteNote": "Cola sem pressionar Enter, para você escolher quando executar.",
       "pasted": "Colado",
       "pasteFailed": "Não foi possível colar. O texto está na sua área de transferência."
+    },
+    "sync": {
+      "tooLarge": "Grande demais para o backup"
     }
   },
   "calendar": {

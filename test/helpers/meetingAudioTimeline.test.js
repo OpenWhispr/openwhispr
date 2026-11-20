@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const { createRequire } = require("node:module");
+const ElevenLabsStreaming = require("../../src/helpers/elevenLabsStreaming");
 const createWatchdog = require("../../src/helpers/meetingSystemAudioWatchdog");
 const createMeetingSystemAudioHandover = require("../../src/helpers/meetingSystemAudioHandover");
 const micGate = require("../../src/helpers/meetingMicGate");
@@ -91,6 +92,7 @@ function harness({ native = true, local = false } = {}) {
     meetingReconnectAudioBuffers: { mic: [], system: [] },
     meetingReconnectAudioBytes: { mic: 0, system: 0 },
     meetingReconnectReplaySources: new Set(),
+    meetingReconnectPromise: null,
     MEETING_RECONNECT_BUFFER_MAX_BYTES: 24000 * 2 * 30,
     MEETING_MIC_BLEED_LOOKBACK_MS: 0,
     meetingMicStatsLogCount: 0,
@@ -205,6 +207,70 @@ test("Deepgram anchors native system and AEC mic transcripts to audio after slow
   assert.deepEqual(system.timestamps, [14000, 14100]);
 });
 
+function receiveElevenLabsFinal(streaming, start) {
+  let received;
+  streaming.onFinalTranscript = (text, timestamp) => {
+    received = { text, timestamp };
+  };
+  streaming.handleMessage(
+    Buffer.from(
+      JSON.stringify({
+        message_type: "committed_transcript_with_timestamps",
+        text: "I am back",
+        words: [{ type: "word", start }],
+      })
+    )
+  );
+  return received;
+}
+
+test("ElevenLabs times native capture from its first sample after a slow handshake", async (t) => {
+  const run = harness({ native: false });
+  await run.start();
+  t.mock.timers.enable({ apis: ["Date"], now: 3200 });
+  const streaming = new ElevenLabsStreaming();
+  streaming.sessionStartedAt = 1000;
+  streaming.isConnected = true;
+  streaming.ws = { readyState: 1, send() {} };
+  run.context._meetingSystemStreaming = streaming;
+  run.at(3200);
+  run.chunk();
+  assert.deepEqual(receiveElevenLabsFinal(streaming, 0), { text: "I am back", timestamp: 3200 });
+});
+
+test("ElevenLabs times resumed speech from the native capture clock after idle keep-alives", async (t) => {
+  const run = harness();
+  await run.start();
+  t.mock.timers.enable({ apis: ["setInterval", "Date"], now: 1000 });
+  const frames = [];
+  const streaming = new ElevenLabsStreaming();
+  streaming.sessionStartedAt = 1000;
+  streaming.isConnected = true;
+  streaming.ws = {
+    readyState: 1,
+    send: (data) => frames.push(Buffer.from(JSON.parse(data).audio_base_64, "base64")),
+  };
+  run.context._meetingSystemStreaming = streaming;
+  run.watchdog.start({ systemAudioStrategy: "native", watchesDelivery: true });
+  t.after(() => {
+    run.watchdog.stop();
+    streaming.stopKeepAlive();
+  });
+  run.at(1000);
+  run.chunk(100);
+  streaming.startKeepAlive();
+  t.mock.timers.tick(6000);
+  assert.ok(frames.length > 1, "socket received idle keep-alive silence");
+  run.at(7000);
+  await run.restart();
+  run.chunk(100);
+  const resumedWordStart = bytes(frames.slice(0, -1)) / 48000;
+  assert.deepEqual(receiveElevenLabsFinal(streaming, resumedWordStart), {
+    text: "I am back",
+    timestamp: 7000,
+  });
+});
+
 for (const provider of ["deepgram", "corti"]) {
   test(`${provider} preserves an established socket's origin across capture recovery`, async () => {
     const run = harness();
@@ -281,6 +347,39 @@ for (const provider of ["deepgram", "corti"]) {
     run.watchdog.stop();
   });
 }
+
+test("a stream that drops while a reconnect is under way joins its replay", () => {
+  const run = harness({ native: false });
+  // The mic session expired first and started the reconnect; system was still up then.
+  run.context.meetingReconnectReplaySources.add("mic");
+  run.context.meetingReconnectPromise = Promise.resolve(true);
+  const system = { isConnected: true, sendAudio: () => true };
+  run.context._meetingSystemStreaming = system;
+
+  run.rendererSend(Buffer.alloc(4800, 1), "system", 1000);
+  assert.equal(
+    run.context.meetingReconnectAudioBuffers.system.length,
+    0,
+    "a live stream is not held"
+  );
+
+  system.isConnected = false;
+  system.sendAudio = () => false;
+  run.rendererSend(Buffer.alloc(4800, 2), "system", 1100);
+  run.rendererSend(Buffer.alloc(4800, 3), "system", 1200);
+
+  const replayed = [];
+  const replacement = { isConnected: true, sendAudio: (buffer) => replayed.push(buffer[0]) > 0 };
+  assert.equal(run.context.replaySystemAudio(replacement), true);
+  assert.deepEqual(replayed, [2, 3]);
+});
+
+test("a dropped stream holds nothing when no reconnect is under way", () => {
+  const run = harness({ native: false });
+  run.context._meetingSystemStreaming = { isConnected: false, sendAudio: () => false };
+  run.rendererSend(Buffer.alloc(4800, 1), "system", 1000);
+  assert.equal(run.context.meetingReconnectAudioBuffers.system.length, 0);
+});
 
 for (const provider of ["deepgram", "corti"]) {
   test(`${provider} places renderer audio held through the connect at its capture time, mic and system alike`, () => {

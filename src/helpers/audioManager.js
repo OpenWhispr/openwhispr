@@ -85,16 +85,20 @@ import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import {
   batchTranscriptionHttpError,
   byokFileSizeLimit,
+  isStreamingOnlySelection,
   resolveByokModel,
   resolveTranscriptionRoute,
-  STREAMING_ONLY_PROVIDERS,
 } from "./transcriptionRoute.ts";
 import {
+  allowsPersonalDictationCleanup,
+  canUseAssemblyAiRewrite,
   getManagedTranscriptionResolution,
   isManagedTranscriptionActive,
 } from "../services/managedTranscription.ts";
 import { getTranscriptionApiKey } from "../services/fileTranscription";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
+import { supportsWhisperSegments } from "./uploadTimestamps";
+import { dropNoSpeechSegments } from "./noSpeechSegments";
 import {
   isOrukeetStreaming,
   isSelfHostedTranscription,
@@ -128,6 +132,7 @@ import {
 } from "../config/agentDetection";
 import {
   cleanupUnconfiguredNotice,
+  providerCleanupStandsIn,
   resolveDictationRouteKind,
   resolveAgentImageTarget,
   resolveWakeWordLanguage,
@@ -149,6 +154,7 @@ import {
   analyzeDictionaryPromptFragment,
   dictionaryEchoError,
   matchesDictionaryPrompt,
+  isSingleKeytermUtterance,
   payloadSendsDictionaryBias,
   stripTrailingDictionaryEcho,
 } from "../utils/dictionaryEchoFilter.js";
@@ -170,12 +176,16 @@ import {
 import {
   getDictionaryHintTiers,
   getEffectiveDictionaryWords,
+  preservesSnippetExpansions,
+  getPersonalDictionaryWords,
   getKeytermDictionaryWords,
+  limitBatchKeyterms,
   getCloudLlmDictionaryFields,
   getKeywordDictionaryWords,
   getLlmDictionaryWords,
   MAX_SHARED_KEYTERMS,
 } from "../utils/snippets";
+import { sanitizeElevenLabsKeyterms } from "../utils/elevenLabsKeyterms.js";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import { getAgentName } from "../utils/agentName";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
@@ -578,6 +588,33 @@ const MANAGED_TRANSCRIPTION_SPEC = {
   }),
 };
 
+function filterScribeDictionaryEcho(text, acceptedKeyterms, settings) {
+  if (acceptedKeyterms.length < 2 || isSingleKeytermUtterance(text, acceptedKeyterms)) return text;
+  const sentPrompt = acceptedKeyterms.join(", ");
+  const personal = new Set(sanitizeElevenLabsKeyterms(getPersonalDictionaryWords(settings)));
+  const personalKeyterms = acceptedKeyterms.filter((term) => personal.has(term));
+  if (
+    matchesDictionaryPrompt(text, sentPrompt) ||
+    (personalKeyterms.length > 1 &&
+      personalKeyterms.length < acceptedKeyterms.length &&
+      matchesDictionaryPrompt(text, personalKeyterms.join(", ")))
+  ) {
+    throw dictionaryEchoError();
+  }
+  return stripTrailingDictionaryEcho(text, sentPrompt, acceptedKeyterms);
+}
+
+// Mistral caps individual words, which can split a multi-word dictionary entry.
+// Keep the original separators so a surviving phrase is still one echo candidate.
+function mistralDictionaryHead(prompt, wordCount) {
+  if (!prompt || wordCount === 0) return null;
+  for (const word of prompt.matchAll(/[^,\s]+/g)) {
+    wordCount -= 1;
+    if (wordCount === 0) return prompt.slice(0, word.index + word[0].length);
+  }
+  return prompt;
+}
+
 // `echoPrompt` gives the dictionary in the order the payload carries it, for
 // the trailing-echo strip; without one it's the Whisper-order `prompt`.
 const PROXY_TRANSCRIPTION_PROVIDERS = {
@@ -618,6 +655,16 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
     }),
     echoPrompt: ({ keyterms }) => keyterms.join(", "),
   },
+  elevenlabs: {
+    displayName: "ElevenLabs",
+    ipc: () => window.electronAPI?.proxyElevenlabsTranscription,
+    buildPayload: ({ audioBuffer, model, language, keyterms }) => ({
+      audioBuffer,
+      model,
+      language,
+      keyterms,
+    }),
+  },
   xai: {
     displayName: "xAI",
     ipc: () => window.electronAPI?.proxyXaiTranscription,
@@ -626,6 +673,20 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       if (keyterms.length > 0) payload.keyterms = keyterms;
       return payload;
     },
+    echoPrompt: ({ keyterms }) => keyterms.join(", "),
+  },
+  // Only the Dictation model reaches here: resolveBatchRoute refuses AssemblyAI's
+  // realtime models before dispatch.
+  assemblyai: {
+    displayName: "AssemblyAI",
+    ipc: () => window.electronAPI?.proxyAssemblyAiTranscription,
+    buildPayload: ({ audioBuffer, mimeType, durationSeconds, language, keyterms }) => ({
+      audioBuffer,
+      mimeType,
+      durationSeconds,
+      language: language !== "auto" ? language : undefined,
+      keyterms: keyterms.length > 0 ? keyterms : undefined,
+    }),
     echoPrompt: ({ keyterms }) => keyterms.join(", "),
   },
   corti: {
@@ -786,6 +847,9 @@ class AudioManager {
     this.selectionCapturePromise = null;
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
+    // Bumped by invalidateSttConfig, so a fetch issued before it (for the
+    // previous account, say) can't install its answer afterwards.
+    this.sttConfigGeneration = 0;
     this.streamingFallbackReason = null;
     this._streamingFailoverReason = null;
     this._streamingSpeechGateState = null;
@@ -799,7 +863,7 @@ class AudioManager {
     this._batchPcmTap = null;
     this._rotatingBatchRecorder = null;
     this._rotationResolve = null;
-    this._stopRequestedDuringMicRecovery = false;
+    this._batchStopRequested = false;
     this._cancelRequestedDuringMicRecovery = false;
     this._streamingFallbackSegments = [];
     this._streamingMicSwapPromise = null;
@@ -826,6 +890,8 @@ class AudioManager {
       },
       onRecovered: (replacement, previous) => this.replaceActiveMic(replacement, previous),
       onStatusChange: (status) => this.setMicCaptureStatus(status),
+      logger,
+      logScope: "audio",
     });
   }
 
@@ -1210,7 +1276,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const policyState = usePolicyStore.getState();
     return (
       (isManagedTranscriptionActive() ||
-        isTranscriptionContextAllowed(policyState, getSettings(), "dictation")) &&
+        isTranscriptionContextAllowed(
+          policyState,
+          getSettings(),
+          "dictation",
+          allowsPersonalDictationCleanup
+        )) &&
       (!this.voiceAgentRequested || isAgentAllowed(policyState))
     );
   }
@@ -1240,6 +1311,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   invalidateSttConfig() {
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
+    this.sttConfigGeneration += 1;
   }
 
   getStreamingProvider(name) {
@@ -1681,7 +1753,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.audioChunks = [];
       this._batchSegments = [];
       this._closeBatchPcmTap();
-      this._stopRequestedDuringMicRecovery = false;
+      this._batchStopRequested = false;
       this._cancelRequestedDuringMicRecovery = false;
       this._receivedAudioData = false;
       const preRollUsable =
@@ -2025,22 +2097,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Honor a stop/cancel that arrived mid-rotation even when the swap failed —
       // dropping it would leave an unstoppable recording (isRecording stuck true).
       const cancelRequested = this._cancelRequestedDuringMicRecovery;
-      const stopRequested = this._stopRequestedDuringMicRecovery;
+      const stopRequested = this._batchStopRequested;
       this._cancelRequestedDuringMicRecovery = false;
-      this._stopRequestedDuringMicRecovery = false;
+      this._batchStopRequested = false;
       if (cancelRequested) this.cancelRecording();
       else if (stopRequested) this.stopRecording();
     }
   }
 
   stopRecording() {
+    if (this._batchStopRequested) return false;
     this.micRecovery.stop();
     if (this._rotatingBatchRecorder) {
-      this._stopRequestedDuringMicRecovery = true;
+      this._batchStopRequested = true;
       return true;
     }
     if (this.mediaRecorder?.state === "recording") {
       this.mediaRecorder.stop();
+      // The recorder becomes inactive before its final audio and stop events arrive.
+      this._batchStopRequested = true;
       return true;
     }
     if (this.isRecording && !this.isStreaming) {
@@ -2679,8 +2754,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
         } catch (fallbackError) {
-          if (isTranscriptionPolicyRefusal(fallbackError)) throw fallbackError;
-          if (fallbackError.selectionEditFatal) {
+          if (
+            fallbackError.name === "AbortError" ||
+            fallbackError.code === "NO_SPEECH_DETECTED" ||
+            isTranscriptionPolicyRefusal(fallbackError) ||
+            fallbackError.selectionEditFatal
+          ) {
             throw fallbackError;
           }
           throw new Error(
@@ -2798,8 +2877,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
         } catch (fallbackError) {
-          if (isTranscriptionPolicyRefusal(fallbackError)) throw fallbackError;
-          if (fallbackError.selectionEditFatal) {
+          if (
+            fallbackError.name === "AbortError" ||
+            fallbackError.code === "NO_SPEECH_DETECTED" ||
+            isTranscriptionPolicyRefusal(fallbackError) ||
+            fallbackError.selectionEditFatal
+          ) {
             throw fallbackError;
           }
           throw new Error(
@@ -2913,6 +2996,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "elevenlabs") {
+      apiKey = s.elevenlabsApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getElevenlabsKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "ElevenLabs API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else if (provider === "groq") {
       // Prefer store value (user-entered via UI) over main process (.env)
       apiKey = s.groqApiKey;
@@ -2936,6 +3031,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           "xAI API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "assemblyai") {
+      // The Dictation proxy reads the key in main; only verify one exists here.
+      apiKey = s.assemblyaiApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getAssemblyAIKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "AssemblyAI API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        err.messageKey = "hooks.audioRecording.errorDescriptions.providerKeyMissing";
         throw err;
       }
     } else if (provider === "openrouter") {
@@ -3462,9 +3571,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (failure?.setupKey) this._shownCleanupSetupKey = failure.setupKey;
   }
 
-  async processTranscription(text, source, wasCancelled = neverCancelled) {
+  async processTranscription(text, source, wasCancelled = neverCancelled, options = {}) {
     try {
-      const result = await this.processTranscriptionCore(text, source, wasCancelled);
+      const result = await this.processTranscriptionCore(text, source, wasCancelled, options);
       if (wasCancelled()) return result;
       return this.finalizeChineseScript(result);
     } catch (error) {
@@ -3473,7 +3582,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async processTranscriptionCore(text, source, wasCancelled = neverCancelled) {
+  async processTranscriptionCore(
+    text,
+    source,
+    wasCancelled = neverCancelled,
+    { cleanedText } = {}
+  ) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
 
     if (!normalizedText) {
@@ -3500,9 +3614,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const agentReachable = dictationAgentReachable(settings);
     const agentName =
       typeof window !== "undefined" && window.localStorage ? getAgentName() : "OpenWhispr";
-    const blockedAgentCommand =
-      isAgentScopeBlocked(settings) &&
-      !this.translationRequested &&
+    const addressesAgent =
       !!agentName &&
       detectAgentName(
         normalizedText,
@@ -3510,6 +3622,36 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         resolveWakeWordLanguage(settings, undefined, normalizedText),
         settings.snippets
       );
+    const blockedAgentCommand =
+      isAgentScopeBlocked(settings) && !this.translationRequested && addressesAgent;
+
+    // A provider that cleaned the transcript itself (AssemblyAI Dictation) can
+    // stand in for the cleanup step. Assistant commands and translation still take
+    // the verbatim transcript below, since cleanup can reword a wake phrase; a name
+    // spoken with no assistant to hear it is ordinary dictation.
+    const providerCleanedText = typeof cleanedText === "string" ? cleanedText.trim() : "";
+    if (
+      providerCleanedText &&
+      !this.voiceAgentRequested &&
+      !this.translationRequested &&
+      !(addressesAgent && (agentReachable || isAgentScopeBlocked(settings))) &&
+      providerCleanupStandsIn(settings, {
+        cleanupReachable,
+        providerLlmAllowed: canUseAssemblyAiRewrite(),
+      })
+    ) {
+      try {
+        assertValidCleanupOutput(normalizedText, providerCleanedText);
+      } catch (error) {
+        this.pendingCleanupFailure = cleanupFailureFromError(error);
+        return normalizedText;
+      }
+      if (!preservesSnippetExpansions(normalizedText, providerCleanedText, settings.snippets)) {
+        return normalizedText;
+      }
+      logger.logReasoning("PROVIDER_CLEANUP_USED", { source });
+      return providerCleanedText;
+    }
     if (
       !cleanupReachable &&
       !agentReachable &&
@@ -4046,6 +4188,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async processWithOpenAIAPI(audioBlob, metadata = {}, wasCancelled = neverCancelled) {
+    if (wasCancelled()) throw new DOMException("Transcription cancelled", "AbortError");
     const timings = {};
     let requestController = null;
     let unsubscribePolicy;
@@ -4094,11 +4237,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             ? "self-hosted"
             : "providers",
         provider: managedResolution?.provider ?? route.provider,
+        model: managedResolution ? managedResolution.deployment : route.model,
       };
       // The recording is already made: only a settled denial stops it, not a
       // verdict that is still loading, as a rotated token's is.
       const stopIfDisallowed = runningPolicyCheck(() => {
-        if (!isTranscriptionSelectionAllowed(usePolicyStore.getState(), selection))
+        if (
+          !isTranscriptionSelectionAllowed(
+            usePolicyStore.getState(),
+            selection,
+            allowsPersonalDictationCleanup
+          )
+        )
           requestController.abort();
       });
       unsubscribePolicy = usePolicyStore.subscribe(stopIfDisallowed);
@@ -4120,22 +4270,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         const apiCallStart = performance.now();
         const proxyDictionaryPrompt = this.getWhisperPrompt(apiSettings);
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        requestController.signal.throwIfAborted();
+        const priorityDictionary = this.getCustomDictionaryPromptTiers().flat().join(", ") || null;
         const proxyArgs = {
-          audioBuffer: await optimizedAudio.arrayBuffer(),
+          audioBuffer,
+          durationSeconds,
           model,
           language,
           apiSettings,
           managedResolution,
           mimeType: optimizedAudio.type || "audio/webm",
           dictionaryPrompt: proxyDictionaryPrompt,
-          priorityDictionaryPrompt: this.getWhisperPrompt(
-            apiSettings,
-            this.getCustomDictionaryPromptTiers().flat().join(", ") || null
-          ),
-          keyterms: this.getKeyterms()
-            .map((t) => t.trim().slice(0, 50))
-            .filter(Boolean)
-            .slice(0, 100),
+          priorityDictionaryPrompt: this.getWhisperPrompt(apiSettings, priorityDictionary),
+          keyterms:
+            proxySpec === PROXY_TRANSCRIPTION_PROVIDERS.elevenlabs
+              ? sanitizeElevenLabsKeyterms(getEffectiveDictionaryWords(apiSettings))
+              : limitBatchKeyterms(this.getKeyterms()),
         };
         const proxyPayload = proxySpec.buildPayload(proxyArgs);
         // Managed Azure is enterprise: its failures keep their own shape.
@@ -4145,6 +4296,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             : asProviderError(err, { provider: proxySpec.displayName, surface: "transcription" });
         let result;
         try {
+          requestController.signal.throwIfAborted();
           result = await call(proxyPayload);
         } catch (err) {
           throw classifyProxyFailure(err);
@@ -4155,33 +4307,42 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           // message (net::ERR_*), so classify the rebuilt error here.
           throw classifyProxyFailure(errorFromIpcResult(result));
         }
-        const sendsDictionaryBias = payloadSendsDictionaryBias(proxyPayload);
-        // A recital follows the order the list was sent in, which for
-        // contextBias and keyterms is personal words first, not Whisper order.
-        const proxyEchoPrompt = proxySpec.echoPrompt?.(proxyArgs) ?? proxyDictionaryPrompt;
-        const proxyText = this.stripTrailingDictionaryEcho(
-          result?.text,
-          sendsDictionaryBias ? proxyEchoPrompt : null
-        );
+        let proxyText = result?.text;
+        if (result?.acceptedKeyterms) {
+          proxyText = filterScribeDictionaryEcho(proxyText, result.acceptedKeyterms, apiSettings);
+        } else if (payloadSendsDictionaryBias(proxyPayload)) {
+          const proxyEchoPrompt = proxySpec.echoPrompt?.(proxyArgs) ?? proxyDictionaryPrompt;
+          proxyText = this.stripTrailingDictionaryEcho(proxyText, proxyEchoPrompt);
+          const personalPrompt = this.getPersonalDictionaryPrompt(apiSettings);
+          let echoDictionary = [];
+          if (proxyPayload.contextBias) {
+            // The script instruction, if sent, occupies the first context_bias word.
+            // isDictionaryEcho checks the remaining dictionary with and without it.
+            const scriptBias = this.getWhisperPrompt(apiSettings, null);
+            const wordCount = proxyPayload.contextBias.length - (scriptBias ? 1 : 0);
+            echoDictionary = [priorityDictionary, personalPrompt].map((prompt) =>
+              mistralDictionaryHead(prompt, wordCount)
+            );
+          } else if (proxyPayload.keyterms) {
+            echoDictionary = [proxyPayload.keyterms.join(", "), personalPrompt];
+          }
+          if (this.isDictionaryEcho(result.text, ...echoDictionary)) throw dictionaryEchoError();
+        }
         if (!proxyText?.trim()) {
           throw new Error(`No text transcribed - ${proxySpec.displayName} response was empty`);
         }
-        // Keyterms carry up to MAX_SHARED_KEYTERMS shared words, not only the
-        // Whisper window's, so a whole-text echo is checked against what was sent.
-        const echoDictionary = proxyPayload.keyterms
-          ? [proxyPayload.keyterms.join(", "), this.getPersonalDictionaryPrompt(apiSettings)]
-          : [];
-        if (sendsDictionaryBias && this.isDictionaryEcho(result.text, ...echoDictionary)) {
-          throw dictionaryEchoError();
-        }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(proxyText, providerName, wasCancelled);
+        const text = await this.processTranscription(proxyText, providerName, wasCancelled, {
+          // A rewrite of a transcript that recited the dictionary still carries the recital.
+          cleanedText: proxyText === result.text ? result.cleanedText : undefined,
+        });
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         const source = (await this.isReasoningAvailable())
           ? `${providerName}-reasoned`
           : providerName;
+        stopIfDisallowed();
         requestController.signal.throwIfAborted();
         return {
           success: true,
@@ -4335,6 +4496,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (shouldStream) {
         formData.append("stream", "true");
       }
+      // verbose_json carries the per-segment no-speech scores dropNoSpeechSegments
+      // reads; the timestamp gate keeps it to the providers and models that accept it.
+      const requestsSegments = !shouldStream && supportsWhisperSegments(route.provider, model);
+      if (requestsSegments) {
+        formData.append("response_format", "verbose_json");
+      }
 
       const apiCallStart = performance.now();
 
@@ -4367,6 +4534,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "model",
             language && language !== "auto" ? "language" : null,
             shouldStream ? "stream" : null,
+            requestsSegments ? "response_format" : null,
           ].filter(Boolean),
         },
         "transcription"
@@ -4455,15 +4623,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       } else {
         const rawText = await response.text();
-        logger.debug(
-          "Raw API response body",
-          {
-            rawText: rawText.substring(0, 1000),
-            fullLength: rawText.length,
-          },
-          "transcription"
-        );
-
         try {
           result = JSON.parse(rawText);
         } catch (parseError) {
@@ -4471,11 +4630,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "Failed to parse JSON response",
             {
               parseError: parseError.message,
-              rawText: rawText.substring(0, 500),
+              responseLength: rawText.length,
             },
             "transcription"
           );
           throw new Error(`Failed to parse API response: ${parseError.message}`);
+        }
+
+        if (requestsSegments) {
+          const spokenText = dropNoSpeechSegments(result);
+          if (spokenText !== result.text) {
+            logger.debug(
+              "Dropped no-speech segments",
+              { originalLength: result.text?.length, keptLength: spokenText?.length },
+              "transcription"
+            );
+            result = { ...result, text: spokenText };
+          }
         }
 
         logger.debug(
@@ -4484,7 +4655,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             hasText: !!result.text,
             textLength: result.text?.length,
             resultKeys: Object.keys(result),
-            fullResult: result,
           },
           "transcription"
         );
@@ -4541,7 +4711,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             blobType: audioBlob.type,
             mimeType,
             extension,
-            resultText: result.text,
             resultKeys: Object.keys(result),
           },
           "transcription"
@@ -4549,8 +4718,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         logger.error(
           "No text in transcription result",
           {
-            result,
-            resultKeys: Object.keys(result),
+            provider,
+            model,
+            segmentCount: result.segments?.length ?? 0,
           },
           "transcription"
         );
@@ -4564,7 +4734,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (error.selectionEditFatal) {
         throw error;
       }
-      if (error.message === "No audio detected") {
+      if (error.message === "No audio detected" || error.code === "NO_SPEECH_DETECTED") {
         throw error;
       }
 
@@ -4644,6 +4814,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Local-vs-cloud is decided upstream, so useLocalWhisper is forced off here:
   // the local→cloud fallback resolves its cloud endpoint through this too.
   resolveBatchRoute(settings, deploymentName = "") {
+    const provider = settings.cloudTranscriptionProvider || "openai";
     const route = resolveTranscriptionRoute({
       settings: {
         ...settings,
@@ -4653,9 +4824,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       },
       policy: usePolicyStore.getState(),
       providers: getTranscriptionProviders(),
-      hasProviderKey: Boolean(
-        getTranscriptionApiKey(settings.cloudTranscriptionProvider || "openai", settings)
-      ),
+      // Batch-capable selections check main-process credentials in getAPIKey
+      // when the renderer's key has not hydrated yet.
+      hasProviderKey: isStreamingOnlySelection(provider, deploymentName)
+        ? Boolean(getTranscriptionApiKey(provider, settings))
+        : undefined,
       request: { model: deploymentName },
     });
     if (route.transport === "error") {
@@ -5089,7 +5262,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // key instead of letting them fall through to the HTTP path.
     if (
       s.cloudTranscriptionMode === "byok" &&
-      STREAMING_ONLY_PROVIDERS.has(s.cloudTranscriptionProvider)
+      isStreamingOnlySelection(s.cloudTranscriptionProvider, s.cloudTranscriptionModel)
     ) {
       return Boolean(getTranscriptionApiKey(s.cloudTranscriptionProvider, s));
     }
