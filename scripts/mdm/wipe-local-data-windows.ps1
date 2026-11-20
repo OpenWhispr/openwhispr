@@ -1,13 +1,14 @@
 # Removes OpenWhispr's local data from a Windows device being offboarded
-# (#3030), for MDM tools that run scripts as SYSTEM (Intune). OpenWhispr is
-# closed first. The WipeLocalDataOnLaunch device key does the same from inside
-# the app.
+# (#3030), for MDM tools that run scripts as SYSTEM (Intune). A profile whose
+# user is signed in, the only way OpenWhispr can be running in it, is skipped.
+# The WipeLocalDataOnLaunch device key does the same from inside the app.
 #
 #   wipe-local-data-windows.ps1 [-IncludeModels] [-UserProfile C:\Users\name, ...]
 #
 # Covers every user profile unless profiles are named. Downloaded models stay
 # unless -IncludeModels is passed. The audit log stays, as does the record of
-# the last WipeLocalDataOnLaunch token, so the app doesn't wipe a second time.
+# the last WipeLocalDataOnLaunch token, so the app doesn't wipe a second time,
+# and each profile's wipe is recorded there.
 # See docs/mdm-local-data-wipe.md.
 
 param(
@@ -20,7 +21,7 @@ $ErrorActionPreference = "Stop"
 
 # The same lists as KEPT_USER_DATA_ENTRIES, MODEL_USER_DATA_ENTRIES,
 # MODEL_CACHE_ENTRIES and TEMP_PREFIXES in src/helpers/localDataWipe.js.
-$keptUserData = @("audit", "meeting-audit-session.json", "meeting-audit-session.json.tmp", "local-data-wipe.json")
+$keptUserData = @("audit", "meeting-audit-session.json", "meeting-audit-session.json.tmp", "local-data-wipe.json", "globe-preference-state.json")
 $modelUserData = @("installed-models.json")
 $modelCache = @("whisper-models", "parakeet-models", "diarization-models", "models", "whisper-vad", "embedding-models")
 $tempPrefixes = @("ow-", "openwhispr-", "whisper-input-", "whisper-output-", "parakeet-", "enterprise-buffer-", "enterprise-chunks-", "kwin-active-class-")
@@ -66,9 +67,11 @@ function Remove-Entry([IO.FileSystemInfo]$Item) {
   }
 }
 
-# Removes everything in a folder under Root except the names given. One reached
-# through a junction or link is skipped and reported.
-function Remove-AllExcept([string]$Dir, [string]$Root, [string[]]$Keep) {
+# Removes everything in a folder under Root except the names given, and the
+# folder KeepBelow names below it (a path relative to it, empty for none) with
+# the folders on its way. One reached through a junction or link is skipped
+# and reported.
+function Remove-AllExcept([string]$Dir, [string]$Root, [string[]]$Keep, [string]$KeepBelow = "") {
   if (-not (Test-RealFolder $Dir $Root)) {
     if (Test-Path -LiteralPath $Dir) {
       Write-Warning "Skipped $($Dir): it is reached through a junction or link"
@@ -76,9 +79,15 @@ function Remove-AllExcept([string]$Dir, [string]$Root, [string[]]$Keep) {
     }
     return
   }
-  Get-ChildItem -LiteralPath $Dir -Force |
-    Where-Object { $Keep -notcontains $_.Name } |
-    ForEach-Object { Remove-Entry $_ }
+  foreach ($item in Get-ChildItem -LiteralPath $Dir -Force) {
+    if ($KeepBelow -and ($KeepBelow -eq $item.Name -or $KeepBelow.StartsWith("$($item.Name)", [StringComparison]::OrdinalIgnoreCase))) {
+      if ($KeepBelow -ne $item.Name) {
+        Remove-AllExcept $item.FullName $Root @() $KeepBelow.Substring($item.Name.Length + 1)
+      }
+      continue
+    }
+    if ($Keep -notcontains $item.Name) { Remove-Entry $item }
+  }
 }
 
 function Remove-TempFiles([string]$Dir, [string]$Root) {
@@ -88,14 +97,11 @@ function Remove-TempFiles([string]$Dir, [string]$Root) {
     ForEach-Object { Remove-Entry $_ }
 }
 
-# The app and its sidecars (search index, local models), which run from the
-# install's resources folder and may hold files open.
-$running = Get-Process -ErrorAction SilentlyContinue |
-  Where-Object { $_.ProcessName -eq "OpenWhispr" -or $_.Path -like "*\OpenWhispr\resources\*" }
-if ($running) {
-  $running | Stop-Process -Force
-  $running | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
-}
+# AuditLogPath from the device policy, in the 64-bit registry view the app
+# reads, whichever PowerShell runs this.
+$policyKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey("LocalMachine", "Registry64").OpenSubKey("SOFTWARE\Policies\OpenWhispr")
+$auditLogPath = if ($policyKey) { $policyKey.GetValue("AuditLogPath") }
+if (-not ($auditLogPath -is [string] -and [IO.Path]::IsPathRooted($auditLogPath))) { $auditLogPath = $null }
 
 # Assigning to $UserProfile would run its ValidateScript again, and a profile
 # whose folder is gone would then stop the run.
@@ -126,6 +132,41 @@ Get-CimInstance Win32_UserProfile | Where-Object { -not $_.Special -and $_.Local
   ForEach-Object { $profileSids[(& $fullPath $_.LocalPath)] = $_.SID }
 $someoneSignedIn = @($signedIn | Where-Object { $profileSids.Values -contains $_ }).Count -gt 0
 
+# Records a profile's wipe in its user's audit log as the app records its own
+# (meetingAuditLog.js): one line in their daily file, in AuditLogPath or else
+# the audit folder the wipe keeps. A daily file that is a link is refused, and
+# AuditLogPath, which other users may write in, is used only while no one is
+# signed in, as with the shared folders below.
+function Write-WipeRecord([string]$Sid, [string]$UserData, [string]$ProfilePath, [bool]$Incomplete) {
+  $user = try {
+    ([Security.Principal.SecurityIdentifier]$Sid).Translate([Security.Principal.NTAccount]).Value.Split("\")[-1]
+  } catch { "unknown" }
+  $user = $user -replace '[\\/:*?"<>|\x00-\x1f]', "_"
+  $ts = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+  $line = [ordered]@{
+    ts = $ts; event = "local-data.wiped"; sessionId = $null; noteId = $null; trigger = "script"
+    reason = $(if ($Incomplete) { "incomplete" } else { $null }); durationSec = $null
+    participantsNotified = $null; notificationMethod = $null; externalAttendees = $null
+    appVersion = $null; deviceUser = $user
+  } | ConvertTo-Json -Compress
+  $default = Join-Path $UserData "audit"
+  $dirs = @(if ($auditLogPath -and -not $someoneSignedIn) { $auditLogPath }) + $default
+  foreach ($dir in $dirs) {
+    try {
+      if ($dir -eq $default -and -not (Test-RealFolder $UserData $ProfilePath)) { continue }
+      $null = [IO.Directory]::CreateDirectory($dir)
+      if ($dir -eq $default -and -not (Test-RealFolder $dir $ProfilePath)) { continue }
+      $file = Join-Path $dir "meeting-audit-$user-$($ts.Substring(0, 10)).jsonl"
+      $existing = Get-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+      if ($existing -and ($existing -isnot [IO.FileInfo] -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint))) { continue }
+      [IO.File]::AppendAllText($file, "$line`n")
+      return
+    } catch {}
+  }
+  Write-Warning "Could not record the wipe in the audit log for $ProfilePath"
+  $script:failed = $true
+}
+
 foreach ($profilePath in $profilePaths) {
   $sid = $profileSids[(& $fullPath $profilePath)]
   if ($sid -and $signedIn -contains $sid) {
@@ -137,10 +178,15 @@ foreach ($profilePath in $profilePaths) {
   $failedBefore = $failed
   $failed = $false
   $userData = Join-Path $profilePath "AppData\Roaming\OpenWhispr"
+  # An AuditLogPath inside the data folder stays, with the folders on its way.
+  $dataPrefix = (& $fullPath $userData) + "\"
+  $auditKeep = if ($auditLogPath -and (& $fullPath $auditLogPath).StartsWith($dataPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    (& $fullPath $auditLogPath).Substring($dataPrefix.Length)
+  } else { "" }
   # A notes folder the user chose is left to the app's own wipe (the
   # WipeLocalDataOnLaunch key): only its database says which files there are
   # the mirror's, and Windows has no SQLite to read it with.
-  Remove-AllExcept $userData $profilePath $kept
+  Remove-AllExcept $userData $profilePath $kept $auditKeep
   Remove-AllExcept (Join-Path $profilePath ".cache\openwhispr") $profilePath $cacheKept
   $bridge = Join-Path $profilePath ".openwhispr"
   $bridgeFile = Join-Path $bridge "cli-bridge.json"
@@ -148,7 +194,9 @@ foreach ($profilePath in $profilePaths) {
     Remove-Entry (Get-Item -LiteralPath $bridgeFile -Force)
   }
   Remove-TempFiles (Join-Path $profilePath "AppData\Local\Temp") $profilePath
-  if (-not $failed -and (Test-Path -LiteralPath $userData)) { Write-Output "Removed OpenWhispr local data from $profilePath" }
+  $hadData = Test-Path -LiteralPath $userData
+  if ($hadData) { Write-WipeRecord $sid $userData $profilePath $failed }
+  if (-not $failed -and $hadData) { Write-Output "Removed OpenWhispr local data from $profilePath" }
   $failed = $failed -or $failedBefore
 }
 

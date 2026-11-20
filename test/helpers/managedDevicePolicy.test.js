@@ -238,6 +238,15 @@ test("WipeLocalDataIncludesModels is a strict boolean that defaults to keeping m
   // Without a token it does nothing, so it alone doesn't make the device managed.
   for (const WipeLocalDataIncludesModels of [true, false])
     assert.equal(normalizeDeviceValues({ WipeLocalDataIncludesModels }).status, "absent");
+  // Deployed on its own it manages nothing, but a workspace removal's wipe still takes models.
+  assert.equal(
+    normalizeDeviceValues({ WipeLocalDataIncludesModels: true }).wipeLocalDataIncludesModels,
+    true
+  );
+  assert.equal(
+    normalizeDeviceValues({ WipeLocalDataIncludesModels: false }).wipeLocalDataIncludesModels,
+    undefined
+  );
   assert.deepEqual(
     await registryExport([
       '"WipeLocalDataOnLaunch"="offboard-1"',

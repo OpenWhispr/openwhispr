@@ -1676,16 +1676,18 @@ class IPCHandlers {
   }
 
   // #3030: the account was removed from the workspace that managed this device.
-  // The next launch wipes, before anything opens a file it removes.
+  // The next launch wipes, before anything opens a file it removes. False when
+  // the removal couldn't be recorded, so the policy lookup asks again.
   _wipeForWorkspaceRemoval(removal) {
-    if (this._workspaceRemovalWipeRequested) return;
+    if (this._workspaceRemovalWipeRequested) return true;
     debugLogger.warn("Removed from the managing workspace; wiping local data", {
       workspaceId: removal.workspaceId,
     });
     const { requestWorkspaceRemovalWipe } = require("./localDataWipe");
-    if (!requestWorkspaceRemovalWipe(app.getPath("userData"), removal)) return;
+    if (!requestWorkspaceRemovalWipe(app.getPath("userData"), removal)) return false;
     this._workspaceRemovalWipeRequested = true;
     void this.relaunchApp();
+    return true;
   }
 
   _getPersonalDictionarySafe() {

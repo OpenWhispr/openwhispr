@@ -167,8 +167,9 @@ export function RemoveMembersDialog({
       const result = await removeMembers(workspace.id, {
         userIds: subjects.map((subject) => subject.user_id),
         ...(transferring && transferTo ? { transferTo } : {}),
-        // Sent only where the dialog asked; elsewhere the server's default applies.
-        ...(canWipeDevices ? { wipeDevices } : {}),
+        // Always said: where the dialog didn't ask, a policy saved since the
+        // preview mustn't wipe by the server's default.
+        wipeDevices: canWipeDevices && wipeDevices,
       });
       toast(doneToast(result, ownerName));
       dispatch({ type: "succeeded" });

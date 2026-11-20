@@ -103,11 +103,16 @@ function normalizeDeviceValues(input) {
     DEVICE_KEYS.filter((key) => Object.hasOwn(input, key)).map((key) => [key, input[key]])
   );
   // Values that change nothing on their own don't make a device managed: the
-  // legacy alias left at false, and the models flag without a wipe token.
+  // legacy alias left at false, and the models flag without a wipe token. The
+  // flag still says what a workspace removal's wipe takes (localDataWipe.js).
   const inert = (key) =>
     (key === "DisableMeetingRecording" && values[key] === false) ||
     (key === "WipeLocalDataIncludesModels" && typeof values[key] === "boolean");
-  if (Object.keys(values).every(inert)) return ABSENT_SNAPSHOT;
+  if (Object.keys(values).every(inert)) {
+    return values.WipeLocalDataIncludesModels === true
+      ? { ...ABSENT_SNAPSHOT, wipeLocalDataIncludesModels: true }
+      : ABSENT_SNAPSHOT;
+  }
   for (const key of BOOLEAN_DEVICE_KEYS) {
     if (values[key] !== undefined && typeof values[key] !== "boolean")
       throw new Error("Invalid device boolean");

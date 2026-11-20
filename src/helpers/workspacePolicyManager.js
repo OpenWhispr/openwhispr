@@ -192,7 +192,9 @@ function createWorkspacePolicyManager({
   // Only a device whose last managed verdict for this credential (or account)
   // named that workspace acts on it: a removal from some other workspace, or a
   // sign-in on another device, wipes nothing. The credential's own verdict
-  // still counts once a rejected session has cleared the account label.
+  // still counts once a rejected session has cleared the account label. A
+  // removal the app couldn't record throws, so the verdict that names its
+  // workspace isn't replaced and the next lookup reports it again.
   function reportRemoval(identity, removal) {
     if (typeof removal?.workspaceId !== "string" || !validTimestamp(removal.removedAt)) return;
     const verdicts = [
@@ -203,11 +205,12 @@ function createWorkspacePolicyManager({
       verdict?.managed && Array.isArray(verdict.managedBy) ? verdict.managedBy : []
     );
     if (!managedBy.includes(removal.workspaceId)) return;
-    onWorkspaceRemoval({
+    const recorded = onWorkspaceRemoval({
       accountId: identity.accountId,
       workspaceId: removal.workspaceId,
       removedAt: removal.removedAt,
     });
+    if (recorded === false) throw new Error("Could not record the workspace removal");
   }
 
   function errorSnapshot(identity, code, error, httpStatus) {
@@ -366,6 +369,8 @@ function createWorkspacePolicyManager({
           try {
             errorBody = await response.json();
           } catch {}
+          // The body can arrive after an account switch, which its removal mustn't reach.
+          assertIdentityCurrent(identity);
           if (errorBody?.code === "POLICY_UNRESOLVABLE") {
             throw unresolvablePolicyError(errorBody.error || "Organization policy is unresolvable");
           }
@@ -392,8 +397,13 @@ function createWorkspacePolicyManager({
         }
         // Still signed in (directory deprovisioning keeps the session), maybe
         // still managed by another workspace; read before this verdict replaces
-        // the one that named the removing workspace.
-        if (data.workspaceRemoval) reportRemoval(identity, data.workspaceRemoval);
+        // the one that named the removing workspace. The newest removal may be
+        // from a workspace that never managed this device, so every listed one
+        // is checked (an older API sends only the newest).
+        const removals = Array.isArray(data.workspaceRemovals)
+          ? data.workspaceRemovals
+          : [data.workspaceRemoval];
+        for (const removal of removals) reportRemoval(identity, removal);
         return acceptSuccessfulResponse(identity, data, "network");
       } finally {
         clearTimeout(timeout);

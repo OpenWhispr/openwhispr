@@ -1397,7 +1397,7 @@ const managedBy =
   () =>
     response(200, { data: { ...validPolicy().data, managedBy: workspaceIds } });
 
-function removalSetup(responses) {
+function removalSetup(responses, record = () => {}) {
   const removals = [];
   const requests = [];
   let call = 0;
@@ -1409,7 +1409,10 @@ function removalSetup(responses) {
     {
       // The binding vouches for account-a's own bearer only.
       getValidatedAccountId: () => (context.tokenState.token === "token-a" ? "account-a" : null),
-      onWorkspaceRemoval: (reported) => removals.push(reported),
+      onWorkspaceRemoval: (reported) => {
+        removals.push(reported);
+        return record(reported);
+      },
     }
   );
   const lookup = (accountId = "account-a") =>
@@ -1492,6 +1495,54 @@ test("a removal never reaches a device the workspace didn't manage, nor an ordin
     await context.lookup();
     assert.deepEqual(context.removals, []);
   }
+});
+
+test("a removal whose 401 body arrives after an account switch wipes nothing", async (t) => {
+  let context;
+  // The body is read after the request: here the user switches accounts meanwhile.
+  const removedThenSwitched = {
+    status: 401,
+    ok: false,
+    json: async () => {
+      context.tokenState.token = "token-b";
+      context.tokenState.generation = 2;
+      return { code: "WORKSPACE_MEMBER_REMOVED", ...removal };
+    },
+  };
+  context = removalSetup([managedBy("workspace-1"), () => removedThenSwitched]);
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, []);
+});
+
+test("a removal behind a newer one from a workspace that never managed the device still wipes it", async (t) => {
+  const newer = { workspaceId: "workspace-9", removedAt: "2026-11-13T10:00:00.000Z" };
+  const context = removalSetup([
+    managedBy("workspace-1"),
+    () => unmanagedWith({ workspaceRemoval: newer, workspaceRemovals: [newer, removal] }),
+  ]);
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+});
+
+test("a removal the app couldn't record is heard again at the next lookup", async (t) => {
+  let recording = false;
+  const context = removalSetup(
+    [managedBy("workspace-1"), () => unmanagedWith({ workspaceRemoval: removal })],
+    () => recording
+  );
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup();
+  // The verdict that names the workspace stays until the removal is on record,
+  // and is replaced once it is.
+  recording = true;
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, Array(2).fill({ accountId: "account-a", ...removal }));
 });
 
 test("known pending screen-context denial blocks capture before the workspace settles", () => {

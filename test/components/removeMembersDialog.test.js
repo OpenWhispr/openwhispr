@@ -480,7 +480,7 @@ test("a transfer sends the new owner and toasts the transfer", async (t) => {
   await view.clickPrimary();
 
   assert.deepEqual(globalThis.__removeCalls, [
-    ["w1", { userIds: ["u-liam", "u-alex"], transferTo: "u-zoe" }],
+    ["w1", { userIds: ["u-liam", "u-alex"], transferTo: "u-zoe", wipeDevices: false }],
   ]);
   assert.equal(globalThis.__toasts.length, 1);
   assert.equal(
@@ -534,7 +534,7 @@ test("an unconfirmed removal locks the wipe box, so a retry can't claim another 
   assert.equal(globalThis.__checkboxProps.disabled, true);
 });
 
-test("a workspace without a policy offers no wipe and leaves it to the server", async (t) => {
+test("a workspace without a policy offers no wipe and asks the server for none", async (t) => {
   const { mount, opened } = await loadDialog(t);
   globalThis.__previewImpl = async () => ({ ...preview([]), can_wipe_devices: false });
   const view = await mount(opened([LIAM]));
@@ -542,7 +542,7 @@ test("a workspace without a policy offers no wipe and leaves it to the server", 
   assert.doesNotMatch(view.text(), /wipeDevices/);
   await view.clickPrimary();
 
-  assert.deepEqual(globalThis.__removeCalls, [["w1", { userIds: ["u-liam"] }]]);
+  assert.deepEqual(globalThis.__removeCalls, [["w1", { userIds: ["u-liam"], wipeDevices: false }]]);
 });
 
 test("a removal without content sends no new owner and toasts the count", async (t) => {
@@ -556,7 +556,9 @@ test("a removal without content sends no new owner and toasts the count", async 
 
   await view.clickPrimary();
 
-  assert.deepEqual(globalThis.__removeCalls, [["w1", { userIds: ["u-liam", "u-alex"] }]]);
+  assert.deepEqual(globalThis.__removeCalls, [
+    ["w1", { userIds: ["u-liam", "u-alex"], wipeDevices: false }],
+  ]);
   assert.equal(globalThis.__toasts[0].title, 'workspaces.removeMembers.done|{"count":2}');
   assert.deepEqual(view.removed, [["u-liam", "u-alex"]]);
 });
@@ -617,7 +619,7 @@ test("a lost transfer reply says the outcome is unconfirmed", async (t) => {
   await view.act(() => reject());
 
   assert.deepEqual(globalThis.__removeCalls, [
-    ["w1", { userIds: ["u-liam"], transferTo: "u-self" }],
+    ["w1", { userIds: ["u-liam"], transferTo: "u-self", wipeDevices: false }],
   ]);
   // The reply was lost, so the reassignment may have happened; the line says only that it's unknown.
   assert.match(view.text(), /!workspaces\.removeMembers\.transferUnconfirmed/);
@@ -706,7 +708,7 @@ test("a vanished new owner falls back to you and keeps the dialog open", async (
   await view.clickPrimary();
 
   assert.deepEqual(globalThis.__removeCalls, [
-    ["w1", { userIds: ["u-liam"], transferTo: "u-zoe" }],
+    ["w1", { userIds: ["u-liam"], transferTo: "u-zoe", wipeDevices: false }],
   ]);
   const text = view.text();
   assert.match(

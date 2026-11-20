@@ -1,23 +1,27 @@
 #!/bin/bash
 # Removes OpenWhispr's local data from a Mac being offboarded (#3030), for MDM
-# tools that run scripts as root (Jamf, Kandji, Intune). OpenWhispr is quit
-# first. The WipeLocalDataOnLaunch device key does the same from inside the app.
+# tools that run scripts as root (Jamf, Kandji, Intune). Each home's owner's
+# OpenWhispr is quit first. The WipeLocalDataOnLaunch device key does the same
+# from inside the app.
 #
 #   wipe-local-data-macos.sh [--include-models] [home ...]
 #
 # Covers every home under /Users unless homes are named. Downloaded models stay
 # unless --include-models is passed. The audit log stays, as does the record of
-# the last WipeLocalDataOnLaunch token, so the app doesn't wipe a second time.
+# the last WipeLocalDataOnLaunch token, so the app doesn't wipe a second time,
+# and each home's wipe is recorded there.
 # See docs/mdm-local-data-wipe.md.
 
 set -eo pipefail
 
 # The same lists as KEPT_USER_DATA_ENTRIES, MODEL_USER_DATA_ENTRIES,
 # MODEL_CACHE_ENTRIES and TEMP_PREFIXES in src/helpers/localDataWipe.js.
-kept_user_data=(audit meeting-audit-session.json meeting-audit-session.json.tmp local-data-wipe.json)
+kept_user_data=(audit meeting-audit-session.json meeting-audit-session.json.tmp local-data-wipe.json globe-preference-state.json)
 model_user_data=(installed-models.json)
 model_cache=(whisper-models parakeet-models diarization-models models whisper-vad embedding-models)
 temp_prefixes=(ow- openwhispr- whisper-input- whisper-output- parakeet- enterprise-buffer- enterprise-chunks- kwin-active-class-)
+# MACOS_PREFERENCES_DOMAIN in src/helpers/managedDevicePolicy.js.
+preferences_domain=com.gizmolabs.openwhispr
 
 include_models=false
 homes=()
@@ -73,11 +77,13 @@ inside_home() {
   [[ "$real" == "$home_real"/* ]]
 }
 
-# Removes everything in a folder of the home except the names given. One that
-# is a link, or leads out of the home, is skipped and reported.
+# Removes everything in a folder of the home except the names given, and the
+# folder keep names below it (a path relative to it, empty for none) with the
+# folders on its way. One that is a link, or leads out of the home, is skipped
+# and reported.
 remove_all_except() {
-  local dir="$1" entry
-  shift
+  local dir="$1" keep="$2" entry name
+  shift 2
   [[ -e "$dir" || -L "$dir" ]] || return 0
   if [[ ! -d "$dir" || -L "$dir" ]] || ! inside_home "$dir"; then
     echo "Skipped $dir: it is a link or leads out of $home" >&2
@@ -86,7 +92,12 @@ remove_all_except() {
   fi
   for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
     [[ -e "$entry" || -L "$entry" ]] || continue
-    contains "$(basename "$entry")" "$@" || remove "$entry"
+    name="$(basename "$entry")"
+    if [[ -n "$keep" && ("$keep" == "$name" || "$keep" == "$name"/*) ]]; then
+      [[ "$keep" == "$name" ]] || remove_all_except "$entry" "${keep#"$name"/}"
+      continue
+    fi
+    contains "$name" "$@" || remove "$entry"
   done
 }
 
@@ -128,19 +139,32 @@ remove_mirrored_files() {
       "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir'")"; } || {
     echo "Could not read the notes mirror's record in $database" >&2
     failed=1
+    mirror_failed=1
     return 0
   }
   while IFS=$'\x1f' read -r -d $'\x1e' base rel hash; do
     [[ "$base" == /* ]] || continue
     real_base="$(cd -P "$base" 2>/dev/null && pwd)" || continue
+    # The record names the folder by its real path: one that now leads
+    # elsewhere (a link put in its place) isn't the folder the mirror wrote to.
+    if [[ "$real_base" != "$base" ]]; then
+      echo "Skipped $base: it now leads elsewhere" >&2
+      failed=1
+      continue
+    fi
     [[ "$real_base" == "$home_real"/* ]] || continue
     file="$base/$rel"
     real_dir="$(cd -P "$(dirname "$file")" 2>/dev/null && pwd)" || continue
     [[ "$real_dir" == "$real_base" || "$real_dir" == "$real_base"/* ]] || continue
     [[ -f "$file" && ! -L "$file" ]] || continue
+    # One it can't read may still hold what it wrote: a failure, not an edit.
     raw="$(read_as_owner "$file" | openssl dgst -sha256 -r)" &&
-      plain="$(read_as_owner "$file" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//; s/\r$//' | openssl dgst -sha256 -r)" ||
+      plain="$(read_as_owner "$file" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//; s/\r$//' | openssl dgst -sha256 -r)" || {
+      echo "Could not read $file" >&2
+      failed=1
+      mirror_failed=1
       continue
+    }
     [[ "$hash" == "${raw%% *}" || "$hash" == "${plain%% *}" ]] || continue
     remove "$file"
     folder="$(dirname "$file")"
@@ -165,16 +189,56 @@ remove_temp_files() {
 }
 
 # The app, its helpers and its sidecars (search index, local models) all run
-# from inside the app bundle.
+# from inside the app bundle. Only the given user's are quit: someone else
+# signed in on this Mac may be recording.
 app_processes="OpenWhispr.app/Contents/"
-if pgrep -f "$app_processes" >/dev/null; then
-  pkill -f "$app_processes" || true
+quit_app() {
+  pgrep -U "$1" -f "$app_processes" >/dev/null || return 0
+  pkill -U "$1" -f "$app_processes" || true
   for _ in 1 2 3 4 5 6 7 8 9 10; do
-    pgrep -f "$app_processes" >/dev/null || break
+    pgrep -U "$1" -f "$app_processes" >/dev/null || return 0
     sleep 1
   done
-  pkill -9 -f "$app_processes" || true
-fi
+  pkill -9 -U "$1" -f "$app_processes" || true
+}
+
+# AuditLogPath from the managed preferences, the user's own before the
+# device's, as the app reads it; nothing when it is unset or not absolute.
+configured_audit_dir() {
+  local plist value
+  for plist in "/Library/Managed Preferences/$1/$preferences_domain" \
+    "/Library/Managed Preferences/$preferences_domain"; do
+    value="$(defaults read "$plist" AuditLogPath 2>/dev/null)" || continue
+    [[ "$value" != /* ]] || echo "$value"
+    return 0
+  done
+}
+
+# Records the home's wipe in its user's audit log as the app records its own
+# (meetingAuditLog.js): one line in their daily file, in AuditLogPath or else
+# the audit folder the wipe keeps, written as them. A daily file that is a
+# link, has other names or is someone else's is refused, as the app refuses
+# one, and so is AuditLogPath for a home whose account is gone, which only
+# root could write for.
+record_wipe() {
+  local user="$1" configured="$2" ts reason=null file dir
+  [[ "$user" =~ ^[A-Za-z0-9._-]+$ ]] || user=unknown
+  ts="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+  [[ "$failed" == 0 ]] || reason='"incomplete"'
+  file="meeting-audit-$user-${ts:0:10}.jsonl"
+  [[ -n "$run_as" || $EUID -ne 0 ]] || configured=""
+  for dir in ${configured:+"$configured"} "$user_data/audit"; do
+    printf '{"ts":"%s","event":"local-data.wiped","sessionId":null,"noteId":null,"trigger":"script","reason":%s,"durationSec":null,"participantsNotified":null,"notificationMethod":null,"externalAttendees":null,"appVersion":null,"deviceUser":"%s"}\n' \
+      "$ts" "$reason" "$user" | as_owner_run /bin/sh -c '
+        mkdir -p "$1" && cd "$1" || exit 1
+        if [ -e "$2" ] || [ -L "$2" ]; then
+          [ -n "$(find "$2" -prune -type f -links 1 -user "$(id -u)")" ] || exit 1
+        fi
+        cat >>"$2"' sh "$dir" "$file" 2>/dev/null && return 0
+  done
+  echo "Could not record the wipe in the audit log for $home" >&2
+  failed=1
+}
 
 console_user=""
 [[ $EUID -eq 0 ]] && console_user="$(stat -f %Su /dev/console)"
@@ -203,10 +267,25 @@ for home in "${homes[@]}"; do
   # Counted per home, so "Removed" names only homes where nothing failed.
   failed_before="$failed"
   failed=0
+  mirror_failed=0
+  user="$(id -un "$owner_uid" 2>/dev/null)" || user=""
+  quit_app "$owner_uid"
   user_data="$home/Library/Application Support/OpenWhispr"
+  audit_dir="$(configured_audit_dir "$user")"
+  # An AuditLogPath inside the data folder stays, with the folders on its way.
+  audit_keep=""
+  if data_real="$(cd -P "$user_data" 2>/dev/null && pwd)" &&
+    audit_real="$(cd -P "$audit_dir" 2>/dev/null && pwd)" &&
+    [[ "$audit_real" == "$data_real"/* ]]; then
+    audit_keep="${audit_real#"$data_real"/}"
+  fi
   remove_mirrored_files
-  remove_all_except "$user_data" "${kept[@]}"
-  remove_all_except "$home/.cache/openwhispr" "${cache_kept[@]}"
+  kept_here=("${kept[@]}")
+  # A run again needs the record of what the notes mirror wrote, in the database.
+  [[ "$mirror_failed" == 0 ]] ||
+    kept_here+=(transcriptions.db transcriptions.db-wal transcriptions.db-shm transcriptions.db-journal)
+  remove_all_except "$user_data" "$audit_keep" "${kept_here[@]}"
+  remove_all_except "$home/.cache/openwhispr" "" "${cache_kept[@]}"
   inside_home "$home/.openwhispr" && remove "$home/.openwhispr/cli-bridge.json"
 
   # The keychain item and the per-user temp folder are reachable only as the
@@ -217,6 +296,7 @@ for home in "${homes[@]}"; do
       security delete-generic-password -s OpenWhispr -a secrets-master-key >/dev/null 2>&1 || true
     remove_temp_files "$(launchctl asuser "$uid" sudo -u "$console_user" getconf DARWIN_USER_TEMP_DIR)"
   fi
+  record_wipe "$user" "$audit_dir"
   [[ "$failed" == 1 ]] || echo "Removed OpenWhispr local data from $home"
   [[ "$failed_before" == 0 ]] || failed=1
 done
