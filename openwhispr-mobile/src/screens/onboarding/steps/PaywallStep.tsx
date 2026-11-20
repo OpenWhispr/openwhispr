@@ -15,6 +15,7 @@ import {
 } from '@/store/useSuperwallIdentityStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { Sentry } from '@/lib/sentry';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
 import { getAffiliateClientConfig } from '@/lib/affiliateLink';
 import { TrackingPermissionStep } from './TrackingPermissionStep';
@@ -54,7 +55,7 @@ export function PaywallStep() {
     usageOwnerKey !== null &&
     usageOwnerKey === getUsageOwnerKey() &&
     !usage.isSubscribed;
-  const { register, state, isConfigured } = useSuperwallGate();
+  const { register, state, isConfigured, requiresIdentity } = useSuperwallGate();
   // A purchase before identify(billingUserId) reaches the server with no app
   // user id and can never be attributed, so the paywall waits for the bridge.
   const identityReady = useSuperwallIdentityStore((s) =>
@@ -132,10 +133,10 @@ export function PaywallStep() {
 
   useEffect(() => {
     // Identifying needs a configured SDK, so the wait only starts counting then.
-    if (!isConfigured || identityReady) return;
+    if (!requiresIdentity || !isConfigured || identityReady) return;
     const timer = setTimeout(() => setIdentityGraceElapsed(true), PAYWALL_READY_GRACE_MS);
     return () => clearTimeout(timer);
-  }, [identityReady, isConfigured]);
+  }, [identityReady, isConfigured, requiresIdentity]);
 
   useEffect(() => {
     if (!presenting) return;
@@ -164,8 +165,13 @@ export function PaywallStep() {
     if (!consentReady) return;
 
     if (!isConfigured && !readyGraceElapsed) return;
-    if (isConfigured && !identityReady) {
+    if (requiresIdentity && isConfigured && !identityReady) {
       if (!identityGraceElapsed) return;
+      Sentry.addBreadcrumb({
+        category: 'superwall',
+        message: 'onboarding paywall skipped: identity not ready',
+        level: 'warning',
+      });
       // No identity means a purchase could not be attributed: skip the offer
       // rather than sell something the account may never receive.
       hasPresentedRef.current = true;
@@ -228,6 +234,7 @@ export function PaywallStep() {
     identityReady,
     isConfigured,
     isConfirmedFree,
+    requiresIdentity,
     readyGraceElapsed,
     user,
     sessionCookie,

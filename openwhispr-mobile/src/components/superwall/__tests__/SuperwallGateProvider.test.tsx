@@ -307,6 +307,27 @@ describe('SuperwallGateProvider', () => {
     await waitFor(() => expect(screen.getByTestId('result').props.children).toBe('true'));
   });
 
+  it("a guest's non-transactional placement runs its feature without presenting", async () => {
+    useAuthStore.setState({ user: null, isGuest: true, sessionCookie: null });
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const feature = jest.fn();
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.noteChatStart}
+          feature={feature}
+          requiresAccount={false}
+        />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+
+    await waitFor(() => expect(screen.getByTestId('result').props.children).toBe('true'));
+    expect(feature).toHaveBeenCalledTimes(1);
+    expect(mockRegisterPlacement).not.toHaveBeenCalled();
+  });
+
   it('registers a non-transactional placement as before once the identity is ready', async () => {
     const screen = render(
       <EnabledSuperwallGateProvider>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useSuperwall, useSuperwallEvents, useUser } from 'expo-superwall';
+import { useSuperwall, useSuperwallEvents, useSuperwallStore, useUser } from 'expo-superwall';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { useSuperwallIdentityStore } from '@/store/useSuperwallIdentityStore';
@@ -14,6 +14,13 @@ import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 
 function publishIdentity(billingUserId: string | null): void {
   useSuperwallIdentityStore.getState().setIdentifiedBillingUserId(billingUserId);
+}
+
+function isIdentityStillCurrent(billingUserId: string): boolean {
+  const { user, isGuest } = useAuthStore.getState();
+  if (!user || isGuest) return false;
+  if (useUsageStore.getState().usage?.billingUserId !== billingUserId) return false;
+  return useSuperwallStore.getState().user?.appUserId === billingUserId;
 }
 
 const INACTIVE_SUBSCRIPTION_STATUS = { status: 'INACTIVE' } as const;
@@ -135,9 +142,10 @@ export function SuperwallEntitlementBridge() {
         }
         await identify(billingUserId, { restorePaywallAssignments: true });
         debugLog('identified with Superwall', { billingUserId });
-        // Publish even if this run was superseded: identify completed, and
-        // paywall gates compare the value with the account's current billing id.
-        publishIdentity(billingUserId);
+        // A superseded run may only publish while the same user is still
+        // signed in with this billing id and the SDK holds it; otherwise a
+        // later re-sign-in would read ready before it is re-identified.
+        if (isIdentityStillCurrent(billingUserId)) publishIdentity(billingUserId);
         if (!cancelled) identifiedUserIdRef.current = billingUserId;
         return;
       }

@@ -332,7 +332,12 @@ export function DisabledSuperwallGateProvider({ children }: Props) {
   );
 
   const value = useMemo(
-    () => ({ register, state: { status: 'idle' } as const, isConfigured: true }),
+    () => ({
+      register,
+      state: { status: 'idle' } as const,
+      isConfigured: true,
+      requiresIdentity: false,
+    }),
     [register],
   );
 
@@ -668,11 +673,12 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
       }
 
       // An App Store purchase made before identify(billingUserId) reaches the
-      // server with no app user id, so it could never be attributed. A
-      // non-transactional placement guards recording starts, where waiting
-      // would cost the user's first words: run the feature at once and never
-      // register it, so nothing can present or sell unattributed.
-      if (user && !isSuperwallIdentityReady() && !isTransactionalSuperwallPlacement(placement)) {
+      // server with no app user id, so it could never be attributed; a signed-out
+      // guest has no identity to attribute to at all. A non-transactional
+      // placement guards recording starts, where waiting would cost the user's
+      // first words: run the feature at once and never register it, so nothing
+      // can present or sell unattributed.
+      if (!isSuperwallIdentityReady() && !isTransactionalSuperwallPlacement(placement)) {
         debugLog('identity not ready: running non-transactional feature without presenting', {
           placement,
         });
@@ -841,7 +847,10 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
     ],
   );
 
-  const value = useMemo(() => ({ register, state, isConfigured }), [isConfigured, register, state]);
+  const value = useMemo(
+    () => ({ register, state, isConfigured, requiresIdentity: true }),
+    [isConfigured, register, state],
+  );
 
   return (
     <SuperwallGateContext.Provider value={value}>
