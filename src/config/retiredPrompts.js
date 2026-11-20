@@ -94,7 +94,7 @@ export const CURRENT_DEFAULT_PROMPT_HASHES = {
   "de/cleanupPrompt": "89452bfcce253803ae9fd9b0e9fc3f50afbf9c8d89706ad92dfc48d1e29ec4af",
   "de/fullPrompt": "9312644f8de56d874e0de9e18d610a3ed6afd0ca1b31411f02d021e012fee601",
   "de/translatePrompt": "818b9176518120cd7889726574b61026733ffb69768d3d00e417c28389e5875e",
-  "en/cleanupPrompt": "78ef4a135005d72505128bbba909862329d62b44d44f975c355d296982a6ac9b",
+  "en/cleanupPrompt": "bd434be713495e50b0c1745e3ad0af2bea71f9a4f2c9948437135b4471dcac8a",
   "en/fullPrompt": "9312644f8de56d874e0de9e18d610a3ed6afd0ca1b31411f02d021e012fee601",
   "en/translatePrompt": "2acf77e82671cfb27f56210461369cca96da52d68597dd825bb5f3cf7fd4cd47",
   "es/cleanupPrompt": "3a977c7d5435d799873a1003d68924b08a51d720386fe8cc9ac16304607df56d",
