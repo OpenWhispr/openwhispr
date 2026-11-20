@@ -536,6 +536,7 @@ const BOOLEAN_SETTINGS = new Set([
   "allowOpenAIFallback",
   "allowLocalFallback",
   "assemblyAiStreaming",
+  "cloudTranscriptionCustomRealtime",
   "autoGenerateNoteTitle",
   "useCleanupModel",
   "toneStyleEnabled",
@@ -1403,6 +1404,7 @@ export interface SettingsState
   setCloudTranscriptionProvider: (value: string) => void;
   setCloudTranscriptionModel: (value: string) => void;
   setCloudTranscriptionBaseUrl: (value: string) => void;
+  setCloudTranscriptionCustomRealtime: (value: boolean) => void;
   setCloudTranscriptionMode: (value: string) => void;
   switchCloudTranscriptionProvider: (
     context: TranscriptionPolicyContext,
@@ -1835,6 +1837,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "cloudTranscriptionBaseUrl",
     API_ENDPOINTS.TRANSCRIPTION_BASE
   ),
+  cloudTranscriptionCustomRealtime: readBoolean("cloudTranscriptionCustomRealtime", false),
   transcriptionModelByProvider: readModelMemory("transcriptionModelByProvider"),
   reasoningModelByProvider: readModelMemory("reasoningModelByProvider"),
   // Secrets aren't hydrated yet at construction; the BYOK default is set
@@ -2366,6 +2369,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
+  setCloudTranscriptionCustomRealtime: createBooleanSetter("cloudTranscriptionCustomRealtime"),
 
   // Every provider shares one model slot per scope, so a plain provider write
   // destroys the outgoing provider's model (the "Parasail" wipe). This setter
@@ -2992,6 +2996,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setCloudTranscriptionModel(settings.cloudTranscriptionModel);
     if (settings.cloudTranscriptionBaseUrl !== undefined)
       s.setCloudTranscriptionBaseUrl(settings.cloudTranscriptionBaseUrl);
+    if (settings.cloudTranscriptionCustomRealtime !== undefined)
+      s.setCloudTranscriptionCustomRealtime(settings.cloudTranscriptionCustomRealtime);
     if (settings.cloudTranscriptionMode !== undefined)
       s.setCloudTranscriptionMode(settings.cloudTranscriptionMode);
     if (settings.customDictionary !== undefined) s.setCustomDictionary(settings.customDictionary);

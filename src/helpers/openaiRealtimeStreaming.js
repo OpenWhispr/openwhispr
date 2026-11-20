@@ -131,6 +131,7 @@ class OpenAIRealtimeStreaming {
       createSocket,
       streamLabel,
       vadThreshold,
+      url: customUrl,
     } = options;
     if (!apiKey && !createSocket) throw new Error(`${this.providerLabel} API key is required`);
 
@@ -167,7 +168,8 @@ class OpenAIRealtimeStreaming {
     this._sessionExpired = false;
     this._connectionLossNotified = false;
 
-    const url = "wss://api.openai.com/v1/realtime?intent=transcription";
+    // An explicit custom endpoint URL (Custom tab realtime) outranks OpenAI.
+    const url = customUrl || "wss://api.openai.com/v1/realtime?intent=transcription";
     debugLogger.debug(`${this.providerLabel} connecting`, this._logContext({ model: this.model }));
 
     // Attested providers (Tinfoil) supply their socket via an async factory.

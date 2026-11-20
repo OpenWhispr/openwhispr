@@ -205,6 +205,7 @@ import {
 import {
   isOpenAiRealtimeSelection,
   isGeminiLiveSelection,
+  isCustomRealtimeSelection,
   defaultStreamingProviderName,
   orukeetDetectedLanguageFields,
   resolveManagedOrukeetRoute,
@@ -562,6 +563,7 @@ const STREAMING_PROVIDERS = {
     onSessionEnd: (cb) => window.electronAPI.onCortiSessionEnd(cb),
   },
   "tinfoil-realtime": makeDictationRealtimeProvider("tinfoil-realtime"),
+  "custom-realtime": makeDictationRealtimeProvider("custom-realtime"),
 };
 
 // Batch providers that must transcribe via a main-process proxy (CORS,
@@ -5229,6 +5231,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     // Self-hosted transcription is batch HTTP to the user's server, never cloud realtime WS.
     if (isSelfHostedTranscription(s)) return false;
+
+    // A Custom endpoint streams over its own WS only when the realtime toggle
+    // (or a -realtime model id) opts in; every other Custom selection keeps the
+    // batch HTTP path.
+    if (s.cloudTranscriptionProvider === "custom") {
+      return isCustomRealtimeSelection(s);
+    }
 
     if (
       s.cloudTranscriptionMode === "openwhispr" &&

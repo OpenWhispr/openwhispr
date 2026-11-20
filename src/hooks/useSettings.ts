@@ -41,6 +41,7 @@ export interface TranscriptionSettings {
   cloudTranscriptionProvider: string;
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl?: string;
+  cloudTranscriptionCustomRealtime?: boolean;
   cloudTranscriptionMode: string;
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
@@ -326,6 +327,8 @@ function useSettingsInternal() {
     setSnippets: store.setSnippets,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
+    cloudTranscriptionCustomRealtime: store.cloudTranscriptionCustomRealtime,
+    setCloudTranscriptionCustomRealtime: store.setCloudTranscriptionCustomRealtime,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
     setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
     useCleanupModel: store.useCleanupModel,

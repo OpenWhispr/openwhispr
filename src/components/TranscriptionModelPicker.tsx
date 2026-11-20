@@ -65,6 +65,7 @@ import { createExternalLinkHandler } from "../utils/externalLinks";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
+import { Toggle } from "./ui/toggle";
 import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
 import { ProviderCheckField } from "./ui/ProviderCheckField";
 import { usePanelVisible } from "./ui/usePanelVisible";
@@ -553,6 +554,12 @@ export default function TranscriptionModelPicker({
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
+  const cloudTranscriptionCustomRealtime = useSettingsStore(
+    (s) => s.cloudTranscriptionCustomRealtime
+  );
+  const setCloudTranscriptionCustomRealtime = useSettingsStore(
+    (s) => s.setCloudTranscriptionCustomRealtime
+  );
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
@@ -1744,6 +1751,21 @@ export default function TranscriptionModelPicker({
                       placeholder="whisper-1"
                       autoComplete="off"
                       spellCheck={false}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground">
+                        {t("transcription.customRealtimeToggle")}
+                      </p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/80">
+                        {t("transcription.customRealtimeToggleDescription")}
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={cloudTranscriptionCustomRealtime}
+                      onChange={setCloudTranscriptionCustomRealtime}
                     />
                   </div>
 

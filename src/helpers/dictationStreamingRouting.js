@@ -5,6 +5,7 @@
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
 import { isOrukeetStreaming, isSelfHostedTranscription } from "./selfHostedTranscription.js";
+import { customRealtimeSocketUrl } from "./customRealtimeEndpoint.js";
 import { isStreamingOnlySelection } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
 import bundledRegistryData from "../models/modelRegistryData.json" with { type: "json" };
@@ -165,6 +166,21 @@ export function isGeminiLiveSelection(settings) {
   );
 }
 
+// A Custom endpoint streams when the user opts in with the realtime toggle or
+// picks a model id ending in -realtime, and only with a URL that converts to a
+// WebSocket endpoint. Everything else on the Custom tab stays on today's
+// batch HTTP path, which transcriptionRoute.ts keeps serving untouched.
+export const CUSTOM_REALTIME_MODEL_SUFFIX = "-realtime";
+export const CUSTOM_REALTIME_PROVIDER = "custom-realtime";
+
+export function isCustomRealtimeSelection(settings) {
+  if (settings?.cloudTranscriptionProvider !== "custom") return false;
+  if (!customRealtimeSocketUrl(settings?.cloudTranscriptionBaseUrl)) return false;
+  if (settings.cloudTranscriptionCustomRealtime) return true;
+  const model = settings.cloudTranscriptionModel;
+  return typeof model === "string" && model.endsWith(CUSTOM_REALTIME_MODEL_SUFFIX);
+}
+
 export function defaultStreamingProviderName(context) {
   return context === "notes" ? "deepgram" : "openai-realtime";
 }
@@ -218,6 +234,9 @@ export function resolveStreamingProviderName({ settings, context, sttConfig, lan
   ) {
     return settings.cloudTranscriptionProvider;
   }
+  if (isCustomRealtimeSelection(settings)) {
+    return CUSTOM_REALTIME_PROVIDER;
+  }
   if (isOpenAiRealtimeSelection(settings)) {
     return "openai-realtime";
   }
@@ -255,6 +274,13 @@ export function buildStreamingSessionOptions({
   // assistant voice skips it because the agent window owns that surface.
   if (providerName === "tinfoil-realtime" && !voiceAgentRequested) {
     options.preview = true;
+  }
+  if (providerName === "custom-realtime") {
+    // The main process converts this http(s) base into the WS endpoint; it is
+    // also part of dictationConnectionKey, so a URL edit redials.
+    options.baseUrl = settings.cloudTranscriptionBaseUrl;
+    // Live interim words on the floating preview, matching tinfoil-realtime.
+    if (!voiceAgentRequested) options.preview = true;
   }
   if (providerName === "orukeet") {
     options.model = ORUKEET_MODEL;
