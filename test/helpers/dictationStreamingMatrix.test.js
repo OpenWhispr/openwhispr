@@ -23,11 +23,12 @@ const RENDERER_STREAMING_PROVIDERS = [
   "gemini",
   "corti",
   "tinfoil-realtime",
+  "custom-realtime",
 ];
 
 // Providers that share the dictation-realtime-* IPC channels and therefore
 // need a fetchRealtimeToken entry under exactly their renderer name.
-const SHARED_CHANNEL_PROVIDERS = ["openai-realtime", "tinfoil-realtime"];
+const SHARED_CHANNEL_PROVIDERS = ["openai-realtime", "tinfoil-realtime", "custom-realtime"];
 
 const SETTINGS_DEFAULTS = {
   cloudTranscriptionProvider: "openai",
@@ -42,6 +43,57 @@ const settingsWith = (overrides) => ({ ...SETTINGS_DEFAULTS, ...overrides });
 // [description, { settings, context, sttConfig }, expected provider name]
 const RESOLUTION_MATRIX = [
   ["default config (the #1624 repro) resolves to openai-realtime", {}, "openai-realtime"],
+  [
+    "custom provider with realtime toggle streams to the custom endpoint",
+    {
+      settings: settingsWith({
+        cloudTranscriptionProvider: "custom",
+        cloudTranscriptionMode: "byok",
+        cloudTranscriptionBaseUrl: "http://127.0.0.1:8792/v1",
+        cloudTranscriptionCustomRealtime: true,
+        cloudTranscriptionModel: "whisper-1",
+      }),
+    },
+    "custom-realtime",
+  ],
+  [
+    "custom provider with a -realtime model suffix streams without the toggle",
+    {
+      settings: settingsWith({
+        cloudTranscriptionProvider: "custom",
+        cloudTranscriptionMode: "byok",
+        cloudTranscriptionBaseUrl: "http://127.0.0.1:8792/v1",
+        cloudTranscriptionModel: "my-asr-realtime",
+      }),
+    },
+    "custom-realtime",
+  ],
+  [
+    "custom provider with the toggle off keeps the batch path (no streaming name)",
+    {
+      settings: settingsWith({
+        cloudTranscriptionProvider: "custom",
+        cloudTranscriptionMode: "byok",
+        cloudTranscriptionBaseUrl: "http://127.0.0.1:8792/v1",
+        cloudTranscriptionCustomRealtime: false,
+        cloudTranscriptionModel: "whisper-1",
+      }),
+    },
+    "openai-realtime",
+  ],
+  [
+    "custom realtime without a usable URL falls back to the dictation default",
+    {
+      settings: settingsWith({
+        cloudTranscriptionProvider: "custom",
+        cloudTranscriptionMode: "byok",
+        cloudTranscriptionBaseUrl: "",
+        cloudTranscriptionCustomRealtime: true,
+        cloudTranscriptionModel: "whisper-1",
+      }),
+    },
+    "openai-realtime",
+  ],
   [
     "gpt-4o-transcribe also resolves to openai-realtime",
     { settings: settingsWith({ cloudTranscriptionModel: "gpt-4o-transcribe" }) },
