@@ -7,10 +7,10 @@ Taken 2026-11-20 on iOS 26.5 simulators, region en_ZA, Apple keyboards: English 
 
 Names are `<device>-<keyboard>-<appearance>-<orientation>-<state>.png`. "rest" is an empty field; "typing" has "Hel" (English) or "Hal" (German) typed, so the suggestion bar shows candidates. Landscape files are stored in the device's raw portrait orientation (the keyboard runs down the left side); rotate them 90° clockwise to view.
 
-| Device | Files |
-| --- | --- |
-| SE | en light portrait rest / typing, en dark portrait typing, en light portrait numbers, en light + dark landscape rest, de light portrait rest / typing, de light landscape typing, emoji light portrait |
-| Pro Max | the same set |
+| Device  | Files                                                                                                                                                                                                 |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SE      | en light portrait rest / typing, en dark portrait typing, en light portrait numbers, en light + dark landscape rest, de light portrait rest / typing, de light landscape typing, emoji light portrait |
+| Pro Max | the same set                                                                                                                                                                                          |
 
 `*-openwhispr-current-light-portrait.png` shows today's OpenWhispr keyboard (the dev build installed on 2026-11-20) for comparison.
 
