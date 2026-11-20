@@ -63,7 +63,20 @@ export default function SidebarModal<T extends string>({
   const { registerContent, shouldBlockDismiss } = useDismissGuard<HTMLDivElement>();
 
   const [isCompact, setIsCompact] = React.useState(false);
+  const layoutValue = React.useMemo(() => ({ isCompact }), [isCompact]);
+  const previousFocusRef = React.useRef<HTMLElement | null>(null);
+  // Never cleared, so the closing handler can tell whether focus is still inside
+  // this dialog's own (already detached) content.
+  const lastContentRef = React.useRef<HTMLElement | null>(null);
   const observerRef = React.useRef<ResizeObserver | null>(null);
+
+  const attachContent = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node) lastContentRef.current = node;
+      return registerContent(node);
+    },
+    [registerContent]
+  );
 
   const containerRef = React.useCallback((el: HTMLDivElement | null) => {
     if (observerRef.current) {
@@ -80,22 +93,17 @@ export default function SidebarModal<T extends string>({
   }, []);
 
   // Group items by their group property
-  const groupedItems = React.useMemo(() => {
-    const groups: { label: string | null; items: SidebarItem<T>[] }[] = [];
-    let currentGroup: string | null | undefined = undefined;
-
-    for (const item of sidebarItems) {
-      const group = item.group ?? null;
-      if (group !== currentGroup) {
-        groups.push({ label: group, items: [item] });
-        currentGroup = group;
-      } else {
-        groups[groups.length - 1].items.push(item);
-      }
+  const groupedItems: { label: string | null; items: SidebarItem<T>[] }[] = [];
+  let currentGroup: string | null | undefined = undefined;
+  for (const item of sidebarItems) {
+    const group = item.group ?? null;
+    if (group !== currentGroup) {
+      groupedItems.push({ label: group, items: [item] });
+      currentGroup = group;
+    } else {
+      groupedItems[groupedItems.length - 1].items.push(item);
     }
-
-    return groups;
-  }, [sidebarItems]);
+  }
 
   const renderBadge = (item: SidebarItem<T>) => {
     if (!item.badge && item.badgeVariant !== "dot") return null;
@@ -131,12 +139,39 @@ export default function SidebarModal<T extends string>({
           )}
         />
         <DialogPrimitive.Content
-          ref={registerContent}
+          ref={attachContent}
           // Radix focuses the first tabbable on open, which is the close button;
           // focus the dialog itself so the X doesn't open wearing a focus ring.
           onOpenAutoFocus={(e) => {
+            previousFocusRef.current = document.activeElement as HTMLElement | null;
             e.preventDefault();
             (e.currentTarget as HTMLElement).focus();
+          }}
+          onCloseAutoFocus={(e) => {
+            // Radix has no Trigger to restore to, but a dialog opened from inside
+            // this one (or an explicit handoff) already owns focus. Suppressing
+            // restoration is what keeps it there.
+            const active = document.activeElement;
+            if (
+              active &&
+              active !== document.body &&
+              active.isConnected &&
+              !lastContentRef.current?.contains(active)
+            ) {
+              e.preventDefault();
+              return;
+            }
+            const previous = previousFocusRef.current;
+            if (
+              previous &&
+              previous !== document.body &&
+              previous.isConnected &&
+              !previous.closest('[hidden], [inert], [data-state="closed"]') &&
+              !previous.matches(":disabled")
+            ) {
+              e.preventDefault();
+              previous.focus({ preventScroll: true });
+            }
           }}
           onEscapeKeyDown={(e) => {
             if (document.querySelector("[data-capturing]") || escapeClearsTarget(e)) {
@@ -218,7 +253,9 @@ export default function SidebarModal<T extends string>({
                               data-section-id={item.id}
                               onClick={() => onSectionChange(item.id)}
                               title={isCompact ? item.label : undefined}
-                              className={`group relative w-full flex items-center text-start text-xs rounded-md transition-colors duration-100 outline-none ${
+                              aria-label={isCompact ? item.label : undefined}
+                              aria-current={isActive ? "page" : undefined}
+                              className={`group relative w-full flex items-center text-start text-xs rounded-md transition-colors duration-100 outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset ${
                                 isCompact ? "justify-center px-0 py-2" : "gap-2 px-2 py-1.5"
                               } ${
                                 isActive
@@ -286,7 +323,7 @@ export default function SidebarModal<T extends string>({
 
               {/* Main Content */}
               <div className="flex-1 overflow-y-auto bg-background">
-                <SettingsLayoutProvider value={{ isCompact }}>
+                <SettingsLayoutProvider value={layoutValue}>
                   {/* The close button (and compact notice badge) float over this column's top corner
                       (top-4, 26px tall); pt-[22px] centres a text-xs heading (line-height 1.15) on that row. */}
                   {/* A page marked data-settings-fill (People) takes the column's height, so its own

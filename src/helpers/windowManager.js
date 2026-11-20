@@ -71,6 +71,11 @@ class WindowManager {
   constructor() {
     this.mainWindow = null;
     this.controlPanelWindow = null;
+    this._settingsHost = null;
+    this._pendingSettingsOpen = null;
+    this._settingsBlocked = false;
+    this._settingsRequestId = 0;
+    this._settingsDocumentId = 0;
     this._resizeMaskTokenCounter = 0;
     this._controlPanelVisibilityTimer = null;
     this._onboardingRestoreBounds = null;
@@ -1439,6 +1444,9 @@ class WindowManager {
       this._clearControlPanelVisibilityTimer();
       this.endOnboardingDemo();
       this.controlPanelWindow = null;
+      this._settingsHost = null;
+      this._settingsBlocked = false;
+      this._settingsDocumentId++;
       this._onboardingActive = true;
       this._hideNormalAppSurfaces();
       this._onboardingRestoreBounds = null;
@@ -1448,6 +1456,13 @@ class WindowManager {
     });
 
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
+
+    // Committed main-frame documents only: will-navigate can still block a started navigation.
+    this.controlPanelWindow.webContents.on("did-navigate", () => {
+      this._settingsHost = null;
+      this._settingsBlocked = false;
+      this._settingsDocumentId++;
+    });
 
     // The initial load may already own a queued note; only release a replaced document's session.
     // On commit, not on start: a navigation will-navigate blocks leaves the document in place.
@@ -2462,20 +2477,88 @@ class WindowManager {
     }
   }
 
-  // A named section waits here like a note navigation: a control panel created
-  // by this call registers its show-settings listener only after the event.
-  async openSettings(section) {
-    if (section) this._pendingSettingsSection = section;
-    await this.createControlPanelWindow();
-    if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
-      this.controlPanelWindow.webContents.send("show-settings");
+  _isSettingsSender(event) {
+    const win = this.controlPanelWindow;
+    return (
+      !!win &&
+      !win.isDestroyed() &&
+      event.sender === win.webContents &&
+      event.senderFrame === win.webContents.mainFrame
+    );
+  }
+
+  getSettingsDocumentId(event) {
+    return this._isSettingsSender(event) ? this._settingsDocumentId : null;
+  }
+
+  setSettingsHostReady(event, hostId, ready, documentId) {
+    if (
+      !this._isSettingsSender(event) ||
+      documentId !== this._settingsDocumentId ||
+      typeof hostId !== "string" ||
+      !hostId ||
+      hostId.length > 128 ||
+      typeof ready !== "boolean"
+    )
+      return;
+    if (ready) {
+      this._settingsHost = { id: hostId, frame: event.senderFrame };
+      this._deliverPendingSettingsOpen();
+    } else if (this._settingsHost?.id === hostId) {
+      this._settingsHost = null;
     }
   }
 
-  consumePendingSettingsSection() {
-    const section = this._pendingSettingsSection;
+  // Onboarding and sign-in have no Settings host, so an open request made there
+  // is dropped instead of replayed once the normal app mounts one.
+  setSettingsBlocked(event, blocked) {
+    if (!this._isSettingsSender(event)) return;
+    this._settingsBlocked = blocked;
+    if (!blocked) return;
+    this._pendingSettingsOpen = null;
     this._pendingSettingsSection = null;
-    return section;
+  }
+
+  acknowledgeSettingsOpen(event, hostId, requestId) {
+    if (
+      !this._isSettingsSender(event) ||
+      this._settingsHost?.id !== hostId ||
+      this._settingsHost.frame !== event.senderFrame ||
+      requestId !== this._pendingSettingsOpen
+    )
+      return;
+    this._pendingSettingsOpen = null;
+    this._pendingSettingsSection = null;
+  }
+
+  _deliverPendingSettingsOpen() {
+    const win = this.controlPanelWindow;
+    if (
+      !win ||
+      win.isDestroyed() ||
+      !this._settingsHost ||
+      this._settingsHost.frame !== win.webContents.mainFrame ||
+      this._pendingSettingsOpen === null
+    )
+      return;
+    win.webContents.send("show-settings", {
+      hostId: this._settingsHost.id,
+      requestId: this._pendingSettingsOpen,
+      section: this._pendingSettingsSection ?? undefined,
+    });
+  }
+
+  async openSettings(section) {
+    // A document load is not React/auth/policy readiness. Keep the open intent
+    // and any named section until the eligible host acknowledges them.
+    if (this._settingsBlocked) {
+      await this.createControlPanelWindow();
+      return;
+    }
+    if (section) this._pendingSettingsSection = section;
+    this._pendingSettingsOpen = ++this._settingsRequestId;
+    await this.createControlPanelWindow();
+    this._deliverPendingSettingsOpen();
   }
 
   showLoadFailureDialog(windowName, errorCode, errorDescription, validatedURL) {

@@ -32,6 +32,8 @@ const MODELS = [...RANKING].reverse().map((value) => ({
     ? "search match"
     : "",
 }));
+// A model row wraps its ModelCard; a header row holds the provider name and count.
+const isCardRow = (row) => Boolean(row.props.children?.props?.model);
 const GROUPED = [
   "anthropic (4)",
   "anthropic/z-fast",
@@ -107,8 +109,8 @@ async function mountList(t, overrides = {}) {
   await React.act(async () => root.render(React.createElement(Harness)));
   const input = () => tree.props.children[0].props.children[1];
   const rows = () =>
-    tree.props.children[1]
-      ? tree.props.children[1].props.children.props.children.map((row) => row.props.children)
+    tree.props.children[2]
+      ? tree.props.children[2].props.children.props.children.map((row) => row.props.children)
       : [];
   return {
     selected,
@@ -119,7 +121,7 @@ async function mountList(t, overrides = {}) {
     },
     order: () =>
       rows().map((row) =>
-        row.props.role === "option"
+        isCardRow(row)
           ? row.props.children.props.model.value
           : `${row.props.children[0].props.children} (${row.props.children[1].props.children})`
       ),
@@ -131,8 +133,8 @@ async function mountList(t, overrides = {}) {
 test("larger providers lead, ties use provider name, and small providers share Other", async (t) => {
   const list = await mountList(t, { selectedModel: RANKING[1] });
   assert.deepEqual(list.order(), GROUPED);
-  const cards = list.rows().filter((row) => row.props.role === "option");
-  assert.equal(cards.filter((row) => row.props["aria-selected"]).length, 1);
+  const cards = list.rows().filter(isCardRow);
+  assert.equal(cards.filter((row) => row.props.children.props.isSelected).length, 1);
   assert.equal(
     cards[0].props.children.props.model.label,
     "z-fast",

@@ -281,42 +281,39 @@ export function HotkeyInput({
   const platform = getPlatform();
   const isMac = platform === "darwin";
 
-  const resolveModifierOnlyCapture = useCallback(
-    (
-      modifiers: Record<ModifierKind, boolean>,
-      codes: Partial<Record<ModifierKind, string>>
-    ): ModifierOnlyCapture => {
-      const heldKinds = MODIFIER_KINDS.filter((kind) => modifiers[kind]);
+  const resolveModifierOnlyCapture = (
+    modifiers: Record<ModifierKind, boolean>,
+    codes: Partial<Record<ModifierKind, string>>
+  ): ModifierOnlyCapture => {
+    const heldKinds = MODIFIER_KINDS.filter((kind) => modifiers[kind]);
 
-      // A lone modifier is only capturable on the right side: that is the side
-      // the native listeners report on its own, and it leaves the left-side key
-      // free for ordinary chords.
-      if (heldKinds.length === 1) {
-        const kind = heldKinds[0];
-        const token = heldModifierToken(kind, codes[kind], platform);
-        if (token.startsWith("Right")) {
-          return { kind: "hotkey", hotkey: token };
-        }
-        const rightSideToken =
-          sidedModifierToken(`${MODIFIER_CODE_STEM[kind]}Right`, platform) ?? token;
-        return {
-          kind: "needsRightSide",
-          held: formatHotkeyLabelForPlatform(token, platform),
-          rightSide: formatHotkeyLabelForPlatform(rightSideToken, platform),
-        };
+    // A lone modifier is only capturable on the right side: that is the side
+    // the native listeners report on its own, and it leaves the left-side key
+    // free for ordinary chords.
+    if (heldKinds.length === 1) {
+      const kind = heldKinds[0];
+      const token = heldModifierToken(kind, codes[kind], platform);
+      if (token.startsWith("Right")) {
+        return { kind: "hotkey", hotkey: token };
       }
+      const rightSideToken =
+        sidedModifierToken(`${MODIFIER_CODE_STEM[kind]}Right`, platform) ?? token;
+      return {
+        kind: "needsRightSide",
+        held: formatHotkeyLabelForPlatform(token, platform),
+        rightSide: formatHotkeyLabelForPlatform(rightSideToken, platform),
+      };
+    }
 
-      if (heldKinds.length >= 2) {
-        return {
-          kind: "hotkey",
-          hotkey: heldKinds.map((kind) => sidelessModifierToken(kind, platform)).join("+"),
-        };
-      }
+    if (heldKinds.length >= 2) {
+      return {
+        kind: "hotkey",
+        hotkey: heldKinds.map((kind) => sidelessModifierToken(kind, platform)).join("+"),
+      };
+    }
 
-      return null;
-    },
-    [platform]
-  );
+    return null;
+  };
 
   const clearFnHeld = useCallback(() => {
     setIsFnHeld(false);
@@ -367,170 +364,161 @@ export function HotkeyInput({
     [validate, onValidationError, onChange, clearFnHeld, rejectCapture]
   );
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (disabled) return;
-      e.preventDefault();
-      e.stopPropagation();
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
 
-      // The user is attempting a new chord, so the previous rejection no longer
-      // applies. This is where clearing belongs, not in handleFocus.
-      onValidationError?.(null);
+    // The user is attempting a new chord, so the previous rejection no longer
+    // applies. This is where clearing belongs, not in handleFocus.
+    onValidationError?.(null);
 
-      // Track held modifiers for modifier-only capture
-      heldModifiersRef.current = {
-        ctrl: e.ctrlKey,
-        meta: e.metaKey,
-        alt: e.altKey,
-        shift: e.shiftKey,
-      };
+    // Track held modifiers for modifier-only capture
+    heldModifiersRef.current = {
+      ctrl: e.ctrlKey,
+      meta: e.metaKey,
+      alt: e.altKey,
+      shift: e.shiftKey,
+    };
 
-      // Track which specific keys are pressed (for left/right detection)
-      const code = e.nativeEvent.code;
-      if (code === "ControlLeft" || code === "ControlRight") {
-        modifierCodesRef.current.ctrl = code;
-      } else if (code === "MetaLeft" || code === "MetaRight") {
-        modifierCodesRef.current.meta = code;
-      } else if (code === "AltLeft" || code === "AltRight") {
-        modifierCodesRef.current.alt = code;
-      } else if (code === "ShiftLeft" || code === "ShiftRight") {
-        modifierCodesRef.current.shift = code;
-      }
+    // Track which specific keys are pressed (for left/right detection)
+    const code = e.nativeEvent.code;
+    if (code === "ControlLeft" || code === "ControlRight") {
+      modifierCodesRef.current.ctrl = code;
+    } else if (code === "MetaLeft" || code === "MetaRight") {
+      modifierCodesRef.current.meta = code;
+    } else if (code === "AltLeft" || code === "AltRight") {
+      modifierCodesRef.current.alt = code;
+    } else if (code === "ShiftLeft" || code === "ShiftRight") {
+      modifierCodesRef.current.shift = code;
+    }
 
-      // Track when first pressed (for hold detection)
-      if (keyDownTimeRef.current === 0) {
-        keyDownTimeRef.current = Date.now();
-      }
+    // Track when first pressed (for hold detection)
+    if (keyDownTimeRef.current === 0) {
+      keyDownTimeRef.current = Date.now();
+    }
 
-      const codes = modifierCodesRef.current;
-      const held: string[] = [];
-      const holdKind = (kind: ModifierKind) =>
-        held.push(heldModifierToken(kind, codes[kind], platform));
-      if (isMac) {
-        if (e.metaKey) holdKind("meta");
-        if (e.ctrlKey) holdKind("ctrl");
+    const codes = modifierCodesRef.current;
+    const held: string[] = [];
+    const holdKind = (kind: ModifierKind) =>
+      held.push(heldModifierToken(kind, codes[kind], platform));
+    if (isMac) {
+      if (e.metaKey) holdKind("meta");
+      if (e.ctrlKey) holdKind("ctrl");
+    } else {
+      if (e.ctrlKey) holdKind("ctrl");
+      if (e.metaKey) holdKind("meta");
+    }
+    if (e.altKey) holdKind("alt");
+    if (e.shiftKey) holdKind("shift");
+    if (fnHeldRef.current) held.push("Fn");
+    setActiveModifiers(held);
+
+    // Try to get non-modifier hotkey first
+    const hotkey = mapKeyboardEventToHotkey(e.nativeEvent);
+    if (hotkey) {
+      keyDownTimeRef.current = 0;
+      if (fnHeldRef.current) {
+        fnCapturedKeyRef.current = true;
+        finalizeCapture(`Fn+${hotkey}`);
       } else {
-        if (e.ctrlKey) holdKind("ctrl");
-        if (e.metaKey) holdKind("meta");
+        finalizeCapture(hotkey);
       }
-      if (e.altKey) holdKind("alt");
-      if (e.shiftKey) holdKind("shift");
-      if (fnHeldRef.current) held.push("Fn");
-      setActiveModifiers(held);
+    }
+    // If no base key, modifiers are held - don't finalize yet
+  };
 
-      // Try to get non-modifier hotkey first
-      const hotkey = mapKeyboardEventToHotkey(e.nativeEvent);
-      if (hotkey) {
-        keyDownTimeRef.current = 0;
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    e.preventDefault();
+
+    const wasHoldingModifiers =
+      heldModifiersRef.current.ctrl ||
+      heldModifiersRef.current.meta ||
+      heldModifiersRef.current.alt ||
+      heldModifiersRef.current.shift;
+
+    let attempted = false;
+
+    if (wasHoldingModifiers && MODIFIER_CODES.has(e.nativeEvent.code)) {
+      const holdDuration = Date.now() - keyDownTimeRef.current;
+      const capture = resolveModifierOnlyCapture(
+        heldModifiersRef.current,
+        modifierCodesRef.current
+      );
+
+      if (
+        capture?.kind === "hotkey" &&
+        shouldAcceptModifierOnlyCapture(capture.hotkey, holdDuration)
+      ) {
+        attempted = true;
         if (fnHeldRef.current) {
           fnCapturedKeyRef.current = true;
-          finalizeCapture(`Fn+${hotkey}`);
+          finalizeCapture(`Fn+${capture.hotkey}`);
         } else {
-          finalizeCapture(hotkey);
+          finalizeCapture(capture.hotkey);
         }
-      }
-      // If no base key, modifiers are held - don't finalize yet
-    },
-    [disabled, isMac, platform, finalizeCapture, onValidationError]
-  );
-
-  const handleKeyUp = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (disabled) return;
-      e.preventDefault();
-
-      const wasHoldingModifiers =
-        heldModifiersRef.current.ctrl ||
-        heldModifiersRef.current.meta ||
-        heldModifiersRef.current.alt ||
-        heldModifiersRef.current.shift;
-
-      let attempted = false;
-
-      if (wasHoldingModifiers && MODIFIER_CODES.has(e.nativeEvent.code)) {
-        const holdDuration = Date.now() - keyDownTimeRef.current;
-        const capture = resolveModifierOnlyCapture(
-          heldModifiersRef.current,
-          modifierCodesRef.current
+      } else if (
+        capture?.kind === "needsRightSide" &&
+        hasMetModifierOnlyHoldThreshold(holdDuration) &&
+        !fnHeldRef.current
+      ) {
+        // Silently dropping this release is what made a left-side Option or
+        // Control look like the field was ignoring the key entirely.
+        attempted = true;
+        rejectCapture(
+          t("hotkeyInput.singleModifierNeedsRightSide", {
+            key: capture.held,
+            alternative: capture.rightSide,
+          })
         );
-
-        if (
-          capture?.kind === "hotkey" &&
-          shouldAcceptModifierOnlyCapture(capture.hotkey, holdDuration)
-        ) {
-          attempted = true;
-          if (fnHeldRef.current) {
-            fnCapturedKeyRef.current = true;
-            finalizeCapture(`Fn+${capture.hotkey}`);
-          } else {
-            finalizeCapture(capture.hotkey);
-          }
-        } else if (
-          capture?.kind === "needsRightSide" &&
-          hasMetModifierOnlyHoldThreshold(holdDuration) &&
-          !fnHeldRef.current
-        ) {
-          // Silently dropping this release is what made a left-side Option or
-          // Control look like the field was ignoring the key entirely.
-          attempted = true;
-          rejectCapture(
-            t("hotkeyInput.singleModifierNeedsRightSide", {
-              key: capture.held,
-              alternative: capture.rightSide,
-            })
-          );
-        }
       }
+    }
 
-      if (!attempted) {
-        heldModifiersRef.current = { ctrl: false, meta: false, alt: false, shift: false };
-        modifierCodesRef.current = {};
-        setActiveModifiers(fnHeldRef.current ? ["Fn"] : []);
-        keyDownTimeRef.current = 0;
-      }
-    },
-    [disabled, resolveModifierOnlyCapture, finalizeCapture, rejectCapture, t]
-  );
+    if (!attempted) {
+      heldModifiersRef.current = { ctrl: false, meta: false, alt: false, shift: false };
+      modifierCodesRef.current = {};
+      setActiveModifiers(fnHeldRef.current ? ["Fn"] : []);
+      keyDownTimeRef.current = 0;
+    }
+  };
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (disabled) return;
-      if (!isCapturing) {
-        containerRef.current?.focus({ preventScroll: true });
-        return;
-      }
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    if (!isCapturing) {
+      containerRef.current?.focus({ preventScroll: true });
+      return;
+    }
 
-      const mouseHotkey = e.button === 3 ? "MouseButton4" : e.button === 4 ? "MouseButton5" : null;
-      if (!mouseHotkey) return;
+    const mouseHotkey = e.button === 3 ? "MouseButton4" : e.button === 4 ? "MouseButton5" : null;
+    if (!mouseHotkey) return;
 
-      e.preventDefault();
-      e.stopPropagation();
-      finalizeCapture(mouseHotkey);
-    },
-    [disabled, isCapturing, finalizeCapture]
-  );
+    e.preventDefault();
+    e.stopPropagation();
+    finalizeCapture(mouseHotkey);
+  };
 
   // Deliberately does not clear the parent's error (handleKeyDown does that on the
   // next real attempt). A rejected chord makes ShortcutSetupStep bump captureKey,
   // which remounts this input with autoFocus, so clearing here fired one frame
   // after the parent set the message and the rejection was never readable.
-  const handleFocus = useCallback(() => {
+  const handleFocus = () => {
     if (!disabled) {
       setIsCapturing(true);
       setValidationWarning(null);
       clearFnHeld();
       window.electronAPI?.setHotkeyListeningMode?.(true);
     }
-  }, [disabled, clearFnHeld]);
+  };
 
-  const handleBlur = useCallback(() => {
+  const handleBlur = () => {
     setIsCapturing(false);
     setActiveModifiers([]);
     setValidationWarning(null);
     clearFnHeld();
     window.electronAPI?.setHotkeyListeningMode?.(false);
     onBlur?.();
-  }, [onBlur, clearFnHeld]);
+  };
 
   useEffect(() => {
     if (!autoFocus) return;

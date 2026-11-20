@@ -36,7 +36,10 @@ async function setup(t) {
           state.checkouts.push(args);
           return state.checkout();
         },
-        openExternal: async (url) => state.opened.push(url),
+        openExternal: async (url) => {
+          state.opened.push(url);
+          return { success: true };
+        },
       },
     },
   });
@@ -45,7 +48,7 @@ async function setup(t) {
     mockModules: {
       "/useAuth": `export const useAuth=()=>({isLoaded:true,isSignedIn:true,user:{id:'a'}});`,
       "/lib/auth": `export const withSessionRefresh=async(fn)=>fn();`,
-      "/lib/authRequestContext": `export const getValidatedAuthGeneration=()=>globalThis.__affiliateCheckout.generation; export const hasValidatedAuthContext=()=>globalThis.__affiliateCheckout.generation!==null; export const getAuthRequestContextSnapshot=()=>({observedGeneration:globalThis.__affiliateCheckout.generation}); export const subscribeAuthRequestContext=()=>()=>{};`,
+      "/lib/authRequestContext": `export const getValidatedAuthGeneration=()=>globalThis.__affiliateCheckout.generation; export const getBoundSessionGeneration=()=>globalThis.__affiliateCheckout.generation; export const hasValidatedAuthContext=()=>globalThis.__affiliateCheckout.generation!==null; export const getAuthRequestContextSnapshot=()=>({observedGeneration:globalThis.__affiliateCheckout.generation}); export const subscribeAuthRequestContext=()=>()=>{};`,
       "/lib/usageStore": `const state={status:'success',accountId:'a',data:{plan:'free',wordsUsed:0,limit:2000,isSubscribed:false,isTrial:false,entitlementSources:{personal:false,workspaceIds:[]}}}; export const subscribeUsage=()=>()=>{}; export const getUsageState=()=>state; export const setUsageAccount=()=>{}; export const loadUsage=async()=>{}; export const retryUsage=async()=>{}; export const watchForUpgrade=async()=>{}; export const isPastDueUsage=()=>false; export const storeBillingOf=()=>null;`,
       settingsStore: `export const useSettingsStore={getState:()=>({telemetryEnabled:false})};`,
       "/services/cloudApi": `export const cloudGetForAuthGeneration=()=>globalThis.__affiliateCheckout.status(); export const cloudPostForAuthGeneration=async()=>({});`,

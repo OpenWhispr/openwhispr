@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "./icons";
 import {
@@ -15,12 +15,14 @@ import { Label } from "./ui/label";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useDelayedFlag } from "../hooks/useDelayedFlag";
 import { useToast } from "./ui/useToast";
+import { useDialogSession } from "../hooks/useDialogSession";
 
 interface Props {
   defaultName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: (workspaceId: string) => void;
+  onReconciled?: (workspaceId: string) => void | Promise<void>;
 }
 
 export default function CreateWorkspaceDialog({
@@ -28,6 +30,7 @@ export default function CreateWorkspaceDialog({
   open,
   onOpenChange,
   onCreated,
+  onReconciled,
 }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -36,43 +39,59 @@ export default function CreateWorkspaceDialog({
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const showSpinner = useDelayedFlag(submitting);
-
-  useEffect(() => {
+  const { sessionKey, capture, invalidate, bindSession } = useDialogSession(open);
+  const draftOwner = JSON.stringify([sessionKey, defaultName]);
+  const [previousOwner, setPreviousOwner] = useState("");
+  if (previousOwner !== draftOwner) {
+    setPreviousOwner(draftOwner);
     setName(open ? (defaultName ?? "") : "");
-  }, [defaultName, open]);
+    setSubmitting(false);
+  }
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next) invalidate();
+    onOpenChange(next);
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || submitting) return;
+    const completion = capture();
     setSubmitting(true);
     try {
       const workspace = await createWorkspace(name.trim());
-      setActive(workspace.id);
-      onOpenChange(false);
+      if (!workspace) return;
+      if (completion.isAccountCurrent()) {
+        setActive(workspace.id);
+        await onReconciled?.(workspace.id);
+      }
+      if (!completion.isCurrent()) return;
+      handleOpenChange(false);
       toast({
         title: t("workspaces.created.title"),
         description: t("workspaces.created.description", { name: workspace.name }),
       });
       onCreated?.(workspace.id);
     } catch (error) {
+      if (!completion.isCurrent()) return;
       toast({
         title: t("workspaces.create.errorTitle"),
         description: error instanceof Error ? error.message : t("common.unknownError"),
         variant: "destructive",
       });
     } finally {
-      setSubmitting(false);
+      if (completion.isCurrent()) setSubmitting(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{t("workspaces.create.title")}</DialogTitle>
           <DialogDescription>{t("workspaces.create.description")}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form ref={bindSession} onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="workspace-name" className="text-xs font-medium">
               {t("workspaces.create.nameLabel")}
@@ -91,7 +110,7 @@ export default function CreateWorkspaceDialog({
             <Button
               type="button"
               variant="ghost"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
               disabled={submitting}
             >
               {t("common.cancel")}

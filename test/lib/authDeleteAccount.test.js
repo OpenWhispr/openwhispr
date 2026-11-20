@@ -67,8 +67,12 @@ test("account deletion uses the validated bearer-generation cloud boundary", asy
       method: "DELETE",
       path: "/api/auth/delete-account",
       body: undefined,
-      public: undefined,
+      public: false,
       expectedAuthGeneration: 7,
     },
   ]);
+  authContext.observeAuthTokenState({ token: "fake-replacement", generation: 8 });
+  await assert.rejects(deleteAccount(7), { code: "AUTH_CONTEXT_CHANGED" });
+  await assert.rejects(deleteAccount(), { code: "AUTH_CONTEXT_CHANGED" });
+  assert.equal(state.requests.length, 1, "obsolete/unvalidated consent never dispatches");
 });

@@ -30,7 +30,9 @@ async function loadAudioManager(t) {
       "/utils/logger":
         "export default { debug() {}, info() {}, warn() {}, error() {}, logReasoning() {} };",
       "/stores/settingsStore": `
-        export const getSettings = () => globalThis.__wakeWordSettings;
+        import { create } from "zustand";
+        export const useSettingsStore = create(() => ({agentName: localStorage.getItem("agentName") || "OpenWhispr", customDictionary: [], updateCustomDictionary() {}}));
+        export const getSettings = () => ({...globalThis.__wakeWordSettings, agentName: useSettingsStore.getState().agentName});
         export const getEffectiveCleanupModel = () => "cleanup-model";
         export const isCloudCleanupMode = () => false;
         export const isCloudDictationAgentMode = () => false;
@@ -70,8 +72,10 @@ async function loadAudioManager(t) {
   });
 
   const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
+  const { setAgentName } = await vite.ssrLoadModule("/utils/agentName.ts");
   return {
     window,
+    setAgentName,
     setSettings: (settings) => {
       globalThis.__wakeWordSettings = settings;
     },
@@ -256,7 +260,7 @@ test("local analytics save uses the propagated occurrence time", async (t) => {
 });
 
 test("cloud auto-language stripping uses the same detected Arabic as routing", async (t) => {
-  const { window, setSettings, createBankingManager } = await loadAudioManager(t);
+  const { window, setSettings, setAgentName, createBankingManager } = await loadAudioManager(t);
   const audioBlob = {
     type: "audio/webm",
     size: 1024,
@@ -271,7 +275,7 @@ test("cloud auto-language stripping uses the same detected Arabic as routing", a
     customDictionary: [],
     snippets: [],
   });
-  localStorage.setItem("agentName", "Max");
+  setAgentName("Max");
   window.electronAPI.cloudTranscribe = async () => ({
     success: true,
     text: "يا Max، لخّص هذه الملاحظة",
@@ -285,7 +289,7 @@ test("cloud auto-language stripping uses the same detected Arabic as routing", a
 });
 
 test("generic auto-language routing infers Arabic before an English UI fallback", async (t) => {
-  const { setSettings, createBankingManager } = await loadAudioManager(t);
+  const { setSettings, setAgentName, createBankingManager } = await loadAudioManager(t);
   setSettings({
     preferredLanguage: "auto",
     uiLanguage: "en",
@@ -295,7 +299,7 @@ test("generic auto-language routing infers Arabic before an English UI fallback"
     customDictionary: [],
     snippets: [],
   });
-  localStorage.setItem("agentName", "Max");
+  setAgentName("Max");
 
   const manager = createBankingManager();
   manager.isReasoningAvailable = async () => true;
@@ -305,7 +309,7 @@ test("generic auto-language routing infers Arabic before an English UI fallback"
 });
 
 test("streaming auto-language routing detects and strips Arabic with an English UI", async (t) => {
-  const { window, setSettings, createStreamingManager } = await loadAudioManager(t);
+  const { window, setSettings, setAgentName, createStreamingManager } = await loadAudioManager(t);
   setSettings({
     preferredLanguage: "auto",
     uiLanguage: "en",
@@ -315,7 +319,7 @@ test("streaming auto-language routing detects and strips Arabic with an English 
     customDictionary: [],
     snippets: [],
   });
-  localStorage.removeItem("agentName");
+  setAgentName("");
   window.electronAPI.cloudStreamingUsage = async () => ({ success: true });
   window.dispatchEvent = () => true;
   const completions = [];

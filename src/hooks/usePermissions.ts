@@ -124,6 +124,38 @@ export const usePermissions = (
   const [isCheckingPasteTools, setIsCheckingPasteTools] = useState(false);
   const [accessibilityTroubleshooting, setAccessibilityTroubleshooting] = useState(false);
   const accessibilityPollCount = useRef(0);
+  const owner = useRef(0);
+  const pasteRequest = useRef(0);
+  const micRequest = useRef(0);
+  const accessibilityRequest = useRef(0);
+
+  useEffect(
+    () => () => {
+      ++owner.current;
+      ++pasteRequest.current;
+      ++micRequest.current;
+      ++accessibilityRequest.current;
+    },
+    []
+  );
+
+  const checkAccessibility = useCallback(
+    async (poll = false) => {
+      const request = ++accessibilityRequest.current;
+      try {
+        const granted = await window.electronAPI?.checkAccessibilityPermission?.(true);
+        if (request !== accessibilityRequest.current || granted === undefined) return;
+        setAccessibilityPermissionGranted(granted);
+        if (granted) {
+          setAccessibilityTroubleshooting(false);
+          accessibilityPollCount.current = 0;
+        } else if (poll && ++accessibilityPollCount.current >= 5) {
+          setAccessibilityTroubleshooting(true);
+        }
+      } catch {}
+    },
+    [setAccessibilityPermissionGranted]
+  );
 
   const openSystemSettings = useCallback(
     async (
@@ -167,6 +199,7 @@ export const usePermissions = (
   );
 
   const requestMicPermission = useCallback(async () => {
+    const request = ++micRequest.current;
     if (!navigator?.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
       const message = t("hooks.permissions.micUnavailable");
       setMicPermissionError(message);
@@ -193,11 +226,14 @@ export const usePermissions = (
         }
       }
 
+      if (request !== micRequest.current) return;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stopTracks(stream);
+      if (request !== micRequest.current) return;
       setMicPermissionGranted(true);
       setMicPermissionError(null);
     } catch (err) {
+      if (request !== micRequest.current) return;
       logger.error("Microphone permission denied:", err);
       const message = describeMicError(err, t);
       setMicPermissionError(message);
@@ -213,10 +249,12 @@ export const usePermissions = (
   }, [showAlertDialog, t, setMicPermissionGranted]);
 
   const checkPasteToolsAvailability = useCallback(async (): Promise<PasteToolsResult | null> => {
+    const request = ++pasteRequest.current;
     setIsCheckingPasteTools(true);
     try {
       if (window.electronAPI?.checkPasteTools) {
         const result = await window.electronAPI.checkPasteTools();
+        if (request !== pasteRequest.current) return null;
         setPasteToolsInfo(result);
 
         // On Windows and Linux with tools available, auto-grant accessibility
@@ -232,16 +270,18 @@ export const usePermissions = (
       logger.error("Failed to check paste tools:", error);
       return null;
     } finally {
-      setIsCheckingPasteTools(false);
+      if (request === pasteRequest.current) setIsCheckingPasteTools(false);
     }
   }, [setAccessibilityPermissionGranted]);
 
   const requestAccessibilityPermission = useCallback(async () => {
+    const generation = owner.current;
     const platform = getPlatform();
 
     if (platform === "darwin") {
-      // Check if already granted
+      // Check if already granted. Read directly: the 2 s poll supersedes checkAccessibility's reads.
       const alreadyGranted = await window.electronAPI?.checkAccessibilityPermission?.(true);
+      if (generation !== owner.current) return;
       if (alreadyGranted) {
         setAccessibilityPermissionGranted(true);
         return;
@@ -262,7 +302,7 @@ export const usePermissions = (
     // On Linux, auto-paste is optional — grant regardless of paste tool availability
     if (platform === "linux") {
       await checkPasteToolsAvailability();
-      setAccessibilityPermissionGranted(true);
+      if (generation === owner.current) setAccessibilityPermissionGranted(true);
     }
   }, [openSystemSettings, checkPasteToolsAvailability, setAccessibilityPermissionGranted]);
 
@@ -275,19 +315,29 @@ export const usePermissions = (
   // localStorage values (e.g. after TCC reset or app update).
   useEffect(() => {
     if (getPlatform() !== "darwin") return;
-    window.electronAPI?.checkMicrophoneAccess?.().then((result) => {
-      if (result) setMicPermissionGranted(result.granted);
-    });
+    const request = ++micRequest.current;
+    window.electronAPI
+      ?.checkMicrophoneAccess?.()
+      .then((result) => {
+        if (result && request === micRequest.current) setMicPermissionGranted(result.granted);
+      })
+      .catch(() => {});
+    const requests = micRequest;
+    return () => {
+      ++requests.current;
+    };
   }, [setMicPermissionGranted]);
 
   // On macOS, re-validate accessibility permission once this screen is allowed
   // to touch protected features, overriding stale localStorage values.
   useEffect(() => {
     if (getPlatform() !== "darwin" || !macAccessibilityChecksEnabled) return;
-    window.electronAPI?.checkAccessibilityPermission?.(true).then((granted) => {
-      setAccessibilityPermissionGranted(granted);
-    });
-  }, [macAccessibilityChecksEnabled, setAccessibilityPermissionGranted]);
+    void checkAccessibility();
+    const requests = accessibilityRequest;
+    return () => {
+      ++requests.current;
+    };
+  }, [macAccessibilityChecksEnabled, checkAccessibility]);
 
   // Poll for accessibility permission changes on macOS (e.g. user grants in System Settings)
   useEffect(() => {
@@ -299,27 +349,15 @@ export const usePermissions = (
     }
 
     const interval = setInterval(() => {
-      window.electronAPI?.checkAccessibilityPermission?.(true).then((granted) => {
-        if (granted) {
-          setAccessibilityPermissionGranted(true);
-          setAccessibilityTroubleshooting(false);
-          accessibilityPollCount.current = 0;
-        } else {
-          accessibilityPollCount.current += 1;
-          // After ~10s of failed polls, show troubleshooting tips
-          if (accessibilityPollCount.current >= 5) {
-            setAccessibilityTroubleshooting(true);
-          }
-        }
-      });
+      void checkAccessibility(true);
     }, 2000);
 
-    return () => clearInterval(interval);
-  }, [
-    accessibilityPermissionGranted,
-    macAccessibilityChecksEnabled,
-    setAccessibilityPermissionGranted,
-  ]);
+    const requests = accessibilityRequest;
+    return () => {
+      clearInterval(interval);
+      ++requests.current;
+    };
+  }, [accessibilityPermissionGranted, macAccessibilityChecksEnabled, checkAccessibility]);
 
   return {
     micPermissionGranted,

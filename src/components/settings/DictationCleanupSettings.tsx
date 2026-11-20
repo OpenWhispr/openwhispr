@@ -5,6 +5,7 @@ import { LOCAL_MODELS_CHANGED_EVENT } from "../../hooks/useModelDownload";
 import { useAssemblyAiDictationCleanup, usePolicySnapshot } from "../../hooks/usePolicy";
 import { selectPolicyEffectiveSettings, useSettingsStore } from "../../stores/settingsStore";
 import type { InferenceMode } from "../../types/electron";
+import type { SettingsNavigationStore } from "../../stores/settingsNavigationStore";
 import { ChevronDown } from "../icons";
 import { Button } from "../ui/button";
 import { SettingsPanel, SettingsPanelRow, SettingsRow } from "../ui/SettingsSection";
@@ -47,6 +48,7 @@ function useMissingLocalModel(check: boolean, model: string): boolean {
 }
 
 interface Props {
+  navigation?: SettingsNavigationStore;
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
   onModeChange: (mode: InferenceMode) => void;
@@ -54,6 +56,7 @@ interface Props {
 }
 
 export default function DictationCleanupSettings({
+  navigation,
   enabled,
   onEnabledChange,
   onModeChange,
@@ -88,6 +91,7 @@ export default function DictationCleanupSettings({
     <>
       <InferenceConfigEditor
         scope="dictationCleanup"
+        navigation={navigation}
         onModeChange={onModeChange}
         selectedLabel={included ? t(`${copy}.saved`) : undefined}
         localPickerRef={included ? localPicker : undefined}

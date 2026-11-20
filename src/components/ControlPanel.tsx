@@ -1,11 +1,12 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useShallow } from "zustand/react/shallow";
+import { useStore } from "zustand";
+import type { SettingsNavigationStore } from "../stores/settingsNavigationStore";
 import { Button } from "./ui/button";
 import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { cn } from "./lib/utils";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
-import { Download, RefreshCw, Loader2, AlertTriangle, Zap } from "./icons";
+import { Download, RefreshCw, Loader2, AlertTriangle } from "./icons";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { RequiredModelsBanner } from "./RequiredModelsBanner";
@@ -16,7 +17,6 @@ import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
-import { useSettings } from "../hooks/useSettings";
 import { recordingRecorderName } from "../utils/noteRecorder";
 import { useAuth } from "../hooks/useAuth";
 import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
@@ -32,11 +32,7 @@ import {
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
 import { clearInsightsCache } from "../lib/insightsCache";
-import {
-  getSettings,
-  selectPolicyEffectiveSettings,
-  useSettingsStore,
-} from "../stores/settingsStore";
+import { getSettings, useSettingsStore } from "../stores/settingsStore";
 import {
   startNewChat,
   subscribeChatAccountScope,
@@ -48,7 +44,7 @@ import { useWorkspaceStore } from "../stores/workspaceStore";
 import { startWorkspaceScopeBridge } from "../stores/workspaceScopeBridge";
 import { useEnsureDefaultWorkspace } from "../hooks/useWorkspace";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
-import { usePolicySnapshot, useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
+import { useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
 import { getKeytermDictionaryWords, limitBatchKeyterms } from "../utils/snippets";
 import { providerCleanupStandsIn } from "../helpers/dictationRouting";
 import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
@@ -90,7 +86,6 @@ import ProfileMenu from "./ProfileMenu";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
-import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
 import { startRecordingForNote, useCreateNote } from "../hooks/useCreateNote";
 import { useSignInCloudNudge } from "../hooks/useSignInCloudNudge";
 import {
@@ -123,6 +118,7 @@ import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
 import JoinYourTeamModal from "./JoinYourTeamModal";
+import { GpuAccelerationBanner } from "./GpuAccelerationBanner";
 import { useModalGate } from "../stores/modalGateStore";
 import { useInvitationNotesEntry } from "../hooks/useInvitationNotesEntry";
 import {
@@ -136,10 +132,7 @@ import type { MeetingStartSource } from "../types/electron";
 const platform = getCachedPlatform();
 
 const SIDEBAR_WIDTH_PX = 192;
-// open-settings-section names an Integrations section as "integrations.<section>".
-const INTEGRATIONS_TARGET_PREFIX = "integrations.";
 
-const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
 const InsightsView = React.lazy(() => import("./InsightsView"));
@@ -149,29 +142,22 @@ const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
 const ChatView = React.lazy(() => import("./chat/ChatView"));
 const CommandSearch = React.lazy(() => import("./CommandSearch"));
 
-interface ControlPanelProps {
-  /** Open the settings modal at this section on mount (e.g. after onboarding). */
-  initialSettingsSection?: string;
-}
-
-export default function ControlPanel({ initialSettingsSection }: ControlPanelProps = {}) {
+export default function ControlPanel({
+  settingsNavigation,
+}: {
+  settingsNavigation: SettingsNavigationStore;
+}) {
   const { t } = useTranslation();
   useEffect(subscribeMeetingNotificationFolders, []);
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
+  const openSettings = useStore(settingsNavigation, (state) => state.openSettings);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPostMigration, setShowPostMigration] = useState(false);
   const [postMigrationChecked, setPostMigrationChecked] = useState(platform !== "darwin");
   useModalGate("postMigrationPending", !postMigrationChecked);
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
-  const [settingsSection, setSettingsSection] = useState<string | undefined>(
-    initialSettingsSection
-  );
-  // Counts named show-settings requests, so asking again for the section the
-  // modal was opened at still lands there after the user moved elsewhere in it.
-  const [settingsRequest, setSettingsRequest] = useState(0);
   const [aiCTADismissed, setAiCTADismissed] = useState(
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
@@ -194,6 +180,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
     DEFAULT_INTEGRATIONS_SECTION
   );
+  const openCalendarIntegrations = useCallback(() => {
+    setIntegrationsSection("calendars");
+    setActiveView("integrations");
+  }, []);
   const navItems = useControlPanelNavItems();
   const {
     collapsed: sidebarCollapsed,
@@ -221,13 +211,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   // Try now and Create with assistant open a chat; Open skill on a chat's card opens the skill.
   const [skillChatRequest, setSkillChatRequest] = useState<SkillChatRequest | null>(null);
   const [openSkillRequest, setOpenSkillRequest] = useState<SkillOpenRequest | null>(null);
-  const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
-    () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
-  );
   const updateReadyToastShown = useRef(false);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
-  const { useCleanupModel } = useSettings();
+  const useCleanupModel = useSettingsStore((settings) => settings.useCleanupModel);
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
   const canAutoStartMeeting = useMeetingAutoTranscriptionCheck({
     isLoaded: authLoaded,
@@ -258,10 +245,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     installUpdate,
   } = useUpdater();
 
-  const openTranscriptionSettings = useCallback(() => {
-    setSettingsSection("transcription");
-    setShowSettings(true);
-  }, []);
+  const openTranscriptionSettings = useCallback(
+    () => openSettings("transcription"),
+    [openSettings]
+  );
   useSignInCloudNudge(isSignedIn, openTranscriptionSettings);
   const workspacesLoaded = useWorkspaceStore((state) => state.loaded);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
@@ -309,10 +296,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setActiveView("personal-notes");
   }, [createNote]);
   const showDictionary = useCallback(() => {
-    setShowSettings(false);
-    setSettingsSection(undefined);
+    settingsNavigation.getState().setSettingsOpen(false);
     setActiveView("dictionary");
-  }, []);
+  }, [settingsNavigation]);
   const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
   useEffect(() => {
     if (!isControlPanelViewAllowed(activeView, agentAllowedByPolicy, policyActionsAllowed)) {
@@ -321,30 +307,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [activeView, agentAllowedByPolicy, policyActionsAllowed]);
   const updateRequiredByOrg = usePolicyStore(isUpdateRequiredByOrg);
   const policyMinAppVersion = usePolicyStore((s) => s.policy?.minAppVersion ?? null);
-
-  // Policy-effective, because the settings pane the GPU banner links to renders
-  // the clamped mode — see eligibleGpuOffers.
-  const policySnapshot = usePolicySnapshot();
-  const gpuBannerSettings = useSettingsStore(
-    useShallow((settings) => {
-      const effective = selectPolicyEffectiveSettings(settings, policySnapshot);
-      return {
-        useLocalWhisper: effective.useLocalWhisper,
-        localTranscriptionProvider: effective.localTranscriptionProvider,
-        useCleanupModel: effective.useCleanupModel,
-        cleanupMode: effective.cleanupMode,
-        useDictationAgent: effective.useDictationAgent,
-        dictationAgentMode: effective.dictationAgentMode,
-      };
-    })
-  );
-  const gpuAccelAvailable = useGpuBannerAvailability({
-    settings: gpuBannerSettings,
-    agentAllowedByPolicy,
-    dismissed: gpuBannerDismissed,
-    settingsOpen: showSettings,
-    platform,
-  });
 
   const {
     confirmDialog,
@@ -410,9 +372,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       if (mod && e.key === "k") {
         e.preventDefault();
         setShowSearch(true);
-      } else if (mod && e.key === ",") {
-        e.preventDefault();
-        setShowSettings(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -612,39 +571,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     return () => cleanup?.();
   }, []);
 
-  useEffect(() => {
-    // A named section waits in main (it can outrace this listener on a cold
-    // start); a bare request (app-menu Cmd+,) keeps an open modal where it is.
-    const drain = async (showAnyway: boolean) => {
-      const section = await window.electronAPI?.getPendingSettingsSection?.();
-      // Integrations is a view, not a Settings section.
-      if (section?.startsWith(INTEGRATIONS_TARGET_PREFIX)) {
-        setIntegrationsSection(
-          section.slice(INTEGRATIONS_TARGET_PREFIX.length) as IntegrationsSection
-        );
-        setActiveView("integrations");
-        setShowSettings(false);
-        return;
-      }
-      if (section) {
-        setSettingsSection(section);
-        setSettingsRequest((count) => count + 1);
-      }
-      if (section || showAnyway) setShowSettings(true);
-    };
-    drain(false);
-    const cleanup = window.electronAPI?.onShowSettings?.(() => drain(true));
-    return () => cleanup?.();
-  }, []);
-
   // When accessibility is missing on macOS, open the permissions settings page
   useEffect(() => {
     const cleanup = window.electronAPI?.onAccessibilityMissing?.(async () => {
       if (isAccessibilitySkipped()) return;
       const migration = await window.electronAPI?.getPostMigrationState?.();
       if (migration?.justMigrated) return;
-      setSettingsSection("privacyData");
-      setShowSettings(true);
+      openSettings("privacyData");
       toast({
         title: t("controlPanel.accessibilityMissing.title"),
         description: t("controlPanel.accessibilityMissing.description"),
@@ -652,7 +585,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       });
     });
     return () => cleanup?.();
-  }, [toast, t]);
+  }, [openSettings, toast, t]);
 
   // The config is refused while the org has meetings off, so it's fetched again
   // whenever they become allowed.
@@ -678,12 +611,23 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, []);
   const handleOpenSkillRequestHandled = useCallback(() => setOpenSkillRequest(null), []);
   // Settings sits over the notes view, so a teamspace opens by closing it and landing the tree there.
-  const openTeamspace = useCallback((spaceId: number) => {
-    setShowSettings(false);
-    setSettingsSection(undefined);
-    navigateToContainer(spaceId, null);
-    setActiveView("personal-notes");
+  const openTeamspace = useCallback(
+    (spaceId: number) => {
+      settingsNavigation.getState().setSettingsOpen(false);
+      navigateToContainer(spaceId, null);
+      setActiveView("personal-notes");
+    },
+    [settingsNavigation]
+  );
+  // Integrations is a view, not a Settings section; SettingsHost hands its links over.
+  const openIntegrations = useCallback((section: string) => {
+    setIntegrationsSection(section as IntegrationsSection);
+    setActiveView("integrations");
   }, []);
+  useEffect(() => {
+    settingsNavigation.setState({ openTeamspace, openIntegrations });
+    return () => settingsNavigation.setState({ openTeamspace: null, openIntegrations: null });
+  }, [settingsNavigation, openTeamspace, openIntegrations]);
   const openNoteInNotes = useCallback(
     (noteId: number, folderId: number | null, spaceId?: number | null) => {
       if (folderId != null) setActiveFolderId(folderId);
@@ -1190,22 +1134,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         onDone={dismissPostMigrationPermanently}
       />
 
-      {showSettings && (
-        <Suspense fallback={null}>
-          <SettingsModal
-            // SettingsModal reads initialSection only on open, so a named request remounts it.
-            key={`${settingsSection ?? "default"}-${settingsRequest}`}
-            open={showSettings}
-            onOpenChange={(open) => {
-              setShowSettings(open);
-              if (!open) setSettingsSection(undefined);
-            }}
-            initialSection={settingsSection}
-            onOpenTeamspace={openTeamspace}
-          />
-        </Suspense>
-      )}
-
       {showReferrals && (
         <Suspense fallback={null}>
           <ReferralModal open={showReferrals} onOpenChange={setShowReferrals} />
@@ -1272,20 +1200,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             activeView={activeView}
             chatNeedsAttention={activeView !== "chat" && chatNeedsAttention}
             onViewChange={setActiveView}
-            onOpenSettings={() => {
-              setSettingsSection(undefined);
-              setShowSettings(true);
-            }}
+            onOpenSettings={() => openSettings()}
             onOpenReferrals={() => setShowReferrals(true)}
-            onUpgrade={() => {
-              setSettingsSection("plansBilling");
-              setShowSettings(true);
-            }}
+            onUpgrade={() => openSettings("plansBilling")}
             isOverLimit={usage?.isOverLimit ?? false}
             isSignedIn={isSignedIn}
             upsell={upsell}
+            settingsNavigation={settingsNavigation}
             // The side-panel layout (a meeting, or a narrow window with a note open) has no room for it.
-            workspaceIntroAllowed={!showSettings && !isSidePanelLayout}
+            workspaceIntroAllowed={!isSidePanelLayout}
             updateAction={
               updateStatus.updateMode !== "it_managed" &&
               !updateStatus.isDevelopment &&
@@ -1331,10 +1254,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     }
                   />
                   <ProfileMenu
-                    onOpenSettings={(section) => {
-                      setSettingsSection(section);
-                      setShowSettings(true);
-                    }}
+                    onOpenSettings={openSettings}
                     onOpenReferrals={() => setShowReferrals(true)}
                     onSignOut={requestSignOut}
                   />
@@ -1392,10 +1312,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                           variant="default"
                           size="sm"
                           className="h-7 text-xs"
-                          onClick={() => {
-                            setSettingsSection("account");
-                            setShowSettings(true);
-                          }}
+                          onClick={() => openSettings("account")}
                         >
                           {t("controlPanel.billing.updatePayment")}
                         </Button>
@@ -1404,55 +1321,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   </div>
                 </div>
               )}
-              {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
-                activeView === "home" &&
-                !gpuBannerDismissed && (
-                  <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
-                    <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
-                      <div className="flex items-start gap-3">
-                        <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
-                          <Zap size={16} className="text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-foreground mb-0.5">
-                            {t("controlPanel.gpu.bannerTitle")}
-                          </p>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            {t("controlPanel.gpu.bannerDescription")}
-                          </p>
-                          <div className="flex items-center gap-3">
-                            <Button
-                              variant="default"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={() => {
-                                setSettingsSection(
-                                  gpuAccelAvailable.transcription
-                                    ? "transcription"
-                                    : gpuAccelAvailable.intelligence === "dictationAgent"
-                                      ? "dictationAgent"
-                                      : "intelligence"
-                                );
-                                setShowSettings(true);
-                              }}
-                            >
-                              {t("controlPanel.gpu.enableButton")}
-                            </Button>
-                            <button
-                              onClick={() => {
-                                setGpuBannerDismissed(true);
-                                localStorage.setItem("gpuBannerDismissedUnified", "true");
-                              }}
-                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                              {t("controlPanel.gpu.dismissButton")}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+              {activeView === "home" && <GpuAccelerationBanner navigation={settingsNavigation} />}
               {activeView === "home" && (
                 <HistoryView
                   history={history}
@@ -1469,24 +1338,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   showDiscarded={showDiscarded}
                   onToggleDiscarded={toggleShowDiscarded}
                   userName={user?.name}
-                  onOpenSettings={(section) => {
-                    setSettingsSection(section);
-                    setShowSettings(true);
-                  }}
-                  onOpenIntegrations={() => {
-                    setIntegrationsSection("calendars");
-                    setActiveView("integrations");
-                  }}
+                  onOpenSettings={openSettings}
+                  onOpenIntegrations={openCalendarIntegrations}
                 />
               )}
               {activeView === "insights" && (
                 <Suspense fallback={null}>
-                  <InsightsView
-                    onSignIn={() => {
-                      setSettingsSection("account");
-                      setShowSettings(true);
-                    }}
-                  />
+                  <InsightsView onSignIn={() => openSettings("account")} />
                 </Suspense>
               )}
               {activeView === "chat" && agentAllowedByPolicy && (
@@ -1502,10 +1360,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               {activeView === "personal-notes" && (
                 <Suspense fallback={null}>
                   <PersonalNotesView
-                    onOpenSettings={(section) => {
-                      setSettingsSection(section);
-                      setShowSettings(true);
-                    }}
+                    onOpenSettings={openSettings}
                     meetingRecordingRequest={meetingRecordingRequest}
                     canAutoStartMeeting={canAutoStartMeeting}
                     onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
@@ -1518,12 +1373,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               )}
               {activeView === "dictionary" && (
                 <Suspense fallback={null}>
-                  <DictionaryView
-                    onUpgrade={() => {
-                      setSettingsSection("plansBilling");
-                      setShowSettings(true);
-                    }}
-                  />
+                  <DictionaryView onUpgrade={() => openSettings("plansBilling")} />
                 </Suspense>
               )}
               {activeView === "upload" && policyActionsAllowed && (
@@ -1534,10 +1384,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       if (folderId) setActiveFolderId(folderId);
                       setActiveView("personal-notes");
                     }}
-                    onOpenSettings={(section) => {
-                      setSettingsSection(section);
-                      setShowSettings(true);
-                    }}
+                    onOpenSettings={openSettings}
                   />
                 </Suspense>
               )}
@@ -1545,10 +1392,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <Suspense fallback={null}>
                   <IntegrationsView
                     isPaid={usage?.hasPaidAccessOptimistic ?? false}
-                    onUpgrade={() => {
-                      setSettingsSection("plansBilling");
-                      setShowSettings(true);
-                    }}
+                    onUpgrade={() => openSettings("plansBilling")}
                     section={integrationsSection}
                     onSectionChange={setIntegrationsSection}
                     onStartSkillChat={agentAllowedByPolicy ? startSkillChat : undefined}

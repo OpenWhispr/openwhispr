@@ -269,9 +269,15 @@ test("Chat navigation exposes the localized waiting marker", async (t) => {
   await (await vite.ssrLoadModule("/i18n.ts")).default.changeLanguage("en");
   const { default: Sidebar } = await vite.ssrLoadModule("/components/ControlPanelSidebar.tsx");
   const { renderToStaticMarkup } = require("react-dom/server");
+  const settingsNavigation = require("zustand").createStore(() => ({ section: null }));
   const render = (chatNeedsAttention) =>
     renderToStaticMarkup(
-      React.createElement(Sidebar, { activeView: "home", upsell: "hide", chatNeedsAttention })
+      React.createElement(Sidebar, {
+        activeView: "home",
+        upsell: "hide",
+        chatNeedsAttention,
+        settingsNavigation,
+      })
     );
   assert.match(render(true), /role="status" aria-label="Waiting for answer"/);
   assert.doesNotMatch(render(false), /role="status"/);

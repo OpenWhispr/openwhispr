@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, X, KeyRound } from "../icons";
 import { Input } from "./input";
@@ -7,6 +7,7 @@ import logger from "../../utils/logger";
 
 interface ApiKeyInputProps {
   apiKey: string;
+  id?: string;
   setApiKey: (key: string) => void;
   className?: string;
   placeholder?: string;
@@ -18,6 +19,7 @@ interface ApiKeyInputProps {
 
 export default function ApiKeyInput({
   apiKey,
+  id,
   setApiKey,
   className = "",
   placeholder,
@@ -27,6 +29,8 @@ export default function ApiKeyInput({
   variant = "default",
 }: ApiKeyInputProps) {
   const { t } = useTranslation();
+  const generatedId = useId();
+  const controlId = id ?? generatedId;
   const resolvedPlaceholder = placeholder ?? t("apiKeyInput.placeholder");
   const resolvedLabel = label ?? t("apiKeyInput.label");
   const [isEditing, setIsEditing] = useState(false);
@@ -90,13 +94,16 @@ export default function ApiKeyInput({
   return (
     <div className={className}>
       {resolvedLabel && (
-        <label className="block text-xs font-medium text-foreground mb-1">{resolvedLabel}</label>
+        <label htmlFor={controlId} className="block text-xs font-medium text-foreground mb-1">
+          {resolvedLabel}
+        </label>
       )}
 
       <div ref={containerRef} className="relative">
         {isEditing ? (
           <div dir="ltr" className="relative">
             <Input
+              id={controlId}
               dir="ltr"
               ref={inputRef}
               type="text"
@@ -130,6 +137,7 @@ export default function ApiKeyInput({
           </div>
         ) : (
           <button
+            id={controlId}
             type="button"
             onClick={enterEdit}
             className={`w-full h-8 flex items-center px-3 rounded border text-sm transition-all cursor-pointer group ${
@@ -137,7 +145,7 @@ export default function ApiKeyInput({
                 ? "border-border/70 bg-input hover:border-border-hover dark:bg-surface-1 dark:border-border-subtle/60 dark:hover:border-border-hover"
                 : "border-dashed border-border/70 bg-transparent hover:border-border/70 hover:bg-muted/30"
             }`}
-            aria-label={hasKey ? t("apiKeyInput.edit") : t("apiKeyInput.add")}
+            aria-label={`${ariaLabel || resolvedLabel || t("apiKeyInput.label")}: ${hasKey ? t("apiKeyInput.edit") : t("apiKeyInput.add")}`}
           >
             {hasKey ? (
               <span

@@ -188,6 +188,8 @@ async function loadManagedLlmManager(t, settings) {
     cancelLocalReasoning: async () => {},
   };
   context.window.localStorage.setItem("agentName", "Sam");
+  // The settings store owns the agent name after startup.
+  context.setSettings({ agentName: "Sam" });
   Object.assign(context.manager, {
     consumeToneStyle: async () => null,
     consumeScreenContext: async () => null,

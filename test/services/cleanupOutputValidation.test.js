@@ -39,7 +39,7 @@ test("cleanup validates completed provider output using the request's prompt set
     ]) {
       assert.equal(await process(config), DUPLICATE);
     }
-    // Prompt Studio installs its edited prompt temporarily before calling processText.
+    // Saved custom cleanup prompts retain custom-output semantics.
     setCustomPrompt("Repeat the text twice");
     assert.equal(await process({ inferenceScope: "dictationCleanup" }), DUPLICATE);
     setCustomPrompt("");

@@ -90,6 +90,8 @@ export default function WorkspaceMembersTab({
   const [pendingRoleIds, setPendingRoleIds] = useState<ReadonlySet<string>>(() => new Set());
   const rereadRef = useRef(false);
   const canManage = workspaceCan(workspace, "manage_members");
+  const membersRequest = useRef(0);
+  const joinRequestsRequest = useRef(0);
   // One controller for Add to team (the bar's and every row's), and one for Add to teamspace, each
   // with its dialog beside the table: the bar goes away when a roster refresh empties the
   // selection, and a dialog inside it would go with it.
@@ -114,23 +116,25 @@ export default function WorkspaceMembersTab({
   const canTransferOwnership = workspaceCan(workspace, "transfer_ownership");
 
   async function loadMembers(): Promise<void> {
+    const request = ++membersRequest.current;
     setMembersLoading(true);
     setMembersError(false);
     try {
       await refreshMembers(workspace.id);
     } catch {
-      setMembersError(true);
+      if (request === membersRequest.current) setMembersError(true);
     } finally {
-      setMembersLoading(false);
+      if (request === membersRequest.current) setMembersLoading(false);
     }
   }
 
   async function refreshJoinRequests(): Promise<void> {
+    const request = ++joinRequestsRequest.current;
     try {
-      setJoinRequests(await WorkspacesService.listJoinRequests(workspace.id));
+      const list = await WorkspacesService.listJoinRequests(workspace.id);
+      if (request === joinRequestsRequest.current) setJoinRequests(list);
     } catch {
-      // Requests are additive context; a failure here must not break the tab.
-      setJoinRequests([]);
+      // Retain confirmed context when this optional refresh is unavailable.
     }
   }
 
@@ -165,6 +169,12 @@ export default function WorkspaceMembersTab({
   useEffect(() => {
     void loadMembers();
     if (canManage) void refreshJoinRequests();
+    const members = membersRequest;
+    const requests = joinRequestsRequest;
+    return () => {
+      ++members.current;
+      ++requests.current;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 

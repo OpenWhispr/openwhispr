@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useStore } from "zustand";
+import type { SettingsNavigationStore } from "../stores/settingsNavigationStore";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
@@ -28,7 +30,6 @@ import { settingsWorkspace } from "../lib/workspaceSwitcher";
 import {
   buildSettingsNav,
   resolveSettingsSection,
-  LEGACY_SUB_TAB,
   type SettingsSectionType,
 } from "../lib/settingsNav";
 
@@ -51,19 +52,16 @@ const SECTION_ICONS: Record<SettingsSectionType, React.ComponentType<{ className
 };
 
 interface SettingsModalProps {
-  open: boolean;
+  navigation: SettingsNavigationStore;
   onOpenChange: (open: boolean) => void;
-  initialSection?: string;
-  /** Takes the user to a teamspace in Notes; the host closes Settings. */
-  onOpenTeamspace?: (localSpaceId: number) => void;
 }
 
-export default function SettingsModal({
-  open,
-  onOpenChange,
-  initialSection,
-  onOpenTeamspace,
-}: SettingsModalProps): React.ReactElement {
+export default function SettingsModal({ navigation, onOpenChange }: SettingsModalProps) {
+  // The only renderer (SettingsHost) mounts this modal iff the section is set.
+  const requestedSection = useStore(navigation, (state) => state.section)!;
+  const openSettings = useStore(navigation, (state) => state.openSettings);
+  // Takes the user to a teamspace in Notes; the control panel closes Settings.
+  const onOpenTeamspace = useStore(navigation, (state) => state.openTeamspace) ?? undefined;
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const policyManaged = usePolicyStore((s) => s.managed);
@@ -91,13 +89,6 @@ export default function SettingsModal({
   // Until the workspace list loads, which workspace pages exist is unknown; a deep link to one
   // waits for the list rather than falling back to General.
   const navKnown = !signedIn || workspacesLoaded;
-  const resolveSection = (section: string | undefined): SettingsSectionType =>
-    resolveSettingsSection(
-      section,
-      navKnown
-        ? nav
-        : buildSettingsNav({ isSignedIn: signedIn, hasWorkspace: true, canManageSettings: true })
-    );
 
   const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(
     () =>
@@ -111,38 +102,28 @@ export default function SettingsModal({
     [nav, t]
   );
 
-  const [activeSection, setActiveSection] = React.useState<SettingsSectionType>(() =>
-    resolveSection(initialSection)
-  );
-  const [initialSubTab, setInitialSubTab] = useState<string | undefined>(() =>
-    initialSection ? LEGACY_SUB_TAB[initialSection] : undefined
-  );
-  const [prevOpen, setPrevOpen] = useState(open);
-
-  if (open && !prevOpen && initialSection) {
-    setPrevOpen(open);
-    setActiveSection(resolveSection(initialSection));
-    setInitialSubTab(LEGACY_SUB_TAB[initialSection]);
-  } else if (open !== prevOpen) {
-    setPrevOpen(open);
-    if (!open) setInitialSubTab(undefined);
-  }
+  const [initialSubTab, setInitialSubTab] = useState<string | undefined>(undefined);
 
   // The open section can disappear (manage_settings revoked, the last workspace left or
   // deleted, signed out); land on the nearest page that still exists.
-  if (navKnown && !nav.some((entry) => entry.id === activeSection)) {
-    setActiveSection(resolveSettingsSection(activeSection, nav));
+  const activeSection =
+    navKnown && !nav.some((entry) => entry.id === requestedSection)
+      ? resolveSettingsSection(requestedSection, nav)
+      : requestedSection;
+  useEffect(() => {
+    if (activeSection === requestedSection) return;
+    openSettings(activeSection);
     setInitialSubTab(undefined);
-  }
+  }, [activeSection, requestedSection, openSettings]);
 
   const handleSectionChange = (section: SettingsSectionType, subTab?: string): void => {
-    setActiveSection(section);
+    openSettings(section);
     setInitialSubTab(subTab);
   };
 
   return (
     <SidebarModal<SettingsSectionType>
-      open={open}
+      open
       onOpenChange={onOpenChange}
       title={t("settingsModal.title")}
       sidebarItems={sidebarItems}
@@ -165,6 +146,7 @@ export default function SettingsModal({
       }
     >
       <SettingsPage
+        navigation={navigation}
         activeSection={activeSection}
         onNavigateToSection={handleSectionChange}
         initialSubTab={initialSubTab}

@@ -26,12 +26,19 @@ export function getCleanupSystemPrompt(
   customDictionary?: string[],
   language?: string,
   uiLanguage?: string,
-  toneStyle?: DictationToneStyle | null
+  toneStyle?: DictationToneStyle | null,
+  promptTemplate?: string
 ): string {
-  const prompt = resolvePrompt("cleanup", { agentName, language, customDictionary, uiLanguage });
+  const prompt = resolvePrompt("cleanup", {
+    agentName,
+    language,
+    customDictionary,
+    uiLanguage,
+    promptTemplate,
+  });
   // A custom cleanup prompt is the user's own instruction, which the tone's
   // priority sentence would override; Cloud cleanup skips the tone the same way.
-  if (useSettingsStore.getState().customPrompts.cleanup) return prompt;
+  if (promptTemplate ?? useSettingsStore.getState().customPrompts.cleanup) return prompt;
   return appendToneStyleSuffix(prompt, toneStyle);
 }
 

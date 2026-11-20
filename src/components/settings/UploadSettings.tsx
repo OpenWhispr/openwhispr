@@ -1,5 +1,7 @@
 import { EnterpriseAudioSettings } from "./EnterpriseAudioSettings";
 import { useCallback } from "react";
+import type { SettingsNavigationStore } from "../../stores/settingsNavigationStore";
+import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, ShieldCheck } from "../icons";
 import {
@@ -19,7 +21,7 @@ import type { InferenceMode } from "../../types/electron";
 import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
 import { enterpriseProviderName } from "../../models/ModelRegistry";
 
-export function UploadTranscriptionPanel() {
+export function UploadTranscriptionPanel({ navigation }: { navigation?: SettingsNavigationStore }) {
   const { t } = useTranslation();
   const policySnapshot = usePolicySnapshot();
 
@@ -51,7 +53,37 @@ export function UploadTranscriptionPanel() {
     setUploadRemoteTranscriptionModel,
     selfHostedSttHeaders,
     setSelfHostedSttHeaders,
-  } = useSettingsStore();
+  } = useSettingsStore(
+    useShallow((s) => ({
+      isSignedIn: s.isSignedIn,
+      uploadTranscriptionMode: s.uploadTranscriptionMode,
+      setUploadTranscriptionMode: s.setUploadTranscriptionMode,
+      setUploadUseLocalWhisper: s.setUploadUseLocalWhisper,
+      uploadWhisperModel: s.uploadWhisperModel,
+      setUploadWhisperModel: s.setUploadWhisperModel,
+      uploadLocalTranscriptionProvider: s.uploadLocalTranscriptionProvider,
+      setUploadLocalTranscriptionProvider: s.setUploadLocalTranscriptionProvider,
+      uploadParakeetModel: s.uploadParakeetModel,
+      setUploadParakeetModel: s.setUploadParakeetModel,
+      uploadCohereModel: s.uploadCohereModel,
+      setUploadCohereModel: s.setUploadCohereModel,
+      uploadCloudTranscriptionProvider: s.uploadCloudTranscriptionProvider,
+      setUploadCloudTranscriptionProvider: s.setUploadCloudTranscriptionProvider,
+      uploadCloudTranscriptionModel: s.uploadCloudTranscriptionModel,
+      setUploadCloudTranscriptionModel: s.setUploadCloudTranscriptionModel,
+      uploadCloudTranscriptionBaseUrl: s.uploadCloudTranscriptionBaseUrl,
+      setUploadCloudTranscriptionBaseUrl: s.setUploadCloudTranscriptionBaseUrl,
+      setUploadCloudTranscriptionMode: s.setUploadCloudTranscriptionMode,
+      setEnterpriseTranscriptionSetupMode: s.setEnterpriseTranscriptionSetupMode,
+      uploadRemoteTranscriptionUrl: s.uploadRemoteTranscriptionUrl,
+      setUploadRemoteTranscriptionUrl: s.setUploadRemoteTranscriptionUrl,
+      uploadRemoteTranscriptionModel: s.uploadRemoteTranscriptionModel,
+      setUploadRemoteTranscriptionModel: s.setUploadRemoteTranscriptionModel,
+      enterpriseTranscriptionSetupMode: s.enterpriseTranscriptionSetupMode,
+      selfHostedSttHeaders: s.selfHostedSttHeaders,
+      setSelfHostedSttHeaders: s.setSelfHostedSttHeaders,
+    }))
+  );
   const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
   const managedActive = managed.kind === "managed";
   const managedAvailable = useManagedScopeResolution("transcription", "managed").kind === "managed";
@@ -147,6 +179,7 @@ export function UploadTranscriptionPanel() {
 
   const renderTranscriptionPicker = (mode: "cloud" | "local") => (
     <TranscriptionModelPicker
+      settingsNavigation={navigation}
       transcriptionContext="upload"
       selectedCloudProvider={uploadCloudTranscriptionProvider}
       onCloudProviderSelect={setUploadCloudTranscriptionProvider}
