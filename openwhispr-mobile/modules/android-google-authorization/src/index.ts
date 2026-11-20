@@ -17,6 +17,8 @@ interface NativeGoogleAuthorization {
   ): Promise<GoogleAuthorization>;
   clearToken(token: string): Promise<void>;
   chooseAccount(): Promise<string | null>;
+  /** Missing on builds before Google sign-in moved to Android's sheet. */
+  signIn?(serverClientId: string, nonce: string): Promise<{ idToken: string; email: string }>;
 }
 
 const native =
@@ -48,4 +50,21 @@ export function chooseGoogleAccount(): Promise<string | null> {
 
 export async function clearGoogleToken(token: string): Promise<void> {
   await native?.clearToken(token);
+}
+
+/** True when this build has Android's "Sign in with Google" sheet. */
+export function isGoogleSignInAvailable(): boolean {
+  return typeof native?.signIn === 'function';
+}
+
+/**
+ * Android's "Sign in with Google" sheet. Resolves an ID token for `serverClientId` that carries
+ * `nonce`; rejects with code CANCELLED when the user backs out.
+ */
+export function signInWithGoogleSheet(
+  serverClientId: string,
+  nonce: string,
+): Promise<{ idToken: string; email: string }> {
+  if (!native?.signIn) return Promise.reject(new Error('Google sign-in is unavailable'));
+  return native.signIn(serverClientId, nonce);
 }

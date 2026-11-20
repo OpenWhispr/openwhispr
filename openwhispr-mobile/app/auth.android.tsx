@@ -1,14 +1,18 @@
 import { useEffect } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import AuthScreen from '@/screens/AuthScreen';
+import AuthScreen, { isAuthReason } from '@/screens/AuthScreen.android';
 import { requiresRealAccount } from '@/lib/accountAccess';
+import { needsEmailVerification } from '@/android/auth/emailVerification';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore.android';
 
 export default function AuthRoute() {
-  const params = useLocalSearchParams<{ returnTo?: string; superwallPlacement?: string }>();
+  const params = useLocalSearchParams<{
+    returnTo?: string;
+    superwallPlacement?: string;
+    reason?: string;
+  }>();
   const user = useAuthStore((state) => state.user);
-  const isGuest = useAuthStore((state) => state.isGuest);
   const sessionRejected = useUsageStore((state) => state.sessionRejected);
 
   useEffect(() => {
@@ -16,7 +20,8 @@ export default function AuthRoute() {
     // done and gets sent on.
     // Android retains the local account while a rejected cloud session is
     // replaced. Do not dismiss its sign-in screen before that succeeds.
-    if (requiresRealAccount(user) || sessionRejected) return;
+    // An email account that hasn't verified stays here on Verify your email (6.1 / 6.4).
+    if (requiresRealAccount(user) || sessionRejected || needsEmailVerification(user)) return;
     if (params.returnTo === 'account') {
       const placement = params.superwallPlacement
         ? `?superwallPlacement=${encodeURIComponent(params.superwallPlacement)}`
@@ -29,9 +34,12 @@ export default function AuthRoute() {
 
   return (
     <AuthScreen
-      // Also hidden for an anonymous session: the default guest action clears
-      // the session, which would destroy their notes and any subscription.
-      hideGuestContinue={isGuest || !!user}
+      reason={isAuthReason(params.reason) ? params.reason : undefined}
+      // The server refused this account's session: sign it in again (2.5), keeping its notes.
+      signInAgainEmail={sessionRejected && user && !user.isAnonymous ? user.email : undefined}
+      // In the app someone is already using OpenWhispr without an account, so there is no guest
+      // link (1.2); for an anonymous session it would also clear the session, notes and all.
+      hideGuestContinue
       onClose={() => {
         if (router.canGoBack()) {
           router.back();

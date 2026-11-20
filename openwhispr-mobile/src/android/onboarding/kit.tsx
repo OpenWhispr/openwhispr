@@ -99,7 +99,8 @@ type ButtonProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-// The desktop's brand glass: a vertical blue gradient with a bright top rim and a soft blue lift.
+// The desktop's brand glass: a vertical blue gradient with a bright top rim. Flat: no drop shadow,
+// on any CTA (Josh, 19 Nov). Disabled is the same glass at 50 %.
 export function GlassButton({ label, onPress, disabled, busy, style }: ButtonProps) {
   return (
     <Pressable
@@ -110,8 +111,7 @@ export function GlassButton({ label, onPress, disabled, busy, style }: ButtonPro
       disabled={disabled || busy}
       onPress={onPress}
       style={({ pressed }) => [
-        s.glassShadow,
-        (disabled || busy) && { opacity: 0.55 },
+        (disabled || busy) && { opacity: 0.5 },
         pressed && { transform: [{ scale: 0.98 }] },
         style,
       ]}
@@ -130,7 +130,8 @@ export function GlassButton({ label, onPress, disabled, busy, style }: ButtonPro
   );
 }
 
-// White glass for the brand-blue screens.
+// White brand glass for the brand-blue screens: the approved sign-in recipe (#FFFFFF → #E7ECF6,
+// a white top highlight and rim, a faint navy bottom edge). No drop shadow.
 export function WhiteButton({ label, onPress, disabled, busy, style }: ButtonProps) {
   return (
     <Pressable
@@ -141,19 +142,20 @@ export function WhiteButton({ label, onPress, disabled, busy, style }: ButtonPro
       disabled={disabled || busy}
       onPress={onPress}
       style={({ pressed }) => [
-        s.whiteShadow,
-        (disabled || busy) && { opacity: 0.55 },
+        s.glass,
+        (disabled || busy) && { opacity: 0.5 },
         pressed && { transform: [{ scale: 0.98 }] },
         style,
       ]}
     >
-      <LinearGradient colors={['#FFFFFF', '#E8EEFB']} style={s.glass}>
-        {busy ? (
-          <ActivityIndicator color={colors.brandMid} />
-        ) : (
-          <Text style={[s.glassLabel, { color: colors.brandMid }]}>{label}</Text>
-        )}
-      </LinearGradient>
+      <LinearGradient colors={['#FFFFFF', '#E7ECF6']} style={StyleSheet.absoluteFill} />
+      <View pointerEvents="none" style={s.whiteRim} />
+      <View pointerEvents="none" style={s.whiteBottom} />
+      {busy ? (
+        <ActivityIndicator color={colors.brandMid} />
+      ) : (
+        <Text style={[s.glassLabel, { color: colors.brandMid }]}>{label}</Text>
+      )}
     </Pressable>
   );
 }
@@ -384,22 +386,6 @@ export const s = StyleSheet.create({
   body: { fontSize: 17, lineHeight: 24, color: colors.secondary },
   caption: { fontSize: 14, lineHeight: 20, color: colors.tertiary },
   center: { alignItems: 'center', justifyContent: 'center' },
-  glassShadow: {
-    borderRadius: 999,
-    shadowColor: '#3466E2',
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
-  },
-  whiteShadow: {
-    borderRadius: 999,
-    shadowColor: '#0B2A7A',
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
-  },
   glass: {
     minHeight: 54,
     borderRadius: 999,
@@ -416,6 +402,21 @@ export const s = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.6)',
   },
   glassLabel: { color: '#FFFFFF', fontSize: 17, fontFamily: AppFont.medium },
+  whiteRim: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+    borderTopColor: '#FFFFFF',
+  },
+  whiteBottom: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 0,
+    height: 1,
+    backgroundColor: 'rgba(20,51,140,0.14)',
+  },
   secondary: {
     minHeight: 54,
     borderRadius: 999,

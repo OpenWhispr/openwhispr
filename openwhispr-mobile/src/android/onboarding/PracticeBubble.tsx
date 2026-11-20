@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, {
   Easing,
+  ZoomIn,
   useAnimatedProps,
   useAnimatedStyle,
   useFrameCallback,
@@ -18,7 +19,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { BubbleIcon, GLASS_GRADIENT, PulseRings, colors } from './kit';
 import { useOnboardingT } from './strings';
 
-export type BubbleState = 'idle' | 'pulsing' | 'holding' | 'listening' | 'processing';
+export type BubbleState = 'idle' | 'pulsing' | 'listening' | 'processing' | 'pasted';
 
 /** How long a finger stays on the bubble before its menu opens (as the real bubble). */
 export const HOLD_MS = 400;
@@ -48,8 +49,9 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 /**
  * The practice bubble, drawn to match the real one (Variant 1): the app icon when idle; brand glass
  * with bars that follow the voice while listening, and a ✕ beside it; three dots while writing.
- * Tapping the listening bubble stops and inserts. With [onHold], holding fills a brand-blue ring
- * and opens the menu after 400 ms, as on the real bubble.
+ * a ✓ once the words are in. Tapping the listening bubble stops and inserts. With [onHold], holding
+ * fills a brand-blue ring (V3) and opens the menu after 400 ms, as on the real bubble; [onHoldStart]
+ * and [onHoldCancel] let the screen say "Keep holding…" while the ring fills.
  */
 export function PracticeBubble({
   state,
@@ -58,6 +60,8 @@ export function PracticeBubble({
   onStop,
   onCancel,
   onHold,
+  onHoldStart,
+  onHoldCancel,
 }: {
   state: BubbleState;
   badge?: GlyphName;
@@ -65,6 +69,8 @@ export function PracticeBubble({
   onStop: () => void;
   onCancel: () => void;
   onHold?: () => void;
+  onHoldStart?: () => void;
+  onHoldCancel?: () => void;
 }) {
   const t = useOnboardingT();
   const reduced = useReducedMotion();
@@ -80,6 +86,24 @@ export function PracticeBubble({
     strokeDashoffset: circumference * (1 - ring.value),
     opacity: ring.value > 0 ? 1 : 0,
   }));
+
+  if (state === 'pasted')
+    return (
+      <Animated.View
+        entering={ZoomIn.duration(200)}
+        style={b.disc}
+        accessibilityLiveRegion="polite"
+      >
+        <LinearGradient
+          colors={GLASS_GRADIENT}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={b.glass}
+        >
+          <SystemIcon name="checkmark" mdName="Check" size={24} color="#FFFFFF" />
+        </LinearGradient>
+      </Animated.View>
+    );
 
   if (state === 'listening' || state === 'processing')
     return (
@@ -128,14 +152,18 @@ export function PracticeBubble({
     held.current = false;
     ring.value = 0;
     ring.value = withTiming(1, { duration: HOLD_MS, easing: Easing.linear });
+    onHoldStart?.();
     timer.current = setTimeout(() => {
       held.current = true;
+      timer.current = null;
       ring.value = 0;
       onHold();
     }, HOLD_MS);
   };
   const end = () => {
     press.value = withSpring(1, { damping: 14, stiffness: 300 });
+    // Let go before the ring closed: no menu.
+    if (timer.current) onHoldCancel?.();
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     ring.value = withTiming(0, { duration: 100 });
@@ -145,7 +173,12 @@ export function PracticeBubble({
     <Pressable
       cssInterop={false}
       accessibilityRole="button"
-      accessibilityLabel={t('bubbleLabel')}
+      accessibilityLabel={onHold ? t('bubbleHoldLabel') : t('bubbleLabel')}
+      accessibilityActions={onHold ? [{ name: 'longpress' }] : undefined}
+      onAccessibilityAction={(event) => {
+        // TalkBack's double-tap-and-hold, so the menu step can be done without a timed hold.
+        if (event.nativeEvent.actionName === 'longpress') onHold?.();
+      }}
       onPressIn={begin}
       onPressOut={end}
       // A tap dictates on the lift; a hold that opened the menu doesn't.

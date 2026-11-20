@@ -12,6 +12,12 @@ const native = {
   'react-native': { Platform, AppState: { addEventListener: () => ({ remove() {} }) } },
   'expo-constants': { default: { expoConfig: { scheme: 'openwhispr' } }, __esModule: true },
   'expo-linking': { createURL: () => 'openwhispr://' },
+  // Android's Google sign-in sheet is native; these flows never call it.
+  'expo-crypto': { randomUUID: () => 'fixture-nonce' },
+  '../../modules/android-google-authorization/src': {
+    isGoogleSignInAvailable: () => false,
+    signInWithGoogleSheet: () => Promise.reject(new Error('not in this harness')),
+  },
 };
 function load(file, replacements, sourceFile = file) {
   const localRequire = createRequire(file);

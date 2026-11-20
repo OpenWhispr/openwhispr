@@ -27,8 +27,16 @@ jest.mock('@/services/reasoning/ReasoningService', () => ({
     processText: (request: { systemPrompt: string }) => mockFormat(request),
   },
 }));
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: { getState: () => ({ user: { name: 'Josh Padoa', email: 'josh@example.com' } }) },
+}));
 jest.mock('../pipeline', () => ({
-  createAndroidJob: (mode: string) => ({ mode, route: { provider: 'local' } }),
+  createAndroidJob: (mode: string, target?: string, selection?: string) => ({
+    mode,
+    target,
+    selection,
+    route: { provider: 'local' },
+  }),
   processAndroidAudio: (...args: unknown[]) => mockProcess(...(args as [])),
 }));
 
@@ -65,7 +73,9 @@ describe('practice recorder', () => {
     mockFormat.mockRejectedValueOnce(new Error('rate limited'));
     const recorder = new PracticeRecorder();
     await recorder.start();
-    await expect(recorder.finish('list')).resolves.toBe('Hey, are we still on for dinner tonight?');
+    await expect(recorder.finish('email')).resolves.toBe(
+      'Hey, are we still on for dinner tonight?',
+    );
   });
 
   it('does not format the message practice', async () => {
@@ -73,6 +83,46 @@ describe('practice recorder', () => {
     await recorder.start();
     await recorder.finish();
     expect(mockFormat).not.toHaveBeenCalled();
+  });
+
+  it('runs Practice 2 as an Assistant request on Cloud and lays it out as an email', async () => {
+    const recorder = new PracticeRecorder();
+    await recorder.start();
+    await expect(recorder.finishWrite()).resolves.toContain('Hey Tim,\n\n');
+    expect(mockProcess).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        mode: 'write',
+        route: expect.objectContaining({ provider: 'cloud' }),
+      }),
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
+  it('asks for a real email: no [Name] placeholders, signed with the account first name', async () => {
+    const recorder = new PracticeRecorder();
+    await recorder.start();
+    await recorder.finishWrite();
+    expect(mockFormat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemPrompt: expect.stringMatching(/Never leave placeholders.*sign it from Josh/),
+      }),
+    );
+  });
+
+  it('runs Practice 3 as Edit selection on the selected text only', async () => {
+    const recorder = new PracticeRecorder();
+    await recorder.start();
+    await recorder.finishEdit('Could we move our call?', 'Spanish');
+    expect(mockProcess).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ mode: 'edit', selection: 'Could we move our call?' }),
+      expect.any(Object),
+      expect.any(Function),
+    );
+    expect(mockFormat).not.toHaveBeenCalled();
+    expect(mockDelete).toHaveBeenCalled();
   });
 
   it('throws the recording away on cancel', async () => {

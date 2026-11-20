@@ -125,7 +125,7 @@ it('offers sign-in instead of cached allowance or billing actions after session 
   expect(screen.queryByRole('button', { name: 'restorePurchases' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'refreshAccess' })).toBeNull();
   fireEvent.press(screen.getByRole('button', { name: 'signIn' }));
-  expect(router.push).toHaveBeenCalledWith('/auth');
+  expect(router.push).toHaveBeenCalledWith('/auth?reason=plan');
 });
 it('keeps unknown access out of checkout and offers a retry after loading fails', async () => {
   useUsageStore.setState({ usage: null });

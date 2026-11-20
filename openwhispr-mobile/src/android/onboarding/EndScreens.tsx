@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -12,20 +12,11 @@ import Animated, {
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import {
-  ANDROID_MODELS,
-  downloadAndroidModel,
-  modelReady,
-  useModelDownloads,
-  type AndroidModelId,
-} from '../models';
-import { CLEANUP, SPEECH, applyPrivateConfig, privateSupported } from './setup';
-import { AccentText, GlassButton, LinkButton, Screen, colors, s } from './kit';
+import { privateSupported } from './setup';
+import { AccentText, GlassButton, Screen, colors, s } from './kit';
 import { appIcon } from './AppsScreen';
 import type { OnboardingMode } from './flow';
 import { useOnboardingT } from './strings';
-
-const megabytes = (id: AndroidModelId) => `${Math.round(ANDROID_MODELS[id].bytes / 1e6)} MB`;
 
 export function ModeScreen({
   mode,
@@ -143,199 +134,6 @@ function ModeCard({
   );
 }
 
-type DownloadState = 'waiting' | 'downloading' | 'ready' | 'failed';
-
-function ModelRow({
-  title,
-  size,
-  body,
-  state,
-  progress,
-}: {
-  title: string;
-  size: string;
-  body: string;
-  state: DownloadState;
-  progress: number;
-}) {
-  const t = useOnboardingT();
-  const done = state === 'ready';
-  return (
-    <View style={e.model}>
-      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-        <View style={[e.modelIcon, done && { backgroundColor: '#E3F4E8' }]}>
-          <SystemIcon
-            name={done ? 'checkmark' : 'arrow.down'}
-            mdName={done ? 'Check' : 'ArrowDown'}
-            size={18}
-            color={done ? colors.green : colors.accent}
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-            <Text style={{ fontSize: 18, fontFamily: AppFont.medium, color: colors.ink }}>
-              {title}
-            </Text>
-            <Text textBreakStrategy="balanced" style={s.caption}>
-              {size}
-            </Text>
-          </View>
-          <Text textBreakStrategy="balanced" style={s.caption}>
-            {body}
-          </Text>
-        </View>
-      </View>
-      <View style={e.track}>
-        <View
-          style={[
-            e.fill,
-            { width: `${Math.round(progress * 100)}%` },
-            done && { backgroundColor: colors.green },
-          ]}
-        />
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text textBreakStrategy="balanced" style={s.caption}>
-          {done
-            ? t('ready')
-            : state === 'downloading'
-              ? t('downloading')
-              : state === 'failed'
-                ? t('tryAgain')
-                : t('waiting')}
-        </Text>
-        <Text textBreakStrategy="balanced" style={s.caption}>
-          {Math.round(progress * 100)}%
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-export function PrivateSetupScreen({
-  onBack,
-  onReady,
-  onUseCloud,
-}: {
-  onBack: () => void;
-  onReady: () => void;
-  onUseCloud: () => void;
-}) {
-  const t = useOnboardingT();
-  const progress = useModelDownloads((state) => state.progress);
-  const [states, setStates] = useState<Record<string, DownloadState>>({
-    [SPEECH]: 'waiting',
-    [CLEANUP]: 'waiting',
-  });
-  const [error, setError] = useState('');
-  const running = useRef(false);
-  const run = useCallback(async () => {
-    if (running.current) return;
-    running.current = true;
-    setError('');
-    try {
-      for (const id of [SPEECH, CLEANUP]) {
-        if (await modelReady(id)) {
-          setStates((current) => ({ ...current, [id]: 'ready' }));
-          continue;
-        }
-        setStates((current) => ({ ...current, [id]: 'downloading' }));
-        try {
-          await downloadAndroidModel(id);
-          setStates((current) => ({ ...current, [id]: 'ready' }));
-        } catch (failure) {
-          setStates((current) => ({ ...current, [id]: 'failed' }));
-          throw failure;
-        }
-      }
-    } catch (failure) {
-      setError((failure as Error).message);
-    } finally {
-      running.current = false;
-    }
-  }, []);
-  useEffect(() => {
-    void applyPrivateConfig();
-    void run();
-  }, [run]);
-  const fraction = (id: AndroidModelId) =>
-    states[id] === 'ready' ? 1 : Math.max(0, Math.min(1, progress[id] ?? 0));
-  const total =
-    (fraction(SPEECH) * ANDROID_MODELS[SPEECH].bytes +
-      fraction(CLEANUP) * ANDROID_MODELS[CLEANUP].bytes) /
-    (ANDROID_MODELS[SPEECH].bytes + ANDROID_MODELS[CLEANUP].bytes);
-  const ready = states[SPEECH] === 'ready' && states[CLEANUP] === 'ready';
-  return (
-    <Screen
-      onBack={onBack}
-      footer={
-        <>
-          {error ? (
-            <GlassButton label={t('tryAgain')} onPress={() => void run()} />
-          ) : (
-            <GlassButton
-              label={ready ? t('continue') : t('settingUp', { percent: Math.round(total * 100) })}
-              disabled={!ready}
-              onPress={onReady}
-            />
-          )}
-          <LinkButton label={t('useCloudInstead')} onPress={onUseCloud} />
-        </>
-      }
-    >
-      <AccentText text={t('privateSetupTitle')} />
-      <Text textBreakStrategy="balanced" style={s.body}>
-        {t('privateSetupBody')}
-      </Text>
-      <ModelRow
-        title={t('speechModel')}
-        size={megabytes(SPEECH)}
-        body={t('speechModelBody')}
-        state={states[SPEECH]}
-        progress={fraction(SPEECH)}
-      />
-      <ModelRow
-        title={t('cleanupModel')}
-        size={megabytes(CLEANUP)}
-        body={t('cleanupModelBody')}
-        state={states[CLEANUP]}
-        progress={fraction(CLEANUP)}
-      />
-      {error ? (
-        <Text accessibilityRole="alert" style={[s.body, { color: '#B42318' }]}>
-          {error}
-        </Text>
-      ) : null}
-    </Screen>
-  );
-}
-
-export function PrivateReadyScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
-  const t = useOnboardingT();
-  return (
-    <Screen onBack={onBack} footer={<GlassButton label={t('continue')} onPress={onNext} />}>
-      <AccentText text={t('privateReadyTitle')} />
-      <Text textBreakStrategy="balanced" style={s.body}>
-        {t('privateReadyBody')}
-      </Text>
-      <ModelRow
-        title={t('speechModel')}
-        size={megabytes(SPEECH)}
-        body={t('speechModelBody')}
-        state="ready"
-        progress={1}
-      />
-      <ModelRow
-        title={t('cleanupModel')}
-        size={megabytes(CLEANUP)}
-        body={t('cleanupModelBody')}
-        state="ready"
-        progress={1}
-      />
-    </Screen>
-  );
-}
-
 const TOP_ROW = ['imessage', 'mail', 'notes', 'safari', 'chatgpt', 'docs', 'outlook'];
 const BOTTOM_ROW = ['claude', 'x', 'gmail', 'whatsapp', 'slack', 'calendar', 'teams'];
 const TILE = 72;
@@ -372,7 +170,7 @@ function Marquee({ apps, reverse }: { apps: string[]; reverse?: boolean }) {
   );
 }
 
-export function ReadyScreen({ onDone }: { onDone: () => void }) {
+export function ReadyScreen({ onDone, onDevice }: { onDone: () => void; onDevice?: boolean }) {
   const t = useOnboardingT();
   return (
     <SafeAreaView style={s.page} edges={['top', 'bottom']}>
@@ -381,7 +179,7 @@ export function ReadyScreen({ onDone }: { onDone: () => void }) {
         <View style={{ paddingHorizontal: 24, gap: 12 }}>
           <AccentText center text={t('readyTitle')} />
           <Text textBreakStrategy="balanced" style={[s.body, { textAlign: 'center' }]}>
-            {t('readyBody')}
+            {t(onDevice ? 'readyBodyDevice' : 'readyBody')}
           </Text>
         </View>
         <Marquee apps={BOTTOM_ROW} reverse />
@@ -415,17 +213,6 @@ const e = StyleSheet.create({
   radioOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   point: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pointText: { fontSize: 15, color: colors.secondary },
-  model: { backgroundColor: colors.surface, borderRadius: 18, padding: 14, gap: 12 },
-  modelIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: colors.accentSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  track: { height: 6, borderRadius: 3, backgroundColor: colors.fill, overflow: 'hidden' },
-  fill: { height: 6, borderRadius: 3, backgroundColor: colors.brandMid },
   tile: {
     width: TILE,
     height: TILE,
