@@ -3,7 +3,9 @@ import { matchesHost } from "../../utils/urlUtils";
 /**
  * Model-family defaults shared across providers. A host can override a family
  * constraint when its API supports different controls for the same model.
- * Keeping defaults here also covers models missing from the registry (#1611).
+ * Keeping defaults here, not in a provider branch, avoids #1611, where a gpt-oss
+ * rule scoped to `providerKey === "groq"` let every other provider send the
+ * rejected "none".
  */
 export interface ModelFamilyConstraints {
   family: "gpt-oss" | "qwen" | "magistral" | "glm-5.3" | "kimi-k3.1" | "gemini-no-minimal";
@@ -94,7 +96,8 @@ export function getModelFamilyConstraints(
   if (!id) return null;
   const family = FAMILIES.find((entry) => entry.match.test(id)) ?? null;
   if (family?.family === "kimi-k3.1" && matchesHost(endpoint, "inference.verda.com")) {
-    // Verda supports a true off switch. Auto leaves effort to the endpoint.
+    // Verda supports a true off switch (docs.verda.com/inference/models/kimi-k3-1-pro).
+    // Auto leaves effort to the endpoint.
     return {
       ...family,
       reasoningEffort: { suppressValue: "none", options: ["none", "low", "high"] },
