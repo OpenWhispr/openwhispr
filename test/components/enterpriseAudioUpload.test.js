@@ -47,6 +47,7 @@ async function setup(t) {
     cachePrefix: "openwhispr-enterprise-upload-ui-",
     noExternal: ["react-i18next"],
     mockModules: {
+      "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
       "react-i18next": `const t=(key, options)=>key+(options ? JSON.stringify(options) : ""); export const useTranslation=()=>({t}); export const initReactI18next={type:"3rdParty",init(){}};`,
       "/hooks/useAuth": "export const useAuth=()=>({isSignedIn:true});",
       "/hooks/useUsage": "export const useUsage=()=>globalThis.__enterpriseUpload.usage;",

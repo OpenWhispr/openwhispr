@@ -183,8 +183,9 @@ test("note and folder sync receipts forward their originating sign-in", async ()
   });
   await api.markNoteSyncedIfUnchanged(1, snapshot, "cloud-note", null, "owner", 2, null, 9);
   await api.markFolderSyncedIfUnchanged(2, snapshot, "cloud-folder", 9);
-  await api.hardDeleteNote(1, 9);
-  await api.hardDeleteFolder(2, 9);
+  const expected = { client_note_id: "client-note", sync_status: "synced" };
+  await api.hardDeleteNote(1, 9, { expected });
+  await api.hardDeleteFolder(2, 9, { preserveDirtyNotes: true });
   const candidates = { notes: ["client-note"], folders: [] };
   await api.getPrivatePlacementBackupCandidates(9);
   await api.getPrivatePlacementBackupRows(9, candidates);
@@ -202,8 +203,8 @@ test("note and folder sync receipts forward their originating sign-in", async ()
     ],
     ["db-mark-note-synced-if-unchanged", 1, snapshot, "cloud-note", null, "owner", 2, null, 9],
     ["db-mark-folder-synced-if-unchanged", 2, snapshot, "cloud-folder", 9],
-    ["db-hard-delete-note", 1, 9],
-    ["db-hard-delete-folder", 2, 9],
+    ["db-hard-delete-note", 1, 9, { expected }],
+    ["db-hard-delete-folder", 2, 9, { preserveDirtyNotes: true }],
     ["db-get-private-placement-backup-candidates", 9],
     ["db-get-private-placement-backup-rows", 9, candidates],
     ["db-queue-unlinked-private-folders", 9],

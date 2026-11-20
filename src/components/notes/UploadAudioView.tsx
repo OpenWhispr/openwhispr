@@ -1,6 +1,7 @@
 import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useState, useRef, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
+import { useToast } from "../ui/useToast";
 import {
   FileAudio,
   X,
@@ -37,10 +38,13 @@ import type { FolderItem } from "../../types/electron";
 import {
   findDefaultFolder,
   findVideosFolder,
+  folderPathLabel,
+  orderFoldersAsTree,
   DOWNLOAD_ERROR_KEYS,
   transcriptionErrorKey,
   uploadRestrictionKey,
   MEETINGS_FOLDER_NAME,
+  folderMutationErrorDescription,
 } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
@@ -162,6 +166,7 @@ interface UploadAudioViewProps {
 export default function UploadAudioView({ onNoteCreated, onOpenSettings }: UploadAudioViewProps) {
   useRegistryVersion();
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [state, setState] = useState<UploadState>("idle");
   const [file, setFile] = useState<{
     name: string;
@@ -1074,6 +1079,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       if (noteId != null) {
         window.electronAPI.updateNote(noteId, { folder_id: res.folder.id });
       }
+    } else {
+      toast({
+        title: t("notes.folders.couldNotCreate"),
+        description: folderMutationErrorDescription(res, folders, t, {
+          name: trimmed,
+          nested: false,
+        }),
+        variant: "destructive",
+      });
     }
     setNewFolderName("");
     setShowNewFolderDialog(false);
@@ -1897,6 +1911,9 @@ function FolderSelect({
   includeCreateNew,
   className,
 }: FolderSelectProps) {
+  const meetingsFolderId = folders.find(
+    (f) => f.name === MEETINGS_FOLDER_NAME && !!f.is_default
+  )?.id;
   return (
     <div className={cn("flex items-center justify-center gap-2", className)}>
       <FolderOpen size={14} className="shrink-0 text-muted-foreground" />
@@ -1905,8 +1922,9 @@ function FolderSelect({
           <SelectValue placeholder={t("notes.upload.selectFolder")} />
         </SelectTrigger>
         <SelectContent>
-          {folders.map((f) => {
-            const isMeetings = f.name === MEETINGS_FOLDER_NAME && !!f.is_default;
+          {orderFoldersAsTree(folders).map((f) => {
+            // The default Meetings folder takes no uploads yet, and neither do its subfolders.
+            const isMeetings = f.id === meetingsFolderId || f.parent_folder_id === meetingsFolderId;
             return (
               <SelectItem
                 key={f.id}
@@ -1915,7 +1933,7 @@ function FolderSelect({
                 className="text-sm py-1.5 ps-2.5 pe-7 rounded-md"
               >
                 <span className="flex items-center gap-1.5">
-                  <span dir="auto">{f.name}</span>
+                  <span dir="auto">{folderPathLabel(f, folders, t)}</span>
                   {isMeetings && (
                     <span className="text-[9px] uppercase tracking-wider text-foreground/45 font-medium">
                       {t("notes.folders.soon")}

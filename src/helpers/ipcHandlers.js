@@ -942,8 +942,8 @@ class IPCHandlers {
     }
   }
 
-  createFolderWithEffects(name, spaceId) {
-    const result = this.databaseManager.createFolder(name, spaceId);
+  createFolderWithEffects(name, spaceId, parentFolderId) {
+    const result = this.databaseManager.createFolder(name, spaceId, parentFolderId);
     if (result?.success && result?.folder) {
       setImmediate(() => {
         broadcastToWindows("folder-created", result.folder);
@@ -1563,6 +1563,15 @@ class IPCHandlers {
       if (!note.deleted_at) this._asyncMirrorWrite(note);
     }
     this.noteFiles.containersChanged();
+  }
+
+  // Deleting a folder deletes its subfolders, and their notes, with it.
+  _captureSubfolderDeletionNotes(folderId, snapshots) {
+    if (!this.noteFiles.enabled) return;
+    for (const subfolder of this.databaseManager.getSubfolders(folderId)) {
+      const subfolderSnapshots = this._captureMirrorDeletionNotes({ folder_id: subfolder.id });
+      for (const [noteId, snapshot] of subfolderSnapshots) snapshots.set(noteId, snapshot);
+    }
   }
 
   _buildSpeakerMappings(noteId) {
@@ -3590,19 +3599,27 @@ class IPCHandlers {
       return { claimed };
     });
 
-    ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard) =>
+    ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard, parentFolderId) =>
       isStaleNoteWrite(writeGuard)
         ? { success: false, error: "Account changed" }
-        : this.createFolderWithEffects(name, spaceId)
+        : this.createFolderWithEffects(name, spaceId, parentFolderId)
     );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
       const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
+      this._captureSubfolderDeletionNotes(id, snapshots);
       const result = this.databaseManager.deleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
         this._mirrorRemovedFolder(result, snapshots);
-        setImmediate(() => broadcastToWindows("folder-deleted", { id }));
+        // Subfolders first, as the database deleted them. Each event names every
+        // note the delete took, so a recording in one of them hears of it.
+        const noteIds = result.noteIds ?? [];
+        setImmediate(() => {
+          for (const folderId of result.folderIds ?? [id]) {
+            broadcastToWindows("folder-deleted", { id: folderId, noteIds });
+          }
+        });
       }
       return result;
     });
@@ -3625,6 +3642,16 @@ class IPCHandlers {
         if (result.folder) {
           setImmediate(() => broadcastToWindows("folder-synced", result.folder));
         }
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-set-folder-parent", async (event, id, parentFolderId, writeGuard) => {
+      if (isStaleNoteWrite(writeGuard)) return { success: false, error: "Account changed" };
+      const result = this.databaseManager.setFolderParent(id, parentFolderId ?? null);
+      if (result?.success && result?.folder) {
+        this.noteFiles.containersChanged();
+        setImmediate(() => broadcastToWindows("folder-synced", result.folder));
       }
       return result;
     });
@@ -4399,17 +4426,32 @@ class IPCHandlers {
     ipcMain.handle("db-mark-note-sync-error", (_, id) =>
       this.databaseManager.markNoteSyncError(id)
     );
+    // No broadcast or mirror write: the note stays deleted until its delete is answered.
+    ipcMain.handle("db-keep-deleted-note-transcript", (_, id, transcript, writeGuard) => {
+      if (writeGuard === undefined || isStaleNoteWrite(writeGuard)) {
+        return { success: false, error: "Account changed" };
+      }
+      return this.databaseManager.keepTranscriptOnDeletedNote(id, transcript);
+    });
     ipcMain.handle("db-restore-note-after-denied-delete", (_, id) => {
       const result = this.databaseManager.restoreNoteAfterDeniedDelete(id);
       // Its files went when the delete was made locally.
       if (result?.success) this.noteFiles.queueNote(id);
+      // A synced restore reaches its windows with the snapshot pull that replaces
+      // it. A pending one keeps its own text, which that pull leaves alone.
+      const restored = result?.pending ? this.databaseManager.getNote(id) : null;
+      if (restored) setImmediate(() => broadcastToWindows("note-synced", restored));
       return result;
     });
-    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration) => {
+    // A pulled delete names the copy it decided from (options.expected); main
+    // leaves a row written since, so its text is decided again, not deleted.
+    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration, options) => {
       if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
         return STALE_SYNC_ACK;
+      const expected =
+        options?.expected && typeof options.expected === "object" ? options.expected : undefined;
       const snapshots = this._captureMirrorDeletionNotes({ id });
-      const result = this.databaseManager.hardDeleteNote(id);
+      const result = this.databaseManager.hardDeleteNote(id, { expected });
       if (result?.success) {
         this.notifyVectorChanges();
         this._asyncMirrorDelete(id, snapshots);
@@ -4500,6 +4542,17 @@ class IPCHandlers {
       });
     });
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
+    ipcMain.handle("db-apply-cloud-folder-parents", (_, links, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return STALE_SYNC_ACK;
+      const changed = this.databaseManager.applyCloudFolderParents(links);
+      if (changed.length > 0) this.noteFiles.containersChanged();
+      setImmediate(() => {
+        for (const folder of changed) {
+          broadcastToWindows("folder-synced", folder);
+        }
+      });
+    });
     ipcMain.handle("db-get-pending-folder-deletes", () =>
       this.databaseManager.getPendingFolderDeletes()
     );
@@ -4516,21 +4569,32 @@ class IPCHandlers {
       const notes = (result.notes ?? []).filter((note) => this.databaseManager.getNote(note.id));
       setImmediate(() => {
         if (result.folder) broadcastToWindows("folder-synced", result.folder);
+        for (const subfolder of result.subfolders ?? []) {
+          broadcastToWindows("folder-synced", subfolder);
+        }
         for (const note of notes) {
           broadcastToWindows("note-synced", note);
         }
       });
       return { ...result, notes };
     });
-    ipcMain.handle("db-hard-delete-folder", (_, id, expectedAuthGeneration) => {
+    ipcMain.handle("db-hard-delete-folder", (_, id, expectedAuthGeneration, options) => {
       if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
         return STALE_SYNC_ACK;
       const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
-      const result = this.databaseManager.hardDeleteFolder(id);
+      const result = this.databaseManager.hardDeleteFolder(id, options);
       if (result?.success) {
         this.notifyVectorChanges();
+        // Notes a pulled delete unfiled to their space's top level are among the
+        // relocated notes, so _mirrorRemovedFolder writes them.
         this._mirrorRemovedFolder(result, snapshots);
-        setImmediate(() => broadcastToWindows("folder-deleted", { id }));
+        setImmediate(() => {
+          // Before the folder goes, so a window showing one of them keeps it open.
+          for (const note of [...(result.preservedNotes ?? []), ...(result.unfiledNotes ?? [])]) {
+            broadcastToWindows("note-updated", note);
+          }
+          broadcastToWindows("folder-deleted", { id, noteIds: result.noteIds ?? [] });
+        });
       }
       return result;
     });
@@ -4547,7 +4611,8 @@ class IPCHandlers {
         // folder, so rewrite the relocated notes and drop the server-owned ones.
         this.notifyVectorChanges();
         this.noteFiles.containersChanged();
-        for (const note of result.relocatedNotes ?? []) {
+        const movedNotes = [...(result.relocatedNotes ?? []), ...(result.unfiledNotes ?? [])];
+        for (const note of movedNotes) {
           this._asyncMirrorWrite(note);
         }
         for (const noteId of result.deletedNoteIds ?? []) {
@@ -4556,7 +4621,7 @@ class IPCHandlers {
         setImmediate(() => {
           if (result.folder) broadcastToWindows("folder-synced", result.folder);
           else broadcastToWindows("folder-deleted", { id });
-          for (const note of result.relocatedNotes ?? []) {
+          for (const note of movedNotes) {
             broadcastToWindows("note-updated", note);
           }
           for (const noteId of result.deletedNoteIds ?? []) {

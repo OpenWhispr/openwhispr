@@ -3518,6 +3518,9 @@
     "mutationErrors": {
       "folderNameRequired": "Inserisci un nome per la cartella.",
       "folderAlreadyExists": "Esiste già una cartella con questo nome.",
+      "folderNameTakenIn": "“{{name}}” è già usato in “{{parent}}”. Il nome di una cartella può essere usato una sola volta in ogni spazio.",
+      "folderNameTakenTopLevel": "“{{name}}” è già usato al livello principale. Il nome di una cartella può essere usato una sola volta in ogni spazio.",
+      "reservedSubfolderName": "“{{name}}” è il nome di una cartella predefinita in Privato, quindi una sottocartella non può usarlo.",
       "folderNotFound": "Impossibile trovare questa cartella.",
       "defaultFolderImmutable": "Le cartelle predefinite non possono essere modificate.",
       "spaceNameRequired": "Inserisci un nome per lo spazio.",
@@ -3571,6 +3574,8 @@
       "confirmMoveInTitle": "Spostare in {{space}}?",
       "confirmMoveIn": "Tutti in {{space}} potranno vedere e modificare questa nota. Le note non potranno più essere spostate fuori da un teamspace.",
       "confirmMoveInFolder": "Tutti in {{space}} potranno vedere e modificare questa cartella e le sue note. Le cartelle e le note non potranno più essere spostate fuori da un teamspace.",
+      "confirmMoveInFolderSubfolders": "Tutti in {{space}} potranno vedere e modificare questa cartella, insieme a {{subfolders}} e {{notes}}. Le cartelle e le note non potranno più essere spostate fuori da un teamspace.",
+      "confirmMoveInSubfolder": "Tutti in {{space}} potranno vedere e modificare questa sottocartella e le sue note. Diventerà una cartella di livello principale in {{space}} e questo spostamento non può essere annullato.",
       "cantMoveOut": "Le note non possono essere spostate fuori da un teamspace.",
       "cantMoveTeammate": "Solo il proprietario della nota o un amministratore del workspace può spostarla in un altro spazio.",
       "moved": "“{{title}}” spostata in {{target}}",
@@ -3647,7 +3652,7 @@
         "title": "Teamspace",
         "description": "Un'area condivisa all'interno di un workspace. Aggiungi persone o team per dare loro accesso."
       },
-      "contents": "Ogni spazio può contenere cartelle e note.",
+      "contents": "Ogni spazio può contenere cartelle e note, e ogni cartella può avere sottocartelle.",
       "done": "Ho capito",
       "reopen": "Scopri come sono organizzati gli spazi"
     },
@@ -3660,13 +3665,18 @@
       "title": "Cartelle",
       "soon": "Presto",
       "folderName": "Nome cartella",
+      "topLevel": "Livello principale",
       "couldNotCreate": "Impossibile creare la cartella",
       "couldNotRename": "Impossibile rinominare la cartella",
       "couldNotDelete": "Impossibile eliminare la cartella",
       "deleteTitle": "Eliminare la cartella?",
       "deleteDescription": "Questa azione eliminerà definitivamente \"{{name}}\" e le sue {{count}} nota/e. Questa operazione non può essere annullata.",
       "deleteDescriptionEmpty": "Questa azione eliminerà definitivamente \"{{name}}\". Questa operazione non può essere annullata.",
-      "deleteConfirm": "Elimina cartella e note"
+      "deleteDescriptionSubfolders": "Questa azione eliminerà definitivamente \"{{name}}\" insieme a {{subfolders}} e {{notes}}. Questa operazione non può essere annullata.",
+      "subfolderCount_one": "{{count}} sottocartella",
+      "subfolderCount_other": "{{count}} sottocartelle",
+      "deleteConfirm": "Elimina cartella e note",
+      "recordingInFolder": "“{{title}}” in questa cartella è in registrazione. Interrompi la registrazione, poi elimina la cartella."
     },
     "list": {
       "title": "Note",
@@ -3852,6 +3862,11 @@
           "title": "Indice",
           "empty": "Aggiungi titoli per creare l'indice."
         }
+      },
+      "lostNoteCopy": {
+        "title": "Le tue ultime modifiche sono in una nuova nota",
+        "description": "“{{title}}” è stata eliminata prima che venissero salvate, quindi sono state salvate in una nuova nota in Privato.",
+        "open": "Apri nota"
       }
     },
     "participants": {
@@ -3995,7 +4010,12 @@
       "recordingDisabledByOrg": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
       "stoppedAccountChanged": "La registrazione si è interrotta perché sei uscito dall'account o hai cambiato account.",
       "stoppedPolicyUnresolved": "La registrazione si è interrotta perché non è stato possibile verificare le impostazioni della tua organizzazione.",
-      "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace."
+      "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace.",
+      "recordingCopy": {
+        "title": "Registrazione spostata in una nuova nota",
+        "description": "“{{title}}” è stata eliminata durante la registrazione. La trascrizione viene salvata in una nuova nota in Privato.",
+        "open": "Apri nota"
+      }
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
@@ -4008,6 +4028,7 @@
       "searchFolders": "Cerca cartelle...",
       "noResults": "Nessuna cartella trovata",
       "newFolder": "Nuova cartella",
+      "newSubfolder": "Nuova sottocartella",
       "showInFileManager": "Mostra in {{manager}}"
     },
     "actions": {
@@ -4242,6 +4263,7 @@
         "members_one": "{{count}} membro",
         "members_other": "{{count}} membri"
       },
+      "subfolders": "Sottocartelle",
       "banner": {
         "title": {
           "team": "Il tuo teamspace",
@@ -6650,7 +6672,7 @@
         "FOLDER_UNAVAILABLE": "Questa destinazione non è disponibile. Scegli un’altra cartella.",
         "SPACE_UNAVAILABLE": "Questa destinazione non è disponibile. Scegli un’altra cartella.",
         "FOLDER_NAME_REQUIRED": "Inserisci un nome per la cartella.",
-        "FOLDER_NAME_TAKEN": "Esiste già una cartella con questo nome in questa posizione.",
+        "FOLDER_NAME_TAKEN": "Esiste già una cartella con questo nome in questo spazio.",
         "CREATE_FAILED": "Impossibile completare. Riprova.",
         "LINKED_NOTE_CHANGED": "Controlla la destinazione, poi partecipa di nuovo.",
         "NOTE_UNAVAILABLE": "Questa nota non è disponibile. Riprova senza crearne un’altra.",

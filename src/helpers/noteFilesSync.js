@@ -9,7 +9,20 @@ const RECONCILE_DELAY_MS = 200;
 const NOTES_PER_TURN = 50;
 const ALL_NOTES_LIMIT = 99999;
 
+// How often one change plans folder moves again after some moved: a parent's
+// directory can move whole only after a subfolder leaving it has gone.
+const MAX_RELOCATION_ROUNDS = 5;
+
 const yieldToEventLoop = () => new Promise((resolve) => setImmediate(resolve));
+
+// Paths a case-insensitive disk may treat as one count as one, so a move waits
+// rather than risk landing in a directory about to leave.
+const foldPath = (relPath) =>
+  String(relPath).normalize("NFC").toLowerCase().toUpperCase().normalize("NFC");
+const isInsidePath = (relPath, ancestorRelPath) =>
+  foldPath(relPath).startsWith(`${foldPath(ancestorRelPath)}/`);
+const isSameOrInsidePath = (relPath, ancestorRelPath) =>
+  foldPath(relPath) === foldPath(ancestorRelPath) || isInsidePath(relPath, ancestorRelPath);
 
 function groupByNote(entries) {
   const groups = new Map();
@@ -44,109 +57,182 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
 
   const database = () => getDatabase();
   const containersSignature = () => JSON.stringify(database().getMirrorContainers());
+
+  // Where a placement's directory is now, as the disk spells it.
+  const existingPath = (location) => {
+    const absolutePath = mirror.getFolderPath(location);
+    return absolutePath === null
+      ? null
+      : path.relative(mirror.getBasePath(), absolutePath).split(path.sep).join("/");
+  };
+  // Every folder's directory, nested ones and other accounts' included, by path.
+  const folderPaths = (snapshot, layout, resolvePath) => {
+    const paths = new Map();
+    for (const folder of snapshot.folders) {
+      const location = layout.folderLocation(folder.id);
+      const relPath = location && resolvePath(location);
+      if (!relPath) continue;
+      if (!paths.has(relPath)) paths.set(relPath, []);
+      paths.get(relPath).push(folder.id);
+    }
+    return paths;
+  };
+
+  // The folders whose whole directory can move to where it now belongs: it is that
+  // folder's alone, before and after, and every file the mirror recorded in it is
+  // one of this account's notes, or a subfolder's directory, that goes along to the
+  // same place inside the new directory.
+  const planFolderMoves = ({
+    previous,
+    oldPlacements,
+    containers,
+    placements,
+    summaries,
+    done,
+  }) => {
+    const newPaths = folderPaths(containers, placements, (location) =>
+      mirror.relPathFor(null, location, "dir")
+    );
+    const oldPaths = folderPaths(previous, oldPlacements, existingPath);
+    const occupiedPaths = folderPaths(containers, placements, existingPath);
+    const previousSources = new Map();
+    for (const [relPath, owners] of oldPaths) {
+      for (const owner of owners) previousSources.set(owner, relPath);
+    }
+    const recorded = mirror.recordedFiles();
+    const moves = [];
+    for (const folder of previous.folders) {
+      if (done.has(folder.id)) continue;
+      const before = oldPlacements.folderLocation(folder.id);
+      const after = placements.folderLocation(folder.id);
+      if (!before || !after) continue;
+      const oldPath = mirror.relPathFor(null, before, "dir");
+      const newPath = mirror.relPathFor(null, after, "dir");
+      // A deferred case rename leaves the ledger at the actual on-disk spelling.
+      const actualOldPath = previousSources.get(folder.id);
+      if (
+        oldPath === newPath ||
+        !actualOldPath ||
+        oldPaths.get(actualOldPath)?.length !== 1 ||
+        newPaths.get(newPath)?.length !== 1 ||
+        // Never into itself or one of its subfolders' directories, nor over an ancestor's.
+        newPath.startsWith(`${actualOldPath}/`) ||
+        actualOldPath.startsWith(`${newPath}/`)
+      )
+        continue;
+      const claimants = [
+        ...(newPaths.get(oldPath) ?? []),
+        ...(occupiedPaths.get(actualOldPath) ?? []),
+      ];
+      if (
+        claimants.some(
+          (id) =>
+            id !== folder.id &&
+            (!previousSources.has(id) || previousSources.get(id) === actualOldPath)
+        )
+      )
+        continue;
+      const descendants = recorded.filter(
+        (entry) =>
+          (entry.relPath === actualOldPath || entry.relPath.startsWith(`${actualOldPath}/`)) &&
+          !mirror.isEmptyRecord(entry)
+      );
+      if (
+        descendants.length === 0 ||
+        !descendants.every((entry) => {
+          if (entry.kind === "dir") {
+            const within = entry.relPath.slice(actualOldPath.length);
+            if (entry.ownerId === folder.id) return within === "";
+            const owner = placements.folderLocation(entry.ownerId);
+            return (
+              owner !== null &&
+              placements.isInsideFolder(entry.ownerId, folder.id) &&
+              mirror.relPathFor(null, owner, "dir") === newPath + within
+            );
+          }
+          const note = summaries.get(entry.ownerId);
+          if (!note) return false;
+          const expectedDir = mirror.relPathFor(null, placements.forNote(note), "dir");
+          const previousDir = entry.relPath.slice(0, entry.relPath.lastIndexOf("/"));
+          return expectedDir === newPath + previousDir.slice(actualOldPath.length);
+        })
+      )
+        continue;
+      moves.push({ before, after, folderId: folder.id, source: actualOldPath, newPath });
+    }
+    return moves;
+  };
+
+  // A move waits while another would carry its directory along, while its
+  // destination sits in a directory about to leave, and until the directory its
+  // destination sits in has arrived. A sibling may take a vacated name after
+  // disambiguation changes, so moves free their destinations first, independently
+  // of database order; cycles are left alone.
+  const runFolderMoves = (moves, done) => {
+    const pending = [...moves];
+    const mustWait = (move) =>
+      pending.some(
+        (other) =>
+          other !== move &&
+          (isInsidePath(move.source, other.source) ||
+            isSameOrInsidePath(move.newPath, other.source) ||
+            isInsidePath(move.newPath, other.newPath))
+      );
+    let movedAny = false;
+    for (;;) {
+      let madeProgress = true;
+      while (madeProgress && pending.length > 0) {
+        madeProgress = false;
+        for (let index = 0; index < pending.length;) {
+          const move = pending[index];
+          if (mirror.getFolderPath(move.after) || mustWait(move)) {
+            index++;
+            continue;
+          }
+          pending.splice(index, 1);
+          // Even a move that can't happen frees the moves waiting on it.
+          madeProgress = true;
+          const source = existingPath(move.before);
+          if (source && mirror.relocateFolderDir(source, move.after, move.folderId)) {
+            done.add(move.folderId);
+            movedAny = true;
+          }
+        }
+      }
+      // A destination still taken now stays taken (the user's directory, or a
+      // cycle), so those moves never happen and the moves waiting on them go alone.
+      const stuck = pending.filter((move) => mirror.getFolderPath(move.after));
+      if (stuck.length === 0 || stuck.length === pending.length) break;
+      for (const move of stuck) pending.splice(pending.indexOf(move), 1);
+    }
+    return movedAny;
+  };
+
   // A save or Show in folder can beat the debounced reconcile. Move safe folders
-  // first, while their attachments still share the notes' original directory.
+  // first, while their attachments still share the notes' original directory. A
+  // parent can move whole only once a subfolder leaving it has gone, so moves are
+  // planned again after any happen.
   const preparePlacements = () => {
     const containers = database().getMirrorContainers();
     const signature = JSON.stringify(containers);
     const placements = buildNotePlacements(containers);
     if (enabled && placementSnapshot && signature !== placementSnapshot) {
       const previous = JSON.parse(placementSnapshot);
-      const oldPlacements = buildNotePlacements(previous);
-      const existingPath = (location) => {
-        const absolutePath = mirror.getFolderPath(location);
-        return absolutePath === null
-          ? null
-          : path.relative(mirror.getBasePath(), absolutePath).split(path.sep).join("/");
+      const plan = {
+        previous,
+        oldPlacements: buildNotePlacements(previous),
+        containers,
+        placements,
+        summaries: new Map(
+          database()
+            .getMirrorNoteSummaries()
+            .map((note) => [note.id, note])
+        ),
+        done: new Set(),
       };
-      const folderPaths = (snapshot, layout, resolvePath) => {
-        const paths = new Map();
-        for (const folder of snapshot.folders) {
-          const location = layout.folderLocation(folder.id);
-          const relPath = location && resolvePath(location);
-          if (!relPath) continue;
-          if (!paths.has(relPath)) paths.set(relPath, []);
-          paths.get(relPath).push(folder.id);
-        }
-        return paths;
-      };
-      const newPaths = folderPaths(containers, placements, (location) =>
-        mirror.relPathFor(null, location, "dir")
-      );
-      const oldPaths = folderPaths(previous, oldPlacements, existingPath);
-      const occupiedPaths = folderPaths(containers, placements, existingPath);
-      const previousSources = new Map();
-      for (const [relPath, owners] of oldPaths) {
-        for (const owner of owners) previousSources.set(owner, relPath);
-      }
-      const summaries = new Map(
-        database()
-          .getMirrorNoteSummaries()
-          .map((note) => [note.id, note])
-      );
-      const recorded = mirror.recordedFiles();
-      const pendingMoves = [];
-      for (const folder of previous.folders) {
-        const before = oldPlacements.folderLocation(folder.id);
-        const after = placements.folderLocation(folder.id);
-        if (!before || !after) continue;
-        const oldPath = mirror.relPathFor(null, before, "dir");
-        const newPath = mirror.relPathFor(null, after, "dir");
-        // A deferred case rename leaves the ledger at the actual on-disk spelling.
-        const actualOldPath = previousSources.get(folder.id);
-        if (
-          oldPath === newPath ||
-          !actualOldPath ||
-          oldPaths.get(actualOldPath)?.length !== 1 ||
-          newPaths.get(newPath)?.length !== 1
-        )
-          continue;
-        const claimants = [
-          ...(newPaths.get(oldPath) ?? []),
-          ...(occupiedPaths.get(actualOldPath) ?? []),
-        ];
-        if (
-          claimants.some(
-            (id) =>
-              id !== folder.id &&
-              (!previousSources.has(id) || previousSources.get(id) === actualOldPath)
-          )
-        )
-          continue;
-        const descendants = recorded.filter(
-          (entry) =>
-            entry.relPath === actualOldPath || entry.relPath.startsWith(`${actualOldPath}/`)
-        );
-        if (
-          descendants.length === 0 ||
-          !descendants.every((entry) => {
-            if (entry.kind === "dir")
-              return entry.ownerId === folder.id && entry.relPath === actualOldPath;
-            const note = summaries.get(entry.ownerId);
-            if (!note) return false;
-            const expectedDir = mirror.relPathFor(null, placements.forNote(note), "dir");
-            const previousDir = entry.relPath.slice(0, entry.relPath.lastIndexOf("/"));
-            return expectedDir === newPath + previousDir.slice(actualOldPath.length);
-          })
-        )
-          continue;
-        pendingMoves.push({ before, after, folderId: folder.id });
-      }
-      // A sibling may take a vacated name after disambiguation changes. Free its
-      // destination first, independently of database order; leave cycles alone.
-      let madeProgress = true;
-      while (madeProgress && pendingMoves.length > 0) {
-        madeProgress = false;
-        for (let index = 0; index < pendingMoves.length;) {
-          const { before, after, folderId } = pendingMoves[index];
-          if (mirror.getFolderPath(after)) {
-            index++;
-            continue;
-          }
-          pendingMoves.splice(index, 1);
-          const source = existingPath(before);
-          if (source && mirror.relocateFolderDir(source, after, folderId)) madeProgress = true;
-        }
+      for (let round = 0; round < MAX_RELOCATION_ROUNDS; round++) {
+        const moves = planFolderMoves(plan);
+        if (moves.length === 0 || !runFolderMoves(moves, plan.done)) break;
       }
     }
     if (enabled) placementSnapshot = signature;
