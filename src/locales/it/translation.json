@@ -963,6 +963,7 @@
     "browsedCustomHint": "{{current}} è ancora in uso. Inserisci il nome di un modello per passare al tuo endpoint personalizzato.",
     "customInUseHint": "Il tuo endpoint personalizzato è ancora in uso. Scegli un modello per passare a {{provider}}.",
     "customProvider": "Personalizzato",
+    "providerUnavailable": "{{provider}} non può essere usato qui. Scegli un modello per cambiare provider.",
     "fallback": {
       "whisperModelDescription": "Modello",
       "parakeetModelDescription": "Modello NVIDIA Parakeet"
