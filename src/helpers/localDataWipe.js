@@ -128,11 +128,10 @@ function readJson(filePath) {
 // What the note-file mirror wrote in each folder, the user's chosen ones
 // included, from its record in the database (named as database.js names it).
 // A database from before the mirror kept that record names no file.
-const databaseName = () =>
-  process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db";
-
 function recordedMirrorFiles(userDataPath) {
-  const databasePath = path.join(userDataPath, databaseName());
+  const name =
+    process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db";
+  const databasePath = path.join(userDataPath, name);
   if (!fs.statSync(databasePath, { throwIfNoEntry: false })?.isFile()) return new Map();
   const db = new (require("better-sqlite3"))(databasePath, { readonly: true, fileMustExist: true });
   try {
@@ -170,14 +169,8 @@ async function keptBelow(target, keep) {
 
 // Returns each store that could not be removed, as "<name>: <reason>". An
 // absolute auditLogPath inside a folder it removes stays, with the folders on
-// its way. With keepMirrorRecord, a notes-mirror cleanup that failed leaves the
-// database that records the mirror's files, for a retry to finish.
-async function removeLocalData({
-  includeModels,
-  roots = defaultRoots(),
-  auditLogPath = null,
-  keepMirrorRecord = false,
-}) {
+// its way.
+async function removeLocalData({ includeModels, roots = defaultRoots(), auditLogPath = null }) {
   const errors = [];
   // One that stalls is a network folder, so none the wipe removes holds it.
   const keep = path.isAbsolute(auditLogPath ?? "")
@@ -212,17 +205,13 @@ async function removeLocalData({
       if (error.code !== "ENOENT") errors.push(`notes mirror: ${error.message}`);
     }
   }
-  const keptDatabase = keepMirrorRecord && errors.length > 0 ? sqliteFiles(databaseName()) : [];
   try {
     await require("./enterpriseAudioBootstrap").removeClaimedBootstraps(roots.userData);
   } catch (error) {
     errors.push(`enterprise audio bootstrap: ${error.message}`);
   }
 
-  const userDataEntries = [
-    ...USER_DATA_ENTRIES,
-    ...(includeModels ? MODEL_USER_DATA_ENTRIES : []),
-  ].filter((name) => !keptDatabase.includes(name));
+  const userDataEntries = [...USER_DATA_ENTRIES, ...(includeModels ? MODEL_USER_DATA_ENTRIES : [])];
   const homeCacheEntries = [...CACHE_ENTRIES, ...(includeModels ? MODEL_CACHE_ENTRIES : [])];
   const cacheRootEntries =
     includeModels && path.resolve(roots.cacheRoot) !== path.resolve(roots.homeCache)
@@ -286,9 +275,8 @@ function takeWipeNotice(userDataPath) {
 
 // Runs at launch, before the logger, database or any sidecar opens a file it
 // removes. Two things ask for it: a WipeLocalDataOnLaunch token this device
-// hasn't acted on, and a recorded workspace removal. Each wipes once, or
-// twice when the first try leaves something behind. Resolves true when the app
-// should relaunch into its fresh state.
+// hasn't acted on, and a recorded workspace removal. Each wipes once.
+// Resolves true when the app should relaunch into its fresh state.
 async function wipeLocalDataOnLaunch({
   userDataPath,
   appVersion,
@@ -303,8 +291,7 @@ async function wipeLocalDataOnLaunch({
   const statePath = path.join(userDataPath, WIPE_STATE_FILE);
   const state = readJson(statePath) ?? {};
   // Only a deployment this build reads and accepts can ask for a wipe or say
-  // how one goes; a recorded removal, like a pending retry, wipes whatever the
-  // device policy says.
+  // how one goes; a recorded removal wipes whatever the device policy says.
   // WipeLocalDataIncludesModels deployed on its own manages nothing, but still
   // says what a removal's wipe takes.
   let device = null;
@@ -319,8 +306,7 @@ async function wipeLocalDataOnLaunch({
   const token = device?.wipeLocalDataOnLaunch ?? null;
   const newToken = token !== null && state.token !== token;
   const removal = state.pendingRemoval ?? null;
-  const retrying = state.retrying === true;
-  if (!newToken && !removal && !retrying) return false;
+  if (!newToken && !removal) return false;
 
   const trigger = removal ? "workspace-removal" : "device-policy";
   logger.warn("Wiping local data", { trigger, includeModels });
@@ -339,7 +325,6 @@ async function wipeLocalDataOnLaunch({
     includeModels,
     roots,
     auditLogPath: device?.auditLogPath,
-    keepMirrorRecord: !retrying,
   });
   for (const [key, value] of Object.entries(loaded)) if (env[key] === value) delete env[key];
   for (const key of require("./environment").SECRET_KEYS) delete env[key];
@@ -366,27 +351,20 @@ async function wipeLocalDataOnLaunch({
     appVersion,
     logger,
   });
-  const complete = errors.length === 0;
-  audit.localDataWiped({ trigger, incomplete: !complete });
-  if (!complete) logger.warn("Local data wipe incomplete", { errors });
+  audit.localDataWiped({ trigger, incomplete: errors.length > 0 });
+  if (errors.length > 0) logger.warn("Local data wipe incomplete", { errors });
 
   // Without this on record a relaunch would wipe again; this launch carries on
-  // instead, and the next one retries. A wipe that left something behind keeps
-  // its trigger for one more try, at the launch that follows; after that it is
-  // done (its audit line says it was incomplete), so a store that can never go
-  // doesn't wipe the fresh install at every launch. Only a removal's complete
-  // wipe leaves the fresh install its notice.
+  // instead, and the next one retries. A removal leaves the fresh install its
+  // notice. The record goes first: the audit line may be bound for a network
+  // AuditLogPath, which is waited on only so long.
   try {
     fs.writeFileSync(
       statePath,
-      JSON.stringify(
-        !complete && !retrying
-          ? { ...state, token: newToken ? token : state.token, retrying: true }
-          : {
-              token: newToken ? token : state.token,
-              notice: removal && complete ? "workspace-removal" : state.notice,
-            }
-      )
+      JSON.stringify({
+        token: newToken ? token : state.token,
+        notice: removal ? "workspace-removal" : state.notice,
+      })
     );
   } catch (error) {
     logger.error("Could not record the local data wipe", { error: error.message });
