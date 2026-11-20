@@ -5,6 +5,7 @@ let mockAffiliateConfig: { domain: string; publishableKey: string } | null = {
 };
 jest.mock('@/lib/affiliateLink', () => ({ getAffiliateClientConfig: () => mockAffiliateConfig }));
 let mockSuperwallConfigured = true;
+let mockRequiresIdentity = false;
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { loadAffiliateOffer, type AffiliateOffer } from '@/lib/affiliateOffer';
@@ -143,7 +144,12 @@ jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({
     register: mockRegisterSuperwallGate,
     isConfigured: mockSuperwallConfigured,
+    requiresIdentity: mockRequiresIdentity,
   }),
+}));
+const mockWaitForSuperwallIdentity = jest.fn();
+jest.mock('@/store/useSuperwallIdentityStore', () => ({
+  waitForSuperwallIdentity: () => mockWaitForSuperwallIdentity(),
 }));
 jest.mock('@/data/remote/billingApi', () => ({
   createStripeBillingPortalSession: (...args: unknown[]) =>
@@ -634,6 +640,7 @@ describe('Account creator offer intent', () => {
     jest.mocked(loadAffiliateOffer).mockResolvedValue(null);
     mockAffiliateConfig = { domain: 'sandbox.dub.link', publishableKey: 'dub_pk_test' };
     mockSuperwallConfigured = true;
+    mockRequiresIdentity = false;
   });
 
   it('leaves the Subscription card unchanged when creator codes are not configured', () => {
@@ -648,6 +655,18 @@ describe('Account creator offer intent', () => {
     const screen = render(<AccountScreen />);
     fireEvent.press(screen.getByText('Submit creator link'));
     await waitFor(() => expect(mockPrepareAffiliate).toHaveBeenCalledTimes(1));
+    expect(loadAffiliateOffer).not.toHaveBeenCalled();
+    expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
+  });
+
+  it('does not allocate an offer when the billing identity never arrives', async () => {
+    mockRequiresIdentity = true;
+    mockWaitForSuperwallIdentity.mockResolvedValue(false);
+    const screen = render(<AccountScreen />);
+    fireEvent.press(screen.getByText('Submit creator link'));
+    await waitFor(() =>
+      expect(screen.getByTestId('creator-result').props.children).toBe('unavailable'),
+    );
     expect(loadAffiliateOffer).not.toHaveBeenCalled();
     expect(mockRegisterSuperwallGate).not.toHaveBeenCalled();
   });

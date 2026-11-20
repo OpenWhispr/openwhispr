@@ -13,6 +13,7 @@ import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
+import { waitForSuperwallIdentity } from '@/store/useSuperwallIdentityStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import { createStripeBillingPortalSession } from '@/data/remote/billingApi';
@@ -127,7 +128,11 @@ export default function AccountScreen() {
   const usage = useUsageStore((s) => s.usage);
   const loadUsage = useUsageStore((s) => s.load);
   const resetOnboarding = useOnboardingStore((state) => state.reset);
-  const { register: registerSuperwallGate, isConfigured: superwallConfigured } = useSuperwallGate();
+  const {
+    register: registerSuperwallGate,
+    isConfigured: superwallConfigured,
+    requiresIdentity,
+  } = useSuperwallGate();
   const handledBillingIntentRef = useRef<string | null>(null);
   const billingContextRef = useRef({
     userId: user?.id,
@@ -205,6 +210,11 @@ export default function AccountScreen() {
         if (!currentUsage?.isSubscribed && intent === 'creator') {
           // Allocating stock for a paywall that can't open would waste the offer.
           if (!superwallConfigured) return 'unavailable';
+          if (requiresIdentity) {
+            const identified = await waitForSuperwallIdentity();
+            if (!isCurrent()) return 'cancelled';
+            if (!identified) return 'unavailable';
+          }
           creatorOffer = (await loadAffiliateOffer(isCurrent)) ?? undefined;
           if (!isCurrent()) return 'cancelled';
           if (!creatorOffer) return 'unavailable';
@@ -250,7 +260,7 @@ export default function AccountScreen() {
         affiliatePendingRef.current = false;
       }
     },
-    [loadUsage, registerSuperwallGate, superwallConfigured, user],
+    [loadUsage, registerSuperwallGate, requiresIdentity, superwallConfigured, user],
   );
 
   useEffect(() => {
