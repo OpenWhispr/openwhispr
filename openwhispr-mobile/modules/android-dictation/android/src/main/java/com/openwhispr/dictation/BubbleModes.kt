@@ -100,6 +100,12 @@ object BubbleMenuPolicy {
    */
   fun menuScale(bubbleScale: Float) = if (bubbleScale.isNaN()) 1f else bubbleScale.coerceIn(0.875f, 1.25f)
 
+  /** The least see-through the open menu gets, so its rows stay readable over any app (Josh, 20 Nov). */
+  const val MENU_MIN_ALPHA = 0.85f
+
+  /** The open menu follows Size & look's see-through like the bubble, but never below [MENU_MIN_ALPHA]. */
+  fun menuAlpha(bubbleAlpha: Float) = if (bubbleAlpha.isNaN()) 1f else bubbleAlpha.coerceIn(MENU_MIN_ALPHA, 1f)
+
   /** Whether a hold records while the finger is down and pastes on release (the Assistant is off). */
   fun holdToTalk(setting: String?) = !holdOpensMenu(setting)
 

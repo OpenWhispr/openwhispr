@@ -7,7 +7,7 @@ jest.mock('../insights', () => ({
   recordInsight: jest.fn(),
   countSpokenWords: (text: string) => text.trim().split(/\s+/).length,
 }));
-import { processAndroidAudio, type DictationMode } from '../pipeline';
+import { assistantLogLine, processAndroidAudio, type DictationMode } from '../pipeline';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { cleanupTranscript } from '@/lib/cleanupTranscript';
 import type { TranscriptionJobRoute } from '@/lib/inferenceRouting';
@@ -328,5 +328,64 @@ describe('the Assistant task on Processing', () => {
     expect(ReasoningService.processText).toHaveBeenCalledWith(
       expect.objectContaining({ systemPrompt: expect.stringContaining('into German') }),
     );
+  });
+});
+
+describe('the Assistant log line', () => {
+  it('names the task, where it was sent and which model answered, never the words', () => {
+    expect(
+      assistantLogLine(
+        'write',
+        {
+          scope: 'agent',
+          route: {
+            mode: 'providers',
+            scope: 'agent',
+            providerId: 'openai',
+            modelId: 'gpt-6-luna',
+            endpoint: 'https://api.openai.com/v1',
+            credentialRef: 'provider.openai',
+          },
+        },
+        'gpt-6-luna',
+        812,
+      ),
+    ).toBe(
+      '[android-assistant] mode=write task=agent route=providers provider=openai model=gpt-6-luna answeredBy=gpt-6-luna elapsedMs=812',
+    );
+    expect(
+      assistantLogLine(
+        'translate',
+        { scope: 'cleanup', route: { mode: 'local', scope: 'cleanup' } },
+        '',
+        40,
+      ),
+    ).toBe('[android-assistant] mode=translate task=cleanup route=local answeredBy=? elapsedMs=40');
+  });
+
+  it('is written for each take, without the spoken or written text', async () => {
+    const info = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+    await processAndroidAudio(
+      audio,
+      {
+        route: routes.cloud,
+        mode: 'write',
+        target: 'Spanish',
+        selection: '',
+        eventId: 'log-test',
+        accountScope: 'device',
+        historyScope: null,
+        startedAt: '2026-11-20T10:00:00Z',
+        localDate: '2026-11-20',
+      },
+      new AbortController().signal,
+      jest.fn(),
+    );
+    const line = info.mock.calls
+      .map((call) => String(call[0]))
+      .find((text) => text.startsWith('[android-assistant]'));
+    expect(line).toMatch(/route=openwhispr answeredBy=test /);
+    expect(line).not.toMatch(/original words|Requested action result/);
+    info.mockRestore();
   });
 });

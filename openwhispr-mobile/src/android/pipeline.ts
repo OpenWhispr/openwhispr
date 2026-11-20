@@ -63,6 +63,24 @@ export function assistantRoute(route: TranscriptionJobRoute): {
   return { route: route.cleanupRoute, unavailable: route.cleanupUnavailable, scope: 'cleanup' };
 }
 
+/**
+ * One log line per bubble Assistant, Translate or Edit take: the task it ran on, where it was sent
+ * and which model answered. Never the words.
+ */
+export function assistantLogLine(
+  mode: DictationMode,
+  assistant: ReturnType<typeof assistantRoute>,
+  answeredBy: string | undefined,
+  elapsedMs: number,
+): string {
+  const route = assistant.route;
+  const target =
+    route?.mode === 'providers'
+      ? `providers provider=${route.providerId ?? '?'} model=${route.modelId ?? '?'}`
+      : (route?.mode ?? 'none');
+  return `[android-assistant] mode=${mode} task=${assistant.scope} route=${target} answeredBy=${answeredBy || '?'} elapsedMs=${elapsedMs}`;
+}
+
 export function createAndroidJob(
   mode: DictationMode = 'dictate',
   target = 'Spanish',
@@ -176,6 +194,7 @@ export async function processAndroidAudio(
       const assistant = assistantRoute(job.route);
       if (assistant.unavailable) throw new Error(assistant.unavailable);
       stage('cleaning');
+      const assistantStartedAt = Date.now();
       const instruction =
         job.mode === 'translate'
           ? `Translate the supplied text into ${job.target}. Return only the translation.`
@@ -201,6 +220,9 @@ export async function processAndroidAudio(
         signal,
         maxTokens: 384,
       });
+      console.info(
+        assistantLogLine(job.mode, assistant, result.model, Date.now() - assistantStartedAt),
+      );
       text = result.text;
     }
     assertCurrent();

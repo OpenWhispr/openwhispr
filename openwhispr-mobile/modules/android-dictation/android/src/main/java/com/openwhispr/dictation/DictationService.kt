@@ -259,7 +259,7 @@ class DictationService : Service() {
     val resized = value.scale != appearance.scale || value.shrinkToDot != appearance.shrinkToDot
     appearance = value
     if (resized) render()
-    else if (state == BubbleState.READY) root?.alpha = value.alpha
+    else if (state == BubbleState.READY) root?.alpha = if (menu != null) BubbleMenuPolicy.menuAlpha(value.alpha) else value.alpha
     wake()
   }
   /** Brings a shrunk bubble back to full size and restarts the idle countdown. */
@@ -367,8 +367,12 @@ class DictationService : Service() {
     bubble.dot = if (appearance.shrinkToDot) shrink else 0f
     cancel.visibility = if (state == BubbleState.LISTENING) View.VISIBLE else View.GONE
     bubble.contentDescription = getString(if (state == BubbleState.LISTENING) R.string.ow_bubble_stop else R.string.ow_bubble_talk)
-    // The resting bubble and its hold menu are as see-through as Size & look says; a take is solid.
-    view.alpha = if (state == BubbleState.READY) appearance.alpha else 1f
+    // The resting bubble is as see-through as Size & look says, its open menu at least 85 %; a take is solid.
+    view.alpha = when {
+      state != BubbleState.READY -> 1f
+      menu != null -> BubbleMenuPolicy.menuAlpha(appearance.alpha)
+      else -> appearance.alpha
+    }
     place()
   }
 
@@ -673,8 +677,9 @@ class DictationService : Service() {
     view.onPick = { pick(it) }
     menu = view
     holder.addView(view, 0, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8f).toInt() })
-    // The menu follows Size & look's see-through, like the bubble it opens from (Josh, 19 Nov).
-    if (state == BubbleState.READY) root?.alpha = appearance.alpha
+    // The menu follows Size & look's see-through like the bubble it opens from (Josh, 19 Nov), with
+    // a floor so it stays readable (Josh, 20 Nov).
+    if (state == BubbleState.READY) root?.alpha = BubbleMenuPolicy.menuAlpha(appearance.alpha)
     handler.removeCallbacks(idleShrink)
     place()
     view.grow(dockRight)

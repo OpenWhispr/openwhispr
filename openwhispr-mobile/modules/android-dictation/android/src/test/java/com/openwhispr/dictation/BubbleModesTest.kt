@@ -102,4 +102,12 @@ class BubbleModesTest {
     assertEquals(1.25f, BubbleMenuPolicy.menuScale(1.375f), 0f)
     assertEquals(1f, BubbleMenuPolicy.menuScale(Float.NaN), 0f)
   }
+
+  @Test fun `the open menu follows the bubble's see-through, never below 85 %`() {
+    assertEquals(0.85f, BubbleMenuPolicy.menuAlpha(0.5f), 0f)
+    assertEquals(0.85f, BubbleMenuPolicy.menuAlpha(0.2f), 0f)
+    assertEquals(0.9f, BubbleMenuPolicy.menuAlpha(0.9f), 0f)
+    assertEquals(1f, BubbleMenuPolicy.menuAlpha(1f), 0f)
+    assertEquals(1f, BubbleMenuPolicy.menuAlpha(Float.NaN), 0f)
+  }
 }
