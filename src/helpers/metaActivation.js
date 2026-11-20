@@ -6,9 +6,9 @@ const { randomUUID } = require("node:crypto");
 const ANCHOR_TTL_MS = 60 * 60_000;
 
 // How often a stream with nothing to send certifies its watermark. Only a
-// milestone crossed on another of the account's devices waits on it, and that
-// has a seven-day delivery window, so minutes are enough.
+// milestone crossed elsewhere can wait while this device is below the threshold.
 const IDLE_HEARTBEAT_MS = 5 * 60_000;
+const MILESTONE_WORDS = 200;
 
 // A small dedicated queue. It never reads transcription/Insights tables and
 // never stores text, audio, model names, titles or application context.
@@ -104,7 +104,7 @@ class MetaActivation {
       void this.flush();
       return null;
     }
-    if (stream.total_words >= 200) return null;
+    if (stream.total_words >= MILESTONE_WORDS) return null;
     const id = randomUUID();
     this.db
       .prepare("INSERT INTO captures(id,stream_id,generation,started_at) VALUES(?,?,?,?)")
@@ -163,7 +163,7 @@ class MetaActivation {
           this.db.prepare("DELETE FROM captures WHERE id=?").run(id);
           return;
         }
-        const words = Math.min(wordCount, 200 - row.total_words);
+        const words = Math.min(wordCount, MILESTONE_WORDS - row.total_words);
         if (words === 0) {
           this.db.prepare("DELETE FROM captures WHERE id=?").run(id);
           return;
@@ -349,11 +349,13 @@ class MetaActivation {
         occurredAt: row.occurred_at,
       }));
     // Between idle heartbeats the timer only retries a failed pass, reports a
-    // gap or a close, and sends what is still queued.
+    // gap or a close, and sends what is still queued. At the milestone an
+    // acknowledged event can still be ahead of server time and need another batch.
     const certifiedAt = this.anchor?.certifiedAt;
     if (
       scheduled &&
       !events.length &&
+      stream.total_words < MILESTONE_WORDS &&
       !stream.gap &&
       stream.state !== "closing" &&
       typeof certifiedAt === "number" &&

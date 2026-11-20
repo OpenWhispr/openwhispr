@@ -73,7 +73,14 @@ function rig(t) {
     if (loseAnswer) throw new Error("timeout");
     return {
       success: true,
-      data: { status: total >= 200 ? "pending" : "collecting", acceptedThrough: seq },
+      data: {
+        status:
+          total >= 200 &&
+          [...contributions.values()].every((event) => Date.parse(event.occurredAt) <= wall)
+            ? "pending"
+            : "collecting",
+        acceptedThrough: seq,
+      },
     };
   };
   const logger = { warn: (message) => warnings.push(message), debug: () => {} };
@@ -306,6 +313,16 @@ test("an idle stream certifies its watermark every five minutes, not on every ti
   assert.deepEqual(batches(r).at(-1).body.events, []);
   assert.equal(registrations(r), 1);
 });
+test("a single device whose 200th word is ahead of server time settles on the next tick", async (t) => {
+  const { r, tick } = await idleRig(t);
+  r.drift(1000, 5000);
+  await capture(r, 200);
+  assert.equal(r.manager.current().state, "open");
+  assert.equal(r.db.prepare("SELECT count(*) AS n FROM captures").get().n, 0);
+  await tick();
+  assert.equal(r.manager.current().state, "done");
+});
+
 test("a heartbeat that fails is retried on the next tick", async (t) => {
   const { r, tick } = await idleRig(t);
   await tick(9);
