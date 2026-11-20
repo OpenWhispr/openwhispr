@@ -190,10 +190,14 @@ export async function processAndroidAudio(
         systemPrompt: instruction,
         inferenceScope: assistant.scope,
         inferenceRoute: assistant.route,
+        // A saved Assistant task runs where the user put it (Processing); one that follows Text
+        // cleanup keeps words transcribed on the phone there, as before it had a task.
         routing:
           assistant.route?.mode === 'providers'
             ? { sendToChosenProvider: true }
-            : { isPrivateNote: job.route.provider === 'local' },
+            : assistant.scope === 'agent'
+              ? {}
+              : { isPrivateNote: job.route.provider === 'local' },
         signal,
         maxTokens: 384,
       });

@@ -257,6 +257,36 @@ describe('the Assistant task on Processing', () => {
     },
   );
 
+  it('runs on OpenWhispr Cloud when the Assistant is saved there, though the words were transcribed on the phone', async () => {
+    mockConfig.current = {
+      ...baseConfig,
+      inference: { cleanup: { mode: 'local' }, agent: { mode: 'openwhispr' } },
+    };
+    const cloud = { mode: 'openwhispr' as const, scope: 'agent' as const };
+    await processAndroidAudio(
+      audio,
+      job('write', { ...routes.local, agentRoute: cloud }),
+      new AbortController().signal,
+      jest.fn(),
+    );
+    const request = jest.mocked(ReasoningService.processText).mock.calls[0][0];
+    expect(request).toMatchObject({ inferenceRoute: cloud, inferenceScope: 'agent' });
+    // Not marked private, which would keep it on the phone's model.
+    expect(request.routing).toEqual({});
+  });
+
+  it("keeps an unsaved Assistant's words on the phone when they were transcribed there", async () => {
+    await processAndroidAudio(
+      audio,
+      job('write', routes.local),
+      new AbortController().signal,
+      jest.fn(),
+    );
+    expect(jest.mocked(ReasoningService.processText).mock.calls[0][0].routing).toEqual({
+      isPrivateNote: true,
+    });
+  });
+
   it('follows Text cleanup while nothing is saved for the Assistant', async () => {
     await processAndroidAudio(
       audio,
