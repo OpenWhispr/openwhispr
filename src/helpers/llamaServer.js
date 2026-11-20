@@ -7,6 +7,7 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const { EventEmitter } = require("node:events");
 const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
 const { isPortAvailable } = require("../utils/serverUtils");
@@ -107,8 +108,9 @@ function buildResponseError(statusCode, body) {
   return new Error(`llama-server returned status ${statusCode}: ${body}`);
 }
 
-class LlamaServerManager {
+class LlamaServerManager extends EventEmitter {
   constructor() {
+    super();
     this.keepResident = false;
     this.dictationModelPath = null;
     this.process = null;
@@ -142,6 +144,7 @@ class LlamaServerManager {
     this.healthCheckFailures = 0;
     this.cachedServerBinaryPaths = null;
     this.activeBackend = null;
+    this.gpuFallbackReason = null;
     this.idleTimer = null;
   }
 
@@ -451,6 +454,7 @@ class LlamaServerManager {
     const binaryPaths = this.getServerBinaryPaths();
     if (Object.keys(binaryPaths).length === 0) throw new Error("llama-server binary not found");
     if (!fs.existsSync(modelPath)) throw new Error(`Model file not found: ${modelPath}`);
+    this.gpuFallbackReason = null;
 
     this.port = await this.findAvailablePort();
     this.modelPath = modelPath;
@@ -575,6 +579,7 @@ class LlamaServerManager {
     if (ladder.length === 0) throw new Error("No CPU llama-server binary available");
 
     let lastError = null;
+    let gpuFallbackReason = null;
     for (let i = 0; i < ladder.length; i++) {
       const rung = ladder[i];
       const next = ladder[i + 1];
@@ -588,15 +593,28 @@ class LlamaServerManager {
           options.startupSignal
         );
         this.activeBackend = rung.backend;
+        this.gpuFallbackReason = rung.backend === "cpu" ? gpuFallbackReason : null;
         this.activeDraftModelPath = rung.mtp ? this.draftModelPath : null;
         // Without this the preflight would believe the full context is
         // available and send a prompt the server cannot take.
         this.activeContextSize = rung.contextSize ?? requestedContext;
         this.contextSize = this.activeContextSize;
+        if (rung.backend === "cpu" && gpuFallbackReason) {
+          this.emit("gpu-fallback", { reason: gpuFallbackReason });
+        }
         return;
       } catch (err) {
         options.startupSignal?.throwIfAborted();
         lastError = err;
+        if (rung.backend === "vulkan") {
+          const reason =
+            /ErrorOutOfDeviceMemory|VK_ERROR_OUT_OF_DEVICE_MEMORY|out of (?:device|GPU) memory/i.test(
+              err.message
+            )
+              ? "out_of_memory"
+              : "startup_failed";
+          if (reason === "out_of_memory" || !gpuFallbackReason) gpuFallbackReason = reason;
+        }
         if (next) {
           debugLogger.warn(`${rung.name} backend failed, falling back to ${next.name}`, {
             error: err.message,
@@ -1171,6 +1189,7 @@ class LlamaServerManager {
     if (!this.process) {
       this.ready = false;
       this.contextSize = null;
+      this.gpuFallbackReason = null;
       return;
     }
 
@@ -1208,6 +1227,7 @@ class LlamaServerManager {
     this.draftModelPath = null;
     this.activeDraftModelPath = null;
     this.activeBackend = null;
+    this.gpuFallbackReason = null;
     this.contextSize = null;
     this.activeContextSize = null;
   }
@@ -1221,11 +1241,13 @@ class LlamaServerManager {
       modelName: this.modelPath ? path.basename(this.modelPath, ".gguf") : null,
       backend: this.activeBackend,
       gpuAccelerated: this.activeBackend === "vulkan" || this.activeBackend === "metal",
+      gpuFallbackReason: this.ready && this.activeBackend === "cpu" ? this.gpuFallbackReason : null,
     };
   }
 
   resetGpuDetection() {
     this.activeBackend = null;
+    this.gpuFallbackReason = null;
     this.cachedServerBinaryPaths = null;
   }
 }

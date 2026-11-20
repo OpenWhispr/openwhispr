@@ -873,6 +873,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("llama-server-start", modelId, requestId),
   llamaServerCancelStart: (requestId) => ipcRenderer.invoke("llama-server-cancel-start", requestId),
   llamaServerStatus: () => ipcRenderer.invoke("llama-server-status"),
+  onLlamaGpuFallback: registerListener(
+    "llama-gpu-fallback",
+    (callback) => (_event, data) => callback(data)
+  ),
   llamaGpuReset: () => ipcRenderer.invoke("llama-gpu-reset"),
 
   // Vulkan GPU acceleration

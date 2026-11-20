@@ -5102,6 +5102,7 @@
     "activationFailed": "GPU acceleration unavailable",
     "activationFailedDescription": "OpenWhispr switched to CPU transcription.",
     "reasoningActivationFailedDescription": "OpenWhispr switched to CPU processing.",
+    "reasoningOutOfMemoryDescription": "This model ran out of GPU memory. OpenWhispr switched to CPU processing. Choose a smaller local model to use the GPU.",
     "retryActivation": "Retry GPU acceleration",
     "redownloadNeeded": "GPU pack needs re-downloading",
     "redownloadNeededDescription": "This version of OpenWhispr can't use your installed GPU pack. Download it again to turn GPU acceleration back on.",

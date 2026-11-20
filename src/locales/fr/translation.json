@@ -5129,6 +5129,7 @@
     "activationFailed": "Accélération GPU indisponible",
     "activationFailedDescription": "OpenWhispr est passé à la transcription par CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr est passé au traitement par CPU.",
+    "reasoningOutOfMemoryDescription": "Ce modèle a épuisé la mémoire du GPU. OpenWhispr utilise maintenant le CPU. Choisissez un modèle local plus petit pour utiliser le GPU.",
     "retryActivation": "Réessayer l'accélération GPU",
     "redownloadNeeded": "Le pack GPU doit être retéléchargé",
     "redownloadNeededDescription": "Cette version d'OpenWhispr ne peut pas utiliser votre pack GPU installé. Retéléchargez-le pour réactiver l'accélération GPU.",

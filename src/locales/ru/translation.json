@@ -4906,6 +4906,7 @@
     "activationFailed": "Ускорение GPU недоступно",
     "activationFailedDescription": "OpenWhispr переключился на транскрипцию на CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr переключился на обработку на CPU.",
+    "reasoningOutOfMemoryDescription": "Этой модели не хватило памяти GPU. OpenWhispr переключился на CPU. Выберите локальную модель меньшего размера, чтобы использовать GPU.",
     "retryActivation": "Повторить ускорение GPU",
     "redownloadNeeded": "Требуется повторная загрузка GPU-пакета",
     "redownloadNeededDescription": "Эта версия OpenWhispr не может использовать установленный GPU-пакет. Загрузите его заново, чтобы снова включить ускорение GPU.",
