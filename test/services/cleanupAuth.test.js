@@ -162,15 +162,20 @@ async function loadSeed(t, { storage = {}, secrets = {}, hydrate = true } = {}) 
       ),
     },
   });
-  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-cleanup-seed-test-" });
+  // Hydration fires lazy imports of these; stubbing them keeps the heavy module graph (and its
+  // file watchers) out of this test.
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-cleanup-seed-test-",
+    mockModules: {
+      "/services/ReasoningService": "export default { clearApiKeyCache() {} };",
+      "/services/SyncService.js": "export const syncService = { canSync: () => false };",
+    },
+  });
   const { seedSttApiCleanup } = await vite.ssrLoadModule("/config/forkCleanupSeed.ts");
   const { useSettingsStore, getSettings, initializeSettings, areSecretsHydrated } =
     await vite.ssrLoadModule("/stores/settingsStore.ts");
   // Seeding is gated on secrets having been read, so a BYOK user is never mistaken for keyless.
   if (hydrate) {
-    // Hydration kicks off lazy imports; load them now so none is still in flight at teardown.
-    await vite.ssrLoadModule("/services/ReasoningService.ts");
-    await vite.ssrLoadModule("/services/SyncService.js");
     await initializeSettings();
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
