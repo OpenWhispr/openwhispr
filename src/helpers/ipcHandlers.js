@@ -4387,6 +4387,10 @@ class IPCHandlers {
       const result = this.databaseManager.restoreNoteAfterDeniedDelete(id);
       // Its files went when the delete was made locally.
       if (result?.success) this.noteFiles.queueNote(id);
+      // A synced restore reaches its windows with the snapshot pull that replaces
+      // it. A pending one keeps its own text, which that pull leaves alone.
+      const restored = result?.pending ? this.databaseManager.getNote(id) : null;
+      if (restored) setImmediate(() => broadcastToWindows("note-synced", restored));
       return result;
     });
     // A pulled delete names the copy it decided from (options.expected); main
