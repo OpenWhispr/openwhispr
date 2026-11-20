@@ -193,8 +193,6 @@
     "editSeed": "苹果、面包和牛奶。",
     "retentionConfirm": "超出保留期限的听写记录将从此手机删除。“不保存”会删除所有听写历史。笔记单独保存。",
     "cleanupRecovery": "文本润色失败。原始转写内容可在首页查看。",
-    "editQuestion": "这是一个问题，不是修改。请用助手提问。",
-    "editNotApplied": "没有任何更改。请说明如何修改，例如“改短一点”。",
     "removeModel": "移除下载",
     "removeModelConfirm": "从手机移除此模型？以后可以重新下载。",
     "privateMode": "本地模式",

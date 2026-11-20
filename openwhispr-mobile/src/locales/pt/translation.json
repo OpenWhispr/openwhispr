@@ -193,8 +193,6 @@
     "editSeed": "Maçãs, pão e leite.",
     "retentionConfirm": "Ditados fora deste período serão excluídos deste celular. “Não salvar” exclui todo o histórico de ditados. As notas são mantidas separadamente.",
     "cleanupRecovery": "A correção falhou. A transcrição original está disponível na página inicial.",
-    "editQuestion": "Isso é uma pergunta, não uma edição. Pergunte com o Assistente.",
-    "editNotApplied": "Nada mudou. Diga como alterar, por exemplo “deixe mais curto”.",
     "removeModel": "Remover download",
     "removeModelConfirm": "Remover este modelo do celular? Você pode baixá-lo novamente.",
     "privateMode": "Modo local",

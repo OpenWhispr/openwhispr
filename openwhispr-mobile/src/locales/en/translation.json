@@ -196,8 +196,6 @@
     "editSeed": "Apples, bread and milk.",
     "retentionConfirm": "Dictations outside this retention period will be deleted from this phone. “Don’t save” deletes all dictation history. Notes are kept separately.",
     "cleanupRecovery": "Text cleanup failed. Your original transcript is available in Home.",
-    "editQuestion": "That's a question, not an edit. Ask it with Assistant.",
-    "editNotApplied": "Nothing changed. Say how to change it, like “make it shorter”.",
     "removeModel": "Remove download",
     "removeModelConfirm": "Remove this model from the phone? You can download it again.",
     "privateMode": "Local Mode",

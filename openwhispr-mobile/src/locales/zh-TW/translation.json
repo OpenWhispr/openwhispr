@@ -193,8 +193,6 @@
     "editSeed": "蘋果、麵包和牛奶。",
     "retentionConfirm": "超出保留期限的聽寫記錄將從此手機刪除。「不儲存」會刪除所有聽寫歷史。筆記另外儲存。",
     "cleanupRecovery": "文字潤飾失敗。原始轉錄內容可在首頁查看。",
-    "editQuestion": "這是一個問題，不是修改。請用助理提問。",
-    "editNotApplied": "沒有任何變更。請說明如何修改，例如「改短一點」。",
     "removeModel": "移除下載",
     "removeModelConfirm": "從手機移除此模型？之後可以重新下載。",
     "privateMode": "本機模式",
