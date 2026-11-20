@@ -3992,6 +3992,11 @@
         "title": "会议音频已静默",
         "description": "已有几分钟未检测到任何人声。如果通话仍在进行，请检查您的声音输出设备。"
       },
+      "externalAttendeesBlocked": "本次会议有组织外人员参加。你的组织不允许转录此类会议。",
+      "externalAttendeesUnverifiable": "OpenWhispr 无法核实所有受邀者的身份。你的组织仅允许转录内部会议。",
+      "externalAttendeesStopped": "由于受邀者中有组织外人员，录音已停止。你仍可继续记笔记。",
+      "internalAttendeesQuestion": "本次会议的所有参与者都属于你的组织吗？",
+      "internalAttendeesConfirm": "是，开始",
       "recordingDisabledByOrg": "您的组织已禁用会议录音。",
       "stoppedAccountChanged": "由于您已退出登录或切换了账号，录音已停止。",
       "stoppedPolicyUnresolved": "由于无法检查您的组织设置，录音已停止。",

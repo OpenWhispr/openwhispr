@@ -24,6 +24,7 @@ export interface CalendarEvent {
   organizer_email: string | null;
   attendees_count: number;
   attendees: string | null;
+  attendees_omitted?: number;
   /** The event's page in Google Calendar or Outlook on the web; null for Apple. */
   web_link: string | null;
   availability_status: CalendarAvailabilityStatus;

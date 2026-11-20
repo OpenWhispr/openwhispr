@@ -1,13 +1,21 @@
 import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
+import { parseNoteParticipants } from "./noteAttendees";
+import {
+  meetingAttendeeVerdict,
+  unlistedOrganizerEmail,
+} from "../helpers/meetingAttendeePolicy.js";
+
+export function hasExternalAttendees(
+  event: CalendarEvent,
+  internalDomains: readonly string[]
+): boolean {
+  return (
+    meetingAttendeeVerdict(event, { externalAttendees: "blocked", internalDomains }) === "external"
+  );
+}
 
 export function parseAttendees(event: CalendarEvent): CalendarAttendee[] {
-  if (!event.attendees) return [];
-  try {
-    const parsed = JSON.parse(event.attendees);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return parseNoteParticipants(event.attendees);
 }
 
 /**
@@ -16,7 +24,11 @@ export function parseAttendees(event: CalendarEvent): CalendarAttendee[] {
  * not a meeting and stays out of the upcoming list.
  */
 export function hasOtherAttendees(event: CalendarEvent): boolean {
+  if (event.attendees_omitted) return true;
   const attendees = parseAttendees(event);
-  if (attendees.length > 0) return attendees.some((attendee) => !attendee.self);
-  return event.attendees_count > 1;
+  return (
+    attendees.some((attendee) => !attendee.self) ||
+    event.attendees_count > Math.max(1, attendees.length) ||
+    (attendees.length > 0 && Boolean(unlistedOrganizerEmail(event, attendees)))
+  );
 }

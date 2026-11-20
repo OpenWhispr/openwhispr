@@ -116,3 +116,18 @@ test("overlay initialization cleanup cancels reveal and invalidates a pending pu
   assert.equal(readyCount, 0);
   assert.equal(unsubscribeCount, 1);
 });
+
+test("outside and unreadable guests show their localized explanation and only Join", async () => {
+  const { getMeetingNotificationPresentation } = await load();
+  for (const [recordingRefusal, key] of [
+    ["POLICY_EXTERNAL_ATTENDEES", "externalAttendeesBlocked"],
+    ["POLICY_ATTENDEES_UNVERIFIABLE", "externalAttendeesUnverifiable"],
+  ]) {
+    const card = getMeetingNotificationPresentation({
+      recordingRefusal,
+      joinUrl: "https://meet.example/join",
+    });
+    assert.equal(card.bodyKey, "notes.meeting." + key);
+    assert.equal(card.action, "open");
+  }
+});

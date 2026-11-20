@@ -5,6 +5,7 @@ import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
 import type { MeetingDestinationContext, MeetingError, MeetingFolderRef } from "../types/electron";
 
 const key = (name: string) => `meetingNotification.folders.${name}`;
+import { meetingAttendeeRefusalKey } from "../helpers/meetingAttendeePolicy.js";
 import { meetingFolderLabel, meetingLocationLabel } from "./meetingFolderLabel";
 import {
   DropdownMenu,
@@ -173,7 +174,7 @@ export function MeetingNotificationFolderPicker({
     : "";
   const errorView = error && (
     <p role="alert" className="meeting-folder-error">
-      {t(key(`errors.${error}`))}
+      {t(meetingAttendeeRefusalKey(error) ?? key(`errors.${error}`))}
     </p>
   );
   return (

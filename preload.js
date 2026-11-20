@@ -1079,6 +1079,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-prepare", options),
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
+  checkMeetingRecordingStart: (options) =>
+    ipcRenderer.invoke("check-meeting-recording-start", options),
+  releaseMeetingRecordingStart: (sessionId) =>
+    ipcRenderer.send("release-meeting-recording-start", sessionId),
+  onMeetingRecordingAdmissionRevoked: registerListener(
+    "meeting-recording-admission-revoked",
+    (callback) => (_event, data) => callback(data)
+  ),
   isMeetingRecordingDisabled: () => ipcRenderer.invoke("is-meeting-recording-disabled"),
   meetingRecordingRefused: (details) => ipcRenderer.invoke("meeting-recording-refused", details),
   meetingTranscriptionSend: (buffer, source, capturedAt) =>
@@ -1765,7 +1773,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-notification-respond", detectionId, action, options),
   confirmMeetingNoteNavigation: (navigationId, status) =>
     ipcRenderer.invoke("confirm-meeting-note-navigation", navigationId, status),
-  joinCalendarMeeting: (eventId) => ipcRenderer.invoke("join-calendar-meeting", eventId),
+  joinCalendarMeeting: (eventId, notesOnly) =>
+    ipcRenderer.invoke("join-calendar-meeting", eventId, notesOnly),
   startManualMeeting: () => ipcRenderer.invoke("start-manual-meeting"),
   getPendingMeetingNoteNavigation: () => ipcRenderer.invoke("get-pending-meeting-note-navigation"),
   onMeetingNoteNavigationPending: registerListener(

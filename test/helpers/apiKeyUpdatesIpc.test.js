@@ -1996,3 +1996,55 @@ test("a meeting start the policy blocks for its provider reaches the audit log",
     ["refused", { noteId: 5, trigger: "hotkey", reason: "DEVICE_POLICY_BLOCKED" }],
   ]);
 });
+
+test("a calendar guest revokes the admitted recording and the backend refuses a direct restart", async (t) => {
+  resetMeeting(t);
+  const invite = { attendees: '[{"email":"member@internal.test"}]', attendees_count: 1 };
+  const policy = defaultDevicePolicy();
+  policy.meetings = { externalAttendees: "blocked", internalDomains: ["internal.test"] };
+  setWorkspacePolicy({ success: true, managed: true, policy });
+  // Only note/event lookups are real inputs to this policy. Other meeting
+  // setup calls use the same stand-ins as the provider lifecycle tests.
+  target.databaseManager = new Proxy(
+    {
+      getNote: () => ({ calendar_event_id: "invite" }),
+      getCalendarEventById: () => invite,
+    },
+    { get: (value, property) => (property in value ? value[property] : anything()) }
+  );
+  const notices = [];
+  editor.send = (channel, payload) => notices.push([channel, payload]);
+  t.after(() => {
+    delete target.databaseManager;
+    delete editor.send;
+  });
+  invoke("save-deepgram-key", "A");
+  const options = {
+    provider: "deepgram-realtime",
+    mode: "byok",
+    sessionId: "guest-check",
+    noteId: 37,
+  };
+  assert.deepEqual(await invoke("check-meeting-recording-start", options), { success: true });
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  const streams = meetingStreams();
+  invite.attendees = '[{"email":"guest@other.test"}]';
+  target._meetingAdmission.recheck();
+  target._meetingAdmission.recheck();
+  assert.ok(streams.every((stream) => !stream.isConnected));
+  assert.deepEqual(
+    notices.filter(([channel]) => channel === "meeting-recording-admission-revoked"),
+    [
+      [
+        "meeting-recording-admission-revoked",
+        { sessionId: "guest-check", code: "POLICY_EXTERNAL_ATTENDEES" },
+      ],
+    ]
+  );
+  await invoke("meeting-transcription-stop", options.sessionId, "policy");
+  assert.equal(
+    (await invoke("check-meeting-recording-start", options)).code,
+    "POLICY_EXTERNAL_ATTENDEES"
+  );
+  assert.equal((await invoke("meeting-transcription-start", options)).success, false);
+});

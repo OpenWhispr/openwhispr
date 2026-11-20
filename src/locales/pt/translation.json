@@ -3998,6 +3998,11 @@
         "title": "O áudio da reunião ficou silencioso",
         "description": "Ninguém foi ouvido nos últimos minutos. Se a chamada ainda estiver acontecendo, verifique seu dispositivo de saída de som."
       },
+      "externalAttendeesBlocked": "Esta reunião inclui pessoas de fora da sua organização. Sua organização não permite transcrever esta reunião.",
+      "externalAttendeesUnverifiable": "O OpenWhispr não conseguiu verificar todas as pessoas convidadas. Sua organização só permite transcrever reuniões internas.",
+      "externalAttendeesStopped": "A gravação foi interrompida porque a lista de convidados inclui alguém de fora da sua organização. Você pode continuar fazendo anotações.",
+      "internalAttendeesQuestion": "Todas as pessoas nesta reunião fazem parte da sua organização?",
+      "internalAttendeesConfirm": "Sim, iniciar",
       "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização.",
       "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta.",
       "stoppedPolicyUnresolved": "A gravação parou porque não foi possível verificar as configurações da sua organização.",

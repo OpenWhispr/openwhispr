@@ -112,6 +112,7 @@ struct EventOut: Encodable {
     let location: String?
     let notes_urls: [String]
     let attendees: [AttendeeOut]
+    let attendees_omitted: Bool
 }
 
 struct SnapshotMessage: Encodable {
@@ -240,7 +241,8 @@ func mapEvent(_ event: EKEvent) -> EventOut? {
         url: event.url?.absoluteString,
         location: event.location,
         notes_urls: extractURLs(from: event.notes),
-        attendees: attendees
+        attendees: attendees,
+        attendees_omitted: event.hasAttendees && attendees.isEmpty
     )
 }
 

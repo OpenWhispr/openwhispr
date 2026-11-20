@@ -227,3 +227,12 @@ test("the helper is launched with the stored lookback", () => {
     },
   ]);
 });
+
+test("EventKit can report invited people without exposing their roster", () => {
+  const AppleCalendarManager = loadManager();
+  const mapped = new AppleCalendarManager({}, {})._mapEvent({
+    attendees: [],
+    attendees_omitted: true,
+  });
+  assert.equal(mapped.attendees_omitted, true);
+});

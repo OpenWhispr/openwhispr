@@ -54,8 +54,13 @@ export interface OrgPolicy {
      */
     memoryEnabled?: boolean;
   };
-  /** Absent on older servers; absent means automatic. Unknown strings suppress auto-start. */
-  meetings?: { transcriptionStart?: string };
+  meetings?: {
+    /** Absent means automatic. Unknown values require a manual start. */
+    transcriptionStart?: string;
+    /** Absent means allowed. Unknown values require an internal invite. */
+    externalAttendees?: string;
+    internalDomains?: string[];
+  };
   sharing: {
     externalLinkSharing: ExternalSharingMode;
   };

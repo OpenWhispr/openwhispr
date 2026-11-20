@@ -359,6 +359,7 @@ class AppleCalendarManager {
       // to exclude, and EventKit often leaves the organizer out of attendees.
       organizer_email: event.organizer_self ? null : event.organizer_email || null,
       attendees_count: attendees.length,
+      attendees_omitted: event.attendees_omitted === true,
       attendees: attendees.length
         ? JSON.stringify(
             attendees.map((a) => ({

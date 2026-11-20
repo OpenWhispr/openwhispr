@@ -1,8 +1,7 @@
 const { parseEventTime } = require("../calendarAvailability");
 const { isValidEmailAddress } = require("./emailCompose");
 
-// Rooms, resources, groups and holiday calendars Google lists as attendees.
-const NON_PERSON_ADDRESS = /@(?:[^@]+\.)?calendar\.google\.com$/i;
+const { NON_PERSON_CALENDAR_ADDRESS } = require("../eventAttendees");
 
 // Spoken names arrive without punctuation: "jean luc" for Jean-Luc, "obrien"
 // or "o brien" for O'Brien, "gabe torres" for gabe.torres@.
@@ -45,7 +44,9 @@ function excludedAddresses({ meetings = [], excludedEmails = [] }) {
 }
 
 function isPersonAddress(email) {
-  return typeof email === "string" && email.includes("@") && !NON_PERSON_ADDRESS.test(email);
+  return (
+    typeof email === "string" && email.includes("@") && !NON_PERSON_CALENDAR_ADDRESS.test(email)
+  );
 }
 
 // A display name is one line of plain text for the model's attendee list.

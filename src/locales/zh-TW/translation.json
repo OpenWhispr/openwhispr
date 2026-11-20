@@ -3992,6 +3992,11 @@
         "title": "會議音訊已靜默",
         "description": "已有幾分鐘未偵測到任何人聲。如果通話仍在進行，請檢查您的聲音輸出裝置。"
       },
+      "externalAttendeesBlocked": "這場會議有組織外部的人員參加。你的組織不允許轉錄這類會議。",
+      "externalAttendeesUnverifiable": "OpenWhispr 無法確認所有受邀者的身分。你的組織僅允許轉錄內部會議。",
+      "externalAttendeesStopped": "由於受邀者中有組織外部的人員，錄音已停止。你仍可繼續做筆記。",
+      "internalAttendeesQuestion": "這場會議的所有參與者都屬於你的組織嗎？",
+      "internalAttendeesConfirm": "是，開始",
       "recordingDisabledByOrg": "您的組織已停用會議錄音。",
       "stoppedAccountChanged": "由於您已登出或切換了帳號，錄音已停止。",
       "stoppedPolicyUnresolved": "由於無法檢查您的組織設定，錄音已停止。",

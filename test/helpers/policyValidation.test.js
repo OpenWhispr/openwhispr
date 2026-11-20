@@ -324,3 +324,19 @@ test("update policy is additive and future string modes do not invalidate manage
     assert.equal(isValidPolicyShape({ ...validPolicy(), updates }), false);
   }
 });
+
+test("meeting attendee policy accepts additive string fields and rejects invalid shapes", () => {
+  for (const meetings of [
+    {},
+    { externalAttendees: "future" },
+    { internalDomains: [] },
+    { externalAttendees: "blocked", internalDomains: ["example.com"] },
+  ])
+    assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), true);
+  for (const meetings of [
+    { externalAttendees: false },
+    { internalDomains: "example.com" },
+    { internalDomains: [null] },
+  ])
+    assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), false);
+});

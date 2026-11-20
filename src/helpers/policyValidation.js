@@ -73,7 +73,12 @@ function isValidPolicyShape(policy) {
         typeof policy.meetings === "object" &&
         !Array.isArray(policy.meetings) &&
         (policy.meetings.transcriptionStart === undefined ||
-          typeof policy.meetings.transcriptionStart === "string"))) &&
+          typeof policy.meetings.transcriptionStart === "string") &&
+        (policy.meetings.externalAttendees === undefined ||
+          typeof policy.meetings.externalAttendees === "string") &&
+        (policy.meetings.internalDomains === undefined ||
+          (Array.isArray(policy.meetings.internalDomains) &&
+            policy.meetings.internalDomains.every((domain) => typeof domain === "string"))))) &&
     SHARING_MODES.includes(policy.sharing?.externalLinkSharing) &&
     LOCAL_HISTORY_MODES.includes(policy.dataRetention?.localHistoryMode) &&
     typeof policy.dataRetention?.cloudBackupAllowed === "boolean" &&

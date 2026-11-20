@@ -4551,6 +4551,11 @@
         "title": "Meeting-Audio ist verstummt",
         "description": "Seit einigen Minuten war niemand zu hören. Falls das Gespräch noch läuft, prüfen Sie Ihr Audioausgabegerät."
       },
+      "externalAttendeesBlocked": "An diesem Meeting nehmen Personen außerhalb deiner Organisation teil. Deine Organisation erlaubt dafür keine Transkription.",
+      "externalAttendeesUnverifiable": "OpenWhispr konnte nicht alle Personen auf der Einladung überprüfen. Deine Organisation erlaubt nur die Transkription interner Meetings.",
+      "externalAttendeesStopped": "Die Aufnahme wurde beendet, weil eine Person außerhalb deiner Organisation eingeladen ist. Du kannst weiter Notizen machen.",
+      "internalAttendeesQuestion": "Gehören alle Personen in diesem Meeting zu deiner Organisation?",
+      "internalAttendeesConfirm": "Ja, starten",
       "recordingDisabledByOrg": "Die Aufzeichnung von Besprechungen wurde von Ihrer Organisation deaktiviert.",
       "stoppedAccountChanged": "Die Aufnahme wurde beendet, weil Sie sich abgemeldet oder das Konto gewechselt haben.",
       "stoppedPolicyUnresolved": "Die Aufnahme wurde beendet, weil die Einstellungen Ihrer Organisation nicht geprüft werden konnten.",
