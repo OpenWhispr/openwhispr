@@ -729,6 +729,17 @@ test(
       fs.readdirSync(path.join(olderData, "audit"))[0],
       new RegExp(`^meeting-audit-${os.userInfo().username}-\\d{4}-\\d{2}-\\d{2}\\.jsonl$`)
     );
+    // A database it can't read can't tell a run again what to remove, so it goes.
+    const corrupt = path.join(root, "corrupt-home");
+    const corruptData = path.join(corrupt, "Library", "Application Support", "OpenWhispr");
+    seed(path.join(corruptData, "transcriptions.db"), "not a database");
+    assert.throws(
+      () => run(corrupt),
+      (error) =>
+        error.status === 1 && error.stderr.includes("Could not read the notes mirror's record")
+    );
+    assert.deepEqual(fs.readdirSync(corruptData), ["audit"]);
+    assert.equal(recorded(corruptData)[0].reason, "incomplete");
     assert.deepEqual(
       recorded(userData).map((line) => line.trigger),
       ["script"]

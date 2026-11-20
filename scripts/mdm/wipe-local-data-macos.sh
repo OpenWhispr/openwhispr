@@ -140,7 +140,6 @@ remove_mirrored_files() {
       "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir'")"; } || {
     echo "Could not read the notes mirror's record in $database" >&2
     failed=1
-    mirror_failed=1
     return 0
   }
   while IFS=$'\x1f' read -r -d $'\x1e' base rel hash; do
