@@ -1,5 +1,6 @@
 const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
+const { secretResolverMethods } = require("./harness/secretResolver");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const fs = require("node:fs");
@@ -291,6 +292,8 @@ function buildFakeThis() {
       getSelfHostedSttHeaders: () => selfHostedHeaders,
       getCortiClientId: () => "corti-id",
       getCortiClientSecret: () => "corti-secret",
+      // The credential path expands stored $VAR references through the manager.
+      ...secretResolverMethods({}),
     },
   };
   return new Proxy(target, {

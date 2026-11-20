@@ -5,21 +5,20 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
-const { BYOK_API_KEYS } = require("../config/secretKeys");
+const { BYOK_API_KEYS, SECRET_ENV_NAMES, NON_REF_SECRET_ENV } = require("../config/secretKeys");
+const {
+  isEnvRef,
+  envRefName,
+  resolveEnvRef,
+  importMissingSecretsFromLoginShell,
+  classifySecretInput,
+} = require("./envKeyResolve");
 
-const SECRET_KEYS = [
-  ...BYOK_API_KEYS.map((k) => k.env),
-  "CORTI_CLIENT_ID",
-  "CORTI_CLIENT_SECRET",
-  "CUSTOM_TRANSCRIPTION_API_KEY",
-  "SELF_HOSTED_STT_HEADERS",
-  "CUSTOM_CLEANUP_API_KEY",
-  "BEDROCK_ACCESS_KEY_ID",
-  "BEDROCK_SECRET_ACCESS_KEY",
-  "BEDROCK_SESSION_TOKEN",
-  "AZURE_OPENAI_API_KEY",
-  "VERTEX_API_KEY",
-];
+// Every name EnvironmentManager encrypts and persists. SECRET_REF_NAMES (shared
+// with secretKeys.js) are the credentials a $VAR field may point at and the
+// login shell may fill; the rest are stored secrets that are not credentials.
+const SECRET_KEYS = [...SECRET_ENV_NAMES, ...NON_REF_SECRET_ENV];
+const SECRET_REF_SET = new Set(SECRET_ENV_NAMES);
 
 const SECRET_KEY_SET = new Set(SECRET_KEYS);
 
@@ -69,13 +68,25 @@ const PERSISTED_KEYS = [
 // Module-level so writes are serialized across all instances — hotkeyManager
 // creates its own EnvironmentManager alongside the main.js singleton.
 let envWriteQueue = Promise.resolve();
+// Shared across EnvironmentManager instances so a second constructor cannot
+// persist login-shell imports that the first one recorded.
+const shellImportedSecrets = new Set();
+// Counts Settings saves per secret, so a login-shell import that was already
+// waiting on the shell never overwrites a key the user saved meanwhile.
+const secretSaveCounts = new Map();
+// Called with the env names a login-shell import filled, so open windows that
+// read their keys before the import finished can read them again.
+const shellImportListeners = new Set();
 
 class EnvironmentManager {
   constructor() {
+    this._shellImportedSecrets = shellImportedSecrets;
     this.loadEnvironmentVariables();
   }
 
   loadEnvironmentVariables() {
+    // Plain dotenv — it does not expand $VAR. A stored $OPENAI_API_KEY stays
+    // a reference until _getKey / resolveSecretRef.
     // App config (.env in userData) takes precedence over system env vars,
     // so keys saved by the user in Settings always win.
     const userDataEnv = path.join(app.getPath("userData"), ".env");
@@ -110,6 +121,47 @@ class EnvironmentManager {
       await this._migrateToSecureStorage();
     }
     await this._loadAllSecrets();
+    // After stored secrets win: fill any still-empty keys from a login shell
+    // (so ~/.zshrc exports work when launched from a desktop icon). Never
+    // persist these — that would copy shell secrets into Settings. Do not
+    // await: a slow rc must not gate window creation.
+    this._importLoginShellSecrets().catch((error) => {
+      debugLogger.error(
+        "login-shell secret import failed",
+        { error: error?.message || String(error) },
+        "environment"
+      );
+    });
+  }
+
+  async _importLoginShellSecrets() {
+    const savesAtStart = new Map(secretSaveCounts);
+    const { imported, reason } = await importMissingSecretsFromLoginShell({
+      secretNames: SECRET_ENV_NAMES,
+      env: process.env,
+      importedSet: this._shellImportedSecrets,
+      // Re-checked after the shell answers: a key saved in Settings meanwhile wins.
+      canImport: (name) =>
+        !process.env[name] && (secretSaveCounts.get(name) || 0) === (savesAtStart.get(name) || 0),
+    });
+    debugLogger.info(
+      "login-shell secret import",
+      { reason, count: imported.length },
+      "environment"
+    );
+    if (imported.length > 0) {
+      for (const listener of shellImportListeners) {
+        try {
+          listener(imported);
+        } catch {}
+      }
+    }
+    return imported;
+  }
+
+  onLoginShellImport(listener) {
+    shellImportListeners.add(listener);
+    return () => shellImportListeners.delete(listener);
   }
 
   _getMigrationSentinelPath() {
@@ -240,6 +292,7 @@ class EnvironmentManager {
     let envContent = "# OpenWhispr Environment Variables\n";
     for (const key of PERSISTED_KEYS) {
       if (stripSecrets && SECRET_KEY_SET.has(key)) continue;
+      if (this._shellImportedSecrets.has(key)) continue;
       if (process.env[key]) {
         const value =
           key === "SELF_HOSTED_STT_HEADERS" && !process.env[key].startsWith("base64:")
@@ -253,11 +306,54 @@ class EnvironmentManager {
     await fsPromises.rename(tmpPath, envPath);
   }
 
-  _getKey(envVarName) {
+  _getRawKey(envVarName) {
     return process.env[envVarName] || "";
   }
 
+  getRawKey(envVarName) {
+    if (this._shellImportedSecrets.has(envVarName)) return `$${envVarName}`;
+    return this._getRawKey(envVarName);
+  }
+
+  getRawCleanupCustomKey() {
+    return this.getRawKey("CUSTOM_CLEANUP_API_KEY") || this.getRawKey("CUSTOM_REASONING_API_KEY");
+  }
+
+  // What a Settings field shows for `envVarName`: the stored text (a $VAR stays a
+  // reference), the cleanup key's legacy alias, the headers decoded. Used to tell
+  // an unedited field from a change.
+  getRawFieldValue(envVarName) {
+    if (envVarName === "CUSTOM_CLEANUP_API_KEY") return this.getRawCleanupCustomKey();
+    if (envVarName === "SELF_HOSTED_STT_HEADERS") return this.getSelfHostedSttHeaders();
+    return this.getRawKey(envVarName);
+  }
+
+  resolveSecretRef(value) {
+    const raw = value || "";
+    const name = envRefName(raw);
+    if (name && !SECRET_REF_SET.has(name)) return "";
+    const resolved = resolveEnvRef(raw, process.env);
+    return isEnvRef(resolved) ? "" : resolved;
+  }
+
+  _getKey(envVarName) {
+    const raw = this._getRawKey(envVarName);
+    // Only credential fields hold references; a region, endpoint or the headers
+    // list is returned as stored, so it can never carry another secret's value.
+    return SECRET_REF_SET.has(envVarName) ? this.resolveSecretRef(raw) : raw;
+  }
+
   _saveKey(envVarName, key) {
+    const trimmed = typeof key === "string" ? key.trim() : key;
+    if (SECRET_REF_SET.has(envVarName)) {
+      const reason = classifySecretInput(trimmed, envVarName, SECRET_REF_SET);
+      if (reason === "self-reference" && shellImportedSecrets.has(envVarName)) {
+        return { success: true };
+      }
+      if (reason) return { success: false, reason };
+    }
+    secretSaveCounts.set(envVarName, (secretSaveCounts.get(envVarName) || 0) + 1);
+    this._shellImportedSecrets.delete(envVarName);
     if (SECRET_KEY_SET.has(envVarName) && this._encryptionAvailable()) {
       this._saveSecretKey(envVarName, key).catch((error) => {
         debugLogger.error(
@@ -291,7 +387,7 @@ class EnvironmentManager {
   }
 
   getSelfHostedSttHeaders() {
-    const value = this._getKey("SELF_HOSTED_STT_HEADERS");
+    const value = this._getRawKey("SELF_HOSTED_STT_HEADERS");
     return value.startsWith("base64:")
       ? Buffer.from(value.slice(7), "base64").toString("utf8")
       : value;
@@ -315,8 +411,23 @@ class EnvironmentManager {
   }
 
   saveCleanupCustomKey(key) {
-    delete process.env.CUSTOM_REASONING_API_KEY;
-    return this._saveKey("CUSTOM_CLEANUP_API_KEY", key);
+    const trimmed = typeof key === "string" ? key.trim() : "";
+    // The field shows a shell-imported legacy alias as $CUSTOM_REASONING_API_KEY.
+    // Committing it unchanged keeps the import as it is (never saved, never cleared).
+    if (
+      trimmed &&
+      !this._getRawKey("CUSTOM_CLEANUP_API_KEY") &&
+      this._shellImportedSecrets.has("CUSTOM_REASONING_API_KEY") &&
+      trimmed === this.getRawCleanupCustomKey()
+    ) {
+      return { success: true };
+    }
+    const result = this._saveKey("CUSTOM_CLEANUP_API_KEY", key);
+    // A reference to the legacy alias needs its target; anything else replaces it.
+    if (result?.success !== false && envRefName(trimmed) !== "CUSTOM_REASONING_API_KEY") {
+      delete process.env.CUSTOM_REASONING_API_KEY;
+    }
+    return result;
   }
 
   // Enterprise providers — AWS Bedrock
@@ -604,3 +715,8 @@ for (const k of BYOK_API_KEYS) {
 }
 
 module.exports = EnvironmentManager;
+module.exports._resetShellImportedSecrets = () => {
+  shellImportedSecrets.clear();
+  secretSaveCounts.clear();
+  shellImportListeners.clear();
+};

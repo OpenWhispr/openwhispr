@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConnectionAutoCheck } from "./useConnectionAutoCheck";
 
-type Drafts = Record<string, { value: string; save: (value: string) => void }>;
+// A save returns an error code (a $VAR reference the store refused) or nothing.
+type Drafts = Record<string, { value: string; save: (value: string) => unknown }>;
 
 export interface CredentialCheckReport {
   phase: ConnectionAutoCheck["phase"];
@@ -28,6 +29,8 @@ const refusalKey = (field: string, request: string, value: string) =>
  */
 export function useCredentialDraft() {
   const [drafts, setDrafts] = useState<Drafts>({});
+  // Why a field's draft wasn't saved; the draft stays so the user can fix it.
+  const [errors, setErrors] = useState<Record<string, string>>({});
   // Kept in step with every change and save, ahead of the render that shows them.
   const latest = useRef(drafts);
   const refusals = useRef(new Set<string>());
@@ -60,7 +63,11 @@ export function useCredentialDraft() {
       const draft = latest.current[field];
       if (!draft || (values && draft.value !== values[field])) continue;
       if ((groups.current[field] ?? [field]).some(refused)) continue;
-      draft.save(draft.value);
+      const result: unknown = draft.save(draft.value);
+      if (typeof result === "string" && result) {
+        setErrors((current) => ({ ...current, [field]: result }));
+        continue;
+      }
       saved.add(draft);
       left.current.delete(field);
     }
@@ -113,8 +120,14 @@ export function useCredentialDraft() {
 
   return {
     value: (field: string, saved: string) => drafts[field]?.value ?? saved,
-    change: (field: string, value: string, save: (value: string) => void) => {
+    error: (field: string): string | null => errors[field] ?? null,
+    change: (field: string, value: string, save: (value: string) => unknown) => {
       editing.current = field;
+      setErrors((current) => {
+        if (!(field in current)) return current;
+        const { [field]: _cleared, ...rest } = current;
+        return rest;
+      });
       left.current.delete(field);
       const draft = { value, save };
       latest.current = { ...latest.current, [field]: draft };

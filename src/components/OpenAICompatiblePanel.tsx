@@ -13,9 +13,11 @@ import ModelCardList from "./ui/ModelCardList";
 import SearchableModelList, { MODEL_SEARCH_THRESHOLD } from "./ui/SearchableModelList";
 import { buildApiUrl, getModelListBaseCandidates, normalizeBaseUrl } from "../config/constants";
 import { isSecureHttpEndpoint } from "../utils/urlUtils";
+import { resolveApiKey } from "../utils/resolveApiKey";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
 import { ProviderCheckField } from "./ui/ProviderCheckField";
+import SecretRefErrorText from "./ui/SecretRefErrorText";
 import { usePanelVisible } from "./ui/usePanelVisible";
 import { isWindowSwitchBlur, useFocusHold } from "../hooks/useFocusHold";
 import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
@@ -187,8 +189,10 @@ export default function OpenAICompatiblePanel({
       }
 
       const trimmedKey = apiKeyRef.current.trim();
-      const effectiveKey = trimmedKey.length > 0 ? trimmedKey : undefined;
-      lastLoadedKeyRef.current = effectiveKey ?? "";
+      // The field keeps a $VAR reference as typed; only the request gets its expansion.
+      const resolvedKey = await resolveApiKey(trimmedKey);
+      const effectiveKey = resolvedKey.length > 0 ? resolvedKey : undefined;
+      lastLoadedKeyRef.current = trimmedKey;
       let activeBase = normalized;
 
       try {
@@ -453,6 +457,7 @@ export default function OpenAICompatiblePanel({
           autoComplete="off"
           spellCheck={false}
         />
+        <SecretRefErrorText code={keyDraft.error("apiKey")} />
         {!apiKeyRequired && (
           <p className="text-xs text-muted-foreground/70 mt-1">
             {t("reasoning.custom.apiKeyHelp")}

@@ -2525,6 +2525,29 @@ class IPCHandlers {
     const runPaidKeyCheck = createPaidKeyCheck(() =>
       path.join(app.getPath("userData"), PAID_KEY_CHECKS_FILE)
     );
+    // A field may hold $VAR / ${VAR}; expand it here, on the way to the provider, so
+    // the check (and its cache digest) sees the secret, never the literal reference.
+    // A field that names a variable which isn't set is reported as such, never checked
+    // as an empty field: Corti would otherwise test the stored pair instead, and a
+    // keyless server would pass and save the unusable reference.
+    const resolveConnectionCheckSecrets = (config) => {
+      const { ENTERPRISE_SECRET_FIELDS } = require("./enterpriseProviderErrors");
+      const { isEnvRef } = require("./envRef.cjs");
+      const resolved = { ...config };
+      const unresolved = [];
+      for (const key of ["apiKey", "clientId", "clientSecret", ...ENTERPRISE_SECRET_FIELDS]) {
+        if (typeof resolved[key] !== "string" || !resolved[key].trim()) continue;
+        const raw = resolved[key];
+        resolved[key] = this.environmentManager.resolveSecretRef(raw);
+        if (isEnvRef(raw) && !resolved[key]) unresolved.push(key);
+      }
+      return { config: resolved, unresolved };
+    };
+    const UNSET_SECRET_REF_FAILURE = {
+      success: false,
+      errorCode: "secretRefUnset",
+      error: "The environment variable this field names is not set.",
+    };
     const checkProviderConnection = async (config) => {
       if (config?.provider === "corti" && config?.scope === "transcription") {
         try {
@@ -2550,9 +2573,11 @@ class IPCHandlers {
       }
       return testProviderConnection(config, proxyFetch, runPaidKeyCheck);
     };
-    handleRemoteProduct("test-provider-connection", (_event, config) =>
-      cachedConnectionCheck(config, () => checkProviderConnection(config))
-    );
+    handleRemoteProduct("test-provider-connection", (_event, rawConfig) => {
+      const { config, unresolved } = resolveConnectionCheckSecrets(rawConfig);
+      if (unresolved.length > 0) return { ...UNSET_SECRET_REF_FAILURE };
+      return cachedConnectionCheck(config, () => checkProviderConnection(config));
+    });
 
     ipcMain.handle("window-minimize", () => {
       if (this.windowManager.controlPanelWindow) {
@@ -2675,12 +2700,14 @@ class IPCHandlers {
     // Counts changes to any key in Settings. A streaming socket keeps the count it
     // was opened under, so a start never reuses one authenticated before a change.
     let credentialGeneration = 0;
-    const saveSecretKey = (getter, saver, storeKey) => (event, key) => {
+    const saveSecretKey = (envName, saver, storeKey) => (event, key) => {
       if (typeof key !== "string") throw new TypeError("API key must be a string");
-      // Committing an unedited key field saves the same value again.
-      const changed = this.environmentManager[getter]() !== key;
+      // Committing an unedited key field saves the same value again. Compare the
+      // stored value, not its expansion, so an unedited $VAR is no change either.
+      const changed = this.environmentManager.getRawFieldValue(envName) !== key;
       const result = this.environmentManager[saver](key);
-      if (!changed) return result;
+      // A rejected $VAR reference left the stored key as it was.
+      if (!changed || result?.success === false) return result;
       credentialGeneration += 1;
       // Notify peers by setting name only; leave the editor's pending input alone.
       for (const win of BrowserWindow.getAllWindows()) {
@@ -2692,9 +2719,26 @@ class IPCHandlers {
     };
 
     for (const k of BYOK_API_KEYS) {
-      ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
-      ipcMain.handle(`save-${k.base}-key`, saveSecretKey(k.get, k.save, k.storeKey));
+      ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager.getRawKey(k.env));
+      ipcMain.handle(`save-${k.base}-key`, saveSecretKey(k.env, k.save, k.storeKey));
     }
+
+    ipcMain.handle("resolve-secret-ref", (_event, value) => {
+      return this.environmentManager.resolveSecretRef(value);
+    });
+
+    // The login-shell import runs after windows may have read their keys; tell
+    // every window which fields it filled so they read them again.
+    this.environmentManager.onLoginShellImport?.((names) => {
+      const { secretStoreKey } = require("../config/secretKeys");
+      const storeKeys = new Set(names.map(secretStoreKey).filter(Boolean));
+      if (storeKeys.size === 0) return;
+      credentialGeneration += 1;
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win.isDestroyed()) continue;
+        for (const storeKey of storeKeys) win.webContents.send("api-key-updated", storeKey);
+      }
+    });
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
@@ -6845,21 +6889,21 @@ class IPCHandlers {
     );
 
     ipcMain.handle("get-corti-client-id", async () => {
-      return this.environmentManager.getCortiClientId();
+      return this.environmentManager.getRawKey("CORTI_CLIENT_ID");
     });
 
     ipcMain.handle(
       "save-corti-client-id",
-      saveSecretKey("getCortiClientId", "saveCortiClientId", "cortiClientId")
+      saveSecretKey("CORTI_CLIENT_ID", "saveCortiClientId", "cortiClientId")
     );
 
     ipcMain.handle("get-corti-client-secret", async () => {
-      return this.environmentManager.getCortiClientSecret();
+      return this.environmentManager.getRawKey("CORTI_CLIENT_SECRET");
     });
 
     ipcMain.handle(
       "save-corti-client-secret",
-      saveSecretKey("getCortiClientSecret", "saveCortiClientSecret", "cortiClientSecret")
+      saveSecretKey("CORTI_CLIENT_SECRET", "saveCortiClientSecret", "cortiClientSecret")
     );
 
     handleProviderTranscription(
@@ -6976,28 +7020,28 @@ class IPCHandlers {
     );
     ipcMain.handle(
       "save-self-hosted-stt-headers",
-      saveSecretKey("getSelfHostedSttHeaders", "saveSelfHostedSttHeaders", "selfHostedSttHeaders")
+      saveSecretKey("SELF_HOSTED_STT_HEADERS", "saveSelfHostedSttHeaders", "selfHostedSttHeaders")
     );
     ipcMain.handle("get-custom-transcription-key", async () => {
-      return this.environmentManager.getCustomTranscriptionKey();
+      return this.environmentManager.getRawKey("CUSTOM_TRANSCRIPTION_API_KEY");
     });
 
     ipcMain.handle(
       "save-custom-transcription-key",
       saveSecretKey(
-        "getCustomTranscriptionKey",
+        "CUSTOM_TRANSCRIPTION_API_KEY",
         "saveCustomTranscriptionKey",
         "customTranscriptionApiKey"
       )
     );
 
     ipcMain.handle("get-cleanup-custom-key", async () => {
-      return this.environmentManager.getCleanupCustomKey();
+      return this.environmentManager.getRawCleanupCustomKey();
     });
 
     ipcMain.handle(
       "save-cleanup-custom-key",
-      saveSecretKey("getCleanupCustomKey", "saveCleanupCustomKey", "cleanupCustomApiKey")
+      saveSecretKey("CUSTOM_CLEANUP_API_KEY", "saveCleanupCustomKey", "cleanupCustomApiKey")
     );
 
     // Enterprise provider key handlers
@@ -7014,29 +7058,29 @@ class IPCHandlers {
       return this.environmentManager.saveBedrockProfile(value);
     });
     ipcMain.handle("get-bedrock-access-key-id", async () => {
-      return this.environmentManager.getBedrockAccessKeyId();
+      return this.environmentManager.getRawKey("BEDROCK_ACCESS_KEY_ID");
     });
     ipcMain.handle(
       "save-bedrock-access-key-id",
-      saveSecretKey("getBedrockAccessKeyId", "saveBedrockAccessKeyId", "bedrockAccessKeyId")
+      saveSecretKey("BEDROCK_ACCESS_KEY_ID", "saveBedrockAccessKeyId", "bedrockAccessKeyId")
     );
     ipcMain.handle("get-bedrock-secret-access-key", async () => {
-      return this.environmentManager.getBedrockSecretAccessKey();
+      return this.environmentManager.getRawKey("BEDROCK_SECRET_ACCESS_KEY");
     });
     ipcMain.handle(
       "save-bedrock-secret-access-key",
       saveSecretKey(
-        "getBedrockSecretAccessKey",
+        "BEDROCK_SECRET_ACCESS_KEY",
         "saveBedrockSecretAccessKey",
         "bedrockSecretAccessKey"
       )
     );
     ipcMain.handle("get-bedrock-session-token", async () => {
-      return this.environmentManager.getBedrockSessionToken();
+      return this.environmentManager.getRawKey("BEDROCK_SESSION_TOKEN");
     });
     ipcMain.handle(
       "save-bedrock-session-token",
-      saveSecretKey("getBedrockSessionToken", "saveBedrockSessionToken", "bedrockSessionToken")
+      saveSecretKey("BEDROCK_SESSION_TOKEN", "saveBedrockSessionToken", "bedrockSessionToken")
     );
     ipcMain.handle("get-azure-endpoint", async () => {
       return this.environmentManager.getAzureEndpoint();
@@ -7045,11 +7089,11 @@ class IPCHandlers {
       return this.environmentManager.saveAzureEndpoint(value);
     });
     ipcMain.handle("get-azure-api-key", async () => {
-      return this.environmentManager.getAzureApiKey();
+      return this.environmentManager.getRawKey("AZURE_OPENAI_API_KEY");
     });
     ipcMain.handle(
       "save-azure-api-key",
-      saveSecretKey("getAzureApiKey", "saveAzureApiKey", "azureApiKey")
+      saveSecretKey("AZURE_OPENAI_API_KEY", "saveAzureApiKey", "azureApiKey")
     );
     ipcMain.handle("get-azure-deployment", async () => {
       return this.environmentManager.getAzureDeployment();
@@ -7076,11 +7120,11 @@ class IPCHandlers {
       return this.environmentManager.saveVertexLocation(value);
     });
     ipcMain.handle("get-vertex-api-key", async () => {
-      return this.environmentManager.getVertexApiKey();
+      return this.environmentManager.getRawKey("VERTEX_API_KEY");
     });
     ipcMain.handle(
       "save-vertex-api-key",
-      saveSecretKey("getVertexApiKey", "saveVertexApiKey", "vertexApiKey")
+      saveSecretKey("VERTEX_API_KEY", "saveVertexApiKey", "vertexApiKey")
     );
 
     // Enterprise provider test connection
@@ -9168,12 +9212,13 @@ class IPCHandlers {
       },
     });
     const resolveEnterpriseRuntime = async (event, provider, model, config = {}) => {
-      const manual = {
+      const { resolveManualEnterpriseRuntime } = require("./enterpriseProviderErrors");
+      const manual = resolveManualEnterpriseRuntime(
+        config,
         provider,
         model,
-        apiKey: config.apiKey || "",
-        enterprise: require("./enterpriseProviderErrors").pickEnterpriseConfig(config),
-      };
+        (value) => this.environmentManager.resolveSecretRef(value)
+      );
       const context = config.managedContext;
       if (!context) return manual;
       const authHeaders = await getAuthHeader(event);
@@ -14053,7 +14098,7 @@ class IPCHandlers {
           durationSeconds,
           requestId,
           purpose,
-          apiKey,
+          apiKey: rawApiKey,
           baseUrl,
           model,
           diarize,
@@ -14073,8 +14118,14 @@ class IPCHandlers {
         return runAudioJob(event, resolvedPurpose, cancel, async (signal) => {
           let cleanupUpload = null;
           let providerErrorContext = null;
+          let apiKey = "";
           try {
             signal.throwIfAborted();
+            // A $VAR field is expanded here, on the way to the provider; leftover
+            // references are never sent.
+            apiKey = require("./envRef.cjs").usableSecret(
+              this.environmentManager.resolveSecretRef(rawApiKey)
+            );
             if (typeof filePath !== "string") {
               return { success: false, error: "Invalid file path" };
             }
