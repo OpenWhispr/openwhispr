@@ -143,7 +143,7 @@ function Write-WipeRecord([string]$Sid, [string]$UserData, [string]$ProfilePath,
     ([Security.Principal.SecurityIdentifier]$Sid).Translate([Security.Principal.NTAccount]).Value.Split("\")[-1]
   } catch { "unknown" }
   $user = $user -replace '[\\/:*?"<>|\x00-\x1f]', "_"
-  $ts = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+  $ts = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", [Globalization.CultureInfo]::InvariantCulture)
   $line = [ordered]@{
     ts = $ts; event = "local-data.wiped"; sessionId = $null; noteId = $null; trigger = "script"
     reason = $(if ($Incomplete) { "incomplete" } else { $null }); durationSec = $null
