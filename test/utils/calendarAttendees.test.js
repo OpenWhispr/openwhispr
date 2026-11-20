@@ -46,6 +46,7 @@ test("hasOtherAttendees falls back to attendees_count when the list is missing o
   assert.equal(hasOtherAttendees(event({ attendees: null, attendees_count: 3 })), true);
   assert.equal(hasOtherAttendees(event({ attendees: "{not json", attendees_count: 3 })), true);
   assert.equal(hasOtherAttendees(event({ attendees: null, attendees_count: 1 })), false);
+  assert.equal(hasOtherAttendees(event({ attendees: "[null,null]", attendees_count: 2 })), true);
 });
 
 test("parseAttendees returns an empty list for malformed JSON", async () => {
@@ -164,4 +165,39 @@ test("Upcoming keeps a one-on-one with a separate human organizer", async () => 
     false
   );
   assert.equal(hasOtherAttendees(event({ organizer_email: "me@example.com" })), false);
+});
+
+test("Upcoming keeps a one-on-one with a guest whose address is unavailable", async () => {
+  const { hasOtherAttendees, parseAttendees } = await load();
+  const guest = { email: null, displayName: "Alex", self: false };
+  const row = event({
+    attendees: JSON.stringify([guest]),
+    attendees_count: 1,
+    organizer_email: "me@example.com",
+    organizer_self: 1,
+  });
+  assert.deepEqual(parseAttendees(row), []);
+  assert.equal(hasOtherAttendees(row), true);
+  assert.equal(
+    hasOtherAttendees({ ...row, attendees: JSON.stringify([{ ...guest, self: true }]) }),
+    false
+  );
+});
+
+test("policy skips non-person Google calendar entries wherever the provider lists them", async () => {
+  const { meetingAttendeeVerdict } = require("../../src/helpers/meetingAttendeePolicy.js");
+  const policy = { externalAttendees: "blocked", internalDomains: ["corp.test"] };
+  const calendar = "engineering@group.calendar.google.com";
+  const row = (guests) =>
+    event({
+      attendees_count: guests.length,
+      attendees: JSON.stringify(guests.map((email) => ({ email }))),
+      organizer_email: calendar,
+    });
+  assert.equal(meetingAttendeeVerdict(row(["employee@corp.test", calendar]), policy), "allow");
+  assert.equal(meetingAttendeeVerdict(row([calendar, "visitor@outside.test"]), policy), "external");
+  assert.equal(
+    meetingAttendeeVerdict(row(["room@calendar.google.com.outside.test"]), policy),
+    "external"
+  );
 });

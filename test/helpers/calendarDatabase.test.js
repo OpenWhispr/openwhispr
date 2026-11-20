@@ -930,3 +930,28 @@ test("linking a confirmed in-person recording to a cached external invite stops 
   assert.deepEqual(refusals, [[args.sessionId, "POLICY_EXTERNAL_ATTENDEES"]]);
   assert.equal(db.getNote(note.id).content, "Keep these notes");
 });
+
+test("Apple organizer identity is refreshed on upgrade and kept out of contacts", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertAppleCalendar(db, "apple-calendar");
+  const event = appleEvent("apple-organizer");
+  db.upsertCalendarEvents([event]);
+  db.db.exec("ALTER TABLE calendar_events DROP COLUMN organizer_self");
+  db.db.close();
+
+  const migrated = new DatabaseManager();
+  try {
+    assert.equal(migrated.getCalendarEventById(event.id).attendees_omitted, 1);
+    migrated.replaceAppleCalendarEvents([
+      { ...event, organizer_email: "me@personal.test", organizer_self: true },
+    ]);
+    const saved = migrated.getCalendarEventById(event.id);
+    assert.equal(saved.organizer_self, 1);
+    assert.equal(saved.organizer_email, "me@personal.test");
+    assert.equal(saved.attendees_omitted, 0);
+    assert.ok(migrated.getContactLookupSources().excludedEmails.includes("me@personal.test"));
+  } finally {
+    migrated.db.close();
+  }
+});

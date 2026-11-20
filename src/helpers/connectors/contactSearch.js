@@ -137,7 +137,7 @@ function createNoteAttendeesLookup({
         ],
       },
       [...participants, ...speakers],
-      { organizerEmail: calendarEvent?.organizer_email ?? null }
+      { organizerEmail: calendarEvent?.organizer_self ? null : calendarEvent?.organizer_email }
     );
   };
 }

@@ -2,6 +2,7 @@ import type { CalendarAttendee, CalendarEvent } from "../types/calendar";
 import { parseNoteParticipants } from "./noteAttendees";
 import {
   meetingAttendeeVerdict,
+  readCalendarRoster,
   unlistedOrganizerEmail,
 } from "../helpers/meetingAttendeePolicy.js";
 
@@ -25,10 +26,14 @@ export function parseAttendees(event: CalendarEvent): CalendarAttendee[] {
  */
 export function hasOtherAttendees(event: CalendarEvent): boolean {
   if (event.attendees_omitted) return true;
-  const attendees = parseAttendees(event);
+  const attendees = (readCalendarRoster(event.attendees) ?? []).filter(
+    (attendee) => attendee && typeof attendee === "object"
+  );
   return (
     attendees.some((attendee) => !attendee.self) ||
     event.attendees_count > Math.max(1, attendees.length) ||
-    (attendees.length > 0 && Boolean(unlistedOrganizerEmail(event, attendees)))
+    (!event.organizer_self &&
+      attendees.length > 0 &&
+      Boolean(unlistedOrganizerEmail(event, attendees)))
   );
 }

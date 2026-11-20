@@ -15,30 +15,38 @@ export function unlistedOrganizerEmail(event, attendees) {
     : organizer;
 }
 
+// Keep participants without an email for both policy and meeting visibility.
+// A malformed list has a different verdict from a genuinely empty invite.
+export function readCalendarRoster(raw) {
+  if (raw == null) return [];
+  try {
+    const roster = JSON.parse(raw);
+    return Array.isArray(roster) ? roster : null;
+  } catch {
+    return null;
+  }
+}
+
 /** @returns {"allow" | "confirm" | "external" | "unverifiable"} */
 export function meetingAttendeeVerdict(event, meetings) {
   if ((meetings?.externalAttendees ?? "allowed") === "allowed") return "allow";
   if (!event) return "confirm";
 
-  let attendees = [];
-  let incomplete = Boolean(event.attendees_omitted);
-  try {
-    const roster = event.attendees == null ? [] : JSON.parse(event.attendees);
-    if (Array.isArray(roster)) attendees = roster;
-    else incomplete = true;
-  } catch {
-    incomplete = true;
-  }
-  incomplete ||= event.attendees_count > attendees.length;
+  const roster = readCalendarRoster(event.attendees);
+  const attendees = roster ?? [];
+  let incomplete =
+    Boolean(event.attendees_omitted) || roster === null || event.attendees_count > attendees.length;
   const organizer = unlistedOrganizerEmail(event, attendees);
   if (organizer) attendees.push({ email: organizer });
   const domains = (meetings.internalDomains ?? []).map((domain) => domain.trim().toLowerCase());
   for (const attendee of attendees) {
     if (attendee?.resource === true) continue;
-    const domain = EMAIL_DOMAIN.exec(normalizeEmail(attendee?.email))?.[1];
+    const email = normalizeEmail(attendee?.email);
+    const domain = EMAIL_DOMAIN.exec(email)?.[1];
     if (!domain) {
       incomplete = true;
     } else if (
+      !NON_PERSON_CALENDAR_ADDRESS.test(email) &&
       !domains.some((internal) => domain === internal || domain.endsWith(`.${internal}`))
     ) {
       return "external";

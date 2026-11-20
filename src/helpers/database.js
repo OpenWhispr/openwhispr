@@ -1894,6 +1894,14 @@ class DatabaseManager {
             UPDATE microsoft_calendars SET sync_token = NULL, sync_token_expires_at = NULL;
           `);
         }
+        // Apple previously discarded the host address when the user organized
+        // the event. The next EventKit snapshot restores it.
+        if (!columns.some((column) => column.name === "organizer_self")) {
+          this.db.exec(`
+            ALTER TABLE calendar_events ADD COLUMN organizer_self INTEGER NOT NULL DEFAULT 0;
+            UPDATE calendar_events SET attendees_omitted = 1 WHERE provider = 'apple';
+          `);
+        }
       })();
       // The event's page in Google Calendar or Outlook on the web; Apple has
       // none. The user_version 5 full sync fills it for rows in the sync window.
@@ -9068,7 +9076,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const transaction = this.db.transaction((eventList) => {
         const stmt = this.db.prepare(
-          "INSERT OR REPLACE INTO calendar_events (id, calendar_id, provider, summary, start_time, end_time, is_all_day, status, availability_status, self_response_status, hangout_link, conference_data, organizer_email, attendees_count, attendees, web_link, attendees_omitted, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+          "INSERT OR REPLACE INTO calendar_events (id, calendar_id, provider, summary, start_time, end_time, is_all_day, status, availability_status, self_response_status, hangout_link, conference_data, organizer_email, attendees_count, attendees, web_link, attendees_omitted, organizer_self, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
         );
         for (const e of eventList) {
           stmt.run(
@@ -9088,7 +9096,8 @@ class DatabaseManager {
             e.attendees_count || 0,
             e.attendees || null,
             e.web_link || null,
-            e.attendees_omitted ? 1 : 0
+            e.attendees_omitted ? 1 : 0,
+            e.organizer_self ? 1 : 0
           );
         }
       });
@@ -9388,8 +9397,8 @@ class DatabaseManager {
   // colleague's shared Google calendar (whose people still come through
   // contacts). Contacts come only from hand-added rows and connected
   // accounts; rows older builds stored have no source and are left out.
-  // excludedEmails are the user's own addresses and every address a stored
-  // event flags as a room or resource.
+  // excludedEmails includes the user's calendar accounts and organizer identities,
+  // plus every address a stored event flags as a room or resource.
   getContactLookupSources(meetingLimit = 1000) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -9397,7 +9406,7 @@ class DatabaseManager {
         .prepare(
           `SELECT start_time, is_all_day, organizer_email, attendees
              FROM calendar_events
-            WHERE (attendees IS NOT NULL OR organizer_email IS NOT NULL)
+            WHERE (attendees IS NOT NULL OR (organizer_email IS NOT NULL AND organizer_self = 0))
               AND status IN ('confirmed', 'tentative')
               AND self_response_status != 'declined'
               AND ${SELECTED_CALENDAR_EVENT_FILTER}
@@ -9442,19 +9451,22 @@ class DatabaseManager {
         )
         .all()
         .flatMap((row) => JSON.parse(row.own_addresses));
-      const resources = this.db
+      const excludedCalendarAddresses = this.db
         .prepare(
-          `SELECT DISTINCT attendee.value ->> '$.email' AS email
+          `SELECT attendee.value ->> '$.email' AS email
              FROM calendar_events, json_each(calendar_events.attendees) AS attendee
             WHERE json_valid(calendar_events.attendees)
-              AND attendee.value ->> '$.resource' = 1`
+              AND attendee.value ->> '$.resource' = 1
+            UNION
+           SELECT organizer_email AS email FROM calendar_events
+            WHERE organizer_self = 1 AND organizer_email IS NOT NULL`
         )
         .all()
         .map((row) => row.email);
       const excludedEmails = [
         ...accounts.map((row) => row.account_email),
         ...microsoftAliases,
-        ...resources,
+        ...excludedCalendarAddresses,
       ];
       return { meetings, contacts, excludedEmails };
     } catch (error) {

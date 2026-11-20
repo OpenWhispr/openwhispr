@@ -227,6 +227,11 @@ func mapEvent(_ event: EKEvent) -> EventOut? {
         )
     }
 
+    let organizer = event.organizer.flatMap { participant -> EKParticipant? in
+        participant.participantType == .room || participant.participantType == .resource ? nil : participant
+    }
+    let organizerEmail = mailtoEmail(organizer?.url)
+
     return EventOut(
         id: "\(eventIdentifier):\(Int(startDate.timeIntervalSince1970))",
         calendar_id: calendarId,
@@ -236,13 +241,14 @@ func mapEvent(_ event: EKEvent) -> EventOut? {
         is_all_day: event.isAllDay,
         status: eventStatus(event.status),
         availability: eventAvailability(event.availability),
-        organizer_email: mailtoEmail(event.organizer?.url),
-        organizer_self: event.organizer?.isCurrentUser ?? false,
+        organizer_email: organizerEmail,
+        organizer_self: organizer?.isCurrentUser ?? false,
         url: event.url?.absoluteString,
         location: event.location,
         notes_urls: extractURLs(from: event.notes),
         attendees: attendees,
-        attendees_omitted: event.hasAttendees && attendees.isEmpty
+        attendees_omitted: (event.hasAttendees && attendees.isEmpty)
+            || (organizer != nil && organizerEmail == nil)
     )
 }
 

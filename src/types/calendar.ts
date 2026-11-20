@@ -22,6 +22,7 @@ export interface CalendarEvent {
   hangout_link: string | null;
   conference_data: string | null;
   organizer_email: string | null;
+  organizer_self?: number;
   attendees_count: number;
   attendees: string | null;
   attendees_omitted?: number;

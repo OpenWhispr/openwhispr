@@ -354,10 +354,8 @@ class AppleCalendarManager {
         // Generic fallback only for the event's own URL field
         (event.url?.startsWith("https://") ? event.url : null),
       conference_data: null,
-      // Dropped when the user organized it, which contact lookup (this
-      // column's only reader) can't otherwise tell: Apple has no account email
-      // to exclude, and EventKit often leaves the organizer out of attendees.
-      organizer_email: event.organizer_self ? null : event.organizer_email || null,
+      organizer_email: event.organizer_email || null,
+      organizer_self: event.organizer_self === true,
       attendees_count: attendees.length,
       attendees_omitted: event.attendees_omitted === true,
       attendees: attendees.length
