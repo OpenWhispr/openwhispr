@@ -60,7 +60,7 @@ class DictationService : Service() {
   private var learnedTab: LearnedTab? = null
   private var layout: WindowManager.LayoutParams? = null
   private var face: BubbleFace? = null
-  private var cancelButton: View? = null
+  private var cancelButton: GlyphButton? = null
   private var menu: HoldMenuView? = null
   private var column: LinearLayout? = null
   private var builtForRight: Boolean? = null
@@ -307,7 +307,7 @@ class DictationService : Service() {
   private fun createWindow() {
     val view = BubbleRoot(this).apply {
       setPadding(shadowRoom, shadowRoom, shadowRoom, shadowRoom); clipToPadding = false; clipChildren = false
-      startsGesture = { canStartGesture() }
+      startsGesture = { event -> canStartGesture() || startsOnCancel(event) }
       gesture = ::onGesture
       outside = { closeMenu() }
     }
@@ -368,6 +368,8 @@ class DictationService : Service() {
     bubble.layoutParams = bubble.layoutParams.apply { width = shown; height = shown }
     bubble.dot = if (appearance.shrinkToDot) shrink else 0f
     cancel.visibility = if (state == BubbleState.LISTENING) View.VISIBLE else View.GONE
+    cancel.ringDiameter = px(44f).toFloat()
+    if (state != BubbleState.LISTENING) { cancelTouch = false; cancel.clearSelection() }
     bubble.contentDescription = getString(if (state == BubbleState.LISTENING) R.string.ow_bubble_stop else R.string.ow_bubble_talk)
     applyAlpha()
     place()
@@ -556,11 +558,40 @@ class DictationService : Service() {
   private fun canStartGesture() =
     !stopping && (state == BubbleState.READY || state == BubbleState.RETRY || state == BubbleState.RECOVER)
 
+  /** A touch that started on the listening ✕ (tap mode): it grows under the finger and cancels on a lift there. */
+  private var cancelTouch = false
+  private fun startsOnCancel(event: MotionEvent) =
+    state == BubbleState.LISTENING && !stopping && event.actionMasked == MotionEvent.ACTION_DOWN && overCancel(event)
+  /** Whether the finger is on the ✕'s 48 dp target, which is wider than the 28 dp ✕ it draws. */
+  private fun overCancel(event: MotionEvent): Boolean {
+    val cancel = cancelButton ?: return false
+    if (state != BubbleState.LISTENING || !cancel.isShown) return false
+    val at = IntArray(2); cancel.getLocationOnScreen(at)
+    // getLocationOnScreen maps through the pop's scale, which pivots on the centre.
+    val cx = at[0] + cancel.width * cancel.scaleX / 2f; val cy = at[1] + cancel.height * cancel.scaleY / 2f
+    return BubblePolicy.overCancel(event.rawX, event.rawY, cx, cy, dp(24f), onBubble(event))
+  }
+  private fun onCancelGesture(event: MotionEvent) {
+    val cancel = cancelButton
+    when (event.actionMasked) {
+      MotionEvent.ACTION_DOWN -> cancel?.underFinger = true
+      MotionEvent.ACTION_MOVE -> cancel?.underFinger = overCancel(event)
+      MotionEvent.ACTION_UP -> {
+        cancelTouch = false
+        // Lifting on the ✕ cancels, as its tap always did; sliding off first keeps recording.
+        if (overCancel(event)) { cancel?.performClick() } else cancel?.underFinger = false
+      }
+      MotionEvent.ACTION_CANCEL -> { cancelTouch = false; cancel?.underFinger = false }
+    }
+  }
+
   private fun onGesture(event: MotionEvent) {
     val params = layout ?: return
     val view = root ?: return
     val bubble = face ?: return
     val open = menu
+    if (event.actionMasked == MotionEvent.ACTION_DOWN) cancelTouch = startsOnCancel(event)
+    if (cancelTouch) { onCancelGesture(event); return }
     when (event.actionMasked) {
       MotionEvent.ACTION_DOWN -> {
         downX = event.rawX; downY = event.rawY; startX = params.x; startY = params.y
@@ -580,8 +611,9 @@ class DictationService : Service() {
       }
       MotionEvent.ACTION_MOVE -> {
         if (open != null) { open.highlighted = open.rowAtScreen(event.rawX, event.rawY); return }
-        // A finger that drifts while talking keeps talking; the bubble stays where it is.
-        if (talking) return
+        // A finger that drifts while talking keeps talking and the bubble stays where it is; on the ✕
+        // it grows, ready to cancel.
+        if (talking) { cancelButton?.underFinger = overCancel(event); return }
         if (!moved && abs(event.rawX - downX) + abs(event.rawY - downY) > dp(12f)) {
           moved = true; handler.removeCallbacks(holdForMenu); handler.removeCallbacks(holdToTalk)
           bubble.holdRing(false); release(bubble); startDrag()
@@ -597,7 +629,8 @@ class DictationService : Service() {
       }
       MotionEvent.ACTION_UP -> {
         handler.removeCallbacks(holdForMenu); handler.removeCallbacks(holdToTalk); touched = false
-        if (talking) { talking = false; finish(false); return }
+        // Released on the ✕: the take is thrown away. Anywhere else pastes.
+        if (talking) { talking = false; finish(overCancel(event)); return }
         if (open != null) {
           val row = open.rowAtScreen(event.rawX, event.rawY)
           when {

@@ -1,5 +1,6 @@
 package com.openwhispr.dictation
 
+import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.sqrt
 
@@ -106,6 +107,14 @@ object BubblePolicy {
 
   /** A released bubble settles on the edge its centre is nearest to. */
   fun dockRight(centerX: Float, screenWidth: Int) = centerX >= screenWidth / 2f
+
+  /**
+   * Whether a finger at ([x], [y]) is on the listening ✕: a square target [half] from the ✕'s centre each
+   * way (48 dp across, though the ✕ draws 28 dp). The bubble wins where the two overlap, so a small
+   * bubble's tap still stops rather than cancels.
+   */
+  fun overCancel(x: Float, y: Float, cancelX: Float, cancelY: Float, half: Float, onBubble: Boolean) =
+    !onBubble && abs(x - cancelX) <= half && abs(y - cancelY) <= half
 
   /** Whether the bubble's centre is close enough to the hide target to hide on release. */
   fun overTarget(bubbleX: Float, bubbleY: Float, targetX: Float, targetY: Float, radius: Float): Boolean {

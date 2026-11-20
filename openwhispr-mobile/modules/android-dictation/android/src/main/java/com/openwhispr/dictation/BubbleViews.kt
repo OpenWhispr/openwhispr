@@ -1,5 +1,6 @@
 package com.openwhispr.dictation
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.*
 import android.view.MotionEvent
@@ -36,14 +37,14 @@ object BubbleColors {
  * while the hold menu opens above it, so a finger can slide straight onto a row.
  */
 class BubbleRoot(context: Context) : FrameLayout(context) {
-  var startsGesture: () -> Boolean = { false }
+  var startsGesture: (MotionEvent) -> Boolean = { false }
   var gesture: ((MotionEvent) -> Unit)? = null
   /** A touch outside the window (FLAG_WATCH_OUTSIDE_TOUCH); it still reaches the app below. */
   var outside: (() -> Unit)? = null
   private var tracking = false
   override fun dispatchTouchEvent(event: MotionEvent): Boolean {
     if (event.actionMasked == MotionEvent.ACTION_OUTSIDE) { outside?.invoke(); return false }
-    if (event.actionMasked == MotionEvent.ACTION_DOWN) tracking = startsGesture()
+    if (event.actionMasked == MotionEvent.ACTION_DOWN) tracking = startsGesture(event)
     if (!tracking) return super.dispatchTouchEvent(event)
     gesture?.invoke(event)
     if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) tracking = false
@@ -59,11 +60,49 @@ class GlyphButton(context: Context, private val glyph: Glyph, private val fill: 
     color = tint; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
   }
   private val solid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint }
+  private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(18, 24, 23, 20) }
   init { isClickable = true; isFocusable = true }
   override fun getAccessibilityClassName(): CharSequence = android.widget.Button::class.java.name
+
+  /** The soft grey ring drawn behind a selected button (44 dp on the listening ✕); 0 draws none. */
+  var ringDiameter = 0f
+  /** 0 at rest, 1 selected: the button grows to 1.15 and the ring fades in. Drawn, not a view scale, so it adds to the pop. */
+  private var selection = 0f
+  private var selecting: ValueAnimator? = null
+  private var under = false
+  /** Grows under a finger: 140 ms ease-out in with a light tick, 120 ms back. With animations off, only the ring shows. */
+  var underFinger: Boolean
+    get() = under
+    set(value) {
+      if (under == value) return
+      under = value
+      selecting?.cancel()
+      if (value) performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+      selecting = ValueAnimator.ofFloat(selection, if (value) 1f else 0f).apply {
+        duration = if (value) 140 else 120
+        interpolator = if (value) BubbleMotion.easeOut else BubbleMotion.standard
+        addUpdateListener { selection = it.animatedValue as Float; invalidate() }
+        start()
+      }
+    }
+  /** Back to rest at once, for a ✕ that is going away. */
+  fun clearSelection() { selecting?.cancel(); selecting = null; under = false; selection = 0f; invalidate() }
+
   override fun onDraw(canvas: Canvas) {
-    val size = minOf(width, height).toFloat()
     val cx = width / 2f; val cy = height / 2f
+    if (selection > 0f && ringDiameter > 0f) {
+      // Drawn past the button's own bounds: its row doesn't clip children.
+      ringPaint.alpha = (18 * selection).toInt()
+      canvas.drawCircle(cx, cy, ringDiameter / 2, ringPaint)
+    }
+    val grow = if (BubbleMotion.reduced(context)) 1f else 1f + 0.15f * selection
+    canvas.save()
+    canvas.scale(grow, grow, cx, cy)
+    drawButton(canvas, cx, cy)
+    canvas.restore()
+  }
+  private fun drawButton(canvas: Canvas, cx: Float, cy: Float) {
+    val size = minOf(width, height).toFloat()
     canvas.drawCircle(cx, cy, size / 2, background)
     val unit = size / 40f
     stroke.strokeWidth = 2f * unit

@@ -47,6 +47,15 @@ class BubblePolicyTest {
     assertFalse(BubblePolicy.overTarget(540f, 1500f, 540f, 1950f, 120f))
   }
 
+  @Test fun cancelTargetIsWiderThanTheCrossAndYieldsToTheBubble() {
+    // ✕ centred at (400, 1000), 48 dp target at 3x density: 72 px each way.
+    assertTrue(BubblePolicy.overCancel(400f, 1000f, 400f, 1000f, 72f, onBubble = false))
+    assertTrue(BubblePolicy.overCancel(330f, 1070f, 400f, 1000f, 72f, onBubble = false))
+    assertFalse(BubblePolicy.overCancel(300f, 1000f, 400f, 1000f, 72f, onBubble = false))
+    assertFalse(BubblePolicy.overCancel(400f, 1100f, 400f, 1000f, 72f, onBubble = false))
+    assertFalse(BubblePolicy.overCancel(460f, 1000f, 400f, 1000f, 72f, onBubble = true))
+  }
+
   @Test fun bubbleSitsAboveTheKeyboardAndNeverOverIt() {
     // Default: just above the keyboard.
     assertEquals(1200 - 40 - 150, BubblePolicy.bubbleTop(null, 1200, 2400, 150, 40, 100))

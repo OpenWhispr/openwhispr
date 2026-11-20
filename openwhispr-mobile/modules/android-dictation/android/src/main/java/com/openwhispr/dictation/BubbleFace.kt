@@ -21,6 +21,10 @@ object BubbleMotion {
   val emphasizedAccelerate = PathInterpolator(0.3f, 0f, 0.8f, 0.15f)
   val easeOut = PathInterpolator(0f, 0f, 0.2f, 1f)
   val easeIn = PathInterpolator(0.4f, 0f, 1f, 1f)
+  /** "Remove animations" (animator duration scale 0): motion that only decorates is left out. */
+  fun reduced(context: android.content.Context): Boolean =
+    if (android.os.Build.VERSION.SDK_INT >= 26) !android.animation.ValueAnimator.areAnimatorsEnabled()
+    else android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
 }
 
 /** The filled glyphs the menu and the mode badges use, from the V3 board (14 dp sparkle, 28 dp tiles). */
