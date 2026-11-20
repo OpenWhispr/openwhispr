@@ -412,6 +412,9 @@ function createWorkspacePolicyManager({
     }
     const key = identityKey(identity);
     const current = snapshots.get(key);
+    // A refusal calls the old verdict into question even if this attempt is
+    // throttled or can only return an offline fallback. Keep the verdict for offline use.
+    if (request.refresh && current?.data.managed === false) successfulRefreshes.delete(key);
     const lastSuccessfulRefresh = successfulRefreshes.get(key);
     const successfulRefreshAge =
       lastSuccessfulRefresh === undefined ? null : now() - lastSuccessfulRefresh;

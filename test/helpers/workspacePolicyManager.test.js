@@ -402,6 +402,26 @@ test("a server refusal or a new sign-in reads past a fresh unmanaged verdict", a
   assert.equal(requestCount, 3);
 });
 
+test("a failed forced read preserves the offline verdict and retries before its unmanaged TTL", async (t) => {
+  let now = 0;
+  const replies = [
+    response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } }),
+    response(503, {}),
+    response(200, validPolicy()),
+  ];
+  const context = setup(async () => replies.shift(), {
+    now: () => now,
+    successfulRefreshMs: 300_000,
+  });
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+  assert.equal((await context.manager.getPolicy(request)).managed, false);
+  now = 60_000;
+  assert.equal((await context.manager.getPolicy({ ...request, refresh: true })).status, "cached");
+  now = 300_000;
+  assert.equal((await context.manager.getPolicy(request)).managed, true);
+});
+
 test("cached errors do not extend successful policy freshness", async (t) => {
   let currentTime = 0;
   let requestCount = 0;
