@@ -5062,6 +5062,7 @@
     "waitingForAnswer": "回答を待っています"
   },
   "integrations": {
+    "apiAccessDisabled": "組織により API と MCP へのアクセスが無効になっています。",
     "title": "連携",
     "googleCalendar": {
       "title": "Google カレンダー",

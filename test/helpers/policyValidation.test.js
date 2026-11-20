@@ -68,6 +68,14 @@ test("ignores stale additive analytics metadata", () => {
   assert.equal(isValidPolicyShape(policy), true);
 });
 
+test("personal API access accepts an optional boolean", () => {
+  for (const value of [undefined, true, false, null, 0, "false"]) {
+    const policy = validPolicy();
+    policy.features.apiAccessEnabled = value;
+    assert.equal(isValidPolicyShape(policy), value === undefined || typeof value === "boolean");
+  }
+});
+
 test("accepts screenContextEnabled as an optional boolean", () => {
   for (const value of [true, false]) {
     const policy = validPolicy();

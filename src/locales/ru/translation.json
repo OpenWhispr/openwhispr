@@ -5230,6 +5230,7 @@
     "waitingForAnswer": "Ожидание ответа"
   },
   "integrations": {
+    "apiAccessDisabled": "Ваша организация отключила доступ к API и MCP.",
     "title": "Интеграции",
     "googleCalendar": {
       "title": "Google Calendar",

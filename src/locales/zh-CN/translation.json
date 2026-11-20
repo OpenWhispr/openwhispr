@@ -5062,6 +5062,7 @@
     "waitingForAnswer": "等待回答"
   },
   "integrations": {
+    "apiAccessDisabled": "您的组织已关闭 API 和 MCP 访问权限。",
     "title": "集成",
     "googleCalendar": {
       "title": "Google 日历",

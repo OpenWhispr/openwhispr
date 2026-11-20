@@ -77,9 +77,9 @@ async function renderSection(t, { keyCount = 0 } = {}) {
   root = createRoot(container);
   const availability = [];
   const onCanCreateChange = (canCreate) => availability.push(canCreate);
-  const render = (createRequest) =>
+  const render = (createRequest, props = {}) =>
     React.act(async () =>
-      root.render(createElement(ApiKeysSection, { createRequest, onCanCreateChange }))
+      root.render(createElement(ApiKeysSection, { createRequest, onCanCreateChange, ...props }))
     );
   return { container, render, availability, loadKeys: () => React.act(async () => resolveList()) };
 }
@@ -117,3 +117,23 @@ for (const keyCount of [0, 1, 5]) {
     assert.equal(availability.at(-1), keyCount < 5);
   });
 }
+
+test("while creation is refused the keys stay listed and no request opens the dialog", async (t) => {
+  const { container, render, loadKeys, availability } = await renderSection(t, { keyCount: 1 });
+  await render(0);
+  await loadKeys();
+  await render(1);
+  assert.match(container.textContent, /CREATE DIALOG/);
+
+  await render(2, { allowCreate: false });
+  assert.doesNotMatch(container.textContent, /CREATE DIALOG/);
+  assert.match(container.textContent, /Key 0/);
+  assert.equal(availability.at(-1), false);
+
+  // Allowing it again opens nothing until someone asks.
+  await render(2);
+  assert.doesNotMatch(container.textContent, /CREATE DIALOG/);
+  assert.equal(availability.at(-1), true);
+  await render(3);
+  assert.match(container.textContent, /CREATE DIALOG/);
+});
