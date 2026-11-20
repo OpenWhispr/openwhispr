@@ -112,6 +112,20 @@ test("a callback with no sign-in in progress is refused", async () => {
   assert.equal(requests.length, 0);
 });
 
+test("a duplicate callback after a completed sign-in leaves no error", async () => {
+  const { session, opened, requests } = makeSession({
+    exchange: () => ({ body: { licenseKey: VALID_KEY, email: "a@b.test" } }),
+  });
+  await session.startSignIn();
+  const callback = callbackFor(opened[0], { act: "act_1" });
+  assert.equal((await session.handleCallback(callback)).ok, true);
+  const again = await session.handleCallback(callback);
+  assert.deepEqual(again, { ok: false, error: "no_pending_sign_in" });
+  assert.equal(requests.length, 1);
+  assert.equal(session.getState().signedIn, true);
+  assert.equal(session.getState().error, null);
+});
+
 test("a stale sign-in (over 10 minutes) is refused", async () => {
   let t = 1_700_000_000_000;
   const { session, opened } = makeSession({ exchange: () => ({ body: {} }), now: () => t });
