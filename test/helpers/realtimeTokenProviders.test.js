@@ -41,7 +41,11 @@ test("openai-compatible realtime returns its optional saved key without a networ
     proxyFetch: async () => assert.fail("no token request"),
     postServerToken: async () => assert.fail("no server token"),
   };
-  const options = { mode: "self-hosted", url: "ws://192.168.1.20:9000/v1/realtime" };
+  const options = {
+    mode: "self-hosted",
+    purpose: "meeting",
+    url: "ws://192.168.1.20:9000/v1/realtime",
+  };
 
   assert.equal(
     await fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(offline), options),
@@ -74,7 +78,10 @@ test("openai-compatible realtime never releases its key without the server URL",
   const { fetchRealtimeTokenForProvider } = await load();
   // Dictation sends no URL and would dial api.openai.com with whatever key it got.
   await assert.rejects(
-    fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), { mode: "byok" }),
+    fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), {
+      mode: "byok",
+      purpose: "meeting",
+    }),
     { message: "selfHostedRealtimeUrlMissing" }
   );
   // Nor for a URL the client would refuse to dial: the key is not handed out
@@ -87,6 +94,7 @@ test("openai-compatible realtime never releases its key without the server URL",
     await assert.rejects(
       fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), {
         mode: "self-hosted",
+        purpose: "meeting",
         url,
       }),
       { message: "selfHostedRealtimeUrlInvalid" },
@@ -97,10 +105,27 @@ test("openai-compatible realtime never releases its key without the server URL",
     await assert.rejects(
       fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), {
         mode: "self-hosted",
+        purpose: "meeting",
         url,
       }),
       { message: "selfHostedRealtimeUrlMissing" },
       JSON.stringify(url)
+    );
+  }
+});
+
+test("openai-compatible realtime releases its key only for Note Recording", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  const url = "ws://192.168.1.20:9000/v1/realtime";
+  for (const purpose of [undefined, "dictation", "upload"]) {
+    await assert.rejects(
+      fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), {
+        mode: "self-hosted",
+        purpose,
+        url,
+      }),
+      { message: "Self-hosted realtime credentials are only available for meeting transcription." },
+      String(purpose)
     );
   }
 });
