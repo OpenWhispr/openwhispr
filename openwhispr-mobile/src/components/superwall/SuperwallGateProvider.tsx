@@ -667,9 +667,22 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
         return false;
       }
 
-      // Any paywall can sell, and an App Store purchase made before
-      // identify(billingUserId) reaches the server with no app user id, so it
-      // could never be attributed. Hold every presentation for the identity.
+      // An App Store purchase made before identify(billingUserId) reaches the
+      // server with no app user id, so it could never be attributed. A
+      // non-transactional placement guards recording starts, where waiting
+      // would cost the user's first words: run the feature at once and never
+      // register it, so nothing can present or sell unattributed.
+      if (user && !isSuperwallIdentityReady() && !isTransactionalSuperwallPlacement(placement)) {
+        debugLog('identity not ready: running non-transactional feature without presenting', {
+          placement,
+        });
+        activePlacementRef.current = null;
+        feature?.();
+        runAccessGrantedWithoutPurchaseCallback(onAccessGrantedWithoutPurchase, placement);
+        return true;
+      }
+
+      // Transactional placements wait for the identity, up to the grace period.
       // Only a pending identity yields: awaiting an already-ready one would
       // defer every ordinary registration by a microtask.
       if (user && !isSuperwallIdentityReady()) {

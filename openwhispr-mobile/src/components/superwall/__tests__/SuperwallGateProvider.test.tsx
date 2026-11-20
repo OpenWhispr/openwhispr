@@ -284,29 +284,39 @@ describe('SuperwallGateProvider', () => {
     await waitFor(() => expect(mockRegisterPlacement).toHaveBeenCalledTimes(1));
   });
 
-  it('fails open for a non-transactional placement when the identity never arrives', async () => {
-    jest.useFakeTimers();
+  it('a non-transactional placement runs its feature at once without presenting while the identity is not ready', async () => {
     useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
     const feature = jest.fn();
+    const onAccessGrantedWithoutPurchase = jest.fn();
     const screen = render(
       <EnabledSuperwallGateProvider>
         <GateConsumer
           placement={SUPERWALL_PLACEMENTS.noteChatStart}
           feature={feature}
+          onAccessGrantedWithoutPurchase={onAccessGrantedWithoutPurchase}
           requiresAccount={false}
         />
       </EnabledSuperwallGateProvider>,
     );
 
     fireEvent.press(screen.getByText('register'));
-    await act(async () => {
-      jest.advanceTimersByTime(SUPERWALL_IDENTITY_WAIT_MS);
-    });
 
-    expect(screen.getByTestId('result').props.children).toBe('true');
     expect(feature).toHaveBeenCalledTimes(1);
+    expect(onAccessGrantedWithoutPurchase).toHaveBeenCalledTimes(1);
     expect(mockRegisterPlacement).not.toHaveBeenCalled();
-    jest.useRealTimers();
+    await waitFor(() => expect(screen.getByTestId('result').props.children).toBe('true'));
+  });
+
+  it('registers a non-transactional placement as before once the identity is ready', async () => {
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer placement={SUPERWALL_PLACEMENTS.noteChatStart} requiresAccount={false} />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+
+    await waitFor(() => expect(mockRegisterPlacement).toHaveBeenCalledTimes(1));
   });
 
   it('retires an aborted onboarding offer and dismisses late presentation without affecting later billing', async () => {
