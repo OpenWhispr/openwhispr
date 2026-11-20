@@ -218,7 +218,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
             <Button
               onClick={() =>
                 void openBilling("checkout", () =>
-                  WorkspacesService.billingCheckout(workspace.id, "monthly")
+                  WorkspacesService.billingCheckout(workspace.id, "monthly", { tier: "business" })
                 )
               }
               disabled={busy !== null}

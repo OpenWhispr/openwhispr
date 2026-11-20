@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -7,8 +7,10 @@ import WorkspaceBillingCard from "./WorkspaceBillingCard";
 
 export default function WorkspaceBillingOverview({
   onRefreshEntitlement,
+  hiddenWorkspaceId,
 }: {
   onRefreshEntitlement?: () => Promise<void>;
+  hiddenWorkspaceId?: string;
 }) {
   const { t } = useTranslation();
   const { isSignedIn, isOfflineAccount } = useAuth();
@@ -26,13 +28,14 @@ export default function WorkspaceBillingOverview({
   }, [isSignedIn, isOfflineAccount, loaded, refresh]);
 
   const orderedWorkspaces = useMemo(() => {
-    if (!activeWorkspaceId) return workspaces;
-    return [...workspaces].sort((a, b) => {
+    const billable = workspaces.filter((workspace) => workspace.id !== hiddenWorkspaceId);
+    if (!activeWorkspaceId) return billable;
+    return billable.sort((a, b) => {
       if (a.id === activeWorkspaceId) return -1;
       if (b.id === activeWorkspaceId) return 1;
       return 0;
     });
-  }, [activeWorkspaceId, workspaces]);
+  }, [activeWorkspaceId, workspaces, hiddenWorkspaceId]);
 
   if (!loaded && workspaces.length === 0) {
     return (

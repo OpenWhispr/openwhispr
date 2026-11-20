@@ -82,6 +82,29 @@ test.before(async (t) => {
       "/lib/authRequestContext": `
         export const hasValidatedAuthContext = () => globalThis.__authValidated !== false;
       `,
+      "/services/WorkspacesService": `
+        export const WorkspacesService = {
+          getPeopleCounts: async () => {
+            if (globalThis.__statsFailed) throw new Error("Stats unavailable");
+            return globalThis.__peopleCounts ?? { member_count: 1, pending_invitations: 0 };
+          },
+          billingCheckout: async (...args) => {
+            if (globalThis.__checkoutWait) await globalThis.__checkoutWait;
+            globalThis.__checkouts.push(args);
+            if (globalThis.__checkoutError) throw new Error(globalThis.__checkoutError);
+            return "https://checkout.stripe.test/session";
+          },
+        };
+      `,
+      "/hooks/useBillingRefreshOnReturn": `
+        export const useBillingRefreshOnReturn = (refresh) => () => {
+          globalThis.__returnToApp = refresh;
+          globalThis.__armed += 1;
+        };
+      `,
+      "/ui/useToast": `
+        export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });
+      `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = {
           getState: () => ({
@@ -120,8 +143,18 @@ async function mount(t, workspace) {
   const closes = [];
   const available = [];
   let setWorkspace = () => {};
+  const external = [];
   globalThis.__refreshes = [];
-  happyWindow.electronAPI = { openSettingsSection: (section) => opened.push(section) };
+  globalThis.__checkouts = [];
+  globalThis.__toasts = [];
+  globalThis.__armed = 0;
+  happyWindow.electronAPI = {
+    openSettingsSection: (section) => opened.push(section),
+    openExternal: async (url) => {
+      external.push(url);
+      return { success: true };
+    },
+  };
   globalThis.window.electronAPI = happyWindow.electronAPI;
   const container = happyWindow.document.createElement("div");
   happyWindow.document.body.appendChild(container);
@@ -131,6 +164,14 @@ async function mount(t, workspace) {
     container.remove();
     delete happyWindow.electronAPI;
     delete globalThis.__refreshes;
+    delete globalThis.__checkouts;
+    delete globalThis.__toasts;
+    delete globalThis.__armed;
+    delete globalThis.__checkoutError;
+    delete globalThis.__checkoutWait;
+    delete globalThis.__returnToApp;
+    delete globalThis.__peopleCounts;
+    delete globalThis.__statsFailed;
   });
   function Host() {
     const [open, setOpen] = React.useState(true);
@@ -149,6 +190,10 @@ async function mount(t, workspace) {
   await React.act(async () => root.render(h(Host)));
   return {
     opened,
+    external,
+    checkouts: () => globalThis.__checkouts,
+    toasts: () => globalThis.__toasts,
+    armed: () => globalThis.__armed,
     closes,
     available,
     refreshes: () => globalThis.__refreshes,
@@ -257,4 +302,131 @@ test("someone without billing on a lapsed plan is told who to ask", async (t) =>
     /Ask Olivia Owner to update billing to create teams\./
   );
   assert.deepEqual(buttons(), ["Close"]);
+});
+
+// Plans & Billing hides an unpaid default workspace nobody else is in, and the personal Business
+// plan there doesn't unlock teams, so its owner checks out from the paywall.
+const soloDefault = (overrides = {}) => ({
+  ...workspaceWith({ manage_billing: true }),
+  plan: "free",
+  status: "active",
+  is_account_default: true,
+  is_default: true,
+  seats_used: 1,
+  has_subscription: false,
+  stripe_subscription_id: null,
+  ...overrides,
+});
+
+test("the owner of a solo default workspace upgrades it to Business from the paywall", async (t) => {
+  const { opened, external, checkouts, armed, closes } = await mount(t, soloDefault());
+  assert.deepEqual(buttons(), ["Upgrade to Business", "Not now"]);
+
+  await click("Upgrade to Business");
+  assert.deepEqual(checkouts(), [["w1", "monthly", { tier: "business" }]]);
+  assert.deepEqual(external, ["https://checkout.stripe.test/session"]);
+  assert.equal(armed(), 1);
+  assert.deepEqual(closes, [false]);
+  assert.deepEqual(opened, []);
+});
+
+test("a checkout that can't start stays open and says why", async (t) => {
+  globalThis.__checkoutError = "Failed to create checkout session";
+  const { external, toasts, closes } = await mount(t, soloDefault());
+
+  await click("Upgrade to Business");
+  assert.deepEqual(external, []);
+  assert.deepEqual(closes, []);
+  assert.equal(toasts().length, 1);
+  assert.equal(toasts()[0].description, "Failed to create checkout session");
+  assert.equal(toasts()[0].variant, "destructive");
+});
+
+test("a default workspace with teammates still upgrades in Plans & Billing", async (t) => {
+  const { opened, checkouts } = await mount(t, soloDefault({ seats_used: 3 }));
+  await click("Upgrade to Business");
+  assert.deepEqual(opened, ["plansBilling"]);
+  assert.deepEqual(checkouts(), []);
+});
+
+test("returning from Business checkout refreshes workspace and account usage", async (t) => {
+  const view = await mount(t, soloDefault());
+  let usageChanges = 0;
+  const changed = () => usageChanges++;
+  happyWindow.addEventListener("usage-changed", changed);
+  t.after(() => happyWindow.removeEventListener("usage-changed", changed));
+  await click("Upgrade to Business");
+  for (let count = 1; count <= 4; count++) {
+    await React.act(async () => globalThis.__returnToApp());
+    assert.equal(usageChanges, count);
+    assert.equal(view.refreshes().length, 1 + count);
+  }
+});
+
+test("a browser launch failure leaves checkout open for a retry", async (t) => {
+  const view = await mount(t, soloDefault());
+  happyWindow.electronAPI.openExternal = async () => ({ success: false, error: "No browser" });
+  await click("Upgrade to Business");
+  assert.deepEqual(view.closes, []);
+  assert.equal(view.armed(), 0);
+  assert.equal(view.toasts()[0].description, "No browser");
+  happyWindow.electronAPI.openExternal = async () => ({ success: true });
+  await click("Upgrade to Business");
+  assert.deepEqual(view.closes, [false]);
+});
+
+test("dismissing a pending checkout discards its eventual browser launch", async (t) => {
+  const view = await mount(t, soloDefault());
+  const pending = Promise.withResolvers();
+  globalThis.__checkoutWait = pending.promise;
+  await click("Upgrade to Business");
+  await click("Not now");
+  await React.act(async () => pending.resolve());
+  assert.deepEqual(view.external, []);
+  assert.deepEqual(view.closes, [false]);
+  assert.equal(view.armed(), 0);
+});
+
+for (const counts of [
+  { member_count: 1, pending_invitations: 1 },
+  { member_count: 2, pending_invitations: 0 },
+]) {
+  test(`seat-free participants retain billing navigation ${JSON.stringify(counts)}`, async (t) => {
+    globalThis.__peopleCounts = counts;
+    const view = await mount(t, soloDefault());
+    await click("Upgrade to Business");
+    assert.deepEqual(view.opened, ["plansBilling"]);
+    assert.deepEqual(view.checkouts(), []);
+  });
+}
+
+test("a refreshed copy of the same workspace keeps an in-flight checkout", async (t) => {
+  const workspace = soloDefault();
+  const view = await mount(t, workspace);
+  const pending = Promise.withResolvers();
+  globalThis.__checkoutWait = pending.promise;
+  await click("Upgrade to Business");
+  await view.setWorkspace({ ...workspace });
+  await React.act(async () => pending.resolve());
+  assert.equal(view.external.length, 1);
+  assert.deepEqual(view.closes, [false]);
+});
+
+test("a failed people count keeps the normal workspace billing route", async (t) => {
+  globalThis.__statsFailed = true;
+  const view = await mount(t, soloDefault());
+  await click("Upgrade to Business");
+  assert.deepEqual(view.opened, ["plansBilling"]);
+  assert.deepEqual(view.checkouts(), []);
+});
+
+test("switching workspaces drops the previous workspace's checkout", async (t) => {
+  const view = await mount(t, soloDefault());
+  const pending = Promise.withResolvers();
+  globalThis.__checkoutWait = pending.promise;
+  await click("Upgrade to Business");
+  await view.setWorkspace(soloDefault({ id: "other" }));
+  await React.act(async () => pending.resolve());
+  assert.deepEqual(view.external, []);
+  assert.deepEqual(view.closes, []);
 });

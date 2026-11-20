@@ -11,6 +11,7 @@ const {
   hasSharedDictionaryPlan,
   hasSubscription,
   isEnterpriseConsoleAvailable,
+  mayBeSoloBillingWorkspace,
 } = require("../../src/lib/workspaceBilling.ts");
 
 const workspace = (overrides = {}) => ({
@@ -328,4 +329,26 @@ test("businessDowngradeAction: skips ineligible active workspaces and respects b
     kind: "stripePortal",
     workspaceId: "delegated",
   });
+});
+
+test("only an owned, free default with at most one known billable seat needs a people count", () => {
+  const solo = workspace({ is_default: true, seats_used: 1, has_subscription: false });
+  assert.equal(mayBeSoloBillingWorkspace(solo), true);
+  assert.equal(mayBeSoloBillingWorkspace({ ...solo, seats_used: 0 }), true);
+  for (const overrides of [
+    { seats_used: 2 },
+    { seats_used: undefined },
+    { is_default: false },
+    { role: "member" },
+    { has_subscription: true },
+    { has_subscription: undefined, stripe_subscription_id: "sub_1" },
+    { plan: "business" },
+    { plan: "business", status: "canceled" },
+  ]) {
+    assert.equal(
+      mayBeSoloBillingWorkspace({ ...solo, ...overrides }),
+      false,
+      JSON.stringify(overrides)
+    );
+  }
 });

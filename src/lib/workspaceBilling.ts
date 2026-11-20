@@ -29,6 +29,18 @@ export function hasActiveWorkspaceSubscription(
   return PAID_PLANS.has(workspace.plan) && ENTITLED_STATUSES.has(workspace.status);
 }
 
+/** Only the owner's free default can be solo. A billable seat count alone cannot prove it. */
+export function mayBeSoloBillingWorkspace(workspace: Workspace): boolean {
+  return (
+    workspace.is_default === true &&
+    workspaceCan(workspace, "manage_billing") &&
+    workspace.plan === "free" &&
+    !hasSubscription(workspace) &&
+    typeof workspace.seats_used === "number" &&
+    workspace.seats_used <= 1
+  );
+}
+
 /**
  * The paid plans the user's workspaces are currently on, so the Plans grid can
  * mark the tiers a workspace provides, not only the personal plan.
