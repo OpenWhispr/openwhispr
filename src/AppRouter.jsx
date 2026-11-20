@@ -10,7 +10,10 @@ import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components
 import { useAuth } from "./hooks/useAuth";
 import { useTitaniumAuth } from "./hooks/useTitaniumAuth";
 import { CLOUD_ENABLED, TITANIUM_ENABLED } from "./config/forkRuntime";
-import { resolveNeedsReauth } from "./helpers/titanium/titaniumOnboardingPolicy.js";
+import {
+  resolveAccountSignedIn,
+  resolveNeedsReauth,
+} from "./helpers/titanium/titaniumOnboardingPolicy.js";
 import { useControlPanelWindowDrag } from "./hooks/useControlPanelWindowDrag";
 import { useTheme } from "./hooks/useTheme";
 import { mirrorActiveAccountScope } from "./lib/accountScopeMirror";
@@ -48,6 +51,12 @@ export default function AppRouter() {
 function MainApp() {
   const { isSignedIn, isGracePeriodOnly, isLoaded: authLoaded } = useAuth();
   const titanium = useTitaniumAuth();
+  const accountSignedIn = resolveAccountSignedIn({
+    titaniumEnabled: TITANIUM_ENABLED,
+    cloudEnabled: CLOUD_ENABLED,
+    titaniumSignedIn: titanium.signedIn,
+    upstreamSignedIn: isSignedIn,
+  });
   const policyStatus = usePolicyStore((state) => state.status);
   const policyResolved =
     !isSignedIn ||
@@ -158,10 +167,10 @@ function MainApp() {
     const authSkipped =
       localStorage.getItem("authenticationSkipped") === "true" ||
       localStorage.getItem("skipAuth") === "true";
-    if (completed && !isOnboardingInProgress() && (isSignedIn || authSkipped)) {
+    if (completed && !isOnboardingInProgress() && (accountSignedIn || authSkipped)) {
       void window.electronAPI?.setOnboardingWindowMode?.("restore");
     }
-  }, [authLoaded, isControlPanel, isSignedIn]);
+  }, [authLoaded, isControlPanel, accountSignedIn]);
 
   const settledControlPanelWindowMode = resolveSettledControlPanelWindowMode({
     isControlPanel,
@@ -196,7 +205,7 @@ function MainApp() {
     void resolveMacAccessibilityReadiness({
       normalAppVisible,
       isControlPanel,
-      isSignedIn,
+      isSignedIn: accountSignedIn,
       authSkipped,
       // The hidden dictation window cannot resolve Better Auth itself. Its
       // persisted main-process scope proves this is a validated returning user.
@@ -209,7 +218,14 @@ function MainApp() {
     return () => {
       cancelled = true;
     };
-  }, [isControlPanel, isLoading, isSignedIn, isWaitingForPolicyStart, needsReauth, showOnboarding]);
+  }, [
+    isControlPanel,
+    isLoading,
+    accountSignedIn,
+    isWaitingForPolicyStart,
+    needsReauth,
+    showOnboarding,
+  ]);
 
   const handleOnboardingComplete = (options) => {
     if (options?.openSettings) {

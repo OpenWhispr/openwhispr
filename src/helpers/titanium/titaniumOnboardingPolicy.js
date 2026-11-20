@@ -23,6 +23,19 @@ export function shouldOfferAuthStep({ cloudEnabled, titaniumEnabled }) {
 }
 
 /**
+ * Whether the user holds a valid account session. Titanium decides when it is the
+ * account system (no hosted cloud); otherwise the upstream session does.
+ */
+export function resolveAccountSignedIn({
+  titaniumEnabled,
+  cloudEnabled,
+  titaniumSignedIn,
+  upstreamSignedIn,
+}) {
+  return titaniumEnabled && !cloudEnabled ? Boolean(titaniumSignedIn) : Boolean(upstreamSignedIn);
+}
+
+/**
  * Whether the control panel must show the reauthentication screen. With Titanium
  * as the account system its state decides; the upstream session is not consulted.
  * `titaniumLoaded` stops a not-yet-hydrated (signed-out looking) state from

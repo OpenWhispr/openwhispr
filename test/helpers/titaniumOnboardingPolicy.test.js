@@ -90,3 +90,29 @@ test("STT notice: sign-in for our host while signed out, generic otherwise", asy
   );
   assert.equal(resolveSttEndpointNotice({ ...ours, refused: false }), null);
 });
+
+test("account session: Titanium decides without hosted cloud, upstream otherwise", async () => {
+  const { resolveAccountSignedIn } = await load();
+  const base = { titaniumSignedIn: true, upstreamSignedIn: false };
+  assert.equal(
+    resolveAccountSignedIn({ ...base, titaniumEnabled: true, cloudEnabled: false }),
+    true
+  );
+  assert.equal(
+    resolveAccountSignedIn({ ...base, titaniumEnabled: true, cloudEnabled: true }),
+    false
+  );
+  assert.equal(
+    resolveAccountSignedIn({ ...base, titaniumEnabled: false, cloudEnabled: false }),
+    false
+  );
+  assert.equal(
+    resolveAccountSignedIn({
+      titaniumSignedIn: false,
+      upstreamSignedIn: true,
+      titaniumEnabled: false,
+      cloudEnabled: true,
+    }),
+    true
+  );
+});
