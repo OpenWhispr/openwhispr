@@ -6,6 +6,8 @@ import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
 import { Button } from "./ui/button";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
+import { CLOUD_ENABLED } from "../config/forkRuntime";
+import { cloudFeatureVisible } from "../config/cloudFeatures";
 import type { UpsellDecision } from "../lib/upsell";
 import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
 
@@ -168,7 +170,7 @@ export default function ControlPanelSidebar({
           </div>
         )}
 
-        {isSignedIn && onOpenReferrals && (
+        {cloudFeatureVisible("referral", CLOUD_ENABLED) && isSignedIn && onOpenReferrals && (
           <button
             onClick={onOpenReferrals}
             aria-label={t("sidebar.referral")}
@@ -197,9 +199,11 @@ export default function ControlPanelSidebar({
           }
         />
 
-        <div className="pt-1">
-          <WorkspaceSwitcher />
-        </div>
+        {cloudFeatureVisible("workspaceSwitcher", CLOUD_ENABLED) && (
+          <div className="pt-1">
+            <WorkspaceSwitcher />
+          </div>
+        )}
       </div>
     </div>
   );

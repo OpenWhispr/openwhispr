@@ -4274,9 +4274,11 @@
         "token_exchange_failed": "Slackの接続が完了しませんでした。もう一度お試しください。",
         "not_configured": "このビルドではSlackを利用できません。",
         "connection_changed": "接続中にアカウントまたはSlackの接続が変わりました。もう一度お試しください。",
-        "signed_out": "Slackを接続するには{{brand}}にサインインしてください。",
+        "signed_out": "Slackを接続するには、Titaniumアカウントでサインインしてください。",
         "policy_blocked": "組織によってコネクタが無効にされています。",
-        "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。"
+        "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
+        "reauth_required": "Slackを接続するには、Titaniumアカウントに再度サインインしてください。",
+        "plan_required": "Slackを接続するには、有効な{{brand}}ライセンスが必要です。"
       },
       "browser": {
         "connectedTitle": "Slackが接続されました",
@@ -4305,13 +4307,15 @@
         "token_exchange_failed": "GitHubの接続が完了しませんでした。もう一度お試しください。",
         "not_configured": "このビルドではGitHubを利用できません。",
         "connection_changed": "接続中にアカウントまたはGitHubの接続が変わりました。もう一度お試しください。",
-        "signed_out": "GitHubを接続するには{{brand}}にサインインしてください。",
+        "signed_out": "GitHubを接続するには、Titaniumアカウントでサインインしてください。",
         "policy_blocked": "組織によってコネクタが無効にされています。",
         "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
         "code_expired": "コードの有効期限が切れました。もう一度お試しください。",
         "device_flow_disabled": "このビルドでは、コードによるGitHubへのサインインが設定されていません。",
         "network": "GitHubに接続できませんでした。接続を確認して、もう一度お試しください。",
-        "rate_limited": "GitHubが混み合っています。1分後にもう一度お試しください。"
+        "rate_limited": "GitHubが混み合っています。1分後にもう一度お試しください。",
+        "reauth_required": "GitHubを接続するには、Titaniumアカウントに再度サインインしてください。",
+        "plan_required": "GitHubを接続するには、有効な{{brand}}ライセンスが必要です。"
       },
       "deviceCode": {
         "instructions": "GitHubでこのコードを入力してください:",
@@ -4345,12 +4349,14 @@
         "token_exchange_failed": "Googleの接続が完了しませんでした。もう一度お試しください。",
         "not_configured": "このビルドではGmailを利用できません。",
         "connection_changed": "接続中にアカウントまたはGmailの接続が変わりました。もう一度お試しください。",
-        "signed_out": "Gmailを接続するには{{brand}}にサインインしてください。",
+        "signed_out": "Gmailを接続するには、Titaniumアカウントでサインインしてください。",
         "policy_blocked": "組織によってコネクタが無効にされています。",
         "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
         "permission_not_granted": "メール送信の権限が許可されなかったため、Gmailは接続されませんでした。もう一度接続し、その権限をオンのままにしてください。",
         "email_not_verified": "このアカウントのメールアドレスがGoogleで確認されていないため、Gmailは接続されませんでした。",
-        "domain_policy": "組織のGoogle管理者がこのアプリをブロックしています。{{brand}}を許可するよう管理者に依頼してください。"
+        "domain_policy": "組織のGoogle管理者がこのアプリをブロックしています。{{brand}}を許可するよう管理者に依頼してください。",
+        "reauth_required": "Gmailを接続するには、Titaniumアカウントに再度サインインしてください。",
+        "plan_required": "Gmailを接続するには、有効な{{brand}}ライセンスが必要です。"
       },
       "browser": {
         "connectedTitle": "Gmailが接続されました",
@@ -4378,10 +4384,12 @@
         "token_exchange_failed": "Linearの接続が完了しませんでした。もう一度お試しください。",
         "not_configured": "このビルドではLinearを利用できません。",
         "connection_changed": "接続中にアカウントまたはLinearの接続が変わりました。もう一度お試しください。",
-        "signed_out": "Linearを接続するには{{brand}}にサインインしてください。",
+        "signed_out": "Linearを接続するには、Titaniumアカウントでサインインしてください。",
         "policy_blocked": "組織によってコネクタが無効にされています。",
         "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
-        "permission_not_granted": "すべての権限が許可されなかったため、Linearは接続されませんでした。もう一度接続し、すべて許可してください。"
+        "permission_not_granted": "すべての権限が許可されなかったため、Linearは接続されませんでした。もう一度接続し、すべて許可してください。",
+        "reauth_required": "Linearを接続するには、Titaniumアカウントに再度サインインしてください。",
+        "plan_required": "Linearを接続するには、有効な{{brand}}ライセンスが必要です。"
       },
       "browser": {
         "connectedTitle": "Linearが接続されました",
@@ -4526,8 +4534,9 @@
       "cardLimit": "1回のリクエストで準備できるカードは{{max}}件までです。"
     },
     "beta": "ベータ",
-    "upsell": "コネクタは有料プランに含まれています。アップグレードすると、アシスタントがあなたのツールで操作できるようになります。",
-    "locked": "有料プランに含まれます"
+    "upsell": "コネクタには有効な{{brand}}ライセンスが必要です。Titaniumアカウントでサインインすると、アシスタントがあなたのツールで操作できるようになります。",
+    "locked": "{{brand}}ライセンスに含まれます",
+    "upsellAction": "Titaniumアカウントを開く"
   },
   "calendar": {
     "title": "Google カレンダー",
@@ -5086,6 +5095,14 @@
     "permissionDenied": "拒否",
     "permissionRestricted": "制限あり",
     "permissionNotDetermined": "未要求"
+  },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "カレンダーが接続されました",
+      "connectedBody": "このタブを閉じて{{brand}}に戻ることができます。",
+      "failedTitle": "カレンダーは接続されませんでした",
+      "failedBody": "カレンダーの接続が完了しませんでした。{{brand}}に戻ってもう一度お試しください。"
+    }
   },
   "titaniumAccount": {
     "title": "Titanium アカウント",

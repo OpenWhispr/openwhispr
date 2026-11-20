@@ -20,6 +20,8 @@ const ROW_ERRORS = new Set([
   "not_configured",
   "connection_changed",
   "signed_out",
+  "reauth_required",
+  "plan_required",
   "policy_blocked",
   "policy_unavailable",
   "disconnect_failed",

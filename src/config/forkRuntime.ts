@@ -16,6 +16,7 @@ export const API_URL = strip(env.VITE_OPENWHISPR_API_URL || fork.API_URL || "");
 export const AUTH_URL = strip(env.VITE_AUTH_URL || fork.AUTH_URL || "");
 export const ADMIN_URL = strip(env.VITE_ADMIN_URL || fork.ADMIN_URL || "");
 export const SITE_URL = strip(env.VITE_SITE_URL || fork.SITE_URL || "");
+export const SERVICES_URL = strip(env.VITE_SERVICES_URL || fork.SERVICES_URL || "");
 export const DOCS_URL = strip(env.VITE_DOCS_URL || fork.DOCS_URL || "");
 export const SUPPORT_EMAIL = env.VITE_SUPPORT_EMAIL || fork.SUPPORT_EMAIL || "";
 export const SHARE_VIEWER_URL = strip(env.VITE_SHARE_VIEWER_URL || fork.SHARE_VIEWER_URL || "");

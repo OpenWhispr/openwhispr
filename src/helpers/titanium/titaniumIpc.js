@@ -3,7 +3,6 @@
 const path = require("path");
 const { app, ipcMain, shell, safeStorage, BrowserWindow } = require("electron");
 const { TitaniumSession } = require("./titaniumSession");
-const { isTitaniumServiceUrl } = require("./titaniumHosts");
 
 let session = null;
 const stateListeners = new Set();
@@ -75,14 +74,44 @@ function getTitaniumSession() {
   return session;
 }
 
+// The origin (scheme + host + port) of an https URL with no userinfo, else "".
+// Anything else (http, ftp, userinfo tricks, unparsable) can never be one of
+// our service origins.
+function httpsOriginOf(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password) return "";
+    return parsed.origin;
+  } catch {
+    return "";
+  }
+}
+
 /**
- * The signed-in user's license key, but only for a request to one of our own
- * services (the fork's default STT host, plus TITANIUM.serviceHosts). A Custom
- * endpoint the user points elsewhere never receives the Titanium credential.
+ * The signed-in user's license key, but only for an https request whose exact
+ * origin (scheme + host + port) equals the origin of the fork's default STT
+ * endpoint, SERVICES_URL, or a TITANIUM.serviceHosts entry (a bare host, taken
+ * as https on the default port). A configured origin that is not itself https
+ * (e.g. an http override) allows nothing. A Custom endpoint the user points
+ * elsewhere never receives the Titanium credential.
  */
-function titaniumServiceKeyFor(url, forkConfig = require("../../config/forkConfig")) {
-  if (!session || !isTitaniumServiceUrl(url, forkConfig)) return null;
-  return session.getLicenseKey();
+// The allowlist comes from the shipped fork.config.json, never from runtime
+// VITE_* overrides: an overridden SERVICES_URL still receives requests, but
+// never the license key.
+function titaniumServiceKeyFor(url, forkConfig = require("../../config/fork.config.json")) {
+  if (!session) return null;
+  const requested = httpsOriginOf(url);
+  if (!requested) return null;
+  const allowed = new Set(
+    [
+      httpsOriginOf(forkConfig.DEFAULT_STT?.baseUrl),
+      httpsOriginOf(forkConfig.SERVICES_URL),
+      ...(forkConfig.TITANIUM?.serviceHosts || []).map((host) =>
+        /^[a-z0-9.-]+$/i.test(String(host || "")) ? httpsOriginOf(`https://${host}`) : ""
+      ),
+    ].filter(Boolean)
+  );
+  return allowed.has(requested) ? session.getLicenseKey() : null;
 }
 
 function _setSessionForTest(value) {

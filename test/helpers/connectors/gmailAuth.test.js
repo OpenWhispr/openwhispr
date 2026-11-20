@@ -930,3 +930,26 @@ test("the status shows the Google address and the reconnect flag", async () => {
   });
   assert.equal(auth.statusOf({ ...CONNECTED, needsReconnect: true }).needsReconnect, true);
 });
+
+test("a fork build never falls back to the calendar Google client for Gmail", async () => {
+  const { gmailClientCredentials } = await loadAuth();
+  const calendar = {
+    GOOGLE_CALENDAR_CLIENT_ID: "cal-id",
+    GOOGLE_CALENDAR_CLIENT_SECRET: "cal-secret",
+  };
+  const gmail = { GMAIL_CLIENT_ID: "gm-id", GMAIL_CLIENT_SECRET: "gm-secret" };
+  const fork = { allowCalendarClient: false };
+  const NONE = { clientId: null, clientSecret: null };
+
+  assert.deepEqual(gmailClientCredentials(calendar, fork), NONE);
+  assert.deepEqual(gmailClientCredentials({ ...calendar, GMAIL_CLIENT_ID: "gm-id" }, fork), NONE);
+  assert.deepEqual(gmailClientCredentials({ ...calendar, ...gmail }, fork), {
+    clientId: "gm-id",
+    clientSecret: "gm-secret",
+  });
+  // Upstream (the default) keeps the calendar fallback.
+  assert.deepEqual(gmailClientCredentials(calendar), {
+    clientId: "cal-id",
+    clientSecret: "cal-secret",
+  });
+});

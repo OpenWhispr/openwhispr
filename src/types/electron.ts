@@ -43,6 +43,8 @@ export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 export interface TitaniumAuthState {
   configured: boolean;
   signedIn: boolean;
+  /** True when the session holds a stable Titanium account id (connectors need one). */
+  accountBound: boolean;
   email: string | null;
   signedInAt: string | null;
   licensed: boolean;

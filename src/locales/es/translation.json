@@ -4326,9 +4326,11 @@
         "token_exchange_failed": "Slack no terminó de conectarse. Inténtalo de nuevo.",
         "not_configured": "Slack no está disponible en esta versión.",
         "connection_changed": "Tu cuenta o la conexión de Slack cambiaron durante la conexión. Inténtalo de nuevo.",
-        "signed_out": "Inicia sesión en {{brand}} para conectar Slack.",
+        "signed_out": "Inicia sesión con tu cuenta de Titanium para conectar Slack.",
         "policy_blocked": "Tu organización ha desactivado los conectores.",
-        "policy_unavailable": "No se pudieron comprobar los ajustes de tu organización. Inténtalo de nuevo."
+        "policy_unavailable": "No se pudieron comprobar los ajustes de tu organización. Inténtalo de nuevo.",
+        "reauth_required": "Vuelve a iniciar sesión en tu cuenta de Titanium para conectar Slack.",
+        "plan_required": "Conectar Slack requiere una licencia activa de {{brand}}."
       },
       "browser": {
         "connectedTitle": "Slack está conectado",
@@ -4357,13 +4359,15 @@
         "token_exchange_failed": "GitHub no terminó de conectarse. Inténtalo de nuevo.",
         "not_configured": "GitHub no está disponible en esta versión.",
         "connection_changed": "Tu cuenta o la conexión de GitHub cambiaron durante la conexión. Inténtalo de nuevo.",
-        "signed_out": "Inicia sesión en {{brand}} para conectar GitHub.",
+        "signed_out": "Inicia sesión con tu cuenta de Titanium para conectar GitHub.",
         "policy_blocked": "Tu organización ha desactivado los conectores.",
         "policy_unavailable": "No se pudieron comprobar los ajustes de tu organización. Inténtalo de nuevo.",
         "code_expired": "El código caducó. Inténtalo de nuevo.",
         "device_flow_disabled": "El inicio de sesión en GitHub con un código no está configurado en esta versión.",
         "network": "No se pudo conectar con GitHub. Comprueba tu conexión e inténtalo de nuevo.",
-        "rate_limited": "GitHub está ocupado en este momento. Inténtalo de nuevo en un minuto."
+        "rate_limited": "GitHub está ocupado en este momento. Inténtalo de nuevo en un minuto.",
+        "reauth_required": "Vuelve a iniciar sesión en tu cuenta de Titanium para conectar GitHub.",
+        "plan_required": "Conectar GitHub requiere una licencia activa de {{brand}}."
       },
       "deviceCode": {
         "instructions": "Introduce este código en GitHub:",
@@ -4397,12 +4401,14 @@
         "token_exchange_failed": "Google no terminó de conectarse. Inténtalo de nuevo.",
         "not_configured": "Gmail no está disponible en esta versión.",
         "connection_changed": "Tu cuenta o la conexión de Gmail cambiaron durante la conexión. Inténtalo de nuevo.",
-        "signed_out": "Inicia sesión en {{brand}} para conectar Gmail.",
+        "signed_out": "Inicia sesión con tu cuenta de Titanium para conectar Gmail.",
         "policy_blocked": "Tu organización ha desactivado los conectores.",
         "policy_unavailable": "No se pudieron comprobar los ajustes de tu organización. Inténtalo de nuevo.",
         "permission_not_granted": "Gmail no se conectó porque no se concedió el permiso para enviar correos. Vuelve a conectar y deja ese permiso marcado.",
         "email_not_verified": "Google no ha verificado la dirección de correo de esta cuenta, así que Gmail no se conectó.",
-        "domain_policy": "El administrador de Google de tu organización bloqueó esta app. Pídele que permita {{brand}}."
+        "domain_policy": "El administrador de Google de tu organización bloqueó esta app. Pídele que permita {{brand}}.",
+        "reauth_required": "Vuelve a iniciar sesión en tu cuenta de Titanium para conectar Gmail.",
+        "plan_required": "Conectar Gmail requiere una licencia activa de {{brand}}."
       },
       "browser": {
         "connectedTitle": "Gmail está conectado",
@@ -4430,10 +4436,12 @@
         "token_exchange_failed": "Linear no terminó de conectarse. Inténtalo de nuevo.",
         "not_configured": "Linear no está disponible en esta versión.",
         "connection_changed": "Tu cuenta o la conexión de Linear cambiaron durante la conexión. Inténtalo de nuevo.",
-        "signed_out": "Inicia sesión en {{brand}} para conectar Linear.",
+        "signed_out": "Inicia sesión con tu cuenta de Titanium para conectar Linear.",
         "policy_blocked": "Tu organización ha desactivado los conectores.",
         "policy_unavailable": "No se pudieron comprobar los ajustes de tu organización. Inténtalo de nuevo.",
-        "permission_not_granted": "Linear no se conectó porque no se concedieron todos los permisos. Vuelve a conectar y permítelos todos."
+        "permission_not_granted": "Linear no se conectó porque no se concedieron todos los permisos. Vuelve a conectar y permítelos todos.",
+        "reauth_required": "Vuelve a iniciar sesión en tu cuenta de Titanium para conectar Linear.",
+        "plan_required": "Conectar Linear requiere una licencia activa de {{brand}}."
       },
       "browser": {
         "connectedTitle": "Linear está conectado",
@@ -4578,8 +4586,9 @@
       "cardLimit": "Solo se pueden preparar {{max}} tarjetas por solicitud."
     },
     "beta": "Beta",
-    "upsell": "Los conectores se incluyen en los planes de pago. Mejora tu plan para que el asistente trabaje en tus herramientas.",
-    "locked": "Incluido en los planes de pago"
+    "upsell": "Los conectores requieren una licencia activa de {{brand}}. Inicia sesión con tu cuenta de Titanium para que el asistente trabaje en tus herramientas.",
+    "locked": "Incluido con una licencia de {{brand}}",
+    "upsellAction": "Abrir cuenta de Titanium"
   },
   "calendar": {
     "title": "Google Calendar",
@@ -5086,6 +5095,14 @@
     "permissionDenied": "Denegado",
     "permissionRestricted": "Restringido",
     "permissionNotDetermined": "No solicitado"
+  },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "El calendario está conectado",
+      "connectedBody": "Puedes cerrar esta pestaña y volver a {{brand}}.",
+      "failedTitle": "No se conectó el calendario",
+      "failedBody": "No se completó la conexión del calendario. Vuelve a {{brand}} para intentarlo de nuevo."
+    }
   },
   "titaniumAccount": {
     "title": "Cuenta Titanium",

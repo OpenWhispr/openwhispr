@@ -11,6 +11,7 @@ export type UnavailableReason =
   | "policyOff"
   | "policyLoading"
   | "planRequired"
+  | "reauthRequired"
   | "notConnected"
   | "needsReconnect"
   | "modelTooSmall";
@@ -22,6 +23,8 @@ export interface UnavailableCapability {
   where?: string;
   /** Sends, posts or files for the user, so the model still writes the text itself. */
   delivers?: boolean;
+  /** Fork build: accounts and licenses are Titanium's, so the text never names the upstream cloud. */
+  titanium?: { brand: string };
 }
 
 /** Where each fix lives, as the UI labels it (localized by the caller). */
@@ -43,10 +46,17 @@ export interface UnavailableCapabilityInput {
   /** False when the selected model gets no tools at all (a small local model). */
   supportsTools: boolean;
   isSignedIn: boolean;
-  webSearch: { allowed: boolean; blockedByOrg: boolean };
+  /** signedIn defaults to isSignedIn; a fork build passes its Titanium session. */
+  webSearch: { allowed: boolean; blockedByOrg: boolean; signedIn?: boolean };
   calendarConnected: boolean;
   /** Omitted on surfaces that never offer connectors (container chat, onboarding demo). */
+  /** Set in a fork build (no OpenWhispr cloud): the account is the Titanium account. */
+  titanium?: { brand: string };
   connectors?: {
+    /** Fork build: Titanium sign-in, which replaces input.isSignedIn for connectors. */
+    signedIn?: boolean;
+    /** Fork build: signed in, but the session has no account id (sign in again). */
+    reauthRequired?: boolean;
     hasPlan: boolean;
     allowed: boolean;
     blockedByOrg: boolean;
@@ -82,9 +92,15 @@ export function resolveUnavailableCapabilities(
   }
 
   const unavailable: UnavailableCapability[] = [];
+  const titanium = input.titanium ? { titanium: input.titanium } : {};
 
-  if (!input.isSignedIn) {
-    unavailable.push({ name: "Web search", reason: "signedOut", where: locations.account });
+  if (!(input.webSearch.signedIn ?? input.isSignedIn)) {
+    unavailable.push({
+      name: "Web search",
+      reason: "signedOut",
+      where: locations.account,
+      ...titanium,
+    });
   } else if (!input.webSearch.allowed) {
     unavailable.push({
       name: "Web search",
@@ -101,11 +117,13 @@ export function resolveUnavailableCapabilities(
 
   // Every connector entry is about sending for the user, never about writing the text.
   const unavailableConnector = (name: string, reason: UnavailableReason, where?: string): void => {
-    unavailable.push({ name, reason, ...(where ? { where } : {}), delivers: true });
+    unavailable.push({ name, reason, ...(where ? { where } : {}), delivers: true, ...titanium });
   };
 
-  if (!input.isSignedIn) {
+  if (!(connectors.signedIn ?? input.isSignedIn)) {
     unavailableConnector(CONNECTORS_NAME, "signedOut", locations.account);
+  } else if (connectors.reauthRequired) {
+    unavailableConnector(CONNECTORS_NAME, "reauthRequired", locations.account);
   } else if (connectors.blockedByOrg) {
     // Before the plan: paying wouldn't help while the organization keeps them off.
     unavailableConnector(CONNECTORS_NAME, "policyOff");
@@ -130,23 +148,29 @@ export function resolveUnavailableCapabilities(
   return unavailable;
 }
 
-function describeOne({ name, reason, where }: UnavailableCapability): string {
+function describeOne({ name, reason, where, titanium }: UnavailableCapability): string {
   const at = where ? ` in ${where}` : "";
   switch (reason) {
     case "signedOut":
-      return `${name}: needs the user to sign in to OpenWhispr${at}.`;
+      return titanium
+        ? `${name}: needs the user to sign in with their Titanium account${at}.`
+        : `${name}: needs the user to sign in to OpenWhispr${at}.`;
+    case "reauthRequired":
+      return `${name}: needs the user to sign in to their Titanium account again${at}.`;
     case "policyOff":
       return `${name}: turned off by the user's organization; only their admin can turn it back on.`;
     case "policyLoading":
       return `${name}: not available right now; the user can try again in a moment.`;
     case "planRequired":
-      return `${name}: needs a paid OpenWhispr plan${at}.`;
+      return titanium
+        ? `${name}: needs an active ${titanium.brand} license${at}.`
+        : `${name}: needs a paid OpenWhispr plan${at}.`;
     case "notConnected":
       return `${name}: not connected; the user can connect it${at}.`;
     case "needsReconnect":
       return `${name}: the connection has expired; the user can reconnect it${at}.`;
     case "modelTooSmall":
-      return `${name}: the selected model runs without tools (small or unrecognized local models do); the user can choose a larger model or a cloud provider${at}. For OpenWhispr product questions, the user can open ${DOCS_ORIGIN} or inspect their current settings in Settings. You can still use anything already in this prompt, such as note text, and write any text the user asks for.`;
+      return `${name}: the selected model runs without tools (small or unrecognized local models do); the user can choose a larger model or a cloud provider${at}. For product questions, the user can open ${DOCS_ORIGIN} or inspect their current settings in Settings. You can still use anything already in this prompt, such as note text, and write any text the user asks for.`;
   }
 }
 

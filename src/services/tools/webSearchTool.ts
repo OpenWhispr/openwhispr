@@ -28,6 +28,15 @@ export const webSearchTool: ToolDefinition = {
     try {
       const raw = await window.electronAPI.agentWebSearch!(query, numResults);
 
+      // The main process answers a refused or failed search as { success: false, error }.
+      if (raw && raw.success === false) {
+        return {
+          success: false,
+          data: null,
+          displayText: `Web search failed: ${raw.error || raw.code || "unknown error"}`,
+        };
+      }
+
       const results = Array.isArray(raw?.results)
         ? raw.results.map(
             (r: { title?: string; url?: string; text?: string; publishedDate?: string }) => ({

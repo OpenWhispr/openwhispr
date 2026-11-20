@@ -4446,9 +4446,11 @@
         "token_exchange_failed": "Slack didn't finish connecting. Try again.",
         "not_configured": "Slack isn't available in this build.",
         "connection_changed": "Your account or Slack connection changed while connecting. Try again.",
-        "signed_out": "Sign in to {{brand}} to connect Slack.",
+        "signed_out": "Sign in with your Titanium account to connect Slack.",
         "policy_blocked": "Connectors are turned off by your organization.",
-        "policy_unavailable": "Couldn't check your organization's settings. Try again."
+        "policy_unavailable": "Couldn't check your organization's settings. Try again.",
+        "reauth_required": "Sign in to your Titanium account again to connect Slack.",
+        "plan_required": "Connecting Slack needs an active {{brand}} license."
       },
       "browser": {
         "connectedTitle": "Slack is connected",
@@ -4477,13 +4479,15 @@
         "token_exchange_failed": "GitHub didn't finish connecting. Try again.",
         "not_configured": "GitHub isn't available in this build.",
         "connection_changed": "Your account or GitHub connection changed while connecting. Try again.",
-        "signed_out": "Sign in to {{brand}} to connect GitHub.",
+        "signed_out": "Sign in with your Titanium account to connect GitHub.",
         "policy_blocked": "Connectors are turned off by your organization.",
         "policy_unavailable": "Couldn't check your organization's settings. Try again.",
         "code_expired": "The code expired. Try again.",
         "device_flow_disabled": "Signing in to GitHub with a code isn't set up for this build.",
         "network": "Couldn't reach GitHub. Check your connection and try again.",
-        "rate_limited": "GitHub is busy right now. Try again in a minute."
+        "rate_limited": "GitHub is busy right now. Try again in a minute.",
+        "reauth_required": "Sign in to your Titanium account again to connect GitHub.",
+        "plan_required": "Connecting GitHub needs an active {{brand}} license."
       },
       "deviceCode": {
         "instructions": "Enter this code on GitHub:",
@@ -4517,12 +4521,14 @@
         "token_exchange_failed": "Google didn't finish connecting. Try again.",
         "not_configured": "Gmail isn't available in this build.",
         "connection_changed": "Your account or Gmail connection changed while connecting. Try again.",
-        "signed_out": "Sign in to {{brand}} to connect Gmail.",
+        "signed_out": "Sign in with your Titanium account to connect Gmail.",
         "policy_blocked": "Connectors are turned off by your organization.",
         "policy_unavailable": "Couldn't check your organization's settings. Try again.",
         "permission_not_granted": "Gmail wasn't connected because permission to send email wasn't granted. Connect again and leave that permission ticked.",
         "email_not_verified": "Google hasn't verified this account's email address, so Gmail wasn't connected.",
-        "domain_policy": "Your organization's Google admin blocked this app. Ask them to allow {{brand}}."
+        "domain_policy": "Your organization's Google admin blocked this app. Ask them to allow {{brand}}.",
+        "reauth_required": "Sign in to your Titanium account again to connect Gmail.",
+        "plan_required": "Connecting Gmail needs an active {{brand}} license."
       },
       "browser": {
         "connectedTitle": "Gmail is connected",
@@ -4550,10 +4556,12 @@
         "token_exchange_failed": "Linear didn't finish connecting. Try again.",
         "not_configured": "Linear isn't available in this build.",
         "connection_changed": "Your account or Linear connection changed while connecting. Try again.",
-        "signed_out": "Sign in to {{brand}} to connect Linear.",
+        "signed_out": "Sign in with your Titanium account to connect Linear.",
         "policy_blocked": "Connectors are turned off by your organization.",
         "policy_unavailable": "Couldn't check your organization's settings. Try again.",
-        "permission_not_granted": "Linear wasn't connected because not every permission was granted. Connect again and allow all of them."
+        "permission_not_granted": "Linear wasn't connected because not every permission was granted. Connect again and allow all of them.",
+        "reauth_required": "Sign in to your Titanium account again to connect Linear.",
+        "plan_required": "Connecting Linear needs an active {{brand}} license."
       },
       "browser": {
         "connectedTitle": "Linear is connected",
@@ -4698,8 +4706,9 @@
       "cardLimit": "Only {{max}} cards can be prepared per request."
     },
     "beta": "Beta",
-    "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",
-    "locked": "Included with paid plans"
+    "upsell": "Connectors need an active {{brand}} license. Sign in with your Titanium account to let the assistant work in your tools.",
+    "locked": "Included with a {{brand}} license",
+    "upsellAction": "Open Titanium account"
   },
   "notesView": {
     "searchPlaceholder": "Search notes…",
@@ -5086,6 +5095,14 @@
     "permissionDenied": "Denied",
     "permissionRestricted": "Restricted",
     "permissionNotDetermined": "Not requested"
+  },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "Calendar is connected",
+      "connectedBody": "You can close this tab and return to {{brand}}.",
+      "failedTitle": "Calendar wasn't connected",
+      "failedBody": "Connecting the calendar didn't finish. Return to {{brand}} to try again."
+    }
   },
   "titaniumAccount": {
     "title": "Titanium account",

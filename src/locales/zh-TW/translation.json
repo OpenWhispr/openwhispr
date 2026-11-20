@@ -4274,9 +4274,11 @@
         "token_exchange_failed": "Slack 未完成連接，請重試。",
         "not_configured": "此版本中 Slack 不可用。",
         "connection_changed": "連接過程中您的帳戶或 Slack 連接發生了變化，請重試。",
-        "signed_out": "請登入 {{brand}} 以連接 Slack。",
+        "signed_out": "請使用您的 Titanium 帳戶登入以連接 Slack。",
         "policy_blocked": "您的組織已關閉連接器。",
-        "policy_unavailable": "無法檢查您的組織設定，請重試。"
+        "policy_unavailable": "無法檢查您的組織設定，請重試。",
+        "reauth_required": "請重新登入您的 Titanium 帳戶以連接 Slack。",
+        "plan_required": "連接 Slack 需要有效的 {{brand}} 授權。"
       },
       "browser": {
         "connectedTitle": "Slack 已連接",
@@ -4305,13 +4307,15 @@
         "token_exchange_failed": "GitHub 未完成連接，請重試。",
         "not_configured": "此版本中 GitHub 不可用。",
         "connection_changed": "連接過程中您的帳戶或 GitHub 連接發生了變化，請重試。",
-        "signed_out": "請登入 {{brand}} 以連接 GitHub。",
+        "signed_out": "請使用您的 Titanium 帳戶登入以連接 GitHub。",
         "policy_blocked": "您的組織已關閉連接器。",
         "policy_unavailable": "無法檢查您的組織設定，請重試。",
         "code_expired": "代碼已過期，請重試。",
         "device_flow_disabled": "此版本未設定使用代碼登入 GitHub。",
         "network": "無法連線到 GitHub。請檢查網路連線後重試。",
-        "rate_limited": "GitHub 目前忙碌中，請一分鐘後重試。"
+        "rate_limited": "GitHub 目前忙碌中，請一分鐘後重試。",
+        "reauth_required": "請重新登入您的 Titanium 帳戶以連接 GitHub。",
+        "plan_required": "連接 GitHub 需要有效的 {{brand}} 授權。"
       },
       "deviceCode": {
         "instructions": "請在 GitHub 上輸入此代碼：",
@@ -4345,12 +4349,14 @@
         "token_exchange_failed": "Google 未完成連接，請重試。",
         "not_configured": "此版本中 Gmail 不可用。",
         "connection_changed": "連接過程中您的帳戶或 Gmail 連接發生了變化，請重試。",
-        "signed_out": "請登入 {{brand}} 以連接 Gmail。",
+        "signed_out": "請使用您的 Titanium 帳戶登入以連接 Gmail。",
         "policy_blocked": "您的組織已關閉連接器。",
         "policy_unavailable": "無法檢查您的組織設定，請重試。",
         "permission_not_granted": "由於未授予傳送郵件的權限，Gmail 未連接。請重新連接並保持勾選該權限。",
         "email_not_verified": "Google 尚未驗證此帳戶的電子郵件地址，因此 Gmail 未連接。",
-        "domain_policy": "您機構的 Google 管理員已封鎖此應用程式。請他們允許 {{brand}}。"
+        "domain_policy": "您機構的 Google 管理員已封鎖此應用程式。請他們允許 {{brand}}。",
+        "reauth_required": "請重新登入您的 Titanium 帳戶以連接 Gmail。",
+        "plan_required": "連接 Gmail 需要有效的 {{brand}} 授權。"
       },
       "browser": {
         "connectedTitle": "Gmail 已連接",
@@ -4378,10 +4384,12 @@
         "token_exchange_failed": "Linear 未完成連接，請重試。",
         "not_configured": "此版本中 Linear 不可用。",
         "connection_changed": "連接過程中您的帳戶或 Linear 連接發生了變化，請重試。",
-        "signed_out": "請登入 {{brand}} 以連接 Linear。",
+        "signed_out": "請使用您的 Titanium 帳戶登入以連接 Linear。",
         "policy_blocked": "您的組織已關閉連接器。",
         "policy_unavailable": "無法檢查您的組織設定，請重試。",
-        "permission_not_granted": "由於未授予全部權限，Linear 未連接。請重新連接並允許所有權限。"
+        "permission_not_granted": "由於未授予全部權限，Linear 未連接。請重新連接並允許所有權限。",
+        "reauth_required": "請重新登入您的 Titanium 帳戶以連接 Linear。",
+        "plan_required": "連接 Linear 需要有效的 {{brand}} 授權。"
       },
       "browser": {
         "connectedTitle": "Linear 已連接",
@@ -4526,8 +4534,9 @@
       "cardLimit": "每次請求最多只能準備 {{max}} 張卡片。"
     },
     "beta": "測試版",
-    "upsell": "連接器包含在付費方案中。升級後，助理即可在您的工具中執行操作。",
-    "locked": "付費方案包含此功能"
+    "upsell": "連接器需要有效的 {{brand}} 授權。請使用您的 Titanium 帳戶登入，助手即可在您的工具中執行操作。",
+    "locked": "{{brand}} 授權包含此功能",
+    "upsellAction": "開啟 Titanium 帳戶"
   },
   "calendar": {
     "title": "Google 日曆",
@@ -5086,6 +5095,14 @@
     "permissionDenied": "已拒絕",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未請求"
+  },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "日曆已連接",
+      "connectedBody": "您可以關閉此分頁並返回 {{brand}}。",
+      "failedTitle": "日曆未連接",
+      "failedBody": "日曆連接未完成。請返回 {{brand}} 重試。"
+    }
   },
   "titaniumAccount": {
     "title": "Titanium 帳戶",

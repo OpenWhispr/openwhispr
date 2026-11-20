@@ -59,3 +59,21 @@ test("loadRuntimeEnv reads runtime-env.json and feeds getApiUrl/getAuthUrl resol
   assert.deepEqual(loadRuntimeEnv(path.join(dir, "missing.json")), {});
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("SERVICES_URL defaults to our stable services host and VITE_SERVICES_URL overrides it", () => {
+  assert.equal(fork.SERVICES_URL, "https://stt.titaniumlabs.us");
+  assert.equal(resolveForkConfig({}, {}).SERVICES_URL, "https://stt.titaniumlabs.us");
+  assert.equal(
+    resolveForkConfig({ VITE_SERVICES_URL: "https://svc.example" }, {}).SERVICES_URL,
+    "https://svc.example"
+  );
+  assert.equal(
+    resolveForkConfig({}, { VITE_SERVICES_URL: "https://rt.example" }).SERVICES_URL,
+    "https://rt.example"
+  );
+});
+
+test("SITE_URL stays the website base, separate from SERVICES_URL", () => {
+  assert.equal(fork.SITE_URL, "");
+  assert.notEqual(fork.SITE_URL, fork.SERVICES_URL);
+});

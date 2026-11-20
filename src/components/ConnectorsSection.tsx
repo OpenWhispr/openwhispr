@@ -9,6 +9,7 @@ import { UpsellBar } from "./integrations/IntegrationsPane";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useConnectorStatusStore } from "../stores/connectorStatusStore";
 import { useConnectorAccess } from "../hooks/useConnectorAccess";
+import { CLOUD_ENABLED } from "../config/forkRuntime";
 import {
   EMAIL_DRAFT_TARGET_SETTINGS,
   gmailSendStatus,
@@ -68,7 +69,13 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
 
   return (
     <div className="space-y-3">
-      {locked && <UpsellBar message={t("connectors.upsell")} onUpgrade={onUpgrade} />}
+      {locked && (
+        <UpsellBar
+          message={t("connectors.upsell")}
+          onUpgrade={onUpgrade}
+          actionLabel={CLOUD_ENABLED ? undefined : t("connectors.upsellAction")}
+        />
+      )}
       <SettingsPanel>
         <SettingsPanelRow>
           <div className={`flex flex-wrap items-center gap-3 ${locked ? "opacity-60" : ""}`}>

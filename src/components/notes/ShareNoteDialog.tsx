@@ -1,3 +1,5 @@
+import { CLOUD_ENABLED } from "../../config/forkRuntime";
+import { cloudFeatureVisible } from "../../config/cloudFeatures";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy, FileText, Link2, Loader2, MoreHorizontal, Users } from "../icons";
@@ -731,302 +733,312 @@ export default function ShareNoteDialog({
       <DialogContent className="max-w-md gap-3 p-5">
         <DialogTitle className="text-base">{t("noteEditor.share.dialog.title")}</DialogTitle>
 
-        {!cloudId ? (
+        {/* Sync and link sharing need the hosted cloud; a fork build keeps only local export. */}
+        {cloudFeatureVisible("shareLink", CLOUD_ENABLED) && (
           <>
-            <DialogDescription className="text-xs text-foreground/50">
-              {sharingRestrictedByPolicy
-                ? t("common.managedByOrg")
-                : t("noteEditor.share.dialog.syncPrompt")}
-            </DialogDescription>
-            {!sharingRestrictedByPolicy && (
-              <Button
-                size="sm"
-                onClick={() => void handleSyncAndShare()}
-                disabled={syncing || !canBeginSharing}
-                className="h-8 px-3 text-xs gap-1.5 justify-self-start"
-              >
-                {syncing && <Loader2 size={12} className="animate-spin" />}
-                {t("noteEditor.share.dialog.syncAndShare")}
-              </Button>
-            )}
-          </>
-        ) : loadError ? (
-          <div className="flex items-center justify-between gap-2 py-1">
-            <p className="text-xs text-foreground/50">
-              {t("noteEditor.share.dialog.error.loadFailed")}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2.5 text-xs"
-              onClick={() => setLoadAttempt((a) => a + 1)}
-            >
-              {t("noteEditor.share.dialog.error.retry")}
-            </Button>
-          </div>
-        ) : (
-          <>
-            <DialogDescription className="sr-only">
-              {t("noteEditor.share.dialog.description")}
-            </DialogDescription>
-
-            {inviteAllowedByPolicy && (
-              <div className="relative">
-                <div className="flex items-center gap-2">
-                  <input
-                    dir="auto"
-                    ref={emailInputRef}
-                    type="text"
-                    value={emailInput}
-                    onChange={(e) => {
-                      setEmailInput(e.target.value);
-                      if (inputError) setInputError(null);
-                    }}
-                    onKeyDown={onKeyDown}
-                    placeholder={t("noteEditor.share.dialog.searchPlaceholder")}
-                    disabled={loading || submitting || !canInvite}
-                    className={cn(
-                      notesInputClass,
-                      "flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                    )}
-                    aria-label={t("noteEditor.share.dialog.emailLabel")}
-                    aria-invalid={inputError ? true : undefined}
-                    aria-describedby={inputError ? "share-invite-error" : undefined}
-                  />
+            {!cloudId ? (
+              <>
+                <DialogDescription className="text-xs text-foreground/50">
+                  {sharingRestrictedByPolicy
+                    ? t("common.managedByOrg")
+                    : t("noteEditor.share.dialog.syncPrompt")}
+                </DialogDescription>
+                {!sharingRestrictedByPolicy && (
                   <Button
                     size="sm"
-                    onClick={() => void handleShareInput()}
-                    disabled={loading || submitting || !canInvite || !emailInput.trim()}
-                    className="h-8 px-3 text-xs gap-1.5"
+                    onClick={() => void handleSyncAndShare()}
+                    disabled={syncing || !canBeginSharing}
+                    className="h-8 px-3 text-xs gap-1.5 justify-self-start"
                   >
-                    {submitting && <Loader2 size={12} className="animate-spin" />}
-                    {t("noteEditor.share.dialog.shareButton")}
+                    {syncing && <Loader2 size={12} className="animate-spin" />}
+                    {t("noteEditor.share.dialog.syncAndShare")}
                   </Button>
-                </div>
-
-                {access &&
-                  emailInput.trim() &&
-                  (searchingSuggestions || suggestions.length > 0 || suggestionsSettled) && (
-                    <div className="absolute z-20 top-9 start-0 end-[72px] max-h-44 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
-                      {searchingSuggestions && suggestions.length === 0 ? (
-                        <div className="h-8 flex items-center justify-center">
-                          <Loader2 size={12} className="animate-spin text-foreground/45" />
-                        </div>
-                      ) : suggestions.length === 0 ? (
-                        <div className="h-8 flex items-center justify-center">
-                          <span className="text-xs text-foreground/45">
-                            {t("noteEditor.share.dialog.noResults")}
-                          </span>
-                        </div>
-                      ) : (
-                        suggestions.map((principal) => (
-                          <button
-                            key={`${principal.type}:${principal.id ?? principal.email}`}
-                            type="button"
-                            onClick={() => void handlePrincipalGrant(principal)}
-                            className="flex items-center gap-2 w-full min-w-0 px-2 h-9 rounded-md text-start hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          >
-                            {principal.type === "team" ||
-                            principal.type === "folder" ||
-                            principal.type === "workspace" ? (
-                              <AudienceIcon />
-                            ) : (
-                              <MemberAvatar
-                                name={principal.name}
-                                email={principal.email ?? principal.name ?? ""}
-                                image={principal.image}
-                              />
-                            )}
-                            <span className="min-w-0 flex-1">
-                              <span dir="auto" className="block text-xs text-foreground truncate">
-                                {principal.name || principal.email}
-                              </span>
-                              {principal.name && principal.email && (
-                                <span
-                                  dir="ltr"
-                                  className="block text-[11px] text-foreground/45 truncate"
-                                >
-                                  {principal.email}
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
+                )}
+              </>
+            ) : loadError ? (
+              <div className="flex items-center justify-between gap-2 py-1">
+                <p className="text-xs text-foreground/50">
+                  {t("noteEditor.share.dialog.error.loadFailed")}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => setLoadAttempt((a) => a + 1)}
+                >
+                  {t("noteEditor.share.dialog.error.retry")}
+                </Button>
               </div>
-            )}
+            ) : (
+              <>
+                <DialogDescription className="sr-only">
+                  {t("noteEditor.share.dialog.description")}
+                </DialogDescription>
 
-            {inviteAllowedByPolicy && (
-              <p
-                id="share-invite-error"
-                aria-live="polite"
-                className={cn("text-xs text-red-500/90 -mt-1", !inputError && "sr-only")}
-              >
-                {inputError}
-              </p>
-            )}
+                {inviteAllowedByPolicy && (
+                  <div className="relative">
+                    <div className="flex items-center gap-2">
+                      <input
+                        dir="auto"
+                        ref={emailInputRef}
+                        type="text"
+                        value={emailInput}
+                        onChange={(e) => {
+                          setEmailInput(e.target.value);
+                          if (inputError) setInputError(null);
+                        }}
+                        onKeyDown={onKeyDown}
+                        placeholder={t("noteEditor.share.dialog.searchPlaceholder")}
+                        disabled={loading || submitting || !canInvite}
+                        className={cn(
+                          notesInputClass,
+                          "flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        )}
+                        aria-label={t("noteEditor.share.dialog.emailLabel")}
+                        aria-invalid={inputError ? true : undefined}
+                        aria-describedby={inputError ? "share-invite-error" : undefined}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => void handleShareInput()}
+                        disabled={loading || submitting || !canInvite || !emailInput.trim()}
+                        className="h-8 px-3 text-xs gap-1.5"
+                      >
+                        {submitting && <Loader2 size={12} className="animate-spin" />}
+                        {t("noteEditor.share.dialog.shareButton")}
+                      </Button>
+                    </div>
 
-            <div className="flex flex-col gap-1.5 mt-1">
-              {(access?.owner || !isTeamNote) && (
-                <MemberRow
-                  leading={
-                    <MemberAvatar
-                      name={access?.owner.name ?? ownerName}
-                      email={access?.owner.email ?? ownerEmail}
-                      image={access?.owner.image}
-                    />
-                  }
-                  primary={access?.owner.name || access?.owner.email || ownerName || ownerEmail}
-                  secondary={
-                    access?.owner.name ? access.owner.email : ownerName ? ownerEmail : null
-                  }
-                  secondaryDir="ltr"
-                  trailing={
-                    <span className="text-[11px] text-foreground/45">
-                      {t("noteEditor.share.dialog.owner")}
-                    </span>
-                  }
-                />
-              )}
-
-              {(access?.grants ?? []).map((grant) => (
-                <AccessGrantRow
-                  key={grant.id}
-                  grant={grant}
-                  canChangePermission={
-                    canManageAccessGrant(access, grant) && shareActionAllowed("change-grant")
-                  }
-                  showPermissionActions={shareActionAllowed("change-grant")}
-                  canRemove={
-                    canManageAccessGrant(access, grant) && shareActionAllowed("remove-grant")
-                  }
-                  busy={busyGrantId === grant.id}
-                  onPermissionChange={(permission) => void handleGrantPermission(grant, permission)}
-                  onRemove={() => void handleRemoveGrant(grant)}
-                />
-              ))}
-
-              {isTeamNote &&
-                space &&
-                !(access?.grants ?? []).some(
-                  (grant) =>
-                    grant.principal.type === "team" &&
-                    space.teams.some((team) => team.id === grant.principal.id)
-                ) && (
-                  <MemberRow
-                    leading={<AudienceIcon />}
-                    primary={space.name}
-                    secondary={t("noteEditor.share.dialog.teamAudience")}
-                    trailing={
-                      <span className="text-[11px] text-foreground/45">
-                        {t("noteEditor.share.dialog.editor")}
-                      </span>
-                    }
-                  />
+                    {access &&
+                      emailInput.trim() &&
+                      (searchingSuggestions || suggestions.length > 0 || suggestionsSettled) && (
+                        <div className="absolute z-20 top-9 start-0 end-[72px] max-h-44 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
+                          {searchingSuggestions && suggestions.length === 0 ? (
+                            <div className="h-8 flex items-center justify-center">
+                              <Loader2 size={12} className="animate-spin text-foreground/45" />
+                            </div>
+                          ) : suggestions.length === 0 ? (
+                            <div className="h-8 flex items-center justify-center">
+                              <span className="text-xs text-foreground/45">
+                                {t("noteEditor.share.dialog.noResults")}
+                              </span>
+                            </div>
+                          ) : (
+                            suggestions.map((principal) => (
+                              <button
+                                key={`${principal.type}:${principal.id ?? principal.email}`}
+                                type="button"
+                                onClick={() => void handlePrincipalGrant(principal)}
+                                className="flex items-center gap-2 w-full min-w-0 px-2 h-9 rounded-md text-start hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              >
+                                {principal.type === "team" ||
+                                principal.type === "folder" ||
+                                principal.type === "workspace" ? (
+                                  <AudienceIcon />
+                                ) : (
+                                  <MemberAvatar
+                                    name={principal.name}
+                                    email={principal.email ?? principal.name ?? ""}
+                                    image={principal.image}
+                                  />
+                                )}
+                                <span className="min-w-0 flex-1">
+                                  <span
+                                    dir="auto"
+                                    className="block text-xs text-foreground truncate"
+                                  >
+                                    {principal.name || principal.email}
+                                  </span>
+                                  {principal.name && principal.email && (
+                                    <span
+                                      dir="ltr"
+                                      className="block text-[11px] text-foreground/45 truncate"
+                                    >
+                                      {principal.email}
+                                    </span>
+                                  )}
+                                </span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                  </div>
                 )}
 
-              {visibleInvitations.map((invitation) => (
-                <MemberRow
-                  key={invitation.id}
-                  leading={<MemberAvatar name={null} email={invitation.email} size="md" />}
-                  primary={invitation.email}
-                  primaryDir="ltr"
-                  secondary={
-                    invitation.accepted_at
-                      ? t("noteEditor.share.dialog.accepted")
-                      : t("noteEditor.share.dialog.pending")
-                  }
-                  trailing={
-                    canManageAccess ? (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            className={cn(
-                              "h-6 w-6 flex items-center justify-center rounded-md",
-                              "hover:bg-foreground/8 dark:hover:bg-white/8",
-                              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                              "transition-colors"
-                            )}
-                            aria-label={t("noteEditor.share.dialog.invitationActions")}
-                          >
-                            <MoreHorizontal size={13} className="text-foreground/50" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" sideOffset={4}>
-                          {shareActionAllowed("resend-invitation") && (
-                            <DropdownMenuItem
-                              className="text-xs"
-                              disabled={resendingId === invitation.id}
-                              onClick={() => void handleResend(invitation)}
-                            >
-                              {t("noteEditor.share.dialog.resend")}
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem
-                            className="text-xs text-red-500"
-                            onClick={() => void handleRevoke(invitation)}
-                          >
-                            {t("noteEditor.share.dialog.revoke")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    ) : (
-                      <span className="text-[11px] text-foreground/45">
-                        {t("noteEditor.share.dialog.viewer")}
-                      </span>
-                    )
-                  }
-                />
-              ))}
-            </div>
+                {inviteAllowedByPolicy && (
+                  <p
+                    id="share-invite-error"
+                    aria-live="polite"
+                    className={cn("text-xs text-red-500/90 -mt-1", !inputError && "sr-only")}
+                  >
+                    {inputError}
+                  </p>
+                )}
 
-            <div className="flex items-center gap-2 pt-3 mt-1 border-t border-border/70">
-              <ShareVisibilityMenu
-                value={share?.visibility ?? "private"}
-                ownerDomain={ownerDomain}
-                showDomainOption={showDomainOption}
-                visibleOptions={visibleShareVisibilities}
-                disabled={loading || !share || !canManageAccess || savingVisibility || linkBusy}
-                onChange={(v) => void applyVisibility(v)}
-              />
-              <div className="flex-1" />
-              {linkActionAllowedByPolicy && (
-                <Button
-                  variant={isPrivate ? "default" : "outline"}
-                  size="sm"
-                  className="h-8 px-3 text-xs gap-1.5"
-                  disabled={loading || !share || !canUseLink || savingVisibility || linkBusy}
-                  onClick={() => void handleLinkButton()}
-                >
-                  {linkBusy ? (
-                    <>
-                      <Loader2 size={12} className="animate-spin" />
-                      {isPrivate
-                        ? t("noteEditor.share.dialog.createLink")
-                        : t("noteEditor.share.dialog.copyLink")}
-                    </>
-                  ) : copied ? (
-                    <>
-                      <Check size={12} />
-                      {t("noteEditor.share.dialog.copied")}
-                    </>
-                  ) : isPrivate ? (
-                    <>
-                      <Link2 size={12} />
-                      {t("noteEditor.share.dialog.createLink")}
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={12} />
-                      {t("noteEditor.share.dialog.copyLink")}
-                    </>
+                <div className="flex flex-col gap-1.5 mt-1">
+                  {(access?.owner || !isTeamNote) && (
+                    <MemberRow
+                      leading={
+                        <MemberAvatar
+                          name={access?.owner.name ?? ownerName}
+                          email={access?.owner.email ?? ownerEmail}
+                          image={access?.owner.image}
+                        />
+                      }
+                      primary={access?.owner.name || access?.owner.email || ownerName || ownerEmail}
+                      secondary={
+                        access?.owner.name ? access.owner.email : ownerName ? ownerEmail : null
+                      }
+                      secondaryDir="ltr"
+                      trailing={
+                        <span className="text-[11px] text-foreground/45">
+                          {t("noteEditor.share.dialog.owner")}
+                        </span>
+                      }
+                    />
                   )}
-                </Button>
-              )}
-            </div>
+
+                  {(access?.grants ?? []).map((grant) => (
+                    <AccessGrantRow
+                      key={grant.id}
+                      grant={grant}
+                      canChangePermission={
+                        canManageAccessGrant(access, grant) && shareActionAllowed("change-grant")
+                      }
+                      showPermissionActions={shareActionAllowed("change-grant")}
+                      canRemove={
+                        canManageAccessGrant(access, grant) && shareActionAllowed("remove-grant")
+                      }
+                      busy={busyGrantId === grant.id}
+                      onPermissionChange={(permission) =>
+                        void handleGrantPermission(grant, permission)
+                      }
+                      onRemove={() => void handleRemoveGrant(grant)}
+                    />
+                  ))}
+
+                  {isTeamNote &&
+                    space &&
+                    !(access?.grants ?? []).some(
+                      (grant) =>
+                        grant.principal.type === "team" &&
+                        space.teams.some((team) => team.id === grant.principal.id)
+                    ) && (
+                      <MemberRow
+                        leading={<AudienceIcon />}
+                        primary={space.name}
+                        secondary={t("noteEditor.share.dialog.teamAudience")}
+                        trailing={
+                          <span className="text-[11px] text-foreground/45">
+                            {t("noteEditor.share.dialog.editor")}
+                          </span>
+                        }
+                      />
+                    )}
+
+                  {visibleInvitations.map((invitation) => (
+                    <MemberRow
+                      key={invitation.id}
+                      leading={<MemberAvatar name={null} email={invitation.email} size="md" />}
+                      primary={invitation.email}
+                      primaryDir="ltr"
+                      secondary={
+                        invitation.accepted_at
+                          ? t("noteEditor.share.dialog.accepted")
+                          : t("noteEditor.share.dialog.pending")
+                      }
+                      trailing={
+                        canManageAccess ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className={cn(
+                                  "h-6 w-6 flex items-center justify-center rounded-md",
+                                  "hover:bg-foreground/8 dark:hover:bg-white/8",
+                                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                                  "transition-colors"
+                                )}
+                                aria-label={t("noteEditor.share.dialog.invitationActions")}
+                              >
+                                <MoreHorizontal size={13} className="text-foreground/50" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" sideOffset={4}>
+                              {shareActionAllowed("resend-invitation") && (
+                                <DropdownMenuItem
+                                  className="text-xs"
+                                  disabled={resendingId === invitation.id}
+                                  onClick={() => void handleResend(invitation)}
+                                >
+                                  {t("noteEditor.share.dialog.resend")}
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                className="text-xs text-red-500"
+                                onClick={() => void handleRevoke(invitation)}
+                              >
+                                {t("noteEditor.share.dialog.revoke")}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <span className="text-[11px] text-foreground/45">
+                            {t("noteEditor.share.dialog.viewer")}
+                          </span>
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 pt-3 mt-1 border-t border-border/70">
+                  <ShareVisibilityMenu
+                    value={share?.visibility ?? "private"}
+                    ownerDomain={ownerDomain}
+                    showDomainOption={showDomainOption}
+                    visibleOptions={visibleShareVisibilities}
+                    disabled={loading || !share || !canManageAccess || savingVisibility || linkBusy}
+                    onChange={(v) => void applyVisibility(v)}
+                  />
+                  <div className="flex-1" />
+                  {linkActionAllowedByPolicy && (
+                    <Button
+                      variant={isPrivate ? "default" : "outline"}
+                      size="sm"
+                      className="h-8 px-3 text-xs gap-1.5"
+                      disabled={loading || !share || !canUseLink || savingVisibility || linkBusy}
+                      onClick={() => void handleLinkButton()}
+                    >
+                      {linkBusy ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          {isPrivate
+                            ? t("noteEditor.share.dialog.createLink")
+                            : t("noteEditor.share.dialog.copyLink")}
+                        </>
+                      ) : copied ? (
+                        <>
+                          <Check size={12} />
+                          {t("noteEditor.share.dialog.copied")}
+                        </>
+                      ) : isPrivate ? (
+                        <>
+                          <Link2 size={12} />
+                          {t("noteEditor.share.dialog.createLink")}
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={12} />
+                          {t("noteEditor.share.dialog.copyLink")}
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
           </>
         )}
 
