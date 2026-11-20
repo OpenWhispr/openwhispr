@@ -97,7 +97,8 @@ class DictationService : Service() {
   private val unhide = Runnable { unhide() }
   private val idleShrink = Runnable { idle = true; updateShrink() }
   private val stillWriting = Runnable { if (state == BubbleState.PROCESSING) showTab(StatusMessage.STILL_WRITING) }
-  private val settleDone = Runnable { if (state == BubbleState.READY) face?.show(BubbleFace.Look.ICON) }
+  /** The tick has eased back to the icon: only now may the Ready bubble shrink (Josh, 20 Nov). */
+  private val settleDone = Runnable { if (state == BubbleState.READY) { face?.show(BubbleFace.Look.ICON); updateShrink() } }
   /** Events waiting for the JS pipeline, which may still be starting when a dictation ends. */
   private val pending = BubbleEventQueue()
   private val pipelineTimeout = Runnable {
@@ -273,7 +274,9 @@ class DictationService : Service() {
   }
   /** ValueAnimator follows the system animator scale, so "Remove animations" makes this a jump. */
   private fun updateShrink(animate: Boolean = true) {
-    val goal = if (BubblePolicy.shrunk(state == BubbleState.READY && !touched && menu == null, idle, appearance.shrinkWhenIdle, searchField, appearance.shrinkInSearch)) 1f else 0f
+    // Listening, writing and the tick are one dictation, all at full size: no shrinking until the tick settles.
+    val settling = face?.look == BubbleFace.Look.DONE
+    val goal = if (BubblePolicy.shrunk(state == BubbleState.READY && !touched && menu == null && !settling, idle, appearance.shrinkWhenIdle, searchField, appearance.shrinkInSearch)) 1f else 0f
     shrinking?.cancel(); shrinking = null
     if (shrink == goal) return
     if (!animate || root?.isShown != true) { shrink = goal; resizeFace(); return }
