@@ -105,9 +105,10 @@ beforeEach(() => {
 
 it('a tap dictates, even over highlighted text', async () => {
   jest.mocked(processAndroidAudio).mockResolvedValue('Tomorrow at 4 works.');
-  mockListeners.onStart({ selection: 'old words', mode: 'dictate' });
+  mockListeners.onStart({ selection: 'old words', mode: 'dictate', app: 'com.whatsapp' });
   await flush();
-  expect(createAndroidJob).toHaveBeenCalledWith('dictate', 'Spanish', 'old words');
+  // The app the field is in goes with the job, for Tone & Style.
+  expect(createAndroidJob).toHaveBeenCalledWith('dictate', 'Spanish', 'old words', 'com.whatsapp');
   mockListeners.onRecording(audio);
   await flush();
   expect(native.insert).toHaveBeenCalledWith('Tomorrow at 4 works.', { highlight: false });
@@ -133,7 +134,7 @@ it.each([
   mockListeners.onStart({ selection, mode });
   mockListeners.onRecording(audio);
   await flush();
-  expect(createAndroidJob).toHaveBeenCalledWith(expected, 'Spanish', selection);
+  expect(createAndroidJob).toHaveBeenCalledWith(expected, 'Spanish', selection, undefined);
   // Only an edit keeps its new words highlighted.
   expect(native.insert).toHaveBeenCalledWith('Done.', { highlight: expected === 'edit' });
   expect(native.setStatus).toHaveBeenLastCalledWith('success');
@@ -146,9 +147,9 @@ it('a retried take runs in the mode it was recorded in', async () => {
   await flush();
   expect(native.setStatus).toHaveBeenLastCalledWith('retry-kept', { message: 'offline' });
   jest.mocked(processAndroidAudio).mockResolvedValueOnce('Hola.');
-  mockListeners.onRetry({ selection: '' });
+  mockListeners.onRetry({ selection: '', app: 'com.Slack' });
   await flush();
-  expect(createAndroidJob).toHaveBeenLastCalledWith('translate', 'Spanish', '');
+  expect(createAndroidJob).toHaveBeenLastCalledWith('translate', 'Spanish', '', 'com.Slack');
 });
 
 it('with typing access off, the words go on the clipboard and the tab offers to turn it on', async () => {
@@ -261,7 +262,7 @@ it('waits for app data before creating the job', async () => {
   expect(createAndroidJob).not.toHaveBeenCalled();
   loaded();
   await flush();
-  expect(createAndroidJob).toHaveBeenCalledWith('dictate', 'Spanish', '');
+  expect(createAndroidJob).toHaveBeenCalledWith('dictate', 'Spanish', '', undefined);
   expect(native.insert).toHaveBeenCalledWith('Hi.', { highlight: false });
 });
 

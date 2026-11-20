@@ -11,6 +11,7 @@ import { buildDictationHints } from '@/lib/dictationHints';
 import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import type { KeyboardTone } from '@/types';
+import { dictationToneStyle } from './style/toneStyle';
 import i18n from './strings';
 
 export interface BenchmarkSelection {
@@ -51,8 +52,7 @@ export function snapshotBenchmark(): BenchmarkSelection {
     language: languages.length === 1 && languages[0] !== 'auto' ? languages[0] : undefined,
     customPrompt: getActiveCustomCleanupPrompt(),
     customDictionary: [...buildDictationHints(false)],
-    tone:
-      config?.androidStyleTones?.[config.androidStyleContext ?? 'personal'] ?? config?.keyboardTone,
+    tone: dictationToneStyle(config, undefined)?.tone,
   };
 }
 export function deviceGuidance(
