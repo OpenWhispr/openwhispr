@@ -1,4 +1,4 @@
-import type { KeyboardTone } from '@/types';
+import type { KeyboardTone, ToneAppCategory } from '@/types';
 import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
 
 // Tone sentences ported verbatim from openwhispr-api/lib/prompts.ts (TONE_INSTRUCTIONS).
@@ -12,6 +12,15 @@ export const TONE_INSTRUCTIONS: Partial<Record<KeyboardTone, string>> = {
     'Apply this tone: very casual, like texting a friend. Write in all lowercase and keep punctuation light: a question still ends with a question mark, but drop the final period and never use em dashes. Use texting shorthand common in the output language only where it stands for the exact words (in English: "u" for you, "lmk" for let me know). Restyle only; do not add or remove information.',
   excited:
     'Apply this tone: upbeat and enthusiastic. Use standard capitalization and warm, energetic wording, and end positive or friendly sentences with an exclamation mark, without overdoing it. Use commas or periods, never semicolons or em dashes, and no emoji. Restyle only; do not add or remove information.',
+};
+
+// The server's APP_CATEGORY_INSTRUCTIONS (openwhispr-api/lib/prompts.ts), verbatim: cleanup says
+// what kind of text it is before the tone. "other" has none.
+export const APP_CATEGORY_INSTRUCTIONS: Partial<Record<ToneAppCategory, string>> = {
+  personal: 'The text is a personal chat message.',
+  work: 'The text is a work chat message.',
+  email:
+    'The text is an email. Keep a dictated greeting, paragraphs and sign-off on their own lines, and never add a greeting or sign-off that was not dictated.',
 };
 
 // The server's TONE_PRIORITY_INSTRUCTION, which cleanup appends after the tone.

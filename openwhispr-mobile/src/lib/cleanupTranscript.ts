@@ -8,6 +8,7 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { requiresRealAccount } from './accountAccess';
 import type {
   KeyboardTone,
+  ToneAppCategory,
   LocalReasoningReadiness,
   ReasoningRequest,
   TextInferenceSnapshot,
@@ -40,6 +41,8 @@ interface CleanupOptions
   onSkipped?: (reason: string) => void;
   signal?: AbortSignal;
   tone?: KeyboardTone;
+  // Sent only with a tone; on its own it says nothing.
+  appCategory?: ToneAppCategory;
   includeSnippetTriggers?: boolean;
   context?: CleanupContext;
 }
@@ -182,6 +185,9 @@ export async function cleanupTranscript(
     language: lang,
     locale: lang,
     tone: options.tone,
+    ...(options.tone && options.tone !== 'default' && options.appCategory
+      ? { appCategory: options.appCategory }
+      : {}),
     agentName,
     customPrompt: getActiveCustomCleanupPrompt(),
   };
