@@ -63,3 +63,23 @@ Seats: Claude verifier + Codex responded. agy not run (scope cap). Min 2 familie
 ## Ship verdict
 
 CONTENT BLOCK. Fix the fork-mode test env (one-line scope: blank VITE_* in that case), gate the Share dialog sync/link sections, re-run `npm test` and CI `quality`, re-QC the new SHA.
+
+
+## Re-verification 2026-11-20
+
+Scope: branch feat/tiwh-v1-gaps (origin/main + PR #28), fix commit 39eb26aaf. Tests run per file with `--import ./test/setup/forkEnv.js --import tsx --test --test-force-exit` (the import list `npm test` uses).
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 6 (gap 1) | New red test `useChatStreamingConnectors` "(fork build)" | PASS | Fork case env is now `{ VITE_OPENWHISPR_API_URL: "", VITE_AUTH_URL: "" }`, so CLOUD_ENABLED is false under forkEnv.js. Under the `npm test` import: 4/4 pass. |
+| 3 (gap 2) | No entry point to dropped features (Share dialog) | PASS | `ShareNoteDialog.tsx` sync/link block wrapped in `cloudFeatureVisible("shareLink", CLOUD_ENABLED)`; local export stays outside. `droppedFeatureGuard.test.js` gained a `syncAndShare` mount-site assertion: 20/20 pass. |
+| 2 (warning) | Sign-in routes to a hidden section | PASS | `ProfileMenu.tsx` signed-out button and `ControlPanel.tsx` Insights `onSignIn` use `CLOUD_ENABLED ? "account" : "titaniumAccount"`. Remaining `setSettingsSection("account")` at `ControlPanel.tsx:1167` is the past-due billing banner gated by cloud `usage.isPastDue` (unreachable in a fork). |
+| 2 (warning) | "View Plans" label in fork | PASS | `ConnectorsSection.tsx` passes `actionLabel={CLOUD_ENABLED ? undefined : t("connectors.upsellAction")}`; key added in 11 locales (commit stat). |
+| 1,4,5 | Titanium account scoping, fail-closed policy, account-change reset | PASS (unchanged) | Not touched by the fix. |
+| 6 (rest) | No new failure vs main | PASS (targeted) | Full suite not re-run by design. One unrelated pre-existing red on main found: `test/services/cleanupAuth.test.js` seed test (see 05-02 re-verification); not introduced by phase 7. |
+
+Score: 6/6. behavior_unverified: 0.
+
+Ship verdict: PASS. Both original gaps and the warnings are closed in code and the red CI test now passes. Confirm CI `quality` on the merged SHA (pending for PR #28 at check time; the cleanupAuth seed test may keep it red independent of phase 7).
+
+Verifier: Claude (gsd-verifier), re-verification.
