@@ -29,8 +29,10 @@ concurrency:
   queue: max
 
 jobs:
-  # Tests and dependency code run here, in a job that holds neither the signing key nor a
-  # token that can write. Nothing is cached: a cache can be written by any workflow on main.
+  # Tests and checks that fetch from the network run here, in a job that holds neither the
+  # signing key nor a token that can write. The publish job still installs and runs the
+  # lockfile-pinned zod and the registry's own code with both keys. Nothing is cached: a
+  # cache can be written by any workflow on main.
   check:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -44,6 +46,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: source/model-registry/.nvmrc
+          # setup-node caches on its own once a package.json declares packageManager.
+          package-manager-cache: false
       - run: npm ci --ignore-scripts && npm test && npm run validate
         working-directory: source/model-registry
       # A rollback republishes data that passed these when it was first published, and must
@@ -78,6 +82,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: source/model-registry/.nvmrc
+          package-manager-cache: false
       - run: npm ci --ignore-scripts
         working-directory: source/model-registry
       # Until OpenWhispr/model-registry stops publishing itself, it may hold a version this

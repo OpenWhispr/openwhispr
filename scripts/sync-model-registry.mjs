@@ -40,9 +40,22 @@ const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const json = (value) => JSON.stringify(value, null, 2) + "\n";
 const isCommit = (value) => /^[a-f0-9]{40}$/.test(value || "");
 
-async function fetchText(url) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(15000), redirect: "error" });
+// Every release job pins from raw.githubusercontent.com, so one network blip would fail a
+// platform's release. Its URLs name a commit, so a repeated fetch reads the same bytes.
+async function fetchText(url, attempts = 3) {
+  const retry = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    return fetchText(url, attempts - 1);
+  };
+  let response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(15000), redirect: "error" });
+  } catch (error) {
+    if (attempts > 1) return retry();
+    throw error;
+  }
   if (!response.ok) {
+    if (attempts > 1 && (response.status === 429 || response.status >= 500)) return retry();
     const error = new Error(`${url} answered HTTP ${response.status}`);
     error.status = response.status;
     throw error;
@@ -62,7 +75,8 @@ function readerHashes(files) {
 }
 
 // What the app bundles for the registry in `from`: its reader and keys byte for byte, and
-// its catalog as that reader validates it. `zod` resolves from the app's node_modules.
+// its catalog as that reader validates it. `zod` resolves from model-registry/node_modules
+// when it is installed there, otherwise from the app's.
 export async function generate(from = registry) {
   const files = {};
   for (const [key, [, sourceName]] of Object.entries(READER))

@@ -5,8 +5,11 @@
 /model-registry/lib/ @greatcoat @Chadpiha @gabrielste1n
 /model-registry/scripts/ @greatcoat @Chadpiha @gabrielste1n
 /model-registry/trusted-keys.json @greatcoat @gabrielste1n
+/model-registry/registry/trusted-publishers.json @greatcoat @gabrielste1n
 /.github/workflows/model-registry*.yml @greatcoat @Chadpiha @gabrielste1n
 /.github/CODEOWNERS @greatcoat @Chadpiha @gabrielste1n
+# Line endings decide the bytes the catalog and reader are hashed from.
+/.gitattributes @greatcoat @Chadpiha @gabrielste1n
 # What the app trusts: the keys and reader it bundles, the code that accepts a
 # publication or a download, and the script and workflows that produce and gate them.
 /src/models/registry* @greatcoat @Chadpiha @gabrielste1n
