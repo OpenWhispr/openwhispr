@@ -1,1 +1,3 @@
 openwhispr-mobile/patches/*.patch -whitespace
+# Fork: keep LF in every checkout (Windows autocrlf breaks source-text tests and workflow parsing).
+* text=auto eol=lf
