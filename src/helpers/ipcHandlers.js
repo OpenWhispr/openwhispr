@@ -7953,10 +7953,13 @@ class IPCHandlers {
       !!this._meetingMicStreaming?.isConnected &&
       (systemAudioMode === "unsupported" || !!this._meetingSystemStreaming?.isConnected);
 
-    const connectRealtimeStreaming = async (event, options) => {
+    const connectRealtimeStreaming = async (
+      event,
+      options,
+      cancelGenerationAtStart = meetingPrepareCancelGeneration
+    ) => {
       // Read before the key is, so a save during the token fetch marks these connections stale.
       const connectionKey = getMeetingConnectionKey(options, credentialGeneration);
-      const cancelGenerationAtStart = meetingPrepareCancelGeneration;
       const StreamingClass = getMeetingStreamingClient(options.provider);
       if (this._meetingMicStreaming?.isConnected) {
         await this._meetingMicStreaming.disconnect();
@@ -9260,6 +9263,8 @@ class IPCHandlers {
         return { success: true };
       }
 
+      // Snapshot before any await, so a cancel at any point of the prepare discards it.
+      const cancelGeneration = meetingPrepareCancelGeneration;
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
       const requestedConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
 
@@ -9276,7 +9281,7 @@ class IPCHandlers {
         let timeoutHandle;
         try {
           await Promise.race([
-            connectRealtimeStreaming(event, options),
+            connectRealtimeStreaming(event, options, cancelGeneration),
             new Promise((_, reject) => {
               timeoutHandle = setTimeout(() => reject(new Error("Prepare timed out")), 15000);
             }),

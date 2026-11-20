@@ -9,7 +9,7 @@ import { shouldSeedSttApiCleanup } from "../services/cleanupAuth";
 import logger from "../utils/logger";
 
 // Every ApiKeySettings field (the compiler rejects a missing one), plus the
-// enterprise credentials that live outside it.
+// per-scope custom keys and enterprise credentials that live outside it.
 const API_KEY_FIELDS: Record<keyof ApiKeySettings, true> = {
   openaiApiKey: true,
   anthropicApiKey: true,
@@ -29,6 +29,11 @@ const API_KEY_FIELDS: Record<keyof ApiKeySettings, true> = {
 };
 const BYOK_KEY_FIELDS = [
   ...Object.keys(API_KEY_FIELDS),
+  "noteFormattingCustomApiKey",
+  "translationCustomApiKey",
+  "dictationAgentCustomApiKey",
+  "dictationAgentVisionCustomApiKey",
+  "chatAgentCustomApiKey",
   "bedrockAccessKeyId",
   "azureApiKey",
   "vertexApiKey",
