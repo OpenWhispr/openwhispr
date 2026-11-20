@@ -2316,7 +2316,6 @@
         "ownerOnly": "Nur der Workspace-Inhaber kann das Abonnement verwalten.",
         "nextInvoice": "Nächste Rechnung",
         "manageStripe": "In Stripe verwalten",
-        "startSubscription": "Abonnement starten",
         "provisionedPlan": "Von OpenWhispr eingerichtet. Wenden Sie sich an den Vertrieb, um Tarif oder Plätze zu ändern.",
         "planLabel": {
           "business": "Business",
@@ -2442,8 +2441,6 @@
       }
     },
     "unifiedBilling": {
-      "workspaceTitle": "Workspace-Abrechnung",
-      "workspaceDescription": "Jeder Workspace hat seinen eigenen Plan, eigene Plätze und einen Abrechnungsinhaber.",
       "billableSeat": "Ihr Platz wird abgerechnet",
       "nonBillableSeat": "Nur Admin-Zugriff · kein kostenpflichtiger Platz",
       "managedBy": "Die Abrechnung wird von {{owner}} verwaltet.",
@@ -2451,7 +2448,6 @@
       "seatUpdated_one": "Workspace-Kapazität auf {{count}} Platz aktualisiert",
       "seatUpdated_other": "Workspace-Kapazität auf {{count}} Plätze aktualisiert",
       "seatUpdateFailed": "Workspace-Plätze konnten nicht aktualisiert werden",
-      "businessWorkspaceOnly": "Für Workspaces verfügbar",
       "personalPlanTitle": "Persönlicher Plan",
       "providedBy": "Persönlicher Plan: Free · Bezahlter Zugriff bereitgestellt von {{workspaces}}",
       "confirmSeats": {
@@ -3336,6 +3332,32 @@
       "upgradeCta": "Jetzt upgraden",
       "upgradedTitle": "Upgrade auf Enterprise abgeschlossen",
       "upgradedDescription": "{{workspace}} ist jetzt auf Enterprise."
+    },
+    "billing": {
+      "free": {
+        "inviteTeammates": "Teammitglieder einladen",
+        "upgradeToBusiness": "Auf Business upgraden",
+        "proHint": "Nur Sie? Pro kostet {{price}} / Monat.",
+        "viewPersonal": "Persönlichen Plan ansehen",
+        "countFailed": "Konnte nicht prüfen, wer in diesem Workspace ist."
+      },
+      "errors": {
+        "noTeammates": "Laden Sie ein Teammitglied ein, bevor Sie Business starten."
+      },
+      "picker": {
+        "label": "Angezeigter Plan",
+        "personal": "Persönlich",
+        "workspaces": "Workspaces",
+        "loadFailed": "Workspaces konnten nicht geladen werden"
+      },
+      "workspaceUnavailable": {
+        "title": "Workspace-Plan nicht verfügbar",
+        "description": "Dein Zugriff bleibt unverändert."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Workspace upgraden",
+        "createWorkspace": "Workspace erstellen"
+      }
     }
   },
   "models": {

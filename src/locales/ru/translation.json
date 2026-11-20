@@ -1673,8 +1673,6 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Оплата рабочих пространств",
-      "workspaceDescription": "У каждого рабочего пространства свой тариф, места и ответственный за оплату.",
       "billableSeat": "Ваше место оплачивается",
       "nonBillableSeat": "Доступ только для администратора · без платного места",
       "managedBy": "Оплатой управляет {{owner}}.",
@@ -1684,7 +1682,6 @@
       "seatUpdated_many": "Вместимость рабочего пространства обновлена до {{count}} мест",
       "seatUpdated_other": "Вместимость рабочего пространства обновлена до {{count}} мест",
       "seatUpdateFailed": "Не удалось обновить места рабочего пространства",
-      "businessWorkspaceOnly": "Доступно для рабочих пространств",
       "personalPlanTitle": "Личный тариф",
       "providedBy": "Личный тариф: Бесплатный · Платный доступ через {{workspaces}}",
       "confirmSeats": {
@@ -3168,7 +3165,6 @@
         "ownerOnly": "Управлять подпиской может только владелец рабочего пространства.",
         "nextInvoice": "Следующий счёт",
         "manageStripe": "Управлять в Stripe",
-        "startSubscription": "Оформить подписку",
         "provisionedPlan": "Настроен OpenWhispr. Чтобы изменить тариф или число мест, свяжитесь с отделом продаж.",
         "planLabel": {
           "business": "Business",
@@ -3334,6 +3330,32 @@
       "upgradeCta": "Обновить сейчас",
       "upgradedTitle": "План обновлён до Enterprise",
       "upgradedDescription": "{{workspace}} теперь на плане Enterprise."
+    },
+    "billing": {
+      "free": {
+        "inviteTeammates": "Пригласить коллег",
+        "upgradeToBusiness": "Перейти на Business",
+        "proHint": "Только вы? Pro стоит {{price}} / месяц.",
+        "viewPersonal": "Посмотреть личный тариф",
+        "countFailed": "Не удалось проверить, кто состоит в этом рабочем пространстве."
+      },
+      "errors": {
+        "noTeammates": "Пригласите коллегу, прежде чем подключать Business."
+      },
+      "picker": {
+        "label": "Показан тариф",
+        "personal": "Личный",
+        "workspaces": "Рабочие пространства",
+        "loadFailed": "Не удалось загрузить рабочие пространства"
+      },
+      "workspaceUnavailable": {
+        "title": "Тариф рабочего пространства недоступен",
+        "description": "Ваш доступ не изменился."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Улучшить рабочее пространство",
+        "createWorkspace": "Создать рабочее пространство"
+      }
     }
   },
   "models": {

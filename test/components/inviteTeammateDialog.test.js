@@ -737,7 +737,7 @@ test("Upgrade shows from every entry point", async (t) => {
   assert.ok(findUpgrade(container), container.textContent);
 });
 
-test("Upgrade closes the dialog and asks for Plan & Billing", async (t) => {
+test("the seat-limit Upgrade opens the invited-to workspace's plan", async (t) => {
   const steps = [];
   const { container } = await mountWithWorkspace(
     t,
@@ -753,7 +753,7 @@ test("Upgrade closes the dialog and asks for Plan & Billing", async (t) => {
   await pressButton(findUpgrade(container));
 
   assert.deepEqual(steps, ["open:false"]);
-  assert.deepEqual(globalThis.__settingsRequests, ["plansBilling"]);
+  assert.deepEqual(globalThis.__settingsRequests, ["plansBilling:workspace:w1"]);
 });
 
 test("admins never see it", async (t) => {

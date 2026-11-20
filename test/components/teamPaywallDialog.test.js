@@ -204,7 +204,7 @@ test("the owner gets Upgrade, which opens Plans & Billing and closes", async (t)
 
   await click("Upgrade to Business");
   assert.deepEqual(closes, [false]);
-  assert.deepEqual(opened, ["plansBilling"]);
+  assert.deepEqual(opened, ["plansBilling:workspace:w1"]);
 });
 
 test("another admin is told who to ask, and has no Upgrade", async (t) => {
@@ -279,7 +279,7 @@ test("a lapsed Business plan is told to fix billing, not to upgrade", async (t) 
   );
   assert.deepEqual(buttons(), ["Update billing", "Not now"]);
   await click("Update billing");
-  assert.deepEqual(opened, ["plansBilling"]);
+  assert.deepEqual(opened, ["plansBilling:workspace:w1"]);
 });
 
 test("someone without billing on a lapsed plan is told who to ask", async (t) => {
@@ -291,46 +291,15 @@ test("someone without billing on a lapsed plan is told who to ask", async (t) =>
   assert.deepEqual(buttons(), ["Close"]);
 });
 
-// Plans & Billing hides an unpaid default workspace nobody else is in, and the personal Business
-// plan there doesn't unlock teams, so its owner checks out from the paywall.
-const soloDefault = (overrides = {}) => ({
-  ...workspaceWith({ manage_billing: true }),
-  plan: "free",
-  status: "active",
-  is_account_default: true,
-  seats_used: 1,
-  has_subscription: false,
-  stripe_subscription_id: null,
-  ...overrides,
-});
-
-test("the owner of a solo default workspace upgrades it to Business from the paywall", async (t) => {
-  const { opened, external, checkouts, armed, closes } = await mount(t, soloDefault());
-  assert.deepEqual(buttons(), ["Upgrade to Business", "Not now"]);
-
+test("Upgrade opens that workspace's plan, for a solo default workspace too", async (t) => {
+  const { opened, external, checkouts } = await mount(t, {
+    ...workspaceWith({ manage_billing: true }),
+    plan: "free",
+    is_account_default: true,
+    seats_used: 1,
+  });
   await click("Upgrade to Business");
-  assert.deepEqual(checkouts(), [["w1", "monthly", { tier: "business" }]]);
-  assert.deepEqual(external, ["https://checkout.stripe.test/session"]);
-  assert.equal(armed(), 1);
-  assert.deepEqual(closes, [false]);
-  assert.deepEqual(opened, []);
-});
-
-test("a checkout that can't start stays open and says why", async (t) => {
-  globalThis.__checkoutError = "Failed to create checkout session";
-  const { external, toasts, closes } = await mount(t, soloDefault());
-
-  await click("Upgrade to Business");
-  assert.deepEqual(external, []);
-  assert.deepEqual(closes, []);
-  assert.equal(toasts().length, 1);
-  assert.equal(toasts()[0].description, "Failed to create checkout session");
-  assert.equal(toasts()[0].variant, "destructive");
-});
-
-test("a default workspace with teammates still upgrades in Plans & Billing", async (t) => {
-  const { opened, checkouts } = await mount(t, soloDefault({ seats_used: 3 }));
-  await click("Upgrade to Business");
-  assert.deepEqual(opened, ["plansBilling"]);
+  assert.deepEqual(opened, ["plansBilling:workspace:w1"]);
   assert.deepEqual(checkouts(), []);
+  assert.deepEqual(external, []);
 });

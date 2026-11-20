@@ -2316,7 +2316,6 @@
         "ownerOnly": "Seul le propriétaire de l'espace de travail peut gérer l'abonnement.",
         "nextInvoice": "Prochaine facture",
         "manageStripe": "Gérer dans Stripe",
-        "startSubscription": "Démarrer l'abonnement",
         "provisionedPlan": "Configuré par OpenWhispr. Contactez l'équipe commerciale pour modifier le forfait ou les places.",
         "planLabel": {
           "business": "Business",
@@ -2448,8 +2447,6 @@
       }
     },
     "unifiedBilling": {
-      "workspaceTitle": "Facturation de l'espace de travail",
-      "workspaceDescription": "Chaque espace de travail a son propre plan, ses sièges et son responsable de facturation.",
       "billableSeat": "Votre siège est facturable",
       "nonBillableSeat": "Accès administrateur uniquement · aucun siège payant",
       "managedBy": "La facturation est gérée par {{owner}}.",
@@ -2457,7 +2454,6 @@
       "seatUpdated_one": "Capacité de l'espace de travail mise à jour : {{count}} siège",
       "seatUpdated_other": "Capacité de l'espace de travail mise à jour : {{count}} sièges",
       "seatUpdateFailed": "Impossible de mettre à jour les sièges de l'espace de travail",
-      "businessWorkspaceOnly": "Disponible pour les espaces de travail",
       "personalPlanTitle": "Plan personnel",
       "providedBy": "Plan personnel : Gratuit · Accès payant fourni par {{workspaces}}",
       "confirmSeats": {
@@ -3342,6 +3338,32 @@
       "upgradeCta": "Mettre à niveau",
       "upgradedTitle": "Mise à niveau effectuée",
       "upgradedDescription": "{{workspace}} est maintenant sur Enterprise."
+    },
+    "billing": {
+      "free": {
+        "inviteTeammates": "Inviter des coéquipiers",
+        "upgradeToBusiness": "Passer à Business",
+        "proHint": "Vous êtes seul ? Pro coûte {{price}} / mois.",
+        "viewPersonal": "Voir le forfait personnel",
+        "countFailed": "Impossible de vérifier qui fait partie de cet espace de travail."
+      },
+      "errors": {
+        "noTeammates": "Invitez un coéquipier avant de démarrer Business."
+      },
+      "picker": {
+        "label": "Forfait affiché",
+        "personal": "Personnel",
+        "workspaces": "Espaces de travail",
+        "loadFailed": "Impossible de charger les espaces de travail"
+      },
+      "workspaceUnavailable": {
+        "title": "Forfait de l'espace de travail indisponible",
+        "description": "Votre accès reste inchangé."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Passer un espace de travail à un forfait supérieur",
+        "createWorkspace": "Créer un espace de travail"
+      }
     }
   },
   "models": {

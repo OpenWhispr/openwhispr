@@ -7,9 +7,11 @@ const React = require("react");
 const { createRendererServer, installHappyDom } = require("../lib/rendererTestHarness");
 const {
   businessDowngradeAction,
+  businessTileAction,
   enterpriseManageAction,
   enterpriseTileCta,
   entitledWorkspacePlans,
+  hasActiveWorkspaceSubscription,
 } = require("../../src/lib/workspaceBilling.ts");
 
 const pricingKey = (suffix) => `settingsPage.account.pricing.${suffix}`;
@@ -23,9 +25,16 @@ const enterprise = (overrides = {}) => ({
   ...overrides,
 });
 
+// Each card's outer div is found by the expression its highlight reads, one per card.
+const CARD_ANCHORS = {
+  business: 'businessTile.kind === "workspacePlan"',
+  enterprise: 'workspacePlans.has("enterprise")',
+};
+
 // Render the actual SettingsPage cards so their caller props and conditional JSX
 // stay covered without mounting unrelated settings tabs and device integrations.
 function loadPricingCard(plan) {
+  const anchor = CARD_ANCHORS[plan];
   const source = fs.readFileSync(
     path.join(__dirname, "../../src/components/SettingsPage.tsx"),
     "utf8"
@@ -42,7 +51,7 @@ function loadPricingCard(plan) {
     if (
       ts.isJsxElement(node) &&
       node.openingElement.tagName.getText(ast) === "div" &&
-      node.openingElement.getText(ast).includes(`workspacePlans.has("${plan}")`)
+      node.openingElement.getText(ast).includes(anchor)
     ) {
       assert.equal(card, undefined, `Expected a single ${plan} card`);
       card = node;
@@ -53,8 +62,9 @@ function loadPricingCard(plan) {
   assert.ok(card, `Missing ${plan} pricing card`);
   const compiled = ts.transpileModule(
     `const { React, cn, t, Check, Mail, Button, WorkspacePlanActionButton,
-      isSignedIn, workspacePlans, enterpriseCta, enterpriseAction, businessAction,
-      usage, billingState, setBillingState, setEnterpriseCheckoutOpen, setEnterpriseWorkspaceCreateOpen, requestSignIn } = scope;
+      isSignedIn, workspacePlans, enterpriseCta, enterpriseAction, businessAction, businessTile,
+      usage, billingState, setBillingState, setEnterpriseCheckoutOpen, setCreateWorkspaceFor,
+      onBillingRequestChange, requestSignIn } = scope;
       return (${card.getText(ast)});`,
     { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2020 } }
   ).outputText;
@@ -76,6 +86,8 @@ async function setup(t) {
     consoleOpens: 0,
     checkoutOpens: 0,
     createOpens: 0,
+    createFor: [],
+    viewRequests: [],
     portal: async () => "https://stripe.test/portal",
   };
   globalThis.__settingsBillingTest = state;
@@ -131,11 +143,23 @@ async function setup(t) {
     enterpriseCta: enterpriseTileCta(workspaces, "enterprise"),
     enterpriseAction: enterpriseManageAction(workspaces, "enterprise"),
     businessAction: businessDowngradeAction(workspaces, "enterprise"),
+    businessTile: businessTileAction({
+      listLoaded: true,
+      entitledWorkspaceIds: workspaces
+        .filter((workspace) => hasActiveWorkspaceSubscription(workspace))
+        .map((workspace) => workspace.id),
+      workspaces,
+      defaultWorkspaceId: null,
+    }),
     usage: null,
     billingState: { business: false },
     setBillingState: () => {},
     setEnterpriseCheckoutOpen: () => state.checkoutOpens++,
-    setEnterpriseWorkspaceCreateOpen: () => state.createOpens++,
+    setCreateWorkspaceFor: (plan) => {
+      state.createFor.push(plan);
+      state.createOpens++;
+    },
+    onBillingRequestChange: (request) => state.viewRequests.push(request),
     requestSignIn: () => {},
     ...overrides,
   });
@@ -220,6 +244,7 @@ test("Enterprise retains sole-plan, non-owner, new-workspace, signed-out and loa
     if (fixture.create) {
       await React.act(async () => findButton(container, "enterprise.upgradeCta").click());
       assert.equal(state.createOpens, 1);
+      assert.deepEqual(state.createFor, ["enterprise"]);
     }
   }
 });
@@ -319,4 +344,76 @@ test("workspace plan actions keep console/sales separate and recover from portal
   await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
   assert.equal(entitlementRefreshes, 0);
   assert.deepEqual(state.workspaceRefreshes, []);
+});
+
+const tileButton = (container, label) =>
+  [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === `settingsPage.billing.tiles.${label}`
+  );
+
+test("Business tile: a solo default workspace gets a view switch", async (t) => {
+  const { root, container, scopeFor, state } = await setup(t);
+  const renderCard = loadPricingCard("business");
+  const solo = { id: "default", plan: "free", role: "owner", status: "active" };
+  await React.act(async () =>
+    root.render(
+      renderCard(
+        scopeFor([solo], { businessTile: { kind: "viewWorkspace", workspaceId: "default" } })
+      )
+    )
+  );
+  assert.equal(Boolean(tileButton(container, "createWorkspace")), false);
+  await React.act(async () => tileButton(container, "upgradeWorkspace").click());
+  assert.deepEqual(state.viewRequests, [{ kind: "workspace", workspaceId: "default" }]);
+  assert.equal(state.checkoutOpens, 0);
+  assert.deepEqual(state.createFor, []);
+});
+
+test("Business tile: Create workspace opens the create dialog for business", async (t) => {
+  const { root, container, scopeFor, state } = await setup(t);
+  const renderCard = loadPricingCard("business");
+  await React.act(async () =>
+    root.render(renderCard(scopeFor([], { businessTile: { kind: "createWorkspace" } })))
+  );
+  assert.equal(Boolean(tileButton(container, "upgradeWorkspace")), false);
+  await React.act(async () => tileButton(container, "createWorkspace").click());
+  assert.deepEqual(state.createFor, ["business"]);
+  assert.deepEqual(state.viewRequests, []);
+  assert.equal(state.checkoutOpens, 0);
+});
+
+test("Business tile: a covering Business workspace shows the workspace label and no button", async (t) => {
+  const { root, container, scopeFor } = await setup(t);
+  const renderCard = loadPricingCard("business");
+  await React.act(async () =>
+    root.render(renderCard(scopeFor([], { businessTile: { kind: "workspacePlan" } })))
+  );
+  assert.equal(container.textContent.includes(pricingKey("yourWorkspacePlan")), true);
+  assert.equal(container.querySelectorAll("button").length, 1, "only the billing switch");
+});
+
+test("Business tile: signed out, the sign-up button is outline so Pro stays the only primary", async (t) => {
+  const { root, container, scopeFor } = await setup(t);
+  const renderCard = loadPricingCard("business");
+  await React.act(async () =>
+    root.render(renderCard(scopeFor([], { isSignedIn: false, businessTile: { kind: "none" } })))
+  );
+  const button = findButton(container, "business.cta");
+  assert.equal(Boolean(button), true);
+  assert.equal(button.className.includes("border-border/70"), true);
+  assert.equal(button.className.includes("--gradient-brand-glass"), false);
+});
+
+test("Enterprise tile: an owner of an unpaid workspace gets an outline purchase button so Pro stays the only primary", async (t) => {
+  const { root, container, scopeFor } = await setup(t);
+  const renderCard = loadPricingCard("enterprise");
+  await React.act(async () =>
+    root.render(
+      renderCard(scopeFor([{ id: "free", plan: "free", role: "owner", status: "active" }]))
+    )
+  );
+  const button = findButton(container, "enterprise.upgradeCta");
+  assert.equal(Boolean(button), true);
+  assert.equal(button.className.includes("border-border/70"), true);
+  assert.equal(button.className.includes("--gradient-brand-glass"), false);
 });

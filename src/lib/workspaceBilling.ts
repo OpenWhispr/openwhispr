@@ -30,27 +30,6 @@ export function hasActiveWorkspaceSubscription(
 }
 
 /**
- * Whether Plans & Billing shows a workspace's card. Every account has a default
- * workspace, so an unpaid one nobody else is in would put a Business checkout
- * above the personal plan with nothing to bill. A lapsed plan keeps its card so
- * the owner can fix it; an unknown seat count keeps it too.
- */
-export function showsWorkspaceBillingCard(
-  workspace: Pick<
-    Workspace,
-    "plan" | "is_account_default" | "seats_used" | "has_subscription" | "stripe_subscription_id"
-  >
-): boolean {
-  const soloUnpaidDefault =
-    workspace.is_account_default === true &&
-    workspace.plan === "free" &&
-    !hasSubscription(workspace) &&
-    typeof workspace.seats_used === "number" &&
-    workspace.seats_used <= 1;
-  return !soloUnpaidDefault;
-}
-
-/**
  * The paid plans the user's workspaces are currently on, so the Plans grid can
  * mark the tiers a workspace provides, not only the personal plan.
  */
@@ -216,4 +195,53 @@ export function enterpriseTileCta(
   const target =
     workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0];
   return { action: "contactSales", ownerName: target.billing_manager ?? null };
+}
+
+/** The workspaces whose billable seat covers the user: the ids /api/usage lists, as far as the list knows them. */
+export function coveringWorkspaces<W extends Pick<Workspace, "id">>(
+  entitledWorkspaceIds: string[] | undefined,
+  workspaces: W[]
+): W[] {
+  if (!entitledWorkspaceIds?.length) return [];
+  const entitled = new Set(entitledWorkspaceIds);
+  return workspaces.filter((workspace) => entitled.has(workspace.id));
+}
+
+export type BusinessTileAction =
+  | { kind: "none" }
+  | { kind: "workspacePlan" }
+  | { kind: "viewWorkspace"; workspaceId: string }
+  | { kind: "createWorkspace" };
+
+type BusinessTileWorkspace = Pick<Workspace, "id"> & WorkspaceBillingState;
+
+/**
+ * What the Business pricing tile does. None of these starts a checkout: the
+ * personal view never sells a workspace plan, it only points at the workspace
+ * view or the create-workspace on-ramp.
+ */
+export function businessTileAction(input: {
+  listLoaded: boolean;
+  entitledWorkspaceIds: string[] | undefined;
+  workspaces: BusinessTileWorkspace[];
+  defaultWorkspaceId: string | null;
+}): BusinessTileAction {
+  // An unloaded list reads as empty, which must never send a member to "Create workspace".
+  if (!input.listLoaded) return { kind: "none" };
+
+  const covering = coveringWorkspaces(input.entitledWorkspaceIds, input.workspaces);
+  if (covering.some((workspace) => workspace.plan === "business")) {
+    return { kind: "workspacePlan" };
+  }
+  if (covering.some((workspace) => workspace.plan === "enterprise")) return { kind: "none" };
+
+  const unpaid = input.workspaces.filter(
+    (workspace) =>
+      workspaceCan(workspace, "manage_billing") &&
+      !hasSubscription(workspace) &&
+      !hasActiveWorkspaceSubscription(workspace)
+  );
+  const target = unpaid.find((workspace) => workspace.id === input.defaultWorkspaceId) ?? unpaid[0];
+  if (target) return { kind: "viewWorkspace", workspaceId: target.id };
+  return { kind: "createWorkspace" };
 }

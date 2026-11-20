@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, Loader2, Plus } from "../icons";
+import { ExternalLink, Loader2, Plus, UserPlus } from "../icons";
 import { Button } from "../ui/button";
 import EnterpriseConsoleRow from "./EnterpriseConsoleRow";
 import { useBillingRefreshOnReturn } from "../../hooks/useBillingRefreshOnReturn";
@@ -14,23 +14,61 @@ import {
 } from "../ui/dialog";
 import { useToast } from "../ui/useToast";
 import { WorkspacesService, type SeatPreview } from "../../services/WorkspacesService";
+import { CloudApiError } from "../../services/cloudApi";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { workspaceCan } from "../../lib/capabilities";
+import {
+  currentBillingIdentity,
+  isSameBillingIdentity,
+  type BillingIdentity,
+} from "../../lib/billingRequestIdentity";
 import { hasActiveWorkspaceSubscription, hasSubscription } from "../../lib/workspaceBilling";
+import { freeWorkspaceCta } from "../../lib/workspacePeople";
+import { useWorkspacePeopleCount } from "../../hooks/useWorkspacePeopleCount";
 import { formatAmount } from "../../utils/formatAmount";
 import type { Workspace } from "../../types/electron";
+
+const InviteTeammateDialog = React.lazy(() => import("../InviteTeammateDialog"));
+
+interface SeatQuote {
+  preview: SeatPreview;
+  identity: BillingIdentity;
+}
 
 interface Props {
   workspace: Workspace;
   onRefreshEntitlement?: () => Promise<void>;
+  /** Shows the "View Personal plan" link beside a solo workspace's Pro hint. */
+  onViewPersonal?: () => void;
 }
 
-export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }: Props) {
+export default function WorkspaceBillingCard({
+  workspace,
+  onRefreshEntitlement,
+  onViewPersonal,
+}: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const refresh = useWorkspaceStore((s) => s.refresh);
   const [busy, setBusy] = useState<"checkout" | "portal" | "preview" | "seats" | null>(null);
-  const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
+  const [seatQuote, setSeatQuote] = useState<SeatQuote | null>(null);
+  // A quote for a workspace the card no longer shows is gone, so the dialog never shows it.
+  const seatPreview =
+    seatQuote && seatQuote.identity.workspaceId === workspace.id ? seatQuote.preview : null;
+  // Read after an await: the card can be shown another workspace (same instance) or be gone.
+  const workspaceIdRef = useRef(workspace.id);
+  workspaceIdRef.current = workspace.id;
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  // Coming back to the workspace must not reopen the quote it left.
+  useEffect(() => {
+    setSeatQuote((quote) => (quote && quote.identity.workspaceId !== workspace.id ? null : quote));
+  }, [workspace.id]);
   const refreshOnReturn = useBillingRefreshOnReturn(() => {
     void refresh();
     void onRefreshEntitlement?.();
@@ -45,6 +83,14 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
   const seatsUsed = workspace.seats_used ?? workspace.seats;
   const seatsTotal = Math.max(workspace.seats, seatsUsed);
   const pct = seatsTotal > 0 ? Math.min(100, (seatsUsed / seatsTotal) * 100) : 0;
+  // Counted only when the answer picks the buttons, so a paid card sends no extra reads.
+  const countsPeople = freeWorkspaceCta(workspace, null) === "pending";
+  const { people, retry: retryPeople } = useWorkspacePeopleCount(
+    countsPeople ? workspace.id : null
+  );
+  const freeCta = freeWorkspaceCta(workspace, people);
+  // Bound to its workspace, so the dialog never invites into one the card no longer shows.
+  const [inviteWorkspaceId, setInviteWorkspaceId] = useState<string | null>(null);
 
   async function openBilling(kind: "checkout" | "portal", getUrl: () => Promise<string>) {
     setBusy(kind);
@@ -56,7 +102,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
     } catch (error) {
       toast({
         title: t("common.error"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
+        description: billingErrorText(error),
         variant: "destructive",
       });
     } finally {
@@ -64,11 +110,133 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
     }
   }
 
+  function billingErrorText(error: unknown): string {
+    if (error instanceof CloudApiError && error.code === "default_workspace_has_no_teammates") {
+      return t("settingsPage.billing.errors.noTeammates");
+    }
+    return error instanceof Error ? error.message : t("common.unknownError");
+  }
+
+  function startBusinessCheckout(): void {
+    void openBilling("checkout", () =>
+      WorkspacesService.billingCheckout(workspace.id, "monthly", { tier: "business" })
+    );
+  }
+
+  function renderInviteButton(variant: "default" | "outline"): React.ReactNode {
+    return (
+      <Button
+        onClick={() => setInviteWorkspaceId(workspace.id)}
+        disabled={busy !== null}
+        size="sm"
+        variant={variant}
+      >
+        <UserPlus className="me-1.5 h-3.5 w-3.5" />
+        {t("settingsPage.billing.free.inviteTeammates")}
+      </Button>
+    );
+  }
+
+  function renderUpgradeButton(variant: "default" | "outline"): React.ReactNode {
+    return (
+      <Button onClick={startBusinessCheckout} disabled={busy !== null} size="sm" variant={variant}>
+        {busy === "checkout" && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
+        {t("settingsPage.billing.free.upgradeToBusiness")}
+      </Button>
+    );
+  }
+
+  function renderFreeActions(): React.ReactNode {
+    switch (freeCta) {
+      case "none":
+        return null;
+      case "pending":
+        // Holds the buttons' height so the card doesn't jump when the count lands.
+        return (
+          <div className="pt-1">
+            <div
+              aria-hidden="true"
+              className="h-8 w-56 max-w-full rounded-full bg-foreground/5 dark:bg-white/5 animate-pulse"
+            />
+          </div>
+        );
+      case "invite":
+        return (
+          <div className="space-y-2 pt-1">
+            <div className="flex flex-wrap gap-2">
+              {renderInviteButton("default")}
+              {renderUpgradeButton("outline")}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("settingsPage.billing.free.proHint", {
+                price: t("settingsPage.account.pricing.pro.monthlyPrice"),
+              })}
+              {onViewPersonal && (
+                <>
+                  {" "}
+                  <button
+                    type="button"
+                    onClick={onViewPersonal}
+                    className="font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    {t("settingsPage.billing.free.viewPersonal")}
+                  </button>
+                </>
+              )}
+            </p>
+          </div>
+        );
+      case "upgrade":
+        return <div className="flex flex-wrap gap-2 pt-1">{renderUpgradeButton("default")}</div>;
+      case "unknown":
+        return (
+          <div className="space-y-2 pt-1">
+            <div className="flex flex-wrap gap-2">
+              {renderInviteButton("outline")}
+              {renderUpgradeButton("outline")}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("settingsPage.billing.free.countFailed")}{" "}
+              <button
+                type="button"
+                onClick={retryPeople}
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {t("common.retry")}
+              </button>
+            </p>
+          </div>
+        );
+    }
+  }
+
+  function isQuoteCurrent(identity: BillingIdentity): boolean {
+    return (
+      mountedRef.current &&
+      isSameBillingIdentity(identity, currentBillingIdentity(workspaceIdRef.current))
+    );
+  }
+
+  function showSeatUpdateFailed(): void {
+    toast({ title: t("settingsPage.unifiedBilling.seatUpdateFailed"), variant: "destructive" });
+  }
+
   async function previewSeatIncrease() {
+    const identity = currentBillingIdentity(workspace.id);
+    if (!identity) {
+      showSeatUpdateFailed();
+      return;
+    }
     setBusy("preview");
     try {
-      setSeatPreview(await WorkspacesService.previewSeats(workspace.id, 1));
+      const preview = await WorkspacesService.previewSeats(
+        workspace.id,
+        1,
+        identity.authGeneration
+      );
+      if (isQuoteCurrent(identity)) setSeatQuote({ preview, identity });
     } catch (error) {
+      if (!mountedRef.current) return;
       toast({
         title: t("settingsPage.unifiedBilling.seatUpdateFailed"),
         description: error instanceof Error ? error.message : t("common.unknownError"),
@@ -80,15 +248,25 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
   }
 
   async function confirmSeatIncrease() {
-    if (!seatPreview) return;
+    if (!seatQuote) return;
+    const { preview, identity } = seatQuote;
+    if (identity.workspaceId === null || !isQuoteCurrent(identity)) {
+      setSeatQuote(null);
+      showSeatUpdateFailed();
+      return;
+    }
     setBusy("seats");
     try {
-      await WorkspacesService.updateSeats(workspace.id, seatPreview.next_quantity);
-      setSeatPreview(null);
+      await WorkspacesService.updateSeats(
+        identity.workspaceId,
+        preview.next_quantity,
+        identity.authGeneration
+      );
+      setSeatQuote(null);
       await refresh({ fresh: true });
       toast({
         title: t("settingsPage.unifiedBilling.seatUpdated", {
-          count: seatPreview.next_quantity,
+          count: preview.next_quantity,
         }),
       });
     } catch (error) {
@@ -180,60 +358,55 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
         <p className="text-xs text-muted-foreground">
           {t("settingsPage.workspace.billing.provisionedPlan")}
         </p>
-      ) : (
+      ) : subscribed ? (
         <div className="flex flex-wrap gap-2 pt-1">
-          {subscribed ? (
-            <>
-              {canAddSeats && (
-                <Button
-                  onClick={() => void previewSeatIncrease()}
-                  disabled={busy !== null}
-                  size="sm"
-                >
-                  {busy === "preview" ? (
-                    <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Plus className="me-1.5 h-3.5 w-3.5" />
-                  )}
-                  {t("settingsPage.unifiedBilling.addSeat")}
-                </Button>
+          {canAddSeats && (
+            <Button onClick={() => void previewSeatIncrease()} disabled={busy !== null} size="sm">
+              {busy === "preview" ? (
+                <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Plus className="me-1.5 h-3.5 w-3.5" />
               )}
-              <Button
-                onClick={() =>
-                  void openBilling("portal", () => WorkspacesService.billingPortal(workspace.id))
-                }
-                disabled={busy !== null}
-                size="sm"
-                variant="outline"
-              >
-                {busy === "portal" ? (
-                  <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <ExternalLink className="me-1.5 h-3.5 w-3.5" />
-                )}
-                {t("settingsPage.workspace.billing.manageStripe")}
-              </Button>
-            </>
-          ) : (
-            <Button
-              onClick={() =>
-                void openBilling("checkout", () =>
-                  WorkspacesService.billingCheckout(workspace.id, "monthly")
-                )
-              }
-              disabled={busy !== null}
-              size="sm"
-            >
-              {busy === "checkout" && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
-              {t("settingsPage.workspace.billing.startSubscription")}
+              {t("settingsPage.unifiedBilling.addSeat")}
             </Button>
           )}
+          <Button
+            onClick={() =>
+              void openBilling("portal", () => WorkspacesService.billingPortal(workspace.id))
+            }
+            disabled={busy !== null}
+            size="sm"
+            variant="outline"
+          >
+            {busy === "portal" ? (
+              <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ExternalLink className="me-1.5 h-3.5 w-3.5" />
+            )}
+            {t("settingsPage.workspace.billing.manageStripe")}
+          </Button>
         </div>
+      ) : (
+        renderFreeActions()
       )}
 
       <EnterpriseConsoleRow workspace={workspace} />
 
-      <Dialog open={seatPreview !== null} onOpenChange={(open) => !open && setSeatPreview(null)}>
+      {inviteWorkspaceId === workspace.id && (
+        <Suspense fallback={null}>
+          <InviteTeammateDialog
+            open
+            onOpenChange={(open) => {
+              if (!open) setInviteWorkspaceId(null);
+            }}
+            workspaceId={workspace.id}
+            workspaceName={workspace.name}
+            onInvitationsChanged={retryPeople}
+          />
+        </Suspense>
+      )}
+
+      <Dialog open={seatPreview !== null} onOpenChange={(open) => !open && setSeatQuote(null)}>
         <DialogContent className="sm:max-w-90">
           <DialogHeader>
             <DialogTitle>{t("settingsPage.unifiedBilling.confirmSeats.title")}</DialogTitle>
@@ -264,7 +437,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setSeatPreview(null)}>
+            <Button variant="outline" size="sm" onClick={() => setSeatQuote(null)}>
               {t("common.cancel")}
             </Button>
             <Button

@@ -1673,8 +1673,6 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Fatturazione dell'area di lavoro",
-      "workspaceDescription": "Ogni area di lavoro ha il proprio piano, i propri posti e un responsabile della fatturazione.",
       "billableSeat": "Il tuo posto è fatturabile",
       "nonBillableSeat": "Accesso solo amministratore · nessun posto a pagamento",
       "managedBy": "La fatturazione è gestita da {{owner}}.",
@@ -1682,7 +1680,6 @@
       "seatUpdated_one": "Capacità dell'area di lavoro aggiornata a {{count}} posto",
       "seatUpdated_other": "Capacità dell'area di lavoro aggiornata a {{count}} posti",
       "seatUpdateFailed": "Impossibile aggiornare i posti dell'area di lavoro",
-      "businessWorkspaceOnly": "Disponibile per le aree di lavoro",
       "personalPlanTitle": "Piano personale",
       "providedBy": "Piano personale: Free · Accesso a pagamento fornito da {{workspaces}}",
       "confirmSeats": {
@@ -3090,7 +3087,6 @@
         "ownerOnly": "Solo il proprietario dell'area di lavoro può gestire l'abbonamento.",
         "nextInvoice": "Prossima fattura",
         "manageStripe": "Gestisci in Stripe",
-        "startSubscription": "Avvia abbonamento",
         "provisionedPlan": "Configurato da OpenWhispr. Contatta le vendite per modificare il piano o i posti.",
         "planLabel": {
           "business": "Business",
@@ -3242,6 +3238,32 @@
       "upgradeCta": "Esegui l'upgrade",
       "upgradedTitle": "Upgrade completato",
       "upgradedDescription": "{{workspace}} è ora su Enterprise."
+    },
+    "billing": {
+      "free": {
+        "inviteTeammates": "Invita colleghi",
+        "upgradeToBusiness": "Passa a Business",
+        "proHint": "Solo tu? Pro costa {{price}} / mese.",
+        "viewPersonal": "Vedi piano personale",
+        "countFailed": "Impossibile verificare chi fa parte di quest'area di lavoro."
+      },
+      "errors": {
+        "noTeammates": "Invita un collega prima di attivare Business."
+      },
+      "picker": {
+        "label": "Piano mostrato",
+        "personal": "Personale",
+        "workspaces": "Aree di lavoro",
+        "loadFailed": "Impossibile caricare le aree di lavoro"
+      },
+      "workspaceUnavailable": {
+        "title": "Piano dell'area di lavoro non disponibile",
+        "description": "Il tuo accesso non è cambiato."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Esegui l'upgrade di un'area di lavoro",
+        "createWorkspace": "Crea area di lavoro"
+      }
     }
   },
   "models": {

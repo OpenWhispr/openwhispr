@@ -80,7 +80,7 @@ const {
   redactProviderBody,
 } = require("./providerHttpErrors");
 const { getLlmRequestTimeoutSeconds, llmRequestTimeoutError } = require("./llmRequestTimeout");
-const { isSettingsTarget } = require("./settingsTargets");
+const { isSettingsTarget, isPlansBillingTarget } = require("./settingsTargets");
 const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
@@ -2604,7 +2604,7 @@ class IPCHandlers {
       if (
         !isSettingsTarget(section) &&
         !isProviderSettingsTarget(section) &&
-        section !== "plansBilling"
+        !isPlansBillingTarget(section)
       ) {
         return { success: false };
       }

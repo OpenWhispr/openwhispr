@@ -1725,8 +1725,6 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Facturación del espacio de trabajo",
-      "workspaceDescription": "Cada espacio de trabajo tiene su propio plan, asientos y responsable de facturación.",
       "billableSeat": "Tu asiento es facturable",
       "nonBillableSeat": "Acceso solo de administrador · sin asiento de pago",
       "managedBy": "La facturación la gestiona {{owner}}.",
@@ -1734,7 +1732,6 @@
       "seatUpdated_one": "Capacidad del espacio de trabajo actualizada a {{count}} asiento",
       "seatUpdated_other": "Capacidad del espacio de trabajo actualizada a {{count}} asientos",
       "seatUpdateFailed": "No se pudieron actualizar los asientos del espacio de trabajo",
-      "businessWorkspaceOnly": "Disponible para espacios de trabajo",
       "personalPlanTitle": "Plan personal",
       "providedBy": "Plan personal: Gratis · Acceso de pago proporcionado por {{workspaces}}",
       "confirmSeats": {
@@ -3142,7 +3139,6 @@
         "ownerOnly": "Solo el propietario del espacio de trabajo puede gestionar la suscripción.",
         "nextInvoice": "Próxima factura",
         "manageStripe": "Administrar en Stripe",
-        "startSubscription": "Iniciar suscripción",
         "provisionedPlan": "Configurado por OpenWhispr. Contacta con ventas para cambiar el plan o los puestos.",
         "planLabel": {
           "business": "Business",
@@ -3294,6 +3290,32 @@
       "upgradeCta": "Actualizar ahora",
       "upgradedTitle": "Actualizado a Enterprise",
       "upgradedDescription": "{{workspace}} ahora está en Enterprise."
+    },
+    "billing": {
+      "free": {
+        "inviteTeammates": "Invitar a compañeros",
+        "upgradeToBusiness": "Pasar a Business",
+        "proHint": "¿Solo tú? Pro cuesta {{price}} / mes.",
+        "viewPersonal": "Ver plan personal",
+        "countFailed": "No se pudo comprobar quién está en este espacio de trabajo."
+      },
+      "errors": {
+        "noTeammates": "Invita a un compañero antes de empezar Business."
+      },
+      "picker": {
+        "label": "Plan mostrado",
+        "personal": "Personal",
+        "workspaces": "Espacios de trabajo",
+        "loadFailed": "No se pudieron cargar los espacios de trabajo"
+      },
+      "workspaceUnavailable": {
+        "title": "Plan del espacio de trabajo no disponible",
+        "description": "Tu acceso no ha cambiado."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Mejorar un espacio de trabajo",
+        "createWorkspace": "Crear espacio de trabajo"
+      }
     }
   },
   "models": {

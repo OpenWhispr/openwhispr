@@ -1652,8 +1652,6 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "Cobrança do workspace",
-      "workspaceDescription": "Cada workspace tem seu próprio plano, assentos e responsável pela cobrança.",
       "billableSeat": "Seu assento é faturável",
       "nonBillableSeat": "Acesso somente de administrador · sem assento pago",
       "managedBy": "A cobrança é gerenciada por {{owner}}.",
@@ -1661,7 +1659,6 @@
       "seatUpdated_one": "Capacidade do workspace atualizada para {{count}} assento",
       "seatUpdated_other": "Capacidade do workspace atualizada para {{count}} assentos",
       "seatUpdateFailed": "Não foi possível atualizar os assentos do workspace",
-      "businessWorkspaceOnly": "Disponível para workspaces",
       "personalPlanTitle": "Plano pessoal",
       "providedBy": "Plano pessoal: Gratuito · Acesso pago fornecido por {{workspaces}}",
       "confirmSeats": {
@@ -3069,7 +3066,6 @@
         "ownerOnly": "Apenas o proprietário do espaço de trabalho pode gerenciar a assinatura.",
         "nextInvoice": "Próxima fatura",
         "manageStripe": "Gerenciar no Stripe",
-        "startSubscription": "Iniciar assinatura",
         "provisionedPlan": "Configurado pela OpenWhispr. Fale com vendas para alterar o plano ou os assentos.",
         "planLabel": {
           "business": "Business",
@@ -3227,6 +3223,32 @@
       "upgradeCta": "Fazer upgrade agora",
       "upgradedTitle": "Upgrade concluído",
       "upgradedDescription": "{{workspace}} agora está no Enterprise."
+    },
+    "billing": {
+      "free": {
+        "inviteTeammates": "Convidar colegas",
+        "upgradeToBusiness": "Fazer upgrade para Business",
+        "proHint": "Só você? O Pro custa {{price}} / mês.",
+        "viewPersonal": "Ver plano pessoal",
+        "countFailed": "Não foi possível verificar quem está neste espaço de trabalho."
+      },
+      "errors": {
+        "noTeammates": "Convide um colega antes de iniciar o Business."
+      },
+      "picker": {
+        "label": "Plano exibido",
+        "personal": "Pessoal",
+        "workspaces": "Workspaces",
+        "loadFailed": "Não foi possível carregar os workspaces"
+      },
+      "workspaceUnavailable": {
+        "title": "Plano do workspace indisponível",
+        "description": "Seu acesso não mudou."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Fazer upgrade de um workspace",
+        "createWorkspace": "Criar workspace"
+      }
     }
   },
   "models": {

@@ -1673,8 +1673,6 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "ワークスペースの請求",
-      "workspaceDescription": "各ワークスペースには独自のプラン、シート、請求管理者があります。",
       "billableSeat": "あなたのシートは課金対象です",
       "nonBillableSeat": "管理者専用アクセス · 有料シートなし",
       "managedBy": "請求は {{owner}} が管理しています。",
@@ -1682,7 +1680,6 @@
       "seatUpdated_one": "ワークスペースの容量を {{count}} シートに更新しました",
       "seatUpdated_other": "ワークスペースの容量を {{count}} シートに更新しました",
       "seatUpdateFailed": "ワークスペースのシートを更新できませんでした",
-      "businessWorkspaceOnly": "ワークスペースで利用可能",
       "personalPlanTitle": "個人プラン",
       "providedBy": "個人プラン: Free · 有料アクセスは {{workspaces}} から提供",
       "confirmSeats": {
@@ -3090,7 +3087,6 @@
         "ownerOnly": "サブスクリプションを管理できるのはワークスペースのオーナーのみです。",
         "nextInvoice": "次回の請求",
         "manageStripe": "Stripe で管理",
-        "startSubscription": "サブスクリプションを開始",
         "provisionedPlan": "OpenWhispr が設定したプランです。プランやシート数の変更は営業担当にお問い合わせください。",
         "planLabel": {
           "business": "Business",
@@ -3242,6 +3238,32 @@
       "upgradeCta": "今すぐアップグレード",
       "upgradedTitle": "Enterpriseにアップグレードしました",
       "upgradedDescription": "{{workspace}}はEnterpriseになりました。"
+    },
+    "billing": {
+      "free": {
+        "inviteTeammates": "チームメンバーを招待",
+        "upgradeToBusiness": "Business にアップグレード",
+        "proHint": "お一人ですか？Pro は月額 {{price}} です。",
+        "viewPersonal": "個人プランを見る",
+        "countFailed": "このワークスペースのメンバーを確認できませんでした。"
+      },
+      "errors": {
+        "noTeammates": "Business を始める前にチームメンバーを招待してください。"
+      },
+      "picker": {
+        "label": "表示中のプラン",
+        "personal": "個人",
+        "workspaces": "ワークスペース",
+        "loadFailed": "ワークスペースを読み込めませんでした"
+      },
+      "workspaceUnavailable": {
+        "title": "ワークスペースのプランを表示できません",
+        "description": "アクセス権は変わっていません。"
+      },
+      "tiles": {
+        "upgradeWorkspace": "ワークスペースをアップグレード",
+        "createWorkspace": "ワークスペースを作成"
+      }
     }
   },
   "models": {

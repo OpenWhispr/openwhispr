@@ -2316,7 +2316,6 @@
         "ownerOnly": "Only the workspace owner can manage the subscription.",
         "nextInvoice": "Next invoice",
         "manageStripe": "Manage in Stripe",
-        "startSubscription": "Start subscription",
         "provisionedPlan": "Set up by OpenWhispr. Contact sales to change the plan or seats.",
         "planLabel": {
           "business": "Business",
@@ -2442,8 +2441,6 @@
       }
     },
     "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
       "billableSeat": "Your seat is billable",
       "nonBillableSeat": "Admin-only access · no paid seat",
       "managedBy": "Billing is managed by {{owner}}.",
@@ -2451,7 +2448,6 @@
       "seatUpdated_one": "Workspace capacity updated to {{count}} seat",
       "seatUpdated_other": "Workspace capacity updated to {{count}} seats",
       "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
       "personalPlanTitle": "Personal plan",
       "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
       "confirmSeats": {
@@ -3336,6 +3332,32 @@
       "upgradeCta": "Upgrade now",
       "upgradedTitle": "Upgraded to Enterprise",
       "upgradedDescription": "{{workspace}} is now on Enterprise."
+    },
+    "billing": {
+      "free": {
+        "inviteTeammates": "Invite teammates",
+        "upgradeToBusiness": "Upgrade to Business",
+        "proHint": "Just you? Pro is {{price}} / month.",
+        "viewPersonal": "View Personal plan",
+        "countFailed": "Couldn't check who is in this workspace."
+      },
+      "errors": {
+        "noTeammates": "Invite a teammate before starting Business."
+      },
+      "picker": {
+        "label": "Plan shown",
+        "personal": "Personal",
+        "workspaces": "Workspaces",
+        "loadFailed": "Couldn't load workspaces"
+      },
+      "workspaceUnavailable": {
+        "title": "Workspace plan unavailable",
+        "description": "Your access is unchanged."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Upgrade a workspace",
+        "createWorkspace": "Create workspace"
+      }
     }
   },
   "models": {

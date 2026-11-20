@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const {
   canSelfServeEnterprise,
   businessDowngradeAction,
+  businessTileAction,
+  coveringWorkspaces,
   canUpgradeWorkspaceToEnterprise,
   enterpriseManageAction,
   enterpriseTileCta,
@@ -11,7 +13,6 @@ const {
   hasSharedDictionaryPlan,
   hasSubscription,
   isEnterpriseConsoleAvailable,
-  showsWorkspaceBillingCard,
 } = require("../../src/lib/workspaceBilling.ts");
 
 const workspace = (overrides = {}) => ({
@@ -331,34 +332,78 @@ test("businessDowngradeAction: skips ineligible active workspaces and respects b
   });
 });
 
-test("showsWorkspaceBillingCard: hides an unpaid default workspace nobody else is in", () => {
-  // 1.12.0 gave every user one, and its checkout sat above the Pro upgrade.
-  const solo = workspace({ is_account_default: true, seats_used: 1, has_subscription: false });
-  assert.equal(showsWorkspaceBillingCard(solo), false);
-  assert.equal(showsWorkspaceBillingCard({ ...solo, seats_used: 0 }), false);
+const free = (o = {}) => workspace({ id: "default", ...o });
+const paid = (o = {}) =>
+  workspace({ id: "team", plan: "business", role: "member", stripe_subscription_id: "sub", ...o });
+const tileInput = (o) => ({
+  listLoaded: true,
+  entitledWorkspaceIds: [],
+  workspaces: [],
+  defaultWorkspaceId: null,
+  ...o,
 });
 
-test("showsWorkspaceBillingCard: keeps every card with something to bill or manage", () => {
-  const solo = workspace({ is_account_default: true, seats_used: 1, has_subscription: false });
-  // A teammate or a pending invitation makes it a team.
-  assert.equal(showsWorkspaceBillingCard({ ...solo, seats_used: 2 }), true);
-  // A workspace the user created.
-  assert.equal(showsWorkspaceBillingCard({ ...solo, is_account_default: false }), true);
-  // Paid, provisioned, or lapsed: the owner still has billing to see or fix.
-  assert.equal(
-    showsWorkspaceBillingCard({
-      ...solo,
-      plan: "business",
-      stripe_subscription_id: "sub_1",
-      has_subscription: true,
-    }),
-    true
+test("businessTileAction: unresolved list offers nothing", () => {
+  assert.deepEqual(businessTileAction(tileInput({ listLoaded: false })), { kind: "none" });
+});
+test("businessTileAction: a solo default workspace gets a view switch, never a checkout", () => {
+  assert.deepEqual(
+    businessTileAction(tileInput({ workspaces: [free()], defaultWorkspaceId: "default" })),
+    { kind: "viewWorkspace", workspaceId: "default" }
   );
-  assert.equal(
-    showsWorkspaceBillingCard({ ...solo, plan: "business", has_subscription: true }),
-    true
+});
+test("businessTileAction: coverage outranks an owned free default workspace", () => {
+  assert.deepEqual(
+    businessTileAction(
+      tileInput({
+        entitledWorkspaceIds: ["team"],
+        workspaces: [free(), paid()],
+        defaultWorkspaceId: "default",
+      })
+    ),
+    { kind: "workspacePlan" }
   );
-  assert.equal(showsWorkspaceBillingCard({ ...solo, plan: "business", status: "canceled" }), true);
-  // An API that sends no seat count: keep the card rather than guess.
-  assert.equal(showsWorkspaceBillingCard({ ...solo, seats_used: undefined }), true);
+});
+test("businessTileAction: a seat that isn't billable is not coverage", () => {
+  assert.deepEqual(
+    businessTileAction(
+      tileInput({
+        entitledWorkspaceIds: [],
+        workspaces: [free(), paid()],
+        defaultWorkspaceId: "default",
+      })
+    ),
+    { kind: "viewWorkspace", workspaceId: "default" }
+  );
+});
+test("businessTileAction: Enterprise coverage shows no Business action", () => {
+  assert.deepEqual(
+    businessTileAction(
+      tileInput({ entitledWorkspaceIds: ["team"], workspaces: [paid({ plan: "enterprise" })] })
+    ),
+    { kind: "none" }
+  );
+});
+test("businessTileAction: the default workspace comes before other unpaid ones", () => {
+  assert.equal(
+    businessTileAction(
+      tileInput({
+        workspaces: [free({ id: "other" }), free()],
+        defaultWorkspaceId: "default",
+      })
+    ).workspaceId,
+    "default"
+  );
+});
+test("businessTileAction: nothing to upgrade offers Create workspace", () => {
+  assert.deepEqual(businessTileAction(tileInput({ workspaces: [paid()] })), {
+    kind: "createWorkspace",
+  });
+});
+test("coveringWorkspaces: ids the list doesn't hold are skipped", () => {
+  assert.deepEqual(
+    coveringWorkspaces(["team", "gone"], [paid()]).map((w) => w.id),
+    ["team"]
+  );
+  assert.deepEqual(coveringWorkspaces(undefined, [paid()]), []);
 });

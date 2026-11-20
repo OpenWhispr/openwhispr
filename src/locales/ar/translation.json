@@ -5125,7 +5125,6 @@
         "ownerOnly": "يمكن لمالك مساحة العمل فقط إدارة الاشتراك.",
         "nextInvoice": "الفاتورة القادمة",
         "manageStripe": "إدارة في Stripe",
-        "startSubscription": "بدء الاشتراك",
         "provisionedPlan": "تم إعدادها بواسطة OpenWhispr. تواصل مع فريق المبيعات لتغيير الخطة أو المقاعد.",
         "planLabel": {
           "business": "Business",
@@ -5275,8 +5274,6 @@
       }
     },
     "unifiedBilling": {
-      "workspaceTitle": "فوترة مساحة العمل",
-      "workspaceDescription": "لكل مساحة عمل خطة ومقاعد ومالك فوترة خاص بها.",
       "billableSeat": "مقعدك قابل للفوترة",
       "nonBillableSeat": "وصول للمسؤول فقط · بدون مقعد مدفوع",
       "managedBy": "تتم إدارة الفوترة بواسطة {{owner}}.",
@@ -5288,7 +5285,6 @@
       "seatUpdated_many": "تم تحديث سعة مساحة العمل إلى {{count}} مقعدًا",
       "seatUpdated_other": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
       "seatUpdateFailed": "تعذر تحديث مقاعد مساحة العمل",
-      "businessWorkspaceOnly": "متاح لمساحات العمل",
       "personalPlanTitle": "الخطة الشخصية",
       "providedBy": "الخطة الشخصية: مجاني · الوصول المدفوع مقدم من {{workspaces}}",
       "confirmSeats": {
@@ -6203,6 +6199,32 @@
       "upgradeCta": "الترقية الآن",
       "upgradedTitle": "تمت الترقية إلى Enterprise",
       "upgradedDescription": "أصبحت {{workspace}} الآن على Enterprise."
+    },
+    "billing": {
+      "free": {
+        "inviteTeammates": "دعوة زملاء الفريق",
+        "upgradeToBusiness": "الترقية إلى Business",
+        "proHint": "أنت وحدك؟ Pro بسعر {{price}} شهريًا.",
+        "viewPersonal": "عرض الخطة الشخصية",
+        "countFailed": "تعذّر التحقق من الأشخاص في مساحة العمل هذه."
+      },
+      "errors": {
+        "noTeammates": "ادعُ زميلًا قبل بدء Business."
+      },
+      "picker": {
+        "label": "الخطة المعروضة",
+        "personal": "شخصي",
+        "workspaces": "مساحات العمل",
+        "loadFailed": "تعذّر تحميل مساحات العمل"
+      },
+      "workspaceUnavailable": {
+        "title": "خطة مساحة العمل غير متاحة",
+        "description": "لم يتغيّر وصولك."
+      },
+      "tiles": {
+        "upgradeWorkspace": "ترقية مساحة عمل",
+        "createWorkspace": "إنشاء مساحة عمل"
+      }
     }
   },
   "settings": {

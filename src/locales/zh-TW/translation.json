@@ -1673,8 +1673,6 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "workspaceTitle": "工作區帳單",
-      "workspaceDescription": "每個工作區都有自己的方案、席次與帳單負責人。",
       "billableSeat": "您的席次需計費",
       "nonBillableSeat": "僅管理員存取 · 無付費席次",
       "managedBy": "帳單由 {{owner}} 管理。",
@@ -1682,7 +1680,6 @@
       "seatUpdated_one": "工作區容量已更新為 {{count}} 個席次",
       "seatUpdated_other": "工作區容量已更新為 {{count}} 個席次",
       "seatUpdateFailed": "無法更新工作區席次",
-      "businessWorkspaceOnly": "適用於工作區",
       "personalPlanTitle": "個人方案",
       "providedBy": "個人方案：免費 · 付費存取由 {{workspaces}} 提供",
       "confirmSeats": {
@@ -3090,7 +3087,6 @@
         "ownerOnly": "只有工作區擁有者可以管理訂閱。",
         "nextInvoice": "下期帳單",
         "manageStripe": "在 Stripe 中管理",
-        "startSubscription": "開始訂閱",
         "provisionedPlan": "由 OpenWhispr 設定。如需變更方案或席位，請聯絡銷售團隊。",
         "planLabel": {
           "business": "Business",
@@ -3242,6 +3238,32 @@
       "upgradeCta": "立即升級",
       "upgradedTitle": "已升級至 Enterprise",
       "upgradedDescription": "{{workspace}} 現已升級至 Enterprise。"
+    },
+    "billing": {
+      "free": {
+        "inviteTeammates": "邀請團隊成員",
+        "upgradeToBusiness": "升級至 Business",
+        "proHint": "只有你一個人？Pro 每月 {{price}}。",
+        "viewPersonal": "查看個人方案",
+        "countFailed": "無法查看此工作區中的成員。"
+      },
+      "errors": {
+        "noTeammates": "開通 Business 前，請先邀請一位團隊成員。"
+      },
+      "picker": {
+        "label": "顯示的方案",
+        "personal": "個人",
+        "workspaces": "工作區",
+        "loadFailed": "無法載入工作區"
+      },
+      "workspaceUnavailable": {
+        "title": "工作區方案無法使用",
+        "description": "你的存取權限不受影響。"
+      },
+      "tiles": {
+        "upgradeWorkspace": "升級工作區",
+        "createWorkspace": "建立工作區"
+      }
     }
   },
   "models": {
