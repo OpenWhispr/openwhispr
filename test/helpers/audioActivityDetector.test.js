@@ -823,8 +823,6 @@ test("linux: production and sink-monitor streams do not drive meeting prompts", 
   detector.stop();
 });
 
-// PipeWire marks a peak meter stream.monitor; plain PulseAudio reports the
-// peaks resampler instead.
 // Every PipeWire stream, real captures included, reports the PipeWire resampler.
 const PIPEWIRE_METER = {
   resample_method: "PipeWire",
