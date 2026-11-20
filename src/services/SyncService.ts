@@ -172,12 +172,18 @@ function isFolderNameTakenError(err: unknown): boolean {
   return err instanceof CloudApiError && err.code === "folder_name_taken";
 }
 
-// Typed 400 for a parent the server can't nest under (moved to another space,
-// nested itself, or the folder gained subfolders on another device). Pending
-// rows never take pulled parents, so the folder is un-nested locally and the
-// next pass pushes it top-level.
-function isInvalidParentFolderError(err: unknown): boolean {
-  return err instanceof CloudApiError && err.code === "invalid_parent_folder";
+// Typed 400s for a nesting the server won't take: invalid_parent_folder (the
+// parent moved to another space, was nested itself, or the folder gained
+// subfolders on another device) and reserved_folder_name (a Private subfolder
+// named like a default folder, left by a build before that rule). Pending rows
+// never take pulled parents, so the folder is un-nested locally and the next
+// pass pushes it top-level.
+function isRefusedNestingCode(code: string | undefined): boolean {
+  return code === "invalid_parent_folder" || code === "reserved_folder_name";
+}
+
+function isRefusedNestingError(err: unknown): boolean {
+  return err instanceof CloudApiError && isRefusedNestingCode(err.code);
 }
 
 // Typed 409 from a note PATCH whose base_updated_at is older than the stored
@@ -1916,7 +1922,7 @@ export class SyncService {
       } catch (err) {
         if (isFolderNameTakenError(err)) {
           this.recordFolderRefused(folder);
-        } else if (isInvalidParentFolderError(err)) {
+        } else if (isRefusedNestingError(err)) {
           await this.settleInvalidParent(push, authGeneration);
         } else if (isPermissionDenialError(err)) {
           await this.handleDeniedFolderUpdate(folder, ctx);
@@ -2030,7 +2036,7 @@ export class SyncService {
     this.dispatchFolderNameTaken(folder.name);
   }
 
-  // invalid_parent_folder. Beside a parent refused for good it says the
+  // A refused nesting (isRefusedNestingCode). Beside a parent refused for good it says the
   // parent's server row isn't in this folder's scope (a refused move left it in
   // the scope it was leaving), not that the nesting is wrong: the folder goes up
   // top-level in its own scope at once and stays nested here, its nesting owed
@@ -3701,7 +3707,7 @@ export class SyncService {
           // proves the folder is still accessible, so reset any 404 streak.
           this.recordFolderRefused(folder);
           this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
-        } else if (isInvalidParentFolderError(err)) {
+        } else if (isRefusedNestingError(err)) {
           await this.settleInvalidParent(push, authGeneration);
         } else if (isPermissionDenialError(err)) {
           await this.handleDeniedFolderUpdate(folder, ctx);
@@ -3759,7 +3765,7 @@ export class SyncService {
         if (
           isSpaceAccessError(err) ||
           isPermissionDenialError(err) ||
-          isInvalidParentFolderError(err) ||
+          isRefusedNestingError(err) ||
           isFolderNameTakenError(err)
         ) {
           // A typed rejection can't be attributed to a row from the batch
@@ -3810,7 +3816,7 @@ export class SyncService {
     const { folder } = push;
     if (code === "folder_name_taken") {
       this.recordFolderRefused(folder);
-    } else if (code === "invalid_parent_folder") {
+    } else if (isRefusedNestingCode(code)) {
       await this.settleInvalidParent(push, authGeneration);
     } else if (isSpaceAccessErrorCode(code) || isPermissionDenialCode(code)) {
       await this.handleRevokedFolderPush(folder, ctx);

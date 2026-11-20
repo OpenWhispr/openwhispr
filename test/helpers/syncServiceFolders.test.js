@@ -883,6 +883,37 @@ test("a subfolder the cloud refuses to nest goes top-level without stranding its
   assert.equal(cloud.folder(synced.cloud_id).parent_folder_id, null);
 });
 
+test("a Private subfolder named like a default that the cloud refuses goes up top-level", async (t) => {
+  const ctx = await setupPersonal(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  const parent = db.createFolder("Client A").folder;
+  await (await newSyncService(t)).syncAll(true);
+  // Nested by a build before the rule; this one refuses the name for a subfolder.
+  const videos = db.createFolder("Videos 2").folder;
+  db.db
+    .prepare("UPDATE folders SET name = 'Videos', parent_folder_id = ? WHERE id = ?")
+    .run(parent.id, videos.id);
+
+  const reserved = { status: 400, code: "reserved_folder_name", error: "Reserved name" };
+  cloud.failNext("POST /api/folders/batch-create", reserved);
+  cloud.failNext(
+    (call) => call.path === "/api/folders/create" && call.body?.name === "Videos",
+    reserved
+  );
+  await (await newSyncService(t)).syncAll(true);
+
+  const unnested = folderByClientId(db, videos.client_folder_id);
+  assert.equal(unnested.parent_folder_id, null);
+  assert.equal(unnested.sync_status, "pending");
+
+  await (await newSyncService(t)).syncAll(true);
+  const synced = folderByClientId(db, videos.client_folder_id);
+  assert.equal(synced.sync_status, "synced");
+  assert.equal(cloud.folder(synced.cloud_id).parent_folder_id, null);
+});
+
 test("a folder name taken mid-batch doesn't keep the folders after it from the cloud", async (t) => {
   const ctx = await setupPersonal(t);
   if (!ctx) return;
