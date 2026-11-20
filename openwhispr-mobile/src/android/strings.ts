@@ -13,6 +13,7 @@ import zhTW from '../locales/zh-TW/translation.json';
 import ja from '../locales/ja/translation.json';
 import ar from '../locales/ar/translation.json';
 import { AndroidDictation } from '../../modules/android-dictation/src';
+import { SELECTION_EDIT_STRINGS } from './selectionEditStrings';
 
 export const androidEnglish = en.android;
 const resources = { en, es, fr, de, pt, it, ru, 'zh-CN': zhCN, 'zh-TW': zhTW, ja, ar };
@@ -30,6 +31,8 @@ if (!i18n.isInitialized)
     resources,
     defaultNS: 'android',
   });
+for (const [language, strings] of Object.entries(SELECTION_EDIT_STRINGS))
+  i18n.addResourceBundle(language, 'android', strings, true, false);
 
 export function observeAndroidLanguage(): () => void {
   const refresh = () => {
