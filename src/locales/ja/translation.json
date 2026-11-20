@@ -391,6 +391,12 @@
             "title": "セルフホスト",
             "description": "自分でホストしているモデルを接続します。"
           }
+        },
+        "titanium": {
+          "title": "{{brand}} クラウド（Titanium）",
+          "description": "Titanium のホスティングサーバーで文字起こしします。Titanium アカウントでサインインするだけで、API キーは不要です。",
+          "signIn": "Titanium でサインイン",
+          "continue": "続ける"
         }
       },
       "provider": {

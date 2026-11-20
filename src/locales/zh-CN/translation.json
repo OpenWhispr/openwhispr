@@ -391,6 +391,12 @@
             "title": "自托管",
             "description": "连接你自己托管的模型。"
           }
+        },
+        "titanium": {
+          "title": "{{brand}} 云端（Titanium）",
+          "description": "在 Titanium 托管的服务器上转录。使用 Titanium 账号登录即可，无需 API 密钥。",
+          "signIn": "使用 Titanium 登录",
+          "continue": "继续"
         }
       },
       "provider": {

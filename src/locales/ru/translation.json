@@ -391,6 +391,12 @@
             "title": "Свой сервер",
             "description": "Подключите свою размещённую модель."
           }
+        },
+        "titanium": {
+          "title": "Облако {{brand}} (Titanium)",
+          "description": "Расшифровка на серверах Titanium. Войдите в аккаунт Titanium; ключ API не нужен.",
+          "signIn": "Войти через Titanium",
+          "continue": "Продолжить"
         }
       },
       "provider": {

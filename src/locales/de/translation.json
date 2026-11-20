@@ -391,6 +391,12 @@
             "title": "Selbst gehostet",
             "description": "Verbinden Sie Ihr eigenes gehostetes Modell."
           }
+        },
+        "titanium": {
+          "title": "{{brand}}-Cloud (Titanium)",
+          "description": "Transkribiere auf den gehosteten Servern von Titanium. Melde dich mit deinem Titanium-Konto an; ein API-Schlüssel ist nicht nötig.",
+          "signIn": "Mit Titanium anmelden",
+          "continue": "Weiter"
         }
       },
       "provider": {

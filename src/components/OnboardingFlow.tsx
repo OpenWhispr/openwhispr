@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "./icons";
-import { CLOUD_ENABLED, TITANIUM_ENABLED } from "../config/forkRuntime";
+import { CLOUD_ENABLED, DEFAULT_STT, TITANIUM_ENABLED } from "../config/forkRuntime";
 import { shouldOfferAuthStep } from "../helpers/titanium/titaniumOnboardingPolicy.js";
 import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
@@ -783,6 +783,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     ]
   );
 
+  // "EdgeAssistant cloud (Titanium)": the same Titanium-hosted STT endpoint the
+  // fork defaults to. Titanium sign-in has already happened on the setup card.
+  const handleTitaniumSetup = useCallback(async () => {
+    setSetupMode("byok");
+    setSelfHostedRequested(false);
+    settingsStore.setCloudTranscriptionForAllScopes({
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "custom",
+      cloudTranscriptionBaseUrl: DEFAULT_STT.baseUrl,
+      cloudTranscriptionModel: DEFAULT_STT.model,
+    });
+    await finalizeOnboarding("byok");
+  }, [finalizeOnboarding, setSelfHostedRequested, setSetupMode, settingsStore]);
+
   const continueFromCurrentStep = useCallback(async () => {
     // A banner from an earlier failed attempt must not outlive the retry.
     setFatalError(null);
@@ -1232,6 +1247,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               isSignedIn={isSignedIn}
               agentAllowed={agentAllowed}
               onSelect={(mode, options) => void handleSetupSelection(mode, options)}
+              onSelectTitanium={() => void handleTitaniumSetup()}
               onRequestAuthentication={() => {
                 setSetupMode("cloud");
                 setAuthPath(null);

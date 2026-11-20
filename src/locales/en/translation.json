@@ -391,6 +391,12 @@
             "title": "Self-Hosted",
             "description": "Connect your own hosted model."
           }
+        },
+        "titanium": {
+          "title": "{{brand}} cloud (Titanium)",
+          "description": "Transcribe on Titanium's hosted servers. Sign in with your Titanium account; no API key needed.",
+          "signIn": "Sign in with Titanium",
+          "continue": "Continue"
         }
       },
       "provider": {

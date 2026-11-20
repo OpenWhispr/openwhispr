@@ -391,6 +391,12 @@
             "title": "Auto-hébergé",
             "description": "Connectez votre propre modèle hébergé."
           }
+        },
+        "titanium": {
+          "title": "Cloud {{brand}} (Titanium)",
+          "description": "Transcrivez sur les serveurs hébergés de Titanium. Connectez-vous avec votre compte Titanium ; aucune clé API n'est nécessaire.",
+          "signIn": "Se connecter avec Titanium",
+          "continue": "Continuer"
         }
       },
       "provider": {

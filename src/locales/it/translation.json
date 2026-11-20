@@ -391,6 +391,12 @@
             "title": "Self-hosted",
             "description": "Connetti il tuo modello ospitato."
           }
+        },
+        "titanium": {
+          "title": "Cloud {{brand}} (Titanium)",
+          "description": "Trascrivi sui server ospitati di Titanium. Accedi con il tuo account Titanium; non serve alcuna chiave API.",
+          "signIn": "Accedi con Titanium",
+          "continue": "Continua"
         }
       },
       "provider": {

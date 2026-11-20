@@ -391,6 +391,12 @@
             "title": "自架主機",
             "description": "連接你自己託管的模型。"
           }
+        },
+        "titanium": {
+          "title": "{{brand}} 雲端（Titanium）",
+          "description": "在 Titanium 代管的伺服器上轉錄。使用 Titanium 帳號登入即可，無需 API 金鑰。",
+          "signIn": "使用 Titanium 登入",
+          "continue": "繼續"
         }
       },
       "provider": {

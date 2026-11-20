@@ -370,6 +370,12 @@
             "title": "Auto-hospedado",
             "description": "Conecte seu próprio modelo hospedado."
           }
+        },
+        "titanium": {
+          "title": "Nuvem do {{brand}} (Titanium)",
+          "description": "Transcreva nos servidores hospedados da Titanium. Entre com sua conta Titanium; não é preciso chave de API.",
+          "signIn": "Entrar com Titanium",
+          "continue": "Continuar"
         }
       },
       "provider": {

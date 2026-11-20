@@ -391,6 +391,12 @@
             "title": "Autoalojado",
             "description": "Conecta tu propio modelo alojado."
           }
+        },
+        "titanium": {
+          "title": "Nube de {{brand}} (Titanium)",
+          "description": "Transcribe en los servidores alojados de Titanium. Inicia sesión con tu cuenta de Titanium; no necesitas clave de API.",
+          "signIn": "Iniciar sesión con Titanium",
+          "continue": "Continuar"
         }
       },
       "provider": {
