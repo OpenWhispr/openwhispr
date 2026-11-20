@@ -22,6 +22,12 @@ export type { ToolDefinition, ToolResult } from "./ToolRegistry";
 
 interface ToolRegistrySettings {
   isSignedIn: boolean;
+  /**
+   * Whether the user may use web search. Defaults to isSignedIn; a fork build
+   * passes its Titanium session here, since the OpenWhispr cloud session stays
+   * signed out there. Only web_search reads it.
+   */
+  webSearchSignedIn?: boolean;
   /** Disabled for onboarding demos; supported normal chat surfaces default to enabled. */
   productHelpEnabled?: boolean;
   calendarConnected: boolean;
@@ -57,7 +63,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     registry.register(createUpdateSnippetsTool(settings.vocabulary));
   }
 
-  if (settings.isSignedIn && settings.webSearchEnabled) {
+  if ((settings.webSearchSignedIn ?? settings.isSignedIn) && settings.webSearchEnabled) {
     registry.register(webSearchTool);
   }
 

@@ -5095,6 +5095,14 @@
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未请求"
   },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "日历已连接",
+      "connectedBody": "您可以关闭此标签页并返回 {{brand}}。",
+      "failedTitle": "日历未连接",
+      "failedBody": "日历连接未完成。请返回 {{brand}} 重试。"
+    }
+  },
   "titaniumAccount": {
     "title": "Titanium 账户",
     "description": "使用 Titanium Labs 账户登录，即可通过我们的转录服务器使用 {{brand}}。",

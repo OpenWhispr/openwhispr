@@ -16,6 +16,8 @@ import {
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { useAuth } from "../../hooks/useAuth";
+import { getTitaniumAuthState } from "../../hooks/useTitaniumAuth";
+import { CLOUD_ENABLED } from "../../config/forkRuntime";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
 import { connectorEligibilityFor } from "../../utils/connectorEligibility";
@@ -422,10 +424,15 @@ export function useChatStreaming({
         const calendarConnected =
           settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
         const webSearchEnabled = isWebSearchAllowed(policy);
+        // The fork's web search is keyed to the Titanium license, not the cloud session.
+        const titaniumAuth = getTitaniumAuthState();
+        const webSearchSignedIn = CLOUD_ENABLED
+          ? settings.isSignedIn
+          : titaniumAuth.signedIn && titaniumAuth.licensed;
         // Fork build: the Titanium session and license; upstream: the OpenWhispr session, plan and org policy.
         const connectorAccess = connectorEligibilityFor({
           cloudEnabled: CLOUD_ENABLED,
-          titanium: getTitaniumAuthState(),
+          titanium: titaniumAuth,
           upstream: {
             isSignedIn: settings.isSignedIn,
             usage: getUsageState(),
@@ -454,12 +461,13 @@ export function useChatStreaming({
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
           const keepNotesUnchanged = !!options?.keepNotesUnchanged;
-          const cacheKey = `${settings.isSignedIn}-${connectorAccess.isPaid}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
+          const cacheKey = `${settings.isSignedIn}-${connectorAccess.isPaid}-${webSearchSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
             registry = createToolRegistry({
               isSignedIn: settings.isSignedIn,
+              webSearchSignedIn,
               calendarConnected,
               cloudBackupEnabled: settings.cloudBackupEnabled,
               searchScope: scope,
@@ -485,7 +493,11 @@ export function useChatStreaming({
           supportsTools,
           isSignedIn: settings.isSignedIn,
           ...(CLOUD_ENABLED ? {} : { titanium: { brand: BRAND_NAME } }),
-          webSearch: { allowed: webSearchEnabled, blockedByOrg: isWebSearchBlockedByOrg(policy) },
+          webSearch: {
+            allowed: webSearchEnabled,
+            blockedByOrg: isWebSearchBlockedByOrg(policy),
+            signedIn: webSearchSignedIn,
+          },
           calendarConnected,
           connectors: allowConnectors
             ? {

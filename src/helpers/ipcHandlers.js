@@ -6,6 +6,7 @@ const fs = require("fs");
 const os = require("os");
 const { isRestorablePasteTarget } = require("./windowsPasteTarget");
 const { titaniumServiceKeyFor } = require("./titanium/titaniumIpc");
+const { forkWebSearch } = require("./forkWebSearch");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
@@ -10358,6 +10359,19 @@ class IPCHandlers {
     });
 
     ipcMain.handle("agent-web-search", async (event, query, numResults = 5) => {
+      // Fork builds (no hosted cloud) search through our own services host with
+      // the Titanium license key. Mode selection: neither path calls the other.
+      if (!forkConfig.CLOUD_ENABLED) {
+        return forkWebSearch(
+          {
+            servicesUrl: forkConfig.SERVICES_URL,
+            getKey: (url) => titaniumServiceKeyFor(url),
+            fetchImpl: proxyFetch,
+          },
+          query,
+          numResults
+        );
+      }
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");

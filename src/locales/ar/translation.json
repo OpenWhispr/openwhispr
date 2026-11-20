@@ -5217,6 +5217,14 @@
     "permissionRestricted": "مقيّد",
     "permissionNotDetermined": "لم يُطلب"
   },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "تم توصيل التقويم",
+      "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى {{brand}}.",
+      "failedTitle": "لم يتم توصيل التقويم",
+      "failedBody": "لم يكتمل توصيل التقويم. عد إلى {{brand}} للمحاولة مرة أخرى."
+    }
+  },
   "titaniumAccount": {
     "title": "حساب Titanium",
     "description": "سجّل الدخول بحساب Titanium Labs لاستخدام {{brand}} مع خوادم النسخ الخاصة بنا.",

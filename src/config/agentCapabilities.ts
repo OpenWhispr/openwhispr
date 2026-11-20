@@ -46,7 +46,8 @@ export interface UnavailableCapabilityInput {
   /** False when the selected model gets no tools at all (a small local model). */
   supportsTools: boolean;
   isSignedIn: boolean;
-  webSearch: { allowed: boolean; blockedByOrg: boolean };
+  /** signedIn defaults to isSignedIn; a fork build passes its Titanium session. */
+  webSearch: { allowed: boolean; blockedByOrg: boolean; signedIn?: boolean };
   calendarConnected: boolean;
   /** Omitted on surfaces that never offer connectors (container chat, onboarding demo). */
   /** Set in a fork build (no OpenWhispr cloud): the account is the Titanium account. */
@@ -93,7 +94,7 @@ export function resolveUnavailableCapabilities(
   const unavailable: UnavailableCapability[] = [];
   const titanium = input.titanium ? { titanium: input.titanium } : {};
 
-  if (!input.isSignedIn) {
+  if (!(input.webSearch.signedIn ?? input.isSignedIn)) {
     unavailable.push({
       name: "Web search",
       reason: "signedOut",

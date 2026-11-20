@@ -25,6 +25,29 @@ npx electron-builder --win nsis --publish never --config electron-builder.fork.j
 
 Output: `dist/EdgeAssistant-Setup-<version>.exe`. Signing happens during bundling. Verify with `Get-AuthenticodeSignature` on the installer and on `dist/win-unpacked/edgeassistant.exe` (Status Valid, CN=Titanium Labs LLC). Delete `dist/win-unpacked` after any failed signed build.
 
+## OAuth client ids (calendars, Slack, Linear)
+
+The Google and Microsoft calendar and the Slack and Linear connectors read their OAuth client ids from `resources/.env`. Write them before `electron-builder` with `scripts/fork-write-env.mjs`. It reads five variables from the build shell, writes them into the repo-root `.env` (packaged as `resources/.env`), keeps every other line, and exits 1 naming any missing or malformed key. It prints key names only, never values. Without client ids the Gmail, GitHub, calendar, Slack and Linear rows hide or report "not configured"; no upstream OpenWhispr client id is ever embedded.
+
+Map the values from the per-provider Pass items (created by the 06-03 portal tasks) in the same shell as the build:
+
+```powershell
+$env:GOOGLE_CALENDAR_CLIENT_ID     = pass-field edgeassistant-oauth-google google_calendar_client_id
+$env:GOOGLE_CALENDAR_CLIENT_SECRET = pass-field edgeassistant-oauth-google google_calendar_client_secret
+$env:MICROSOFT_CALENDAR_CLIENT_ID  = pass-field edgeassistant-oauth-entra microsoft_calendar_client_id
+$env:SLACK_CLIENT_ID               = pass-field edgeassistant-oauth-slack slack_client_id
+$env:LINEAR_CLIENT_ID              = pass-field edgeassistant-oauth-linear linear_client_id
+node scripts/fork-write-env.mjs
+```
+
+After `electron-builder`, check that the package carries the key names (names only, no values):
+
+```powershell
+Select-String -Path dist/win-unpacked/resources/.env -Pattern '^(GOOGLE_CALENDAR_CLIENT_ID|GOOGLE_CALENDAR_CLIENT_SECRET|MICROSOFT_CALENDAR_CLIENT_ID|SLACK_CLIENT_ID|LINEAR_CLIENT_ID)=' | ForEach-Object { ($_.Line -split '=')[0] }
+```
+
+Why the Google client secret may ship: Google issues a "Desktop app" client a secret, but for installed apps it is not confidential (RFC 8252 public client, Google's installed-app guidance), and the flow uses PKCE. The Microsoft, Slack and Linear clients are PKCE public clients with no secret. The Slack and Linear redirect URIs are `${SERVICES_URL}/auth/{slack,linear}/callback` (`SERVICES_URL` is the stt-api host in `src/config/fork.config.json`, overridable with `VITE_SERVICES_URL`).
+
 ## Release
 
 Publish to `finedesignz/openwhispr` as a non-draft release marked latest, with `latest.yml`, the installer and its `.blockmap`. Asset names must match `latest.yml`, which uses the same dashed name (`EdgeAssistant-Setup-<version>.exe`), so upload the installer as built. The app's updater reads the build-generated `app-update.yml` and checks this repo.
