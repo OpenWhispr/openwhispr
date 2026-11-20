@@ -9,6 +9,7 @@ const VIEW_PERSONAL = "settingsPage.billing.free.viewPersonal";
 const COUNT_FAILED = "settingsPage.billing.free.countFailed";
 const NO_TEAMMATES = "settingsPage.billing.errors.noTeammates";
 const RETRY = "common.retry";
+const MEMBERS = "settingsPage.billing.workspace.usage.members";
 
 const freeWorkspace = (id) => ({
   id,
@@ -49,7 +50,11 @@ async function setup(t) {
   });
   const happyWindow = await installHappyDom(context);
   happyWindow.electronAPI = {
-    openExternal: async (url) => globalThis.__freeActionsTest.opened.push(url),
+    openExternal: async (url) => {
+      const state = globalThis.__freeActionsTest;
+      if (state.openError) throw state.openError;
+      state.opened.push(url);
+    },
   };
   const state = {
     listMembersCalls: 0,
@@ -58,9 +63,11 @@ async function setup(t) {
     invitations: new Map(),
     checkoutCalls: [],
     checkoutError: null,
+    openError: null,
     opened: [],
     toasts: [],
     inviteDialogs: [],
+    enterpriseDialogs: [],
   };
   const pending = (map, workspaceId) => {
     const request = deferred();
@@ -79,7 +86,8 @@ async function setup(t) {
     noExternal: ["react-i18next"],
     cachePrefix: "openwhispr-workspace-billing-free-actions-",
     mockModules: {
-      "react-i18next": "export const useTranslation = () => ({ t: (key) => key });",
+      "react-i18next":
+        "export const useTranslation = () => ({ t: (key) => key, i18n: { language: 'en' } });",
       "/authRequestContext":
         "export const getValidatedAuthGeneration = () => globalThis.__gen ?? null;",
       "/stores/workspaceStore": `export const useWorkspaceStore = (select) => select({
@@ -120,11 +128,17 @@ async function setup(t) {
           globalThis.__freeActionsTest.inviteDialogs.push(props);
           return React.createElement("div", { "data-invite-dialog": props.workspaceId });
         }`,
+      "/EnterpriseCheckoutDialog": `import React from "react";
+        export default function EnterpriseCheckoutDialog(props) {
+          globalThis.__freeActionsTest.enterpriseDialogs.push(props);
+          return React.createElement("div", { "data-enterprise-dialog": props.initialWorkspaceId });
+        }`,
       "/ui/useToast":
         "export const useToast = () => ({ toast: (value) => globalThis.__freeActionsTest.toasts.push(value) });",
       "/hooks/useBillingRefreshOnReturn":
         "export const useBillingRefreshOnReturn = () => () => {};",
-      "./EnterpriseConsoleRow": "export default function EnterpriseConsoleRow() { return null; }",
+      // The real module starts the auth client; the card only calls openAdminConsole.
+      "/lib/auth": "export const openAdminConsole = async () => {};",
       "/ui/dialog": `import React from "react";
         const pass = ({ children }) => React.createElement("div", null, children);
         export const Dialog = ({ open, children }) =>
@@ -134,10 +148,29 @@ async function setup(t) {
         export const DialogFooter = pass;
         export const DialogHeader = pass;
         export const DialogTitle = pass;`,
-      "../icons": `export const ExternalLink = () => null;
-        export const Loader2 = () => null;
-        export const Plus = () => null;
-        export const UserPlus = () => null;`,
+      "../icons": `const icon = () => null;
+        export const AudioLines = icon;
+        export const Brain = icon;
+        export const Code2 = icon;
+        export const Key = icon;
+        export const Link2 = icon;
+        export const Mail = icon;
+        export const MessageCircle = icon;
+        export const MessageSquare = icon;
+        export const MonitorSmartphone = icon;
+        export const ShieldCheck = icon;
+        export const Sliders = icon;
+        export const Users = icon;
+        export const Building2 = icon;
+        export const Copy = icon;
+        export const CreditCard = icon;
+        export const ExternalLink = icon;
+        export const Loader2 = icon;
+        export const Plus = icon;
+        export const Shield = icon;
+        export const User = icon;
+        export const UserPlus = icon;
+        export const Zap = icon;`,
     },
   });
   const { CloudApiError } = await vite.ssrLoadModule("/services/cloudApi");
@@ -153,18 +186,45 @@ async function setup(t) {
     React.act(async () =>
       root.render(React.createElement(WorkspaceBillingCard, { workspace, ...props }))
     );
+  // The card's own buttons; the Plans grid below it is read through gridButtons.
+  const cardButtonElements = () =>
+    [...container.querySelectorAll("button")].filter(
+      (button) => !button.closest("[data-plans-grid]")
+    );
   // Labels and variants only, so a failing assertion never has to print a happy-dom node.
   const buttons = () =>
-    [...container.querySelectorAll("button")].map((button) => ({
+    cardButtonElements().map((button) => ({
       label: button.textContent,
       variant: button.getAttribute("data-variant"),
     }));
+  const gridButtonElements = (plan) => [
+    ...container.querySelectorAll(`[data-plans-grid] [data-plan="${plan}"] button`),
+  ];
+  const gridButtons = (plan) =>
+    gridButtonElements(plan).map((button) => ({
+      label: button.textContent,
+      variant: button.getAttribute("data-variant"),
+    }));
+  const hasGrid = () => container.querySelector("[data-plans-grid]") !== null;
+  // The Members row's value, or null when the row isn't there.
+  const membersValue = () => {
+    const label = [...container.querySelectorAll("span")].find(
+      (span) => span.textContent === MEMBERS
+    );
+    return label ? label.nextElementSibling.textContent : null;
+  };
+  const membersIsolated = () =>
+    [...container.querySelectorAll("bdi")].map((node) => node.textContent);
   const click = (label) =>
     React.act(async () => {
-      const button = [...container.querySelectorAll("button")].find(
-        (candidate) => candidate.textContent === label
-      );
+      const button = cardButtonElements().find((candidate) => candidate.textContent === label);
       assert.ok(button, `Missing button ${label}`);
+      button.click();
+    });
+  const clickGrid = (plan, label) =>
+    React.act(async () => {
+      const button = gridButtonElements(plan).find((candidate) => candidate.textContent === label);
+      assert.ok(button, `Missing ${plan} grid button ${label}`);
       button.click();
     });
   const settle = (map, workspaceId, outcome) =>
@@ -189,7 +249,12 @@ async function setup(t) {
     container,
     render,
     buttons,
+    gridButtons,
+    hasGrid,
+    membersValue,
+    membersIsolated,
     click,
+    clickGrid,
     settle,
     resolveCount,
     waitFor,
@@ -210,8 +275,8 @@ test("a solo workspace shows Invite first; Upgrade sends tier business", async (
   await render(freeWorkspace("free-ws"));
   await resolveCount("free-ws", [member("owner")], []);
   assert.deepEqual(buttons(), [
-    { label: INVITE, variant: "default" },
-    { label: UPGRADE, variant: "outline" },
+    { label: INVITE, variant: "primary" },
+    { label: UPGRADE, variant: "secondary" },
   ]);
   // The hint shows; its link only once someone can take it.
   assert.equal(container.textContent.includes("settingsPage.billing.free.proHint"), true);
@@ -257,7 +322,7 @@ test("two or more people lead with Upgrade alone", async (t) => {
     [member("owner")],
     [{ accepted_at: null, revoked_at: null, expires_at: "2999-01-01T00:00:00Z" }]
   );
-  assert.deepEqual(buttons(), [{ label: UPGRADE, variant: "default" }]);
+  assert.deepEqual(buttons(), [{ label: UPGRADE, variant: "primary" }]);
 });
 
 test("a failed count shows no primary and retries", async (t) => {
@@ -266,13 +331,14 @@ test("a failed count shows no primary and retries", async (t) => {
   await settle(state.members, "free-ws", new Error("offline"));
   assert.equal(container.textContent.includes(COUNT_FAILED), true);
   assert.equal(
-    buttons().some((button) => button.variant === "default"),
+    buttons().some((button) => button.variant === "primary"),
     false
   );
-  assert.deepEqual(
-    buttons().map((button) => button.label),
-    [INVITE, UPGRADE, RETRY]
-  );
+  assert.deepEqual(buttons(), [
+    { label: INVITE, variant: "secondary" },
+    { label: UPGRADE, variant: "secondary" },
+    { label: RETRY, variant: null },
+  ]);
   await click(RETRY);
   assert.equal(state.listMembersCalls, 2);
   assert.equal(buttons().length, 0);
@@ -285,7 +351,7 @@ test("a people count for A never decides B's buttons", async (t) => {
   await resolveCount("a", [member("owner")], []);
   assert.equal(buttons().length, 0);
   await resolveCount("b", [member("owner"), member("other")], []);
-  assert.deepEqual(buttons(), [{ label: UPGRADE, variant: "default" }]);
+  assert.deepEqual(buttons(), [{ label: UPGRADE, variant: "primary" }]);
   assert.equal(state.listMembersCalls, 2);
 });
 
@@ -311,9 +377,126 @@ test("a refused checkout for a workspace with no teammates says why", async (t) 
   assert.equal(state.toasts.at(-1).description, NO_TEAMMATES);
 });
 
+test("a free workspace admin reads the people count for the Members row", async (t) => {
+  const { state, buttons, render, resolveCount, membersValue, membersIsolated } = await setup(t);
+  await render({ ...freeWorkspace("free-ws"), role: "admin" });
+  assert.equal(state.listMembersCalls, 1);
+  assert.equal(state.listInvitationsCalls, 1);
+  assert.equal(membersValue(), "—", "while counting");
+  await resolveCount("free-ws", [member("owner"), member("admin")], []);
+  assert.equal(membersValue(), "2");
+  assert.deepEqual(membersIsolated(), ["2"]);
+  // An admin can't buy: still no free-workspace buttons.
+  assert.deepEqual(buttons(), []);
+});
+
+test("a Members count that failed drops the row and the Usage block", async (t) => {
+  const { state, container, render, settle, membersValue } = await setup(t);
+  await render({ ...freeWorkspace("free-ws"), role: "admin" });
+  await settle(state.members, "free-ws", new Error("offline"));
+  assert.equal(membersValue(), null);
+  assert.equal(container.textContent.includes("settingsPage.billing.personal.blocks.usage"), false);
+});
+
 test("a subscribed or unbillable workspace asks for no count", async (t) => {
   const { state, render } = await setup(t);
   await render({ ...freeWorkspace("paid"), plan: "business", stripe_subscription_id: "sub" });
   await render({ ...freeWorkspace("member"), role: "member" });
   assert.equal(state.listMembersCalls, 0);
+});
+
+const ENTERPRISE_UPGRADE = "settingsPage.account.pricing.enterprise.upgradeCta";
+const CONTACT_SALES = "settingsPage.account.pricing.enterprise.cta";
+
+test("the plans grid under a free workspace shows Business and Enterprise only", async (t) => {
+  const { container, hasGrid, render, resolveCount } = await setup(t);
+  await render(freeWorkspace("free-ws"));
+  await resolveCount("free-ws", [member("owner")], []);
+  assert.equal(hasGrid(), true);
+  const plans = [...container.querySelectorAll("[data-plans-grid] [data-plan]")].map((node) =>
+    node.getAttribute("data-plan")
+  );
+  assert.deepEqual(plans, ["business", "enterprise"]);
+});
+
+test("the grid's Business is always secondary: the card's own button leads", async (t) => {
+  const { state, buttons, gridButtons, render, resolveCount, settle } = await setup(t);
+  const businessVariants = () => gridButtons("business").map((button) => button.variant);
+  await render(freeWorkspace("free-ws"));
+  assert.deepEqual(businessVariants(), ["secondary"], "while counting");
+  await resolveCount("free-ws", [member("owner")], []);
+  assert.deepEqual(businessVariants(), ["secondary"], "solo");
+
+  await render(freeWorkspace("pair"));
+  await resolveCount(
+    "pair",
+    [member("owner")],
+    [{ accepted_at: null, revoked_at: null, expires_at: "2999-01-01T00:00:00Z" }]
+  );
+  // The card's Upgrade is the one primary Upgrade to Business.
+  assert.deepEqual(buttons(), [{ label: UPGRADE, variant: "primary" }]);
+  assert.deepEqual(businessVariants(), ["secondary"], "two people");
+
+  await render(freeWorkspace("offline"));
+  await settle(state.members, "offline", new Error("offline"));
+  assert.deepEqual(businessVariants(), ["secondary"], "failed count");
+});
+
+test("the grid's Business starts the tier-named Business checkout for this workspace", async (t) => {
+  const { state, clickGrid, render, resolveCount } = await setup(t);
+  await render(freeWorkspace("free-ws"));
+  await resolveCount("free-ws", [member("owner"), member("other")], []);
+  await clickGrid("business", UPGRADE);
+  assert.deepEqual(state.checkoutCalls, [["free-ws", "monthly", { tier: "business" }]]);
+  assert.deepEqual(state.opened, ["https://stripe.test/checkout"]);
+});
+
+test("the grid's Enterprise opens the checkout dialog preselected on this workspace", async (t) => {
+  const { state, clickGrid, render, resolveCount, container, waitFor } = await setup(t);
+  await render(freeWorkspace("free-ws"));
+  await resolveCount("free-ws", [member("owner")], []);
+  await clickGrid("enterprise", ENTERPRISE_UPGRADE);
+  assert.equal(
+    await waitFor(() => container.querySelector('[data-enterprise-dialog="free-ws"]') !== null),
+    true
+  );
+  const dialog = state.enterpriseDialogs.at(-1);
+  assert.equal(dialog.initialWorkspaceId, "free-ws");
+  assert.deepEqual(
+    dialog.workspaces.map((workspace) => workspace.id),
+    ["free-ws"]
+  );
+  assert.deepEqual(state.checkoutCalls, []);
+});
+
+test("a free workspace that can't check out offers no Business button and contacts sales for Enterprise", async (t) => {
+  const { state, gridButtons, clickGrid, render } = await setup(t);
+  await render({ ...freeWorkspace("flagged"), has_subscription: true });
+  // The checkout would be refused, so Business offers no button, as on the card.
+  assert.deepEqual(gridButtons("business"), []);
+  assert.deepEqual(
+    gridButtons("enterprise").map((button) => button.label),
+    [CONTACT_SALES]
+  );
+  await clickGrid("enterprise", CONTACT_SALES);
+  assert.deepEqual(state.opened, ["https://openwhispr.com/contact-sales"]);
+  assert.deepEqual(state.enterpriseDialogs, []);
+});
+
+test("members and paid workspaces get no plans grid", async (t) => {
+  const { hasGrid, render } = await setup(t);
+  await render({ ...freeWorkspace("member"), role: "member" });
+  assert.equal(hasGrid(), false);
+  await render({ ...freeWorkspace("paid"), plan: "business", stripe_subscription_id: "sub" });
+  assert.equal(hasGrid(), false);
+});
+
+test("a contact-sales page that won't open says so", async (t) => {
+  const { state, clickGrid, render } = await setup(t);
+  state.openError = new Error("no browser");
+  await render({ ...freeWorkspace("flagged"), has_subscription: true });
+  await clickGrid("enterprise", CONTACT_SALES);
+  await React.act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  assert.equal(state.toasts.at(-1)?.description, "no browser");
+  assert.equal(state.toasts.at(-1)?.variant, "destructive");
 });

@@ -2,20 +2,31 @@ import type { Workspace, WorkspaceInvitation, WorkspaceMember } from "../types/e
 import { workspaceCan } from "./capabilities";
 import { hasActiveWorkspaceSubscription, hasSubscription } from "./workspaceBilling";
 
+export interface PeopleTally {
+  /** `members + invitations`. */
+  count: number;
+  members: number;
+  invitations: number;
+}
+
 export type PeopleCount =
-  { status: "loading" } | { status: "known"; count: number } | { status: "failed" };
+  { status: "loading" } | ({ status: "known" } & PeopleTally) | { status: "failed" };
 
 /** Every member (seat-free admins too) plus invitations not accepted, not revoked and not expired. */
 export function countPeople(
   members: WorkspaceMember[],
   invitations: Array<Pick<WorkspaceInvitation, "accepted_at" | "revoked_at" | "expires_at">>,
   now: number
-): number {
+): PeopleTally {
   const liveInvitations = invitations.filter(
     (invitation) =>
       !invitation.accepted_at && !invitation.revoked_at && Date.parse(invitation.expires_at) > now
-  );
-  return members.length + liveInvitations.length;
+  ).length;
+  return {
+    count: members.length + liveInvitations,
+    members: members.length,
+    invitations: liveInvitations,
+  };
 }
 
 /** Which buttons a workspace card with no subscription leads with. */

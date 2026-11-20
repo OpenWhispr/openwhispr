@@ -936,6 +936,10 @@ export interface Workspace {
   role: WorkspaceRole;
   is_billable?: boolean;
   billing_manager?: string | null;
+  // Absent before API release 4.
+  billing_manager_email?: string | null;
+  member_count?: number;
+  invitation_count?: number;
   // Absent on API responses that predate capabilities; read through workspaceCan().
   capabilities?: WorkspaceCapabilities;
   has_subscription?: boolean;

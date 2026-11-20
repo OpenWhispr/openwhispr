@@ -1673,14 +1673,10 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "billableSeat": "あなたのシートは課金対象です",
-      "nonBillableSeat": "管理者専用アクセス · 有料シートなし",
-      "managedBy": "請求は {{owner}} が管理しています。",
       "addSeat": "シートを追加",
       "seatUpdated_one": "ワークスペースの容量を {{count}} シートに更新しました",
       "seatUpdated_other": "ワークスペースの容量を {{count}} シートに更新しました",
       "seatUpdateFailed": "ワークスペースのシートを更新できませんでした",
-      "providedBy": "個人プラン: Free · 有料アクセスは {{workspaces}} から提供",
       "confirmSeats": {
         "title": "ワークスペースのシートを追加しますか？",
         "description_one": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
@@ -2989,25 +2985,12 @@
         "resentNoEmail": "招待を更新しましたが、メールを配信できませんでした。"
       },
       "billing": {
-        "plan": "プラン",
-        "seats": "シート",
-        "ownerOnly": "サブスクリプションを管理できるのはワークスペースのオーナーのみです。",
         "nextInvoice": "次回の請求",
-        "manageStripe": "Stripe で管理",
-        "provisionedPlan": "OpenWhispr が設定したプランです。プランやシート数の変更は営業担当にお問い合わせください。",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Free",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "有効",
-          "trialing": "トライアル中",
-          "past_due": "支払い期限超過",
-          "canceled": "キャンセル済み",
-          "incomplete": "未完了",
-          "unpaid": "未払い"
         }
       },
       "developer": {
@@ -3224,8 +3207,7 @@
           "subscribePro": "Pro に登録",
           "manageBilling": "請求を管理",
           "updatePayment": "支払い方法を更新",
-          "cancelPro": "Pro を解約",
-          "cancelTrial": "トライアルを解約"
+          "cancelPro": "Pro を解約"
         },
         "usage": {
           "cloudTranscription": "クラウド文字起こし",
@@ -3250,34 +3232,25 @@
         },
         "price": {
           "free": "$0",
-          "proFrom": "{{date}} から {{price}} / 月",
           "billedYearly": "年払い",
           "proMonthly": "{{price}} / 月"
         },
         "banners": {
-          "coveredTrial": {
-            "title": "{{workspace}} がすでに対象にしています",
-            "body": "トライアルは {{date}} に有料の Pro プランに切り替わります。"
-          },
-          "coveredTrialUnnamed": {
-            "title": "ワークスペースがすでに対象にしています",
-            "body": "トライアルは {{date}} に有料の Pro プランに切り替わります。"
-          },
           "coveredPastDue": {
             "title": "{{workspace}} がすでに対象にしています",
-            "body": "Pro の支払いに失敗しました。再試行を止めるには Pro を解約してください。"
+            "body": "{{plan}} の支払いに失敗しました。再試行を止めるには {{plan}} を解約してください。"
           },
           "coveredPastDueUnnamed": {
             "title": "ワークスペースがすでに対象にしています",
-            "body": "Pro の支払いに失敗しました。再試行を止めるには Pro を解約してください。"
+            "body": "{{plan}} の支払いに失敗しました。再試行を止めるには {{plan}} を解約してください。"
           },
           "coveredPaying": {
             "title": "{{workspace}} がすでに対象にしています",
-            "body": "Pro の料金は引き続き発生しています。"
+            "body": "{{plan}} の料金は引き続き発生しています。"
           },
           "coveredPayingUnnamed": {
             "title": "ワークスペースがすでに対象にしています",
-            "body": "Pro の料金は引き続き発生しています。"
+            "body": "{{plan}} の料金は引き続き発生しています。"
           },
           "coveredStore": {
             "title": "{{workspace}} がすでに対象にしています",
@@ -3309,7 +3282,6 @@
           }
         },
         "details": {
-          "trialEnds": "トライアル終了日",
           "periodEnds": "現在の期間の終了日",
           "billedThrough": "請求元",
           "accessUntil": "利用期限",
@@ -3387,7 +3359,6 @@
         },
         "usage": {
           "seats": "シート",
-          "seatsValue": "{{used}} / {{total}}",
           "members": "メンバー",
           "noSeatsLeft": "空きシートがありません",
           "noSeatsLeftWithInvites_one": "空きシートがありません · 保留中の招待 {{count}} 件",

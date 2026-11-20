@@ -6,7 +6,7 @@ import {
 } from "../../../lib/personalPlanState";
 import { CONTACT_SALES_URL } from "../../../lib/contactSales";
 import { storeSubscriptionsUrl } from "../../../lib/upsell";
-import type { BusinessTileAction, EnterpriseTileCta } from "../../../lib/workspaceBilling";
+import type { BusinessCardAction, EnterpriseCardAction } from "./PlansGrid";
 
 export type PersonalProCardKind =
   "subscribe" | "current" | "covered" | "signIn" | "downgrade" | "none";
@@ -19,8 +19,7 @@ export interface PersonalPlanHandlers {
   signIn: () => void;
   retry: () => void;
   viewWorkspace: (workspaceId: string) => void;
-  createWorkspace: (target: "business" | "enterprise") => void;
-  openEnterpriseCheckout: () => void;
+  createWorkspace: () => void;
 }
 
 export function personalProCardKind(input: {
@@ -51,24 +50,21 @@ export function personalProCardKind(input: {
   return covered ? "covered" : "none";
 }
 
+// A checkout is a workspace view's own button; the personal view never sells a workspace plan.
 export function runBusinessTileAction(
-  action: BusinessTileAction,
+  action: BusinessCardAction,
   handlers: Pick<PersonalPlanHandlers, "viewWorkspace" | "createWorkspace">
 ): void {
   if (action.kind === "viewWorkspace") handlers.viewWorkspace(action.workspaceId);
-  else if (action.kind === "createWorkspace") handlers.createWorkspace("business");
+  else if (action.kind === "createWorkspace") handlers.createWorkspace();
 }
 
-export function runEnterpriseCta(
-  cta: EnterpriseTileCta,
-  handlers: Pick<
-    PersonalPlanHandlers,
-    "openEnterpriseCheckout" | "createWorkspace" | "openExternal"
-  >
+export function runEnterpriseTileAction(
+  action: EnterpriseCardAction,
+  handlers: Pick<PersonalPlanHandlers, "viewWorkspace" | "openExternal">
 ): void {
-  if (cta.action === "openDialog") handlers.openEnterpriseCheckout();
-  else if (cta.action === "createWorkspace") handlers.createWorkspace("enterprise");
-  else handlers.openExternal(CONTACT_SALES_URL);
+  if (action.kind === "viewWorkspace") handlers.viewWorkspace(action.workspaceId);
+  else if (action.kind === "contactSales") handlers.openExternal(CONTACT_SALES_URL);
 }
 
 export function runPersonalAction(action: PersonalAction, handlers: PersonalPlanHandlers): void {

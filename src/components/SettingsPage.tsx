@@ -171,26 +171,25 @@ import {
   businessDowngradeAction,
   businessTileAction,
   enterpriseManageAction,
-  enterpriseTileCta,
+  enterpriseTileAction,
   coveringWorkspaces,
   entitledWorkspacePlans,
-  type EnterpriseTileCta,
 } from "../lib/workspaceBilling";
-import { personalPlanState, type PersonalAction } from "../lib/personalPlanState";
+import { personalPlanState, showsCreatorLink, type PersonalAction } from "../lib/personalPlanState";
 import { PersonalPlanView } from "./settings/billing/PersonalPlanView";
+import { formatBillingDate } from "./settings/billing/billingFormat";
 import { PlansGrid, type ProCardAction } from "./settings/billing/PlansGrid";
 import {
   billingIntervalChoice,
   personalBusyAction,
   personalProCardKind,
   runBusinessTileAction,
-  runEnterpriseCta,
+  runEnterpriseTileAction,
   runPersonalAction,
   type PersonalPlanHandlers,
 } from "./settings/billing/personalGridHandlers";
 import { PlansBillingPicker } from "./settings/billing/PlansBillingPicker";
 import { WorkspaceBillingView } from "./settings/billing/WorkspaceBillingView";
-import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
 import ToneStyleSection from "./settings/ToneStyleSection";
@@ -1453,11 +1452,7 @@ export default function SettingsPage({
   const billingWorkspacesLoaded = useWorkspaceStore((s) => s.loaded);
   const billingWorkspacesError = useWorkspaceStore((s) => s.error);
   const defaultWorkspaceId = useWorkspaceStore((s) => s.defaultWorkspaceId);
-  const [enterpriseCheckoutOpen, setEnterpriseCheckoutOpen] = useState(false);
-  // Which tile opened the create dialog decides where a new workspace leads.
-  const [createWorkspaceFor, setCreateWorkspaceFor] = useState<"enterprise" | "business" | null>(
-    null
-  );
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const billingView = resolveBillingView(billingRequest, {
     loaded: billingWorkspacesLoaded,
     error: billingWorkspacesError,
@@ -1478,12 +1473,6 @@ export default function SettingsPage({
     billingWorkspacesLoaded,
     onBillingRequestChange,
   ]);
-  // Until the store resolves, an empty list would make enterpriseTileCta answer
-  // "createWorkspace" for everyone — including members who must never be routed
-  // into creating a workspace. Fall back to contact sales for that window.
-  const enterpriseCta: EnterpriseTileCta = billingWorkspacesLoaded
-    ? enterpriseTileCta(billingWorkspaces, activeWorkspaceId)
-    : { action: "contactSales", ownerName: null };
   // The grid's Pro badge is the personal plan; these mark what workspaces provide.
   const workspacePlans = billingWorkspacesLoaded
     ? entitledWorkspacePlans(billingWorkspaces)
@@ -1500,6 +1489,14 @@ export default function SettingsPage({
     entitledWorkspaceIds: usage?.entitledWorkspaceIds,
     workspaces: billingWorkspaces,
     defaultWorkspaceId,
+  });
+  const enterpriseTile = enterpriseTileAction({
+    // Until usage loads, its covering ids read as none, which would ask a covered member to contact sales.
+    listLoaded: billingWorkspacesLoaded && usage?.status === "success",
+    entitledWorkspaceIds: usage?.entitledWorkspaceIds,
+    workspaces: billingWorkspaces,
+    defaultWorkspaceId,
+    activeWorkspaceId,
   });
   const { planLabel } = useAccountPlan(usage);
   const hasShownApproachingToast = useRef(false);
@@ -1964,13 +1961,8 @@ export default function SettingsPage({
       toast,
     ]
   );
-  const formatBillingDate = useCallback(
-    (iso: string): string =>
-      new Date(iso).toLocaleDateString(i18n.language, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
+  const formatPersonalBillingDate = useCallback(
+    (iso: string): string => formatBillingDate(iso, i18n.language),
     [i18n.language]
   );
   const { requestSignOut, isSigningOut } = useSignOut({ showConfirmDialog, showAlertDialog });
@@ -2068,6 +2060,7 @@ export default function SettingsPage({
     ),
     businessAction: businessTile,
   });
+  const showCreatorLink = showsCreatorLink(usage ?? null);
   const personalHandlers: PersonalPlanHandlers = {
     subscribePro: () => void subscribePro(),
     openBillingPortal: () => void openBillingPortal(),
@@ -2075,8 +2068,7 @@ export default function SettingsPage({
     signIn: requestSignIn,
     retry: () => void usage?.retry(),
     viewWorkspace: (workspaceId) => onBillingRequestChange?.({ kind: "workspace", workspaceId }),
-    createWorkspace: setCreateWorkspaceFor,
-    openEnterpriseCheckout: () => setEnterpriseCheckoutOpen(true),
+    createWorkspace: () => setCreateWorkspaceOpen(true),
   };
   const handlePersonalAction = (action: PersonalAction): void => {
     setPortalAction(action.kind);
@@ -2494,10 +2486,10 @@ export default function SettingsPage({
                       state={personalState}
                       onAction={handlePersonalAction}
                       busyAction={busyAction}
-                      formatDate={formatBillingDate}
+                      formatDate={formatPersonalBillingDate}
                       grid={
                         <div className="flex flex-col gap-3">
-                          {!usage?.isPersonallySubscribed && <CreatorLinkField />}
+                          {showCreatorLink && <CreatorLinkField />}
                           <PlansGrid
                             isSignedIn={isSignedIn}
                             onSignIn={requestSignIn}
@@ -2510,11 +2502,13 @@ export default function SettingsPage({
                               runBusinessTileAction(action, personalHandlers)
                             }
                             enterprise={{
-                              cta: enterpriseCta,
+                              action: enterpriseTile,
                               manage: enterpriseAction,
                               entitled: workspacePlans.has("enterprise"),
                             }}
-                            onEnterprise={(cta) => runEnterpriseCta(cta, personalHandlers)}
+                            onEnterprise={(action) =>
+                              runEnterpriseTileAction(action, personalHandlers)
+                            }
                             onRefreshEntitlement={usage?.refetch}
                             columns={isCompact ? 2 : 3}
                           />
@@ -2617,24 +2611,13 @@ export default function SettingsPage({
                   </>
                 )}
 
-                <EnterpriseCheckoutDialog
-                  open={enterpriseCheckoutOpen}
-                  onOpenChange={setEnterpriseCheckoutOpen}
-                  workspaces={billingWorkspaces}
-                  onRefreshEntitlement={usage?.refetch}
-                />
                 {/* Outside the view switch, so a new workspace's view can replace the grid. */}
                 <CreateWorkspaceDialog
-                  open={createWorkspaceFor !== null}
-                  onOpenChange={(open) => {
-                    if (!open) setCreateWorkspaceFor(null);
-                  }}
-                  onCreated={(workspaceId) => {
-                    if (createWorkspaceFor === "enterprise") setEnterpriseCheckoutOpen(true);
-                    else if (createWorkspaceFor === "business") {
-                      onBillingRequestChange?.({ kind: "workspace", workspaceId });
-                    }
-                  }}
+                  open={createWorkspaceOpen}
+                  onOpenChange={setCreateWorkspaceOpen}
+                  onCreated={(workspaceId) =>
+                    onBillingRequestChange?.({ kind: "workspace", workspaceId })
+                  }
                 />
               </>
             ) : (

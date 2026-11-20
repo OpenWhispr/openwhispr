@@ -53,7 +53,8 @@ async function setup(t) {
     noExternal: ["react-i18next"],
     cachePrefix: "openwhispr-workspace-billing-seat-quote-",
     mockModules: {
-      "react-i18next": "export const useTranslation = () => ({ t: (key) => key });",
+      "react-i18next":
+        "export const useTranslation = () => ({ t: (key) => key, i18n: { language: 'en' } });",
       "/authRequestContext":
         "export const getValidatedAuthGeneration = () => globalThis.__gen ?? null;",
       "/stores/workspaceStore": `export const useWorkspaceStore = (select) => select({
@@ -81,7 +82,8 @@ async function setup(t) {
         "export const useToast = () => ({ toast: (value) => globalThis.__seatQuoteTest.toasts.push(value) });",
       "/hooks/useBillingRefreshOnReturn":
         "export const useBillingRefreshOnReturn = () => () => {};",
-      "./EnterpriseConsoleRow": "export default function EnterpriseConsoleRow() { return null; }",
+      // The real module starts the auth client; the card only calls openAdminConsole.
+      "/lib/auth": "export const openAdminConsole = async () => {};",
       // The confirmation's own dialog markup is not under test: an inline stand-in keeps it
       // queryable without Radix's portal and focus handling.
       "/ui/dialog": `import React from "react";
@@ -93,10 +95,29 @@ async function setup(t) {
         export const DialogFooter = pass;
         export const DialogHeader = pass;
         export const DialogTitle = pass;`,
-      "../icons": `export const ExternalLink = () => null;
-        export const Loader2 = () => null;
-        export const Plus = () => null;
-        export const UserPlus = () => null;`,
+      "../icons": `const icon = () => null;
+        export const AudioLines = icon;
+        export const Brain = icon;
+        export const Code2 = icon;
+        export const Key = icon;
+        export const Link2 = icon;
+        export const Mail = icon;
+        export const MessageCircle = icon;
+        export const MessageSquare = icon;
+        export const MonitorSmartphone = icon;
+        export const ShieldCheck = icon;
+        export const Sliders = icon;
+        export const Users = icon;
+        export const Building2 = icon;
+        export const Copy = icon;
+        export const CreditCard = icon;
+        export const ExternalLink = icon;
+        export const Loader2 = icon;
+        export const Plus = icon;
+        export const Shield = icon;
+        export const User = icon;
+        export const UserPlus = icon;
+        export const Zap = icon;`,
     },
   });
   const { createRoot } = require("react-dom/client");

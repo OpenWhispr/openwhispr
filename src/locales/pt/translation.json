@@ -1652,14 +1652,10 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "billableSeat": "Seu assento é faturável",
-      "nonBillableSeat": "Acesso somente de administrador · sem assento pago",
-      "managedBy": "A cobrança é gerenciada por {{owner}}.",
       "addSeat": "Adicionar assento",
       "seatUpdated_one": "Capacidade do workspace atualizada para {{count}} assento",
       "seatUpdated_other": "Capacidade do workspace atualizada para {{count}} assentos",
       "seatUpdateFailed": "Não foi possível atualizar os assentos do workspace",
-      "providedBy": "Plano pessoal: Gratuito · Acesso pago fornecido por {{workspaces}}",
       "confirmSeats": {
         "title": "Adicionar um assento ao workspace?",
         "description_one": "Aumentar {{workspace}} para {{count}} assento. O Stripe fará o rateio da alteração.",
@@ -2968,25 +2964,12 @@
         "resentNoEmail": "Convite atualizado, mas não foi possível entregar o e-mail."
       },
       "billing": {
-        "plan": "Plano",
-        "seats": "Assentos",
-        "ownerOnly": "Apenas o proprietário do espaço de trabalho pode gerenciar a assinatura.",
         "nextInvoice": "Próxima fatura",
-        "manageStripe": "Gerenciar no Stripe",
-        "provisionedPlan": "Configurado pela OpenWhispr. Fale com vendas para alterar o plano ou os assentos.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Gratuito",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Ativa",
-          "trialing": "Em teste",
-          "past_due": "Em atraso",
-          "canceled": "Cancelada",
-          "incomplete": "Incompleta",
-          "unpaid": "Não paga"
         }
       },
       "developer": {
@@ -3209,8 +3192,7 @@
           "subscribePro": "Assinar o Pro",
           "manageBilling": "Gerenciar cobrança",
           "updatePayment": "Atualizar pagamento",
-          "cancelPro": "Cancelar Pro",
-          "cancelTrial": "Cancelar teste"
+          "cancelPro": "Cancelar Pro"
         },
         "usage": {
           "cloudTranscription": "Transcrição na nuvem",
@@ -3235,34 +3217,25 @@
         },
         "price": {
           "free": "$0",
-          "proFrom": "{{price}} / mês a partir de {{date}}",
           "billedYearly": "Cobrança anual",
           "proMonthly": "{{price}} / mês"
         },
         "banners": {
-          "coveredTrial": {
-            "title": "{{workspace}} já cobre você",
-            "body": "Seu teste vira um plano Pro pago em {{date}}."
-          },
-          "coveredTrialUnnamed": {
-            "title": "Um espaço de trabalho já cobre você",
-            "body": "Seu teste vira um plano Pro pago em {{date}}."
-          },
           "coveredPastDue": {
             "title": "{{workspace}} já cobre você",
-            "body": "O pagamento do Pro falhou. Cancele o Pro para parar as novas tentativas."
+            "body": "O pagamento do {{plan}} falhou. Cancele o {{plan}} para parar as novas tentativas."
           },
           "coveredPastDueUnnamed": {
             "title": "Um espaço de trabalho já cobre você",
-            "body": "O pagamento do Pro falhou. Cancele o Pro para parar as novas tentativas."
+            "body": "O pagamento do {{plan}} falhou. Cancele o {{plan}} para parar as novas tentativas."
           },
           "coveredPaying": {
             "title": "{{workspace}} já cobre você",
-            "body": "Você ainda paga pelo Pro."
+            "body": "Você ainda paga pelo {{plan}}."
           },
           "coveredPayingUnnamed": {
             "title": "Um espaço de trabalho já cobre você",
-            "body": "Você ainda paga pelo Pro."
+            "body": "Você ainda paga pelo {{plan}}."
           },
           "coveredStore": {
             "title": "{{workspace}} já cobre você",
@@ -3294,7 +3267,6 @@
           }
         },
         "details": {
-          "trialEnds": "O teste termina",
           "periodEnds": "O período atual termina",
           "billedThrough": "Cobrado por",
           "accessUntil": "Acesso até",
@@ -3372,7 +3344,6 @@
         },
         "usage": {
           "seats": "Vagas",
-          "seatsValue": "{{used}} / {{total}}",
           "members": "Membros",
           "noSeatsLeft": "Nenhuma vaga disponível",
           "noSeatsLeftWithInvites_one": "Nenhuma vaga disponível · {{count}} convite pendente",

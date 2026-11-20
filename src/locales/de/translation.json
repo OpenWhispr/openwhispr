@@ -2311,25 +2311,12 @@
         "resentNoEmail": "Einladung aktualisiert, aber die E-Mail konnte nicht zugestellt werden."
       },
       "billing": {
-        "plan": "Plan",
-        "seats": "Plätze",
-        "ownerOnly": "Nur der Workspace-Inhaber kann das Abonnement verwalten.",
         "nextInvoice": "Nächste Rechnung",
-        "manageStripe": "In Stripe verwalten",
-        "provisionedPlan": "Von OpenWhispr eingerichtet. Wenden Sie sich an den Vertrieb, um Tarif oder Plätze zu ändern.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Free",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Aktiv",
-          "trialing": "Testphase",
-          "past_due": "Überfällig",
-          "canceled": "Gekündigt",
-          "incomplete": "Unvollständig",
-          "unpaid": "Unbezahlt"
         }
       },
       "developer": {
@@ -2441,14 +2428,10 @@
       }
     },
     "unifiedBilling": {
-      "billableSeat": "Ihr Platz wird abgerechnet",
-      "nonBillableSeat": "Nur Admin-Zugriff · kein kostenpflichtiger Platz",
-      "managedBy": "Die Abrechnung wird von {{owner}} verwaltet.",
       "addSeat": "Platz hinzufügen",
       "seatUpdated_one": "Workspace-Kapazität auf {{count}} Platz aktualisiert",
       "seatUpdated_other": "Workspace-Kapazität auf {{count}} Plätze aktualisiert",
       "seatUpdateFailed": "Workspace-Plätze konnten nicht aktualisiert werden",
-      "providedBy": "Persönlicher Plan: Free · Bezahlter Zugriff bereitgestellt von {{workspaces}}",
       "confirmSeats": {
         "title": "Workspace-Platz hinzufügen?",
         "description_one": "{{workspace}} auf {{count}} Platz erweitern. Stripe berechnet die Änderung anteilig.",
@@ -3318,8 +3301,7 @@
           "subscribePro": "Pro abonnieren",
           "manageBilling": "Abrechnung verwalten",
           "updatePayment": "Zahlung aktualisieren",
-          "cancelPro": "Pro kündigen",
-          "cancelTrial": "Testphase beenden"
+          "cancelPro": "Pro kündigen"
         },
         "usage": {
           "cloudTranscription": "Cloud-Transkription",
@@ -3344,34 +3326,25 @@
         },
         "price": {
           "free": "$0",
-          "proFrom": "{{price}} / Monat ab {{date}}",
           "billedYearly": "Jährliche Abrechnung",
           "proMonthly": "{{price}} / Monat"
         },
         "banners": {
-          "coveredTrial": {
-            "title": "{{workspace}} deckt dich bereits ab",
-            "body": "Deine Testphase wird am {{date}} zu einem bezahlten Pro-Plan."
-          },
-          "coveredTrialUnnamed": {
-            "title": "Ein Workspace deckt dich bereits ab",
-            "body": "Deine Testphase wird am {{date}} zu einem bezahlten Pro-Plan."
-          },
           "coveredPastDue": {
             "title": "{{workspace}} deckt dich bereits ab",
-            "body": "Deine Pro-Zahlung ist fehlgeschlagen. Kündige Pro, um die erneuten Versuche zu stoppen."
+            "body": "Deine {{plan}}-Zahlung ist fehlgeschlagen. Kündige {{plan}}, um die erneuten Versuche zu stoppen."
           },
           "coveredPastDueUnnamed": {
             "title": "Ein Workspace deckt dich bereits ab",
-            "body": "Deine Pro-Zahlung ist fehlgeschlagen. Kündige Pro, um die erneuten Versuche zu stoppen."
+            "body": "Deine {{plan}}-Zahlung ist fehlgeschlagen. Kündige {{plan}}, um die erneuten Versuche zu stoppen."
           },
           "coveredPaying": {
             "title": "{{workspace}} deckt dich bereits ab",
-            "body": "Du zahlst weiterhin für Pro."
+            "body": "Du zahlst weiterhin für {{plan}}."
           },
           "coveredPayingUnnamed": {
             "title": "Ein Workspace deckt dich bereits ab",
-            "body": "Du zahlst weiterhin für Pro."
+            "body": "Du zahlst weiterhin für {{plan}}."
           },
           "coveredStore": {
             "title": "{{workspace}} deckt dich bereits ab",
@@ -3403,7 +3376,6 @@
           }
         },
         "details": {
-          "trialEnds": "Testphase endet",
           "periodEnds": "Aktueller Zeitraum endet",
           "billedThrough": "Abgerechnet über",
           "accessUntil": "Zugriff bis",
@@ -3481,7 +3453,6 @@
         },
         "usage": {
           "seats": "Plätze",
-          "seatsValue": "{{used}} / {{total}}",
           "members": "Mitglieder",
           "noSeatsLeft": "Keine Plätze mehr frei",
           "noSeatsLeftWithInvites_one": "Keine Plätze mehr frei · {{count}} offene Einladung",

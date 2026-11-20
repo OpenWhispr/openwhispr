@@ -1673,16 +1673,12 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "billableSeat": "Ваше место оплачивается",
-      "nonBillableSeat": "Доступ только для администратора · без платного места",
-      "managedBy": "Оплатой управляет {{owner}}.",
       "addSeat": "Добавить место",
       "seatUpdated_one": "Вместимость рабочего пространства обновлена до {{count}} места",
       "seatUpdated_few": "Вместимость рабочего пространства обновлена до {{count}} мест",
       "seatUpdated_many": "Вместимость рабочего пространства обновлена до {{count}} мест",
       "seatUpdated_other": "Вместимость рабочего пространства обновлена до {{count}} мест",
       "seatUpdateFailed": "Не удалось обновить места рабочего пространства",
-      "providedBy": "Личный тариф: Бесплатный · Платный доступ через {{workspaces}}",
       "confirmSeats": {
         "title": "Добавить место в рабочее пространство?",
         "description_one": "Увеличить {{workspace}} до {{count}} места. Stripe пересчитает стоимость пропорционально.",
@@ -3067,25 +3063,12 @@
         "resentNoEmail": "Приглашение обновлено, но письмо не удалось доставить."
       },
       "billing": {
-        "plan": "Тариф",
-        "seats": "Места",
-        "ownerOnly": "Управлять подпиской может только владелец рабочего пространства.",
         "nextInvoice": "Следующий счёт",
-        "manageStripe": "Управлять в Stripe",
-        "provisionedPlan": "Настроен OpenWhispr. Чтобы изменить тариф или число мест, свяжитесь с отделом продаж.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Бесплатный",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Активна",
-          "trialing": "Пробный период",
-          "past_due": "Просрочена",
-          "canceled": "Отменена",
-          "incomplete": "Не завершена",
-          "unpaid": "Не оплачена"
         }
       },
       "developer": {
@@ -3316,8 +3299,7 @@
           "subscribePro": "Подписаться на Pro",
           "manageBilling": "Управление оплатой",
           "updatePayment": "Обновить оплату",
-          "cancelPro": "Отменить Pro",
-          "cancelTrial": "Отменить пробный период"
+          "cancelPro": "Отменить Pro"
         },
         "usage": {
           "cloudTranscription": "Облачная транскрипция",
@@ -3344,34 +3326,25 @@
         },
         "price": {
           "free": "$0",
-          "proFrom": "{{price}} / месяц с {{date}}",
           "billedYearly": "Годовая оплата",
           "proMonthly": "{{price}} / месяц"
         },
         "banners": {
-          "coveredTrial": {
-            "title": "{{workspace}} уже покрывает вас",
-            "body": "{{date}} пробный период станет платным планом Pro."
-          },
-          "coveredTrialUnnamed": {
-            "title": "Рабочее пространство уже покрывает вас",
-            "body": "{{date}} пробный период станет платным планом Pro."
-          },
           "coveredPastDue": {
             "title": "{{workspace}} уже покрывает вас",
-            "body": "Оплата Pro не прошла. Отмените Pro, чтобы остановить повторные попытки."
+            "body": "Оплата {{plan}} не прошла. Отмените {{plan}}, чтобы остановить повторные попытки."
           },
           "coveredPastDueUnnamed": {
             "title": "Рабочее пространство уже покрывает вас",
-            "body": "Оплата Pro не прошла. Отмените Pro, чтобы остановить повторные попытки."
+            "body": "Оплата {{plan}} не прошла. Отмените {{plan}}, чтобы остановить повторные попытки."
           },
           "coveredPaying": {
             "title": "{{workspace}} уже покрывает вас",
-            "body": "Вы всё ещё платите за Pro."
+            "body": "Вы всё ещё платите за {{plan}}."
           },
           "coveredPayingUnnamed": {
             "title": "Рабочее пространство уже покрывает вас",
-            "body": "Вы всё ещё платите за Pro."
+            "body": "Вы всё ещё платите за {{plan}}."
           },
           "coveredStore": {
             "title": "{{workspace}} уже покрывает вас",
@@ -3403,7 +3376,6 @@
           }
         },
         "details": {
-          "trialEnds": "Пробный период заканчивается",
           "periodEnds": "Текущий период заканчивается",
           "billedThrough": "Оплата через",
           "accessUntil": "Доступ до",
@@ -3483,7 +3455,6 @@
         },
         "usage": {
           "seats": "Места",
-          "seatsValue": "{{used}} / {{total}}",
           "members": "Участники",
           "noSeatsLeft": "Свободных мест нет",
           "noSeatsLeftWithInvites_one": "Свободных мест нет · {{count}} приглашение ожидает",

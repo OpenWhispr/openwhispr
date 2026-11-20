@@ -92,7 +92,7 @@ export function UsageMeterRow({
   action,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   percent: number;
   caption?: string;
   tone?: "normal" | "warning" | "destructive";
@@ -128,15 +128,14 @@ export function UsageMeterRow({
   );
 }
 
-export function UsageValueRow({ label, value }: { label: string; value: string }): ReactElement {
+export function UsageValueRow({ label, value }: { label: string; value: ReactNode }): ReactElement {
   return (
     <div className="flex flex-col gap-0.5 border-t border-border px-4 py-3.5 text-sm first:border-t-0">
       <span dir="auto" className="truncate text-foreground">
         {label}
       </span>
-      <span dir="auto" className="truncate text-muted-foreground">
-        {value}
-      </span>
+      {/* Inherits the row's direction: dir="auto" would put a bare number on the LTR side. */}
+      <span className="truncate text-muted-foreground">{value}</span>
     </div>
   );
 }
@@ -214,6 +213,7 @@ export function PillButton({
     <button
       {...rest}
       type={type}
+      data-variant={variant}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
       className={cn(

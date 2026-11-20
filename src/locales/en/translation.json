@@ -2311,25 +2311,12 @@
         "resentNoEmail": "Invitation updated, but the email couldn't be delivered."
       },
       "billing": {
-        "plan": "Plan",
-        "seats": "Seats",
-        "ownerOnly": "Only the workspace owner can manage the subscription.",
         "nextInvoice": "Next invoice",
-        "manageStripe": "Manage in Stripe",
-        "provisionedPlan": "Set up by OpenWhispr. Contact sales to change the plan or seats.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Free",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Active",
-          "trialing": "Trialing",
-          "past_due": "Past due",
-          "canceled": "Canceled",
-          "incomplete": "Incomplete",
-          "unpaid": "Unpaid"
         }
       },
       "developer": {
@@ -2441,14 +2428,10 @@
       }
     },
     "unifiedBilling": {
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
       "addSeat": "Add seat",
       "seatUpdated_one": "Workspace capacity updated to {{count}} seat",
       "seatUpdated_other": "Workspace capacity updated to {{count}} seats",
       "seatUpdateFailed": "Couldn't update workspace seats",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
       "confirmSeats": {
         "title": "Add a workspace seat?",
         "description_one": "Increase {{workspace}} to {{count}} seat. Stripe will prorate the change.",
@@ -3318,8 +3301,7 @@
           "subscribePro": "Subscribe to Pro",
           "manageBilling": "Manage billing",
           "updatePayment": "Update payment",
-          "cancelPro": "Cancel Pro",
-          "cancelTrial": "Cancel trial"
+          "cancelPro": "Cancel Pro"
         },
         "usage": {
           "cloudTranscription": "Cloud transcription",
@@ -3344,34 +3326,25 @@
         },
         "price": {
           "free": "$0",
-          "proFrom": "{{price}} / month from {{date}}",
           "billedYearly": "Billed yearly",
           "proMonthly": "{{price}} / month"
         },
         "banners": {
-          "coveredTrial": {
-            "title": "{{workspace}} already covers you",
-            "body": "Your trial turns into a paid Pro plan on {{date}}."
-          },
-          "coveredTrialUnnamed": {
-            "title": "A workspace already covers you",
-            "body": "Your trial turns into a paid Pro plan on {{date}}."
-          },
           "coveredPastDue": {
             "title": "{{workspace}} already covers you",
-            "body": "Your Pro payment failed. Cancel Pro to stop the retries."
+            "body": "Your {{plan}} payment failed. Cancel {{plan}} to stop the retries."
           },
           "coveredPastDueUnnamed": {
             "title": "A workspace already covers you",
-            "body": "Your Pro payment failed. Cancel Pro to stop the retries."
+            "body": "Your {{plan}} payment failed. Cancel {{plan}} to stop the retries."
           },
           "coveredPaying": {
             "title": "{{workspace}} already covers you",
-            "body": "You still pay for Pro."
+            "body": "You still pay for {{plan}}."
           },
           "coveredPayingUnnamed": {
             "title": "A workspace already covers you",
-            "body": "You still pay for Pro."
+            "body": "You still pay for {{plan}}."
           },
           "coveredStore": {
             "title": "{{workspace}} already covers you",
@@ -3403,7 +3376,6 @@
           }
         },
         "details": {
-          "trialEnds": "Trial ends",
           "periodEnds": "Current period ends",
           "billedThrough": "Billed through",
           "accessUntil": "Access until",
@@ -3481,7 +3453,6 @@
         },
         "usage": {
           "seats": "Seats",
-          "seatsValue": "{{used}} / {{total}}",
           "members": "Members",
           "noSeatsLeft": "No seats left",
           "noSeatsLeftWithInvites_one": "No seats left · {{count}} pending invite",

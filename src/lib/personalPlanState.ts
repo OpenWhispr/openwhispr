@@ -52,6 +52,13 @@ export interface PersonalPlanInput {
 
 export type PersonalTier = "free" | "pro" | "business";
 
+/** Plan names are brand names: shown as they are in every language. */
+const PERSONAL_PLAN_NAMES: Record<PersonalTier, string> = {
+  free: "Free",
+  pro: "Pro",
+  business: "Business",
+};
+
 export type PersonalUsageRow =
   | {
       kind: "words";
@@ -113,6 +120,13 @@ interface Facts {
  */
 export function isCardlessTrial(usage: Pick<PersonalUsage, "isTrial" | "storeBilling">): boolean {
   return usage.isTrial && !usage.storeBilling;
+}
+
+/** The creator link only matters before a purchase: hidden once Stripe bills the user personally. */
+export function showsCreatorLink(
+  usage: Pick<PersonalUsage, "isPersonallySubscribed" | "isTrial" | "storeBilling"> | null
+): boolean {
+  return !usage?.isPersonallySubscribed || isCardlessTrial(usage);
 }
 
 function resolveTier(usage: PersonalUsage): PersonalTier {
@@ -184,16 +198,22 @@ function banner(
 }
 
 function coveredBanner(facts: Facts, workspaceName: string | undefined): PersonalBanner {
-  const { usage, stripeBilled } = facts;
-  const named = (id: string, action?: PersonalAction): PersonalBanner =>
+  const { usage, tier, stripeBilled } = facts;
+  const named = (
+    id: string,
+    action?: PersonalAction,
+    extra: Record<string, string> = {}
+  ): PersonalBanner =>
     banner(id, "warning", {
       keyId: workspaceName ? id : `${id}Unnamed`,
-      params: workspaceName ? { workspace: workspaceName } : {},
+      params: workspaceName ? { workspace: workspaceName, ...extra } : extra,
       action,
     });
+  // The plan still being paid for, by its brand name.
+  const paid = { plan: PERSONAL_PLAN_NAMES[tier] };
 
-  if (usage.isPastDue) return named("coveredPastDue", { kind: "cancelPro" });
-  if (stripeBilled) return named("coveredPaying", { kind: "cancelPro" });
+  if (usage.isPastDue) return named("coveredPastDue", { kind: "cancelPro" }, paid);
+  if (stripeBilled) return named("coveredPaying", { kind: "cancelPro" }, paid);
   if (usage.storeBilling) return named("coveredStore");
   return named("covered");
 }

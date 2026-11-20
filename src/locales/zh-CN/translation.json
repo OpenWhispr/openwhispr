@@ -1673,14 +1673,10 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "billableSeat": "您的席位需计费",
-      "nonBillableSeat": "仅管理员访问 · 无付费席位",
-      "managedBy": "账单由 {{owner}} 管理。",
       "addSeat": "添加席位",
       "seatUpdated_one": "工作区容量已更新为 {{count}} 个席位",
       "seatUpdated_other": "工作区容量已更新为 {{count}} 个席位",
       "seatUpdateFailed": "无法更新工作区席位",
-      "providedBy": "个人套餐：免费版 · 付费权限由 {{workspaces}} 提供",
       "confirmSeats": {
         "title": "要添加工作区席位吗？",
         "description_one": "将 {{workspace}} 增加到 {{count}} 个席位。Stripe 将按比例计费。",
@@ -2989,25 +2985,12 @@
         "resentNoEmail": "邀请已更新，但邮件无法送达。"
       },
       "billing": {
-        "plan": "套餐",
-        "seats": "席位",
-        "ownerOnly": "只有工作区所有者可以管理订阅。",
         "nextInvoice": "下一张账单",
-        "manageStripe": "在 Stripe 中管理",
-        "provisionedPlan": "由 OpenWhispr 设置。如需更改方案或席位，请联系销售。",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "免费版",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "生效中",
-          "trialing": "试用中",
-          "past_due": "逾期未付",
-          "canceled": "已取消",
-          "incomplete": "未完成",
-          "unpaid": "未支付"
         }
       },
       "developer": {
@@ -3224,8 +3207,7 @@
           "subscribePro": "订阅 Pro",
           "manageBilling": "管理账单",
           "updatePayment": "更新付款方式",
-          "cancelPro": "取消 Pro",
-          "cancelTrial": "取消试用"
+          "cancelPro": "取消 Pro"
         },
         "usage": {
           "cloudTranscription": "云端转录",
@@ -3250,34 +3232,25 @@
         },
         "price": {
           "free": "$0",
-          "proFrom": "{{date}} 起 {{price}} / 月",
           "billedYearly": "按年计费",
           "proMonthly": "{{price}} / 月"
         },
         "banners": {
-          "coveredTrial": {
-            "title": "{{workspace}} 已为您提供权益",
-            "body": "您的试用将于 {{date}} 转为付费 Pro 方案。"
-          },
-          "coveredTrialUnnamed": {
-            "title": "已有工作区为您提供权益",
-            "body": "您的试用将于 {{date}} 转为付费 Pro 方案。"
-          },
           "coveredPastDue": {
             "title": "{{workspace}} 已为您提供权益",
-            "body": "您的 Pro 付款失败。取消 Pro 即可停止重试。"
+            "body": "您的 {{plan}} 付款失败。取消 {{plan}} 即可停止重试。"
           },
           "coveredPastDueUnnamed": {
             "title": "已有工作区为您提供权益",
-            "body": "您的 Pro 付款失败。取消 Pro 即可停止重试。"
+            "body": "您的 {{plan}} 付款失败。取消 {{plan}} 即可停止重试。"
           },
           "coveredPaying": {
             "title": "{{workspace}} 已为您提供权益",
-            "body": "您仍在为 Pro 付费。"
+            "body": "您仍在为 {{plan}} 付费。"
           },
           "coveredPayingUnnamed": {
             "title": "已有工作区为您提供权益",
-            "body": "您仍在为 Pro 付费。"
+            "body": "您仍在为 {{plan}} 付费。"
           },
           "coveredStore": {
             "title": "{{workspace}} 已为您提供权益",
@@ -3309,7 +3282,6 @@
           }
         },
         "details": {
-          "trialEnds": "试用结束",
           "periodEnds": "当前周期结束",
           "billedThrough": "计费渠道",
           "accessUntil": "可用至",
@@ -3387,7 +3359,6 @@
         },
         "usage": {
           "seats": "席位",
-          "seatsValue": "{{used}} / {{total}}",
           "members": "成员",
           "noSeatsLeft": "没有剩余席位",
           "noSeatsLeftWithInvites_one": "没有剩余席位 · {{count}} 个待接受邀请",

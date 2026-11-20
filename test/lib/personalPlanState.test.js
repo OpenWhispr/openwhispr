@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { personalPlanState } = require("../../src/lib/personalPlanState.ts");
+const { personalPlanState, showsCreatorLink } = require("../../src/lib/personalPlanState.ts");
 const {
   personalProCardKind,
 } = require("../../src/components/settings/billing/personalGridHandlers.ts");
@@ -248,7 +248,7 @@ test("covered Stripe Pro: covered paying banner with Cancel Pro", () => {
   const paying = banner(result, "coveredPaying");
   assert.equal(paying.tone, "warning");
   assert.equal(paying.titleKey, "banners.coveredPaying.title");
-  assert.deepEqual(paying.params, { workspace: "Acme" });
+  assert.deepEqual(paying.params, { workspace: "Acme", plan: "Pro" });
   assert.deepEqual(paying.action, { kind: "cancelPro" });
   assert.deepEqual(result.usage, [{ kind: "unlimited" }]);
 });
@@ -275,8 +275,23 @@ test("covered past due: Manage billing and the covered past due banner, never pa
   assert.deepEqual(bannerIds(result), ["coveredPastDue"]);
   const pastDue = banner(result, "coveredPastDue");
   assert.equal(pastDue.tone, "warning");
+  assert.deepEqual(pastDue.params, { workspace: "Acme", plan: "Pro" });
   assert.deepEqual(pastDue.action, { kind: "cancelPro" });
   assert.deepEqual(result.usage, [{ kind: "unlimited" }]);
+});
+
+test("covered banners name a personal Business plan as Business, named or not", () => {
+  const paying = ready({ ...STRIPE_PRO, plan: "business", entitledWorkspaceIds: ["ws-1"] });
+  assert.deepEqual(banner(paying, "coveredPaying").params, { plan: "Business" });
+  assert.equal(banner(paying, "coveredPaying").titleKey, "banners.coveredPayingUnnamed.title");
+  const pastDue = ready(
+    { ...PAST_DUE, plan: "business", isSubscribed: true, entitledWorkspaceIds: ["ws-1"] },
+    { coveringWorkspaceNames: ["Acme"] }
+  );
+  assert.deepEqual(banner(pastDue, "coveredPastDue").params, {
+    workspace: "Acme",
+    plan: "Business",
+  });
 });
 
 test("App Store: Manage in store, billed through and renews details", () => {
@@ -516,8 +531,44 @@ test("API: a covered past due payer keeps the portal and can cancel Pro", () => 
   assert.equal(proCard, "none");
 });
 
+// A Stripe trial (with a card) is trialing in Stripe, but the webhook clears trial_ends_at,
+// so the API reports isTrial false and a personal entitlement: it bills like any Stripe Pro.
+test("API: a Stripe-side trialing subscription manages billing, with a price and Pro current", () => {
+  const { result, proCard } = fromPayload(
+    apiPayload(
+      {
+        ...SUBSCRIBED,
+        plan: "pro",
+        status: "trialing",
+        isTrial: false,
+        currentPeriodEnd: PERIOD_END,
+        billingInterval: "monthly",
+      },
+      { personal: true }
+    )
+  );
+  assert.equal(result.tier, "pro");
+  assert.deepEqual(actionKinds(result), ["manageBilling", "business"]);
+  assert.deepEqual(result.price, { key: "price.proMonthly" });
+  assert.equal(result.badge?.key, "badges.monthly");
+  assert.deepEqual(result.banners, []);
+  assert.equal(proCard, "current");
+});
+
 test("API: a past due personal Business plan stays Business", () => {
   const { result } = fromPayload(apiPayload({ ...API.pastDue, plan: "business" }));
   assert.equal(result.tier, "business");
   assert.equal(result.price, null);
+});
+
+test("the creator link shows to anyone who can still subscribe, a cardless trial included", () => {
+  assert.equal(showsCreatorLink(null), true);
+  assert.equal(showsCreatorLink(usage()), true);
+  assert.equal(showsCreatorLink(usage(TRIAL)), true);
+  assert.equal(showsCreatorLink(usage(COVERED)), true);
+  assert.equal(showsCreatorLink(usage(STRIPE_PRO)), false);
+  assert.equal(
+    showsCreatorLink(usage({ ...store(), isTrial: true, isPersonallySubscribed: true })),
+    false
+  );
 });

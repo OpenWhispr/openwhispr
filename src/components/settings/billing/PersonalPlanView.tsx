@@ -21,6 +21,7 @@ import {
   UsageMeterRow,
   UsageValueRow,
 } from "./BillingUi";
+import { translationParams } from "./billingFormat";
 import { isPortalAction } from "./personalGridHandlers";
 
 interface PersonalPlanViewProps {
@@ -60,21 +61,6 @@ function actionLabel(t: Translate, action: PersonalAction): string {
     default:
       return t(`${P}.actions.${action.kind}`);
   }
-}
-
-/**
- * Model params are strings: ISO dates reach t() in the reader's locale, and a
- * day count reaches it as a number `count`, which picks the key's plural form.
- */
-function translationParams(
-  params: Record<string, string> | undefined,
-  formatDate: (iso: string) => string
-): Record<string, string | number> | undefined {
-  if (!params) return undefined;
-  const result: Record<string, string | number> = { ...params };
-  if (params.date) result.date = formatDate(params.date);
-  if (params.days !== undefined) result.count = Number(params.days);
-  return result;
 }
 
 function CurrentPlanMessage({

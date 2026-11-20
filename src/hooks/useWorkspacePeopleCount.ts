@@ -41,8 +41,8 @@ export function useWorkspacePeopleCount(workspaceId: string | null): {
     ]).then(
       ([members, invitations]) => {
         if (!isCurrent()) return;
-        const count = countPeople(members, invitations, Date.now());
-        setStamped({ identity, people: { status: "known", count } });
+        const tally = countPeople(members, invitations, Date.now());
+        setStamped({ identity, people: { status: "known", ...tally } });
       },
       () => {
         if (isCurrent()) setStamped({ identity, people: { status: "failed" } });

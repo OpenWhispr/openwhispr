@@ -25,15 +25,38 @@ test("countPeople counts every member and only live invitations", () => {
     invite({ revoked_at: "2026-11-01T00:00:00Z" }),
     invite({ expires_at: "2026-11-01T00:00:00Z" }),
   ];
-  assert.equal(countPeople(members, invitations, NOW), 3);
+  assert.deepEqual(countPeople(members, invitations, NOW), {
+    count: 3,
+    members: 2,
+    invitations: 1,
+  });
+});
+
+test("countPeople splits members from invitations", () => {
+  assert.deepEqual(countPeople([{ user_id: "owner" }], [], NOW), {
+    count: 1,
+    members: 1,
+    invitations: 0,
+  });
+  assert.deepEqual(countPeople([], [invite(), invite()], NOW), {
+    count: 2,
+    members: 0,
+    invitations: 2,
+  });
 });
 
 test("freeWorkspaceCta: a known solo workspace leads with Invite", () => {
-  assert.equal(freeWorkspaceCta(owner(), { status: "known", count: 1 }), "invite");
+  assert.equal(
+    freeWorkspaceCta(owner(), { status: "known", count: 1, members: 1, invitations: 0 }),
+    "invite"
+  );
 });
 
 test("freeWorkspaceCta: two or more people lead with Upgrade", () => {
-  assert.equal(freeWorkspaceCta(owner(), { status: "known", count: 2 }), "upgrade");
+  assert.equal(
+    freeWorkspaceCta(owner(), { status: "known", count: 2, members: 1, invitations: 1 }),
+    "upgrade"
+  );
 });
 
 test("freeWorkspaceCta: an unknown count never picks a primary", () => {
@@ -43,7 +66,7 @@ test("freeWorkspaceCta: an unknown count never picks a primary", () => {
 });
 
 test("freeWorkspaceCta: none for a subscribed workspace or someone who can't bill", () => {
-  const solo = { status: "known", count: 1 };
+  const solo = { status: "known", count: 1, members: 1, invitations: 0 };
   assert.equal(freeWorkspaceCta(owner({ stripe_subscription_id: "sub" }), solo), "none");
   assert.equal(freeWorkspaceCta(owner({ has_subscription: true }), solo), "none");
   assert.equal(freeWorkspaceCta(owner({ plan: "business", status: "active" }), solo), "none");

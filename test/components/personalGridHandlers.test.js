@@ -8,7 +8,7 @@ const {
   personalBusyAction,
   personalProCardKind,
   runBusinessTileAction,
-  runEnterpriseCta,
+  runEnterpriseTileAction,
   runPersonalAction,
 } = require("../../src/components/settings/billing/personalGridHandlers.ts");
 
@@ -21,8 +21,7 @@ function recorder() {
     signIn: () => calls.push(["signIn"]),
     retry: () => calls.push(["retry"]),
     viewWorkspace: (workspaceId) => calls.push(["viewWorkspace", workspaceId]),
-    createWorkspace: (target) => calls.push(["createWorkspace", target]),
-    openEnterpriseCheckout: () => calls.push(["openEnterpriseCheckout"]),
+    createWorkspace: () => calls.push(["createWorkspace"]),
   };
   return { calls, handlers };
 }
@@ -186,20 +185,19 @@ test("Business tile: viewWorkspace switches to that workspace, createWorkspace o
   runBusinessTileAction({ kind: "createWorkspace" }, handlers);
   runBusinessTileAction({ kind: "none" }, handlers);
   runBusinessTileAction({ kind: "workspacePlan" }, handlers);
-  assert.deepEqual(calls, [
-    ["viewWorkspace", "ws-9"],
-    ["createWorkspace", "business"],
-  ]);
+  assert.deepEqual(calls, [["viewWorkspace", "ws-9"], ["createWorkspace"]]);
 });
 
-test("Enterprise: openDialog, createWorkspace and contactSales each reach their handler", () => {
+test("Enterprise: Upgrade a workspace switches the view and contact sales opens the page; nothing starts a checkout", () => {
   const { calls, handlers } = recorder();
-  runEnterpriseCta({ action: "openDialog" }, handlers);
-  runEnterpriseCta({ action: "createWorkspace" }, handlers);
-  runEnterpriseCta({ action: "contactSales", ownerName: "Ada" }, handlers);
+  runEnterpriseTileAction({ kind: "viewWorkspace", workspaceId: "ws-3" }, handlers);
+  runEnterpriseTileAction({ kind: "contactSales", ownerName: "Ada" }, handlers);
+  runEnterpriseTileAction({ kind: "workspacePlan" }, handlers);
+  runEnterpriseTileAction({ kind: "none" }, handlers);
+  // Personal never sells a workspace plan, even if handed a checkout.
+  runEnterpriseTileAction({ kind: "checkout" }, handlers);
   assert.deepEqual(calls, [
-    ["openEnterpriseCheckout"],
-    ["createWorkspace", "enterprise"],
+    ["viewWorkspace", "ws-3"],
     ["openExternal", "https://openwhispr.com/contact-sales"],
   ]);
 });
@@ -230,7 +228,7 @@ test("Personal actions: portal actions open the Stripe portal, the rest reach th
     ["signIn"],
     ["retry"],
     ["viewWorkspace", "ws-2"],
-    ["createWorkspace", "business"],
+    ["createWorkspace"],
   ]);
 });
 

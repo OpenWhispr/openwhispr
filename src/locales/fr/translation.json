@@ -2311,25 +2311,12 @@
         "resentNoEmail": "Invitation mise à jour, mais l'e-mail n'a pas pu être délivré."
       },
       "billing": {
-        "plan": "Plan",
-        "seats": "Sièges",
-        "ownerOnly": "Seul le propriétaire de l'espace de travail peut gérer l'abonnement.",
         "nextInvoice": "Prochaine facture",
-        "manageStripe": "Gérer dans Stripe",
-        "provisionedPlan": "Configuré par OpenWhispr. Contactez l'équipe commerciale pour modifier le forfait ou les places.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Gratuit",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Actif",
-          "trialing": "Période d'essai",
-          "past_due": "En retard",
-          "canceled": "Annulé",
-          "incomplete": "Incomplet",
-          "unpaid": "Impayé"
         }
       },
       "developer": {
@@ -2447,14 +2434,10 @@
       }
     },
     "unifiedBilling": {
-      "billableSeat": "Votre siège est facturable",
-      "nonBillableSeat": "Accès administrateur uniquement · aucun siège payant",
-      "managedBy": "La facturation est gérée par {{owner}}.",
       "addSeat": "Ajouter un siège",
       "seatUpdated_one": "Capacité de l'espace de travail mise à jour : {{count}} siège",
       "seatUpdated_other": "Capacité de l'espace de travail mise à jour : {{count}} sièges",
       "seatUpdateFailed": "Impossible de mettre à jour les sièges de l'espace de travail",
-      "providedBy": "Plan personnel : Gratuit · Accès payant fourni par {{workspaces}}",
       "confirmSeats": {
         "title": "Ajouter un siège à l'espace de travail ?",
         "description_one": "Passer {{workspace}} à {{count}} siège. Stripe calculera le changement au prorata.",
@@ -3324,8 +3307,7 @@
           "subscribePro": "S'abonner à Pro",
           "manageBilling": "Gérer la facturation",
           "updatePayment": "Mettre à jour le paiement",
-          "cancelPro": "Résilier Pro",
-          "cancelTrial": "Annuler l'essai"
+          "cancelPro": "Résilier Pro"
         },
         "usage": {
           "cloudTranscription": "Transcription cloud",
@@ -3350,34 +3332,25 @@
         },
         "price": {
           "free": "$0",
-          "proFrom": "{{price}} / mois à partir du {{date}}",
           "billedYearly": "Facturation annuelle",
           "proMonthly": "{{price}} / mois"
         },
         "banners": {
-          "coveredTrial": {
-            "title": "{{workspace}} vous couvre déjà",
-            "body": "Votre essai devient un forfait Pro payant le {{date}}."
-          },
-          "coveredTrialUnnamed": {
-            "title": "Un espace de travail vous couvre déjà",
-            "body": "Votre essai devient un forfait Pro payant le {{date}}."
-          },
           "coveredPastDue": {
             "title": "{{workspace}} vous couvre déjà",
-            "body": "Votre paiement Pro a échoué. Résiliez Pro pour arrêter les nouvelles tentatives."
+            "body": "Votre paiement {{plan}} a échoué. Résiliez {{plan}} pour arrêter les nouvelles tentatives."
           },
           "coveredPastDueUnnamed": {
             "title": "Un espace de travail vous couvre déjà",
-            "body": "Votre paiement Pro a échoué. Résiliez Pro pour arrêter les nouvelles tentatives."
+            "body": "Votre paiement {{plan}} a échoué. Résiliez {{plan}} pour arrêter les nouvelles tentatives."
           },
           "coveredPaying": {
             "title": "{{workspace}} vous couvre déjà",
-            "body": "Vous payez toujours Pro."
+            "body": "Vous payez toujours {{plan}}."
           },
           "coveredPayingUnnamed": {
             "title": "Un espace de travail vous couvre déjà",
-            "body": "Vous payez toujours Pro."
+            "body": "Vous payez toujours {{plan}}."
           },
           "coveredStore": {
             "title": "{{workspace}} vous couvre déjà",
@@ -3409,7 +3382,6 @@
           }
         },
         "details": {
-          "trialEnds": "Fin de l'essai",
           "periodEnds": "Fin de la période en cours",
           "billedThrough": "Facturé via",
           "accessUntil": "Accès jusqu'au",
@@ -3487,7 +3459,6 @@
         },
         "usage": {
           "seats": "Sièges",
-          "seatsValue": "{{used}} / {{total}}",
           "members": "Membres",
           "noSeatsLeft": "Plus aucun siège disponible",
           "noSeatsLeftWithInvites_one": "Plus aucun siège disponible · {{count}} invitation en attente",

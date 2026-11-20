@@ -91,6 +91,32 @@ test("PillButton busy is disabled, spins and keeps its label", async (t) => {
   assert.doesNotMatch(idle, /aria-busy/);
 });
 
+test("PillButton names its variant, so a test reads it without parsing classes", async (t) => {
+  const ui = await load(t);
+  const primary = renderToStaticMarkup(createElement(ui.PillButton, { variant: "primary" }, "A"));
+  const secondary = renderToStaticMarkup(
+    createElement(ui.PillButton, { variant: "secondary" }, "B")
+  );
+  assert.match(primary, /data-variant="primary"/);
+  assert.match(secondary, /data-variant="secondary"/);
+});
+
+test("UsageValueRow takes a node, and its value inherits the row's direction", async (t) => {
+  const ui = await load(t);
+  const html = renderToStaticMarkup(
+    createElement(ui.UsageValueRow, {
+      label: "الأعضاء",
+      value: createElement("bdi", null, "12"),
+    })
+  );
+  assert.match(html, /<bdi>12<\/bdi>/);
+  // A number alone would resolve dir="auto" to LTR and sit on the wrong side of an RTL label.
+  const valueSpan = html.match(/<span[^>]*>(?:(?!<span).)*<bdi>/)?.[0] ?? "";
+  assert.doesNotMatch(valueSpan, /dir="auto"/);
+  // The label still finds its own direction.
+  assert.match(html, /<span dir="auto"[^>]*>الأعضاء<\/span>/);
+});
+
 test("markup holds no hard-coded colours", async (t) => {
   const ui = await load(t);
   const html = [

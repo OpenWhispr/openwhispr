@@ -5120,25 +5120,12 @@
         "resentNoEmail": "تم تحديث الدعوة، لكن تعذر تسليم البريد الإلكتروني."
       },
       "billing": {
-        "plan": "الخطة",
-        "seats": "المقاعد",
-        "ownerOnly": "يمكن لمالك مساحة العمل فقط إدارة الاشتراك.",
         "nextInvoice": "الفاتورة القادمة",
-        "manageStripe": "إدارة في Stripe",
-        "provisionedPlan": "تم إعدادها بواسطة OpenWhispr. تواصل مع فريق المبيعات لتغيير الخطة أو المقاعد.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "مجاني",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "نشط",
-          "trialing": "في فترة تجريبية",
-          "past_due": "متأخر الدفع",
-          "canceled": "ملغى",
-          "incomplete": "غير مكتمل",
-          "unpaid": "غير مدفوع"
         }
       },
       "developer": {
@@ -5274,9 +5261,6 @@
       }
     },
     "unifiedBilling": {
-      "billableSeat": "مقعدك قابل للفوترة",
-      "nonBillableSeat": "وصول للمسؤول فقط · بدون مقعد مدفوع",
-      "managedBy": "تتم إدارة الفوترة بواسطة {{owner}}.",
       "addSeat": "إضافة مقعد",
       "seatUpdated_zero": "تم تحديث سعة مساحة العمل إلى {{count}} مقاعد",
       "seatUpdated_one": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
@@ -5285,7 +5269,6 @@
       "seatUpdated_many": "تم تحديث سعة مساحة العمل إلى {{count}} مقعدًا",
       "seatUpdated_other": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
       "seatUpdateFailed": "تعذر تحديث مقاعد مساحة العمل",
-      "providedBy": "الخطة الشخصية: مجاني · الوصول المدفوع مقدم من {{workspaces}}",
       "confirmSeats": {
         "title": "إضافة مقعد لمساحة العمل؟",
         "description_zero": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيحتسب Stripe الفرق بشكل تناسبي.",
@@ -6185,8 +6168,7 @@
           "subscribePro": "الاشتراك في Pro",
           "manageBilling": "إدارة الفوترة",
           "updatePayment": "تحديث الدفع",
-          "cancelPro": "إلغاء Pro",
-          "cancelTrial": "إلغاء الفترة التجريبية"
+          "cancelPro": "إلغاء Pro"
         },
         "usage": {
           "cloudTranscription": "التفريغ السحابي",
@@ -6215,34 +6197,25 @@
         },
         "price": {
           "free": "$0",
-          "proFrom": "{{price}} / شهريًا بدءًا من {{date}}",
           "billedYearly": "تدفع سنويًا",
           "proMonthly": "{{price}} / شهريًا"
         },
         "banners": {
-          "coveredTrial": {
-            "title": "{{workspace}} يغطيك بالفعل",
-            "body": "تتحول فترتك التجريبية إلى خطة Pro مدفوعة في {{date}}."
-          },
-          "coveredTrialUnnamed": {
-            "title": "مساحة عمل تغطيك بالفعل",
-            "body": "تتحول فترتك التجريبية إلى خطة Pro مدفوعة في {{date}}."
-          },
           "coveredPastDue": {
             "title": "{{workspace}} يغطيك بالفعل",
-            "body": "فشل دفع Pro. ألغِ Pro لإيقاف المحاولات المتكررة."
+            "body": "فشل دفع {{plan}}. ألغِ {{plan}} لإيقاف المحاولات المتكررة."
           },
           "coveredPastDueUnnamed": {
             "title": "مساحة عمل تغطيك بالفعل",
-            "body": "فشل دفع Pro. ألغِ Pro لإيقاف المحاولات المتكررة."
+            "body": "فشل دفع {{plan}}. ألغِ {{plan}} لإيقاف المحاولات المتكررة."
           },
           "coveredPaying": {
             "title": "{{workspace}} يغطيك بالفعل",
-            "body": "ما زلت تدفع مقابل Pro."
+            "body": "ما زلت تدفع مقابل {{plan}}."
           },
           "coveredPayingUnnamed": {
             "title": "مساحة عمل تغطيك بالفعل",
-            "body": "ما زلت تدفع مقابل Pro."
+            "body": "ما زلت تدفع مقابل {{plan}}."
           },
           "coveredStore": {
             "title": "{{workspace}} يغطيك بالفعل",
@@ -6274,7 +6247,6 @@
           }
         },
         "details": {
-          "trialEnds": "تنتهي الفترة التجريبية",
           "periodEnds": "تنتهي الفترة الحالية",
           "billedThrough": "الفوترة عبر",
           "accessUntil": "الوصول حتى",
@@ -6356,7 +6328,6 @@
         },
         "usage": {
           "seats": "المقاعد",
-          "seatsValue": "{{used}} / {{total}}",
           "members": "الأعضاء",
           "noSeatsLeft": "لا توجد مقاعد متبقية",
           "noSeatsLeftWithInvites_zero": "لا توجد مقاعد متبقية · الدعوات المعلقة: {{count}}",
