@@ -150,17 +150,32 @@ const TARGET = {
   model: "haiku",
 };
 
-async function loadSeed(t, { storage = {}, secrets = {} } = {}) {
+async function loadSeed(t, { storage = {}, secrets = {}, hydrate = true } = {}) {
   // The fork (cloud disabled) runs cleanup in "providers" mode; the test env enables the cloud.
   installBrowserGlobals(t, {
     initialStorage: { cleanupMode: "providers", ...storage },
-    window: { electronAPI: {} },
+    // Every secret read from the main process answers "none stored".
+    window: {
+      electronAPI: new Proxy(
+        {},
+        { get: (_, key) => (key === "then" ? undefined : async () => "") }
+      ),
+    },
   });
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-cleanup-seed-test-" });
   const { seedSttApiCleanup } = await vite.ssrLoadModule("/config/forkCleanupSeed.ts");
-  const { useSettingsStore, getSettings } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { useSettingsStore, getSettings, initializeSettings, areSecretsHydrated } =
+    await vite.ssrLoadModule("/stores/settingsStore.ts");
+  // Seeding is gated on secrets having been read, so a BYOK user is never mistaken for keyless.
+  if (hydrate) {
+    // Hydration kicks off lazy imports; load them now so none is still in flight at teardown.
+    await vite.ssrLoadModule("/services/ReasoningService.ts");
+    await vite.ssrLoadModule("/services/SyncService.js");
+    await initializeSettings();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
   useSettingsStore.setState(secrets);
-  return { seedSttApiCleanup, getSettings };
+  return { seedSttApiCleanup, getSettings, areSecretsHydrated };
 }
 
 test("a fresh signed-in install is seeded onto our server and persists the choice", async (t) => {
@@ -193,4 +208,12 @@ test("a stored cleanup provider is never overwritten by the seed", async (t) => 
   assert.equal(stored.seedSttApiCleanup(true, TARGET), false);
   assert.equal(stored.getSettings().cleanupProvider, "anthropic");
   assert.equal(stored.getSettings().cleanupModel, "claude-sonnet-4-6");
+});
+
+test("seeding waits for secrets to hydrate, so a keyless-looking BYOK user is never seeded", async (t) => {
+  const early = await loadSeed(t, { hydrate: false });
+
+  assert.equal(early.areSecretsHydrated(), false);
+  assert.equal(early.seedSttApiCleanup(true, TARGET), false);
+  assert.equal(early.getSettings().cleanupProvider, "openai");
 });
