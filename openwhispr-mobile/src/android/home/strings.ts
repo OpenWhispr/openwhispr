@@ -62,7 +62,6 @@ export const homeEnglish = {
   audioOnly: 'Audio only — no text was saved',
   nothingFromBefore: 'Nothing from before',
   nothingFromBeforeBody: 'This phone has no recordings from before accounts.',
-  homeTitle: 'Home',
   hide: 'Hide',
   gotIt: 'Got it',
   seeAllHistory: 'See all history',

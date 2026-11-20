@@ -120,7 +120,7 @@ export default function SettingsScreen() {
     if (value && !signedIn) {
       Alert.alert(t('backupSignInTitle'), t('backupSignInBody'), [
         { text: t('cancel'), style: 'cancel' },
-        { text: t('signIn'), onPress: () => router.push('/auth') },
+        { text: t('signIn'), onPress: () => router.push('/auth?reason=sync') },
       ]);
       return;
     }
@@ -216,7 +216,7 @@ export default function SettingsScreen() {
             ) : undefined
           }
           subtitle={signedIn ? (user?.email ?? undefined) : t('signInToSync')}
-          onPress={() => router.push(signedIn ? '/(account)/profile' : '/auth')}
+          onPress={() => router.push(signedIn ? '/(account)/profile' : '/auth?reason=sync')}
         />
       </Group>
 

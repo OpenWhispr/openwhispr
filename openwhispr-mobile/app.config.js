@@ -169,6 +169,21 @@ module.exports = () => {
     android: {
       ...expo.android,
       package: environment.androidPackage,
+      // The password reset and verify-email links open here (src/android/auth/passwordReset.ts,
+      // emailVerification.ts). Verified as an App
+      // Link by https://openwhispr.com/.well-known/assetlinks.json, so it opens the app directly.
+      intentFilters: [
+        ...(expo.android?.intentFilters ?? []),
+        {
+          action: 'VIEW',
+          autoVerify: true,
+          data: [
+            { scheme: 'https', host: 'openwhispr.com', path: '/android-reset-password' },
+            { scheme: 'https', host: 'openwhispr.com', path: '/android-verify-email' },
+          ],
+          category: ['BROWSABLE', 'DEFAULT'],
+        },
+      ],
     },
     plugins: withBrandFonts(expo.plugins),
     extra: {

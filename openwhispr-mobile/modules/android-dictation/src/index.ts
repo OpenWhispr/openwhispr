@@ -70,6 +70,8 @@ interface NativeDictation {
   getLocale(): string;
   getStatus(): BubbleStatus;
   openSettings(kind: 'overlay' | 'accessibility' | 'battery' | 'app'): void;
+  /** Missing on builds before the sign-in redesign. */
+  openEmailApp?(title: string): boolean;
   /** Turns the floating bubble on or off and remembers the choice and size across restarts. */
   setEnabled(enabled: boolean, size: number): void;
   /** Starts the bubble again when the user left it on and its permissions are still granted. */

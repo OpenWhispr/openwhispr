@@ -3,7 +3,6 @@ import type { HomeKey } from './strings';
 // Missing keys fall back to English.
 export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> = {
   es: {
-    homeTitle: 'Inicio',
     hide: 'Ocultar',
     gotIt: 'Entendido',
     seeAllHistory: 'Ver todo el historial',
@@ -78,7 +77,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Permite el micrófono para probar el dictado.',
   },
   fr: {
-    homeTitle: 'Accueil',
     hide: 'Masquer',
     gotIt: 'Compris',
     seeAllHistory: 'Voir tout l’historique',
@@ -153,7 +151,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Autorisez le micro pour essayer la dictée.',
   },
   de: {
-    homeTitle: 'Start',
     hide: 'Ausblenden',
     gotIt: 'Verstanden',
     seeAllHistory: 'Ganzen Verlauf ansehen',
@@ -228,7 +225,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Erlaube das Mikrofon, um das Diktieren auszuprobieren.',
   },
   pt: {
-    homeTitle: 'Início',
     hide: 'Ocultar',
     gotIt: 'Entendi',
     seeAllHistory: 'Ver todo o histórico',
@@ -303,7 +299,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Permita o microfone para experimentar o ditado.',
   },
   it: {
-    homeTitle: 'Home',
     hide: 'Nascondi',
     gotIt: 'Ho capito',
     seeAllHistory: 'Vedi tutta la cronologia',
@@ -378,7 +373,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Consenti il microfono per provare la dettatura.',
   },
   ru: {
-    homeTitle: 'Главная',
     hide: 'Скрыть',
     gotIt: 'Понятно',
     seeAllHistory: 'Вся история',
@@ -453,7 +447,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Разрешите микрофон, чтобы попробовать диктовку.',
   },
   'zh-CN': {
-    homeTitle: '首页',
     hide: '隐藏',
     gotIt: '知道了',
     seeAllHistory: '查看全部历史',
@@ -528,7 +521,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '请允许使用麦克风以试用听写。',
   },
   'zh-TW': {
-    homeTitle: '首頁',
     hide: '隱藏',
     gotIt: '知道了',
     seeAllHistory: '查看全部記錄',
@@ -603,7 +595,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '請允許使用麥克風以試用聽寫。',
   },
   ja: {
-    homeTitle: 'ホーム',
     hide: '非表示',
     gotIt: 'OK',
     seeAllHistory: '履歴をすべて見る',
@@ -678,7 +669,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '音声入力を試すにはマイクを許可してください。',
   },
   ar: {
-    homeTitle: 'الرئيسية',
     hide: 'إخفاء',
     gotIt: 'حسنًا',
     seeAllHistory: 'عرض السجل كله',

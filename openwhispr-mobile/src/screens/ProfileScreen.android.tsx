@@ -29,7 +29,7 @@ export default function ProfileScreen() {
             icon="UserPlus"
             title={user ? t('createAccount') : t('signIn')}
             subtitle={t('createAccountBody')}
-            onPress={() => router.push('/auth')}
+            onPress={() => router.push('/auth?reason=sync')}
           />
         </Group>
       </SettingsPage>

@@ -131,7 +131,7 @@ function GuestReferralEmptyState() {
 
   const handleSignIn = useCallback(() => {
     safeHaptics('medium');
-    router.push('/auth');
+    router.push('/auth?reason=referral');
   }, []);
 
   return (

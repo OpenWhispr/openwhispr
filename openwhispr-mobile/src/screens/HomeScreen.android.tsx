@@ -442,13 +442,7 @@ export default function AndroidHome() {
           alignItems: 'center',
         }}
       >
-        <Text
-          accessibilityRole="header"
-          numberOfLines={1}
-          style={{ flex: 1, fontSize: 28, lineHeight: 34, fontWeight: '500', color: home.text }}
-        >
-          {h('homeTitle')}
-        </Text>
+        <View style={{ flex: 1 }} />
         <AccountAvatar />
       </View>
       <ScrollView

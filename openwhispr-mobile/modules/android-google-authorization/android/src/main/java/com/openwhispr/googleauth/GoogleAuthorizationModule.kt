@@ -3,6 +3,16 @@ package com.openwhispr.googleauth
 import android.accounts.Account
 import android.accounts.AccountManager
 import android.app.Activity
+import android.os.CancellationSignal
+import androidx.credentials.CredentialManager
+import androidx.credentials.CredentialManagerCallback
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.GetCredentialResponse
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.ClearTokenRequest
@@ -75,6 +85,40 @@ class GoogleAuthorizationModule : Module() {
         pendingPick = null
         promise.reject("FAILED", error.message ?: "Could not open the account picker", error)
       }
+    }.runOnQueue(Queues.MAIN)
+
+    // Signing in to OpenWhispr: Android's "Sign in with Google" sheet (accounts on the phone, or
+    // add one). The ID token is issued for `serverClientId`, the API's web client, so the API
+    // verifies it as it does a browser sign-in. Rejects CANCELLED when the user backs out.
+    AsyncFunction("signIn") { serverClientId: String, nonce: String, promise: Promise ->
+      val activity = appContext.currentActivity
+        ?: return@AsyncFunction promise.reject("FAILED", "No activity to show Google's sheet", null)
+      val option = GetSignInWithGoogleOption.Builder(serverClientId).setNonce(nonce).build()
+      val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+      CredentialManager.create(activity).getCredentialAsync(
+        activity,
+        request,
+        CancellationSignal(),
+        activity.mainExecutor,
+        object : CredentialManagerCallback<GetCredentialResponse, GetCredentialException> {
+          override fun onResult(result: GetCredentialResponse) {
+            val credential = result.credential
+            if (credential is CustomCredential &&
+              credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+            ) {
+              val google = GoogleIdTokenCredential.createFrom(credential.data)
+              promise.resolve(mapOf("idToken" to google.idToken, "email" to google.id))
+            } else {
+              promise.reject("FAILED", "Google returned an unexpected credential", null)
+            }
+          }
+
+          override fun onError(e: GetCredentialException) {
+            val code = if (e is GetCredentialCancellationException) "CANCELLED" else "FAILED"
+            promise.reject(code, e.message ?: e.type, e)
+          }
+        },
+      )
     }.runOnQueue(Queues.MAIN)
 
     // Drops a token from Play services' cache so a revoked one isn't handed back.
