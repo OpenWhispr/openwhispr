@@ -29,7 +29,7 @@
   "publish": {
     "provider": "github",
     "owner": "finedesignz",
-    "repo": "openwhispr",
+    "repo": "edgeassistant",
     "private": false,
     "releaseType": "draft"
   }
