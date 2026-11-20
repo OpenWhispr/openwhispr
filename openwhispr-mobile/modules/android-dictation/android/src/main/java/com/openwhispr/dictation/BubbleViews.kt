@@ -60,6 +60,7 @@ class GlyphButton(context: Context, private val glyph: Glyph, private val fill: 
     color = tint; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
   }
   private val solid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint }
+  private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = Color.argb(15, 0, 0, 0) }
   private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(18, 24, 23, 20) }
   init { isClickable = true; isFocusable = true }
   override fun getAccessibilityClassName(): CharSequence = android.widget.Button::class.java.name
@@ -108,7 +109,12 @@ class GlyphButton(context: Context, private val glyph: Glyph, private val fill: 
     stroke.strokeWidth = 2f * unit
     when (glyph) {
       Glyph.CLOSE -> {
-        val r = 5.5f * unit
+        // The listening ✕ (V1/Satellite · cancel): on a 28 dp circle, a 2.2 dp stroke with arms 5.8 dp
+        // across, and a 6 % ink hairline edge.
+        edge.strokeWidth = size / 28f
+        canvas.drawCircle(cx, cy, size / 2 - edge.strokeWidth / 2, edge)
+        stroke.strokeWidth = size * 2.2f / 28f
+        val r = size * 2.9167f / 28f
         canvas.drawLine(cx - r, cy - r, cx + r, cy + r, stroke); canvas.drawLine(cx + r, cy - r, cx - r, cy + r, stroke)
       }
       Glyph.STOP -> { val r = 6f * unit; canvas.drawRoundRect(cx - r, cy - r, cx + r, cy + r, 2f * unit, 2f * unit, solid) }
