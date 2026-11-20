@@ -251,11 +251,29 @@ function isTeamRow(row: { space_id: number }, ctx: SpaceSyncContext): boolean {
   return ctx.byId.get(row.space_id)?.kind === "team";
 }
 
-// The snapshot a folder push settles against. A parent withheld from the push
-// (a folder leaving a team retracts top-level) no longer matches the row, so
-// the row stays pending until its nesting can be sent.
+// The snapshot a folder push settles against, given the parent its row landed
+// with. A parent withheld from the push (a folder leaving a team retracts
+// top-level) or dropped by the server no longer matches the row, so the row
+// stays pending until its nesting can be sent.
 function withSentParent(folder: FolderItem, parentFolderId: string | null): FolderItem {
   return { ...folder, parent_folder_id: parentFolderId === null ? null : folder.parent_folder_id };
+}
+
+// Whether a folder the server answered with shows it stores parents: false for
+// a row without parent_folder_id (an API from before subfolders drops the field
+// from every write and every answer), undefined for anything but a full row (an
+// access stub never carries it). A null parent is a top-level row of a server
+// that knows the field.
+function rowKnowsParents(row: unknown): boolean | undefined {
+  if (!row || typeof row !== "object" || "access_removed" in row) return undefined;
+  if (typeof (row as { id?: unknown }).id !== "string") return undefined;
+  return "parent_folder_id" in row;
+}
+
+// The parent a pushed folder's row landed with: the one sent, unless the
+// answer shows the server dropped it.
+function landedParent(cloud: unknown, sentParent: string | null): string | null {
+  return sentParent !== null && rowKnowsParents(cloud) === false ? null : sentParent;
 }
 
 // A Private subfolder takes its parent's placement, so its push leaves the
@@ -293,24 +311,33 @@ interface NestingOwed {
   // The parent's cloud row when the folder went up top-level beside it; unset
   // when it had none.
   parentCloudId?: string;
+  // The parent was sent, and the server dropped it (an API from before subfolders).
+  serverDroppedParent?: true;
 }
 
 // A subfolder owed its nesting: sending it again would send what already landed
-// while what the nesting waits for still holds. A parent refused for good holds
-// it while it keeps the cloud row it had then, which the server wouldn't nest
-// under (a refused move left it in another scope), or still has none: a refusal
-// that ends, or a new cloud row, sends it again, and so does an edit of the
-// subfolder (it no longer matches its record).
+// while what the nesting waits for still holds. A server that drops parents
+// holds every nesting, until its rows show the field. A parent refused for good
+// holds it while it keeps the cloud row it had then, which the server wouldn't
+// nest under (a refused move left it in another scope), or still has none: a
+// refusal that ends, or a new cloud row, sends it again. An edit of the
+// subfolder (it no longer matches its record) sends it again too.
 function nestingStillOwed(
   folder: FolderItem,
   {
     localToCloud,
     refusedFolderIds,
     nestingOwed,
-  }: Pick<LocalToCloudFolderMap, "localToCloud" | "refusedFolderIds" | "nestingOwed">
+    serverDropsParents,
+  }: Pick<
+    LocalToCloudFolderMap,
+    "localToCloud" | "refusedFolderIds" | "nestingOwed" | "serverDropsParents"
+  >
 ): boolean {
   const owed = nestingOwed.get(folder.id);
   if (!owed || folder.parent_folder_id == null || folder.left_team) return false;
+  if (serverDropsParents) return true;
+  if (owed.serverDroppedParent) return false;
   return (
     refusedFolderIds.has(folder.parent_folder_id) &&
     localToCloud.get(folder.parent_folder_id) === owed.parentCloudId
@@ -440,6 +467,9 @@ interface LocalToCloudFolderMap {
   // Pending folders whose last push landed everything but their parent, as the
   // row still stands (FOLDER_NESTING_OWED_KEY). They don't hold their notes back.
   nestingOwed: Map<number, NestingOwed>;
+  // The server's folder rows come without parent_folder_id
+  // (FOLDER_PARENTS_UNSUPPORTED_KEY).
+  serverDropsParents: boolean;
 }
 
 const PUSH_DEBOUNCE_MS = 2000;
@@ -589,8 +619,16 @@ const FOLDER_PUSH_REFUSED_KEY = "folderPushRefused";
 // its server row is where its notes belong, and they don't wait for it.
 const FOLDER_NESTING_OWED_KEY = "folderNestingOwed";
 // Set per account once folders pulled before parent_folder_id existed have been
-// replayed: one for the personal rows a full pass covers, one for team rows.
+// replayed: one for the personal rows a full pass covers, one for team rows. A
+// list whose rows lack the field (an API from before subfolders) doesn't set it.
 const FOLDER_PARENTS_BACKFILLED_KEY = "folderParentsBackfilled";
+const FOLDER_PARENT_BACKFILL_ROWS = ["personal", "team"] as const;
+const folderParentsBackfilledKey = (rows: string, accountId: string | null | undefined): string =>
+  `${FOLDER_PARENTS_BACKFILLED_KEY}.${rows}.${accountId}`;
+// Set while the server's folder rows come without parent_folder_id: an API from
+// before subfolders, which stores every folder top-level whatever the push says.
+// The subfolders it took owe their nesting until a row with the field shows up.
+const FOLDER_PARENTS_UNSUPPORTED_KEY = "folderParentsUnsupported";
 // Unattributed words and snippets whose PATCH 404'd for an account, keyed by
 // client id with the updated_at that failed. Such a row may be another
 // account's, so it is never re-created; it waits for its owner's pass or a new
@@ -1064,6 +1102,8 @@ export class SyncService {
   // ambient team-only backoff (see shouldRunAmbientTeamOnlyPass).
   private teamPassMovedWork = false;
   private lastFolderPullParkedRows = false;
+  // Set when the last folder list's rows came without parent_folder_id.
+  private lastFolderPullLackedParents = false;
   // Set when the current shared dictionary pass changed the mirror or hides.
   private sharedDictionaryPassChanged = false;
   // The auth generation a plain 404 answered the shared dictionary routes
@@ -1265,8 +1305,8 @@ export class SyncService {
     for (const kind of PARKED_DELETE_KINDS) {
       localStorage.removeItem(parkedDeleteKey(kind, accountId));
     }
-    for (const rows of ["personal", "team"]) {
-      localStorage.removeItem(`${FOLDER_PARENTS_BACKFILLED_KEY}.${rows}.${accountId}`);
+    for (const rows of FOLDER_PARENT_BACKFILL_ROWS) {
+      localStorage.removeItem(folderParentsBackfilledKey(rows, accountId));
     }
   }
 
@@ -1888,7 +1928,7 @@ export class SyncService {
   // LWW revert it), and a withheld parent keeps the row pending until it can be sent.
   private async updateCloudFolder(push: FolderPush, authGeneration: number): Promise<void> {
     const { folder, parentFolderId } = push;
-    await FoldersService.update(
+    const cloud = await FoldersService.update(
       folder.cloud_id!,
       {
         name: folder.name,
@@ -1900,11 +1940,11 @@ export class SyncService {
     );
     await window.electronAPI.markFolderSyncedIfUnchanged?.(
       folder.id,
-      withSentParent(folder, parentFolderId),
+      withSentParent(folder, landedParent(cloud, parentFolderId)),
       folder.cloud_id!,
       authGeneration
     );
-    this.recordFolderPushLanded(push);
+    this.recordFolderPushLanded(push, cloud);
   }
 
   // A parent travels as its cloud id: null for a top-level folder, undefined
@@ -1935,17 +1975,25 @@ export class SyncService {
     return localToCloud.get(folder.parent_folder_id);
   }
 
-  // A folder push the server took: any refusal is over, and a folder sent
-  // top-level while nested here owes its nesting alone.
-  private recordFolderPushLanded({ folder, parentFolderId, parentCloudId }: FolderPush): void {
+  // A folder push the server took, with the row it answered: any refusal is
+  // over, and a folder whose row landed top-level while nested here (sent so, or
+  // its parent dropped by the server) owes its nesting alone.
+  private recordFolderPushLanded(push: FolderPush, cloud: unknown): void {
+    const { folder, parentFolderId, parentCloudId } = push;
+    this.observeFolderParentSupport([cloud]);
     const refused = this.readLocalRecord<string>(FOLDER_PUSH_REFUSED_KEY);
     if (String(folder.id) in refused) {
       delete refused[folder.id];
       this.writeLocalRecord(FOLDER_PUSH_REFUSED_KEY, refused);
     }
     const owed = this.readLocalRecord<NestingOwed>(FOLDER_NESTING_OWED_KEY);
-    if (parentFolderId === null && folder.parent_folder_id != null) {
-      owed[folder.id] = { pushed: folderPushFingerprint(folder), parentCloudId };
+    const landed = landedParent(cloud, parentFolderId);
+    if (landed === null && folder.parent_folder_id != null) {
+      const pushed = folderPushFingerprint(folder);
+      owed[folder.id] =
+        landed === parentFolderId
+          ? { pushed, parentCloudId }
+          : { pushed, serverDroppedParent: true };
     } else if (!(String(folder.id) in owed)) {
       return;
     } else {
@@ -2006,11 +2054,11 @@ export class SyncService {
     const { folder, parentFolderId } = push;
     const cloud = await FoldersService.create(folderCreateInput(push), authGeneration);
     await this.acknowledgeCreatedFolder(
-      withSentParent(folder, parentFolderId),
+      withSentParent(folder, landedParent(cloud, parentFolderId)),
       cloud,
       authGeneration
     );
-    this.recordFolderPushLanded(push);
+    this.recordFolderPushLanded(push, cloud);
   }
 
   // Links a pushed folder to the cloud row its create returned. A Private
@@ -3416,7 +3464,7 @@ export class SyncService {
     const accountId = getAuthRequestContextSnapshot().sessionUserId;
     const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
     return [...(teamOnly ? [] : ["personal"]), ...(teamCapable ? ["team"] : [])]
-      .map((rows) => `${FOLDER_PARENTS_BACKFILLED_KEY}.${rows}.${accountId}`)
+      .map((rows) => folderParentsBackfilledKey(rows, accountId))
       .filter((key) => localStorage.getItem(key) === null);
   }
 
@@ -3432,14 +3480,34 @@ export class SyncService {
   // Returns false when those rows must wait: the list itself failed. New folders
   // and nested rows still push, so a list that keeps failing can't stop backups. A
   // parked row retries the backfill next pass without holding anything back.
+  // A server without the field leaves the backfill owed: it holds no parents to
+  // replay yet, so nothing waits for it, but the list after it takes parents must.
   private async backfillFolderParents(teamOnly: boolean): Promise<boolean> {
     const owed = this.owedFolderParentBackfills(teamOnly);
     if (owed.length === 0) return true;
     const pulled = await this.pullFolders(teamOnly, true, true);
-    if (pulled) {
+    if (pulled && !this.lastFolderPullLackedParents) {
       for (const key of owed) localStorage.setItem(key, "true");
     }
     return pulled || this.lastFolderPullParkedRows;
+  }
+
+  // What the server's folder rows show about parents (rowKnowsParents). A server
+  // without them re-arms this account's backfill: its full list is what sees the
+  // server start taking parents, whatever the delta lists, and the rows other
+  // devices nested since then need replaying.
+  private observeFolderParentSupport(rows: readonly unknown[]): void {
+    const known = rows.map(rowKnowsParents).filter((knows) => knows !== undefined);
+    if (known.length === 0) return;
+    if (!known.includes(false)) {
+      localStorage.removeItem(FOLDER_PARENTS_UNSUPPORTED_KEY);
+      return;
+    }
+    localStorage.setItem(FOLDER_PARENTS_UNSUPPORTED_KEY, "true");
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    for (const rows of FOLDER_PARENT_BACKFILL_ROWS) {
+      localStorage.removeItem(folderParentsBackfilledKey(rows, accountId));
+    }
   }
 
   // A full account folder list proves which cloud-bound legacy folders it owns.
@@ -3651,11 +3719,11 @@ export class SyncService {
         for (const [i, cloudFolder] of created.entries()) {
           const push = accepted[i];
           await this.acknowledgeCreatedFolder(
-            withSentParent(push.folder, push.parentFolderId),
+            withSentParent(push.folder, landedParent(cloudFolder, push.parentFolderId)),
             cloudFolder,
             authGeneration
           );
-          this.recordFolderPushLanded(push);
+          this.recordFolderPushLanded(push, cloudFolder);
         }
       } catch (err) {
         if (isAuthContextError(err)) throw err;
@@ -3734,6 +3802,7 @@ export class SyncService {
     backfillParents = false
   ): Promise<boolean> {
     this.lastFolderPullParkedRows = false;
+    this.lastFolderPullLackedParents = false;
     try {
       const authGeneration = getValidatedAuthGeneration();
       if (authGeneration == null || (!teamOnly && !this.canSync())) return false;
@@ -3761,6 +3830,10 @@ export class SyncService {
         scope,
         authGeneration,
         "no-store"
+      );
+      this.observeFolderParentSupport(cloudFolders);
+      this.lastFolderPullLackedParents = cloudFolders.some(
+        (folder) => rowKnowsParents(folder) === false
       );
       // Rows re-read from the overlap were applied before: no work moved.
       if (cloudFolders.some((folder) => pastCursor(folder.updated_at, stored))) {
@@ -6447,6 +6520,7 @@ export class SyncService {
       waitingFolders: blocked.filter((f) => !f.cloud_id),
       refusedFolderIds,
       nestingOwed,
+      serverDropsParents: localStorage.getItem(FOLDER_PARENTS_UNSUPPORTED_KEY) !== null,
     };
   }
 

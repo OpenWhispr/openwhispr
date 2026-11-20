@@ -2555,24 +2555,134 @@ test("a debounced folder push waits for the backfill rather than flatten the row
   assert.equal(cloud.folder(cloudChildId).parent_folder_id, cloudParentId);
 });
 
-test("an API without parent_folder_id links nothing and still finishes the backfill", async (t) => {
+test("an API without parent_folder_id links nothing and leaves the backfill owed until it lists parents", async (t) => {
   const ctx = await setupPersonal(t);
   if (!ctx) return;
   const { db, cloud } = ctx;
   const service = await newSyncService(t);
-  const { child } = await upgradedDevice(db, cloud, service);
-  const request = browserWindow.electronAPI.cloudApiRequest;
-  t.mock.method(browserWindow.electronAPI, "cloudApiRequest", async (options) => {
-    const response = await request(options);
-    if (options.path.startsWith("/api/folders/list")) {
-      for (const folder of response.data.folders) delete folder.parent_folder_id;
-    }
-    return response;
-  });
+  const { child, parent } = await upgradedDevice(db, cloud, service);
+  const api = asOldApi(t);
 
+  // Nothing to replay, so nothing waits for it, but a later list still has to.
   assert.equal(await service.backfillFolderParents(false), true);
 
   assert.equal(folderByClientId(db, child.client_folder_id).parent_folder_id, null);
+  assert.equal(service.owedFolderParentBackfills(false).length, 1);
+
+  api.old = false;
+  assert.equal(await service.backfillFolderParents(false), true);
+  assert.equal(folderByClientId(db, child.client_folder_id).parent_folder_id, parent.id);
+  assert.deepEqual(service.owedFolderParentBackfills(false), []);
+});
+
+// An API from before subfolders: its schemas strip parent_folder_id from every
+// folder write, and no folder it answers with carries the field.
+function asOldApi(t) {
+  const api = browserWindow.electronAPI;
+  const request = api.cloudApiRequest;
+  const state = { old: true };
+  const strip = (value) => {
+    if (Array.isArray(value)) return value.map(strip);
+    if (!value || typeof value !== "object") return value;
+    const { parent_folder_id: _dropped, ...rest } = value;
+    for (const key of Object.keys(rest)) rest[key] = strip(rest[key]);
+    return rest;
+  };
+  t.mock.method(api, "cloudApiRequest", async (options) => {
+    if (!state.old || !options.path.startsWith("/api/folders")) return request(options);
+    const response = await request({ ...options, body: strip(options.body) });
+    return response?.data ? { ...response, data: strip(response.data) } : response;
+  });
+  return state;
+}
+
+test("a subfolder an API without parents took top-level owes its nesting, sent once the API takes parents", async (t) => {
+  const ctx = await setupPersonal(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const api = asOldApi(t);
+  const clients = db.createFolder("Clients").folder;
+  const acme = db.createFolder("Acme", null, clients.id).folder;
+  const beta = db.createFolder("Beta").folder;
+  const plan = db.saveNote("Plan", "body", "personal", null, null, acme.id).note;
+  const service = await newSyncService(t);
+  await service.syncAll(true);
+  // Nested later, through the debounced push.
+  assert.equal(db.setFolderParent(beta.id, clients.id).success, true);
+  await service.pushEntity("folder", beta.id);
+
+  const clientsCloudId = folderByName(db, "Clients").cloud_id;
+  for (const name of ["Acme", "Beta"]) {
+    const row = folderByName(db, name);
+    assert.ok(row.cloud_id);
+    assert.equal(row.parent_folder_id, clients.id, `${name} stays nested here`);
+    assert.equal(row.sync_status, "pending", `${name} still owes its nesting`);
+    assert.equal(cloud.folder(row.cloud_id).parent_folder_id ?? null, null);
+  }
+  assert.equal(
+    cloud.note(db.getNote(plan.id).cloud_id).folder_id,
+    folderByName(db, "Acme").cloud_id
+  );
+  assert.equal(db.getNote(plan.id).sync_status, "synced", "its note doesn't wait");
+  assert.equal(service.owedFolderParentBackfills(false).length, 1);
+
+  const writesFor = (name) => {
+    const cloudId = folderByName(db, name).cloud_id;
+    const clientId = folderByName(db, name).client_folder_id;
+    return [
+      ...cloud.logFor("/api/folders/update").filter((call) => call.body?.id === cloudId),
+      ...cloud
+        .logFor("/api/folders/create")
+        .filter((call) => call.body?.client_folder_id === clientId),
+      ...cloud
+        .logFor("/api/folders/batch-create")
+        .filter((call) => call.body?.folders?.some((f) => f.client_folder_id === clientId)),
+    ].length;
+  };
+  const before = { acme: writesFor("Acme"), beta: writesFor("Beta") };
+  await (await newSyncService(t)).syncAll(true);
+  await (await newSyncService(t)).syncAll(true);
+  assert.deepEqual({ acme: writesFor("Acme"), beta: writesFor("Beta") }, before, "no churn");
+
+  // The API ships subfolders: the next pass sends each nesting once.
+  api.old = false;
+  await (await newSyncService(t)).syncAll(true);
+  await (await newSyncService(t)).syncAll(true);
+  assert.deepEqual(
+    { acme: writesFor("Acme"), beta: writesFor("Beta") },
+    {
+      acme: before.acme + 1,
+      beta: before.beta + 1,
+    }
+  );
+  for (const name of ["Acme", "Beta"]) {
+    const row = folderByName(db, name);
+    assert.equal(
+      cloud.folder(row.cloud_id).parent_folder_id,
+      clientsCloudId,
+      `${name} on the server`
+    );
+    assert.equal(row.parent_folder_id, clients.id);
+    assert.equal(row.sync_status, "synced");
+  }
+  assert.deepEqual(service.owedFolderParentBackfills(false), []);
+});
+
+test("an API answering parent_folder_id null settles a folder sent top-level as before", async (t) => {
+  const ctx = await setupPersonal(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const service = await newSyncService(t);
+  const clients = db.createFolder("Clients").folder;
+  const acme = db.createFolder("Acme", null, clients.id).folder;
+  await service.syncAll(true);
+  assert.equal(db.setFolderParent(acme.id, null).success, true);
+  await service.pushEntity("folder", acme.id);
+
+  const row = folderByName(db, "Acme");
+  assert.equal(cloud.folder(row.cloud_id).parent_folder_id, null);
+  assert.equal(row.sync_status, "synced");
+  assert.equal(browserLocalStorage.getItem("folderNestingOwed"), null);
   assert.deepEqual(service.owedFolderParentBackfills(false), []);
 });
 
