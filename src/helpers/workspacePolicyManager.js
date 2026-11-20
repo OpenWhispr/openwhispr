@@ -60,6 +60,9 @@ function createWorkspacePolicyManager({
   logger,
   requestTimeoutMs = 10_000,
   successfulRefreshMs = 5 * 60 * 1000,
+  // An unmanaged verdict restricts nothing, so it is read again less often. A
+  // caller the server refused still asks at once (`refresh`).
+  unmanagedRefreshMs = 3 * successfulRefreshMs,
   minimumAttemptIntervalMs = 5_000,
   now = Date.now,
 }) {
@@ -420,7 +423,7 @@ function createWorkspacePolicyManager({
       !(current.data.managed === false && requiresManagedPolicy(identity)) &&
       successfulRefreshAge !== null &&
       successfulRefreshAge >= 0 &&
-      successfulRefreshAge < successfulRefreshMs
+      successfulRefreshAge < (current.data.managed ? successfulRefreshMs : unmanagedRefreshMs)
     ) {
       return publicSnapshot(identity, current.data, "current", current.revision);
     }
