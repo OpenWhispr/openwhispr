@@ -9,9 +9,9 @@
 ### Fork CI (CI)
 
 - [x] **CI-01**: A CI build with no repository variables set is cloud-disabled (no `auth.openwhispr.com` or other OpenWhispr-hosted default in any workflow)
-- [ ] **CI-02**: Upstream-only workflows (winget, nix, llm/stt canaries, mobile CI, macOS/Linux notarize jobs, upstream sidecar release builders not used by the fork) do not run in the fork
+- [x] **CI-02**: Upstream-only workflows (winget, nix, llm/stt canaries, mobile CI, macOS/Linux notarize jobs, upstream sidecar release builders not used by the fork) do not run in the fork
 - [x] **CI-03**: One Windows workflow runs on every PR and push to main: install (Node 24, Electron present), typecheck, lint, i18n check, full test suite, unsigned installer build
-- [ ] **CI-04**: The full test suite passes in that workflow (pre-existing "Electron failed to install" failures resolved by installing Electron; flaky tests fixed, never skipped)
+- [x] **CI-04**: The full test suite passes in that workflow (pre-existing "Electron failed to install" failures resolved by installing Electron; flaky tests fixed, never skipped)
 - [x] **CI-05**: A smoke test boots the packaged/main entry with cloud disabled and asserts the default transcription route resolves to stt-api
 
 ### Rebrand (BRAND)
@@ -26,7 +26,7 @@
 
 ### Titanium sign-in (AUTH)
 
-- [ ] **AUTH-01**: App slug `titanium-whisper` is provisioned in Titanium (Keygen product + policy, `apps` row) with return origin `titaniumwhisper://auth` allowed
+- [x] **AUTH-01**: App slug `titanium-whisper` is provisioned in Titanium (Keygen product + policy, `apps` row) with return origin `titaniumwhisper://auth` allowed (open item: dev/staging schemes `titaniumwhisper-dev://auth` and `titaniumwhisper-staging://auth` are not yet allowed in the titanium-licensing app row; ticketed to titanium-licensing via memlog request 1795213470930-0)
 - [x] **AUTH-02**: User signs in from the app: browser opens Titanium hosted login (magic link / passkey / Google), returns via `titaniumwhisper://auth?act=…`, app exchanges `act` for `{licenseKey, email}`
 - [x] **AUTH-03**: License key is verified offline in the Electron main process with `@titanium-labs/license-client` (no Redis on the client), cached under userData, and re-checked on launch (offline-first)
 - [x] **AUTH-04**: Renderer auth state (`useAuth`) reflects Titanium sign-in: signed in, email, sign out (clears cache), replacing the better-auth client
@@ -37,7 +37,7 @@
 
 - [x] **STT-01**: stt-api accepts a Titanium license key as bearer (offline Ed25519 verify, product match, expiry, blocklist check server-side) on all routes including WS; shared `STT_API_TOKEN` kept only as operator credential
 - [x] **STT-02**: The app sends the signed-in user's license key to stt-api automatically; no STT key field is needed
-- [ ] **STT-03**: stt-api is reachable on a stable domain and the fork default uses it (no Coolify-generated hostname)
+- [x] **STT-03**: stt-api is reachable on a stable domain and the fork default uses it (no Coolify-generated hostname)
 - [x] **STT-04**: With an English-only STT model, the language picker can't silently produce non-English dictation (restricted or warned)
 - [ ] **STT-05**: Meeting transcription and the live dictation preview can stream to stt-api's WS endpoint
 - [ ] **STT-06**: File uploads through stt-api return segment timestamps and speaker labels
@@ -75,17 +75,17 @@
 | Requirement  | Phase   | Status                                                                                                                              |
 | ------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | CI-01, 03, 05 | Phase 1 | Complete (PR #10, merged 2026-11-09)                                                                                               |
-| CI-02        | Phase 1 | In review (PR #17: mobile CI gated; PR #4 cherry-picked and closed)                                                                 |
-| CI-04        | Phase 1 | In review (PR #17: test root cause was CRLF on Windows checkouts, fixed by `.gitattributes`)                                        |
+| CI-02        | Phase 1 | Complete (PR #17 merged 2026-11-18: mobile CI gated; PR #4 cherry-picked and closed)                                                |
+| CI-04        | Phase 1 | Complete (PR #17 merged 2026-11-18; PR checks `quality` and `build-windows` passed; root cause CRLF, fixed by `.gitattributes`). Caveat: 20 Windows-only local test failures remain (see `phases/04-leftovers-VERIFICATION.md`, v1.0 audit) |
 | OPS-01       | Phase 1 | Complete (PR #10, `docs/UPSTREAM-SYNC.md`)                                                                                          |
 | BRAND-01..07 | Phase 2 | Complete (PR #11, PR #12). Visible name is "EdgeAssistant"; appId `com.titaniumlabs.titaniumwhisper`, userData "Titanium Whisper" kept |
-| AUTH-01      | Phase 3 | In review (PR #18): `titanium-whisper` provisioned (product id bbe843ac-4de5-486c-85e2-1a1b7e533e5f), `titaniumwhisper://auth` allowed |
+| AUTH-01      | Phase 3 | Complete (PR #18 merged 2026-11-20): `titanium-whisper` provisioned (product id bbe843ac-4de5-486c-85e2-1a1b7e533e5f), `titaniumwhisper://auth` allowed. OPEN: dev/staging return_url schemes not yet allowed in the titanium-licensing app row (memlog request 1795213470930-0) |
 | AUTH-02..04  | Phase 3 | Complete in code (PR #11; AUTH-04 as a separate `useTitaniumAuth`); end-to-end UI sign-in round trip not yet run                     |
 | AUTH-05      | Phase 6 | Planned: moved to Phase 6 but in no Phase 6 plan yet (plan lookup needs a server we own)                                            |
 | AUTH-06      | Phase 3 | Complete in code (PR #11)                                                                                                           |
 | STT-01       | Phase 4 | Complete (stt-api PR #26 merged; prod `TITANIUM_KEYGEN_PRODUCT_ID`/`PUBLIC_KEY` set)                                                |
 | STT-02, 04   | Phase 4 | Complete in code (PR #11); end-to-end dictation with a license key pending PR #18/#19 merges                                        |
-| STT-03       | Phase 4 | In review (PR #19): `stt.titaniumlabs.us` live with valid TLS, old Coolify host kept, saved-URL migration                           |
+| STT-03       | Phase 4 | Complete (PR #19 merged 2026-11-18): `stt.titaniumlabs.us` live with valid TLS, old Coolify host kept, saved-URL migration         |
 | STT-05..07   | Phase 5 | Planned (05-01, 05-02)                                                                                                              |
 | FEAT-01..03  | Phase 6 | Planned (06-01..06-04)                                                                                                              |
 | FEAT-04..06  | Phase 7 | Planned (07-01..07-03); FEAT-04 dependency IDP-32 merged (titanium-licensing PR #304, 2026-10-14)                                   |
@@ -99,4 +99,4 @@
 ---
 
 _Requirements defined: 2026-11-08_
-_Last updated: 2026-11-18 after reconciling phases 1-4 status and planning phases 5-7_
+_Last updated: 2026-11-20 after verifying merged PRs for CI-02, CI-04, AUTH-01, STT-03_
