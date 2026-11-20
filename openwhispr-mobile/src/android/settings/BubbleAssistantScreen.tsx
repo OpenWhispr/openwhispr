@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     boxShadow: '0px 1px 2px rgba(0,0,0,0.12)',
   },
   menu: {
-    width: 168,
+    width: 184,
     padding: 5,
     gap: 2,
     borderRadius: 16,

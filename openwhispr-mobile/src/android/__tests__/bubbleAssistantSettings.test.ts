@@ -95,7 +95,14 @@ describe('Translate into', () => {
     expect(mockUpdateConfig).toHaveBeenCalledWith({
       androidTranslationTarget: { code: 'de', label: 'German' },
     });
-    expect(useTranslateRecents.getState().codes).toEqual(['de', 'fr', 'es']);
+    // Spanish was the target (nothing saved), so it comes straight after the new pick.
+    expect(useTranslateRecents.getState().codes).toEqual(['de', 'es', 'fr']);
+  });
+
+  it('keeps the language it replaces in Recent, even the Spanish it started on', async () => {
+    useTranslateRecents.setState({ codes: [] });
+    await saveTranslateTarget(TRANSLATE_LANGUAGES.find((item) => item.code === 'de')!);
+    expect(useTranslateRecents.getState().codes).toEqual(['de', 'es']);
   });
 });
 

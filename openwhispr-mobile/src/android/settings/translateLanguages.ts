@@ -176,12 +176,18 @@ export function currentTranslateTarget(saved: { code: string; label: string } | 
   return saved?.code && saved.label ? saved : DEFAULT_TRANSLATE_TARGET;
 }
 
-/** Saves the pick to the account config (the bubble reads it from there) and to this phone's recents. */
+/**
+ * Saves the pick to the account config (the bubble reads it from there) and to this phone's recents.
+ * The language it replaces stays in Recent too, even the Spanish it started on, which was never
+ * picked (Translate is going from Spanish to German, so Spanish is a recent language).
+ */
 export async function saveTranslateTarget(language: TranslateLanguage): Promise<void> {
-  const codes = [
-    language.code,
-    ...useTranslateRecents.getState().codes.filter((c) => c !== language.code),
-  ].slice(0, MAX_RECENTS);
+  const previous = currentTranslateTarget(
+    useConfigStore.getState().config?.androidTranslationTarget,
+  ).code;
+  const codes = [language.code, previous, ...useTranslateRecents.getState().codes]
+    .filter((code, index, all) => all.indexOf(code) === index)
+    .slice(0, MAX_RECENTS);
   useTranslateRecents.setState({ codes });
   try {
     localStorage.setItem(RECENTS_KEY, JSON.stringify(codes));
