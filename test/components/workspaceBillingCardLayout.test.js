@@ -17,7 +17,7 @@ const PAYMENT_BUTTONS = [
   MANAGE_BILLING,
   `${W}.actions.finishCheckout`,
 ];
-const ADD_SEAT = "settingsPage.unifiedBilling.addSeat";
+const ADD_SEAT = "settingsPage.billing.addSeats.title";
 const MANAGED_ACCOUNT = `${W}.managedAccount`;
 
 const workspace = (overrides = {}) => ({
@@ -54,6 +54,9 @@ async function setup(t) {
   const happyWindow = await installHappyDom(context);
   const state = {
     portalCalls: [],
+    portal: async () => "https://stripe.test/portal",
+    summaryCalls: [],
+    summary: undefined,
     checkoutCalls: [],
     previewCalls: [],
     consoleOpens: 0,
@@ -81,8 +84,12 @@ async function setup(t) {
     mockModules: {
       "react-i18next":
         "export const useTranslation = () => ({ t: (key) => key, i18n: { language: 'en' } });",
-      "/authRequestContext":
-        "export const getValidatedAuthGeneration = () => globalThis.__gen ?? null;",
+      "/authRequestContext": `export const getValidatedAuthGeneration = () => globalThis.__gen ?? null;
+         export const subscribeAuthRequestContext = () => () => {};`,
+      "/services/BillingSummaryService": `export async function getBillingSummary(identity) {
+        globalThis.__layoutTest.summaryCalls.push(identity.workspaceId);
+        return globalThis.__layoutTest.summary;
+      }`,
       "/stores/workspaceStore": `export const useWorkspaceStore = (select) => select({
         refresh: async () => {}
       });`,
@@ -93,9 +100,9 @@ async function setup(t) {
           return new Promise(() => {});
         },
         updateSeats: async () => { throw new Error("unexpected"); },
-        billingPortal: async (workspaceId) => {
-          globalThis.__layoutTest.portalCalls.push(workspaceId);
-          return "https://stripe.test/portal";
+        billingPortal: async (workspaceId, generation) => {
+          globalThis.__layoutTest.portalCalls.push([workspaceId, generation]);
+          return globalThis.__layoutTest.portal();
         },
         billingCheckout: async (...args) => {
           globalThis.__layoutTest.checkoutCalls.push(args);
@@ -114,8 +121,8 @@ async function setup(t) {
         }`,
       "/ui/useToast":
         "export const useToast = () => ({ toast: (value) => globalThis.__layoutTest.toasts.push(value) });",
-      "/hooks/useBillingRefreshOnReturn":
-        "export const useBillingRefreshOnReturn = () => () => {};",
+      "/hooks/useBillingRefreshOnReturn": `export const useBillingRefreshOnReturn = (refresh) =>
+        () => { globalThis.__layoutTest.refreshOnReturn = refresh; };`,
       "/ui/dialog": `import React from "react";
         const pass = ({ children }) => React.createElement("div", null, children);
         export const Dialog = ({ open, children }) =>
@@ -189,7 +196,7 @@ test("owner past due: destructive banner whose Update payment opens this workspa
   assert.equal(has(`${W}.banners.paymentFailed.title`), true);
   assert.equal(has(`${W}.badges.pastDue`), true);
   await click(UPDATE_PAYMENT);
-  assert.deepEqual(state.portalCalls, ["a"]);
+  assert.deepEqual(state.portalCalls, [["a", 7]]);
   assert.deepEqual(state.opened, ["https://stripe.test/portal"]);
 });
 
@@ -203,7 +210,7 @@ test("owner cancelled: Resubscribe starts a Business checkout", async (t) => {
 test("member: Managed account badge and workspace details, Copy email only", async (t) => {
   const { state, render, buttons, has, click } = await setup(t);
   await render(
-    workspace({ role: "member", billing_manager: "Dana Lee", billing_manager_email: "dana@x.co" })
+    workspace({ role: "member", billing_manager: "Dana Lee", billing_manager_email: "Dana@X.co" })
   );
   assert.equal(has(MANAGED_ACCOUNT), true);
   assert.equal(has(`${W}.workspaceDetails`), true);
@@ -215,15 +222,19 @@ test("member: Managed account badge and workspace details, Copy email only", asy
   assert.equal(has("Dana Lee"), true);
   assert.deepEqual(buttons(), [COPY_EMAIL]);
   await click(COPY_EMAIL);
-  assert.deepEqual(state.copied, ["dana@x.co"]);
+  assert.deepEqual(state.copied, ["Dana@X.co"]);
   assert.equal(state.toasts.at(-1).title, "common.copied");
 });
 
 test("member without a manager email: no buttons at all", async (t) => {
   const { render, buttons, has } = await setup(t);
-  await render(workspace({ role: "member", billing_manager: "Dana Lee" }));
-  assert.equal(has("Dana Lee"), true);
-  assert.deepEqual(buttons(), []);
+  for (const billing_manager_email of [undefined, null]) {
+    await render(
+      workspace({ role: "member", billing_manager: "display@x.co", billing_manager_email })
+    );
+    assert.equal(has("display@x.co"), true);
+    assert.deepEqual(buttons(), []);
+  }
 });
 
 test("Enterprise admin: Open console opens the admin console", async (t) => {
@@ -257,7 +268,7 @@ test("Manage billing opens this workspace's portal", async (t) => {
   const { state, render, click } = await setup(t);
   await render(workspace());
   await click(MANAGE_BILLING);
-  assert.deepEqual(state.portalCalls, ["a"]);
+  assert.deepEqual(state.portalCalls, [["a", 7]]);
 });
 
 test("provisioned owner: invoiced by OpenWhispr, no Stripe buttons", async (t) => {
@@ -325,3 +336,97 @@ test("an unparseable period end never shows Invalid Date", async (t) => {
   await render(workspace({ current_period_end: "not-a-date" }));
   assert.equal(text().includes("Invalid Date"), false);
 });
+
+test("paid owner capacity uses live invitation counts separately from the seat meter", async (t) => {
+  const { render, has } = await setup(t);
+  const full = workspace({ member_count: 6, seats_used: 7, seats: 7 });
+  await render({ ...full, invitation_count: 3 });
+  assert.equal(has(`${W}.usage.noSeatsLeftWithInvites`), true);
+  await render({ ...full, invitation_count: 3, seats: 9 });
+  assert.equal(has(`${W}.usage.pendingInvites`), true);
+  for (const invitation_count of [undefined, 0]) {
+    await render({ ...full, invitation_count });
+    assert.equal(has(`${W}.usage.noSeatsLeftWithInvites`), false);
+    assert.equal(has(`${W}.usage.noSeatsLeft`), true);
+  }
+});
+
+test("owner billing details use the viewed workspace and disappear when its role changes", async (t) => {
+  const { state, render, text, has, click } = await setup(t);
+  state.summary = {
+    cancel_at_period_end: true,
+    interval: "annual",
+    unit_amount: 24000,
+    next_invoice: { date: null, amount: 72000, currency: "usd" },
+    billing_email: "billing@example.test",
+  };
+  await render(workspace({ id: "viewed" }));
+  assert.equal(has(`${W}.details.ends`), true);
+  assert.equal(has(`${W}.details.firstInvoice`), false);
+  assert.equal(has(`${W}.interval.annual`), true);
+  assert.equal(has(`${W}.planLine.seatPrice`), true);
+  assert.equal(text().includes("billing@example.test"), true);
+  await click(`${W}.actions.keepPlan`);
+  assert.deepEqual(state.portalCalls, [["viewed", 7]]);
+  state.summary = { ...state.summary, cancel_at_period_end: false };
+  await React.act(async () => state.refreshOnReturn());
+  assert.equal(has(`${W}.details.ends`), false);
+  assert.equal(has(`${W}.details.nextInvoice`), true);
+  assert.equal(has("$720.00"), true);
+  await render(workspace({ id: "viewed", role: "member" }));
+  assert.equal(has(`${W}.workspaceDetails`), true);
+  assert.equal(has(`${W}.billingDetails`), false);
+  assert.equal(text().includes("billing@example.test"), false);
+  assert.deepEqual(state.summaryCalls, ["viewed", "viewed"]);
+});
+
+test("trial badge takes precedence over the billing interval when the seat price is known", async (t) => {
+  const { state, render, has } = await setup(t);
+  state.summary = {
+    interval: "monthly",
+    unit_amount: 1500,
+    next_invoice: { date: "2026-12-20T00:00:00Z", amount: 4500, currency: "usd" },
+  };
+  await render(workspace({ status: "trialing" }));
+  assert.equal(has(`${W}.badges.trialUndated`), true);
+  assert.equal(has(`${W}.interval.monthly`), false);
+  assert.equal(has(`${W}.planLine.seatPrice`), true);
+  assert.equal(has(`${W}.details.firstInvoice`), true);
+});
+
+test("the active workspace interval uses the info badge", async (t) => {
+  const { state, render, container } = await setup(t);
+  state.summary = { interval: "annual" };
+  await render(workspace());
+  const interval = [...container.querySelectorAll("span")].find(
+    (item) => item.textContent === `${W}.interval.annual`
+  );
+  assert.ok(interval?.classList.contains("text-primary"));
+});
+
+for (const scenario of ["workspace", "workspace round trip", "generation", "role", "role error"]) {
+  test(`a late Keep Business portal result is discarded after changing ${scenario}`, async (t) => {
+    const { state, render, click } = await setup(t);
+    const owner = workspace({ cancel_at_period_end: true });
+    const deferred = Promise.withResolvers();
+    state.portal = () => deferred.promise;
+    await render(owner);
+    await click(`${W}.actions.keepPlan`);
+    if (scenario.startsWith("workspace")) {
+      await render({ ...owner, id: "other" });
+      if (scenario.endsWith("trip")) await render(owner);
+    } else if (scenario === "generation") {
+      globalThis.__gen += 1;
+      await render(owner);
+    } else {
+      await render({ ...owner, role: "member" });
+    }
+    await React.act(async () => {
+      if (scenario === "role error") deferred.reject(new Error("old portal"));
+      else deferred.resolve("https://stripe.test/old-portal");
+    });
+    assert.deepEqual(state.opened, []);
+    assert.deepEqual(state.toasts, []);
+    assert.equal(state.refreshOnReturn, undefined);
+  });
+}

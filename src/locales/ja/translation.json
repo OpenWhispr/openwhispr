@@ -1673,18 +1673,7 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "addSeat": "シートを追加",
-      "seatUpdated_one": "ワークスペースの容量を {{count}} シートに更新しました",
-      "seatUpdated_other": "ワークスペースの容量を {{count}} シートに更新しました",
-      "seatUpdateFailed": "ワークスペースのシートを更新できませんでした",
-      "confirmSeats": {
-        "title": "ワークスペースのシートを追加しますか？",
-        "description_one": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
-        "description_other": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
-        "newCapacity": "新しい容量",
-        "chargeToday": "本日の請求額",
-        "confirm": "シートを追加"
-      }
+      "seatUpdateFailed": "ワークスペースのシートを更新できませんでした"
     },
     "account": {
       "billing": {
@@ -3130,6 +3119,28 @@
       "upgradedDescription": "{{workspace}}はEnterpriseになりました。"
     },
     "billing": {
+      "addSeats": {
+        "title": "シートを追加",
+        "invoiceDate": "次回の請求 · {{date}}",
+        "quantity": "追加するシート数",
+        "decrease": "シート数を減らす",
+        "increase": "シート数を増やす",
+        "now": "現在",
+        "after": "追加後",
+        "inUse": "使用中",
+        "pending": "保留中の招待",
+        "available": "利用可能",
+        "total": "合計シート数",
+        "price": "料金",
+        "perMonth": "{{price}} / シート / 月",
+        "proration": "次回の請求に加算",
+        "confirm_one": "{{count}} シートを追加",
+        "confirm_other": "{{count}} シートを追加",
+        "adding": "追加中…",
+        "failure": "シートを追加できませんでした。請求は発生していません。",
+        "success": "シートを追加しました。{{workspace}} の合計は {{count}} シートです。",
+        "previewFailed": "シート料金を読み込めませんでした。"
+      },
       "free": {
         "inviteTeammates": "チームメンバーを招待",
         "upgradeToBusiness": "Business にアップグレード",
@@ -3204,6 +3215,9 @@
           "body": "アクセス権は変わりません。"
         },
         "actions": {
+          "cancelTrial": "トライアルを解約",
+          "cancelBusiness": "Business を解約",
+          "keepPlan": "{{plan}} を継続",
           "subscribePro": "Pro に登録",
           "manageBilling": "請求を管理",
           "updatePayment": "支払い方法を更新",
@@ -3223,6 +3237,7 @@
           "unknown": "お使いのスマートフォンのアプリストア"
         },
         "badges": {
+          "stripeTrial": "トライアル",
           "trial_one": "トライアル · 残り {{count}} 日",
           "trial_other": "トライアル · 残り {{count}} 日",
           "pastDue": "支払い期限切れ",
@@ -3231,11 +3246,25 @@
           "monthly": "月払い"
         },
         "price": {
+          "trialStarts": "{{date}}から請求開始",
+          "trialYearlyStarts": "{{date}}から年払い",
           "free": "$0",
           "billedYearly": "年払い",
           "proMonthly": "{{price}} / 月"
         },
         "banners": {
+          "endingDated": {
+            "title": "{{plan}} は{{date}}に終了します",
+            "body": "請求ポータルでプランを継続できます。"
+          },
+          "ending": {
+            "title": "{{plan}} は終了予定です",
+            "body": "請求ポータルでプランを継続できます。"
+          },
+          "paymentFailedRetry": {
+            "title": "支払いに失敗しました",
+            "body": "支払いが完了するまで無料プランの上限が適用されます。次回の再試行は{{date}}です。"
+          },
           "coveredPastDue": {
             "title": "{{workspace}} がすでに対象にしています",
             "body": "{{plan}} の支払いに失敗しました。再試行を止めるには {{plan}} を解約してください。"
@@ -3243,6 +3272,14 @@
           "coveredPastDueUnnamed": {
             "title": "ワークスペースがすでに対象にしています",
             "body": "{{plan}} の支払いに失敗しました。再試行を止めるには {{plan}} を解約してください。"
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} がすでに対象にしています",
+            "body": "Pro のトライアルは終了すると有料のサブスクリプションに切り替わります。"
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "ワークスペースがすでに対象にしています",
+            "body": "Pro のトライアルは終了すると有料のサブスクリプションに切り替わります。"
           },
           "coveredPaying": {
             "title": "{{workspace}} がすでに対象にしています",
@@ -3282,6 +3319,13 @@
           }
         },
         "details": {
+          "nextInvoice": "次回の請求",
+          "firstInvoice": "初回の請求",
+          "nextRetry": "次回の支払い再試行",
+          "amountDue": "未払い額",
+          "ends": "終了日",
+          "ended": "終了済み",
+          "billingContact": "請求先連絡先",
           "periodEnds": "現在の期間の終了日",
           "billedThrough": "請求元",
           "accessUntil": "利用期限",
@@ -3302,7 +3346,13 @@
           "cancelled": "解約済み",
           "paused": "一時停止中"
         },
+        "interval": {
+          "monthly": "月払い",
+          "annual": "年払い"
+        },
         "planLine": {
+          "seatPrice": "1 席あたり月額 {{price}}",
+          "customPricing": "個別料金",
           "free": "$0",
           "invoicedByOpenWhispr": "OpenWhispr から請求",
           "paidBy": "{{workspace}} が支払い",
@@ -3367,6 +3417,10 @@
           "pendingInvites_other": "保留中の招待 {{count}} 件"
         },
         "details": {
+          "nextInvoice": "次回の請求",
+          "nextRetry": "次回の支払い試行",
+          "amountDue": "未払い金額",
+          "billingContact": "請求先連絡先",
           "firstInvoice": "初回請求日",
           "ends": "終了日",
           "ended": "終了日",

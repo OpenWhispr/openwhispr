@@ -2434,18 +2434,7 @@
       }
     },
     "unifiedBilling": {
-      "addSeat": "Ajouter un siège",
-      "seatUpdated_one": "Capacité de l'espace de travail mise à jour : {{count}} siège",
-      "seatUpdated_other": "Capacité de l'espace de travail mise à jour : {{count}} sièges",
-      "seatUpdateFailed": "Impossible de mettre à jour les sièges de l'espace de travail",
-      "confirmSeats": {
-        "title": "Ajouter un siège à l'espace de travail ?",
-        "description_one": "Passer {{workspace}} à {{count}} siège. Stripe calculera le changement au prorata.",
-        "description_other": "Passer {{workspace}} à {{count}} sièges. Stripe calculera le changement au prorata.",
-        "newCapacity": "Nouvelle capacité",
-        "chargeToday": "Montant facturé aujourd'hui",
-        "confirm": "Ajouter un siège"
-      }
+      "seatUpdateFailed": "Impossible de mettre à jour les sièges de l'espace de travail"
     },
     "account": {
       "billing": {
@@ -3230,6 +3219,29 @@
       "upgradedDescription": "{{workspace}} est maintenant sur Enterprise."
     },
     "billing": {
+      "addSeats": {
+        "title": "Ajouter des places",
+        "invoiceDate": "Prochaine facture · {{date}}",
+        "quantity": "Places à ajouter",
+        "decrease": "Diminuer le nombre de places",
+        "increase": "Augmenter le nombre de places",
+        "now": "Actuellement",
+        "after": "Après",
+        "inUse": "Utilisées",
+        "pending": "Invitations en attente",
+        "available": "Disponibles",
+        "total": "Total des places",
+        "price": "Prix",
+        "perMonth": "{{price}} / place / mois",
+        "proration": "Ajouté à la prochaine facture",
+        "confirm_one": "Ajouter {{count}} place",
+        "confirm_other": "Ajouter {{count}} places",
+        "confirm_many": "Ajouter {{count}} places",
+        "adding": "Ajout en cours…",
+        "failure": "Impossible d’ajouter des places. Aucun montant n’a été facturé.",
+        "success": "Places ajoutées. {{workspace}} dispose maintenant de {{count}} places.",
+        "previewFailed": "Impossible de charger les tarifs."
+      },
       "free": {
         "inviteTeammates": "Inviter des coéquipiers",
         "upgradeToBusiness": "Passer à Business",
@@ -3304,6 +3316,9 @@
           "body": "Votre accès reste inchangé."
         },
         "actions": {
+          "cancelTrial": "Résilier l’essai",
+          "cancelBusiness": "Résilier Business",
+          "keepPlan": "Conserver {{plan}}",
           "subscribePro": "S'abonner à Pro",
           "manageBilling": "Gérer la facturation",
           "updatePayment": "Mettre à jour le paiement",
@@ -3323,6 +3338,7 @@
           "unknown": "La boutique d'applications de votre téléphone"
         },
         "badges": {
+          "stripeTrial": "Période d’essai",
           "trial_one": "Essai · {{count}} jour restant",
           "trial_other": "Essai · {{count}} jours restants",
           "pastDue": "Paiement en retard",
@@ -3331,11 +3347,25 @@
           "monthly": "Mensuel"
         },
         "price": {
+          "trialStarts": "Facturation à partir du {{date}}",
+          "trialYearlyStarts": "Facturation annuelle à partir du {{date}}",
           "free": "$0",
           "billedYearly": "Facturation annuelle",
           "proMonthly": "{{price}} / mois"
         },
         "banners": {
+          "endingDated": {
+            "title": "{{plan}} prend fin le {{date}}",
+            "body": "Vous pouvez conserver votre forfait dans le portail de facturation."
+          },
+          "ending": {
+            "title": "La résiliation de {{plan}} est programmée",
+            "body": "Vous pouvez conserver votre forfait dans le portail de facturation."
+          },
+          "paymentFailedRetry": {
+            "title": "Échec du paiement",
+            "body": "Les limites du forfait gratuit s’appliquent jusqu’au paiement. Prochaine tentative le {{date}}."
+          },
           "coveredPastDue": {
             "title": "{{workspace}} vous couvre déjà",
             "body": "Votre paiement {{plan}} a échoué. Résiliez {{plan}} pour arrêter les nouvelles tentatives."
@@ -3343,6 +3373,14 @@
           "coveredPastDueUnnamed": {
             "title": "Un espace de travail vous couvre déjà",
             "body": "Votre paiement {{plan}} a échoué. Résiliez {{plan}} pour arrêter les nouvelles tentatives."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} vous couvre déjà",
+            "body": "Votre essai Pro deviendra un abonnement payant à son terme."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "Un espace de travail vous couvre déjà",
+            "body": "Votre essai Pro deviendra un abonnement payant à son terme."
           },
           "coveredPaying": {
             "title": "{{workspace}} vous couvre déjà",
@@ -3382,6 +3420,13 @@
           }
         },
         "details": {
+          "nextInvoice": "Prochaine facture",
+          "firstInvoice": "Première facture",
+          "nextRetry": "Prochaine tentative de paiement",
+          "amountDue": "Montant dû",
+          "ends": "Se termine le",
+          "ended": "Terminé le",
+          "billingContact": "Contact de facturation",
           "periodEnds": "Fin de la période en cours",
           "billedThrough": "Facturé via",
           "accessUntil": "Accès jusqu'au",
@@ -3402,7 +3447,13 @@
           "cancelled": "Annulé",
           "paused": "En pause"
         },
+        "interval": {
+          "monthly": "Mensuel",
+          "annual": "Annuel"
+        },
         "planLine": {
+          "seatPrice": "{{price}} par place et par mois",
+          "customPricing": "Tarification sur mesure",
           "free": "$0",
           "invoicedByOpenWhispr": "Facturé par OpenWhispr",
           "paidBy": "Payé par {{workspace}}",
@@ -3467,6 +3518,10 @@
           "pendingInvites_other": "{{count}} invitations en attente"
         },
         "details": {
+          "nextInvoice": "Prochaine facture",
+          "nextRetry": "Prochaine tentative de paiement",
+          "amountDue": "Montant dû",
+          "billingContact": "Contact de facturation",
           "firstInvoice": "Première facture",
           "ends": "Se termine",
           "ended": "Terminé",

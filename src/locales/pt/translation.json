@@ -1652,18 +1652,7 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "addSeat": "Adicionar assento",
-      "seatUpdated_one": "Capacidade do workspace atualizada para {{count}} assento",
-      "seatUpdated_other": "Capacidade do workspace atualizada para {{count}} assentos",
-      "seatUpdateFailed": "Não foi possível atualizar os assentos do workspace",
-      "confirmSeats": {
-        "title": "Adicionar um assento ao workspace?",
-        "description_one": "Aumentar {{workspace}} para {{count}} assento. O Stripe fará o rateio da alteração.",
-        "description_other": "Aumentar {{workspace}} para {{count}} assentos. O Stripe fará o rateio da alteração.",
-        "newCapacity": "Nova capacidade",
-        "chargeToday": "Cobrança de hoje",
-        "confirm": "Adicionar assento"
-      }
+      "seatUpdateFailed": "Não foi possível atualizar os assentos do workspace"
     },
     "account": {
       "billing": {
@@ -3115,6 +3104,29 @@
       "upgradedDescription": "{{workspace}} agora está no Enterprise."
     },
     "billing": {
+      "addSeats": {
+        "title": "Adicionar lugares",
+        "invoiceDate": "Próxima fatura · {{date}}",
+        "quantity": "Lugares a adicionar",
+        "decrease": "Diminuir lugares",
+        "increase": "Aumentar lugares",
+        "now": "Agora",
+        "after": "Depois",
+        "inUse": "Em uso",
+        "pending": "Convites pendentes",
+        "available": "Disponíveis",
+        "total": "Total de lugares",
+        "price": "Preço",
+        "perMonth": "{{price}} / lugar / mês",
+        "proration": "Adicionado à próxima fatura",
+        "confirm_one": "Adicionar {{count}} lugar",
+        "confirm_other": "Adicionar {{count}} lugares",
+        "confirm_many": "Adicionar {{count}} lugares",
+        "adding": "A adicionar…",
+        "failure": "Não foi possível adicionar lugares. Não foi cobrado qualquer valor.",
+        "success": "Lugares adicionados. {{workspace}} tem agora {{count}} lugares.",
+        "previewFailed": "Não foi possível carregar os preços."
+      },
       "free": {
         "inviteTeammates": "Convidar colegas",
         "upgradeToBusiness": "Fazer upgrade para Business",
@@ -3189,6 +3201,9 @@
           "body": "Seu acesso não muda."
         },
         "actions": {
+          "cancelTrial": "Cancelar teste",
+          "cancelBusiness": "Cancelar Business",
+          "keepPlan": "Manter {{plan}}",
           "subscribePro": "Assinar o Pro",
           "manageBilling": "Gerenciar cobrança",
           "updatePayment": "Atualizar pagamento",
@@ -3208,6 +3223,7 @@
           "unknown": "A loja de apps do seu celular"
         },
         "badges": {
+          "stripeTrial": "Período de teste",
           "trial_one": "Teste · falta {{count}} dia",
           "trial_other": "Teste · faltam {{count}} dias",
           "pastDue": "Pagamento atrasado",
@@ -3216,11 +3232,25 @@
           "monthly": "Mensal"
         },
         "price": {
+          "trialStarts": "Cobrança a partir de {{date}}",
+          "trialYearlyStarts": "Cobrança anual a partir de {{date}}",
           "free": "$0",
           "billedYearly": "Cobrança anual",
           "proMonthly": "{{price}} / mês"
         },
         "banners": {
+          "endingDated": {
+            "title": "{{plan}} termina em {{date}}",
+            "body": "Você pode manter seu plano no portal de cobrança."
+          },
+          "ending": {
+            "title": "{{plan}} tem encerramento programado",
+            "body": "Você pode manter seu plano no portal de cobrança."
+          },
+          "paymentFailedRetry": {
+            "title": "Falha no pagamento",
+            "body": "Os limites do plano gratuito se aplicam até que o pagamento seja concluído. Próxima tentativa em {{date}}."
+          },
           "coveredPastDue": {
             "title": "{{workspace}} já cobre você",
             "body": "O pagamento do {{plan}} falhou. Cancele o {{plan}} para parar as novas tentativas."
@@ -3228,6 +3258,14 @@
           "coveredPastDueUnnamed": {
             "title": "Um espaço de trabalho já cobre você",
             "body": "O pagamento do {{plan}} falhou. Cancele o {{plan}} para parar as novas tentativas."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} já cobre você",
+            "body": "Ao terminar, seu teste do Pro será convertido em uma assinatura paga."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "Um espaço de trabalho já cobre você",
+            "body": "Ao terminar, seu teste do Pro será convertido em uma assinatura paga."
           },
           "coveredPaying": {
             "title": "{{workspace}} já cobre você",
@@ -3267,6 +3305,13 @@
           }
         },
         "details": {
+          "nextInvoice": "Próxima fatura",
+          "firstInvoice": "Primeira fatura",
+          "nextRetry": "Próxima tentativa de cobrança",
+          "amountDue": "Valor em aberto",
+          "ends": "Termina em",
+          "ended": "Terminou em",
+          "billingContact": "Contato de cobrança",
           "periodEnds": "O período atual termina",
           "billedThrough": "Cobrado por",
           "accessUntil": "Acesso até",
@@ -3287,7 +3332,13 @@
           "cancelled": "Cancelado",
           "paused": "Pausado"
         },
+        "interval": {
+          "monthly": "Mensal",
+          "annual": "Anual"
+        },
         "planLine": {
+          "seatPrice": "{{price}} por assento por mês",
+          "customPricing": "Preços personalizados",
           "free": "$0",
           "invoicedByOpenWhispr": "Faturado pela OpenWhispr",
           "paidBy": "Pago por {{workspace}}",
@@ -3352,6 +3403,10 @@
           "pendingInvites_other": "{{count}} convites pendentes"
         },
         "details": {
+          "nextInvoice": "Próxima fatura",
+          "nextRetry": "Próxima tentativa de pagamento",
+          "amountDue": "Valor em aberto",
+          "billingContact": "Contato de cobrança",
           "firstInvoice": "Primeira fatura",
           "ends": "Termina",
           "ended": "Terminou",

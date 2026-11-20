@@ -22,6 +22,13 @@ export interface SeatPreview {
   seats_used: number;
   amount_due: number;
   currency: string;
+  member_seats?: number;
+  pending_seats?: number;
+  unit_amount?: number | null;
+  interval?: "monthly" | "annual" | null;
+  proration_amount?: number;
+  next_invoice_amount?: number;
+  next_invoice_date?: string | null;
 }
 
 export interface EnterpriseUpgradePreview {
@@ -159,10 +166,12 @@ async function billingCheckout(
   return res.data.url;
 }
 
-async function billingPortal(workspaceId: string): Promise<string> {
-  const res = await cloudPost<DataWrap<{ url: string }>>(
-    `/api/workspaces/${workspaceId}/billing/portal`
-  );
+async function billingPortal(workspaceId: string, authGeneration?: number): Promise<string> {
+  const path = `/api/workspaces/${workspaceId}/billing/portal`;
+  const res =
+    authGeneration === undefined
+      ? await cloudPost<DataWrap<{ url: string }>>(path)
+      : await cloudPostForAuthGeneration<DataWrap<{ url: string }>>(path, undefined, authGeneration);
   return res.data.url;
 }
 

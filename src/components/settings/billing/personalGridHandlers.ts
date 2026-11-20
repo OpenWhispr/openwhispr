@@ -76,6 +76,9 @@ export function runPersonalAction(action: PersonalAction, handlers: PersonalPlan
     case "manageBilling":
     case "updatePayment":
     case "cancelPro":
+    case "cancelTrial":
+    case "cancelBusiness":
+    case "keepPlan":
       handlers.openBillingPortal();
       return;
     case "manageInStore":
@@ -97,6 +100,9 @@ const PORTAL_ACTIONS: ReadonlySet<PersonalAction["kind"]> = new Set([
   "manageBilling",
   "updatePayment",
   "cancelPro",
+  "cancelTrial",
+  "cancelBusiness",
+  "keepPlan",
 ]);
 
 /** The actions `runPersonalAction` sends to the Stripe portal. */

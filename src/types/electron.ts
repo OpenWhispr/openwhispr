@@ -3387,7 +3387,7 @@ declare global {
         error?: string;
         code?: string;
       }>;
-      cloudBillingPortal?: () => Promise<{
+      cloudBillingPortal?: (expectedAuthGeneration?: number) => Promise<{
         success: boolean;
         url?: string;
         error?: string;

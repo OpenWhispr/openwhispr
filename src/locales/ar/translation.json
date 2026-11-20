@@ -5261,26 +5261,7 @@
       }
     },
     "unifiedBilling": {
-      "addSeat": "إضافة مقعد",
-      "seatUpdated_zero": "تم تحديث سعة مساحة العمل إلى {{count}} مقاعد",
-      "seatUpdated_one": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
-      "seatUpdated_two": "تم تحديث سعة مساحة العمل إلى {{count}} مقعدين",
-      "seatUpdated_few": "تم تحديث سعة مساحة العمل إلى {{count}} مقاعد",
-      "seatUpdated_many": "تم تحديث سعة مساحة العمل إلى {{count}} مقعدًا",
-      "seatUpdated_other": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
-      "seatUpdateFailed": "تعذر تحديث مقاعد مساحة العمل",
-      "confirmSeats": {
-        "title": "إضافة مقعد لمساحة العمل؟",
-        "description_zero": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_one": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_two": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدين. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_few": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_many": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدًا. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_other": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "newCapacity": "السعة الجديدة",
-        "chargeToday": "رسوم اليوم",
-        "confirm": "إضافة مقعد"
-      }
+      "seatUpdateFailed": "تعذر تحديث مقاعد مساحة العمل"
     },
     "account": {
       "billing": {
@@ -6091,6 +6072,32 @@
       "upgradedDescription": "أصبحت {{workspace}} الآن على Enterprise."
     },
     "billing": {
+      "addSeats": {
+        "title": "إضافة مقاعد",
+        "invoiceDate": "الفاتورة التالية · {{date}}",
+        "quantity": "المقاعد المراد إضافتها",
+        "decrease": "تقليل عدد المقاعد",
+        "increase": "زيادة عدد المقاعد",
+        "now": "الآن",
+        "after": "بعد الإضافة",
+        "inUse": "قيد الاستخدام",
+        "pending": "الدعوات المعلّقة",
+        "available": "متاحة",
+        "total": "إجمالي المقاعد",
+        "price": "السعر",
+        "perMonth": "{{price}} / مقعد / شهر",
+        "proration": "يُضاف إلى الفاتورة التالية",
+        "confirm_zero": "إضافة مقاعد: {{count}}",
+        "confirm_one": "إضافة مقاعد: {{count}}",
+        "confirm_other": "إضافة {{count}} مقعد",
+        "adding": "جارٍ الإضافة…",
+        "failure": "تعذرت إضافة المقاعد. لم يُخصم أي مبلغ.",
+        "success": "تمت إضافة المقاعد. إجمالي المقاعد في {{workspace}} هو {{count}}.",
+        "previewFailed": "تعذر تحميل أسعار المقاعد.",
+        "confirm_two": "إضافة مقاعد: {{count}}",
+        "confirm_few": "إضافة {{count}} مقاعد",
+        "confirm_many": "إضافة {{count}} مقعدًا"
+      },
       "free": {
         "inviteTeammates": "دعوة زملاء الفريق",
         "upgradeToBusiness": "الترقية إلى Business",
@@ -6165,6 +6172,9 @@
           "body": "لم يتغير وصولك."
         },
         "actions": {
+          "cancelTrial": "إلغاء الفترة التجريبية",
+          "cancelBusiness": "إلغاء Business",
+          "keepPlan": "الاحتفاظ بخطة {{plan}}",
           "subscribePro": "الاشتراك في Pro",
           "manageBilling": "إدارة الفوترة",
           "updatePayment": "تحديث الدفع",
@@ -6184,6 +6194,7 @@
           "unknown": "متجر التطبيقات على هاتفك"
         },
         "badges": {
+          "stripeTrial": "فترة تجريبية",
           "trial_zero": "فترة تجريبية · الأيام المتبقية: {{count}}",
           "trial_one": "فترة تجريبية · يتبقى {{count}} يوم",
           "trial_two": "فترة تجريبية · الأيام المتبقية: {{count}}",
@@ -6196,11 +6207,25 @@
           "monthly": "شهري"
         },
         "price": {
+          "trialStarts": "تبدأ الفوترة في {{date}}",
+          "trialYearlyStarts": "فوترة سنوية اعتبارًا من {{date}}",
           "free": "$0",
           "billedYearly": "تدفع سنويًا",
           "proMonthly": "{{price}} / شهريًا"
         },
         "banners": {
+          "endingDated": {
+            "title": "تنتهي خطة {{plan}} في {{date}}",
+            "body": "يمكنك الاحتفاظ بخطتك من خلال بوابة الفوترة."
+          },
+          "ending": {
+            "title": "ستنتهي خطة {{plan}}",
+            "body": "يمكنك الاحتفاظ بخطتك من خلال بوابة الفوترة."
+          },
+          "paymentFailedRetry": {
+            "title": "فشل الدفع",
+            "body": "تُطبق حدود الخطة المجانية حتى إتمام الدفع. المحاولة التالية في {{date}}."
+          },
           "coveredPastDue": {
             "title": "{{workspace}} يغطيك بالفعل",
             "body": "فشل دفع {{plan}}. ألغِ {{plan}} لإيقاف المحاولات المتكررة."
@@ -6208,6 +6233,14 @@
           "coveredPastDueUnnamed": {
             "title": "مساحة عمل تغطيك بالفعل",
             "body": "فشل دفع {{plan}}. ألغِ {{plan}} لإيقاف المحاولات المتكررة."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} يغطيك بالفعل",
+            "body": "ستتحول الفترة التجريبية لخطة Pro إلى اشتراك مدفوع عند انتهائها."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "مساحة عمل تغطيك بالفعل",
+            "body": "ستتحول الفترة التجريبية لخطة Pro إلى اشتراك مدفوع عند انتهائها."
           },
           "coveredPaying": {
             "title": "{{workspace}} يغطيك بالفعل",
@@ -6247,6 +6280,13 @@
           }
         },
         "details": {
+          "nextInvoice": "الفاتورة التالية",
+          "firstInvoice": "الفاتورة الأولى",
+          "nextRetry": "محاولة الدفع التالية",
+          "amountDue": "المبلغ المستحق",
+          "ends": "ينتهي في",
+          "ended": "انتهى في",
+          "billingContact": "جهة اتصال الفوترة",
           "periodEnds": "تنتهي الفترة الحالية",
           "billedThrough": "الفوترة عبر",
           "accessUntil": "الوصول حتى",
@@ -6271,7 +6311,13 @@
           "cancelled": "ملغى",
           "paused": "متوقف مؤقتًا"
         },
+        "interval": {
+          "monthly": "شهري",
+          "annual": "سنوي"
+        },
         "planLine": {
+          "seatPrice": "{{price}} لكل مقعد شهريًا",
+          "customPricing": "أسعار مخصصة",
           "free": "$0",
           "invoicedByOpenWhispr": "تصدر OpenWhispr الفواتير",
           "paidBy": "تدفع {{workspace}}",
@@ -6344,6 +6390,10 @@
           "pendingInvites_other": "{{count}} دعوة معلقة"
         },
         "details": {
+          "nextInvoice": "الفاتورة التالية",
+          "nextRetry": "محاولة الدفع التالية",
+          "amountDue": "المبلغ المستحق",
+          "billingContact": "جهة اتصال الفوترة",
           "firstInvoice": "أول فاتورة",
           "ends": "تنتهي",
           "ended": "انتهت",

@@ -1,5 +1,8 @@
+import type { BillingInvoiceValue } from "../components/settings/billing/billingFormat";
 import type { BillingTone } from "../components/settings/billing/billingTones";
+import type { WorkspaceBillingSummary } from "../services/BillingSummaryService";
 import type { Workspace } from "../types/electron";
+import { monthlyEquivalentSeatAmount } from "./addSeatsState";
 import { workspaceCan } from "./capabilities";
 import {
   canSelfServeEnterprise,
@@ -8,11 +11,10 @@ import {
   hasSubscription,
   isEnterpriseConsoleAvailable,
 } from "./workspaceBilling";
-import type { PeopleCount } from "./workspacePeople";
+import { workspacePeopleCounts, type PeopleCount } from "./workspacePeople";
 
 const KEY_PREFIX = "settingsPage.billing.workspace.";
 const DAY_MS = 86_400_000;
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Plan names are brand names: shown as they are in every language. */
 export const WORKSPACE_PLAN_NAMES: Record<WorkspaceTier, string> = {
   free: "Free",
@@ -63,6 +65,7 @@ export type WorkspaceDetailValue =
   /** A full i18n key, not relative: the role label reuses `settingsPage.workspace.role.*`. */
   | { kind: "key"; key: string }
   | { kind: "date"; iso: string }
+  | ({ kind: "invoice" } & BillingInvoiceValue)
   | { kind: "manager"; name: string; email: string | null };
 
 export interface WorkspaceDetailRow {
@@ -81,6 +84,8 @@ export interface WorkspacePlanState {
   /** Members and admins with a paid seat on an entitled plan. */
   managedBadge: boolean;
   planLine: { key: string; params?: Params } | null;
+  billingInterval: NonNullable<WorkspaceBillingSummary["interval"]> | null;
+  seatPrice: { amount: number; currency: string } | null;
   /** The right side of Current Plan, as secondary buttons. */
   planActions: WorkspaceAction[];
   /** Render the free-workspace buttons instead of `planActions`. */
@@ -102,6 +107,8 @@ interface Facts {
   role: WorkspaceRoleView;
   tier: WorkspaceTier;
   entitled: boolean;
+  ending: boolean;
+  summary?: WorkspaceBillingSummary;
   stripe: boolean;
   provisioned: boolean;
   paidSeat: boolean;
@@ -162,10 +169,12 @@ function resolveBadge(facts: Facts, now: number): WorkspacePlanState["badge"] {
 }
 
 function resolvePlanLine(facts: Facts): WorkspacePlanState["planLine"] {
-  const { workspace, role, tier, provisioned, paidSeat } = facts;
+  const { workspace, role, tier, stripe, provisioned, paidSeat } = facts;
   if (role === "owner") {
     if (tier === "free") return { key: "planLine.free" };
-    return provisioned ? { key: "planLine.invoicedByOpenWhispr" } : null;
+    if (provisioned) return { key: "planLine.invoicedByOpenWhispr" };
+    if (stripe && tier === "enterprise") return { key: "planLine.customPricing" };
+    return null;
   }
   if (paidSeat) return { key: "planLine.paidBy", params: { workspace: workspace.name } };
   return { key: "planLine.personalApplies" };
@@ -216,13 +225,13 @@ function datedBanner(
 }
 
 function ownerBanner(facts: Facts): WorkspaceBanner | null {
-  const { workspace, status, tier, entitled, stripe } = facts;
+  const { workspace, status, tier, ending, stripe } = facts;
   const plan = { plan: WORKSPACE_PLAN_NAMES[tier] };
   // Every payment fix goes through the Stripe portal; a provisioned plan has none.
   const portal = (kind: "keepPlan" | "updatePayment" | "finishCheckout"): WorkspaceAction | null =>
     stripe ? { kind } : null;
 
-  if (workspace.cancel_at_period_end && entitled) {
+  if (ending) {
     return datedBanner("ends", workspace.current_period_end, plan, portal("keepPlan"));
   }
   switch (status) {
@@ -296,28 +305,76 @@ function dateRow(labelKey: string, iso: string | null): WorkspaceDetailRow[] {
   return iso ? [{ labelKey, value: { kind: "date", iso } }] : [];
 }
 
-function billingRows(facts: Facts): WorkspaceDetailRow[] {
-  const { workspace, status, entitled, provisioned } = facts;
-  if (status === "canceled") return dateRow("details.ended", facts.endedAt);
-  // Checked before the trial: a trial set to cancel has no first invoice.
-  if (workspace.cancel_at_period_end && entitled) {
-    return dateRow("details.ends", workspace.current_period_end);
-  }
-  if (status === "trialing") return dateRow("details.firstInvoice", workspace.trial_ends_at);
-  if (provisioned) {
-    return [
-      {
-        labelKey: "details.billing",
-        value: { kind: "key", key: `${KEY_PREFIX}details.invoicedByOpenWhispr` },
-      },
-    ];
-  }
-  return dateRow("details.periodEnds", workspace.current_period_end);
+function invoiceRow(labelKey: string, invoice: BillingInvoiceValue): WorkspaceDetailRow[] {
+  const { date, amount, currency } = invoice;
+  return date || (Number.isFinite(amount) && currency?.trim())
+    ? [{ labelKey, value: { kind: "invoice", ...invoice } }]
+    : [];
 }
 
-function managerEmail(workspace: Workspace, manager: string): string | null {
-  if (workspace.billing_manager_email) return workspace.billing_manager_email;
-  return EMAIL_PATTERN.test(manager) ? manager : null;
+function billingRows(facts: Facts): WorkspaceDetailRow[] {
+  const { workspace, status, entitled, ending, provisioned, summary } = facts;
+  const next = summary?.next_invoice;
+  const outstanding = summary?.outstanding_invoice;
+  const balanceRows = outstanding
+    ? invoiceRow(outstanding.next_payment_attempt ? "details.nextRetry" : "details.amountDue", {
+        date: outstanding.next_payment_attempt,
+        amount: outstanding.amount_remaining,
+        currency: outstanding.currency,
+      })
+    : [];
+  const rows: WorkspaceDetailRow[] = [];
+
+  if (status === "canceled") {
+    rows.push(...dateRow("details.ended", facts.endedAt));
+  } else if (ending) {
+    rows.push(...dateRow("details.ends", workspace.current_period_end));
+  } else if (status === "trialing") {
+    const invoice = next
+      ? invoiceRow("details.firstInvoice", { ...next, date: next.date ?? workspace.trial_ends_at })
+      : [];
+    rows.push(
+      ...(invoice.length ? invoice : dateRow("details.firstInvoice", workspace.trial_ends_at))
+    );
+  } else if (provisioned) {
+    rows.push({
+      labelKey: "details.billing",
+      value: { kind: "key", key: `${KEY_PREFIX}details.invoicedByOpenWhispr` },
+    });
+  } else {
+    const invoice = entitled && next ? invoiceRow("details.nextInvoice", next) : [];
+    if (invoice.length) rows.push(...invoice);
+    else if (balanceRows.length === 0) {
+      rows.push(...dateRow("details.periodEnds", workspace.current_period_end));
+    }
+  }
+
+  rows.push(...balanceRows);
+  if (summary?.billing_email?.trim()) {
+    rows.push({
+      labelKey: "details.billingContact",
+      value: { kind: "text", text: summary.billing_email },
+    });
+  }
+  return rows;
+}
+
+function resolveSeatPrice(
+  facts: Facts,
+  interval: WorkspacePlanState["billingInterval"]
+): WorkspacePlanState["seatPrice"] {
+  const unitAmount = facts.summary?.unit_amount;
+  // The summary has no separate currency for unit_amount. Only the subscription's
+  // upcoming invoice can establish its currency.
+  const currency = facts.summary?.next_invoice?.currency?.trim();
+  return facts.tier === "business" &&
+    interval &&
+    unitAmount != null &&
+    Number.isFinite(unitAmount) &&
+    currency &&
+    /^[a-z]{3}$/i.test(currency)
+    ? { amount: monthlyEquivalentSeatAmount(unitAmount, interval), currency }
+    : null;
 }
 
 function workspaceRows(facts: Facts): WorkspaceDetailRow[] {
@@ -340,7 +397,7 @@ function workspaceRows(facts: Facts): WorkspaceDetailRow[] {
   if (manager) {
     rows.push({
       labelKey: "details.managedBy",
-      value: { kind: "manager", name: manager, email: managerEmail(workspace, manager) },
+      value: { kind: "manager", name: manager, email: workspace.billing_manager_email ?? null },
     });
   }
   return rows;
@@ -350,20 +407,6 @@ function resolveDetails(facts: Facts): WorkspacePlanState["details"] {
   if (facts.role !== "owner") return { titleKey: "workspaceDetails", rows: workspaceRows(facts) };
   const rows = billingRows(facts);
   return rows.length > 0 ? { titleKey: "billingDetails", rows } : null;
-}
-
-/** The workspace's own counts stand in while the people list hasn't been read. */
-function peopleNumbers(
-  workspace: Workspace,
-  people: PeopleCount | null
-): { members: number | null; invitations: number | null } {
-  if (people?.status === "known") {
-    return { members: people.members, invitations: people.invitations };
-  }
-  return {
-    members: workspace.member_count ?? null,
-    invitations: workspace.invitation_count ?? null,
-  };
 }
 
 function pastDate(iso: string | null, now: number): string | null {
@@ -379,14 +422,20 @@ export function showsMembersCount(workspace: Workspace): boolean {
 export function workspacePlanState(
   workspace: Workspace,
   people: PeopleCount | null,
-  now: number
+  now: number,
+  billingSummary?: WorkspaceBillingSummary
 ): WorkspacePlanState {
   const role = resolveRole(workspace);
   const tier = resolveTier(workspace.plan);
   const status = resolveStatus(workspace.status);
   const entitled = hasActiveWorkspaceSubscription(workspace);
   const stripe = Boolean(workspace.stripe_subscription_id);
+  const provisioned = !stripe && hasSubscription(workspace);
+  const summary = role === "owner" && !provisioned ? billingSummary : undefined;
+  const ending = entitled && (summary?.cancel_at_period_end ?? workspace.cancel_at_period_end);
+  const billingInterval = stripe ? (summary?.interval ?? null) : null;
   const paidSeat = workspace.is_billable !== false && entitled;
+  const { members, invitations } = workspacePeopleCounts(workspace, people);
   const facts: Facts = {
     workspace,
     status,
@@ -394,11 +443,14 @@ export function workspacePlanState(
     tier,
     entitled,
     stripe,
-    provisioned: !stripe && hasSubscription(workspace),
+    provisioned,
+    ending,
+    summary,
     paidSeat,
     paused: tier !== "free" && (status === "unpaid" || status === "canceled"),
-    ...peopleNumbers(workspace, people),
-    peopleLoading: people?.status === "loading",
+    members: typeof members === "number" ? members : null,
+    invitations: typeof invitations === "number" ? invitations : null,
+    peopleLoading: members === "loading",
     endedAt: pastDate(workspace.current_period_end, now),
   };
   const ownsFreeWorkspace = role === "owner" && tier === "free";
@@ -409,6 +461,8 @@ export function workspacePlanState(
     badge: resolveBadge(facts, now),
     managedBadge: role !== "owner" && paidSeat,
     planLine: resolvePlanLine(facts),
+    billingInterval,
+    seatPrice: resolveSeatPrice(facts, billingInterval),
     planActions: resolvePlanActions(facts),
     freeCta: ownsFreeWorkspace,
     banner: role === "owner" ? ownerBanner(facts) : memberBanner(facts),

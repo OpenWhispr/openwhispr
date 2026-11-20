@@ -75,6 +75,7 @@ function store(status = "active", name = "app_store") {
 function state(usageOverrides = {}, inputOverrides = {}) {
   return personalPlanState({
     signedIn: true,
+    now: Date.parse("2026-12-15T00:00:00Z"),
     usage: usage(usageOverrides),
     coveringWorkspaceNames: [],
     businessAction: VIEW_WORKSPACE,
@@ -96,6 +97,7 @@ test("signed out, unknown usage and a failed fetch are their own states", () => 
   assert.deepEqual(
     personalPlanState({
       signedIn: false,
+      now: Date.parse("2026-12-15T00:00:00Z"),
       usage: null,
       coveringWorkspaceNames: [],
       businessAction: VIEW_WORKSPACE,
@@ -388,6 +390,7 @@ function fromApi(response) {
   return {
     status: "success",
     plan: data.plan,
+    subscriptionStatus: data.subscriptionStatus,
     isTrial: data.isTrial,
     trialDaysLeft: data.trialDaysLeft,
     isPastDue: isPastDueUsage(data),
@@ -532,8 +535,8 @@ test("API: a covered past due payer keeps the portal and can cancel Pro", () => 
 });
 
 // A Stripe trial (with a card) is trialing in Stripe, but the webhook clears trial_ends_at,
-// so the API reports isTrial false and a personal entitlement: it bills like any Stripe Pro.
-test("API: a Stripe-side trialing subscription manages billing, with a price and Pro current", () => {
+// so the API reports isTrial false alongside trialing status and a personal entitlement.
+test("API: a Stripe-side trialing subscription manages billing, with a first-payment date and Pro current", () => {
   const { result, proCard } = fromPayload(
     apiPayload(
       {
@@ -549,8 +552,8 @@ test("API: a Stripe-side trialing subscription manages billing, with a price and
   );
   assert.equal(result.tier, "pro");
   assert.deepEqual(actionKinds(result), ["manageBilling", "business"]);
-  assert.deepEqual(result.price, { key: "price.proMonthly" });
-  assert.equal(result.badge?.key, "badges.monthly");
+  assert.equal(result.price, null);
+  assert.deepEqual(result.badge, { key: "badges.trial", params: { days: "5" }, tone: "info" });
   assert.deepEqual(result.banners, []);
   assert.equal(proCard, "current");
 });
@@ -571,4 +574,160 @@ test("the creator link shows to anyone who can still subscribe, a cardless trial
     showsCreatorLink(usage({ ...store(), isTrial: true, isPersonallySubscribed: true })),
     false
   );
+});
+
+const NEXT_INVOICE = { date: PERIOD_END, amount: 0, currency: "usd" };
+const SUMMARY = { next_invoice: NEXT_INVOICE, billing_email: "billing@example.test" };
+const CONTACT = {
+  labelKey: "details.billingContact",
+  value: { kind: "text", text: "billing@example.test" },
+};
+
+test("active Pro displays the upcoming invoice, including zero, and the billing contact", () => {
+  for (const date of [PERIOD_END, null]) {
+    const invoice = { ...NEXT_INVOICE, date };
+    const result = ready(
+      { ...STRIPE_PRO, subscriptionStatus: "active" },
+      {
+        summary: { ...SUMMARY, next_invoice: invoice },
+      }
+    );
+    assert.deepEqual(result.details, [
+      { labelKey: "details.nextInvoice", value: { kind: "invoice", ...invoice } },
+      CONTACT,
+    ]);
+  }
+});
+
+test("Stripe trial shows its first invoice and only promises an annual cadence when known", () => {
+  for (const [billingInterval, key] of [
+    ["monthly", "price.trialStarts"],
+    ["annual", "price.trialYearlyStarts"],
+  ]) {
+    const usage = fromApi(
+      apiPayload(
+        {
+          ...SUBSCRIBED,
+          plan: "pro",
+          status: "trialing",
+          isTrial: false,
+          currentPeriodEnd: PERIOD_END,
+          billingInterval,
+        },
+        { personal: true }
+      )
+    );
+    const result = ready({ ...usage, subscriptionStatus: "trialing" }, { summary: SUMMARY });
+    assert.deepEqual(result.price, { key, params: { date: PERIOD_END } });
+    assert.deepEqual(result.details, [
+      { labelKey: "details.firstInvoice", value: { kind: "invoice", ...NEXT_INVOICE } },
+      CONTACT,
+    ]);
+  }
+});
+
+test("a trial period end alone does not establish a billing start", () => {
+  const trial = { ...STRIPE_PRO, subscriptionStatus: "trialing", billingInterval: "monthly" };
+  for (const summary of [undefined, {}, { next_invoice: null }]) {
+    const result = ready(trial, { summary });
+    assert.equal(result.price, null);
+    assert.deepEqual(result.details, [
+      { labelKey: "details.periodEnds", value: { kind: "date", iso: PERIOD_END } },
+    ]);
+  }
+  const invoice = { ...NEXT_INVOICE, date: null };
+  const result = ready(trial, { summary: { next_invoice: invoice } });
+  assert.equal(result.price, null);
+  assert.deepEqual(result.details, [
+    { labelKey: "details.firstInvoice", value: { kind: "invoice", ...invoice } },
+  ]);
+});
+
+test("personal balance survives cancellation and uses retry only when supplied", () => {
+  for (const [status, usageFields] of [
+    ["past_due", PAST_DUE],
+    ["canceled", COVERED],
+  ]) {
+    for (const retry of [PERIOD_END, null]) {
+      const result = ready(
+        { ...usageFields, subscriptionStatus: status },
+        {
+          summary: {
+            ...SUMMARY,
+            cancel_at_period_end: true,
+            outstanding_invoice: {
+              next_payment_attempt: retry,
+              amount_remaining: 1500,
+              currency: "eur",
+            },
+          },
+        }
+      );
+      assert.deepEqual(result.details, [
+        {
+          labelKey: retry ? "details.nextRetry" : "details.amountDue",
+          value: { kind: "invoice", date: retry, amount: 1500, currency: "eur" },
+        },
+        CONTACT,
+      ]);
+      assert.ok(!actionKinds(result).includes("keepPlan"));
+    }
+  }
+});
+
+test("scheduled cancellation overrides the first or next invoice and the covered cancel action", () => {
+  for (const subscriptionStatus of ["active", "trialing"]) {
+    const result = ready(
+      { ...STRIPE_PRO, plan: "business", subscriptionStatus, entitledWorkspaceIds: ["ws"] },
+      { summary: { ...SUMMARY, cancel_at_period_end: true } }
+    );
+    assert.deepEqual(result.details, [
+      { labelKey: "details.ends", value: { kind: "date", iso: PERIOD_END } },
+      CONTACT,
+    ]);
+    assert.deepEqual(result.banners.map((banner) => banner.action).filter(Boolean), [
+      { kind: "keepPlan", plan: "Business" },
+    ]);
+  }
+});
+
+test("a covered personal Business payer can cancel Business", () => {
+  const result = ready({ ...STRIPE_PRO, plan: "business", entitledWorkspaceIds: ["ws"] });
+  assert.deepEqual(result.banners[0].action, { kind: "cancelBusiness" });
+});
+
+test("the authorized summary adds no Stripe data to store or referral views", () => {
+  assert.deepEqual(ready(store(), { summary: SUMMARY }).details, ready(store()).details);
+  assert.deepEqual(ready(TRIAL, { summary: SUMMARY }).details, []);
+  assert.deepEqual(ready(COVERED, { summary: {} }).details, []);
+});
+
+test("completed cancellation displays only a known past end date alongside its balance", () => {
+  const next = {
+    ...SUMMARY,
+    outstanding_invoice: { amount_remaining: 2500, currency: "usd", next_payment_attempt: null },
+  };
+  for (const currentPeriodEnd of ["2026-01-01T00:00:00Z", PERIOD_END, null]) {
+    const result = ready(
+      { subscriptionStatus: "canceled", currentPeriodEnd },
+      { summary: next, now: Date.parse("2026-11-20T00:00:00Z") }
+    );
+    assert.deepEqual(
+      result.details.map(({ labelKey }) => labelKey),
+      [
+        ...(currentPeriodEnd?.startsWith("2026-01") ? ["details.ended"] : []),
+        "details.amountDue",
+        "details.billingContact",
+      ]
+    );
+  }
+});
+
+test("a covered Stripe Pro trial shows its trial time and can be cancelled in the personal portal", () => {
+  const result = ready(
+    { ...STRIPE_PRO, subscriptionStatus: "trialing", entitledWorkspaceIds: ["ws"] },
+    { summary: SUMMARY, now: Date.parse(PERIOD_END) - 5 * 86_400_000 }
+  );
+  assert.deepEqual(result.badge, { key: "badges.trial", params: { days: "5" }, tone: "info" });
+  assert.deepEqual(result.banners[0].action, { kind: "cancelTrial" });
 });

@@ -89,10 +89,12 @@ async function setup(t) {
       "react-i18next":
         "export const useTranslation = () => ({ t: (key) => key, i18n: { language: 'en' } });",
       "/authRequestContext":
-        "export const getValidatedAuthGeneration = () => globalThis.__gen ?? null;",
+        `export const getValidatedAuthGeneration = () => globalThis.__gen ?? null;
+         export const subscribeAuthRequestContext = () => () => {};`,
       "/stores/workspaceStore": `export const useWorkspaceStore = (select) => select({
         refresh: async () => {}
       });`,
+      "/services/BillingSummaryService": "export const getBillingSummary = async () => undefined;",
       "/services/cloudApi": `export class CloudApiError extends Error {
         constructor(message, status, code) {
           super(message);
@@ -378,12 +380,12 @@ test("a refused checkout for a workspace with no teammates says why", async (t) 
 });
 
 test("a free workspace admin reads the people count for the Members row", async (t) => {
-  const { state, buttons, render, resolveCount, membersValue, membersIsolated } = await setup(t);
+  const { state, buttons, render, settle, membersValue, membersIsolated } = await setup(t);
   await render({ ...freeWorkspace("free-ws"), role: "admin" });
   assert.equal(state.listMembersCalls, 1);
-  assert.equal(state.listInvitationsCalls, 1);
+  assert.equal(state.listInvitationsCalls, 0);
   assert.equal(membersValue(), "—", "while counting");
-  await resolveCount("free-ws", [member("owner"), member("admin")], []);
+  await settle(state.members, "free-ws", [member("owner"), member("admin")]);
   assert.equal(membersValue(), "2");
   assert.deepEqual(membersIsolated(), ["2"]);
   // An admin can't buy: still no free-workspace buttons.
@@ -499,4 +501,86 @@ test("a contact-sales page that won't open says so", async (t) => {
   await React.act(() => new Promise((resolve) => setTimeout(resolve, 0)));
   assert.equal(state.toasts.at(-1)?.description, "no browser");
   assert.equal(state.toasts.at(-1)?.variant, "destructive");
+});
+
+test("complete list counts give a free owner or admin the Members row with no roster reads", async (t) => {
+  const { state, buttons, render, membersValue } = await setup(t);
+  await render({ ...freeWorkspace("a"), member_count: 0, invitation_count: 1 });
+  assert.equal(membersValue(), "0");
+  assert.equal(buttons()[0].label, INVITE);
+  await render({ ...freeWorkspace("a"), role: "admin", member_count: 2 });
+  assert.equal(membersValue(), "2");
+  assert.deepEqual(buttons(), []);
+  assert.equal(state.listMembersCalls, 0);
+  assert.equal(state.listInvitationsCalls, 0);
+});
+
+test("two known members show Upgrade without loading invitations", async (t) => {
+  const { state, buttons, render, membersValue } = await setup(t);
+  await render({ ...freeWorkspace("a"), member_count: 2 });
+  assert.equal(membersValue(), "2");
+  assert.deepEqual(buttons(), [{ label: UPGRADE, variant: "primary" }]);
+  assert.equal(state.listMembersCalls, 0);
+  assert.equal(state.listInvitationsCalls, 0);
+});
+
+test("two known invites show Upgrade even when the separate Members row fails", async (t) => {
+  const { state, buttons, render, settle, membersValue } = await setup(t);
+  await render({ ...freeWorkspace("a"), invitation_count: 2 });
+  assert.deepEqual(buttons(), [{ label: UPGRADE, variant: "primary" }]);
+  assert.equal(state.listMembersCalls, 1);
+  assert.equal(state.listInvitationsCalls, 0);
+  await settle(state.members, "a", new Error("offline"));
+  assert.equal(membersValue(), null);
+  assert.deepEqual(buttons(), [{ label: UPGRADE, variant: "primary" }]);
+});
+
+test("a supplied owner member count renders while only missing invitations load and retry", async (t) => {
+  const { state, buttons, render, settle, click, membersValue } = await setup(t);
+  await render({ ...freeWorkspace("a"), member_count: 1 });
+  assert.equal(state.listMembersCalls, 0);
+  assert.equal(state.listInvitationsCalls, 1);
+  assert.equal(membersValue(), "1");
+  assert.deepEqual(buttons(), []);
+  await settle(state.invitations, "a", new Error("offline"));
+  assert.equal(membersValue(), "1");
+  await click(RETRY);
+  assert.deepEqual(buttons(), []);
+  await settle(state.invitations, "a", [
+    { accepted_at: null, revoked_at: null, expires_at: "2999-01-01T00:00:00Z" },
+  ]);
+  assert.deepEqual(buttons(), [{ label: UPGRADE, variant: "primary" }]);
+  assert.equal(state.listMembersCalls, 0);
+  assert.equal(state.listInvitationsCalls, 2);
+});
+
+test("a supplied invitation count uses only members and ignores a stale roster after an identity change", async (t) => {
+  const { state, buttons, render, settle, membersValue } = await setup(t);
+  await render({ ...freeWorkspace("a"), invitation_count: 0 });
+  globalThis.__gen = 8;
+  await render({ ...freeWorkspace("a"), invitation_count: 0 });
+  await settle(state.members, "a", [member("old-owner")]);
+  assert.deepEqual(buttons(), []);
+  assert.equal(membersValue(), "—");
+  await settle(state.members, "a", [member("owner"), { ...member("admin"), is_billable: false }]);
+  assert.equal(membersValue(), "2");
+  assert.deepEqual(buttons(), [{ label: UPGRADE, variant: "primary" }]);
+  assert.equal(state.listMembersCalls, 2);
+  assert.equal(state.listInvitationsCalls, 0);
+});
+
+test("a returned member roster renders while the free owner still waits for invitations", async (t) => {
+  const { state, buttons, render, settle, membersValue } = await setup(t);
+  await render(freeWorkspace("a"));
+  await settle(state.members, "a", [member("owner")]);
+  assert.equal(membersValue(), "1");
+  assert.deepEqual(buttons(), []);
+});
+
+test("a canceled paid workspace with legacy counts requests no people rosters", async (t) => {
+  const { state, render, membersValue } = await setup(t);
+  await render({ ...freeWorkspace("a"), plan: "business", status: "canceled" });
+  assert.equal(membersValue(), null);
+  assert.equal(state.listMembersCalls, 0);
+  assert.equal(state.listInvitationsCalls, 0);
 });

@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useRef, useState } from "react";
+import React, { Suspense, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -6,14 +6,13 @@ import {
   Copy,
   CreditCard,
   ExternalLink,
-  Loader2,
   Plus,
   Shield,
   User,
   UserPlus,
   Zap,
 } from "../icons";
-import { Button } from "../ui/button";
+import { AddSeatsDialog } from "./billing/AddSeatsDialog";
 import {
   BillingBanner,
   BillingBlock,
@@ -25,19 +24,16 @@ import {
   UsageMeterRow,
   UsageValueRow,
 } from "./billing/BillingUi";
-import { formatBillingDate, translationParams } from "./billing/billingFormat";
-import { PlansGrid, type BusinessCardAction, type EnterpriseCardAction } from "./billing/PlansGrid";
-import { useBillingRefreshOnReturn } from "../../hooks/useBillingRefreshOnReturn";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
+  formatBillingDate,
+  formatBillingInvoice,
+  translationParams,
+} from "./billing/billingFormat";
+import { PlansGrid, type BusinessCardAction, type EnterpriseCardAction } from "./billing/PlansGrid";
+import { useBillingSummary } from "../../hooks/useBillingSummary";
+import { useBillingRefreshOnReturn } from "../../hooks/useBillingRefreshOnReturn";
 import { useToast } from "../ui/useToast";
-import { WorkspacesService, type SeatPreview } from "../../services/WorkspacesService";
+import { WorkspacesService } from "../../services/WorkspacesService";
 import { CloudApiError } from "../../services/cloudApi";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import {
@@ -45,6 +41,11 @@ import {
   isSameBillingIdentity,
   type BillingIdentity,
 } from "../../lib/billingRequestIdentity";
+import { workspaceCan } from "../../lib/capabilities";
+import {
+  getValidatedAuthGeneration,
+  subscribeAuthRequestContext,
+} from "../../lib/authRequestContext";
 import { openAdminConsole } from "../../lib/auth";
 import { CONTACT_SALES_URL } from "../../lib/contactSales";
 import { canSelfServeEnterprise } from "../../lib/workspaceBilling";
@@ -81,7 +82,7 @@ const ACTION_ICONS: Partial<Record<WorkspaceAction["kind"], IconComponent>> = {
   openConsole: ExternalLink,
 };
 
-type Busy = "checkout" | "preview" | "seats" | WorkspaceAction["kind"];
+type Busy = "checkout" | WorkspaceAction["kind"];
 
 async function openExternalUrl(url: string): Promise<void> {
   if (window.electronAPI?.openExternal) await window.electronAPI.openExternal(url);
@@ -91,11 +92,6 @@ async function openExternalUrl(url: string): Promise<void> {
 /** The avatar letter: the first character, whole even when it is outside the BMP. */
 function initialOf(name: string): string {
   return (Array.from(name.trim())[0] ?? "").toLocaleUpperCase();
-}
-
-interface SeatQuote {
-  preview: SeatPreview;
-  identity: BillingIdentity;
 }
 
 interface Props {
@@ -113,35 +109,37 @@ export default function WorkspaceBillingCard({
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const refresh = useWorkspaceStore((s) => s.refresh);
+  const canManageBilling = workspaceCan(workspace, "manage_billing");
+  const authGeneration = useSyncExternalStore(
+    subscribeAuthRequestContext,
+    getValidatedAuthGeneration
+  );
+  const { summary, refresh: refreshBillingSummary } = useBillingSummary({
+    kind: "workspace",
+    workspaceId: workspace.id,
+    canManageBilling,
+  });
   const [busy, setBusy] = useState<Busy | null>(null);
-  const [seatQuote, setSeatQuote] = useState<SeatQuote | null>(null);
-  // A quote for a workspace the card no longer shows is gone, so the dialog never shows it.
-  const seatPreview =
-    seatQuote && seatQuote.identity.workspaceId === workspace.id ? seatQuote.preview : null;
-  // Read after an await: the card can be shown another workspace (same instance) or be gone.
-  const workspaceIdRef = useRef(workspace.id);
-  workspaceIdRef.current = workspace.id;
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
+  const billingRequest = useRef<symbol | null>(null);
+  useLayoutEffect(() => {
+    setBusy(null);
     return () => {
-      mountedRef.current = false;
+      billingRequest.current = null;
     };
-  }, []);
-  // Coming back to the workspace must not reopen the quote it left.
-  useEffect(() => {
-    setSeatQuote((quote) => (quote && quote.identity.workspaceId !== workspace.id ? null : quote));
-  }, [workspace.id]);
+  }, [workspace.id, canManageBilling, authGeneration]);
+  const [seatOpening, setSeatOpening] = useState<BillingIdentity | null>(null);
+  const seatTrigger = useRef<HTMLElement | null>(null);
   const refreshOnReturn = useBillingRefreshOnReturn(() => {
+    refreshBillingSummary();
     void refresh();
     void onRefreshEntitlement?.();
   });
-  // Counted for the free buttons (also asked for a lapsed plan's owner, whose seats caption then
-  // names pending invitations) and for the Members row; other cards send no extra reads.
-  const countsPeople =
-    freeWorkspaceCta(workspace, null) === "pending" || showsMembersCount(workspace);
+  const needsMembers = showsMembersCount(workspace);
+  const needsInvitations = needsMembers && freeWorkspaceCta(workspace, null) === "pending";
   const { people, retry: retryPeople } = useWorkspacePeopleCount(
-    countsPeople ? workspace.id : null
+    workspace,
+    needsMembers,
+    needsInvitations
   );
   const freeCta = freeWorkspaceCta(workspace, people);
   // Bound to its workspace, so the dialog never invites into one the card no longer shows.
@@ -156,19 +154,30 @@ export default function WorkspaceBillingCard({
     return value.toLocaleString(i18n.language);
   }
 
-  async function openBilling(kind: Busy, getUrl: () => Promise<string>) {
+  async function openBilling(kind: Busy, getUrl: () => Promise<string>): Promise<void> {
+    const request = Symbol();
+    const generation = getValidatedAuthGeneration();
+    const isCurrent = (): boolean =>
+      billingRequest.current === request && getValidatedAuthGeneration() === generation;
+    billingRequest.current = request;
     setBusy(kind);
     try {
-      await openExternalUrl(await getUrl());
-      refreshOnReturn();
+      const url = await getUrl();
+      if (!isCurrent()) return;
+      await openExternalUrl(url);
+      if (isCurrent()) refreshOnReturn();
     } catch (error) {
+      if (!isCurrent()) return;
       toast({
         title: t("common.error"),
         description: billingErrorText(error),
         variant: "destructive",
       });
     } finally {
-      setBusy(null);
+      if (billingRequest.current === request) {
+        billingRequest.current = null;
+        setBusy(null);
+      }
     }
   }
 
@@ -275,77 +284,13 @@ export default function WorkspaceBillingCard({
     }
   }
 
-  function isQuoteCurrent(identity: BillingIdentity): boolean {
-    return (
-      mountedRef.current &&
-      isSameBillingIdentity(identity, currentBillingIdentity(workspaceIdRef.current))
-    );
-  }
-
-  function showSeatUpdateFailed(): void {
-    toast({ title: t("settingsPage.unifiedBilling.seatUpdateFailed"), variant: "destructive" });
-  }
-
-  async function previewSeatIncrease() {
-    const identity = currentBillingIdentity(workspace.id);
-    if (!identity) {
-      showSeatUpdateFailed();
-      return;
-    }
-    setBusy("preview");
-    try {
-      const preview = await WorkspacesService.previewSeats(
-        workspace.id,
-        1,
-        identity.authGeneration
-      );
-      if (isQuoteCurrent(identity)) setSeatQuote({ preview, identity });
-    } catch (error) {
-      if (!mountedRef.current) return;
-      toast({
-        title: t("settingsPage.unifiedBilling.seatUpdateFailed"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
-      });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function confirmSeatIncrease() {
-    if (!seatQuote) return;
-    const { preview, identity } = seatQuote;
-    if (identity.workspaceId === null || !isQuoteCurrent(identity)) {
-      setSeatQuote(null);
-      showSeatUpdateFailed();
-      return;
-    }
-    setBusy("seats");
-    try {
-      await WorkspacesService.updateSeats(
-        identity.workspaceId,
-        preview.next_quantity,
-        identity.authGeneration
-      );
-      setSeatQuote(null);
-      await refresh({ fresh: true });
-      toast({
-        title: t("settingsPage.unifiedBilling.seatUpdated", {
-          count: preview.next_quantity,
-        }),
-      });
-    } catch (error) {
-      toast({
-        title: t("settingsPage.unifiedBilling.seatUpdateFailed"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
-      });
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  const plan = workspacePlanState(workspace, people, Date.now());
+  const plan = workspacePlanState(workspace, people, Date.now(), summary);
+  const canAddSeats = plan.usage.some((row) => row.kind === "seats" && row.addSeats);
+  const showAddSeats =
+    canAddSeats && isSameBillingIdentity(seatOpening, currentBillingIdentity(workspace.id));
+  useLayoutEffect(() => {
+    if (seatOpening && !showAddSeats) setSeatOpening(null);
+  }, [seatOpening, showAddSeats]);
   const planName = WORKSPACE_PLAN_NAMES[plan.tier];
 
   function runAction(action: WorkspaceAction): void {
@@ -353,9 +298,14 @@ export default function WorkspaceBillingCard({
       case "manageBilling":
       case "updatePayment":
       case "finishCheckout":
-      case "keepPlan":
-        void openBilling(action.kind, () => WorkspacesService.billingPortal(workspace.id));
+      case "keepPlan": {
+        const identity = currentBillingIdentity(workspace.id);
+        if (!canManageBilling || !identity) return;
+        void openBilling(action.kind, () =>
+          WorkspacesService.billingPortal(workspace.id, identity.authGeneration)
+        );
         return;
+      }
       case "resubscribe":
         void openBilling("resubscribe", () =>
           WorkspacesService.billingCheckout(workspace.id, "monthly", { tier: "business" })
@@ -367,9 +317,16 @@ export default function WorkspaceBillingCard({
       case "upgradeEnterprise":
         setEnterpriseWorkspaceId(workspace.id);
         return;
-      case "addSeats":
-        void previewSeatIncrease();
+      case "addSeats": {
+        const identity = currentBillingIdentity(workspace.id);
+        if (identity && canAddSeats) setSeatOpening(identity);
+        else
+          toast({
+            title: t("settingsPage.unifiedBilling.seatUpdateFailed"),
+            variant: "destructive",
+          });
         return;
+      }
       case "viewPersonal":
         onViewPersonal?.();
         return;
@@ -429,6 +386,8 @@ export default function WorkspaceBillingCard({
         return t(value.key);
       case "date":
         return formatDate(value.iso);
+      case "invoice":
+        return formatBillingInvoice(value, i18n.language);
       case "manager": {
         const { email } = value;
         return (
@@ -495,11 +454,13 @@ export default function WorkspaceBillingCard({
                 <PillButton
                   variant="primary"
                   icon={Plus}
-                  busy={busy === "preview"}
                   disabled={busy !== null}
-                  onClick={() => runAction({ kind: "addSeats" })}
+                  onClick={(event) => {
+                    seatTrigger.current = event.currentTarget;
+                    runAction({ kind: "addSeats" });
+                  }}
                 >
-                  {t("settingsPage.unifiedBilling.addSeat")}
+                  {t("settingsPage.billing.addSeats.title")}
                 </PillButton>
               ) : undefined
             }
@@ -532,6 +493,19 @@ export default function WorkspaceBillingCard({
   }
 
   const banner = plan.banner;
+  const intervalLabel = plan.billingInterval ? translate(`interval.${plan.billingInterval}`) : null;
+  const badge = plan.badge
+    ? { label: translate(plan.badge.key, plan.badge.params), tone: plan.badge.tone }
+    : intervalLabel
+      ? { label: intervalLabel, tone: "info" as const }
+      : undefined;
+  const planLine = plan.seatPrice
+    ? translate("planLine.seatPrice", {
+        price: formatAmount(plan.seatPrice.amount, plan.seatPrice.currency),
+      })
+    : plan.planLine
+      ? translate(plan.planLine.key, plan.planLine.params)
+      : plan.badge && intervalLabel;
   // The View Personal plan button needs somewhere to go.
   const planActions = plan.planActions.filter(
     (action) => action.kind !== "viewPersonal" || onViewPersonal
@@ -552,18 +526,10 @@ export default function WorkspaceBillingCard({
         <BillingBox>
           <BillingRow>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <PlanName
-                icon={TIER_ICONS[plan.tier]}
-                name={planName}
-                badge={
-                  plan.badge
-                    ? { label: translate(plan.badge.key, plan.badge.params), tone: plan.badge.tone }
-                    : undefined
-                }
-              />
-              {plan.planLine && (
+              <PlanName icon={TIER_ICONS[plan.tier]} name={planName} badge={badge} />
+              {planLine && (
                 <p dir="auto" className="truncate text-xs text-muted-foreground">
-                  {translate(plan.planLine.key, plan.planLine.params)}
+                  {planLine}
                 </p>
               )}
               {plan.freeCta && renderFreeActions()}
@@ -647,51 +613,18 @@ export default function WorkspaceBillingCard({
         </Suspense>
       )}
 
-      <Dialog open={seatPreview !== null} onOpenChange={(open) => !open && setSeatQuote(null)}>
-        <DialogContent className="sm:max-w-90">
-          <DialogHeader>
-            <DialogTitle>{t("settingsPage.unifiedBilling.confirmSeats.title")}</DialogTitle>
-            <DialogDescription>
-              {seatPreview &&
-                t("settingsPage.unifiedBilling.confirmSeats.description", {
-                  workspace: workspace.name,
-                  count: seatPreview.next_quantity,
-                })}
-            </DialogDescription>
-          </DialogHeader>
-          {seatPreview && (
-            <div className="rounded-lg border border-border/70 divide-y divide-border/60">
-              <div className="flex justify-between px-3 py-2 text-xs">
-                <span className="text-muted-foreground">
-                  {t("settingsPage.unifiedBilling.confirmSeats.newCapacity")}
-                </span>
-                <span className="font-medium">{seatPreview.next_quantity}</span>
-              </div>
-              <div className="flex justify-between px-3 py-2 text-xs">
-                <span className="text-muted-foreground">
-                  {t("settingsPage.unifiedBilling.confirmSeats.chargeToday")}
-                </span>
-                <span className="font-medium">
-                  {formatAmount(seatPreview.amount_due, seatPreview.currency)}
-                </span>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setSeatQuote(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => void confirmSeatIncrease()}
-              disabled={busy === "seats"}
-            >
-              {busy === "seats" && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
-              {t("settingsPage.unifiedBilling.confirmSeats.confirm")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {showAddSeats && seatOpening && (
+        <AddSeatsDialog
+          workspace={workspace}
+          planName={planName}
+          identity={seatOpening}
+          summary={summary}
+          onClose={() => setSeatOpening(null)}
+          restoreFocus={() => seatTrigger.current?.focus()}
+          refreshWorkspace={() => refresh({ fresh: true })}
+          refreshSummary={refreshBillingSummary}
+        />
+      )}
     </div>
   );
 }

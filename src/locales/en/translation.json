@@ -2428,18 +2428,7 @@
       }
     },
     "unifiedBilling": {
-      "addSeat": "Add seat",
-      "seatUpdated_one": "Workspace capacity updated to {{count}} seat",
-      "seatUpdated_other": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description_one": "Increase {{workspace}} to {{count}} seat. Stripe will prorate the change.",
-        "description_other": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
-      }
+      "seatUpdateFailed": "Couldn't update workspace seats"
     },
     "account": {
       "billing": {
@@ -3224,6 +3213,28 @@
       "upgradedDescription": "{{workspace}} is now on Enterprise."
     },
     "billing": {
+      "addSeats": {
+        "title": "Add seats",
+        "invoiceDate": "Next invoice · {{date}}",
+        "quantity": "Seats to add",
+        "decrease": "Decrease seats",
+        "increase": "Increase seats",
+        "now": "Now",
+        "after": "After",
+        "inUse": "In use",
+        "pending": "Pending invites",
+        "available": "Available",
+        "total": "Total seats",
+        "price": "Price",
+        "perMonth": "{{price}} / seat / month",
+        "proration": "Added to next invoice",
+        "confirm_one": "Add {{count}} seat",
+        "confirm_other": "Add {{count}} seats",
+        "adding": "Adding…",
+        "failure": "Couldn’t add seats. Nothing was charged.",
+        "success": "Seats added. {{workspace}} now has {{count}} seats.",
+        "previewFailed": "Couldn’t load seat pricing."
+      },
       "free": {
         "inviteTeammates": "Invite teammates",
         "upgradeToBusiness": "Upgrade to Business",
@@ -3298,6 +3309,9 @@
           "body": "Your access is unchanged."
         },
         "actions": {
+          "cancelTrial": "Cancel trial",
+          "cancelBusiness": "Cancel Business",
+          "keepPlan": "Keep {{plan}}",
           "subscribePro": "Subscribe to Pro",
           "manageBilling": "Manage billing",
           "updatePayment": "Update payment",
@@ -3317,6 +3331,7 @@
           "unknown": "Your phone's app store"
         },
         "badges": {
+          "stripeTrial": "Trial",
           "trial_one": "Trial · {{count}} day left",
           "trial_other": "Trial · {{count}} days left",
           "pastDue": "Past due",
@@ -3325,11 +3340,25 @@
           "monthly": "Monthly"
         },
         "price": {
+          "trialStarts": "Billing starts {{date}}",
+          "trialYearlyStarts": "Billed yearly from {{date}}",
           "free": "$0",
           "billedYearly": "Billed yearly",
           "proMonthly": "{{price}} / month"
         },
         "banners": {
+          "endingDated": {
+            "title": "{{plan}} ends {{date}}",
+            "body": "You can keep your plan in the billing portal."
+          },
+          "ending": {
+            "title": "{{plan}} is set to end",
+            "body": "You can keep your plan in the billing portal."
+          },
+          "paymentFailedRetry": {
+            "title": "Payment failed",
+            "body": "Free limits apply until the payment goes through. Next retry {{date}}."
+          },
           "coveredPastDue": {
             "title": "{{workspace}} already covers you",
             "body": "Your {{plan}} payment failed. Cancel {{plan}} to stop the retries."
@@ -3337,6 +3366,14 @@
           "coveredPastDueUnnamed": {
             "title": "A workspace already covers you",
             "body": "Your {{plan}} payment failed. Cancel {{plan}} to stop the retries."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} already covers you",
+            "body": "Your Pro trial will become a paid subscription when it ends."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "A workspace already covers you",
+            "body": "Your Pro trial will become a paid subscription when it ends."
           },
           "coveredPaying": {
             "title": "{{workspace}} already covers you",
@@ -3376,6 +3413,13 @@
           }
         },
         "details": {
+          "nextInvoice": "Next invoice",
+          "firstInvoice": "First invoice",
+          "nextRetry": "Next retry",
+          "amountDue": "Amount due",
+          "ends": "Ends",
+          "ended": "Ended",
+          "billingContact": "Billing contact",
           "periodEnds": "Current period ends",
           "billedThrough": "Billed through",
           "accessUntil": "Access until",
@@ -3396,7 +3440,13 @@
           "cancelled": "Cancelled",
           "paused": "Paused"
         },
+        "interval": {
+          "monthly": "Monthly",
+          "annual": "Yearly"
+        },
         "planLine": {
+          "seatPrice": "{{price}} per seat per month",
+          "customPricing": "Custom pricing",
           "free": "$0",
           "invoicedByOpenWhispr": "Invoiced by OpenWhispr",
           "paidBy": "Paid by {{workspace}}",
@@ -3461,6 +3511,10 @@
           "pendingInvites_other": "{{count}} pending invites"
         },
         "details": {
+          "nextInvoice": "Next invoice",
+          "nextRetry": "Next retry",
+          "amountDue": "Amount due",
+          "billingContact": "Billing contact",
           "firstInvoice": "First invoice",
           "ends": "Ends",
           "ended": "Ended",
