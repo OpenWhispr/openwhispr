@@ -4043,6 +4043,7 @@
       "folderAlreadyExists": "A folder with that name already exists.",
       "folderNameTakenIn": "“{{name}}” is already used in “{{parent}}”. A folder name can only be used once in each space.",
       "folderNameTakenTopLevel": "“{{name}}” is already used at the top level. A folder name can only be used once in each space.",
+      "reservedSubfolderName": "“{{name}}” is the name of a default folder in Private, so a subfolder can't use it.",
       "folderNotFound": "That folder could not be found.",
       "defaultFolderImmutable": "Default folders cannot be changed.",
       "spaceNameRequired": "Enter a space name.",

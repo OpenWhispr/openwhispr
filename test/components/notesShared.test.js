@@ -113,6 +113,17 @@ test("a folder name clash says where the name is used, unless it's right beside 
   );
 });
 
+test("a default folder's name refused for a Private subfolder names what was refused", async () => {
+  const { folderMutationErrorDescription } = await load();
+  const t = (key, options) => (options ? `${key} ${JSON.stringify(options)}` : key);
+  const refusal = { error: "reserved", code: "reserved_folder_name", reservedName: "Meetings" };
+
+  assert.equal(
+    folderMutationErrorDescription(refusal, [], t, { name: "Client A", nested: false }),
+    'notes.mutationErrors.reservedSubfolderName {"name":"Meetings"}'
+  );
+});
+
 test("path labels name the parent and localize default folder segments", async () => {
   const { folderPathLabel } = await load();
   const meetings = folder(1, { name: "Meetings", is_default: 1 });

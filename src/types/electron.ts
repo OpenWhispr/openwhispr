@@ -475,10 +475,11 @@ export interface Leaderboard {
 }
 
 // Where a folder name is already used in the space: a parent's id, or null at the
-// top level.
+// top level. Or a default folder's name, which no subfolder in Private takes.
 export interface FolderNameClash {
   takenName?: string;
   takenInFolderId?: number | null;
+  reservedName?: string;
 }
 
 export interface DeviceNoteFolder {
@@ -2286,7 +2287,7 @@ declare global {
         id: number,
         parentFolderId: number | null,
         writeGuard?: NoteWriteGuard
-      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
+      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash>;
       getFolderNoteCounts: () => Promise<
         Array<{ space_id: number; folder_id: number | null; count: number }>
       >;

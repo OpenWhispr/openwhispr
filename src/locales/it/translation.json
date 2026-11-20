@@ -3484,6 +3484,7 @@
       "folderAlreadyExists": "Esiste già una cartella con questo nome.",
       "folderNameTakenIn": "“{{name}}” è già usato in “{{parent}}”. Il nome di una cartella può essere usato una sola volta in ogni spazio.",
       "folderNameTakenTopLevel": "“{{name}}” è già usato al livello principale. Il nome di una cartella può essere usato una sola volta in ogni spazio.",
+      "reservedSubfolderName": "“{{name}}” è il nome di una cartella predefinita in Privato, quindi una sottocartella non può usarlo.",
       "folderNotFound": "Impossibile trovare questa cartella.",
       "defaultFolderImmutable": "Le cartelle predefinite non possono essere modificate.",
       "spaceNameRequired": "Inserisci un nome per lo spazio.",

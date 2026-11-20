@@ -4043,6 +4043,7 @@
       "folderAlreadyExists": "Ein Ordner mit diesem Namen existiert bereits.",
       "folderNameTakenIn": "„{{name}}“ wird bereits in „{{parent}}“ verwendet. Ein Ordnername kann pro Bereich nur einmal verwendet werden.",
       "folderNameTakenTopLevel": "„{{name}}“ wird bereits auf oberster Ebene verwendet. Ein Ordnername kann pro Bereich nur einmal verwendet werden.",
+      "reservedSubfolderName": "„{{name}}“ ist in Privat der Name eines Standardordners, daher kann ein Unterordner ihn nicht verwenden.",
       "folderNotFound": "Dieser Ordner wurde nicht gefunden.",
       "defaultFolderImmutable": "Standardordner können nicht geändert werden.",
       "spaceNameRequired": "Gib einen Bereichsnamen ein.",

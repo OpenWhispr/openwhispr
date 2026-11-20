@@ -216,6 +216,14 @@ test("POST /v1/folders/create nests under parent_folder_id and refuses a missing
     () => call(ctx.bridge, "POST", "/v1/folders/create", { name: "Q2", parent_folder_id: 999 }),
     { code: "VALIDATION", message: "Parent folder not found" }
   );
+  assert.throws(
+    () =>
+      call(ctx.bridge, "POST", "/v1/folders/create", {
+        name: "Meetings",
+        parent_folder_id: parent.id,
+      }),
+    { code: "VALIDATION", message: /default folder/ }
+  );
 });
 
 test("PATCH refuses a folder in another workspace", (t) => {

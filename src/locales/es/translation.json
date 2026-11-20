@@ -3536,6 +3536,7 @@
       "folderAlreadyExists": "Ya existe una carpeta con ese nombre.",
       "folderNameTakenIn": "“{{name}}” ya se usa en “{{parent}}”. Un nombre de carpeta solo se puede usar una vez en cada espacio.",
       "folderNameTakenTopLevel": "“{{name}}” ya se usa en el nivel superior. Un nombre de carpeta solo se puede usar una vez en cada espacio.",
+      "reservedSubfolderName": "“{{name}}” es el nombre de una carpeta predeterminada en Privado, así que una subcarpeta no puede usarlo.",
       "folderNotFound": "No se pudo encontrar esa carpeta.",
       "defaultFolderImmutable": "Las carpetas predeterminadas no se pueden modificar.",
       "spaceNameRequired": "Introduce un nombre para el espacio.",

@@ -3484,6 +3484,7 @@
       "folderAlreadyExists": "已存在同名資料夾。",
       "folderNameTakenIn": "「{{name}}」已在「{{parent}}」中使用。每個空間中的資料夾名稱只能使用一次。",
       "folderNameTakenTopLevel": "「{{name}}」已在最上層使用。每個空間中的資料夾名稱只能使用一次。",
+      "reservedSubfolderName": "「{{name}}」是私人中預設資料夾的名稱，子資料夾不能使用。",
       "folderNotFound": "找不到該資料夾。",
       "defaultFolderImmutable": "無法變更預設資料夾。",
       "spaceNameRequired": "請輸入空間名稱。",

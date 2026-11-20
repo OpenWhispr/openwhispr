@@ -1219,7 +1219,7 @@ export async function renameFolder(
 export async function setFolderParent(
   id: number,
   parentFolderId: number | null
-): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
+): Promise<{ success: boolean; folder?: FolderItem; error?: string } & FolderNameClash> {
   // No write guard, like the UI's other folder writes (createFolder above).
   const result = await window.electronAPI.setFolderParent(id, parentFolderId);
   if (result.success) {

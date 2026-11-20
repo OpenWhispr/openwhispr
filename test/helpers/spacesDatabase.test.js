@@ -1628,9 +1628,11 @@ test("upsertFolderFromCloud keeps a subfolder's parent when both moved to the sa
   const parent = db.createFolder("Client A", team.id).folder;
   const child = db.createFolder("Q1", team.id, parent.id).folder;
   const stray = db.createFolder("Q2", team.id, parent.id).folder;
+  const videos = db.createFolder("Videos", team.id, parent.id).folder;
   db.markFolderSynced(parent.id, "cloud-client-a");
   db.markFolderSynced(child.id, "cloud-q1");
   db.markFolderSynced(stray.id, "cloud-q2");
+  db.markFolderSynced(videos.id, "cloud-videos");
   const pulled = (folder, name) => ({
     client_folder_id: folder.client_folder_id,
     id: `cloud-${name.toLowerCase().replace(" ", "-")}`,
@@ -1653,6 +1655,11 @@ test("upsertFolderFromCloud keeps a subfolder's parent when both moved to the sa
   const moved = db.upsertFolderFromCloud(pulled(child, "Q1"), privateId);
   assert.equal(moved.space_id, privateId);
   assert.equal(moved.parent_folder_id, parent.id, "it moved with its parent");
+  assert.equal(
+    db.upsertFolderFromCloud(pulled(videos, "Videos"), privateId).parent_folder_id,
+    null,
+    "a default's name stays top-level in Private"
+  );
 });
 
 test("upsertFolderFromCloud never takes over a namesake that is another cloud folder", (t) => {
@@ -3179,6 +3186,178 @@ test("setFolderParent nests and un-nests, refusing defaults and parents", (t) =>
   const unnested = db.setFolderParent(quarter.id, null);
   assert.ok(unnested.success);
   assert.equal(unnested.folder.parent_folder_id, null);
+});
+
+// What a refusal of a default folder's name for a subfolder in Private says.
+function reservedNameOf(result) {
+  return result.success === false && result.code === "reserved_folder_name"
+    ? result.reservedName
+    : null;
+}
+
+test("a subfolder in Private can't take a default folder's name; a teamspace's can", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const client = db.createFolder("Client A").folder;
+  const teamClient = db.createFolder("Client B", team.id).folder;
+
+  for (const name of ["Personal", "Meetings", "Videos"]) {
+    assert.equal(reservedNameOf(db.createFolder(name, null, client.id)), name);
+  }
+  assert.ok(db.createFolder("meetings", null, client.id).success, "names compare exactly");
+  const videos = db.createFolder("Videos").folder;
+  assert.ok(videos, "a top-level folder may take a default's name");
+  const quarter = db.createFolder("Q1", null, client.id).folder;
+  assert.equal(reservedNameOf(db.renameFolder(quarter.id, "Personal")), "Personal");
+  assert.equal(reservedNameOf(db.setFolderParent(videos.id, client.id)), "Videos");
+  const folder = (id) => db.getFolders().find((f) => f.id === id);
+  assert.equal(folder(quarter.id).name, "Q1");
+  assert.equal(folder(videos.id).parent_folder_id, null);
+
+  assert.ok(db.createFolder("Meetings", team.id, teamClient.id).success);
+  const teamQuarter = db.createFolder("Q1", team.id, teamClient.id).folder;
+  assert.ok(db.renameFolder(teamQuarter.id, "Personal").success);
+  const teamVideos = db.createFolder("Videos", team.id).folder;
+  assert.ok(db.setFolderParent(teamVideos.id, teamClient.id).success);
+
+  // A teamspace folder whose subfolder holds a default's name can't bring it into Private.
+  const moving = db.moveFolderToSpace(teamClient.id, privateId);
+  assert.ok(["Meetings", "Personal"].includes(reservedNameOf(moving)));
+  assert.equal(folder(teamClient.id).space_id, team.id, "it stays in its teamspace");
+});
+
+test("a Private's defaults are found at the top level only, so a subfolder never takes their notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "ws-other", defaultWorkspaceId: "ws-default" });
+  const spaceId = db.getPrivateSpaceId("ws-other");
+  const projects = db.createFolder("Projects", spaceId).folder;
+  assert.equal(reservedNameOf(db.createFolder("Meetings", spaceId, projects.id)), "Meetings");
+  const standup = db.saveNote("Standup", "x", "meeting", null, null, null, spaceId).note;
+  const meetings = db.getFolders(spaceId).find((f) => f.id === standup.folder_id);
+  assert.equal(meetings.name, "Meetings");
+  assert.equal(meetings.is_default, 1);
+  assert.equal(meetings.parent_folder_id, null);
+
+  // A subfolder an older build left holding a default's name keeps that name from a
+  // default (names are unique per space across both levels), and takes none of its notes.
+  const legacyId = db.getPrivateSpaceId("ws-legacy");
+  const archive = db.createFolder("Archive", legacyId).folder;
+  const leftover = Number(
+    db.db
+      .prepare(
+        `INSERT INTO folders (name, sort_order, space_id, parent_folder_id, client_folder_id, account_id, sync_status)
+         VALUES ('Meetings', 9, ?, ?, ?, 'test-account', 'synced')`
+      )
+      .run(legacyId, archive.id, randomUUID()).lastInsertRowid
+  );
+  const retro = db.saveNote("Retro", "x", "meeting", null, null, null, legacyId).note;
+  assert.equal(retro.folder_id, null, "filed at the root, not in Archive / Meetings");
+  assert.equal(db.getMeetingsFolder(legacyId), null);
+  assert.equal(db.copyNoteToSpace(standup.id, legacyId).folder_id, null);
+  assert.ok(db.getFolders(legacyId).some((f) => f.id === leftover && f.parent_folder_id));
+});
+
+test("imports go to a top-level Imported folder, never a subfolder of that name", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const archive = db.createFolder("Archive").folder;
+  const nested = db.createFolder("Imported", null, archive.id).folder;
+  const imported = db.importNotes([
+    {
+      clientNoteId: "granola-nested",
+      title: "Imported",
+      content: "",
+      sourceFile: null,
+      transcript: null,
+      participants: null,
+      createdAt: null,
+    },
+  ]);
+  assert.equal(imported.imported, 1);
+  assert.notEqual(imported.folderId, nested.id);
+  assert.equal(db.getNote(imported.noteIds[0]).folder_id, imported.folderId);
+});
+
+test("a pulled Private folder with a default's name stays top-level; a teamspace's nests", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const projects = db.createFolder("Projects").folder;
+  const meetings = db.createFolder("Meetings").folder;
+  const quarter = db.createFolder("Q1", null, projects.id).folder;
+  const roadmap = db.createFolder("Roadmap", team.id).folder;
+  const teamMeetings = db.createFolder("Meetings", team.id).folder;
+  for (const [folder, cloudId] of [
+    [projects, "c-projects"],
+    [meetings, "c-meetings"],
+    [quarter, "c-quarter"],
+    [roadmap, "c-roadmap"],
+    [teamMeetings, "c-team-meetings"],
+  ]) {
+    db.markFolderSynced(folder.id, cloudId);
+  }
+  // Another device renamed Q1 to a default's name.
+  db.upsertFolderFromCloud({
+    client_folder_id: quarter.client_folder_id,
+    id: "c-quarter",
+    name: "Personal",
+    sort_order: 1,
+    parent_folder_id: "c-projects",
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-02T00:00:00.000Z",
+  });
+
+  const link = (folder, cloudId, parentCloudId) => ({
+    cloudId,
+    parentCloudId,
+    snapshot: db.getFolderByClientId(folder.client_folder_id),
+  });
+  const changed = db.applyCloudFolderParents([
+    link(meetings, "c-meetings", "c-projects"),
+    link(quarter, "c-quarter", "c-projects"),
+    link(teamMeetings, "c-team-meetings", "c-roadmap"),
+  ]);
+  const parentOf = (id) => db.getFolderByCloudId(id).parent_folder_id;
+  assert.equal(parentOf("c-meetings"), null);
+  assert.equal(parentOf("c-quarter"), null, "a subfolder renamed to a default's name moves up");
+  assert.equal(parentOf("c-team-meetings"), roadmap.id);
+  assert.deepEqual(
+    changed.map((f) => f.id).sort((a, b) => a - b),
+    [quarter.id, teamMeetings.id].sort((a, b) => a - b)
+  );
+});
+
+test("a pulled Private subfolder with a default's name becomes the unsent local default", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const spaceId = db.getPrivateSpaceId();
+  const localDefault = db.getMeetingsFolder(spaceId);
+  const cloudRow = (fields) => ({
+    client_folder_id: randomUUID(),
+    sort_order: 1,
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-02T00:00:00.000Z",
+    ...fields,
+  });
+  db.upsertFolderFromCloud(cloudRow({ id: "c-projects", name: "Projects" }), spaceId);
+  const pulled = db.upsertFolderFromCloud(
+    cloudRow({ id: "c-meetings", name: "Meetings", parent_folder_id: "c-projects" }),
+    spaceId
+  );
+  assert.equal(pulled.id, localDefault.id, "the cloud folder holds the name, so the default is it");
+  assert.equal(pulled.name, "Meetings");
+  assert.equal(pulled.cloud_id, "c-meetings");
+  assert.equal(pulled.parent_folder_id, null);
+  assert.deepEqual(
+    db
+      .getFolders(spaceId)
+      .filter((f) => f.name.startsWith("Meetings"))
+      .map((f) => f.id),
+    [localDefault.id]
+  );
 });
 
 test("deleteFolder takes its subfolders and their notes along, each with its own journal", (t) => {

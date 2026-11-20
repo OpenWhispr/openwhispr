@@ -308,6 +308,15 @@ function teamRowSyncedRefusal() {
   };
 }
 
+function reservedSubfolderNameRefusal(name) {
+  return {
+    success: false,
+    code: "reserved_folder_name",
+    error: `Subfolders in Private can't use a default folder's name (${DEFAULT_FOLDER_NAMES.join(", ")})`,
+    reservedName: name,
+  };
+}
+
 // The default folders a private space gets the first time a note needs one.
 const PRIVATE_DEFAULT_FOLDERS = [
   { name: "Personal", sortOrder: 0 },
@@ -1033,6 +1042,17 @@ class DatabaseManager {
       takenName: existing.name,
       takenInFolderId: existing.parent_folder_id,
     };
+  }
+
+  // A Private's defaults are found by name at the top level, so no subfolder there
+  // takes a default's name: it would keep the default from being made, here and on
+  // the server, where names are unique per space across both levels too. A
+  // teamspace has no defaults. Names compare as the uniqueness check compares them.
+  _isReservedSubfolderName(spaceId, name) {
+    return (
+      DEFAULT_FOLDER_NAMES.includes(name) &&
+      this.db.prepare("SELECT kind FROM spaces WHERE id = ?").get(spaceId)?.kind === "private"
+    );
   }
 
   // Subfolders go one level deep: the parent is a live top-level folder in the
@@ -5580,8 +5600,7 @@ class DatabaseManager {
         if (!space) throw new Error("Space not found in the active account scope");
         const defaultFolderName = noteType === "meeting" ? "Meetings" : "Personal";
         if (space.kind === "private") {
-          this.ensureDefaultFolders(spaceId);
-          folderId = this._privateFolderNamed(spaceId, space.account_id, defaultFolderName);
+          folderId = this._privateDefaultFolderId(spaceId, space.account_id, defaultFolderName);
         } else {
           const folderScope = this._accountScopeCondition("folders");
           const defaultFolder = this.db
@@ -5637,10 +5656,12 @@ class DatabaseManager {
       let folderId = null;
       try {
         const folderScope = this._accountScopeCondition("folders");
+        // A subfolder of that name is the user's own and takes no imports.
         const existing = this.db
           .prepare(
             `SELECT id FROM folders
-             WHERE name = ? AND space_id = ? AND deleted_at IS NULL AND ${folderScope.sql}`
+             WHERE name = ? AND space_id = ? AND parent_folder_id IS NULL AND deleted_at IS NULL
+               AND ${folderScope.sql}`
           )
           .get(folderName, spaceId, ...folderScope.params);
         folderId = existing?.id ?? this.createFolder(folderName, spaceId)?.folder?.id ?? null;
@@ -6161,6 +6182,9 @@ class DatabaseManager {
       if (parentFolderId != null) {
         const parentError = this._folderParentError(null, parentFolderId, spaceId);
         if (parentError) return { success: false, error: parentError };
+        if (this._isReservedSubfolderName(spaceId, trimmed)) {
+          return reservedSubfolderNameRefusal(trimmed);
+        }
       }
       const accountScope = this._accountScopeCondition("folders");
       const existing = this.db
@@ -6602,6 +6626,12 @@ class DatabaseManager {
       if (folder.is_default) return { success: false, error: "Cannot rename default folders" };
       const trimmed = (name || "").trim();
       if (!trimmed) return { success: false, error: "Folder name is required" };
+      if (
+        folder.parent_folder_id != null &&
+        this._isReservedSubfolderName(folder.space_id, trimmed)
+      ) {
+        return reservedSubfolderNameRefusal(trimmed);
+      }
       const folderScope = this._accountScopeCondition("folders");
       const existing = this.db
         .prepare(
@@ -6640,6 +6670,10 @@ class DatabaseManager {
       const children = this.getSubfolders(id);
       const folderIds = [id, ...children.map((child) => child.id)];
       const names = [folder.name, ...children.map((child) => child.name)];
+      const reservedChild = children.find((child) =>
+        this._isReservedSubfolderName(spaceId, child.name)
+      );
+      if (reservedChild) return reservedSubfolderNameRefusal(reservedChild.name);
       const placeholders = (values) => values.map(() => "?").join(", ");
       const inFolders = `IN (${placeholders(folderIds)})`;
       const existing = this.db
@@ -6726,6 +6760,9 @@ class DatabaseManager {
       if (parentFolderId != null) {
         const parentError = this._folderParentError(folder, parentFolderId, folder.space_id);
         if (parentError) return { success: false, error: parentError };
+        if (this._isReservedSubfolderName(folder.space_id, folder.name)) {
+          return reservedSubfolderNameRefusal(folder.name);
+        }
       }
       if (folder.parent_folder_id === parentFolderId) return { success: true, folder };
       this.db
@@ -6941,8 +6978,15 @@ class DatabaseManager {
 
   // The live folder of that name in a private space, its default first: a
   // folder the user made with a default's name still takes that default's
-  // notes rather than leaving them at the root.
-  _privateFolderNamed(spaceId, accountId, name, foreignCloudIds = []) {
+  // notes rather than leaving them at the root. A name is held at either level;
+  // topLevelOnly finds only a folder that can stand for a default.
+  _privateFolderNamed(
+    spaceId,
+    accountId,
+    name,
+    foreignCloudIds = [],
+    { topLevelOnly = false } = {}
+  ) {
     return (
       this.db
         .prepare(
@@ -6951,15 +6995,25 @@ class DatabaseManager {
              AND (account_id IS NULL OR account_id IS ?)
              AND NOT (account_id IS NULL AND cloud_id IS NOT NULL
                AND cloud_id IN (SELECT value FROM json_each(?)))
+             ${topLevelOnly ? "AND parent_folder_id IS NULL" : ""}
            ORDER BY account_id IS ? DESC, is_default DESC, id LIMIT 1`
         )
         .get(spaceId, name, accountId, JSON.stringify(foreignCloudIds), accountId)?.id ?? null
     );
   }
 
+  // Where a note with no folder goes in a private space: the default of that
+  // name, made first if it's missing. A subfolder never stands for a default.
+  _privateDefaultFolderId(spaceId, accountId, name) {
+    this.ensureDefaultFolders(spaceId);
+    return this._privateFolderNamed(spaceId, accountId, name, [], { topLevelOnly: true });
+  }
+
   // Gives a private space its own Personal and Meetings folders, the first
   // time a note needs one. A folder already holding the name (a default the
-  // split moved or copied there, or one the user made) is kept as it is.
+  // split moved or copied there, or one the user made) is kept as it is. A
+  // subfolder holding it (one an older build made) leaves the default unmade:
+  // the name can't be used twice in a space.
   // Empty unlinked defaults need no upload; a contained note queues them
   // (queueUnlinkedPrivateFolders).
   ensureDefaultFolders(spaceId, foreignCloudIds = []) {
@@ -7238,8 +7292,7 @@ class DatabaseManager {
       const copyId = this.db.transaction(() => {
         let targetFolderId = folderId;
         if (targetFolderId == null) {
-          this.ensureDefaultFolders(space.id);
-          targetFolderId = this._privateFolderNamed(
+          targetFolderId = this._privateDefaultFolderId(
             space.id,
             space.account_id,
             source.note_type === "meeting" ? "Meetings" : "Personal"
@@ -10163,8 +10216,7 @@ class DatabaseManager {
       const space = this.getSpace(targetId);
       if (!space) return null;
       if (space.kind === "private") {
-        this.ensureDefaultFolders(targetId);
-        const id = this._privateFolderNamed(targetId, space.account_id, "Meetings");
+        const id = this._privateDefaultFolderId(targetId, space.account_id, "Meetings");
         return id == null ? null : { id };
       }
       const accountScope = this._accountScopeCondition("folders");
@@ -12867,9 +12919,13 @@ class DatabaseManager {
           )
           .get(spaceId, cloudFolder.name, accountId);
         if (!existing) throw err;
+        // A Private folder with a default's name is top-level here, wherever the
+        // server keeps it, so it joins the local namesake (an unsent default)
+        // rather than leave that default a create the server refuses for good.
         if (
           (existing.cloud_id && existing.cloud_id !== cloudFolder.id) ||
-          this._folderAtOtherLevel(existing, cloudFolder)
+          (!this._isReservedSubfolderName(spaceId, cloudFolder.name) &&
+            this._folderAtOtherLevel(existing, cloudFolder))
         ) {
           // The namesake is another cloud folder (one backed up before
           // placement beside a placed one, or a rename that hasn't synced), or
@@ -12949,9 +13005,16 @@ class DatabaseManager {
 
   // The local folder a pulled folder's server parent is, when it can hold
   // folderId in spaceId: a live top-level folder there other than folderId,
-  // which itself is no default and holds no subfolders.
+  // which itself is no default, has no default's name in Private, and holds no
+  // subfolders.
   _cloudParentInSpace(cloudFolder, folderId, spaceId) {
-    if (!cloudFolder.parent_folder_id || cloudFolder.is_default) return null;
+    if (
+      !cloudFolder.parent_folder_id ||
+      cloudFolder.is_default ||
+      this._isReservedSubfolderName(spaceId, cloudFolder.name)
+    ) {
+      return null;
+    }
     const accountScope = this._accountScopeCondition("folders");
     const parent = this.db
       .prepare(
@@ -12970,8 +13033,10 @@ class DatabaseManager {
 
   // Pulled folders arrive in updated_at order, so a subfolder can come before
   // its parent; links are applied once the page is stored. A parent unknown
-  // here or in another space leaves the folder top-level, and a final pass
-  // undoes any chain deeper than one level whatever order the links came in.
+  // here or in another space leaves the folder top-level, as does a default's
+  // name in Private (the cloud row keeps its parent until an edit here sends
+  // the folder again), and a final pass undoes any chain deeper than one level
+  // whatever order the links came in.
   // Pending rows keep their unpushed local parent, unless the link adopts it into
   // an empty one (the upgrade backfill); the final pass un-nests a chain's pending
   // folder (the server refuses its nesting anyway), else the subfolder.
@@ -13007,7 +13072,8 @@ class DatabaseManager {
             parent &&
             parent.id !== folder.id &&
             parent.space_id === folder.space_id &&
-            !folder.is_default;
+            !folder.is_default &&
+            !this._isReservedSubfolderName(folder.space_id, folder.name);
           const parentId = nestable ? parent.id : null;
           if (parentId === folder.parent_folder_id) continue;
           setParent.run(parentId, folder.id);

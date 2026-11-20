@@ -3490,6 +3490,7 @@
       "folderAlreadyExists": "Já existe uma pasta com esse nome.",
       "folderNameTakenIn": "“{{name}}” já é usado em “{{parent}}”. Um nome de pasta só pode ser usado uma vez em cada espaço.",
       "folderNameTakenTopLevel": "“{{name}}” já é usado no nível superior. Um nome de pasta só pode ser usado uma vez em cada espaço.",
+      "reservedSubfolderName": "“{{name}}” é o nome de uma pasta padrão em Privado, então uma subpasta não pode usá-lo.",
       "folderNotFound": "Não foi possível encontrar essa pasta.",
       "defaultFolderImmutable": "As pastas padrão não podem ser alteradas.",
       "spaceNameRequired": "Insira um nome para o espaço.",

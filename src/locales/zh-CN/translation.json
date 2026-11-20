@@ -3484,6 +3484,7 @@
       "folderAlreadyExists": "已存在同名文件夹。",
       "folderNameTakenIn": "“{{name}}”已在“{{parent}}”中使用。每个空间中的文件夹名称只能使用一次。",
       "folderNameTakenTopLevel": "“{{name}}”已在顶层使用。每个空间中的文件夹名称只能使用一次。",
+      "reservedSubfolderName": "“{{name}}”是私密中默认文件夹的名称，子文件夹不能使用。",
       "folderNotFound": "找不到该文件夹。",
       "defaultFolderImmutable": "无法更改默认文件夹。",
       "spaceNameRequired": "请输入空间名称。",

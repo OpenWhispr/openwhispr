@@ -3412,6 +3412,7 @@
       "folderAlreadyExists": "同じ名前のフォルダが既に存在します。",
       "folderNameTakenIn": "「{{name}}」は「{{parent}}」で既に使われています。フォルダ名は各スペースで一度しか使えません。",
       "folderNameTakenTopLevel": "「{{name}}」は最上位で既に使われています。フォルダ名は各スペースで一度しか使えません。",
+      "reservedSubfolderName": "「{{name}}」はプライベートのデフォルトフォルダの名前のため、サブフォルダには使えません。",
       "folderNotFound": "そのフォルダが見つかりませんでした。",
       "defaultFolderImmutable": "デフォルトフォルダは変更できません。",
       "spaceNameRequired": "スペース名を入力してください。",

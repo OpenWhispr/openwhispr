@@ -106,7 +106,10 @@ export function folderMutationErrorDescription(
   t: (key: string, options?: Record<string, string>) => string,
   attempt?: { name: string; nested: boolean }
 ): string {
-  const { takenName, takenInFolderId } = result;
+  const { takenName, takenInFolderId, reservedName } = result;
+  if (reservedName) {
+    return t("notes.mutationErrors.reservedSubfolderName", { name: reservedName });
+  }
   if (takenName && takenInFolderId != null) {
     const parent = folders.find((folder) => folder.id === takenInFolderId);
     if (parent) {

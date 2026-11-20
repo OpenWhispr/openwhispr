@@ -4049,6 +4049,7 @@
       "folderAlreadyExists": "Un dossier portant ce nom existe déjà.",
       "folderNameTakenIn": "« {{name}} » est déjà utilisé dans « {{parent}} ». Un nom de dossier ne peut être utilisé qu'une seule fois par espace.",
       "folderNameTakenTopLevel": "« {{name}} » est déjà utilisé au niveau supérieur. Un nom de dossier ne peut être utilisé qu'une seule fois par espace.",
+      "reservedSubfolderName": "« {{name}} » est le nom d'un dossier par défaut dans Privé : un sous-dossier ne peut pas l'utiliser.",
       "folderNotFound": "Ce dossier est introuvable.",
       "defaultFolderImmutable": "Les dossiers par défaut ne peuvent pas être modifiés.",
       "spaceNameRequired": "Saisissez un nom d’espace.",
