@@ -2,6 +2,7 @@ import React from 'react';
 import { act, render } from '@testing-library/react-native';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import { SuperwallEntitlementBridge } from '../SuperwallEntitlementBridge';
+import { useSuperwallIdentityStore } from '@/store/useSuperwallIdentityStore';
 
 const mockIdentify = jest.fn().mockResolvedValue(undefined);
 const mockSignOut = jest.fn().mockResolvedValue(undefined);
@@ -91,6 +92,7 @@ describe('SuperwallEntitlementBridge identity sync', () => {
     mockSuperwallUser = null;
     mockAuthState = { user: null, isGuest: false, isInitialized: true };
     mockUsage = null;
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
   });
 
   it('keeps the persisted identity while a signed-in user waits for the billing id', async () => {
@@ -150,5 +152,54 @@ describe('SuperwallEntitlementBridge identity sync', () => {
 
     expect(mockSetSubscriptionStatus).toHaveBeenCalledTimes(1);
     expect(mockUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('publishes the identity only after identify resolves', async () => {
+    mockAuthState = { user: { id: 'user-1' }, isGuest: false, isInitialized: true };
+    mockUsage = usageWithBillingId;
+    let finishIdentify: () => void = () => {};
+    mockIdentify.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishIdentify = resolve)),
+    );
+
+    await renderBridge();
+    expect(useSuperwallIdentityStore.getState().identifiedBillingUserId).toBeNull();
+
+    await act(async () => finishIdentify());
+    expect(useSuperwallIdentityStore.getState().identifiedBillingUserId).toBe(billingUserId);
+  });
+
+  it('publishes an identity Superwall already holds for the billing user', async () => {
+    mockAuthState = { user: { id: 'user-1' }, isGuest: false, isInitialized: true };
+    mockSuperwallUser = { appUserId: billingUserId };
+    mockUsage = usageWithBillingId;
+
+    await renderBridge();
+
+    expect(useSuperwallIdentityStore.getState().identifiedBillingUserId).toBe(billingUserId);
+  });
+
+  it('clears the published identity on sign-out', async () => {
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: billingUserId });
+    mockAuthState = { user: null, isGuest: false, isInitialized: true };
+    mockSuperwallUser = { appUserId: billingUserId };
+
+    await renderBridge();
+
+    expect(useSuperwallIdentityStore.getState().identifiedBillingUserId).toBeNull();
+  });
+
+  it('clears a previous account identity when the billing id differs', async () => {
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: 'previous-account' });
+    mockAuthState = { user: { id: 'user-1' }, isGuest: false, isInitialized: true };
+    let finishIdentify: () => void = () => {};
+    mockIdentify.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishIdentify = resolve)),
+    );
+    mockUsage = usageWithBillingId;
+
+    await renderBridge();
+    expect(useSuperwallIdentityStore.getState().identifiedBillingUserId).toBeNull();
+    await act(async () => finishIdentify());
   });
 });

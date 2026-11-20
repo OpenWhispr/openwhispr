@@ -12,6 +12,10 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { useUsageStore } from '@/store/useUsageStore';
 import {
+  isSuperwallIdentityReady,
+  waitForSuperwallIdentity,
+} from '@/store/useSuperwallIdentityStore';
+import {
   isTransactionalSuperwallPlacement,
   resolveSuperwallPlacementName,
   SUPERWALL_PLACEMENTS,
@@ -661,6 +665,47 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
         showBillingStarting();
         activePlacementRef.current = null;
         return false;
+      }
+
+      // Any paywall can sell, and an App Store purchase made before
+      // identify(billingUserId) reaches the server with no app user id, so it
+      // could never be attributed. Hold every presentation for the identity.
+      // Only a pending identity yields: awaiting an already-ready one would
+      // defer every ordinary registration by a microtask.
+      if (user && !isSuperwallIdentityReady()) {
+        const identified = await waitForSuperwallIdentity(undefined, signal);
+        const sessionChanged = useAuthStore.getState().user?.id !== user.id;
+        if (signal?.aborted || sessionChanged) {
+          if (activePlacementRef.current === placement) activePlacementRef.current = null;
+          return false;
+        }
+        if (pendingGateRef.current) {
+          // Another registration took the gate while this one waited.
+          if (passesThroughWhenBlocked) {
+            feature?.();
+            runAccessGrantedWithoutPurchaseCallback(onAccessGrantedWithoutPurchase, placement);
+            return true;
+          }
+          return false;
+        }
+        if (!identified) {
+          debugLog('BLOCKED: Superwall identity not ready', { placement });
+          Sentry.addBreadcrumb({
+            category: 'superwall',
+            message: 'placement blocked while the billing identity is pending',
+            level: 'warning',
+            data: { placement },
+          });
+          activePlacementRef.current = null;
+          if (passesThroughWhenBlocked || canOpenExistingBilling(placement)) {
+            feature?.();
+            runAccessGrantedWithoutPurchaseCallback(onAccessGrantedWithoutPurchase, placement);
+            return true;
+          }
+          showBillingUnavailable();
+          return false;
+        }
+        activePlacementRef.current = placement;
       }
 
       return new Promise<boolean>((resolve) => {
