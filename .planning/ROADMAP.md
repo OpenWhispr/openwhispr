@@ -6,12 +6,12 @@
 ## Phases
 
 - [x] **Phase 1: Fork CI & sync runbook** — CI builds are cloud-disabled, upstream-only jobs off, one green Windows build+test job
-- [ ] **Phase 2: Titanium Whisper rebrand** — name, identity, icons, links, userData migration
-- [ ] **Phase 3: Titanium sign-in** — browser login → deep link → exchange → offline license in Electron main
-- [ ] **Phase 4: stt-api on Titanium auth** — license-key bearer on stt-api, stable domain, app sends key, language guard
-- [ ] **Phase 5: Self-hosted transcription parity** — WS streaming client, diarization/timestamps, cleanup via stt-api
-- [ ] **Phase 6: Hosted services** — web search endpoint, Slack/Linear OAuth relay, calendar OAuth clients
-- [ ] **Phase 7: Connectors on Titanium accounts** — connectors keyed to Titanium account id; capability text; dropped features hidden
+- [x] **Phase 2: Titanium Whisper rebrand** — name, identity, icons, links, userData migration
+- [ ] **Phase 3: Titanium sign-in** — browser login → deep link → exchange → offline license in Electron main (code merged, PR #11; UI round trip and AUTH-01 PR #18 pending)
+- [ ] **Phase 4: stt-api on Titanium auth** — license-key bearer on stt-api, stable domain, app sends key, language guard (code merged; stable domain PR #19 in review; end-to-end dictation pending)
+- [ ] **Phase 5: Self-hosted transcription parity** — WS streaming client, diarization/timestamps, cleanup via stt-api (planned, 2 plans)
+- [ ] **Phase 6: Hosted services** — web search endpoint, Slack/Linear OAuth relay, calendar OAuth clients (planned, 4 plans)
+- [ ] **Phase 7: Connectors on Titanium accounts** — connectors keyed to Titanium account id; capability text; dropped features hidden (planned, 3 plans)
 
 ## Phase Details
 
@@ -33,6 +33,7 @@
 **Goal:** The installed app is Titanium Whisper everywhere a user looks, and existing OpenWhispr users keep their data.
 **Depends on:** Phase 1 (CI catches regressions)
 **Requirements:** BRAND-01..BRAND-07
+**Status:** Complete (PR #11, PR #12). Visible product name is "EdgeAssistant" (PR #12); appId `com.titaniumlabs.titaniumwhisper`, scheme `titaniumwhisper://` and the userData folder "Titanium Whisper" are kept.
 **Success criteria:**
 
 1. Built installer and window titles read "Titanium Whisper"; appId `com.titaniumlabs.titaniumwhisper`
@@ -76,6 +77,12 @@
 2. An uploaded file gets timestamps and speaker labels
 3. Cleanup runs via stt-api by default when signed in
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md - stt-api: WS streaming, diarization/timestamps and cleanup wire contracts, served in prod (wave 1)
+- [ ] 05-02-PLAN.md - desktop: stt-api streaming client for meetings and live preview, upload timestamps/speakers, cleanup via stt-api by default (wave 2)
+
 ### Phase 6: Hosted services
 
 **Goal:** Web search, Slack/Linear OAuth and calendars work on our infrastructure.
@@ -87,10 +94,18 @@
 2. Slack/Linear connect completes through our relay
 3. Google/Microsoft calendar connect works in a fork build
 
+**Plans:** 4 plans
+
+Plans:
+- [ ] 06-01-PLAN.md - stt-api: Slack/Linear OAuth relay routes + license-gated Tavily web search (wave 1)
+- [ ] 06-02-PLAN.md - desktop: calendar local result page, SERVICES_URL relay base, fork web search, build-time client ids (wave 1)
+- [ ] 06-03-PLAN.md - portal: Entra, Google, Slack, Linear OAuth clients into Pass (wave 1)
+- [ ] 06-04-PLAN.md - prove in production: deploy, signed fork build, live OAuth round trips, packaged web search (wave 2)
+
 ### Phase 7: Connectors on Titanium accounts
 
 **Goal:** Connectors and capability messaging work on Titanium accounts; dropped features leave no dead ends.
-**Depends on:** Phase 6; titanium-licensing v3.5 Phase 32 (IDP-32) merged
+**Depends on:** Phase 6; titanium-licensing v3.5 Phase 32 (IDP-32) merged (PR #304, 2026-10-14)
 **Requirements:** FEAT-04, FEAT-05, FEAT-06
 **Success criteria:**
 
@@ -98,14 +113,21 @@
 2. No UI or assistant text tells users to sign in to OpenWhispr
 3. No entry point to a dropped feature remains
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 07-01-PLAN.md - main: Titanium accountId + app_slug in session, fork connector policy (license = paid plan), account-change reset, keygenProductId (wave 1)
+- [ ] 07-02-PLAN.md - renderer: Titanium connector eligibility, capability text to Titanium account, 9-locale copy, sign-in copy guard test, Gmail row (wave 2)
+- [ ] 07-03-PLAN.md - dropped features: cloudFeatures registry, gate every entry point, mount-site guard test (wave 1)
+
 ## Progress
 
 | Phase | Status | Plans | Progress |
 | ----- | ------ | ----- | -------- |
 | 1     | ✓      | 1/1   | 100%     |
-| 2     | ◆      | 1/1   | review   |
-| 3     | ◆      | 1/1   | review   |
-| 4     | ◆      | 1/2   | review   |
-| 5     | ○      | 0/0   | 0%       |
-| 6     | ○      | 0/0   | 0%       |
-| 7     | ○      | 0/0   | 0%       |
+| 2     | ✓      | 1/1   | 100%     |
+| 3     | ◆      | 1/1   | code merged (PR #11); AUTH-01 in review (PR #18), UI round trip pending |
+| 4     | ◆      | 1/2   | code merged (PR #11, stt-api PR #26); STT-03 in review (PR #19), end-to-end dictation pending |
+| 5     | ○      | 0/2   | 0%       |
+| 6     | ○      | 0/4   | 0%       |
+| 7     | ○      | 0/3   | 0%       |

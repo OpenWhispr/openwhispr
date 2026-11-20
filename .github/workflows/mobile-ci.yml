@@ -19,12 +19,13 @@ env:
 
 jobs:
   changes:
+    if: github.repository == 'OpenWhispr/openwhispr'
     uses: ./.github/workflows/ci-changes.yml
 
   lockfile:
     name: Mobile lockfile
     needs: changes
-    if: needs.changes.outputs.mobile == 'true'
+    if: github.repository == 'OpenWhispr/openwhispr' && needs.changes.outputs.mobile == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -44,7 +45,7 @@ jobs:
   checks:
     name: Mobile ${{ matrix.check }}
     needs: [changes, lockfile]
-    if: needs.changes.outputs.mobile == 'true'
+    if: github.repository == 'OpenWhispr/openwhispr' && needs.changes.outputs.mobile == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -101,7 +102,7 @@ jobs:
   native-transport:
     name: Mobile native Swift tests
     needs: changes
-    if: needs.changes.outputs.mobile == 'true'
+    if: github.repository == 'OpenWhispr/openwhispr' && needs.changes.outputs.mobile == 'true'
     # Compiles native Swift sources and their tests, which need Xcode's toolchain (the keyboard's UIKit tests build for Mac Catalyst).
     runs-on: macos-latest
     timeout-minutes: 15
@@ -125,7 +126,7 @@ jobs:
   mobile-status:
     name: Mobile CI
     needs: [changes, lockfile, checks, native-transport]
-    if: always()
+    if: github.repository == 'OpenWhispr/openwhispr' && always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

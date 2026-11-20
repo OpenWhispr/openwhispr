@@ -49,6 +49,7 @@ const UPSTREAM_ONLY = {
   "llm-canary.yml": ["canary"],
   "stt-canary.yml": ["canary"],
   "build-and-notarize.yml": ["build-linux", "build-macos"],
+  "mobile-ci.yml": ["changes", "lockfile", "checks", "native-transport", "mobile-status"],
 };
 
 for (const [file, jobs] of Object.entries(UPSTREAM_ONLY)) {
