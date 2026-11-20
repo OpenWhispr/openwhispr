@@ -38,6 +38,7 @@ import {
 } from '@/lib/appsflyer';
 import { initSyncTriggers } from '@/sync/syncEngine';
 import { initProductEvents } from '@/lib/productEvents';
+import { initDictationMilestone } from '@/lib/dictationMilestone';
 import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
@@ -48,6 +49,7 @@ import { eraseProviderCredentialsFromPreviousInstall } from '@/services/provider
 
 initSentry();
 initAppsFlyer();
+initDictationMilestone();
 runMigrations();
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
