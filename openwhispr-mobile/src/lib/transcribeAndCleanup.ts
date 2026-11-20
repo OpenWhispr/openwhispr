@@ -234,6 +234,7 @@ async function runSerialTranscribeAndCleanup(
       cleanupWarning = message;
     },
     tone: cleanupToneForRequest(request),
+    appCategory: request.keyboardAppCategory,
     includeSnippetTriggers: isDictationContext(request.requestContext),
     context: cleanupContextForRequest(request.requestContext),
   });
@@ -299,6 +300,7 @@ async function runTranscribeAndCleanup(
         },
         inferenceRoute: request.cleanupRoute,
         tone: cleanupToneForRequest(request),
+        appCategory: request.keyboardAppCategory,
         includeSnippetTriggers: isDictationContext(request.requestContext),
         context: cleanupContextForRequest(request.requestContext),
       });

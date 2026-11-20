@@ -8,6 +8,8 @@ import type {
 export type ProcessingMode = 'cloud' | 'private' | 'providers';
 export type TranscriptionProvider = 'local' | 'cloud' | 'byok';
 export type KeyboardTone = 'default' | 'formal' | 'casual' | 'very_casual' | 'excited';
+// The kind of app a dictation goes into, as openwhispr-api's /api/reason takes it (`appCategory`).
+export type ToneAppCategory = 'personal' | 'work' | 'email' | 'other';
 export type AndroidStyleContext = 'personal' | 'work' | 'email' | 'notes';
 export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 
@@ -134,6 +136,9 @@ export interface ReasoningRequest {
   // tone; the API appends a matching instruction in cleanup mode unless a
   // custom prompt is set.
   tone?: KeyboardTone;
+  // The kind of app the text goes into, sent with a tone: the API (and the provider prompt built
+  // here) adds a line saying it is a chat message or an email. Never set without a tone.
+  appCategory?: ToneAppCategory;
   // User's custom cleanup prompt, sent as a TEMPLATE: the API substitutes
   // {{agentName}} and still appends language and dictionary, but no tone.
   // Ignored when systemPrompt is set.
@@ -227,6 +232,8 @@ export interface TranscriptionRequest extends CleanupInferenceSnapshot {
   // Per-job snapshot of the keyboard tone taken at record-start. Threaded to
   // cleanup; never re-read live. Only set for keyboard dictation.
   keyboardTone?: KeyboardTone;
+  // The kind of app taken with keyboardTone at record-start; cleanup sends it with the tone.
+  keyboardAppCategory?: ToneAppCategory;
   timeoutSeconds?: number;
 }
 
