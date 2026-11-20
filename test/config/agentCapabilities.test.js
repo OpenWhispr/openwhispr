@@ -231,3 +231,44 @@ test("models without tools point to the existing documentation site", async () =
   assert.match(text, /https:\/\/docs\.openwhispr\.com/);
   assert.doesNotMatch(text, /Support → OpenWhispr Help/);
 });
+
+test("fork builds word sign-in and plan messages for the Titanium account and license", async () => {
+  const { describeUnavailable } = await load();
+  const titanium = { brand: "EdgeAssistant" };
+  const text = describeUnavailable([
+    { name: "Web search", reason: "signedOut", where: "Settings → Titanium account", titanium },
+    {
+      name: "Integrations",
+      reason: "planRequired",
+      where: "Settings → Titanium account",
+      titanium,
+    },
+    {
+      name: "Integrations",
+      reason: "reauthRequired",
+      where: "Settings → Titanium account",
+      titanium,
+    },
+  ]);
+  assert.match(text, /needs the user to sign in with their Titanium account in Settings/);
+  assert.match(text, /needs an active EdgeAssistant license in Settings/);
+  assert.match(text, /sign in to their Titanium account again in Settings/);
+  assert.doesNotMatch(text, /OpenWhispr/);
+});
+
+test("a fork connector chain reports sign-in, then re-sign-in, then license", async () => {
+  const { resolveUnavailableCapabilities } = await load();
+  const reasons = (connectors) =>
+    resolveUnavailableCapabilities({
+      ...input({ isSignedIn: false }),
+      titanium: { brand: "EdgeAssistant" },
+      connectors: { ...input().connectors, ...connectors },
+    })
+      .filter((item) => item.delivers)
+      .map((item) => item.reason);
+  assert.deepEqual(reasons({ signedIn: false }), ["signedOut"]);
+  assert.deepEqual(reasons({ signedIn: true, reauthRequired: true, hasPlan: false }), [
+    "reauthRequired",
+  ]);
+  assert.deepEqual(reasons({ signedIn: true, hasPlan: false }), ["planRequired"]);
+});

@@ -17,6 +17,11 @@ const { resolveFailedGpuBackends } = require("./whisper");
 const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const forkConfig = require("../config/forkConfig");
+const { getTitaniumSession } = require("./titanium/titaniumIpc");
+const {
+  createTitaniumConnectorBindings,
+  watchTitaniumAccount,
+} = require("./connectors/titaniumConnectorPolicy");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
@@ -6584,28 +6589,44 @@ class IPCHandlers {
             : "not-applicable",
       }),
     });
+    // Cloud builds judge connectors by the OpenWhispr org policy and the account bound
+    // to the credential in use (the same binding get-active-account-scope serves, not
+    // the separately synced database scope, which lags a sign-in or account switch).
+    // A fork build has neither: the Titanium session's account id and offline license
+    // decide (build-mode selection, not a fallback).
+    const connectorBindings = forkConfig.CLOUD_ENABLED
+      ? {
+          getPolicyState: createConnectorPolicyResolver({
+            getAuthHeader: createConnectorAuthLookup({
+              hasBearerToken: () => Boolean(tokenStore.get()),
+              windowFor: (event) => BrowserWindow.fromWebContents(event.sender),
+              authHeaderFor: getAuthHeaderFromWindow,
+            }),
+            getPolicy: (options) => workspacePolicyManager.getPolicy(options),
+            peekPolicy: (options) => workspacePolicyManager.peekPolicy(options),
+            getAuthGeneration: () => tokenStore.getState().generation,
+          }),
+          getAccountScope: () =>
+            accountScopeBinding.resolveActiveAccountScope({
+              ...tokenStore.getState(),
+              binding: accountScopeBinding.read(),
+            }),
+        }
+      : createTitaniumConnectorBindings(() => getTitaniumSession());
+    if (!forkConfig.CLOUD_ENABLED && getTitaniumSession()) {
+      // A Titanium sign-out or account switch ends the old account's connects and
+      // changes whose logins show, as the better-auth sign-out path does.
+      watchTitaniumAccount(getTitaniumSession(), () => {
+        this.connectorManager?.accountChanged();
+        void this.connectorManager?.notifyStatusChanged();
+      });
+    }
     if (this.connectorManager) {
       registerConnectorIpc({
         ipcMain,
         manager: this.connectorManager,
-        getPolicyState: createConnectorPolicyResolver({
-          getAuthHeader: createConnectorAuthLookup({
-            hasBearerToken: () => Boolean(tokenStore.get()),
-            windowFor: (event) => BrowserWindow.fromWebContents(event.sender),
-            authHeaderFor: getAuthHeaderFromWindow,
-          }),
-          getPolicy: (options) => workspacePolicyManager.getPolicy(options),
-          peekPolicy: (options) => workspacePolicyManager.peekPolicy(options),
-          getAuthGeneration: () => tokenStore.getState().generation,
-        }),
-        // The account bound to the credential in use, the same binding
-        // get-active-account-scope serves (not the separately synced
-        // database scope, which lags a sign-in or account switch).
-        getAccountScope: () =>
-          accountScopeBinding.resolveActiveAccountScope({
-            ...tokenStore.getState(),
-            binding: accountScopeBinding.read(),
-          }),
+        getPolicyState: connectorBindings.getPolicyState,
+        getAccountScope: connectorBindings.getAccountScope,
         findContacts: (query) =>
           searchContacts(this.databaseManager.getContactLookupSources(), query),
         noteAttendees: createNoteAttendeesLookup({

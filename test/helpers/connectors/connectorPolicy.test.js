@@ -141,3 +141,14 @@ test("only a resolved managed policy reports connectors as turned off by the org
   };
   assert.equal(isConnectorsBlockedByOrg(outdated), false);
 });
+
+test("fork refusals map to their own codes and unknown states still fail closed", async () => {
+  const { policyRefusal } = await loadState();
+  assert.equal(policyRefusal("plan_required"), "plan_required");
+  assert.equal(policyRefusal("reauth_required"), "reauth_required");
+  assert.equal(policyRefusal("allowed"), null);
+  assert.equal(policyRefusal("blocked"), "policy_blocked");
+  assert.equal(policyRefusal("signed_out"), "signed_out");
+  assert.equal(policyRefusal("unavailable"), "policy_unavailable");
+  assert.equal(policyRefusal("SOME_FUTURE_STATE"), "policy_unavailable");
+});

@@ -38,6 +38,17 @@ async function mountNudge(t, { settings = {}, prompted = true } = {}) {
   const dismissed = [];
   globalThis.__cloudNudgeToasts = { toasts, dismissed };
   t.after(() => delete globalThis.__cloudNudgeToasts);
+  // The nudge points at the hosted cloud, so this runs as an upstream (cloud-enabled)
+  // build; a fork build never nudges (test/utils/signInCloudNudge.test.js).
+  const restoreEnv = [
+    ["VITE_OPENWHISPR_API_URL", "https://api.cloud-nudge.test"],
+    ["VITE_AUTH_URL", "https://auth.cloud-nudge.test"],
+  ].map(([key, value]) => {
+    const previous = process.env[key];
+    process.env[key] = value;
+    return () => (previous === undefined ? delete process.env[key] : (process.env[key] = previous));
+  });
+  t.after(() => restoreEnv.forEach((restore) => restore()));
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-cloud-nudge-",
     noExternal: ["react-i18next"],

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { CLOUD_ENABLED } from "../config/forkRuntime";
 import { ToastActionButton } from "../components/ui/Toast";
 import { useToast } from "../components/ui/useToast";
 import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
@@ -29,6 +30,7 @@ export function useSignInCloudNudge(
     const promptedAt = localStorage.getItem(SIGN_IN_PROMPTED_AT_KEY);
     if (promptedAt === null) return;
     const decision = decideSignInCloudNudge({
+      cloudEnabled: CLOUD_ENABLED,
       promptedAt: Number(promptedAt),
       now: Date.now(),
       isSignedIn,

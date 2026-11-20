@@ -22,6 +22,10 @@ function policyRefusal(policyState) {
   if (policyState === "allowed") return null;
   if (policyState === "blocked") return "policy_blocked";
   if (policyState === "signed_out") return "signed_out";
+  // Fork builds (titaniumConnectorPolicy.js): signed in from a session with no
+  // account id, and signed in without an active license.
+  if (policyState === "reauth_required") return "reauth_required";
+  if (policyState === "plan_required") return "plan_required";
   return "policy_unavailable";
 }
 

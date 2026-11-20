@@ -1,4 +1,5 @@
 import { CLOUD_ENABLED } from "../config/forkRuntime";
+import { cloudFeatureVisible } from "../config/cloudFeatures";
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -183,7 +184,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     joinable,
     dismiss: dismissJoinable,
     markRequested,
-  } = useJoinableWorkspaces(user?.id ?? null, isSignedIn && !invitationToken);
+  } = useJoinableWorkspaces(
+    user?.id ?? null,
+    cloudFeatureVisible("teamJoin", CLOUD_ENABLED) && isSignedIn && !invitationToken
+  );
   const usage = useUsage();
   const upsell = CLOUD_ENABLED
     ? decideUpsell({
@@ -208,6 +212,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setShowSettings(true);
   }, []);
   useSignInCloudNudge(isSignedIn, openTranscriptionSettings);
+  const openReferrals = cloudFeatureVisible("referral", CLOUD_ENABLED)
+    ? () => setShowReferrals(true)
+    : undefined;
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
   const { createNote } = useCreateNote();
@@ -333,6 +340,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   useEffect(() => {
     const dispose = window.electronAPI?.onLimitReached?.(
       (data: { wordsUsed: number; limit: number }) => {
+        if (!cloudFeatureVisible("upgradePrompt", CLOUD_ENABLED)) return;
         if (!hasShownUpgradePrompt.current) {
           hasShownUpgradePrompt.current = true;
           setLimitData(data);
@@ -950,12 +958,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         onOk={() => {}}
       />
 
-      <UpgradePrompt
-        open={showUpgradePrompt}
-        onOpenChange={setShowUpgradePrompt}
-        wordsUsed={limitData?.wordsUsed}
-        limit={limitData?.limit}
-      />
+      {cloudFeatureVisible("upgradePrompt", CLOUD_ENABLED) && (
+        <UpgradePrompt
+          open={showUpgradePrompt}
+          onOpenChange={setShowUpgradePrompt}
+          wordsUsed={limitData?.wordsUsed}
+          limit={limitData?.limit}
+        />
+      )}
 
       <PostMigrationOnboarding
         open={showPostMigration}
@@ -978,28 +988,32 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </Suspense>
       )}
 
-      {showReferrals && (
+      {cloudFeatureVisible("referral", CLOUD_ENABLED) && showReferrals && (
         <Suspense fallback={null}>
           <ReferralModal open={showReferrals} onOpenChange={setShowReferrals} />
         </Suspense>
       )}
 
-      <AcceptInvitationModal
-        token={invitationToken}
-        onClose={() => setInvitationToken(null)}
-        onAccepted={(entry) => {
-          setInvitationNotesEntry(entry);
-          setActiveView("personal-notes");
-        }}
-      />
+      {cloudFeatureVisible("teamJoin", CLOUD_ENABLED) && (
+        <AcceptInvitationModal
+          token={invitationToken}
+          onClose={() => setInvitationToken(null)}
+          onAccepted={(entry) => {
+            setInvitationNotesEntry(entry);
+            setActiveView("personal-notes");
+          }}
+        />
+      )}
 
-      <JoinYourTeamModal
-        joinable={joinable}
-        domain={user?.email?.split("@")[1] ?? null}
-        onDismiss={dismissJoinable}
-        onRequested={markRequested}
-        onJoined={() => setActiveView("personal-notes")}
-      />
+      {cloudFeatureVisible("teamJoin", CLOUD_ENABLED) && (
+        <JoinYourTeamModal
+          joinable={joinable}
+          domain={user?.email?.split("@")[1] ?? null}
+          onDismiss={dismissJoinable}
+          onRequested={markRequested}
+          onJoined={() => setActiveView("personal-notes")}
+        />
+      )}
 
       {/* Always mounted so the palette chunk is warm and Radix can play its exit animation. */}
       <Suspense fallback={null}>
@@ -1048,7 +1062,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               setSettingsSection(undefined);
               setShowSettings(true);
             }}
-            onOpenReferrals={() => setShowReferrals(true)}
+            onOpenReferrals={openReferrals}
             onUpgrade={() => {
               setSettingsSection("plansBilling");
               setShowSettings(true);
@@ -1097,7 +1111,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       setSettingsSection(section);
                       setShowSettings(true);
                     }}
-                    onOpenReferrals={() => setShowReferrals(true)}
+                    onOpenReferrals={openReferrals}
                     onSignOut={requestSignOut}
                   />
                 </div>
@@ -1240,7 +1254,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <Suspense fallback={null}>
                   <InsightsView
                     onSignIn={() => {
-                      setSettingsSection("account");
+                      setSettingsSection(CLOUD_ENABLED ? "account" : "titaniumAccount");
                       setShowSettings(true);
                     }}
                   />
@@ -1290,7 +1304,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   <IntegrationsView
                     isPaid={usage?.hasPaidAccessOptimistic ?? false}
                     onUpgrade={() => {
-                      setSettingsSection("plansBilling");
+                      // A fork build has no Plans & Billing: sign in and the license live in the Titanium account.
+                      setSettingsSection(CLOUD_ENABLED ? "plansBilling" : "titaniumAccount");
                       setShowSettings(true);
                     }}
                     section={integrationsSection}
