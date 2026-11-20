@@ -1158,7 +1158,7 @@ const invokeUpload = (payload, bytes = Buffer.from([1, 2, 3, 4])) => {
   );
 };
 
-test("Sarvam uploads and history retries use normal transcription even with stale output settings", async (t) => {
+test("Sarvam uploads and history retries use the selected output mode for each operation", async (t) => {
   if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath())
     return t.skip("ffmpeg unavailable");
   const { pcm16ToWav } = require("../../src/utils/audioUtils");
@@ -1201,9 +1201,45 @@ test("Sarvam uploads and history retries use normal transcription even with stal
   const fields = ({ init: { body } }) =>
     ["model", "mode", "language_code", "keyterms"].map((field) => body.get(field));
   assert.deepEqual(fetches.map(fields), [
-    ["saaras:v4", "transcribe", "hi-IN", '["OpenWhispr"]'],
-    ["saaras:v3", "transcribe", null, null],
+    ["saaras:v4", "codemix", "hi-IN", '["OpenWhispr"]'],
+    ["saaras:v3", "verbatim", null, null],
   ]);
+});
+
+test("Sarvam file uploads preserve phrase times across audio cuts and silent pieces", async (t) => {
+  if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath())
+    return t.skip("ffmpeg unavailable");
+  const { pcm16ToWav } = require("../../src/utils/audioUtils");
+  const wav = pcm16ToWav(Buffer.alloc(61 * 32000));
+  const original = fetchResponse;
+  t.after(() => {
+    fetchResponse = original;
+  });
+  const replies = [
+    {
+      transcript: "Good morning.",
+      timestamps: {
+        words: ["Good", "morning."],
+        start_time_seconds: [1, 2],
+        end_time_seconds: [1.5, 3],
+      },
+    },
+    { transcript: "" },
+    {
+      transcript: "Welcome.",
+      timestamps: { words: ["Welcome."], start_time_seconds: [0.5], end_time_seconds: [2] },
+    },
+  ];
+  fetchResponse = () => Response.json(replies.shift());
+  fetches.length = 0;
+  const result = await invokeUpload({ provider: "sarvam", timestamps: true }, wav);
+  assert.equal(result.text, "Good morning. Welcome.");
+  assert.deepEqual(result.segments, [
+    { text: "Good", start: 1, end: 1.5 },
+    { text: "morning.", start: 2, end: 3 },
+    { text: "Welcome.", start: 58.5, end: 60 },
+  ]);
+  assert.ok(fetches.every(({ init }) => init.body.get("with_timestamps") === "true"));
 });
 
 test("a silent Sarvam upload returns empty text as other providers do; a retry still reports no speech", async (t) => {

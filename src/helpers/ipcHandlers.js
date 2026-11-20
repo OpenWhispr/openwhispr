@@ -225,6 +225,7 @@ const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { SarvamRealtimeStreaming } = require("./sarvamRealtimeStreaming");
+const { captureStartFromDelivery, createMeetingCaptureClock } = require("./meetingCaptureClock");
 const { transcribeWithSarvam } = require("./sarvamTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const { transcribeAssemblyAiRecording } = require("./assemblyAiDictation");
@@ -2175,7 +2176,12 @@ class IPCHandlers {
           !args[0]?.public &&
           args[0]?.method?.toUpperCase() === "POST" &&
           args[0]?.path === "/api/conversations/create";
-        const streamProperty = channel.startsWith("dictation-realtime-")
+        // Sarvam warms only the renderer's microphone. An idle socket may still
+        // belong to the previous provider and retain its own policy registration.
+        const ownsDictationStream =
+          channel.startsWith("dictation-realtime-") &&
+          !(channel === "dictation-realtime-warmup" && args[0]?.provider === "sarvam");
+        const streamProperty = ownsDictationStream
           ? "_dictationStreaming"
           : /^(assemblyai|deepgram|gemini|corti)-streaming-(start|warmup)$/.test(channel)
             ? {
@@ -6780,17 +6786,20 @@ class IPCHandlers {
 
     handleProviderTranscription(
       "proxy-sarvam-transcription",
-      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }, signal) => {
-        return transcribeWithSarvam({
-          audioBuffer,
-          model,
-          language,
-          keyterms,
-          signal,
-          apiKey: this.environmentManager.getSarvamKey(),
-          fetchImpl: proxyFetch,
-        });
-      })
+      serializeIpcError(
+        async (event, { audioBuffer, model, language, keyterms, sarvamMode }, signal) => {
+          return transcribeWithSarvam({
+            sarvamMode,
+            audioBuffer,
+            model,
+            language,
+            keyterms,
+            signal,
+            apiKey: this.environmentManager.getSarvamKey(),
+            fetchImpl: proxyFetch,
+          });
+        }
+      )
     );
 
     handleProviderTranscription(
@@ -9756,6 +9765,7 @@ class IPCHandlers {
           result = { text, source: "corti", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "sarvam") {
           const { text } = await transcribeWithSarvam({
+            sarvamMode: settings.sarvamMode,
             audioBuffer: buffer,
             model: route.model,
             language: route.language,
@@ -10235,11 +10245,16 @@ class IPCHandlers {
       schedulePendingMicFinalFlush();
     };
 
+    const meetingClockByPcm = new WeakMap();
     const captureMeetingDiarizationState = async () => {
       const systemPcmPath = meetingDiarizationPath;
       const systemStartedAt = meetingDiarizationStartedAt;
       const micPcmPath = meetingMicDiarizationPath;
       const micStartedAt = meetingMicDiarizationStartedAt;
+      const captureClocks = {
+        mic: meetingClockByPcm.get(meetingMicDiarizationStream),
+        system: meetingClockByPcm.get(meetingDiarizationStream),
+      };
       const systemAudioHeard = meetingSystemAudioHeard;
       const diarizationSegments = meetingDiarizationSegments;
       const retractedSegments = meetingRetractedMicSegments;
@@ -10275,6 +10290,7 @@ class IPCHandlers {
         retractedSegments,
         diarizationStartedAt: startedAt,
         diarizedSource,
+        captureClock: captureClocks[diarizedSource],
       };
     };
 
@@ -10563,6 +10579,7 @@ class IPCHandlers {
             environment: options.environment,
             tenant: options.tenant,
             keyterms: options.keyterms,
+            sarvamMode: options.sarvamMode,
             sampleRate: MEETING_STREAM_SAMPLE_RATE,
             ...(await enterpriseMeetingConnectOptions(tokenEvent, options)),
           };
@@ -10895,6 +10912,7 @@ class IPCHandlers {
         environment: options.environment,
         tenant: options.tenant,
         keyterms: options.keyterms,
+        sarvamMode: options.sarvamMode,
         sampleRate: MEETING_STREAM_SAMPLE_RATE,
         ...(await enterpriseMeetingConnectOptions(event, options)),
       };
@@ -11193,6 +11211,10 @@ class IPCHandlers {
       if (meetingReconnectPromise && !streaming.isConnected) {
         meetingReconnectReplaySources.add(source);
       }
+      if (capturedAt === null && meetingConnectionOptions?.provider === "sarvam-realtime") {
+        // AEC output arrives directly here. Preserve its sample time on replay.
+        capturedAt = captureStartFromDelivery(outbound, Date.now());
+      }
       queueMeetingReconnectAudio(source, outbound, capturedAt);
       const sent = sendMeetingStreamingAudio(streaming, outbound, capturedAt);
       if (synthetic) return;
@@ -11225,10 +11247,21 @@ class IPCHandlers {
         return false;
       }
 
+      // The helper emits cleaned samples asynchronously and can reframe input
+      // blocks. Map its output sample cursor to the original mic capture.
+      const captureClock =
+        meetingConnectionOptions.provider === "sarvam-realtime"
+          ? createMeetingCaptureClock()
+          : null;
+      if (captureClock) meetingClockByPcm.set(this.meetingAecManager, captureClock);
+      let outputBytes = 0;
       const started = await this.meetingAecManager
         .start({
           onMicChunk: (chunk) => {
-            dispatchMeetingAudioBuffer(chunk, "mic");
+            const at = captureClock?.firstSampleAt;
+            const capturedAt = at == null ? null : at + captureClock.elapsedMs(outputBytes / 48);
+            outputBytes += chunk.length;
+            dispatchMeetingAudioBuffer(chunk, "mic", false, capturedAt);
           },
           onError: (error) => {
             debugLogger.warn("Meeting AEC helper disabled", { error: error.message }, "meeting");
@@ -11302,16 +11335,21 @@ class IPCHandlers {
       }
     };
 
-    const processMeetingMicWithAec = (buffer) => {
+    const processMeetingMicWithAec = (buffer, capturedAt) => {
       if (!meetingAecEnabled) {
         return false;
       }
 
       const sent = this.meetingAecManager?.processMicBuffer(buffer);
       if (sent) {
+        const sarvam = meetingConnectionOptions?.provider === "sarvam-realtime";
+        if (sarvam) {
+          meetingClockByPcm.get(this.meetingAecManager)?.append(buffer, capturedAt);
+        }
         meetingPendingMicChunks.push({
           buffer,
           queuedAt: Date.now(),
+          capturedAt: sarvam ? capturedAt : null,
           analysisOnly: true,
         });
         flushPendingMeetingMicChunks();
@@ -11368,13 +11406,16 @@ class IPCHandlers {
               ? meetingOneOnOneAttendee.displayName
               : identification.displayName;
 
+            const clock = meetingClockByPcm.get(meetingDiarizationStream);
+            const startMs = identification.startTime * 1000;
+            const endMs = identification.endTime * 1000;
             const startTime = Math.max(
               meetingLiveSpeakerStartedAt,
-              meetingLiveSpeakerStartedAt + identification.startTime * 1000
+              meetingLiveSpeakerStartedAt + (clock?.elapsedMs(startMs) ?? startMs)
             );
             const endTime = Math.max(
               startTime,
-              meetingLiveSpeakerStartedAt + identification.endTime * 1000
+              meetingLiveSpeakerStartedAt + (clock?.elapsedMs(endMs, true) ?? endMs)
             );
             const enrichedIdentification = {
               ...identification,
@@ -12157,6 +12198,7 @@ class IPCHandlers {
           if (provider === "sarvam") {
             if (isCloud) throw new Error("Sarvam dictation requires a personal API key");
             await streaming.connect({
+              sarvamMode: options.sarvamMode,
               apiKey: this.environmentManager.getSarvamKey(),
               model: options.model,
               language: options.language,
@@ -12503,6 +12545,8 @@ class IPCHandlers {
       )
         return;
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      const sarvam = meetingConnectionOptions?.provider === "sarvam-realtime";
+      if (sarvam) capturedAt ??= captureStartFromDelivery(outboundBuffer, Date.now());
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
       if (!synthetic) {
@@ -12542,6 +12586,7 @@ class IPCHandlers {
           meetingDiarizationStream = fs.createWriteStream(meetingDiarizationPath);
           meetingDiarizationStartedAt = chunkCapturedAt;
         }
+        if (sarvam) trackMeetingPcm(meetingDiarizationStream, outboundBuffer, capturedAt);
         meetingDiarizationStream.write(outboundBuffer);
 
         if (!synthetic) {
@@ -12577,10 +12622,11 @@ class IPCHandlers {
             // burst; its capture time, not its arrival, starts the timeline.
             meetingMicDiarizationStartedAt = capturedAt ?? receivedAt;
           }
+          if (sarvam) trackMeetingPcm(meetingMicDiarizationStream, outboundBuffer, capturedAt);
           meetingMicDiarizationStream.write(outboundBuffer);
         }
 
-        if (processMeetingMicWithAec(outboundBuffer)) {
+        if (processMeetingMicWithAec(outboundBuffer, capturedAt)) {
           return;
         }
 
@@ -12592,6 +12638,12 @@ class IPCHandlers {
         flushPendingMeetingMicChunks();
         return;
       }
+    };
+
+    const trackMeetingPcm = (stream, buffer, capturedAt) => {
+      if (!meetingClockByPcm.has(stream))
+        meetingClockByPcm.set(stream, createMeetingCaptureClock());
+      meetingClockByPcm.get(stream).append(buffer, capturedAt);
     };
 
     // The Windows helper reports capture_silent when its own stream is silent
@@ -12770,13 +12822,18 @@ class IPCHandlers {
         if (route === "takeover") completeMeetingSystemAudioHandover();
       }
       const now = Date.now();
+      // Renderer worklet timestamps mark completed blocks. The native macOS
+      // timeline, in contrast, already supplies first-sample times directly.
+      const blockEnd = Number.isFinite(capturedAt)
+        ? Math.min(Math.max(capturedAt, now - MEETING_STARTUP_AUDIO_MAX_AGE_MS), now)
+        : null;
       sendMeetingAudio(
         buffer,
         source,
         false,
-        Number.isFinite(capturedAt)
-          ? Math.min(Math.max(capturedAt, now - MEETING_STARTUP_AUDIO_MAX_AGE_MS), now)
-          : null
+        blockEnd !== null && meetingConnectionOptions?.provider === "sarvam-realtime"
+          ? captureStartFromDelivery(buffer, blockEnd)
+          : blockEnd
       );
     });
 
@@ -12889,6 +12946,7 @@ class IPCHandlers {
           retractedSegments,
           diarizationStartedAt,
           diarizedSource,
+          captureClock,
         } = await captureMeetingDiarizationState();
         // An empty accepted transcript is intentional when every final was filtered.
         // Provider accumulators still contain those rejected rows.
@@ -12911,7 +12969,8 @@ class IPCHandlers {
           noteIdSnapshot,
           diarizedSource,
           speakerIndexBaseSnapshot,
-          retractedSegments
+          retractedSegments,
+          ...(captureClock ? [captureClock] : [])
         );
 
         return { success: true, transcript, diarizationSessionId };
@@ -13019,7 +13078,7 @@ class IPCHandlers {
 
     const streamingStartFailure = (err) => {
       const result = toPolicyFailure(err);
-      if (err.messageKey) result.messageKey = err.messageKey;
+      if (err.surface) Object.assign(result, ipcErrorFields(err));
       if (err.networkCode) result.networkCode = err.networkCode;
       return result;
     };
@@ -14111,6 +14170,7 @@ class IPCHandlers {
           diarize,
           timestamps,
           keyterms,
+          sarvamMode,
           provider,
           language,
           environment,
@@ -14246,7 +14306,8 @@ class IPCHandlers {
               providerErrorContext = byokErrorContext;
               // Other providers answer a silent file with empty text, which the upload view
               // and the chat mic each report in their own way.
-              const { text } = await transcribeWithSarvam({
+              const transcription = await transcribeWithSarvam({
+                sarvamMode,
                 filePath: sourcePath,
                 model: route.model,
                 language: route.language,
@@ -14255,13 +14316,14 @@ class IPCHandlers {
                 signal,
                 fetchImpl: proxyFetch,
                 maxRetryWaitMs: 60_000,
+                timestamps,
                 onProgress: (payload) =>
                   event.sender.send("upload-transcription-progress", payload),
               }).catch((error) => {
                 if (error.code === "NO_SPEECH_DETECTED") return { text: "" };
                 throw error;
               });
-              return { success: true, text };
+              return { success: true, ...transcription };
             }
 
             const upload = await prepareProviderUpload(sourcePath, { signal });
@@ -16863,7 +16925,8 @@ class IPCHandlers {
     noteId = null,
     diarizedSource = "system",
     speakerIndexBase = 0,
-    retractedSegments = []
+    retractedSegments = [],
+    captureClock = null
   ) {
     const startMs =
       (Number.isFinite(audioStartedAt) && audioStartedAt) ||
@@ -17016,7 +17079,13 @@ class IPCHandlers {
 
         const enrichedSegments = this.diarizationManager.mergeWithTranscript(
           kept,
-          diarizationSegments,
+          captureClock
+            ? diarizationSegments.map((segment) => ({
+                ...segment,
+                start: captureClock.elapsedMs(segment.start * 1000) / 1000,
+                end: captureClock.elapsedMs(segment.end * 1000, true) / 1000,
+              }))
+            : diarizationSegments,
           { diarizedSource, speakerIndexBase }
         );
 

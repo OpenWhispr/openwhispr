@@ -28,6 +28,7 @@ for (const model of ["saaras:v4", "saaras:v3"]) {
       apiKey: "dummy",
       model,
       language: "hi",
+      sarvamMode: model === "saaras:v3" ? "translate" : undefined,
       keyterms: ["OpenWhispr"],
       fetchImpl: async (url, { headers, body, redirect }) => {
         calls++;
@@ -36,7 +37,7 @@ for (const model of ["saaras:v4", "saaras:v3"]) {
         assert.equal(headers["api-subscription-key"], "dummy");
         assert.equal(body.get("language_code"), "hi-IN");
         assert.equal(body.get("model"), model);
-        assert.equal(body.get("mode"), "transcribe");
+        assert.equal(body.get("mode"), model === "saaras:v3" ? "translate" : "codemix");
         assert.equal(body.get("keyterms"), model === "saaras:v4" ? '["OpenWhispr"]' : null);
         assert.equal(body.get("file").type, "audio/wav");
         return ok("नमस्ते");
@@ -80,6 +81,49 @@ mediaTest("a silent recording uses the normal no-speech outcome", async () => {
     }),
     { code: "NO_SPEECH_DETECTED" }
   );
+});
+
+mediaTest("missing or partial phrase timing preserves every piece as plain text", async () => {
+  const complete = { words: ["First."], start_time_seconds: [0], end_time_seconds: [1] };
+  for (const missing of [
+    null,
+    { ...complete, words: ["Next"] },
+    { ...complete, end_time_seconds: [] },
+  ]) {
+    const responses = [
+      { transcript: "First.", timestamps: complete },
+      { transcript: "Next bit.", timestamps: missing },
+    ];
+    const result = await transcribeWithSarvam({
+      audioBuffer: audio(31),
+      apiKey: "dummy",
+      timestamps: true,
+      fetchImpl: async () => Response.json(responses.shift()),
+    });
+    assert.deepEqual(result, { text: "First. Next bit." });
+  }
+});
+
+mediaTest("untimed requests ignore unsolicited timing fields", async () => {
+  for (const timestamps of [false, undefined]) {
+    const result = await transcribeWithSarvam({
+      audioBuffer: audio(1),
+      apiKey: "dummy",
+      timestamps,
+      fetchImpl: async (_, { body }) => {
+        assert.equal(body.get("with_timestamps"), null);
+        return Response.json({
+          transcript: "Hi.",
+          timestamps: {
+            words: ["Hi."],
+            start_time_seconds: [0],
+            end_time_seconds: [1],
+          },
+        });
+      },
+    });
+    assert.deepEqual(result, { text: "Hi." });
+  }
 });
 
 mediaTest("a failed or cancelled later segment never returns a partial success", async () => {

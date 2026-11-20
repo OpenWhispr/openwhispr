@@ -5,6 +5,7 @@ import {
 } from "../helpers/selfHostedSttHeaders.js";
 import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
+import { resolveSarvamMode, type SarvamMode } from "../utils/sarvam.js";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
@@ -1452,6 +1453,9 @@ export interface SettingsState
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
+  sarvamMode: SarvamMode;
+  setSarvamMode: (mode: string) => void;
+
   // Corti (BYOK)
   cortiEnvironment: string;
   cortiTenant: string;
@@ -1845,6 +1849,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
+  sarvamMode: resolveSarvamMode(readString("sarvamMode", "")),
   cortiEnvironment: readString("cortiEnvironment", "us"),
   cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
@@ -2596,6 +2601,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setGeminiApiKey: createSecretSetter("geminiApiKey", "gemini", "gemini"),
   setGroqApiKey: createSecretSetter("groqApiKey", "groq", "groq"),
   setXaiApiKey: createSecretSetter("xaiApiKey", "xai"),
+  setSarvamMode: (mode) => createStringSetter("sarvamMode")(resolveSarvamMode(mode)),
   setSarvamApiKey: createSecretSetter("sarvamApiKey", "sarvam"),
   setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
   setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
@@ -4668,6 +4674,8 @@ export async function initializeSettings(): Promise<void> {
       } else {
         value = parsed;
       }
+    } else if (key === "sarvamMode") {
+      value = resolveSarvamMode(newValue);
     } else if (key === "emailDraftTarget") {
       value = normalizeEmailDraftTarget(newValue);
     } else if (key === "toneStyles") {

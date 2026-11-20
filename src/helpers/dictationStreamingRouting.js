@@ -5,7 +5,7 @@
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
 import { getEffectiveDictionaryWords } from "../utils/snippets.ts";
-import { sarvamKeyterms } from "../utils/sarvam.js";
+import { resolveSarvamMode, sarvamKeyterms } from "../utils/sarvam.js";
 import { isOrukeetStreaming, isSelfHostedTranscription } from "./selfHostedTranscription.js";
 import { isStreamingOnlySelection, resolveByokModel } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
@@ -262,6 +262,7 @@ export function buildStreamingSessionOptions({
   if (providerName === "sarvam") {
     // A model left over from another provider resolves as the batch fallback's does.
     options.model = resolveByokModel("sarvam", options.model);
+    options.sarvamMode = resolveSarvamMode(settings.sarvamMode);
     options.keyterms =
       options.model === "saaras:v4"
         ? sarvamKeyterms(getEffectiveDictionaryWords(settings))

@@ -38,6 +38,7 @@ const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
     model: options.model,
     language: options.language,
     mode: options.mode,
+    sarvamMode: options.sarvamMode,
     environment: options.environment,
     tenant: options.tenant,
     keyterms: options.keyterms,

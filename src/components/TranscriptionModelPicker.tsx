@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useState, useEffect, useId, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { SARVAM_MODES } from "../utils/sarvam.js";
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { isAwaitingCatalog } from "../models/modelLifecycle.js";
 import { getRegistryData } from "../models/registryData.js";
@@ -537,6 +538,9 @@ export default function TranscriptionModelPicker({
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const sarvamApiKey = useSettingsStore((s) => s.sarvamApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const sarvamModeId = useId();
+  const sarvamMode = useSettingsStore((s) => s.sarvamMode);
+  const setSarvamMode = useSettingsStore((s) => s.setSarvamMode);
   const setSarvamApiKey = useSettingsStore((s) => s.setSarvamApiKey);
   const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
   const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
@@ -1785,6 +1789,26 @@ export default function TranscriptionModelPicker({
                       </div>
                     );
                   })}
+
+                  {displayedCloudProvider === "sarvam" && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-foreground" htmlFor={sarvamModeId}>
+                        {t("transcription.sarvam.outputMode")}
+                      </label>
+                      <Select value={sarvamMode} onValueChange={setSarvamMode}>
+                        <SelectTrigger className="h-8 text-sm" id={sarvamModeId}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SARVAM_MODES.map((mode) => (
+                            <SelectItem key={mode} value={mode}>
+                              {t(`transcription.sarvam.${mode}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-foreground">

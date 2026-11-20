@@ -8,7 +8,7 @@ import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
 import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
-import { getKeytermDictionaryWords } from "../utils/snippets";
+import { getEffectiveDictionaryWords, getKeytermDictionaryWords } from "../utils/snippets";
 import {
   resolveInitialSpeakerCountOverride,
   resolveParticipantSpeakerCountSync,
@@ -224,9 +224,13 @@ const getMeetingTranscriptionOptions = () => {
       selectedModel: resolved.cloudTranscriptionModel,
       byokProviders: getMeetingStreamingTranscriptionProviders(),
       managedProviders: useStreamingProvidersStore.getState().providers,
+      sarvamMode: state.sarvamMode,
       cortiEnvironment: state.cortiEnvironment,
       cortiTenant: state.cortiTenant,
-      keyterms: getKeytermDictionaryWords(state).filter(Boolean),
+      keyterms:
+        resolved.cloudTranscriptionProvider === "sarvam"
+          ? getEffectiveDictionaryWords(state)
+          : getKeytermDictionaryWords(state).filter(Boolean),
     }),
     // A model revoked mid-start stays blank for main to refuse, not the default chosen above.
     ...(state.policyBlockedLocalScopes?.includes("meeting") ? { localModel: "" } : {}),
@@ -493,17 +497,17 @@ let segmentsRefValue: TranscriptSegment[] = [];
 // matched against the seeded rows. Keyed by diarization session at stop.
 let sessionSeedLength = 0;
 let sessionRecorderName: string | undefined;
-const seedLengthByDiarizationSession = new Map<
-  string,
-  { noteId: number | null; seedLength: number; fallbackTranscript: string; recorderName?: string }
->();
-// The stopping session's seed, until its stop call returns and keys it above.
-let stoppingSeed: {
+let recordingSequence = 0;
+let lastStoppingSequence = 0;
+interface DiarizationSeed {
   noteId: number | null;
+  sequence: number;
   seedLength: number;
+  savedRowCount: number;
   fallbackTranscript: string;
   recorderName?: string;
-} | null = null;
+}
+const seedByDiarizationSession = new Map<string, DiarizationSeed>();
 let preparePromise: Promise<void> | null = null;
 let ipcCleanups: Array<() => void> = [];
 let speakerIdentifications: SpeakerIdentification[] = [];
@@ -1034,6 +1038,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     }
 
     segmentsRefValue = seed;
+    recordingSequence++;
     sessionSeedLength = seed.length;
     sessionRecorderName = args.recorderName;
     speakerIdentifications = [];
@@ -1928,6 +1933,7 @@ export async function stopRecording(
     }
 
     const sessionId = activeRecordingSessionId;
+    lastStoppingSequence = recordingSequence;
     activeRecordingSessionId = null;
     isRecordingFlag = false;
     isStartingFlag = false;
@@ -1963,15 +1969,14 @@ export async function stopRecording(
           ? stopTranscript
           : serializeTranscriptSegments(useMeetingRecordingStore.getState().segments)),
       stop: async () => {
-        // Set before cleanup's awaits: the final transcript write is already
-        // posted, so an earlier session's result can land from here on.
         const seed = {
           noteId: recordingNoteId,
+          sequence: recordingSequence,
           seedLength: sessionSeedLength,
+          savedRowCount: finalSegments.length - sessionSeedLength,
           fallbackTranscript: "",
           recorderName: sessionRecorderName,
         };
-        stoppingSeed = seed;
         await cleanup();
 
         let stoppedDiarizationSessionId: string | null = null;
@@ -1982,7 +1987,7 @@ export async function stopRecording(
           );
           if (result?.diarizationSessionId) {
             stoppedDiarizationSessionId = result.diarizationSessionId;
-            seedLengthByDiarizationSession.set(stoppedDiarizationSessionId, seed);
+            seedByDiarizationSession.set(stoppedDiarizationSessionId, seed);
             useMeetingRecordingStore.setState({
               diarizationSessionId: stoppedDiarizationSessionId,
             });
@@ -1993,6 +1998,7 @@ export async function stopRecording(
             } else {
               stopTranscript = result.transcript;
               seed.fallbackTranscript = result.transcript.trim();
+              seed.savedRowCount = 1;
               const segments = [
                 ...useMeetingRecordingStore.getState().segments,
                 { id: "stop-plain", text: seed.fallbackTranscript, source: "system" as const },
@@ -2013,8 +2019,6 @@ export async function stopRecording(
             { error: (err as Error).message },
             "meeting"
           );
-        } finally {
-          stoppingSeed = null;
         }
         return stoppedDiarizationSessionId;
       },
@@ -2096,28 +2100,32 @@ if (typeof window !== "undefined") {
   const enqueueDiarizationCompletion = createSerialQueue();
   window.electronAPI?.onMeetingDiarizationComplete?.((data) => {
     enqueueDiarizationCompletion(async () => {
-      await meetingRecordingStopBarrier.waitForPendingStop();
-      const {
-        diarizationSessionId,
-        isRecording,
-        recordingNoteId,
-        segments: liveSegments,
-      } = useMeetingRecordingStore.getState();
-      const { targetNoteId, isCurrentSession } = resolveDiarizationTarget({
-        payloadNoteId: data?.noteId,
-        payloadSessionId: data?.sessionId,
-        currentSessionId: diarizationSessionId,
-        activeRecordingNoteId: isRecording ? recordingNoteId : null,
-      });
+      const targetNoteId = data?.noteId;
       if (targetNoteId == null) {
-        if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
+        await meetingRecordingStopBarrier.waitForPendingStop();
+        if (data?.sessionId) seedByDiarizationSession.delete(data.sessionId);
         return;
       }
 
       // Publishing an empty result clears a waiting editor's spinner without
       // painting an overlay; anything non-empty is already persisted.
-      const publish = (segments: TranscriptSegment[]) => {
-        if (isCurrentSession) {
+      const publish = (segments: TranscriptSegment[], completedSequence?: number): void => {
+        const latest = useMeetingRecordingStore.getState();
+        const { isCurrentSession } = resolveDiarizationTarget({
+          payloadNoteId: targetNoteId,
+          payloadSessionId: data?.sessionId,
+          currentSessionId: latest.diarizationSessionId,
+          activeRecordingNoteId: latest.isRecording ? latest.recordingNoteId : null,
+        });
+        // Refresh the newer session's overlay if it has already published.
+        const latestAlreadyCompleted =
+          completedSequence !== undefined &&
+          recordingSequence > completedSequence &&
+          latest.recordingNoteId === targetNoteId &&
+          !latest.isRecording &&
+          latest.diarizationSessionId &&
+          !seedByDiarizationSession.has(latest.diarizationSessionId);
+        if (isCurrentSession || latestAlreadyCompleted) {
           useMeetingRecordingStore.setState({
             completedDiarization: { noteId: targetNoteId, segments },
           });
@@ -2125,14 +2133,22 @@ if (typeof window !== "undefined") {
       };
 
       if (!data?.segments?.length) {
-        if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
+        await meetingRecordingStopBarrier.waitForPendingStop();
+        if (data?.sessionId) seedByDiarizationSession.delete(data.sessionId);
         publish([]);
         return;
       }
 
       let persisted: NoteItem | null | undefined;
       try {
-        persisted = await window.electronAPI?.getNote?.(targetNoteId);
+        // A newer stop can post its final write while getNote's IPC reply is in
+        // flight. Reread after that stop before writing over its transcript.
+        let stopAtRead: number;
+        do {
+          stopAtRead = lastStoppingSequence;
+          await meetingRecordingStopBarrier.waitForPendingStop();
+          persisted = await window.electronAPI?.getNote?.(targetNoteId);
+        } while (stopAtRead !== lastStoppingSequence);
       } catch (error) {
         logger.error(
           "Diarization completion could not read its note",
@@ -2142,85 +2158,85 @@ if (typeof window !== "undefined") {
       }
       // Read after the getNote await: a skipped diarization is sent before the
       // stop call that records this session's seed length returns.
-      const seed = data.sessionId ? seedLengthByDiarizationSession.get(data.sessionId) : undefined;
+      const seed = data.sessionId ? seedByDiarizationSession.get(data.sessionId) : undefined;
       const seedLength = seed?.seedLength ?? 0;
-      if (data.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
       // No note means no safe base to merge into, and writing to a deleted one
       // would resurrect its tombstone in the sidebar, cloud mirror, and vector
       // index.
       if (!persisted || persisted.deleted_at) {
+        if (data.sessionId && (persisted === null || persisted?.deleted_at)) {
+          seedByDiarizationSession.delete(data.sessionId);
+        }
         publish([]);
         return;
       }
 
-      const existing = selectBaseSegments({
-        persistedSegments: persisted.transcript ? parseSeedSegments(persisted.transcript) : null,
-        liveSegments,
-        recordingNoteId,
-        targetNoteId,
-      });
+      const current = useMeetingRecordingStore.getState();
+      const resumedRecording =
+        seed &&
+        recordingSequence > seed.sequence &&
+        current.isRecording &&
+        current.recordingNoteId === targetNoteId;
+      const existing = resumedRecording
+        ? current.segments
+        : selectBaseSegments({
+            persistedSegments: persisted.transcript
+              ? parseSeedSegments(persisted.transcript)
+              : null,
+            liveSegments: current.segments,
+            recordingNoteId: current.recordingNoteId,
+            targetNoteId,
+          });
       const recordedSegments = seed?.recorderName
         ? data.segments.map((segment) => ({ ...segment, recorderName: seed.recorderName }))
         : data.segments;
-      // A later session seeded this session's rows, so move its boundary when
-      // removing rows or replacing a fallback with individual diarized rows.
-      // Only sessions whose final write is already posted count: one posted
-      // after this write puts the rows back.
-      const laterSeeds = [...seedLengthByDiarizationSession.values(), stoppingSeed].filter(
-        (pending): pending is NonNullable<typeof stoppingSeed> =>
-          pending?.noteId === targetNoteId && pending.seedLength > seedLength
-      );
+      // The stop captured both ends of its own slice. A newer completion can
+      // already have discarded its bookkeeping when this older result arrives.
       const { segments: enriched, removedCount } = mergeSessionDiarization({
         existing,
         seedLength,
-        // Their rows are not this session's: a late final must not land among them.
-        sessionEnd: laterSeeds.length
-          ? Math.min(...laterSeeds.map((pending) => pending.seedLength))
-          : undefined,
+        sessionEnd: seed ? seedLength + seed.savedRowCount : undefined,
         fallbackTranscript: seed?.fallbackTranscript,
         segments: recordedSegments,
         removedSegments: data.removedSegments,
         splitLiveSpeakers: data.splitLiveSpeakers,
       });
 
+      // Apply to the resumed capture before yielding: its next periodic/stop
+      // write uses this snapshot and may run while the database write finishes.
+      if (resumedRecording) {
+        sessionSeedLength -= removedCount;
+        segmentsRefValue = enriched;
+        useMeetingRecordingStore.setState({
+          segments: enriched,
+          transcript: buildTranscriptText(enriched),
+        });
+      }
+      const laterSeeds = Array.from(seedByDiarizationSession.values()).filter(
+        (pending) => seed && pending.noteId === targetNoteId && pending.sequence > seed.sequence
+      );
+      let saved = false;
       try {
         // Awaited so the next queued completion's getNote is guaranteed to
         // read this write — without it the ordering depends on db-update-note
         // staying synchronous ahead of its first await.
-        await window.electronAPI?.updateNote?.(targetNoteId, {
+        const result = await window.electronAPI?.updateNote?.(targetNoteId, {
           transcript: serializeTranscriptSegments(enriched),
         });
+        if (result && !result.success) throw new Error(result.error || "Failed to save transcript");
+        saved = true;
       } catch (error) {
         publish([]);
         throw error;
+      } finally {
+        // A resumed recording already owns this merge and retries it on its
+        // next save. Otherwise retain the old boundaries if the write failed.
+        if (saved || resumedRecording) {
+          if (data.sessionId) seedByDiarizationSession.delete(data.sessionId);
+          for (const pending of laterSeeds) pending.seedLength -= removedCount;
+        }
       }
-      for (const pending of laterSeeds) pending.seedLength -= removedCount;
-
-      // The resumed recording must save the replacement too, or its next
-      // periodic/stop write would put the combined fallback back.
-      const current = useMeetingRecordingStore.getState();
-      if (
-        current.recordingNoteId === targetNoteId &&
-        sessionSeedLength > seedLength &&
-        seed?.fallbackTranscript &&
-        current.segments[seedLength]?.text === seed.fallbackTranscript
-      ) {
-        const merged = mergeSessionDiarization({
-          existing: current.segments,
-          seedLength,
-          fallbackTranscript: seed.fallbackTranscript,
-          segments: recordedSegments,
-          removedSegments: data.removedSegments,
-          splitLiveSpeakers: data.splitLiveSpeakers,
-        });
-        sessionSeedLength -= merged.removedCount;
-        segmentsRefValue = merged.segments;
-        useMeetingRecordingStore.setState({
-          segments: merged.segments,
-          transcript: buildTranscriptText(merged.segments),
-        });
-      }
-      publish(enriched);
+      publish(enriched, seed?.sequence);
 
       if (data.speakerEmbeddings) {
         await window.electronAPI?.saveNoteSpeakerEmbeddings?.(targetNoteId, data.speakerEmbeddings);

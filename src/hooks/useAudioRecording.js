@@ -330,10 +330,12 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!current()) return false;
 
         const usesStreaming = manager.shouldUseStreaming();
+        const providerName = usesStreaming ? manager.getStreamingProviderName?.() : null;
+        if (providerName === "sarvam" && stopRequestedDuringStartRef.current) return false;
         const connectsPerRecording =
           usesStreaming &&
           holdsAudioUntilConnected({
-            providerName: manager.getStreamingProviderName?.(),
+            providerName,
             cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
           });
         startEffectsOnReportRef.current = connectsPerRecording;
@@ -358,7 +360,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // A stop that landed while the start was still awaiting the mic open was
         // dropped (isRecording was still false), leaving a runaway recording
         // until the next hotkey press. Honor it now that we started.
-        if (didStart && stopRequestedDuringStartRef.current) {
+        if (didStart && stopRequestedDuringStartRef.current && manager.getState().isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
           // Cue semantics mirror performStopRecording: unconditional for
           // streaming, gated on the stop landing for batch.
@@ -408,9 +410,20 @@ export const useAudioRecording = (toast, options = {}) => {
 
   const performStopRecording = useCallback(async () => {
     if (startLockRef.current) {
+      if (stopRequestedDuringStartRef.current) return true;
       stopRequestedDuringStartRef.current = true;
       setIsPreparing(false);
       setIsStopping(true);
+      const manager = audioManagerRef.current;
+      const state = manager?.getState();
+      if (
+        state?.isStreamingStartInProgress &&
+        manager.getActiveStreamingProviderName() === "sarvam"
+      ) {
+        if (!state.isRecording) return manager.cancelStreamingRecording();
+        void playStopCue();
+        return manager.stopStreamingRecording();
+      }
       return true;
     }
     if (stopLockRef.current) return false;

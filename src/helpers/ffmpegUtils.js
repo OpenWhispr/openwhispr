@@ -196,8 +196,8 @@ function convertToPcm16(inputPath, outputPath, options = {}) {
       "wav,w64,mp3,aac,ac3,aiff,au,ogg,flac,wv,ape,mov,matroska,webm,amr,asf,caf,avi,mpeg,mpegts",
       "-i",
       inputPath,
-      "-map",
-      "0:a:0",
+      // Use the default audio track, as convertToWav does for speaker detection.
+      "-vn",
       "-ar",
       "16000",
       "-ac",

@@ -69,7 +69,7 @@ test("note recording routes both Saaras models through the personal Sarvam accou
     await import("../../src/helpers/meetingTranscriptionRouting.js");
   const { fetchRealtimeTokenForProvider } =
     await import("../../src/helpers/realtimeTokenProviders.js");
-  const { getMeetingStreamingClient } = await load();
+  const { getMeetingStreamingClient, getMeetingConnectionKey } = await load();
   const { SarvamMeetingStreaming } = require("../../src/helpers/sarvamRealtimeStreaming");
   const providers = getMeetingStreamingTranscriptionProviders();
   const sarvam = providers.find((provider) => provider.id === "sarvam");
@@ -83,11 +83,17 @@ test("note recording routes both Saaras models through the personal Sarvam accou
       byokProviders: providers,
       selectedProvider: "sarvam",
       selectedModel,
+      sarvamMode: "verbatim",
       language: "hi",
       keyterms: ["OpenWhispr"],
     });
     assert.equal(route.model, selectedModel ?? "saaras:v4");
     assert.equal(route.language, "hi");
+    assert.notEqual(
+      getMeetingConnectionKey(route),
+      getMeetingConnectionKey({ ...route, sarvamMode: "translate" })
+    );
+    assert.equal(route.sarvamMode, "verbatim");
     assert.deepEqual(route.keyterms, selectedModel ? undefined : ["OpenWhispr"]);
     assert.equal(getMeetingStreamingClient(route.provider), SarvamMeetingStreaming);
     const credentials = { environmentManager: { getSarvamKey: () => "personal" } };

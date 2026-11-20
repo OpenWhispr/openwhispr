@@ -38,6 +38,9 @@ export default class FakeAudioManager {
   getStreamingProviderName() {
     return globalThis.__startRoute.provider;
   }
+  getActiveStreamingProviderName() {
+    return this.getStreamingProviderName();
+  }
   isSttConfigStale() {
     return false;
   }
@@ -277,6 +280,22 @@ test("a stop during the connect resumes media and releases Escape", async (t) =>
   assert.equal(events.includes("stop"), true);
   assert.equal(events.at(-1), "resume");
   assert.equal(events.at(-2), "unregister");
+});
+
+test("Sarvam push-to-talk release reaches capture before the handshake completes", async (t) => {
+  const hook = await mountHook(t, SARVAM);
+  let released;
+  globalThis.__startOnStart = (manager) => {
+    manager.report({ ...RECORDING, isStreamingStartInProgress: true });
+    void hook.api.stopRecording();
+    released = !manager.getState().isRecording;
+    manager.finishStart(true);
+  };
+  await React.act(async () => {
+    await hook.api.startRecording();
+  });
+  assert.equal(released, true);
+  assert.equal(globalThis.__startEvents.filter((event) => event === "stop").length, 1);
 });
 
 test("Escape during the connect cancels, resumes media and releases the hotkey", async (t) => {

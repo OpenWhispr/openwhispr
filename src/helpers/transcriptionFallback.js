@@ -29,6 +29,10 @@ const SARVAM_ACCOUNT_FAILURES = new Set([
   "PROVIDER_QUOTA_EXHAUSTED",
 ]);
 
+export function isSarvamAccountFailure(error) {
+  return SARVAM_ACCOUNT_FAILURES.has(error.code);
+}
+
 // A device policy's refusal is as final as a workspace's.
 export function isTranscriptionPolicyRefusal(error) {
   return typeof error?.code === "string" && /^(DEVICE_)?POLICY_/.test(error.code);
@@ -55,7 +59,7 @@ export function resolveStreamingStartFallback({ providerName, cloudTranscription
   }
   if (providerName === "sarvam" && cloudTranscriptionMode === "byok") {
     // A missing or refused key, or a spent budget, would fail the batch upload too.
-    return SARVAM_ACCOUNT_FAILURES.has(result.code) ? null : "session_unavailable";
+    return isSarvamAccountFailure(result) ? null : "session_unavailable";
   }
   if (!isManagedOrukeetStream({ providerName, cloudTranscriptionMode })) return null;
   if (result.code === "FEATURE_NOT_ENABLED") return "feature_disabled";

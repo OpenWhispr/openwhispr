@@ -430,11 +430,13 @@ test("options: sarvam resolves a model left by another provider before connectin
         cloudTranscriptionProvider: "sarvam",
         cloudTranscriptionMode: "byok",
         cloudTranscriptionModel,
+        sarvamMode: "translate",
         customDictionary: ["OpenWhispr"],
       }),
       language: "hi",
     });
   const stale = build("gpt-4o-mini-transcribe");
+  assert.equal(stale.sarvamMode, "translate");
   assert.equal(stale.model, "saaras:v4");
   assert.deepEqual(stale.keyterms, ["OpenWhispr"]);
   const v3 = build("saaras:v3");

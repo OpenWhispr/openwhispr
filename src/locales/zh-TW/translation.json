@@ -979,6 +979,14 @@
       "transportNote": "Tinfoil 串流轉錄使用 Voxtral Mini 4B，批次轉錄使用 Voxtral Small 24B。",
       "docsLink": "查看文件"
     },
+    "sarvam": {
+      "outputMode": "輸出模式",
+      "codemix": "混合語言（英文單字保留拉丁字母）",
+      "transcribe": "以原語言轉錄",
+      "verbatim": "逐字轉錄",
+      "translate": "翻譯成英文",
+      "translit": "轉寫為拉丁字母"
+    },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr 會將詞典中符合條件的詞條傳送給 ElevenLabs。包含這些詞條時，ElevenLabs 會加收 20% 的費用。"
     }

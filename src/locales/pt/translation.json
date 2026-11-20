@@ -958,6 +958,14 @@
       "transportNote": "O Tinfoil transmite com o Voxtral Mini 4B e processa em lote com o Voxtral Small 24B.",
       "docsLink": "Ver a documentação"
     },
+    "sarvam": {
+      "outputMode": "Modo de saída",
+      "codemix": "Idiomas mistos (manter as palavras em inglês no alfabeto latino)",
+      "transcribe": "Transcrever no idioma falado",
+      "verbatim": "Transcrever palavra por palavra",
+      "translate": "Traduzir para inglês",
+      "translit": "Transliterar para o alfabeto latino"
+    },
     "elevenlabs": {
       "keytermsNote": "O OpenWhispr envia à ElevenLabs os termos compatíveis do seu dicionário. A ElevenLabs cobra 20% a mais quando esses termos são incluídos."
     }

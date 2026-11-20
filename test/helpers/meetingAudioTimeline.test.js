@@ -46,6 +46,8 @@ function harness({ native = true, local = false } = {}) {
     app: { getVersion: () => "1.11.1" },
     productOperationAllowed: require("../../src/helpers/productPolicy").productOperationAllowed,
     meetingConnectionOptions: null,
+    meetingClockByPcm: new WeakMap(),
+    ...require("../../src/helpers/meetingCaptureClock"),
     require: (specifier) => {
       const imported = createRequire(ipcPath)(specifier);
       return specifier === "./meetingAudioTimeline"
@@ -141,6 +143,32 @@ function harness({ native = true, local = false } = {}) {
   };
 }
 const bytes = (buffers) => buffers.reduce((total, buffer) => total + buffer.length, 0);
+
+test("Sarvam keeps native, buffered renderer and replay audio on the local speaker clock", async () => {
+  const run = harness({ native: false });
+  await run.start();
+  run.context.meetingConnectionOptions = { provider: "sarvam-realtime" };
+  run.context.meetingReconnectReplaySources.add("system");
+  run.at(1100);
+  run.chunk(100);
+  // A coalesced native read covers the next two seconds without an idle gap.
+  run.at(3100);
+  run.chunk(2000);
+  // The renderer delivers a saved 100 ms worklet block during recovery.
+  run.at(90000);
+  run.rendererSend(Buffer.alloc(4800, 1), "system", 61100);
+  const captures = [];
+  run.context.replaySystemAudio({
+    isConnected: true,
+    sendAudio: (_, capturedAt) => captures.push(capturedAt),
+  });
+  assert.deepEqual(captures, [1000, 1100, 61000]);
+  const clock = run.context.meetingClockByPcm.get(run.context.meetingDiarizationStream);
+  assert.equal(clock.elapsedMs(2100, true), 2100);
+  assert.equal(clock.elapsedMs(2100), 60000);
+  assert.equal(bytes(run.pcm), 2200 * 48);
+  assert.equal(bytes(run.live), 2200 * 48);
+});
 
 function createTimestampedStream(provider, connectedAt) {
   const StreamingClient = require(`../../src/helpers/${provider}Streaming`);

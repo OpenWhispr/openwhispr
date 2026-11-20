@@ -3,8 +3,9 @@ const path = require("node:path");
 const { setTimeout: delay } = require("node:timers/promises");
 const { convertToPcm16 } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
+const { mapVerboseSegments } = require("./uploadTimestamps");
 const { pcm16ToWav } = require("../utils/audioUtils");
-const { SARVAM_MODE, sarvamKeyterms, sarvamLanguage } = require("../utils/sarvam");
+const { resolveSarvamMode, sarvamKeyterms, sarvamLanguage } = require("../utils/sarvam");
 const {
   asProviderError,
   providerError,
@@ -32,15 +33,36 @@ function boundary(pcm) {
   return cut;
 }
 
+function phraseSegments(text, timestamps, offset) {
+  const { words, start_time_seconds: starts, end_time_seconds: ends } = timestamps || {};
+  if (
+    !Array.isArray(words) ||
+    !Array.isArray(starts) ||
+    !Array.isArray(ends) ||
+    starts.length !== words.length ||
+    ends.length !== words.length
+  )
+    return null;
+  const segments = [];
+  for (const [index, phrase] of words.entries()) {
+    const start = starts[index];
+    const end = ends[index];
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start) return null;
+    segments.push({ text: phrase, start: offset + start, end: offset + end });
+  }
+  return mapVerboseSegments({ text, segments });
+}
+
 async function sendPiece(
   pcm,
-  { apiKey, model, language, keyterms, signal, fetchImpl, maxRetryWaitMs }
+  { apiKey, model, language, keyterms, sarvamMode, timestamps, signal, fetchImpl, maxRetryWaitMs }
 ) {
   const form = new FormData();
   form.set("file", new Blob([pcm16ToWav(pcm)], { type: "audio/wav" }), "audio.wav");
   form.set("model", model);
-  form.set("mode", SARVAM_MODE);
+  form.set("mode", sarvamMode);
   if (language) form.set("language_code", language);
+  if (timestamps) form.set("with_timestamps", "true");
   if (keyterms.length) form.set("keyterms", JSON.stringify(keyterms));
 
   for (let attempt = 0; ; attempt++) {
@@ -67,15 +89,15 @@ async function sendPiece(
       continue;
     }
     if (response.ok) {
-      let transcript;
+      let data;
       try {
-        ({ transcript } = JSON.parse(body));
+        data = JSON.parse(body);
       } catch {
         // Checked below.
       }
-      if (typeof transcript !== "string")
+      if (typeof data?.transcript !== "string")
         throw new Error("Sarvam AI returned an invalid transcript.");
-      return transcript.trim();
+      return data;
     }
     const retryable =
       (response.status === 429 && !body.includes("seat_budget_exhausted_error")) ||
@@ -105,6 +127,7 @@ async function transcribeWithSarvam({
   filePath,
   apiKey,
   model = "saaras:v4",
+  sarvamMode,
   language,
   keyterms,
   signal,
@@ -112,6 +135,7 @@ async function transcribeWithSarvam({
   // A dictation is waiting on the paste; an upload can sit out a per-minute rate limit.
   maxRetryWaitMs = 10_000,
   onProgress,
+  timestamps = false,
 }) {
   if (!apiKey?.trim())
     throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
@@ -136,13 +160,16 @@ async function transcribeWithSarvam({
       const fields = {
         apiKey,
         model,
+        sarvamMode: resolveSarvamMode(sarvamMode),
         language: sarvamLanguage(language),
         keyterms: model === "saaras:v4" ? sarvamKeyterms(keyterms) : [],
         signal,
         fetchImpl,
         maxRetryWaitMs,
+        timestamps,
       };
       const parts = [];
+      let segments = timestamps ? [] : null;
       let position = 0;
       // Cut points depend on the audio, so the total firms up as pieces are sent.
       const reportProgress = () =>
@@ -162,7 +189,15 @@ async function transcribeWithSarvam({
           read += bytesRead;
         }
         const length = size - position > MAX_BYTES ? boundary(chunk) : chunk.length;
-        parts.push(await sendPiece(chunk.subarray(0, length), fields));
+        const piece = await sendPiece(chunk.subarray(0, length), fields);
+        const text = piece.transcript.trim();
+        parts.push(text);
+        if (segments && text) {
+          const phrases = phraseSegments(text, piece.timestamps, position / BYTES_PER_SECOND);
+          // The saved note uses the segments as its transcript, so none of the words can be missing.
+          if (phrases) segments.push(...phrases);
+          else segments = null;
+        }
         position += length;
         reportProgress();
       }
@@ -172,7 +207,7 @@ async function transcribeWithSarvam({
         throw Object.assign(new Error("No speech detected in audio"), {
           code: "NO_SPEECH_DETECTED",
         });
-      return { text };
+      return segments ? { text, segments } : { text };
     } finally {
       await pcm.close();
     }

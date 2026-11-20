@@ -34,6 +34,7 @@ for (const model of ["saaras:v4", "saaras:v3"]) {
       apiKey: "saved",
       model,
       language: "or",
+      sarvamMode: model === "saaras:v3" ? "translate" : undefined,
       keyterms: ["OpenWhispr"],
     });
     const socket = stream.ws;
@@ -44,7 +45,10 @@ for (const model of ["saaras:v4", "saaras:v3"]) {
       model === "saaras:v3" ? "saaras:v3-realtime" : model
     );
     assert.equal(socket.url.searchParams.get("language_code"), "or-IN");
-    assert.equal(socket.url.searchParams.get("mode"), "transcribe");
+    assert.equal(
+      socket.url.searchParams.get("mode"),
+      model === "saaras:v3" ? "translate" : "codemix"
+    );
     assert.equal(
       socket.url.searchParams.get("keyterms"),
       model === "saaras:v4" ? '["OpenWhispr"]' : null
@@ -205,6 +209,37 @@ test("meeting finals with string offsets keep their audio time", async () => {
   stream.ws.receive({ event: "transcript.final", utterance_idx: 0, text: "एक", start_s: "2.25" });
   assert.deepEqual(finals, [["एक", 12250]]);
   await stream.disconnect({ commit: false });
+});
+
+test("meeting finals keep their capture time on both sides of an idle device", async (t) => {
+  const start = 1760000000000;
+  t.mock.timers.enable({ apis: ["Date"], now: start });
+  for (const replay of [false, true]) {
+    const stream = new SarvamMeetingStreaming(Socket);
+    const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+    stream.ws.receive({ event: "session.begin" });
+    await ready;
+    const pcm = Buffer.alloc(4800); // 100 ms of 24 kHz capture
+    const capture = (offset) => {
+      t.mock.timers.setTime(start + (replay ? 120000 : offset + 100));
+      stream.sendAudio(pcm, replay ? start + offset : null);
+    };
+    capture(0);
+    capture(115); // Normal delivery jitter does not move the sample clock.
+    capture(60000);
+    const finals = [];
+    stream.onFinalTranscript = (_, timestamp) => finals.push(timestamp - start);
+    for (const [index, startSeconds] of [0.15, 0.2, 0.25].entries()) {
+      stream.ws.receive({
+        event: "transcript.final",
+        utterance_idx: index,
+        text: "speech",
+        start_s: String(startSeconds),
+      });
+    }
+    assert.deepEqual(finals, [150, 60000, 60050]);
+    await stream.disconnect({ commit: false });
+  }
 });
 
 test("a meeting stop gives up on a missing last final after 5 s without reporting an error", async (t) => {

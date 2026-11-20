@@ -6482,6 +6482,14 @@
       "transportNote": "يستخدم Tinfoil نموذج Voxtral Mini 4B للتفريغ المباشر (البث)، ونموذج Voxtral Small 24B للمعالجة الدفعية.",
       "docsLink": "قراءة الوثائق"
     },
+    "sarvam": {
+      "outputMode": "وضع الإخراج",
+      "codemix": "لغات مختلطة (إبقاء الكلمات الإنجليزية بالحروف اللاتينية)",
+      "transcribe": "نسخ باللغة المنطوقة",
+      "verbatim": "نسخ حرفي",
+      "translate": "ترجمة إلى الإنجليزية",
+      "translit": "كتابة النطق بالحروف اللاتينية"
+    },
     "elevenlabs": {
       "keytermsNote": "يُرسل OpenWhispr الكلمات المؤهلة من قاموسك إلى ElevenLabs. وتزيد رسوم ElevenLabs بنسبة 20٪ عند تضمين هذه الكلمات."
     }

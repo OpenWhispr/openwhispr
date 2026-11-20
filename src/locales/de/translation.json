@@ -979,6 +979,14 @@
       "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
       "docsLink": "Zur Dokumentation"
     },
+    "sarvam": {
+      "outputMode": "Ausgabemodus",
+      "codemix": "Gemischte Sprachen (englische Wörter in lateinischer Schrift)",
+      "transcribe": "In der gesprochenen Sprache transkribieren",
+      "verbatim": "Wortgetreu transkribieren",
+      "translate": "Ins Englische übersetzen",
+      "translit": "In lateinische Schrift übertragen"
+    },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr sendet geeignete Wörter aus deinem Wörterbuch an ElevenLabs. Wenn solche Wörter mitgesendet werden, berechnet ElevenLabs 20 % mehr."
     }

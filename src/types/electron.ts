@@ -1,3 +1,4 @@
+import type { SarvamMode } from "../utils/sarvam.js";
 import type { ModelDefinition } from "../models/ModelRegistry";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
@@ -152,6 +153,7 @@ export interface DictationRealtimeSessionOptions {
   transcriptionMode?: string;
   language?: string;
   sampleRate?: number;
+  sarvamMode?: SarvamMode;
   keyterms?: string[];
   environment?: string;
   tenant?: string;
@@ -2041,6 +2043,7 @@ declare global {
           whisperModel: string;
           preferredLanguage?: string;
           translationSourceLanguage?: string;
+          sarvamMode?: SarvamMode;
           keyterms?: string[];
           transcriptionMode?: InferenceMode;
           remoteTranscriptionType?: SelfHostedType;
@@ -2979,6 +2982,7 @@ declare global {
         audioBuffer: ArrayBuffer;
         model: string;
         language?: string;
+        sarvamMode?: SarvamMode;
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
       // Mistral API key management
@@ -3472,6 +3476,7 @@ declare global {
 
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
+        sarvamMode?: SarvamMode;
         keyterms?: string[];
         filePath: string;
         durationSeconds?: number;
@@ -3966,6 +3971,7 @@ declare global {
         >;
         provider?: string;
         model?: string;
+        sarvamMode?: SarvamMode;
         language?: string;
       }) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
       meetingTranscriptionStart?: (options: {
@@ -3976,6 +3982,7 @@ declare global {
         >;
         provider?: string;
         model?: string;
+        sarvamMode?: SarvamMode;
         language?: string;
         noteId?: number | null;
         sessionId: string;

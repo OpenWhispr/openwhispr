@@ -8,6 +8,7 @@ const {
   wavToFloat32Samples,
   splitAudioFile,
   convertToPcm16,
+  convertToWav,
   getFFmpegPath,
 } = require("../../src/helpers/ffmpegUtils");
 const { UPLOAD_AUDIO_EXTENSIONS } = require("../../src/constants/uploadAudioFormats.json");
@@ -73,6 +74,49 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 
 const ffmpegPath = getFFmpegPath();
+
+test(
+  "Sarvam and speaker detection use the same default audio track",
+  { skip: !ffmpegPath },
+  async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-default-track-"));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const source = path.join(dir, "meeting.mkv");
+    execFileSync(ffmpegPath, [
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "anullsrc=r=16000:cl=mono",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=900:sample_rate=16000",
+      "-t",
+      "1",
+      "-map",
+      "0:a",
+      "-map",
+      "1:a",
+      "-c:a",
+      "pcm_s16le",
+      "-disposition:a:0",
+      "0",
+      "-disposition:a:1",
+      "default",
+      source,
+    ]);
+    const pcm = path.join(dir, "transcription.pcm");
+    const wav = path.join(dir, "diarization.wav");
+    await convertToPcm16(source, pcm);
+    await convertToWav(source, wav);
+    const samples = fs.readFileSync(pcm);
+    const diarizationSamples = fs.readFileSync(wav).subarray(-32000);
+    assert.ok(diarizationSamples.some((sample) => sample !== 0));
+    assert.ok(samples.equals(diarizationSamples), "transcription must decode the default track");
+  }
+);
 
 // ffmpeg -i with no output exits non-zero; the stream listing is on stderr.
 function streamsOf(file) {

@@ -63,6 +63,36 @@ test("timestamps opt-in reaches the BYOK IPC call and segments flow back", async
   assert.equal(withSpeakers.durationSeconds, 120);
 });
 
+test("Sarvam sends the saved output mode with file and chat microphone requests", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-file-sarvam-mode-",
+    mockModules: {
+      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
+    },
+  });
+  const { transcribeFile } = await vite.ssrLoadModule("/services/fileTranscription.ts");
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.getState().setSarvamMode("verbatim");
+  const config = {
+    ...byokConfig(),
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v4",
+    getApiKey: () => assert.fail("main owns the Sarvam key"),
+  };
+  const requests = [];
+  window.electronAPI.transcribeAudioFileByok = async (options) => {
+    requests.push(options);
+    return { success: true, text: "Hello" };
+  };
+  await transcribeFile("/tmp/upload.wav", config, false, { timestamps: true });
+  await transcribeFile("/tmp/chat.wav", config, false, { purpose: "dictation" });
+  assert.deepEqual(
+    requests.map(({ sarvamMode }) => sarvamMode),
+    ["verbatim", "verbatim"]
+  );
+});
+
 // Local diarization over a provider that returned timed segments: each keeps
 // its own timing and takes the diarizer speaker it overlaps most, instead of
 // the merge's text-proportional turns.

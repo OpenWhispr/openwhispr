@@ -203,7 +203,8 @@ export async function transcribeFile(
     };
   }
 
-  const isSarvam = route.transport === "proxied" && route.provider === "sarvam";
+  const sarvamSettings =
+    route.transport === "proxied" && route.provider === "sarvam" ? getSettings() : null;
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
     requestId: opts.requestId,
@@ -212,14 +213,17 @@ export async function transcribeFile(
     ...(route.transport === "proxied" && route.provider === "assemblyai"
       ? { durationSeconds }
       : {}),
-    apiKey: isSarvam ? "" : cfg.getApiKey(),
+    apiKey: sarvamSettings ? "" : cfg.getApiKey(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,
     timestamps: opts.timestamps || undefined,
     provider: cfg.cloudTranscriptionProvider,
     language: cfg.language,
-    ...(isSarvam && { keyterms: getEffectiveDictionaryWords(getSettings()) }),
+    ...(sarvamSettings && {
+      sarvamMode: sarvamSettings.sarvamMode,
+      keyterms: getEffectiveDictionaryWords(sarvamSettings),
+    }),
     environment: cfg.cortiEnvironment,
     tenant: cfg.cortiTenant,
     transcriptionMode: cfg.transcriptionMode,

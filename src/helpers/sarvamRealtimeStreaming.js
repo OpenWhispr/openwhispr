@@ -1,8 +1,9 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
-const { SARVAM_MODE, sarvamLanguage, sarvamKeyterms } = require("../utils/sarvam");
+const { resolveSarvamMode, sarvamLanguage, sarvamKeyterms } = require("../utils/sarvam");
 const { providerError, providerHttpError, PROVIDER_ERROR_CODES } = require("./providerHttpErrors");
 const { downsample24kTo16k } = require("../utils/audioUtils");
+const { captureStartFromDelivery, createMeetingCaptureClock } = require("./meetingCaptureClock");
 
 // Sarvam discards an audio frame over 16,000 bytes, and a stalled main process can
 // coalesce system-audio reads well past that. 8,000 bytes is 250 ms at 16 kHz.
@@ -39,7 +40,7 @@ class SarvamRealtimeStreaming {
     this.utterances = new Map();
   }
 
-  async connect({ apiKey, model, language, keyterms, returnTimestamps = false }) {
+  async connect({ apiKey, model, language, keyterms, sarvamMode, returnTimestamps = false }) {
     if (!apiKey) {
       throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
         provider: "Sarvam AI",
@@ -55,7 +56,7 @@ class SarvamRealtimeStreaming {
       model: model === "saaras:v3" ? "saaras:v3-realtime" : model,
       encoding: "linear16",
       sample_rate: "16000",
-      mode: SARVAM_MODE,
+      mode: resolveSarvamMode(sarvamMode),
       stream_type: "fast",
     }).toString();
     if (returnTimestamps) url.searchParams.set("return_timestamps", "true");
@@ -211,15 +212,18 @@ class SarvamMeetingStreaming extends SarvamRealtimeStreaming {
     this.completedSegments = [];
     this.remainder = Buffer.alloc(0);
     this.sessionStartedAt = null;
+    this.captureClock = createMeetingCaptureClock();
   }
 
   connect(options) {
     return super.connect({ ...options, returnTimestamps: true });
   }
 
-  sendAudio(buffer) {
+  sendAudio(buffer, capturedAt = null) {
     if (!this.isConnected || this.final) return false;
-    if (this.sessionStartedAt === null) this.sessionStartedAt = Date.now();
+    const at = capturedAt ?? captureStartFromDelivery(buffer, Date.now());
+    this.sessionStartedAt ??= at;
+    this.captureClock.append(buffer, at);
     const pcm = this.remainder.length ? Buffer.concat([this.remainder, buffer]) : buffer;
     // Three 24 kHz samples produce two 16 kHz samples. Preserve phase across IPC frames.
     const usable = pcm.length - (pcm.length % 6);
@@ -234,7 +238,7 @@ class SarvamMeetingStreaming extends SarvamRealtimeStreaming {
     const seconds = parseFloat(startSeconds);
     const timestamp =
       this.sessionStartedAt !== null && Number.isFinite(seconds)
-        ? this.sessionStartedAt + Math.round(seconds * 1000)
+        ? Math.round(this.sessionStartedAt + this.captureClock.elapsedMs(seconds * 1000))
         : Date.now();
     this.onFinalTranscript?.(text, timestamp);
   }

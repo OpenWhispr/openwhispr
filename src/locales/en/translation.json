@@ -979,6 +979,14 @@
       "transportNote": "Tinfoil streams using Voxtral Mini 4B, and batches with Voxtral Small 24B.",
       "docsLink": "Read the docs"
     },
+    "sarvam": {
+      "outputMode": "Output mode",
+      "codemix": "Mixed languages (keep English words in Latin script)",
+      "transcribe": "Transcribe in the spoken language",
+      "verbatim": "Transcribe verbatim",
+      "translate": "Translate to English",
+      "translit": "Transliterate into Latin script"
+    },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr sends eligible words from your dictionary to ElevenLabs. ElevenLabs charges 20% more when those words are included."
     }

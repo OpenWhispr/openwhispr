@@ -134,25 +134,26 @@ test("language pick follows design §6.2 and call 4", async () => {
   assert.equal(pickDictationModel(["en-GB", "de"], mac({})).group, "european");
 });
 
-test("never offers a model for a language it lacks", async () => {
+test("selects a supported local model, falling back to Whisper auto-detection for cloud-only languages", async () => {
   const { pickDictationModel } = await load();
-  const englishFallback = table.models.dictation.english;
   for (const { code, whisper } of languageRegistry.languages) {
     if (code === "auto") continue;
     const base = code.split("-")[0].toLowerCase();
     const { modelId } = pickDictationModel([code], mac({}));
+    const hasLocalModel =
+      whisper ||
+      Object.values(registry.parakeetModels).some((model) =>
+        model.supportedLanguages?.includes(base)
+      );
+    if (!hasLocalModel) {
+      assert.equal(modelId, table.models.dictation.other, code);
+      continue;
+    }
     const parakeet = registry.parakeetModels[modelId];
     const ok =
       (parakeet && (parakeet.supportedLanguages || []).includes(base)) ||
-      (registry.whisperModels[modelId] && whisper === true) ||
-      modelId === englishFallback;
+      (registry.whisperModels[modelId] && whisper === true);
     assert.ok(ok, `${code} → ${modelId}`);
-    // The English fallback is only used for English or a language nothing local supports.
-    if (modelId === englishFallback && base !== "en") {
-      assert.equal(whisper, false, `${code} fell back to English but Whisper supports it`);
-      const european = registry.parakeetModels[table.models.dictation.european];
-      assert.ok(!european.supportedLanguages.includes(base), `${code} is in Orukeet's list`);
-    }
   }
 });
 

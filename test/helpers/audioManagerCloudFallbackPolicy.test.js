@@ -1011,7 +1011,7 @@ test("a local preview refusal never stops a dictation going to the enterprise ro
   assert.equal(completed.text, "enterprise transcript");
 });
 
-test("Sarvam dictation uses the selected model and ignores a previously saved output mode", async (t) => {
+test("Sarvam dictation uses the selected model and output mode", async (t) => {
   const { window, setSettings, createManager } = await loadAudioManager(t, {
     cachePrefix: "ow-sarvam-route-",
     settingsKey: "__sarvamSettings",
@@ -1023,12 +1023,12 @@ test("Sarvam dictation uses the selected model and ignores a previously saved ou
       cloudTranscriptionProvider: "sarvam",
       cloudTranscriptionModel: model,
       transcriptionMode: "providers",
-      sarvamMode: "codemix",
+      sarvamMode: "translit",
       customDictionary: ["New Delhi"],
     });
     window.electronAPI.proxySarvamTranscription = async (payload) => {
       assert.equal(payload.model, model);
-      assert.equal(payload.mode, undefined);
+      assert.equal(payload.sarvamMode, "translit");
       assert.deepEqual(payload.keyterms, model === "saaras:v4" ? ["New Delhi"] : undefined);
       return { text: "meeting है" };
     };

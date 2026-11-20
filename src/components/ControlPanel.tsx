@@ -1,4 +1,3 @@
-import { getEffectiveDictionaryWords } from "../utils/snippets";
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -50,7 +49,11 @@ import { startWorkspaceScopeBridge } from "../stores/workspaceScopeBridge";
 import { useEnsureDefaultWorkspace } from "../hooks/useWorkspace";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
 import { usePolicySnapshot, useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
-import { getKeytermDictionaryWords, limitBatchKeyterms } from "../utils/snippets";
+import {
+  getEffectiveDictionaryWords,
+  getKeytermDictionaryWords,
+  limitBatchKeyterms,
+} from "../utils/snippets";
 import { providerCleanupStandsIn } from "../helpers/dictationRouting";
 import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
 import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
@@ -853,9 +856,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cloudTranscriptionProvider: s.cloudTranscriptionProvider,
           cloudTranscriptionModel: s.cloudTranscriptionModel,
           cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
-          ...(s.cloudTranscriptionProvider === "sarvam" && {
-            keyterms: getEffectiveDictionaryWords(s),
-          }),
+          sarvamMode: s.sarvamMode,
           cortiEnvironment: s.cortiEnvironment,
           cortiTenant: s.cortiTenant,
           parakeetModel: s.parakeetModel,
@@ -863,7 +864,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,
           translationSourceLanguage: s.translationSourceLanguage,
-          keyterms: limitBatchKeyterms(getKeytermDictionaryWords(s)),
+          keyterms:
+            s.cloudTranscriptionProvider === "sarvam"
+              ? getEffectiveDictionaryWords(s)
+              : limitBatchKeyterms(getKeytermDictionaryWords(s)),
           transcriptionMode: s.transcriptionMode,
           remoteTranscriptionType: s.remoteTranscriptionType,
           remoteTranscriptionUrl: s.remoteTranscriptionUrl,
