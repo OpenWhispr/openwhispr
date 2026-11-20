@@ -49,6 +49,8 @@ type ScopeSummary = {
   enforced: ManagedEnterpriseScope[];
   managedAudioOperations?: AudioOperation[];
   enforcedAudioOperations?: AudioOperation[];
+  // When the API last called the workspace non-Enterprise; every window reads it from storage.
+  notEnterpriseAt?: number;
 };
 const EMPTY_SCOPES: ScopeSummary = { managed: [], enforced: [] };
 
@@ -99,7 +101,8 @@ function scopesHeldAfterError(
   workspaceId: string | null
 ): ScopeSummary {
   if (code === "ENTERPRISE_REQUIRED") {
-    if (accountId && workspaceId) persistScopes(accountId, workspaceId, EMPTY_SCOPES);
+    if (accountId && workspaceId)
+      persistScopes(accountId, workspaceId, { ...EMPTY_SCOPES, notEnterpriseAt: Date.now() });
     return EMPTY_SCOPES;
   }
   return config ? summarize(config) : readPersistedScopes(accountId, workspaceId);
@@ -274,6 +277,21 @@ function refreshCurrentManagedIdentity(): void {
   void state.refresh(state.accountId, state.workspaceId, state.authGeneration, true);
 }
 
+// A workspace the API called non-Enterprise has no managed setup to change. Unless a policy
+// manages the account, the app's windows ask about it again every fifteen minutes between
+// them, as often as main reads an unmanaged policy, not each one every five and on every focus.
+const NOT_ENTERPRISE_RECHECK_MS = 15 * 60 * 1000;
+
+function pollManagedIdentity(): void {
+  const { accountId, workspaceId } = useEnterpriseIdentityStore.getState();
+  if (usePolicyStore.getState().status === "unmanaged") {
+    const answeredAt = readPersistedScopes(accountId, workspaceId).notEnterpriseAt;
+    const age = typeof answeredAt === "number" ? Date.now() - answeredAt : -1;
+    if (age >= 0 && age < NOT_ENTERPRISE_RECHECK_MS) return;
+  }
+  refreshCurrentManagedIdentity();
+}
+
 // Bound on first refresh() rather than at module load: the listeners no-op
 // until an identity is resolved, and test harnesses import this store with
 // partial window stubs that lack setInterval (same pattern as
@@ -281,8 +299,15 @@ function refreshCurrentManagedIdentity(): void {
 function ensureLifecycleListeners(): void {
   if (lifecycleListenersReady || typeof window === "undefined") return;
   lifecycleListenersReady = true;
-  window.addEventListener("focus", refreshCurrentManagedIdentity);
-  window.setInterval(refreshCurrentManagedIdentity, 5 * 60 * 1000);
+  window.addEventListener("focus", pollManagedIdentity);
+  window.setInterval(pollManagedIdentity, 5 * 60 * 1000);
+  // What says the workspace may be Enterprise now asks at once: a policy that starts managing
+  // the account, and an administrator's device-test link.
+  usePolicyStore.subscribe((policy, previous) => {
+    if (previous.status === "unmanaged" && policy.status === "managed")
+      refreshCurrentManagedIdentity();
+  });
+  window.electronAPI?.onEnterpriseAudioTestRequested?.(refreshCurrentManagedIdentity);
   window.electronAPI?.onManagedEnterpriseConfigChanged?.((snapshot) => {
     const state = useEnterpriseIdentityStore.getState();
     if (
