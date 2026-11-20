@@ -156,6 +156,23 @@ test("per-provider transcription model memory", async (t) => {
       assert.equal(memory[`${context}:corti`], "corti-transcribe");
     }
   });
+
+  await t.test("setCloudTranscriptionForAllScopes keeps the model for OpenWhispr Cloud", () => {
+    state().setCloudTranscriptionProvider("openai");
+    state().setCloudTranscriptionModel("gpt-4o-transcribe");
+
+    state().setCloudTranscriptionForAllScopes({
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "openwhispr",
+      cloudTranscriptionProvider: "openwhispr",
+    });
+
+    assert.equal(state().cloudTranscriptionProvider, "openwhispr");
+    assert.equal(state().cloudTranscriptionModel, "gpt-4o-transcribe");
+    assert.equal(state().meetingCloudTranscriptionModel, "gpt-4o-transcribe");
+    assert.equal(state().uploadCloudTranscriptionModel, "gpt-4o-transcribe");
+    assert.equal(state().transcriptionModelByProvider["dictation:openai"], "gpt-4o-transcribe");
+  });
 });
 
 test("unset upload/meeting local providers inherit dictation, and onboarding mirrors them", async (t) => {
