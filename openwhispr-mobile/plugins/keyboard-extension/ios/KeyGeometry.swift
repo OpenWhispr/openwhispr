@@ -90,8 +90,9 @@ struct KeyGeometry {
   ) -> KeyGeometry {
     let rows = KeyRows.letters(language: language, layout: layout)
     let widest = rows.map(\.count).max() ?? 10
-    let gap: CGFloat = widest > 10 ? 5 : 6
-    let margin: CGFloat = widest > 10 ? 3 : 6.5
+    // Apple's German keyboard keeps the ten-key gaps and margins; its eleven keys are narrower.
+    let gap: CGFloat = 6
+    let margin: CGFloat = 6.5
     let keyWidth = (width - 2 * margin - CGFloat(widest - 1) * gap) / CGFloat(widest)
     let pitch = keyWidth + gap
     var centres: [Character: CGPoint] = [:]

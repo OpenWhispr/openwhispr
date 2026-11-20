@@ -14,6 +14,10 @@ if [ ! -x "$OUT" ] || [ -z "${KEYBOARD_TYPING_REUSE:-}" ]; then
     "$IOS/TypingLexicon.swift" \
     "$IOS/Autocorrector.swift" \
     "$IOS/TypingSession.swift" \
+    "$IOS/SwipeDecoder.swift" \
+    "$IOS/HitTargetModel.swift" \
+    "$IOS/TrackpadModel.swift" \
+    "$IOS/EmojiCatalog.swift" \
     "$PLUGIN/tests/typing"/*.swift \
     -o "$OUT"
 fi

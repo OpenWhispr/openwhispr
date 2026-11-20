@@ -55,3 +55,6 @@ skills-lock.json
 
 # Keyboard data: raw corpus downloads (see plugins/keyboard-extension/tools/fetch-sources.sh)
 plugins/keyboard-extension/data/.cache/
+
+# keyboard data tooling
+__pycache__/

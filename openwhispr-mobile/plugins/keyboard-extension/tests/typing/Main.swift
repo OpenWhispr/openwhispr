@@ -44,6 +44,10 @@ enum TypingMain {
       exit(TypingTests.run(plugin: plugin) ? 0 : 1)
     case "autocorrect":
       AutocorrectBench.run(environment(layoutAt: nil), verbose: verbose)
+    case "swipe":
+      SwipeBench.run(environment(layoutAt: 1), verbose: verbose)
+    case "targets":
+      TargetsBench.run(environment(layoutAt: 1), verbose: verbose)
     default:
       print("Unknown command \(arguments[1])")
       exit(2)

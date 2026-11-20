@@ -15,6 +15,10 @@ enum TypingTests {
   }
 
   static func run(plugin: URL) -> Bool {
+    runHitTargetTests(plugin: plugin)
+    runTrackpadTests()
+    runEmojiTests(plugin: plugin)
+    runSwipeTests(plugin: plugin)
     print("Typing engine tests: \(checks - failures)/\(checks) passed")
     return failures == 0
   }
