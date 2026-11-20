@@ -5,9 +5,8 @@ export type OnboardingStep =
   | 'signin'
   | 'pitch'
   | 'how'
-  | 'practiceMessage'
-  | 'practiceEmail'
-  | 'practiceList'
+  | 'practiceDictate'
+  | 'practiceAssistant'
   | 'practiceEdit'
   | 'languages'
   | 'apps'
@@ -25,9 +24,8 @@ const SHARED: OnboardingStep[] = [
   'signin',
   'pitch',
   'how',
-  'practiceMessage',
-  'practiceEmail',
-  'practiceList',
+  'practiceDictate',
+  'practiceAssistant',
   'practiceEdit',
   'languages',
   'apps',
@@ -68,8 +66,16 @@ function read(key: string): string | null {
   }
 }
 
+// Steps saved by the v3 build, before the practices became dictate, assistant and edit.
+const RENAMED: Record<string, OnboardingStep> = {
+  practiceMessage: 'practiceDictate',
+  practiceEmail: 'practiceAssistant',
+  practiceList: 'practiceEdit',
+};
+
 export function savedStep(): OnboardingStep {
-  const saved = read(STEP_KEY) as OnboardingStep | null;
+  const stored = read(STEP_KEY);
+  const saved = (stored && (RENAMED[stored] ?? stored)) as OnboardingStep | null;
   return saved && [...stepsFor('cloud'), ...stepsFor('private')].includes(saved) ? saved : 'splash';
 }
 

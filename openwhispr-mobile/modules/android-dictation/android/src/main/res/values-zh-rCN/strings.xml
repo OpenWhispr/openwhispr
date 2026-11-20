@@ -1,5 +1,5 @@
 <resources>
-  <string name="ow_insertion_label">OpenWhispr · 插入文字</string>
+  <string name="ow_insertion_label">OpenWhispr</string>
   <string name="ow_insertion_description">无障碍功能允许 OpenWhispr 将结果插入当前输入框。开始听写时会读取该输入框，OpenWhispr 输入文字后的 45 秒内会再次读取，这样你在其中修改的词就可以加入你的词典。不会读取其他任何输入框，密码框也被排除在外。它不会发送消息。它还会检查是否有文本框处于焦点，以便只在你输入时显示悬浮球。</string>
   <string name="ow_bubble_ready">OpenWhispr 已就绪</string>
   <string name="ow_bubble_recording">OpenWhispr · 正在聆听…</string>

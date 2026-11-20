@@ -126,7 +126,7 @@ export const settingsTranslations: Record<
     insertionNotice:
       'Para escribir tu texto en Messages, Gmail y otras apps, OpenWhispr usa Accesibilidad de Android. Solo lee el cuadro de texto donde dictas: al empezar y durante 45 segundos después de que tus palabras se inserten, para que una palabra que corrijas ahí se una a tu diccionario. Nunca los campos de contraseña, y nunca toca botones ni envía mensajes.',
     insertionNoticeSteps:
-      'En la siguiente pantalla, abre Aplicaciones instaladas → Inserción de texto de OpenWhispr y actívala.',
+      'En la siguiente pantalla, abre Aplicaciones instaladas → OpenWhispr y actívalo.',
     permissionOn: '{{name}} está activado',
     searchLanguages: 'Buscar idiomas',
     autoDetect: 'Detectar automáticamente',
@@ -421,7 +421,7 @@ export const settingsTranslations: Record<
     insertionNotice:
       'Pour placer votre texte dans Messages, Gmail et d’autres apps, OpenWhispr utilise l’Accessibilité d’Android. Il lit uniquement le champ où vous dictez : au démarrage, puis pendant 45 secondes après l’insertion de vos mots, afin qu’un mot que vous corrigez là rejoigne votre dictionnaire. Jamais les champs de mot de passe, et il n’appuie jamais sur des boutons ni n’envoie de messages.',
     insertionNoticeSteps:
-      'Sur l’écran suivant, ouvrez Applications installées → Insertion de texte OpenWhispr et activez-la.',
+      'Sur l’écran suivant, ouvrez Applications installées → OpenWhispr et activez-le.',
     permissionOn: '{{name}} est activé',
     searchLanguages: 'Rechercher une langue',
     autoDetect: 'Détection automatique',
@@ -715,7 +715,7 @@ export const settingsTranslations: Record<
     insertionNotice:
       'Um deinen Text in Messages, Gmail und andere Apps einzufügen, nutzt OpenWhispr die Android-Bedienungshilfe. Sie liest nur das Textfeld, in das du diktierst: beim Start und 45 Sekunden nach dem Einfügen deiner Worte, damit ein Wort, das du dort korrigierst, in dein Wörterbuch kommt. Nie Passwortfelder, und sie tippt nie auf Schaltflächen und sendet keine Nachrichten.',
     insertionNoticeSteps:
-      'Öffne auf dem nächsten Bildschirm Installierte Apps → OpenWhispr-Texteingabe und schalte sie ein.',
+      'Öffne auf dem nächsten Bildschirm Installierte Apps → OpenWhispr und schalte es ein.',
     permissionOn: '{{name}} ist an',
     searchLanguages: 'Sprachen suchen',
     autoDetect: 'Automatisch erkennen',
@@ -1007,7 +1007,7 @@ export const settingsTranslations: Record<
     insertionNotice:
       'Para colocar suas palavras no Messages, no Gmail e em outros apps, o OpenWhispr usa a Acessibilidade do Android. Ele lê apenas a caixa de texto em que você dita: quando você começa e por 45 segundos depois que suas palavras entram, para que uma palavra que você corrija ali entre no seu dicionário. Nunca campos de senha, e nunca toca em botões nem envia mensagens.',
     insertionNoticeSteps:
-      'Na próxima tela, abra Apps instalados → Inserção de texto do OpenWhispr e ative.',
+      'Na próxima tela, abra Apps instalados → OpenWhispr e ative.',
     permissionOn: '{{name}} está ativado',
     searchLanguages: 'Buscar idiomas',
     autoDetect: 'Detectar automaticamente',
@@ -1298,7 +1298,7 @@ export const settingsTranslations: Record<
     insertionNotice:
       'Per inserire le tue parole in Messages, Gmail e altre app, OpenWhispr usa l’Accessibilità di Android. Legge solo la casella di testo in cui detti: quando inizi e per 45 secondi dopo che le tue parole sono state inserite, così una parola che correggi lì entra nel tuo dizionario. Mai i campi password, e non tocca mai i pulsanti né invia messaggi.',
     insertionNoticeSteps:
-      'Nella schermata successiva, apri App installate → Inserimento testo di OpenWhispr e attivalo.',
+      'Nella schermata successiva, apri App installate → OpenWhispr e attivalo.',
     permissionOn: '{{name}} è attivo',
     searchLanguages: 'Cerca lingue',
     autoDetect: 'Rileva automaticamente',
@@ -1590,7 +1590,7 @@ export const settingsTranslations: Record<
     insertionNotice:
       'Чтобы вставлять текст в Messages, Gmail и другие приложения, OpenWhispr использует спец. возможности Android. Он читает только поле, в которое вы диктуете: когда вы начинаете и в течение 45 секунд после вставки ваших слов, чтобы слово, которое вы там исправите, попало в ваш словарь. Никогда поля паролей, и он не нажимает кнопки и не отправляет сообщения.',
     insertionNoticeSteps:
-      'На следующем экране откройте «Установленные приложения» → «Ввод текста OpenWhispr» и включите его.',
+      'На следующем экране откройте «Установленные приложения» → «OpenWhispr» и включите его.',
     permissionOn: '{{name}}: включено',
     searchLanguages: 'Поиск языков',
     autoDetect: 'Определять автоматически',
@@ -1881,7 +1881,7 @@ export const settingsTranslations: Record<
     insertionNoticeTitle: '插入你的文字',
     insertionNotice:
       '为了把文字放进 Messages、Gmail 等应用，OpenWhispr 会使用 Android 无障碍功能。它只读取你正在听写的文本框：开始听写时，以及文字输入后的 45 秒内，这样你在其中修改的词就会加入你的词典。绝不读取密码框，也绝不点按按钮或发送消息。',
-    insertionNoticeSteps: '在下一个界面中，打开“已安装的应用”→“OpenWhispr 文字插入”并开启。',
+    insertionNoticeSteps: '在下一个界面中，打开“已安装的应用”→“OpenWhispr”并开启。',
     permissionOn: '{{name}}已开启',
     searchLanguages: '搜索语言',
     autoDetect: '自动检测',
@@ -2154,7 +2154,7 @@ export const settingsTranslations: Record<
     insertionNotice:
       '為了把文字放進 Messages、Gmail 等 App，OpenWhispr 會使用 Android 無障礙功能。它只讀取你正在聽寫的文字框：開始聽寫時，以及文字輸入後的 45 秒內，這樣你在其中修改的字詞就會加入你的字典。絕不讀取密碼欄位，也絕不點選按鈕或傳送訊息。',
     insertionNoticeSteps:
-      '在下一個畫面中，開啟「已安裝的應用程式」→「OpenWhispr 文字插入」並開啟。',
+      '在下一個畫面中，開啟「已安裝的應用程式」→「OpenWhispr」並開啟。',
     permissionOn: '{{name}}已開啟',
     searchLanguages: '搜尋語言',
     autoDetect: '自動偵測',
@@ -2431,7 +2431,7 @@ export const settingsTranslations: Record<
     insertionNotice:
       'Messages、Gmail などのアプリに文字を入れるため、OpenWhispr は Android のユーザー補助を使います。読み取るのは音声入力中の入力欄のみで、入力を始めたときと、文字が入ってから 45 秒間だけです。そこで修正した語句が辞書に追加されます。パスワード欄は読み取らず、ボタンのタップやメッセージの送信も行いません。',
     insertionNoticeSteps:
-      '次の画面で「インストール済みのアプリ」→「OpenWhispr テキスト挿入」を開き、オンにしてください。',
+      '次の画面で「インストール済みのアプリ」→「OpenWhispr」を開き、オンにしてください。',
     permissionOn: '{{name}}はオンです',
     searchLanguages: '言語を検索',
     autoDetect: '自動検出',
@@ -2718,7 +2718,7 @@ export const settingsTranslations: Record<
     insertionNotice:
       'لإدراج كلماتك في Messages وGmail وتطبيقات أخرى، يستخدم OpenWhispr إمكانية الوصول في Android. يقرأ فقط مربع النص الذي تُملي فيه: عند البدء، ولمدة 45 ثانية بعد إدراج كلماتك، حتى تنضم الكلمة التي تصححها هناك إلى قاموسك. ولا يقرأ حقول كلمات المرور أبدًا، ولا يضغط الأزرار ولا يرسل الرسائل.',
     insertionNoticeSteps:
-      'في الشاشة التالية، افتح التطبيقات المثبّتة ← إدراج النص في OpenWhispr وفعّله.',
+      'في الشاشة التالية، افتح التطبيقات المثبّتة ← OpenWhispr وفعّله.',
     permissionOn: '{{name}} مفعّل',
     searchLanguages: 'البحث في اللغات',
     autoDetect: 'الكشف تلقائيًا',

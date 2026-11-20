@@ -21,16 +21,15 @@ Object.defineProperty(globalThis, 'localStorage', {
 describe('Android onboarding flow', () => {
   beforeEach(() => store.clear());
 
-  it('runs sign-in, the practices and permissions before the Cloud or Private choice', () => {
+  it('runs sign-in, the practices and permissions before the Cloud or On device choice', () => {
     const steps = stepsFor('cloud');
-    expect(steps.slice(0, 8)).toEqual([
+    expect(steps.slice(0, 7)).toEqual([
       'splash',
       'signin',
       'pitch',
       'how',
-      'practiceMessage',
-      'practiceEmail',
-      'practiceList',
+      'practiceDictate',
+      'practiceAssistant',
       'practiceEdit',
     ]);
     expect(steps.indexOf('notifications')).toBeLessThan(steps.indexOf('mode'));
@@ -59,6 +58,13 @@ describe('Android onboarding flow', () => {
     clearProgress();
     expect(savedStep()).toBe('splash');
     expect(savedMode()).toBe('cloud');
+  });
+
+  it('resumes a practice saved under its v3 name', () => {
+    localStorage.setItem('android-onboarding-v3-step', 'practiceEmail');
+    expect(savedStep()).toBe('practiceAssistant');
+    localStorage.setItem('android-onboarding-v3-step', 'practiceList');
+    expect(savedStep()).toBe('practiceEdit');
   });
 
   it('ignores a step saved by an older build', () => {

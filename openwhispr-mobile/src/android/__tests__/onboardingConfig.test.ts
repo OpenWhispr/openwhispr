@@ -7,6 +7,10 @@ jest.mock('../../../modules/android-dictation/src', () => ({
   AndroidDictation: { getLocale: () => mockLocale },
 }));
 jest.mock('../models', () => ({ modelSupported: () => true }));
+const mockHold = jest.fn();
+jest.mock('../settings/bubbleAppearance', () => ({
+  setHoldAction: (value: string) => mockHold(value),
+}));
 jest.mock('@/store/useConfigStore', () => {
   const state: { config: unknown; updateConfig: unknown } = {
     config: undefined,
@@ -26,7 +30,23 @@ beforeEach(() => {
   useConfigStore.setState({ config: undefined, updateConfig } as never);
 });
 
-describe('Cloud or Private', () => {
+describe('Cloud or On device', () => {
+  it('On device leaves off what setup skipped: cleanup and the hold menu', async () => {
+    await applyPrivateConfig({ cleanup: false, assistant: false });
+    expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({ cleanupEnabled: false }));
+    expect(mockHold).toHaveBeenLastCalledWith('nothing');
+    await applyPrivateConfig({ cleanup: true, assistant: true });
+    expect(updateConfig).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cleanupEnabled: true }),
+    );
+    expect(mockHold).toHaveBeenLastCalledWith('menu');
+  });
+
+  it('Cloud turns the hold menu back on', async () => {
+    await applyCloudConfig();
+    expect(mockHold).toHaveBeenLastCalledWith('menu');
+  });
+
   it('Private keeps dictation, cleanup, notes and the assistant on the phone', async () => {
     await applyPrivateConfig();
     expect(updateConfig).toHaveBeenCalledWith(

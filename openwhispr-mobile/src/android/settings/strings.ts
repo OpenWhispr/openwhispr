@@ -174,7 +174,7 @@ export const settingsEnglish = {
   insertionNotice:
     'To put your words into Messages, Gmail and other apps, OpenWhispr uses Android Accessibility. It only reads the text box you’re dictating into: when you start, and for 45 seconds after your words go in, so a word you fix there joins your dictionary. Never password fields, and it never taps buttons or sends messages.',
   insertionNoticeSteps:
-    'On the next screen, open Installed apps → OpenWhispr text insertion and turn it on.',
+    'On the next screen, open Installed apps → OpenWhispr and turn it on.',
   permissionOn: '{{name}} is on',
   // Language
   searchLanguages: 'Search languages',

@@ -1,5 +1,5 @@
 <resources>
-  <string name="ow_insertion_label">OpenWhispr · テキストを挿入</string>
+  <string name="ow_insertion_label">OpenWhispr</string>
   <string name="ow_insertion_description">ユーザー補助により、OpenWhispr は選択中の欄に結果を挿入できます。その欄は音声入力を始めたときと、OpenWhispr が文字を入力してから 45 秒間読み取られ、そこで修正した語句を辞書に追加できます。ほかの欄は読み取らず、パスワード欄は除外されます。メッセージの送信は行いません。入力中だけバブルを表示するため、テキスト欄にフォーカスがあるかどうかも確認します。</string>
   <string name="ow_bubble_ready">OpenWhispr は準備完了です</string>
   <string name="ow_bubble_recording">OpenWhispr · 聞き取り中…</string>

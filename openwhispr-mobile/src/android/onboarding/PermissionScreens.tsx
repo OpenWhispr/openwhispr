@@ -17,12 +17,14 @@ import {
   LinkButton,
   PillButton,
   Halo,
+  PulseRings,
   Screen,
   colors,
   s,
 } from './kit';
 import { useOnboardingT } from './strings';
 import { appIcon } from './AppsScreen';
+import { glassEdge } from '../home/kit';
 
 const EMPTY: BubbleStatus = {
   overlay: false,
@@ -109,39 +111,68 @@ export function OverlayScreen({ onBack, onNext }: { onBack: () => void; onNext: 
       <Text textBreakStrategy="balanced" style={[s.body, { textAlign: 'center' }]}>
         {t('overlayBody')}
       </Text>
-      <View style={p.overlayArt} importantForAccessibility="no-hide-descendants">
-        <View style={[p.overlayBubble, s.center]}>
-          <Halo size={88} />
-          <BubbleIcon size={60} />
-        </View>
-        <View style={p.overlayCard}>
-          <SettingCard header="OpenWhispr" label={t('overlaySetting')} on />
-        </View>
-        <Svg
-          width="100%"
-          height="100%"
-          viewBox="0 0 361 300"
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        >
-          <Path
-            d="M 214 62 C 322 62 360 150 348 206 C 342 234 330 246 312 248"
-            stroke={colors.accent}
-            strokeWidth={2}
-            fill="none"
-            strokeLinecap="round"
-          />
-          <Path
-            d="M 324 238 L 312 248 L 326 258"
-            stroke={colors.accent}
-            strokeWidth={2}
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      </View>
+      <OverlayArt />
     </Screen>
+  );
+}
+
+// v4-07 (Figma 5278:8334), drawn on its own 352 x 274 dp board and scaled to the screen's width,
+// so the arrow always lands on top of the switch.
+const ART = { width: 352, height: 274 };
+
+function OverlayArt() {
+  const t = useOnboardingT();
+  const [width, setWidth] = useState(0);
+  const scale = width / ART.width;
+  return (
+    <View
+      style={{ width: '100%', aspectRatio: ART.width / ART.height, marginTop: 8 }}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      importantForAccessibility="no-hide-descendants"
+    >
+      {width > 0 ? (
+        <View
+          style={{
+            width: ART.width,
+            height: ART.height,
+            transform: [{ scale }],
+            transformOrigin: 'top left',
+          }}
+        >
+          <View style={[p.overlayBubble, s.center]}>
+            <PulseRings size={89.6} color="rgba(51,102,227,0.16)" />
+            <Halo size={117.6} color="rgba(51,102,227,0.08)" />
+            <Halo size={89.6} color="rgba(51,102,227,0.16)" />
+            <BubbleIcon size={56} />
+          </View>
+          <View style={p.overlayCard}>
+            <SettingCard header="OpenWhispr" label={t('overlaySetting')} on />
+          </View>
+          <Svg
+            width={ART.width}
+            height={ART.height}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          >
+            <Path
+              d="M 220 59 C 290 59 285.26 119 279.26 228"
+              stroke={colors.accent}
+              strokeWidth={2}
+              fill="none"
+              strokeLinecap="round"
+            />
+            <Path
+              d="M 271.26 220 L 279.26 230 L 287.26 220"
+              stroke={colors.accent}
+              strokeWidth={2}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -384,38 +415,28 @@ export function NotificationsScreen({
 }
 
 const p = StyleSheet.create({
-  toggle: { width: 46, height: 26, borderRadius: 13, padding: 3, justifyContent: 'center' },
-  toggleOn: { backgroundColor: colors.brandMid },
+  // Toggle/Switch from the design system (4173:8).
+  toggle: { width: 52.5, height: 23, borderRadius: 12, padding: 1.6, justifyContent: 'center' },
+  toggleOn: { backgroundColor: '#1555D4' },
   toggleOff: { backgroundColor: '#D9D7D2' },
-  knob: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFFFFF' },
-  settingCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOpacity: 0.07,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  },
-  settingHeader: { backgroundColor: colors.surface2, paddingHorizontal: 16, paddingVertical: 12 },
+  knob: { width: 32, height: 19.7, borderRadius: 10, backgroundColor: '#FFFFFF' },
+  settingCard: { ...glassEdge, borderRadius: 20, overflow: 'hidden' },
+  settingHeader: { backgroundColor: '#F8F7F5', paddingHorizontal: 18, paddingVertical: 14 },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    minHeight: 52,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     gap: 12,
   },
-  overlayArt: { width: '100%', aspectRatio: 361 / 300, marginTop: 8 },
   overlayBubble: {
     position: 'absolute',
-    left: '50%',
-    top: 18,
-    width: 88,
-    height: 88,
-    marginLeft: -44,
+    left: 176 - 58.8,
+    top: 0,
+    width: 117.6,
+    height: 117.6,
   },
-  overlayCard: { position: 'absolute', left: 24, right: 40, top: '58%' },
+  overlayCard: { position: 'absolute', left: 27.5, width: 297, top: 169 },
   number: {
     width: 24,
     height: 24,

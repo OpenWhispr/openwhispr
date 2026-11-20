@@ -1,5 +1,5 @@
 <resources>
-  <string name="ow_insertion_label">OpenWhispr text insertion</string>
+  <string name="ow_insertion_label">OpenWhispr</string>
   <string name="ow_insertion_description">Inserts your dictation into the field you focused. That field is read when you start dictating, and again for 45 seconds after OpenWhispr types into it, so a word you correct there can be added to your dictionary. No other field is read, and password fields are excluded. OpenWhispr does not send messages, tap buttons, or monitor your screen. It also checks whether a text box is focused, so the bubble only shows while you type.</string>
   <string name="ow_bubble_ready">OpenWhispr is ready</string>
   <string name="ow_bubble_recording">OpenWhispr is recording</string>
