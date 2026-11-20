@@ -110,7 +110,7 @@ object BubblePolicy {
 
   /**
    * Whether a finger at ([x], [y]) is on the listening ✕: a square target [half] from the ✕'s centre each
-   * way (48 dp across, though the ✕ draws 28 dp). The bubble wins where the two overlap, so a small
+   * way (48 dp across, though the ✕ draws 32 dp). The bubble wins where the two overlap, so a small
    * bubble's tap still stops rather than cancels.
    */
   fun overCancel(x: Float, y: Float, cancelX: Float, cancelY: Float, half: Float, onBubble: Boolean) =

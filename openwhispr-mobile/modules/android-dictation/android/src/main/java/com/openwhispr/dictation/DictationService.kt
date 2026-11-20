@@ -353,11 +353,12 @@ class DictationService : Service() {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; clipChildren = false; clipToPadding = false
       }
       // The ✕ sits on the side facing the middle of the screen.
-      val cancelParams = LinearLayout.LayoutParams(px(28f), px(28f))
+      // 32 dp, 10 dp from the bubble (Josh, 20 Nov); it grows to 36 dp under the thumb.
+      val cancelParams = LinearLayout.LayoutParams(px(32f), px(32f))
       if (dockRight) {
-        row.addView(cancel, cancelParams.apply { marginEnd = px(14f) }); row.addView(bubble, LinearLayout.LayoutParams(shown, shown))
+        row.addView(cancel, cancelParams.apply { marginEnd = px(10f) }); row.addView(bubble, LinearLayout.LayoutParams(shown, shown))
       } else {
-        row.addView(bubble, LinearLayout.LayoutParams(shown, shown)); row.addView(cancel, cancelParams.apply { marginStart = px(14f) })
+        row.addView(bubble, LinearLayout.LayoutParams(shown, shown)); row.addView(cancel, cancelParams.apply { marginStart = px(10f) })
       }
       column = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; clipChildren = false; clipToPadding = false
@@ -371,7 +372,7 @@ class DictationService : Service() {
     bubble.layoutParams = bubble.layoutParams.apply { width = shown; height = shown }
     bubble.dot = if (appearance.shrinkToDot) shrink else 0f
     cancel.visibility = if (state == BubbleState.LISTENING) View.VISIBLE else View.GONE
-    cancel.ringDiameter = px(44f).toFloat()
+    cancel.ringDiameter = px(48f).toFloat()
     if (state != BubbleState.LISTENING) { cancelTouch = false; cancel.clearSelection() }
     bubble.contentDescription = getString(if (state == BubbleState.LISTENING) R.string.ow_bubble_stop else R.string.ow_bubble_talk)
     applyAlpha()
@@ -565,7 +566,7 @@ class DictationService : Service() {
   private var cancelTouch = false
   private fun startsOnCancel(event: MotionEvent) =
     state == BubbleState.LISTENING && !stopping && event.actionMasked == MotionEvent.ACTION_DOWN && overCancel(event)
-  /** Whether the finger is on the ✕'s 48 dp target, which is wider than the 28 dp ✕ it draws. */
+  /** Whether the finger is on the ✕'s 48 dp target, which is wider than the 32 dp ✕ it draws. */
   private fun overCancel(event: MotionEvent): Boolean {
     val cancel = cancelButton ?: return false
     if (state != BubbleState.LISTENING || !cancel.isShown) return false

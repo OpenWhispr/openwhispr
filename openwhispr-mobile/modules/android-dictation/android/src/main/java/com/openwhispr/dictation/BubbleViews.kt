@@ -65,9 +65,9 @@ class GlyphButton(context: Context, private val glyph: Glyph, private val fill: 
   init { isClickable = true; isFocusable = true }
   override fun getAccessibilityClassName(): CharSequence = android.widget.Button::class.java.name
 
-  /** The soft grey ring drawn behind a selected button (44 dp on the listening ✕); 0 draws none. */
+  /** The soft grey ring drawn behind a selected button (48 dp on the listening ✕); 0 draws none. */
   var ringDiameter = 0f
-  /** 0 at rest, 1 selected: the button grows to 1.15 and the ring fades in. Drawn, not a view scale, so it adds to the pop. */
+  /** 0 at rest, 1 selected: the button grows to 1.125 (32 → 36 dp) and the ring fades in. Drawn, not a view scale, so it adds to the pop. */
   private var selection = 0f
   private var selecting: ValueAnimator? = null
   private var under = false
@@ -96,7 +96,7 @@ class GlyphButton(context: Context, private val glyph: Glyph, private val fill: 
       ringPaint.alpha = (18 * selection).toInt()
       canvas.drawCircle(cx, cy, ringDiameter / 2, ringPaint)
     }
-    val grow = if (BubbleMotion.reduced(context)) 1f else 1f + 0.15f * selection
+    val grow = if (BubbleMotion.reduced(context)) 1f else 1f + 0.125f * selection
     canvas.save()
     canvas.scale(grow, grow, cx, cy)
     drawButton(canvas, cx, cy)
@@ -109,8 +109,8 @@ class GlyphButton(context: Context, private val glyph: Glyph, private val fill: 
     stroke.strokeWidth = 2f * unit
     when (glyph) {
       Glyph.CLOSE -> {
-        // The listening ✕ (V1/Satellite · cancel): on a 28 dp circle, a 2.2 dp stroke with arms 5.8 dp
-        // across, and a 6 % ink hairline edge.
+        // The listening ✕ (V1/Satellite · cancel), in proportion to Figma's 28 dp drawing: a 2.2 dp stroke
+        // with arms 5.8 dp across, and a 6 % ink hairline edge.
         edge.strokeWidth = size / 28f
         canvas.drawCircle(cx, cy, size / 2 - edge.strokeWidth / 2, edge)
         stroke.strokeWidth = size * 2.2f / 28f
