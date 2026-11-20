@@ -106,7 +106,7 @@ Plans:
 
 **Goal:** Connectors and capability messaging work on Titanium accounts; dropped features leave no dead ends.
 **Depends on:** Phase 6; titanium-licensing v3.5 Phase 32 (IDP-32) merged (PR #304, 2026-10-14)
-**Requirements:** FEAT-04, FEAT-05, FEAT-06
+**Requirements:** FEAT-04, FEAT-05, FEAT-06, AUTH-05 (re-homed from Phase 6: fork `isPaid` is the offline-verified Titanium license, `src/utils/connectorEligibility.ts:50-60` and `src/helpers/titanium/titaniumSession.js:178-197`, shipped by 07-01 in PR #21; the `/v1/licenses/lookup` call was not built, plan tiers deferred to v2 AUTH-08)
 **Success criteria:**
 
 1. Connector logins stored under the Titanium account id
