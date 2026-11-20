@@ -7956,6 +7956,7 @@ class IPCHandlers {
     const connectRealtimeStreaming = async (event, options) => {
       // Read before the key is, so a save during the token fetch marks these connections stale.
       const connectionKey = getMeetingConnectionKey(options, credentialGeneration);
+      const cancelGenerationAtStart = meetingPrepareCancelGeneration;
       const StreamingClass = getMeetingStreamingClient(options.provider);
       if (this._meetingMicStreaming?.isConnected) {
         await this._meetingMicStreaming.disconnect();
@@ -8013,6 +8014,17 @@ class IPCHandlers {
         );
         if (pairs.some(({ ref }) => !this[ref]?.isConnected)) {
           throw new Error("Meeting transcription connection closed during startup.");
+        }
+        // An stt-api socket opened under a license that changed, or for a prepare
+        // that was cancelled, while it connected must not stay warm.
+        if (
+          options.provider === "stt-api-realtime" &&
+          (meetingPrepareCancelGeneration !== cancelGenerationAtStart ||
+            getMeetingConnectionKey(options, credentialGeneration) !== connectionKey)
+        ) {
+          throw new Error(
+            "Meeting connection outdated (cancelled or license changed) during startup."
+          );
         }
         meetingConnectionKey = connectionKey;
       } catch (error) {
@@ -8086,6 +8098,8 @@ class IPCHandlers {
     let meetingConnectionOptions = null;
     let meetingConnectionWin = null;
     let meetingConnectionKey = null;
+    // Bumped by meeting-transcription-cancel so an in-flight stt-api connect is discarded.
+    let meetingPrepareCancelGeneration = 0;
     let meetingReconnectAudioBuffers = { mic: [], system: [] };
     let meetingReconnectAudioBytes = { mic: 0, system: 0 };
     let meetingReconnectReplaySources = new Set();
@@ -9283,6 +9297,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("meeting-transcription-cancel", async () => {
+      meetingPrepareCancelGeneration += 1;
       // A prepared-but-unrecorded stt-api stream holds a pool slot and sends
       // silence until dropped, so a cancel closes it.
       if (meetingConnectionOptions === null && isSttApiConnectionKey(meetingConnectionKey)) {

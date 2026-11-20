@@ -3,23 +3,36 @@
 // sign-in rather than a store default, so an existing BYOK install is untouched
 // and a signed-out install keeps the upstream default.
 import { FORK_DEFAULTS } from "./forkDefaults";
-import { getSettings, useSettingsStore } from "../stores/settingsStore";
+import { areSecretsHydrated, getSettings, useSettingsStore } from "../stores/settingsStore";
+import type { ApiKeySettings } from "../hooks/useSettings";
 import { shouldSeedSttApiCleanup } from "../services/cleanupAuth";
 import logger from "../utils/logger";
 
+// Every ApiKeySettings field (the compiler rejects a missing one), plus the
+// enterprise credentials that live outside it.
+const API_KEY_FIELDS: Record<keyof ApiKeySettings, true> = {
+  openaiApiKey: true,
+  anthropicApiKey: true,
+  geminiApiKey: true,
+  groqApiKey: true,
+  xaiApiKey: true,
+  mistralApiKey: true,
+  openrouterApiKey: true,
+  cortiClientId: true,
+  cortiClientSecret: true,
+  cortiApiKey: true,
+  tinfoilApiKey: true,
+  deepgramApiKey: true,
+  assemblyaiApiKey: true,
+  customTranscriptionApiKey: true,
+  cleanupCustomApiKey: true,
+};
 const BYOK_KEY_FIELDS = [
-  "openaiApiKey",
-  "anthropicApiKey",
-  "geminiApiKey",
-  "groqApiKey",
-  "openrouterApiKey",
-  "tinfoilApiKey",
-  "cortiApiKey",
-  "cleanupCustomApiKey",
+  ...Object.keys(API_KEY_FIELDS),
   "bedrockAccessKeyId",
   "azureApiKey",
   "vertexApiKey",
-] as const;
+];
 
 type SeedTarget = { provider: string; baseUrl: string; model: string };
 
@@ -31,7 +44,8 @@ const defaultTarget = (): SeedTarget | null => {
 };
 
 export function seedSttApiCleanup(licensed: boolean, target: SeedTarget | null = defaultTarget()) {
-  if (!target) return false;
+  // Without hydrated secrets a BYOK user would look keyless and get seeded.
+  if (!target || !areSecretsHydrated()) return false;
   const settings = getSettings() as unknown as Record<string, unknown>;
   const eligible = shouldSeedSttApiCleanup({
     licensed,

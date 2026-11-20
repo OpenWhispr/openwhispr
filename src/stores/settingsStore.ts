@@ -1445,6 +1445,11 @@ const SECRET_IPC_SAVERS = {
 
 type SecretProvider = keyof typeof SECRET_IPC_SAVERS;
 
+// Fork: true once secrets were read from the main process. Decisions that
+// depend on whether the user has BYOK keys must not run before (or without) it.
+let secretsHydrated = false;
+export const areSecretsHydrated = () => secretsHydrated;
+
 const secretSaveTimers: Partial<Record<SecretProvider, ReturnType<typeof setTimeout>>> = {};
 function debouncedSaveSecret(provider: SecretProvider, key: string) {
   if (!isBrowser) return;
@@ -3560,6 +3565,7 @@ export async function initializeSettings(): Promise<void> {
           hydrated.setOpenrouterApiKey(customRx);
         }
       }
+      secretsHydrated = true;
     } catch (err) {
       logger.warn(
         "Failed to hydrate secrets from main process",
