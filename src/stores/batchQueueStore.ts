@@ -145,11 +145,10 @@ export function processBatchQueue(
   diarization: DiarizationSettings
 ): void {
   if (useBatchQueueStore.getState().isProcessing) return;
-  if (
-    !isAudioFeatureAllowed(usePolicyStore.getState(), "upload") ||
-    (!isManagedTranscriptionActive() &&
-      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload"))
-  )
+  const policy = usePolicyStore.getState();
+  if (!isAudioFeatureAllowed(policy, "upload")) return;
+  const personalSettings = isManagedTranscriptionActive() ? null : getSettings();
+  if (personalSettings && !isTranscriptionContextAllowed(policy, personalSettings, "upload"))
     return;
   const run = ++runId;
   useBatchQueueStore.setState((s) => ({
@@ -164,6 +163,7 @@ export function processBatchQueue(
   const snapshotApiKey = transcribeOpts.transcription.getApiKey();
   const transcription: FileTranscriptionConfig = {
     ...transcribeOpts.transcription,
+    sarvamMode: transcribeOpts.transcription.sarvamMode ?? personalSettings?.sarvamMode,
     getApiKey: () => snapshotApiKey,
   };
 

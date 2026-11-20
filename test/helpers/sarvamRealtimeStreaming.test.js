@@ -242,6 +242,24 @@ test("meeting finals keep their capture time on both sides of an idle device", a
   }
 });
 
+test("the mic and system clients can recover the origin of an initial capture backlog", async () => {
+  const stream = new SarvamMeetingStreaming(Socket);
+  const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+  stream.ws.receive({ event: "session.begin" });
+  await ready;
+  const pcm = Buffer.alloc(4800);
+  // All five 100 ms blocks arrive together. Their delivery estimate initially
+  // places the first block 400 ms late.
+  for (let block = 0; block < 5; block++) stream.sendAudio(pcm, 1400);
+  let timestamp;
+  stream.onFinalTranscript = (_text, at) => {
+    timestamp = at;
+  };
+  stream.ws.receive({ event: "transcript.final", utterance_idx: 0, text: "hello", start_s: "0.2" });
+  assert.equal(timestamp, 1200);
+  await stream.disconnect({ commit: false });
+});
+
 test("a meeting stop gives up on a missing last final after 5 s without reporting an error", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   const stream = new SarvamMeetingStreaming(Socket);

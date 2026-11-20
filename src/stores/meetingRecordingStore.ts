@@ -504,11 +504,12 @@ interface DiarizationSeed {
   noteId: number | null;
   sequence: number;
   seedLength: number;
-  savedRowCount: number;
+  savedRowCount: number | null;
   fallbackTranscript: string;
   recorderName?: string;
 }
 const seedByDiarizationSession = new Map<string, DiarizationSeed>();
+const enqueueDiarizationCompletion = createSerialQueue();
 let preparePromise: Promise<void> | null = null;
 let ipcCleanups: Array<() => void> = [];
 let speakerIdentifications: SpeakerIdentification[] = [];
@@ -918,6 +919,7 @@ export interface StartRecordingArgs {
   noteTitle: string | null;
   folderId: number | null;
   seedSegments?: TranscriptSegment[];
+  noteTranscript?: string | null;
   recorderName?: string;
   diarizationEnabled?: boolean | null;
   expectedCount?: number | null;
@@ -940,9 +942,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
   if (isStartingFlag && !args.canAutoStart) return true;
   if (args.canAutoStart && !args.canAutoStart()) return false;
   const sessionId = createMeetingRecordingSessionId();
+  const refreshResumeSeed =
+    args.noteId != null &&
+    args.seedSegments === undefined &&
+    args.noteTranscript !== undefined &&
+    (useMeetingRecordingStore.getState().recordingNoteId === args.noteId ||
+      Array.from(seedByDiarizationSession.values()).some(
+        (pending) => pending.noteId === args.noteId
+      ));
   let automaticStartSuppressed = false;
   let automaticStartCancelled = false;
-  let recordingDisabled = false;
+  let startRefused = false;
   await meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {
     if (isRecordingFlag || isStartingFlag) return;
     const refresh = refreshEnterpriseIdentityForUse();
@@ -990,11 +1000,42 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         startSource: args.startSource,
         reason: "POLICY_MEETING_RECORDING_DISABLED",
       });
-      recordingDisabled = true;
+      startRefused = true;
       return;
     }
 
     await meetingRecordingStopBarrier.waitForPendingStop();
+    let seed = args.seedSegments ?? parseSeedSegments(args.noteTranscript);
+    if (refreshResumeSeed && args.noteId != null && window.electronAPI?.getNote) {
+      // The caller read the note before the policy/stop awaits. Order this read
+      // after any completion already merging into it, including its DB write.
+      const noteId = args.noteId;
+      const cancelled = new Promise<null>((resolve) =>
+        startOperation.onCancel(() => resolve(null))
+      );
+      try {
+        const read = enqueueDiarizationCompletion(async () => {
+          if (!startOperation.isCurrent()) return null;
+          return Promise.race([window.electronAPI.getNote(noteId), cancelled]);
+        });
+        // Cancel both a queued read and one already waiting on the database.
+        const note = await Promise.race([read, cancelled]);
+        if (startOperation.isCurrent()) {
+          if (!note || note.deleted_at) {
+            automaticStartCancelled = Boolean(args.canAutoStart);
+            startRefused = true;
+            return;
+          }
+          seed = parseSeedSegments(note.transcript);
+        }
+      } catch (error) {
+        if (startOperation.isCurrent()) {
+          reportMeetingError(describeMeetingSetupError(error));
+          startRefused = true;
+          return;
+        }
+      }
+    }
     if (!startOperation.isCurrent()) {
       automaticStartCancelled = Boolean(args.canAutoStart);
       return;
@@ -1030,7 +1071,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     );
 
     logger.info("Meeting transcription starting...", {}, "meeting");
-    const seed = args.seedSegments ?? [];
+    for (const pending of seedByDiarizationSession.values()) {
+      if (pending.noteId === args.noteId && pending.savedRowCount === null) {
+        // A failed stop write may have left only the last periodic save on
+        // disk. This is the actual boundary before the resumed recording adds rows.
+        pending.savedRowCount = Math.max(0, seed.length - pending.seedLength);
+      }
+    }
     const locks = new Map<string, string>();
     const keepSeedSelfLocks = !args.recorderName && !seed.some((segment) => segment.recorderName);
     let maxSpeakerIndex = -1;
@@ -1858,8 +1905,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       await teardownStart();
     }
   });
-  if (recordingDisabled) return false;
-  return automaticStartCancelled ? "cancelled" : !automaticStartSuppressed;
+  return automaticStartCancelled ? "cancelled" : !startRefused && !automaticStartSuppressed;
 }
 
 // Writes the live segments to the recording's note, serialized exactly as the
@@ -1955,11 +2001,15 @@ export async function stopRecording(
     const { recordingNoteId, segments: finalSegments } = useMeetingRecordingStore.getState();
     const hasNewSegments = finalSegments.length > sessionSeedLength;
     let stopTranscript = "";
+    let stopWriteFailed = false;
     const persistTranscript = async (transcript: string) => {
       if (recordingNoteId == null) return;
       try {
-        await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
+        const result = await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
+        if (result && !result.success) throw new Error(result.error || "Failed to save transcript");
+        stopWriteFailed = false;
       } catch (err) {
+        stopWriteFailed = true;
         logger.error(
           "Failed to persist final meeting transcript",
           { error: (err as Error).message, noteId: recordingNoteId },
@@ -2034,6 +2084,11 @@ export async function stopRecording(
       },
     });
 
+    if (diarizationSessionId && stopWriteFailed) {
+      const seed = seedByDiarizationSession.get(diarizationSessionId);
+      if (seed) seed.savedRowCount = null;
+    }
+
     useMeetingRecordingStore.setState({
       micPartial: "",
       systemPartial: "",
@@ -2107,7 +2162,6 @@ if (typeof window !== "undefined") {
   // Serialized so rapid re-record completions can't interleave around the
   // getNote await and overwrite each other's speaker labels — the later
   // result merges on top of the earlier one's persisted transcript.
-  const enqueueDiarizationCompletion = createSerialQueue();
   window.electronAPI?.onMeetingDiarizationComplete?.((data) => {
     enqueueDiarizationCompletion(async () => {
       const targetNoteId = data?.noteId;
@@ -2205,7 +2259,7 @@ if (typeof window !== "undefined") {
       const { segments: enriched, removedCount } = mergeSessionDiarization({
         existing,
         seedLength,
-        sessionEnd: seed ? seedLength + seed.savedRowCount : undefined,
+        sessionEnd: seed?.savedRowCount != null ? seedLength + seed.savedRowCount : undefined,
         fallbackTranscript: seed?.fallbackTranscript,
         segments: recordedSegments,
         removedSegments: data.removedSegments,

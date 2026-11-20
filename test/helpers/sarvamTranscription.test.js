@@ -126,6 +126,36 @@ mediaTest("untimed requests ignore unsolicited timing fields", async () => {
   }
 });
 
+for (const [reason, starts, ends] of [
+  ["timing past the final piece", [0, 1], [1, 3]],
+  ["starts out of order", [1, 0], [1.5, 2]],
+  ["ends out of order", [0, 0.5], [2, 1]],
+]) {
+  mediaTest(`Sarvam preserves the full text when a piece has ${reason}`, async () => {
+    const replies = [
+      {
+        transcript: "First.",
+        timestamps: { words: ["First."], start_time_seconds: [0], end_time_seconds: [1] },
+      },
+      {
+        transcript: "Last words.",
+        timestamps: {
+          words: ["Last", "words."],
+          start_time_seconds: starts,
+          end_time_seconds: ends,
+        },
+      },
+    ];
+    const result = await transcribeWithSarvam({
+      audioBuffer: audio(31),
+      apiKey: "dummy",
+      timestamps: true,
+      fetchImpl: async () => Response.json(replies.shift()),
+    });
+    assert.deepEqual(result, { text: "First. Last words." });
+  });
+}
+
 mediaTest("a failed or cancelled later segment never returns a partial success", async () => {
   let calls = 0;
   await assert.rejects(

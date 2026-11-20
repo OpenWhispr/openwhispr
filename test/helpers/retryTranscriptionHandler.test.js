@@ -1291,9 +1291,11 @@ test("retry: Groq writes only the retained dictation to both history fields", as
     cloudTranscriptionProvider: "groq",
     cloudTranscriptionModel: "whisper-large-v3",
     transcriptionMode: "providers",
+    preferredLanguage: "brx",
   });
   assert.equal(result.success, true);
   assert.equal(fetches.at(-1).init.body.get("response_format"), "verbose_json");
+  assert.equal(fetches.at(-1).init.body.get("language"), null);
   assert.deepEqual(update.mock.calls[0].arguments, [
     7,
     "Send the report today.",

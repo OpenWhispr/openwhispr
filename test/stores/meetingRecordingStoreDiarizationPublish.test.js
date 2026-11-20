@@ -315,6 +315,145 @@ const diarized = (text, timestamp, speakerName) => ({
 const rowsOf = (note) =>
   JSON.parse(note.transcript).map((row) => [row.text, row.timestamp, row.speakerName]);
 
+test("a note-backed resume honors deletion and cancellation while explicit rows stay caller-owned", async (t) => {
+  const { api, state, notes } = createElectronAPI({ stopDiarizationSessionId: "first" });
+  const store = await loadStore(t, api);
+  await store.startRecording(START_ARGS);
+  state.segmentCallback({ type: "final", source: "mic", text: "First.", timestamp: 1760000000000 });
+  await store.stopRecording();
+  const note = notes.get(NOTE_ID);
+  const args = { ...START_ARGS, noteTranscript: note.transcript };
+  let mainStarts = 0;
+  const start = api.meetingTranscriptionStart;
+  api.meetingTranscriptionStart = async (...options) => {
+    mainStarts++;
+    return start(...options);
+  };
+  const writes = state.updatedTranscripts.length;
+  for (const missing of [null, { ...note, deleted_at: "2026-11-01" }]) {
+    api.getNote = async () => missing;
+    assert.equal(await store.startRecording(args), false);
+  }
+  const read = deferred();
+  const reading = deferred();
+  api.getNote = () => {
+    reading.resolve();
+    return read.promise;
+  };
+  const pending = store.startRecording({ ...args, canAutoStart: () => true });
+  await reading.promise;
+  const stopped = store.stopRecording();
+  let cancelledBeforeRead = false;
+  void pending.then(() => {
+    cancelledBeforeRead = true;
+  });
+  await settle();
+  assert.ok(cancelledBeforeRead);
+  assert.equal(await pending, "cancelled");
+  assert.equal((await stopped).cancelledStart, true);
+  await settle();
+  assert.equal(mainStarts, 0);
+  assert.equal(state.updatedTranscripts.length, writes);
+
+  const completionRead = deferred();
+  let reads = 0;
+  api.getNote = () => {
+    reads++;
+    return completionRead.promise;
+  };
+  state.diarizationCallback({
+    noteId: NOTE_ID,
+    sessionId: "first",
+    segments: [diarized("First.", 0, "Carol")],
+  });
+  await settle();
+  assert.equal(reads, 1, "a cancelled database read must release the completion queue");
+  const queued = store.startRecording({ ...args, canAutoStart: () => true });
+  await settle();
+  const stopQueued = store.stopRecording();
+  let cancelledWhileQueued = false;
+  void queued.then(() => {
+    cancelledWhileQueued = true;
+  });
+  await settle();
+  assert.ok(cancelledWhileQueued);
+  assert.equal(await queued, "cancelled");
+  assert.equal((await stopQueued).cancelledStart, true);
+  completionRead.resolve(note);
+  read.resolve(note);
+  await settle();
+  assert.equal(reads, 1, "a queued resume must not read the note after cancellation");
+  assert.equal(mainStarts, 0);
+
+  api.getNote = async () => note;
+  await store.startRecording({
+    ...START_ARGS,
+    seedSegments: [{ id: "draft", source: "system", text: "Unsaved caller draft." }],
+  });
+  assert.deepEqual(
+    store.useMeetingRecordingStore.getState().segments.map(({ text }) => text),
+    ["Unsaved caller draft."]
+  );
+  await store.stopRecording();
+});
+
+for (const timing of ["during the next start", "after a failed stop write"]) {
+  test(`a resumed note preserves both repeated utterances ${timing}`, async (t) => {
+    const { api, state, notes } = createElectronAPI({ stopDiarizationSessionId: "first" });
+    const store = await loadStore(t, api);
+    const note = notes.get(NOTE_ID);
+    const live = (text, timestamp) =>
+      state.segmentCallback({ type: "final", source: "system", text, timestamp });
+    const completeFirst = async () => {
+      state.diarizationCallback({
+        noteId: NOTE_ID,
+        sessionId: "first",
+        segments: [diarized("Opening.", 0, "Carol"), diarized("Okay.", 1, "Carol")],
+      });
+      await settle();
+    };
+    await store.startRecording(START_ARGS);
+    live("Opening.", 1760000000000);
+    await store.persistLiveTranscript();
+    if (timing === "after a failed stop write") {
+      live("Okay.", 1760000001000);
+      const update = api.updateNote;
+      api.updateNote = async () => {
+        api.updateNote = update;
+        return { success: false, error: "disk busy" };
+      };
+    }
+    await store.stopRecording();
+    const permission = deferred();
+    if (timing === "during the next start")
+      api.isMeetingRecordingDisabled = () => permission.promise;
+    state.stopDiarizationSessionId = "second";
+    const starting = store.startRecording({
+      ...START_ARGS,
+      noteTranscript: note.transcript,
+    });
+    if (timing === "during the next start") {
+      await completeFirst();
+      permission.resolve(false);
+    }
+    await starting;
+    live("Okay.", 1760000100000);
+    await store.stopRecording();
+    if (timing === "after a failed stop write") await completeFirst();
+    state.diarizationCallback({
+      noteId: NOTE_ID,
+      sessionId: "second",
+      segments: [diarized("Okay.", 0.25, "Dave")],
+    });
+    await settle();
+    assert.deepEqual(rowsOf(note), [
+      ["Opening.", 0, "Carol"],
+      ["Okay.", 1, "Carol"],
+      ["Okay.", 0.25, "Dave"],
+    ]);
+  });
+}
+
 for (const timing of [
   "while recording",
   "failed live save",

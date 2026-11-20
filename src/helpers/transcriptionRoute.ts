@@ -8,6 +8,7 @@
 // Routes never carry secrets — `auth.keyRef` names the key slot the executor
 // resolves itself.
 import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants.ts";
+import { getBaseLanguageCode, getWhisperLanguageHint } from "../utils/languageSupport.ts";
 import {
   isSecureHttpEndpoint,
   isAzureOpenAIEndpoint,
@@ -364,10 +365,9 @@ export function resolveTranscriptionRoute({
   const s = settings || {};
   const managed = policy?.status === "managed";
   const language =
-    request?.effectiveLanguage ??
-    (!s.preferredLanguage || s.preferredLanguage === "auto"
+    request?.effectiveLanguage === "auto"
       ? undefined
-      : s.preferredLanguage.split("-")[0]);
+      : (request?.effectiveLanguage ?? getBaseLanguageCode(s.preferredLanguage));
 
   // Managed enterprise STT outranks every personal setting; the resolution is
   // already policy-checked where it was computed (enterpriseIdentityStore /
@@ -574,6 +574,6 @@ export function resolveTranscriptionRoute({
     model,
     auth: { scheme: "bearer", keyRef: resolvedProvider },
     sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
-    language,
+    language: /(?:^|\/)whisper-/.test(model) ? getWhisperLanguageHint(language) : language,
   };
 }

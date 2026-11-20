@@ -144,6 +144,29 @@ function harness({ native = true, local = false } = {}) {
 }
 const bytes = (buffers) => buffers.reduce((total, buffer) => total + buffer.length, 0);
 
+test("a backlog of separate PCM reads preserves the sample timeline and an actual preceding gap", () => {
+  const {
+    createMeetingCaptureClock,
+    captureStartFromDelivery,
+  } = require("../../src/helpers/meetingCaptureClock");
+  for (const silenceMs of [0, 60000]) {
+    const clock = createMeetingCaptureClock();
+    const buffer = Buffer.alloc(4800);
+    clock.append(buffer, 0);
+    // The first block after any real silence arrives on time. A later event-loop
+    // stall delivers 34 separate native reads in one turn.
+    clock.append(buffer, 100 + silenceMs);
+    for (let frame = 2; frame < 51; frame++) {
+      const delivery = silenceMs + Math.max(3500, (frame + 1) * 100);
+      clock.append(buffer, captureStartFromDelivery(buffer, delivery));
+    }
+    assert.equal(clock.elapsedMs(100, true), 100);
+    assert.equal(clock.elapsedMs(100), 100 + silenceMs);
+    assert.equal(clock.elapsedMs(200), 200 + silenceMs);
+    assert.equal(clock.elapsedMs(5000), 5000 + silenceMs);
+  }
+});
+
 test("Sarvam keeps native, buffered renderer and replay audio on the local speaker clock", async () => {
   const run = harness({ native: false });
   await run.start();

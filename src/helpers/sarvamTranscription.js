@@ -33,7 +33,7 @@ function boundary(pcm) {
   return cut;
 }
 
-function phraseSegments(text, timestamps, offset) {
+function phraseSegments(text, timestamps, offset, duration) {
   const { words, start_time_seconds: starts, end_time_seconds: ends } = timestamps || {};
   if (
     !Array.isArray(words) ||
@@ -47,7 +47,15 @@ function phraseSegments(text, timestamps, offset) {
   for (const [index, phrase] of words.entries()) {
     const start = starts[index];
     const end = ends[index];
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start) return null;
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      start < 0 ||
+      end < start ||
+      end > duration
+    )
+      return null;
+    if (index > 0 && (start < starts[index - 1] || end < ends[index - 1])) return null;
     segments.push({ text: phrase, start: offset + start, end: offset + end });
   }
   return mapVerboseSegments({ text, segments });
@@ -193,7 +201,12 @@ async function transcribeWithSarvam({
         const text = piece.transcript.trim();
         parts.push(text);
         if (segments && text) {
-          const phrases = phraseSegments(text, piece.timestamps, position / BYTES_PER_SECOND);
+          const phrases = phraseSegments(
+            text,
+            piece.timestamps,
+            position / BYTES_PER_SECOND,
+            length / BYTES_PER_SECOND
+          );
           // The saved note uses the segments as its transcript, so none of the words can be missing.
           if (phrases) segments.push(...phrases);
           else segments = null;

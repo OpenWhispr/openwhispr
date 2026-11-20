@@ -511,6 +511,31 @@ test("request overrides win: explicit model and effective language", async () =>
   assert.equal(route.language, "ja");
 });
 
+test("hosted Whisper drops unsupported picker languages and preserves valid language hints", async () => {
+  for (const [provider, model] of [
+    ["openai", "whisper-1"],
+    ["groq", "whisper-large-v3-turbo"],
+    ["openrouter", "openai/whisper-1"],
+  ]) {
+    for (const [preferredLanguage, expected] of [
+      ["brx", undefined],
+      ["or", undefined],
+      ["hi-IN", "hi"],
+      ["haw", "haw"],
+    ]) {
+      const route = await resolve({
+        cloudTranscriptionProvider: provider,
+        cloudTranscriptionModel: model,
+        preferredLanguage,
+      });
+      assert.equal(route.model, model);
+      assert.equal(route.language, expected, `${provider} / ${preferredLanguage}`);
+    }
+  }
+  const sarvam = await resolve({ cloudTranscriptionProvider: "sarvam", preferredLanguage: "brx" });
+  assert.equal(sarvam.language, "brx");
+});
+
 const MANAGED_STT = {
   kind: "managed",
   provider: "azure",

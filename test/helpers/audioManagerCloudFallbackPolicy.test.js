@@ -55,6 +55,27 @@ const rejectFetch = (message) => () => {
   throw new Error(message);
 };
 
+test("hosted Whisper dictation sends only a supported effective source language", async (t) => {
+  const { setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-hosted-whisper-language-",
+    settingsKey: "__hostedWhisperLanguageSettings",
+  });
+  setSettings({ cloudTranscriptionProvider: "groq", preferredLanguage: "hi" });
+  const sent = [];
+  captureFetch(t, (_endpoint, init) => {
+    sent.push(init.body.get("language"));
+    return okJson({ text: "dictated" })();
+  });
+  for (const language of ["brx", "auto", "ta-IN", "haw"]) {
+    const manager = createManager({
+      getTranscriptionModel: () => "whisper-large-v3",
+      getEffectiveSttLanguage: () => language,
+    });
+    await manager.processWithOpenAIAPI(new Blob(["audio"], { type: "audio/webm" }));
+  }
+  assert.deepEqual(sent, [null, null, "ta", "haw"]);
+});
+
 function buildManagedPolicy(allowedTranscriptionModes) {
   return {
     version: 1,
@@ -1076,4 +1097,29 @@ test("cancelling before a Sarvam recording is read prevents the upload", async (
     )
   );
   assert.equal(uploaded, false);
+});
+
+test("account rejection from Sarvam batch fallback cannot start a local retry", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "ow-sarvam-owner-",
+    settingsKey: "__sarvamOwner",
+  });
+  setSettings({
+    allowLocalFallback: true,
+    useLocalWhisper: false,
+    transcriptionMode: "providers",
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v4",
+  });
+  window.electronAPI.proxySarvamTranscription = async (payload) => {
+    assert.equal(payload.sarvamCaptureId, "original");
+    return { error: "Owner changed", code: "AUTH_CONTEXT_CHANGED" };
+  };
+  window.electronAPI.transcribeLocalWhisper = () =>
+    assert.fail("retired recording reached local inference");
+  const manager = createManager({ getTranscriptionModel: () => "saaras:v4" });
+  await assert.rejects(
+    manager.processWithOpenAIAPI(new Blob(["test"]), { sarvamCaptureId: "original" }),
+    { code: "AUTH_CONTEXT_CHANGED" }
+  );
 });

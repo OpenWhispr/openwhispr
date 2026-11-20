@@ -802,6 +802,77 @@ test("a no-final stream whose upload transcribed but failed its selection edit k
   );
 });
 
+test("account retirement cancels Sarvam capture without delivering or saving the old audio", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  Object.assign(globalThis.__streamingFinalizationSettings, {
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v4",
+  });
+  installCapture(t);
+  let errorListener, captureId;
+  globalThis.window.electronAPI.onDictationRealtimeError = (fn) => {
+    errorListener = fn;
+    return () => {};
+  };
+  const provider = startingOrukeetProvider({
+    start: async (options) => {
+      captureId = options.sarvamCaptureId;
+      return { success: true };
+    },
+  });
+  const { manager, completions } = createStartingManager(AudioManager, {
+    providerName: "sarvam",
+    provider,
+  });
+  manager.saveFailedTranscription = () => assert.fail("retired audio reached History");
+  manager.processWithOpenAIAPI = () => assert.fail("retired audio reached batch");
+  assert.equal(await manager.startStreamingRecording(), true);
+  assert.ok(captureId);
+  manager.streamingProcessor.port.onmessage({ data: speechPcm() });
+  errorListener({ code: "AUTH_CONTEXT_CHANGED", sarvamCaptureId: "previous" });
+  assert.equal(manager.isRecording, true);
+  errorListener({ code: "AUTH_CONTEXT_CHANGED", sarvamCaptureId: captureId });
+  await manager._streamingStopPromise;
+  assert.equal(manager.isRecording, false);
+  assert.equal(manager.isStreaming, false);
+  assert.deepEqual(completions, []);
+});
+
+test("retirement while the Sarvam microphone opens discards the take before its socket starts", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  installCapture(t);
+  const reserved = Promise.withResolvers();
+  const mic = Promise.withResolvers();
+  let retire, released;
+  Object.assign(globalThis.window.electronAPI, {
+    reserveSarvamDictation: reserved.resolve,
+    releaseSarvamDictation: (id) => {
+      released = id;
+    },
+    onDictationRealtimeError: (listener) => {
+      retire = listener;
+      return () => {};
+    },
+  });
+  const provider = startingOrukeetProvider({
+    start: () => assert.fail("retired capture attempted to connect"),
+  });
+  const { manager, errors } = createStartingManager(AudioManager, {
+    providerName: "sarvam",
+    provider,
+  });
+  manager._acquireCaptureStream = () => mic.promise;
+  manager.saveFailedTranscription = () => assert.fail("retired recording reached History");
+  const starting = manager.startStreamingRecording();
+  const id = await reserved.promise;
+  retire({ code: "AUTH_CONTEXT_CHANGED", error: "Account changed", sarvamCaptureId: id });
+  mic.resolve({ getAudioTracks: () => [], getTracks: () => [] });
+  await Promise.all([starting, manager._streamingStopPromise]);
+  assert.equal(released, id);
+  assert.equal(manager.isRecording, false);
+  assert.equal(errors[0].code, "AUTH_CONTEXT_CHANGED");
+});
+
 for (const selectedProvider of ["sarvam", "openai"]) {
   test(`an interrupted Sarvam recording with ${selectedProvider} selected at stop only retries its original route`, async (t) => {
     const AudioManager = await loadManagerClass(t);
@@ -816,7 +887,11 @@ for (const selectedProvider of ["sarvam", "openai"]) {
     let uploads = 0;
     Object.assign(manager, {
       _activeStreamingProviderName: "sarvam",
-      _activeStreamingConfig: { sarvamModel: "saaras:v4", sarvamMode: "translate" },
+      _activeStreamingConfig: {
+        sarvamModel: "saaras:v4",
+        sarvamMode: "translate",
+        sarvamCaptureId: "first",
+      },
       streamingFinalText: "first utterance",
       streamingPartialText: "incomplete tail",
       getStreamingProvider: () => ({
@@ -827,6 +902,7 @@ for (const selectedProvider of ["sarvam", "openai"]) {
       mergeRecordedSegments: async () => new Blob(["whole recording"]),
       processWithOpenAIAPI: async (blob, metadata) => {
         assert.equal(metadata.sarvamMode, "translate");
+        assert.equal(metadata.sarvamCaptureId, "first");
         assert.equal(await blob.text(), "whole recording");
         uploads++;
         return { text: "complete transcript", source: "sarvam" };

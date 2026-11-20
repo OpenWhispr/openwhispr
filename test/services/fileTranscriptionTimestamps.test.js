@@ -86,11 +86,55 @@ test("Sarvam sends the saved output mode with file and chat microphone requests"
     return { success: true, text: "Hello" };
   };
   await transcribeFile("/tmp/upload.wav", config, false, { timestamps: true });
+  useSettingsStore.getState().setSarvamMode("translit");
   await transcribeFile("/tmp/chat.wav", config, false, { purpose: "dictation" });
   assert.deepEqual(
     requests.map(({ sarvamMode }) => sarvamMode),
-    ["verbatim", "verbatim"]
+    ["verbatim", "translit"]
   );
+});
+
+test("Sarvam keeps the starting output mode throughout an upload queue", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-queue-sarvam-mode-",
+    mockModules: { "/lib/auth": "export const withSessionRefresh = (fn) => fn();" },
+  });
+  const { addFiles, processBatchQueue, useBatchQueueStore } = await vite.ssrLoadModule(
+    "/stores/batchQueueStore.ts"
+  );
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.getState().setSarvamMode("verbatim");
+  const modes = [];
+  window.electronAPI.transcribeAudioFileByok = async ({ sarvamMode }) => {
+    modes.push(sarvamMode);
+    useSettingsStore.getState().setSarvamMode("translate");
+    return { success: true, text: "Hello" };
+  };
+  window.electronAPI.saveNote = async () => ({ success: true, note: { id: 42 } });
+  addFiles(["one.wav", "two.wav"].map((name) => ({ name, path: `/tmp/${name}`, sizeBytes: 1 })));
+  const finished = new Promise((resolve) => {
+    const unsubscribe = useBatchQueueStore.subscribe(({ isProcessing }) => {
+      if (!isProcessing) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
+  processBatchQueue(
+    {
+      folderId: null,
+      transcription: {
+        ...byokConfig(),
+        cloudTranscriptionProvider: "sarvam",
+        cloudTranscriptionModel: "saaras:v4",
+      },
+    },
+    { enabled: false, localModelsReady: false, numSpeakers: null }
+  );
+  await finished;
+  assert.deepEqual(modes, ["verbatim", "verbatim"]);
+  assert.ok(useBatchQueueStore.getState().queue.every(({ status }) => status === "done"));
 });
 
 // Local diarization over a provider that returned timed segments: each keeps

@@ -1,4 +1,4 @@
-import registry from "../config/languageRegistry.json";
+import registry from "../config/languageRegistry.json" with { type: "json" };
 
 function buildLanguageSet(key: "whisper" | "assemblyai"): Set<string> {
   const set = new Set<string>();
@@ -27,6 +27,14 @@ const LANGUAGE_INSTRUCTIONS: Record<string, string> = Object.fromEntries(
 export function getBaseLanguageCode(language: string | null | undefined): string | undefined {
   if (!language || language === "auto") return undefined;
   return language.split("-")[0];
+}
+
+export function getWhisperLanguageHint(language: string | null | undefined): string | undefined {
+  if (!language) return undefined;
+  const base = language.split("-")[0];
+  // The picker also lists cloud-only languages and omits some valid Whisper codes.
+  const preference = registry.languages.find((entry) => entry.code === base);
+  return preference?.whisper === false ? undefined : language;
 }
 
 export function getLanguageInstruction(language: string | undefined): string {

@@ -638,11 +638,12 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
   sarvam: {
     displayName: "Sarvam AI",
     ipc: () => window.electronAPI?.proxySarvamTranscription,
-    buildPayload: ({ audioBuffer, model, language, apiSettings, sarvamMode }) => ({
+    buildPayload: ({ audioBuffer, model, language, apiSettings, sarvamMode, sarvamCaptureId }) => ({
       audioBuffer,
       model,
       language,
       sarvamMode: sarvamMode ?? apiSettings.sarvamMode,
+      ...(sarvamCaptureId && { sarvamCaptureId }),
       ...(model === "saaras:v4" && {
         keyterms: sarvamKeyterms(getEffectiveDictionaryWords(apiSettings)),
       }),
@@ -1340,7 +1341,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getStreamingProvider(name) {
-    return STREAMING_PROVIDERS[name];
+    const provider = STREAMING_PROVIDERS[name];
+    const captureId = this._activeStreamingConfig?.sarvamCaptureId;
+    if (name === "sarvam" && captureId) {
+      return {
+        ...provider,
+        send: (buffer) => window.electronAPI.dictationRealtimeSend(buffer, captureId),
+        finalize: () => window.electronAPI.dictationRealtimeFinalize(captureId),
+        stop: () => window.electronAPI.dictationRealtimeStop(captureId),
+      };
+    }
+    return provider;
   }
 
   // The provider the active streaming session started on. The sttConfig can be
@@ -1356,6 +1367,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this._activeStreamingSessionId !== sessionId) return;
     this._activeStreamingSessionId = null;
     this._activeStreamingProviderName = null;
+    this._activeStreamingConfig?.unsubscribeAccountRetirement?.();
+    if (this._activeStreamingConfig?.sarvamCaptureId)
+      window.electronAPI?.releaseSarvamDictation?.(this._activeStreamingConfig.sarvamCaptureId);
     this._activeStreamingConfig = null;
     this._connectingCaptureStop = null;
     this._activePipelineOptions = undefined;
@@ -4263,7 +4277,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Route before reading a key: the resolver's fail-closed guards name the
       // real problem (a realtime-only provider, or its missing key), whereas the
       // key read blames the OpenAI key for a provider that never uses it.
-      const route = managedResolution ? null : this.resolveBatchRoute(apiSettings, model);
+      const route = managedResolution
+        ? null
+        : this.resolveBatchRoute(apiSettings, model, language ?? "auto");
       requestController = new AbortController();
       this._activeTranscriptionAbortController = requestController;
       const selection = {
@@ -4320,6 +4336,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           mimeType: optimizedAudio.type || "audio/webm",
           dictionaryPrompt: proxyDictionaryPrompt,
           sarvamMode: metadata.sarvamMode,
+          sarvamCaptureId: metadata.sarvamCaptureId,
           priorityDictionaryPrompt: this.getWhisperPrompt(apiSettings, priorityDictionary),
           keyterms:
             proxySpec === PROXY_TRANSCRIPTION_PROVIDERS.elevenlabs
@@ -4450,8 +4467,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       formData.append("file", uploadAudio, `audio.${extension}`);
       formData.append("model", model);
 
-      if (language && model !== "orukeet-v0.1.0") {
-        formData.append("language", language);
+      if (route.language && model !== "orukeet-v0.1.0") {
+        formData.append("language", route.language);
       }
 
       const endpoint = this.getTranscriptionEndpoint(route);
@@ -4571,7 +4588,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           formDataFields: [
             "file",
             "model",
-            language && language !== "auto" ? "language" : null,
+            formData.has("language") ? "language" : null,
             shouldStream ? "stream" : null,
             requestsSegments ? "response_format" : null,
           ].filter(Boolean),
@@ -4769,7 +4786,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     } catch (error) {
       requestController?.signal.throwIfAborted();
-      if (error.name === "AbortError" || isTranscriptionPolicyRefusal(error)) throw error;
+      if (
+        error.name === "AbortError" ||
+        error.code === "AUTH_CONTEXT_CHANGED" ||
+        isTranscriptionPolicyRefusal(error)
+      )
+        throw error;
       if (error.selectionEditFatal) {
         throw error;
       }
@@ -4852,7 +4874,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Local-vs-cloud is decided upstream, so useLocalWhisper is forced off here:
   // the local→cloud fallback resolves its cloud endpoint through this too.
-  resolveBatchRoute(settings, deploymentName = "") {
+  resolveBatchRoute(settings, deploymentName = "", effectiveLanguage) {
     const provider = settings.cloudTranscriptionProvider || "openai";
     const route = resolveTranscriptionRoute({
       settings: {
@@ -4868,7 +4890,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       hasProviderKey: isStreamingOnlySelection(provider, deploymentName)
         ? Boolean(getTranscriptionApiKey(provider, settings))
         : undefined,
-      request: { model: deploymentName },
+      request: { model: deploymentName, effectiveLanguage },
     });
     if (route.transport === "error") {
       const error = new Error(route.message);
@@ -5675,11 +5697,32 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       providerName = this.getStreamingProviderName();
       this._activeStreamingProviderName = providerName;
       this._activeStreamingConfig = { ...this.sttConfig };
-      if (providerName === "sarvam")
-        this._activeStreamingConfig.sarvamModel = getSettings().cloudTranscriptionModel;
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
       startWasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
+      if (providerName === "sarvam") {
+        const captureId = crypto.randomUUID();
+        this._activeStreamingConfig.sarvamModel = getSettings().cloudTranscriptionModel;
+        this._activeStreamingConfig.sarvamCaptureId = captureId;
+        // Account ownership spans microphone startup, the socket and any batch fallback.
+        this._activeStreamingConfig.unsubscribeAccountRetirement =
+          window.electronAPI?.onDictationRealtimeError?.((error) => {
+            if (
+              !ownsSession() ||
+              error?.code !== "AUTH_CONTEXT_CHANGED" ||
+              error.sarvamCaptureId !== captureId
+            )
+              return;
+            this.lastAudioBlob = null;
+            void this.cancelStreamingRecording();
+            this.onError?.({
+              title: "Streaming Error",
+              description: error.error,
+              code: error.code,
+            });
+          });
+        window.electronAPI?.reserveSarvamDictation?.(captureId);
+      }
 
       const t0 = performance.now();
       const prepared = forceDefaultMic ? null : await this.preparedMicCapture.take();
@@ -5808,7 +5851,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
 
       const errorCleanup = provider.onError((error) => {
-        if (!ownsSession()) return;
+        if (!ownsSession() || error?.code === "AUTH_CONTEXT_CHANGED") return;
         logger.error("Streaming provider error", { error }, "streaming");
         // Managed Orukeet refuses a second concurrent recording on the account
         // and can drop a socket mid-recording. The fallback recorder has the
@@ -5905,8 +5948,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Decided from the credentials this session opens with, so a mode
         // switch before stop cannot move its words in or out of Cloud usage.
         this._streamingMeteredByCloud = isCloudMeteredStream(sessionOptions);
-        if (providerName === "sarvam")
+        if (providerName === "sarvam") {
           this._activeStreamingConfig.sarvamMode = sessionOptions.sarvamMode;
+          sessionOptions.sarvamCaptureId = this._activeStreamingConfig.sarvamCaptureId;
+        }
         const res = await provider.start(sessionOptions);
         // The user is gone: no upgrade prompt, session refresh or retry for this answer.
         if (startWasCancelled()) return res;
@@ -6817,7 +6862,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // reported and kept like the batch pipeline's.
       if (!failoverReason && outcome.report && !error.transcript) return;
       failureReport = outcome.report;
-      if (outcome.keepAudio) {
+      if (error.code === "AUTH_CONTEXT_CHANGED") this.lastAudioBlob = null;
+      else if (outcome.keepAudio) {
         delivery.resultHandled = this.saveFailedTranscription(
           error.message,
           error.code || null,
@@ -6881,6 +6927,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                     durationSeconds,
                     ...(providerName === "sarvam" && {
                       sarvamMode: this._activeStreamingConfig?.sarvamMode,
+                      sarvamCaptureId: this._activeStreamingConfig?.sarvamCaptureId,
                     }),
                   },
                   wasCancelled

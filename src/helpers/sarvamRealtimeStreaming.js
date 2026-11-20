@@ -222,8 +222,8 @@ class SarvamMeetingStreaming extends SarvamRealtimeStreaming {
   sendAudio(buffer, capturedAt = null) {
     if (!this.isConnected || this.final) return false;
     const at = capturedAt ?? captureStartFromDelivery(buffer, Date.now());
-    this.sessionStartedAt ??= at;
     this.captureClock.append(buffer, at);
+    this.sessionStartedAt = this.captureClock.firstSampleAt;
     const pcm = this.remainder.length ? Buffer.concat([this.remainder, buffer]) : buffer;
     // Three 24 kHz samples produce two 16 kHz samples. Preserve phase across IPC frames.
     const usable = pcm.length - (pcm.length % 6);

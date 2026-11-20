@@ -1134,9 +1134,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Dictation realtime streaming
   dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),
   dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
-  dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
-  dictationRealtimeFinalize: () => ipcRenderer.invoke("dictation-realtime-finalize"),
-  dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
+  dictationRealtimeSend: (buffer, captureId) =>
+    ipcRenderer.send("dictation-realtime-send", buffer, captureId),
+  reserveSarvamDictation: (captureId) => ipcRenderer.send("dictation-realtime-reserve", captureId),
+  releaseSarvamDictation: (captureId) => ipcRenderer.send("dictation-realtime-release", captureId),
+  dictationRealtimeFinalize: (captureId) =>
+    ipcRenderer.invoke("dictation-realtime-finalize", captureId),
+  dictationRealtimeStop: (captureId) => ipcRenderer.invoke("dictation-realtime-stop", captureId),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",
     (callback) => (_event, data) => callback(data)

@@ -13,12 +13,18 @@ function createMeetingCaptureClock() {
     append(buffer, capturedAt) {
       firstSampleAt ??= capturedAt;
       const offsetMs = bytes / 48;
-      const drift = capturedAt - (firstSampleAt + offsetMs + skippedMs);
-      // A capture callback can arrive late. Align real discontinuities while
-      // keeping ordinary sub-frame delivery jitter on the PCM sample clock.
-      if (drift > 250) {
-        skippedMs += drift;
+      const observedSkip = capturedAt - firstSampleAt - offsetMs;
+      if (observedSkip > skippedMs + 250) {
+        skippedMs = observedSkip;
         gaps.push({ offsetMs, skippedMs });
+      } else if (observedSkip < skippedMs) {
+        // Delivery only gives an upper bound on capture time. After a stall,
+        // consecutive reads can drain a backlog faster than realtime. Trim the
+        // newest inferred gaps first so an earlier, real pause stays in place.
+        skippedMs = Math.max(0, observedSkip);
+        while (gaps.length && (gaps.at(-2)?.skippedMs ?? 0) >= skippedMs) gaps.pop();
+        if (gaps.length) gaps.at(-1).skippedMs = skippedMs;
+        if (observedSkip < 0) firstSampleAt += observedSkip;
       }
       bytes += buffer.length;
     },

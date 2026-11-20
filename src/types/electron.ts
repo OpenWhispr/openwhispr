@@ -154,6 +154,7 @@ export interface DictationRealtimeSessionOptions {
   language?: string;
   sampleRate?: number;
   sarvamMode?: SarvamMode;
+  sarvamCaptureId?: string;
   keyterms?: string[];
   environment?: string;
   tenant?: string;
@@ -2983,6 +2984,7 @@ declare global {
         model: string;
         language?: string;
         sarvamMode?: SarvamMode;
+        sarvamCaptureId?: string;
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
       // Mistral API key management
@@ -4179,21 +4181,27 @@ declare global {
       dictationRealtimeStart?: (
         options: DictationRealtimeSessionOptions
       ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
-      dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
-      dictationRealtimeFinalize?: () => Promise<
+      dictationRealtimeSend?: (buffer: ArrayBuffer, captureId?: string) => void;
+      reserveSarvamDictation?: (captureId: string) => void;
+      releaseSarvamDictation?: (captureId: string) => void;
+      dictationRealtimeFinalize?: (captureId?: string) => Promise<
         {
           success: boolean;
           text?: string;
           error?: string;
         } & Partial<DictationLanguageMetadata>
       >;
-      dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
+      dictationRealtimeStop?: (captureId?: string) => Promise<{ success: boolean; text: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeLanguage?: (
         callback: (metadata: DictationLanguageMetadata) => void
       ) => () => void;
-      onDictationRealtimeError?: (callback: (error: string) => void) => () => void;
+      onDictationRealtimeError?: (
+        callback: (
+          error: string | { code: "AUTH_CONTEXT_CHANGED"; error: string; sarvamCaptureId: string }
+        ) => void
+      ) => () => void;
       onDictationRealtimeSessionEnd?: (callback: (data: { text: string }) => void) => () => void;
 
       // Google Calendar event listeners

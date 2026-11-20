@@ -13,6 +13,7 @@ import {
 } from "./managedTranscription";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
 import type { LocalTranscriptionProvider } from "../types/electron";
+import type { SarvamMode } from "../utils/sarvam.js";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -55,6 +56,7 @@ export interface FileTranscriptionConfig {
   cloudTranscriptionBaseUrl: string;
   cloudTranscriptionModel: string;
   language: string;
+  sarvamMode?: SarvamMode;
   cortiEnvironment?: string;
   cortiTenant?: string;
   transcriptionMode?: string;
@@ -225,7 +227,7 @@ export async function transcribeFile(
     provider: cfg.cloudTranscriptionProvider,
     language: cfg.language,
     ...(sarvamSettings && {
-      sarvamMode: sarvamSettings.sarvamMode,
+      sarvamMode: cfg.sarvamMode ?? sarvamSettings.sarvamMode,
       keyterms: getEffectiveDictionaryWords(sarvamSettings),
     }),
     environment: cfg.cortiEnvironment,

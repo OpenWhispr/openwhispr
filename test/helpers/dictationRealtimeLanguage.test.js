@@ -1,6 +1,7 @@
 const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const Module = require("node:module");
 const { deferred } = require("./harness/deferred");
 
@@ -81,6 +82,9 @@ Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
   if (parent?.filename === handlersModulePath) {
     if (request === "./debugLogger") return new Proxy({}, { get: () => () => {} });
+    if (request === "./sarvamRealtimeStreaming") {
+      return { SarvamRealtimeStreaming: class extends FakeRealtimeStreaming {} };
+    }
     if (request === "./openaiRealtimeStreaming") return FakeRealtimeStreaming;
     if (request === "./realtimeTokenProviders") {
       return {
@@ -129,11 +133,19 @@ function scenario(t) {
       })
     )
   );
-  const event = { sender: { send: (channel, payload) => calls.sent.push({ channel, payload }) } };
-  const invoke = (channel, options) => handlers.get(channel)(event, options);
+  const sender = Object.assign(new EventEmitter(), {
+    id: 1,
+    send: (channel, payload) => calls.sent.push({ channel, payload }),
+  });
+  const event = { sender };
+  const invoke = (channel, options) => {
+    if (channel === "dictation-realtime-start" && options?.sarvamCaptureId)
+      listeners.get("dictation-realtime-reserve")(event, options.sarvamCaptureId);
+    return handlers.get(channel)(event, options);
+  };
   const sendAudio = () => listeners.get("dictation-realtime-send")(event, new Uint8Array(4));
   t.after(() => invoke("dictation-realtime-stop"));
-  return { invoke, sendAudio };
+  return { invoke, sendAudio, sender, target };
 }
 
 const byok = (overrides) => ({
@@ -301,3 +313,163 @@ for (const [label, options] of [
     assert.equal(calls.connects.length, 2);
   });
 }
+
+const sarvamRecording = (sarvamCaptureId) =>
+  byok({ provider: "sarvam", model: "saaras:v4", sarvamCaptureId });
+
+test("cancelling Sarvam before the policy verdict settles prevents a late connection", async (t) => {
+  const { invoke, target } = scenario(t);
+  const verdict = deferred();
+  let loading = true;
+  target.effectivePolicyManager = {
+    getCurrent: () => ({
+      success: !loading,
+      status: loading ? "loading" : "ready",
+      deviceReady: true,
+      accountId: null,
+      managed: false,
+      localOnly: false,
+    }),
+  };
+  target.refreshEffectivePolicy = () => verdict.promise;
+  const start = invoke("dictation-realtime-start", sarvamRecording("first"));
+  await invoke("dictation-realtime-stop", "first");
+  const beforeVerdict = await Promise.race([start, new Promise((r) => setImmediate(r))]);
+  loading = false;
+  verdict.resolve();
+  await start;
+  assert.equal(beforeVerdict?.code, "TRANSCRIPTION_CANCELLED");
+  assert.equal(calls.connects.length, 0);
+});
+
+for (const eventName of ["did-start-loading", "render-process-gone"]) {
+  test(`Sarvam closes on ${eventName} and a retired renderer leaves the replacement recording alone`, async (t) => {
+    const { invoke, sender, target } = scenario(t);
+    assert.equal(
+      (await invoke("dictation-realtime-start", sarvamRecording("first"))).success,
+      true
+    );
+    const original = target._dictationStreaming;
+    sender.emit(eventName);
+    assert.equal(original.isConnected, false);
+    assert.equal(target._dictationStreaming, null);
+    const other = Object.assign(new EventEmitter(), { id: 2, send() {} });
+    const replacement = (channel, options) => handlers.get(channel)({ sender: other }, options);
+    listeners.get("dictation-realtime-reserve")({ sender: other }, "second");
+    await replacement("dictation-realtime-start", sarvamRecording("second"));
+    const fresh = target._dictationStreaming;
+    sender.emit("destroyed");
+    await invoke("dictation-realtime-stop");
+    assert.equal(target._dictationStreaming, fresh);
+    assert.equal(fresh.isConnected, true);
+    await replacement("dictation-realtime-stop", "second");
+  });
+}
+
+for (const boundary of ["reload", "account change", "replacement"]) {
+  test(`a Sarvam start waiting on a warmup cannot open a socket after ${boundary}`, async (t) => {
+    const { invoke, sender, target } = scenario(t);
+    target.effectivePolicyManager = {
+      getCurrent: () => ({
+        success: true,
+        status: "ready",
+        managed: false,
+        deviceReady: true,
+        accountId: "owner",
+      }),
+    };
+    target.refreshEffectivePolicy = async () => {};
+    const warmup = deferred();
+    target._dictationConnectPromise = warmup.promise;
+    const start = invoke("dictation-realtime-start", sarvamRecording("old"));
+    await new Promise((r) => setImmediate(r));
+    assert.equal(calls.connects.length, 0);
+    let replacement;
+    if (boundary === "reload") sender.emit("did-start-loading");
+    else if (boundary === "account change")
+      target._retireAccountProductStreams(
+        target._remoteStreamPolicies.get("_dictationStreaming").accountId
+      );
+    else replacement = invoke("dictation-realtime-start", sarvamRecording("new"));
+    const beforeWarmup = await Promise.race([start, new Promise((r) => setImmediate(r))]);
+    target._dictationConnectPromise = null;
+    warmup.resolve();
+    await start;
+    if (replacement) assert.equal((await replacement).success, true);
+    assert.equal(
+      beforeWarmup?.code,
+      boundary === "account change" ? "AUTH_CONTEXT_CHANGED" : "TRANSCRIPTION_CANCELLED"
+    );
+    assert.equal(calls.connects.length, replacement ? 1 : 0);
+    if (replacement) {
+      const current = target._dictationStreaming;
+      listeners.get("dictation-realtime-release")({ sender }, "old");
+      assert.equal(target._dictationStreaming, current);
+      assert.equal(current.isConnected, true);
+    }
+  });
+}
+
+test("a late stop and a foreign start cannot close a replacement Sarvam capture", async (t) => {
+  const { invoke, sender, target } = scenario(t);
+  await invoke("dictation-realtime-start", sarvamRecording("first"));
+  const original = target._dictationStreaming;
+  const closed = deferred();
+  original.disconnect = async () => {
+    await closed.promise;
+    return { text: "" };
+  };
+  const stop = invoke("dictation-realtime-stop", "first");
+  await invoke("dictation-realtime-start", sarvamRecording("second"));
+  const replacement = target._dictationStreaming;
+  closed.resolve();
+  await stop;
+  const stranger = Object.assign(new EventEmitter(), { id: 99, send() {} });
+  const denied = await handlers.get("dictation-realtime-start")(
+    { sender: stranger },
+    { provider: "unknown" }
+  );
+  assert.equal(denied.success, false);
+  listeners.get("dictation-realtime-release")({ sender }, "first");
+  await invoke("dictation-realtime-stop", "first");
+  await invoke("dictation-realtime-stop");
+  listeners.get("dictation-realtime-send")({ sender }, new Uint8Array(4), "first");
+  assert.deepEqual(calls.audio, []);
+  assert.equal(target._dictationStreaming, replacement);
+  assert.equal(replacement.isConnected, true);
+});
+
+for (const boundary of ["account change", "reload", "cancel"]) {
+  test(`a reserved Sarvam recording cannot start after ${boundary} while its microphone opens`, async (t) => {
+    const { sender, target } = scenario(t);
+    const event = { sender };
+    const start = (id) => handlers.get("dictation-realtime-start")(event, sarvamRecording(id));
+    listeners.get("dictation-realtime-reserve")(event, "opening");
+    if (boundary === "account change")
+      target._retireAccountProductStreams(target.effectivePolicyManager.getCurrent().accountId);
+    else if (boundary === "reload") sender.emit("did-start-loading");
+    else await handlers.get("dictation-realtime-stop")(event, "opening");
+    const next = Object.assign(new EventEmitter(), { id: 2, send() {} });
+    listeners.get("dictation-realtime-reserve")({ sender: next }, "next");
+    assert.equal((await start("opening")).code, "AUTH_CONTEXT_CHANGED");
+    assert.equal(calls.connects.length, 0);
+    assert.equal(
+      (await handlers.get("dictation-realtime-start")({ sender: next }, sarvamRecording("next")))
+        .success,
+      true
+    );
+    next.emit("destroyed");
+  });
+}
+
+test("cancelling a Sarvam reservation leaves the previous provider's idle socket intact", async (t) => {
+  const { invoke, sender, target } = scenario(t);
+  await invoke("dictation-realtime-warmup", byok());
+  const idle = target._dictationStreaming;
+  listeners.get("dictation-realtime-reserve")({ sender }, "opening");
+  listeners.get("dictation-realtime-send")({ sender }, new Uint8Array(4), "opening");
+  await invoke("dictation-realtime-stop", "opening");
+  assert.deepEqual(calls.audio, []);
+  assert.equal(target._dictationStreaming, idle);
+  assert.equal(idle.isConnected, true);
+});
