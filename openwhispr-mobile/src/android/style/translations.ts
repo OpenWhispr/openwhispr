@@ -31,7 +31,7 @@ export const styleTranslations: Record<string, Partial<Record<StyleKey, string>>
     toneSlider: 'Tono para {{kind}}',
     introTitle: 'Suena como tú\nen cada app',
     introBody:
-      'Elige un tono para mensajes, chat de trabajo, correo y todo lo demás. Cuando dictas, OpenWhispr escribe en ese tono.',
+      'Elige un estilo para mensajes, chat de trabajo, correo y todo lo demás. Cuando dictas, OpenWhispr escribe en ese estilo.',
     letsPersonalize: 'Personalizar',
     notNow: 'Ahora no',
     close: 'Cerrar',
@@ -77,7 +77,7 @@ export const styleTranslations: Record<string, Partial<Record<StyleKey, string>>
     toneSlider: 'Ton pour {{kind}}',
     introTitle: 'Parlez comme vous\ndans chaque app',
     introBody:
-      'Choisissez un ton pour les SMS, le chat pro, les e-mails et tout le reste. Quand vous dictez, OpenWhispr écrit dans ce ton.',
+      'Choisissez un style pour les SMS, le chat pro, les e-mails et tout le reste. Quand vous dictez, OpenWhispr écrit dans ce style.',
     letsPersonalize: 'Personnaliser',
     notNow: 'Plus tard',
     close: 'Fermer',
@@ -123,7 +123,7 @@ export const styleTranslations: Record<string, Partial<Record<StyleKey, string>>
     toneSlider: 'Ton für {{kind}}',
     introTitle: 'Klingt nach dir\nin jeder App',
     introBody:
-      'Wähle einen Ton für Nachrichten, Arbeits-Chat, E-Mail und alles andere. Wenn du diktierst, schreibt OpenWhispr in diesem Ton.',
+      'Wähle einen Stil für Nachrichten, Arbeits-Chat, E-Mail und alles andere. Wenn du diktierst, schreibt OpenWhispr in diesem Stil.',
     letsPersonalize: 'Los geht’s',
     notNow: 'Nicht jetzt',
     close: 'Schließen',
@@ -169,7 +169,7 @@ export const styleTranslations: Record<string, Partial<Record<StyleKey, string>>
     toneSlider: 'Tom para {{kind}}',
     introTitle: 'Soe como você\nem cada app',
     introBody:
-      'Escolha um tom para mensagens, chat de trabalho, e-mail e todo o resto. Quando você dita, o OpenWhispr escreve nesse tom.',
+      'Escolha um estilo para mensagens, chat de trabalho, e-mail e todo o resto. Quando você dita, o OpenWhispr escreve nesse estilo.',
     letsPersonalize: 'Personalizar',
     notNow: 'Agora não',
     close: 'Fechar',
@@ -215,7 +215,7 @@ export const styleTranslations: Record<string, Partial<Record<StyleKey, string>>
     toneSlider: 'Tono per {{kind}}',
     introTitle: 'Sembra proprio te\nin ogni app',
     introBody:
-      'Scegli un tono per messaggi, chat di lavoro, email e tutto il resto. Quando detti, OpenWhispr scrive in quel tono.',
+      'Scegli uno stile per messaggi, chat di lavoro, email e tutto il resto. Quando detti, OpenWhispr scrive in quello stile.',
     letsPersonalize: 'Personalizza',
     notNow: 'Non ora',
     close: 'Chiudi',
@@ -261,7 +261,7 @@ export const styleTranslations: Record<string, Partial<Record<StyleKey, string>>
     toneSlider: 'Тон для {{kind}}',
     introTitle: 'Звучите как вы\nв каждом приложении',
     introBody:
-      'Выберите тон для переписки, рабочего чата, почты и всего остального. Когда вы диктуете, OpenWhispr пишет в этом тоне.',
+      'Выберите стиль для переписки, рабочего чата, почты и всего остального. Когда вы диктуете, OpenWhispr пишет в этом стиле.',
     letsPersonalize: 'Настроить',
     notNow: 'Не сейчас',
     close: 'Закрыть',
@@ -306,7 +306,7 @@ export const styleTranslations: Record<string, Partial<Record<StyleKey, string>>
     exampleLabel: '{{kind}}中的示例：{{text}}',
     toneSlider: '{{kind}}的语气',
     introTitle: '在每个应用里\n都像你自己',
-    introBody: '为短信、工作聊天、邮件和其他一切选择语气。你口述时，OpenWhispr 就按这个语气写。',
+    introBody: '为短信、工作聊天、邮件和其他一切选择风格。你口述时，OpenWhispr 就按这个风格写。',
     letsPersonalize: '开始个性化',
     notNow: '以后再说',
     close: '关闭',
@@ -351,7 +351,7 @@ export const styleTranslations: Record<string, Partial<Record<StyleKey, string>>
     exampleLabel: '{{kind}}中的範例：{{text}}',
     toneSlider: '{{kind}}的語氣',
     introTitle: '在每個應用程式裡\n都像你自己',
-    introBody: '為簡訊、工作聊天、郵件和其他一切選擇語氣。你口述時，OpenWhispr 就用這個語氣寫。',
+    introBody: '為簡訊、工作聊天、郵件和其他一切選擇風格。你口述時，OpenWhispr 就用這個風格寫。',
     letsPersonalize: '開始個人化',
     notNow: '以後再說',
     close: '關閉',
@@ -397,7 +397,7 @@ export const styleTranslations: Record<string, Partial<Record<StyleKey, string>>
     toneSlider: '{{kind}}のトーン',
     introTitle: 'どのアプリでも\nあなたらしく',
     introBody:
-      'メッセージ、仕事のチャット、メール、その他すべてにトーンを選びましょう。音声入力すると、OpenWhispr がそのトーンで書きます。',
+      'メッセージ、仕事のチャット、メール、その他すべてにスタイルを選びましょう。音声入力すると、OpenWhispr がそのスタイルで書きます。',
     letsPersonalize: 'カスタマイズする',
     notNow: '後で',
     close: '閉じる',
@@ -443,7 +443,7 @@ export const styleTranslations: Record<string, Partial<Record<StyleKey, string>>
     toneSlider: 'النبرة في {{kind}}',
     introTitle: 'اكتب بأسلوبك\nفي كل تطبيق',
     introBody:
-      'اختر نبرة للرسائل ودردشة العمل والبريد وكل ما عدا ذلك. عندما تُملي، يكتب OpenWhispr بها.',
+      'اختر أسلوبًا للرسائل ودردشة العمل والبريد وكل ما عدا ذلك. عندما تُملي، يكتب OpenWhispr بها.',
     letsPersonalize: 'لنبدأ التخصيص',
     notNow: 'ليس الآن',
     close: 'إغلاق',

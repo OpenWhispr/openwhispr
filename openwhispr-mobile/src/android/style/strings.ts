@@ -33,7 +33,7 @@ export const styleEnglish = {
   toneSlider: 'Tone for {{kind}}',
   introTitle: 'Sound like you\nin every app',
   introBody:
-    'Pick a tone for texts, work chat, email and everything else. When you dictate, OpenWhispr writes in it.',
+    'Pick a style for texts, work chat, email and everything else. When you dictate, OpenWhispr writes in it.',
   letsPersonalize: 'Let’s personalize',
   notNow: 'Not now',
   close: 'Close',
