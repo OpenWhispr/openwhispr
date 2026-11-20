@@ -674,4 +674,4 @@ function createEnterpriseIdentityManager({
   return { getConfig, resolveProvider, clear };
 }
 
-module.exports = { createEnterpriseIdentityManager };
+module.exports = { createEnterpriseIdentityManager, CONFIG_REFRESH_MS };

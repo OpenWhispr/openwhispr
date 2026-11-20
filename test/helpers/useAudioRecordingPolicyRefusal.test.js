@@ -2,7 +2,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
 const { createRoot } = require("react-dom/client");
-const { managedPolicy } = require("./harness/policyFixtures");
+const {
+  managedPolicy,
+  assemblyAiPolicy,
+  setManagedBedrockCleanup,
+  loadAssemblyAiDictationCatalog,
+} = require("./harness/policyFixtures");
 const {
   createRendererServer,
   installBrowserGlobals,
@@ -30,17 +35,19 @@ export default class FakeAudioManager {
   isSttConfigStale() {
     return false;
   }
-  prepareMicCapture() {}
+  prepareMicCapture() { this.prepared = true; }
   cancelPreparedMicCapture() {}
   cleanup() {}
   async startRecording() {
-    return false;
+    this.started = true;
+    return true;
   }
 }
 `;
 
 async function setup(t) {
   let root = null;
+  let prepare;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
@@ -52,10 +59,13 @@ async function setup(t) {
         onToggleVoiceAgent: noopDispose,
         onToggleTranslation: noopDispose,
         onStartDictation: noopDispose,
-        onPrepareDictation: noopDispose,
+        onPrepareDictation: (callback) => {
+          prepare = callback;
+          return () => {};
+        },
         onCancelDictationPreparation: noopDispose,
         onStopDictation: noopDispose,
-        dictationLifecycleStateChanged() {},
+        dictationLifecycleStateChanged: async () => true,
       },
     },
   });
@@ -83,7 +93,15 @@ async function setup(t) {
   }
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Harness)));
-  return { api, toasts, usePolicyStore, manager: FakeAudioManager.instance };
+  return {
+    api,
+    toasts,
+    usePolicyStore,
+    useSettingsStore,
+    prepare,
+    vite,
+    manager: FakeAudioManager.instance,
+  };
 }
 
 const policyState = (transcription) => ({
@@ -142,3 +160,35 @@ test("a refusal from main keeps its message and gains the Settings link on the e
   assert.equal(card.presentation, "dictation-error");
   assert.ok(card.actions.some((action) => action.icon === "settings"));
 });
+
+for (const [model, sttAllowed, llmAllowed, permitted, managedCleanup = false] of [
+  ["dictation", true, false, false],
+  ["dictation", false, true, false],
+  ["dictation", true, true, true],
+  ["dictation", true, true, false, true],
+  ["universal-3-6-pro", true, true, true, true],
+  ["universal-3-6-pro", true, false, true],
+]) {
+  test(`mic preparation and start for ${model}, STT=${sttAllowed}, LLM=${llmAllowed}, managed cleanup=${managedCleanup}`, async (t) => {
+    const { api, manager, prepare, usePolicyStore, useSettingsStore, vite } = await setup(t);
+    await loadAssemblyAiDictationCatalog(vite);
+    useSettingsStore.setState({
+      transcriptionMode: "providers",
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "assemblyai",
+      cloudTranscriptionModel: model,
+      toneStyleEnabled: false,
+    });
+    usePolicyStore.setState(assemblyAiPolicy(sttAllowed, llmAllowed));
+    if (managedCleanup) await setManagedBedrockCleanup(vite);
+    const realtime = model !== "dictation";
+    manager.shouldUseStreaming = () => realtime;
+    manager.startStreamingRecording = t.mock.fn(async () => true);
+    await React.act(async () => prepare());
+    assert.equal(Boolean(manager.prepared), permitted);
+    await React.act(async () => assert.equal(await api.startRecording(), permitted));
+    assert.equal(Boolean(manager.started), permitted && !realtime);
+    assert.equal(manager.startStreamingRecording.mock.callCount(), Number(permitted && realtime));
+  });
+}

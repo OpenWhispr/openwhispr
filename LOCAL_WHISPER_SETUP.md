@@ -92,10 +92,13 @@ npm run download:whisper-cpp:all
 
 ## Privacy Comparison
 
-| Mode  | Audio Leaves Device | Internet Required       | Cost      |
-| ----- | ------------------- | ----------------------- | --------- |
-| Local | No                  | Only for model download | Free      |
-| Cloud | Yes (to OpenAI)     | Yes                     | API usage |
+| Mode              | Audio Leaves Device                   | Internet Required       | Cost                                      |
+| ----------------- | ------------------------------------- | ----------------------- | ----------------------------------------- |
+| Local             | No                                    | Only for model download | Free                                      |
+| BYOK cloud        | Yes, to the provider you configured  | Yes                     | Your provider's API pricing               |
+| OpenWhispr Cloud  | Yes, to OpenWhispr                    | Yes                     | Free weekly allowance, then subscription  |
+
+Local mode never needs an OpenWhispr account or a paid plan. OpenWhispr Cloud includes a free weekly allowance; paid plans raise or remove the Cloud limits. BYOK cloud mode uses your own provider key and is billed by that provider.
 
 ## Optional local model residency
 

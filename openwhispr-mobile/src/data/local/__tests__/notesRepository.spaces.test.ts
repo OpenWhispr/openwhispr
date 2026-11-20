@@ -718,3 +718,49 @@ describe('LocalNotesRepository — owner-only Private folder placement', () => {
     expect(repo.getFolders()[0].privateWorkspaceId).toBeNull();
   });
 });
+
+describe('LocalNotesRepository — per-workspace Private', () => {
+  it('records the Private a pulled note is filed in, keeping it when a response omits it', () => {
+    const { repo, db } = createMemoryRepository();
+    repo.applyRemoteNote(remoteNote({ private_workspace_id: 'workspace-beta' }), noFolder);
+    const [pulled] = repo.getAllNotes();
+    expect(pulled.privateWorkspaceId).toBe('workspace-beta');
+
+    repo.applyRemoteNote(
+      remoteNote({ title: 'Edited', updated_at: '2026-08-24T11:00:00.000Z' }),
+      noFolder,
+    );
+    expect(noteRow(db, pulled.id)).toMatchObject({
+      title: 'Edited',
+      privateWorkspaceId: 'workspace-beta',
+    });
+
+    repo.applyRemoteNote(
+      remoteNote({
+        private_workspace_id: 'workspace-alpha',
+        updated_at: '2026-08-24T12:00:00.000Z',
+      }),
+      noFolder,
+    );
+    expect(noteRow(db, pulled.id).privateWorkspaceId).toBe('workspace-alpha');
+  });
+
+  it('creates a Private folder in the asked workspace, and never places a team folder', () => {
+    const { repo, db } = createMemoryRepository();
+    const personal = repo.createFolder('Personal', undefined, {
+      privateWorkspaceId: 'workspace-beta',
+      isDefault: true,
+      sortOrder: 0,
+    });
+    expect(personal).toMatchObject({
+      spaceId: privateSpaceId(db),
+      privateWorkspaceId: 'workspace-beta',
+      isDefault: 1,
+      pendingSync: 1,
+    });
+    const teamSpaceId = createTeamSpace(db);
+    const team = repo.createFolder('Launch', teamSpaceId, { privateWorkspaceId: 'workspace-beta' });
+    expect(team.privateWorkspaceId).toBeNull();
+    expect(repo.createFolder('Ideas').privateWorkspaceId).toBeNull();
+  });
+});

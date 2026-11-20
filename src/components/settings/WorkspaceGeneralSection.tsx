@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LogOut, Trash2 } from "../icons";
+import { LogOut, Trash2, Upload } from "../icons";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { deleteWorkspace, leaveWorkspace } from "../../services/workspaceActions";
@@ -9,7 +9,16 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
 import { workspaceCan } from "../../lib/capabilities";
+import { getValidatedAuthGeneration } from "../../lib/authRequestContext";
+import {
+  WORKSPACE_ICON_INPUT_TYPES,
+  WorkspaceIconUnreadableError,
+  checkWorkspaceIconFile,
+  encodeWorkspaceIcon,
+} from "../../lib/workspaceIcon";
+import { classifyWorkspaceIconError } from "../../lib/workspaceErrors";
 import { privateNotesDestinationName } from "../../lib/workspaceSwitcher";
+import { isolate } from "../../utils/bidiIsolate";
 import { exitReducer } from "../../lib/workspaceExitFlow";
 import { transferReducer } from "../../lib/workspaceTransferFlow";
 import { WorkspaceExitDialog } from "../workspace/WorkspaceExitDialog";
@@ -80,6 +89,8 @@ export default function WorkspaceGeneralSection({
       <SettingsWorkspaceFrame state={state}>
         {(workspace) => (
           <GeneralPage
+            // A save or icon change still running belongs to the workspace it started on.
+            key={workspace.id}
             workspace={workspace}
             onTransfer={() => startTransfer(workspace)}
             onDelete={() => startExit(workspace, "startDelete")}
@@ -133,6 +144,10 @@ function GeneralPage({
   const refresh = useWorkspaceStore((s) => s.refresh);
   const [name, setName] = useState(workspace.name);
   const [saving, setSaving] = useState(false);
+  const [iconBusy, setIconBusy] = useState<"upload" | "remove" | null>(null);
+  const iconInputRef = useRef<HTMLInputElement>(null);
+  const iconButtonRef = useRef<HTMLButtonElement>(null);
+  const iconWasBusy = useRef(false);
   const nameId = useId();
   const hintId = useId();
   const canEdit = workspaceCan(workspace, "manage_settings");
@@ -143,23 +158,114 @@ function GeneralPage({
 
   useEffect(() => {
     setName(workspace.name);
-  }, [workspace.id, workspace.name]);
+  }, [workspace.name]);
+
+  useEffect(() => {
+    if (iconBusy) {
+      iconWasBusy.current = true;
+      return;
+    }
+    if (!iconWasBusy.current) return;
+    iconWasBusy.current = false;
+    // Disabling the focused button, or removing Remove, left focus on the page.
+    if (!document.activeElement || document.activeElement === document.body) {
+      iconButtonRef.current?.focus();
+    }
+  }, [iconBusy]);
+
+  function showError(description: string): void {
+    toast({ title: t("common.error"), description, variant: "destructive" });
+  }
+
+  function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : t("common.unknownError");
+  }
+
+  function iconErrorMessage(error: unknown): string {
+    if (error instanceof WorkspaceIconUnreadableError) {
+      return t("settingsPage.workspace.general.iconUnreadable");
+    }
+    const failure = classifyWorkspaceIconError(error);
+    const workspaceName = isolate(workspace.name);
+    switch (failure.kind) {
+      case "signInChanged":
+        return t("settingsPage.workspace.general.iconSignInChanged");
+      case "unavailable":
+        return t("settingsPage.workspace.general.iconUnavailable");
+      case "notAllowed":
+        return t("settingsPage.workspace.general.iconNotAllowed", { workspace: workspaceName });
+      case "ssoRequired":
+        return t("settingsPage.workspace.general.iconSsoRequired", { workspace: workspaceName });
+      case "rateLimited":
+        return t("settingsPage.workspace.general.iconRateLimited");
+      case "refused":
+        return failure.message;
+      default:
+        return t("settingsPage.workspace.general.iconFailed");
+    }
+  }
+
+  async function applyUpdate(
+    update: () => Promise<unknown>,
+    successTitle: string,
+    describeError: (error: unknown) => string
+  ): Promise<void> {
+    try {
+      await update();
+      await refresh({ fresh: true });
+      toast({ title: successTitle });
+    } catch (error) {
+      showError(describeError(error));
+    }
+  }
 
   async function handleSave(): Promise<void> {
     setSaving(true);
-    try {
-      await WorkspacesService.update(workspace.id, { name: name.trim() });
-      await refresh({ fresh: true });
-      toast({ title: t("settingsPage.workspace.general.saved") });
-    } catch (error) {
-      toast({
-        title: t("common.error"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
+    await applyUpdate(
+      () => WorkspacesService.update(workspace.id, { name: name.trim() }),
+      t("settingsPage.workspace.general.saved"),
+      errorMessage
+    );
+    setSaving(false);
+  }
+
+  async function handleIconFile(file: File): Promise<void> {
+    if (iconBusy) return;
+    const validation = checkWorkspaceIconFile(file);
+    if (validation !== "ok") {
+      showError(
+        t(
+          validation === "unsupported"
+            ? "settingsPage.workspace.general.iconUnsupported"
+            : "settingsPage.workspace.general.iconTooLarge"
+        )
+      );
+      return;
     }
+    // Pin before encoding so an account switch cannot adopt the replacement session.
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration === null) {
+      showError(t("auth.unconfirmedSession"));
+      return;
+    }
+    setIconBusy("upload");
+    await applyUpdate(
+      async () =>
+        WorkspacesService.uploadIcon(workspace.id, await encodeWorkspaceIcon(file), authGeneration),
+      t("settingsPage.workspace.general.iconUploaded"),
+      iconErrorMessage
+    );
+    setIconBusy(null);
+  }
+
+  async function handleIconRemove(): Promise<void> {
+    setIconBusy("remove");
+    await applyUpdate(
+      () => WorkspacesService.removeIcon(workspace.id),
+      t("settingsPage.workspace.general.iconRemoved"),
+      iconErrorMessage
+    );
+    setIconBusy(null);
   }
 
   return (
@@ -224,7 +330,53 @@ function GeneralPage({
             {t("settingsPage.workspace.general.iconHint")}
           </p>
         </div>
-        <MemberAvatar name={workspace.name} email={null} size="lg" />
+        <div className="flex flex-wrap items-center gap-3">
+          <MemberAvatar name={workspace.name} email={null} image={workspace.icon_url} size="lg" />
+          {canEdit && (
+            <>
+              <input
+                ref={iconInputRef}
+                type="file"
+                accept={WORKSPACE_ICON_INPUT_TYPES.join(",")}
+                className="hidden"
+                disabled={iconBusy !== null}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  // Cleared so choosing the same file again still reports it.
+                  event.target.value = "";
+                  if (file) void handleIconFile(file);
+                }}
+              />
+              <Button
+                ref={iconButtonRef}
+                variant="outline"
+                size="sm"
+                onClick={() => iconInputRef.current?.click()}
+                disabled={iconBusy !== null}
+              >
+                <Upload className="size-3.5" aria-hidden="true" />
+                {t(
+                  iconBusy === "upload"
+                    ? "settingsPage.workspace.general.iconUploading"
+                    : workspace.icon_url
+                      ? "settingsPage.workspace.general.iconChange"
+                      : "settingsPage.workspace.general.iconUpload"
+                )}
+              </Button>
+              {workspace.icon_url && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void handleIconRemove()}
+                  disabled={iconBusy !== null}
+                >
+                  <Trash2 className="size-3.5" aria-hidden="true" />
+                  {t("settingsPage.workspace.general.iconRemove")}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       <div>

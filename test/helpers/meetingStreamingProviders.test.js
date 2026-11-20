@@ -176,6 +176,47 @@ test("connection identity follows key saves exactly when the token comes from a 
   }
 });
 
+test("elevenlabs-realtime resolves to the ElevenLabs client and Note Recording offers it", async () => {
+  const { STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS, getMeetingConnectionKey } =
+    await load();
+  const { default: ElevenLabsStreaming } = await import("../../src/helpers/elevenLabsStreaming.js");
+  const {
+    getMeetingStreamingTranscriptionProviders,
+    getDictationTranscriptionProviders,
+    getUploadTranscriptionProviders,
+  } = await import("../../src/models/ModelRegistry.ts");
+
+  assert.equal(STREAMING_CLIENT_BY_PROVIDER["elevenlabs-realtime"], ElevenLabsStreaming);
+  assert.equal(ALLOWED_MEETING_PROVIDERS.has("elevenlabs-realtime"), true);
+  assert.equal(ALLOWED_MEETING_PROVIDERS.has("elevenlabs"), false);
+
+  const meeting = getMeetingStreamingTranscriptionProviders().find((p) => p.id === "elevenlabs");
+  assert.deepEqual(
+    meeting?.models.map((m) => m.id),
+    ["scribe_v3_live"]
+  );
+  const dictation = getDictationTranscriptionProviders().find((p) => p.id === "elevenlabs");
+  assert.deepEqual(
+    dictation?.models.map((m) => m.id),
+    ["scribe_v3", "scribe_v2"],
+    "the realtime model has nothing to run outside Note Recording"
+  );
+  const upload = getUploadTranscriptionProviders().find((p) => p.id === "elevenlabs");
+  assert.deepEqual(
+    upload?.models.map((m) => m.id),
+    ["scribe_v3", "scribe_v2"]
+  );
+
+  // The saved key is the socket's credential, so a key save makes a new connection.
+  const options = { provider: "elevenlabs-realtime", mode: "byok", keyterms: ["A"] };
+  assert.notEqual(getMeetingConnectionKey(options, 1), getMeetingConnectionKey(options, 2));
+  assert.notEqual(
+    getMeetingConnectionKey(options, 1),
+    getMeetingConnectionKey({ ...options, keyterms: ["B"] }, 1),
+    "a dictionary change makes a new connection"
+  );
+});
+
 test("enterprise meeting reuse is scoped to workspace, profile and credential generation", async () => {
   const { getMeetingConnectionKey } = await load();
   const options = {
@@ -203,4 +244,18 @@ test("enterprise meeting reuse is scoped to workspace, profile and credential ge
       1
     )
   );
+});
+
+test("policy judges a saved-key provider as bring-your-own-key whatever mode the start names", async () => {
+  const { SAVED_KEY_PROVIDERS } = await load();
+  const { realtimeSelection } = require("../../src/helpers/productPolicy");
+
+  assert.ok(SAVED_KEY_PROVIDERS.has("elevenlabs-realtime"));
+  for (const provider of SAVED_KEY_PROVIDERS) {
+    assert.deepEqual(
+      realtimeSelection({ provider, mode: "openwhispr" }),
+      { mode: "providers", provider: provider.replace(/-realtime$/, "") },
+      provider
+    );
+  }
 });

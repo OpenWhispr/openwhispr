@@ -32,6 +32,7 @@ jobs:
           STT_CANARY_ASSEMBLYAI_KEY: ${{ secrets.STT_CANARY_ASSEMBLYAI_KEY }}
           STT_CANARY_TINFOIL_KEY: ${{ secrets.STT_CANARY_TINFOIL_KEY }}
           STT_CANARY_GEMINI_KEY: ${{ secrets.STT_CANARY_GEMINI_KEY }}
+          STT_CANARY_ELEVENLABS_KEY: ${{ secrets.STT_CANARY_ELEVENLABS_KEY }}
         run: |
           set -o pipefail
           node scripts/stt-canary.mjs | tee canary-report.md

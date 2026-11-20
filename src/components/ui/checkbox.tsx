@@ -9,6 +9,8 @@ interface CheckboxProps {
   children: ReactNode;
   disabled?: boolean;
   className?: string;
+  /** A fuller name than the visible label, which it should contain. */
+  ariaLabel?: string;
   /** The id of text that explains the option, read after its label. */
   describedBy?: string;
 }
@@ -20,6 +22,7 @@ export function Checkbox({
   children,
   disabled = false,
   className,
+  ariaLabel,
   describedBy,
 }: CheckboxProps) {
   return (
@@ -27,6 +30,7 @@ export function Checkbox({
       type="button"
       role="checkbox"
       aria-checked={checked}
+      aria-label={ariaLabel}
       aria-describedby={describedBy}
       disabled={disabled}
       onClick={() => onChange(!checked)}
