@@ -18,7 +18,16 @@ import {
 } from './practiceParts';
 import { diffWords, type DiffRun } from './practiceDiff';
 import { PracticeRecorder, requestMicrophone } from './practiceRecorder';
+import i18n from '../strings';
 import { useOnboardingT, type OnboardingKey } from './strings';
+
+// Edit selection's own failures already say what happened and what to do, so they show as they
+// are, not inside "That didn't work: …" (the keys come from the bubble pipeline).
+function ownEditMessage(message: string): boolean {
+  return ['editQuestion', 'editNotApplied'].some(
+    (key) => i18n.exists(key) && i18n.t(key) === message,
+  );
+}
 
 export type MenuPractice = 'assistant' | 'edit';
 
@@ -187,7 +196,13 @@ export function PracticeMenuScreen({
     } catch (failure) {
       if (!mounted.current) return;
       const message = (failure as Error).message;
-      setError(/hear|speech/i.test(message) ? t('noSpeech') : t('practiceFailed', { message }));
+      setError(
+        /hear|speech/i.test(message)
+          ? t('noSpeech')
+          : ownEditMessage(message)
+            ? t('practiceRetryHold', { message })
+            : t('practiceFailed', { message }),
+      );
       restart();
     }
   };

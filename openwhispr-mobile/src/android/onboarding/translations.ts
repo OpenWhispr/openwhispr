@@ -3,6 +3,7 @@ import type { OnboardingKey } from './strings';
 // Words wrapped in [brackets] are drawn in the accent colour; keep one span per string where English has one.
 export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey, string>>> = {
   es: {
+    practiceRetryHold: '{{message}} Mantén pulsada la burbuja para volver a intentarlo.',
     splashTitle: 'Habla [3x] más rápido de lo que escribes',
     getStarted: 'Empezar',
     back: 'Atrás',
@@ -156,6 +157,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     and: '{{first}} y {{last}}',
   },
   fr: {
+    practiceRetryHold: '{{message}} Maintenez la bulle pour réessayer.',
     splashTitle: 'Parlez [3x] plus vite que vous ne tapez',
     getStarted: 'Commencer',
     back: 'Retour',
@@ -311,6 +313,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     and: '{{first}} et {{last}}',
   },
   de: {
+    practiceRetryHold: '{{message}} Halte die Bubble gedrückt, um es noch mal zu versuchen.',
     splashTitle: 'Sprich [3x] schneller, als du tippst',
     getStarted: 'Los geht’s',
     back: 'Zurück',
@@ -468,6 +471,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     and: '{{first}} und {{last}}',
   },
   pt: {
+    practiceRetryHold: '{{message}} Segure a bolha para tentar de novo.',
     splashTitle: 'Fale [3x] mais rápido do que digita',
     getStarted: 'Começar',
     back: 'Voltar',
@@ -624,6 +628,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     and: '{{first}} e {{last}}',
   },
   it: {
+    practiceRetryHold: '{{message}} Tieni premuta la bolla per riprovare.',
     splashTitle: 'Parla [3x] più veloce di quanto scrivi',
     getStarted: 'Inizia',
     back: 'Indietro',
@@ -779,6 +784,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     and: '{{first}} e {{last}}',
   },
   ru: {
+    practiceRetryHold: '{{message}} Удерживайте пузырь, чтобы попробовать снова.',
     splashTitle: 'Говорите в [3x] быстрее, чем печатаете',
     getStarted: 'Начать',
     back: 'Назад',
@@ -935,6 +941,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     and: '{{first}} и {{last}}',
   },
   'zh-CN': {
+    practiceRetryHold: '{{message}}按住气泡再试一次。',
     splashTitle: '说话比打字快 [3x]',
     getStarted: '开始使用',
     back: '返回',
@@ -1081,6 +1088,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     and: '{{first}}和{{last}}',
   },
   'zh-TW': {
+    practiceRetryHold: '{{message}}按住泡泡再試一次。',
     splashTitle: '說話比打字快 [3x]',
     getStarted: '開始使用',
     back: '返回',
@@ -1228,6 +1236,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     and: '{{first}}和{{last}}',
   },
   ja: {
+    practiceRetryHold: '{{message}}バブルを長押ししてもう一度お試しください。',
     splashTitle: '話すほうが入力より [3x] 速い',
     getStarted: '始める',
     back: '戻る',
@@ -1382,6 +1391,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     and: '{{first}}と{{last}}',
   },
   ar: {
+    practiceRetryHold: '{{message}} اضغط مطوّلًا على الفقاعة للمحاولة مجددًا.',
     splashTitle: 'تحدّث أسرع [3x] مما تكتب',
     getStarted: 'ابدأ',
     back: 'رجوع',
