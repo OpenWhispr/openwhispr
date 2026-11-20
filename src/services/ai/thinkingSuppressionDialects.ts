@@ -50,9 +50,10 @@ export function geminiCatalogThinkingFloor(
 export function suppressThinking(
   requestBody: Record<string, unknown>,
   providerKey: string,
-  model: string
+  model: string,
+  endpoint?: string
 ): void {
-  const family = getModelFamilyConstraints(model);
+  const family = getModelFamilyConstraints(model, endpoint);
 
   if (providerKey === "gemini") {
     const floor = geminiCatalogThinkingFloor(model);

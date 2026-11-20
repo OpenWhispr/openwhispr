@@ -109,6 +109,36 @@ test("a level saved for a cloud provider never reaches a self-hosted server", as
   assert.equal(chosenReasoningEffort("lan", "openai/gpt-oss-120b", config), undefined);
 });
 
+for (const [host, endpoint, options, suppressed, savedNone, automatic] of [
+  ["Tinfoil", "https://inference.tinfoil.sh/v1", ["low", "high"], "low", "high", "high"],
+  ["Verda", "https://inference.verda.com/v1", ["none", "low", "high"], "none", "none", undefined],
+]) {
+  test(`Custom Kimi K3.1 on ${host} uses the same effort policy in Settings, Chat and Responses`, async () => {
+    const { applyChatCompletionsParams, selectableReasoningEffort, responsesReasoningEffort } =
+      await import("../../src/services/ai/chatRequestBody.ts");
+    const model = "kimi-k3-1-pro";
+    assert.deepEqual(selectableReasoningEffort("custom", model, {}, endpoint)?.options, options);
+
+    for (const [config, expected] of [
+      [{ disableThinking: true }, suppressed],
+      [CHOSEN("none"), savedNone],
+      [CHOSEN("low"), "low"],
+      [{}, automatic],
+    ]) {
+      const body = { model, messages: [] };
+      applyChatCompletionsParams(body, {
+        model,
+        provider: "custom",
+        endpoint,
+        config,
+        maxTokens: 4096,
+      });
+      assert.equal(body.reasoning_effort, expected);
+      assert.equal(responsesReasoningEffort(model, "custom", config, endpoint), expected);
+    }
+  });
+}
+
 test("Responses effort: OpenAI sends the chosen level the model offers", async () => {
   const { responsesReasoningEffort } = await import("../../src/services/ai/chatRequestBody.ts");
 
