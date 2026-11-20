@@ -22,12 +22,12 @@ import {
   canSelfServeEnterprise,
   canUpgradeWorkspaceToEnterprise,
 } from "../../lib/workspaceBilling";
+import { CONTACT_SALES_URL } from "../../lib/contactSales";
 import { formatAmount } from "../../utils/formatAmount";
 import { openExternalLink } from "../../utils/externalLinks";
 import type { Workspace } from "../../types/electron";
 
 const SEAT_LIMIT = 500;
-const CONTACT_SALES_URL = "https://openwhispr.com/contact-sales";
 
 // The API's coded billing refusals, localized; uncoded errors fall back to
 // the server's own message.
@@ -48,6 +48,8 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspaces: Workspace[];
+  /** Selected when the dialog opens, if it is one of the eligible workspaces. */
+  initialWorkspaceId?: string;
   onRefreshEntitlement?: () => Promise<void> | void;
 }
 
@@ -55,6 +57,7 @@ export default function EnterpriseCheckoutDialog({
   open,
   onOpenChange,
   workspaces,
+  initialWorkspaceId,
   onRefreshEntitlement,
 }: Props) {
   const { t } = useTranslation();
@@ -90,7 +93,8 @@ export default function EnterpriseCheckoutDialog({
 
   useEffect(() => {
     if (open) {
-      setWorkspaceId(null);
+      // An id that isn't eligible falls through to the first eligible workspace below.
+      setWorkspaceId(initialWorkspaceId ?? null);
       setBillingInterval("monthly");
       setSeats(seatsInUse);
     }

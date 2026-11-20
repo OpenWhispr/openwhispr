@@ -27,8 +27,6 @@ import {
   Sparkles,
   AlertTriangle,
   Loader2,
-  Check,
-  Mail,
   CircleCheck,
   CircleX,
   RotateCw,
@@ -109,7 +107,6 @@ import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
-import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
 import type {
@@ -126,8 +123,8 @@ import {
   InferenceModeSelector,
 } from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
-import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { TabPanel } from "./ui/TabPanel";
+import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
@@ -150,7 +147,6 @@ import {
   type HotkeyRegistrationResult,
 } from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
-import { decideProPlanCardCta, storeSubscriptionsUrl } from "../lib/upsell";
 import {
   canChangeCloudBackupPreference,
   effectiveAudioRetentionDays,
@@ -176,10 +172,22 @@ import {
   businessTileAction,
   enterpriseManageAction,
   enterpriseTileCta,
+  coveringWorkspaces,
   entitledWorkspacePlans,
   type EnterpriseTileCta,
 } from "../lib/workspaceBilling";
-import { WorkspacePlanActionButton } from "./settings/WorkspacePlanActionButton";
+import { personalPlanState, type PersonalAction } from "../lib/personalPlanState";
+import { PersonalPlanView } from "./settings/billing/PersonalPlanView";
+import { PlansGrid, type ProCardAction } from "./settings/billing/PlansGrid";
+import {
+  billingIntervalChoice,
+  personalBusyAction,
+  personalProCardKind,
+  runBusinessTileAction,
+  runEnterpriseCta,
+  runPersonalAction,
+  type PersonalPlanHandlers,
+} from "./settings/billing/personalGridHandlers";
 import { PlansBillingPicker } from "./settings/billing/PlansBillingPicker";
 import { WorkspaceBillingView } from "./settings/billing/WorkspaceBillingView";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
@@ -1493,8 +1501,7 @@ export default function SettingsPage({
     workspaces: billingWorkspaces,
     defaultWorkspaceId,
   });
-  const { accountPlan, isWorkspaceCovered, coveringWorkspaceNames, coveringPlanLabel, planLabel } =
-    useAccountPlan(usage);
+  const { planLabel } = useAccountPlan(usage);
   const hasShownApproachingToast = useRef(false);
   useEffect(() => {
     if (usage?.isApproachingLimit && !hasShownApproachingToast.current) {
@@ -1957,37 +1964,24 @@ export default function SettingsPage({
       toast,
     ]
   );
-  // Signed out there is nothing to load and the plan grid is purely
-  // promotional; signed in, no card may claim a plan until usage confirms one.
-  const planStateKnown = !isSignedIn || usage?.status === "success";
-  const proCardCta = decideProPlanCardCta({
-    isSignedIn,
-    planStateKnown,
-    isPersonallySubscribed: usage?.isPersonallySubscribed ?? false,
-    isStoreBilled: Boolean(usage?.storeBilling),
-    plan: usage?.plan ?? "free",
-    isTrial: usage?.isTrial ?? false,
-    isWorkspaceCovered,
-  });
-  const storeBilling = usage?.storeBilling ?? null;
-  const storeUrl = storeBilling?.store ? storeSubscriptionsUrl(storeBilling.store) : null;
-  const periodEndDate = usage?.currentPeriodEnd
-    ? new Date(usage.currentPeriodEnd).toLocaleDateString(i18n.language, {
+  const formatBillingDate = useCallback(
+    (iso: string): string =>
+      new Date(iso).toLocaleDateString(i18n.language, {
         month: "short",
         day: "numeric",
         year: "numeric",
-      })
-    : null;
+      }),
+    [i18n.language]
+  );
   const { requestSignOut, isSigningOut } = useSignOut({ showConfirmDialog, showAlertDialog });
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
   const [eraseDeviceData, setEraseDeviceData] = useState(false);
   const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
-  const [billingState, setBillingState] = useState<Record<string, boolean>>({
-    pro: true,
-    business: true,
-  });
-  const [checkoutTier, setCheckoutTier] = useState<string | null>(null);
+  const [yearlyBilling, setYearlyBilling] = useState(true);
+  const [proCheckoutOpening, setProCheckoutOpening] = useState(false);
+  // The portal opens for several actions; only the one clicked should spin.
+  const [portalAction, setPortalAction] = useState<PersonalAction["kind"] | null>(null);
   const [switchPreview, setSwitchPreview] = useState<{
     plan: "monthly" | "annual";
     tier: "pro" | "business";
@@ -2046,20 +2040,69 @@ export default function SettingsPage({
     }
   }, [switchPreview, usage, toast, t]);
 
-  const handleCheckout = useCallback(
-    async (plan: "monthly" | "annual", tier: "pro" | "business") => {
-      setCheckoutTier(tier);
-      const result = await usage.openCheckout({ plan, tier });
-      setCheckoutTier(null);
+  const subscribePro = useCallback(async () => {
+    if (!usage) return;
+    setProCheckoutOpening(true);
+    try {
+      const result = await usage.openCheckout({
+        plan: billingIntervalChoice(yearlyBilling),
+        tier: "pro",
+      });
       if (!result.success) {
         toast({
           title: t("settingsPage.account.checkout.couldNotOpenTitle"),
           description: t(checkoutErrorDescriptionKey(result.code)),
+          variant: "destructive",
         });
       }
-    },
-    [usage, toast, t]
-  );
+    } finally {
+      setProCheckoutOpening(false);
+    }
+  }, [usage, yearlyBilling, toast, t]);
+
+  const personalState = personalPlanState({
+    signedIn: Boolean(isSignedIn),
+    usage: usage ?? null,
+    coveringWorkspaceNames: coveringWorkspaces(usage?.entitledWorkspaceIds, billingWorkspaces).map(
+      (workspace) => workspace.name
+    ),
+    businessAction: businessTile,
+  });
+  const personalHandlers: PersonalPlanHandlers = {
+    subscribePro: () => void subscribePro(),
+    openBillingPortal: () => void openBillingPortal(),
+    openExternal: (url) => void window.electronAPI?.openExternal?.(url),
+    signIn: requestSignIn,
+    retry: () => void usage?.retry(),
+    viewWorkspace: (workspaceId) => onBillingRequestChange?.({ kind: "workspace", workspaceId }),
+    createWorkspace: setCreateWorkspaceFor,
+    openEnterpriseCheckout: () => setEnterpriseCheckoutOpen(true),
+  };
+  const handlePersonalAction = (action: PersonalAction): void => {
+    setPortalAction(action.kind);
+    runPersonalAction(action, personalHandlers);
+  };
+  const busyAction = personalBusyAction({
+    proCheckoutOpening,
+    isRetrying: Boolean(usage?.isRetrying),
+    isOpeningBilling,
+    portalAction,
+  });
+  const proCardKind = personalProCardKind({
+    signedIn: Boolean(isSignedIn),
+    state: personalState,
+    usage: usage ?? null,
+  });
+  const proCardAction: ProCardAction =
+    proCardKind === "subscribe"
+      ? { kind: "subscribe", busy: proCheckoutOpening, onClick: () => void subscribePro() }
+      : proCardKind === "downgrade"
+        ? {
+            kind: "downgrade",
+            busy: previewLoading || Boolean(usage?.checkoutLoading),
+            onClick: () => void handleSwitchPlan(billingIntervalChoice(yearlyBilling), "pro"),
+          }
+        : { kind: proCardKind };
 
   const handleDeleteAccount = useCallback(() => {
     setEraseDeviceData(false);
@@ -2447,789 +2490,130 @@ export default function SettingsPage({
                   />
                 ) : (
                   <>
-                    {isSignedIn ? (
-                      <div className="space-y-5">
-                        <SectionHeader title={t("settingsPage.unifiedBilling.personalPlanTitle")} />
-                        {usage?.status === "error" ? (
-                          <SettingsPanel>
-                            <SettingsPanelRow>
-                              <SettingsRow
-                                label={t("settingsPage.account.planUnavailable.title")}
-                                description={t("settingsPage.account.planUnavailable.description")}
-                              >
-                                <Button
-                                  onClick={() => void usage.retry()}
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={usage.isRetrying}
-                                >
-                                  {usage.isRetrying ? (
-                                    <Loader2 size={14} className="animate-spin" />
-                                  ) : (
-                                    t("common.retry")
-                                  )}
-                                </Button>
-                              </SettingsRow>
-                            </SettingsPanelRow>
-                          </SettingsPanel>
-                        ) : usage?.status !== "success" ? (
-                          <SettingsPanel>
-                            <SettingsPanelRow>
-                              <div className="flex items-center justify-between">
-                                <Skeleton className="h-4 w-24" />
-                                <Skeleton className="h-5 w-16 rounded-full" />
-                              </div>
-                            </SettingsPanelRow>
-                            <SettingsPanelRow>
-                              <div className="space-y-2">
-                                <Skeleton className="h-3 w-48" />
-                                <Skeleton className="h-8 w-full rounded" />
-                              </div>
-                            </SettingsPanelRow>
-                          </SettingsPanel>
-                        ) : (
-                          <SettingsPanel>
-                            {usage.isPastDue && (
-                              <SettingsPanelRow>
-                                <Alert
-                                  variant="warning"
-                                  className="dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 dark:[&>svg]:text-amber-400"
-                                >
-                                  <AlertTriangle className="h-4 w-4" />
-                                  <AlertTitle>{t("settingsPage.account.pastDue.title")}</AlertTitle>
-                                  <AlertDescription>
-                                    {t("settingsPage.account.pastDue.description")}
-                                  </AlertDescription>
-                                </Alert>
-                              </SettingsPanelRow>
-                            )}
-
-                            <SettingsPanelRow>
-                              <SettingsRow
-                                label={planLabel ?? t("settingsPage.account.planLabels.free")}
-                                description={
-                                  accountPlan.description === "trial"
-                                    ? t("settingsPage.account.planDescriptions.trial", {
-                                        days: usage.trialDaysLeft,
-                                      })
-                                    : accountPlan.description === "pastDue"
-                                      ? t("settingsPage.account.planDescriptions.pastDue", {
-                                          used: usage.wordsUsed.toLocaleString(i18n.language),
-                                          limit: usage.limit.toLocaleString(i18n.language),
-                                        })
-                                      : accountPlan.description === "storePaymentIssue"
-                                        ? t(
-                                            "settingsPage.account.planDescriptions.storePaymentIssue"
-                                          )
-                                        : accountPlan.description === "accessUntil"
-                                          ? t("settingsPage.account.planDescriptions.accessUntil", {
-                                              date: periodEndDate,
-                                            })
-                                          : accountPlan.description === "nextBilling"
-                                            ? t(
-                                                "settingsPage.account.planDescriptions.nextBilling",
-                                                {
-                                                  date: periodEndDate,
-                                                }
-                                              )
-                                            : accountPlan.description === "unlimited"
-                                              ? t("settingsPage.account.planDescriptions.unlimited")
-                                              : accountPlan.description === "providedBy"
-                                                ? t("settingsPage.unifiedBilling.providedBy", {
-                                                    workspaces: coveringWorkspaceNames.join(", "),
-                                                  })
-                                                : t(
-                                                    "settingsPage.account.planDescriptions.freeUsage",
-                                                    {
-                                                      used: usage.wordsUsed.toLocaleString(
-                                                        i18n.language
-                                                      ),
-                                                      limit: usage.limit.toLocaleString(
-                                                        i18n.language
-                                                      ),
-                                                    }
-                                                  )
-                                }
-                              >
-                                {accountPlan.row === "trial" ? (
-                                  <Badge variant="info">
-                                    {t("settingsPage.account.badges.trial")}
-                                  </Badge>
-                                ) : accountPlan.row === "pastDue" ? (
-                                  <Badge variant="destructive">
-                                    {t("settingsPage.account.badges.pastDue")}
-                                  </Badge>
-                                ) : accountPlan.row === "personal" ||
-                                  accountPlan.row === "store" ? (
-                                  <Badge variant="success">
-                                    {usage.plan === "business"
-                                      ? t("settingsPage.account.badges.business")
-                                      : t("settingsPage.account.badges.pro")}
-                                  </Badge>
-                                ) : coveringPlanLabel ? (
-                                  <Badge variant="success">{coveringPlanLabel}</Badge>
-                                ) : usage.isOverLimit ? (
-                                  <Badge variant="warning">
-                                    {t("settingsPage.account.badges.limitReached")}
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline">
-                                    {t("settingsPage.account.badges.free")}
-                                  </Badge>
-                                )}
-                              </SettingsRow>
-                            </SettingsPanelRow>
-
-                            {!usage.isSubscribed && !usage.isTrial && (
-                              <SettingsPanelRow>
-                                <div className="space-y-1.5">
-                                  <Progress
-                                    value={
-                                      usage.limit > 0
-                                        ? Math.min(100, (usage.wordsUsed / usage.limit) * 100)
-                                        : 0
-                                    }
-                                    className={cn(
-                                      "h-1.5",
-                                      usage.isOverLimit
-                                        ? "[&>div]:bg-destructive"
-                                        : usage.isApproachingLimit
-                                          ? "[&>div]:bg-warning"
-                                          : "[&>div]:bg-primary"
-                                    )}
-                                  />
-                                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                    <span className="tabular-nums">
-                                      {usage.wordsUsed.toLocaleString(i18n.language)} /{" "}
-                                      {usage.limit.toLocaleString(i18n.language)}
-                                    </span>
-                                    {usage.isApproachingLimit && (
-                                      <span className="text-warning">
-                                        {t("settingsPage.account.wordsRemaining", {
-                                          remaining: usage.wordsRemaining.toLocaleString(
-                                            i18n.language
-                                          ),
-                                        })}
-                                      </span>
-                                    )}
-                                    {!usage.isApproachingLimit && !usage.isOverLimit && (
-                                      <span>{t("settingsPage.account.rollingWeeklyLimit")}</span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    {t("settingsPage.account.planDescriptions.byokUnlimited")}
-                                  </p>
-                                </div>
-                              </SettingsPanelRow>
-                            )}
-
-                            <SettingsPanelRow>
-                              {accountPlan.action === "updatePayment" ? (
-                                <Button
-                                  onClick={() => void openBillingPortal()}
-                                  disabled={isOpeningBilling}
-                                  size="sm"
-                                  className="w-full"
-                                >
-                                  {isOpeningBilling ? (
-                                    <>
-                                      <Loader2 size={14} className="animate-spin" />
-                                      {t("settingsPage.account.billing.opening")}
-                                    </>
-                                  ) : (
-                                    t("settingsPage.account.billing.updatePaymentMethod")
-                                  )}
-                                </Button>
-                              ) : accountPlan.action === "manageInStore" && storeUrl ? (
-                                <Button
-                                  onClick={() => void window.electronAPI?.openExternal?.(storeUrl)}
-                                  variant="outline"
-                                  size="sm"
-                                  className="w-full"
-                                >
-                                  {storeBilling?.store === "play_store"
-                                    ? t("settingsPage.account.billing.manageInGooglePlay")
-                                    : t("settingsPage.account.billing.manageInAppStore")}
-                                </Button>
-                              ) : accountPlan.action === "storeNote" ? (
-                                <p className="text-xs text-muted-foreground">
-                                  {t("settingsPage.account.billing.managedInMobileStore")}
-                                </p>
-                              ) : accountPlan.action === "manageBilling" ? (
-                                <Button
-                                  onClick={() => void openBillingPortal()}
-                                  variant="outline"
-                                  size="sm"
-                                  className="w-full"
-                                  disabled={isOpeningBilling}
-                                >
-                                  {isOpeningBilling
-                                    ? t("settingsPage.account.billing.opening")
-                                    : t("settingsPage.account.billing.manageBilling")}
-                                </Button>
-                              ) : accountPlan.action === "none" ? null : (
-                                <Button
-                                  onClick={async () => {
-                                    setCheckoutTier("plan-upgrade");
-                                    const result = await usage.openCheckout({
-                                      plan: billingState.pro ? "annual" : "monthly",
-                                      tier: "pro",
-                                    });
-                                    setCheckoutTier(null);
-                                    if (!result.success) {
-                                      toast({
-                                        title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-                                        description: t(checkoutErrorDescriptionKey(result.code)),
-                                        variant: "destructive",
-                                      });
-                                    }
-                                  }}
-                                  size="sm"
-                                  className="w-full"
-                                  disabled={checkoutTier === "plan-upgrade"}
-                                >
-                                  {checkoutTier === "plan-upgrade"
-                                    ? t("settingsPage.account.checkout.opening")
-                                    : t("settingsPage.account.checkout.upgradeToPro")}
-                                </Button>
-                              )}
-                            </SettingsPanelRow>
-                          </SettingsPanel>
-                        )}
-                      </div>
-                    ) : null}
-
-                    <div className="space-y-5">
-                      <SectionHeader title={t("settingsPage.account.pricing.title")} />
-                      {!usage?.isPersonallySubscribed && <CreatorLinkField />}
-                      <div className={`grid gap-1.5 ${isCompact ? "grid-cols-2" : "grid-cols-4"}`}>
-                        <div
-                          className={cn(
-                            "rounded-md p-2.5 flex flex-col",
-                            planStateKnown &&
-                              !usage?.isPersonallySubscribed &&
-                              !storeBilling &&
-                              !usage?.isTrial &&
-                              !isWorkspaceCovered
-                              ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
-                              : "border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
-                          )}
-                        >
-                          <p className="text-xs font-semibold text-foreground">
-                            {t("settingsPage.account.pricing.free.name")}
-                          </p>
-                          <div className="flex items-baseline gap-0.5 mt-0.5">
-                            <span className="text-lg font-bold text-foreground">
-                              {t("settingsPage.account.pricing.free.price")}
-                            </span>
-                            <span className="text-[9px] text-muted-foreground">
-                              / {t("settingsPage.account.pricing.free.period")}
-                            </span>
-                          </div>
-                          <ul className="space-y-0.5 mt-2 flex-1">
-                            {(
-                              t("settingsPage.account.pricing.free.features", {
-                                returnObjects: true,
-                              }) as string[]
-                            ).map((feature, i) =>
-                              feature.startsWith("## ") ? (
-                                <li
-                                  key={i}
-                                  className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/70 ${i > 0 ? "pt-1.5" : ""}`}
-                                >
-                                  {feature.slice(3)}
-                                </li>
-                              ) : (
-                                <li
-                                  key={i}
-                                  className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                                >
-                                  <Check size={9} className="mt-[2px] text-primary/70 shrink-0" />
-                                  {feature}
-                                </li>
-                              )
-                            )}
-                          </ul>
-                          {!isSignedIn ? (
-                            <Button
-                              onClick={requestSignIn}
-                              variant="outline"
-                              size="sm"
-                              className="mt-2 w-full h-6 text-[10px]"
-                            >
-                              {t("settingsPage.account.signedOutPlans.button")}
-                            </Button>
-                          ) : usage?.isPersonallySubscribed && !usage?.isTrial ? (
-                            <Button
-                              onClick={() => void openBillingPortal()}
-                              variant="outline"
-                              size="sm"
-                              className="mt-2 w-full h-6 text-[10px]"
-                              disabled={isOpeningBilling}
-                            >
-                              {isOpeningBilling
-                                ? t("settingsPage.account.billing.opening")
-                                : t("settingsPage.account.pricing.downgrade")}
-                            </Button>
-                          ) : planStateKnown && !isWorkspaceCovered && !storeBilling ? (
-                            <div className="mt-2 text-center">
-                              <span className="text-[9px] font-medium text-primary/70">
-                                {t("settingsPage.account.pricing.currentPlan")}
-                              </span>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div
-                          className={cn(
-                            "rounded-md border-2 p-2.5 flex flex-col",
-                            (usage?.isPersonallySubscribed ||
-                              (storeBilling && !isWorkspaceCovered)) &&
-                              usage?.plan === "pro"
-                              ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
-                              : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
-                          )}
-                        >
-                          <p className="text-xs font-semibold text-foreground">
-                            {t("settingsPage.account.pricing.pro.name")}
-                          </p>
-                          <button
-                            onClick={() => setBillingState((prev) => ({ ...prev, pro: !prev.pro }))}
-                            role="switch"
-                            aria-checked={billingState.pro}
-                            className="flex items-center gap-1.5 mt-1"
-                          >
-                            <div
-                              className={`relative w-7 h-4 rounded-full transition-colors ${billingState.pro ? "bg-primary" : "bg-muted"}`}
-                            >
-                              <div
-                                className={`absolute top-0.5 start-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3 rtl:-translate-x-3" : ""}`}
-                              />
-                            </div>
-                            <span className="text-[9px] text-muted-foreground">
-                              {t("settingsPage.account.pricing.billedYearly")}
-                            </span>
-                          </button>
-                          <div className="flex items-baseline gap-0.5 mt-1">
-                            <span className="text-lg font-bold text-foreground">
-                              {billingState.pro
-                                ? t("settingsPage.account.pricing.pro.annualEquivalent")
-                                : t("settingsPage.account.pricing.pro.monthlyPrice")}
-                            </span>
-                            <span className="text-[9px] text-muted-foreground">
-                              {t("settingsPage.account.pricing.pro.monthlyPeriod")}
-                            </span>
-                          </div>
-                          <p className="text-[9px] text-muted-foreground/70 mt-1.5">
-                            {t("settingsPage.account.pricing.pro.includesPrefix")}
-                          </p>
-                          <ul className="space-y-0.5 mt-1 flex-1">
-                            {(
-                              t("settingsPage.account.pricing.pro.features", {
-                                returnObjects: true,
-                              }) as string[]
-                            ).map((feature, i) => (
-                              <li
-                                key={i}
-                                className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                              >
-                                <Check size={9} className="mt-[2px] text-primary shrink-0" />
-                                {feature}
-                              </li>
-                            ))}
-                          </ul>
-                          {proCardCta === "currentPlan" ? (
-                            <div className="mt-2 text-center">
-                              <span className="text-[9px] font-medium text-primary">
-                                {workspacePlans.size > 0
-                                  ? t("settingsPage.account.pricing.yourPersonalPlan")
-                                  : t("settingsPage.account.pricing.currentPlan")}
-                              </span>
-                            </div>
-                          ) : proCardCta === "downgradeToPro" ? (
-                            <Button
-                              onClick={() =>
-                                handleSwitchPlan(billingState.pro ? "annual" : "monthly", "pro")
-                              }
-                              disabled={previewLoading || usage.checkoutLoading}
-                              variant="outline"
-                              size="sm"
-                              className="mt-2 w-full h-6 text-[10px]"
-                            >
-                              {previewLoading ? (
-                                <Loader2 size={10} className="animate-spin" />
-                              ) : (
-                                t("settingsPage.account.pricing.downgrade")
-                              )}
-                            </Button>
-                          ) : proCardCta === "signUp" ? (
-                            <Button
-                              onClick={requestSignIn}
-                              size="sm"
-                              className="mt-2 w-full h-6 text-[10px]"
-                            >
-                              {t("settingsPage.account.pricing.pro.cta")}
-                            </Button>
-                          ) : proCardCta === "coveredByWorkspace" ? (
-                            <div className="mt-2 text-center">
-                              <span className="text-[9px] font-medium text-primary">
-                                {t("settingsPage.account.pricing.coveredByWorkspace")}
-                              </span>
-                            </div>
-                          ) : proCardCta === "checkout" ? (
-                            <Button
-                              onClick={() =>
-                                handleCheckout(billingState.pro ? "annual" : "monthly", "pro")
-                              }
-                              disabled={checkoutTier === "pro"}
-                              size="sm"
-                              className="mt-2 w-full h-6 text-[10px]"
-                            >
-                              {checkoutTier === "pro" ? (
-                                <Loader2 size={10} className="animate-spin" />
-                              ) : (
-                                t("settingsPage.account.pricing.pro.cta")
-                              )}
-                            </Button>
-                          ) : null}
-                        </div>
-
-                        <div
-                          className={cn(
-                            "rounded-md border-2 p-2.5 flex flex-col relative",
-                            businessTile.kind === "workspacePlan"
-                              ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
-                              : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
-                          )}
-                        >
-                          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
-                            {t("settingsPage.account.pricing.business.badge")}
-                          </span>
-                          <p className="text-xs font-semibold text-foreground">
-                            {t("settingsPage.account.pricing.business.name")}
-                          </p>
-                          <button
-                            onClick={() =>
-                              setBillingState((prev) => ({ ...prev, business: !prev.business }))
+                    <PersonalPlanView
+                      state={personalState}
+                      onAction={handlePersonalAction}
+                      busyAction={busyAction}
+                      formatDate={formatBillingDate}
+                      grid={
+                        <div className="flex flex-col gap-3">
+                          {!usage?.isPersonallySubscribed && <CreatorLinkField />}
+                          <PlansGrid
+                            isSignedIn={isSignedIn}
+                            onSignIn={requestSignIn}
+                            yearly={yearlyBilling}
+                            onYearlyChange={setYearlyBilling}
+                            pro={proCardAction}
+                            business={businessTile}
+                            businessDowngrade={businessAction}
+                            onBusinessAction={(action) =>
+                              runBusinessTileAction(action, personalHandlers)
                             }
-                            role="switch"
-                            aria-checked={billingState.business}
-                            className="flex items-center gap-1.5 mt-1"
-                          >
-                            <div
-                              className={`relative w-7 h-4 rounded-full transition-colors ${billingState.business ? "bg-primary" : "bg-muted"}`}
-                            >
-                              <div
-                                className={`absolute top-0.5 start-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3 rtl:-translate-x-3" : ""}`}
-                              />
-                            </div>
-                            <span className="text-[9px] text-muted-foreground">
-                              {t("settingsPage.account.pricing.billedYearly")}
-                            </span>
-                          </button>
-                          <div className="flex items-baseline gap-0.5 mt-1">
-                            <span className="text-lg font-bold text-foreground">
-                              {billingState.business
-                                ? t("settingsPage.account.pricing.business.annualEquivalent")
-                                : t("settingsPage.account.pricing.business.monthlyPrice")}
-                            </span>
-                            <span className="text-[9px] text-muted-foreground">
-                              {t("settingsPage.account.pricing.business.monthlyPeriod")}
-                            </span>
-                          </div>
-                          <p className="text-[9px] text-muted-foreground/70 mt-1.5">
-                            {t("settingsPage.account.pricing.business.includesPrefix")}
-                          </p>
-                          <ul className="space-y-0.5 mt-1 flex-1">
-                            {(
-                              t("settingsPage.account.pricing.business.features", {
-                                returnObjects: true,
-                              }) as string[]
-                            ).map((feature, i) => (
-                              <li
-                                key={i}
-                                className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                              >
-                                <Check size={9} className="mt-[2px] text-primary shrink-0" />
-                                {feature}
-                              </li>
-                            ))}
-                          </ul>
-                          {!isSignedIn ? (
-                            <Button
-                              onClick={requestSignIn}
-                              variant="outline"
-                              size="sm"
-                              className="mt-2 w-full h-6 text-[10px]"
-                            >
-                              {t("settingsPage.account.pricing.business.cta")}
-                            </Button>
-                          ) : (
-                            <div className="mt-2 space-y-1 text-center">
-                              {businessTile.kind === "workspacePlan" ? (
-                                <span className="block text-[9px] font-medium text-primary">
-                                  {t("settingsPage.account.pricing.yourWorkspacePlan")}
-                                </span>
-                              ) : businessTile.kind === "viewWorkspace" ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="w-full h-6 text-[10px]"
-                                  onClick={() =>
-                                    onBillingRequestChange?.({
-                                      kind: "workspace",
-                                      workspaceId: businessTile.workspaceId,
-                                    })
-                                  }
-                                >
-                                  {t("settingsPage.billing.tiles.upgradeWorkspace")}
-                                </Button>
-                              ) : businessTile.kind === "createWorkspace" ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="w-full h-6 text-[10px]"
-                                  onClick={() => setCreateWorkspaceFor("business")}
-                                >
-                                  {t("settingsPage.billing.tiles.createWorkspace")}
-                                </Button>
-                              ) : null}
-                              {businessAction && (
-                                <WorkspacePlanActionButton
-                                  action={businessAction}
-                                  onRefreshEntitlement={usage?.refetch}
-                                  label={
-                                    businessAction.kind === "contactSales"
-                                      ? t("settingsPage.account.pricing.enterprise.cta")
-                                      : t("settingsPage.account.pricing.downgrade")
-                                  }
-                                />
-                              )}
-                            </div>
-                          )}
+                            enterprise={{
+                              cta: enterpriseCta,
+                              manage: enterpriseAction,
+                              entitled: workspacePlans.has("enterprise"),
+                            }}
+                            onEnterprise={(cta) => runEnterpriseCta(cta, personalHandlers)}
+                            onRefreshEntitlement={usage?.refetch}
+                            columns={isCompact ? 2 : 3}
+                          />
                         </div>
-
-                        <div
-                          className={cn(
-                            "rounded-md p-2.5 flex flex-col",
-                            workspacePlans.has("enterprise")
-                              ? "border-2 border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
-                              : "border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
-                          )}
-                        >
-                          <p className="text-xs font-semibold text-foreground">
-                            {t("settingsPage.account.pricing.enterprise.name")}
-                          </p>
-                          <p className="text-[9px] text-muted-foreground mt-1">
-                            {t("settingsPage.account.pricing.enterprise.subtitle")}
-                          </p>
-                          <div className="flex items-baseline gap-0.5 mt-1">
-                            <span className="text-lg font-bold text-foreground">
-                              {t("settingsPage.account.pricing.enterprise.price")}
-                            </span>
-                          </div>
-                          <p className="text-[9px] text-muted-foreground/70 mt-1.5">
-                            {t("settingsPage.account.pricing.enterprise.includesPrefix")}
-                          </p>
-                          <ul className="space-y-0.5 mt-1 flex-1">
-                            {(
-                              t("settingsPage.account.pricing.enterprise.features", {
-                                returnObjects: true,
-                              }) as string[]
-                            ).map((feature, i) => (
-                              <li
-                                key={i}
-                                className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                              >
-                                <Check
-                                  size={9}
-                                  className="mt-[2px] text-purple-500 dark:text-purple-400 shrink-0"
-                                />
-                                {feature}
-                              </li>
-                            ))}
-                          </ul>
-                          {isSignedIn && workspacePlans.has("enterprise") && (
-                            <div className="mt-2 space-y-1 text-center">
-                              <span className="block text-[9px] font-medium text-primary">
-                                {t("settingsPage.account.pricing.yourWorkspacePlan")}
+                      }
+                    />
+                    <Dialog
+                      open={!!switchPreview}
+                      onOpenChange={(open) => !open && setSwitchPreview(null)}
+                    >
+                      <DialogContent className="sm:max-w-90">
+                        <DialogHeader>
+                          <DialogTitle>
+                            {t("settingsPage.account.pricing.confirmSwitch.title")}
+                          </DialogTitle>
+                          <DialogDescription>
+                            {switchPreview &&
+                              t("settingsPage.account.pricing.confirmSwitch.description", {
+                                plan: switchPreview.tier === "pro" ? "Pro" : "Business",
+                                interval:
+                                  switchPreview.plan === "annual"
+                                    ? t("settingsPage.account.pricing.confirmSwitch.yearly")
+                                    : t("settingsPage.account.pricing.confirmSwitch.monthly"),
+                              })}
+                          </DialogDescription>
+                        </DialogHeader>
+                        {switchPreview && (
+                          <div className="rounded-lg border border-border/70 dark:border-border-subtle/60 overflow-hidden">
+                            <div className="flex justify-between items-center px-3 py-2.5 bg-muted/40 dark:bg-surface-2/50">
+                              <span className="text-xs text-muted-foreground">
+                                {switchPreview.immediateAmount < 0
+                                  ? t("settingsPage.account.pricing.confirmSwitch.accountCredit")
+                                  : t("settingsPage.account.pricing.confirmSwitch.chargeToday")}
                               </span>
-                              {enterpriseAction && (
-                                <WorkspacePlanActionButton
-                                  action={enterpriseAction}
-                                  onRefreshEntitlement={usage?.refetch}
-                                  label={t("settingsPage.account.pricing.manage")}
-                                />
-                              )}
-                            </div>
-                          )}
-                          {/* Another workspace can still be upgraded alongside the current plan. */}
-                          {isSignedIn && enterpriseCta.action !== "contactSales" ? (
-                            <div className="mt-2 space-y-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full h-6 text-[10px]"
-                                onClick={() => {
-                                  if (enterpriseCta.action === "openDialog") {
-                                    setEnterpriseCheckoutOpen(true);
-                                  } else {
-                                    setCreateWorkspaceFor("enterprise");
-                                  }
-                                }}
-                              >
-                                {t("settingsPage.account.pricing.enterprise.upgradeCta")}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="w-full h-6 text-[10px] text-muted-foreground"
-                                onClick={() =>
-                                  window.electronAPI?.openExternal?.(
-                                    "https://openwhispr.com/contact-sales"
-                                  )
-                                }
-                              >
-                                <Mail size={10} />
-                                {t("settingsPage.account.pricing.enterprise.cta")}
-                              </Button>
-                            </div>
-                          ) : isSignedIn && workspacePlans.has("enterprise") ? null : isSignedIn ? (
-                            <div className="mt-2 space-y-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full h-6 text-[10px]"
-                                onClick={() =>
-                                  window.electronAPI?.openExternal?.(
-                                    "https://openwhispr.com/contact-sales"
-                                  )
-                                }
-                              >
-                                <Mail size={10} />
-                                {t("settingsPage.account.pricing.enterprise.cta")}
-                              </Button>
-                              {enterpriseCta.action === "contactSales" &&
-                                enterpriseCta.ownerName && (
-                                  <p className="text-[10px] text-muted-foreground text-center">
-                                    {t("settingsPage.account.pricing.enterprise.askOwner", {
-                                      name: enterpriseCta.ownerName,
-                                    })}
-                                  </p>
+                              <span
+                                className={cn(
+                                  "text-sm font-semibold",
+                                  switchPreview.immediateAmount < 0
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : "text-foreground"
                                 )}
+                              >
+                                {formatAmount(
+                                  Math.abs(switchPreview.immediateAmount),
+                                  switchPreview.currency
+                                )}
+                              </span>
                             </div>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="mt-2 w-full h-6 text-[10px]"
-                              onClick={() =>
-                                window.electronAPI?.openExternal?.(
-                                  "https://openwhispr.com/contact-sales"
-                                )
-                              }
-                            >
-                              <Mail size={10} />
-                              {t("settingsPage.account.pricing.enterprise.cta")}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-
-                      <Dialog
-                        open={!!switchPreview}
-                        onOpenChange={(open) => !open && setSwitchPreview(null)}
-                      >
-                        <DialogContent className="sm:max-w-90">
-                          <DialogHeader>
-                            <DialogTitle>
-                              {t("settingsPage.account.pricing.confirmSwitch.title")}
-                            </DialogTitle>
-                            <DialogDescription>
-                              {switchPreview &&
-                                t("settingsPage.account.pricing.confirmSwitch.description", {
-                                  plan: switchPreview.tier === "pro" ? "Pro" : "Business",
-                                  interval:
-                                    switchPreview.plan === "annual"
-                                      ? t("settingsPage.account.pricing.confirmSwitch.yearly")
-                                      : t("settingsPage.account.pricing.confirmSwitch.monthly"),
-                                })}
-                            </DialogDescription>
-                          </DialogHeader>
-                          {switchPreview && (
-                            <div className="rounded-lg border border-border/70 dark:border-border-subtle/60 overflow-hidden">
-                              <div className="flex justify-between items-center px-3 py-2.5 bg-muted/40 dark:bg-surface-2/50">
+                            <div className="divide-y divide-border/60">
+                              <div className="flex justify-between items-center px-3 py-2">
                                 <span className="text-xs text-muted-foreground">
-                                  {switchPreview.immediateAmount < 0
-                                    ? t("settingsPage.account.pricing.confirmSwitch.accountCredit")
-                                    : t("settingsPage.account.pricing.confirmSwitch.chargeToday")}
+                                  {t("settingsPage.account.pricing.confirmSwitch.newPrice")}
                                 </span>
-                                <span
-                                  className={cn(
-                                    "text-sm font-semibold",
-                                    switchPreview.immediateAmount < 0
-                                      ? "text-emerald-600 dark:text-emerald-400"
-                                      : "text-foreground"
-                                  )}
-                                >
+                                <span className="text-xs font-medium text-foreground">
                                   {formatAmount(
-                                    Math.abs(switchPreview.immediateAmount),
+                                    switchPreview.newPriceAmount,
                                     switchPreview.currency
                                   )}
+                                  /
+                                  {switchPreview.newInterval === "year"
+                                    ? t("settingsPage.account.pricing.confirmSwitch.yr")
+                                    : t("settingsPage.account.pricing.confirmSwitch.mo")}
                                 </span>
                               </div>
-                              <div className="divide-y divide-border/60">
+                              {switchPreview.nextBillingDate && (
                                 <div className="flex justify-between items-center px-3 py-2">
                                   <span className="text-xs text-muted-foreground">
-                                    {t("settingsPage.account.pricing.confirmSwitch.newPrice")}
+                                    {t("settingsPage.account.pricing.confirmSwitch.nextBilling")}
                                   </span>
                                   <span className="text-xs font-medium text-foreground">
-                                    {formatAmount(
-                                      switchPreview.newPriceAmount,
-                                      switchPreview.currency
-                                    )}
-                                    /
-                                    {switchPreview.newInterval === "year"
-                                      ? t("settingsPage.account.pricing.confirmSwitch.yr")
-                                      : t("settingsPage.account.pricing.confirmSwitch.mo")}
+                                    {new Date(switchPreview.nextBillingDate).toLocaleDateString()}
                                   </span>
                                 </div>
-                                {switchPreview.nextBillingDate && (
-                                  <div className="flex justify-between items-center px-3 py-2">
-                                    <span className="text-xs text-muted-foreground">
-                                      {t("settingsPage.account.pricing.confirmSwitch.nextBilling")}
-                                    </span>
-                                    <span className="text-xs font-medium text-foreground">
-                                      {new Date(switchPreview.nextBillingDate).toLocaleDateString()}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          <DialogFooter>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSwitchPreview(null)}
-                            >
-                              {t("settingsPage.account.pricing.confirmSwitch.cancel")}
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={confirmSwitchPlan}
-                              disabled={usage?.checkoutLoading}
-                            >
-                              {usage?.checkoutLoading ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                t("settingsPage.account.pricing.confirmSwitch.confirm")
                               )}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
+                            </div>
+                          </div>
+                        )}
+                        <DialogFooter>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSwitchPreview(null)}
+                          >
+                            {t("settingsPage.account.pricing.confirmSwitch.cancel")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={confirmSwitchPlan}
+                            disabled={usage?.checkoutLoading}
+                          >
+                            {usage?.checkoutLoading ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              t("settingsPage.account.pricing.confirmSwitch.confirm")
+                            )}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </>
                 )}
 

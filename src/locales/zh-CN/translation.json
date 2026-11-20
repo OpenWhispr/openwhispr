@@ -1680,7 +1680,6 @@
       "seatUpdated_one": "工作区容量已更新为 {{count}} 个席位",
       "seatUpdated_other": "工作区容量已更新为 {{count}} 个席位",
       "seatUpdateFailed": "无法更新工作区席位",
-      "personalPlanTitle": "个人套餐",
       "providedBy": "个人套餐：免费版 · 付费权限由 {{workspaces}} 提供",
       "confirmSeats": {
         "title": "要添加工作区席位吗？",
@@ -1692,25 +1691,13 @@
       }
     },
     "account": {
-      "badges": {
-        "free": "免费版",
-        "limitReached": "已达云端上限",
-        "pastDue": "逾期未付",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "试用"
-      },
       "billing": {
         "couldNotOpenDescription": "打开账单页面时出错，请重试。",
         "couldNotOpenTitle": "无法打开账单",
-        "manageBilling": "管理账单",
-        "opening": "正在打开...",
-        "updatePaymentMethod": "更新支付方式",
         "contactOwnerTitle": "请联系工作区所有者",
         "contactOwnerDescription": "只有工作区所有者才能更新该工作区的账单。",
         "manageInAppStore": "在 App Store 中管理",
-        "manageInGooglePlay": "在 Google Play 中管理",
-        "managedInMobileStore": "通过手机应用商店计费。请在手机上管理订阅。"
+        "manageInGooglePlay": "在 Google Play 中管理"
       },
       "checkout": {
         "couldNotOpenDescription": "打开结账页面时出错，请重试。",
@@ -1729,27 +1716,12 @@
         "title": "显示上次登录时的信息",
         "description": "在 OpenWhispr 能连接到服务器之前，同步和账户更改将暂停。"
       },
-      "pastDue": {
-        "description": "你目前使用的是免费版。更新支付方式即可恢复 Pro 版。",
-        "title": "我们无法处理你的付款"
-      },
-      "planDescriptions": {
-        "freeUsage": "本周 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 个词",
-        "byokUnlimited": "使用自己的 API 密钥和本地模型仍不受此限制。",
-        "nextBilling": "下次扣费：{{date}}",
-        "pastDue": "本周 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 个词——更新支付方式以恢复 Pro",
-        "trial": "剩余 {{days}} 天——无限转录",
-        "unlimited": "无限制",
-        "accessUntil": "可使用至 {{date}}",
-        "storePaymentIssue": "应用商店未能续订此订阅。请在应用商店中更新付款方式以继续使用当前套餐。"
-      },
       "planLabels": {
         "free": "免费版",
         "pro": "Pro",
         "business": "Business",
         "trial": "试用"
       },
-      "rollingWeeklyLimit": "滚动周限额",
       "signOut": {
         "endMeetingDescription": "退出登录会结束正在进行的会议录制。已录制的内容会保留在笔记中。",
         "endMeetingTitle": "结束会议录制？",
@@ -1773,81 +1745,24 @@
       "pricing": {
         "title": "套餐",
         "billedYearly": "按年计费",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "永久",
-          "features": [
-            "## OpenWhispr Cloud",
-            "每周 2,000 字转录",
-            "每月 5 小时会议录制",
-            "## 永久免费",
-            "无限本地 AI 模型",
-            "使用自己的 API 密钥无限云端转录",
-            "支持 100+ 种语言",
-            "自定义词典",
-            "零数据留存",
-            "社区支持"
-          ]
-        },
         "pro": {
           "name": "Pro",
           "monthlyPrice": "$8",
-          "monthlyPeriod": "/月",
-          "annualPrice": "$80",
-          "annualPeriod": "/年",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "所有 Free 功能 +",
-          "features": [
-            "无限云端转录",
-            "每月 20 小时会议录制",
-            "跨设备同步",
-            "通过公开链接分享笔记",
-            "个人 API 访问",
-            "在所有应用中集成 MCP",
-            "移动应用（无限云端）",
-            "邮件支持"
-          ],
-          "cta": "开始使用",
-          "switchToAnnual": "切换为年付"
+          "annualEquivalent": "$6.67"
         },
         "business": {
           "name": "Business",
           "monthlyPrice": "$16",
-          "monthlyPeriod": "/月",
-          "annualPrice": "$160",
-          "annualPeriod": "/年",
           "annualEquivalent": "$13.33",
-          "includesPrefix": "所有 Pro 功能 +",
-          "badge": "最受欢迎",
-          "features": [
-            "无限会议录制",
-            "工作区角色与成员管理",
-            "助手模式",
-            "与您的数据对话",
-            "优先支持"
-          ],
-          "cta": "开始使用",
-          "switchToAnnual": "切换为年付"
+          "cta": "开始使用"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "自定义",
-          "subtitle": "提供高级安全保障与支持",
-          "includesPrefix": "所有 Business 功能 +",
-          "features": [
-            "托管 API 额度",
-            "跨设备云端同步",
-            "团队功能与管理",
-            "SSO 与合规",
-            "专属支持"
-          ],
           "cta": "联系销售",
           "upgradeCta": "升级到 Enterprise",
           "askOwner": "请 {{name}} 升级您的工作区。"
         },
-        "currentPlan": "当前套餐",
-        "yourPersonalPlan": "你的个人方案",
         "yourWorkspacePlan": "你的工作区方案",
         "manage": "管理",
         "coveredByWorkspace": "已包含在您的工作区套餐中",
@@ -1869,11 +1784,7 @@
           "confirm": "确认"
         }
       },
-      "signedOutPlans": {
-        "button": "免费创建账户"
-      },
       "user": "用户",
-      "wordsRemaining": "剩余 {{remaining}} 个词",
       "deleteAccount": {
         "label": "删除账户",
         "labelDescription": "永久删除您的账户和个人云端数据。其他本地用户和工作区所有的内容将被保留。",
@@ -1924,10 +1835,6 @@
           "noPassword": "此账户未设置密码。",
           "generic": "出了点问题，请重试。"
         }
-      },
-      "planUnavailable": {
-        "title": "无法获取方案",
-        "description": "暂时无法加载你的方案，你的使用权限不受影响。"
       }
     },
     "agentConfig": {
@@ -3263,6 +3170,245 @@
       "tiles": {
         "upgradeWorkspace": "升级工作区",
         "createWorkspace": "创建工作区"
+      },
+      "plans": {
+        "pricePerMonth": "{{price}} / 月",
+        "pricePerMonthYearly": "{{price}} / 月，按年计费",
+        "pricePerSeat": "{{price}} / 席位 / 月",
+        "pricePerSeatYearly": "{{price}} / 席位 / 月，按年计费",
+        "yourPlan": "您的方案",
+        "pro": {
+          "includes": "包含 Free 全部功能，另加",
+          "features": {
+            "unlimitedCloud": "无限云端转录",
+            "syncDevices": "跨设备同步",
+            "publicLinks": "笔记公开链接",
+            "apiMcp": "个人 API 与 MCP 访问",
+            "mobileApp": "移动应用"
+          }
+        },
+        "business": {
+          "includes": "包含 Pro 全部功能，另加",
+          "features": {
+            "workspaceRoles": "工作区角色与成员",
+            "assistantMode": "助手模式",
+            "chatOverData": "与您的数据对话",
+            "prioritySupport": "优先支持"
+          }
+        },
+        "enterprise": {
+          "includes": "包含 Business 全部功能，另加",
+          "features": {
+            "managedCredits": "托管 API 额度",
+            "ssoCompliance": "SSO 与合规",
+            "adminControls": "管理控制与策略",
+            "dedicatedSupport": "专属支持"
+          }
+        }
+      },
+      "personal": {
+        "blocks": {
+          "currentPlan": "当前方案",
+          "usage": "用量",
+          "billingDetails": "账单详情"
+        },
+        "signedOut": {
+          "title": "未登录",
+          "body": "登录后即可查看您的方案。"
+        },
+        "failed": {
+          "title": "方案不可用",
+          "body": "您的访问权限不受影响。"
+        },
+        "actions": {
+          "subscribePro": "订阅 Pro",
+          "manageBilling": "管理账单",
+          "updatePayment": "更新付款方式",
+          "cancelPro": "取消 Pro",
+          "cancelTrial": "取消试用"
+        },
+        "usage": {
+          "cloudTranscription": "云端转录",
+          "unlimited": "无限制",
+          "wordsValue": "{{used}} / {{limit}} 个词",
+          "wordsLeft": "过去 7 天还剩 {{remaining}} 个词",
+          "rolling": "按过去 7 天计算。本地模型和您自己的 API 密钥不受限制。",
+          "limitReached": "已达上限。本地模型和您自己的 API 密钥仍可使用。"
+        },
+        "stores": {
+          "appStore": "App Store",
+          "playStore": "Google Play",
+          "unknown": "您手机的应用商店"
+        },
+        "badges": {
+          "trial_one": "试用 · 剩余 {{count}} 天",
+          "trial_other": "试用 · 剩余 {{count}} 天",
+          "pastDue": "逾期未付",
+          "cancelled": "已取消",
+          "yearly": "按年",
+          "monthly": "按月"
+        },
+        "price": {
+          "free": "$0",
+          "proFrom": "{{date}} 起 {{price}} / 月",
+          "billedYearly": "按年计费",
+          "proMonthly": "{{price}} / 月"
+        },
+        "banners": {
+          "coveredTrial": {
+            "title": "{{workspace}} 已为您提供权益",
+            "body": "您的试用将于 {{date}} 转为付费 Pro 方案。"
+          },
+          "coveredTrialUnnamed": {
+            "title": "已有工作区为您提供权益",
+            "body": "您的试用将于 {{date}} 转为付费 Pro 方案。"
+          },
+          "coveredPastDue": {
+            "title": "{{workspace}} 已为您提供权益",
+            "body": "您的 Pro 付款失败。取消 Pro 即可停止重试。"
+          },
+          "coveredPastDueUnnamed": {
+            "title": "已有工作区为您提供权益",
+            "body": "您的 Pro 付款失败。取消 Pro 即可停止重试。"
+          },
+          "coveredPaying": {
+            "title": "{{workspace}} 已为您提供权益",
+            "body": "您仍在为 Pro 付费。"
+          },
+          "coveredPayingUnnamed": {
+            "title": "已有工作区为您提供权益",
+            "body": "您仍在为 Pro 付费。"
+          },
+          "coveredStore": {
+            "title": "{{workspace}} 已为您提供权益",
+            "body": "您仍在为 Pro 付费。请在您手机的应用商店中取消。"
+          },
+          "coveredStoreUnnamed": {
+            "title": "已有工作区为您提供权益",
+            "body": "您仍在为 Pro 付费。请在您手机的应用商店中取消。"
+          },
+          "covered": {
+            "title": "{{workspace}} 为您提供权益",
+            "body": "您的工作区席位让您在这里也能无限使用。"
+          },
+          "coveredUnnamed": {
+            "title": "工作区为您提供权益",
+            "body": "您的工作区席位让您在这里也能无限使用。"
+          },
+          "paymentFailed": {
+            "title": "付款失败",
+            "body": "付款成功前将适用 Free 的限额。"
+          },
+          "storeRenewalFailed": {
+            "title": "续订失败",
+            "body": "您手机的应用商店正在重试。请在那里更新付款方式。"
+          },
+          "weeklyLimit": {
+            "title": "已达每周上限",
+            "body": "随着 7 天前的词移出统计，云端转录会逐步恢复。本地模型和您自己的 API 密钥仍可使用。"
+          }
+        },
+        "details": {
+          "trialEnds": "试用结束",
+          "periodEnds": "当前周期结束",
+          "billedThrough": "计费渠道",
+          "accessUntil": "可用至",
+          "renews": "续订日期"
+        }
+      },
+      "workspace": {
+        "managedAccount": "托管账户",
+        "billingDetails": "账单详情",
+        "workspaceDetails": "工作区详情",
+        "badges": {
+          "trial_one": "试用 · 剩余 {{count}} 天",
+          "trial_other": "试用 · 剩余 {{count}} 天",
+          "trialUndated": "试用",
+          "pastDue": "逾期未付",
+          "unpaid": "未付款",
+          "incomplete": "未完成",
+          "cancelled": "已取消",
+          "paused": "已暂停"
+        },
+        "planLine": {
+          "free": "$0",
+          "invoicedByOpenWhispr": "由 OpenWhispr 开具发票",
+          "paidBy": "由 {{workspace}} 付费",
+          "personalApplies": "适用您的个人方案"
+        },
+        "actions": {
+          "manageBilling": "管理账单",
+          "updatePayment": "更新付款方式",
+          "finishCheckout": "完成结账",
+          "keepPlan": "保留 {{plan}}",
+          "resubscribe": "重新订阅",
+          "openConsole": "打开控制台",
+          "upgradeEnterprise": "升级到 Enterprise",
+          "viewPersonal": "查看个人方案",
+          "copyEmail": "复制邮箱"
+        },
+        "banners": {
+          "ends": {
+            "title": "{{plan}} 将于 {{date}} 结束",
+            "body": "在此之前，成员仍可使用 {{plan}}。"
+          },
+          "endsUndated": {
+            "title": "{{plan}} 即将结束",
+            "body": "当前周期结束前，成员仍可使用 {{plan}}。"
+          },
+          "paymentFailed": {
+            "title": "付款失败",
+            "body": "请更新付款方式，让成员继续使用 {{plan}}。"
+          },
+          "paused": {
+            "title": "{{plan}} 已暂停",
+            "body": "付款成功前，成员使用各自的个人方案。"
+          },
+          "checkoutIncomplete": {
+            "title": "结账未完成",
+            "body": "完成结账即可为成员开通 {{plan}}。"
+          },
+          "ended": {
+            "title": "{{plan}} 已于 {{date}} 结束",
+            "body": "成员已恢复使用各自的个人方案。"
+          },
+          "endedUndated": {
+            "title": "{{plan}} 已结束",
+            "body": "成员已恢复使用各自的个人方案。"
+          },
+          "memberPaymentProblem": {
+            "title": "{{workspace}} 的付款出现问题",
+            "body": "访问权限可能很快结束。"
+          },
+          "memberPaused": {
+            "title": "{{workspace}} 的方案已暂停",
+            "body": "恢复之前，适用您的个人方案。"
+          }
+        },
+        "usage": {
+          "seats": "席位",
+          "seatsValue": "{{used}} / {{total}}",
+          "members": "成员",
+          "noSeatsLeft": "没有剩余席位",
+          "noSeatsLeftWithInvites_one": "没有剩余席位 · {{count}} 个待接受邀请",
+          "noSeatsLeftWithInvites_other": "没有剩余席位 · {{count}} 个待接受邀请",
+          "pendingInvites_one": "{{count}} 个待接受邀请",
+          "pendingInvites_other": "{{count}} 个待接受邀请"
+        },
+        "details": {
+          "firstInvoice": "首张账单",
+          "ends": "结束日期",
+          "ended": "结束于",
+          "billing": "计费",
+          "periodEnds": "当前周期结束",
+          "workspace": "工作区",
+          "yourRole": "您的角色",
+          "yourSeat": "您的席位",
+          "managedBy": "管理者",
+          "invoicedByOpenWhispr": "由 OpenWhispr 开具发票",
+          "paidSeat": "付费席位",
+          "noPaidSeat": "无付费席位"
+        }
       }
     }
   },

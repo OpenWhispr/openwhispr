@@ -1,8 +1,5 @@
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
 const test = require("node:test");
-const ts = require("typescript");
 const React = require("react");
 const { createRendererServer, installHappyDom } = require("../lib/rendererTestHarness");
 const {
@@ -13,9 +10,10 @@ const {
   entitledWorkspacePlans,
   hasActiveWorkspaceSubscription,
 } = require("../../src/lib/workspaceBilling.ts");
+const en = require("../../src/locales/en/translation.json");
+const de = require("../../src/locales/de/translation.json");
 
 const pricingKey = (suffix) => `settingsPage.account.pricing.${suffix}`;
-const translate = (key, options) => (options?.returnObjects ? [] : key);
 const enterprise = (overrides = {}) => ({
   id: "enterprise",
   plan: "enterprise",
@@ -25,51 +23,24 @@ const enterprise = (overrides = {}) => ({
   ...overrides,
 });
 
-// Each card's outer div is found by the expression its highlight reads, one per card.
-const CARD_ANCHORS = {
-  business: 'businessTile.kind === "workspacePlan"',
-  enterprise: 'workspacePlans.has("enterprise")',
-};
-
-// Render the actual SettingsPage cards so their caller props and conditional JSX
-// stay covered without mounting unrelated settings tabs and device integrations.
-function loadPricingCard(plan) {
-  const anchor = CARD_ANCHORS[plan];
-  const source = fs.readFileSync(
-    path.join(__dirname, "../../src/components/SettingsPage.tsx"),
-    "utf8"
-  );
-  const ast = ts.createSourceFile(
-    "SettingsPage.tsx",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX
-  );
-  let card;
-  function visit(node) {
-    if (
-      ts.isJsxElement(node) &&
-      node.openingElement.tagName.getText(ast) === "div" &&
-      node.openingElement.getText(ast).includes(anchor)
-    ) {
-      assert.equal(card, undefined, `Expected a single ${plan} card`);
-      card = node;
-    }
-    ts.forEachChild(node, visit);
-  }
-  visit(ast);
-  assert.ok(card, `Missing ${plan} pricing card`);
-  const compiled = ts.transpileModule(
-    `const { React, cn, t, Check, Mail, Button, WorkspacePlanActionButton,
-      isSignedIn, workspacePlans, enterpriseCta, enterpriseAction, businessAction, businessTile,
-      usage, billingState, setBillingState, setEnterpriseCheckoutOpen, setCreateWorkspaceFor,
-      onBillingRequestChange, requestSignIn } = scope;
-      return (${card.getText(ast)});`,
-    { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2020 } }
-  ).outputText;
-  return new Function("scope", compiled);
-}
+const ICONS = [
+  "Loader2",
+  "Zap",
+  "Building2",
+  "Shield",
+  "AudioLines",
+  "MonitorSmartphone",
+  "Link2",
+  "Code2",
+  "Users",
+  "Brain",
+  "MessageSquare",
+  "MessageCircle",
+  "Key",
+  "ShieldCheck",
+  "Sliders",
+  "Mail",
+];
 
 async function setup(t) {
   const cleanup = [];
@@ -84,10 +55,11 @@ async function setup(t) {
     openedUrls: [],
     toasts: [],
     consoleOpens: 0,
-    checkoutOpens: 0,
-    createOpens: 0,
-    createFor: [],
-    viewRequests: [],
+    proClicks: 0,
+    signIns: 0,
+    yearlyChanges: [],
+    businessActions: [],
+    enterpriseCtas: [],
     portal: async () => "https://stripe.test/portal",
   };
   globalThis.__settingsBillingTest = state;
@@ -118,7 +90,7 @@ async function setup(t) {
       };`,
       "/ui/useToast":
         "export const useToast = () => ({ toast: (value) => globalThis.__settingsBillingTest.toasts.push(value) });",
-      "../icons": "export const Loader2 = () => null;",
+      "/icons": ICONS.map((name) => `export const ${name} = () => null;`).join("\n"),
     },
   });
   const { createRoot } = require("react-dom/client");
@@ -128,22 +100,14 @@ async function setup(t) {
   const { WorkspacePlanActionButton } = await vite.ssrLoadModule(
     "/components/settings/WorkspacePlanActionButton.tsx"
   );
-  const { Button } = await vite.ssrLoadModule("/components/ui/button.tsx");
+  const { PlansGrid } = await vite.ssrLoadModule("/components/settings/billing/PlansGrid.tsx");
   const { useUsage } = await vite.ssrLoadModule("/hooks/useUsage.ts");
-  const scopeFor = (workspaces, overrides = {}) => ({
-    React,
-    cn: (...values) => values.join(" "),
-    t: translate,
-    Check: () => null,
-    Mail: () => null,
-    Button,
-    WorkspacePlanActionButton,
+  const propsFor = (workspaces, overrides = {}) => ({
     isSignedIn: true,
-    workspacePlans: entitledWorkspacePlans(workspaces),
-    enterpriseCta: enterpriseTileCta(workspaces, "enterprise"),
-    enterpriseAction: enterpriseManageAction(workspaces, "enterprise"),
-    businessAction: businessDowngradeAction(workspaces, "enterprise"),
-    businessTile: businessTileAction({
+    yearly: true,
+    onYearlyChange: (yearly) => state.yearlyChanges.push(yearly),
+    pro: { kind: "subscribe", busy: false, onClick: () => state.proClicks++ },
+    business: businessTileAction({
       listLoaded: true,
       entitledWorkspaceIds: workspaces
         .filter((workspace) => hasActiveWorkspaceSubscription(workspace))
@@ -151,25 +115,58 @@ async function setup(t) {
       workspaces,
       defaultWorkspaceId: null,
     }),
-    usage: null,
-    billingState: { business: false },
-    setBillingState: () => {},
-    setEnterpriseCheckoutOpen: () => state.checkoutOpens++,
-    setCreateWorkspaceFor: (plan) => {
-      state.createFor.push(plan);
-      state.createOpens++;
+    businessDowngrade: businessDowngradeAction(workspaces, "enterprise"),
+    onBusinessAction: (action) => state.businessActions.push(action),
+    enterprise: {
+      cta: enterpriseTileCta(workspaces, "enterprise"),
+      manage: enterpriseManageAction(workspaces, "enterprise"),
+      entitled: entitledWorkspacePlans(workspaces).has("enterprise"),
     },
-    onBillingRequestChange: (request) => state.viewRequests.push(request),
-    requestSignIn: () => {},
+    onEnterprise: (cta) => state.enterpriseCtas.push(cta),
     ...overrides,
   });
-  return { happyWindow, state, container, root, useUsage, scopeFor, WorkspacePlanActionButton };
+  const signedOut = {
+    isSignedIn: false,
+    pro: { kind: "signIn" },
+    onSignIn: () => state.signIns++,
+    business: { kind: "none" },
+  };
+  const render = (props) =>
+    React.act(async () => root.render(React.createElement(PlansGrid, props)));
+  return {
+    happyWindow,
+    state,
+    container,
+    root,
+    useUsage,
+    propsFor,
+    signedOut,
+    render,
+    PlansGrid,
+    WorkspacePlanActionButton,
+  };
 }
 
-function findButton(container, label) {
-  return [...container.querySelectorAll("button")].find(
-    (button) => button.textContent === pricingKey(label)
-  );
+const card = (container, plan) => container.querySelector(`[data-plan="${plan}"]`);
+
+function findButton(scope, key) {
+  return [...scope.querySelectorAll("button")].find((button) => button.textContent === key);
+}
+
+const isPrimary = (button) => button.className.includes("text-primary-foreground");
+
+function resolve(locale, key) {
+  return key.split(".").reduce((node, part) => (node == null ? undefined : node[part]), locale);
+}
+
+function renderedTexts(container) {
+  const walker = container.ownerDocument.createTreeWalker(container, 4);
+  const texts = [];
+  while (walker.nextNode()) {
+    const text = walker.currentNode.textContent.trim();
+    if (text) texts.push(text);
+  }
+  return texts;
 }
 
 for (const otherWorkspace of [
@@ -183,23 +180,30 @@ for (const otherWorkspace of [
   },
 ]) {
   test(`Enterprise keeps its workspace label and Manage alongside upgrading another ${otherWorkspace.plan} workspace`, async (t) => {
-    const { root, container, scopeFor, state } = await setup(t);
-    const renderCard = loadPricingCard("enterprise");
-    await React.act(async () => root.render(renderCard(scopeFor([enterprise(), otherWorkspace]))));
-    assert.ok(container.textContent.includes(pricingKey("yourWorkspacePlan")));
-    assert.ok(findButton(container, "manage"));
-    assert.ok(findButton(container, "enterprise.upgradeCta"));
-    await React.act(async () => findButton(container, "manage").click());
+    const { container, propsFor, render, state } = await setup(t);
+    await render(propsFor([enterprise(), otherWorkspace]));
+    const enterpriseCard = card(container, "enterprise");
+    assert.equal(enterpriseCard.textContent.includes(pricingKey("yourWorkspacePlan")), true);
+    assert.equal(Boolean(findButton(enterpriseCard, pricingKey("manage"))), true);
+    assert.equal(Boolean(findButton(enterpriseCard, pricingKey("enterprise.upgradeCta"))), true);
+    await React.act(async () => findButton(enterpriseCard, pricingKey("manage")).click());
     assert.deepEqual(state.portalIds, ["enterprise"]);
-    await React.act(async () => findButton(container, "enterprise.upgradeCta").click());
-    assert.equal(state.checkoutOpens, 1);
-    assert.equal(state.createOpens, 0);
+    await React.act(async () =>
+      findButton(enterpriseCard, pricingKey("enterprise.upgradeCta")).click()
+    );
+    assert.deepEqual(state.enterpriseCtas, [{ action: "openDialog" }]);
   });
 }
 
-test("Enterprise retains sole-plan, non-owner, new-workspace, signed-out and loading actions", async (t) => {
-  const { root, container, scopeFor, state } = await setup(t);
-  const renderCard = loadPricingCard("enterprise");
+test("Enterprise retains sole-plan, non-owner, new-workspace, ask-owner, signed-out and loading actions", async (t) => {
+  const { container, propsFor, signedOut, render, state } = await setup(t);
+  const memberOfFree = {
+    id: "team",
+    plan: "free",
+    role: "member",
+    status: "active",
+    billing_manager: "Alice",
+  };
   for (const fixture of [
     { workspaces: [enterprise()], badge: true, manage: true, upgrade: false, sales: false },
     {
@@ -215,48 +219,84 @@ test("Enterprise retains sole-plan, non-owner, new-workspace, signed-out and loa
       manage: false,
       upgrade: true,
       sales: true,
+      clickUpgrade: { action: "openDialog" },
     },
-    { workspaces: [], badge: false, manage: false, upgrade: true, sales: true, create: true },
     {
       workspaces: [],
-      overrides: { isSignedIn: false },
+      badge: false,
+      manage: false,
+      upgrade: true,
+      sales: true,
+      clickUpgrade: { action: "createWorkspace" },
+    },
+    {
+      workspaces: [memberOfFree],
       badge: false,
       manage: false,
       upgrade: false,
       sales: true,
+      askOwner: true,
+      clickSales: { action: "contactSales", ownerName: "Alice" },
     },
     {
       workspaces: [],
-      overrides: { enterpriseCta: { action: "contactSales", ownerName: null } },
+      overrides: signedOut,
+      badge: false,
+      manage: false,
+      upgrade: false,
+      sales: true,
+      clickSales: { action: "contactSales", ownerName: null },
+    },
+    {
+      workspaces: [],
+      enterpriseCta: { action: "contactSales", ownerName: null },
       badge: false,
       manage: false,
       upgrade: false,
       sales: true,
     },
   ]) {
-    await React.act(async () =>
-      root.render(renderCard(scopeFor(fixture.workspaces, fixture.overrides)))
+    const props = propsFor(fixture.workspaces, fixture.overrides);
+    if (fixture.enterpriseCta)
+      props.enterprise = { ...props.enterprise, cta: fixture.enterpriseCta };
+    await render(props);
+    const enterpriseCard = card(container, "enterprise");
+    assert.equal(
+      enterpriseCard.textContent.includes(pricingKey("yourWorkspacePlan")),
+      fixture.badge
     );
-    assert.equal(container.textContent.includes(pricingKey("yourWorkspacePlan")), fixture.badge);
-    assert.equal(Boolean(findButton(container, "manage")), fixture.manage);
-    assert.equal(Boolean(findButton(container, "enterprise.upgradeCta")), fixture.upgrade);
-    assert.equal(Boolean(findButton(container, "enterprise.cta")), fixture.sales);
-    if (fixture.create) {
-      await React.act(async () => findButton(container, "enterprise.upgradeCta").click());
-      assert.equal(state.createOpens, 1);
-      assert.deepEqual(state.createFor, ["enterprise"]);
+    assert.equal(Boolean(findButton(enterpriseCard, pricingKey("manage"))), fixture.manage);
+    assert.equal(
+      Boolean(findButton(enterpriseCard, pricingKey("enterprise.upgradeCta"))),
+      fixture.upgrade
+    );
+    assert.equal(Boolean(findButton(enterpriseCard, pricingKey("enterprise.cta"))), fixture.sales);
+    assert.equal(
+      enterpriseCard.textContent.includes(pricingKey("enterprise.askOwner")),
+      Boolean(fixture.askOwner)
+    );
+    state.enterpriseCtas.length = 0;
+    if (fixture.clickUpgrade) {
+      await React.act(async () =>
+        findButton(enterpriseCard, pricingKey("enterprise.upgradeCta")).click()
+      );
+      assert.deepEqual(state.enterpriseCtas, [fixture.clickUpgrade]);
+    }
+    if (fixture.clickSales) {
+      state.enterpriseCtas.length = 0;
+      await React.act(async () => findButton(enterpriseCard, pricingKey("enterprise.cta")).click());
+      assert.deepEqual(state.enterpriseCtas, [fixture.clickSales]);
     }
   }
 });
 
 for (const plan of ["business", "enterprise"]) {
-  test(`${plan} Settings card refreshes account entitlement on portal return and every retry after its button unmounts`, async (t) => {
-    const { happyWindow, state, root, container, useUsage, scopeFor } = await setup(t);
-    const renderCard = loadPricingCard(plan);
+  test(`${plan} Plans card refreshes account entitlement on portal return and every retry after its button unmounts`, async (t) => {
+    const { happyWindow, state, root, container, useUsage, propsFor, PlansGrid } = await setup(t);
     let entitlementActive = true;
     let usageCalls = 0;
     let latestUsage;
-    let showCard = true;
+    let showGrid = true;
     t.mock.timers.enable({ apis: ["setTimeout"] });
     happyWindow.electronAPI.cloudUsage = async () => {
       usageCalls++;
@@ -275,17 +315,25 @@ for (const plan of ["business", "enterprise"]) {
     };
     function Harness() {
       latestUsage = useUsage();
-      return showCard ? renderCard(scopeFor([enterprise()], { usage: latestUsage })) : null;
+      return showGrid
+        ? React.createElement(
+            PlansGrid,
+            propsFor([enterprise()], { onRefreshEntitlement: latestUsage.refetch })
+          )
+        : null;
     }
     await React.act(async () => root.render(React.createElement(Harness)));
     assert.equal(usageCalls, 1);
     assert.equal(latestUsage.hasPaidAccess, true);
     assert.deepEqual(latestUsage.entitledWorkspaceIds, ["enterprise"]);
     await React.act(async () =>
-      findButton(container, plan === "business" ? "downgrade" : "manage").click()
+      findButton(
+        card(container, plan),
+        pricingKey(plan === "business" ? "downgrade" : "manage")
+      ).click()
     );
     assert.deepEqual(state.openedUrls, ["https://stripe.test/portal"]);
-    showCard = false;
+    showGrid = false;
     await React.act(async () => root.render(React.createElement(Harness)));
     assert.equal(container.querySelector("button"), null);
     await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
@@ -305,6 +353,43 @@ for (const plan of ["business", "enterprise"]) {
     );
   });
 }
+
+test("Business downgrade offers contact sales when the portal can't serve it", async (t) => {
+  const { container, propsFor, render, state } = await setup(t);
+  await render(propsFor([], { businessDowngrade: { kind: "contactSales" } }));
+  const businessCard = card(container, "business");
+  assert.equal(Boolean(findButton(businessCard, pricingKey("downgrade"))), false);
+  await React.act(async () => findButton(businessCard, pricingKey("enterprise.cta")).click());
+  assert.deepEqual(state.openedUrls, ["https://openwhispr.com/contact-sales"]);
+});
+
+test("Manage and Business Downgrade are full-width h-8 secondary pills", async (t) => {
+  const { container, propsFor, render } = await setup(t);
+  await render(propsFor([enterprise()]));
+  const manage = findButton(card(container, "enterprise"), pricingKey("manage"));
+  const downgrade = findButton(card(container, "business"), pricingKey("downgrade"));
+  for (const button of [manage, downgrade]) {
+    const classes = button.className.split(/\s+/);
+    for (const expected of ["h-8", "w-full", "rounded-full", "bg-surface-3", "text-xs"]) {
+      assert.equal(classes.includes(expected), true, `missing ${expected}`);
+    }
+    assert.equal(classes.includes("h-6"), false);
+    assert.equal(isPrimary(button), false);
+  }
+});
+
+test("WorkspacePlanActionButton keeps its default look without a className", async (t) => {
+  const { root, container, WorkspacePlanActionButton } = await setup(t);
+  await React.act(async () =>
+    root.render(
+      React.createElement(WorkspacePlanActionButton, { action: { kind: "console" }, label: "Go" })
+    )
+  );
+  const classes = container.querySelector("button").className.split(/\s+/);
+  assert.equal(classes.includes("h-6"), true);
+  assert.equal(classes.includes("text-[10px]"), true);
+  assert.equal(classes.includes("bg-surface-3"), false);
+});
 
 test("workspace plan actions keep console/sales separate and recover from portal errors", async (t) => {
   const { root, container, state, happyWindow, WorkspacePlanActionButton } = await setup(t);
@@ -346,74 +431,179 @@ test("workspace plan actions keep console/sales separate and recover from portal
   assert.deepEqual(state.workspaceRefreshes, []);
 });
 
-const tileButton = (container, label) =>
-  [...container.querySelectorAll("button")].find(
-    (button) => button.textContent === `settingsPage.billing.tiles.${label}`
-  );
+const tileKey = (label) => `settingsPage.billing.tiles.${label}`;
 
 test("Business tile: a solo default workspace gets a view switch", async (t) => {
-  const { root, container, scopeFor, state } = await setup(t);
-  const renderCard = loadPricingCard("business");
+  const { container, propsFor, render, state } = await setup(t);
   const solo = { id: "default", plan: "free", role: "owner", status: "active" };
-  await React.act(async () =>
-    root.render(
-      renderCard(
-        scopeFor([solo], { businessTile: { kind: "viewWorkspace", workspaceId: "default" } })
-      )
-    )
-  );
-  assert.equal(Boolean(tileButton(container, "createWorkspace")), false);
-  await React.act(async () => tileButton(container, "upgradeWorkspace").click());
-  assert.deepEqual(state.viewRequests, [{ kind: "workspace", workspaceId: "default" }]);
-  assert.equal(state.checkoutOpens, 0);
-  assert.deepEqual(state.createFor, []);
+  await render(propsFor([solo], { business: { kind: "viewWorkspace", workspaceId: "default" } }));
+  const businessCard = card(container, "business");
+  assert.equal(Boolean(findButton(businessCard, tileKey("createWorkspace"))), false);
+  const button = findButton(businessCard, tileKey("upgradeWorkspace"));
+  assert.equal(isPrimary(button), false);
+  await React.act(async () => button.click());
+  assert.deepEqual(state.businessActions, [{ kind: "viewWorkspace", workspaceId: "default" }]);
+  assert.deepEqual(state.enterpriseCtas, []);
 });
 
-test("Business tile: Create workspace opens the create dialog for business", async (t) => {
-  const { root, container, scopeFor, state } = await setup(t);
-  const renderCard = loadPricingCard("business");
-  await React.act(async () =>
-    root.render(renderCard(scopeFor([], { businessTile: { kind: "createWorkspace" } })))
-  );
-  assert.equal(Boolean(tileButton(container, "upgradeWorkspace")), false);
-  await React.act(async () => tileButton(container, "createWorkspace").click());
-  assert.deepEqual(state.createFor, ["business"]);
-  assert.deepEqual(state.viewRequests, []);
-  assert.equal(state.checkoutOpens, 0);
+test("Business tile: Create workspace asks for the create flow", async (t) => {
+  const { container, propsFor, render, state } = await setup(t);
+  await render(propsFor([], { business: { kind: "createWorkspace" } }));
+  const businessCard = card(container, "business");
+  assert.equal(Boolean(findButton(businessCard, tileKey("upgradeWorkspace"))), false);
+  const button = findButton(businessCard, tileKey("createWorkspace"));
+  assert.equal(isPrimary(button), false);
+  await React.act(async () => button.click());
+  assert.deepEqual(state.businessActions, [{ kind: "createWorkspace" }]);
+  assert.deepEqual(state.enterpriseCtas, []);
 });
 
 test("Business tile: a covering Business workspace shows the workspace label and no button", async (t) => {
-  const { root, container, scopeFor } = await setup(t);
-  const renderCard = loadPricingCard("business");
-  await React.act(async () =>
-    root.render(renderCard(scopeFor([], { businessTile: { kind: "workspacePlan" } })))
-  );
-  assert.equal(container.textContent.includes(pricingKey("yourWorkspacePlan")), true);
-  assert.equal(container.querySelectorAll("button").length, 1, "only the billing switch");
+  const { container, propsFor, render } = await setup(t);
+  await render(propsFor([], { business: { kind: "workspacePlan" } }));
+  const businessCard = card(container, "business");
+  assert.equal(businessCard.textContent.includes(pricingKey("yourWorkspacePlan")), true);
+  assert.equal(businessCard.querySelectorAll("button").length, 0);
 });
 
-test("Business tile: signed out, the sign-up button is outline so Pro stays the only primary", async (t) => {
-  const { root, container, scopeFor } = await setup(t);
-  const renderCard = loadPricingCard("business");
-  await React.act(async () =>
-    root.render(renderCard(scopeFor([], { isSignedIn: false, businessTile: { kind: "none" } })))
-  );
-  const button = findButton(container, "business.cta");
-  assert.equal(Boolean(button), true);
-  assert.equal(button.className.includes("border-border/70"), true);
-  assert.equal(button.className.includes("--gradient-brand-glass"), false);
+test("signed out: Pro's Sign in is the only primary button, and Business still signs in", async (t) => {
+  const { container, propsFor, signedOut, render, state } = await setup(t);
+  await render(propsFor([], signedOut));
+  const primaries = [...container.querySelectorAll("button")].filter(isPrimary);
+  assert.equal(primaries.length, 1);
+  assert.equal(card(container, "pro").contains(primaries[0]), true);
+  assert.equal(primaries[0].textContent, "common.signIn");
+  await React.act(async () => primaries[0].click());
+  const businessButton = findButton(card(container, "business"), pricingKey("business.cta"));
+  assert.equal(isPrimary(businessButton), false);
+  await React.act(async () => businessButton.click());
+  assert.equal(state.signIns, 2);
+  assert.deepEqual(state.businessActions, []);
 });
 
-test("Enterprise tile: an owner of an unpaid workspace gets an outline purchase button so Pro stays the only primary", async (t) => {
-  const { root, container, scopeFor } = await setup(t);
-  const renderCard = loadPricingCard("enterprise");
-  await React.act(async () =>
-    root.render(
-      renderCard(scopeFor([{ id: "free", plan: "free", role: "owner", status: "active" }]))
-    )
-  );
-  const button = findButton(container, "enterprise.upgradeCta");
+test("Enterprise tile: an owner of an unpaid workspace gets a secondary purchase button so Pro stays the only primary", async (t) => {
+  const { container, propsFor, render } = await setup(t);
+  await render(propsFor([{ id: "free", plan: "free", role: "owner", status: "active" }]));
+  const button = findButton(card(container, "enterprise"), pricingKey("enterprise.upgradeCta"));
   assert.equal(Boolean(button), true);
-  assert.equal(button.className.includes("border-border/70"), true);
-  assert.equal(button.className.includes("--gradient-brand-glass"), false);
+  assert.equal(isPrimary(button), false);
+  const primaries = [...container.querySelectorAll("button")].filter(isPrimary);
+  assert.equal(primaries.length, 1);
+  assert.equal(card(container, "pro").contains(primaries[0]), true);
+});
+
+test("Pro card: subscribe starts checkout, busy disables it, current and covered show labels", async (t) => {
+  const { container, propsFor, render, state } = await setup(t);
+  await render(propsFor([]));
+  const subscribe = findButton(
+    card(container, "pro"),
+    "settingsPage.account.checkout.upgradeToPro"
+  );
+  assert.equal(isPrimary(subscribe), true);
+  await React.act(async () => subscribe.click());
+  assert.equal(state.proClicks, 1);
+
+  await render(propsFor([], { pro: { kind: "subscribe", busy: true, onClick: () => {} } }));
+  const busy = card(container, "pro").querySelector("button");
+  assert.equal(busy.disabled, true);
+
+  await render(propsFor([], { pro: { kind: "current" } }));
+  assert.equal(card(container, "pro").querySelectorAll("button").length, 0);
+  assert.equal(
+    card(container, "pro").textContent.includes("settingsPage.billing.plans.yourPlan"),
+    true
+  );
+
+  await render(propsFor([], { pro: { kind: "covered" } }));
+  assert.equal(card(container, "pro").querySelectorAll("button").length, 0);
+  assert.equal(card(container, "pro").textContent.includes(pricingKey("coveredByWorkspace")), true);
+});
+
+test("Pro card: a personal Business subscriber gets a secondary Downgrade", async (t) => {
+  const { container, propsFor, render } = await setup(t);
+  let downgrades = 0;
+  await render(
+    propsFor([], { pro: { kind: "downgrade", busy: false, onClick: () => downgrades++ } })
+  );
+  const proCard = card(container, "pro");
+  assert.equal(proCard.querySelectorAll("button").length, 1);
+  const downgrade = findButton(proCard, pricingKey("downgrade"));
+  assert.equal(isPrimary(downgrade), false);
+  assert.equal(downgrade.disabled, false);
+  await React.act(async () => downgrade.click());
+  assert.equal(downgrades, 1);
+
+  await render(propsFor([], { pro: { kind: "downgrade", busy: true, onClick: () => {} } }));
+  assert.equal(card(container, "pro").querySelector("button").disabled, true);
+});
+
+test("Pro card: an unknown plan state shows no button and no label", async (t) => {
+  const { container, propsFor, render } = await setup(t);
+  await render(propsFor([], { pro: { kind: "none" } }));
+  const proCard = card(container, "pro");
+  assert.equal(proCard.querySelectorAll("button").length, 0);
+  for (const key of [
+    "settingsPage.billing.plans.yourPlan",
+    pricingKey("coveredByWorkspace"),
+    "settingsPage.account.checkout.upgradeToPro",
+    "common.signIn",
+  ]) {
+    assert.equal(proCard.textContent.includes(key), false, `${key} shown`);
+  }
+  assert.equal(proCard.textContent.includes(pricingKey("pro.name")), true);
+});
+
+test("the yearly switch sits in the Plans header and picks the yearly or monthly prices", async (t) => {
+  const { container, propsFor, render, state } = await setup(t);
+  await render(propsFor([]));
+  const switches = container.querySelectorAll('[role="switch"]');
+  assert.equal(switches.length, 1);
+  assert.equal(switches[0].getAttribute("aria-checked"), "true");
+  assert.equal(switches[0].getAttribute("aria-label"), pricingKey("billedYearly"));
+  const label = switches[0].closest("label");
+  assert.ok(label, "the switch sits in a label");
+  assert.equal(label.textContent, pricingKey("billedYearly"));
+  assert.equal(card(container, "pro").contains(switches[0]), false);
+  assert.equal(
+    card(container, "pro").textContent.includes("settingsPage.billing.plans.pricePerMonthYearly"),
+    true
+  );
+  assert.equal(
+    card(container, "business").textContent.includes(
+      "settingsPage.billing.plans.pricePerSeatYearly"
+    ),
+    true
+  );
+  await React.act(async () => switches[0].click());
+  assert.deepEqual(state.yearlyChanges, [false]);
+
+  await render(propsFor([], { yearly: false }));
+  assert.equal(container.querySelector('[role="switch"]').getAttribute("aria-checked"), "false");
+  assert.equal(
+    card(container, "pro").textContent.includes("settingsPage.billing.plans.pricePerMonth"),
+    true
+  );
+  assert.equal(
+    card(container, "pro").textContent.includes("settingsPage.billing.plans.pricePerMonthYearly"),
+    false
+  );
+  assert.equal(
+    card(container, "business").textContent.includes("settingsPage.billing.plans.pricePerSeat"),
+    true
+  );
+});
+
+test("no card advertises meeting hours, in English or German", async (t) => {
+  const { container, propsFor, signedOut, render } = await setup(t);
+  for (const props of [propsFor([]), propsFor([], signedOut), propsFor([enterprise()])]) {
+    await render(props);
+    const texts = renderedTexts(container);
+    assert.ok(texts.length > 10, "the grid rendered its text");
+    for (const key of texts) {
+      const english = resolve(en, key);
+      assert.equal(typeof english, "string", `${key} is an English string key`);
+      assert.doesNotMatch(english, /hour/i, `${key} mentions hours`);
+      assert.doesNotMatch(String(resolve(de, key)), /stunde/i, `${key} mentions Stunden`);
+    }
+  }
 });

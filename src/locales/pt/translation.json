@@ -1659,7 +1659,6 @@
       "seatUpdated_one": "Capacidade do workspace atualizada para {{count}} assento",
       "seatUpdated_other": "Capacidade do workspace atualizada para {{count}} assentos",
       "seatUpdateFailed": "Não foi possível atualizar os assentos do workspace",
-      "personalPlanTitle": "Plano pessoal",
       "providedBy": "Plano pessoal: Gratuito · Acesso pago fornecido por {{workspaces}}",
       "confirmSeats": {
         "title": "Adicionar um assento ao workspace?",
@@ -1671,25 +1670,13 @@
       }
     },
     "account": {
-      "badges": {
-        "free": "Gratuito",
-        "limitReached": "Limite da nuvem atingido",
-        "pastDue": "Em atraso",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Teste"
-      },
       "billing": {
         "couldNotOpenDescription": "Tivemos dificuldade em abrir a página de cobrança. Tente novamente.",
         "couldNotOpenTitle": "Não foi possível abrir cobrança",
-        "manageBilling": "Gerenciar cobrança",
-        "opening": "Abrindo...",
-        "updatePaymentMethod": "Atualizar forma de pagamento",
         "contactOwnerTitle": "Fale com o proprietário do workspace",
         "contactOwnerDescription": "Apenas o proprietário do workspace pode atualizar a cobrança dele.",
         "manageInAppStore": "Gerenciar na App Store",
-        "manageInGooglePlay": "Gerenciar no Google Play",
-        "managedInMobileStore": "Cobrado pela loja de apps do seu celular. Gerencie pelo celular."
+        "manageInGooglePlay": "Gerenciar no Google Play"
       },
       "checkout": {
         "couldNotOpenDescription": "Tivemos dificuldade em abrir a página de checkout. Tente novamente.",
@@ -1708,27 +1695,12 @@
         "title": "Mostrando seu último login",
         "description": "A sincronização e as alterações da conta ficam pausadas até que o OpenWhispr consiga acessar seus servidores."
       },
-      "pastDue": {
-        "description": "Você está no plano gratuito por enquanto. Atualize sua forma de pagamento para voltar ao Pro.",
-        "title": "Não foi possível processar seu pagamento"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} palavras do OpenWhispr Cloud esta semana",
-        "byokUnlimited": "Suas próprias chaves de API e os modelos locais continuam sem limite.",
-        "nextBilling": "Próxima cobrança: {{date}}",
-        "pastDue": "{{used}} / {{limit}} palavras do OpenWhispr Cloud esta semana — atualize o pagamento para restaurar o Pro",
-        "trial": "{{days}} dias restantes — transcrições ilimitadas",
-        "unlimited": "Ilimitado",
-        "accessUntil": "Acesso até {{date}}",
-        "storePaymentIssue": "A loja de apps não conseguiu renovar esta assinatura. Atualize lá sua forma de pagamento para manter seu plano."
-      },
       "planLabels": {
         "free": "Gratuito",
         "pro": "Pro",
         "business": "Business",
         "trial": "Teste"
       },
-      "rollingWeeklyLimit": "Limite semanal contínuo",
       "signOut": {
         "endMeetingDescription": "Sair da conta encerra a gravação da reunião em andamento. O que foi capturado até agora permanece na nota.",
         "endMeetingTitle": "Encerrar a gravação da reunião?",
@@ -1752,81 +1724,24 @@
       "pricing": {
         "title": "Planos",
         "billedYearly": "Cobrança anual",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "para sempre",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2.000 palavras/semana de transcrição",
-            "5 horas de gravação de reuniões/mês",
-            "## Sempre gratuito",
-            "Modelos de IA locais ilimitados",
-            "Transcrição na nuvem ilimitada com suas próprias chaves de API",
-            "Mais de 100 idiomas suportados",
-            "Dicionário personalizado",
-            "Zero retenção de dados",
-            "Suporte da comunidade"
-          ]
-        },
         "pro": {
           "name": "Pro",
           "monthlyPrice": "$8",
-          "monthlyPeriod": "/mês",
-          "annualPrice": "$80",
-          "annualPeriod": "/ano",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Todos os recursos do Free +",
-          "features": [
-            "Transcrição na nuvem ilimitada",
-            "20 horas de gravação de reuniões/mês",
-            "Sincronização entre dispositivos",
-            "Compartilhe notas com links públicos",
-            "Acesso pessoal à API",
-            "Integração MCP em todos os seus apps",
-            "Aplicativo móvel com nuvem ilimitada",
-            "Suporte por e-mail"
-          ],
-          "cta": "Começar",
-          "switchToAnnual": "Mudar para anual"
+          "annualEquivalent": "$6.67"
         },
         "business": {
           "name": "Business",
           "monthlyPrice": "$16",
-          "monthlyPeriod": "/mês",
-          "annualPrice": "$160",
-          "annualPeriod": "/ano",
           "annualEquivalent": "$13.33",
-          "includesPrefix": "Todos os recursos do Pro +",
-          "badge": "Mais popular",
-          "features": [
-            "Gravações de reuniões ilimitadas",
-            "Funções e gestão de membros do espaço de trabalho",
-            "Modo assistente",
-            "Converse com seus dados",
-            "Suporte prioritário"
-          ],
-          "cta": "Começar",
-          "switchToAnnual": "Mudar para anual"
+          "cta": "Começar"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "Personalizado",
-          "subtitle": "Para segurança avançada e suporte",
-          "includesPrefix": "Todos os recursos do Business +",
-          "features": [
-            "Créditos de API gerenciados",
-            "Sincronização na nuvem entre dispositivos",
-            "Recursos de equipe e administração",
-            "SSO e conformidade",
-            "Suporte dedicado"
-          ],
           "cta": "Falar com Vendas",
           "upgradeCta": "Fazer upgrade para Enterprise",
           "askOwner": "Peça a {{name}} para fazer o upgrade do seu workspace."
         },
-        "currentPlan": "Plano atual",
-        "yourPersonalPlan": "Seu plano pessoal",
         "yourWorkspacePlan": "O plano do seu espaço de trabalho",
         "manage": "Gerenciar",
         "coveredByWorkspace": "Incluído no plano do seu workspace",
@@ -1848,11 +1763,7 @@
           "confirm": "Confirmar"
         }
       },
-      "signedOutPlans": {
-        "button": "Criar conta gratuita"
-      },
       "user": "Usuário",
-      "wordsRemaining": "{{remaining}} restantes",
       "deleteAccount": {
         "label": "Excluir conta",
         "labelDescription": "Excluir permanentemente sua conta e dados pessoais na nuvem. Outros usuários locais e conteúdos dos espaços de trabalho são preservados.",
@@ -1903,10 +1814,6 @@
           "noPassword": "Nenhuma senha está definida para esta conta.",
           "generic": "Algo deu errado. Tente novamente."
         }
-      },
-      "planUnavailable": {
-        "title": "Plano indisponível",
-        "description": "Não conseguimos carregar seu plano agora. Seu acesso permanece o mesmo."
       }
     },
     "agentConfig": {
@@ -3248,6 +3155,245 @@
       "tiles": {
         "upgradeWorkspace": "Fazer upgrade de um workspace",
         "createWorkspace": "Criar workspace"
+      },
+      "plans": {
+        "pricePerMonth": "{{price}} / mês",
+        "pricePerMonthYearly": "{{price}} / mês, cobrança anual",
+        "pricePerSeat": "{{price}} / usuário / mês",
+        "pricePerSeatYearly": "{{price}} / usuário / mês, cobrança anual",
+        "yourPlan": "Seu plano",
+        "pro": {
+          "includes": "Tudo do Free, mais",
+          "features": {
+            "unlimitedCloud": "Transcrição na nuvem ilimitada",
+            "syncDevices": "Sincronização entre dispositivos",
+            "publicLinks": "Links públicos para notas",
+            "apiMcp": "Acesso pessoal à API e ao MCP",
+            "mobileApp": "Aplicativo móvel"
+          }
+        },
+        "business": {
+          "includes": "Tudo do Pro, mais",
+          "features": {
+            "workspaceRoles": "Funções e membros do espaço de trabalho",
+            "assistantMode": "Modo assistente",
+            "chatOverData": "Converse com seus dados",
+            "prioritySupport": "Suporte prioritário"
+          }
+        },
+        "enterprise": {
+          "includes": "Tudo do Business, mais",
+          "features": {
+            "managedCredits": "Créditos de API gerenciados",
+            "ssoCompliance": "SSO e conformidade",
+            "adminControls": "Controles e políticas de administração",
+            "dedicatedSupport": "Suporte dedicado"
+          }
+        }
+      },
+      "personal": {
+        "blocks": {
+          "currentPlan": "Plano atual",
+          "usage": "Uso",
+          "billingDetails": "Detalhes de cobrança"
+        },
+        "signedOut": {
+          "title": "Sem sessão iniciada",
+          "body": "Entre para ver seu plano."
+        },
+        "failed": {
+          "title": "Plano indisponível",
+          "body": "Seu acesso não muda."
+        },
+        "actions": {
+          "subscribePro": "Assinar o Pro",
+          "manageBilling": "Gerenciar cobrança",
+          "updatePayment": "Atualizar pagamento",
+          "cancelPro": "Cancelar Pro",
+          "cancelTrial": "Cancelar teste"
+        },
+        "usage": {
+          "cloudTranscription": "Transcrição na nuvem",
+          "unlimited": "Ilimitada",
+          "wordsValue": "{{used}} / {{limit}} palavras",
+          "wordsLeft": "Restam {{remaining}} palavras nos últimos 7 dias",
+          "rolling": "Conta os últimos 7 dias. Modelos locais e suas próprias chaves de API são ilimitados.",
+          "limitReached": "Limite atingido. Modelos locais e suas próprias chaves de API continuam funcionando."
+        },
+        "stores": {
+          "appStore": "App Store",
+          "playStore": "Google Play",
+          "unknown": "A loja de apps do seu celular"
+        },
+        "badges": {
+          "trial_one": "Teste · falta {{count}} dia",
+          "trial_other": "Teste · faltam {{count}} dias",
+          "pastDue": "Pagamento atrasado",
+          "cancelled": "Cancelado",
+          "yearly": "Anual",
+          "monthly": "Mensal"
+        },
+        "price": {
+          "free": "$0",
+          "proFrom": "{{price}} / mês a partir de {{date}}",
+          "billedYearly": "Cobrança anual",
+          "proMonthly": "{{price}} / mês"
+        },
+        "banners": {
+          "coveredTrial": {
+            "title": "{{workspace}} já cobre você",
+            "body": "Seu teste vira um plano Pro pago em {{date}}."
+          },
+          "coveredTrialUnnamed": {
+            "title": "Um espaço de trabalho já cobre você",
+            "body": "Seu teste vira um plano Pro pago em {{date}}."
+          },
+          "coveredPastDue": {
+            "title": "{{workspace}} já cobre você",
+            "body": "O pagamento do Pro falhou. Cancele o Pro para parar as novas tentativas."
+          },
+          "coveredPastDueUnnamed": {
+            "title": "Um espaço de trabalho já cobre você",
+            "body": "O pagamento do Pro falhou. Cancele o Pro para parar as novas tentativas."
+          },
+          "coveredPaying": {
+            "title": "{{workspace}} já cobre você",
+            "body": "Você ainda paga pelo Pro."
+          },
+          "coveredPayingUnnamed": {
+            "title": "Um espaço de trabalho já cobre você",
+            "body": "Você ainda paga pelo Pro."
+          },
+          "coveredStore": {
+            "title": "{{workspace}} já cobre você",
+            "body": "Você ainda paga pelo Pro. Cancele na loja de apps do seu celular."
+          },
+          "coveredStoreUnnamed": {
+            "title": "Um espaço de trabalho já cobre você",
+            "body": "Você ainda paga pelo Pro. Cancele na loja de apps do seu celular."
+          },
+          "covered": {
+            "title": "{{workspace}} cobre você",
+            "body": "Sua vaga no espaço de trabalho também dá uso ilimitado aqui."
+          },
+          "coveredUnnamed": {
+            "title": "Um espaço de trabalho cobre você",
+            "body": "Sua vaga no espaço de trabalho também dá uso ilimitado aqui."
+          },
+          "paymentFailed": {
+            "title": "Falha no pagamento",
+            "body": "Os limites do Free valem até o pagamento ser concluído."
+          },
+          "storeRenewalFailed": {
+            "title": "Falha na renovação",
+            "body": "A loja de apps do seu celular está tentando de novo. Atualize seu pagamento lá."
+          },
+          "weeklyLimit": {
+            "title": "Limite semanal atingido",
+            "body": "A transcrição na nuvem volta conforme as palavras de mais de 7 dias atrás saem da contagem. Modelos locais e suas próprias chaves de API continuam funcionando."
+          }
+        },
+        "details": {
+          "trialEnds": "O teste termina",
+          "periodEnds": "O período atual termina",
+          "billedThrough": "Cobrado por",
+          "accessUntil": "Acesso até",
+          "renews": "Renova em"
+        }
+      },
+      "workspace": {
+        "managedAccount": "Conta gerenciada",
+        "billingDetails": "Detalhes de cobrança",
+        "workspaceDetails": "Detalhes do workspace",
+        "badges": {
+          "trial_one": "Teste · {{count}} dia restante",
+          "trial_other": "Teste · {{count}} dias restantes",
+          "trialUndated": "Teste",
+          "pastDue": "Em atraso",
+          "unpaid": "Não pago",
+          "incomplete": "Incompleto",
+          "cancelled": "Cancelado",
+          "paused": "Pausado"
+        },
+        "planLine": {
+          "free": "$0",
+          "invoicedByOpenWhispr": "Faturado pela OpenWhispr",
+          "paidBy": "Pago por {{workspace}}",
+          "personalApplies": "Seu plano pessoal se aplica"
+        },
+        "actions": {
+          "manageBilling": "Gerenciar cobrança",
+          "updatePayment": "Atualizar pagamento",
+          "finishCheckout": "Concluir pagamento",
+          "keepPlan": "Manter {{plan}}",
+          "resubscribe": "Assinar novamente",
+          "openConsole": "Abrir console",
+          "upgradeEnterprise": "Fazer upgrade para Enterprise",
+          "viewPersonal": "Ver plano pessoal",
+          "copyEmail": "Copiar e-mail"
+        },
+        "banners": {
+          "ends": {
+            "title": "{{plan}} termina em {{date}}",
+            "body": "Seus membros mantêm o {{plan}} até lá."
+          },
+          "endsUndated": {
+            "title": "{{plan}} vai terminar",
+            "body": "Seus membros mantêm o {{plan}} até o fim do período atual."
+          },
+          "paymentFailed": {
+            "title": "Falha no pagamento",
+            "body": "Atualize o pagamento para seus membros manterem o {{plan}}."
+          },
+          "paused": {
+            "title": "{{plan}} está pausado",
+            "body": "Seus membros usam os planos pessoais até o pagamento ser aprovado."
+          },
+          "checkoutIncomplete": {
+            "title": "Pagamento não concluído",
+            "body": "Conclua o pagamento para ativar o {{plan}} para seus membros."
+          },
+          "ended": {
+            "title": "{{plan}} terminou em {{date}}",
+            "body": "Seus membros voltaram aos planos pessoais."
+          },
+          "endedUndated": {
+            "title": "{{plan}} terminou",
+            "body": "Seus membros voltaram aos planos pessoais."
+          },
+          "memberPaymentProblem": {
+            "title": "{{workspace}} tem um problema de pagamento",
+            "body": "O acesso pode terminar em breve."
+          },
+          "memberPaused": {
+            "title": "O plano de {{workspace}} está pausado",
+            "body": "Seu plano pessoal se aplica até ele voltar."
+          }
+        },
+        "usage": {
+          "seats": "Vagas",
+          "seatsValue": "{{used}} / {{total}}",
+          "members": "Membros",
+          "noSeatsLeft": "Nenhuma vaga disponível",
+          "noSeatsLeftWithInvites_one": "Nenhuma vaga disponível · {{count}} convite pendente",
+          "noSeatsLeftWithInvites_other": "Nenhuma vaga disponível · {{count}} convites pendentes",
+          "pendingInvites_one": "{{count}} convite pendente",
+          "pendingInvites_other": "{{count}} convites pendentes"
+        },
+        "details": {
+          "firstInvoice": "Primeira fatura",
+          "ends": "Termina",
+          "ended": "Terminou",
+          "billing": "Cobrança",
+          "periodEnds": "O período atual termina",
+          "workspace": "Workspace",
+          "yourRole": "Sua função",
+          "yourSeat": "Sua vaga",
+          "managedBy": "Gerenciado por",
+          "invoicedByOpenWhispr": "Faturado pela OpenWhispr",
+          "paidSeat": "Vaga paga",
+          "noPaidSeat": "Sem vaga paga"
+        }
       }
     }
   },
