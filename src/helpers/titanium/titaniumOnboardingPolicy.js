@@ -65,6 +65,15 @@ export function resolveTitaniumSetupAction({ titaniumSignedIn }) {
 }
 
 /**
+ * Whether the Speech-to-Text connection check must be sent again: Titanium has just
+ * become signed in while the last answer was the sign-in notice. The config itself
+ * did not change, so the auto-check would otherwise keep showing the stale refusal.
+ */
+export function shouldRetrySttCheck({ wasSignedIn, signedIn, notice }) {
+  return !wasSignedIn && Boolean(signedIn) && notice === "titaniumSignIn";
+}
+
+/**
  * What the Speech-to-Text settings show after the endpoint refused the request
  * with 401/403. "titaniumSignIn" replaces the API-key advice for our own host
  * while signed out; any other refusal without a key keeps the generic message.

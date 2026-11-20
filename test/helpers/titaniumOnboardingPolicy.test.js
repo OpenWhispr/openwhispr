@@ -116,3 +116,15 @@ test("account session: Titanium decides without hosted cloud, upstream otherwise
     true
   );
 });
+
+test("STT check is re-sent when Titanium signs in over the sign-in notice", async () => {
+  const { shouldRetrySttCheck } = await load();
+  const notice = "titaniumSignIn";
+  assert.equal(shouldRetrySttCheck({ wasSignedIn: false, signedIn: true, notice }), true);
+  assert.equal(shouldRetrySttCheck({ wasSignedIn: true, signedIn: true, notice }), false);
+  assert.equal(shouldRetrySttCheck({ wasSignedIn: false, signedIn: false, notice }), false);
+  assert.equal(
+    shouldRetrySttCheck({ wasSignedIn: false, signedIn: true, notice: "unauthorized" }),
+    false
+  );
+});

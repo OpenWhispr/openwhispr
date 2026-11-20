@@ -4,7 +4,10 @@ import { Button } from "./ui/button";
 import { useTitaniumAuth } from "../hooks/useTitaniumAuth";
 import { DEFAULT_STT, TITANIUM, TITANIUM_ENABLED } from "../config/forkRuntime";
 import { isTitaniumServiceUrl } from "../helpers/titanium/titaniumHosts";
-import { resolveSttEndpointNotice } from "../helpers/titanium/titaniumOnboardingPolicy.js";
+import {
+  resolveSttEndpointNotice,
+  shouldRetrySttCheck,
+} from "../helpers/titanium/titaniumOnboardingPolicy.js";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
@@ -1221,6 +1224,21 @@ export default function TranscriptionModelPicker({
         titaniumSignedIn: titaniumAuth.signedIn,
       })
     : null;
+  // The check's config does not change when Titanium signs in, so ask again explicitly.
+  const wasTitaniumSignedIn = useRef(titaniumAuth.signedIn);
+  const retryCheck = check.retry;
+  useEffect(() => {
+    if (
+      shouldRetrySttCheck({
+        wasSignedIn: wasTitaniumSignedIn.current,
+        signedIn: titaniumAuth.signedIn,
+        notice: sttNotice,
+      })
+    ) {
+      retryCheck();
+    }
+    wasTitaniumSignedIn.current = titaniumAuth.signedIn;
+  }, [titaniumAuth.signedIn, sttNotice, retryCheck]);
   const customFailureReason =
     sttNotice === "titaniumSignIn"
       ? t("transcription.titaniumSignIn.message")
