@@ -1,0 +1,80 @@
+{
+  "diarizationModels": {
+    "sherpa-onnx-pyannote-segmentation-3-0": {
+      "name": "Pyannote Segmentation 3.0",
+      "description": "Speech boundary detection for speaker diarization",
+      "size": "6.6 MB",
+      "sizeMb": 6.6,
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+      "extractDir": "sherpa-onnx-pyannote-segmentation-3-0",
+      "descriptionKey": "models.descriptions.diarization.segmentation"
+    },
+    "3dspeaker-campplus-en": {
+      "name": "CAM++ Speaker Embedding (English)",
+      "description": "Speaker voice fingerprinting for identification",
+      "size": "28.2 MB",
+      "sizeMb": 28.2,
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+      "fileName": "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+      "descriptionKey": "models.descriptions.diarization.embedding_en"
+    }
+  },
+  "openwhisprCloudModels": {
+    "tiers": [
+      {
+        "id": "fast",
+        "label": "Fast",
+        "provider": "groq",
+        "models": [
+          {
+            "id": "llama-3.3-70b-versatile",
+            "name": "Llama 3.3 70B",
+            "description": "Fast, high-quality reasoning",
+            "recommended": true
+          },
+          {
+            "id": "llama-3.1-8b-instant",
+            "name": "Llama 3.1 8B",
+            "description": "Ultra-fast, low latency"
+          }
+        ]
+      },
+      {
+        "id": "balanced",
+        "label": "Balanced",
+        "provider": "openrouter",
+        "models": [
+          {
+            "id": "anthropic/claude-sonnet-4.6",
+            "name": "Claude Sonnet 4.6",
+            "description": "Balanced performance and quality",
+            "recommended": true
+          },
+          {
+            "id": "google/gemini-2.5-flash",
+            "name": "Gemini 2.5 Flash",
+            "description": "Fast with strong reasoning"
+          }
+        ]
+      },
+      {
+        "id": "quality",
+        "label": "Quality",
+        "provider": "openrouter",
+        "models": [
+          {
+            "id": "anthropic/claude-opus-4.8",
+            "name": "Claude Opus 4.8",
+            "description": "Most capable, highest quality",
+            "recommended": true
+          },
+          {
+            "id": "openai/gpt-4.1",
+            "name": "GPT-4.1",
+            "description": "Strong general-purpose reasoning"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -7,6 +7,7 @@ test("desktop source and dependency changes only select desktop", () => {
     desktop: true,
     mobile: false,
     build: true,
+    registry: false,
   });
 });
 
@@ -17,7 +18,12 @@ test("mobile source, dependencies, docs and workflow only select mobile", () => 
     "openwhispr-mobile/README.md",
     ".github/workflows/mobile-ci.yml",
   ]) {
-    assert.deepEqual(classifyPaths([path]), { desktop: false, mobile: true, build: false });
+    assert.deepEqual(classifyPaths([path]), {
+      desktop: false,
+      mobile: true,
+      build: false,
+      registry: false,
+    });
   }
 });
 
@@ -26,6 +32,7 @@ test("mixed changes and cross-app renames select both", () => {
     desktop: true,
     mobile: true,
     build: true,
+    registry: false,
   });
 });
 
@@ -37,7 +44,12 @@ test("shared CI configuration selects both", () => {
     ".github/dependabot.yml",
     ".gitattributes",
   ]) {
-    assert.deepEqual(classifyPaths([path]), { desktop: true, mobile: true, build: true });
+    assert.deepEqual(classifyPaths([path]), {
+      desktop: true,
+      mobile: true,
+      build: true,
+      registry: true,
+    });
   }
 });
 
@@ -48,6 +60,7 @@ test("desktop docs do not require packaging", () => {
       desktop: true,
       mobile: false,
       build: false,
+      registry: false,
     }
   );
 });
@@ -62,18 +75,58 @@ test("desktop workflows do not select mobile", () => {
       desktop: true,
       mobile: false,
       build: true,
+      registry: false,
     }
   );
+});
+
+test("registry changes select the registry and the desktop checks that bundle it", () => {
+  assert.deepEqual(classifyPaths(["model-registry/registry/whisper.json"]), {
+    desktop: true,
+    mobile: false,
+    build: true,
+    registry: true,
+  });
+  assert.deepEqual(classifyPaths(["model-registry/README.md"]), {
+    desktop: true,
+    mobile: false,
+    build: false,
+    registry: true,
+  });
+});
+
+test("registry workflows select only the registry", () => {
+  for (const path of [
+    ".github/workflows/model-registry.yml",
+    ".github/workflows/model-registry-publish.yml",
+  ]) {
+    assert.deepEqual(classifyPaths([path]), {
+      desktop: false,
+      mobile: false,
+      build: false,
+      registry: true,
+    });
+  }
 });
 
 test("handles large diffs and unusual file names without truncation", () => {
   const paths = Array.from({ length: 500 }, (_, index) => `openwhispr-mobile/src/file-${index}.ts`);
   paths.push("src/file with\na newline.ts");
-  assert.deepEqual(classifyPaths(paths), { desktop: true, mobile: true, build: true });
+  assert.deepEqual(classifyPaths(paths), {
+    desktop: true,
+    mobile: true,
+    build: true,
+    registry: false,
+  });
 });
 
 test("empty diff selects neither app", () => {
-  assert.deepEqual(classifyPaths([]), { desktop: false, mobile: false, build: false });
+  assert.deepEqual(classifyPaths([]), {
+    desktop: false,
+    mobile: false,
+    build: false,
+    registry: false,
+  });
 });
 
 test("PRs compare against the merge parent and pushes cover every pushed commit", () => {

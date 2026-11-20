@@ -1946,7 +1946,7 @@ declare global {
       >;
 
       // Org policy (see src/types/policy.ts)
-      getEffectivePolicy?: () => Promise<EffectivePolicySnapshot>;
+      getEffectivePolicy?: (options?: { refresh?: boolean }) => Promise<EffectivePolicySnapshot>;
       onEffectivePolicyChanged?: (
         callback: (snapshot: EffectivePolicySnapshot) => void
       ) => () => void;

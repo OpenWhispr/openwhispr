@@ -5,6 +5,11 @@ const { randomUUID } = require("node:crypto");
 // server time is fetched again hourly.
 const ANCHOR_TTL_MS = 60 * 60_000;
 
+// How often a stream with nothing to send certifies its watermark. Only a
+// milestone crossed elsewhere can wait while this device is below the threshold.
+const IDLE_HEARTBEAT_MS = 5 * 60_000;
+const MILESTONE_WORDS = 200;
+
 // A small dedicated queue. It never reads transcription/Insights tables and
 // never stores text, audio, model names, titles or application context.
 class MetaActivation {
@@ -99,7 +104,7 @@ class MetaActivation {
       void this.flush();
       return null;
     }
-    if (stream.total_words >= 200) return null;
+    if (stream.total_words >= MILESTONE_WORDS) return null;
     const id = randomUUID();
     this.db
       .prepare("INSERT INTO captures(id,stream_id,generation,started_at) VALUES(?,?,?,?)")
@@ -158,7 +163,7 @@ class MetaActivation {
           this.db.prepare("DELETE FROM captures WHERE id=?").run(id);
           return;
         }
-        const words = Math.min(wordCount, 200 - row.total_words);
+        const words = Math.min(wordCount, MILESTONE_WORDS - row.total_words);
         if (words === 0) {
           this.db.prepare("DELETE FROM captures WHERE id=?").run(id);
           return;
@@ -194,7 +199,10 @@ class MetaActivation {
     if (this.disposed) return;
     if (this.running) return this.running;
     this.running = this.runPass(scheduled)
-      .catch(() => {})
+      .catch(() => {
+        // The next tick retries a failed pass instead of waiting out the idle heartbeat.
+        if (this.anchor) this.anchor.certifiedAt = null;
+      })
       .finally(() => {
         this.running = null;
       });
@@ -340,6 +348,20 @@ class MetaActivation {
         words: row.words,
         occurredAt: row.occurred_at,
       }));
+    // Between idle heartbeats the timer only retries a failed pass, reports a
+    // gap or a close, and sends what is still queued. At the milestone an
+    // acknowledged event can still be ahead of server time and need another batch.
+    const certifiedAt = this.anchor?.certifiedAt;
+    if (
+      scheduled &&
+      !events.length &&
+      stream.total_words < MILESTONE_WORDS &&
+      !stream.gap &&
+      stream.state !== "closing" &&
+      typeof certifiedAt === "number" &&
+      this.monotonicNow() - certifiedAt < IDLE_HEARTBEAT_MS
+    )
+      return;
     const result = await post("/api/activation/batch", {
       deviceId: stream.id,
       events,
@@ -353,7 +375,10 @@ class MetaActivation {
     }
     if (!Number.isSafeInteger(result.acceptedThrough) || result.acceptedThrough > stream.last_seq)
       throw new Error("Invalid acknowledgement");
-    if (this.anchor) this.anchor.afterRejection = false;
+    if (this.anchor) {
+      this.anchor.afterRejection = false;
+      this.anchor.certifiedAt = this.monotonicNow();
+    }
     this.db.transaction(() => {
       this.db
         .prepare("DELETE FROM captures WHERE stream_id=? AND seq<=?")

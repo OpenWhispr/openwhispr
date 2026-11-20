@@ -68,6 +68,8 @@ function isValidPolicyShape(policy) {
       typeof policy.features.screenContextEnabled === "boolean") &&
     (policy.features?.connectorsEnabled === undefined ||
       typeof policy.features.connectorsEnabled === "boolean") &&
+    (policy.features?.apiAccessEnabled === undefined ||
+      typeof policy.features.apiAccessEnabled === "boolean") &&
     (policy.meetings === undefined ||
       (policy.meetings !== null &&
         typeof policy.meetings === "object" &&

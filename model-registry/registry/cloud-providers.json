@@ -1,0 +1,642 @@
+[
+  {
+    "id": "openai",
+    "name": "OpenAI",
+    "models": [
+      {
+        "id": "gpt-6-astra",
+        "name": "GPT-6 Astra",
+        "description": "OpenAI's most capable model for coding, computer use, and research, 1M context",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_6_astra",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": false,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        }
+      },
+      {
+        "id": "gpt-6.1-sol",
+        "name": "GPT-6.1 Sol",
+        "description": "Near-Astra capability for chat and agentic work at lower cost, 1M context",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_6_1_sol",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": false,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "defaultValue": "medium"
+        }
+      },
+      {
+        "id": "gpt-6-luna",
+        "name": "GPT-6 Luna",
+        "description": "Fastest and lowest-cost GPT-6 model, 1M context",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_6_luna",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": false,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "defaultValue": "medium"
+        }
+      },
+      {
+        "id": "gpt-5.6-sol",
+        "name": "GPT-5.6 Sol",
+        "description": "Flagship GPT-5.6 for complex coding, research, and agentic work, 1M context",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_sol",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": false,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "defaultValue": "medium"
+        }
+      },
+      {
+        "id": "gpt-5.6-terra",
+        "name": "GPT-5.6 Terra",
+        "description": "Balanced capability, speed, and cost for everyday work",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_terra",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": false,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "defaultValue": "medium"
+        }
+      },
+      {
+        "id": "gpt-5.6-luna",
+        "name": "GPT-5.6 Luna",
+        "description": "Fastest and lowest-cost model in the GPT-5.6 family",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_luna",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": false,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "defaultValue": "medium"
+        }
+      },
+      {
+        "id": "gpt-5.5",
+        "name": "GPT-5.5",
+        "description": "Frontier model for complex reasoning, 1M context",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_5_5",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": false,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "defaultValue": "medium"
+        }
+      },
+      {
+        "id": "gpt-5.2",
+        "name": "GPT-5.2",
+        "description": "Strong reasoning model",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_5_2",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": false,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "defaultValue": "none"
+        }
+      },
+      {
+        "id": "gpt-5-mini",
+        "name": "GPT-5 Mini",
+        "description": "Fast and cost-efficient",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_5_mini",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": false,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ],
+          "defaultValue": "medium"
+        },
+        "legacy": true
+      },
+      {
+        "id": "gpt-5-nano",
+        "name": "GPT-5 Nano",
+        "description": "Ultra-fast, low latency",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_5_nano",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": false,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ],
+          "defaultValue": "medium"
+        },
+        "legacy": true
+      },
+      {
+        "id": "gpt-4.1",
+        "name": "GPT-4.1",
+        "description": "Strong baseline, 1M context",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": true,
+        "supportsVision": true,
+        "legacy": true
+      },
+      {
+        "id": "gpt-4.1-mini",
+        "name": "GPT-4.1 Mini",
+        "description": "Smaller GPT-4.1 model",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_mini",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": true,
+        "supportsVision": true,
+        "legacy": true
+      },
+      {
+        "id": "gpt-4.1-nano",
+        "name": "GPT-4.1 Nano",
+        "description": "Lowest latency GPT-4.1",
+        "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_nano",
+        "tokenParam": "max_completion_tokens",
+        "supportsTemperature": true,
+        "supportsVision": true,
+        "retired": true,
+        "replacement": "gpt-6-luna"
+      }
+    ],
+    "defaultModel": "gpt-6-astra"
+  },
+  {
+    "id": "anthropic",
+    "name": "Anthropic",
+    "models": [
+      {
+        "id": "claude-fable-5-1",
+        "name": "Claude Fable 5.1",
+        "description": "Anthropic's most capable model, Mythos-class, 1M context",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5_1",
+        "supportsTemperature": false,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-fable-5",
+        "name": "Claude Fable 5",
+        "description": "Previous Mythos-class flagship, 1M context",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5",
+        "supportsTemperature": false,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-opus-5-5",
+        "name": "Claude Opus 5.5",
+        "description": "Latest Opus model for complex reasoning, 1M context",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_5_5",
+        "supportsTemperature": false,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-sonnet-5-5",
+        "name": "Claude Sonnet 5.5",
+        "description": "Latest Sonnet: fast and capable for everyday work, 1M context",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5_5",
+        "supportsTemperature": false,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-haiku-5-5",
+        "name": "Claude Haiku 5.5",
+        "description": "Fastest, lowest-cost Claude model, 1M context",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_5_5",
+        "supportsTemperature": false,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-sonnet-5",
+        "name": "Claude Sonnet 5",
+        "description": "Fast, capable agentic model at lower cost",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5",
+        "supportsTemperature": false,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6",
+        "description": "Balanced performance",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6",
+        "supportsTemperature": true,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-haiku-4-5",
+        "name": "Claude Haiku 4.5",
+        "description": "Fast with near-frontier intelligence",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5",
+        "supportsTemperature": true,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-opus-5",
+        "name": "Claude Opus 5",
+        "description": "Previous Opus flagship, 1M context",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_5",
+        "supportsTemperature": false,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-opus-4-8",
+        "name": "Claude Opus 4.8",
+        "description": "Powerful Opus model tuned for honesty and reliability, 1M context",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8",
+        "supportsTemperature": false,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-opus-4-7",
+        "name": "Claude Opus 4.7",
+        "description": "Powerful Opus model, 1M context",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7",
+        "supportsTemperature": false,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-opus-4-6",
+        "name": "Claude Opus 4.6",
+        "description": "Previous Opus generation, 1M context",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6",
+        "supportsTemperature": true,
+        "supportsVision": true
+      },
+      {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "description": "Previous Sonnet generation",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5",
+        "supportsTemperature": true,
+        "supportsVision": true,
+        "legacy": true
+      },
+      {
+        "id": "claude-opus-4-5",
+        "name": "Claude Opus 4.5",
+        "description": "Earlier Opus model",
+        "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5",
+        "supportsTemperature": true,
+        "supportsVision": true
+      }
+    ],
+    "defaultModel": "claude-fable-5-1"
+  },
+  {
+    "id": "gemini",
+    "name": "Google Gemini",
+    "models": [
+      {
+        "id": "gemini-3.6-flash",
+        "name": "Gemini 3.6 Flash",
+        "description": "Fast, high-capability Gemini model",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_6_flash",
+        "supportsThinking": true,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ],
+          "defaultValue": "medium"
+        }
+      },
+      {
+        "id": "gemini-3.8-flash",
+        "name": "Gemini 3.8 Flash",
+        "description": "Most capable Flash model",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_8_flash",
+        "supportsThinking": true,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "defaultValue": "medium"
+        }
+      },
+      {
+        "id": "gemini-4-argon",
+        "name": "Gemini 4 Argon",
+        "description": "Google's frontier reasoning model",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemini_4_argon",
+        "supportsThinking": true,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "defaultValue": "medium"
+        }
+      },
+      {
+        "id": "gemini-3.5-flash",
+        "name": "Gemini 3.5 Flash",
+        "description": "Fast, high-capability Gemini model",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash",
+        "supportsThinking": true,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ],
+          "defaultValue": "medium"
+        },
+        "legacy": true
+      },
+      {
+        "id": "gemini-3.5-flash-lite",
+        "name": "Gemini 3.5 Flash Lite",
+        "description": "Fastest, most cost-effective 3.5 model",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash_lite",
+        "supportsThinking": true,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ],
+          "defaultValue": "minimal"
+        }
+      },
+      {
+        "id": "gemini-3.1-pro-preview",
+        "name": "Gemini 3.1 Pro",
+        "description": "Next-gen flagship model for complex reasoning",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
+        "supportsThinking": true,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "defaultValue": "high"
+        }
+      },
+      {
+        "id": "gemini-3.1-flash-lite",
+        "name": "Gemini 3.1 Flash Lite",
+        "description": "Frontier-class performance at low cost",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_flash_lite",
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "id": "gemini-3-flash-preview",
+        "name": "Gemini 3 Flash",
+        "description": "Ultra-fast, high-capability next-gen model",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview",
+        "supportsThinking": true,
+        "supportsVision": true,
+        "reasoningEffort": {
+          "options": [
+            "minimal",
+            "low",
+            "medium",
+            "high"
+          ],
+          "defaultValue": "high"
+        }
+      },
+      {
+        "id": "gemini-2.5-flash-lite",
+        "name": "Gemini 2.5 Flash Lite",
+        "description": "Lowest latency and cost",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemini_2_5_flash_lite",
+        "supportsVision": true
+      },
+      {
+        "id": "gemma-4-31b-it",
+        "name": "Gemma 4 31B",
+        "description": "Google's largest Gemma 4, 31B dense, 256K context",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_31b_it"
+      },
+      {
+        "id": "gemma-4-26b-a4b-it",
+        "name": "Gemma 4 26B MoE",
+        "description": "Google's Gemma 4 MoE, 4B active params, 256K context",
+        "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_26b_a4b_it"
+      }
+    ],
+    "defaultModel": "gemini-3.6-flash"
+  },
+  {
+    "id": "groq",
+    "name": "Groq",
+    "models": [
+      {
+        "id": "openai/gpt-oss-120b",
+        "name": "GPT-OSS 120B",
+        "description": "OpenAI's open-source flagship, 500 T/sec",
+        "supportsThinking": true,
+        "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b",
+        "reasoningEffort": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "id": "qwen/qwen3.8-27b",
+        "name": "Qwen3.8 27B",
+        "description": "Fast Qwen model, 450 T/sec, 131K context",
+        "disableThinking": true,
+        "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_8_27b"
+      },
+      {
+        "id": "openai/gpt-oss-20b",
+        "name": "GPT-OSS 20B",
+        "description": "Fast open-source model, 1000 T/sec",
+        "supportsThinking": true,
+        "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b",
+        "reasoningEffort": {
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      {
+        "id": "groq/compound",
+        "name": "Compound",
+        "description": "Groq's compound system, 450 T/sec",
+        "descriptionKey": "models.descriptions.cloud.groq_compound",
+        "retired": true,
+        "replacement": "openai/gpt-oss-120b"
+      },
+      {
+        "id": "groq/compound-mini",
+        "name": "Compound Mini",
+        "description": "Fast compound system, 3x lower latency",
+        "descriptionKey": "models.descriptions.cloud.groq_compound_mini",
+        "retired": true,
+        "replacement": "openai/gpt-oss-20b"
+      }
+    ],
+    "defaultModel": "openai/gpt-oss-120b"
+  },
+  {
+    "id": "tinfoil",
+    "name": "Tinfoil",
+    "defaultModel": "glm-5-3",
+    "models": [
+      {
+        "id": "glm-5-3",
+        "name": "GLM-5.3",
+        "description": "Private agentic coding model in secure enclaves, 1M context",
+        "tokenParam": "max_tokens",
+        "supportsTemperature": true,
+        "descriptionKey": "models.descriptions.cloud.tinfoil_glm_5_3",
+        "supportsThinking": true
+      },
+      {
+        "id": "gpt-oss-120b",
+        "name": "GPT-OSS 120B",
+        "description": "Private open-weight reasoning model with tool use, 131K context",
+        "tokenParam": "max_tokens",
+        "supportsTemperature": true,
+        "descriptionKey": "models.descriptions.cloud.tinfoil_gpt_oss_120b",
+        "supportsThinking": true
+      },
+      {
+        "id": "gemma4-31b",
+        "name": "Gemma 4 31B",
+        "description": "Private multilingual reasoning model with tool calling, 256K context",
+        "tokenParam": "max_tokens",
+        "supportsTemperature": true,
+        "descriptionKey": "models.descriptions.cloud.tinfoil_gemma4_31b",
+        "supportsThinking": true
+      }
+    ]
+  },
+  {
+    "id": "corti",
+    "name": "Corti",
+    "models": [
+      {
+        "id": "corti-s1-instant",
+        "name": "Corti S1 Instant",
+        "description": "Fast healthcare model, no reasoning trace",
+        "descriptionKey": "models.descriptions.cloud.corti_corti_s1_instant",
+        "tokenParam": "max_tokens",
+        "supportsTemperature": true
+      },
+      {
+        "id": "corti-s1",
+        "name": "Corti S1",
+        "description": "Most capable clinical model with reasoning",
+        "descriptionKey": "models.descriptions.cloud.corti_corti_s1",
+        "tokenParam": "max_tokens",
+        "supportsTemperature": true
+      },
+      {
+        "id": "corti-s1-mini-instant",
+        "name": "Corti S1 Mini Instant",
+        "description": "Compact healthcare model, fastest and lowest cost",
+        "descriptionKey": "models.descriptions.cloud.corti_corti_s1_mini_instant",
+        "tokenParam": "max_tokens",
+        "supportsTemperature": true
+      },
+      {
+        "id": "corti-s1-mini",
+        "name": "Corti S1 Mini",
+        "description": "Compact clinical model with reasoning at half the price",
+        "descriptionKey": "models.descriptions.cloud.corti_corti_s1_mini",
+        "tokenParam": "max_tokens",
+        "supportsTemperature": true
+      }
+    ],
+    "defaultModel": "corti-s1-instant"
+  }
+]
