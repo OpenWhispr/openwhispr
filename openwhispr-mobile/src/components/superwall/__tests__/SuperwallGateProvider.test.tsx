@@ -284,6 +284,75 @@ describe('SuperwallGateProvider', () => {
     await waitFor(() => expect(mockRegisterPlacement).toHaveBeenCalledTimes(1));
   });
 
+  it('loads missing usage while a transactional placement waits for the identity', async () => {
+    useUsageStore.setState({ usage: null });
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer placement={SUPERWALL_PLACEMENTS.accountBillingOpen} />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+    expect(useUsageStore.getState().load).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      useUsageStore.setState({ usage });
+      useSuperwallIdentityStore.setState({ identifiedBillingUserId: usage.billingUserId });
+    });
+
+    await waitFor(() => expect(mockRegisterPlacement).toHaveBeenCalledTimes(1));
+  });
+
+  it('opens existing subscriber billing when the identity never arrives', async () => {
+    jest.useFakeTimers();
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const onAccessGrantedWithoutPurchase = jest.fn();
+    useUsageStore.setState({ usage: { ...usage, isSubscribed: true, plan: 'pro' } });
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.accountBillingOpen}
+          onAccessGrantedWithoutPurchase={onAccessGrantedWithoutPurchase}
+        />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+    await act(async () => {
+      jest.advanceTimersByTime(SUPERWALL_IDENTITY_WAIT_MS);
+    });
+
+    expect(screen.getByTestId('result').props.children).toBe('true');
+    expect(onAccessGrantedWithoutPurchase).toHaveBeenCalledTimes(1);
+    expect(mockRegisterPlacement).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+    jest.useRealTimers();
+  });
+
+  it('an abort during the identity wait ends quietly', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const controller = new AbortController();
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.accountBillingOpen}
+          signal={controller.signal}
+        />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+    await act(async () => controller.abort());
+
+    expect(screen.getByTestId('result').props.children).toBe('false');
+    expect(mockRegisterPlacement).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
   it('a non-transactional placement runs its feature at once without presenting while the identity is not ready', async () => {
     useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
     const feature = jest.fn();

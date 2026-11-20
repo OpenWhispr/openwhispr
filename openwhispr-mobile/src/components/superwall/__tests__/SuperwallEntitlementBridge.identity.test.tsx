@@ -42,7 +42,7 @@ jest.mock(
 
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: Object.assign((selector: (state: object) => unknown) => selector(mockAuthState), {
-    getState: () => mockAuthState,
+    getState: () => ({ sessionCookie: 'session=test', ...mockAuthState }),
   }),
 }));
 

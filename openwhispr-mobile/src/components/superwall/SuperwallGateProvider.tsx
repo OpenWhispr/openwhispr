@@ -692,6 +692,9 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
       // Only a pending identity yields: awaiting an already-ready one would
       // defer every ordinary registration by a microtask.
       if (user && !isSuperwallIdentityReady()) {
+        // The bridge identifies only once usage has the billing id; a launch
+        // load that failed would otherwise leave this wait to time out.
+        if (!useUsageStore.getState().usage?.billingUserId) useUsageStore.getState().load();
         const identified = await waitForSuperwallIdentity(undefined, signal);
         const sessionChanged = useAuthStore.getState().user?.id !== user.id;
         if (signal?.aborted || sessionChanged) {

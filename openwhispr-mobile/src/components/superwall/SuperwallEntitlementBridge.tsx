@@ -11,16 +11,10 @@ import {
 } from '@/lib/superwall';
 import { Sentry } from '@/lib/sentry';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
+import { getBillingIdentity, isBillingIdentityCurrent } from '@/lib/billingIdentity';
 
 function publishIdentity(billingUserId: string | null): void {
   useSuperwallIdentityStore.getState().setIdentifiedBillingUserId(billingUserId);
-}
-
-function isIdentityStillCurrent(billingUserId: string): boolean {
-  const { user, isGuest } = useAuthStore.getState();
-  if (!user || isGuest) return false;
-  if (useUsageStore.getState().usage?.billingUserId !== billingUserId) return false;
-  return useSuperwallStore.getState().user?.appUserId === billingUserId;
 }
 
 const INACTIVE_SUBSCRIPTION_STATUS = { status: 'INACTIVE' } as const;
@@ -140,12 +134,18 @@ export function SuperwallEntitlementBridge() {
           publishIdentity(billingUserId);
           return;
         }
+        const identity = getBillingIdentity();
         await identify(billingUserId, { restorePaywallAssignments: true });
         debugLog('identified with Superwall', { billingUserId });
         // A superseded run may only publish while the same user is still
         // signed in with this billing id and the SDK holds it; otherwise a
         // later re-sign-in would read ready before it is re-identified.
-        if (isIdentityStillCurrent(billingUserId)) publishIdentity(billingUserId);
+        if (
+          identity &&
+          isBillingIdentityCurrent(identity) &&
+          useSuperwallStore.getState().user?.appUserId === billingUserId
+        )
+          publishIdentity(billingUserId);
         if (!cancelled) identifiedUserIdRef.current = billingUserId;
         return;
       }
