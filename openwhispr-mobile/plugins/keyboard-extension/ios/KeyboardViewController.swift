@@ -201,12 +201,44 @@ private struct Keycaps: Equatable {
 /// the gaps between rows. UIKit's default hit testing stops at a parent whose
 /// bounds do not contain the touch, before consulting the key's point(inside:).
 /// Touches no key claims keep UIKit's default target.
+/// The toolbar. One of its buttons (the compact dictation pill) can take touches a little
+/// below the bar, to make a 44pt target out of the 40pt strip.
+private final class ToolbarView: UIView {
+  weak var touchOutsetTarget: UIView?
+  var touchOutset: CGFloat = 4
+
+  private func extendedTargetFrame() -> CGRect? {
+    guard let target = touchOutsetTarget, !target.isHidden else { return nil }
+    var frame = target.convert(target.bounds, to: self)
+    frame.size.height += touchOutset
+    return frame
+  }
+
+  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+    super.point(inside: point, with: event) || extendedTargetFrame()?.contains(point) == true
+  }
+
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    if let hit = super.hitTest(point, with: event), hit !== self { return hit }
+    if let target = touchOutsetTarget, extendedTargetFrame()?.contains(point) == true {
+      // The pill's own subviews (the hand-off link) decide as if the touch were inside it.
+      let inside = target.convert(point, from: self)
+      let clamped = CGPoint(x: inside.x, y: min(inside.y, target.bounds.maxY - 1))
+      return target.hitTest(clamped, with: event) ?? target
+    }
+    return super.hitTest(point, with: event)
+  }
+}
+
 private final class KeyboardRowsStack: UIStackView {
   /// Padding around the rows that still routes to the nearest key, as the system
   /// keyboard does at its edges.
   var touchMargins = UIEdgeInsets.zero
+  /// A patch of the padding another control owns (the compact dictation pill's target).
+  var excludedRegion: CGRect?
 
   override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+    if let excludedRegion, excludedRegion.contains(point) { return false }
     let expanded = bounds.inset(
       by: UIEdgeInsets(
         top: -touchMargins.top,
@@ -253,8 +285,14 @@ private final class KeyboardRowsStack: UIStackView {
     }
 
     subviews.forEach(visit)
+    // Between letter keys the boundary leans toward the letter the word is likely to
+    // continue with; the resolver answers nil to keep the nearest key.
+    if let nearest, let resolved = letterResolver?(point, nearest) { return resolved }
     return nearest ?? defaultTarget
   }
+
+  /// Dynamic hit targets: given a touch and the nearest key, the letter key it means.
+  var letterResolver: ((CGPoint, KeyButton) -> KeyButton?)?
 }
 
 private extension UIColor {
@@ -290,6 +328,16 @@ private final class KeyButton: UIButton {
   /// Nudges the glyph down (or up, negative) from UIKit's centring to Apple's position.
   var imageOffsetY: CGFloat = 0 {
     didSet { setNeedsLayout() }
+  }
+  /// Trackpad mode: the key keeps its shape and loses its label, as Apple's keys do.
+  var labelsFaded = false {
+    didSet {
+      guard labelsFaded != oldValue else { return }
+      UIView.animate(withDuration: 0.15, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+        self.titleLabel?.alpha = self.labelsFaded ? 0 : 1
+        self.imageView?.alpha = self.labelsFaded ? 0 : 1
+      }
+    }
   }
 
   // UIKit asks for this rect on every layout, so the nudge neither accumulates nor gets lost
@@ -822,6 +870,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private enum Metrics {
     // The toolbar: tone, the centred dictation pill, agent.
     static let dictationButtonSize: CGFloat = 40
+    /// The pill as a mic button beside the suggestions: a 44pt target.
+    static let compactPillWidth: CGFloat = 44
+    /// How far the compact pill's touch target reaches below the 40pt strip, to make 44pt.
+    static let compactPillTouchOutset: CGFloat = 4
+    /// The suggestion row above the toolbar, in the "row" bar style.
+    static let suggestionRowHeight: CGFloat = 36
+    /// After the last key, suggestions for the next word stay this long before the strip
+    /// returns to the dictation pill.
+    static let suggestionRestDelay: TimeInterval = 3
     /// Where the pill's icon starts; the animated dots overlay the icon's place.
     static let pillLeadingInset: CGFloat = 16
     static let toolbarButtonSize: CGFloat = 36
@@ -1055,7 +1112,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private let rootStack = UIStackView()
   // The toolbar: tone, the centred dictation pill, agent. The strip guide is the
   // pill-high strip at the top of the band, where the buttons centre.
-  private let topBar = UIView()
+  private let topBar = ToolbarView()
   private let stripGuide = UILayoutGuide()
   private var stripConstraints: [NSLayoutConstraint] = []
   private let recordButton = UIButton(type: .system)
@@ -1074,6 +1131,55 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // it, so the layout follows the screen width without any width constants.
   private let keyWidthGuide = UILayoutGuide()
   private var keyWidthGuideConstraint: NSLayoutConstraint?
+  // A letter key's width where a row has more than ten keys (German: eleven). Function
+  // and bottom-row keys keep the ten-key widths above, as Apple's German keyboard does.
+  private let letterWidthGuide = UILayoutGuide()
+  private var letterWidthGuideConstraint: NSLayoutConstraint?
+  /// The typing language, layout and the rest, from the App Group. Tests set it directly.
+  private var typingSettings = TypingSettings(defaults: nil)
+  private var letterRows: [[Character]] { KeyRows.letters(language: typingSettings.language, layout: typingSettings.layout) }
+  /// Keys in the widest letter row: ten, or eleven with the German umlaut keys.
+  private var letterColumns: Int { letterRows.map(\.count).max() ?? 10 }
+
+  // Typing help: the lexicon, corrector and session for the typing language. Nil until the
+  // first key needs it, and for good without Full Access or when the lexicon is missing;
+  // the keyboard then types plainly, as it always did.
+  private var typingEngine: TypingEngine?
+  private var didLoadTypingEngine = false
+  /// Where the lexicons are, when not in the extension's bundle (tests, the harness).
+  static var typingResourcesOverride: URL?
+  /// Settings for tests and the harness, in place of the App Group's.
+  static var typingSettingsOverride: TypingSettings?
+  private let suggestionBar = SuggestionBarView()
+  private var isSuggestionBarShown = false
+  private var suggestionRefreshScheduled = false
+  private var lastKeystrokeAt: CFTimeInterval = 0
+  private var suggestionRestTimer: Timer?
+  /// The pill shows its resting state ("Tap to speak" / "Activate"), not a take in progress.
+  private var isPillIdle = false
+  private var pillTitle = ""
+  private var pillCenterConstraint: NSLayoutConstraint?
+  private var pillCompactConstraints: [NSLayoutConstraint] = []
+  private var suggestionStripConstraints: [NSLayoutConstraint] = []
+  private var suggestionRowConstraints: [NSLayoutConstraint] = []
+  private var emojiButton: KeyButton?
+  private var letterButtonsByCode: [UInt16: KeyButton] = [:]
+  private var hitTargets: HitTargetModel?
+  private var swipeDecoder: SwipeDecoder?
+  private let swipeRecognizer = SwipeTypingRecognizer()
+  private let swipeTrail = SwipeTrailLayer()
+  // Space-bar trackpad.
+  private var trackpadGesture = TrackpadGesture()
+  private var trackpadCursor: TrackpadCursorModel?
+  private var trackpadHoldTimer: Timer?
+  // Long-press accents.
+  private let accentPopup = AccentPopupView()
+  private weak var accentKey: KeyButton?
+  /// Key feedback; tests swap in a counter, since a simulator has nothing to feel.
+  var keyFeedback: KeyFeedbackGenerating = SystemKeyFeedback()
+  private let numberPadStack = UIStackView()
+  private var isNumberPadShown = false
+  private var emojiKeyConstraints: (withEmoji: [NSLayoutConstraint], withoutEmoji: [NSLayoutConstraint]) = ([], [])
 
   private let recordingCanvas = UIView()
   // Shown whenever hasFullAccess is false, in place of the keys AND the
@@ -1276,6 +1382,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     KeyboardLog.ui.info("Keyboard loaded. hasFullAccess=\(self.hasFullAccess, privacy: .public)")
     KeyboardLog.echo("Keyboard loaded. hasFullAccess=\(self.hasFullAccess)")
     metrics = KeyboardMetrics.current(for: layoutInputs(width: layoutWidth))
+    typingSettings = loadTypingSettings()
     setupLayout()
     applyKeyboardHeight()
     refreshRecordButton()
@@ -1286,12 +1393,28 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     super.viewDidLayoutSubviews()
     refreshMetricsIfNeeded()
     applyKeyboardHeight()
+    refreshLaidOutGeometry()
+  }
+
+  /// Hands the engines the keys' real positions whenever the width they were laid out at
+  /// changes.
+  private var geometryWidth: CGFloat = 0
+  private func refreshLaidOutGeometry() {
+    let width = keyboardRowsStack.bounds.width
+    guard didLoadTypingEngine, let engine = typingEngine, abs(width - geometryWidth) > 0.5,
+      let geometry = laidOutKeyGeometry()
+    else { return }
+    geometryWidth = width
+    engine.corrector.geometry = geometry
+    hitTargets = HitTargetModel(lexicon: engine.lexicon, geometry: geometry)
+    swipeDecoder = SwipeDecoder(lexicon: engine.lexicon, geometry: geometry)
+    if topBar.touchOutsetTarget != nil { refreshPillTouchReservation() }
   }
 
   private func applyKeyboardHeight() {
     // The keys keep their height at the bottom; the card above them takes the extra.
     let showsCardHeight = isAgentReviewShown || isAgentActionInFlight
-    let keyboardHeight = metrics.keyboardHeight + (showsCardHeight ? Metrics.agentReviewExtraHeight : 0)
+    let keyboardHeight = contentHeight + (showsCardHeight ? Metrics.agentReviewExtraHeight : 0)
 
     if let keyboardHeightConstraint {
       keyboardHeightConstraint.constant = keyboardHeight
@@ -1307,6 +1430,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func textDidChange(_ textInput: UITextInput?) {
     super.textDidChange(textInput)
     noteFieldReport()
+    syncTypingSessionWithField()
     syncShiftWithContextIfNeeded()
     refreshFieldAwareKeys()
     _ = consumePendingTranscriptIfAvailable(trigger: "textDidChange")
@@ -1316,7 +1440,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // textDidChange when the keyboard opens: shift and the return key follow the field here.
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
+    reloadTypingSettings()
     noteFieldReport()
+    syncTypingSessionWithField()
     syncShiftWithContextIfNeeded()
     refreshFieldAwareKeys()
   }
@@ -1370,6 +1496,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     logRecordMarker("viewWillDisappear")
     directKeyboardWillDisappear()
     stopDeleteRepeating()
+    suggestionRestTimer?.invalidate()
     issueResetTimer?.invalidate()
     waitForTranscriptTimer?.invalidate()
     waitForAgentResultTimer?.invalidate()
@@ -1458,7 +1585,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   @objc private func handleBackspaceTapped() {
     playKeyClick()
-    textDocumentProxy.deleteBackward()
+    deleteBackwardOnce()
     // "Hello. W" ⌫ starts a sentence again.
     syncShiftWithContextIfNeeded()
     refreshAfterEdit()
@@ -1545,7 +1672,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard prior.isLetter || prior.isNumber else { return false }
 
     textDocumentProxy.deleteBackward()
-    typeText(". ")
+    insertUntracked(". ")
+    typing?.noteDeletedBackward()
+    typing?.noteInserted(". ")
     return true
   }
 
@@ -1613,7 +1742,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // iOS first lays a third-party keyboard out at its own default height (444pt on a
     // 17 Pro) for a frame or two before adopting ours. The content keeps its own height
     // on the bottom edge, so keys never stretch; only the top constraint yields.
-    rootHeightConstraint = rootStack.heightAnchor.constraint(equalToConstant: metrics.keyboardHeight)
+    rootHeightConstraint = rootStack.heightAnchor.constraint(equalToConstant: contentHeight)
     rootHeightConstraint?.priority = UILayoutPriority(999)
     let rootTopConstraint = rootStack.topAnchor.constraint(equalTo: view.topAnchor)
     rootTopConstraint.priority = .defaultHigh
@@ -2353,7 +2482,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       agentButton.widthAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
       agentButton.heightAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
 
-      recordButton.centerXAnchor.constraint(equalTo: stripGuide.centerXAnchor),
       recordButton.centerYAnchor.constraint(equalTo: stripGuide.centerYAnchor),
       recordButton.heightAnchor.constraint(equalToConstant: Metrics.dictationButtonSize),
       recordButton.widthAnchor.constraint(lessThanOrEqualTo: stripGuide.widthAnchor, constant: -16),
@@ -2370,11 +2498,23 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       processingCancelButton.heightAnchor.constraint(equalToConstant: Metrics.processingCancelSize),
     ])
 
+    let pillCenter = recordButton.centerXAnchor.constraint(equalTo: stripGuide.centerXAnchor)
+    pillCenter.isActive = true
+    pillCenterConstraint = pillCenter
+    pillCompactConstraints = [
+      recordButton.widthAnchor.constraint(equalToConstant: Metrics.compactPillWidth),
+      recordButton.trailingAnchor.constraint(
+        equalTo: stripGuide.trailingAnchor,
+        constant: -(2 * Metrics.toolbarButtonInset + Metrics.toolbarButtonSize)
+      ),
+    ]
+
     setupAgentLink()
     refreshAgentButton()
     setupDictationLink()
 
     rootStack.addArrangedSubview(topBar)
+    setupSuggestionBar()
   }
 
   /// The round tone and agent buttons: a grey disc with a glass rim.
@@ -2410,11 +2550,308 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func refreshAfterEdit() {
     noteFieldReport()
     refreshReturnKey()
+    scheduleSuggestionRefresh()
   }
 
+  /// A key's text: through the typing session, which may correct the word it ends.
   private func typeText(_ text: String) {
+    lastKeystrokeAt = CACurrentMediaTime()
+    guard let session = typing else {
+      insertUntracked(text)
+      return
+    }
+    session.policy = fieldPolicy
+    performEdit(session.insert(text))
+  }
+
+  /// Text the session doesn't decide on.
+  private func insertUntracked(_ text: String) {
     textDocumentProxy.insertText(text)
     typedDocument = textDocumentProxy.documentIdentifier
+  }
+
+  private func performEdit(_ edit: TextEdit) {
+    for _ in 0..<edit.deleteCount { textDocumentProxy.deleteBackward() }
+    if !edit.insert.isEmpty { textDocumentProxy.insertText(edit.insert) }
+    typedDocument = textDocumentProxy.documentIdentifier
+  }
+
+  /// Backspace: undoes the correction just made or removes a swiped word whole; otherwise
+  /// one character.
+  private func deleteBackwardOnce() {
+    lastKeystrokeAt = CACurrentMediaTime()
+    if let edit = typing?.backspace() {
+      performEdit(edit)
+    } else {
+      textDocumentProxy.deleteBackward()
+    }
+  }
+
+  // MARK: - Typing help
+
+  private var contentHeight: CGFloat {
+    metrics.keyboardHeight + (typingSettings.barStyle == .row ? Metrics.suggestionRowHeight : 0)
+  }
+
+  private func loadTypingSettings() -> TypingSettings {
+    if let override = Self.typingSettingsOverride { return override }
+    return TypingSettings(defaults: hasFullAccess ? KeyboardHandoffProvider.shared.sharedDefaults() : nil)
+  }
+
+  /// Picks up a language, layout or bar style changed in the app (or in another keyboard
+  /// process) since this keyboard last showed.
+  private func reloadTypingSettings() {
+    let next = loadTypingSettings()
+    applyLearnedWordsClearIfNeeded()
+    guard next != typingSettings else { return }
+    let keysChanged = next.language != typingSettings.language || next.layout != typingSettings.layout
+    let barChanged = next.barStyle != typingSettings.barStyle
+    typingSettings = next
+    if keysChanged {
+      typingEngine = nil
+      didLoadTypingEngine = false
+      if didBuildKeyboard { rebuildKeyboard() }
+    }
+    if barChanged { applySuggestionBarStyle() }
+    refreshSuggestions()
+  }
+
+  private var typing: TypingSession? { loadedTypingEngine()?.session }
+
+  private func loadedTypingEngine() -> TypingEngine? {
+    if didLoadTypingEngine { return typingEngine }
+    // Without Full Access the keyboard keeps to plain typing: there is no bar to show a
+    // correction in and nowhere to keep learned words.
+    guard hasFullAccess else { return nil }
+    didLoadTypingEngine = true
+    guard let resources = Self.typingResourcesOverride ?? Bundle.main.resourceURL else { return nil }
+    let storage = KeyboardHandoffProvider.shared.containerURL()
+    typingEngine = TypingEngine(
+      language: typingSettings.language, layout: typingSettings.layout, resources: resources, storage: storage
+    )
+    guard let engine = typingEngine else { return nil }
+    engine.session.policy = fieldPolicy
+    engine.session.resync(before: textDocumentProxy.documentContextBeforeInput)
+    suggestionBar.quotes = typingSettings.language == .german ? ("\u{201E}", "\u{201C}") : ("\u{201C}", "\u{201D}")
+    if let geometry = laidOutKeyGeometry() { engine.corrector.geometry = geometry }
+    // iOS text replacements and contact names. Asked once per keyboard; the answer comes
+    // later on the main queue. Not in the test harness, which has no system lexicon.
+    if Self.typingResourcesOverride == nil {
+      requestSupplementaryLexicon { [weak engine] lexicon in
+        let entries = lexicon.entries.map { (input: $0.userInput, replacement: $0.documentText) }
+        DispatchQueue.main.async { engine?.setSystemEntries(entries) }
+      }
+    }
+    return engine
+  }
+
+  /// The app's "Clear learned words" leaves a timestamp; the keyboard forgets once per stamp.
+  private func applyLearnedWordsClearIfNeeded() {
+    guard hasFullAccess, let defaults = KeyboardHandoffProvider.shared.sharedDefaults(),
+      let requested = defaults.string(forKey: TypingSettings.learnedWordsClearedAtKey),
+      requested != defaults.string(forKey: "keyboard_learned_words_cleared_applied_ms")
+    else { return }
+    let storage = KeyboardHandoffProvider.shared.containerURL()
+    if let engine = loadedTypingEngine() {
+      engine.clearLearnedWords(storage: storage)
+    } else if let storage {
+      for language in TypingLanguage.allCases {
+        try? FileManager.default.removeItem(at: TypingEngine.learnedWordsURL(in: storage, language: language))
+      }
+    }
+    defaults.set(requested, forKey: "keyboard_learned_words_cleared_applied_ms")
+  }
+
+  /// What help the field gets: none where it asks for none, in address and number
+  /// keyboards, and for names, passwords and codes.
+  private var fieldPolicy: TypingFieldPolicy {
+    let proxy = textDocumentProxy
+    var traits = FieldTraits()
+    traits.autocorrectionOff = proxy.autocorrectionType == .no
+    traits.spellCheckingOff = proxy.spellCheckingType == .no
+    switch proxy.keyboardType ?? .default {
+    case .URL: traits.keyboard = .url
+    case .emailAddress: traits.keyboard = .email
+    case .numberPad, .decimalPad, .phonePad, .asciiCapableNumberPad, .numbersAndPunctuation:
+      traits.keyboard = .number
+    default: traits.keyboard = .standard
+    }
+    if let contentType = proxy.textContentType ?? nil {
+      switch contentType {
+      case .username: traits.contentType = "username"
+      case .password: traits.contentType = "password"
+      case .newPassword: traits.contentType = "new-password"
+      case .oneTimeCode: traits.contentType = "one-time-code"
+      case .emailAddress: traits.contentType = "email"
+      default: break
+      }
+    }
+    traits.hidesText = proxy.isSecureTextEntry == true || fieldHidesItsText
+    return TypingFieldPolicy(traits: traits)
+  }
+
+  /// The field's text or cursor may have changed under the keyboard.
+  private func syncTypingSessionWithField() {
+    guard didLoadTypingEngine, let session = typingEngine?.session else { return }
+    session.policy = fieldPolicy
+    let proxy = textDocumentProxy
+    // A field that reports nothing (it hides its text, or the host never reports) leaves
+    // the session with what the keyboard itself typed.
+    if proxy.documentContextBeforeInput != nil || !proxy.hasText {
+      session.resync(before: proxy.documentContextBeforeInput ?? "")
+    }
+    scheduleSuggestionRefresh()
+  }
+
+  /// Key centres as laid out, for the engines; nil before the first layout.
+  private func laidOutKeyGeometry() -> KeyGeometry? {
+    guard let first = characterButtons.first, first.bounds.width > 0, keyboardRowsStack.bounds.width > 0
+    else { return nil }
+    var centres: [Character: CGPoint] = [:]
+    for button in characterButtons {
+      guard let letter = button.output?.first else { continue }
+      let frame = button.convert(button.bounds, to: keyboardRowsStack)
+      centres[letter] = CGPoint(x: frame.midX, y: frame.midY)
+    }
+    return KeyGeometry(
+      centres: centres,
+      pitch: first.bounds.width + metrics.keyGap,
+      keySize: first.bounds.size,
+      rowPitch: metrics.keyHeight + metrics.rowGap
+    )
+  }
+
+  // MARK: Suggestion bar
+
+  /// After the key's own work, so a suggestion lookup never delays a keystroke; several
+  /// edits in one turn share one refresh.
+  private func scheduleSuggestionRefresh() {
+    guard !suggestionRefreshScheduled else { return }
+    suggestionRefreshScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      self?.suggestionRefreshScheduled = false
+      self?.refreshSuggestions()
+    }
+  }
+
+  private func refreshSuggestions() {
+    let suggestions = didLoadTypingEngine || lastKeystrokeAt > 0 ? (typing?.suggestions() ?? []) : []
+    suggestionBar.show(suggestions)
+    updateSuggestionBarVisibility()
+  }
+
+  /// "row": the bar has its own row and always shows. "strip": it takes the pill's place
+  /// while a word is being typed, and for a moment after for the next word; at rest the
+  /// pill is back. A take in progress always owns the strip.
+  private func updateSuggestionBarVisibility() {
+    suggestionRestTimer?.invalidate()
+    suggestionRestTimer = nil
+    guard typingSettings.barStyle == .strip else {
+      setSuggestionStripShown(false)
+      return
+    }
+    var shows = false
+    if isPillIdle, !suggestionBar.suggestions.isEmpty, let session = typing {
+      if !session.composing.isEmpty {
+        shows = true
+      } else {
+        let remaining = Metrics.suggestionRestDelay - (CACurrentMediaTime() - lastKeystrokeAt)
+        if remaining > 0 {
+          shows = true
+          let timer = Timer(timeInterval: remaining, repeats: false) { [weak self] _ in
+            self?.updateSuggestionBarVisibility()
+          }
+          RunLoop.main.add(timer, forMode: .common)
+          suggestionRestTimer = timer
+        }
+      }
+    }
+    setSuggestionStripShown(shows)
+  }
+
+  private func setSuggestionStripShown(_ shown: Bool) {
+    guard shown != isSuggestionBarShown else { return }
+    isSuggestionBarShown = shown
+    if typingSettings.barStyle == .strip { suggestionBar.isHidden = !shown }
+    applyPillCompactness()
+  }
+
+  /// Beside the suggestions the pill is a mic button: icon only, 44pt wide, next to the
+  /// assistant button. Its taps and states are the pill's own.
+  private func applyPillCompactness() {
+    let compact = isSuggestionBarShown && typingSettings.barStyle == .strip
+    if var config = recordButton.configuration {
+      config.title = compact ? nil : pillTitle
+      config.imagePadding = compact ? 0 : 7
+      config.contentInsets = compact
+        ? NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        : NSDirectionalEdgeInsets(top: 8, leading: Metrics.pillLeadingInset, bottom: 8, trailing: 18)
+      recordButton.configuration = config
+    }
+    pillCenterConstraint?.isActive = !compact
+    pillCompactConstraints.forEach { $0.isActive = compact }
+    topBar.touchOutsetTarget = compact ? recordButton : nil
+    refreshPillTouchReservation()
+  }
+
+  /// The compact pill's target reaches 4pt into the gap above row 1; the rows give that
+  /// patch up, or the Q–P keys' enlarged targets would take it.
+  private func refreshPillTouchReservation() {
+    guard topBar.touchOutsetTarget != nil else {
+      keyboardRowsStack.excludedRegion = nil
+      return
+    }
+    view.layoutIfNeeded()
+    let pill = recordButton.convert(recordButton.bounds, to: keyboardRowsStack)
+    keyboardRowsStack.excludedRegion = CGRect(
+      x: pill.minX, y: pill.maxY, width: pill.width, height: Metrics.compactPillTouchOutset
+    )
+  }
+
+  private func setupSuggestionBar() {
+    suggestionBar.translatesAutoresizingMaskIntoConstraints = false
+    suggestionBar.onPick = { [weak self] suggestion in self?.handleSuggestionPicked(suggestion) }
+    applySuggestionBarStyle()
+  }
+
+  private func applySuggestionBarStyle() {
+    NSLayoutConstraint.deactivate(suggestionStripConstraints + suggestionRowConstraints)
+    suggestionBar.removeFromSuperview()
+    isSuggestionBarShown = false
+    switch typingSettings.barStyle {
+    case .strip:
+      topBar.addSubview(suggestionBar)
+      suggestionBar.isHidden = true
+      let trailing = suggestionBar.trailingAnchor.constraint(
+        equalTo: stripGuide.trailingAnchor,
+        constant: -(2 * Metrics.toolbarButtonInset + Metrics.toolbarButtonSize + Metrics.compactPillWidth + 6)
+      )
+      suggestionStripConstraints = [
+        suggestionBar.leadingAnchor.constraint(equalTo: toneButton.trailingAnchor, constant: 6),
+        trailing,
+        suggestionBar.topAnchor.constraint(equalTo: stripGuide.topAnchor),
+        suggestionBar.bottomAnchor.constraint(equalTo: stripGuide.bottomAnchor),
+      ]
+      NSLayoutConstraint.activate(suggestionStripConstraints)
+    case .row:
+      suggestionBar.isHidden = false
+      rootStack.insertArrangedSubview(suggestionBar, at: 0)
+      rootStack.setCustomSpacing(0, after: suggestionBar)
+      suggestionRowConstraints = [suggestionBar.heightAnchor.constraint(equalToConstant: Metrics.suggestionRowHeight)]
+      NSLayoutConstraint.activate(suggestionRowConstraints)
+    }
+    applyPillCompactness()
+    rootHeightConstraint?.constant = contentHeight
+    if isViewLoaded { view.setNeedsLayout() }
+  }
+
+  private func handleSuggestionPicked(_ suggestion: Suggestion) {
+    guard let session = typing else { return }
+    playKeyClick()
+    lastKeystrokeAt = CACurrentMediaTime()
+    performEdit(session.accept(suggestion))
+    syncShiftWithContextIfNeeded()
+    refreshAfterEdit()
   }
 
   private func noteFieldReport() {
@@ -2612,10 +3049,292 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       keyWidthGuide.heightAnchor.constraint(equalToConstant: 0),
     ])
     keyWidthGuideConstraint = guideWidth
+    keyboardRowsStack.addLayoutGuide(letterWidthGuide)
+    NSLayoutConstraint.activate([
+      letterWidthGuide.leadingAnchor.constraint(equalTo: keyboardRowsStack.leadingAnchor),
+      letterWidthGuide.topAnchor.constraint(equalTo: keyboardRowsStack.topAnchor),
+      letterWidthGuide.heightAnchor.constraint(equalToConstant: 0),
+    ])
+    refreshLetterWidthGuide()
 
     // Above the bar and the keys, and inside rootStack so it fades and locks with them
     // whenever a canvas covers the keyboard.
     rootStack.addSubview(keyPopup)
+    rootStack.addSubview(accentPopup)
+    accentPopup.isHidden = true
+    keyboardRowsStack.letterResolver = { [weak self] point, nearest in
+      self?.resolveLetterKey(at: point, nearest: nearest)
+    }
+
+    swipeRecognizer.addTarget(self, action: #selector(handleSwipeTyping(_:)))
+    swipeRecognizer.canStartSwipe = { [weak self] point in self?.swipePitch(forTouchAt: point) }
+    keyboardRowsStack.addGestureRecognizer(swipeRecognizer)
+    keyboardRowsStack.layer.addSublayer(swipeTrail)
+  }
+
+  // MARK: Swipe typing
+
+  /// The key pitch when a touch here may start a swipe: on a letter key, on the letters
+  /// page, in a field that gets typing help. Nil otherwise.
+  private func swipePitch(forTouchAt point: CGPoint) -> CGFloat? {
+    guard layoutMode == .letters, !isNumberPadShown, let engine = loadedTypingEngine(),
+      engine.session.policy.suggests, swipeDecoder != nil,
+      let key = keyboardRowsStack.hitTest(point, with: nil) as? KeyButton,
+      let code = key.output?.utf16.first, letterButtonsByCode[code] === key
+    else { return nil }
+    return engine.corrector.geometry.pitch
+  }
+
+  @objc private func handleSwipeTyping(_ recognizer: SwipeTypingRecognizer) {
+    switch recognizer.state {
+    case .began:
+      keyPopup.hide()
+      accentPopup.hide()
+      swipeTrail.show(recognizer.path, color: Palette.accent)
+    case .changed:
+      swipeTrail.show(recognizer.path, color: Palette.accent)
+    case .ended:
+      swipeTrail.show([], color: Palette.accent)
+      commitSwipe(path: recognizer.path)
+    case .cancelled, .failed:
+      swipeTrail.show([], color: Palette.accent)
+    default:
+      break
+    }
+  }
+
+  private func commitSwipe(path: [CGPoint]) {
+    guard let engine = loadedTypingEngine(), let decoder = swipeDecoder else { return }
+    let session = engine.session
+    session.policy = fieldPolicy
+    let context = session.nextLetterContext()
+    let words = decoder.decode(path: path, previous: context.previous, sentenceStart: context.sentenceStart, limit: 4)
+    guard let best = words.first else { return }
+    // Shift applies to a swiped word as to a typed one: a capital with shift on (the start
+    // of a sentence included), capitals throughout under caps lock.
+    func cased(_ word: String) -> String {
+      if isCapsLocked { return word.uppercased() }
+      return isShiftEnabled ? CaseShape.capitalisingFirst(word) : word
+    }
+    playKeyClick()
+    lastKeystrokeAt = CACurrentMediaTime()
+    performEdit(session.insertSwiped(cased(best), alternatives: words.dropFirst().map(cased)))
+    if !isCapsLocked, isShiftEnabled {
+      isShiftEnabled = fieldCapitalization == .allCharacters
+      refreshShiftState()
+    }
+    refreshAfterEdit()
+  }
+
+  /// Dynamic hit targets, for touches whose nearest key is a letter, in fields that get
+  /// typing help. Nil keeps the nearest key.
+  private func resolveLetterKey(at point: CGPoint, nearest: KeyButton) -> KeyButton? {
+    guard layoutMode == .letters, didLoadTypingEngine, let engine = typingEngine, let model = hitTargets,
+      let code = nearest.output?.utf16.first, letterButtonsByCode[code] === nearest,
+      engine.session.policy.suggests
+    else { return nil }
+    let context = engine.session.nextLetterContext()
+    let previous = context.sentenceStart
+      ? TypingLexicon.sentenceStart : context.previous.flatMap { engine.lexicon.id(of: $0) }
+    guard let letter = model.letter(at: point, prefix: TypingLexicon.key(of: context.prefix), previousID: previous)
+    else { return nil }
+    return letterButtonsByCode[letter]
+  }
+
+  // MARK: Long-press accents
+
+  @objc private func handleAccentHold(_ gesture: UILongPressGestureRecognizer) {
+    guard let key = gesture.view as? KeyButton, let letter = key.output?.first else { return }
+    switch gesture.state {
+    case .began:
+      let accents = KeyRows.accents(for: letter, language: typingSettings.language)
+      guard !accents.isEmpty else { return }
+      // The key's own letter first, as on Apple's keyboard: holding and letting go types it.
+      let options = ([letter] + accents).map { character -> String in
+        let text = String(character)
+        let upper = text.uppercased()
+        return isShiftEnabled && upper.count == 1 ? upper : text
+      }
+      keyPopup.hide()
+      accentKey = key
+      keyFeedback.tick()
+      accentPopup.show(
+        options,
+        font: metrics.keycaps.lowercase,
+        keyFrame: key.convert(key.bounds, to: rootStack),
+        container: rootStack.layoutMarginsGuide.layoutFrame,
+        cornerRadius: metrics.keyCornerRadius
+      )
+    case .changed:
+      accentPopup.select(at: gesture.location(in: accentPopup))
+    case .ended:
+      let picked = accentPopup.selected
+      accentPopup.hide()
+      accentKey = nil
+      if let picked { typeAccent(picked) }
+    case .cancelled, .failed:
+      accentPopup.hide()
+      accentKey = nil
+    default:
+      break
+    }
+  }
+
+  private func typeAccent(_ text: String) {
+    playKeyClick()
+    typeText(text)
+    if !isCapsLocked {
+      let shiftStaysOn = fieldCapitalization == .allCharacters
+      if shiftStaysOn != isShiftEnabled {
+        isShiftEnabled = shiftStaysOn
+        refreshShiftState()
+      }
+    }
+    refreshAfterEdit()
+  }
+
+  // MARK: Space-bar trackpad
+
+  @objc private func handleSpaceTouch(_ sender: KeyButton, forEvent event: UIEvent) {
+    guard let touch = event.allTouches?.first(where: { $0.view === sender || $0.view?.isDescendant(of: sender) == true })
+      ?? event.allTouches?.first
+    else { return }
+    let point = touch.location(in: view)
+    let time = touch.timestamp
+    switch touch.phase {
+    case .began:
+      trackpadHoldTimer?.invalidate()
+      applyTrackpad(trackpadGesture.began(at: point, time: time))
+      // A still finger sends no events, so the hold is timed here.
+      let timer = Timer(timeInterval: TrackpadGesture.holdThreshold, repeats: false) { [weak self] _ in
+        guard let self else { return }
+        self.applyTrackpad(self.trackpadGesture.holdTimerFired(time: ProcessInfo.processInfo.systemUptime))
+      }
+      RunLoop.main.add(timer, forMode: .common)
+      trackpadHoldTimer = timer
+    case .moved, .stationary:
+      applyTrackpad(trackpadGesture.moved(to: point, time: time))
+    case .ended:
+      trackpadHoldTimer?.invalidate()
+      applyTrackpad(trackpadGesture.ended(at: point, time: time))
+    default:
+      trackpadHoldTimer?.invalidate()
+      applyTrackpad(trackpadGesture.cancelled())
+    }
+  }
+
+  private func applyTrackpad(_ output: TrackpadOutput) {
+    switch output {
+    case .none:
+      break
+    case .typeSpace:
+      handleSpaceTapped()
+    case .began:
+      keyPopup.hide()
+      keyFeedback.tick()
+      setKeyLabelsFaded(true)
+      trackpadCursor = TrackpadCursorModel(
+        before: textDocumentProxy.documentContextBeforeInput ?? "",
+        after: textDocumentProxy.documentContextAfterInput ?? ""
+      )
+    case let .move(steps, lines):
+      guard var cursor = trackpadCursor else { return }
+      let offset = cursor.move(steps: steps, lines: lines)
+      trackpadCursor = cursor
+      if offset != 0 { textDocumentProxy.adjustTextPosition(byCharacterOffset: offset) }
+    case .ended:
+      setKeyLabelsFaded(false)
+      // The host reports the new cursor late; the drag's own model says where it is.
+      if let cursor = trackpadCursor, didLoadTypingEngine { typingEngine?.session.resync(before: cursor.before) }
+      trackpadCursor = nil
+      syncShiftWithContextIfNeeded()
+      refreshAfterEdit()
+    }
+  }
+
+  private func setKeyLabelsFaded(_ faded: Bool) {
+    func visit(_ view: UIView) {
+      if let key = view as? KeyButton {
+        key.labelsFaded = faded
+        return
+      }
+      view.subviews.forEach(visit)
+    }
+    visit(keyboardRowsStack)
+  }
+
+  // MARK: Emoji key and typing language
+
+  /// Tap opens the emoji panel; a long press offers the typing language and layout, which
+  /// keeps the space bar free for the trackpad.
+  private func makeEmojiButton() -> KeyButton {
+    let button = makeKeyButton(display: nil, imageSystemName: "face.smiling", role: .utility)
+    button.accessibilityLabel = "Emoji"
+    button.accessibilityHint = "Hold to change the typing language"
+    button.addTarget(self, action: #selector(handleEmojiKeyTapped), for: .touchUpInside)
+    button.menu = typingLanguageMenu()
+    return button
+  }
+
+  private func typingLanguageMenu() -> UIMenu {
+    let languages: [(TypingLanguage, String)] = [(.english, "English"), (.german, "Deutsch")]
+    let layouts: [(KeyLayoutKind, String)] = [(.qwerty, "QWERTY"), (.qwertz, "QWERTZ")]
+    let languageActions = languages.map { language, title in
+      UIAction(title: title, state: language == typingSettings.language ? .on : .off) { [weak self] _ in
+        self?.pickTypingLanguage(language)
+      }
+    }
+    let layoutActions = layouts.map { layout, title in
+      UIAction(title: title, state: layout == typingSettings.layout ? .on : .off) { [weak self] _ in
+        self?.pickKeyLayout(layout)
+      }
+    }
+    return UIMenu(title: "Typing language", children: [
+      UIMenu(title: "", options: .displayInline, children: languageActions),
+      UIMenu(title: "", options: .displayInline, children: layoutActions),
+    ])
+  }
+
+  private func pickTypingLanguage(_ language: TypingLanguage) {
+    if var override = Self.typingSettingsOverride {
+      // A layout nobody chose follows the language.
+      if override.layout == override.language.defaultLayout { override.layout = language.defaultLayout }
+      override.language = language
+      Self.typingSettingsOverride = override
+    } else {
+      TypingSettings.store(language: language, in: KeyboardHandoffProvider.shared.sharedDefaults())
+    }
+    reloadTypingSettings()
+  }
+
+  private func pickKeyLayout(_ layout: KeyLayoutKind) {
+    if var override = Self.typingSettingsOverride {
+      override.layout = layout
+      Self.typingSettingsOverride = override
+    } else {
+      TypingSettings.store(layout: layout, in: KeyboardHandoffProvider.shared.sharedDefaults())
+    }
+    reloadTypingSettings()
+  }
+
+  @objc private func handleEmojiKeyTapped() {
+    playKeyClick()
+    showEmojiPanel()
+  }
+
+  private func showEmojiPanel() {}
+
+  /// (row width − (n − 1) gaps) / n for the n keys of the widest letter row.
+  private func refreshLetterWidthGuide() {
+    let columns = CGFloat(letterColumns)
+    letterWidthGuideConstraint?.isActive = false
+    let constraint = letterWidthGuide.widthAnchor.constraint(
+      equalTo: keyboardRowsStack.widthAnchor,
+      multiplier: 1 / columns,
+      constant: -(columns - 1) / columns * metrics.keyGap
+    )
+    constraint.isActive = true
+    letterWidthGuideConstraint = constraint
   }
 
   private func buildKeyboardIfNeeded() {
@@ -2627,11 +3346,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     rebuildKeyboard()
   }
 
-  private static let letterRows: [[String]] = [
-    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-    ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
-    ["z", "x", "c", "v", "b", "n", "m"],
-  ]
   // (display, output): the quote keys show curly marks and insert straight ones, which
   // smartQuoteSubstitution turns into context-aware curly quotes.
   private static let numberRows: [[(display: String, output: String)]] = [
@@ -2656,6 +3370,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
 
     characterButtons.removeAll()
+    letterButtonsByCode.removeAll()
+    hitTargets = nil
+    swipeDecoder = nil
+    geometryWidth = 0
+    emojiButton = nil
     shortcutButtons.removeAll()
     bottomRowConstraints = BottomRowConstraints()
     appliedBottomRowLayout = nil
@@ -2673,9 +3392,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     keyboardRowsStack.addArrangedSubview(numbersRowsStack)
     keyboardRowsStack.addArrangedSubview(symbolsRowsStack)
 
-    let letters = Self.letterRows.map { row in row.map { (display: $0, output: $0) } }
-    addCharacterRow(letters[0], to: lettersRowsStack, registersLetters: true)
-    addCharacterRow(letters[1], to: lettersRowsStack, registersLetters: true)
+    refreshLetterWidthGuide()
+    let letters = letterRows.map { row in row.map { (display: String($0), output: String($0)) } }
+    addCharacterRow(letters[0], to: lettersRowsStack, isLetters: true)
+    addCharacterRow(letters[1], to: lettersRowsStack, isLetters: true)
     addLettersThirdRow(letters[2], to: lettersRowsStack)
     addMainBottomRow(to: keyboardRowsStack)
     refreshVisibleKeyboardMode()
@@ -2695,10 +3415,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     _ view: UIView,
     keys: CGFloat,
     gaps: CGFloat = 0,
-    priority: UILayoutPriority = .required
+    priority: UILayoutPriority = .required,
+    letters: Bool = false
   ) -> NSLayoutConstraint {
     let constraint = view.widthAnchor.constraint(
-      equalTo: keyWidthGuide.widthAnchor,
+      equalTo: (letters ? letterWidthGuide : keyWidthGuide).widthAnchor,
       multiplier: keys,
       constant: gaps * metrics.keyGap
     )
@@ -2744,7 +3465,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     if metricsChanged {
       metrics = nextMetrics
       applyRootPadding()
-      rootHeightConstraint?.constant = metrics.keyboardHeight
+      rootHeightConstraint?.constant = contentHeight
       [keyboardRowsStack, lettersRowsStack, numbersRowsStack, symbolsRowsStack].forEach {
         $0.spacing = metrics.rowGap
       }
@@ -2880,14 +3601,21 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         constraints.letterWidth[index].isActive = true
       }
     }
+    let showsEmoji = layout.shortcuts.isEmpty
+    emojiButton?.isHidden = !showsEmoji
+    NSLayoutConstraint.deactivate(showsEmoji ? emojiKeyConstraints.withoutEmoji : emojiKeyConstraints.withEmoji)
+    NSLayoutConstraint.activate(showsEmoji ? emojiKeyConstraints.withEmoji : emojiKeyConstraints.withoutEmoji)
     spaceButton.isHidden = !layout.showsSpace
     returnButton.isHidden = !layout.showsReturn
     constraints.returnWidth?.isActive = !layout.narrowReturn
     constraints.narrowReturnWidth?.isActive = layout.narrowReturn
   }
 
+  /// Every key: the system click (which follows the user's Keyboard Clicks setting) and a
+  /// light tap, unless the user turned haptics off in the app.
   private func playKeyClick() {
-    UIDevice.current.playInputClick()
+    keyFeedback.click()
+    if typingSettings.hapticsEnabled { keyFeedback.tap() }
   }
 
   /// A row container, already in `stack` so its keys can be sized against keyWidthGuide.
@@ -2904,14 +3632,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func addCharacterRow(
     _ keys: [(display: String, output: String)],
     to stack: UIStackView,
-    registersLetters: Bool = false
+    isLetters: Bool = false
   ) {
     let rowContainer = addRowContainer(to: stack)
-    let rowStack = makeKeyStack(keys, registersLetters: registersLetters)
+    let rowStack = makeKeyStack(keys, registersLetters: isLetters)
     rowContainer.addSubview(rowStack)
     NSLayoutConstraint.activate([
       rowStack.centerXAnchor.constraint(equalTo: rowContainer.centerXAnchor),
-      widthOfKeys(rowStack, keys: CGFloat(keys.count), gaps: CGFloat(keys.count - 1)),
+      widthOfKeys(rowStack, keys: CGFloat(keys.count), gaps: CGFloat(keys.count - 1), letters: isLetters),
       rowStack.topAnchor.constraint(equalTo: rowContainer.topAnchor),
       rowStack.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
     ])
@@ -2943,6 +3671,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       )
       if registersLetters {
         characterButtons.append(button)
+        if let code = key.output.utf16.first { letterButtonsByCode[code] = button }
+        if let letter = key.output.first,
+          !KeyRows.accents(for: letter, language: typingSettings.language).isEmpty
+        {
+          let hold = UILongPressGestureRecognizer(target: self, action: #selector(handleAccentHold(_:)))
+          hold.minimumPressDuration = 0.4
+          button.addGestureRecognizer(hold)
+        }
       }
       stack.addArrangedSubview(button)
     }
@@ -2954,7 +3690,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     shift.imageOffsetY = metrics.keycaps.edgeGlyphOffset
     shift.addTarget(self, action: #selector(handleShiftTapped), for: .touchUpInside)
     shiftButton = shift
-    addThirdRow(leadingKey: shift, keys: makeKeyStack(keys, registersLetters: true), to: stack)
+    addThirdRow(leadingKey: shift, keys: makeKeyStack(keys, registersLetters: true), to: stack, isLetters: true)
   }
 
   private func addPunctuationThirdRow(pageKeyTitle: String, to stack: UIStackView) {
@@ -2974,7 +3710,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   /// Row 3 of every page: a function key at each edge and seven letter widths of keys
   /// centred between them, so Z sits under S and the five symbol keys span Z…M.
-  private func addThirdRow(leadingKey: KeyButton, keys: UIStackView, to stack: UIStackView) {
+  private func addThirdRow(
+    leadingKey: KeyButton, keys: UIStackView, to stack: UIStackView, isLetters: Bool = false
+  ) {
     let rowContainer = addRowContainer(to: stack)
 
     let backspace = makeKeyButton(display: nil, imageSystemName: "delete.left", role: .utility)
@@ -2999,7 +3737,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       backspace.trailingAnchor.constraint(equalTo: rowContainer.trailingAnchor),
       widthOfKeys(backspace, keys: metrics.functionKeys),
       keys.centerXAnchor.constraint(equalTo: rowContainer.centerXAnchor),
-      widthOfKeys(keys, keys: 7, gaps: 6),
+      // The symbol pages' five keys span seven ten-key widths; letters use their own width.
+      widthOfKeys(keys, keys: 7, gaps: 6, letters: isLetters),
     ])
   }
 
@@ -3020,8 +3759,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // After 123, as Apple's; with it showing, 123 and the globe share one 123 width.
     let globeButton = makeNextKeyboardButton()
 
+    let emojiButton = makeEmojiButton()
+    self.emojiButton = emojiButton
+
     let spaceButton = makeKeyButton(display: nil, role: .utility)
-    spaceButton.addTarget(self, action: #selector(handleSpaceTapped), for: .touchUpInside)
+    // Tap, hold-for-trackpad and swipe are told apart by TrackpadGesture, so the space bar
+    // reports every touch phase rather than a tap.
+    spaceButton.addTarget(self, action: #selector(handleSpaceTouch(_:forEvent:)), for: .allTouchEvents)
     spaceButton.setContentHuggingPriority(UILayoutPriority(1), for: .horizontal)
     spaceButton.setContentCompressionResistancePriority(UILayoutPriority(1), for: .horizontal)
     // Blank, as Apple's is; the OpenWhispr logo sits in the dictation pill.
@@ -3039,7 +3783,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     returnButton.addTarget(self, action: #selector(handleReturnTapped), for: .touchUpInside)
     self.returnButton = returnButton
 
-    ([modeButton, globeButton, spaceButton] + shortcuts + [returnButton]).forEach(row.addArrangedSubview)
+    ([modeButton, globeButton, emojiButton, spaceButton] + shortcuts + [returnButton])
+      .forEach(row.addArrangedSubview)
 
     // Keys that can hide in the stack get 999 widths, so the stack's own zero-width
     // hiding constraint wins without a conflict.
@@ -3064,12 +3809,23 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         returnButton, keys: metrics.narrowReturnKeys, gaps: metrics.narrowReturnGaps, priority: hideable
       )
     )
-    NSLayoutConstraint.activate([
-      needsInputModeSwitchKey
-        ? halfBottomKey(modeButton)
-        : widthOfKeys(modeButton, keys: metrics.bottomKeys, gaps: metrics.bottomGaps),
-      halfBottomKey(globeButton),
-    ])
+    // Apple's: 123 and emoji share the old 123 width (Face ID phones); with the globe the
+    // three sit side by side, the emoji key one letter wide where Apple's mic is (SE).
+    // Fields with their own bottom-row keys (URL, email, search) get no emoji key, and 123
+    // takes the room back.
+    let globe = needsInputModeSwitchKey
+    emojiKeyConstraints = (
+      withEmoji: [
+        halfBottomKey(modeButton),
+        globe ? widthOfKeys(emojiButton, keys: 1, priority: hideable) : halfBottomKey(emojiButton),
+      ],
+      withoutEmoji: [
+        globe
+          ? halfBottomKey(modeButton)
+          : widthOfKeys(modeButton, keys: metrics.bottomKeys, gaps: metrics.bottomGaps, priority: hideable)
+      ]
+    )
+    halfBottomKey(globeButton).isActive = true
   }
 
   private func makeNextKeyboardButton() -> KeyButton {
@@ -3196,8 +3952,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     playKeyClick()
     if deleteRepeatCount >= 24 && deleteRepeatCount % 6 == 0 {
       deletePreviousWordChunk()
+    } else if deleteRepeatCount == 0 {
+      deleteBackwardOnce()
     } else {
       textDocumentProxy.deleteBackward()
+      typing?.noteDeletedBackward()
     }
     deleteRepeatCount += 1
     scheduleNextDeleteRepeat()
@@ -3225,6 +3984,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func deletePreviousWordChunk() {
     guard let context = textDocumentProxy.documentContextBeforeInput, !context.isEmpty else {
       textDocumentProxy.deleteBackward()
+      typing?.noteDeletedBackward()
       return
     }
 
@@ -3244,6 +4004,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     for _ in 0..<max(1, deleteCount) {
       textDocumentProxy.deleteBackward()
     }
+    typing?.noteDeletedBackward(max(1, deleteCount))
   }
 
   private func startRecordingPoll() {
@@ -3694,6 +4455,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       return outgoing
     }
     recordButton.configuration = config
+    pillTitle = title
+    isPillIdle = title == "Tap to speak" || title == "Activate"
+    applyPillCompactness()
+    updateSuggestionBarVisibility()
 
     // "Activate" uses the brand gradient; transient/issue states pass a solid
     // colour; everything else (incl. "Tap to speak") uses the adaptive pill.
@@ -3902,7 +4667,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       && !text.hasPrefix(".")
 
     let insertion = needsLeadingSpace ? " \(text)" : text
-    typeText(insertion)
+    insertUntracked(insertion)
+    typing?.noteInserted(insertion)
     // Shift follows the text (it was synced before the text arrived).
     syncShiftWithContextIfNeeded()
     refreshAfterEdit()
@@ -5004,6 +5770,14 @@ private struct KeyboardHandoffProvider {
     sharedDefaults.removeObject(forKey: transcriptionErrorKey)
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? nil : trimmed
+  }
+
+  /// The App Group's defaults; nil without Full Access.
+  func sharedDefaults() -> UserDefaults? { UserDefaults(suiteName: appGroupId) }
+
+  /// The App Group container, where learned words and emoji recents are kept.
+  func containerURL() -> URL? {
+    FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId)
   }
 
   func currentTone() -> String {
