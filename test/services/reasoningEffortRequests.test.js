@@ -335,16 +335,18 @@ test("streaming: Gemini gets xhigh when the catalog offers it", async (t) => {
     model: "gemini-4-neon",
     config: CHOSEN("xhigh"),
     editCatalog: (data) => {
-      data.cloudProviders
-        .find((provider) => provider.id === "gemini")
-        .models.push({
+      const gemini = data.cloudProviders.find((provider) => provider.id === "gemini");
+      gemini.models = [
+        ...gemini.models.filter((model) => model.id !== "gemini-4-neon"),
+        {
           id: "gemini-4-neon",
           name: "Gemini 4 Neon",
           description: "Gemini 4 Neon",
           supportsThinking: true,
           reasoningEffort: { options: ["low", "medium", "high", "xhigh"], defaultValue: "high" },
           thinkingFloor: { level: "low" },
-        });
+        },
+      ];
     },
   });
   assert.deepEqual(body?.generationConfig.thinkingConfig, {
