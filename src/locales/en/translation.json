@@ -3572,6 +3572,7 @@
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
       "signInRequired": "Note Recording requires you to be signed in. Please sign in.",
+      "titaniumSignInRequired": "Sign in to {{brand}} to transcribe meetings.",
       "signInExpired": "Your sign-in has expired, so Note Recording can't renew its connection and may stop. Sign in again once this recording ends.",
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",

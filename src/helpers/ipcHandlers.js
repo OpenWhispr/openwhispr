@@ -5,7 +5,9 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { isRestorablePasteTarget } = require("./windowsPasteTarget");
-const { titaniumServiceKeyFor } = require("./titanium/titaniumIpc");
+const { titaniumServiceKeyFor, onTitaniumStateChanged } = require("./titanium/titaniumIpc");
+const { sttApiStreamUrl } = require("./sttApiStreamPolicy");
+const { createSttApiPreviewStream } = require("./sttApiStreaming");
 const { forkWebSearch } = require("./forkWebSearch");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
@@ -207,7 +209,10 @@ const {
 const {
   ALLOWED_MEETING_PROVIDERS,
   getMeetingStreamingClient,
-  getMeetingConnectionKey,
+  getMeetingConnectionKey: getMeetingConnectionKeyBase,
+  licenseFingerprint,
+  isSttApiConnectionStale,
+  isSttApiConnectionKey,
 } = require("./meetingStreamingProviders");
 const {
   createServerTokenPoster,
@@ -220,6 +225,20 @@ const { CALENDAR_LOOKBACK_MS } = require("./calendarCacheWindow");
 // Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
 // streaming providers must be told the true PCM rate or they misread the audio.
 const MEETING_STREAM_SAMPLE_RATE = 24000;
+
+// The license fingerprint a stt-api meeting connection is opened under (null for
+// every other provider). Re-read on each prepare/start so a sign-out or account
+// switch can never ride a socket opened for the previous license.
+const meetingCredentialIdentity = (options = {}) => {
+  if (options.provider !== "stt-api-realtime") return null;
+  try {
+    return licenseFingerprint(titaniumServiceKeyFor(sttApiStreamUrl(options.baseUrl)));
+  } catch {
+    return "";
+  }
+};
+const getMeetingConnectionKey = (options, credentialGeneration) =>
+  getMeetingConnectionKeyBase(options, credentialGeneration, meetingCredentialIdentity(options));
 const MEETING_RECONNECT_BUFFER_MAX_BYTES = MEETING_STREAM_SAMPLE_RATE * 2 * 30;
 // The realtime clients default to a 0.6 server-VAD threshold, raised in #630 to
 // keep mic ambient noise from opening turns. The system loopback channel's noise
@@ -318,6 +337,8 @@ const {
   formatSpeakerTranscript,
 } = require("./speakerMerge");
 const { timestampRequestFields, mapVerboseSegments } = require("./uploadTimestamps");
+const { scribeRequestFields, scribeWordsToSegments } = require("./scribeSegments");
+const { isTitaniumServiceUrl } = require("./titanium/titaniumHosts");
 const { listLocalTranscriptionModels } = require("./localTranscriptionModels");
 
 // Canonicalize allowed dirs so realpath'd inputs match on macOS (/var -> /private/var).
@@ -7785,6 +7806,7 @@ class IPCHandlers {
             environment: options.environment,
             tenant: options.tenant,
             keyterms: options.keyterms,
+            baseUrl: options.baseUrl,
             sampleRate: MEETING_STREAM_SAMPLE_RATE,
           };
 
@@ -7903,6 +7925,7 @@ class IPCHandlers {
           proxyFetch,
           postServerToken,
           mintCortiToken: (tokenOptions) => this._mintStoredCortiToken(tokenOptions),
+          titaniumServiceKeyFor,
         },
         options,
         { streams }
@@ -7952,7 +7975,11 @@ class IPCHandlers {
       !!this._meetingMicStreaming?.isConnected &&
       (systemAudioMode === "unsupported" || !!this._meetingSystemStreaming?.isConnected);
 
-    const connectRealtimeStreaming = async (event, options) => {
+    const connectRealtimeStreaming = async (
+      event,
+      options,
+      cancelGenerationAtStart = meetingPrepareCancelGeneration
+    ) => {
       // Read before the key is, so a save during the token fetch marks these connections stale.
       const connectionKey = getMeetingConnectionKey(options, credentialGeneration);
       const StreamingClass = getMeetingStreamingClient(options.provider);
@@ -7974,6 +8001,7 @@ class IPCHandlers {
         environment: options.environment,
         tenant: options.tenant,
         keyterms: options.keyterms,
+        baseUrl: options.baseUrl,
         sampleRate: MEETING_STREAM_SAMPLE_RATE,
       };
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
@@ -8011,6 +8039,17 @@ class IPCHandlers {
         );
         if (pairs.some(({ ref }) => !this[ref]?.isConnected)) {
           throw new Error("Meeting transcription connection closed during startup.");
+        }
+        // An stt-api socket opened under a license that changed, or for a prepare
+        // that was cancelled, while it connected must not stay warm.
+        if (
+          options.provider === "stt-api-realtime" &&
+          (meetingPrepareCancelGeneration !== cancelGenerationAtStart ||
+            getMeetingConnectionKey(options, credentialGeneration) !== connectionKey)
+        ) {
+          throw new Error(
+            "Meeting connection outdated (cancelled or license changed) during startup."
+          );
         }
         meetingConnectionKey = connectionKey;
       } catch (error) {
@@ -8084,6 +8123,8 @@ class IPCHandlers {
     let meetingConnectionOptions = null;
     let meetingConnectionWin = null;
     let meetingConnectionKey = null;
+    // Bumped by meeting-transcription-cancel so an in-flight stt-api connect is discarded.
+    let meetingPrepareCancelGeneration = 0;
     let meetingReconnectAudioBuffers = { mic: [], system: [] };
     let meetingReconnectAudioBytes = { mic: 0, system: 0 };
     let meetingReconnectReplaySources = new Set();
@@ -8902,6 +8943,34 @@ class IPCHandlers {
       resetMeetingReconnectAudio();
     };
 
+    // Drops warm (or live) stt-api meeting sockets. A recording that loses its
+    // license mid-session is told once, via the existing sign-in-expired message.
+    const dropSttApiMeetingStreams = async (reason) => {
+      const mic = this._meetingMicStreaming;
+      const system = this._meetingSystemStreaming;
+      const recording = meetingConnectionOptions !== null;
+      const win = meetingConnectionWin;
+      this._meetingMicStreaming = null;
+      this._meetingSystemStreaming = null;
+      meetingConnectionKey = null;
+      debugLogger.info("Dropping stt-api meeting streams", { reason, recording });
+      await Promise.all([
+        mic?.disconnect(false).catch(() => undefined),
+        system?.disconnect(false).catch(() => undefined),
+      ]);
+      if (recording && win && !win.isDestroyed() && !meetingFatalErrorSent) {
+        meetingFatalErrorSent = true;
+        win.webContents.send("meeting-transcription-fatal-error", "signInExpired");
+      }
+    };
+
+    onTitaniumStateChanged(() => {
+      const stale = isSttApiConnectionStale(meetingConnectionKey, (parsed) =>
+        meetingCredentialIdentity(parsed)
+      );
+      if (stale) void dropSttApiMeetingStreams("license-changed");
+    });
+
     const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
       const results = await Promise.all([
         this._meetingMicStreaming
@@ -9216,6 +9285,8 @@ class IPCHandlers {
         return { success: true };
       }
 
+      // Snapshot before any await, so a cancel at any point of the prepare discards it.
+      const cancelGeneration = meetingPrepareCancelGeneration;
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
       const requestedConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
 
@@ -9232,7 +9303,7 @@ class IPCHandlers {
         let timeoutHandle;
         try {
           await Promise.race([
-            connectRealtimeStreaming(event, options),
+            connectRealtimeStreaming(event, options, cancelGeneration),
             new Promise((_, reject) => {
               timeoutHandle = setTimeout(() => reject(new Error("Prepare timed out")), 15000);
             }),
@@ -9253,6 +9324,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("meeting-transcription-cancel", async () => {
+      meetingPrepareCancelGeneration += 1;
+      // A prepared-but-unrecorded stt-api stream holds a pool slot and sends
+      // silence until dropped, so a cancel closes it.
+      if (meetingConnectionOptions === null && isSttApiConnectionKey(meetingConnectionKey)) {
+        await dropSttApiMeetingStreams("prepare-cancelled");
+      }
       if (isMeetingStreamingConnected() || meetingLocalTimer) {
         return { success: false, reason: "recording-active" };
       }
@@ -9937,7 +10014,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "start-dictation-preview",
-      async (_event, { provider, model, language, display = true }) => {
+      async (_event, { provider, model, language, display = true, baseUrl }) => {
         resetDictationPreviewState();
         const gen = dictationPreviewGen;
         dictationPreviewMode = true;
@@ -9948,6 +10025,55 @@ class IPCHandlers {
         dictationPreviewDisplay = display;
         dictationPreviewChunkCount = 0;
         if (display) this.windowManager.showTranscriptionPreview("");
+
+        // Our own stt-api host (Phase 5, D-06): live partial text only. A refused
+        // or failed stream ends the preview; the dictation itself is untouched and
+        // no other preview path is tried.
+        if (provider === "stt-api") {
+          const endPreview = (reason) => {
+            if (gen !== dictationPreviewGen) return { success: true };
+            resetDictationPreviewState();
+            this.windowManager.hideTranscriptionPreview();
+            return { success: false, reason };
+          };
+          let key = null;
+          try {
+            key = titaniumServiceKeyFor(sttApiStreamUrl(baseUrl));
+          } catch (error) {
+            debugLogger.warn("stt-api preview endpoint refused", { error: error.message });
+            return endPreview("unavailable");
+          }
+          if (!key) return endPreview("signInRequired");
+          try {
+            const stream = await createSttApiPreviewStream({
+              baseUrl,
+              key,
+              onUpdate: (text) => {
+                if (gen === dictationPreviewGen && text && dictationPreviewDisplay) {
+                  this.windowManager.showTranscriptionPreview(text);
+                }
+              },
+              onError: (error) => {
+                if (gen !== dictationPreviewGen || dictationPreviewStream !== stream) return;
+                debugLogger.warn("stt-api preview stream ended", { error: error.message });
+                endPreview("unavailable");
+              },
+            });
+            if (gen !== dictationPreviewGen) {
+              stream.abort();
+              return { success: true };
+            }
+            dictationPreviewStream = stream;
+            for (const chunk of dictationPreviewBuffer) {
+              stream.sendPcm16(chunk);
+            }
+            dictationPreviewBuffer = [];
+            return { success: true };
+          } catch (error) {
+            debugLogger.warn("stt-api preview stream unavailable", { error: error.message });
+            return endPreview("unavailable");
+          }
+        }
 
         if (provider === "nvidia" && this.parakeetManager.supportsOnlineStreaming(model)) {
           try {
@@ -10917,7 +11043,23 @@ class IPCHandlers {
             // that require one (Corti) are handled on their own branch above.
           }
 
-          if (diarize) {
+          // Our own stt-api host (Phase 5, D-07): speakers and timestamps come from
+          // the Scribe route. Uploads that want neither keep the plain POST above.
+          const scribeUrl =
+            (diarize || timestamps) &&
+            route.provider === "custom" &&
+            isTitaniumServiceUrl(transcriptionUrl, forkConfig)
+              ? transcriptionUrl.replace(/\/audio\/transcriptions\/?$/, "/speech-to-text")
+              : null;
+          const useScribe = !!scribeUrl && scribeUrl !== transcriptionUrl;
+          if (useScribe) {
+            transcriptionUrl = scribeUrl;
+            for (const field of Object.keys(multipartFields)) delete multipartFields[field];
+            Object.assign(
+              multipartFields,
+              scribeRequestFields({ model: route.model, diarize: !!diarize })
+            );
+          } else if (diarize) {
             // A Custom endpoint may front OpenAI or Mistral, so fall back to the
             // resolved host before giving up on speaker labels.
             const diarizeTarget =
@@ -10978,6 +11120,15 @@ class IPCHandlers {
               status: data.statusCode,
               body: data.data,
             });
+          }
+
+          if (useScribe) {
+            // Same shape the verbose_json branches below already consume.
+            const scribeSegments = scribeWordsToSegments(data.data?.words);
+            data.data = {
+              text: data.data?.text,
+              ...(scribeSegments.length ? { segments: scribeSegments } : {}),
+            };
           }
 
           if (diarize && data.data?.speakers) {

@@ -25,6 +25,8 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
   signInRequired: "notes.meeting.signInRequired",
+  // Our own transcription server (Titanium sign-in, not the OpenWhispr cloud account).
+  titaniumSignInRequired: "notes.meeting.titaniumSignInRequired",
   // Mid-recording, so no Sign in action: signing in reloads this window and the recording with it.
   signInExpired: "notes.meeting.signInExpired",
 };
@@ -79,13 +81,17 @@ export default function MeetingRecordingMount(): null {
     if (!error) return;
     const [sentinel, argument] = error.split(":");
     const errorKey = MEETING_ERROR_KEYS[sentinel];
-    const needsSignIn = sentinel === "signInRequired";
+    const needsTitaniumSignIn = sentinel === "titaniumSignInRequired";
+    const needsSignIn = sentinel === "signInRequired" || needsTitaniumSignIn;
+    const signIn = needsTitaniumSignIn
+      ? () => void window.electronAPI?.titaniumAuthSignIn?.()
+      : requestSignIn;
     toast({
       title: t("notes.meeting.title"),
       description: errorKey ? t(errorKey, { provider: argument }) : error,
       variant: "destructive",
       duration: needsSignIn || sentinel === "signInExpired" ? 8000 : undefined,
-      actions: needsSignIn ? [{ label: t("common.signIn"), onClick: requestSignIn }] : undefined,
+      actions: needsSignIn ? [{ label: t("common.signIn"), onClick: signIn }] : undefined,
       actionsAlign: needsSignIn ? "end" : undefined,
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.

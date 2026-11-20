@@ -27,6 +27,9 @@ import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import type { InferenceScope } from "../config/inferenceScopes";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
+import { cleanupKeySource, type CleanupKeySource } from "./cleanupAuth";
+import { isTitaniumServiceUrl } from "../helpers/titanium/titaniumHosts";
+import { DEFAULT_STT, TITANIUM } from "../config/forkRuntime";
 import {
   canBorrowCleanupCustomKey,
   resolveConfiguredOpenAIBase,
@@ -190,6 +193,14 @@ class ReasoningService extends BaseReasoningService {
     };
   }
 
+  private cleanupKeySourceFor(storedKey: string, baseUrl: string | undefined): CleanupKeySource {
+    return cleanupKeySource({
+      storedKey,
+      baseUrl,
+      isTitaniumService: isTitaniumServiceUrl(baseUrl, { DEFAULT_STT, TITANIUM }),
+    });
+  }
+
   private async getApiKey(
     provider:
       "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
@@ -211,6 +222,19 @@ class ReasoningService extends BaseReasoningService {
         hasKey: !!trimmedKey,
         keyLength: trimmedKey.length,
       });
+
+      // With no key of their own, a signed-in user reaches our server (and only
+      // our server) with their Titanium license. Never cached: signing in or out
+      // takes effect on the next request.
+      const { cleanupCloudBaseUrl } = getSettings();
+      if (this.cleanupKeySourceFor(trimmedKey, cleanupCloudBaseUrl) === "titanium") {
+        try {
+          return (await window.electronAPI?.getTitaniumServiceKey?.(cleanupCloudBaseUrl)) || "";
+        } catch (err) {
+          logger.logReasoning("TITANIUM_KEY_IPC_ERROR", { error: (err as Error)?.message });
+          return "";
+        }
+      }
 
       return trimmedKey;
     }
@@ -1392,6 +1416,18 @@ class ReasoningService extends BaseReasoningService {
       }
 
       if (settings.cleanupProvider === "custom" && settings.cleanupCloudBaseUrl?.trim()) {
+        // Our own server with no stored key and no license: skip cleanup instead
+        // of sending a request that can only fail.
+        if (
+          isTitaniumServiceUrl(settings.cleanupCloudBaseUrl, { DEFAULT_STT, TITANIUM }) &&
+          !(await this.getApiKey("custom"))
+        ) {
+          logger.logReasoning("API_KEY_CHECK", {
+            customProvider: true,
+            signedOutOnOurServer: true,
+          });
+          return false;
+        }
         logger.logReasoning("API_KEY_CHECK", {
           customProvider: true,
           hasCustomEndpoint: true,

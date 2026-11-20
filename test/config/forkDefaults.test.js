@@ -41,3 +41,23 @@ test("cloud-disabled defaults resolve to a valid http-batch custom route", async
   assert.equal(route.model, "m1");
   assert.match(route.endpoint, /^https:\/\/stt\.example\/v1\//);
 });
+
+test("cloud disabled: cleanup defaults to Custom on our server's chat completions with a display-only model", async () => {
+  const { resolveForkDefaults } = await import("../../src/config/forkDefaults.ts");
+
+  for (const baseUrl of ["https://stt.example/v1", "https://stt.example/v1/"]) {
+    const d = resolveForkDefaults(false, { baseUrl, model: "m1" });
+    assert.equal(d.cleanupProvider, "custom");
+    assert.equal(d.cleanupBaseUrl, "https://stt.example/v1/chat/completions");
+    assert.equal(d.cleanupModel, "haiku");
+  }
+});
+
+test("cloud enabled: cleanup keeps the upstream defaults", async () => {
+  const { resolveForkDefaults } = await import("../../src/config/forkDefaults.ts");
+  const d = resolveForkDefaults(true);
+
+  assert.equal(d.cleanupProvider, null);
+  assert.equal(d.cleanupBaseUrl, null);
+  assert.equal(d.cleanupModel, null);
+});

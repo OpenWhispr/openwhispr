@@ -10,6 +10,13 @@ export function resolveForkDefaults(cloudEnabled: boolean, stt = DEFAULT_STT) {
     transcriptionProvider: cloudEnabled ? null : "custom",
     transcriptionModel: cloudEnabled ? null : stt.model,
     transcriptionBaseUrl: cloudEnabled ? null : stt.baseUrl,
+    // Cleanup runs on our server too (POST <stt>/chat/completions with the license
+    // bearer). A full /chat/completions path, so the Custom provider goes straight
+    // to chat completions and never probes /models or /responses.
+    cleanupProvider: cloudEnabled ? null : "custom",
+    cleanupBaseUrl: cloudEnabled ? null : `${stt.baseUrl.replace(/\/+$/, "")}/chat/completions`,
+    // Display only: the server pins the cleanup model.
+    cleanupModel: cloudEnabled ? null : "haiku",
     // A stored "openwhispr" route cannot work without a backend.
     coerceInferenceMode: (value: string) =>
       !cloudEnabled && value === "openwhispr" ? "providers" : value,

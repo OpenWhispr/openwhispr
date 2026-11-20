@@ -22,6 +22,16 @@ const DEFAULT_MANAGED_PROVIDER = {
   models: [{ id: "gpt-4o-mini-transcribe", default: true }],
 };
 
+// Our own stt-api host (Phase 5). The caller decides `isTitaniumService` (the URL
+// is one of our service hosts) so this function stays pure; the license key is
+// attached later, in main, only for such a host.
+const sttApiOptions = (baseUrl, language) => ({
+  provider: "stt-api-realtime",
+  mode: "self-hosted",
+  baseUrl,
+  language,
+});
+
 const resolveModel = (provider, selectedModel) =>
   provider.models.find((model) => model.id === selectedModel)?.id ??
   provider.models.find((model) => model.default)?.id ??
@@ -41,6 +51,8 @@ export function resolveMeetingTranscriptionOptions({
   cortiEnvironment,
   cortiTenant,
   keyterms,
+  selfHostedBaseUrl,
+  isTitaniumService,
 }) {
   if (transcriptionMode === "local") {
     return {
@@ -71,11 +83,18 @@ export function resolveMeetingTranscriptionOptions({
   // cannot serve — so they are sentinels that MeetingRecordingMount translates,
   // not English sentences. Anything after the colon is an argument.
   if (transcriptionMode === "self-hosted") {
+    if (isTitaniumService && selfHostedBaseUrl) return sttApiOptions(selfHostedBaseUrl, language);
     throw new Error("unsupportedSelfHosted");
   }
 
   if (transcriptionMode !== "providers") {
     throw new Error(`Unsupported Note Recording transcription mode: ${transcriptionMode}`);
+  }
+
+  // The fork's dictation default is Custom pointed at our own host; it carries
+  // meetings to the same server. Any other Custom endpoint stays unsupported.
+  if (selectedProvider === "custom" && isTitaniumService && selfHostedBaseUrl) {
+    return sttApiOptions(selfHostedBaseUrl, language);
   }
 
   const provider = byokProviders.find((candidate) => candidate.id === selectedProvider);

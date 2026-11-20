@@ -5,6 +5,24 @@ const { app, ipcMain, shell, safeStorage, BrowserWindow } = require("electron");
 const { TitaniumSession } = require("./titaniumSession");
 
 let session = null;
+const stateListeners = new Set();
+
+// Main-process subscribers to sign-in / sign-out / account changes (e.g. to drop
+// connections opened under the previous license). Returns an unsubscribe.
+function onTitaniumStateChanged(listener) {
+  stateListeners.add(listener);
+  return () => stateListeners.delete(listener);
+}
+
+function notifyTitaniumStateChanged(state) {
+  for (const listener of [...stateListeners]) {
+    try {
+      listener(state);
+    } catch {
+      // A failing subscriber must not stop the others or the broadcast.
+    }
+  }
+}
 
 function encrypt(text) {
   if (!safeStorage.isEncryptionAvailable()) return null;
@@ -34,7 +52,10 @@ function initTitaniumAuth({ forkConfig, urlScheme, logger }) {
     logger,
   });
   session.load();
-  session.on("changed", broadcast);
+  session.on("changed", (state) => {
+    broadcast(state);
+    notifyTitaniumStateChanged(state);
+  });
 
   ipcMain.handle("titanium-auth-get-state", () => session.getState());
   ipcMain.handle("titanium-auth-sign-in", async () => {
@@ -101,5 +122,7 @@ module.exports = {
   initTitaniumAuth,
   getTitaniumSession,
   titaniumServiceKeyFor,
+  onTitaniumStateChanged,
+  notifyTitaniumStateChanged,
   _setSessionForTest,
 };

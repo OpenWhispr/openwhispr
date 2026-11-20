@@ -3572,6 +3572,7 @@
       "unsupportedProvider": "L'enregistrement de notes ne peut pas utiliser {{provider}} pour la transcription en direct. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "noProviderSelected": "Aucun fournisseur n'est sélectionné pour l'enregistrement de notes. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "signInRequired": "L'enregistrement de notes nécessite d'être connecté. Veuillez vous connecter.",
+      "titaniumSignInRequired": "Connectez-vous à {{brand}} pour transcrire les réunions.",
       "signInExpired": "Votre session a expiré : l'enregistrement de notes ne peut pas renouveler sa connexion et risque de s'arrêter. Reconnectez-vous une fois cet enregistrement terminé.",
       "systemAudioSilent": {
         "title": "Aucun son de réunion détecté pour le moment",
