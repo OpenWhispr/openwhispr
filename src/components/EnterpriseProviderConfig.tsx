@@ -243,6 +243,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
     if (!reloadCatalogRef.current) return;
     reloadCatalogRef.current = false;
     void loadCatalog();
+    // loadCatalog is a new function every render; only a new configuration should run it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configuration]);
 
