@@ -7,8 +7,10 @@ const {
   isPcm16Mono16kWav,
   wavToFloat32Samples,
   splitAudioFile,
+  convertToPcm16,
   getFFmpegPath,
 } = require("../../src/helpers/ffmpegUtils");
+const { UPLOAD_AUDIO_EXTENSIONS } = require("../../src/constants/uploadAudioFormats.json");
 const { wavHeader, pcm16Mono16kWav, insertWavChunk } = require("./harness/wavFixtures");
 
 test("parseFfmpegDuration reads the input duration from ffmpeg output", () => {
@@ -134,5 +136,27 @@ test(
       assert.doesNotMatch(info, /Video:/, `${name} carries a video frame`);
       assert.doesNotMatch(info, /Board meeting/, `${name} carries the file's tags`);
     }
+  }
+);
+
+test(
+  "every upload format this ffmpeg can write passes the self-contained-media allow-list",
+  { skip: !ffmpegPath && "no ffmpeg binary available" },
+  async (t) => {
+    const { spawnSync } = require("node:child_process");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-ffmpeg-formats-"));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const written = [];
+    for (const extension of UPLOAD_AUDIO_EXTENSIONS) {
+      const source = path.join(dir, `tone.${extension}`);
+      const tone = ["-f", "lavfi", "-i", "sine=frequency=440:duration=1"];
+      if (spawnSync(ffmpegPath, ["-y", ...tone, source]).status !== 0) continue;
+      written.push(extension);
+      await assert.doesNotReject(
+        convertToPcm16(source, path.join(dir, `${extension}.pcm`)),
+        `.${extension} is rejected`
+      );
+    }
+    for (const extension of ["ac3", "au", "wv"]) assert.ok(written.includes(extension));
   }
 );

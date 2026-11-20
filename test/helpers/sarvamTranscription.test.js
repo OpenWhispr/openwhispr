@@ -128,6 +128,47 @@ mediaTest("a transient failure retries just the affected piece", async () => {
   assert.notEqual(sizes[0], sizes[1]);
 });
 
+mediaTest("an upload reports each piece as it finishes", async () => {
+  const progress = [];
+  await transcribeWithSarvam({
+    audioBuffer: audio(61),
+    apiKey: "dummy",
+    onProgress: ({ chunksCompleted, chunksTotal }) => progress.push([chunksCompleted, chunksTotal]),
+    fetchImpl: async () => ok("piece"),
+  });
+  assert.deepEqual(progress, [
+    [0, 3],
+    [1, 3],
+    [2, 3],
+    [3, 3],
+  ]);
+});
+
+mediaTest("a rate limit is waited out only within the caller's budget", async () => {
+  const limited = () =>
+    Response.json(
+      { error: { code: "rate_limit_exceeded_error" } },
+      {
+        status: 429,
+        headers: { "retry-after": "1" },
+      }
+    );
+  const run = (options) => {
+    let calls = 0;
+    const result = transcribeWithSarvam({
+      audioBuffer: audio(1),
+      apiKey: "dummy",
+      fetchImpl: async () => (++calls === 1 ? limited() : ok("after the wait")),
+      ...options,
+    });
+    return result.finally(() => assert.equal(calls, options.expectedCalls));
+  };
+  await assert.rejects(run({ maxRetryWaitMs: 500, expectedCalls: 1 }), {
+    code: "PROVIDER_RATE_LIMITED",
+  });
+  assert.equal((await run({ expectedCalls: 2 })).text, "after the wait");
+});
+
 mediaTest("a manifest disguised as a WAV cannot send a neighboring file", async (t) => {
   const fs = require("node:fs/promises");
   const path = require("node:path");

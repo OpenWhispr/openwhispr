@@ -106,7 +106,7 @@ import {
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
 import {
-  isManagedOrukeetStream,
+  holdsAudioUntilConnected,
   isTranscriptionPolicyRefusal,
   resolveStreamingFallbackTarget,
   resolveStreamingStartFallback,
@@ -5714,15 +5714,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // cannot change how this session's stream errors are handled. Only a
       // session whose fallback recorder started has a capture to fail over
       // to; stop finishes that recorder before a refused commit can arrive.
-      const managedOrukeet = isManagedOrukeetStream({
+      const holdUntilConnected = holdsAudioUntilConnected({
         providerName,
         cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
       });
-      const holdUntilConnected = managedOrukeet || providerName === "sarvam";
       const failsOver = Boolean(this.streamingFallbackRecorder) && holdUntilConnected;
-      // Managed Orukeet cues the user before its session exists, and main can drop
+      // These routes cue the user before their session exists, and main can drop
       // what reaches a connection it replaces (a warmup for another route, a failed
-      // one, a session retry). So its audio waits here until the session has started.
+      // one, a session retry). So the audio waits here until the session has started.
       let heldFrames = holdUntilConnected ? [] : null;
 
       this.streamingProcessor.port.onmessage = (event) => {
@@ -6126,12 +6125,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._streamingFallbackSegments = [];
       this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
 
-      // Esc is live during managed Orukeet's cold connect, which can take seconds.
-      // Stopping aborts its mint and socket, so the start settles now and the pill
+      // Esc is live during a per-recording cold connect, which can take seconds.
+      // Stopping aborts the mint and socket, so the start settles now and the pill
       // doesn't sit busy until the connect times out.
       if (
         this.streamingStartInProgress &&
-        isManagedOrukeetStream({
+        holdsAudioUntilConnected({
           providerName,
           cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
         })

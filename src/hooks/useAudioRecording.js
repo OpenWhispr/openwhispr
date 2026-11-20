@@ -13,7 +13,7 @@ import {
   dismissPastePermissionNotice,
 } from "../utils/permissions";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
-import { isManagedOrukeetStream } from "../helpers/transcriptionFallback";
+import { holdsAudioUntilConnected } from "../helpers/transcriptionFallback";
 import {
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
@@ -330,14 +330,14 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!current()) return false;
 
         const usesStreaming = manager.shouldUseStreaming();
-        const managedOrukeet =
+        const connectsPerRecording =
           usesStreaming &&
-          isManagedOrukeetStream({
+          holdsAudioUntilConnected({
             providerName: manager.getStreamingProviderName?.(),
             cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
           });
-        startEffectsOnReportRef.current = managedOrukeet;
-        startCuePendingRef.current = managedOrukeet;
+        startEffectsOnReportRef.current = connectsPerRecording;
+        startCuePendingRef.current = connectsPerRecording;
         const didStart = usesStreaming
           ? await manager.startStreamingRecording()
           : await manager.startRecording();
@@ -631,8 +631,8 @@ export const useAudioRecording = (toast, options = {}) => {
                 ? "preparing"
                 : "idle"
         );
-        // Managed Orukeet acts with the pill, not when the start resolves: its start
-        // stays pending on a cold connect for seconds while audio already buffers.
+        // Managed Orukeet and Sarvam act with the pill, not when the start resolves: the
+        // start stays pending on a cold connect for seconds while audio already buffers.
         // A fallback to batch reports recording again after its not-recording report
         // released these, so only the cue is once per start.
         if (

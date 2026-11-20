@@ -1142,7 +1142,8 @@ test("a model list whose body never arrives is no verdict, not a missing model",
 test("Sarvam checks a subscription key with a file-less transcription request", async () => {
   for (const [status, error, success] of [
     [400, { code: "invalid_request_error", message: "body.file : Field required" }, true],
-    [400, { code: "invalid_request_error", message: "invalid model" }, false],
+    [422, { detail: [{ loc: ["body", "file"], msg: "Field required" }] }, true],
+    [402, { code: "insufficient_quota_error" }, false],
     [403, { code: "invalid_api_key_error" }, false],
   ]) {
     const result = await testProviderConnection(

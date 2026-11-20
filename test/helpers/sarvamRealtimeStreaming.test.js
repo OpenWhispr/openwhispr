@@ -120,6 +120,36 @@ for (const model of ["saaras:v4", "saaras:v3"]) {
   });
 }
 
+test("a coalesced read is split under Sarvam's frame cap and a rejected frame keeps the stream", async () => {
+  const stream = new SarvamMeetingStreaming(Socket);
+  const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+  stream.ws.receive({ event: "session.begin" });
+  await ready;
+  // 1.5 s of 24 kHz audio in one read becomes 48,000 bytes at 16 kHz.
+  const pcm = Buffer.alloc(72000, 1);
+  assert.equal(stream.sendAudio(pcm), true);
+  const frames = stream.ws.sent.map(({ audio }) => Buffer.from(audio, "base64").length);
+  assert.deepEqual(frames, [8000, 8000, 8000, 8000, 8000, 8000]);
+  assert.equal(stream.audioBytesSent, 48000);
+  stream.ws.receive({ event: "error", code: "chunk_too_large", is_fatal: false });
+  assert.equal(stream.isConnected, true);
+  await stream.disconnect({ commit: false });
+});
+
+test("a socket with no audio is kept alive until it closes", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const stream = new SarvamMeetingStreaming(Socket);
+  const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+  stream.ws.receive({ event: "session.begin" });
+  await ready;
+  t.mock.timers.tick(40000);
+  assert.deepEqual(stream.ws.sent, [{ event: "ping" }, { event: "ping" }]);
+  stream.ws.receive({ event: "pong" });
+  await stream.disconnect({ commit: false });
+  t.mock.timers.tick(40000);
+  assert.equal(stream.ws.sent.length, 2);
+});
+
 test("meeting loss triggers recovery only for an active socket, and policy cancellation does not flush", async () => {
   for (const cancel of [false, true]) {
     const stream = new SarvamMeetingStreaming(Socket);

@@ -193,7 +193,7 @@ function convertToPcm16(inputPath, outputPath, options = {}) {
       "-protocol_whitelist",
       "file",
       "-format_whitelist",
-      "wav,w64,mp3,aac,aiff,ogg,flac,mov,matroska,webm,amr,asf,caf,avi,mpeg,mpegts",
+      "wav,w64,mp3,aac,ac3,aiff,au,ogg,flac,wv,ape,mov,matroska,webm,amr,asf,caf,avi,mpeg,mpegts",
       "-i",
       inputPath,
       "-map",

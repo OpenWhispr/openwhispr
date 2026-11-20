@@ -120,6 +120,52 @@ test("late note finals stay in capture order within the recording that produced 
   }
 });
 
+test("late finals never land among a later recording's rows or move its start wrongly", async () => {
+  const { mergeSessionDiarization } = await import("../../src/utils/diarizationCompletion.ts");
+  // Saved rows carry stored ids and main's rows carry none, so they pair by text.
+  const saved = (text, index) => ({ id: `stored-${index}`, text, source: "mic", timestamp: index });
+  const fromMain = (text, timestamp) => ({ text, source: "mic", timestamp });
+  const texts = (segments) => segments.map((segment) => segment.text);
+
+  // The first recording's only saved row was an echo main dropped, so nothing pairs.
+  const echoOnly = ["seed", "echo", "hello again", "second"].map(saved);
+  const unmatched = mergeSessionDiarization({
+    existing: echoOnly,
+    seedLength: 1,
+    sessionEnd: 2,
+    segments: [fromMain("late one", 5), fromMain("late two", 6)],
+    removedSegments: [{ text: "echo", source: "mic", timestamp: 1 }],
+  });
+  assert.deepEqual(texts(unmatched.segments), [
+    "seed",
+    "late one",
+    "late two",
+    "hello again",
+    "second",
+  ]);
+  assert.equal(2 - unmatched.removedCount, texts(unmatched.segments).indexOf("hello again"));
+
+  // A stock phrase said in both recordings pairs only with the first one's row.
+  const repeated = ["seed", "saved", "hello again", "Okay.", "second"].map(saved);
+  const collided = mergeSessionDiarization({
+    existing: repeated,
+    seedLength: 1,
+    sessionEnd: 2,
+    segments: [fromMain("saved", 1), fromMain("late one", 2), fromMain("Okay.", 3)],
+  });
+  assert.deepEqual(texts(collided.segments), [
+    "seed",
+    "saved",
+    "late one",
+    "Okay.",
+    "hello again",
+    "Okay.",
+    "second",
+  ]);
+  assert.equal(collided.segments[5].id, "stored-3");
+  assert.equal(2 - collided.removedCount, texts(collided.segments).indexOf("hello again"));
+});
+
 test("persisted segments of the target note win over live segments", () => {
   const persisted = [seg("p1")];
   const result = selectBaseSegments({

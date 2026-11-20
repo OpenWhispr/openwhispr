@@ -802,9 +802,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setChunkProgress(null);
     setDiarizationWarning(false);
 
-    // Managed and OpenRouter uploads go out in pieces, and a single piece reports
-    // nothing until it is done, so the simulated bar covers it.
-    const uploadsPieces = managedActive || uploadInPieces;
+    // Managed, OpenRouter and Sarvam uploads go out in pieces, and a single piece
+    // reports nothing until it is done, so the simulated bar covers it.
+    const uploadsPieces = managedActive || uploadInPieces || byokDiarizeProvider === "sarvam";
     const useChunkProgress = uploadsPieces || (isOpenWhisprCloud && isLargeFile);
 
     if (useChunkProgress) {

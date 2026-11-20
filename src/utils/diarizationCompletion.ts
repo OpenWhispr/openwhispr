@@ -89,11 +89,13 @@ export function withoutRemovedSegments<
 }
 
 // Merges main's result into this session's rows only: the first `seedLength`
-// rows are a resumed note's earlier sessions and stay as saved. `removedCount`
-// is the net number of rows dropped, including replacement of stop-only text.
+// rows are a resumed note's earlier sessions and stay as saved, and so do the
+// rows from `sessionEnd` on, which a later recording added. `removedCount` is
+// the net number of rows dropped, including replacement of stop-only text.
 export function mergeSessionDiarization(params: {
   existing: TranscriptSegment[];
   seedLength: number;
+  sessionEnd?: number;
   fallbackTranscript?: string;
   segments: Array<Omit<TranscriptSegment, "id"> & { id?: string }>;
   removedSegments?: RemovedTranscriptSegment[];
@@ -102,7 +104,12 @@ export function mergeSessionDiarization(params: {
   const { existing, seedLength, fallbackTranscript, segments, removedSegments, splitLiveSpeakers } =
     params;
   const seededCount = Math.min(seedLength, existing.length);
-  const sessionRows = existing.slice(seededCount);
+  const sessionEnd = Math.max(
+    seededCount,
+    Math.min(params.sessionEnd ?? Infinity, existing.length)
+  );
+  const sessionRows = existing.slice(seededCount, sessionEnd);
+  const laterRows = existing.slice(sessionEnd);
   const incoming = segments.map((segment, index) => ({
     ...segment,
     id: segment.id || `diarized-${index}`,
@@ -113,6 +120,7 @@ export function mergeSessionDiarization(params: {
         ...existing.slice(0, seededCount),
         ...mergeTranscriptSegments([], incoming),
         ...sessionRows.slice(1),
+        ...laterRows,
       ],
       removedCount: 1 - incoming.length,
     };
@@ -120,7 +128,7 @@ export function mergeSessionDiarization(params: {
   const keptRows = withoutRemovedSegments(sessionRows, removedSegments);
   const mergedRows = mergeTranscriptSegments(keptRows, incoming, splitLiveSpeakers);
   return {
-    segments: [...existing.slice(0, seededCount), ...mergedRows],
+    segments: [...existing.slice(0, seededCount), ...mergedRows, ...laterRows],
     removedCount: sessionRows.length - mergedRows.length,
   };
 }

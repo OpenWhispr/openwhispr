@@ -470,21 +470,18 @@ async function testProviderConnection(
 
   const provider = String(config?.provider || "").toLowerCase();
   if (provider === "sarvam") {
-    // Sarvam authenticates first. A missing-file error confirms the key without sending speech.
+    // Sarvam authenticates before it validates, so its refusal of a request with no
+    // file confirms the key without sending speech, whatever wording it uses.
     const body = new FormData();
     body.set("model", config.model || "saaras:v4");
     const failure = await probe(
       request.endpoint,
       request,
       fetchImpl,
-      async (response) => {
-        if (response.status === 400 || response.status === 422) {
-          const data = await readJson(response);
-          if (data?.error?.code === "invalid_request_error" && /file/i.test(data.error.message))
-            return null;
-        }
-        return describeStatusFailure(response.status, provider);
-      },
+      (response) =>
+        response.status === 400 || response.status === 422
+          ? null
+          : describeStatusFailure(response.status, provider),
       { method: "POST", body }
     );
     return failure ? { success: false, ...failure } : { success: true };

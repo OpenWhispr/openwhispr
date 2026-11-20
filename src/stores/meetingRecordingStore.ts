@@ -2162,15 +2162,6 @@ if (typeof window !== "undefined") {
       const recordedSegments = seed?.recorderName
         ? data.segments.map((segment) => ({ ...segment, recorderName: seed.recorderName }))
         : data.segments;
-      const { segments: enriched, removedCount } = mergeSessionDiarization({
-        existing,
-        seedLength,
-        fallbackTranscript: seed?.fallbackTranscript,
-        segments: recordedSegments,
-        removedSegments: data.removedSegments,
-        splitLiveSpeakers: data.splitLiveSpeakers,
-      });
-
       // A later session seeded this session's rows, so move its boundary when
       // removing rows or replacing a fallback with individual diarized rows.
       // Only sessions whose final write is already posted count: one posted
@@ -2179,6 +2170,19 @@ if (typeof window !== "undefined") {
         (pending): pending is NonNullable<typeof stoppingSeed> =>
           pending?.noteId === targetNoteId && pending.seedLength > seedLength
       );
+      const { segments: enriched, removedCount } = mergeSessionDiarization({
+        existing,
+        seedLength,
+        // Their rows are not this session's: a late final must not land among them.
+        sessionEnd: laterSeeds.length
+          ? Math.min(...laterSeeds.map((pending) => pending.seedLength))
+          : undefined,
+        fallbackTranscript: seed?.fallbackTranscript,
+        segments: recordedSegments,
+        removedSegments: data.removedSegments,
+        splitLiveSpeakers: data.splitLiveSpeakers,
+      });
+
       try {
         // Awaited so the next queued completion's getNote is guaranteed to
         // read this write — without it the ordering depends on db-update-note

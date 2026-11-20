@@ -93,6 +93,7 @@ const RECORDING = { isRecording: true, isProcessing: false, isStreaming: true };
 const IDLE = { isRecording: false, isProcessing: false, isStreaming: false };
 
 const MANAGED_ORUKEET = { streaming: true, provider: "orukeet", mode: "openwhispr" };
+const SARVAM = { streaming: true, provider: "sarvam", mode: "byok" };
 
 async function mountHook(t, route = MANAGED_ORUKEET) {
   let root = null;
@@ -167,30 +168,35 @@ async function settle() {
 
 const STARTED = ["pause", "register", "start"];
 
-test("cue, media pause and Escape act when recording begins, not when the connect finishes", async (t) => {
-  const hook = await mountHook(t);
-  let activeManager;
-  globalThis.__startOnStart = (manager) => {
-    activeManager = manager;
-    manager.report(RECORDING);
-    // Mic status reports repeat the recording state while the connect is pending.
-    manager.report({ ...RECORDING, micCaptureStatus: "active" });
-  };
+for (const [name, route] of [
+  ["managed Orukeet", MANAGED_ORUKEET],
+  ["Sarvam", SARVAM],
+]) {
+  test(`${name}: cue, media pause and Escape act when recording begins, not when the connect finishes`, async (t) => {
+    const hook = await mountHook(t, route);
+    let activeManager;
+    globalThis.__startOnStart = (manager) => {
+      activeManager = manager;
+      manager.report(RECORDING);
+      // Mic status reports repeat the recording state while the connect is pending.
+      manager.report({ ...RECORDING, micCaptureStatus: "active" });
+    };
 
-  let started;
-  await React.act(async () => {
-    started = hook.api.startRecording();
-    await new Promise((resolve) => setImmediate(resolve));
-  });
-  await settle();
-  assert.deepEqual(globalThis.__startEvents, STARTED, "must not wait for the connect");
+    let started;
+    await React.act(async () => {
+      started = hook.api.startRecording();
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+    await settle();
+    assert.deepEqual(globalThis.__startEvents, STARTED, "must not wait for the connect");
 
-  await React.act(async () => {
-    activeManager.finishStart(true);
-    await started;
+    await React.act(async () => {
+      activeManager.finishStart(true);
+      await started;
+    });
+    assert.deepEqual(globalThis.__startEvents, STARTED, "must act once");
   });
-  assert.deepEqual(globalThis.__startEvents, STARTED, "must act once");
-});
+}
 
 test("a streaming start that falls back to batch cues once and stays paused with Escape held", async (t) => {
   const hook = await mountHook(t);

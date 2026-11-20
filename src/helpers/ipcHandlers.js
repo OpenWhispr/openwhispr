@@ -14257,6 +14257,9 @@ class IPCHandlers {
                 apiKey: this.environmentManager.getSarvamKey(),
                 signal,
                 fetchImpl: proxyFetch,
+                maxRetryWaitMs: 60_000,
+                onProgress: (payload) =>
+                  event.sender.send("upload-transcription-progress", payload),
               });
               return { success: true, text };
             }

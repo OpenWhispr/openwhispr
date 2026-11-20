@@ -32,6 +32,14 @@ export function isManagedOrukeetStream({ providerName, cloudTranscriptionMode })
   return providerName === "orukeet" && cloudTranscriptionMode === "openwhispr";
 }
 
+// Routes that open a session per recording. The pill, start cue and Escape act while
+// it connects, and the audio spoken meanwhile is held for it.
+export function holdsAudioUntilConnected({ providerName, cloudTranscriptionMode }) {
+  return (
+    providerName === "sarvam" || isManagedOrukeetStream({ providerName, cloudTranscriptionMode })
+  );
+}
+
 // These routes can transcribe the whole recording over their own batch API
 // when the streaming endpoint is unavailable. Policy and account refusals still apply.
 export function resolveStreamingStartFallback({ providerName, cloudTranscriptionMode, result }) {

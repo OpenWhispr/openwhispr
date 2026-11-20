@@ -4,7 +4,7 @@ const { setTimeout: delay } = require("node:timers/promises");
 const { convertToPcm16 } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { pcm16ToWav } = require("../utils/audioUtils");
-const { sarvamKeyterms, sarvamLanguage } = require("../utils/sarvam");
+const { SARVAM_MODE, sarvamKeyterms, sarvamLanguage } = require("../utils/sarvam");
 const { providerError, providerHttpError, PROVIDER_ERROR_CODES } = require("./providerHttpErrors");
 
 const SARVAM_URL = "https://api.sarvam.ai/speech-to-text";
@@ -27,11 +27,14 @@ function boundary(pcm) {
   return cut;
 }
 
-async function sendPiece(pcm, { apiKey, model, language, keyterms, signal, fetchImpl }) {
+async function sendPiece(
+  pcm,
+  { apiKey, model, language, keyterms, signal, fetchImpl, maxRetryWaitMs }
+) {
   const form = new FormData();
   form.set("file", new Blob([pcm16ToWav(pcm)], { type: "audio/wav" }), "audio.wav");
   form.set("model", model);
-  form.set("mode", "transcribe");
+  form.set("mode", SARVAM_MODE);
   if (language) form.set("language_code", language);
   if (keyterms.length) form.set("keyterms", JSON.stringify(keyterms));
 
@@ -72,7 +75,7 @@ async function sendPiece(pcm, { apiKey, model, language, keyterms, signal, fetch
         : Date.parse(after) - Date.now();
       if (Number.isFinite(ms)) wait = Math.max(wait, ms);
     }
-    if (!retryable || attempt >= 2 || wait > 10000)
+    if (!retryable || attempt >= 2 || wait > maxRetryWaitMs)
       throw providerHttpError({
         provider: "Sarvam AI",
         surface: "transcription",
@@ -94,6 +97,9 @@ async function transcribeWithSarvam({
   keyterms,
   signal,
   fetchImpl = fetch,
+  // A dictation is waiting on the paste; an upload can sit out a per-minute rate limit.
+  maxRetryWaitMs = 10_000,
+  onProgress,
 }) {
   if (!apiKey?.trim())
     throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
@@ -122,9 +128,18 @@ async function transcribeWithSarvam({
         keyterms: model === "saaras:v4" ? sarvamKeyterms(keyterms) : [],
         signal,
         fetchImpl,
+        maxRetryWaitMs,
       };
       const parts = [];
       let position = 0;
+      // Cut points depend on the audio, so the total firms up as pieces are sent.
+      const reportProgress = () =>
+        onProgress?.({
+          stage: "transcribing",
+          chunksTotal: parts.length + Math.ceil((size - position) / MAX_BYTES),
+          chunksCompleted: parts.length,
+        });
+      reportProgress();
       while (position < size) {
         signal?.throwIfAborted();
         const chunk = Buffer.alloc(Math.min(MAX_BYTES, size - position));
@@ -137,6 +152,7 @@ async function transcribeWithSarvam({
         const length = size - position > MAX_BYTES ? boundary(chunk) : chunk.length;
         parts.push(await sendPiece(chunk.subarray(0, length), fields));
         position += length;
+        reportProgress();
       }
       signal?.throwIfAborted();
       const text = parts.filter(Boolean).join(" ");

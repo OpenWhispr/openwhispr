@@ -1,7 +1,14 @@
 const WebSocket = require("ws");
-const { sarvamLanguage, sarvamKeyterms } = require("../utils/sarvam");
+const debugLogger = require("./debugLogger");
+const { SARVAM_MODE, sarvamLanguage, sarvamKeyterms } = require("../utils/sarvam");
 const { providerError, PROVIDER_ERROR_CODES } = require("./providerHttpErrors");
 const { downsample24kTo16k } = require("../utils/audioUtils");
+
+// Sarvam discards an audio frame over 16,000 bytes, and a stalled main process can
+// coalesce system-audio reads well past that. 8,000 bytes is 250 ms at 16 kHz.
+const MAX_FRAME_BYTES = 8000;
+// Sarvam closes a socket that receives nothing for 60 seconds.
+const KEEPALIVE_MS = 20000;
 
 class SarvamRealtimeStreaming {
   constructor(WebSocketImpl = WebSocket) {
@@ -27,7 +34,7 @@ class SarvamRealtimeStreaming {
       model: model === "saaras:v3" ? "saaras:v3-realtime" : model,
       encoding: "linear16",
       sample_rate: "16000",
-      mode: "transcribe",
+      mode: SARVAM_MODE,
       stream_type: "fast",
     }).toString();
     if (returnTimestamps) url.searchParams.set("return_timestamps", "true");
@@ -62,6 +69,11 @@ class SarvamRealtimeStreaming {
       case "session.begin":
         clearTimeout(this.timer);
         this.isConnected = true;
+        this.keepalive = setInterval(
+          () => this.ws.send(JSON.stringify({ event: "ping" })),
+          KEEPALIVE_MS
+        );
+        this.keepalive.unref?.();
         this.ready.resolve();
         break;
       case "transcript.partial":
@@ -88,6 +100,10 @@ class SarvamRealtimeStreaming {
       case "error":
         if (message.is_fatal !== false)
           throw new Error(message.message || "Sarvam transcription failed");
+        debugLogger.warn("Sarvam reported a recoverable error", {
+          code: message.code,
+          message: message.message,
+        });
         break;
     }
   }
@@ -110,7 +126,10 @@ class SarvamRealtimeStreaming {
       this.fail(new Error("Sarvam audio upload could not keep up with the recording"));
       return false;
     }
-    this.ws.send(JSON.stringify({ event: "audio_input", audio: pcm.toString("base64") }));
+    for (let start = 0; start < pcm.length; start += MAX_FRAME_BYTES) {
+      const audio = pcm.toString("base64", start, start + MAX_FRAME_BYTES);
+      this.ws.send(JSON.stringify({ event: "audio_input", audio }));
+    }
     this.audioBytesSent += pcm.length;
     return true;
   }
@@ -144,6 +163,7 @@ class SarvamRealtimeStreaming {
     this.closed = true;
     this.isConnected = false;
     clearTimeout(this.timer);
+    clearInterval(this.keepalive);
     if (this.ws?.readyState === WebSocket.CONNECTING) this.ws.terminate();
     else this.ws?.close();
     this.onClose?.();

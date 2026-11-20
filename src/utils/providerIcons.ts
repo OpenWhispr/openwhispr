@@ -70,6 +70,7 @@ export const MONOCHROME_PROVIDERS = [
   "tinfoil",
   "assemblyai",
   "elevenlabs",
+  "sarvam",
 ] as const;
 
 export function isMonochromeProvider(provider: string): boolean {
