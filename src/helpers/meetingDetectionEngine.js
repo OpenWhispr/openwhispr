@@ -554,7 +554,6 @@ class MeetingDetectionEngine {
       owner.prompt.recordingRefusal ?? this._attendeeRefusal(calendarEvent, eventId);
     if (attendeeRefusal) {
       owner.prompt.recordingRefusal = attendeeRefusal;
-      this._onStartRefused(attendeeRefusal, "prompt");
       return { success: false, code: attendeeRefusal };
     }
     let note = owner.committedNoteId

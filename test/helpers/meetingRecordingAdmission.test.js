@@ -97,6 +97,20 @@ test("account rotation or cancellation during a confirmation cannot authorize ca
   }
 });
 
+test("a token change revokes an approved start only while external guests are blocked", async () => {
+  const { gate, state, args, owner } = fixture();
+  state.meetings.externalAttendees = "allowed";
+  assert.equal((await gate.prepare(owner, args)).success, true);
+  gate.cancelPending();
+  assert.deepEqual(state.revoked, []);
+  assert.equal(gate.start(owner, args).success, true);
+  gate.end(args.sessionId);
+  state.meetings.externalAttendees = "blocked";
+  assert.equal((await gate.prepare(owner, args)).success, true);
+  gate.cancelPending();
+  assert.deepEqual(state.revoked, [["session", "AUDIO_OPERATION_CANCELLED"]]);
+});
+
 test("allowed direct starts use existing behavior and observe a stricter policy mid-meeting", () => {
   const { gate, state, owner, args } = fixture();
   state.meetings.externalAttendees = "allowed";

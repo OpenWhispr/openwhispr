@@ -157,7 +157,8 @@ function createMeetingRecordingAdmission({
     cancelPending() {
       for (const attempt of pending.values()) {
         release(attempt.owner, attempt.sessionId);
-        if (attempt.approved) onRevoked(attempt, cancelled.code, false);
+        if (attempt.approved && (getPolicy()?.externalAttendees ?? "allowed") !== "allowed")
+          onRevoked(attempt, cancelled.code, false);
       }
     },
     activeRefusal: () => active?.refusal ?? null,

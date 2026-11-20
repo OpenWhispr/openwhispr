@@ -1230,7 +1230,10 @@ test("a mic detection queued before its note opened doesn't prompt either", asyn
 });
 
 test("a calendar prompt offers Join for an outside guest and rechecks a stale Join before scheduling recording", async () => {
-  const { engine, windowManager, shown, meetingNavigations } = createEngine();
+  const refused = [];
+  const { engine, windowManager, shown, meetingNavigations } = createEngine({
+    onStartRefused: (code, startSource) => refused.push([code, startSource]),
+  });
   const external = {
     id: "evt",
     calendar_id: "cal",
@@ -1262,6 +1265,9 @@ test("a calendar prompt offers Join for an outside guest and rechecks a stale Jo
   const retry = await engine.handleNotificationResponse(detectionId, "start", {}, owner);
   assert.equal(retry.code, "POLICY_EXTERNAL_ATTENDEES");
   assert.deepEqual(meetingNavigations, []);
+  // The prompt IPC's policy wrapper audits these refusals; a second entry here
+  // would log each click twice.
+  assert.deepEqual(refused, []);
 });
 
 test("a linkless outside meeting opens an editable note without requesting recording", async () => {
