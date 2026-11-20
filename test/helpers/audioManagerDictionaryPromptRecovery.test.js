@@ -536,4 +536,40 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
     assert.equal(fallbackCalls, 1);
     assert.equal(calls.length, 2);
   });
+
+  await t.test(
+    "a long pause-heavy dictation truncated by prompt bias uses the prompt-free retry (#2474)",
+    async () => {
+      globalThis.__dictionaryPromptRecoveryLogs.length = 0;
+      // In #2474, a 92.3s audio with long pauses stopped halfway through with 38 words
+      // ending in an invented word, whereas without prompt it produced all 62 words.
+      const truncatedText =
+        "First part of the long discussion before the pause runner for the project";
+      const fullText =
+        "First part of the long discussion before the pause passes and we continue with the complete remaining dictation all the way to the end of the recording without losing anything";
+
+      const calls = queueTranscriptions(window, [
+        { success: true, text: truncatedText },
+        { success: true, text: fullText },
+      ]);
+      const { manager, processedTexts } = createRecoveryManager();
+
+      const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+        durationSeconds: 92.3,
+      });
+
+      assert.equal(result.rawText, fullText);
+      assert.deepEqual(processedTexts, [fullText]);
+      assert.equal(calls.length, 2);
+      assert.equal(calls[1].options.initialPrompt, undefined);
+      assert.equal(calls[1].options.skipVad, true);
+
+      const recoveryLog = globalThis.__dictionaryPromptRecoveryLogs.find(
+        ({ message }) => message === "Local dictionary-prompt recovery attempt"
+      );
+      assert.ok(recoveryLog, "expected recovery log");
+      assert.equal(recoveryLog.data.reason, "prompt-truncated");
+      assert.equal(recoveryLog.data.recovered, true);
+    }
+  );
 });
