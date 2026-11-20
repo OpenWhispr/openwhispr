@@ -178,8 +178,8 @@ function resolveProviderRequest(config) {
   const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
   let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
   // A hosted provider's fixed endpoint never redirects. Following one would carry
-  // x-api-key or x-goog-api-key to whichever host it names (fetch drops only
-  // Authorization across origins), so a redirect fails the check instead. Custom
+  // x-api-key, x-goog-api-key or xi-api-key to whichever host it names (fetch drops
+  // only Authorization across origins), so a redirect fails the check instead. Custom
   // servers may redirect within themselves, such as adding a trailing slash.
   let redirect = "error";
   let transcriptionEndpoint;
@@ -356,8 +356,8 @@ async function readJson(response) {
   }
 }
 
-// Gemini, xAI and Corti answer a made-up key with a 400, which on its own can also
-// mean a malformed request. Their error bodies say which it was.
+// Gemini, xAI, Corti and ElevenLabs answer a made-up key with a 400, which on its own
+// can also mean a malformed request. Their error bodies say which it was.
 const KEY_REJECTED_BY_BODY = {
   gemini: (_, body) =>
     Array.isArray(body?.error?.details) &&
@@ -366,6 +366,7 @@ const KEY_REJECTED_BY_BODY = {
     status === 400 && typeof body?.error === "string" && /incorrect api key/i.test(body.error),
   // Corti's gateway turns an unknown key away before routing, with no body at all.
   corti: (status, body) => status === 400 && body === undefined,
+  elevenlabs: (_, body) => body?.detail?.code === "invalid_api_key",
 };
 
 async function describeResponseFailure(response, provider) {
@@ -565,7 +566,13 @@ async function testElevenLabsKey(request, fetchImpl) {
     async (response) => {
       // 402 is how ElevenLabs now reports a key with no credit left; 401 quota_exceeded
       // below is the older form of the same answer.
-      if (response.ok || [400, 402, 422].includes(response.status)) return null;
+      if (response.ok || response.status === 402) return null;
+      // A made-up key can get the same 400 as the missing audio, so only a key the body
+      // refuses fails the check.
+      if ([400, 422].includes(response.status)) {
+        const refusal = await describeResponseFailure(response, "elevenlabs");
+        return refusal.errorCode === "credentialsRejected" ? refusal : null;
+      }
       if (
         response.status === 401 &&
         (await readJson(response))?.detail?.status === "quota_exceeded"

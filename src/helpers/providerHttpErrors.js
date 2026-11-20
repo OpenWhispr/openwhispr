@@ -61,7 +61,7 @@ const MESSAGE_KEYS = {
   [C.TIMEOUT]: "providerErrors.timeout",
   [C.UNREACHABLE]: "providerErrors.unreachable",
   [C.NO_RESPONSE]: "providerErrors.noResponse",
-  // Only a self-hosted server takes custom headers, and only its requests refuse redirects.
+  // Only a self-hosted server takes custom headers, and only its refused redirect is named.
   [C.INVALID_HEADERS]: "providerErrors.selfHosted.invalidHeaders",
   [C.REDIRECTED]: "providerErrors.selfHosted.redirected",
   [C.ERROR]: "providerErrors.unknown",
@@ -127,8 +127,9 @@ const INVALID_KEY_SIGNAL =
 // your plan and billing details" and Groq's links to its /settings/billing page.
 const QUOTA_SIGNAL =
   /insufficient_quota|credit balance|insufficient (credits|balance|funds)|out of credits|payment required/i;
-// ElevenLabs answers an exhausted character quota with a 401, so it is read
-// before the status alone can call it a refused key.
+// ElevenLabs' older answer to an exhausted character quota is a 401, which its
+// error reference grouped under 400/401, so it is read before the status alone
+// can call it a refused key or a bad request.
 const ELEVENLABS_QUOTA_SIGNAL = /"status"\s*:\s*"quota_exceeded"/;
 // It also answers 401 for a valid key that lacks the permission for the request,
 // which re-entering the key would not fix.
@@ -180,6 +181,9 @@ const SECRET_PATTERNS = [
   [/\bgsk_[A-Za-z0-9*]{4,}/g, "[redacted]"],
   [/\bAIza[A-Za-z0-9_-]{4,}/g, "[redacted]"],
   [/\bxai-[A-Za-z0-9*]{4,}/g, "[redacted]"],
+  // ElevenLabs keys are sk_ plus letters and digits, kept apart from the sk- row, whose
+  // wider alphabet would also redact a word such as sk_SK.UTF-8.
+  [/\bsk_[A-Za-z0-9*]{4,}/g, "[redacted]"],
 ];
 
 function bodyToText(body) {
@@ -325,8 +329,10 @@ export function asProviderError(err, ctx) {
     });
   } else if (inner.code === LLM_REQUEST_TIMEOUT_CODE || inner.name === "TimeoutError") {
     classified = providerError(C.TIMEOUT, ctx);
-  } else if (ctx?.selfHosted && isRefusedRedirect(inner)) {
-    classified = providerError(C.REDIRECTED, ctx);
+  } else if (isRefusedRedirect(inner)) {
+    // Only a self-hosted server's address is the user's to correct. A hosted provider's
+    // endpoint never redirects, so something else answered in its place.
+    classified = providerError(ctx?.selfHosted ? C.REDIRECTED : C.UNREACHABLE, ctx);
   } else if (netError) {
     classified = providerError(ELECTRON_NET_TIMEOUTS.has(netError) ? C.TIMEOUT : C.UNREACHABLE, {
       ...ctx,
