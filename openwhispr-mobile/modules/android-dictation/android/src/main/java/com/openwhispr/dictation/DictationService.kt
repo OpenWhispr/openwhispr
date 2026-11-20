@@ -37,6 +37,8 @@ class DictationService : Service() {
     var appVisible = false
     var practiceVisible = false
     const val PREFERENCES = "bubble"
+    /** How often the listening bubble hears the microphone's level. */
+    const val LEVEL_WINDOW_MS = 20
 
     fun readAppearance(preferences: android.content.SharedPreferences) = BubbleAppearance(
       size = preferences.getInt("size", 64), opacity = preferences.getFloat("opacity", 0.8f),
@@ -841,8 +843,10 @@ class DictationService : Service() {
       val selected = InsertionService.instance?.captureTarget().orEmpty()
       mode = next
       foreground(true)
-      recorder = WavRecorder(this).also { recording ->
-        recording.onLevel = { level -> handler.post { face?.setLevel(level) } }
+      // 20 ms reads, so the bars follow every syllable; the meter keeps them still for room noise.
+      val meter = VoiceMeter()
+      recorder = WavRecorder(this, readMillis = LEVEL_WINDOW_MS).also { recording ->
+        recording.onLevel = { level -> val voice = meter.update(level, LEVEL_WINDOW_MS.toFloat()); handler.post { face?.setLevel(voice) } }
         recording.start()
       }
       setState(BubbleState.LISTENING)

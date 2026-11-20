@@ -19,6 +19,8 @@ class WavRecorder internal constructor(
   private val onFrame: ((ByteArray, Long) -> Unit)? = null,
   private val onFailure: ((Exception) -> Unit)? = null,
   private val createInput: (Int) -> PcmInput,
+  /** How much audio each read takes, so [onLevel] fires that often; null reads half the input's buffer. */
+  private val readMillis: Int? = null,
 ) {
   constructor(
     context: Context,
@@ -27,8 +29,9 @@ class WavRecorder internal constructor(
     maximumSeconds: Int = 300,
     onFrame: ((ByteArray, Long) -> Unit)? = null,
     onFailure: ((Exception) -> Unit)? = null,
+    readMillis: Int? = null,
   ) : this(context.cacheDir, sampleRate, destinationFile, maximumSeconds, onFrame, onFailure,
-    { rate -> MicrophoneInput(rate) })
+    { rate -> MicrophoneInput(rate) }, readMillis)
 
   companion object { private val microphoneInUse = AtomicBoolean(false) }
   private var ownsMicrophone = false
@@ -72,7 +75,7 @@ class WavRecorder internal constructor(
             out.seek(0); out.write(header.array()); out.seek(44L + dataSize)
           }
           updateHeader()
-          val buffer = ShortArray(size / 2)
+          val buffer = ShortArray(readMillis?.let { (sampleRate * it / 1000).coerceIn(1, size / 2) } ?: (size / 2))
           try {
             while (recording && samples < sampleRate.toLong() * maximumSeconds) {
               val count = audio.read(buffer)
