@@ -149,8 +149,8 @@ function Intro({ onStart, onClose }: { onStart: () => void; onClose: () => void 
   const t = useStyleT();
   const tone = useToneText();
   const fan: { tone: keyof typeof INTRO_EXAMPLES; x: number; y: number; rotate: string }[] = [
-    { tone: 'formal', x: -118, y: 18, rotate: '-6deg' },
-    { tone: 'very_casual', x: 118, y: 18, rotate: '6deg' },
+    { tone: 'formal', x: -78, y: 14, rotate: '-6deg' },
+    { tone: 'very_casual', x: 78, y: 14, rotate: '6deg' },
     { tone: 'casual', x: 0, y: 0, rotate: '0deg' },
   ];
   return (
