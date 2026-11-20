@@ -54,7 +54,7 @@ function loadPricingCard(plan) {
   const compiled = ts.transpileModule(
     `const { React, cn, t, Check, Mail, Button, WorkspacePlanActionButton,
       isSignedIn, workspacePlans, enterpriseCta, enterpriseAction, businessAction,
-      usage, billingState, setBillingState, setEnterpriseCheckoutOpen, setEnterpriseWorkspaceCreateOpen, requestSignIn } = scope;
+      billingWorkspaces, soloBusinessWorkspace, WorkspaceBusinessCheckoutButton, usage, billingState, setBillingState, setEnterpriseCheckoutOpen, setEnterpriseWorkspaceCreateOpen, requestSignIn } = scope;
       return (${card.getText(ast)});`,
     { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2020 } }
   ).outputText;
@@ -71,6 +71,7 @@ async function setup(t) {
   const state = {
     workspaceRefreshes: [],
     portalIds: [],
+    checkouts: [],
     openedUrls: [],
     toasts: [],
     consoleOpens: 0,
@@ -81,7 +82,10 @@ async function setup(t) {
   globalThis.__settingsBillingTest = state;
   t.after(() => delete globalThis.__settingsBillingTest);
   happyWindow.electronAPI = {
-    openExternal: async (url) => state.openedUrls.push(url),
+    openExternal: async (url) => {
+      state.openedUrls.push(url);
+      return { success: true };
+    },
   };
   const vite = await createRendererServer(context, {
     noExternal: ["react-i18next"],
@@ -95,10 +99,12 @@ async function setup(t) {
         export const openAdminConsole = async () => { globalThis.__settingsBillingTest.consoleOpens++; };`,
       "/lib/authRequestContext":
         "export const hasValidatedAuthContext = () => true; export const getValidatedAuthGeneration = () => 7;",
-      "/stores/workspaceStore": `export const useWorkspaceStore = (select) => select({
+      "/stores/workspaceStore": `const getState = () => ({
         refresh: async (options) => { globalThis.__settingsBillingTest.workspaceRefreshes.push(options); }
-      });`,
+      });
+      export const useWorkspaceStore = Object.assign((select) => select(getState()), { getState });`,
       "/services/WorkspacesService": `export const WorkspacesService = {
+        billingCheckout: async (...args) => { globalThis.__settingsBillingTest.checkouts.push(args); return "https://stripe.test/checkout"; },
         billingPortal: async (id) => {
           globalThis.__settingsBillingTest.portalIds.push(id);
           return globalThis.__settingsBillingTest.portal();
@@ -127,6 +133,7 @@ async function setup(t) {
     Button,
     WorkspacePlanActionButton,
     isSignedIn: true,
+    billingWorkspaces: workspaces,
     workspacePlans: entitledWorkspacePlans(workspaces),
     enterpriseCta: enterpriseTileCta(workspaces, "enterprise"),
     enterpriseAction: enterpriseManageAction(workspaces, "enterprise"),
@@ -139,7 +146,16 @@ async function setup(t) {
     requestSignIn: () => {},
     ...overrides,
   });
-  return { happyWindow, state, container, root, useUsage, scopeFor, WorkspacePlanActionButton };
+  return {
+    vite,
+    happyWindow,
+    state,
+    container,
+    root,
+    useUsage,
+    scopeFor,
+    WorkspacePlanActionButton,
+  };
 }
 
 function findButton(container, label) {
@@ -319,4 +335,102 @@ test("workspace plan actions keep console/sales separate and recover from portal
   await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
   assert.equal(entitlementRefreshes, 0);
   assert.deepEqual(state.workspaceRefreshes, []);
+});
+
+test("the Business tile reached from Shared Dictionary buys the selected workspace and interval", async (t) => {
+  const { vite, state, root, container, scopeFor } = await setup(t);
+  const { WorkspaceBusinessCheckoutButton } = await vite.ssrLoadModule(
+    "/components/workspace/WorkspaceBusinessCheckoutButton.tsx"
+  );
+  const workspace = { id: "personal-default", name: "My workspace", plan: "free", role: "owner" };
+  const scope = scopeFor([workspace, enterprise({ name: "Enterprise workspace" })], {
+    soloBusinessWorkspace: workspace,
+    WorkspaceBusinessCheckoutButton,
+    billingState: { business: true },
+  });
+  await React.act(async () => root.render(loadPricingCard("business")(scope)));
+  const upgrade = [...container.querySelectorAll("button")].find((button) =>
+    button.textContent.includes("settingsPage.workspace.teams.paywall.upgrade")
+  );
+  assert.ok(upgrade);
+  assert.ok(container.textContent.includes(workspace.name));
+  assert.ok(container.textContent.includes("Enterprise workspace"));
+  await React.act(async () => upgrade.click());
+  assert.deepEqual(state.checkouts, [[workspace.id, "annual", { tier: "business" }]]);
+  assert.deepEqual(state.openedUrls, ["https://stripe.test/checkout"]);
+});
+
+test("the visible workspace card can start Business when the people count is unavailable", async (t) => {
+  const { vite, state, root, container } = await setup(t);
+  const { default: WorkspaceBillingCard } = await vite.ssrLoadModule(
+    "/components/settings/WorkspaceBillingCard.tsx"
+  );
+  const workspace = {
+    id: "free-default",
+    name: "My workspace",
+    is_default: true,
+    role: "owner",
+    plan: "free",
+    status: "active",
+    seats: 1,
+    seats_used: 1,
+    has_subscription: false,
+  };
+  await React.act(async () =>
+    root.render(React.createElement(WorkspaceBillingCard, { workspace }))
+  );
+  const checkout = [...container.querySelectorAll("button")].find((button) =>
+    button.textContent.includes("settingsPage.workspace.billing.startSubscription")
+  );
+  assert.ok(checkout);
+  await React.act(async () => checkout.click());
+  assert.deepEqual(state.checkouts, [[workspace.id, "monthly", { tier: "business" }]]);
+});
+
+test("returning from Business checkout updates account coverage even after the button unmounts", async (t) => {
+  const { vite, state, root, container, happyWindow, useUsage } = await setup(t);
+  const { WorkspaceBusinessCheckoutButton } = await vite.ssrLoadModule(
+    "/components/workspace/WorkspaceBusinessCheckoutButton.tsx"
+  );
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let paid = false;
+  let latestUsage;
+  let usageCalls = 0;
+  happyWindow.electronAPI.cloudUsage = async () => {
+    usageCalls++;
+    return {
+      success: true,
+      isSubscribed: paid,
+      entitlementSources: { personal: false, workspaceIds: paid ? ["solo"] : [] },
+    };
+  };
+  function Host() {
+    latestUsage = useUsage();
+    const [open, setOpen] = React.useState(true);
+    return open
+      ? React.createElement(WorkspaceBusinessCheckoutButton, {
+          workspaceId: "solo",
+          interval: "monthly",
+          className: "",
+          onOpened: () => setOpen(false),
+        })
+      : null;
+  }
+  await React.act(async () => root.render(React.createElement(Host)));
+  assert.equal(latestUsage.hasPaidAccess, false);
+  await React.act(async () => container.querySelector("button").click());
+  assert.equal(container.querySelector("button"), null);
+  await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
+  assert.equal(usageCalls, 2);
+  paid = true;
+  for (const delay of [4000, 4000, 8000]) {
+    await React.act(async () => t.mock.timers.tick(delay));
+    assert.equal(latestUsage.hasPaidAccess, true);
+    assert.deepEqual(latestUsage.entitledWorkspaceIds, ["solo"]);
+  }
+  assert.equal(usageCalls, 5);
+  assert.deepEqual(
+    state.workspaceRefreshes,
+    Array.from({ length: 4 }, () => ({ fresh: true }))
+  );
 });

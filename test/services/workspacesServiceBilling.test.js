@@ -95,3 +95,19 @@ test("upgradeToEnterprise posts to the upgrade endpoint with no body", async (t)
   assert.equal(requests[0].path, "/api/workspaces/ws-1/billing/upgrade");
   assert.equal(requests[0].body, undefined);
 });
+
+test("workspace people counts use fresh membership and invitation totals", async (t) => {
+  const counts = { member_count: 1, pending_invitations: 2 };
+  const requests = installCloudCapture(t, counts);
+  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
+  assert.deepEqual(await WorkspacesService.getPeopleCounts("ws-1"), counts);
+  assert.equal(requests[0].path, "/api/workspaces/ws-1/stats");
+  assert.equal(requests[0].method, "GET");
+  assert.equal(requests[0].cache, "no-store");
+});
+
+test("an incomplete stats response leaves membership unknown", async (t) => {
+  installCloudCapture(t, { member_count: 1 });
+  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
+  await assert.rejects(WorkspacesService.getPeopleCounts("ws-1"));
+});

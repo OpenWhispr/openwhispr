@@ -29,25 +29,16 @@ export function hasActiveWorkspaceSubscription(
   return PAID_PLANS.has(workspace.plan) && ENTITLED_STATUSES.has(workspace.status);
 }
 
-/**
- * Whether Plans & Billing shows a workspace's card. Every account has a default
- * workspace, so an unpaid one nobody else is in would put a Business checkout
- * above the personal plan with nothing to bill. A lapsed plan keeps its card so
- * the owner can fix it; an unknown seat count keeps it too.
- */
-export function showsWorkspaceBillingCard(
-  workspace: Pick<
-    Workspace,
-    "plan" | "is_account_default" | "seats_used" | "has_subscription" | "stripe_subscription_id"
-  >
-): boolean {
-  const soloUnpaidDefault =
-    workspace.is_account_default === true &&
+/** Only the owner's free default can be solo. A billable seat count alone cannot prove it. */
+export function mayBeSoloBillingWorkspace(workspace: Workspace): boolean {
+  return (
+    workspace.is_default === true &&
+    workspaceCan(workspace, "manage_billing") &&
     workspace.plan === "free" &&
     !hasSubscription(workspace) &&
     typeof workspace.seats_used === "number" &&
-    workspace.seats_used <= 1;
-  return !soloUnpaidDefault;
+    workspace.seats_used <= 1
+  );
 }
 
 /**

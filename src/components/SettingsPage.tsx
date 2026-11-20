@@ -172,12 +172,15 @@ import WorkspaceDeveloperSection from "./settings/WorkspaceDeveloperSection";
 import type { SettingsSectionType } from "../lib/settingsNav";
 import {
   businessDowngradeAction,
+  mayBeSoloBillingWorkspace,
   enterpriseManageAction,
   enterpriseTileCta,
   entitledWorkspacePlans,
   type EnterpriseTileCta,
 } from "../lib/workspaceBilling";
 import { WorkspacePlanActionButton } from "./settings/WorkspacePlanActionButton";
+import { useSoloBillingWorkspace } from "../hooks/useSoloBillingWorkspace";
+import { WorkspaceBusinessCheckoutButton } from "./workspace/WorkspaceBusinessCheckoutButton";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
@@ -1856,6 +1859,17 @@ export default function SettingsPage({
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
   const { isSignedIn, isLoaded, user, refetch, isOfflineAccount } = useAuth();
+  const soloCandidate =
+    activeSection === "plansBilling" && isSignedIn && !isOfflineAccount && billingWorkspacesLoaded
+      ? billingWorkspaces.find(mayBeSoloBillingWorkspace)
+      : undefined;
+  const soloStatus = useSoloBillingWorkspace(soloCandidate);
+  const soloBusinessWorkspace =
+    (soloStatus === "solo" || soloStatus === "unavailable") &&
+    (!activeWorkspaceId || soloCandidate?.id === activeWorkspaceId)
+      ? soloCandidate
+      : undefined;
+
   const {
     canToggleSync: canToggleInsightsSync,
     disableInsightsSync,
@@ -2368,7 +2382,15 @@ export default function SettingsPage({
           </div>
         );
 
-      case "plansBilling":
+      case "plansBilling": {
+        const workspaceOverview = isSignedIn && (
+          <WorkspaceBillingOverview
+            hiddenWorkspaceId={
+              soloStatus === "checking" || soloStatus === "solo" ? soloCandidate?.id : undefined
+            }
+            onRefreshEntitlement={usage?.refetch}
+          />
+        );
         return (
           <div className="space-y-5">
             {!AUTH_URL ? (
@@ -2390,7 +2412,7 @@ export default function SettingsPage({
               </>
             ) : isLoaded ? (
               <>
-                {isSignedIn && <WorkspaceBillingOverview onRefreshEntitlement={usage?.refetch} />}
+                {soloStatus !== "unavailable" && workspaceOverview}
                 {isSignedIn ? (
                   <div className="space-y-5">
                     <SectionHeader title={t("settingsPage.unifiedBilling.personalPlanTitle")} />
@@ -2625,6 +2647,9 @@ export default function SettingsPage({
                     )}
                   </div>
                 ) : null}
+
+                {/* An unconfirmed default keeps its card below the personal Pro upgrade. */}
+                {soloStatus === "unavailable" && workspaceOverview}
 
                 <div className="space-y-5">
                   <SectionHeader title={t("settingsPage.account.pricing.title")} />
@@ -2895,11 +2920,39 @@ export default function SettingsPage({
                             <span className="block text-[9px] font-medium text-primary">
                               {t("settingsPage.account.pricing.yourWorkspacePlan")}
                             </span>
-                          ) : !businessAction ? (
+                          ) : !businessAction && !soloBusinessWorkspace ? (
                             <span className="block text-[9px] font-medium text-muted-foreground">
                               {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
                             </span>
                           ) : null}
+                          {soloBusinessWorkspace && (
+                            <>
+                              <span
+                                dir="auto"
+                                className="block truncate text-[9px] text-muted-foreground"
+                              >
+                                {soloBusinessWorkspace.name}
+                              </span>
+                              <WorkspaceBusinessCheckoutButton
+                                key={soloBusinessWorkspace.id}
+                                workspaceId={soloBusinessWorkspace.id}
+                                interval={billingState.business ? "annual" : "monthly"}
+                                className="w-full h-6 inline-flex items-center justify-center gap-1 rounded-md bg-primary text-[10px] font-medium text-primary-foreground disabled:opacity-50"
+                              />
+                            </>
+                          )}
+                          {soloBusinessWorkspace && businessAction?.kind === "stripePortal" && (
+                            <span
+                              dir="auto"
+                              className="block truncate text-[9px] text-muted-foreground"
+                            >
+                              {
+                                billingWorkspaces.find(
+                                  (workspace) => workspace.id === businessAction.workspaceId
+                                )?.name
+                              }
+                            </span>
+                          )}
                           {businessAction && (
                             <WorkspacePlanActionButton
                               action={businessAction}
@@ -3155,6 +3208,7 @@ export default function SettingsPage({
             )}
           </div>
         );
+      }
 
       case "workspaceGeneral":
         return <WorkspaceGeneralSection onNavigateToSection={onNavigateToSection} />;

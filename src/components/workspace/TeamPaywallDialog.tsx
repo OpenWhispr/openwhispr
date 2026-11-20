@@ -1,15 +1,14 @@
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useEffect, useRef, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Users } from "../icons";
+import { Users } from "../icons";
 import { cn } from "../lib/utils";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./dialogButtons";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
-import { useToast } from "../ui/useToast";
-import { useBillingRefreshOnReturn } from "../../hooks/useBillingRefreshOnReturn";
+import { WorkspaceBusinessCheckoutButton } from "./WorkspaceBusinessCheckoutButton";
+import { useSoloBillingWorkspace } from "../../hooks/useSoloBillingWorkspace";
 import { hasValidatedAuthContext } from "../../lib/authRequestContext";
 import { teamCreationFor, workspaceCan } from "../../lib/capabilities";
-import { showsWorkspaceBillingCard } from "../../lib/workspaceBilling";
-import { WorkspacesService } from "../../services/WorkspacesService";
+import { mayBeSoloBillingWorkspace } from "../../lib/workspaceBilling";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { isolate } from "../../utils/bidiIsolate";
 import type { Workspace } from "../../types/electron";
@@ -39,18 +38,15 @@ export default function TeamPaywallDialog({
   onAvailable,
 }: TeamPaywallDialogProps): ReactElement {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const [startingCheckout, setStartingCheckout] = useState(false);
-  const refreshOnReturn = useBillingRefreshOnReturn(() => {
-    void useWorkspaceStore.getState().refresh({ fresh: true });
-  });
   const canUpgrade = workspaceCan(workspace, "manage_billing");
   const owner = workspace.billing_manager;
   const lapsed = TEAM_PLANS.has(workspace.plan);
   const blocked = teamCreationFor(workspace) !== "allowed";
-  // Plans & Billing hides an unpaid default workspace nobody else is in, so its owner buys
-  // Business for it from here: the personal Business plan there doesn't unlock teams.
-  const checkoutHere = !lapsed && !showsWorkspaceBillingCard(workspace);
+  const soloStatus = useSoloBillingWorkspace(
+    open && hasValidatedAuthContext() && mayBeSoloBillingWorkspace(workspace)
+      ? workspace
+      : undefined
+  );
 
   // The capability the paywall opened on may be stale (a plan changed on the web or another
   // device, or a webhook that landed late), so each opening reads the workspace again.
@@ -71,32 +67,7 @@ export default function TeamPaywallDialog({
     else if (sawBlocked.current) onAvailable?.();
   }, [open, blocked, onAvailable]);
 
-  const startCheckout = async (): Promise<void> => {
-    setStartingCheckout(true);
-    try {
-      const url = await WorkspacesService.billingCheckout(workspace.id, "monthly", {
-        tier: "business",
-      });
-      if (window.electronAPI?.openExternal) await window.electronAPI.openExternal(url);
-      else window.open(url, "_blank");
-      refreshOnReturn();
-      onOpenChange(false);
-    } catch (error) {
-      toast({
-        title: t("common.error"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
-      });
-    } finally {
-      setStartingCheckout(false);
-    }
-  };
-
   const handleUpgrade = (): void => {
-    if (checkoutHere) {
-      void startCheckout();
-      return;
-    }
     // A named section remounts Settings, so this also works from inside Settings.
     onOpenChange(false);
     void window.electronAPI?.openSettingsSection?.("plansBilling");
@@ -130,17 +101,24 @@ export default function TeamPaywallDialog({
         <div className="flex flex-col gap-2">
           {canUpgrade ? (
             <>
-              <button
-                type="button"
-                onClick={handleUpgrade}
-                disabled={startingCheckout}
-                className={cn(PRIMARY_BUTTON, "flex-none")}
-              >
-                {startingCheckout && (
-                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                )}
-                {t(lapsed ? `${COPY}.updateBilling` : `${COPY}.upgrade`)}
-              </button>
+              {open && soloStatus === "solo" ? (
+                <WorkspaceBusinessCheckoutButton
+                  key={workspace.id}
+                  workspaceId={workspace.id}
+                  interval="monthly"
+                  className={cn(PRIMARY_BUTTON, "flex-none")}
+                  onOpened={() => onOpenChange(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleUpgrade}
+                  disabled={soloStatus === "checking"}
+                  className={cn(PRIMARY_BUTTON, "flex-none")}
+                >
+                  {t(lapsed ? `${COPY}.updateBilling` : `${COPY}.upgrade`)}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
