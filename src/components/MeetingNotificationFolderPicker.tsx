@@ -3,8 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, Folder, Plus, Search, Users, X } from "./icons";
 import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
 import type { MeetingDestinationContext, MeetingError, MeetingFolderRef } from "../types/electron";
-
-const key = (name: string) => `meetingNotification.folders.${name}`;
+import { meetingAttendeeRefusalKey } from "../helpers/meetingAttendeePolicy.js";
 import { meetingFolderLabel, meetingLocationLabel } from "./meetingFolderLabel";
 import {
   DropdownMenu,
@@ -12,6 +11,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "./ui/dropdown-menu";
+
+const key = (name: string) => `meetingNotification.folders.${name}`;
 
 interface Props {
   context: MeetingDestinationContext | null;
@@ -173,7 +174,7 @@ export function MeetingNotificationFolderPicker({
     : "";
   const errorView = error && (
     <p role="alert" className="meeting-folder-error">
-      {t(key(`errors.${error}`))}
+      {t(meetingAttendeeRefusalKey(error) ?? key(`errors.${error}`))}
     </p>
   );
   return (

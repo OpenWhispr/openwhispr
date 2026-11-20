@@ -52,6 +52,7 @@ const {
   createEnterpriseIdentityManager,
   CONFIG_REFRESH_MS,
 } = require("./enterpriseIdentityManager");
+const { createMeetingRecordingAdmission } = require("./meetingRecordingAdmission");
 const { createEffectivePolicyManager } = require("./effectivePolicyManager");
 const { devicePolicyNetworkAllowed } = require("./devicePolicyNetwork");
 const {
@@ -1177,6 +1178,7 @@ class IPCHandlers {
   }
 
   _handleAuthTokenChange({ generation, token }) {
+    this._meetingAdmission?.cancelPending();
     this._cancelCalendarAuthorizations();
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
@@ -3794,6 +3796,7 @@ class IPCHandlers {
       // decides it when it lands. Leaving an account does end its work.
       const leftAccount =
         accountChanged && typeof this.databaseManager.activeAccountId === "string";
+      if (accountChanged) this._meetingAdmission?.cancelPending();
       if (accountChanged && !leftAccount && accountId !== null) {
         for (const operation of this._productRequests.values()) {
           if (operation.guestLocalDictation && operation.accountId === null)
@@ -8659,6 +8662,7 @@ class IPCHandlers {
         // Known restrictions still apply while the workspace decision is pending.
         if (snapshot.status !== "loading" || !snapshot.deviceReady || snapshot.policy)
           this._audioFeaturePolicy?.update(snapshot);
+        if (snapshot.success || snapshot.policy) this._meetingAdmission?.recheck();
         if (snapshot.workspaceRequired || snapshot.authGeneration === credentialsGeneration)
           this._localModelPolicy?.update(snapshot);
         // The updater would take a verdict still loading for a failed lookup.
@@ -8739,6 +8743,55 @@ class IPCHandlers {
       onChange: () => this._syncMeetingDetectorPolicy?.(),
       logger: debugLogger,
     });
+    this._meetingAdmission = createMeetingRecordingAdmission({
+      getPolicy: () => this._audioFeaturePolicy.activeMeetingPolicy(),
+      resolveFeature: () =>
+        this.managedMeetingPolicy.isMeetingRecordingDisabled()
+          ? { success: false, code: "POLICY_MEETING_RECORDING_DISABLED" }
+          : this._audioFeaturePolicy.resolve("meeting"),
+      getNote: (id) => this.databaseManager.getNote(id),
+      getEvent: (id) => this.databaseManager.getCalendarEventById(id),
+      generation: () => tokenStore.getState().generation,
+      confirmInternal: async (owner, signal) => {
+        const parent = BrowserWindow.fromWebContents(owner);
+        if (!parent || parent.isDestroyed() || signal.aborted) return false;
+        // A meeting hotkey leaves the panel behind the call; the question must be seen.
+        if (parent === this.windowManager.controlPanelWindow) this.windowManager.showControlPanel();
+        const { response } = await require("electron").dialog.showMessageBox(parent, {
+          type: "question",
+          message: i18nMain.t("notes.meeting.internalAttendeesQuestion"),
+          buttons: [
+            i18nMain.t("notes.meeting.internalAttendeesConfirm"),
+            i18nMain.t("common.cancel"),
+          ],
+          defaultId: 1,
+          cancelId: 1,
+          signal,
+        });
+        return response === 0;
+      },
+      onRevoked: ({ owner, sessionId }, code, active) => {
+        if (active) this._stopMeetingForPolicy(code, sessionId);
+        if (!owner?.isDestroyed?.()) {
+          try {
+            owner?.send?.("meeting-recording-admission-revoked", { sessionId, code });
+          } catch (error) {
+            debugLogger.warn("Meeting admission owner unavailable", { error: error.message });
+          }
+        }
+      },
+    });
+    this.databaseManager.onCalendarEventsUpdated = (noteId) =>
+      this._meetingAdmission.recheck(noteId);
+    ipcMain.handle("check-meeting-recording-start", (event, options) =>
+      this._meetingAdmission.prepare(event.sender, options)
+    );
+    ipcMain.on("release-meeting-recording-start", (event, sessionId) =>
+      this._meetingAdmission.release(event.sender, sessionId)
+    );
+
+    this.windowManager.getMeetingAttendeePolicy = () =>
+      this._audioFeaturePolicy.activeMeetingPolicy();
     this.windowManager.getMeetingRecordingRefusal = () =>
       this._audioFeaturePolicy.failure("meeting");
     this.windowManager.resolveMeetingRecordingRefusal = () =>
@@ -10657,6 +10710,9 @@ class IPCHandlers {
     const assertMeetingAllowed = () => {
       const denied = this._audioFeaturePolicy.activeFailure("meeting");
       if (denied) throw Object.assign(new Error(denied.error), { code: denied.code });
+      const attendeeRefusal = this._meetingAdmission?.activeRefusal();
+      if (attendeeRefusal)
+        throw Object.assign(new Error(attendeeRefusal), { code: attendeeRefusal });
       if (this._activeLocalMeetingLease)
         this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
     };
@@ -11416,6 +11472,7 @@ class IPCHandlers {
     };
 
     const transcribeLocalMeetingChunk = async (source) => {
+      if (this._meetingAdmission?.activeRefusal()) return;
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
       const lease = this._activeLocalMeetingLease;
@@ -11478,7 +11535,11 @@ class IPCHandlers {
           : transcribeChunk());
         // A decode that outlives a revocation must not deliver its text, as
         // the streaming path's uncommitted disconnect does not.
-        if (this._audioFeaturePolicy.activeFailure("meeting")) return;
+        if (
+          this._audioFeaturePolicy.activeFailure("meeting") ||
+          this._meetingAdmission?.activeRefusal()
+        )
+          return;
         assertMeetingAllowed();
 
         if (result?.success && result.text?.trim()) {
@@ -11607,7 +11668,7 @@ class IPCHandlers {
           error: error.message,
         });
         // The revocation that cut it off has already stopped the meeting, with its reason.
-        if (lease?.signal.aborted) return;
+        if (lease?.signal.aborted || this._meetingAdmission?.activeRefusal()) return;
         if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
           meetingLocalWin.webContents.send(
             "meeting-transcription-error",
@@ -12446,6 +12507,7 @@ class IPCHandlers {
     };
 
     const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
+      if (this._meetingAdmission?.activeRefusal()) return;
       const effective = this.effectivePolicyManager.getCurrent();
       if (
         this._audioFeaturePolicy.activeFailure("meeting") ||
@@ -12733,7 +12795,8 @@ class IPCHandlers {
       );
     });
 
-    this._stopMeetingForPolicy = (reason = "policyRestricted") => {
+    this._stopMeetingForPolicy = (reason = "policyRestricted", expectedSessionId) => {
+      if (expectedSessionId && policyMeetingStop?.sessionId !== expectedSessionId) return;
       const wasActive =
         meetingConnectionOptions ||
         meetingLocalMode ||
@@ -12751,9 +12814,11 @@ class IPCHandlers {
         clearInterval(meetingLocalTimer);
         meetingLocalTimer = null;
       }
-      if (wasActive) broadcastToWindows("meeting-transcription-error", reason);
+      // An attendee-policy stop has already been sent to the owning renderer by session ID.
+      if (wasActive && !expectedSessionId)
+        broadcastToWindows("meeting-transcription-error", reason);
       const stopped = meetingTranscriptionLifecycle.stopSession(
-        undefined,
+        expectedSessionId,
         reason === "accountChanged" || reason === "workspaceChanged" ? "account-change" : "policy"
       );
       // The renderer still needs this result after its capture cleanup to bind
@@ -12880,16 +12945,26 @@ class IPCHandlers {
         ownerWebContents,
         options: { transcriptionOptions, authGeneration },
       }) => {
+        const admission = this._meetingAdmission.start(ownerWebContents, {
+          ...transcriptionOptions,
+          sessionId,
+        });
+        if (!admission.success) return admission;
         policyMeetingStop = {
           sessionId,
           ownerWebContents,
           authGeneration,
           promise: null,
         };
-        const result = await startMeetingTranscription(
-          { sender: ownerWebContents },
-          { ...transcriptionOptions, sessionId }
-        );
+        let result;
+        try {
+          result = await startMeetingTranscription(
+            { sender: ownerWebContents },
+            { ...transcriptionOptions, sessionId }
+          );
+        } finally {
+          if (!result?.success) this._meetingAdmission.end(sessionId);
+        }
         if (result?.success)
           this.meetingAuditLog?.recordingStarted({
             sessionId,
@@ -12900,7 +12975,9 @@ class IPCHandlers {
       },
       stop: (sessionId, reason) => {
         this.meetingAuditLog?.recordingStopped({ sessionId, reason });
-        return stopMeetingTranscription(sessionId);
+        return stopMeetingTranscription(sessionId).finally(() =>
+          this._meetingAdmission.end(sessionId)
+        );
       },
       onError: (error, sessionId) => {
         debugLogger.error(
@@ -12923,6 +13000,17 @@ class IPCHandlers {
           typeof options.sessionId === "string" && options.sessionId.length > 0
             ? options.sessionId
             : crypto.randomUUID();
+        // A refused start must not replace the owner's current recording in the lifecycle queue.
+        if (
+          (this._audioFeaturePolicy.activeMeetingPolicy()?.externalAttendees ?? "allowed") !==
+          "allowed"
+        ) {
+          const admission = this._meetingAdmission.checkStart(event.sender, {
+            ...options,
+            sessionId,
+          });
+          if (!admission.success) return admission;
+        }
         return meetingTranscriptionLifecycle.startSession({
           sessionId,
           ownerWebContents: event.sender,
@@ -16049,14 +16137,18 @@ class IPCHandlers {
       this.meetingDetectionEngine?.closeMeetingNote(id);
     });
 
-    ipcMain.handle("join-calendar-meeting", async (_event, eventId) => {
+    ipcMain.handle("join-calendar-meeting", async (_event, eventId, notesOnly) => {
       try {
         // Sent from the open panel, which may have just opened the meeting
         // link: leave the meeting in front rather than pulling the panel back.
         const refusal = await this.meetingDetectionEngine.joinCalendarMeeting(
           eventId,
           "calendar-join",
-          { activate: false, startSource: "calendar-join" }
+          {
+            activate: false,
+            startSource: "calendar-join",
+            ...(notesOnly === true && { notesOnly: true }),
+          }
         );
         return refusal ?? { success: true };
       } catch (error) {

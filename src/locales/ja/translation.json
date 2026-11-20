@@ -4075,6 +4075,11 @@
         "title": "会議の音声が無音になりました",
         "description": "数分間、誰の声も検出されていません。通話が続いている場合は、音声出力デバイスを確認してください。"
       },
+      "externalAttendeesBlocked": "この会議には組織外の参加者がいます。組織のポリシーにより、この会議の文字起こしは許可されていません。",
+      "externalAttendeesUnverifiable": "OpenWhispr は招待者全員の所属を確認できませんでした。組織で文字起こしが許可されているのは内部会議のみです。",
+      "externalAttendeesStopped": "組織外の人が招待されているため、録音を停止しました。引き続きメモを取れます。",
+      "internalAttendeesQuestion": "この会議の参加者は全員、あなたの組織に所属していますか？",
+      "internalAttendeesConfirm": "はい、開始します",
       "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。",
       "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。",
       "stoppedPolicyUnresolved": "組織の設定を確認できなかったため、録音を停止しました。",
