@@ -101,7 +101,8 @@ export default function ToneSetupScreen() {
     setSaving(true);
     try {
       await saveToneStyle({ enabled: true, setUp: true, tones });
-      showToast(t('saved'));
+      // Setup closes back onto a tab, so the toast sits above the tab bar.
+      showToast(t('saved'), 'success', undefined, { aboveTabBar: true });
       close();
     } catch {
       showToast(t('saveFailed'), 'error');
