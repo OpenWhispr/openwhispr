@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
+import { useTitaniumAuth } from "../hooks/useTitaniumAuth";
+import { DEFAULT_STT, TITANIUM, TITANIUM_ENABLED } from "../config/forkRuntime";
+import { isTitaniumServiceUrl } from "../helpers/titanium/titaniumHosts";
+import { resolveSttEndpointNotice } from "../helpers/titanium/titaniumOnboardingPolicy.js";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
@@ -1204,8 +1208,25 @@ export default function TranscriptionModelPicker({
       refused: refused && !isCustom,
     });
   }, [check.phase, checkedFields, isCustom, refused, followKeyDraft]);
+  const titaniumAuth = useTitaniumAuth();
+  const sttNotice = isCustom
+    ? resolveSttEndpointNotice({
+        refused,
+        hasApiKey: Boolean(customKey.trim()),
+        isTitaniumEndpoint: isTitaniumServiceUrl(cloudTranscriptionBaseUrl, {
+          DEFAULT_STT,
+          TITANIUM,
+        }),
+        titaniumEnabled: TITANIUM_ENABLED,
+        titaniumSignedIn: titaniumAuth.signedIn,
+      })
+    : null;
   const customFailureReason =
-    !customKey.trim() && refused ? t("reasoning.custom.endpointUnauthorized") : undefined;
+    sttNotice === "titaniumSignIn"
+      ? t("transcription.titaniumSignIn.message")
+      : sttNotice === "unauthorized"
+        ? t("reasoning.custom.endpointUnauthorized")
+        : undefined;
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
@@ -1464,6 +1485,17 @@ export default function TranscriptionModelPicker({
                       spellCheck={false}
                     />
                   </div>
+
+                  {sttNotice === "titaniumSignIn" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void titaniumAuth.signIn()}
+                      disabled={titaniumAuth.pending}
+                    >
+                      {t("transcription.titaniumSignIn.action")}
+                    </Button>
+                  )}
 
                   {/azure\.com/i.test(cloudTranscriptionBaseUrl || "") && (
                     <p className="text-xs text-muted-foreground">{t("transcription.azureHint")}</p>

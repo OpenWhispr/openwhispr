@@ -920,6 +920,10 @@
     "tinfoil": {
       "transportNote": "Tinfoil использует Voxtral Mini 4B для потоковой обработки и Voxtral Small 24B для пакетной.",
       "docsLink": "Открыть документацию"
+    },
+    "titaniumSignIn": {
+      "message": "Войдите в Titanium, чтобы использовать облачную расшифровку {{brand}}.",
+      "action": "Войти через Titanium"
     }
   },
   "hooks": {

@@ -920,6 +920,10 @@
     "tinfoil": {
       "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
       "docsLink": "ドキュメントを見る"
+    },
+    "titaniumSignIn": {
+      "message": "Titanium にサインインして、{{brand}} のクラウド文字起こしを利用してください。",
+      "action": "Titanium でサインイン"
     }
   },
   "hooks": {

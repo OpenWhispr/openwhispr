@@ -4387,6 +4387,10 @@
     "tinfoil": {
       "transportNote": "يستخدم Tinfoil نموذج Voxtral Mini 4B للتفريغ المباشر (البث)، ونموذج Voxtral Small 24B للمعالجة الدفعية.",
       "docsLink": "قراءة الوثائق"
+    },
+    "titaniumSignIn": {
+      "message": "سجّل الدخول إلى Titanium لاستخدام النسخ السحابي في {{brand}}.",
+      "action": "تسجيل الدخول عبر Titanium"
     }
   },
   "cleanupPrompt": "التنظيف",

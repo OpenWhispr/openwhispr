@@ -920,6 +920,10 @@
     "tinfoil": {
       "transportNote": "Tinfoil diffuse avec Voxtral Mini 4B et traite les lots avec Voxtral Small 24B.",
       "docsLink": "Voir la documentation"
+    },
+    "titaniumSignIn": {
+      "message": "Connectez-vous à Titanium pour utiliser la transcription cloud de {{brand}}.",
+      "action": "Se connecter avec Titanium"
     }
   },
   "hooks": {

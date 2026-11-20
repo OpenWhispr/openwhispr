@@ -920,6 +920,10 @@
     "tinfoil": {
       "transportNote": "Tinfoil streams using Voxtral Mini 4B, and batches with Voxtral Small 24B.",
       "docsLink": "Read the docs"
+    },
+    "titaniumSignIn": {
+      "message": "Sign in to Titanium to use {{brand}} cloud transcription.",
+      "action": "Sign in with Titanium"
     }
   },
   "hooks": {
