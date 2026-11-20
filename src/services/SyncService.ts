@@ -263,9 +263,13 @@ function withSentParent(folder: FolderItem, parentFolderId: string | null): Fold
 // parent's: the server reads an explicit null as the default workspace, a
 // parent backed up before placement is unassigned there, and a placement other
 // than the parent's is refused (invalid_parent_folder). A team row keeps its
-// explicit null, which says it has no Private placement at all.
-function folderPushScope(scope: PushScopeFields, parentFolderId: string | null): PushScopeFields {
-  if (!parentFolderId || scope.space_id || !("private_workspace_id" in scope)) return scope;
+// explicit null, which says it has no Private placement at all. Under a parent
+// refused for good the subfolder names its own placement: a refused move leaves
+// the parent's server row in the area it was leaving, and the subfolder must be
+// refused there rather than inherit that area (settleInvalidParent).
+function folderPushScope({ scope, parentFolderId, parentRefused }: FolderPush): PushScopeFields {
+  if (!parentFolderId || parentRefused || scope.space_id || !("private_workspace_id" in scope))
+    return scope;
   const { private_workspace_id: _placement, ...inherited } = scope;
   return inherited;
 }
@@ -281,25 +285,81 @@ function folderRefusalFingerprint(folder: FolderItem): string {
   return JSON.stringify([folderPushFingerprint(folder), folder.parent_folder_id ?? null]);
 }
 
-// A subfolder whose last push went up top-level beside a parent refused for good
-// that still has no cloud row: sending it again would send what already landed.
-// The parent's cloud id, a refusal that ends or an edit of the subfolder (it no
-// longer matches its record) sends it again.
+// A folder whose last push landed everything but its parent
+// (FOLDER_NESTING_OWED_KEY), and what its nesting waits for.
+interface NestingOwed {
+  // folderPushFingerprint of what landed: an edit of the folder ends the record.
+  pushed: string;
+  // The parent's cloud row when the folder went up top-level beside it; unset
+  // when it had none.
+  parentCloudId?: string;
+}
+
+// A subfolder owed its nesting: sending it again would send what already landed
+// while what the nesting waits for still holds. A parent refused for good holds
+// it while it keeps the cloud row it had then, which the server wouldn't nest
+// under (a refused move left it in another scope), or still has none: a refusal
+// that ends, or a new cloud row, sends it again, and so does an edit of the
+// subfolder (it no longer matches its record).
 function nestingStillOwed(
   folder: FolderItem,
   {
     localToCloud,
     refusedFolderIds,
-    nestingOwedFolderIds,
-  }: Pick<LocalToCloudFolderMap, "localToCloud" | "refusedFolderIds" | "nestingOwedFolderIds">
+    nestingOwed,
+  }: Pick<LocalToCloudFolderMap, "localToCloud" | "refusedFolderIds" | "nestingOwed">
 ): boolean {
+  const owed = nestingOwed.get(folder.id);
+  if (!owed || folder.parent_folder_id == null || folder.left_team) return false;
   return (
-    folder.parent_folder_id != null &&
-    !folder.left_team &&
-    nestingOwedFolderIds.has(folder.id) &&
     refusedFolderIds.has(folder.parent_folder_id) &&
-    !localToCloud.has(folder.parent_folder_id)
+    localToCloud.get(folder.parent_folder_id) === owed.parentCloudId
   );
+}
+
+// A folder push and the parent it names, as the pass's folder map saw them.
+interface FolderPush {
+  folder: FolderItem;
+  scope: PushScopeFields;
+  // The parent's cloud id as sent: null sends the folder top-level.
+  parentFolderId: string | null;
+  // The parent is refused for good, so its server row may still be in the scope
+  // it was leaving.
+  parentRefused: boolean;
+  // The parent's cloud row, which a nesting owed waits on (NestingOwed).
+  parentCloudId?: string;
+}
+
+function folderPush(
+  folder: FolderItem,
+  scope: PushScopeFields,
+  parentFolderId: string | null,
+  {
+    localToCloud,
+    refusedFolderIds,
+  }: Pick<LocalToCloudFolderMap, "localToCloud" | "refusedFolderIds">
+): FolderPush {
+  const parentId = folder.parent_folder_id;
+  return {
+    folder,
+    scope,
+    parentFolderId,
+    parentRefused: parentId != null && refusedFolderIds.has(parentId),
+    parentCloudId: parentId == null ? undefined : localToCloud.get(parentId),
+  };
+}
+
+// A folder create's body, one row of a batch create too.
+function folderCreateInput(push: FolderPush): Parameters<typeof FoldersService.create>[0] {
+  const { folder, parentFolderId } = push;
+  return {
+    name: folder.name,
+    client_folder_id: folder.client_folder_id,
+    is_default: !!folder.is_default,
+    sort_order: folder.sort_order,
+    parent_folder_id: parentFolderId,
+    ...folderPushScope(push),
+  };
 }
 
 // A note keeps its cloud folder association in both personal and team scope.
@@ -379,7 +439,7 @@ interface LocalToCloudFolderMap {
   refusedFolderIds: Set<number>;
   // Pending folders whose last push landed everything but their parent, as the
   // row still stands (FOLDER_NESTING_OWED_KEY). They don't hold their notes back.
-  nestingOwedFolderIds: Set<number>;
+  nestingOwed: Map<number, NestingOwed>;
 }
 
 const PUSH_DEBOUNCE_MS = 2000;
@@ -1787,38 +1847,20 @@ export class SyncService {
     const parentFolderId = this.cloudParentFolderId(folder, folderMap);
     // The parent hasn't reached the cloud yet; a full pass pushes it first.
     if (parentFolderId === undefined) return;
+    const push = folderPush(folder, scope, parentFolderId, folderMap);
 
     if (folder.cloud_id) {
       if (nestingStillOwed(folder, folderMap)) return;
       try {
-        await FoldersService.update(
-          folder.cloud_id,
-          {
-            name: folder.name,
-            sort_order: folder.sort_order,
-            parent_folder_id: parentFolderId,
-            ...folderPushScope(scope, parentFolderId),
-          },
-          authGeneration
-        );
-        // Settle like the batch path: a delivered row left pending would both
+        // Settled like the batch path: a delivered row left pending would both
         // block its notes' pushes (blockedFolderIds) and re-PATCH stale state
-        // over a teammate's newer rename on the next pass. Guarded settle: a
-        // rename landing mid-flight stays pending so it still pushes (a blind
-        // settle would let the next pull's LWW revert it). A withheld parent
-        // keeps the row pending until it can be sent.
-        await window.electronAPI.markFolderSyncedIfUnchanged?.(
-          folder.id,
-          withSentParent(folder, parentFolderId),
-          folder.cloud_id,
-          authGeneration
-        );
-        this.recordFolderPushLanded(folder, parentFolderId);
+        // over a teammate's newer rename on the next pass.
+        await this.updateCloudFolder(push, authGeneration);
       } catch (err) {
         if (isFolderNameTakenError(err)) {
           this.recordFolderRefused(folder);
         } else if (isInvalidParentFolderError(err)) {
-          await this.unnestRefusedFolder(folder, authGeneration);
+          await this.settleInvalidParent(push, authGeneration);
         } else if (isPermissionDenialError(err)) {
           await this.handleDeniedFolderUpdate(folder, ctx);
           await this.restoreDeniedRows("folder");
@@ -1837,8 +1879,32 @@ export class SyncService {
         }
       }
     } else {
-      await this.pushFreshFolder(folder, scope, parentFolderId, ctx, authGeneration);
+      await this.pushFreshFolder(push, ctx, authGeneration);
     }
+  }
+
+  // PATCHes a linked folder and settles it guarded: a rename landing mid-flight
+  // stays pending so it still pushes (a blind settle would let the next pull's
+  // LWW revert it), and a withheld parent keeps the row pending until it can be sent.
+  private async updateCloudFolder(push: FolderPush, authGeneration: number): Promise<void> {
+    const { folder, parentFolderId } = push;
+    await FoldersService.update(
+      folder.cloud_id!,
+      {
+        name: folder.name,
+        sort_order: folder.sort_order,
+        parent_folder_id: parentFolderId,
+        ...folderPushScope(push),
+      },
+      authGeneration
+    );
+    await window.electronAPI.markFolderSyncedIfUnchanged?.(
+      folder.id,
+      withSentParent(folder, parentFolderId),
+      folder.cloud_id!,
+      authGeneration
+    );
+    this.recordFolderPushLanded(push);
   }
 
   // A parent travels as its cloud id: null for a top-level folder, undefined
@@ -1850,8 +1916,9 @@ export class SyncService {
   // alongside the move while the folder still has team subfolders there; the
   // row stays pending, so its nesting goes up on a later pass.
   // A parent the server refused for good (a name taken) waits for the user, so
-  // its subfolders stop waiting for it: they name its cloud row, still valid for
-  // nesting, or go up top-level while it has none, their nesting owed.
+  // its subfolders stop waiting for it: they name its cloud row from their own
+  // scope, which nests them if the row is there (a refused rename), or go up
+  // top-level while it has none or isn't (a refused move), their nesting owed.
   private cloudParentFolderId(
     folder: FolderItem,
     {
@@ -1870,15 +1937,15 @@ export class SyncService {
 
   // A folder push the server took: any refusal is over, and a folder sent
   // top-level while nested here owes its nesting alone.
-  private recordFolderPushLanded(folder: FolderItem, parentFolderId: string | null): void {
+  private recordFolderPushLanded({ folder, parentFolderId, parentCloudId }: FolderPush): void {
     const refused = this.readLocalRecord<string>(FOLDER_PUSH_REFUSED_KEY);
     if (String(folder.id) in refused) {
       delete refused[folder.id];
       this.writeLocalRecord(FOLDER_PUSH_REFUSED_KEY, refused);
     }
-    const owed = this.readLocalRecord<string>(FOLDER_NESTING_OWED_KEY);
+    const owed = this.readLocalRecord<NestingOwed>(FOLDER_NESTING_OWED_KEY);
     if (parentFolderId === null && folder.parent_folder_id != null) {
-      owed[folder.id] = folderPushFingerprint(folder);
+      owed[folder.id] = { pushed: folderPushFingerprint(folder), parentCloudId };
     } else if (!(String(folder.id) in owed)) {
       return;
     } else {
@@ -1898,6 +1965,27 @@ export class SyncService {
     this.dispatchFolderNameTaken(folder.name);
   }
 
+  // invalid_parent_folder. Beside a parent refused for good it says the
+  // parent's server row isn't in this folder's scope (a refused move left it in
+  // the scope it was leaving), not that the nesting is wrong: the folder goes up
+  // top-level in its own scope at once and stays nested here, its nesting owed
+  // until the parent lands. Under any other parent it un-nests.
+  private async settleInvalidParent(push: FolderPush, authGeneration: number): Promise<void> {
+    if (!push.parentRefused || push.parentFolderId === null) {
+      return this.unnestRefusedFolder(push.folder, authGeneration);
+    }
+    const topLevel = { ...push, parentFolderId: null };
+    try {
+      if (push.folder.cloud_id) await this.updateCloudFolder(topLevel, authGeneration);
+      else await this.createCloudFolder(topLevel, authGeneration);
+    } catch (err) {
+      if (isAuthContextError(err)) throw err;
+      if (isFolderNameTakenError(err)) this.recordFolderRefused(push.folder);
+      // It stays pending; the next push tries the parent again first.
+      else console.error("Folder push beside a refused parent failed:", err);
+    }
+  }
+
   // invalid_parent_folder: un-nest the folder here, which queues it again, so
   // the next push sends it top-level. The write is fenced to the sign-in that
   // pushed it, like the pass's other writes.
@@ -1914,29 +2002,15 @@ export class SyncService {
   // isolation fallback. On a same-name collision the API returns the WINNER's
   // existing row; adopt its identity (as the batch path does) so later pulls
   // of that row match this folder instead of inserting a colliding duplicate.
-  private async createCloudFolder(
-    folder: FolderItem,
-    scope: PushScopeFields,
-    parentFolderId: string | null,
-    authGeneration: number
-  ): Promise<void> {
-    const cloud = await FoldersService.create(
-      {
-        name: folder.name,
-        client_folder_id: folder.client_folder_id,
-        is_default: !!folder.is_default,
-        sort_order: folder.sort_order,
-        parent_folder_id: parentFolderId,
-        ...folderPushScope(scope, parentFolderId),
-      },
-      authGeneration
-    );
+  private async createCloudFolder(push: FolderPush, authGeneration: number): Promise<void> {
+    const { folder, parentFolderId } = push;
+    const cloud = await FoldersService.create(folderCreateInput(push), authGeneration);
     await this.acknowledgeCreatedFolder(
       withSentParent(folder, parentFolderId),
       cloud,
       authGeneration
     );
-    this.recordFolderPushLanded(folder, parentFolderId);
+    this.recordFolderPushLanded(push);
   }
 
   // Links a pushed folder to the cloud row its create returned. A Private
@@ -3498,11 +3572,7 @@ export class SyncService {
 
     const ctx = await this.buildSpaceContext();
     const folderMap = await this.buildLocalToCloudFolderMap(ctx);
-    const pushable: Array<{
-      folder: FolderItem;
-      scope: PushScopeFields;
-      parentFolderId: string | null;
-    }> = [];
+    const pushable: FolderPush[] = [];
     for (const folder of pending) {
       const scope = this.resolvePushScope("folder", folder, ctx);
       if (!scope) continue;
@@ -3515,34 +3585,17 @@ export class SyncService {
         waiting.add(folder.id);
         continue;
       }
-      pushable.push({ folder, scope, parentFolderId });
+      pushable.push(folderPush(folder, scope, parentFolderId, folderMap));
     }
 
     const migration = pushable.filter(({ folder }) => folder.cloud_id);
     const fresh = pushable.filter(({ folder }) => !folder.cloud_id);
 
     let denied = false;
-    for (const { folder, scope, parentFolderId } of migration) {
+    for (const push of migration) {
+      const { folder } = push;
       try {
-        await FoldersService.update(
-          folder.cloud_id!,
-          {
-            name: folder.name,
-            sort_order: folder.sort_order,
-            parent_folder_id: parentFolderId,
-            ...folderPushScope(scope, parentFolderId),
-          },
-          authGeneration
-        );
-        // Settle only if the row wasn't edited while the PATCH was in flight;
-        // a withheld parent keeps it pending until it can be sent.
-        await window.electronAPI.markFolderSyncedIfUnchanged?.(
-          folder.id,
-          withSentParent(folder, parentFolderId),
-          folder.cloud_id!,
-          authGeneration
-        );
-        this.recordFolderPushLanded(folder, parentFolderId);
+        await this.updateCloudFolder(push, authGeneration);
         this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
       } catch (err) {
         if (isAuthContextError(err)) throw err;
@@ -3552,7 +3605,7 @@ export class SyncService {
           this.recordFolderRefused(folder);
           this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
         } else if (isInvalidParentFolderError(err)) {
-          await this.unnestRefusedFolder(folder, authGeneration);
+          await this.settleInvalidParent(push, authGeneration);
         } else if (isPermissionDenialError(err)) {
           await this.handleDeniedFolderUpdate(folder, ctx);
           denied = true;
@@ -3573,14 +3626,7 @@ export class SyncService {
       const chunk = fresh.slice(start, start + BATCH_SIZE);
       try {
         const { created, refused = [] } = await FoldersService.batchCreate(
-          chunk.map(({ folder, scope, parentFolderId }) => ({
-            name: folder.name,
-            client_folder_id: folder.client_folder_id,
-            is_default: !!folder.is_default,
-            sort_order: folder.sort_order,
-            parent_folder_id: parentFolderId,
-            ...folderPushScope(scope, parentFolderId),
-          })),
+          chunk.map(folderCreateInput),
           authGeneration
         );
         // An unacknowledged row retains its local content and pending state.
@@ -3590,8 +3636,7 @@ export class SyncService {
           const entry = chunk.find(
             ({ folder }) => folder.client_folder_id === row.client_folder_id
           );
-          if (entry)
-            await this.settleRefusedFolderCreate(entry.folder, row.code, ctx, authGeneration);
+          if (entry) await this.settleRefusedFolderCreate(entry, row.code, ctx, authGeneration);
         }
         // created preserves the order of the rows the server accepted; the
         // cloud may return an existing folder with a different
@@ -3604,13 +3649,13 @@ export class SyncService {
           continue;
         }
         for (const [i, cloudFolder] of created.entries()) {
-          const { folder, parentFolderId } = accepted[i];
+          const push = accepted[i];
           await this.acknowledgeCreatedFolder(
-            withSentParent(folder, parentFolderId),
+            withSentParent(push.folder, push.parentFolderId),
             cloudFolder,
             authGeneration
           );
-          this.recordFolderPushLanded(folder, parentFolderId);
+          this.recordFolderPushLanded(push);
         }
       } catch (err) {
         if (isAuthContextError(err)) throw err;
@@ -3624,9 +3669,7 @@ export class SyncService {
           // response, and the server stops at the first one; create
           // individually so one rejected folder settles on its own without
           // stranding (or relocating) the rest.
-          for (const { folder, scope, parentFolderId } of chunk) {
-            await this.pushFreshFolder(folder, scope, parentFolderId, ctx, authGeneration);
-          }
+          for (const push of chunk) await this.pushFreshFolder(push, ctx, authGeneration);
         } else {
           console.error("Folder batch create failed:", err);
         }
@@ -3639,18 +3682,16 @@ export class SyncService {
   // row by forking it into Private, with a fresh identity; anything
   // else stays 'pending' for the next pass.
   private async pushFreshFolder(
-    folder: FolderItem,
-    scope: PushScopeFields,
-    parentFolderId: string | null,
+    push: FolderPush,
     ctx: SpaceSyncContext,
     authGeneration: number
   ): Promise<void> {
     try {
-      await this.createCloudFolder(folder, scope, parentFolderId, authGeneration);
+      await this.createCloudFolder(push, authGeneration);
     } catch (err) {
       if (isAuthContextError(err)) throw err;
       const code = err instanceof CloudApiError ? err.code : undefined;
-      if (!(await this.settleRefusedFolderCreate(folder, code, ctx, authGeneration))) {
+      if (!(await this.settleRefusedFolderCreate(push, code, ctx, authGeneration))) {
         console.error("Folder create sync failed:", err);
       }
     }
@@ -3660,18 +3701,20 @@ export class SyncService {
   // adopts no folder: a name taken elsewhere in the Private area (the server
   // never takes a same-named folder under another parent) waits for the user,
   // pending, while its subfolders and notes go on (recordFolderRefused); a
-  // parent it can't nest under un-nests it here; a space it may no longer
-  // write moves it to Private. False for any other refusal, left to retry.
+  // parent it can't nest under is settled by settleInvalidParent; a space it
+  // may no longer write moves it to Private. False for any other refusal, left
+  // to retry.
   private async settleRefusedFolderCreate(
-    folder: FolderItem,
+    push: FolderPush,
     code: string | undefined,
     ctx: SpaceSyncContext,
     authGeneration: number
   ): Promise<boolean> {
+    const { folder } = push;
     if (code === "folder_name_taken") {
       this.recordFolderRefused(folder);
     } else if (code === "invalid_parent_folder") {
-      await this.unnestRefusedFolder(folder, authGeneration);
+      await this.settleInvalidParent(push, authGeneration);
     } else if (isSpaceAccessErrorCode(code) || isPermissionDenialCode(code)) {
       await this.handleRevokedFolderPush(folder, ctx);
       this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
@@ -6370,15 +6413,17 @@ export class SyncService {
     const backup = this.canSync();
     const localToCloud = new Map(folders.filter((f) => f.cloud_id).map((f) => [f.id, f.cloud_id!]));
     const pending = folders.filter((f) => f.sync_status === "pending");
-    const refusedFolderIds = this.currentFolderRecords(
-      FOLDER_PUSH_REFUSED_KEY,
-      pending,
-      folderRefusalFingerprint
+    const refusedFolderIds = new Set(
+      this.currentFolderRecords<string>(
+        FOLDER_PUSH_REFUSED_KEY,
+        pending,
+        (f, refused) => refused === folderRefusalFingerprint(f)
+      ).keys()
     );
-    const nestingOwed = this.currentFolderRecords(
+    const nestingOwed = this.currentFolderRecords<NestingOwed>(
       FOLDER_NESTING_OWED_KEY,
       pending.filter((f) => f.cloud_id && f.parent_folder_id != null),
-      folderPushFingerprint
+      (f, owed) => owed.pushed === folderPushFingerprint(f)
     );
     const unpushed = new Set(
       pending.filter((f) => f.cloud_id && !nestingOwed.has(f.id)).map((f) => f.id)
@@ -6401,20 +6446,22 @@ export class SyncService {
       blockedFolderIds: new Set(blocked.map((f) => f.id)),
       waitingFolders: blocked.filter((f) => !f.cloud_id),
       refusedFolderIds,
-      nestingOwedFolderIds: nestingOwed,
+      nestingOwed,
     };
   }
 
-  // The folders a per-folder record still holds for, as the rows stand now. A
-  // record whose row is gone or changed is dropped.
-  private currentFolderRecords(
+  // The folders a per-folder record still holds for, as the rows stand now, with
+  // their entries. A record whose row is gone or changed is dropped.
+  private currentFolderRecords<T>(
     key: string,
     candidates: FolderItem[],
-    fingerprint: (folder: FolderItem) => string
-  ): Set<number> {
-    const record = this.readLocalRecord<string>(key);
-    const held = new Set(
-      candidates.filter((f) => record[f.id] === fingerprint(f)).map((f) => f.id)
+    holds: (folder: FolderItem, entry: T) => boolean
+  ): Map<number, T> {
+    const record = this.readLocalRecord<T>(key);
+    const held = new Map(
+      candidates
+        .filter((f) => record[f.id] != null && holds(f, record[f.id]))
+        .map((f) => [f.id, record[f.id]] as const)
     );
     const kept = Object.fromEntries(Object.entries(record).filter(([id]) => held.has(Number(id))));
     if (Object.keys(kept).length !== Object.keys(record).length) this.writeLocalRecord(key, kept);

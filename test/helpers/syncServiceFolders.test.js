@@ -1100,6 +1100,174 @@ test("a subfolder owed its nesting to a parent refused for good isn't sent again
   assert.equal(folderByClientId(db, quarter.client_folder_id).sync_status, "synced");
 });
 
+// Private folders placed per workspace, with the API's nesting rules: a Private
+// subfolder inherits its parent's placement or must name the same one, and a
+// parent must sit in the subfolder's scope.
+const PLACED_SUBFOLDERS = {
+  privateWorkspacePlacement: true,
+  subfolderPlacement: true,
+  subfolderScope: true,
+  folderPlacement: true,
+  defaultWorkspaceId: "workspace-default",
+};
+
+async function setupPlacedPersonal(t) {
+  const ctx = await setupPersonal(t, PLACED_SUBFOLDERS);
+  if (!ctx) return null;
+  ctx.db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-default",
+    defaultWorkspaceId: "workspace-default",
+  });
+  ctx.db.bindDefaultPrivateSpace("workspace-default");
+  return ctx;
+}
+
+const refuseFolderName = (cloud, cloudId) =>
+  cloud.failWith(
+    (call) => call.path.startsWith("/api/folders/update") && call.body?.id === cloudId,
+    { status: 409, code: "folder_name_taken", error: "Folder name already taken" }
+  );
+
+test("a subfolder whose parent's move into a teamspace is refused goes up there top-level, nested here, and nests once the parent lands", async (t) => {
+  const ctx = await setup(t, { subfolderScope: true });
+  if (!ctx) return;
+  const { db, cloud, team } = ctx;
+  browserLocalStorage.setItem(`syncCursors.privateBackup:${TEAM_ACCOUNT}`, "1");
+  const clients = db.createFolder("Clients").folder;
+  const acme = db.createFolder("Acme", null, clients.id).folder;
+  const plan = db.saveNote("Plan", "body", "personal", null, null, acme.id).note;
+  await (await newSyncService(t)).syncAll(true);
+  const clientsCloudId = folderByName(db, "Clients").cloud_id;
+  const acmeCloudId = folderByName(db, "Acme").cloud_id;
+  assert.equal(cloud.folder(acmeCloudId).parent_folder_id, clientsCloudId);
+
+  db.defaultWorkspaceId = TEAM_SPACE.workspace_id;
+  assert.equal(db.moveFolderToSpace(clients.id, team.id).success, true);
+  // A teammate's "Clients" this device hasn't pulled already sits in the teamspace.
+  refuseFolderName(cloud, clientsCloudId);
+  const acmeWrites = () =>
+    cloud.logFor("/api/folders/update").filter((c) => c.body?.id === acmeCloudId);
+
+  await (await newSyncService(t)).syncAll(true);
+  const sent = acmeWrites().length;
+  await (await newSyncService(t)).syncAll(true);
+
+  assert.equal(acmeWrites().length, sent, "a second pass sends it nothing");
+  const local = folderByName(db, "Acme");
+  assert.equal(local.space_id, team.id);
+  assert.equal(local.parent_folder_id, clients.id, "still nested here");
+  assert.equal(local.sync_status, "pending");
+  assert.equal(cloud.folder(clientsCloudId).space_id ?? null, null, "the parent's move is refused");
+  assert.equal(cloud.folder(acmeCloudId).space_id, TEAM_SPACE.id);
+  assert.equal(cloud.folder(acmeCloudId).parent_folder_id ?? null, null);
+  assert.equal(db.getNote(plan.id).sync_status, "synced", "its note doesn't wait");
+  assert.equal(cloud.note(db.getNote(plan.id).cloud_id).space_id, TEAM_SPACE.id);
+  assert.equal(cloud.note(db.getNote(plan.id).cloud_id).folder_id, acmeCloudId);
+
+  // An edit of the subfolder goes up in the teamspace, still nested here.
+  const service = await newSyncService(t);
+  db.renameFolder(acme.id, "Acme Corp");
+  await service.pushEntity("folder", acme.id);
+  assert.equal(cloud.folder(acmeCloudId).name, "Acme Corp");
+  assert.equal(cloud.folder(acmeCloudId).space_id, TEAM_SPACE.id);
+  assert.equal(folderByName(db, "Acme Corp").parent_folder_id, clients.id);
+  const edited = acmeWrites().length;
+  await service.syncAll(true);
+  assert.equal(acmeWrites().length, edited);
+
+  // The user renames the parent past the clash: it lands, and the nesting follows.
+  cloud.clearFailures();
+  db.renameFolder(clients.id, "Clients 2");
+  await (await newSyncService(t)).syncAll(true);
+  assert.equal(cloud.folder(clientsCloudId).space_id, TEAM_SPACE.id);
+  assert.equal(cloud.folder(acmeCloudId).parent_folder_id, clientsCloudId);
+  assert.equal(folderByName(db, "Acme Corp").parent_folder_id, clients.id);
+  assert.equal(folderByName(db, "Acme Corp").sync_status, "synced");
+  assert.equal(cloud.note(db.getNote(plan.id).cloud_id).folder_id, acmeCloudId);
+});
+
+test("a subfolder whose parent's move to another Private is refused goes up there top-level with its notes, nested here, and nests once the parent lands", async (t) => {
+  const ctx = await setupPlacedPersonal(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const home = db.getDefaultPrivateSpaceId();
+  const side = db.getPrivateSpaceId("workspace-side");
+  const clients = db.createFolder("Clients", home).folder;
+  const acme = db.createFolder("Acme", home, clients.id).folder;
+  const plan = db.saveNote("Plan", "body", "personal", null, null, acme.id, home).note;
+  await (await newSyncService(t)).syncAll(true);
+  const clientsCloudId = folderByName(db, "Clients").cloud_id;
+  const acmeCloudId = folderByName(db, "Acme").cloud_id;
+  const planCloudId = db.getNote(plan.id).cloud_id;
+  assert.equal(cloud.folder(acmeCloudId).parent_folder_id, clientsCloudId);
+  assert.equal(cloud.note(planCloudId).private_workspace_id, "workspace-default");
+
+  assert.equal(db.moveFolderToSpace(clients.id, side).success, true);
+  // The side workspace's Private already has a "Clients" on the server.
+  refuseFolderName(cloud, clientsCloudId);
+  const acmeWrites = () =>
+    cloud.logFor("/api/folders/update").filter((c) => c.body?.id === acmeCloudId);
+
+  await (await newSyncService(t)).syncAll(true);
+  const sent = acmeWrites().length;
+  await (await newSyncService(t)).syncAll(true);
+
+  assert.equal(acmeWrites().length, sent, "a second pass sends it nothing");
+  const local = folderByName(db, "Acme");
+  assert.equal(local.space_id, side, "the pull leaves it where the user put it");
+  assert.equal(local.parent_folder_id, clients.id, "still nested here");
+  assert.equal(local.sync_status, "pending");
+  assert.equal(cloud.folder(clientsCloudId).private_workspace_id, "workspace-default");
+  assert.equal(cloud.folder(acmeCloudId).private_workspace_id, "workspace-side");
+  assert.equal(cloud.folder(acmeCloudId).parent_folder_id ?? null, null);
+  const note = db.getNote(plan.id);
+  assert.equal(note.space_id, side);
+  assert.equal(note.folder_id, acme.id);
+  assert.equal(note.sync_status, "synced");
+  assert.equal(cloud.note(planCloudId).private_workspace_id, "workspace-side");
+  assert.equal(cloud.note(planCloudId).folder_id, acmeCloudId);
+
+  cloud.clearFailures();
+  db.renameFolder(clients.id, "Clients 2");
+  await (await newSyncService(t)).syncAll(true);
+  assert.equal(cloud.folder(clientsCloudId).private_workspace_id, "workspace-side");
+  assert.equal(cloud.folder(acmeCloudId).parent_folder_id, clientsCloudId);
+  assert.equal(cloud.folder(acmeCloudId).private_workspace_id, "workspace-side");
+  assert.equal(folderByName(db, "Acme").parent_folder_id, clients.id);
+  assert.equal(folderByName(db, "Acme").space_id, side);
+  assert.equal(folderByName(db, "Acme").sync_status, "synced");
+  assert.equal(db.getNote(plan.id).space_id, side);
+  assert.equal(cloud.note(planCloudId).private_workspace_id, "workspace-side");
+});
+
+for (const kind of ["private", "team"]) {
+  test(`a ${kind} subfolder nests under the cloud row of a parent whose rename alone is refused`, async (t) => {
+    const ctx =
+      kind === "team" ? await setup(t, { subfolderScope: true }) : await setupPlacedPersonal(t);
+    if (!ctx) return;
+    const { db, cloud } = ctx;
+    const spaceId = kind === "team" ? ctx.team.id : db.getDefaultPrivateSpaceId();
+    const clients = db.createFolder("Clients", spaceId).folder;
+    await (await newSyncService(t)).syncAll(true);
+    const clientsCloudId = folderByName(db, "Clients").cloud_id;
+    db.renameFolder(clients.id, "Clients 2");
+    refuseFolderName(cloud, clientsCloudId);
+    const acme = db.createFolder("Acme", spaceId, clients.id).folder;
+    const plan = db.saveNote("Plan", "body", "personal", null, null, acme.id, spaceId).note;
+
+    await (await newSyncService(t)).syncAll(true);
+    await (await newSyncService(t)).syncAll(true);
+
+    const local = folderByName(db, "Acme");
+    assert.equal(cloud.folder(local.cloud_id).parent_folder_id, clientsCloudId);
+    assert.equal(local.parent_folder_id, clients.id);
+    assert.equal(local.sync_status, "synced");
+    assert.equal(folderByName(db, "Clients 2").sync_status, "pending", "the rename waits");
+    assert.equal(cloud.note(db.getNote(plan.id).cloud_id).folder_id, local.cloud_id);
+    assert.equal(db.getNote(plan.id).sync_status, "synced");
+  });
+}
+
 const nameTakenNotices = () =>
   browserWindow.electronAPI.syncEvents.filter((event) => event.name === "folder-name-taken");
 

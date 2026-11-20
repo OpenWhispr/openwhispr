@@ -37,6 +37,17 @@
 // parent's, and one named (null being the default workspace) that isn't the
 // parent's answers 400 invalid_parent_folder. An unplaced parent counts as the
 // default only when the subfolder leaves the placement out.
+// `subfolderScope` models the rest of lib/folders-service.ts's nesting. A parent
+// must be a live top-level folder in the scope the write leaves the folder in (a
+// space folder under a folder of that space, a personal one under a personal
+// folder), other than the folder, which may be neither a default folder nor a
+// parent itself; anything else answers 400 invalid_parent_folder
+// (assertValidParent). A space change with no parent in the payload takes the
+// folder top-level (updateFolder), and leaves its subfolders that stay in
+// another space top-level there (unnestSubfolders). What a move does to notes
+// (relocate_private_folder_children, detachNotesLeftInPreviousSpace) isn't
+// modelled: the real API then refuses a note's next PATCH as
+// note_version_conflict on base_updated_at, which this fake's guards don't model.
 // `userId` models one account's note ownership and separates its cloud ids.
 // `adoptDefaultFolders` models the server returning an existing personal
 // default when another device creates the same name in the same workspace.
@@ -144,6 +155,7 @@ function createFakeCloud(config = {}) {
     adoptDefaultFolders: false,
     folderNamesPerParent: false,
     subfolderPlacement: false,
+    subfolderScope: false,
     revisionGuard: false,
     serverDate: false,
     ...config,
@@ -305,8 +317,46 @@ function createFakeCloud(config = {}) {
     return input;
   }
 
+  // As assertValidParent: `existing` is the row the write lands on, if any.
+  function assertValidParent(input, existing) {
+    if (!cfg.subfolderScope || !input.parent_folder_id) return;
+    const parent = folders.get(input.parent_folder_id);
+    const spaceId = "space_id" in input ? (input.space_id ?? null) : (existing?.space_id ?? null);
+    const isParent =
+      !!existing &&
+      [...folders.values()].some((row) => row.parent_folder_id === existing.id && !row.deleted_at);
+    if (
+      !parent ||
+      parent.deleted_at ||
+      parent.parent_folder_id ||
+      parent === existing ||
+      isParent ||
+      (existing ? existing.is_default : input.is_default) ||
+      (parent.space_id ?? null) !== spaceId
+    ) {
+      throw new HttpError(400, "Invalid parent folder", "invalid_parent_folder");
+    }
+  }
+
+  // A space change, given the folder's space before the write: with no parent in
+  // the payload the folder goes top-level, and subfolders left in another space
+  // go top-level there.
+  function afterFolderWrite(row, spaceBefore, input) {
+    const spaceId = row.space_id ?? null;
+    if (!cfg.subfolderScope || spaceBefore === spaceId) return;
+    if (!("parent_folder_id" in input)) row.parent_folder_id = null;
+    for (const child of folders.values()) {
+      if (child.parent_folder_id !== row.id || child.deleted_at) continue;
+      if ((child.space_id ?? null) === spaceId) continue;
+      child.parent_folder_id = null;
+      child.updated_at = bump(child);
+    }
+  }
+
   function createFolder(input) {
     input = placeSubfolder(input);
+    const existing = findByClientId(folderCollection, input.client_folder_id);
+    assertValidParent(input, existing);
     if (cfg.folderNamesPerParent && !input.space_id && "parent_folder_id" in input) {
       for (const row of folders.values()) {
         if (row.deleted_at || row.space_id || row.name !== input.name) continue;
@@ -327,7 +377,10 @@ function createFakeCloud(config = {}) {
           return row;
       }
     }
-    return upsertRow(folderCollection, input);
+    const spaceBefore = existing && (existing.space_id ?? null);
+    const row = upsertRow(folderCollection, input);
+    if (existing) afterFolderWrite(row, spaceBefore, input);
+    return row;
   }
 
   function findByClientId(collection, clientId) {
@@ -739,7 +792,12 @@ function createFakeCloud(config = {}) {
       case "PATCH /api/folders/update": {
         const { id, ...updates } = body ?? {};
         const row = requireLive(folderCollection, id);
-        return applyWrite(folderCollection, row, placeSubfolder(updates));
+        const input = placeSubfolder(updates);
+        assertValidParent(input, row);
+        const spaceBefore = row.space_id ?? null;
+        applyWrite(folderCollection, row, input);
+        afterFolderWrite(row, spaceBefore, input);
+        return row;
       }
       case "GET /api/me/spaces":
         if (spaces.size === 0 && !cfg.privateWorkspacePlacement)
