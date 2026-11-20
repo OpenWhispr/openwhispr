@@ -46,7 +46,7 @@
 ### Hosted features (FEAT)
 
 - [ ] **FEAT-01**: Agent web search works for signed-in users through our own endpoint (gated by license key)
-- [ ] **FEAT-02**: Slack and Linear OAuth relay hosted on our site; `SITE_URL` configured
+- [ ] **FEAT-02**: Slack and Linear OAuth relay hosted on our services host; relay base `SERVICES_URL` configured (`SITE_URL` stays the website base)
 - [ ] **FEAT-03**: Google and Microsoft calendar connect work in fork builds (our OAuth client ids supplied at build)
 - [ ] **FEAT-04**: Connector logins are keyed to the Titanium account (stable id, IDP-32) and connectors work when signed in on a paid plan
 - [ ] **FEAT-05**: Assistant capability messages tell users to sign in with Titanium (not OpenWhispr) and never offer an action the user can't take

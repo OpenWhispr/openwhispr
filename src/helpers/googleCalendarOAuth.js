@@ -1,5 +1,6 @@
 const { net } = require("electron");
 const { runOAuthLoopbackFlow, OAuthFlowError } = require("./oauthLoopbackFlow");
+const { calendarResultPage, defaultI18n } = require("./calendarOAuthResultPage");
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -7,8 +8,9 @@ const CALENDAR_SCOPE =
   "openid email https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.calendarlist.readonly";
 
 class GoogleCalendarOAuth {
-  constructor(databaseManager) {
+  constructor(databaseManager, { i18n } = {}) {
     this.databaseManager = databaseManager;
+    this.i18n = i18n;
   }
 
   getClientId() {
@@ -22,6 +24,7 @@ class GoogleCalendarOAuth {
   startOAuthFlow() {
     return runOAuthLoopbackFlow({
       errorParam: "gcal_error",
+      renderResultPage: ({ ok }) => calendarResultPage({ i18n: this.i18n || defaultI18n() }, ok),
       buildAuthUrl: (redirectUri, state, codeChallenge) => {
         const params = new URLSearchParams({
           client_id: this.getClientId(),

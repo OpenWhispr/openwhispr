@@ -1,5 +1,6 @@
 const { net } = require("electron");
 const { runOAuthLoopbackFlow, OAuthFlowError } = require("./oauthLoopbackFlow");
+const { calendarResultPage, defaultI18n } = require("./calendarOAuthResultPage");
 
 // The "common" tenant covers both work/school (M365) and personal
 // (outlook.com) accounts. Desktop apps are public clients: PKCE, no secret.
@@ -26,8 +27,9 @@ function tenantIdOf(tokenData) {
 }
 
 class MicrosoftCalendarOAuth {
-  constructor(databaseManager) {
+  constructor(databaseManager, { i18n } = {}) {
     this.databaseManager = databaseManager;
+    this.i18n = i18n;
     this._refreshInFlight = new Map();
   }
 
@@ -43,6 +45,7 @@ class MicrosoftCalendarOAuth {
     }
     return runOAuthLoopbackFlow({
       errorParam: "mcal_error",
+      renderResultPage: ({ ok }) => calendarResultPage({ i18n: this.i18n || defaultI18n() }, ok),
       buildAuthUrl: (redirectUri, state, codeChallenge) => {
         const params = new URLSearchParams({
           client_id: this.getClientId(),

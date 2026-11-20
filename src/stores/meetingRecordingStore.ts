@@ -3,6 +3,8 @@ import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { getMeetingStreamingTranscriptionProviders } from "../models/ModelRegistry";
 import { resolveMeetingTranscriptionOptions } from "../helpers/meetingTranscriptionRouting";
+import { isTitaniumServiceUrl } from "../helpers/titanium/titaniumHosts";
+import { DEFAULT_STT, TITANIUM } from "../config/forkRuntime";
 import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
 import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
@@ -162,6 +164,10 @@ const getMeetingTranscriptionOptions = () => {
   const state = getSettings();
   const resolved = selectResolvedMeetingTranscription(state);
   const language = getBaseLanguageCode(state.preferredLanguage);
+  // The endpoint Note Recording would use when it is our own server (Phase 5).
+  const selfHostedBaseUrl =
+    (resolved.transcriptionMode === "self-hosted" ? resolved.remoteTranscriptionUrl : "") ||
+    resolved.cloudTranscriptionBaseUrl;
 
   return resolveMeetingTranscriptionOptions({
     transcriptionMode: resolved.transcriptionMode,
@@ -177,6 +183,8 @@ const getMeetingTranscriptionOptions = () => {
     cortiEnvironment: state.cortiEnvironment,
     cortiTenant: state.cortiTenant,
     keyterms: (state.customDictionary ?? []).filter(Boolean),
+    selfHostedBaseUrl,
+    isTitaniumService: isTitaniumServiceUrl(selfHostedBaseUrl, { DEFAULT_STT, TITANIUM }),
   });
 };
 
@@ -1053,9 +1061,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         const needsSignIn =
           startResult?.code === "AUTH_EXPIRED" || startResult?.code === "AUTH_REQUIRED";
         reportMeetingError(
-          needsSignIn
-            ? "signInRequired"
-            : startResult?.error || "Failed to start meeting transcription",
+          startResult?.code === "TITANIUM_SIGN_IN_REQUIRED"
+            ? "titaniumSignInRequired"
+            : needsSignIn
+              ? "signInRequired"
+              : startResult?.error || "Failed to start meeting transcription",
           { isRecording: false, isTranscribing: false }
         );
         stopMediaStream(micResult);

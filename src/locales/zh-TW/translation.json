@@ -3220,6 +3220,7 @@
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
       "signInRequired": "筆記錄音需要登入，請先登入。",
+      "titaniumSignInRequired": "請登入 {{brand}} 以轉錄會議。",
       "signInExpired": "登入已過期，筆記錄音無法更新連線，可能會中斷。請在本次錄音結束後重新登入。",
       "systemAudioSilent": {
         "title": "尚未偵測到會議音訊",
@@ -5094,6 +5095,14 @@
     "permissionDenied": "已拒絕",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未請求"
+  },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "日曆已連接",
+      "connectedBody": "您可以關閉此分頁並返回 {{brand}}。",
+      "failedTitle": "日曆未連接",
+      "failedBody": "日曆連接未完成。請返回 {{brand}} 重試。"
+    }
   },
   "titaniumAccount": {
     "title": "Titanium 帳戶",

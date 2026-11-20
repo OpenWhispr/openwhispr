@@ -3272,6 +3272,7 @@
       "unsupportedProvider": "La grabación de notas no puede usar {{provider}} para transcripción en vivo. Abre Ajustes y elige Local o un proveedor de streaming.",
       "noProviderSelected": "No hay ningún proveedor seleccionado para la grabación de notas. Abre Ajustes y elige Local o un proveedor de streaming.",
       "signInRequired": "La grabación de notas requiere iniciar sesión. Por favor, inicia sesión.",
+      "titaniumSignInRequired": "Inicia sesión en {{brand}} para transcribir reuniones.",
       "signInExpired": "Tu sesión ha caducado, así que la grabación de notas no puede renovar su conexión y podría detenerse. Vuelve a iniciar sesión cuando termine esta grabación.",
       "systemAudioSilent": {
         "title": "Aún no se detecta el audio de la reunión",
@@ -5094,6 +5095,14 @@
     "permissionDenied": "Denegado",
     "permissionRestricted": "Restringido",
     "permissionNotDetermined": "No solicitado"
+  },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "El calendario está conectado",
+      "connectedBody": "Puedes cerrar esta pestaña y volver a {{brand}}.",
+      "failedTitle": "No se conectó el calendario",
+      "failedBody": "No se completó la conexión del calendario. Vuelve a {{brand}} para intentarlo de nuevo."
+    }
   },
   "titaniumAccount": {
     "title": "Cuenta Titanium",

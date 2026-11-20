@@ -678,3 +678,21 @@ test("with a callback path, only that path is a callback", async () => {
   await getLocal(`http://127.0.0.1:${port}/slack/callback?code=c8&state=${state}`);
   assert.deepEqual(await started.flow, { code: "c8" });
 });
+
+test("a calendar flow answers the browser with a local 200 page", async () => {
+  const { calendarResultPage } = require("../../src/helpers/calendarOAuthResultPage.js");
+  const i18n = { t: (key) => key };
+  const started = startFlow(async () => ({ success: true, email: "a@b.test" }), {
+    errorParam: "mcal_error",
+    renderResultPage: ({ ok }) => calendarResultPage({ i18n }, ok),
+  });
+  const redirectUri = await until(started.getRedirectUri);
+
+  const response = await getLocal(`${redirectUri}/?code=c9&state=${started.getState()}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.location, undefined);
+  assert.match(response.headers["content-type"], /text\/html/);
+  assert.ok(response.body.includes("calendarConnect.browser.connectedTitle"));
+  assert.deepEqual(await started.flow, { success: true, email: "a@b.test" });
+});

@@ -3220,6 +3220,7 @@
       "unsupportedProvider": "笔记录音无法使用 {{provider}} 进行实时转录。请打开设置，选择本地或支持流式传输的服务商。",
       "noProviderSelected": "尚未为笔记录音选择服务商。请打开设置，选择本地或支持流式传输的服务商。",
       "signInRequired": "笔记录音需要登录，请先登录。",
+      "titaniumSignInRequired": "请登录 {{brand}} 以转录会议。",
       "signInExpired": "登录已过期，笔记录音无法更新连接，可能会中断。请在本次录音结束后重新登录。",
       "systemAudioSilent": {
         "title": "尚未检测到会议音频",
@@ -5094,6 +5095,14 @@
     "permissionDenied": "已拒绝",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未请求"
+  },
+  "calendarConnect": {
+    "browser": {
+      "connectedTitle": "日历已连接",
+      "connectedBody": "您可以关闭此标签页并返回 {{brand}}。",
+      "failedTitle": "日历未连接",
+      "failedBody": "日历连接未完成。请返回 {{brand}} 重试。"
+    }
   },
   "titaniumAccount": {
     "title": "Titanium 账户",
