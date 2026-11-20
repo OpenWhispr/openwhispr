@@ -223,6 +223,30 @@ test("a token rotation for the same account keeps the editor and its save", asyn
   ]);
 });
 
+test("a variable chip inserts its placeholder at the caret and is saved as typed", async (t) => {
+  const { container, main } = await renderSnippets(t);
+  const form = await openEditor(container);
+  const textarea = byTag(form, "TEXTAREA");
+  // The minimal DOM has no selection API; a real textarea keeps these itself.
+  textarea.setSelectionRange = (start, end) => {
+    textarea.selectionStart = start;
+    textarea.selectionEnd = end;
+  };
+  textarea.setSelectionRange("A's".length, "A's".length);
+
+  await click(
+    findElement(form, (node) => node.tagName === "BUTTON" && node.textContent === "{{date}}")
+  );
+  await flush();
+  assert.equal(textarea.selectionStart, "A's{{date}}".length, "the caret follows the placeholder");
+  await React.act(async () => form.dispatchEvent(domEvent("submit")));
+  await flush();
+
+  assert.deepEqual(main.snippetSaves, [
+    ["account-a", [{ trigger: "addr", replacement: "A's{{date}} new address" }]],
+  ]);
+});
+
 test("a dictionary change opened under a replaced owner is refused by the store", async (t) => {
   const { main, settings, store } = await renderSnippets(t);
   const openedAs = settings.getListsOwnerRevision();

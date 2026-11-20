@@ -44,12 +44,61 @@ function buildMatcher(snippets: Snippet[]): SnippetMatcher | null {
   return { regex, replacements };
 }
 
+export interface SnippetVariableContext {
+  now?: Date;
+  /** BCP 47 locale; the device's when omitted. */
+  locale?: string;
+}
+
+// Same variables as desktop. Mobile's UI is English-only, so the device locale
+// decides the format, as it does for every other date the app shows.
+function snippetVariableValues(now: Date, locale: string | undefined): Map<string, string> {
+  const dateParts = { year: 'numeric', month: '2-digit', day: '2-digit' } as const;
+  const timeParts = { hour: 'numeric', minute: '2-digit' } as const;
+  return new Map([
+    ['date', now.toLocaleDateString(locale, dateParts)],
+    ['time', now.toLocaleTimeString(locale, timeParts)],
+    ['datetime', now.toLocaleString(locale, { ...dateParts, ...timeParts })],
+    ['locale', locale ?? Intl.DateTimeFormat().resolvedOptions().locale],
+  ]);
+}
+
 /**
- * Replace every spoken trigger with its saved text in a single pass. The matcher
- * is memoized against the snippets array reference (stores replace the array on
- * every change), matching desktop's reference-equality memoization.
+ * Fill `{{date}}`, `{{time}}`, `{{datetime}}` and `{{locale}}` in a snippet's
+ * saved text. Any other `{{…}}` is left as typed, and, as on desktop, there is
+ * no escape for these four.
  */
-export function expandSnippets(text: string, snippets: Snippet[]): string {
+export function resolveSnippetVariables(
+  text: string,
+  { now = new Date(), locale }: SnippetVariableContext = {},
+): string {
+  if (!text.includes('{{')) return text;
+  let values: Map<string, string> | null | undefined;
+  return text.replace(/\{\{([A-Za-z][A-Za-z0-9_]*)\}\}/g, (placeholder, name: string) => {
+    if (values === undefined) {
+      // A runtime without full Intl must not cost the user their dictation:
+      // the placeholders then stay as typed.
+      try {
+        values = snippetVariableValues(now, locale);
+      } catch {
+        values = null;
+      }
+    }
+    return values?.get(name) ?? placeholder;
+  });
+}
+
+/**
+ * Replace every spoken trigger with its saved text in a single pass, filling
+ * variables in that saved text only (a dictated `{{date}}` stays as it is). The
+ * matcher is memoized against the snippets array reference (stores replace the
+ * array on every change), matching desktop's reference-equality memoization.
+ */
+export function expandSnippets(
+  text: string,
+  snippets: Snippet[],
+  context: SnippetVariableContext = {},
+): string {
   if (!text || snippets.length === 0) return text;
   if (snippets !== cachedSnippets) {
     cachedSnippets = snippets;
@@ -57,10 +106,14 @@ export function expandSnippets(text: string, snippets: Snippet[]): string {
   }
   if (!cachedMatcher) return text;
   const { regex, replacements } = cachedMatcher;
+  // One clock for every replacement, so two stamps in one dictation agree.
+  const variables = { ...context, now: context.now ?? new Date() };
   return text.replace(regex, (match, lead: string) => {
     const trigger = match.slice(lead.length).toLowerCase();
     const replacement = replacements.get(trigger);
-    return replacement === undefined ? match : lead + replacement;
+    return replacement === undefined
+      ? match
+      : lead + resolveSnippetVariables(replacement, variables);
   });
 }
 

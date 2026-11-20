@@ -4320,6 +4320,7 @@
       "triggerPlaceholder": "ex.: minha agenda",
       "replacementLabel": "Substituição",
       "replacementPlaceholder": "Texto a inserir quando você disser o gatilho…",
+      "variablesLabel": "Inserir",
       "create": "Criar snippet",
       "duplicate": "Já existe um snippet com esse gatilho",
       "emptyTitle": "O que você não deveria ter que dizer",
