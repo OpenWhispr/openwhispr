@@ -154,3 +154,21 @@ test("native Settings intent survives cold loading, wrong/stale readiness, reloa
   );
   assert.equal(restored, true, "native request also surfaces a minimized panel");
 });
+
+test("a Settings request made while the panel shows onboarding or sign-in is dropped", async () => {
+  const { WindowManager, sends } = loadWindowManager();
+  const manager = new WindowManager();
+  manager.loadWindowContent = async () => {};
+  await manager.openSettings("speechToText");
+  const contents = manager.controlPanelWindow.webContents;
+  const event = () => ({ sender: contents, senderFrame: contents.mainFrame });
+  manager.setSettingsBlocked(event(), true);
+  await manager.openSettings();
+  manager.setSettingsBlocked(event(), false);
+  manager.setSettingsHostReady(event(), "host", true, manager.getSettingsDocumentId(event()));
+  assert.deepEqual(
+    sends.filter(([channel]) => channel === "show-settings"),
+    [],
+    "neither the cold-start nor the onboarding request opens Settings once the host mounts"
+  );
+});

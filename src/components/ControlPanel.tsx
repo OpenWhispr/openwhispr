@@ -152,7 +152,6 @@ export default function ControlPanel({
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
   const openSettings = useStore(settingsNavigation, (state) => state.openSettings);
-  const settingsOpen = useStore(settingsNavigation, (state) => state.section !== null);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPostMigration, setShowPostMigration] = useState(false);
   const [postMigrationChecked, setPostMigrationChecked] = useState(platform !== "darwin");
@@ -1207,8 +1206,9 @@ export default function ControlPanel({
             isOverLimit={usage?.isOverLimit ?? false}
             isSignedIn={isSignedIn}
             upsell={upsell}
+            settingsNavigation={settingsNavigation}
             // The side-panel layout (a meeting, or a narrow window with a note open) has no room for it.
-            workspaceIntroAllowed={!settingsOpen && !isSidePanelLayout}
+            workspaceIntroAllowed={!isSidePanelLayout}
             updateAction={
               updateStatus.updateMode !== "it_managed" &&
               !updateStatus.isDevelopment &&

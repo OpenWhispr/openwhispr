@@ -85,6 +85,12 @@ const SystemUpdates = React.memo(function SystemUpdates({
     };
   }, [getAppVersion]);
 
+  // A stall raised before this section mounted belongs to an install the user
+  // started elsewhere and has moved on from; only one seen while mounted alerts.
+  useEffect(() => {
+    consumeInstallStall();
+  }, [consumeInstallStall]);
+
   useEffect(() => {
     if (!installStalled || !consumeInstallStall()) return;
     showAlertDialog({

@@ -60,12 +60,15 @@ test("a transient session refetch failure keeps the one-time secret", async (t) 
   const { dom, render } = await mountAuditDom(t);
   dom.happyDOM.setURL("https://desktop.openwhispr.test");
   dom.electronAPI.authGetTokenState = async () => ({ token: "fake-token", generation: 1 });
+  const created = deferred();
+  globalThis.__refetchCreate = created.promise;
+  t.after(() => delete globalThis.__refetchCreate);
   const vite = await createRendererServer(t, {
     noExternal: ["react-i18next", "@radix-ui/react-dialog"],
     mockModules: {
       "react-i18next": `export const useTranslation=()=>({t:key=>key});`,
       "/ui/useToast": `export const useToast=()=>({toast(){}});`,
-      "/services/WorkspaceApiKeysService": `export const WorkspaceApiKeysService={list:async()=>[],create:async()=>({id:"fake",key:"fake-test-only-shown-once",name:"draft"})};`,
+      "/services/WorkspaceApiKeysService": `export const WorkspaceApiKeysService={list:async()=>[],create:()=>globalThis.__refetchCreate};`,
     },
   });
   const auth = await vite.ssrLoadModule("/lib/authRequestContext.ts");
@@ -104,8 +107,11 @@ test("a transient session refetch failure keeps the one-time secret", async (t) 
       .querySelector("form")
       .dispatchEvent(new dom.Event("submit", { bubbles: true, cancelable: true }))
   );
-  assert.ok(dom.document.body.textContent.includes("fake-test-only-shown-once"));
   // A failed get-session refetch drops validation without changing the credential.
   await React.act(async () => auth.invalidateValidatedAuthContext());
+  await React.act(async () =>
+    created.resolve({ id: "fake", key: "fake-test-only-shown-once", name: "draft" })
+  );
   assert.ok(dom.document.body.textContent.includes("fake-test-only-shown-once"));
+  assert.ok(!dom.document.body.textContent.includes("common.saving"));
 });

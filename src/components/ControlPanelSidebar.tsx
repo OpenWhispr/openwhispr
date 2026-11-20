@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useStore } from "zustand";
 import { Gift, Lock, Settings, ShieldCheck, HelpCircle, X, Zap } from "./icons";
 import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
@@ -7,6 +8,7 @@ import SupportDropdown from "./ui/SupportDropdown";
 import { Button } from "./ui/button";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import type { UpsellDecision } from "../lib/upsell";
+import type { SettingsNavigationStore } from "../stores/settingsNavigationStore";
 import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
 
 export type { ControlPanelView };
@@ -29,7 +31,8 @@ interface ControlPanelSidebarProps {
   isSignedIn?: boolean;
   upsell: UpsellDecision;
   updateAction?: React.ReactNode;
-  /** False while another modal (Settings) is open, so the workspace intro waits. */
+  settingsNavigation: SettingsNavigationStore;
+  /** False when the layout has no room for it; the intro also waits while Settings is open. */
   workspaceIntroAllowed?: boolean;
 }
 
@@ -44,9 +47,12 @@ export default function ControlPanelSidebar({
   isSignedIn,
   upsell,
   updateAction,
+  settingsNavigation,
   workspaceIntroAllowed = false,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
+  // Subscribed here, not in ControlPanel, so opening Settings re-renders only the sidebar.
+  const settingsOpen = useStore(settingsNavigation, (state) => state.section !== null);
   const [upgradeDismissed, setUpgradeDismissed] = useState(
     () => localStorage.getItem("upgradeProDismissed") === "true"
   );
@@ -211,7 +217,7 @@ export default function ControlPanelSidebar({
         />
 
         <div className="pt-1">
-          <WorkspaceSwitcher introAllowed={workspaceIntroAllowed} />
+          <WorkspaceSwitcher introAllowed={workspaceIntroAllowed && !settingsOpen} />
         </div>
       </div>
     </div>

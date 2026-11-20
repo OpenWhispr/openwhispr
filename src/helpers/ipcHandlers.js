@@ -2466,8 +2466,9 @@ class IPCHandlers {
       this._onboardingDemoSession = null;
     };
 
-    ipcMain.handle("onboarding-set-active", (_event, active) => {
+    ipcMain.handle("onboarding-set-active", (event, active) => {
       if (typeof active !== "boolean") return false;
+      this.windowManager.setSettingsBlocked(event, active);
       const result = this.windowManager.setOnboardingActive(active);
       // The dictation panel can show the GPU pack notice only once the normal
       // app is up: until then it stays hidden.

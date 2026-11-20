@@ -10,9 +10,11 @@ export interface DialogCompletion {
   isAccountCurrent: () => boolean;
 }
 
+// A failed session refetch drops validation without changing the account, so
+// validation stays out of the binding: a pending create still lands its result.
 function accountBinding() {
   const s = getAuthRequestContextSnapshot();
-  return JSON.stringify([s.sessionUserId, s.observedGeneration, s.validatedGeneration]);
+  return JSON.stringify([s.sessionUserId, s.observedGeneration]);
 }
 
 /** Dialog-local completion expires on dismissal; completed writes still reconcile for their account. */
@@ -23,7 +25,7 @@ export function useDialogSession(open: boolean, owner = "") {
     getAuthRequestContextServerSnapshot
   );
   // A credential change resets the session; a failed session refetch at the same
-  // generation does not. capture() still checks the full account binding.
+  // generation does not. capture() still checks the account binding.
   const sessionKey = JSON.stringify([open, owner, auth.observedGeneration]);
   const session = useRef<object | null>(null);
   // The committed form owns the session. Ref replacement/cleanup also fences

@@ -73,6 +73,7 @@ class WindowManager {
     this.controlPanelWindow = null;
     this._settingsHost = null;
     this._pendingSettingsOpen = null;
+    this._settingsBlocked = false;
     this._settingsRequestId = 0;
     this._settingsDocumentId = 0;
     this._resizeMaskTokenCounter = 0;
@@ -1444,6 +1445,7 @@ class WindowManager {
       this.endOnboardingDemo();
       this.controlPanelWindow = null;
       this._settingsHost = null;
+      this._settingsBlocked = false;
       this._settingsDocumentId++;
       this._onboardingActive = true;
       this._hideNormalAppSurfaces();
@@ -1458,6 +1460,7 @@ class WindowManager {
     // Committed main-frame documents only: will-navigate can still block a started navigation.
     this.controlPanelWindow.webContents.on("did-navigate", () => {
       this._settingsHost = null;
+      this._settingsBlocked = false;
       this._settingsDocumentId++;
     });
 
@@ -2506,6 +2509,16 @@ class WindowManager {
     }
   }
 
+  // Onboarding and sign-in have no Settings host, so an open request made there
+  // is dropped instead of replayed once the normal app mounts one.
+  setSettingsBlocked(event, blocked) {
+    if (!this._isSettingsSender(event)) return;
+    this._settingsBlocked = blocked;
+    if (!blocked) return;
+    this._pendingSettingsOpen = null;
+    this._pendingSettingsSection = null;
+  }
+
   acknowledgeSettingsOpen(event, hostId, requestId) {
     if (
       !this._isSettingsSender(event) ||
@@ -2538,6 +2551,10 @@ class WindowManager {
   async openSettings(section) {
     // A document load is not React/auth/policy readiness. Keep the open intent
     // and any named section until the eligible host acknowledges them.
+    if (this._settingsBlocked) {
+      await this.createControlPanelWindow();
+      return;
+    }
     if (section) this._pendingSettingsSection = section;
     this._pendingSettingsOpen = ++this._settingsRequestId;
     await this.createControlPanelWindow();

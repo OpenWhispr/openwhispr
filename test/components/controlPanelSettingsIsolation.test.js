@@ -14,7 +14,7 @@ test("the production host and ControlPanel isolate 150 History rows, and retry p
     raw_text: raw,
     timestamp: "2026-10-27T12:00:00Z",
   }));
-  const seen = (globalThis.__controlPanelIsolation = { renders: 0, toasts: [] });
+  const seen = (globalThis.__controlPanelIsolation = { renders: 0, panelRenders: 0, toasts: [] });
   t.after(() => delete globalThis.__controlPanelIsolation);
   let warning;
   let output = `${clean}\n\n${clean}`;
@@ -68,7 +68,7 @@ test("the production host and ControlPanel isolate 150 History rows, and retry p
       "/GpuAccelerationBanner": `export const GpuAccelerationBanner = () => null;`,
       "/ui/useToast": `const toast = value => globalThis.__controlPanelIsolation.toasts.push(value); export const useToast = () => ({toast});`,
       "/utils/logger": `export default {warn() {}, info() {}, debug() {}, error() {}, logReasoning() {}};`,
-      "/ControlPanelSidebar": `import React from "react"; export default ({onOpenSettings}) => React.createElement("button", {onClick: onOpenSettings}, "settings");`,
+      "/ControlPanelSidebar": `import React from "react"; export default ({onOpenSettings}) => {globalThis.__controlPanelIsolation.panelRenders++; return React.createElement("button", {onClick: onOpenSettings}, "settings");};`,
       "/ControlPanelTopBar": empty,
       "/SettingsModal": `export default () => null;`,
       "/ui/TranscriptionItem": `import React from "react"; export default props => {globalThis.__controlPanelIsolation.renders++; return React.createElement("button", {"data-row": props.item.id, onClick: () => {globalThis.__controlPanelIsolation.pending = props.onRetryTranscription(props.item.id);}}, props.item.text);};`,
@@ -94,14 +94,22 @@ test("the production host and ControlPanel isolate 150 History rows, and retry p
   );
   assert.equal(container.querySelectorAll("[data-row]").length, 150);
   const before = seen.renders;
+  const panelRenders = seen.panelRenders;
   await React.act(async () =>
     [...container.querySelectorAll("button")]
       .find((button) => button.textContent === "settings")
       .click()
   );
+  assert.equal(seen.panelRenders, panelRenders, "opening Settings does not render ControlPanel");
   await React.act(async () => store.getState().setPreferredLanguage("fr"));
   await React.act(async () => navigation.getState().openSettings("noteFormatting"));
+  const panelRendersBeforeClose = seen.panelRenders;
   await React.act(async () => navigation.getState().setSettingsOpen(false));
+  assert.equal(
+    seen.panelRenders,
+    panelRendersBeforeClose,
+    "closing Settings does not render ControlPanel"
+  );
   assert.equal(
     seen.renders,
     before,

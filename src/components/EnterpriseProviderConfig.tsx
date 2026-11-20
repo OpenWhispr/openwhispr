@@ -1,5 +1,5 @@
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Loader2, Search } from "./icons";
@@ -159,6 +159,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
   });
   const [catalogVisited, setCatalogVisited] = useState(false);
   const catalogRequestRef = useRef(0);
+  const reloadCatalogRef = useRef(false);
   const accountId = usePolicyStore((s) => s.accountId);
   const authGeneration = usePolicyStore((s) => s.authGeneration);
 
@@ -233,7 +234,17 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
     store.setBedrockRegion(region);
     const adjusted = adjustBedrockModelForRegion(reasoningModel, region);
     if (adjusted !== reasoningModel) setReasoningModel(adjusted);
+    reloadCatalogRef.current = catalog.status !== "idle";
   };
+
+  // Picking a region reloads a catalog the user already asked for. It runs once
+  // the new region's render commits, since its catalog lease only exists then.
+  useEffect(() => {
+    if (!reloadCatalogRef.current) return;
+    reloadCatalogRef.current = false;
+    void loadCatalog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configuration]);
 
   const getTestConfig = () => ({
     ...getConnectionConfig(),

@@ -255,4 +255,23 @@ test("System update owner mounts on first visit and retains live state and insta
   await render(true);
   // Reopen must not replay a consumed stall alert.
   assert.equal(calls.alerts.length, 1, "a consumed stall alert does not replay on reopen");
+
+  await React.act(async () => onDownloaded(null, { version: "2.0" }));
+  let stall;
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    if (delay !== 10000) return realSetTimeout(callback, delay, ...args);
+    stall = callback;
+    return 0;
+  };
+  try {
+    await React.act(async () => globalThis.__systemInstallButton());
+    await React.act(async () => confirmed.onConfirm());
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+  await React.act(async () => root.unmount());
+  stall();
+  root = createRoot(container);
+  await render(true);
+  assert.equal(calls.alerts.length, 1, "a stall raised while System was closed does not alert");
 });

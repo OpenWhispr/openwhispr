@@ -70,6 +70,15 @@ test("retained Bedrock catalogs invalidate on shared effective configuration and
   assert.doesNotMatch(container.textContent, /obsolete-us/);
   await finish(1, "current-eu");
   assert.match(container.textContent, /current-eu/);
+  await React.act(async () => {
+    const select = container.querySelector("select");
+    select.value = "us-west-2";
+    select.dispatchEvent(new dom.Event("change", { bubbles: true }));
+  });
+  assert.equal(reads.length, 3, "picking a region reloads the loaded catalog");
+  assert.equal(reads.at(-1).config.bedrockRegion, "us-west-2");
+  await finish(2, "current-us-west");
+  assert.match(container.textContent, /current-us-west/);
   const leaf = () => globalThis.__bedrockOwned.leaves.at(-1);
   await React.act(async () => leaf().setDraft("retained query"));
   for (const patch of [
