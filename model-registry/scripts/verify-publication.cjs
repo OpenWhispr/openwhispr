@@ -16,7 +16,8 @@ try {
   // (the old repository, after the move) holds changes main lacks; the next publication
   // from main would silently undo them, so it stops here until they are brought to main.
   // Main as it is now: a re-run of an older run may meet a publication made after it.
-  execFileSync("git", ["fetch", "--quiet", "origin", "main"], { stdio: "ignore" });
+  // The full ref: a short name would take a tag called main over the branch.
+  execFileSync("git", ["fetch", "--quiet", "origin", "refs/heads/main"], { stdio: ["ignore", "ignore", "pipe"] });
   try {
     execFileSync("git", ["merge-base", "--is-ancestor", sourceCommit, "FETCH_HEAD"], { stdio: "ignore" });
   } catch {

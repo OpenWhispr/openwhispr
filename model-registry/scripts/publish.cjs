@@ -49,7 +49,8 @@ if (!/^[a-f0-9]{40}$/.test(sourceCommit))
   throw new Error("No commit has changed the registry; the checkout needs full history");
 const latestMain = () => {
   if (dryRun) return sourceCommit;
-  git(["fetch", "--quiet", "origin", "main"]);
+  // The full ref: a short name would take a tag called main over the branch.
+  git(["fetch", "--quiet", "origin", "refs/heads/main"]);
   return registryCommit("FETCH_HEAD");
 };
 // A stale normal run defers to the newer one; a rollback must never report success

@@ -92,7 +92,7 @@ test("a merge that puts back an earlier version is refused", () => {
   commit();
   // A fast-forward of the branch whose tree is version 1 again. Path-limited history
   // follows the parent it matches, so the deleted version 2 is never looked at.
-  const merge = git("commit-tree", `${first}^{tree}`, "-p", "HEAD", "-p", first, "-m", "x");
+  const merge = git("-c", "user.name=test", "-c", "user.email=test@example.com", "commit-tree", `${first}^{tree}`, "-p", "HEAD", "-p", first, "-m", "x");
   git("reset", "--quiet", "--hard", merge);
   assert.throws(() => readPublicationDir(directory, trusted), /merge commit/);
 });

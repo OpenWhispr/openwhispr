@@ -43,8 +43,8 @@ function assertReadersKept(testedClientContracts, previous, dropped = []) {
 function assertSigningKey(privateKey, keyId, trustedKeys) {
   try {
     verifyEnvelope(JSON.stringify(signEnvelope(Buffer.from("{}"), keyId, privateKey)), trustedKeys);
-  } catch {
-    throw new Error(`The signing key is not the private half of the pinned key ${keyId}`);
+  } catch (error) {
+    throw new Error(`The signing key is not the private half of the pinned key ${keyId}: ${error.message}`);
   }
 }
 
