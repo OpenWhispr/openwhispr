@@ -675,6 +675,16 @@ class ReasoningService extends BaseReasoningService {
       throw new Error("No reasoning model selected");
     }
 
+    // Read before inference, since settings can change while a slow model runs.
+    // OpenWhispr Cloud writes its prompt on the server.
+    const cleanupInstructions =
+      validateCleanup && providerId !== "openwhispr"
+        ? {
+            prompt: this.getSystemPrompt(agentName, dispatchConfig.toneStyle),
+            dictionary: this.getCustomDictionary(),
+          }
+        : undefined;
+
     logger.logReasoning("PROVIDER_SELECTION", {
       provider: providerId,
       model: trimmedModel,
@@ -704,7 +714,7 @@ class ReasoningService extends BaseReasoningService {
       });
       assertStillAllowed();
       if (isRequestCancelled(requestId)) throw requestCancelledError();
-      if (validateCleanup) assertValidCleanupOutput(text, result);
+      if (validateCleanup) assertValidCleanupOutput(text, result, cleanupInstructions);
 
       logger.logReasoning("PROVIDER_SUCCESS", {
         provider: providerId,
