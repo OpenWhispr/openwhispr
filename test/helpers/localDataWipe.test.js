@@ -804,10 +804,13 @@ test(
     mirrorWrote(userData, vault, "Personal/1-a.md", mirrored(1));
     const note = path.join(vault, "Personal", "1-a.md");
     const calls = path.join(root, "process-lookups.log");
+    // A Mac's disk ignores case, so IT may type the folder in another one.
+    const typed =
+      process.platform === "darwin" ? path.join(userData, "LOGS", "Audit") : auditLogPath;
     const run = macosScript({
       pgrep: `echo "$*" >> "${calls}"\nexit 1`,
       // AuditLogPath deployed device-wide.
-      defaults: `[ "$2" = "/Library/Managed Preferences/com.gizmolabs.openwhispr" ] && [ "$3" = AuditLogPath ] && echo "${auditLogPath}" && exit 0\nexit 1`,
+      defaults: `[ "$2" = "/Library/Managed Preferences/com.gizmolabs.openwhispr" ] && [ "$3" = AuditLogPath ] && echo "${typed}" && exit 0\nexit 1`,
     });
     const wipeLines = () =>
       fs

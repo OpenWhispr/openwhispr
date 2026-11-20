@@ -274,9 +274,10 @@ for home in "${homes[@]}"; do
   user_data="$home/Library/Application Support/OpenWhispr"
   audit_dir="$(configured_audit_dir "$user")"
   # An AuditLogPath inside the data folder stays, with the folders on its way.
+  # /bin/pwd spells them as the disk does, however AuditLogPath is typed.
   audit_keep=""
-  if data_real="$(cd -P "$user_data" 2>/dev/null && pwd)" &&
-    audit_real="$(cd -P "$audit_dir" 2>/dev/null && pwd)" &&
+  if data_real="$(cd -P "$user_data" 2>/dev/null && /bin/pwd -P)" &&
+    audit_real="$(cd -P "$audit_dir" 2>/dev/null && /bin/pwd -P)" &&
     [[ "$audit_real" == "$data_real"/* ]]; then
     audit_keep="${audit_real#"$data_real"/}"
   fi

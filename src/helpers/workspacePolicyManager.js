@@ -399,10 +399,8 @@ function createWorkspacePolicyManager({
         // still managed by another workspace; read before this verdict replaces
         // the one that named the removing workspace. The newest removal may be
         // from a workspace that never managed this device, so every listed one
-        // is checked (an older API sends only the newest).
-        const removals = Array.isArray(data.workspaceRemovals)
-          ? data.workspaceRemovals
-          : [data.workspaceRemoval];
+        // is checked.
+        const removals = Array.isArray(data.workspaceRemovals) ? data.workspaceRemovals : [];
         for (const removal of removals) reportRemoval(identity, removal);
         return acceptSuccessfulResponse(identity, data, "network");
       } finally {

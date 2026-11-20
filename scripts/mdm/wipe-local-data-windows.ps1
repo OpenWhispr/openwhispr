@@ -137,7 +137,8 @@ $someoneSignedIn = @($signedIn | Where-Object { $profileSids.Values -contains $_
 # (meetingAuditLog.js): one line in their daily file, in AuditLogPath or else
 # the audit folder the wipe keeps. A daily file that is a link is refused, and
 # AuditLogPath, which other users may write in, is used only while no one is
-# signed in, as with the shared folders below.
+# signed in, as with the shared folders below, and only when it already exists
+# with no junction or link on its way.
 function Write-WipeRecord([string]$Sid, [string]$UserData, [string]$ProfilePath, [bool]$Incomplete) {
   $user = try {
     ([Security.Principal.SecurityIdentifier]$Sid).Translate([Security.Principal.NTAccount]).Value.Split("\")[-1]
@@ -154,6 +155,7 @@ function Write-WipeRecord([string]$Sid, [string]$UserData, [string]$ProfilePath,
   $dirs = @(if ($auditLogPath -and -not $someoneSignedIn) { $auditLogPath }) + $default
   foreach ($dir in $dirs) {
     try {
+      if ($dir -ne $default -and -not (Test-RealFolder $dir ([IO.Path]::GetPathRoot($dir)))) { continue }
       if ($dir -eq $default -and -not (Test-RealFolder $UserData $ProfilePath)) { continue }
       $null = [IO.Directory]::CreateDirectory($dir)
       if ($dir -eq $default -and -not (Test-RealFolder $dir $ProfilePath)) { continue }

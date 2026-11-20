@@ -1390,6 +1390,8 @@ test("nothing is held for an identity that never fetched a policy", () => {
 
 // #3030: a removal from the workspace that managed this device wipes it.
 const removal = { workspaceId: "workspace-1", removedAt: "2026-11-12T10:00:00.000Z" };
+// What the API sends: the newest removal, and every one.
+const removedFrom = { workspaceRemoval: removal, workspaceRemovals: [removal] };
 const unmanagedWith = (extra) =>
   response(200, { data: { managed: false, policy: null, policyUpdatedAt: null, ...extra } });
 const managedBy =
@@ -1430,11 +1432,11 @@ test("a device the workspace managed hears its removal, signed in or not", async
         ...removal,
       }),
     // Directory deprovisioning kept it signed in.
-    () => unmanagedWith({ workspaceRemoval: removal }),
+    () => unmanagedWith(removedFrom),
     // ...while another workspace still manages them.
     () =>
       response(200, {
-        data: { ...validPolicy().data, managedBy: ["workspace-2"], workspaceRemoval: removal },
+        data: { ...validPolicy().data, managedBy: ["workspace-2"], ...removedFrom },
       }),
   ]) {
     const context = removalSetup([managedBy("workspace-1", "workspace-2"), removed]);
@@ -1462,10 +1464,7 @@ test("the revoked session's own verdict still hears its removal without an accou
 
 // Account labels can lag a new bearer: B's removal must not read A's verdict.
 test("another account's removal, under a label still naming the last account, wipes nothing", async (t) => {
-  const context = removalSetup([
-    managedBy("workspace-1"),
-    () => unmanagedWith({ workspaceRemoval: removal }),
-  ]);
+  const context = removalSetup([managedBy("workspace-1"), () => unmanagedWith(removedFrom)]);
   t.after(context.cleanup);
   await context.lookup();
   context.tokenState.token = "token-b";
@@ -1477,7 +1476,7 @@ test("another account's removal, under a label still naming the last account, wi
 test("a removal never reaches a device the workspace didn't manage, nor an ordinary 401", async (t) => {
   for (const responses of [
     // A sign-in on another device: this one never saw the account managed.
-    [() => unmanagedWith({ workspaceRemoval: removal })],
+    [() => unmanagedWith(removedFrom)],
     [managedBy("workspace-1"), () => response(401, { error: "Invalid session" })],
     [
       managedBy("workspace-1"),
@@ -1485,9 +1484,9 @@ test("a removal never reaches a device the workspace didn't manage, nor an ordin
     ],
     [managedBy("workspace-1"), () => unmanagedWith({})],
     // Managed by another workspace: an old removal from this one changes nothing.
-    [managedBy("workspace-2"), () => unmanagedWith({ workspaceRemoval: removal })],
+    [managedBy("workspace-2"), () => unmanagedWith(removedFrom)],
     // A verdict cached before managedBy existed names no workspace.
-    [() => response(200, validPolicy()), () => unmanagedWith({ workspaceRemoval: removal })],
+    [() => response(200, validPolicy()), () => unmanagedWith(removedFrom)],
   ]) {
     const context = removalSetup(responses);
     t.after(context.cleanup);
@@ -1531,7 +1530,7 @@ test("a removal behind a newer one from a workspace that never managed the devic
 test("a removal the app couldn't record is heard again at the next lookup", async (t) => {
   let recording = false;
   const context = removalSetup(
-    [managedBy("workspace-1"), () => unmanagedWith({ workspaceRemoval: removal })],
+    [managedBy("workspace-1"), () => unmanagedWith(removedFrom)],
     () => recording
   );
   t.after(context.cleanup);

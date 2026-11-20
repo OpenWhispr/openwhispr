@@ -12,6 +12,8 @@ const PRODUCT_EVENTS_FILE = "product-events.json";
 const WIPE_STATE_FILE = "local-data-wipe.json";
 // A stalled network AuditLogPath mustn't keep the fresh install from opening.
 const AUDIT_FLUSH_WAIT_MS = 5000;
+const auditWait = () =>
+  new Promise((resolve) => setTimeout(resolve, AUDIT_FLUSH_WAIT_MS, null).unref());
 
 const USER_DATA_ENTRIES = [
   ...sqliteFiles("transcriptions.db"),
@@ -177,8 +179,9 @@ async function removeLocalData({
   keepMirrorRecord = false,
 }) {
   const errors = [];
+  // One that stalls is a network folder, so none the wipe removes holds it.
   const keep = path.isAbsolute(auditLogPath ?? "")
-    ? await fs.promises.realpath(auditLogPath).catch(() => null)
+    ? await Promise.race([fs.promises.realpath(auditLogPath).catch(() => null), auditWait()])
     : null;
   const remove = async (name, target) => {
     try {
@@ -388,10 +391,7 @@ async function wipeLocalDataOnLaunch({
     logger.error("Could not record the local data wipe", { error: error.message });
     return false;
   }
-  await Promise.race([
-    audit.flush(),
-    new Promise((resolve) => setTimeout(resolve, AUDIT_FLUSH_WAIT_MS).unref()),
-  ]);
+  await Promise.race([audit.flush(), auditWait()]);
   return true;
 }
 
