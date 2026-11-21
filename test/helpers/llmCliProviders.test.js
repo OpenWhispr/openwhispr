@@ -292,3 +292,192 @@ test("every row lists requiredFlags and testedVersion", () => {
   }
   assert.strictEqual(mod.getProvider("claude").tokenEnvVar, "CLAUDE_CODE_OAUTH_TOKEN");
 });
+
+// ---- Task 3: state machine, gates, scopes, installer and sign-in specs ----
+
+test("reducer transition table", () => {
+  const r = mod.reduceSeatState;
+  const s0 = mod.initialSeatState();
+  assert.strictEqual(r({ status: "installed" }, { type: "NOT_FOUND" }).status, "missing");
+  assert.strictEqual(
+    r(s0, { type: "DETECTED", version: "1.0.0", path: "p", missingFlags: ["--x"] }).status,
+    "outdated"
+  );
+  const installed = r(s0, { type: "DETECTED", version: "1.0.0", path: "p", missingFlags: [] });
+  assert.strictEqual(installed.status, "installed");
+  assert.strictEqual(r(installed, { type: "AUTH", result: "signed-out" }).status, "signed-out");
+  assert.strictEqual(r(s0, { type: "AUTH", result: "signed-in" }).status, "missing");
+  assert.strictEqual(r(s0, { type: "INSTALL_START" }).status, "installing");
+  assert.strictEqual(r({ status: "installing" }, { type: "INSTALL_DONE", version: "2.0.0" }).status, "installed");
+  const failed = r({ status: "installing" }, { type: "INSTALL_FAIL", code: "signature-invalid" });
+  assert.deepStrictEqual([failed.status, failed.errorCode], ["error", "signature-invalid"]);
+  const signing = r({ status: "signed-out" }, { type: "SIGNIN_START" });
+  assert.strictEqual(signing.status, "signing-in");
+  assert.strictEqual(r(signing, { type: "SIGNIN_DONE" }).status, "signed-in");
+  const sf = r(signing, { type: "SIGNIN_FAIL", code: "timeout" });
+  assert.deepStrictEqual([sf.status, sf.errorCode], ["signed-out", "timeout"]);
+  assert.strictEqual(r({ status: "signed-in" }, { type: "SIGNOUT_DONE" }).status, "signed-out");
+  assert.strictEqual(
+    r({ status: "signed-in" }, { type: "RUN_ERROR", code: "not-signed-in" }).status,
+    "signed-out"
+  );
+  const kept = r({ status: "signed-in" }, { type: "RUN_ERROR", code: "timeout" });
+  assert.strictEqual(kept.status, "signed-in");
+  assert.strictEqual(kept.lastError, "timeout");
+  const unchanged = { status: "signed-in" };
+  assert.strictEqual(r(unchanged, { type: "NOPE" }), unchanged);
+  assert.strictEqual(r(unchanged, null), unchanged);
+});
+
+test("claude gate (D-04): only claude is gated", () => {
+  assert.strictEqual(mod.isSeatEnabled("claude", { claudeEnabled: false }), false);
+  assert.strictEqual(mod.isSeatEnabled("claude", {}), false);
+  assert.strictEqual(mod.isSeatEnabled("claude", { claudeEnabled: true }), true);
+  for (const seat of ["codex", "grok", "agy"]) {
+    assert.strictEqual(mod.isSeatEnabled(seat, { claudeEnabled: false }), true, seat);
+    assert.strictEqual(mod.isSeatEnabled(seat, { claudeEnabled: true }), true, seat);
+  }
+});
+
+test("scopes (D-03): CLI seats only for chat and dictation agent; enumerates INFERENCE_SCOPES", () => {
+  const { INFERENCE_SCOPES } = require("../../src/config/inferenceScopes.ts");
+  const keys = Object.keys(INFERENCE_SCOPES);
+  for (const allowed of mod.CLI_SCOPE_ALLOWLIST) assert.ok(keys.includes(allowed), allowed);
+  assert.deepStrictEqual([...mod.CLI_SCOPE_ALLOWLIST].sort(), ["chatIntelligence", "dictationAgent"]);
+  for (const key of keys) {
+    const ids = mod.cliProviderIdsForScope(key, { claudeEnabled: true });
+    if (mod.CLI_SCOPE_ALLOWLIST.includes(key)) {
+      assert.deepStrictEqual([...ids].sort(), ["cli-agy", "cli-claude", "cli-codex", "cli-grok"], key);
+    } else {
+      assert.deepStrictEqual(ids, [], key);
+    }
+  }
+  for (const key of ["dictationCleanup", "dictationAgentVision", "noteFormatting"]) {
+    assert.ok(keys.includes(key), key);
+    assert.deepStrictEqual(mod.cliProviderIdsForScope(key, { claudeEnabled: true }), []);
+  }
+  assert.ok(!mod.cliProviderIdsForScope("chatIntelligence", { claudeEnabled: false }).includes("cli-claude"));
+  assert.deepStrictEqual(mod.cliProviderIdsForScope("unknownFutureScope", { claudeEnabled: true }), []);
+});
+
+test("installSpec urls and publisher checks (D-02)", () => {
+  const c = mod.installSpec("claude", "win32");
+  assert.deepStrictEqual([c.kind, c.url, c.publisher, c.publisherCheck], [
+    "script",
+    "https://claude.ai/install.ps1",
+    "Anthropic, PBC",
+    "enforce",
+  ]);
+  assert.strictEqual(mod.installSpec("claude", "darwin").url, "https://claude.ai/install.sh");
+  assert.strictEqual(mod.installSpec("claude", "linux").url, "https://claude.ai/install.sh");
+  assert.strictEqual(mod.installSpec("codex", "win32").url, "https://chatgpt.com/codex/install.ps1");
+  assert.strictEqual(mod.installSpec("codex", "linux").url, "https://chatgpt.com/codex/install.sh");
+  assert.strictEqual(mod.installSpec("codex", "win32").publisherCheck, "report-only");
+  assert.strictEqual(mod.installSpec("agy", "win32").url, "https://antigravity.google/cli/install.ps1");
+  assert.strictEqual(mod.installSpec("agy", "darwin").url, "https://antigravity.google/cli/install.sh");
+  assert.strictEqual(mod.installSpec("agy", "darwin").publisherCheck, "report-only");
+  for (const platform of ["win32", "darwin", "linux"]) {
+    assert.deepStrictEqual(mod.installSpec("grok", platform), {
+      kind: "guided",
+      url: "https://docs.x.ai/build/cli/reference",
+    });
+    for (const seat of ["claude", "codex", "agy"]) {
+      const { url } = mod.installSpec(seat, platform);
+      const u = new URL(url);
+      assert.strictEqual(u.protocol, "https:");
+      assert.ok(["claude.ai", "chatgpt.com", "antigravity.google"].includes(u.hostname));
+      assert.strictEqual(u.port + u.username + u.password + u.search + u.hash, "");
+    }
+  }
+});
+
+test("isAllowedInstallUrl rejects off-list and decorated urls", () => {
+  assert.strictEqual(mod.isAllowedInstallUrl("https://claude.ai/install.sh"), true);
+  for (const bad of [
+    "http://claude.ai/install.sh",
+    "https://claude.ai:8443/install.sh",
+    "https://u@claude.ai/install.sh",
+    "https://claude.ai/install.sh?x=1",
+    "https://claude.ai.evil.example/install.sh",
+    "https://docs.x.ai/install.sh",
+    42,
+  ]) {
+    assert.strictEqual(mod.isAllowedInstallUrl(bad), false, String(bad));
+  }
+});
+
+test("installCommand is a fixed argv built from the table url", () => {
+  assert.deepStrictEqual(mod.installCommand("claude", "win32"), [
+    "powershell.exe",
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    "irm https://claude.ai/install.ps1 | iex",
+  ]);
+  assert.deepStrictEqual(mod.installCommand("codex", "linux"), [
+    "/bin/bash",
+    "-c",
+    "curl -fsSL https://chatgpt.com/codex/install.sh | bash",
+  ]);
+  assert.strictEqual(mod.installCommand("grok", "win32"), null);
+  assert.throws(() => mod.installCommand("nope", "win32"), /unknown seat/);
+});
+
+test("isAllowedSignInUrl exact-host allowlist (T-08-05)", () => {
+  assert.strictEqual(mod.isAllowedSignInUrl("claude", "https://claude.ai/oauth/authorize?code=true"), true);
+  assert.strictEqual(mod.isAllowedSignInUrl("claude", "https://claude.com/cai/oauth"), true);
+  assert.strictEqual(mod.isAllowedSignInUrl("codex", "https://auth.openai.com/codex/device"), true);
+  assert.strictEqual(mod.isAllowedSignInUrl("grok", "https://accounts.x.ai/device"), true);
+  assert.strictEqual(mod.isAllowedSignInUrl("codex", "https://claude.ai/x"), false);
+  for (const bad of [
+    "http://claude.ai/x",
+    "https://user@claude.ai/x",
+    "https://claude.ai:444/x",
+    "https://claude.ai.evil.example/x",
+    "https://evilclaude.ai/x",
+    "https://xn--lude-9qa.ai/x",
+    "https://clаude.ai/x",
+    "javascript:alert(1)",
+    "not a url",
+    null,
+    {},
+  ]) {
+    assert.strictEqual(mod.isAllowedSignInUrl("claude", bad), false, String(bad));
+  }
+  assert.strictEqual(mod.isAllowedSignInUrl("agy", "https://claude.ai/x"), false);
+});
+
+test("signInSpec and signOutSpec", () => {
+  assert.deepStrictEqual(mod.signInSpec("claude"), { kind: "pty-token", argv: ["setup-token"] });
+  assert.deepStrictEqual(mod.signInSpec("codex"), { kind: "device-auth", argv: ["login", "--device-auth"] });
+  assert.deepStrictEqual(mod.signInSpec("grok"), { kind: "device-auth", argv: ["login", "--device-auth"] });
+  assert.deepStrictEqual(mod.signInSpec("agy"), { kind: "terminal-guide" });
+  assert.strictEqual(mod.signOutSpec("claude").kind, "delete-stored-token");
+  assert.deepStrictEqual(mod.signOutSpec("grok").argv, ["logout"]);
+  assert.strictEqual(mod.signOutSpec("grok").verified, undefined);
+  assert.strictEqual(mod.signOutSpec("codex").verified, false);
+  assert.strictEqual(mod.signOutSpec("agy").kind, "guide");
+  assert.strictEqual(mod.signOutSpec("codex").affectsTerminalCli, true);
+  assert.strictEqual(mod.signOutSpec("grok").affectsTerminalCli, true);
+  assert.strictEqual(mod.signOutSpec("claude").affectsTerminalCli, false);
+  assert.strictEqual(mod.signOutSpec("agy").affectsTerminalCli, false);
+});
+
+test("TIMEOUTS and ERROR_CODES", () => {
+  for (const key of ["versionMs", "helpMs", "statusMs", "firstOutputMs", "idleMs", "totalMs", "installMs", "signInMs"]) {
+    assert.strictEqual(typeof mod.TIMEOUTS[key], "number", key);
+    assert.ok(mod.TIMEOUTS[key] > 0, key);
+  }
+  assert.strictEqual(mod.agyPrintTimeoutSeconds(120000), 115);
+  assert.strictEqual(mod.agyPrintTimeoutSeconds(mod.TIMEOUTS.totalMs), 115);
+  assert.ok(Object.isFrozen(mod.ERROR_CODES));
+  for (const code of [
+    "not-installed", "outdated", "not-signed-in", "api-key-login-refused", "timeout", "killed",
+    "quota-or-rate-limit", "exit-nonzero", "parse-failed", "claude-disabled", "busy", "invalid-input",
+    "signature-invalid", "install-failed", "quarantined-or-missing",
+  ]) {
+    assert.ok(mod.ERROR_CODES.includes(code), code);
+  }
+});

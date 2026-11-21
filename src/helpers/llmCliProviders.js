@@ -29,7 +29,6 @@ const STDIN_MARKER = "-";
 const AGY_PROMPT_MAX_CHARS = 24000;
 const PROMPT_MAX_CHARS = 200000;
 const MODEL_ID_REGEX = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
-const DEFAULT_AGY_PRINT_TIMEOUT_SECONDS = 115;
 
 // Known install locations per platform. `env` entries resolve against the
 // platform's home/app-data variable; `abs` entries are used verbatim.
@@ -358,7 +357,7 @@ function buildRunArgv(seat, opts = {}) {
       if (prompt.startsWith("-")) prompt = `Request:\n${prompt}`;
       const seconds = Number.isInteger(opts.printTimeoutSeconds)
         ? opts.printTimeoutSeconds
-        : DEFAULT_AGY_PRINT_TIMEOUT_SECONDS;
+        : agyPrintTimeoutSeconds(TIMEOUTS.totalMs);
       const argv = ["-p", prompt, "--output-format", "json", "--print-timeout", `${seconds}s`];
       if (model) argv.push("--model", model);
       return argv;
@@ -463,10 +462,204 @@ function reduceSeatState(state, event) {
         return prev;
       }
       return { ...prev, status: event.result === "signed-in" ? "signed-in" : "signed-out" };
+    case "INSTALL_START":
+      return { status: "installing" };
+    case "INSTALL_DONE":
+      return { status: "installed", version: event.version || null, path: event.path || null, missingFlags: [] };
+    case "INSTALL_FAIL":
+      return { status: "error", errorCode: event.code || "install-failed" };
+    case "SIGNIN_START":
+      return { ...prev, status: "signing-in" };
+    case "SIGNIN_DONE":
+      return { ...prev, status: "signed-in", errorCode: undefined };
+    case "SIGNIN_FAIL":
+      return { ...prev, status: "signed-out", errorCode: event.code || "not-signed-in" };
+    case "SIGNOUT_DONE":
+      return { ...prev, status: "signed-out" };
+    case "RUN_ERROR":
+      if (event.code === "not-signed-in") return { ...prev, status: "signed-out" };
+      return { ...prev, lastError: event.code || "exit-nonzero" };
     default:
       return prev;
   }
 }
+
+// ---- Gates and scopes (D-03, D-04) ----
+
+// Claude runs on the user's subscription at their own risk; it stays hidden
+// until the claude setting is switched on. The other seats are never gated.
+function isSeatEnabled(seat, prefs = {}) {
+  if (seat === "claude") return prefs.claudeEnabled === true;
+  return !!getProvider(seat);
+}
+
+// Allowlist, not a denylist: a future inference scope defaults to excluded.
+const CLI_SCOPE_ALLOWLIST = Object.freeze(["chatIntelligence", "dictationAgent"]);
+
+function cliProviderIdsForScope(scope, prefs = {}) {
+  if (!CLI_SCOPE_ALLOWLIST.includes(scope)) return [];
+  return LLM_CLI_PROVIDERS.filter((p) => isSeatEnabled(p.seat, prefs)).map((p) => p.id);
+}
+
+// ---- Install, sign-in, sign-out specs (D-02) ----
+
+const INSTALL_HOSTS = Object.freeze(["claude.ai", "chatgpt.com", "antigravity.google"]);
+const GROK_GUIDE_URL = "https://docs.x.ai/build/cli/reference";
+
+const INSTALL_SCRIPTS = Object.freeze({
+  claude: {
+    win32: "https://claude.ai/install.ps1",
+    posix: "https://claude.ai/install.sh",
+    publisher: "Anthropic, PBC",
+    publisherCheck: "enforce",
+  },
+  codex: {
+    win32: "https://chatgpt.com/codex/install.ps1",
+    posix: "https://chatgpt.com/codex/install.sh",
+    publisher: null,
+    publisherCheck: "report-only",
+  },
+  agy: {
+    win32: "https://antigravity.google/cli/install.ps1",
+    posix: "https://antigravity.google/cli/install.sh",
+    publisher: null,
+    publisherCheck: "report-only",
+  },
+});
+
+function parseHttpsUrl(url) {
+  if (typeof url !== "string" || url.length > 2048) return null;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:") return null;
+  if (parsed.username || parsed.password || parsed.port) return null;
+  return parsed;
+}
+
+function isAllowedInstallUrl(url) {
+  const parsed = parseHttpsUrl(url);
+  if (!parsed) return false;
+  if (parsed.search || parsed.hash) return false;
+  return INSTALL_HOSTS.includes(parsed.hostname);
+}
+
+function installSpec(seat, platform) {
+  requireProvider(seat);
+  if (seat === "grok") return { kind: "guided", url: GROK_GUIDE_URL };
+  const entry = INSTALL_SCRIPTS[seat];
+  const isWin = platform === "win32";
+  const url = isWin ? entry.win32 : entry.posix;
+  if (!isAllowedInstallUrl(url)) throw invalidInput("install url not allowed");
+  return {
+    kind: "script",
+    shell: isWin ? "powershell" : "bash",
+    url,
+    publisher: entry.publisher,
+    publisherCheck: entry.publisherCheck,
+  };
+}
+
+// Fixed argv for the hidden shell, built only from the table URL.
+function installCommand(seat, platform) {
+  const spec = installSpec(seat, platform);
+  if (spec.kind !== "script") return null;
+  if (spec.shell === "powershell") {
+    return [
+      "powershell.exe",
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      `irm ${spec.url} | iex`,
+    ];
+  }
+  return ["/bin/bash", "-c", `curl -fsSL ${spec.url} | bash`];
+}
+
+const SIGN_IN_HOSTS = Object.freeze({
+  claude: Object.freeze(["claude.ai", "claude.com"]),
+  codex: Object.freeze(["auth.openai.com"]),
+  grok: Object.freeze(["accounts.x.ai"]),
+  agy: Object.freeze([]),
+});
+
+// Exact-host match on the WHATWG-normalised hostname, so look-alike suffixes
+// and punycode (xn--) look-alikes both fail.
+function isAllowedSignInUrl(seat, url) {
+  const hosts = SIGN_IN_HOSTS[seat];
+  if (!hosts) return false;
+  const parsed = parseHttpsUrl(url);
+  if (!parsed) return false;
+  return hosts.includes(parsed.hostname);
+}
+
+function signInSpec(seat) {
+  requireProvider(seat);
+  switch (seat) {
+    case "claude":
+      return { kind: "pty-token", argv: ["setup-token"] };
+    case "codex":
+    case "grok":
+      return { kind: "device-auth", argv: ["login", "--device-auth"] };
+    default:
+      return { kind: "terminal-guide" };
+  }
+}
+
+function signOutSpec(seat) {
+  requireProvider(seat);
+  switch (seat) {
+    case "claude":
+      return { kind: "delete-stored-token", affectsTerminalCli: false };
+    case "grok":
+      return { kind: "cli", argv: ["logout"], affectsTerminalCli: true };
+    case "codex":
+      // 08-02 confirms with `codex logout --help` before wiring (R-06).
+      return { kind: "cli", argv: ["logout"], verified: false, affectsTerminalCli: true };
+    default:
+      return { kind: "guide", affectsTerminalCli: false };
+  }
+}
+
+// ---- Timeouts and error taxonomy (D-03) ----
+
+const TIMEOUTS = Object.freeze({
+  versionMs: 5000,
+  helpMs: 8000,
+  statusMs: 10000,
+  firstOutputMs: 30000,
+  idleMs: 30000,
+  totalMs: 120000,
+  installMs: 300000,
+  signInMs: 600000,
+});
+
+function agyPrintTimeoutSeconds(totalMs) {
+  return Math.max(1, Math.floor((totalMs - 5000) / 1000));
+}
+
+const ERROR_CODES = Object.freeze([
+  "not-installed",
+  "outdated",
+  "not-signed-in",
+  "api-key-login-refused",
+  "timeout",
+  "killed",
+  "quota-or-rate-limit",
+  "exit-nonzero",
+  "parse-failed",
+  "claude-disabled",
+  "busy",
+  "invalid-input",
+  "signature-invalid",
+  "install-failed",
+  "quarantined-or-missing",
+]);
 
 module.exports = Object.freeze({
   LLM_CLI_PROVIDERS,
@@ -486,4 +679,16 @@ module.exports = Object.freeze({
   redactSecrets,
   initialSeatState,
   reduceSeatState,
+  CLI_SCOPE_ALLOWLIST,
+  isSeatEnabled,
+  cliProviderIdsForScope,
+  isAllowedInstallUrl,
+  installSpec,
+  installCommand,
+  isAllowedSignInUrl,
+  signInSpec,
+  signOutSpec,
+  TIMEOUTS,
+  agyPrintTimeoutSeconds,
+  ERROR_CODES,
 });
