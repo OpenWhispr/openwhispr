@@ -90,6 +90,7 @@ import {
   canReuseCachedTranscriptionKey,
   customTranscriptionKeySource,
   shouldSkipTranscriptionApiKey,
+  transcriptionDestinationUrl,
 } from "./transcriptionAuth";
 import {
   isOrukeetStreaming,
@@ -2717,10 +2718,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const provider = s.cloudTranscriptionProvider || "openai";
 
     // Check cache (invalidate if provider changed)
-    const isTitaniumService = isTitaniumServiceUrl(s.cloudTranscriptionBaseUrl, {
-      DEFAULT_STT,
-      TITANIUM,
-    });
+    const destinationUrl = transcriptionDestinationUrl(s);
+    const isTitaniumService = isTitaniumServiceUrl(destinationUrl, { DEFAULT_STT, TITANIUM });
     if (
       this.cachedApiKey !== null &&
       this.cachedApiKeyProvider === provider &&
@@ -2768,9 +2767,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       ) {
         apiKey = "";
         try {
-          const titaniumKey = await window.electronAPI.getTitaniumServiceKey?.(
-            s.cloudTranscriptionBaseUrl || ""
-          );
+          const titaniumKey = await window.electronAPI.getTitaniumServiceKey?.(destinationUrl);
           if (titaniumKey) return titaniumKey;
         } catch {
           // Signed out or unavailable: fall through to an unauthenticated request.

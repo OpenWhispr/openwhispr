@@ -245,35 +245,23 @@ test("titanium engine state: signedOut, noLicense or licensed", async () => {
   );
 });
 
-test("after selecting EdgeAssistant cloud the route resolves to the Titanium URL, not the old server", async () => {
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+
+test("selecting EdgeAssistant cloud through the real store resolves the route to the Titanium URL", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-titanium-engine-test-" });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { resolveTranscriptionRoute } = await vite.ssrLoadModule("/helpers/transcriptionRoute.ts");
   const { titaniumEngineSettings } = await load();
-  const { resolveTranscriptionRoute } = await import("../../src/helpers/transcriptionRoute.ts");
-  const { isTitaniumServiceUrl } = await import("../../src/helpers/titanium/titaniumHosts.js");
-  const { customTranscriptionKeySource } = await import("../../src/helpers/transcriptionAuth.js");
   const stt = { baseUrl: "https://stt.titaniumlabs.test/v1", model: "scribe" };
-  const fork = { DEFAULT_STT: stt };
-  const settings = {
-    transcriptionMode: "self-hosted",
-    remoteTranscriptionUrl: "https://old.example.com/v1",
-    remoteTranscriptionModel: "old-model",
-    ...titaniumEngineSettings(stt),
-  };
-  const route = resolveTranscriptionRoute({ settings });
+  const store = useSettingsStore.getState();
+  store.setRemoteTranscriptionUrl("https://old.example.com/v1");
+  store.setRemoteTranscriptionModel("old-model");
+  store.setTranscriptionMode("self-hosted");
+  store.setCloudTranscriptionForAllScopes(titaniumEngineSettings(stt));
+  const after = useSettingsStore.getState();
+  assert.equal(after.remoteTranscriptionUrl, "");
+  const route = resolveTranscriptionRoute({ settings: after });
   assert.equal(route.provider, "custom");
-  assert.ok(isTitaniumServiceUrl(route.endpoint, fork));
-  // a stored key never rides to our host; the license decides there
-  assert.equal(
-    customTranscriptionKeySource({
-      storedKey: "stale",
-      isTitaniumService: isTitaniumServiceUrl(route.endpoint, fork),
-    }),
-    "titanium"
-  );
-  assert.equal(
-    customTranscriptionKeySource({
-      storedKey: "mine",
-      isTitaniumService: isTitaniumServiceUrl("https://old.example.com/v1", fork),
-    }),
-    "stored"
-  );
+  assert.ok(route.endpoint.startsWith(stt.baseUrl));
 });

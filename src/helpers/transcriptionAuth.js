@@ -22,3 +22,14 @@ export function customTranscriptionKeySource({ storedKey, isTitaniumService }) {
 export function canReuseCachedTranscriptionKey({ provider, isTitaniumService }) {
   return !(provider === "custom" && isTitaniumService);
 }
+
+/**
+ * The URL a Custom-provider request is actually sent to: the saved self-hosted URL
+ * when it wins routing (transcriptionRoute), else the cloud base URL. Every "is this
+ * one of our hosts" decision for auth must use this, never the cloud base URL alone.
+ */
+export function transcriptionDestinationUrl(settings) {
+  return isSelfHostedTranscription(settings)
+    ? settings.remoteTranscriptionUrl.trim()
+    : settings?.cloudTranscriptionBaseUrl || "";
+}

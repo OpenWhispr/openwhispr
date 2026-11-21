@@ -2686,6 +2686,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setCloudTranscriptionBaseUrl(settings.cloudTranscriptionBaseUrl);
     if (settings.cloudTranscriptionMode !== undefined)
       s.setCloudTranscriptionMode(settings.cloudTranscriptionMode);
+    if (settings.remoteTranscriptionUrl !== undefined)
+      s.setRemoteTranscriptionUrl(settings.remoteTranscriptionUrl);
+    if (settings.remoteTranscriptionModel !== undefined)
+      s.setRemoteTranscriptionModel(settings.remoteTranscriptionModel);
     if (settings.customDictionary !== undefined) s.setCustomDictionary(settings.customDictionary);
     if (settings.snippets !== undefined) s.setSnippets(settings.snippets);
     if (settings.assemblyAiStreaming !== undefined)
