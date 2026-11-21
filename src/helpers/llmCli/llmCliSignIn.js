@@ -98,6 +98,22 @@ function createSignIn({
         resolve({ ok: false, code });
       };
 
+      const captureToken = (final) => {
+        const token = policy.extractSetupToken(buffer, { final });
+        if (!token) return;
+        try {
+          tokenStore.save(token);
+          detector.apply("claude", { type: "SIGNIN_DONE" });
+          void finish({ code: null });
+        } catch (error) {
+          log("llm-cli claude token save failed", error && error.code);
+          void finish({
+            code:
+              error && error.code === "encryption-unavailable" ? "install-failed" : "exit-nonzero",
+          });
+        }
+      };
+
       pty.onData((data) => {
         if (settled) return;
         buffer += data;
@@ -116,25 +132,12 @@ function createSignIn({
             });
           }
         }
-        let token = policy.extractSetupToken(buffer);
-        if (token) {
-          try {
-            tokenStore.save(token);
-            detector.apply("claude", { type: "SIGNIN_DONE" });
-            void finish({ code: null });
-          } catch (error) {
-            log("llm-cli claude token save failed", error && error.code);
-            void finish({
-              code:
-                error && error.code === "encryption-unavailable"
-                  ? "install-failed"
-                  : "exit-nonzero",
-            });
-          }
-          token = null;
-        }
+        captureToken(false);
       });
       pty.onExit(() => {
+        if (settled) return;
+        // The stream is over: a token with nothing after it is now complete.
+        captureToken(true);
         if (!settled) void finish({ code: "not-signed-in" });
       });
       flow.cancel = () => void finish({ code: "killed" });

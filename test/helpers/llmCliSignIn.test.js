@@ -116,6 +116,33 @@ test("claude sign-in: allowed url opened, code written, token captured to the st
   assert.ok(!surfaces.includes("sk-ant-oat01"));
 });
 
+test("claude sign-in: a token split across pty chunks at every boundary is saved whole", async () => {
+  for (let split = 90; split <= 130; split += 1) {
+    const h = makeClaudeHarness();
+    const started = await h.signIn.start({ seat: "claude" });
+    h.pty.dataCb(`Your token:\r\n${TOKEN.slice(0, split)}`);
+    await tick();
+    assert.deepEqual(h.saved, [], `saved a truncated token at split ${split}`);
+    h.pty.dataCb(`${TOKEN.slice(split)}\r\nStore it safely\r\n`);
+    const result = await started.done;
+    assert.equal(result.ok, true);
+    assert.deepEqual(h.saved, [TOKEN], `split ${split}`);
+    assert.ok(!JSON.stringify([h.events, h.logs, result]).includes("sk-ant-oat01"));
+  }
+});
+
+test("claude sign-in: an undelimited token is accepted when the pty exits", async () => {
+  const h = makeClaudeHarness();
+  const started = await h.signIn.start({ seat: "claude" });
+  h.pty.dataCb(`Your token:\r\n${TOKEN}`);
+  await tick();
+  assert.deepEqual(h.saved, []);
+  h.pty.exitCb({ exitCode: 0 });
+  const result = await started.done;
+  assert.equal(result.ok, true);
+  assert.deepEqual(h.saved, [TOKEN]);
+});
+
 test("claude sign-in never opens a disallowed url", async () => {
   const h = makeClaudeHarness();
   await h.signIn.start({ seat: "claude" });

@@ -28,6 +28,14 @@ test("extractSetupToken: plain, colored, wrapped; null for partial and api keys"
   assert.strictEqual(mod.extractSetupToken("no token here"), null);
 });
 
+test("extractSetupToken: a token still at the end of the buffer is not delimited until final", () => {
+  assert.strictEqual(mod.extractSetupToken(TOKEN), null);
+  assert.strictEqual(mod.extractSetupToken(`x\n${TOKEN}\x1b[0`), null);
+  assert.strictEqual(mod.extractSetupToken(TOKEN, { final: true }), TOKEN);
+  assert.strictEqual(mod.extractSetupToken(`${TOKEN}\n`), TOKEN);
+  assert.strictEqual(mod.extractSetupToken(`${TOKEN}\n`, { final: true }), TOKEN);
+});
+
 test("extractSignInUrl returns the first allowlisted URL only", () => {
   const out = [
     "Docs: https://example.com/help",

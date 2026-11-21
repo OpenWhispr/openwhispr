@@ -768,11 +768,16 @@ function joinWrappedLines(text) {
 }
 
 // Long-lived Claude setup token (oat01 only; API keys are refused, rule 22c).
-function extractSetupToken(text) {
+// A pty delivers output in arbitrary chunks, so a token that ends at the end of
+// the buffer may still be growing: it is accepted only once whitespace follows
+// it, or when the caller says the stream is over (`final`).
+function extractSetupToken(text, { final = false } = {}) {
   const joined = joinWrappedLines(stripAnsi(text));
   const match = /sk-ant-oat01-[A-Za-z0-9_-]{1,150}/.exec(joined);
-  if (!match) return null;
-  return match[0].length >= 100 ? match[0] : null;
+  if (!match || match[0].length < 100) return null;
+  const end = match.index + match[0].length;
+  if (end < joined.length) return /\s/.test(joined[end]) ? match[0] : null;
+  return final ? match[0] : null;
 }
 
 function extractSignInUrl(seat, text) {
