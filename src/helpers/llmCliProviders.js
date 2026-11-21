@@ -1,5 +1,5 @@
 // Pure policy for the subscription-CLI LLM seats (claude, codex, grok, agy).
-// CommonJS, no Electron, no fs/child_process/path: platform, env and any I/O
+// ESM (main loads it with require(esm), the Vite renderer imports it), no Electron, no fs/child_process/path: platform, env and any I/O
 // result are passed in, so main (runner) and the Vite renderer share one
 // tested set of decisions. Rule 22c: no API keys, ever; seats use the user's
 // own subscription sign-in.
@@ -915,7 +915,7 @@ function scrubFixture(text) {
   return out;
 }
 
-module.exports = Object.freeze({
+export {
   LLM_CLI_PROVIDERS,
   stripAnsi,
   extractSetupToken,
@@ -954,4 +954,4 @@ module.exports = Object.freeze({
   TIMEOUTS,
   agyPrintTimeoutSeconds,
   ERROR_CODES,
-});
+};
