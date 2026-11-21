@@ -41,6 +41,7 @@ import { initProductEvents } from '@/lib/productEvents';
 import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
+import { startKeyboardLayoutSync } from '@/lib/keyboardLayoutSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
 import { startKeyboardFullAccessProbe } from '@/lib/keyboardFullAccessProbe';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
@@ -120,6 +121,7 @@ function RootLayout() {
   useEffect(() => {
     let started = false;
     let stopTone: (() => void) | undefined;
+    let stopLayout: (() => void) | undefined;
     let stopAgent: (() => void) | undefined;
     let stopFullAccessProbe: (() => void) | undefined;
     // Waits for config to hydrate so the probe's Sentry events respect the
@@ -129,6 +131,7 @@ function RootLayout() {
       if (state.config !== null && !state.isLoading) {
         started = true;
         stopTone = startKeyboardToneSync();
+        stopLayout = startKeyboardLayoutSync();
         stopAgent = startKeyboardAgentSync();
         stopFullAccessProbe = startKeyboardFullAccessProbe();
       }
@@ -139,6 +142,7 @@ function RootLayout() {
     return () => {
       unsubscribe();
       stopTone?.();
+      stopLayout?.();
       stopAgent?.();
       stopFullAccessProbe?.();
     };
