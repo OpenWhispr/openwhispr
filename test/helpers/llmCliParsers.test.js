@@ -46,7 +46,10 @@ test("extractSignInUrl returns the first allowlisted URL only", () => {
 test("extractDeviceCode needs a device URL and a letter in the code", () => {
   const text = "Open https://auth.openai.com/codex/device\nEnter code: ABCD-EFGH\n";
   assert.strictEqual(mod.extractDeviceCode(text), "ABCD-EFGH");
-  assert.strictEqual(mod.extractDeviceCode("code 7XQK-ZPL3 visit https://accounts.x.ai/d"), "7XQK-ZPL3");
+  assert.strictEqual(
+    mod.extractDeviceCode("code 7XQK-ZPL3 visit https://accounts.x.ai/d"),
+    "7XQK-ZPL3"
+  );
   assert.strictEqual(mod.extractDeviceCode("ABCD-EFGH but no url"), null);
   assert.strictEqual(mod.extractDeviceCode("https://a.example/x 2026-1120"), null);
 });
@@ -63,9 +66,15 @@ test("parseClaudeStreamLine", () => {
   );
   const err = (result) =>
     mod.parseClaudeStreamLine(JSON.stringify({ type: "result", is_error: true, result }));
-  assert.deepStrictEqual(err("Invalid API key - please run /login"), { type: "error", code: "not-signed-in" });
+  assert.deepStrictEqual(err("Invalid API key - please run /login"), {
+    type: "error",
+    code: "not-signed-in",
+  });
   assert.deepStrictEqual(err("OAuth token has expired"), { type: "error", code: "not-signed-in" });
-  assert.deepStrictEqual(err("Usage limit reached"), { type: "error", code: "quota-or-rate-limit" });
+  assert.deepStrictEqual(err("Usage limit reached"), {
+    type: "error",
+    code: "quota-or-rate-limit",
+  });
   assert.deepStrictEqual(err("boom"), { type: "error", code: "exit-nonzero" });
   for (const line of [
     JSON.stringify({ type: "system", subtype: "init" }),
@@ -86,14 +95,20 @@ test("parseCodexFinal", () => {
     type: "final",
     text: "OK",
   });
-  assert.deepStrictEqual(mod.parseCodexFinal({ fileText: "", stderrText: "Error: not logged in" }), {
-    type: "error",
-    code: "not-signed-in",
-  });
-  assert.deepStrictEqual(mod.parseCodexFinal({ fileText: "", stderrText: "429 Too Many Requests" }), {
-    type: "error",
-    code: "quota-or-rate-limit",
-  });
+  assert.deepStrictEqual(
+    mod.parseCodexFinal({ fileText: "", stderrText: "Error: not logged in" }),
+    {
+      type: "error",
+      code: "not-signed-in",
+    }
+  );
+  assert.deepStrictEqual(
+    mod.parseCodexFinal({ fileText: "", stderrText: "429 Too Many Requests" }),
+    {
+      type: "error",
+      code: "quota-or-rate-limit",
+    }
+  );
   assert.deepStrictEqual(mod.parseCodexFinal({}), { type: "error", code: "parse-failed" });
 });
 
@@ -103,16 +118,25 @@ test("parseJsonResult field order, plain fallback, empty", () => {
       type: "final",
       text: "A",
     });
-    assert.deepStrictEqual(mod.parseJsonResult(seat, JSON.stringify({ result: "", response: "C" })), {
-      type: "final",
-      text: "C",
-    });
+    assert.deepStrictEqual(
+      mod.parseJsonResult(seat, JSON.stringify({ result: "", response: "C" })),
+      {
+        type: "final",
+        text: "C",
+      }
+    );
     assert.deepStrictEqual(mod.parseJsonResult(seat, JSON.stringify({ output: "D" })), {
       type: "final",
       text: "D",
     });
-    assert.deepStrictEqual(mod.parseJsonResult(seat, "plain OK\n"), { type: "final", text: "plain OK" });
-    assert.deepStrictEqual(mod.parseJsonResult(seat, "  \n"), { type: "error", code: "parse-failed" });
+    assert.deepStrictEqual(mod.parseJsonResult(seat, "plain OK\n"), {
+      type: "final",
+      text: "plain OK",
+    });
+    assert.deepStrictEqual(mod.parseJsonResult(seat, "  \n"), {
+      type: "error",
+      code: "parse-failed",
+    });
     assert.deepStrictEqual(mod.parseJsonResult(seat, JSON.stringify({ nope: 1 })), {
       type: "error",
       code: "parse-failed",
@@ -123,7 +147,10 @@ test("parseJsonResult field order, plain fallback, empty", () => {
 
 test("classifyStderr", () => {
   assert.strictEqual(mod.classifyStderr("claude", "Please run /login"), "not-signed-in");
-  assert.strictEqual(mod.classifyStderr("grok", "You are not logged in. Run grok login"), "not-signed-in");
+  assert.strictEqual(
+    mod.classifyStderr("grok", "You are not logged in. Run grok login"),
+    "not-signed-in"
+  );
   assert.strictEqual(mod.classifyStderr("agy", "authentication required"), "not-signed-in");
   assert.strictEqual(mod.classifyStderr("codex", "rate limit exceeded"), "quota-or-rate-limit");
   assert.strictEqual(mod.classifyStderr("codex", "weekly quota used"), "quota-or-rate-limit");
@@ -141,7 +168,17 @@ test("scrubFixture removes identifying data", () => {
     "org org_ABCDEF123456 acct_ZZZZ99998888",
   ].join("\n");
   const out = mod.scrubFixture(raw);
-  for (const leak of ["me@corp", "123e4567", "AbCdEfGh", "eyJhbGciOi", "someone", "bob", "amy", "ABCDEF123456", "ZZZZ9999"]) {
+  for (const leak of [
+    "me@corp",
+    "123e4567",
+    "AbCdEfGh",
+    "eyJhbGciOi",
+    "someone",
+    "bob",
+    "amy",
+    "ABCDEF123456",
+    "ZZZZ9999",
+  ]) {
     assert.ok(!out.includes(leak), leak);
   }
   assert.ok(out.includes("<HOME>"));
@@ -181,4 +218,77 @@ test("hostile input: completes fast and never throws", () => {
 test("inputs over 2 MB are capped, not processed whole", () => {
   const huge = "a".repeat(3 * 1024 * 1024);
   assert.ok(mod.stripAnsi(huge).length <= 2 * 1024 * 1024);
+});
+
+// ---- Pinned live fixtures (test/fixtures/llm-cli, see its README) ----
+
+const fs = require("node:fs");
+const path = require("node:path");
+const FIXTURE_DIR = path.join(__dirname, "../fixtures/llm-cli");
+const readFixture = (name) => fs.readFileSync(path.join(FIXTURE_DIR, name), "utf8");
+
+test("claude fixture: text deltas then one final OK, no error", () => {
+  const parsed = readFixture("claude-stream.ndjson")
+    .split("\n")
+    .map((line) => mod.parseClaudeStreamLine(line))
+    .filter(Boolean);
+  const deltas = parsed.filter((p) => p.type === "text-delta");
+  const finals = parsed.filter((p) => p.type === "final");
+  assert.ok(deltas.length >= 1);
+  assert.strictEqual(deltas.map((d) => d.text).join(""), "OK");
+  assert.deepStrictEqual(finals, [{ type: "final", text: "OK" }]);
+  assert.ok(!parsed.some((p) => p.type === "error"));
+  assert.ok(parsed.indexOf(finals[0]) > parsed.indexOf(deltas[deltas.length - 1]));
+});
+
+test("codex fixture: last message is OK", () => {
+  assert.deepStrictEqual(mod.parseCodexFinal({ fileText: readFixture("codex-last-message.txt") }), {
+    type: "final",
+    text: "OK",
+  });
+});
+
+test("agy fixture: JSON response field yields OK", () => {
+  assert.deepStrictEqual(mod.parseJsonResult("agy", readFixture("agy-json.txt")), {
+    type: "final",
+    text: "OK\n",
+  });
+});
+
+test("grok fixture: the known hang is recorded as a timeout, not a result", () => {
+  const raw = readFixture("grok-json.txt");
+  assert.deepStrictEqual(JSON.parse(raw), { timeout: true });
+  // The timeout marker has no result field, so the parser must not invent text.
+  assert.deepStrictEqual(mod.parseJsonResult("grok", raw), { type: "error", code: "parse-failed" });
+  assert.ok(mod.ERROR_CODES.includes("timeout"));
+  assert.ok(mod.TIMEOUTS.idleMs > 0 && mod.TIMEOUTS.totalMs > mod.TIMEOUTS.idleMs);
+});
+
+test("fixture scan: no email, UUID, API key or JWT in any fixture", () => {
+  const files = fs.readdirSync(FIXTURE_DIR).filter((f) => f !== "README.md");
+  assert.ok(files.length >= 4);
+  for (const file of files) {
+    const text = readFixture(file);
+    assert.doesNotMatch(
+      text,
+      /[A-Za-z0-9._%+-]+@(?!example\.invalid)[A-Za-z0-9.-]+\.[A-Za-z]{2,}/,
+      `${file} email`
+    );
+    assert.doesNotMatch(
+      text,
+      /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/,
+      `${file} uuid`
+    );
+    assert.doesNotMatch(text, /sk-(?!ant-REDACTED|REDACTED)[A-Za-z0-9_-]{8,}/, `${file} sk- token`);
+    assert.doesNotMatch(text, /eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\./, `${file} jwt`);
+    assert.doesNotMatch(text, /[A-Za-z]:\\+Users\\+(?!<)/, `${file} home path`);
+  }
+});
+
+test("model lists captured from the CLIs all pass the id allowlist", () => {
+  for (const seat of ["claude", "grok", "agy"]) {
+    const models = mod.getProvider(seat).models;
+    assert.ok(models.length > 0, seat);
+    for (const id of models) assert.ok(mod.isSafeModelId(id), id);
+  }
 });

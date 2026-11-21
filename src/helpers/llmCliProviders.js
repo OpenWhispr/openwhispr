@@ -104,7 +104,9 @@ const LLM_CLI_PROVIDERS = Object.freeze([
     models: Object.freeze(["haiku", "sonnet", "opus"]),
     tokenEnvVar: CLAUDE_TOKEN_ENV,
     known: Object.freeze({
-      win32: Object.freeze([{ env: "USERPROFILE", rel: [".local", "bin", "claude.exe"], kind: "known-dir" }]),
+      win32: Object.freeze([
+        { env: "USERPROFILE", rel: [".local", "bin", "claude.exe"], kind: "known-dir" },
+      ]),
       darwin: Object.freeze([
         { env: "HOME", rel: [".local", "bin", "claude"], kind: "known-dir" },
         { env: "HOME", rel: [".claude", "local", "claude"], kind: "known-dir" },
@@ -134,9 +136,11 @@ const LLM_CLI_PROVIDERS = Object.freeze([
       "--max-turns",
     ]),
     testedVersion: "1.0.70",
-    models: Object.freeze([]),
+    models: Object.freeze(["grok-4.7", "grok-4.7-build-fast", "grok-4.6", "grok-4.5"]),
     known: Object.freeze({
-      win32: Object.freeze([{ env: "USERPROFILE", rel: [".grok", "bin", "grok.exe"], kind: "known-dir" }]),
+      win32: Object.freeze([
+        { env: "USERPROFILE", rel: [".grok", "bin", "grok.exe"], kind: "known-dir" },
+      ]),
       darwin: Object.freeze([
         { env: "HOME", rel: [".grok", "bin", "grok"], kind: "known-dir" },
         { abs: "/usr/local/bin/grok", kind: "known-dir" },
@@ -158,9 +162,39 @@ const LLM_CLI_PROVIDERS = Object.freeze([
     helpArgs: Object.freeze(["--help"]),
     requiredFlags: Object.freeze(["--print", "--output-format", "--print-timeout", "--model"]),
     testedVersion: "1.5.13",
-    models: Object.freeze([]),
+    models: Object.freeze([
+      "gemini-4-neon-high",
+      "gemini-4-neon-xhigh",
+      "gemini-4-neon-medium",
+      "gemini-4-neon-low",
+      "gemini-4-carbon-medium",
+      "gemini-4-carbon-high",
+      "gemini-4-carbon-low",
+      "gemini-4-argon-medium",
+      "gemini-4-argon-high",
+      "gemini-4-argon-low",
+      "gemini-4-hydrogen-high",
+      "gemini-4-hydrogen-xhigh",
+      "gemini-4-hydrogen-medium",
+      "gemini-4-hydrogen-low",
+      "gemini-pro-orchestrator-neon",
+      "gemini-pro-orchestrator",
+      "gemini-pro-orchestrator-argon",
+      "gemini-3.8-flash-high",
+      "gemini-3.8-flash-medium",
+      "gemini-3.8-flash-low",
+      "claude-opus-5-5-low",
+      "claude-opus-5-5-medium",
+      "claude-opus-5-5-high",
+      "claude-sonnet-5-5-low",
+      "claude-sonnet-5-5-medium",
+      "claude-sonnet-5-5-high",
+      "gpt-oss-120b-medium",
+    ]),
     known: Object.freeze({
-      win32: Object.freeze([{ env: "LOCALAPPDATA", rel: ["agy", "bin", "agy.exe"], kind: "known-dir" }]),
+      win32: Object.freeze([
+        { env: "LOCALAPPDATA", rel: ["agy", "bin", "agy.exe"], kind: "known-dir" },
+      ]),
       darwin: Object.freeze([
         { env: "HOME", rel: [".local", "bin", "agy"], kind: "known-dir" },
         { abs: "/usr/local/bin/agy", kind: "known-dir" },
@@ -206,7 +240,9 @@ function sepFor(platform) {
 function joinPath(platform, ...parts) {
   return parts
     .filter(Boolean)
-    .map((part, i) => (i === 0 ? part.replace(/[\\/]+$/, "") : part.replace(/^[\\/]+|[\\/]+$/g, "")))
+    .map((part, i) =>
+      i === 0 ? part.replace(/[\\/]+$/, "") : part.replace(/^[\\/]+|[\\/]+$/g, "")
+    )
     .join(sepFor(platform));
 }
 
@@ -430,7 +466,8 @@ function redactSecrets(text, literals = []) {
   if (typeof text !== "string") return "";
   let out = text.length > REDACT_INPUT_CAP ? text.slice(0, REDACT_INPUT_CAP) : text;
   for (const literal of literals) {
-    if (typeof literal === "string" && literal.length >= 4) out = out.split(literal).join("[redacted]");
+    if (typeof literal === "string" && literal.length >= 4)
+      out = out.split(literal).join("[redacted]");
   }
   out = out.replace(/sk-ant-[A-Za-z0-9_-]{6,}/g, "[redacted]");
   out = out.replace(/Bearer\s+[A-Za-z0-9._~+/=-]{16,}/g, "Bearer [redacted]");
@@ -458,14 +495,23 @@ function reduceSeatState(state, event) {
       };
     }
     case "AUTH":
-      if (prev.status !== "installed" && prev.status !== "signed-in" && prev.status !== "signed-out") {
+      if (
+        prev.status !== "installed" &&
+        prev.status !== "signed-in" &&
+        prev.status !== "signed-out"
+      ) {
         return prev;
       }
       return { ...prev, status: event.result === "signed-in" ? "signed-in" : "signed-out" };
     case "INSTALL_START":
       return { status: "installing" };
     case "INSTALL_DONE":
-      return { status: "installed", version: event.version || null, path: event.path || null, missingFlags: [] };
+      return {
+        status: "installed",
+        version: event.version || null,
+        path: event.path || null,
+        missingFlags: [],
+      };
     case "INSTALL_FAIL":
       return { status: "error", errorCode: event.code || "install-failed" };
     case "SIGNIN_START":
@@ -793,7 +839,10 @@ function parseClaudeStreamLine(line) {
     const body = typeof obj.result === "string" ? obj.result : "";
     if (obj.is_error === true) {
       let code = "exit-nonzero";
-      if (obj.api_error_status === 401 || /login|authenticat|oauth|expired|invalid.*token/i.test(body)) {
+      if (
+        obj.api_error_status === 401 ||
+        /login|authenticat|oauth|expired|invalid.*token/i.test(body)
+      ) {
         code = "not-signed-in";
       } else if (/rate limit|usage limit|quota|overloaded/i.test(body)) {
         code = "quota-or-rate-limit";
@@ -813,7 +862,14 @@ function parseCodexFinal({ fileText, stderrText } = {}) {
   return { type: "error", code: "parse-failed" };
 }
 
-const JSON_RESULT_FIELDS = Object.freeze(["result", "text", "response", "content", "message", "output"]);
+const JSON_RESULT_FIELDS = Object.freeze([
+  "result",
+  "text",
+  "response",
+  "content",
+  "message",
+  "output",
+]);
 
 function parseJsonResult(seat, stdoutText) {
   if (!getProvider(seat)) return { type: "error", code: "parse-failed" };
@@ -826,12 +882,15 @@ function parseJsonResult(seat, stdoutText) {
     return { type: "final", text: raw };
   }
   if (typeof doc === "string") {
-    return doc.trim().length > 0 ? { type: "final", text: doc } : { type: "error", code: "parse-failed" };
+    return doc.trim().length > 0
+      ? { type: "final", text: doc }
+      : { type: "error", code: "parse-failed" };
   }
   if (doc && typeof doc === "object" && !Array.isArray(doc)) {
     for (const field of JSON_RESULT_FIELDS) {
       const value = doc[field];
-      if (typeof value === "string" && value.trim().length > 0) return { type: "final", text: value };
+      if (typeof value === "string" && value.trim().length > 0)
+        return { type: "final", text: value };
     }
   }
   return { type: "error", code: "parse-failed" };
@@ -844,7 +903,10 @@ function scrubFixture(text) {
   out = out.replace(/sk-ant-[A-Za-z0-9_-]{6,}/g, "sk-ant-REDACTED");
   out = out.replace(/\bsk-[A-Za-z0-9]{16,}/g, "sk-REDACTED");
   out = out.replace(/eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, "JWT-REDACTED");
-  out = out.replace(/[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){1,5}/g, "user@example.invalid");
+  out = out.replace(
+    /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){1,5}/g,
+    "user@example.invalid"
+  );
   out = out.replace(
     /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g,
     "UUID-REDACTED"
