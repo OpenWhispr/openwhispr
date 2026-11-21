@@ -31,7 +31,7 @@
     "dev:renderer": "cd src && vite",
     "prebuild": "npm run compile:native && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx && npm run download:yt-dlp && npm run download:qdrant && npm run download:meeting-aec-helper && npm run download:whisper-vad-model && npm run download:embedding-model -- --for-build && npm run download:diarization-models -- --output-dir resources/bin/diarization-models && npm run download:brand-fonts",
     "build": "cd src && vite build && cd .. && electron-builder",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "node scripts/rebuild-native-deps.js",
     "build:renderer": "cd src && vite build",
     "compile:mac-icon": "node scripts/compile-macos-icon.js",
     "prebuild:mac": "npm run compile:native && npm run compile:mac-icon && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx && npm run download:yt-dlp && npm run download:qdrant && npm run download:meeting-aec-helper && npm run download:whisper-vad-model && npm run download:diarization-models -- --output-dir resources/bin/diarization-models && npm run download:brand-fonts",

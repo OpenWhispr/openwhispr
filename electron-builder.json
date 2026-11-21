@@ -1,5 +1,6 @@
 {
   "appId": "com.gizmolabs.openwhispr",
+  "beforePack": "scripts/rebuild-native-deps.js",
   "afterPack": "scripts/afterPack.js",
   "extraMetadata": {
     "windowsTrayIdentity": true
@@ -12,7 +13,7 @@
   "directories": {
     "output": "dist"
   },
-  "npmRebuild": true,
+  "npmRebuild": false,
   "buildDependenciesFromSource": false,
   "files": [
     "main.js",
