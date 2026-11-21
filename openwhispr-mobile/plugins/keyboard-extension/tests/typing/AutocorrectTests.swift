@@ -22,8 +22,8 @@ extension TypingTests {
     // A capital at the start: the writer uses capitals, so the keyboard supplies the rest.
     check("capitals are added for someone who uses them", typed("I think i like french food ") == "I think I like French food ")
     // Lower case at the start means shift was turned off there: capitals are left out.
-    check("capitals are left out for someone writing in lower case", typed("i think i like french food ") == "i think i like french food ")
-    check("lower-case writing still gets real corrections", typed("i think teh food is good ") == "i think the food is good ")
+    check("lower-case writers keep lower-case names but still get the pronoun", typed("i think i like french food ") == "I think I like french food ")
+    check("lower-case writing still gets real corrections", typed("i think teh food is good ") == "I think the food is good ")
     check("a new sentence with a capital brings capitals back", typed("ok. Then i left ") == "ok. Then I left ")
     // A real word is not swapped for a commoner one a key-slip away without support from the
     // sentence, least of all a name.

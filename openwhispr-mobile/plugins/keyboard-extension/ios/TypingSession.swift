@@ -204,7 +204,11 @@ final class TypingSession {
     let context = context(before: wordStart)
     guard !context.glued else { return nil }
     guard let replacement = correction(for: typed, context: context).replacement else { return nil }
-    if writesInLowerCase, replacement.lowercased() == typed.lowercased() { return nil }
+    // Lower-case writers keep their lower case, except for the pronoun: "i" and "i'm" become
+    // "I" and "I'm" for everyone.
+    let lowered = typed.lowercased()
+    let isPronoun = lowered == "i" || lowered.hasPrefix("i'") || lowered.hasPrefix("i\u{2019}")
+    if writesInLowerCase, !isPronoun, replacement.lowercased() == lowered { return nil }
     // Corrected a moment ago, deleted, and typed again the same way: the user means it. It
     // stays, from now on.
     if let insisted = retypedAfterCorrection, insisted == typed.lowercased() {

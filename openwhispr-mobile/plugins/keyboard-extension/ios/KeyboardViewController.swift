@@ -3446,12 +3446,17 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         + DirectDictationRuntime.shared.diagnosticsSummary
     }
     let dictationReadout = UIAction(title: dictationLine, attributes: .disabled) { _ in }
+    // The menu cuts long lines off, so the readout can be typed into the field to read or copy.
+    let typedSummary = diagnostics.summary
+    let typeOut = UIAction(title: "Type diagnostics into this field") { [weak self] _ in
+      self?.insertUntracked("\n[OpenWhispr keyboard diagnostics]\n" + typedSummary + "\n" + dictationLine + "\n")
+    }
     let reset = UIAction(title: "Reset counts") { [weak self] _ in self?.diagnostics = TypingDiagnostics() }
     return UIMenu(title: "Typing", options: .displayInline, children: [
       UIMenu(title: "", options: .displayInline, children: languageActions),
       UIMenu(title: "", options: .displayInline, children: layoutActions),
       UIMenu(title: "", options: .displayInline, children: aidActions),
-      UIMenu(title: "Diagnostics (counts only)", options: .displayInline, children: [readout, dictationReadout, reset]),
+      UIMenu(title: "Diagnostics (counts only)", options: .displayInline, children: [typeOut, readout, dictationReadout, reset]),
     ])
   }
 
