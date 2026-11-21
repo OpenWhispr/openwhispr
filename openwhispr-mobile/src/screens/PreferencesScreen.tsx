@@ -1,16 +1,99 @@
 import React, { useState } from 'react';
-import { Platform } from 'react-native';
+import { Alert, Platform, Pressable } from 'react-native';
+import { MenuView } from '@react-native-menu/menu';
 import { router } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
 import { SoonBadge } from '@/components/ui/SoonBadge';
+import { SystemIcon } from '@/components/ui/SystemIcon';
+import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { DEFAULT_LANGUAGE, getLanguage } from '@/lib/languages';
 import { toneLabel, DEFAULT_KEYBOARD_TONE } from '@/lib/keyboardTone';
 import { getDictationAgentName } from '@/lib/dictationAgent';
+import {
+  KEYBOARD_TYPING_LANGUAGES,
+  KEYBOARD_TYPING_LAYOUTS,
+  clearKeyboardLearnedWords,
+  keyboardHapticsEnabled,
+  keyboardTypingLanguage,
+  keyboardTypingLayout,
+  setKeyboardHapticsEnabled,
+  setKeyboardTypingLanguage,
+  setKeyboardTypingLayout,
+} from '@/lib/keyboardTypingSync';
+import { safeHaptics } from '@/lib/utils';
 import { LiveActivity } from '../../modules/live-activity/src';
+
+const AUTOMATIC = 'automatic';
+
+type TypingPickerProps<Value extends string> = {
+  label: string;
+  options: { value: Value; label: string }[];
+  // null is Automatic: the keyboard picks.
+  value: Value | null;
+  onChange: (value: Value | null) => void;
+};
+
+// A row's value that opens a menu of choices, with Automatic first.
+function TypingPicker<Value extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: TypingPickerProps<Value>): React.ReactElement {
+  const current = options.find((option) => option.value === value);
+  const currentLabel = current?.label ?? 'Automatic';
+  return (
+    <MenuView
+      title={label}
+      shouldOpenOnLongPress={false}
+      actions={[
+        { id: AUTOMATIC, title: 'Automatic', state: current ? 'off' : 'on' },
+        ...options.map((option) => ({
+          id: option.value,
+          title: option.label,
+          state: option.value === current?.value ? ('on' as const) : ('off' as const),
+        })),
+      ]}
+      onPressAction={({ nativeEvent }) => {
+        const next = options.find((option) => option.value === nativeEvent.event)?.value ?? null;
+        if (next === (current?.value ?? null)) return;
+        safeHaptics('selection');
+        onChange(next);
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${currentLabel}`}
+        className="flex-row items-center gap-1.5"
+      >
+        <Text numberOfLines={1} className="text-[15px] text-secondaryLabel">
+          {currentLabel}
+        </Text>
+        <SystemIcon
+          name="chevron.up.chevron.down"
+          mdName="ChevronsUpDown"
+          size={13}
+          color="tertiaryLabel"
+        />
+      </Pressable>
+    </MenuView>
+  );
+}
+
+function confirmClearLearnedWords(): void {
+  Alert.alert(
+    'Clear learned words?',
+    'The keyboard forgets the words it has learned from your typing.',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear', style: 'destructive', onPress: clearKeyboardLearnedWords },
+    ],
+  );
+}
 
 export default function PreferencesScreen() {
   const config = useConfigStore((state) => state.config);
@@ -129,6 +212,64 @@ export default function PreferencesScreen() {
           />
         ) : null}
       </SettingsSection>
+      {Platform.OS === 'ios' ? (
+        <SettingsSection title="Keyboard typing">
+          <SettingsRow
+            iconStyle="line"
+            icon="character.bubble"
+            mdIcon="Languages"
+            title="Typing language"
+            rightElement={
+              <TypingPicker
+                label="Typing language"
+                options={KEYBOARD_TYPING_LANGUAGES}
+                value={keyboardTypingLanguage(config)}
+                onChange={setKeyboardTypingLanguage}
+              />
+            }
+            showChevron={false}
+          />
+          <SettingsRow
+            iconStyle="line"
+            icon="keyboard"
+            mdIcon="Keyboard"
+            title="Layout"
+            rightElement={
+              <TypingPicker
+                label="Layout"
+                options={KEYBOARD_TYPING_LAYOUTS}
+                value={keyboardTypingLayout(config)}
+                onChange={setKeyboardTypingLayout}
+              />
+            }
+            showChevron={false}
+          />
+          <SettingsRow
+            iconStyle="line"
+            icon="hand.tap"
+            mdIcon="Vibrate"
+            title="Haptic feedback"
+            description="A light tap on every key"
+            rightElement={
+              <SettingsSwitch
+                accessibilityLabel="Haptic feedback"
+                value={keyboardHapticsEnabled(config)}
+                onValueChange={setKeyboardHapticsEnabled}
+              />
+            }
+            showChevron={false}
+          />
+          <SettingsRow
+            iconStyle="line"
+            icon="trash"
+            mdIcon="Trash2"
+            title="Clear learned words"
+            destructive
+            showChevron={false}
+            onPress={confirmClearLearnedWords}
+          />
+        </SettingsSection>
+      ) : null}
     </SettingsScreen>
   );
 }

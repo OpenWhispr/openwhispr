@@ -8,6 +8,8 @@ import type {
 export type ProcessingMode = 'cloud' | 'private' | 'providers';
 export type TranscriptionProvider = 'local' | 'cloud' | 'byok';
 export type KeyboardTone = 'default' | 'formal' | 'casual' | 'very_casual' | 'excited';
+export type KeyboardTypingLanguage = 'en' | 'de';
+export type KeyboardTypingLayout = 'qwerty' | 'qwertz';
 export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 
 export interface UserConfig {
@@ -47,6 +49,11 @@ export interface UserConfig {
   // Records and transcribes in the keyboard for OpenWhispr Cloud, without opening the app.
   // Off by default for the first TestFlight build.
   keyboardDirectDictation?: boolean;
+  // The keyboard's typing help (src/lib/keyboardTypingSync.ts), apart from the dictation language.
+  // Unset or null follows the device's languages / the typing language; haptics default on.
+  keyboardTypingLanguage?: KeyboardTypingLanguage | null;
+  keyboardTypingLayout?: KeyboardTypingLayout | null;
+  keyboardHapticsEnabled?: boolean;
   // Apple Foundation Models local generation for notes. Default on; users can
   // disable it from AI Models.
   appleLocalIntelligenceEnabled?: boolean;
