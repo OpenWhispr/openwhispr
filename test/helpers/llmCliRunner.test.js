@@ -102,6 +102,14 @@ test("grok reads a prompt file, agy takes the prompt in argv; both parse JSON", 
   const gr = grok.report();
   assert.equal(gr.promptFileContent, "grok prompt text");
   assert.ok(!gr.argv.join(" ").includes("grok prompt text"));
+  // The spawned grok must not import the user's Claude/Cursor MCP servers and hooks.
+  for (const key of [
+    "GROK_CLAUDE_MCPS_ENABLED",
+    "GROK_CURSOR_MCPS_ENABLED",
+    "GROK_CLAUDE_HOOKS_ENABLED",
+  ]) {
+    assert.ok(gr.envKeys.includes(key), key);
+  }
 
   const agy = makeHarness({ mode: "agy-json" });
   const a = await agy.runner.runStream({ seat: "agy", prompt: "agy prompt text" });

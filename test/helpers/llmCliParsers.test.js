@@ -202,6 +202,23 @@ test("classifyStderr", () => {
   assert.strictEqual(mod.classifyStderr("agy", "authentication required"), "not-signed-in");
   assert.strictEqual(mod.classifyStderr("codex", "rate limit exceeded"), "quota-or-rate-limit");
   assert.strictEqual(mod.classifyStderr("codex", "weekly quota used"), "quota-or-rate-limit");
+  assert.strictEqual(
+    mod.classifyStderr(
+      "grok",
+      '{"type":"error","message":"API error (status 402 Payment Required): Grok Build usage balance exhausted"}'
+    ),
+    "quota-or-rate-limit"
+  );
+  assert.strictEqual(
+    mod.classifyStderr("grok", "insufficient balance for this request"),
+    "quota-or-rate-limit"
+  );
+  // "usage balance" alone is not exhaustion: lookups and network errors must not read as quota.
+  assert.strictEqual(
+    mod.classifyStderr("grok", "Failed to retrieve usage balance: connection reset"),
+    null
+  );
+  assert.strictEqual(mod.classifyStderr("grok", "connect ECONNRESET 104.18.0.1:443"), null);
   assert.strictEqual(mod.classifyStderr("codex", "something else"), null);
   assert.strictEqual(mod.classifyStderr("nope", "not logged in"), null);
 });
