@@ -22,6 +22,7 @@ import {
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage from "./SettingsPage";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
+import { usePlansBillingRequest } from "./settings/billing/usePlansBillingRequest";
 import { useAuth } from "../hooks/useAuth";
 import { workspaceCan } from "../lib/capabilities";
 import { settingsWorkspace } from "../lib/workspaceSwitcher";
@@ -118,6 +119,7 @@ export default function SettingsModal({
     initialSection ? LEGACY_SUB_TAB[initialSection] : undefined
   );
   const [prevOpen, setPrevOpen] = useState(open);
+  const [billingRequest, setBillingRequest] = usePlansBillingRequest(initialSection, activeSection);
 
   if (open && !prevOpen && initialSection) {
     setPrevOpen(open);
@@ -169,6 +171,8 @@ export default function SettingsModal({
         onNavigateToSection={handleSectionChange}
         initialSubTab={initialSubTab}
         onOpenTeamspace={onOpenTeamspace}
+        billingRequest={billingRequest}
+        onBillingRequestChange={setBillingRequest}
       />
     </SidebarModal>
   );

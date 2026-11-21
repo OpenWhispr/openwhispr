@@ -34,6 +34,7 @@ function setup() {
     state,
     requests,
     checkout: (generation) => handlers.get("cloud-checkout")({}, { plan: "annual" }, generation),
+    portal: (generation) => handlers.get("cloud-billing-portal")({}, generation),
     setFetch: (callback) => {
       fetch = callback;
     },
@@ -59,4 +60,21 @@ test("native checkout discards the URL when its credential changes during the re
   assert.equal(result.success, false);
   assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
   assert.equal(result.url, undefined);
+});
+
+test("native personal portal refuses a stale generation before its Stripe POST", async () => {
+  const { portal, requests } = setup();
+  const result = await portal(6);
+  assert.equal(result.success, false);
+  assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
+  assert.equal(requests.length, 0);
+});
+
+test("native personal portal preserves the legacy call without a generation", async () => {
+  const { portal, requests } = setup();
+  const result = await portal();
+  assert.equal(result.success, true);
+  assert.equal(requests[0][0], "https://api.openwhispr.test/api/stripe/portal");
+  assert.equal(requests[0][1].method, "POST");
+  assert.equal(requests[0][1].headers.Authorization, "Bearer account-a");
 });

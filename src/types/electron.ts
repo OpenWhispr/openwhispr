@@ -936,6 +936,10 @@ export interface Workspace {
   role: WorkspaceRole;
   is_billable?: boolean;
   billing_manager?: string | null;
+  // Absent before API release 4.
+  billing_manager_email?: string | null;
+  member_count?: number;
+  invitation_count?: number;
   // Absent on API responses that predate capabilities; read through workspaceCan().
   capabilities?: WorkspaceCapabilities;
   has_subscription?: boolean;
@@ -1905,7 +1909,11 @@ declare global {
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       openSettingsSection?: (
-        section: SettingsTarget | ProviderSettingsTarget | "plansBilling"
+        section:
+          | SettingsTarget
+          | ProviderSettingsTarget
+          | "plansBilling"
+          | `plansBilling:workspace:${string}`
       ) => Promise<{ success: boolean }>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       captureDictationAppCategory?: () => Promise<ToneAppCategory>;
@@ -3379,7 +3387,7 @@ declare global {
         error?: string;
         code?: string;
       }>;
-      cloudBillingPortal?: () => Promise<{
+      cloudBillingPortal?: (expectedAuthGeneration?: number) => Promise<{
         success: boolean;
         url?: string;
         error?: string;

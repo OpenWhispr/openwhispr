@@ -4,11 +4,9 @@ import { Users } from "../icons";
 import { cn } from "../lib/utils";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./dialogButtons";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
-import { WorkspaceBusinessCheckoutButton } from "./WorkspaceBusinessCheckoutButton";
-import { useSoloBillingWorkspace } from "../../hooks/useSoloBillingWorkspace";
+import { workspacePlanSection } from "../../lib/settingsNav";
 import { hasValidatedAuthContext } from "../../lib/authRequestContext";
 import { teamCreationFor, workspaceCan } from "../../lib/capabilities";
-import { mayBeSoloBillingWorkspace } from "../../lib/workspaceBilling";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { isolate } from "../../utils/bidiIsolate";
 import type { Workspace } from "../../types/electron";
@@ -42,11 +40,6 @@ export default function TeamPaywallDialog({
   const owner = workspace.billing_manager;
   const lapsed = TEAM_PLANS.has(workspace.plan);
   const blocked = teamCreationFor(workspace) !== "allowed";
-  const soloStatus = useSoloBillingWorkspace(
-    open && hasValidatedAuthContext() && mayBeSoloBillingWorkspace(workspace)
-      ? workspace
-      : undefined
-  );
 
   // The capability the paywall opened on may be stale (a plan changed on the web or another
   // device, or a webhook that landed late), so each opening reads the workspace again.
@@ -70,7 +63,7 @@ export default function TeamPaywallDialog({
   // A named section remounts Settings, so this also works from inside Settings.
   const handleUpgrade = (): void => {
     onOpenChange(false);
-    void window.electronAPI?.openSettingsSection?.("plansBilling");
+    void window.electronAPI?.openSettingsSection?.(workspacePlanSection(workspace.id));
   };
 
   const variant = lapsed ? "lapsedBody" : "body";
@@ -101,24 +94,13 @@ export default function TeamPaywallDialog({
         <div className="flex flex-col gap-2">
           {canUpgrade ? (
             <>
-              {open && soloStatus === "solo" ? (
-                <WorkspaceBusinessCheckoutButton
-                  key={workspace.id}
-                  workspaceId={workspace.id}
-                  interval="monthly"
-                  className={cn(PRIMARY_BUTTON, "flex-none")}
-                  onOpened={() => onOpenChange(false)}
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleUpgrade}
-                  disabled={soloStatus === "checking"}
-                  className={cn(PRIMARY_BUTTON, "flex-none")}
-                >
-                  {t(lapsed ? `${COPY}.updateBilling` : `${COPY}.upgrade`)}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleUpgrade}
+                className={cn(PRIMARY_BUTTON, "flex-none")}
+              >
+                {t(lapsed ? `${COPY}.updateBilling` : `${COPY}.upgrade`)}
+              </button>
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
