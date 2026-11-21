@@ -209,6 +209,16 @@ test("classifyStderr", () => {
     ),
     "quota-or-rate-limit"
   );
+  assert.strictEqual(
+    mod.classifyStderr("grok", "insufficient balance for this request"),
+    "quota-or-rate-limit"
+  );
+  // "usage balance" alone is not exhaustion: lookups and network errors must not read as quota.
+  assert.strictEqual(
+    mod.classifyStderr("grok", "Failed to retrieve usage balance: connection reset"),
+    null
+  );
+  assert.strictEqual(mod.classifyStderr("grok", "connect ECONNRESET 104.18.0.1:443"), null);
   assert.strictEqual(mod.classifyStderr("codex", "something else"), null);
   assert.strictEqual(mod.classifyStderr("nope", "not logged in"), null);
 });

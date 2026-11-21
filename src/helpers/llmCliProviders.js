@@ -896,7 +896,7 @@ function extractDeviceCode(text) {
 const SIGNED_OUT_RE =
   /not (?:logged|signed) in|please (?:log|sign) ?in|run [^\n]{0,30}(?:log ?in|auth)|unauthori[sz]ed|authentication (?:failed|required|error)|invalid[^\n]{0,20}(?:token|credentials)|token (?:has )?expired|session expired|oauth|\b401\b/i;
 const QUOTA_RE =
-  /rate.?limit|usage limit|quota|too many requests|overloaded|usage balance|payment required|\b429\b/i;
+  /rate.?limit|usage limit|quota|too many requests|overloaded|balance exhausted|insufficient (?:usage )?balance|payment required|\b429\b/i;
 
 function classifyStderr(seat, text) {
   if (!getProvider(seat)) return null;
