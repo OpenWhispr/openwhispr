@@ -359,3 +359,197 @@ test("quit hook cancels a hung run and the child process is gone", async () => {
     }));
   assert.equal(gone, true);
 });
+
+// ---- End to end: real modules, fake process boundary, codex seat ----
+const { EventEmitter } = require("events");
+const { createDetector } = require("../../src/helpers/llmCli/llmCliDetect");
+const { createInstaller } = require("../../src/helpers/llmCli/llmCliInstaller");
+const { createSignIn } = require("../../src/helpers/llmCli/llmCliSignIn");
+
+test("e2e codex: detect, install, sign-in, stream, cancel, sign-out in order, no secret emitted", async () => {
+  const CANARY = `sk-ant-api03-${"C".repeat(40)}`;
+  const EXE = "C:\\bin\\codex.exe";
+  const fake = path.join(__dirname, "..", "fixtures", "llm-cli", "fake-cli.js");
+  const env = {
+    Path: "C:\\bin",
+    SystemRoot: "C:\\Windows",
+    ANTHROPIC_API_KEY: CANARY,
+    FAKE_CLI_MODE: "codex-ok",
+  };
+  let present = true;
+  let signedIn = true;
+  const detectorSpawn = (exe, args) => {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.pid = 1;
+    child.kill = () => {};
+    const key = path.win32.basename(exe).toLowerCase();
+    const argLine = args.join(" ");
+    let out = "";
+    let code = 0;
+    if (key === "powershell.exe") out = JSON.stringify({ Status: "Valid", Subject: "CN=OpenAI" });
+    else if (argLine === "--version") out = "codex-cli 0.157.0";
+    else if (argLine === "exec --help")
+      out =
+        "--sandbox --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --output-last-message";
+    else if (argLine === "login status") {
+      out = signedIn ? "Logged in using ChatGPT" : "Not logged in";
+      code = signedIn ? 0 : 1;
+    } else if (argLine === "logout --help") out = "Remove stored authentication credentials";
+    else if (argLine === "logout") signedIn = false;
+    setImmediate(() => {
+      if (out) child.stdout.emit("data", Buffer.from(out));
+      child.emit("close", code);
+    });
+    return child;
+  };
+  const detector = createDetector({
+    fs: {
+      statSync: (p) => {
+        if (present && p.toLowerCase() === EXE.toLowerCase()) return { isFile: () => true };
+        throw new Error("ENOENT");
+      },
+      readdirSync: () => [],
+    },
+    spawn: detectorSpawn,
+    env,
+    platform: "win32",
+    tokenStore: { has: () => false },
+  });
+  const runnerChildren = [];
+  const runner = createRunner({
+    spawn: (...args) => {
+      const child = childProcess.spawn(...args);
+      runnerChildren.push(child);
+      return child;
+    },
+    tmpDir: fs.mkdtempSync(path.join(os.tmpdir(), "llm-cli-e2e-")),
+    env,
+    resolveExe: async () => ({ exe: process.execPath, args: [fake] }),
+  });
+  const flowChild = () => {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.pid = 2;
+    return child;
+  };
+  const installChild = flowChild();
+  const installer = createInstaller({
+    spawn: () => installChild,
+    detector,
+    platform: "win32",
+    env,
+  });
+  const signInChild = flowChild();
+  const events = [];
+  const emitEvent = (event) => events.push(event);
+  const signIn = createSignIn({
+    spawn: () => signInChild,
+    detector,
+    tokenStore: { clear() {} },
+    openExternal: async () => {},
+    platform: "win32",
+    env,
+    emit: emitEvent,
+    killTree: () => {},
+  });
+  const ipcMain = makeIpcMain();
+  registerLlmCliIpc({
+    ipcMain,
+    runner,
+    detector,
+    installer,
+    signIn,
+    prefs: makePrefs(),
+    emitEvent,
+  });
+  const returned = [];
+  const call = async (channel, ...args) => {
+    const result = await ipcMain.handlers.get(channel)({ sender: makeSender() }, ...args);
+    returned.push(result);
+    return result;
+  };
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+  const mark = (label) => events.push({ type: "MARK", label });
+
+  // detect
+  mark("detect");
+  const detected = await call("llm-cli-detect");
+  assert.equal(detected.codex.status, "signed-in");
+
+  // install (the vendor script prints a line that contains a key; it must be redacted)
+  mark("install");
+  const installing = call(
+    "llm-cli-install-start",
+    "codex",
+    "https://chatgpt.com/codex/install.ps1"
+  );
+  await tick();
+  installChild.stdout.emit("data", Buffer.from(`using key ${CANARY}\nok\n`));
+  installChild.emit("close", 0);
+  assert.equal((await installing).ok, true);
+
+  // sign-in (device auth)
+  mark("signin");
+  signedIn = false;
+  const signing = await call("llm-cli-signin-start", "codex");
+  assert.equal(signing.ok, true);
+  signInChild.stdout.emit(
+    "data",
+    Buffer.from("Open https://auth.openai.com/codex/device code ABCD-1234\n")
+  );
+  signedIn = true;
+  signInChild.emit("close", 0);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  // stream
+  mark("stream");
+  const sender = makeSender();
+  const streamed = await ipcMain.handlers.get("llm-cli-stream-start")(
+    { sender },
+    { streamId: "e1", seat: "codex", prompt: "hello" }
+  );
+  returned.push(streamed);
+  assert.equal(streamed.success, true);
+  assert.equal(sender.sent.at(-1).payload.done, true);
+
+  // cancel
+  mark("cancel");
+  env.FAKE_CLI_MODE = "hang";
+  const hung = ipcMain.handlers.get("llm-cli-stream-start")(
+    { sender: makeSender() },
+    { streamId: "e2", seat: "codex", prompt: "hello" }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  await call("llm-cli-stream-cancel", "e2");
+  assert.equal((await hung).code, "killed");
+
+  // sign-out
+  mark("signout");
+  const out = await call("llm-cli-signout", "codex");
+  assert.deepEqual(out, { ok: true, affectsTerminalCli: true });
+
+  const labels = events.map((e) => (e.type === "MARK" ? e.label : e.type));
+  const at = (name, from = 0) => labels.indexOf(name, from);
+  const installAt = at("install");
+  const signinAt = at("signin");
+  assert.ok(installAt > at("detect"));
+  assert.ok(at("install-progress", installAt) > installAt);
+  assert.ok(at("install-progress", installAt) < signinAt);
+  assert.ok(at("signin-prompt", signinAt) > signinAt);
+  assert.ok(at("signin-result", signinAt) > at("signin-prompt", signinAt));
+  assert.ok(at("signin-result", signinAt) < at("stream"));
+  const states = events.filter((e) => e.type === "state").map((e) => e.state.status);
+  assert.ok(states.includes("installing"));
+  assert.ok(states.includes("signing-in"));
+  assert.equal(states.at(-1), "signed-out");
+
+  const everything = JSON.stringify([events, returned]);
+  assert.ok(!everything.includes(CANARY), "no key may be emitted or returned");
+  assert.ok(!everything.includes("sk-ant"));
+  for (const child of runnerChildren) {
+    assert.ok(child.exitCode !== null || child.signalCode || child.killed);
+  }
+});
