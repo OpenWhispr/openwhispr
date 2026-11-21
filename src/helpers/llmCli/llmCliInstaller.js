@@ -145,7 +145,7 @@ function createInstaller({
         return done({
           ok: false,
           code: "quarantined-or-missing",
-          messageKey: "llmCli.install.antivirusQuarantine",
+          messageKey: "llmSubscriptions.errors.quarantined-or-missing",
         });
       }
 
