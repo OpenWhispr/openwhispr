@@ -1028,3 +1028,14 @@ test("the dictation picker explains the current cleanup setting only for selecte
   await panel.setProps({ transcriptionContext: "upload" });
   assert.equal(hint(), undefined);
 });
+
+test("Sarvam defaults to code-mixed output and saves the selected mode", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "sarvam", selectedCloudModel: "saaras:v4" },
+  });
+  assert.equal(panel.state().sarvamMode, "codemix");
+  for (const mode of ["transcribe", "translate", "verbatim", "translit", "codemix"]) {
+    await panel.choose(mode);
+    assert.equal(panel.state().sarvamMode, mode);
+  }
+});

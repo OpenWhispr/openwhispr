@@ -17,6 +17,7 @@ const PREFIX_VALIDATED_PROVIDERS = [
   "groq",
   "xai",
   "mistral",
+  "sarvam",
   "corti",
   "gemini",
   "deepgram",

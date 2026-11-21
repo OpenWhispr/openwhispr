@@ -62,6 +62,56 @@ test("a dictation-only streaming provider is not offered for note recording", as
   assert.equal(meetingIds.includes("gemini"), false);
 });
 
+test("note recording routes both Saaras models through the personal Sarvam account", async () => {
+  const { getMeetingStreamingTranscriptionProviders } =
+    await import("../../src/models/ModelRegistry.ts");
+  const { resolveMeetingTranscriptionOptions } =
+    await import("../../src/helpers/meetingTranscriptionRouting.js");
+  const { fetchRealtimeTokenForProvider } =
+    await import("../../src/helpers/realtimeTokenProviders.js");
+  const { getMeetingStreamingClient, getMeetingConnectionKey } = await load();
+  const { SarvamMeetingStreaming } = require("../../src/helpers/sarvamRealtimeStreaming");
+  const providers = getMeetingStreamingTranscriptionProviders();
+  const sarvam = providers.find((provider) => provider.id === "sarvam");
+  assert.deepEqual(
+    sarvam.models.map(({ id }) => id),
+    ["saaras:v4", "saaras:v3"]
+  );
+  for (const selectedModel of [undefined, "saaras:v3"]) {
+    const route = resolveMeetingTranscriptionOptions({
+      transcriptionMode: "providers",
+      byokProviders: providers,
+      selectedProvider: "sarvam",
+      selectedModel,
+      sarvamMode: "verbatim",
+      language: "hi",
+      keyterms: ["OpenWhispr"],
+    });
+    assert.equal(route.model, selectedModel ?? "saaras:v4");
+    assert.equal(route.language, "hi");
+    assert.notEqual(
+      getMeetingConnectionKey(route),
+      getMeetingConnectionKey({ ...route, sarvamMode: "translate" })
+    );
+    assert.equal(route.sarvamMode, "verbatim");
+    assert.deepEqual(route.keyterms, selectedModel ? undefined : ["OpenWhispr"]);
+    assert.equal(getMeetingStreamingClient(route.provider), SarvamMeetingStreaming);
+    const credentials = { environmentManager: { getSarvamKey: () => "personal" } };
+    assert.deepEqual(
+      await fetchRealtimeTokenForProvider(route.provider, credentials, route, { streams: 2 }),
+      ["personal", "personal"]
+    );
+    await assert.rejects(
+      fetchRealtimeTokenForProvider(
+        route.provider,
+        { environmentManager: { getSarvamKey: () => "" } },
+        route
+      ),
+      { code: "NO_API" }
+    );
+  }
+});
+
 // The intersection is an allow-list, so a new streaming provider is silently
 // excluded from note recording unless it is listed. Deepgram and AssemblyAI are
 // the managed note-recording providers and must stay admitted.
@@ -157,7 +207,7 @@ test("connection identity follows key saves exactly when the token comes from a 
         return "key";
       };
       const options = { provider, mode, purpose: "meeting" };
-      await fetchRealtimeTokenForProvider(
+      const token = fetchRealtimeTokenForProvider(
         provider,
         {
           environmentManager: new Proxy({}, { get: () => savedKey }),
@@ -167,6 +217,11 @@ test("connection identity follows key saves exactly when the token comes from a 
         },
         options
       );
+      if (provider === "sarvam-realtime" && mode !== "byok") {
+        await assert.rejects(token, /personal API key/);
+      } else {
+        await token;
+      }
       assert.equal(
         getMeetingConnectionKey(options, 1) !== getMeetingConnectionKey(options, 2),
         readsSavedKey,

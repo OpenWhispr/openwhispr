@@ -980,6 +980,14 @@
       "transportNote": "Tinfoil diffuse avec Voxtral Mini 4B et traite les lots avec Voxtral Small 24B.",
       "docsLink": "Voir la documentation"
     },
+    "sarvam": {
+      "outputMode": "Mode de sortie",
+      "codemix": "Langues mélangées (conserver les mots anglais en alphabet latin)",
+      "transcribe": "Transcrire dans la langue parlée",
+      "verbatim": "Transcrire mot à mot",
+      "translate": "Traduire en anglais",
+      "translit": "Translittérer en alphabet latin"
+    },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr envoie à ElevenLabs les termes de votre dictionnaire qui respectent ses critères. ElevenLabs facture 20 % de plus lorsque ces termes sont inclus."
     }
@@ -3382,6 +3390,8 @@
         "openai_whisper_1": "Modèle Whisper original",
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
+        "sarvam_v4": "22 langues indiennes, anglais international et termes du dictionnaire",
+        "sarvam_v3": "22 langues indiennes et anglais indien",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
         "gemini_3_5_transcribe": "Reconnaissance vocale Gemini de Google",
         "elevenlabs_scribe_v3": "La transcription multilingue la plus précise",

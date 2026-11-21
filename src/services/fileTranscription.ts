@@ -1,3 +1,5 @@
+import { getSettings } from "../stores/settingsStore";
+import { getEffectiveDictionaryWords } from "../utils/snippets";
 import { refreshEnterpriseIdentityForUse } from "../stores/enterpriseIdentityStore";
 import { withSessionRefresh } from "../lib/auth";
 import {
@@ -65,6 +67,7 @@ export interface TranscriptionApiKeys {
   groqApiKey: string;
   xaiApiKey: string;
   mistralApiKey: string;
+  sarvamApiKey: string;
   geminiApiKey: string;
   tinfoilApiKey: string;
   deepgramApiKey: string;
@@ -82,6 +85,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.groqApiKey;
     case "xai":
       return keys.xaiApiKey;
+    case "sarvam":
+      return keys.sarvamApiKey;
     case "mistral":
       return keys.mistralApiKey;
     case "gemini":
@@ -202,8 +207,8 @@ export async function transcribeFile(
     };
   }
 
-  // Self-hosted fields make the handler route to the configured server
-  // (fail-closed on misconfiguration) instead of stale BYOK settings.
+  const sarvamSettings =
+    route.transport === "proxied" && route.provider === "sarvam" ? getSettings() : null;
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
     requestId: opts.requestId,
@@ -212,13 +217,17 @@ export async function transcribeFile(
     ...(route.transport === "proxied" && route.provider === "assemblyai"
       ? { durationSeconds }
       : {}),
-    apiKey: cfg.getApiKey(),
+    apiKey: sarvamSettings ? "" : cfg.getApiKey(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,
     timestamps: opts.timestamps || undefined,
     provider: cfg.cloudTranscriptionProvider,
     language: cfg.language,
+    ...(sarvamSettings && {
+      sarvamMode: sarvamSettings.sarvamMode,
+      keyterms: getEffectiveDictionaryWords(sarvamSettings),
+    }),
     environment: cfg.cortiEnvironment,
     tenant: cfg.cortiTenant,
     transcriptionMode: cfg.transcriptionMode,

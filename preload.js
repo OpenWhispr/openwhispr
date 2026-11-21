@@ -11,6 +11,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "groq", get: "getGroqKey", save: "saveGroqKey" },
   { base: "xai", get: "getXaiKey", save: "saveXaiKey" },
   { base: "mistral", get: "getMistralKey", save: "saveMistralKey" },
+  { base: "sarvam", get: "getSarvamKey", save: "saveSarvamKey" },
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
@@ -749,6 +750,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   proxyAssemblyAiTranscription: (data) =>
     ipcRenderer.invoke("proxy-assemblyai-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
+  proxySarvamTranscription: (data) => ipcRenderer.invoke("proxy-sarvam-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
   proxyElevenlabsTranscription: (data) =>
     ipcRenderer.invoke("proxy-elevenlabs-transcription", data),

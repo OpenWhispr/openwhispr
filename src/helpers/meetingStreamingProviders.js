@@ -4,6 +4,7 @@ const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const ElevenLabsStreaming = require("./elevenLabsStreaming");
 const { TinfoilRealtimeStreaming } = require("./tinfoilRealtimeStreaming");
+const { SarvamMeetingStreaming } = require("./sarvamRealtimeStreaming");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
@@ -13,6 +14,7 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "corti-realtime": CortiStreaming,
   "elevenlabs-realtime": ElevenLabsStreaming,
   "tinfoil-realtime": TinfoilRealtimeStreaming,
+  "sarvam-realtime": SarvamMeetingStreaming,
 };
 
 // Derived from the registry so an allowed provider can never lack a client
@@ -36,6 +38,7 @@ const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
     model: options.model,
     language: options.language,
     mode: options.mode,
+    sarvamMode: options.sarvamMode,
     environment: options.environment,
     tenant: options.tenant,
     keyterms: options.keyterms,

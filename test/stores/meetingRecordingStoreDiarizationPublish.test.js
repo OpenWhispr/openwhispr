@@ -315,6 +315,98 @@ const diarized = (text, timestamp, speakerName) => ({
 const rowsOf = (note) =>
   JSON.parse(note.transcript).map((row) => [row.text, row.timestamp, row.speakerName]);
 
+for (const timing of [
+  "while recording",
+  "failed live save",
+  "across newer stop",
+  "after newer completion",
+]) {
+  test(`a late final survives a repeated phrase in a resumed note (${timing})`, async (t) => {
+    const { api, state, notes } = createElectronAPI({ stopDiarizationSessionId: "first" });
+    const { store, parseSeedSegments } = await loadModules(t, api);
+    const note = notes.get(NOTE_ID);
+    await store.startRecording(START_ARGS);
+    state.segmentCallback({
+      type: "final",
+      source: "system",
+      timestamp: 1760000000200,
+      text: "Opening.",
+    });
+    await store.stopRecording();
+
+    state.stopDiarizationSessionId = "second";
+    await store.startRecording({ ...START_ARGS, seedSegments: parseSeedSegments(note.transcript) });
+    state.segmentCallback({
+      type: "final",
+      source: "system",
+      timestamp: 1760010000500,
+      text: "Okay.",
+    });
+    const firstCompletion = async () => {
+      state.diarizationCallback({
+        noteId: NOTE_ID,
+        sessionId: "first",
+        segments: [diarized("Opening.", 0.2, "Carol"), diarized("Okay.", 9, "Carol")],
+      });
+      await settle();
+    };
+    if (timing === "failed live save") {
+      const update = api.updateNote;
+      api.updateNote = async () => {
+        api.updateNote = update;
+        return { success: false, error: "transient write failure" };
+      };
+      await firstCompletion();
+    } else if (timing === "while recording") {
+      await firstCompletion();
+      await store.persistLiveTranscript();
+    }
+    const pendingRead = deferred();
+    if (timing === "across newer stop") {
+      const getNote = api.getNote;
+      api.getNote = async (id) => {
+        api.getNote = getNote;
+        const snapshot = { ...(await getNote(id)) };
+        await pendingRead.promise;
+        return snapshot;
+      };
+      await firstCompletion();
+    }
+    await store.stopRecording();
+    pendingRead.resolve();
+    await settle();
+    if (timing === "across newer stop") {
+      assert.deepEqual(
+        rowsOf(note).map((row) => row[0]),
+        ["Opening.", "Okay.", "Okay."]
+      );
+    }
+    state.diarizationCallback({
+      noteId: NOTE_ID,
+      sessionId: "second",
+      segments: [diarized("Okay.", 0.5, "Dave")],
+    });
+    await settle();
+    if (timing === "after newer completion") await firstCompletion();
+    const expected = [
+      ["Opening.", 0.2, "Carol"],
+      ["Okay.", 9, "Carol"],
+      ["Okay.", 0.5, "Dave"],
+    ];
+    assert.deepEqual(rowsOf(note), expected);
+    assert.deepEqual(
+      store.useMeetingRecordingStore
+        .getState()
+        .completedDiarization.segments.map(({ text, timestamp, speakerName }) => [
+          text,
+          timestamp,
+          speakerName,
+        ]),
+      expected
+    );
+  });
+}
+
 // Each stop keeps its own seed length: with one shared value, the resumed
 // session's seed would also shield the earlier session's own diarization.
 test("an earlier session's diarization that lands after the note was resumed still labels its rows", async (t) => {

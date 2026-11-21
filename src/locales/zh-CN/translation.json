@@ -980,6 +980,14 @@
       "transportNote": "Tinfoil 流式转录使用 Voxtral Mini 4B，批量转录使用 Voxtral Small 24B。",
       "docsLink": "查看文档"
     },
+    "sarvam": {
+      "outputMode": "输出模式",
+      "codemix": "混合语言（英文单词保留拉丁字母）",
+      "transcribe": "按原语言转写",
+      "verbatim": "逐字转写",
+      "translate": "翻译成英语",
+      "translit": "转写为拉丁字母"
+    },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr 会将词典中符合条件的词条发送给 ElevenLabs。包含这些词条时，ElevenLabs 会加收 20% 的费用。"
     }
@@ -3278,6 +3286,8 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍实时速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
+        "sarvam_v4": "支持 22 种印度语言、全球英语口音和词典提示",
+        "sarvam_v3": "支持 22 种印度语言和印度英语",
         "mistral_voxtral_mini_latest": "快速多语言转录",
         "gemini_3_5_transcribe": "Google Gemini 语音转文字",
         "elevenlabs_scribe_v3": "最精准的多语言转录",

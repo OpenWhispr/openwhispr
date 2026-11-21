@@ -1,3 +1,4 @@
+import { sarvamKeyterms } from "../utils/sarvam.js";
 import { refreshEnterpriseIdentityForUse } from "../stores/enterpriseIdentityStore.ts";
 import { selfHostedSttRequest } from "./selfHostedSttHeaders.js";
 import i18n from "../i18n";
@@ -106,7 +107,8 @@ import {
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
 import {
-  isManagedOrukeetStream,
+  holdsAudioUntilConnected,
+  isSarvamAccountFailure,
   isTranscriptionPolicyRefusal,
   resolveStreamingFallbackTarget,
   resolveStreamingStartFallback,
@@ -523,6 +525,11 @@ const STREAMING_PROVIDERS = {
     onSessionEnd: (cb) => window.electronAPI.onAssemblyAiSessionEnd(cb),
   },
   "openai-realtime": makeDictationRealtimeProvider("openai-realtime"),
+  sarvam: {
+    ...makeDictationRealtimeProvider("sarvam"),
+    finalizeAcknowledged: true,
+    finalize: () => window.electronAPI.dictationRealtimeFinalize(),
+  },
   orukeet: {
     ...makeDictationRealtimeProvider("orukeet"),
     finalizeAcknowledged: true,
@@ -627,6 +634,21 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       language,
       prompt: dictionaryPrompt || undefined,
     }),
+  },
+  sarvam: {
+    displayName: "Sarvam AI",
+    ipc: () => window.electronAPI?.proxySarvamTranscription,
+    buildPayload: ({ audioBuffer, model, language, apiSettings, sarvamMode }) => ({
+      audioBuffer,
+      model,
+      language,
+      sarvamMode: sarvamMode ?? apiSettings.sarvamMode,
+      ...(model === "saaras:v4" && {
+        keyterms: sarvamKeyterms(getEffectiveDictionaryWords(apiSettings)),
+      }),
+    }),
+    echoPrompt: ({ apiSettings }) =>
+      sarvamKeyterms(getEffectiveDictionaryWords(apiSettings)).join(", "),
   },
   mistral: {
     displayName: "Mistral",
@@ -821,6 +843,8 @@ class AudioManager {
     this.stopRequestedDuringStreamingStart = false;
     this._streamingStopPromise = null;
     this._streamingStopMode = null;
+    this._connectingCaptureStop = null;
+    this._cancelPendingStreamingFinal = null;
     this._streamingSessionGeneration = 0;
     this._streamingCancellationGeneration = 0;
     this._activeTranscriptionAbortController = null;
@@ -1333,6 +1357,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._activeStreamingSessionId = null;
     this._activeStreamingProviderName = null;
     this._activeStreamingConfig = null;
+    this._connectingCaptureStop = null;
     this._activePipelineOptions = undefined;
   }
 
@@ -2315,6 +2340,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   cancelProcessing() {
     this._cancelActivationCapture(this._activeProcessingPipeline?.activationCapture);
     if (this.isProcessing) {
+      if (this._connectingCaptureStop && this.streamingStartInProgress) {
+        void this.cancelStreamingRecording();
+        return true;
+      }
       this._processingCancellationGeneration = (this._processingCancellationGeneration ?? 0) + 1;
       this._requestStreamingCancellation();
       // Streaming finalization can be inside a provider or model await that
@@ -4260,7 +4289,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
       unsubscribePolicy = usePolicyStore.subscribe(stopIfDisallowed);
       stopIfDisallowed();
-      const apiKey = managedResolution ? null : await this.getAPIKey();
+      const apiKey =
+        managedResolution || route.provider === "sarvam" ? null : await this.getAPIKey();
       requestController?.signal.throwIfAborted();
       const optimizedAudio = audioBlob;
 
@@ -4289,6 +4319,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           managedResolution,
           mimeType: optimizedAudio.type || "audio/webm",
           dictionaryPrompt: proxyDictionaryPrompt,
+          sarvamMode: metadata.sarvamMode,
           priorityDictionaryPrompt: this.getWhisperPrompt(apiSettings, priorityDictionary),
           keyterms:
             proxySpec === PROXY_TRANSCRIPTION_PROVIDERS.elevenlabs
@@ -4304,6 +4335,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         let result;
         try {
           requestController.signal.throwIfAborted();
+          if (wasCancelled()) throw new DOMException("Dictation cancelled", "AbortError");
           result = await call(proxyPayload);
         } catch (err) {
           throw classifyProxyFailure(err);
@@ -5244,6 +5276,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return route === "orukeet" && Boolean(isSignedInOverride ?? s.isSignedIn);
     }
 
+    if (s.cloudTranscriptionMode === "byok" && s.cloudTranscriptionProvider === "sarvam") {
+      return Boolean(s.sarvamApiKey);
+    }
+
     // Corti (BYOK) streams over its own WSS — independent of OpenWhispr Cloud.
     if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
       return !!(s.cortiClientId && s.cortiClientSecret);
@@ -5486,6 +5522,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return blob;
   }
 
+  async collectStreamingFallbackAudio() {
+    try {
+      return await this.mergeRecordedSegments(this._streamingFallbackSegments);
+    } catch (error) {
+      logger.warn(
+        "Failed to merge streaming fallback audio",
+        { error: error.message },
+        "streaming"
+      );
+      return this.getLargestRecordedSegment(this._streamingFallbackSegments);
+    }
+  }
+
   async replaceStreamingMic(replacement, previous) {
     if (!this.streamingProcessor || !this.streamingAudioContext) {
       throw new Error("Streaming audio pipeline is unavailable");
@@ -5551,7 +5600,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (res.code === "FEATURE_NOT_ENABLED") this.invalidateSttConfig();
       this.streamingFallbackReason = fallbackReason;
       logger.warn(
-        "Managed Orukeet session unavailable, falling back to batch recording",
+        "Streaming session unavailable, falling back to batch recording",
         { code: res.code, status: res.status, reason: fallbackReason, error: res.error },
         "streaming"
       );
@@ -5564,9 +5613,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         limit: Number.isFinite(res.details.limit) ? res.details.limit : 2000,
       });
     }
-    const err = new Error(res.error || "Failed to start streaming session");
-    err.code = res.code;
-    err.messageKey = res.messageKey;
+    const err = errorFromIpcResult({
+      ...res,
+      error: res.error || "Failed to start streaming session",
+    });
     err.networkCode = res.networkCode;
     throw err;
   }
@@ -5625,6 +5675,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       providerName = this.getStreamingProviderName();
       this._activeStreamingProviderName = providerName;
       this._activeStreamingConfig = { ...this.sttConfig };
+      if (providerName === "sarvam")
+        this._activeStreamingConfig.sarvamModel = getSettings().cloudTranscriptionModel;
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
       startWasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
@@ -5693,22 +5745,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // cannot change how this session's stream errors are handled. Only a
       // session whose fallback recorder started has a capture to fail over
       // to; stop finishes that recorder before a refused commit can arrive.
-      const managedOrukeet = isManagedOrukeetStream({
+      const holdUntilConnected = holdsAudioUntilConnected({
         providerName,
         cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
       });
-      const failsOver = Boolean(this.streamingFallbackRecorder) && managedOrukeet;
-      // Managed Orukeet cues the user before its session exists, and main can drop
+      const failsOver = Boolean(this.streamingFallbackRecorder) && holdUntilConnected;
+      // These routes cue the user before their session exists, and main can drop
       // what reaches a connection it replaces (a warmup for another route, a failed
-      // one, a session retry). So its audio waits here until the session has started.
-      let heldFrames = managedOrukeet ? [] : null;
+      // one, a session retry). So the audio waits here until the session has started.
+      let heldFrames = holdUntilConnected ? [] : null;
+      let pcmComplete = false;
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
         // on stop; the sentinel must not be sent as audio (realtime backends
         // reject the odd-length non-PCM bytes with "Invalid audio data").
-        if (!ownsSession() || !this.isStreaming) return;
+        if (!ownsSession() || !this.isStreaming || pcmComplete) return;
         if (event.data === "flushed") {
+          pcmComplete = true;
           this._streamingFlushResolve?.();
           return;
         }
@@ -5851,6 +5905,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Decided from the credentials this session opens with, so a mode
         // switch before stop cannot move its words in or out of Cloud usage.
         this._streamingMeteredByCloud = isCloudMeteredStream(sessionOptions);
+        if (providerName === "sarvam")
+          this._activeStreamingConfig.sarvamMode = sessionOptions.sarvamMode;
         const res = await provider.start(sessionOptions);
         // The user is gone: no upgrade prompt, session refresh or retry for this answer.
         if (startWasCancelled()) return res;
@@ -5861,16 +5917,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._settleStreamingStart();
       if (startWasCancelled()) return false;
 
-      // A managed Orukeet start failure (refused socket, account cap, outage)
-      // keeps this capture: the fallback recorder has held the audio since the
-      // mic opened, and reopening the mic for a batch recording would lose it.
-      if (result.needsFallback && this.streamingFallbackReason && this.streamingFallbackRecorder) {
-        this._streamingFailoverReason = this.streamingFallbackReason;
+      // Even after release, the fallback recorder holds the original capture.
+      // Reopening the microphone would lose it and record past the hotkey.
+      if (
+        result.needsFallback &&
+        (this._connectingCaptureStop ||
+          (this.streamingFallbackReason && this.streamingFallbackRecorder))
+      ) {
+        this._streamingFailoverReason = this.streamingFallbackReason || "session_unavailable";
         this.streamingFallbackReason = null;
         heldFrames = null;
         logger.info(
-          "Managed Orukeet unavailable, recording for the Cloud upload",
-          { reason: this._streamingFailoverReason },
+          "Streaming unavailable, keeping audio for batch transcription",
+          { providerName, reason: this._streamingFailoverReason },
           "streaming"
         );
         if (this.stopRequestedDuringStreamingStart) {
@@ -5978,15 +6037,33 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           "Your microphones stayed muted and produced no audio. Please check your sound input settings and try again.";
       }
 
-      this.onError?.({
-        code: error.code,
-        messageKey: error.messageKey,
-        title: errorTitle,
-        description: errorDescription,
-      });
+      if (providerName === "sarvam" && isSarvamAccountFailure(error) && this.recordingStartTime) {
+        const startedAt = this.recordingStartTime;
+        const capture = this.stopConnectingCapture();
+        await capture.finished;
+        if (!startWasCancelled()) {
+          const capturedAudio = await this.collectStreamingFallbackAudio();
+          if (capturedAudio && !startWasCancelled()) {
+            this.lastAudioBlob = capturedAudio;
+            await this.saveFailedTranscription(error.message, error.code, {
+              durationSeconds: (capture.endedAt - startedAt) / 1000,
+              analyticsOccurredAt: new Date(startedAt).toISOString(),
+            });
+          }
+        }
+        this._streamingFallbackSegments = [];
+      }
+      if (!startWasCancelled()) {
+        this.onError?.({
+          ...transcriptionFailureOutcome(error).report,
+          title: errorTitle,
+          description: errorDescription,
+        });
+      }
 
       await this.cleanupStreaming();
       this.isRecording = false;
+      this.isProcessing = false;
       this.recordingStartTime = null;
       this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
       return false;
@@ -6018,9 +6095,56 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
   }
 
+  // Drain the worklet before finalizing. A missing flush requires the retained
+  // recording because the realtime transcript could omit the last syllable.
+  async flushStreamingProcessor() {
+    const processor = this.streamingProcessor;
+    let watchdog;
+    try {
+      await new Promise((resolve, reject) => {
+        this._streamingFlushResolve = resolve;
+        watchdog = setTimeout(
+          () => reject(new Error("Audio worklet did not flush")),
+          PREVIEW_FLUSH_WATCHDOG_MS
+        );
+        processor.port.postMessage("stop");
+      });
+      return null;
+    } catch (error) {
+      return { success: false, error: error.message };
+    } finally {
+      clearTimeout(watchdog);
+      if (this.streamingProcessor === processor) {
+        this._streamingFlushResolve = null;
+        processor.disconnect();
+        this.streamingProcessor = null;
+      }
+    }
+  }
+
+  // Release the capture independently of the WebSocket handshake. Its held
+  // PCM, including the worklet's last partial frame, can still be submitted.
+  stopConnectingCapture() {
+    if (this._connectingCaptureStop) return this._connectingCaptureStop;
+    this.isRecording = false;
+    this.isProcessing = true;
+    this.micRecovery.stop();
+    this.streamingSource?.disconnect();
+    const endedAt = Date.now();
+    const finished = this._streamingMicSwapPromise || this.finishStreamingFallbackSegment();
+    const flush = this.streamingProcessor ? this.flushStreamingProcessor() : null;
+    this._connectingCaptureStop = { endedAt, finished, flush };
+    this.streamingStream?.getTracks().forEach((track) => track.stop());
+    this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
+    return this._connectingCaptureStop;
+  }
+
   async stopStreamingRecording() {
     if (this.streamingStartInProgress) {
       this.stopRequestedDuringStreamingStart = true;
+      if (this.isRecording && this.getActiveStreamingProviderName() === "sarvam") {
+        this.stopConnectingCapture();
+      }
       logger.debug("Streaming stop requested while start is in progress", {}, "streaming");
       return true;
     }
@@ -6064,6 +6188,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   _requestStreamingCancellation() {
     this._streamingCancellationGeneration += 1;
+    this._cancelPendingStreamingFinal?.();
     ReasoningService.cancelAllRequests();
     window.electronAPI?.cancelCloudTranscription?.();
     this._activeTranscriptionAbortController?.abort();
@@ -6104,12 +6229,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._streamingFallbackSegments = [];
       this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
 
-      // Esc is live during managed Orukeet's cold connect, which can take seconds.
-      // Stopping aborts its mint and socket, so the start settles now and the pill
+      // Esc is live during a per-recording cold connect, which can take seconds.
+      // Stopping aborts the mint and socket, so the start settles now and the pill
       // doesn't sit busy until the connect times out.
       if (
         this.streamingStartInProgress &&
-        isManagedOrukeetStream({
+        holdsAudioUntilConnected({
           providerName,
           cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
         })
@@ -6136,7 +6261,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "streaming"
           );
         });
-      await Promise.all([providerStop, this.cleanupPreview({ dismiss: true })]);
+      // MediaRecorder posts its final chunk and stop after release. Wait for
+      // that callback before dropping the cancelled recording's segments.
+      await Promise.all([
+        providerStop,
+        this.cleanupPreview({ dismiss: true }),
+        this._connectingCaptureStop?.finished,
+      ]);
+      this._streamingFallbackSegments = [];
       return true;
     })();
 
@@ -6170,12 +6302,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const providerName = this.getActiveStreamingProviderName();
     const cancellationGeneration = this._streamingCancellationGeneration;
     const wasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
+    let cancelledSocketStop;
     const abandonFinalization = async () => {
       this.cleanupStreamingAudio();
       this.cleanupStreamingListeners(sessionId);
       this._streamingFallbackSegments = [];
       try {
-        await this.getStreamingProvider(providerName).stop?.();
+        await (cancelledSocketStop || this.getStreamingProvider(providerName).stop?.());
       } catch (error) {
         logger.debug(
           "Streaming disconnect after cancellation failed",
@@ -6187,7 +6320,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     };
 
     const durationSeconds = this.recordingStartTime
-      ? (Date.now() - this.recordingStartTime) / 1000
+      ? ((this._connectingCaptureStop?.endedAt ?? Date.now()) - this.recordingStartTime) / 1000
       : null;
     const analyticsOccurredAt = new Date(this.recordingStartTime || Date.now());
 
@@ -6205,45 +6338,42 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Let an in-flight mic swap settle so its fallback segment isn't lost and
     // its replacement recorder doesn't outlive this stop.
     if (this._streamingMicSwapPromise) await this._streamingMicSwapPromise;
+    if (this._connectingCaptureStop) await this._connectingCaptureStop.finished;
     if (wasCancelled()) return abandonFinalization();
 
     const t0 = performance.now();
     let finalText = this.streamingFinalText || "";
 
     const provider = this.getStreamingProvider(providerName);
+    // Sarvam's session.end can take up to 15 seconds. Closing its socket settles
+    // the pending final immediately, including when the user cancels processing.
+    const finalizeAcknowledgedStream = async () => {
+      if (providerName === "sarvam")
+        this._cancelPendingStreamingFinal = () => {
+          this._cancelPendingStreamingFinal = null;
+          cancelledSocketStop = provider.stop().catch(() => {});
+        };
+      try {
+        return await provider.finalize();
+      } catch (error) {
+        return { success: false, error: error.message };
+      } finally {
+        this._cancelPendingStreamingFinal = null;
+      }
+    };
     let acknowledgedFinal = null;
     let finalAcknowledged = false;
     let orukeetFinal = null;
     // The worklet emits PCM followed by "flushed" on the same message port.
     // IPC sends and the finalize invoke preserve that order in the main process.
-    if (this.streamingProcessor && provider.finalizeAcknowledged) {
-      const processor = this.streamingProcessor;
-      let watchdog;
-      const flushed = new Promise((resolve, reject) => {
-        this._streamingFlushResolve = resolve;
-        watchdog = setTimeout(
-          () => reject(new Error("Audio worklet did not flush")),
-          PREVIEW_FLUSH_WATCHDOG_MS
-        );
-      });
-      processor.port.postMessage("stop");
-      try {
-        await flushed;
-      } catch (error) {
-        // Incomplete capture must use the retained recording, never commit a
-        // truncated stream. Keep cleanup running so the microphone is released.
-        acknowledgedFinal = Promise.resolve({ success: false, error: error.message });
-      } finally {
-        clearTimeout(watchdog);
-        this._streamingFlushResolve = null;
-        processor.disconnect();
-        this.streamingProcessor = null;
-      }
+    if (
+      provider.finalizeAcknowledged &&
+      (this.streamingProcessor || this._connectingCaptureStop?.flush)
+    ) {
+      acknowledgedFinal = await (this._connectingCaptureStop?.flush ||
+        this.flushStreamingProcessor());
       if (wasCancelled()) return abandonFinalization();
-      acknowledgedFinal ||= provider.finalize().catch((error) => ({
-        success: false,
-        error: error.message,
-      }));
+      acknowledgedFinal ||= finalizeAcknowledgedStream();
     } else if (this.streamingProcessor) {
       try {
         this.streamingProcessor.port.postMessage("stop");
@@ -6265,19 +6395,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.streamingAudioContext = null;
 
     // Stop fallback recorder before stopping media tracks
-    let fallbackBlob = null;
     await this.finishStreamingFallbackSegment();
     if (wasCancelled()) return abandonFinalization();
-    try {
-      fallbackBlob = await this.mergeRecordedSegments(this._streamingFallbackSegments);
-    } catch (error) {
-      logger.warn(
-        "Failed to merge streaming fallback audio",
-        { error: error.message },
-        "streaming"
-      );
-      fallbackBlob = this.getLargestRecordedSegment(this._streamingFallbackSegments);
-    }
+    const fallbackBlob = await this.collectStreamingFallbackAudio();
     if (wasCancelled()) return abandonFinalization();
     if (fallbackBlob) {
       this.lastAudioBlob = fallbackBlob;
@@ -6303,9 +6423,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // 3. Finalize tells the provider to process any buffered audio and send final results.
     //    Wait for the transcript to settle before disconnecting.
     if (provider.finalizeAcknowledged) {
-      const result = await (acknowledgedFinal || provider.finalize());
+      const result = await (acknowledgedFinal || finalizeAcknowledgedStream());
       finalAcknowledged = result?.success === true;
-      if (finalAcknowledged) orukeetFinal = result;
+      if (finalAcknowledged && providerName === "orukeet") orukeetFinal = result;
       if (finalAcknowledged && typeof result.text === "string") {
         this.streamingFinalText = result.text;
       }
@@ -6345,6 +6465,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
     }
 
+    if (providerName === "sarvam") {
+      // A partial or an earlier utterance omits the tail when the socket drops.
+      finalText = finalAcknowledged ? this.streamingFinalText : "";
+      if (!finalAcknowledged) this._streamingFailoverReason ??= "stream_no_final";
+    }
     this.cleanupStreamingListeners(sessionId);
     if (wasCancelled()) return true;
 
@@ -6706,8 +6831,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       (failoverReason ? !failoverSilent : !finalAcknowledged && durationSeconds > 2) &&
       fallbackBlob?.size > 0
     ) {
-      const target = resolveStreamingFallbackTarget(getSettings());
-      if (target === "skip") {
+      const current = getSettings();
+      const target = resolveStreamingFallbackTarget(current);
+      if (
+        providerName === "sarvam" &&
+        (target !== "byok" ||
+          current.cloudTranscriptionProvider !== "sarvam" ||
+          current.cloudTranscriptionModel !== this._activeStreamingConfig?.sarvamModel ||
+          current.useLocalWhisper ||
+          isSelfHostedTranscription(current) ||
+          getManagedTranscriptionResolution())
+      ) {
+        failBatchFallback(new Error("Transcription settings changed during recording"));
+      } else if (target === "skip") {
         logger.warn(
           "Skipping batch fallback: OpenWhispr Cloud session signed out",
           {},
@@ -6739,7 +6875,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   },
                   wasCancelled
                 )
-              : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds }, wasCancelled);
+              : await this.processWithOpenAIAPI(
+                  fallbackBlob,
+                  {
+                    durationSeconds,
+                    ...(providerName === "sarvam" && {
+                      sarvamMode: this._activeStreamingConfig?.sarvamMode,
+                    }),
+                  },
+                  wasCancelled
+                );
           if (wasCancelled()) return true;
           if (batchResult?.text) {
             finalText = batchResult.text;

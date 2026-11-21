@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
-const registry = require("../../src/models/modelRegistryData.json");
+const { bundledRegistryData: registry } = require("../../src/models/registryData.js");
 
 // Upload, the batch queue and Chat's mic read keys through this switch, so a
 // provider it doesn't know gets no key there even while Settings shows one.

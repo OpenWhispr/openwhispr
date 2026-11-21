@@ -1,3 +1,5 @@
+import { resolveSarvamMode, sarvamKeyterms } from "../utils/sarvam.js";
+
 // Note recording only offers providers the main process will actually run:
 // meeting prepare/start check ALLOWED_MEETING_PROVIDERS (derived from the
 // streaming client table in meetingStreamingProviders.js) and reject anything
@@ -11,6 +13,7 @@ export const MEETING_STREAMING_PROVIDER_IDS = [
   "deepgram",
   "corti",
   "tinfoil",
+  "sarvam",
   "elevenlabs",
 ];
 
@@ -39,6 +42,7 @@ export function resolveMeetingTranscriptionOptions({
   selectedModel,
   byokProviders,
   managedProviders,
+  sarvamMode,
   cortiEnvironment,
   cortiTenant,
   keyterms,
@@ -102,6 +106,12 @@ export function resolveMeetingTranscriptionOptions({
     };
   }
 
+  if (provider.id === "sarvam")
+    return {
+      ...options,
+      sarvamMode: resolveSarvamMode(sarvamMode),
+      ...(options.model === "saaras:v4" && { keyterms: sarvamKeyterms(keyterms) }),
+    };
   // ElevenLabs takes the dictionary as keyterms on the socket it opens.
   if (provider.id === "elevenlabs") return { ...options, keyterms };
 

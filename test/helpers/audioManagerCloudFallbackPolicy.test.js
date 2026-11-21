@@ -1010,3 +1010,70 @@ test("a local preview refusal never stops a dictation going to the enterprise ro
   assert.equal(reported, undefined);
   assert.equal(completed.text, "enterprise transcript");
 });
+
+test("Sarvam dictation uses the selected model and output mode", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "ow-sarvam-route-",
+    settingsKey: "__sarvamSettings",
+  });
+  for (const model of ["saaras:v4", "saaras:v3"]) {
+    setSettings({
+      useLocalWhisper: false,
+      allowLocalFallback: false,
+      cloudTranscriptionProvider: "sarvam",
+      cloudTranscriptionModel: model,
+      transcriptionMode: "providers",
+      sarvamMode: "translit",
+      customDictionary: ["New Delhi"],
+    });
+    window.electronAPI.proxySarvamTranscription = async (payload) => {
+      assert.equal(payload.model, model);
+      assert.equal(payload.sarvamMode, "translit");
+      assert.deepEqual(payload.keyterms, model === "saaras:v4" ? ["New Delhi"] : undefined);
+      return { text: "meeting है" };
+    };
+    const manager = createManager({
+      getTranscriptionModel: () => model,
+      getAPIKey: () => assert.fail("main owns the Sarvam key"),
+    });
+    const result = await manager.processWithOpenAIAPI(
+      new Blob([Uint8Array.of(1)], { type: "audio/webm" })
+    );
+    assert.equal(result.source, "sarvam");
+  }
+});
+
+test("cancelling before a Sarvam recording is read prevents the upload", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "ow-sarvam-cancel-",
+    settingsKey: "__sarvamCancel",
+  });
+  setSettings({
+    allowLocalFallback: false,
+    useLocalWhisper: false,
+    transcriptionMode: "providers",
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v4",
+  });
+  let uploaded = false;
+  window.electronAPI.proxySarvamTranscription = async () => {
+    uploaded = true;
+    return { text: "unexpected" };
+  };
+  const manager = createManager({ getTranscriptionModel: () => "saaras:v4" });
+  let cancelled = false;
+  await assert.rejects(
+    manager.processWithOpenAIAPI(
+      {
+        type: "audio/webm",
+        arrayBuffer: async () => {
+          cancelled = true;
+          return new ArrayBuffer(4);
+        },
+      },
+      {},
+      () => cancelled
+    )
+  );
+  assert.equal(uploaded, false);
+});

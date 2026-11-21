@@ -282,6 +282,7 @@ function buildFakeThis() {
       getOpenAIKey: () => "sk-openai",
       getGroqKey: () => "gk-groq",
       getMistralKey: () => "mk-mistral",
+      getSarvamKey: () => "saved-sarvam-key",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
       getAssemblyAIKey: () => "aai-assemblyai",
@@ -1157,6 +1158,114 @@ const invokeUpload = (payload, bytes = Buffer.from([1, 2, 3, 4])) => {
   );
 };
 
+test("Sarvam uploads and history retries use the selected output mode for each operation", async (t) => {
+  if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath())
+    return t.skip("ffmpeg unavailable");
+  const { pcm16ToWav } = require("../../src/utils/audioUtils");
+  const wav = pcm16ToWav(Buffer.alloc(32000));
+  t.mock.method(fakeThis.audioStorageManager, "getAudioBuffer", () => wav);
+  const previousResponse = fetchResponse;
+  t.after(() => {
+    fetchResponse = previousResponse;
+  });
+  fetchResponse = () => Response.json({ transcript: "कल meeting है" });
+  fetches.length = 0;
+
+  const upload = await invokeUpload(
+    {
+      provider: "sarvam",
+      model: "saaras:v4",
+      sarvamMode: "codemix",
+      keyterms: ["OpenWhispr"],
+      language: "hi",
+      transcriptionMode: "providers",
+    },
+    wav
+  );
+  const retry = await invoke({
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v3",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+    sarvamMode: "verbatim",
+    preferredLanguage: "auto",
+    keyterms: ["OpenWhispr"],
+  });
+  assert.equal(upload.text, "कल meeting है");
+  assert.equal(retry.success, true);
+  assert.equal(fetches.length, 2);
+  for (const { url, init } of fetches) {
+    assert.equal(url, "https://api.sarvam.ai/speech-to-text");
+    assert.equal(init.headers["api-subscription-key"], "saved-sarvam-key");
+  }
+  const fields = ({ init: { body } }) =>
+    ["model", "mode", "language_code", "keyterms"].map((field) => body.get(field));
+  assert.deepEqual(fetches.map(fields), [
+    ["saaras:v4", "codemix", "hi-IN", '["OpenWhispr"]'],
+    ["saaras:v3", "verbatim", null, null],
+  ]);
+});
+
+test("Sarvam file uploads preserve phrase times across audio cuts and silent pieces", async (t) => {
+  if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath())
+    return t.skip("ffmpeg unavailable");
+  const { pcm16ToWav } = require("../../src/utils/audioUtils");
+  const wav = pcm16ToWav(Buffer.alloc(61 * 32000));
+  const original = fetchResponse;
+  t.after(() => {
+    fetchResponse = original;
+  });
+  const replies = [
+    {
+      transcript: "Good morning.",
+      timestamps: {
+        words: ["Good", "morning."],
+        start_time_seconds: [1, 2],
+        end_time_seconds: [1.5, 3],
+      },
+    },
+    { transcript: "" },
+    {
+      transcript: "Welcome.",
+      timestamps: { words: ["Welcome."], start_time_seconds: [0.5], end_time_seconds: [2] },
+    },
+  ];
+  fetchResponse = () => Response.json(replies.shift());
+  fetches.length = 0;
+  const result = await invokeUpload({ provider: "sarvam", timestamps: true }, wav);
+  assert.equal(result.text, "Good morning. Welcome.");
+  assert.deepEqual(result.segments, [
+    { text: "Good", start: 1, end: 1.5 },
+    { text: "morning.", start: 2, end: 3 },
+    { text: "Welcome.", start: 58.5, end: 60 },
+  ]);
+  assert.ok(fetches.every(({ init }) => init.body.get("with_timestamps") === "true"));
+});
+
+test("a silent Sarvam upload returns empty text as other providers do; a retry still reports no speech", async (t) => {
+  if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath())
+    return t.skip("ffmpeg unavailable");
+  const { pcm16ToWav } = require("../../src/utils/audioUtils");
+  const wav = pcm16ToWav(Buffer.alloc(32000));
+  t.mock.method(fakeThis.audioStorageManager, "getAudioBuffer", () => wav);
+  const previousResponse = fetchResponse;
+  t.after(() => {
+    fetchResponse = previousResponse;
+  });
+  fetchResponse = () => Response.json({ transcript: " " });
+
+  const upload = await invokeUpload({ provider: "sarvam", transcriptionMode: "providers" }, wav);
+  assert.equal(upload.success, true);
+  assert.equal(upload.text, "");
+  const retry = await invoke({
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+  });
+  assert.equal(retry.success, false);
+  assert.equal(retry.code, "NO_SPEECH_DETECTED");
+});
+
 const whisperResponse = {
   text: "Send the report today. Thanks!",
   segments: [
@@ -1405,31 +1514,45 @@ test("canceling a live AssemblyAI request during authorization prevents its uplo
   assert.equal(fetches.length, 0);
 });
 
-test("live AssemblyAI cancellation affects only the sending window and rejects a late provider result", async (t) => {
-  const { deferred } = require("./harness/deferred");
-  const started = deferred();
-  const finish = deferred();
-  const sender = { id: 42 };
-  t.after(() => {
-    fetchResponse = defaultFetchResponse;
+for (const [provider, name] of [
+  ["assemblyai", "AssemblyAI"],
+  ["sarvam", "Sarvam"],
+]) {
+  test(`live ${name} cancellation affects only the sending window and rejects a late provider result`, async (t) => {
+    if (provider === "sarvam" && !require("../../src/helpers/ffmpegUtils").getFFmpegPath())
+      return t.skip("ffmpeg unavailable");
+    const { deferred } = require("./harness/deferred");
+    const started = deferred();
+    const finish = deferred();
+    const sender = { id: 42 };
+    t.after(() => {
+      fetchResponse = defaultFetchResponse;
+    });
+    fetchResponse = async (_url, init) => {
+      started.resolve(init.signal);
+      await finish.promise;
+      return provider === "sarvam"
+        ? Response.json({ transcript: "late transcript" })
+        : dictationResponse({ text: "late transcript" })();
+    };
+    const pending = handlers.get(`proxy-${provider}-transcription`)(
+      { sender },
+      {
+        audioBuffer:
+          provider === "sarvam"
+            ? require("../../src/utils/audioUtils").pcm16ToWav(Buffer.alloc(32000))
+            : new Uint8Array([1]),
+      }
+    );
+    const signal = await started.promise;
+    eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: 43 } });
+    assert.equal(signal.aborted, false);
+    eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: sender.id } });
+    finish.resolve();
+    assert.equal(signal.aborted, true);
+    assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
   });
-  fetchResponse = async (_url, init) => {
-    started.resolve(init.signal);
-    await finish.promise;
-    return dictationResponse({ text: "late transcript" })();
-  };
-  const pending = handlers.get("proxy-assemblyai-transcription")(
-    { sender },
-    { audioBuffer: new Uint8Array([1]) }
-  );
-  const signal = await started.promise;
-  eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: 43 } });
-  assert.equal(signal.aborted, false);
-  eventHandlers.get("cloud-transcribe-cancel")({ sender: { id: sender.id } });
-  finish.resolve();
-  assert.equal(signal.aborted, true);
-  assert.equal((await pending).code, "TRANSCRIPTION_CANCELLED");
-});
+}
 
 test("switching personal workspaces aborts an AssemblyAI upload and discards a late body", async (t) => {
   const { deferred } = require("./harness/deferred");

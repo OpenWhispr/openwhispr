@@ -123,6 +123,17 @@ const REALTIME_TOKEN_PROVIDERS = {
     return duplicate(streams, apiKey);
   },
 
+  "sarvam-realtime": async ({ environmentManager }, options, streams) => {
+    if (options.mode !== "byok") throw new Error("Sarvam AI requires a personal API key");
+    const apiKey = environmentManager.getSarvamKey();
+    if (!apiKey) {
+      throw Object.assign(new Error("No Sarvam AI API key configured. Add your key in Settings."), {
+        code: "NO_API",
+      });
+    }
+    return duplicate(streams, apiKey);
+  },
+
   "openai-realtime": async ({ environmentManager, postServerToken }, options, streams) => {
     if (options.mode === "byok") {
       const apiKey = environmentManager.getOpenAIKey();

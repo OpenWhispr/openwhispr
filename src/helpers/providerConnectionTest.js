@@ -4,6 +4,7 @@ const ENDPOINTS = {
   openai: "https://api.openai.com/v1/models",
   groq: "https://api.groq.com/openai/v1/models",
   xai: "https://api.x.ai/v1/models",
+  sarvam: "https://api.sarvam.ai/speech-to-text",
   mistral: "https://api.mistral.ai/v1/models",
   // The largest page each API allows, so a valid but older model is still listed.
   anthropic: "https://api.anthropic.com/v1/models?limit=1000",
@@ -252,6 +253,8 @@ function resolveProviderRequest(config) {
       headers["anthropic-version"] = "2023-06-01";
     } else if (provider === "gemini") {
       headers["x-goog-api-key"] = apiKey;
+    } else if (provider === "sarvam") {
+      headers["api-subscription-key"] = apiKey;
     } else if (provider === "deepgram") {
       headers.Authorization = `Token ${apiKey}`;
     } else if (provider === "assemblyai") {
@@ -466,6 +469,23 @@ async function testProviderConnection(
   }
 
   const provider = String(config?.provider || "").toLowerCase();
+  if (provider === "sarvam") {
+    // Sarvam authenticates before it validates, so its refusal of a request with no
+    // file confirms the key without sending speech, whatever wording it uses.
+    const body = new FormData();
+    body.set("model", config.model || "saaras:v4");
+    const failure = await probe(
+      request.endpoint,
+      request,
+      fetchImpl,
+      (response) =>
+        response.status === 400 || response.status === 422
+          ? null
+          : describeStatusFailure(response.status, provider),
+      { method: "POST", body }
+    );
+    return failure ? { success: false, ...failure } : { success: true };
+  }
   if (provider === "deepgram") return testDeepgramKey(request, fetchImpl);
   if (provider === "elevenlabs") return testElevenLabsKey(request, fetchImpl);
 

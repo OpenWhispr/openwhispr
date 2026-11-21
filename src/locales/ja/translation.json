@@ -980,6 +980,14 @@
       "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
       "docsLink": "ドキュメントを見る"
     },
+    "sarvam": {
+      "outputMode": "出力モード",
+      "codemix": "言語混在（英単語はラテン文字のまま）",
+      "transcribe": "話された言語で文字起こし",
+      "verbatim": "逐語的に文字起こし",
+      "translate": "英語に翻訳",
+      "translit": "ラテン文字に翻字"
+    },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr は辞書の用語のうち条件を満たすものを ElevenLabs に送信します。用語が含まれる場合、ElevenLabs の料金が 20% 高くなります。"
     }
@@ -3278,6 +3286,8 @@
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
+        "sarvam_v4": "インドの22言語、各地の英語、辞書の用語に対応",
+        "sarvam_v3": "インドの22言語とインド英語に対応",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
         "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
         "elevenlabs_scribe_v3": "最も高精度な多言語文字起こし",

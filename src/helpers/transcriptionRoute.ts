@@ -175,10 +175,11 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs";
+      provider:
+        "tinfoil" | "mistral" | "sarvam" | "xai" | "corti" | "gemini" | "assemblyai" | "elevenlabs";
       model: string | null;
       language?: string;
-      sizeCapBytes: number;
+      sizeCapBytes: number | null;
       cortiEnvironment?: string;
       cortiTenant?: string;
     }
@@ -311,6 +312,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
   if (provider === "xai") return "grok-stt";
+  if (provider === "sarvam") return "saaras:v4";
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
@@ -464,6 +466,9 @@ export function resolveTranscriptionRoute({
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }
+  // Sarvam audio is converted locally and sent in 30-second pieces, so no file cap applies.
+  if (provider === "sarvam")
+    return { transport: "proxied", provider, model, language, sizeCapBytes: null };
   if (provider === "gemini") {
     return {
       transport: "proxied",

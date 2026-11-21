@@ -38,6 +38,9 @@ export default class FakeAudioManager {
   getStreamingProviderName() {
     return globalThis.__startRoute.provider;
   }
+  getActiveStreamingProviderName() {
+    return this.getStreamingProviderName();
+  }
   isSttConfigStale() {
     return false;
   }
@@ -93,6 +96,7 @@ const RECORDING = { isRecording: true, isProcessing: false, isStreaming: true };
 const IDLE = { isRecording: false, isProcessing: false, isStreaming: false };
 
 const MANAGED_ORUKEET = { streaming: true, provider: "orukeet", mode: "openwhispr" };
+const SARVAM = { streaming: true, provider: "sarvam", mode: "byok" };
 
 async function mountHook(t, route = MANAGED_ORUKEET) {
   let root = null;
@@ -167,30 +171,35 @@ async function settle() {
 
 const STARTED = ["pause", "register", "start"];
 
-test("cue, media pause and Escape act when recording begins, not when the connect finishes", async (t) => {
-  const hook = await mountHook(t);
-  let activeManager;
-  globalThis.__startOnStart = (manager) => {
-    activeManager = manager;
-    manager.report(RECORDING);
-    // Mic status reports repeat the recording state while the connect is pending.
-    manager.report({ ...RECORDING, micCaptureStatus: "active" });
-  };
+for (const [name, route] of [
+  ["managed Orukeet", MANAGED_ORUKEET],
+  ["Sarvam", SARVAM],
+]) {
+  test(`${name}: cue, media pause and Escape act when recording begins, not when the connect finishes`, async (t) => {
+    const hook = await mountHook(t, route);
+    let activeManager;
+    globalThis.__startOnStart = (manager) => {
+      activeManager = manager;
+      manager.report(RECORDING);
+      // Mic status reports repeat the recording state while the connect is pending.
+      manager.report({ ...RECORDING, micCaptureStatus: "active" });
+    };
 
-  let started;
-  await React.act(async () => {
-    started = hook.api.startRecording();
-    await new Promise((resolve) => setImmediate(resolve));
-  });
-  await settle();
-  assert.deepEqual(globalThis.__startEvents, STARTED, "must not wait for the connect");
+    let started;
+    await React.act(async () => {
+      started = hook.api.startRecording();
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+    await settle();
+    assert.deepEqual(globalThis.__startEvents, STARTED, "must not wait for the connect");
 
-  await React.act(async () => {
-    activeManager.finishStart(true);
-    await started;
+    await React.act(async () => {
+      activeManager.finishStart(true);
+      await started;
+    });
+    assert.deepEqual(globalThis.__startEvents, STARTED, "must act once");
   });
-  assert.deepEqual(globalThis.__startEvents, STARTED, "must act once");
-});
+}
 
 test("a streaming start that falls back to batch cues once and stays paused with Escape held", async (t) => {
   const hook = await mountHook(t);
@@ -271,6 +280,22 @@ test("a stop during the connect resumes media and releases Escape", async (t) =>
   assert.equal(events.includes("stop"), true);
   assert.equal(events.at(-1), "resume");
   assert.equal(events.at(-2), "unregister");
+});
+
+test("Sarvam push-to-talk release reaches capture before the handshake completes", async (t) => {
+  const hook = await mountHook(t, SARVAM);
+  let released;
+  globalThis.__startOnStart = (manager) => {
+    manager.report({ ...RECORDING, isStreamingStartInProgress: true });
+    void hook.api.stopRecording();
+    released = !manager.getState().isRecording;
+    manager.finishStart(true);
+  };
+  await React.act(async () => {
+    await hook.api.startRecording();
+  });
+  assert.equal(released, true);
+  assert.equal(globalThis.__startEvents.filter((event) => event === "stop").length, 1);
 });
 
 test("Escape during the connect cancels, resumes media and releases the hotkey", async (t) => {

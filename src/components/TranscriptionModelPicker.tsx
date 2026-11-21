@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useState, useEffect, useId, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { SARVAM_MODES } from "../utils/sarvam.js";
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { isAwaitingCatalog } from "../models/modelLifecycle.js";
 import { getRegistryData } from "../models/registryData.js";
@@ -296,6 +297,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "groq", name: "Groq" },
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
+  { id: "sarvam", name: "Sarvam AI" },
   { id: "gemini", name: "Gemini" },
   { id: "corti", name: "Corti" },
   { id: "tinfoil", name: "Tinfoil" },
@@ -329,6 +331,7 @@ interface ProviderCredentialField {
     | "groqApiKey"
     | "xaiApiKey"
     | "mistralApiKey"
+    | "sarvamApiKey"
     | "geminiApiKey"
     | "cortiClientId"
     | "cortiClientSecret"
@@ -360,6 +363,10 @@ const PROVIDER_CREDENTIALS: Record<
   xai: {
     consoleUrl: "https://console.x.ai",
     fields: [{ key: "xaiApiKey", input: "secret" }],
+  },
+  sarvam: {
+    consoleUrl: "https://indus.sarvam.ai/key-management",
+    fields: [{ key: "sarvamApiKey", input: "secret" }],
   },
   mistral: {
     consoleUrl: "https://console.mistral.ai/api-keys",
@@ -530,7 +537,12 @@ export default function TranscriptionModelPicker({
   const xaiApiKey = useSettingsStore((s) => s.xaiApiKey);
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
+  const sarvamApiKey = useSettingsStore((s) => s.sarvamApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const sarvamModeId = useId();
+  const sarvamMode = useSettingsStore((s) => s.sarvamMode);
+  const setSarvamMode = useSettingsStore((s) => s.setSarvamMode);
+  const setSarvamApiKey = useSettingsStore((s) => s.setSarvamApiKey);
   const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
   const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
@@ -1316,6 +1328,7 @@ export default function TranscriptionModelPicker({
     groqApiKey: keyDraft.value("groqApiKey", groqApiKey),
     xaiApiKey: keyDraft.value("xaiApiKey", xaiApiKey),
     mistralApiKey: keyDraft.value("mistralApiKey", mistralApiKey),
+    sarvamApiKey: keyDraft.value("sarvamApiKey", sarvamApiKey),
     geminiApiKey: keyDraft.value("geminiApiKey", geminiApiKey),
     cortiClientId: keyDraft.value("cortiClientId", cortiClientId),
     cortiClientSecret: keyDraft.value("cortiClientSecret", cortiClientSecret),
@@ -1333,6 +1346,7 @@ export default function TranscriptionModelPicker({
     groqApiKey: setGroqApiKey,
     xaiApiKey: setXaiApiKey,
     mistralApiKey: setMistralApiKey,
+    sarvamApiKey: setSarvamApiKey,
     geminiApiKey: setGeminiApiKey,
     cortiClientId: setCortiClientId,
     cortiClientSecret: setCortiClientSecret,
@@ -1814,6 +1828,26 @@ export default function TranscriptionModelPicker({
                       </div>
                     );
                   })}
+
+                  {displayedCloudProvider === "sarvam" && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-foreground" htmlFor={sarvamModeId}>
+                        {t("transcription.sarvam.outputMode")}
+                      </label>
+                      <Select value={sarvamMode} onValueChange={setSarvamMode}>
+                        <SelectTrigger className="h-8 text-sm" id={sarvamModeId}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SARVAM_MODES.map((mode) => (
+                            <SelectItem key={mode} value={mode}>
+                              {t(`transcription.sarvam.${mode}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-foreground">
