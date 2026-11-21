@@ -14,3 +14,11 @@ export function customTranscriptionKeySource({ storedKey, isTitaniumService }) {
   if (isTitaniumService) return "titanium";
   return storedKey && String(storedKey).trim() ? "stored" : "none";
 }
+
+/**
+ * A key cached for the Custom provider may be reused only off our own hosts; on them
+ * the decision is made per request so a key cached from an earlier endpoint is never sent.
+ */
+export function canReuseCachedTranscriptionKey({ provider, isTitaniumService }) {
+  return !(provider === "custom" && isTitaniumService);
+}

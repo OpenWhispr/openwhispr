@@ -932,8 +932,7 @@
       "action": "Se connecter avec Titanium"
     },
     "titaniumNoLicense": {
-      "message": "Votre compte Titanium n'a pas de licence {{brand}}. Contactez {{supportEmail}} pour en obtenir une.",
-      "action": "Contacter le support"
+      "message": "Votre compte Titanium n'a pas de licence {{brand}}. Contactez {{supportEmail}} pour en obtenir une."
     }
   },
   "hooks": {

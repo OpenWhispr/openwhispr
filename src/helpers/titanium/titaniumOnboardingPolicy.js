@@ -137,9 +137,16 @@ export function resolveTranscriptionEngineTab({
   return isTitaniumRoute ? "titanium" : mode;
 }
 
-/** The transcription settings that select EdgeAssistant cloud (setup card and Settings tab). */
+/**
+ * The transcription settings that select EdgeAssistant cloud (setup card and Settings
+ * tab). The saved self-hosted URL and model are cleared because the route resolver
+ * prefers them under transcriptionMode "self-hosted" (which byok + custom persists),
+ * which would send audio to the old server.
+ */
 export function titaniumEngineSettings(defaultStt) {
   return {
+    remoteTranscriptionUrl: "",
+    remoteTranscriptionModel: "",
     useLocalWhisper: false,
     cloudTranscriptionMode: "byok",
     cloudTranscriptionProvider: "custom",

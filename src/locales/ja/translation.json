@@ -932,8 +932,7 @@
       "action": "Titanium でサインイン"
     },
     "titaniumNoLicense": {
-      "message": "Titanium アカウントに {{brand}} のライセンスがありません。取得するには {{supportEmail}} までご連絡ください。",
-      "action": "サポートに連絡"
+      "message": "Titanium アカウントに {{brand}} のライセンスがありません。取得するには {{supportEmail}} までご連絡ください。"
     }
   },
   "hooks": {

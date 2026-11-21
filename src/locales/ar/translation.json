@@ -4411,8 +4411,7 @@
       "action": "تسجيل الدخول عبر Titanium"
     },
     "titaniumNoLicense": {
-      "message": "لا يحتوي حسابك على Titanium على ترخيص {{brand}}. تواصل مع {{supportEmail}} للحصول على واحد.",
-      "action": "التواصل مع الدعم"
+      "message": "لا يحتوي حسابك على Titanium على ترخيص {{brand}}. تواصل مع {{supportEmail}} للحصول على واحد."
     }
   },
   "cleanupPrompt": "التنظيف",

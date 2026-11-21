@@ -88,3 +88,10 @@ test("custom key source: license wins on our hosts, stored key elsewhere", async
   );
   assert.equal(customTranscriptionKeySource({ storedKey: "  ", isTitaniumService: false }), "none");
 });
+
+test("cached key: never reused for Custom on our own hosts", async () => {
+  const { canReuseCachedTranscriptionKey } = await import("../../src/helpers/transcriptionAuth.js");
+  assert.equal(canReuseCachedTranscriptionKey({ provider: "custom", isTitaniumService: true }), false);
+  assert.equal(canReuseCachedTranscriptionKey({ provider: "custom", isTitaniumService: false }), true);
+  assert.equal(canReuseCachedTranscriptionKey({ provider: "openai", isTitaniumService: true }), true);
+});

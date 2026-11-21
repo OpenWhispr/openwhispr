@@ -932,8 +932,7 @@
       "action": "Войти через Titanium"
     },
     "titaniumNoLicense": {
-      "message": "У вашей учётной записи Titanium нет лицензии {{brand}}. Свяжитесь с {{supportEmail}}, чтобы получить её.",
-      "action": "Связаться с поддержкой"
+      "message": "У вашей учётной записи Titanium нет лицензии {{brand}}. Свяжитесь с {{supportEmail}}, чтобы получить её."
     }
   },
   "hooks": {

@@ -932,8 +932,7 @@
       "action": "Mit Titanium anmelden"
     },
     "titaniumNoLicense": {
-      "message": "Dein Titanium-Konto hat keine {{brand}}-Lizenz. Wende dich an {{supportEmail}}, um eine zu erhalten.",
-      "action": "Support kontaktieren"
+      "message": "Dein Titanium-Konto hat keine {{brand}}-Lizenz. Wende dich an {{supportEmail}}, um eine zu erhalten."
     }
   },
   "hooks": {

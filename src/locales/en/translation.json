@@ -932,8 +932,7 @@
       "action": "Sign in with Titanium"
     },
     "titaniumNoLicense": {
-      "message": "Your Titanium account has no {{brand}} license. Contact {{supportEmail}} to get one.",
-      "action": "Contact support"
+      "message": "Your Titanium account has no {{brand}} license. Contact {{supportEmail}} to get one."
     }
   },
   "hooks": {

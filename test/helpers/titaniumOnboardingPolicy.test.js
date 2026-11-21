@@ -211,6 +211,8 @@ test("engine tab: titanium only for an enabled, non-local custom route on our ho
 test("titaniumEngineSettings is the payload the setup card writes", async () => {
   const { titaniumEngineSettings } = await load();
   assert.deepEqual(titaniumEngineSettings({ baseUrl: "https://stt.test/v1", model: "scribe" }), {
+    remoteTranscriptionUrl: "",
+    remoteTranscriptionModel: "",
     useLocalWhisper: false,
     cloudTranscriptionMode: "byok",
     cloudTranscriptionProvider: "custom",
@@ -240,5 +242,38 @@ test("titanium engine state: signedOut, noLicense or licensed", async () => {
   assert.equal(
     resolveTitaniumEngineState({ signedIn: true, licensed: true, reason: null }),
     "licensed"
+  );
+});
+
+test("after selecting EdgeAssistant cloud the route resolves to the Titanium URL, not the old server", async () => {
+  const { titaniumEngineSettings } = await load();
+  const { resolveTranscriptionRoute } = await import("../../src/helpers/transcriptionRoute.ts");
+  const { isTitaniumServiceUrl } = await import("../../src/helpers/titanium/titaniumHosts.js");
+  const { customTranscriptionKeySource } = await import("../../src/helpers/transcriptionAuth.js");
+  const stt = { baseUrl: "https://stt.titaniumlabs.test/v1", model: "scribe" };
+  const fork = { DEFAULT_STT: stt };
+  const settings = {
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "https://old.example.com/v1",
+    remoteTranscriptionModel: "old-model",
+    ...titaniumEngineSettings(stt),
+  };
+  const route = resolveTranscriptionRoute({ settings });
+  assert.equal(route.provider, "custom");
+  assert.ok(isTitaniumServiceUrl(route.endpoint, fork));
+  // a stored key never rides to our host; the license decides there
+  assert.equal(
+    customTranscriptionKeySource({
+      storedKey: "stale",
+      isTitaniumService: isTitaniumServiceUrl(route.endpoint, fork),
+    }),
+    "titanium"
+  );
+  assert.equal(
+    customTranscriptionKeySource({
+      storedKey: "mine",
+      isTitaniumService: isTitaniumServiceUrl("https://old.example.com/v1", fork),
+    }),
+    "stored"
   );
 });

@@ -911,8 +911,7 @@
       "action": "Entrar com Titanium"
     },
     "titaniumNoLicense": {
-      "message": "Sua conta Titanium não tem uma licença do {{brand}}. Entre em contato com {{supportEmail}} para obter uma.",
-      "action": "Falar com o suporte"
+      "message": "Sua conta Titanium não tem uma licença do {{brand}}. Entre em contato com {{supportEmail}} para obter uma."
     }
   },
   "hooks": {

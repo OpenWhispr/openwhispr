@@ -86,7 +86,11 @@ import {
   isManagedTranscriptionActive,
 } from "../services/managedTranscription.ts";
 import { getTranscriptionApiKey } from "../services/fileTranscription";
-import { customTranscriptionKeySource, shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
+import {
+  canReuseCachedTranscriptionKey,
+  customTranscriptionKeySource,
+  shouldSkipTranscriptionApiKey,
+} from "./transcriptionAuth";
 import {
   isOrukeetStreaming,
   isSelfHostedTranscription,
@@ -2713,7 +2717,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const provider = s.cloudTranscriptionProvider || "openai";
 
     // Check cache (invalidate if provider changed)
-    if (this.cachedApiKey !== null && this.cachedApiKeyProvider === provider) {
+    const isTitaniumService = isTitaniumServiceUrl(s.cloudTranscriptionBaseUrl, {
+      DEFAULT_STT,
+      TITANIUM,
+    });
+    if (
+      this.cachedApiKey !== null &&
+      this.cachedApiKeyProvider === provider &&
+      canReuseCachedTranscriptionKey({ provider, isTitaniumService })
+    ) {
       return this.cachedApiKey;
     }
 
@@ -2751,10 +2763,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (
         customTranscriptionKeySource({
           storedKey: apiKey,
-          isTitaniumService: isTitaniumServiceUrl(s.cloudTranscriptionBaseUrl, {
-            DEFAULT_STT,
-            TITANIUM,
-          }),
+          isTitaniumService,
         }) === "titanium"
       ) {
         apiKey = "";

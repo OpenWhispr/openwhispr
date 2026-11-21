@@ -339,6 +339,7 @@ const {
 const { timestampRequestFields, mapVerboseSegments } = require("./uploadTimestamps");
 const { scribeRequestFields, scribeWordsToSegments } = require("./scribeSegments");
 const { isTitaniumServiceUrl } = require("./titanium/titaniumHosts");
+const { customTranscriptionKeySource } = require("./transcriptionAuth");
 const { listLocalTranscriptionModels } = require("./localTranscriptionModels");
 
 // Canonicalize allowed dirs so realpath'd inputs match on macOS (/var -> /private/var).
@@ -11105,9 +11106,15 @@ class IPCHandlers {
           const url = new URL(transcriptionUrl);
           // Fork: a keyless Custom upload to our own STT API carries the user's
           // Titanium license (titaniumServiceKeyFor checks the host).
+          // On our own hosts the license wins and a stored custom key is never sent.
           const authKey =
-            apiKey ||
-            (route.provider === "custom" ? titaniumServiceKeyFor(transcriptionUrl) : null);
+            route.provider === "custom" &&
+            customTranscriptionKeySource({
+              storedKey: apiKey,
+              isTitaniumService: isTitaniumServiceUrl(transcriptionUrl, forkConfig),
+            }) === "titanium"
+              ? titaniumServiceKeyFor(transcriptionUrl)
+              : apiKey;
           // Mistral authenticates with x-api-key, not Bearer.
           const headers = authKey
             ? route.provider === "mistral"
