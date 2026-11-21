@@ -930,6 +930,10 @@
     "titaniumSignIn": {
       "message": "请登录 Titanium 以使用 {{brand}} 云端转录。",
       "action": "使用 Titanium 登录"
+    },
+    "titaniumNoLicense": {
+      "message": "你的 Titanium 账户没有 {{brand}} 许可证。请联系 {{supportEmail}} 获取。",
+      "action": "联系支持"
     }
   },
   "hooks": {

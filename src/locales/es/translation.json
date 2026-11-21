@@ -930,6 +930,10 @@
     "titaniumSignIn": {
       "message": "Inicia sesión en Titanium para usar la transcripción en la nube de {{brand}}.",
       "action": "Iniciar sesión con Titanium"
+    },
+    "titaniumNoLicense": {
+      "message": "Tu cuenta de Titanium no tiene una licencia de {{brand}}. Contacta con {{supportEmail}} para obtener una.",
+      "action": "Contactar con soporte"
     }
   },
   "hooks": {

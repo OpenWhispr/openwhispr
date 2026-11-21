@@ -930,6 +930,10 @@
     "titaniumSignIn": {
       "message": "Sign in to Titanium to use {{brand}} cloud transcription.",
       "action": "Sign in with Titanium"
+    },
+    "titaniumNoLicense": {
+      "message": "Your Titanium account has no {{brand}} license. Contact {{supportEmail}} to get one.",
+      "action": "Contact support"
     }
   },
   "hooks": {

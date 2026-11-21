@@ -909,6 +909,10 @@
     "titaniumSignIn": {
       "message": "Entre no Titanium para usar a transcrição na nuvem do {{brand}}.",
       "action": "Entrar com Titanium"
+    },
+    "titaniumNoLicense": {
+      "message": "Sua conta Titanium não tem uma licença do {{brand}}. Entre em contato com {{supportEmail}} para obter uma.",
+      "action": "Falar com o suporte"
     }
   },
   "hooks": {

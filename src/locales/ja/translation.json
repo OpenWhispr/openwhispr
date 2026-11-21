@@ -930,6 +930,10 @@
     "titaniumSignIn": {
       "message": "Titanium にサインインして、{{brand}} のクラウド文字起こしを利用してください。",
       "action": "Titanium でサインイン"
+    },
+    "titaniumNoLicense": {
+      "message": "Titanium アカウントに {{brand}} のライセンスがありません。取得するには {{supportEmail}} までご連絡ください。",
+      "action": "サポートに連絡"
     }
   },
   "hooks": {

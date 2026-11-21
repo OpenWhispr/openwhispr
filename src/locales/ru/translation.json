@@ -930,6 +930,10 @@
     "titaniumSignIn": {
       "message": "Войдите в Titanium, чтобы использовать облачную расшифровку {{brand}}.",
       "action": "Войти через Titanium"
+    },
+    "titaniumNoLicense": {
+      "message": "У вашей учётной записи Titanium нет лицензии {{brand}}. Свяжитесь с {{supportEmail}}, чтобы получить её.",
+      "action": "Связаться с поддержкой"
     }
   },
   "hooks": {
