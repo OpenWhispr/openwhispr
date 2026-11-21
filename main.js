@@ -317,6 +317,7 @@ const TrayManager = require("./src/helpers/tray");
 const dockManager = require("./src/helpers/dockManager");
 const autoStart = require("./src/helpers/autoStart");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
+const { initLlmCliIpc } = require("./src/helpers/llmCli/llmCliIpc");
 const CliBridge = require("./src/helpers/cliBridge");
 const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
@@ -761,6 +762,11 @@ function initializeCoreManagers() {
     oauthProtocolRegistered: protocolRegistered,
     oauthProtocol: OAUTH_PROTOCOL,
   });
+
+  // Subscription-CLI runtime. Composed here, with the real electron app, and not
+  // inside IPCHandlers: IPCHandlers unit tests run it against minimal electron
+  // stubs that have no safeStorage, so wiring it there broke every one of them.
+  initLlmCliIpc({ logger: debugLogger });
 }
 
 function registerSidecars() {

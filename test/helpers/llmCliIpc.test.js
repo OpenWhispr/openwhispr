@@ -141,6 +141,12 @@ function channelsIn(file) {
   return new Set(text.match(/"llm-cli-[a-z-]+"/g) || []);
 }
 
+test("the llm-cli runtime is composed in main.js, never inside IPCHandlers (its tests stub electron without safeStorage)", () => {
+  const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
+  assert.doesNotMatch(read("src/helpers/ipcHandlers.js"), /initLlmCliIpc|llmCli\/llmCliIpc/);
+  assert.match(read("main.js"), /initLlmCliIpc\(\{ logger: debugLogger \}\)/);
+});
+
 test("preload and llmCliIpc.js agree on every llm-cli channel (invoke and event)", () => {
   const ipc = channelsIn("src/helpers/llmCli/llmCliIpc.js");
   const preload = channelsIn("preload.js");
@@ -388,7 +394,8 @@ test("e2e codex: detect, install, sign-in, stream, cancel, sign-out in order, no
     const argLine = args.join(" ");
     let out = "";
     let code = 0;
-    if (key === "powershell.exe") out = JSON.stringify({ Status: "Valid", Subject: 'CN="OpenAI OpCo, LLC"' });
+    if (key === "powershell.exe")
+      out = JSON.stringify({ Status: "Valid", Subject: 'CN="OpenAI OpCo, LLC"' });
     else if (argLine === "--version") out = "codex-cli 0.157.0";
     else if (argLine === "exec --help")
       out =

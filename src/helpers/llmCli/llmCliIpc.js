@@ -1,5 +1,5 @@
 // Thin IPC adapter for the subscription-CLI seats. Registered from
-// ipcHandlers.js through one require and one call. All decisions live in
+// main.js through one require and one call. All decisions live in
 // ../llmCliProviders and the sibling modules; this file validates renderer
 // input (seat enum, size caps) and relays results. Every error string that
 // crosses IPC passes redactSecrets.
@@ -193,7 +193,7 @@ function registerLlmCliIpc({
   });
 }
 
-// Composition root, called once from ipcHandlers.js. Electron is required here
+// Composition root, called once from main.js. Electron is required here
 // only so the adapter above stays testable without it.
 function initLlmCliIpc({ logger } = {}) {
   const path = require("path");
