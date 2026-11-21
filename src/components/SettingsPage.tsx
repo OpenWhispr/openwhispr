@@ -70,7 +70,6 @@ import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
 import { useDialogs } from "../hooks/useDialogs";
 import { useSignOut } from "../hooks/useSignOut";
-import { useAccountPlan } from "../hooks/useAccountPlan";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
 import { clearInsightsCache } from "../lib/insightsCache";
@@ -1499,7 +1498,6 @@ export default function SettingsPage({
     defaultWorkspaceId,
     activeWorkspaceId,
   });
-  const { planLabel } = useAccountPlan(usage);
   const hasShownApproachingToast = useRef(false);
   useEffect(() => {
     if (usage?.isApproachingLimit && !hasShownApproachingToast.current) {
@@ -2068,6 +2066,9 @@ export default function SettingsPage({
       (workspace) => workspace.name
     ),
     businessAction: businessTile,
+    hasWorkspacePlanAction: Boolean(
+      businessAction || enterpriseAction || enterpriseTile.kind === "viewWorkspace"
+    ),
   });
   const showCreatorLink = showsCreatorLink(usage ?? null);
   const personalHandlers: PersonalPlanHandlers = {
@@ -2457,6 +2458,14 @@ export default function SettingsPage({
       case "plansBilling":
         return (
           <div className="space-y-5">
+            <header className="space-y-1">
+              <h2 className="text-lg font-medium text-foreground">
+                {t("settingsModal.sections.plansBilling.label")}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {t("settingsModal.sections.plansBilling.description")}
+              </p>
+            </header>
             {!AUTH_URL ? (
               <>
                 <SectionHeader
@@ -2480,12 +2489,18 @@ export default function SettingsPage({
                   <PlansBillingPicker
                     request={billingRequest}
                     onChange={onBillingRequestChange ?? noop}
-                    personalPlanLabel={planLabel ?? null}
+                    personalPlanLabel={
+                      personalState.kind === "ready"
+                        ? t(`settingsPage.account.planLabels.${personalState.tier}`)
+                        : null
+                    }
                   />
                 )}
                 {isSignedIn && billingView.kind !== "personal" ? (
                   <WorkspaceBillingView
                     view={billingView}
+                    yearly={yearlyBilling}
+                    onYearlyChange={setYearlyBilling}
                     onViewPersonal={() => onBillingRequestChange?.(PERSONAL_BILLING_REQUEST)}
                     onRefreshEntitlement={usage?.refetch}
                   />
@@ -2496,32 +2511,30 @@ export default function SettingsPage({
                       onAction={handlePersonalAction}
                       busyAction={busyAction}
                       formatDate={formatPersonalBillingDate}
+                      creatorLink={showCreatorLink && <CreatorLinkField />}
                       grid={
-                        <div className="flex flex-col gap-3">
-                          {showCreatorLink && <CreatorLinkField />}
-                          <PlansGrid
-                            isSignedIn={isSignedIn}
-                            onSignIn={requestSignIn}
-                            yearly={yearlyBilling}
-                            onYearlyChange={setYearlyBilling}
-                            pro={proCardAction}
-                            business={businessTile}
-                            businessDowngrade={businessAction}
-                            onBusinessAction={(action) =>
-                              runBusinessTileAction(action, personalHandlers)
-                            }
-                            enterprise={{
-                              action: enterpriseTile,
-                              manage: enterpriseAction,
-                              entitled: workspacePlans.has("enterprise"),
-                            }}
-                            onEnterprise={(action) =>
-                              runEnterpriseTileAction(action, personalHandlers)
-                            }
-                            onRefreshEntitlement={usage?.refetch}
-                            columns={isCompact ? 2 : 3}
-                          />
-                        </div>
+                        <PlansGrid
+                          isSignedIn={isSignedIn}
+                          onSignIn={requestSignIn}
+                          yearly={yearlyBilling}
+                          onYearlyChange={setYearlyBilling}
+                          pro={proCardAction}
+                          business={businessTile}
+                          businessDowngrade={businessAction}
+                          onBusinessAction={(action) =>
+                            runBusinessTileAction(action, personalHandlers)
+                          }
+                          enterprise={{
+                            action: enterpriseTile,
+                            manage: enterpriseAction,
+                            entitled: workspacePlans.has("enterprise"),
+                          }}
+                          onEnterprise={(action) =>
+                            runEnterpriseTileAction(action, personalHandlers)
+                          }
+                          onRefreshEntitlement={usage?.refetch}
+                          columns={isCompact ? 2 : 3}
+                        />
                       }
                     />
                     <Dialog

@@ -1715,7 +1715,7 @@
         "label": "Profil"
       },
       "plansBilling": {
-        "description": "Forfaits, utilisation & facturation",
+        "description": "Gérez votre forfait, votre utilisation et votre facturation.",
         "label": "Forfait & facturation"
       },
       "workspaceGeneral": {
@@ -3228,7 +3228,7 @@
         "now": "Actuellement",
         "after": "Après",
         "inUse": "Utilisées",
-        "pending": "Invitations en attente",
+        "pending": "Places en attente",
         "available": "Disponibles",
         "total": "Total des places",
         "price": "Prix",
@@ -3238,8 +3238,8 @@
         "confirm_other": "Ajouter {{count}} places",
         "confirm_many": "Ajouter {{count}} places",
         "adding": "Ajout en cours…",
-        "failure": "Impossible d’ajouter des places. Aucun montant n’a été facturé.",
-        "success": "Places ajoutées. {{workspace}} dispose maintenant de {{count}} places.",
+        "failure": "Impossible de confirmer la modification. Vérification du nombre de places en cours.",
+        "success": "{{workspace}} dispose maintenant de {{count}} places.",
         "previewFailed": "Impossible de charger les tarifs."
       },
       "free": {
@@ -3392,11 +3392,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} vous couvre déjà",
-            "body": "Vous payez toujours Pro. Résiliez-le dans la boutique d'applications de votre téléphone."
+            "body": "Vous payez toujours {{plan}}. Résiliez-le dans la boutique d'applications de votre téléphone."
           },
           "coveredStoreUnnamed": {
             "title": "Un espace de travail vous couvre déjà",
-            "body": "Vous payez toujours Pro. Résiliez-le dans la boutique d'applications de votre téléphone."
+            "body": "Vous payez toujours {{plan}}. Résiliez-le dans la boutique d'applications de votre téléphone."
           },
           "covered": {
             "title": "{{workspace}} vous couvre",

@@ -24,7 +24,7 @@ import {
 } from "../../lib/workspaceBilling";
 import { CONTACT_SALES_URL } from "../../lib/contactSales";
 import { formatAmount } from "../../utils/formatAmount";
-import { openExternalLink } from "../../utils/externalLinks";
+import { openExternalUrl } from "../../utils/externalLinks";
 import type { Workspace } from "../../types/electron";
 
 const SEAT_LIMIT = 500;
@@ -50,6 +50,7 @@ interface Props {
   workspaces: Workspace[];
   /** Selected when the dialog opens, if it is one of the eligible workspaces. */
   initialWorkspaceId?: string;
+  initialBillingInterval?: "monthly" | "annual";
   onRefreshEntitlement?: () => Promise<void> | void;
 }
 
@@ -58,13 +59,14 @@ export default function EnterpriseCheckoutDialog({
   onOpenChange,
   workspaces,
   initialWorkspaceId,
+  initialBillingInterval = "monthly",
   onRefreshEntitlement,
 }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const refresh = useWorkspaceStore((s) => s.refresh);
   const armRefreshOnReturn = useBillingRefreshOnReturn(() => {
-    void refresh();
+    void refresh({ fresh: true });
     void onRefreshEntitlement?.();
   });
 
@@ -79,7 +81,7 @@ export default function EnterpriseCheckoutDialog({
     [workspaces]
   );
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
+  const [billingInterval, setBillingInterval] = useState(initialBillingInterval);
   const [submitting, setSubmitting] = useState(false);
   const [upgradePreview, setUpgradePreview] = useState<EnterpriseUpgradePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -95,7 +97,7 @@ export default function EnterpriseCheckoutDialog({
     if (open) {
       // An id that isn't eligible falls through to the first eligible workspace below.
       setWorkspaceId(initialWorkspaceId ?? null);
-      setBillingInterval("monthly");
+      setBillingInterval(initialBillingInterval);
       setSeats(seatsInUse);
     }
     // Reset to defaults on every open; seatsInUse is read, not watched.
@@ -148,7 +150,7 @@ export default function EnterpriseCheckoutDialog({
         tier: "enterprise",
         additionalSeats: seats - seatsInUse,
       });
-      openExternalLink(url);
+      await openExternalUrl(url, t("settingsPage.account.checkout.couldNotOpenDescription"));
       armRefreshOnReturn();
       onOpenChange(false);
     } catch (error) {
@@ -311,6 +313,7 @@ export default function EnterpriseCheckoutDialog({
                         key={option}
                         type="button"
                         size="sm"
+                        aria-pressed={billingInterval === option}
                         variant={billingInterval === option ? "default" : "outline"}
                         onClick={() => setBillingInterval(option)}
                       >

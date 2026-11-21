@@ -1,17 +1,14 @@
-import React, { Suspense, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import React, {
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { ComponentType } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Building2,
-  Copy,
-  CreditCard,
-  ExternalLink,
-  Plus,
-  Shield,
-  User,
-  UserPlus,
-  Zap,
-} from "../icons";
+import { Building2, Copy, CreditCard, ExternalLink, Shield, User, UserPlus, Zap } from "../icons";
 import { AddSeatsDialog } from "./billing/AddSeatsDialog";
 import {
   BillingBanner,
@@ -60,6 +57,7 @@ import {
   type WorkspaceUsageRow,
 } from "../../lib/workspacePlanState";
 import { useWorkspacePeopleCount } from "../../hooks/useWorkspacePeopleCount";
+import { openExternalUrl } from "../../utils/externalLinks";
 import { formatAmount } from "../../utils/formatAmount";
 import type { Workspace } from "../../types/electron";
 
@@ -84,11 +82,6 @@ const ACTION_ICONS: Partial<Record<WorkspaceAction["kind"], IconComponent>> = {
 
 type Busy = "checkout" | WorkspaceAction["kind"];
 
-async function openExternalUrl(url: string): Promise<void> {
-  if (window.electronAPI?.openExternal) await window.electronAPI.openExternal(url);
-  else window.open(url, "_blank");
-}
-
 /** The avatar letter: the first character, whole even when it is outside the BMP. */
 function initialOf(name: string): string {
   return (Array.from(name.trim())[0] ?? "").toLocaleUpperCase();
@@ -96,6 +89,8 @@ function initialOf(name: string): string {
 
 interface Props {
   workspace: Workspace;
+  yearly: boolean;
+  onYearlyChange: (yearly: boolean) => void;
   onRefreshEntitlement?: () => Promise<void>;
   /** Shows the "View Personal plan" link beside a solo workspace's Pro hint. */
   onViewPersonal?: () => void;
@@ -103,6 +98,8 @@ interface Props {
 
 export default function WorkspaceBillingCard({
   workspace,
+  yearly,
+  onYearlyChange,
   onRefreshEntitlement,
   onViewPersonal,
 }: Props) {
@@ -114,11 +111,65 @@ export default function WorkspaceBillingCard({
     subscribeAuthRequestContext,
     getValidatedAuthGeneration
   );
-  const { summary, refresh: refreshBillingSummary } = useBillingSummary({
-    kind: "workspace",
-    workspaceId: workspace.id,
-    canManageBilling,
-  });
+  const { summary, refresh: refreshBillingSummary } = useBillingSummary(
+    { kind: "workspace", workspaceId: workspace.id, canManageBilling },
+    JSON.stringify([
+      workspace.plan,
+      workspace.status,
+      workspace.stripe_subscription_id,
+      workspace.current_period_end,
+      workspace.cancel_at_period_end,
+      workspace.seats,
+    ])
+  );
+  const [seatSplit, setSeatSplit] = useState<{
+    workspace: Workspace;
+    authGeneration: number;
+    pending: number;
+  } | null>(null);
+  useEffect(() => {
+    const used = workspace.seats_used;
+    if (
+      authGeneration == null ||
+      workspace.plan === "free" ||
+      workspace.role === "member" ||
+      used == null ||
+      used < 1 ||
+      workspace.member_count == null ||
+      workspace.invitation_count == null
+    )
+      return;
+    let current = true;
+    void WorkspacesService.getPeopleCounts(workspace.id).then(
+      (stats) => {
+        const billable = stats.billable_members;
+        // Only compare occupied seats and billable members from matching workspace counts.
+        // Invitations can be nonbillable, and directory reservations can occupy seats too.
+        if (
+          current &&
+          getValidatedAuthGeneration() === authGeneration &&
+          stats.seats === workspace.seats &&
+          stats.member_count === workspace.member_count &&
+          stats.pending_invitations === workspace.invitation_count &&
+          billable != null &&
+          Number.isSafeInteger(billable) &&
+          billable >= 0 &&
+          billable <= used &&
+          billable <= stats.member_count
+        ) {
+          setSeatSplit({ workspace, authGeneration, pending: used - billable });
+        }
+      },
+      () => {}
+    );
+    return () => {
+      current = false;
+    };
+  }, [workspace, authGeneration]);
+  const pendingSeats =
+    seatSplit?.workspace === workspace && seatSplit.authGeneration === authGeneration
+      ? seatSplit.pending
+      : 0;
   const [busy, setBusy] = useState<Busy | null>(null);
   const billingRequest = useRef<symbol | null>(null);
   useLayoutEffect(() => {
@@ -131,7 +182,8 @@ export default function WorkspaceBillingCard({
   const seatTrigger = useRef<HTMLElement | null>(null);
   const refreshOnReturn = useBillingRefreshOnReturn(() => {
     refreshBillingSummary();
-    void refresh();
+    void refresh({ fresh: true });
+    window.dispatchEvent(new Event("usage-changed"));
     void onRefreshEntitlement?.();
   });
   const needsMembers = showsMembersCount(workspace);
@@ -155,6 +207,7 @@ export default function WorkspaceBillingCard({
   }
 
   async function openBilling(kind: Busy, getUrl: () => Promise<string>): Promise<void> {
+    if (billingRequest.current) return;
     const request = Symbol();
     const generation = getValidatedAuthGeneration();
     const isCurrent = (): boolean =>
@@ -164,7 +217,7 @@ export default function WorkspaceBillingCard({
     try {
       const url = await getUrl();
       if (!isCurrent()) return;
-      await openExternalUrl(url);
+      await openExternalUrl(url, t("settingsPage.account.checkout.couldNotOpenDescription"));
       if (isCurrent()) refreshOnReturn();
     } catch (error) {
       if (!isCurrent()) return;
@@ -190,7 +243,9 @@ export default function WorkspaceBillingCard({
 
   function startBusinessCheckout(): void {
     void openBilling("checkout", () =>
-      WorkspacesService.billingCheckout(workspace.id, "monthly", { tier: "business" })
+      WorkspacesService.billingCheckout(workspace.id, yearly ? "annual" : "monthly", {
+        tier: "business",
+      })
     );
   }
 
@@ -291,7 +346,10 @@ export default function WorkspaceBillingCard({
   useLayoutEffect(() => {
     if (seatOpening && !showAddSeats) setSeatOpening(null);
   }, [seatOpening, showAddSeats]);
-  const planName = WORKSPACE_PLAN_NAMES[plan.tier];
+  const planName =
+    plan.tier === "free"
+      ? t("settingsPage.workspace.billing.planLabel.free")
+      : WORKSPACE_PLAN_NAMES[plan.tier];
 
   function runAction(action: WorkspaceAction): void {
     switch (action.kind) {
@@ -307,8 +365,14 @@ export default function WorkspaceBillingCard({
         return;
       }
       case "resubscribe":
+        if (workspace.stripe_subscription_id) {
+          runAction({ kind: "manageBilling" });
+          return;
+        }
         void openBilling("resubscribe", () =>
-          WorkspacesService.billingCheckout(workspace.id, "monthly", { tier: "business" })
+          WorkspacesService.billingCheckout(workspace.id, yearly ? "annual" : "monthly", {
+            tier: "business",
+          })
         );
         return;
       case "openConsole":
@@ -356,7 +420,10 @@ export default function WorkspaceBillingCard({
   }
 
   function translate(key: string, params?: Record<string, string>): string {
-    return t(`${KEY_PREFIX}${key}`, translationParams(params, formatDate));
+    return t(
+      `${KEY_PREFIX}${key}`,
+      translationParams(params?.plan ? { ...params, plan: planName } : params, formatDate)
+    );
   }
 
   function renderActionButton(action: WorkspaceAction): React.ReactNode {
@@ -438,6 +505,14 @@ export default function WorkspaceBillingCard({
       case "seats": {
         const seatsUsed = formatNumber(row.used);
         const seatsTotal = formatNumber(row.total);
+        const pending =
+          pendingSeats > 0 && row.total > 0
+            ? {
+                percent: (pendingSeats / row.total) * 100,
+                label: `${t("settingsPage.billing.addSeats.pending")} · ${formatNumber(pendingSeats)}`,
+                usedLabel: `${t("settingsPage.billing.addSeats.inUse")} · ${formatNumber(row.used - pendingSeats)}`,
+              }
+            : undefined;
         return (
           <UsageMeterRow
             key="seats"
@@ -448,12 +523,12 @@ export default function WorkspaceBillingCard({
               </span>
             }
             percent={row.total > 0 ? (row.used / row.total) * 100 : 0}
+            pending={pending}
             caption={row.captionKey ? translate(row.captionKey, row.params) : undefined}
             action={
               row.addSeats ? (
                 <PillButton
                   variant="primary"
-                  icon={Plus}
                   disabled={busy !== null}
                   onClick={(event) => {
                     seatTrigger.current = event.currentTarget;
@@ -482,7 +557,10 @@ export default function WorkspaceBillingCard({
   function runGridEnterprise(action: EnterpriseCardAction): void {
     if (action.kind === "checkout") setEnterpriseWorkspaceId(workspace.id);
     else if (action.kind === "contactSales") {
-      openExternalUrl(CONTACT_SALES_URL).catch((error: unknown) => {
+      openExternalUrl(
+        CONTACT_SALES_URL,
+        t("settingsPage.account.checkout.couldNotOpenDescription")
+      ).catch((error: unknown) => {
         toast({
           title: t("common.error"),
           description: billingErrorText(error),
@@ -573,6 +651,8 @@ export default function WorkspaceBillingCard({
           <PlansGrid
             isSignedIn
             cards={["business", "enterprise"]}
+            yearly={yearly}
+            onYearlyChange={onYearlyChange}
             business={gridBusiness}
             businessDowngrade={null}
             onBusinessAction={(action) => {
@@ -594,7 +674,11 @@ export default function WorkspaceBillingCard({
             }}
             workspaces={[workspace]}
             initialWorkspaceId={workspace.id}
-            onRefreshEntitlement={onRefreshEntitlement}
+            initialBillingInterval={yearly ? "annual" : "monthly"}
+            onRefreshEntitlement={async () => {
+              refreshBillingSummary();
+              await onRefreshEntitlement?.();
+            }}
           />
         </Suspense>
       )}

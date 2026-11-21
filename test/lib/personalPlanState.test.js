@@ -79,6 +79,7 @@ function state(usageOverrides = {}, inputOverrides = {}) {
     usage: usage(usageOverrides),
     coveringWorkspaceNames: [],
     businessAction: VIEW_WORKSPACE,
+    hasWorkspacePlanAction: false,
     ...inputOverrides,
   });
 }
@@ -349,8 +350,40 @@ test("covered store plan: covered store banner without an action", () => {
   assert.deepEqual(bannerIds(result), ["coveredStore"]);
   const covered = banner(result, "coveredStore");
   assert.equal(covered.tone, "warning");
-  assert.deepEqual(covered.params, { workspace: "Acme" });
+  assert.deepEqual(covered.params, { workspace: "Acme", plan: "Pro" });
   assert.equal(covered.action, undefined);
+});
+
+test("canceled mobile plans show coverage without instructions to cancel again", () => {
+  const result = ready({ ...store("canceled"), entitledWorkspaceIds: ["ws-1"] });
+  assert.deepEqual(bannerIds(result), ["covered"]);
+  assert.equal(result.badge.key, "badges.cancelled");
+  assert.equal(result.details[1].labelKey, "details.accessUntil");
+});
+
+test("a covered mobile Business payer sees their actual plan before and after workspace names load", () => {
+  const usage = { ...store(), plan: "business", entitledWorkspaceIds: ["ws-1"] };
+  for (const names of [[], ["Acme"]]) {
+    const result = ready(usage, { coveringWorkspaceNames: names });
+    const covered = banner(result, "coveredStore");
+    assert.equal(
+      covered.bodyKey,
+      names.length ? "banners.coveredStore.body" : "banners.coveredStoreUnnamed.body"
+    );
+    assert.equal(covered.params.plan, "Business");
+    assert.deepEqual(result.actions, [{ kind: "manageInStore", store: "app_store" }]);
+  }
+});
+
+test("an unknown Pro billing interval has no advertised monthly price", () => {
+  assert.equal(ready({ ...STRIPE_PRO, billingInterval: null }).price, null);
+});
+
+test("covered Free members see the plans grid only when they have a workspace plan action", () => {
+  assert.equal(ready(COVERED).showPlansGrid, false);
+  assert.equal(ready(COVERED, { hasWorkspacePlanAction: true }).showPlansGrid, true);
+  assert.equal(ready().showPlansGrid, true);
+  assert.equal(ready({ ...STRIPE_PRO, entitledWorkspaceIds: ["ws-1"] }).showPlansGrid, true);
 });
 
 test("a covered free member shows no billing interval badge", () => {

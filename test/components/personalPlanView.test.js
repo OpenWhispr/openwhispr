@@ -17,12 +17,14 @@ async function setup(t) {
     noExternal: ["react-i18next"],
     cachePrefix: "openwhispr-personal-plan-view-",
     mockModules: {
+      "/i18n": "export default { t: (key) => key };",
+      "/settingsStore": "export const useSettingsStore = { getState: () => ({}) };",
       // Params are echoed so tests can see what reached t().
       "react-i18next": `export const useTranslation = () => ({
         t: (key, params) => (params ? key + JSON.stringify(params) : key),
         i18n: { language: "en" },
       });`,
-      "/icons": ["User", "Zap", "Building2", "CreditCard", "Loader2"]
+      "/icons": ["User", "Zap", "Building2", "CreditCard", "Loader2", "ChevronDown"]
         .map((name) => `export const ${name} = () => null;`)
         .join("\n"),
     },
@@ -48,12 +50,13 @@ async function setup(t) {
         })
       )
     );
-  return { container, render, actions };
+  return { container, render, actions, vite };
 }
 
 const ready = (overrides = {}) => ({
   kind: "ready",
   tier: "free",
+  showPlansGrid: true,
   badge: null,
   price: { key: "price.free" },
   actions: [],
@@ -86,6 +89,26 @@ test("free solo: Subscribe to Pro is the only primary button, words meter shown,
   assert.ok(container.querySelector('[style*="width"]'), "the meter rendered");
   assert.doesNotMatch(container.textContent, new RegExp(`${P}.blocks.billingDetails`));
   assert.ok(container.querySelector('[data-testid="grid"]'));
+});
+
+test("a covered member can use an enabled creator link without seeing the plans grid", async (t) => {
+  const { container, render, vite } = await setup(t);
+  const { default: CreatorLinkField } = await vite.ssrLoadModule(
+    "/components/CreatorLinkField.tsx"
+  );
+  const { useAffiliateStore } = await vite.ssrLoadModule("/stores/affiliateStore.ts");
+  const link = "https://creator.example.test/ref";
+  useAffiliateStore.setState({ enabled: true, saved: false, link });
+  await render(ready({ showPlansGrid: false, usage: [{ kind: "unlimited" }] }), {
+    creatorLink: React.createElement(CreatorLinkField),
+  });
+  assert.match(container.textContent, /usage\.unlimited/);
+  assert.equal(container.querySelector('[data-testid="grid"]'), null);
+  assert.equal(container.querySelector("input").value, link);
+  await React.act(async () => useAffiliateStore.setState({ saved: true }));
+  assert.match(container.textContent, /affiliate\.saved/);
+  await React.act(async () => useAffiliateStore.setState({ enabled: false }));
+  assert.doesNotMatch(container.textContent, /affiliate\./);
 });
 
 test("covered + Stripe Pro: warning banner with Cancel Pro, which reports cancelPro", async (t) => {

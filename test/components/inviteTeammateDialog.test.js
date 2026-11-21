@@ -288,17 +288,14 @@ test("only seats beyond the plan's free ones are priced", async (t) => {
   await React.act(async () => {});
   assert.equal(latest().seatCostLine, null);
 
-  // The second address takes the first seat past the plan: the opening preview prices it.
+  // The second address takes the first seat past the plan: the legacy preview has no separate proration.
   await React.act(async () => latest().dispatch({ type: "draft", text: "b@x.com," }));
-  assert.equal(latest().seatCostLine, 'workspaces.invite.seatCost|{"amount":"$12.00"}');
+  assert.equal(latest().seatCostLine, 'workspaces.invite.seatCostManyUnpriced|{"count":1}');
   assert.deepEqual(globalThis.__previewCalls, [1]);
 
   await React.act(async () => latest().dispatch({ type: "draft", text: "c@x.com," }));
   await React.act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
-  assert.equal(
-    latest().seatCostLine,
-    'workspaces.invite.seatCostMany|{"count":2,"amount":"$24.00"}'
-  );
+  assert.equal(latest().seatCostLine, 'workspaces.invite.seatCostManyUnpriced|{"count":2}');
 });
 
 test("a zero proration prices both single and batch invitations at zero", async (t) => {

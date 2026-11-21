@@ -27,10 +27,6 @@ interface InviteSeatLines {
   seatCostLine: string | null;
 }
 
-function formatInviteProration(preview: SeatPreview): string {
-  return formatAmount(preview.proration_amount ?? preview.amount_due, preview.currency);
-}
-
 /**
  * The seats left and what new invitations would cost, for anywhere addresses can be invited.
  * `pricedCount` is how many invitations to price; null prices none.
@@ -129,17 +125,18 @@ export function useInviteSeatLines(
       : null;
   // The opening preview prices one added seat; more come from their own preview.
   let seatCostLine: string | null = null;
-  if (billedSeats === 1 && seatPreview) {
-    seatCostLine = t("workspaces.invite.seatCost", {
-      amount: formatInviteProration(seatPreview),
-    });
-  } else if (billedSeats > 1) {
-    seatCostLine = batchPreview
-      ? t("workspaces.invite.seatCostMany", {
-          count: billedSeats,
-          amount: formatInviteProration(batchPreview),
-        })
-      : t("workspaces.invite.seatCostManyUnpriced", { count: billedSeats });
+  const priced = billedSeats === 1 ? seatPreview : batchPreview;
+  if (billedSeats > 0) {
+    // Legacy amount_due is the whole invoice. Only a split quote can price the added seats.
+    if (priced?.proration_amount == null) {
+      seatCostLine = t("workspaces.invite.seatCostManyUnpriced", { count: billedSeats });
+    } else {
+      const amount = formatAmount(priced.proration_amount, priced.currency);
+      seatCostLine =
+        billedSeats === 1
+          ? t("workspaces.invite.seatCost", { amount })
+          : t("workspaces.invite.seatCostMany", { count: billedSeats, amount });
+    }
   }
 
   return { workspace, purchasedLeft, seatLine, seatCostLine };

@@ -56,6 +56,7 @@ export interface PersonalPlanInput {
   /** From `coveringWorkspaces()`; empty while the workspace list loads. */
   coveringWorkspaceNames: string[];
   businessAction: BusinessTileAction;
+  hasWorkspacePlanAction: boolean;
   summary?: BillingSummary;
   now: number;
 }
@@ -106,6 +107,7 @@ export type PersonalPlanState =
   | {
       kind: "ready";
       tier: PersonalTier;
+      showPlansGrid: boolean;
       badge: PersonalBadge | null;
       /** `null` when this build can't know what the plan costs. */
       price: PersonalPrice | null;
@@ -204,7 +206,7 @@ function resolvePrice({
     return usage.billingInterval === "annual" ? { key: "price.billedYearly" } : null;
   }
   if (usage.billingInterval === "annual") return { key: "price.billedYearly" };
-  return { key: "price.proMonthly" };
+  return usage.billingInterval === "monthly" ? { key: "price.proMonthly" } : null;
 }
 
 function businessActions(action: BusinessTileAction): PersonalAction[] {
@@ -257,11 +259,11 @@ function coveredBanner(facts: Facts, workspaceName: string | undefined): Persona
   const plan = PERSONAL_PLAN_NAMES[tier === "business" ? "business" : "pro"];
   const cancel: PersonalAction = { kind: tier === "business" ? "cancelBusiness" : "cancelPro" };
 
-  if (ending) return named("covered");
+  if (ending || facts.storeCanceled) return named("covered");
   if (usage.isPastDue) return named("coveredPastDue", cancel, { plan });
   if (stripeTrial && tier === "pro") return named("coveredStripeTrial", { kind: "cancelTrial" });
   if (stripeBilled) return named("coveredPaying", cancel, { plan });
-  if (usage.storeBilling) return named("coveredStore");
+  if (usage.storeBilling) return named("coveredStore", undefined, { plan });
   return named("covered");
 }
 
@@ -409,6 +411,7 @@ export function personalPlanState(input: PersonalPlanInput): PersonalPlanState {
   return {
     kind: "ready",
     tier: facts.tier,
+    showPlansGrid: !facts.covered || facts.tier !== "free" || input.hasWorkspacePlanAction,
     badge: resolveBadge(facts, input.now),
     price: resolvePrice(facts),
     actions: resolveActions(facts, input.businessAction),

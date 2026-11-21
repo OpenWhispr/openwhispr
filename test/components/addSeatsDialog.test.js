@@ -173,6 +173,7 @@ test("the real dialog opens on the quantity, displays the dated totals and retur
   assert.equal(range().labels[0].textContent, "Seats to add");
   assert.match(dialog().textContent, /Acme · Business/);
   assert.ok(byName("Add 1 seat"));
+  assert.equal(amount("Pending seats"), "Pending seats22");
   assert.equal(amount("Available"), "Available01");
   assert.deepEqual(labels(), ["Price", "Added to next invoice", "Next invoice · Nov 19, 2026"]);
   assert.doesNotMatch(dialog().textContent, /Charge today/);
@@ -198,14 +199,14 @@ test("the real dialog opens on the quantity, displays the dated totals and retur
   await waitForFocus();
   assert.equal(dialog() === null, true);
   assert.equal(happyWindow.document.activeElement.textContent, "Open");
-  assert.equal(messages[0].title, "Seats added. Acme now has 23 seats.");
+  assert.equal(messages[0].title, "Acme now has 23 seats.");
 });
 
 test("older previews omit unavailable pricing and seat categories", async (t) => {
   await open(t, { legacy: true });
   assert.deepEqual(labels(), ["Next invoice"]);
   assert.equal(amount("In use"), undefined);
-  assert.equal(amount("Pending invites"), undefined);
+  assert.equal(amount("Pending seats"), undefined);
   assert.equal(amount("Available"), "Available01");
 });
 

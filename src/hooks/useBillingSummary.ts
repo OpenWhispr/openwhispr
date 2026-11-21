@@ -29,7 +29,10 @@ interface StoredSummary {
   summary: WorkspaceBillingSummary | undefined;
 }
 
-export function useBillingSummary(view: BillingSummaryView): BillingSummaryResult {
+export function useBillingSummary(
+  view: BillingSummaryView,
+  subscriptionKey?: string
+): BillingSummaryResult {
   const generation = useSyncExternalStore(subscribeAuthRequestContext, getValidatedAuthGeneration);
   const workspaceId =
     view.kind === "personal"
@@ -40,8 +43,10 @@ export function useBillingSummary(view: BillingSummaryView): BillingSummaryResul
   // Keep a distinct identity object per visit, even for A → B → A with the same sign-in.
   const identity = useMemo(
     () =>
-      workspaceId === undefined || generation === null ? null : currentBillingIdentity(workspaceId),
-    [workspaceId, generation]
+      workspaceId === undefined || generation === null
+        ? null
+        : { workspaceId, authGeneration: generation, subscriptionKey },
+    [workspaceId, generation, subscriptionKey]
   );
   const activeIdentity = useRef<BillingIdentity | null>(null);
   const latestRequest = useRef(0);

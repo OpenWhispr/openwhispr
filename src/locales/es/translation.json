@@ -1673,7 +1673,7 @@
         "label": "Perfil"
       },
       "plansBilling": {
-        "description": "Planes, uso y facturación",
+        "description": "Gestiona tu plan, tu uso y tu facturación.",
         "label": "Plan y facturación"
       },
       "workspaceGeneral": {
@@ -3180,7 +3180,7 @@
         "now": "Ahora",
         "after": "Después",
         "inUse": "En uso",
-        "pending": "Invitaciones pendientes",
+        "pending": "Plazas pendientes",
         "available": "Disponibles",
         "total": "Plazas totales",
         "price": "Precio",
@@ -3190,8 +3190,8 @@
         "confirm_other": "Añadir {{count}} plazas",
         "confirm_many": "Añadir {{count}} plazas",
         "adding": "Añadiendo…",
-        "failure": "No se pudieron añadir plazas. No se ha realizado ningún cargo.",
-        "success": "Se han añadido plazas. {{workspace}} tiene ahora {{count}} plazas.",
+        "failure": "No se pudo confirmar el cambio. Se está comprobando el total de plazas.",
+        "success": "{{workspace}} tiene ahora {{count}} plazas.",
         "previewFailed": "No se pudieron cargar los precios."
       },
       "free": {
@@ -3344,11 +3344,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} ya te cubre",
-            "body": "Sigues pagando por Pro. Cancélalo en la tienda de apps de tu teléfono."
+            "body": "Sigues pagando por {{plan}}. Cancélalo en la tienda de apps de tu teléfono."
           },
           "coveredStoreUnnamed": {
             "title": "Un espacio de trabajo ya te cubre",
-            "body": "Sigues pagando por Pro. Cancélalo en la tienda de apps de tu teléfono."
+            "body": "Sigues pagando por {{plan}}. Cancélalo en la tienda de apps de tu teléfono."
           },
           "covered": {
             "title": "{{workspace}} te cubre",

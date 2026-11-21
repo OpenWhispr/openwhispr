@@ -1621,7 +1621,7 @@
         "label": "Profilo"
       },
       "plansBilling": {
-        "description": "Piani, utilizzo e fatturazione",
+        "description": "Gestisci il piano, l’utilizzo e la fatturazione.",
         "label": "Piano e fatturazione"
       },
       "workspaceGeneral": {
@@ -3128,7 +3128,7 @@
         "now": "Ora",
         "after": "Dopo",
         "inUse": "In uso",
-        "pending": "Inviti in sospeso",
+        "pending": "Posti in sospeso",
         "available": "Disponibili",
         "total": "Posti totali",
         "price": "Prezzo",
@@ -3138,8 +3138,8 @@
         "confirm_other": "Aggiungi {{count}} posti",
         "confirm_many": "Aggiungi {{count}} posti",
         "adding": "Aggiunta in corso…",
-        "failure": "Impossibile aggiungere posti. Non è stato addebitato nulla.",
-        "success": "Posti aggiunti. {{workspace}} ora ha {{count}} posti.",
+        "failure": "Impossibile confermare la modifica. Verifica del totale dei posti in corso.",
+        "success": "{{workspace}} ora ha {{count}} posti.",
         "previewFailed": "Impossibile caricare i prezzi."
       },
       "free": {
@@ -3292,11 +3292,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} ti copre già",
-            "body": "Stai ancora pagando Pro. Annullalo nello store di app del tuo telefono."
+            "body": "Stai ancora pagando {{plan}}. Annullalo nello store di app del tuo telefono."
           },
           "coveredStoreUnnamed": {
             "title": "Un workspace ti copre già",
-            "body": "Stai ancora pagando Pro. Annullalo nello store di app del tuo telefono."
+            "body": "Stai ancora pagando {{plan}}. Annullalo nello store di app del tuo telefono."
           },
           "covered": {
             "title": "{{workspace}} ti copre",

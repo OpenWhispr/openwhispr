@@ -28,7 +28,7 @@ interface PersonalPlanViewProps {
   state: PersonalPlanState;
   onAction: (action: PersonalAction) => void;
   busyAction: PersonalAction["kind"] | null;
-  /** The Plans grid (and anything above it), built by SettingsPage. */
+  creatorLink: ReactNode;
   grid: ReactNode;
   formatDate: (iso: string) => string;
 }
@@ -110,6 +110,7 @@ export function PersonalPlanView({
   state,
   onAction,
   busyAction,
+  creatorLink,
   grid,
   formatDate,
 }: PersonalPlanViewProps): ReactElement {
@@ -119,6 +120,13 @@ export function PersonalPlanView({
   const currentPlanTitle = t(`${P}.blocks.currentPlan`);
   // The card and a banner can both show a portal button; they share one request.
   const portalOpening = isPortalAction(busyAction);
+
+  const planOptions = (
+    <div className="flex flex-col gap-3 empty:hidden">
+      {creatorLink}
+      {(state.kind !== "ready" || state.showPlansGrid) && grid}
+    </div>
+  );
 
   const actionButton = (action: PersonalAction, primary = false): ReactElement => (
     <PillButton
@@ -143,7 +151,7 @@ export function PersonalPlanView({
             action={actionButton({ kind: "signIn" })}
           />
         </BillingBlock>
-        {grid}
+        {planOptions}
       </div>
     );
   }
@@ -158,7 +166,7 @@ export function PersonalPlanView({
             action={actionButton({ kind: "retry" })}
           />
         </BillingBlock>
-        {grid}
+        {planOptions}
       </div>
     );
   }
@@ -180,7 +188,7 @@ export function PersonalPlanView({
             </BillingBlock>
           </div>
         </div>
-        {grid}
+        {planOptions}
       </div>
     );
   }
@@ -297,7 +305,7 @@ export function PersonalPlanView({
         </BillingBlock>
       )}
 
-      {grid}
+      {planOptions}
     </div>
   );
 }

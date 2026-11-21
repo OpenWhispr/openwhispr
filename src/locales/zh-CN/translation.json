@@ -1621,7 +1621,7 @@
         "label": "个人资料"
       },
       "plansBilling": {
-        "description": "套餐、用量与账单",
+        "description": "管理你的套餐、用量和账单。",
         "label": "套餐与账单"
       },
       "workspaceGeneral": {
@@ -3128,7 +3128,7 @@
         "now": "当前",
         "after": "添加后",
         "inUse": "使用中",
-        "pending": "待处理的邀请",
+        "pending": "已预留席位",
         "available": "可用",
         "total": "席位总数",
         "price": "价格",
@@ -3137,8 +3137,8 @@
         "confirm_one": "添加 {{count}} 个席位",
         "confirm_other": "添加 {{count}} 个席位",
         "adding": "正在添加…",
-        "failure": "无法添加席位。未收取任何费用。",
-        "success": "席位已添加。{{workspace}} 现有 {{count}} 个席位。",
+        "failure": "无法确认席位变更。正在检查当前席位总数。",
+        "success": "{{workspace}} 现有 {{count}} 个席位。",
         "previewFailed": "无法加载席位价格。"
       },
       "free": {
@@ -3291,11 +3291,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} 已为您提供权益",
-            "body": "您仍在为 Pro 付费。请在您手机的应用商店中取消。"
+            "body": "您仍在为 {{plan}} 付费。请在您手机的应用商店中取消。"
           },
           "coveredStoreUnnamed": {
             "title": "已有工作区为您提供权益",
-            "body": "您仍在为 Pro 付费。请在您手机的应用商店中取消。"
+            "body": "您仍在为 {{plan}} 付费。请在您手机的应用商店中取消。"
           },
           "covered": {
             "title": "{{workspace}} 为您提供权益",

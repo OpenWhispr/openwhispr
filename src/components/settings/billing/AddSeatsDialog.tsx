@@ -22,8 +22,9 @@ import { PillButton } from "./BillingUi";
 import { formatBillingDate } from "./billingFormat";
 
 const PREFIX = "settingsPage.billing.addSeats.";
-const SURFACE = "rounded-xl bg-surface-3 p-3";
-const STEP_BUTTON = "size-8 rounded-lg border border-border bg-card text-lg disabled:opacity-40";
+const SURFACE = "overflow-hidden rounded-xl bg-surface-3";
+const STEP_BUTTON =
+  "h-7 w-8 rounded-full bg-surface-raised text-sm text-muted-foreground disabled:opacity-40";
 
 interface Props {
   workspace: Workspace;
@@ -54,6 +55,8 @@ export function AddSeatsDialog({
   const locked = useRef(false);
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState(1);
+  // A lost response can follow a successful write. Every retry is bounded by the original total.
+  const [retryTarget, setRetryTarget] = useState<number | null>(null);
   // A repeated 10 → 15 → 10 list snapshot is a new observation. Only the preview
   // requested against this observation can override its counts or authorize a purchase.
   const { seats, seats_used, seat_limit } = workspace;
@@ -65,6 +68,7 @@ export function AddSeatsDialog({
     version: number;
     delta: number;
     preview: SeatPreview;
+    retryTarget: number | null;
     snapshot: typeof seatSnapshot;
   } | null>(null);
   const [previewError, setPreviewError] = useState(false);
@@ -72,17 +76,22 @@ export function AddSeatsDialog({
   const latestRefresh = useRef(refreshWorkspace);
   latestRefresh.current = refreshWorkspace;
   const baseline = quote?.snapshot === seatSnapshot ? quote : null;
+  const purchased = baseline?.preview.current_quantity ?? seats;
   const model = addSeatsState({
     workspace: seatSnapshot,
-    selectedDelta: selected,
+    selectedDelta: retryTarget === null ? selected : Math.max(0, retryTarget - purchased),
     preview: baseline?.preview,
     summary,
   });
   const { delta, maxDelta } = model;
+  // Read the smallest quote first so an already-applied increase near the ceiling can be observed.
+  const previewDelta =
+    retryTarget !== null && baseline?.retryTarget !== retryTarget ? Math.min(1, maxDelta) : delta;
   const fresh =
     baseline?.version === version.current &&
     baseline.delta === delta &&
-    model.nextQuantity !== null;
+    model.nextQuantity !== null &&
+    (retryTarget === null || model.nextQuantity <= retryTarget);
   const priced = delta === 0 || fresh;
   const pending = delta > 0 && !fresh && !previewError;
   const workspaceId = workspace.id;
@@ -105,27 +114,67 @@ export function AddSeatsDialog({
       request === version.current &&
       isSameBillingIdentity(identity, currentBillingIdentity(workspaceId));
     setPreviewError(false);
-    setSelected(delta);
-    if (delta > 0 && !locked.current) {
-      void WorkspacesService.previewSeats(workspaceId, delta, identity.authGeneration).then(
+    if (retryTarget === null) setSelected(delta);
+    if (previewDelta > 0 && !locked.current) {
+      void WorkspacesService.previewSeats(workspaceId, previewDelta, identity.authGeneration).then(
         (preview) => {
           if (!valid()) return;
-          setQuote({ version: request, delta, preview, snapshot: seatSnapshot });
-          if (preview.next_quantity !== preview.current_quantity + delta) setPreviewError(true);
+          if (preview.next_quantity !== preview.current_quantity + previewDelta) {
+            setPreviewError(true);
+            return;
+          }
+          setQuote({
+            version: request,
+            delta: previewDelta,
+            preview,
+            retryTarget,
+            snapshot: seatSnapshot,
+          });
         },
         () => {
           if (!valid()) return;
           setPreviewError(true);
-          // A fresh list can lower the seat ceiling after a rejected preview.
-          setQuote(null);
+          // Keep the recovery baseline so a failed remaining-seat quote waits for Retry.
+          // A newer workspace snapshot will independently invalidate it.
+          if (retryTarget === null) setQuote(null);
           void latestRefresh.current().catch(() => {});
         }
       );
     }
-  }, [delta, revision, workspaceId, identity, seatSnapshot]);
+  }, [delta, previewDelta, retryTarget, revision, workspaceId, identity, seatSnapshot]);
+
+  useLayoutEffect(() => {
+    if (
+      retryTarget === null ||
+      purchased < retryTarget ||
+      locked.current ||
+      !isSameBillingIdentity(identity, currentBillingIdentity(workspaceId))
+    )
+      return;
+    locked.current = true;
+    toast({
+      title: t(PREFIX + "success", { workspace: workspace.name, count: purchased }),
+      variant: "success",
+    });
+    onClose();
+    refreshSummary();
+    void refreshWorkspace().catch(() => {});
+  }, [
+    retryTarget,
+    purchased,
+    identity,
+    workspaceId,
+    workspace.name,
+    toast,
+    t,
+    onClose,
+    refreshSummary,
+    refreshWorkspace,
+  ]);
 
   function select(value: number): void {
-    if (locked.current || delta === value) return;
+    if (locked.current || (retryTarget !== null && !fresh) || delta === value) return;
+    setRetryTarget(null);
     ++version.current;
     setSelected(value);
   }
@@ -162,6 +211,7 @@ export function AddSeatsDialog({
       toast({ title: t(PREFIX + "failure"), variant: "destructive" });
       locked.current = false;
       setAdding(false);
+      setRetryTarget(model.nextQuantity);
       retryPreview();
       return;
     }
@@ -175,6 +225,7 @@ export function AddSeatsDialog({
     void refreshWorkspace().catch(() => {});
   }
 
+  const quantityLocked = adding || (retryTarget !== null && !fresh);
   const ticks = [0, 5, 10, 15, 20].filter((tick) => tick < maxDelta).concat(maxDelta);
   const invoice = priced ? model.invoice : null;
   const priceRows = [
@@ -220,14 +271,14 @@ export function AddSeatsDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>{t(PREFIX + "title")}</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-base font-medium">{t(PREFIX + "title")}</DialogTitle>
+          <DialogDescription className="text-xs">
             <bdi>{workspace.name}</bdi> · {planName}
           </DialogDescription>
         </DialogHeader>
-        <section className={SURFACE}>
+        <section className={SURFACE + " p-3"}>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <label htmlFor="billing-seats-delta" className="text-sm font-medium">
+            <label htmlFor="billing-seats-delta" className="text-xs text-muted-foreground">
               {t(PREFIX + "quantity")}
             </label>
             <div className="flex items-center gap-2">
@@ -235,7 +286,7 @@ export function AddSeatsDialog({
                 type="button"
                 className={STEP_BUTTON}
                 aria-label={t(PREFIX + "decrease")}
-                disabled={adding || delta === 0}
+                disabled={quantityLocked || delta === 0}
                 onClick={() => select(delta - 1)}
               >
                 −
@@ -245,33 +296,53 @@ export function AddSeatsDialog({
                 type="button"
                 className={STEP_BUTTON}
                 aria-label={t(PREFIX + "increase")}
-                disabled={adding || delta === maxDelta}
+                disabled={quantityLocked || delta === maxDelta}
                 onClick={() => select(delta + 1)}
               >
                 +
               </button>
             </div>
           </div>
-          <input
-            id="billing-seats-delta"
-            ref={slider}
-            type="range"
-            min={0}
-            max={maxDelta}
-            step={1}
-            value={delta}
-            disabled={adding || maxDelta === 0}
-            onChange={(event) => select(event.currentTarget.valueAsNumber)}
-            className="w-full accent-primary"
-          />
-          <div aria-hidden="true" className="relative h-4 text-xs text-muted-foreground">
+          <div className="relative flex h-6 items-center">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 h-1.5 rounded-full bg-surface-1 forced-colors:hidden"
+            >
+              <span
+                className="absolute inset-y-0 start-0 rounded-full bg-primary"
+                style={{ width: `${maxDelta ? (delta / maxDelta) * 100 : 0}%` }}
+              />
+              <div className="absolute inset-x-2 inset-y-0">
+                {ticks
+                  .filter((tick) => tick > 0 && tick < maxDelta)
+                  .map((tick) => (
+                    <span
+                      key={tick}
+                      className="absolute top-1/2 size-0.5 -translate-y-1/2 rounded-full bg-muted-foreground"
+                      style={{ insetInlineStart: `${(tick / maxDelta) * 100}%` }}
+                    />
+                  ))}
+              </div>
+            </div>
+            <input
+              id="billing-seats-delta"
+              ref={slider}
+              type="range"
+              min={0}
+              max={maxDelta}
+              step={1}
+              value={delta}
+              disabled={quantityLocked || maxDelta === 0}
+              onChange={(event) => select(event.currentTarget.valueAsNumber)}
+              className="input-inline billing-seat-range relative h-full w-full rounded-full accent-primary focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+            />
+          </div>
+          <div aria-hidden="true" className="relative mx-2 h-4 text-xs text-muted-foreground">
             {ticks.map((tick) => (
               <span
                 key={tick}
-                className="absolute"
-                style={{
-                  insetInlineStart: `clamp(0px, ${maxDelta ? (tick / maxDelta) * 100 : 0}%, calc(100% - 2ch))`,
-                }}
+                className="absolute -translate-x-1/2 rtl:translate-x-1/2"
+                style={{ insetInlineStart: `${maxDelta ? (tick / maxDelta) * 100 : 0}%` }}
               >
                 {tick}
               </span>
@@ -279,26 +350,34 @@ export function AddSeatsDialog({
           </div>
         </section>
         <div className={SURFACE}>
-          <table className="w-full text-sm tabular-nums">
+          <table className="w-full border-collapse text-sm text-muted-foreground tabular-nums">
             <thead>
-              <tr className="text-muted-foreground">
+              <tr className="h-9 border-b border-border-subtle text-xs [&>th]:font-medium">
                 <td />
                 <th scope="col" className="text-end">
                   {t(PREFIX + "now")}
                 </th>
-                <th scope="col" className="text-end">
+                <th scope="col" className="pe-3.5 text-end">
                   {t(PREFIX + "after")}
                 </th>
               </tr>
             </thead>
             <tbody>
               {model.rows.map((row) => (
-                <tr key={row.kind}>
-                  <th scope="row" className="py-1 text-start font-normal">
+                <tr key={row.kind} className="h-11 border-b border-border-subtle last:border-0">
+                  <th scope="row" className="ps-3.5 text-start text-xs font-normal">
                     {t(PREFIX + row.kind)}
                   </th>
                   <td className="text-end">{row.now}</td>
-                  <td className="text-end">{row.after}</td>
+                  <td
+                    className={
+                      row.after !== row.now
+                        ? "pe-3.5 text-end font-semibold text-foreground"
+                        : "pe-3.5 text-end"
+                    }
+                  >
+                    {row.after}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -307,15 +386,18 @@ export function AddSeatsDialog({
         {priceRows.length > 0 && (
           <dl
             aria-busy={pending || undefined}
-            className={SURFACE + " grid grid-cols-[1fr_auto] gap-2 text-sm"}
+            className={SURFACE + " divide-y divide-border-subtle text-sm"}
           >
             {priceRows.map(({ label, value }) => (
-              <React.Fragment key={label}>
-                <dt>{label}</dt>
+              <div
+                key={label}
+                className="flex min-h-11 items-center justify-between gap-2 px-3.5 py-2"
+              >
+                <dt className="text-xs text-muted-foreground">{label}</dt>
                 <dd className="text-end">
                   <bdi>{value ?? "—"}</bdi>
                 </dd>
-              </React.Fragment>
+              </div>
             ))}
           </dl>
         )}

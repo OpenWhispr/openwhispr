@@ -83,10 +83,14 @@ const METER_FILL: Record<"normal" | "warning" | "destructive", string> = {
   destructive: "bg-destructive",
 };
 
+const PENDING_HATCH =
+  "text-primary bg-[repeating-linear-gradient(125deg,currentColor_0_1.5px,transparent_1.5px_5px)]";
+
 export function UsageMeterRow({
   label,
   value,
   percent,
+  pending,
   caption,
   tone = "normal",
   action,
@@ -94,15 +98,20 @@ export function UsageMeterRow({
   label: string;
   value: ReactNode;
   percent: number;
+  pending?: { percent: number; label: string; usedLabel: string };
   caption?: string;
   tone?: "normal" | "warning" | "destructive";
-  /** A button at the end of the label line, such as Add seats. */
+  /** A button beside the meter, such as Add seats. */
   action?: ReactNode;
 }): ReactElement {
   const clamped = Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 0;
+  const pendingPercent =
+    pending && Number.isFinite(pending.percent)
+      ? Math.min(clamped, Math.max(0, pending.percent))
+      : 0;
   return (
-    <div className="flex flex-col gap-2 border-t border-border px-4 py-3.5 first:border-t-0">
-      <div className="flex items-center justify-between gap-3">
+    <div className="flex items-center gap-3 border-t border-border px-4 py-3.5 first:border-t-0">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex min-w-0 items-baseline gap-2 text-sm">
           <span dir="auto" className="truncate text-foreground">
             {label}
@@ -111,19 +120,29 @@ export function UsageMeterRow({
             {value}
           </span>
         </div>
-        {action}
+        <div aria-hidden="true" className="flex h-3 overflow-hidden rounded-lg bg-surface-3">
+          <div
+            className={cn("h-full", METER_FILL[tone])}
+            style={{ width: `${clamped - pendingPercent}%` }}
+          />
+          {pendingPercent > 0 && (
+            <div className={cn("h-full", PENDING_HATCH)} style={{ width: `${pendingPercent}%` }} />
+          )}
+        </div>
+        {(pending || caption) && (
+          <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground/70">
+            {pending && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="sr-only">{pending.usedLabel}. </span>
+                <span aria-hidden="true" className={cn("size-2.5 rounded-xs", PENDING_HATCH)} />
+                <span dir="auto">{pending.label}</span>
+              </span>
+            )}
+            {caption && <span dir="auto">{caption}</span>}
+          </div>
+        )}
       </div>
-      <div className="h-3 overflow-hidden rounded-lg bg-surface-3">
-        <div
-          className={cn("h-full rounded-lg", METER_FILL[tone])}
-          style={{ width: `${clamped}%` }}
-        />
-      </div>
-      {caption && (
-        <p dir="auto" className="text-xs text-muted-foreground/70">
-          {caption}
-        </p>
-      )}
+      {action}
     </div>
   );
 }
@@ -146,7 +165,7 @@ export function DetailRows({
   rows: Array<{ label: string; value: ReactNode }>;
 }): ReactElement {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col divide-y divide-border">
       {rows.map((row, index) => (
         <div key={`${index}-${row.label}`} className="flex items-start gap-3 px-2 py-3">
           <span dir="auto" className="w-[140px] shrink-0 text-xs text-muted-foreground/70">

@@ -1715,7 +1715,7 @@
         "label": "Profil"
       },
       "plansBilling": {
-        "description": "Tarife, Nutzung & Abrechnung",
+        "description": "Verwalte deinen Tarif, deine Nutzung und deine Abrechnung.",
         "label": "Tarif & Abrechnung"
       },
       "workspaceGeneral": {
@@ -3222,7 +3222,7 @@
         "now": "Jetzt",
         "after": "Danach",
         "inUse": "Belegt",
-        "pending": "Ausstehende Einladungen",
+        "pending": "Ausstehende Plätze",
         "available": "Verfügbar",
         "total": "Plätze insgesamt",
         "price": "Preis",
@@ -3231,8 +3231,8 @@
         "confirm_one": "{{count}} Platz hinzufügen",
         "confirm_other": "{{count}} Plätze hinzufügen",
         "adding": "Wird hinzugefügt…",
-        "failure": "Plätze konnten nicht hinzugefügt werden. Es wurde nichts berechnet.",
-        "success": "Plätze hinzugefügt. {{workspace}} hat jetzt insgesamt {{count}} Plätze.",
+        "failure": "Die Änderung konnte nicht bestätigt werden. Die aktuelle Anzahl wird geprüft.",
+        "success": "{{workspace}} hat jetzt insgesamt {{count}} Plätze.",
         "previewFailed": "Die Preise konnten nicht geladen werden."
       },
       "free": {
@@ -3385,11 +3385,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} deckt dich bereits ab",
-            "body": "Du zahlst weiterhin für Pro. Kündige es im App-Store deines Telefons."
+            "body": "Du zahlst weiterhin für {{plan}}. Kündige es im App-Store deines Telefons."
           },
           "coveredStoreUnnamed": {
             "title": "Ein Workspace deckt dich bereits ab",
-            "body": "Du zahlst weiterhin für Pro. Kündige es im App-Store deines Telefons."
+            "body": "Du zahlst weiterhin für {{plan}}. Kündige es im App-Store deines Telefons."
           },
           "covered": {
             "title": "{{workspace}} deckt dich ab",

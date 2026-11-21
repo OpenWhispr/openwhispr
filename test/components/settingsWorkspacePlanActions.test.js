@@ -634,18 +634,20 @@ const workspaceGridProps = (overrides = {}) => ({
   ...overrides,
 });
 
-test("cards: a Business and Enterprise grid shows no Pro card and no yearly switch, at monthly prices", async (t) => {
-  const { container, render } = await setup(t);
-  // A stray yearly flag never reaches a grid without Pro's switch.
-  await render(workspaceGridProps({ yearly: true }));
+test("Business and Enterprise grid switches Business billing cadence in its own view", async (t) => {
+  const { state, container, render } = await setup(t);
+  const change = (yearly) => state.yearlyChanges.push(yearly);
+  await render(workspaceGridProps({ yearly: true, onYearlyChange: change }));
   assert.equal(card(container, "pro"), null);
-  assert.notEqual(card(container, "business"), null);
-  assert.notEqual(card(container, "enterprise"), null);
-  assert.equal(container.querySelector('[role="switch"]'), null);
-  assert.equal(
-    card(container, "business").textContent.includes("settingsPage.billing.plans.pricePerSeat"),
-    true
+  assert.ok(card(container, "enterprise"));
+  assert.ok(
+    card(container, "business").textContent.includes(
+      "settingsPage.billing.plans.pricePerSeatYearly"
+    )
   );
+  await React.act(async () => container.querySelector('[role="switch"]').click());
+  assert.deepEqual(state.yearlyChanges, [false]);
+  await render(workspaceGridProps({ yearly: false, onYearlyChange: change }));
   assert.equal(
     card(container, "business").textContent.includes(
       "settingsPage.billing.plans.pricePerSeatYearly"

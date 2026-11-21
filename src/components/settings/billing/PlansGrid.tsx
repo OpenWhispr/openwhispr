@@ -50,23 +50,20 @@ export type PlanCardId = "pro" | "business" | "enterprise";
 type PlansGridAuth =
   { isSignedIn: true; onSignIn?: () => void } | { isSignedIn: false; onSignIn: () => void };
 
-// The yearly switch only reprices Pro's card with it; a grid without Pro shows monthly prices.
 type PlansGridCards =
   | {
       cards?: PlanCardId[];
       pro: ProCardAction;
-      yearly: boolean;
-      onYearlyChange: (yearly: boolean) => void;
     }
   | {
       cards: Array<Exclude<PlanCardId, "pro">>;
       pro?: undefined;
-      yearly?: undefined;
-      onYearlyChange?: undefined;
     };
 
 type PlansGridProps = PlansGridAuth &
   PlansGridCards & {
+    yearly: boolean;
+    onYearlyChange: (yearly: boolean) => void;
     business: BusinessCardAction;
     businessDowngrade: WorkspacePlanAction | null;
     onBusinessAction: (action: BusinessCardAction) => void;
@@ -188,12 +185,11 @@ export function PlansGrid({
   const { t } = useTranslation();
   const shown = new Set<PlanCardId>(cards);
   const showsPro = shown.has("pro") && pro !== undefined;
-  const yearlyPrices = showsPro && yearly;
 
-  const proPrice = yearlyPrices
+  const proPrice = yearly
     ? t(`${PLANS}.pricePerMonthYearly`, { price: t(`${PRICING}.pro.annualEquivalent`) })
     : t(`${PLANS}.pricePerMonth`, { price: t(`${PRICING}.pro.monthlyPrice`) });
-  const businessPrice = yearlyPrices
+  const businessPrice = yearly
     ? t(`${PLANS}.pricePerSeatYearly`, { price: t(`${PRICING}.business.annualEquivalent`) })
     : t(`${PLANS}.pricePerSeat`, { price: t(`${PRICING}.business.monthlyPrice`) });
 
@@ -343,7 +339,7 @@ export function PlansGrid({
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-base font-medium text-foreground">{t(`${PRICING}.title`)}</h3>
-        {showsPro && onYearlyChange && (
+        {onYearlyChange && (
           <label className="flex cursor-pointer items-center gap-2">
             <span dir="auto" className="text-xs text-muted-foreground">
               {t(`${PRICING}.billedYearly`)}

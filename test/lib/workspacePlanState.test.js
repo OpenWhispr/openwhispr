@@ -496,7 +496,7 @@ test("Enterprise owner cancelled: ended banner without Resubscribe", () => {
   assert.equal(state.banner.action, undefined);
 });
 
-test("a lapsed paid plan with no subscription left offers Enterprise in its own view", () => {
+test("a lapsed paid plan with no subscription left offers the Business and Enterprise grid in its own view", () => {
   for (const plan of ["business", "enterprise"]) {
     const state = workspacePlanState(
       workspace({
@@ -508,7 +508,7 @@ test("a lapsed paid plan with no subscription left offers Enterprise in its own 
       people(3, 0),
       NOW
     );
-    assert.equal(state.showPlansGrid, false, plan);
+    assert.equal(state.showPlansGrid, true, plan);
     assert.equal(state.freeCta, false, plan);
     assert.deepEqual(state.planActions, [{ kind: "upgradeEnterprise" }], plan);
   }

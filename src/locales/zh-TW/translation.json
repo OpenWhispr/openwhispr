@@ -1621,7 +1621,7 @@
         "label": "個人資料"
       },
       "plansBilling": {
-        "description": "方案、用量與帳單",
+        "description": "管理你的方案、用量和帳單。",
         "label": "方案與帳單"
       },
       "workspaceGeneral": {
@@ -3128,7 +3128,7 @@
         "now": "目前",
         "after": "新增後",
         "inUse": "使用中",
-        "pending": "待處理的邀請",
+        "pending": "已預留席位",
         "available": "可用",
         "total": "席位總數",
         "price": "價格",
@@ -3137,8 +3137,8 @@
         "confirm_one": "新增 {{count}} 個席位",
         "confirm_other": "新增 {{count}} 個席位",
         "adding": "正在新增…",
-        "failure": "無法新增席位。未收取任何費用。",
-        "success": "席位已新增。{{workspace}} 現有 {{count}} 個席位。",
+        "failure": "無法確認席位變更。正在檢查目前的席位總數。",
+        "success": "{{workspace}} 現有 {{count}} 個席位。",
         "previewFailed": "無法載入席位價格。"
       },
       "free": {
@@ -3291,11 +3291,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} 已為您提供權益",
-            "body": "您仍在為 Pro 付費。請在您手機的應用程式商店中取消。"
+            "body": "您仍在為 {{plan}} 付費。請在您手機的應用程式商店中取消。"
           },
           "coveredStoreUnnamed": {
             "title": "已有工作區為您提供權益",
-            "body": "您仍在為 Pro 付費。請在您手機的應用程式商店中取消。"
+            "body": "您仍在為 {{plan}} 付費。請在您手機的應用程式商店中取消。"
           },
           "covered": {
             "title": "{{workspace}} 為您提供權益",

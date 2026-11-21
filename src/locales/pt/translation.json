@@ -1600,7 +1600,7 @@
         "label": "Perfil"
       },
       "plansBilling": {
-        "description": "Planos, uso e cobrança",
+        "description": "Gerencie seu plano, uso e faturamento.",
         "label": "Plano e cobrança"
       },
       "workspaceGeneral": {
@@ -3113,7 +3113,7 @@
         "now": "Agora",
         "after": "Depois",
         "inUse": "Em uso",
-        "pending": "Convites pendentes",
+        "pending": "Lugares pendentes",
         "available": "Disponíveis",
         "total": "Total de lugares",
         "price": "Preço",
@@ -3123,8 +3123,8 @@
         "confirm_other": "Adicionar {{count}} lugares",
         "confirm_many": "Adicionar {{count}} lugares",
         "adding": "A adicionar…",
-        "failure": "Não foi possível adicionar lugares. Não foi cobrado qualquer valor.",
-        "success": "Lugares adicionados. {{workspace}} tem agora {{count}} lugares.",
+        "failure": "Não foi possível confirmar a alteração. A verificar o total de lugares.",
+        "success": "{{workspace}} tem agora {{count}} lugares.",
         "previewFailed": "Não foi possível carregar os preços."
       },
       "free": {
@@ -3277,11 +3277,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} já cobre você",
-            "body": "Você ainda paga pelo Pro. Cancele na loja de apps do seu celular."
+            "body": "Você ainda paga pelo {{plan}}. Cancele na loja de apps do seu celular."
           },
           "coveredStoreUnnamed": {
             "title": "Um espaço de trabalho já cobre você",
-            "body": "Você ainda paga pelo Pro. Cancele na loja de apps do seu celular."
+            "body": "Você ainda paga pelo {{plan}}. Cancele na loja de apps do seu celular."
           },
           "covered": {
             "title": "{{workspace}} cobre você",

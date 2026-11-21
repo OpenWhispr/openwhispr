@@ -150,6 +150,25 @@ async function removeMembers(
   return res.data;
 }
 
+interface WorkspacePeopleCounts {
+  seats?: number;
+  billable_members?: number;
+  member_count: number;
+  pending_invitations: number;
+}
+
+async function getPeopleCounts(workspaceId: string): Promise<WorkspacePeopleCounts> {
+  const res = await cloudGet<DataWrap<WorkspacePeopleCounts>>(
+    `/api/workspaces/${workspaceId}/stats`,
+    "no-store"
+  );
+  const counts = res.data;
+  if (!Number.isInteger(counts?.member_count) || !Number.isInteger(counts?.pending_invitations)) {
+    throw new Error("Workspace people counts are unavailable");
+  }
+  return counts;
+}
+
 async function billingCheckout(
   workspaceId: string,
   interval: "monthly" | "annual" = "monthly",
@@ -171,7 +190,11 @@ async function billingPortal(workspaceId: string, authGeneration?: number): Prom
   const res =
     authGeneration === undefined
       ? await cloudPost<DataWrap<{ url: string }>>(path)
-      : await cloudPostForAuthGeneration<DataWrap<{ url: string }>>(path, undefined, authGeneration);
+      : await cloudPostForAuthGeneration<DataWrap<{ url: string }>>(
+          path,
+          undefined,
+          authGeneration
+        );
   return res.data.url;
 }
 
@@ -273,6 +296,7 @@ export const WorkspacesService = {
   removeMember,
   previewMemberRemoval,
   removeMembers,
+  getPeopleCounts,
   billingCheckout,
   billingPortal,
   previewSeats,

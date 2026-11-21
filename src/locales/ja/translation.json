@@ -1621,7 +1621,7 @@
         "label": "プロフィール"
       },
       "plansBilling": {
-        "description": "プラン、使用状況、請求",
+        "description": "プラン、使用状況、請求を管理します。",
         "label": "プランと請求"
       },
       "workspaceGeneral": {
@@ -3128,7 +3128,7 @@
         "now": "現在",
         "after": "追加後",
         "inUse": "使用中",
-        "pending": "保留中の招待",
+        "pending": "保留中のシート",
         "available": "利用可能",
         "total": "合計シート数",
         "price": "料金",
@@ -3137,8 +3137,8 @@
         "confirm_one": "{{count}} シートを追加",
         "confirm_other": "{{count}} シートを追加",
         "adding": "追加中…",
-        "failure": "シートを追加できませんでした。請求は発生していません。",
-        "success": "シートを追加しました。{{workspace}} の合計は {{count}} シートです。",
+        "failure": "シート数の変更を確認できませんでした。現在の合計を確認しています。",
+        "success": "{{workspace}} の合計は {{count}} シートです。",
         "previewFailed": "シート料金を読み込めませんでした。"
       },
       "free": {
@@ -3291,11 +3291,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} がすでに対象にしています",
-            "body": "Pro の料金は引き続き発生しています。スマートフォンのアプリストアで解約してください。"
+            "body": "{{plan}} の料金は引き続き発生しています。スマートフォンのアプリストアで解約してください。"
           },
           "coveredStoreUnnamed": {
             "title": "ワークスペースがすでに対象にしています",
-            "body": "Pro の料金は引き続き発生しています。スマートフォンのアプリストアで解約してください。"
+            "body": "{{plan}} の料金は引き続き発生しています。スマートフォンのアプリストアで解約してください。"
           },
           "covered": {
             "title": "{{workspace}} の対象です",

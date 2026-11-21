@@ -455,7 +455,10 @@ test("a team's access menu says what Admin means for the team", async (t) => {
   await mount(t);
 
   await openMenu(roleTrigger(rowFor("Sales")));
-  assert.match(text(menuItem("Everyone is a member")), /Everyone on the team can view and edit notes/);
+  assert.match(
+    text(menuItem("Everyone is a member")),
+    /Everyone on the team can view and edit notes/
+  );
   assert.match(text(menuItem("Team admins are admins")), /Everyone else on the team is a member/);
 });
 
@@ -691,7 +694,7 @@ test("a workspace admin sees seat usage and can invite without accessing a price
   await ui.settle();
   assert.match(PANEL_TEXT(), /Using 8 of 8 seats/);
   assert.match(PANEL_TEXT(), /No seats left\. Ask Olivia to add seats\./);
-  assert.doesNotMatch(PANEL_TEXT(), /If accepted, adds a seat to your plan/);
+  assert.doesNotMatch(PANEL_TEXT(), /adds (?:a|1) seat to your plan/);
   assert.deepEqual(callsTo("workspaces").at(-1), ["workspaces", { fresh: true }]);
   assert.equal(addButton().disabled, false);
 
@@ -714,7 +717,8 @@ test("someone who manages billing gets Upgrade beside the seat warning", async (
   t.after(() => delete happyWindow.electronAPI);
 
   await addAddress("new@example.com");
-  assert.match(PANEL_TEXT(), /If accepted, adds a seat to your plan/);
+  assert.match(PANEL_TEXT(), /adds 1 seat to your plan/);
+  assert.doesNotMatch(PANEL_TEXT(), /12[.,]00/, "the invoice total is not a seat price");
   await ui.click(buttonNamed("Upgrade"));
 
   // The seat warning links to the workspace whose seats are full.

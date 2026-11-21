@@ -244,7 +244,7 @@ test("only the newest opening and delta authorize a purchase, including +5 → 0
   assert.deepEqual(state.updateSeatsCalls, [["a", 11, 7]]);
 });
 
-test("a rejected purchase preserves the delta and needs a fresh preview and explicit confirm", async (t) => {
+test("a seat retry quotes the outstanding difference to the original total and requires confirmation", async (t) => {
   const { state, container, render, click } = await setup(t);
   await render(paidWorkspace("a"));
   await click(ADD_SEAT);
@@ -265,17 +265,85 @@ test("a rejected purchase preserves the delta and needs a fresh preview and expl
   assert.equal(state.toasts.at(-1).title, command("failure"));
   assert.equal(container.querySelector("input[type=range]").value, "5");
   assert.equal(primary(container).disabled, true);
-  assert.deepEqual(state.previewCalls.at(-1), ["a", 5, 7]);
-  await settle(() => state.previews.at(-1).resolve({ ...quote(17), current_quantity: 12 }));
+  assert.deepEqual(state.previewCalls.at(-1), ["a", 1, 7]);
+  await settle(() => state.previews.at(-1).resolve(quote(13)));
+  assert.deepEqual(state.previewCalls.at(-1), ["a", 3, 7]);
+  assert.equal(primary(container).disabled, true);
+  await settle(() => state.previews.at(-1).resolve({ ...quote(15), current_quantity: 12 }));
+  assert.equal(container.querySelector("input[type=range]").value, "3");
   assert.equal(state.updateSeatsCalls.length, 1);
   state.refreshError = true;
-  state.pendingPurchase = Promise.resolve({ quantity: 18, seats_used: 8 });
+  state.pendingPurchase = Promise.resolve({ quantity: 15, seats_used: 8 });
   const reads = state.summaryReads;
   await click(CONFIRM);
   assert.equal(dialogOpen(container), false);
-  assert.deepEqual(state.updateSeatsCalls.at(-1), ["a", 17, 7]);
+  assert.deepEqual(state.updateSeatsCalls.at(-1), ["a", 15, 7]);
   assert.equal(state.toasts.at(-1).title, command("success"));
   assert.equal(state.summaryReads, reads + 1);
+  assert.equal(state.refreshes, 1);
+});
+
+test("a failed remaining-seat quote waits for a manual retry and keeps the target", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  await render(paidWorkspace("a"));
+  await click(ADD_SEAT);
+  await click(command("increase"));
+  await resolvePreview("a", { ...quote(12), current_quantity: 10 });
+  const purchase = Promise.withResolvers();
+  state.pendingPurchase = purchase.promise;
+  await click(CONFIRM);
+  await settle(() => purchase.reject(Error("response lost")));
+  await resolvePreview("a", quote(11));
+  assert.deepEqual(state.previewCalls.at(-1), ["a", 2, 7]);
+  const calls = state.previewCalls.length;
+  await settle(() => state.previews.at(-1).reject(Error("offline")));
+  assert.equal(primary(container).disabled, true);
+  assert.equal(state.previewCalls.length, calls);
+  await click("common.retry");
+  assert.deepEqual(state.previewCalls.slice(calls), [["a", 2, 7]]);
+  await resolvePreview("a", { ...quote(12), current_quantity: 10 });
+  assert.equal(primary(container).disabled, false);
+  assert.deepEqual(state.updateSeatsCalls, [["a", 12, 7]]);
+});
+
+test("a lower seat ceiling during reconciliation allows confirming the newly quoted total", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  await render(paidWorkspace("a"));
+  await click(ADD_SEAT);
+  for (let index = 0; index < 4; index++) await click(command("increase"));
+  await resolvePreview("a", { ...quote(15), current_quantity: 10 });
+  const purchase = Promise.withResolvers();
+  state.pendingPurchase = purchase.promise;
+  await click(CONFIRM);
+  await settle(() => purchase.reject(Error("response lost")));
+  await render({ ...paidWorkspace("a"), seat_limit: 13 });
+  await resolvePreview("a", quote(11));
+  assert.deepEqual(state.previewCalls.at(-1), ["a", 3, 7]);
+  assert.equal(primary(container).disabled, true);
+  await resolvePreview("a", { ...quote(13), current_quantity: 10 });
+  state.pendingPurchase = Promise.resolve({ quantity: 13 });
+  await click(CONFIRM);
+  assert.deepEqual(state.updateSeatsCalls, [
+    ["a", 15, 7],
+    ["a", 13, 7],
+  ]);
+});
+
+test("a purchase accepted before its response is lost is reconciled without a second write", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  await render(paidWorkspace("a"));
+  await click(ADD_SEAT);
+  for (let index = 0; index < 4; index++) await click(command("increase"));
+  await resolvePreview("a", { ...quote(15), current_quantity: 10 });
+  const purchase = Promise.withResolvers();
+  state.pendingPurchase = purchase.promise;
+  await click(CONFIRM);
+  await settle(() => purchase.reject(Error("response lost")));
+  assert.equal(primary(container).disabled, true);
+  await resolvePreview("a", quote(16));
+  assert.equal(dialogOpen(container), false);
+  assert.deepEqual(state.updateSeatsCalls, [["a", 15, 7]]);
+  assert.equal(state.toasts.at(-1).title, command("success"));
   assert.equal(state.refreshes, 1);
 });
 

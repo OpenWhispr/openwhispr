@@ -1715,7 +1715,7 @@
         "label": "Profile"
       },
       "plansBilling": {
-        "description": "Plans, usage & billing",
+        "description": "Manage your plan, usage and billing.",
         "label": "Plan & Billing"
       },
       "workspaceGeneral": {
@@ -3222,7 +3222,7 @@
         "now": "Now",
         "after": "After",
         "inUse": "In use",
-        "pending": "Pending invites",
+        "pending": "Pending seats",
         "available": "Available",
         "total": "Total seats",
         "price": "Price",
@@ -3231,8 +3231,8 @@
         "confirm_one": "Add {{count}} seat",
         "confirm_other": "Add {{count}} seats",
         "adding": "Adding…",
-        "failure": "Couldn’t add seats. Nothing was charged.",
-        "success": "Seats added. {{workspace}} now has {{count}} seats.",
+        "failure": "Couldn’t confirm the seat change. Checking the current total.",
+        "success": "{{workspace}} now has {{count}} seats.",
         "previewFailed": "Couldn’t load seat pricing."
       },
       "free": {
@@ -3385,11 +3385,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} already covers you",
-            "body": "You still pay for Pro. Cancel it in your phone's app store."
+            "body": "You still pay for {{plan}}. Cancel it in your phone's app store."
           },
           "coveredStoreUnnamed": {
             "title": "A workspace already covers you",
-            "body": "You still pay for Pro. Cancel it in your phone's app store."
+            "body": "You still pay for {{plan}}. Cancel it in your phone's app store."
           },
           "covered": {
             "title": "{{workspace}} covers you",

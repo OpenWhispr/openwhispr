@@ -15,7 +15,6 @@ import { workspacePeopleCounts, type PeopleCount } from "./workspacePeople";
 
 const KEY_PREFIX = "settingsPage.billing.workspace.";
 const DAY_MS = 86_400_000;
-/** Plan names are brand names: shown as they are in every language. */
 export const WORKSPACE_PLAN_NAMES: Record<WorkspaceTier, string> = {
   free: "Free",
   pro: "Pro",
@@ -242,13 +241,13 @@ function ownerBanner(facts: Facts): WorkspaceBanner | null {
     case "incomplete":
       return banner("checkoutIncomplete", "warning", plan, portal("finishCheckout"));
     case "canceled":
-      // Resubscribe restarts the Business checkout. Enterprise has none here: it is bought again
-      // through the plan row's Upgrade to Enterprise checkout.
       return datedBanner(
         "ended",
         facts.endedAt,
         plan,
-        tier === "business" ? { kind: "resubscribe" } : null
+        tier === "business" && (stripe || canSelfServeEnterprise(workspace))
+          ? { kind: "resubscribe" }
+          : null
       );
     default:
       return null;
@@ -468,6 +467,6 @@ export function workspacePlanState(
     banner: role === "owner" ? ownerBanner(facts) : memberBanner(facts),
     usage: resolveUsage(facts),
     details: resolveDetails(facts),
-    showPlansGrid: ownsFreeWorkspace,
+    showPlansGrid: ownsFreeWorkspace || canSelfServeEnterprise(workspace),
   };
 }

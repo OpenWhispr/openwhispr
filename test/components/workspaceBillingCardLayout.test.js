@@ -95,6 +95,7 @@ async function setup(t) {
       });`,
       "/services/WorkspacesService": `export const WorkspacesService = {
         listMembers: async () => [],
+        getPeopleCounts: async () => globalThis.__layoutTest.stats ?? {},
         previewSeats: (workspaceId, additionalSeats, authGeneration) => {
           globalThis.__layoutTest.previewCalls.push([workspaceId, additionalSeats, authGeneration]);
           return new Promise(() => {});
@@ -200,11 +201,12 @@ test("owner past due: destructive banner whose Update payment opens this workspa
   assert.deepEqual(state.opened, ["https://stripe.test/portal"]);
 });
 
-test("owner cancelled: Resubscribe starts a Business checkout", async (t) => {
+test("owner cancelled: a remaining Stripe subscription is recovered through the portal", async (t) => {
   const { state, render, click } = await setup(t);
   await render(workspace({ status: "canceled" }));
   await click(RESUBSCRIBE);
-  assert.deepEqual(state.checkoutCalls, [["a", "monthly", { tier: "business" }]]);
+  assert.deepEqual(state.portalCalls, [["a", 7]]);
+  assert.deepEqual(state.checkoutCalls, []);
 });
 
 test("member: Managed account badge and workspace details, Copy email only", async (t) => {
@@ -260,6 +262,9 @@ test("Stripe Business owner: Upgrade to Enterprise opens the dialog for this wor
     dialog.workspaces.map((value) => value.id),
     ["a"]
   );
+  const reads = state.summaryCalls.length;
+  await React.act(async () => dialog.onRefreshEntitlement());
+  assert.equal(state.summaryCalls.length, reads + 1);
   await React.act(async () => dialog.onOpenChange(false));
   assert.equal(container.querySelector("[data-enterprise-dialog]") !== null, false);
 });
@@ -329,6 +334,36 @@ test("seats meter: the count stays LTR-isolated", async (t) => {
   await render(workspace({ seats: 5, seats_used: 3 }));
   const value = [...container.querySelectorAll('span[dir="ltr"]')].map((span) => span.textContent);
   assert.deepEqual(value, ["3 / 5"]);
+});
+
+test("seat meter hatches confirmed pending seats beside Add seats and hides a stale split", async (t) => {
+  const { state, container, render } = await setup(t);
+  // One nonbillable invitation and one SCIM reservation can produce identical counts.
+  const paid = workspace({ seats: 10, seats_used: 8, member_count: 8, invitation_count: 1 });
+  state.stats = { seats: 10, member_count: 8, billable_members: 7, pending_invitations: 1 };
+  await render(paid);
+  const addSeats = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === ADD_SEAT
+  );
+  assert.ok(addSeats.previousElementSibling.textContent.includes(`${W}.usage.pendingInvites`));
+  const meter = addSeats.previousElementSibling.querySelector('[aria-hidden="true"]');
+  assert.ok(
+    addSeats.previousElementSibling.textContent.includes("settingsPage.billing.addSeats.inUse · 7")
+  );
+  assert.ok(
+    addSeats.previousElementSibling.textContent.includes(
+      "settingsPage.billing.addSeats.pending · 1"
+    )
+  );
+  assert.deepEqual(
+    [...meter.children].map((segment) => segment.style.width),
+    ["70%", "10%"]
+  );
+  await render({ ...paid, invitation_count: 4 });
+  assert.deepEqual(
+    [...meter.children].map((segment) => segment.style.width),
+    ["80%"]
+  );
 });
 
 test("an unparseable period end never shows Invalid Date", async (t) => {

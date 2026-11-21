@@ -31,7 +31,16 @@ export function usePersonalPlanBilling({
     !usage.storeBilling &&
     !isCardlessTrial(usage);
   const { summary, refresh } = useBillingSummary(
-    showSummary ? { kind: "personal" } : { kind: "disabled" }
+    showSummary ? { kind: "personal" } : { kind: "disabled" },
+    showSummary
+      ? [
+          usage.plan,
+          usage.isPersonallySubscribed,
+          usage.subscriptionStatus,
+          usage.billingInterval,
+          usage.currentPeriodEnd,
+        ].join("|")
+      : undefined
   );
 
   return {

@@ -168,6 +168,63 @@ test("the latest refresh wins when two requests settle in reverse order", async 
   assert.equal(probe.current(), undefined);
 });
 
+test("Personal billing refreshes on purchase, plan and cadence changes, but not word usage", async (t) => {
+  const { root, vite, requests, signIn } = await setup(t);
+  const { usePersonalPlanBilling } = await vite.ssrLoadModule("/hooks/usePersonalPlanBilling.ts");
+  const amounts = [];
+  function Personal({ usage }) {
+    const { state } = usePersonalPlanBilling({
+      enabled: true,
+      view: "personal",
+      signedIn: true,
+      usage,
+      coveringWorkspaceNames: [],
+      businessAction: { kind: "none" },
+      hasWorkspacePlanAction: false,
+    });
+    amounts.push(state.details.find((row) => row.labelKey === "details.nextInvoice")?.value.amount);
+    return null;
+  }
+  const render = (usage) =>
+    React.act(async () => root.render(React.createElement(Personal, { usage })));
+  const settle = (request, amount) =>
+    React.act(async () =>
+      request.resolve({
+        success: true,
+        data: { data: { next_invoice: { amount, currency: "usd" } } },
+      })
+    );
+  const free = { status: "success", plan: "free", entitledWorkspaceIds: [] };
+  const business = {
+    ...free,
+    plan: "business",
+    subscriptionStatus: "active",
+    isPersonallySubscribed: true,
+    isSubscribed: true,
+    billingInterval: "monthly",
+  };
+  const pro = { ...business, plan: "pro" };
+
+  await signIn(1);
+  await render(free);
+  await render(business);
+  assert.equal(requests.length, 2);
+  await settle(requests[1], 5000);
+  assert.equal(amounts.at(-1), 5000);
+  await render(pro);
+  assert.equal(amounts.at(-1), undefined);
+  await render({ ...pro, billingInterval: "annual" });
+  assert.equal(requests.length, 4);
+  await settle(requests[3], 9600);
+  await settle(requests[2], 1000);
+  await settle(requests[0], 0);
+  await render({ ...pro, billingInterval: "annual", wordsUsed: 42 });
+  assert.equal(requests.length, 4);
+  assert.equal(amounts.at(-1), 9600);
+  assert.ok(!amounts.includes(1000));
+  assert.ok(!amounts.includes(0));
+});
+
 test("plan views show only the current billing contact and amount across scope and permission changes", async (t) => {
   const toasts = [];
   globalThis.__summaryViewToasts = toasts;

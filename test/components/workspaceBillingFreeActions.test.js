@@ -54,6 +54,7 @@ async function setup(t) {
       const state = globalThis.__freeActionsTest;
       if (state.openError) throw state.openError;
       state.opened.push(url);
+      return state.openResult;
     },
   };
   const state = {
@@ -88,8 +89,7 @@ async function setup(t) {
     mockModules: {
       "react-i18next":
         "export const useTranslation = () => ({ t: (key) => key, i18n: { language: 'en' } });",
-      "/authRequestContext":
-        `export const getValidatedAuthGeneration = () => globalThis.__gen ?? null;
+      "/authRequestContext": `export const getValidatedAuthGeneration = () => globalThis.__gen ?? null;
          export const subscribeAuthRequestContext = () => () => {};`,
       "/stores/workspaceStore": `export const useWorkspaceStore = (select) => select({
         refresh: async () => {}
@@ -453,9 +453,35 @@ test("the grid's Business starts the tier-named Business checkout for this works
   assert.deepEqual(state.opened, ["https://stripe.test/checkout"]);
 });
 
+for (const plan of ["pro", "enterprise", "business"]) {
+  test(`a lapsed ${plan} workspace buys Business with its selected cadence`, async (t) => {
+    const { state, clickGrid, render } = await setup(t);
+    const former = { ...freeWorkspace("former"), plan, status: "canceled" };
+    for (const yearly of [true, false]) {
+      await render(former, { yearly, onYearlyChange: () => {} });
+      await clickGrid("business", UPGRADE);
+    }
+    assert.deepEqual(state.checkoutCalls, [
+      ["former", "annual", { tier: "business" }],
+      ["former", "monthly", { tier: "business" }],
+    ]);
+  });
+}
+
+test("a failed external launch reports the payment error and permits retry", async (t) => {
+  const { state, render, clickGrid } = await setup(t);
+  await render({ ...freeWorkspace("solo"), member_count: 1, invitation_count: 0 });
+  state.openResult = { success: false, error: "Browser unavailable" };
+  await clickGrid("business", UPGRADE);
+  assert.equal(state.toasts.at(-1).description, "Browser unavailable");
+  state.openResult = { success: true };
+  await clickGrid("business", UPGRADE);
+  assert.equal(state.checkoutCalls.length, 2);
+});
+
 test("the grid's Enterprise opens the checkout dialog preselected on this workspace", async (t) => {
   const { state, clickGrid, render, resolveCount, container, waitFor } = await setup(t);
-  await render(freeWorkspace("free-ws"));
+  await render(freeWorkspace("free-ws"), { yearly: true, onYearlyChange: () => {} });
   await resolveCount("free-ws", [member("owner")], []);
   await clickGrid("enterprise", ENTERPRISE_UPGRADE);
   assert.equal(
@@ -464,6 +490,7 @@ test("the grid's Enterprise opens the checkout dialog preselected on this worksp
   );
   const dialog = state.enterpriseDialogs.at(-1);
   assert.equal(dialog.initialWorkspaceId, "free-ws");
+  assert.equal(dialog.initialBillingInterval, "annual");
   assert.deepEqual(
     dialog.workspaces.map((workspace) => workspace.id),
     ["free-ws"]

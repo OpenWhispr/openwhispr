@@ -11,12 +11,16 @@ import type { PlansBillingView } from "../../../lib/plansBillingView";
 interface WorkspaceBillingViewProps {
   view: Exclude<PlansBillingView, { kind: "personal" }>;
   onViewPersonal: () => void;
+  yearly: boolean;
+  onYearlyChange: (yearly: boolean) => void;
   onRefreshEntitlement?: () => Promise<void>;
 }
 
 export function WorkspaceBillingView({
   view,
   onViewPersonal,
+  yearly,
+  onYearlyChange,
   onRefreshEntitlement,
 }: WorkspaceBillingViewProps): React.ReactElement {
   const { t } = useTranslation();
@@ -30,6 +34,8 @@ export function WorkspaceBillingView({
         // A fresh card per workspace, so nothing one workspace's card holds reaches another's.
         key={view.workspace.id}
         workspace={view.workspace}
+        yearly={yearly}
+        onYearlyChange={onYearlyChange}
         onViewPersonal={onViewPersonal}
         onRefreshEntitlement={onRefreshEntitlement}
       />
