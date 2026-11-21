@@ -287,12 +287,13 @@ private final class KeyboardRowsStack: UIStackView {
     subviews.forEach(visit)
     // Between letter keys the boundary leans toward the letter the word is likely to
     // continue with; the resolver answers nil to keep the nearest key.
-    if let nearest, let resolved = letterResolver?(point, nearest) { return resolved }
+    if let nearest, let resolved = letterResolver?(point, nearest, event?.timestamp) { return resolved }
     return nearest ?? defaultTarget
   }
 
-  /// Dynamic hit targets: given a touch and the nearest key, the letter key it means.
-  var letterResolver: ((CGPoint, KeyButton) -> KeyButton?)?
+  /// Dynamic hit targets: given a touch (its point, the nearest key and the event's time,
+  /// which tells one touch's repeated hit tests apart), the letter key it means.
+  var letterResolver: ((CGPoint, KeyButton, TimeInterval?) -> KeyButton?)?
 }
 
 private extension UIColor {
@@ -1542,6 +1543,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   @objc private func handleCharacterKeyTapped(_ sender: KeyButton) {
     guard let output = sender.output else { return }
+    let started = CACurrentMediaTime()
+    defer {
+      let elapsed = (CACurrentMediaTime() - started) * 1000
+      diagnostics.keys += 1
+      if elapsed > 8 { diagnostics.slowKeys += 1 }
+      diagnostics.slowestKeyMs = max(diagnostics.slowestKeyMs, elapsed)
+    }
     playKeyClick()
 
     let insertion = layoutMode == .letters && isShiftEnabled ? output.uppercased() : output
@@ -2601,6 +2609,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func performEdit(_ edit: TextEdit) {
+    if edit.deleteCount > 0, !edit.insert.isEmpty { diagnostics.corrections += 1 }
     for _ in 0..<edit.deleteCount { textDocumentProxy.deleteBackward() }
     if !edit.insert.isEmpty { textDocumentProxy.insertText(edit.insert) }
     typedDocument = currentDocumentID
@@ -2728,7 +2737,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       }
     }
     traits.hidesText = proxy.isSecureTextEntry == true || fieldHidesItsText
-    return TypingFieldPolicy(traits: traits)
+    var policy = TypingFieldPolicy(traits: traits)
+    if !typingSettings.autocorrectEnabled { policy.autocorrects = false }
+    return policy
   }
 
   /// The field's text or cursor may have changed under the keyboard.
@@ -2791,9 +2802,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func refreshSuggestions() {
+    let started = CACurrentMediaTime()
     let suggestions = didLoadTypingEngine || lastKeystrokeAt > 0 ? (typing?.suggestions() ?? []) : []
     suggestionBar.show(suggestions)
     updateSuggestionBarVisibility()
+    diagnostics.slowestSuggestionMs = max(diagnostics.slowestSuggestionMs, (CACurrentMediaTime() - started) * 1000)
   }
 
   /// "row": the bar has its own row and always shows. "strip": it takes the pill's place
@@ -3131,8 +3144,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     rootStack.addSubview(keyPopup)
     rootStack.addSubview(accentPopup)
     accentPopup.isHidden = true
-    keyboardRowsStack.letterResolver = { [weak self] point, nearest in
-      self?.resolveLetterKey(at: point, nearest: nearest)
+    keyboardRowsStack.letterResolver = { [weak self] point, nearest, time in
+      self?.resolveLetterKey(at: point, nearest: nearest, time: time)
     }
 
     swipeRecognizer.addTarget(self, action: #selector(handleSwipeTyping(_:)))
@@ -3146,7 +3159,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// The key pitch when a touch here may start a swipe: on a letter key, on the letters
   /// page, in a field that gets typing help. Nil otherwise.
   private func swipePitch(forTouchAt point: CGPoint) -> CGFloat? {
-    guard layoutMode == .letters, !isNumberPadShown, let engine = loadedTypingEngine(),
+    guard typingSettings.swipeEnabled,
+      layoutMode == .letters, !isNumberPadShown, let engine = loadedTypingEngine(),
       engine.session.policy.suggests, swipeDecoder != nil,
       let key = keyboardRowsStack.hitTest(point, with: nil) as? KeyButton,
       let code = key.output?.utf16.first, letterButtonsByCode[code] === key
@@ -3182,9 +3196,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     var length: CGFloat = 0
     for (from, to) in zip(path, path.dropFirst()) { length += hypot(to.x - from.x, to.y - from.y) }
     let pitch = engine.corrector.geometry.pitch
-    let words = length >= 1.5 * pitch
-      ? decoder.decode(path: path, previous: context.previous, sentenceStart: context.sentenceStart, limit: 4)
-      : []
+    let isShort = length < 1.5 * pitch
+    let words = isShort
+      ? []
+      : decoder.decode(path: path, previous: context.previous, sentenceStart: context.sentenceStart, limit: 4)
+    diagnostics.swipes += 1
+    if isShort { diagnostics.shortSwipes += 1 } else if words.isEmpty { diagnostics.emptySwipes += 1 }
     guard let best = words.first else {
       if let start = path.first, let key = keyboardRowsStack.hitTest(start, with: nil) as? KeyButton,
         let code = key.output?.utf16.first, letterButtonsByCode[code] === key
@@ -3211,8 +3228,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   /// Dynamic hit targets, for touches whose nearest key is a letter, in fields that get
   /// typing help. Nil keeps the nearest key.
-  private func resolveLetterKey(at point: CGPoint, nearest: KeyButton) -> KeyButton? {
-    guard layoutMode == .letters, didLoadTypingEngine, let engine = typingEngine, let model = hitTargets,
+  private func resolveLetterKey(at point: CGPoint, nearest: KeyButton, time: TimeInterval? = nil) -> KeyButton? {
+    guard typingSettings.smartTargetsEnabled,
+      layoutMode == .letters, didLoadTypingEngine, let engine = typingEngine, let model = hitTargets,
       let code = nearest.output?.utf16.first, letterButtonsByCode[code] === nearest,
       engine.session.policy.suggests
     else { return nil }
@@ -3221,8 +3239,36 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       ? TypingLexicon.sentenceStart : context.previous.flatMap { engine.lexicon.id(of: $0) }
     guard let letter = model.letter(at: point, prefix: TypingLexicon.key(of: context.prefix), previousID: previous)
     else { return nil }
-    return letterButtonsByCode[letter]
+    let resolved = letterButtonsByCode[letter]
+    if let resolved, resolved !== nearest, let time, time != diagnostics.lastShiftedTouch {
+      diagnostics.lastShiftedTouch = time
+      diagnostics.shiftedTargets += 1
+    }
+    return resolved
   }
+
+  /// Counts and timings for tuning on a phone: how often each typing aid stepped in and how
+  /// long keys took. Never what was typed.
+  private struct TypingDiagnostics {
+    var keys = 0
+    var slowKeys = 0
+    var slowestKeyMs = 0.0
+    var slowestSuggestionMs = 0.0
+    var shiftedTargets = 0
+    var lastShiftedTouch: TimeInterval = 0
+    var swipes = 0
+    var shortSwipes = 0
+    var emptySwipes = 0
+    var corrections = 0
+
+    var summary: String {
+      String(
+        format: "%d keys, %d over 8 ms (slowest %.1f ms), suggestions up to %.1f ms · %d shifted targets · %d swipes (%d short, %d no word) · %d corrections",
+        keys, slowKeys, slowestKeyMs, slowestSuggestionMs, shiftedTargets, swipes, shortSwipes, emptySwipes, corrections
+      )
+    }
+  }
+  private var diagnostics = TypingDiagnostics()
 
   // MARK: Long-press accents
 
@@ -3360,7 +3406,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     button.accessibilityLabel = "Emoji"
     button.accessibilityHint = "Hold to change the typing language"
     button.addTarget(self, action: #selector(handleEmojiKeyTapped), for: .touchUpInside)
-    button.menu = typingLanguageMenu()
+    // Built each time it opens, so the ticks and the diagnostics line are current.
+    button.menu = UIMenu(children: [
+      UIDeferredMenuElement.uncached { [weak self] completion in
+        completion(self.map { [$0.typingLanguageMenu()] } ?? [])
+      }
+    ])
     return button
   }
 
@@ -3377,10 +3428,39 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         self?.pickKeyLayout(layout)
       }
     }
-    return UIMenu(title: "Typing language", children: [
+    let aids: [(String, String, Bool)] = [
+      ("Swipe typing", TypingSettings.swipeKey, typingSettings.swipeEnabled),
+      ("Smart key targets", TypingSettings.smartTargetsKey, typingSettings.smartTargetsEnabled),
+      ("Autocorrect", TypingSettings.autocorrectKey, typingSettings.autocorrectEnabled),
+    ]
+    let aidActions = aids.map { title, key, isOn in
+      UIAction(title: title, state: isOn ? .on : .off) { [weak self] _ in
+        self?.setTypingAid(key, enabled: !isOn)
+      }
+    }
+    let readout = UIAction(title: diagnostics.summary, attributes: .disabled) { _ in }
+    let reset = UIAction(title: "Reset counts") { [weak self] _ in self?.diagnostics = TypingDiagnostics() }
+    return UIMenu(title: "Typing", options: .displayInline, children: [
       UIMenu(title: "", options: .displayInline, children: languageActions),
       UIMenu(title: "", options: .displayInline, children: layoutActions),
+      UIMenu(title: "", options: .displayInline, children: aidActions),
+      UIMenu(title: "Diagnostics (counts only)", options: .displayInline, children: [readout, reset]),
     ])
+  }
+
+  private func setTypingAid(_ key: String, enabled: Bool) {
+    if var override = Self.typingSettingsOverride {
+      switch key {
+      case TypingSettings.swipeKey: override.swipeEnabled = enabled
+      case TypingSettings.smartTargetsKey: override.smartTargetsEnabled = enabled
+      default: override.autocorrectEnabled = enabled
+      }
+      Self.typingSettingsOverride = override
+    } else {
+      KeyboardHandoffProvider.shared.sharedDefaults()?.set(enabled ? "1" : "0", forKey: key)
+    }
+    reloadTypingSettings()
+    if didLoadTypingEngine { typingEngine?.session.policy = fieldPolicy }
   }
 
   private func pickTypingLanguage(_ language: TypingLanguage) {

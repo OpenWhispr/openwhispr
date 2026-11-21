@@ -17,11 +17,18 @@ struct TypingSettings: Equatable {
   var layout: KeyLayoutKind
   var hapticsEnabled: Bool
   var barStyle: SuggestionBarStyle
+  /// Each of these can be turned off on its own, from the keyboard's own menu.
+  var swipeEnabled = true
+  var smartTargetsEnabled = true
+  var autocorrectEnabled = true
 
   static let languageKey = "keyboard_typing_language"
   static let layoutKey = "keyboard_typing_layout"
   static let hapticsKey = "keyboard_haptics_enabled"
   static let barStyleKey = "keyboard_suggestion_bar_style"
+  static let swipeKey = "keyboard_swipe_typing_enabled"
+  static let smartTargetsKey = "keyboard_smart_targets_enabled"
+  static let autocorrectKey = "keyboard_autocorrect_enabled"
   /// Milliseconds since 1970, set by the app's "Clear learned words"; the keyboard drops
   /// what it learned before then.
   static let learnedWordsClearedAtKey = "keyboard_learned_words_cleared_at_ms"
@@ -43,6 +50,9 @@ struct TypingSettings: Equatable {
     hapticsEnabled = defaults?.string(forKey: TypingSettings.hapticsKey) != "0"
     barStyle = defaults?.string(forKey: TypingSettings.barStyleKey).flatMap(SuggestionBarStyle.init(rawValue:))
       ?? TypingSettings.defaultBarStyle
+    swipeEnabled = defaults?.string(forKey: TypingSettings.swipeKey) != "0"
+    smartTargetsEnabled = defaults?.string(forKey: TypingSettings.smartTargetsKey) != "0"
+    autocorrectEnabled = defaults?.string(forKey: TypingSettings.autocorrectKey) != "0"
   }
 
   /// Records a language picked in the keyboard. The layout follows the language only when
