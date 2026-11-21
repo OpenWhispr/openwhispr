@@ -53,7 +53,7 @@ const TARGETS: AppTarget[] = [
     title: isIOS ? 'Mail' : 'Gmail',
     icon: 'envelope.fill',
     mdIcon: 'Mail',
-    iconBg: '#007AFF',
+    iconBg: '#2F5BEA',
     iconAsset: isIOS
       ? require('../../../../assets/onboarding/app-icons/mail.png')
       : require('../../../../assets/onboarding/app-icons/gmail.png'),
