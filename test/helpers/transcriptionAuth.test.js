@@ -74,3 +74,17 @@ test("custom Orukeet keeps its API key in the self-hosted fallback", async () =>
     false
   );
 });
+
+test("custom key source: license wins on our hosts, stored key elsewhere", async () => {
+  const { customTranscriptionKeySource } = await import("../../src/helpers/transcriptionAuth.js");
+  assert.equal(
+    customTranscriptionKeySource({ storedKey: "stale-key", isTitaniumService: true }),
+    "titanium"
+  );
+  assert.equal(customTranscriptionKeySource({ storedKey: "", isTitaniumService: true }), "titanium");
+  assert.equal(
+    customTranscriptionKeySource({ storedKey: "my-key", isTitaniumService: false }),
+    "stored"
+  );
+  assert.equal(customTranscriptionKeySource({ storedKey: "  ", isTitaniumService: false }), "none");
+});

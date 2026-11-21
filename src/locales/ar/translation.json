@@ -3990,7 +3990,9 @@
         "localDesc": "نماذج على الجهاز. خاصة بالكامل.",
         "selfHostedDesc": "خادمك الخاص على شبكتك.",
         "enterprise": "السحابة المؤسسية",
-        "enterpriseDesc": "يُرسَل الصوت إلى السحابة الخاصة بمؤسستك."
+        "enterpriseDesc": "يُرسَل الصوت إلى السحابة الخاصة بمؤسستك.",
+        "titanium": "سحابة {{brand}}",
+        "titaniumDesc": "مشمولة في ترخيصك. لا يلزم أي إعداد."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "دقة موثوقة. لا حاجة للإعداد.",
@@ -4019,6 +4021,10 @@
         "switchedEnterprise": {
           "title": "تم اختيار السحابة المؤسسية",
           "description": "يستخدم الإملاء الآن نشر التفريغ الذي تديره مؤسستك."
+        },
+        "switchedTitanium": {
+          "title": "سحابة {{brand}}",
+          "description": "استخدام النسخ السحابي من {{brand}}."
         }
       },
       "gpuDevice": {
@@ -4084,7 +4090,12 @@
         }
       },
       "meetingEnterpriseOnly": "لا تسمح مؤسستك إلا بالتفريغ عبر السحابة المؤسسية، وهو لا يشمل تسجيل الاجتماعات بعد.",
-      "meetingCloudSignedOut": "لا يمكن بدء تسجيل الملاحظات عبر {{brand}} Cloud وأنت غير مسجل الدخول. اختر محركًا آخر أعلاه."
+      "meetingCloudSignedOut": "لا يمكن بدء تسجيل الملاحظات عبر {{brand}} Cloud وأنت غير مسجل الدخول. اختر محركًا آخر أعلاه.",
+      "titaniumEngine": {
+        "connected": "متصل",
+        "expires": "ينتهي الترخيص في {{date}}",
+        "retry": "إعادة المحاولة"
+      }
     },
     "intelligence": {
       "gpuDevice": {

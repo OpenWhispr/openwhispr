@@ -2611,7 +2611,9 @@
         "localDesc": "On-device models. Fully private.",
         "selfHostedDesc": "Your own server on your network.",
         "enterprise": "Enterprise cloud",
-        "enterpriseDesc": "Audio goes to your organization's own cloud."
+        "enterpriseDesc": "Audio goes to your organization's own cloud.",
+        "titanium": "{{brand}} cloud",
+        "titaniumDesc": "Included with your license. No setup needed."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
@@ -2640,6 +2642,10 @@
         "switchedEnterprise": {
           "title": "Enterprise cloud selected",
           "description": "Dictation now uses the transcription deployment your organization manages."
+        },
+        "switchedTitanium": {
+          "title": "{{brand}} cloud",
+          "description": "Using {{brand}} cloud transcription."
         }
       },
       "gpuDevice": {
@@ -2705,7 +2711,12 @@
         }
       },
       "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet.",
-      "meetingCloudSignedOut": "Note recordings can't start on {{brand}} Cloud while you're signed out. Choose another engine above."
+      "meetingCloudSignedOut": "Note recordings can't start on {{brand}} Cloud while you're signed out. Choose another engine above.",
+      "titaniumEngine": {
+        "connected": "Connected",
+        "expires": "License expires {{date}}",
+        "retry": "Retry"
+      }
     },
     "intelligence": {
       "gpuDevice": {

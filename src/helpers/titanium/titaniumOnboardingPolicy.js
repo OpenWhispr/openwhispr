@@ -113,3 +113,51 @@ export function resolveSttEndpointNotice({
   }
   return hasApiKey ? null : "unauthorized";
 }
+
+/**
+ * The Settings "EdgeAssistant cloud" speech-to-text tab is a derived view over the
+ * existing fields (no persisted mode of its own): it is current when Titanium is
+ * offered, the cloud route is Custom (not local) and its endpoint is one of our
+ * hosts. Anything else keeps the `mode` the store derived.
+ */
+export function resolveTranscriptionEngineTab({
+  mode,
+  useLocalWhisper,
+  cloudTranscriptionMode,
+  cloudTranscriptionProvider,
+  titaniumEnabled,
+  isTitaniumUrl,
+}) {
+  const isTitaniumRoute =
+    titaniumEnabled &&
+    !useLocalWhisper &&
+    cloudTranscriptionMode === "byok" &&
+    cloudTranscriptionProvider === "custom" &&
+    isTitaniumUrl;
+  return isTitaniumRoute ? "titanium" : mode;
+}
+
+/** The transcription settings that select EdgeAssistant cloud (setup card and Settings tab). */
+export function titaniumEngineSettings(defaultStt) {
+  return {
+    useLocalWhisper: false,
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionBaseUrl: defaultStt.baseUrl,
+    cloudTranscriptionModel: defaultStt.model,
+  };
+}
+
+/**
+ * Extra settings to write when leaving the EdgeAssistant cloud tab. Its endpoint is
+ * cleared only when it is one of our hosts; a base URL of the user's own is kept.
+ */
+export function settingsOnLeavingTitaniumEngine({ isTitaniumUrl }) {
+  return isTitaniumUrl ? { cloudTranscriptionBaseUrl: "" } : {};
+}
+
+/** License state shown in the EdgeAssistant cloud panel: signedOut, noLicense or licensed. */
+export function resolveTitaniumEngineState({ signedIn, licensed, reason }) {
+  if (!signedIn || reason === "signed_out") return "signedOut";
+  return licensed ? "licensed" : "noLicense";
+}

@@ -86,7 +86,7 @@ import {
   isManagedTranscriptionActive,
 } from "../services/managedTranscription.ts";
 import { getTranscriptionApiKey } from "../services/fileTranscription";
-import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
+import { customTranscriptionKeySource, shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isOrukeetStreaming,
   isSelfHostedTranscription,
@@ -2745,10 +2745,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "transcription"
       );
 
-      // Fork: with no key of their own, signed-in users reach our STT API with their
-      // Titanium license (main only hands it out for our own hosts). Not cached, so
-      // signing in or out takes effect on the next request.
-      if (!apiKey) {
+      // Fork: on our own hosts the signed-in user's Titanium license always wins and a
+      // stored custom key is never sent (main only hands the license out for our own
+      // hosts). Not cached, so signing in or out takes effect on the next request.
+      if (
+        customTranscriptionKeySource({
+          storedKey: apiKey,
+          isTitaniumService: isTitaniumServiceUrl(s.cloudTranscriptionBaseUrl, {
+            DEFAULT_STT,
+            TITANIUM,
+          }),
+        }) === "titanium"
+      ) {
+        apiKey = "";
         try {
           const titaniumKey = await window.electronAPI.getTitaniumServiceKey?.(
             s.cloudTranscriptionBaseUrl || ""

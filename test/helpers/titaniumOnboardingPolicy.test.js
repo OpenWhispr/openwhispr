@@ -187,3 +187,58 @@ test("STT retry: the no-license notice does not trigger a sign-in retry", async 
   step = stepSttRetry(step.state, { signedIn: true, notice: "titaniumNoLicense" });
   assert.equal(step.retry, false);
 });
+
+const titaniumRoute = {
+  mode: "self-hosted",
+  useLocalWhisper: false,
+  cloudTranscriptionMode: "byok",
+  cloudTranscriptionProvider: "custom",
+  titaniumEnabled: true,
+  isTitaniumUrl: true,
+};
+
+test("engine tab: titanium only for an enabled, non-local custom route on our host", async () => {
+  const { resolveTranscriptionEngineTab } = await load();
+  assert.equal(resolveTranscriptionEngineTab(titaniumRoute), "titanium");
+  const keep = (over) => resolveTranscriptionEngineTab({ ...titaniumRoute, ...over });
+  assert.equal(keep({ titaniumEnabled: false }), "self-hosted");
+  assert.equal(keep({ isTitaniumUrl: false }), "self-hosted");
+  assert.equal(keep({ cloudTranscriptionProvider: "openai", mode: "providers" }), "providers");
+  assert.equal(keep({ useLocalWhisper: true, mode: "local" }), "local");
+  assert.equal(keep({ cloudTranscriptionMode: "openwhispr", mode: "openwhispr" }), "openwhispr");
+});
+
+test("titaniumEngineSettings is the payload the setup card writes", async () => {
+  const { titaniumEngineSettings } = await load();
+  assert.deepEqual(titaniumEngineSettings({ baseUrl: "https://stt.test/v1", model: "scribe" }), {
+    useLocalWhisper: false,
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionBaseUrl: "https://stt.test/v1",
+    cloudTranscriptionModel: "scribe",
+  });
+});
+
+test("leaving the titanium tab clears the base URL only when it is ours", async () => {
+  const { settingsOnLeavingTitaniumEngine } = await load();
+  assert.deepEqual(settingsOnLeavingTitaniumEngine({ isTitaniumUrl: true }), {
+    cloudTranscriptionBaseUrl: "",
+  });
+  assert.deepEqual(settingsOnLeavingTitaniumEngine({ isTitaniumUrl: false }), {});
+});
+
+test("titanium engine state: signedOut, noLicense or licensed", async () => {
+  const { resolveTitaniumEngineState } = await load();
+  assert.equal(
+    resolveTitaniumEngineState({ signedIn: false, licensed: false, reason: "signed_out" }),
+    "signedOut"
+  );
+  assert.equal(
+    resolveTitaniumEngineState({ signedIn: true, licensed: false, reason: "no_license" }),
+    "noLicense"
+  );
+  assert.equal(
+    resolveTitaniumEngineState({ signedIn: true, licensed: true, reason: null }),
+    "licensed"
+  );
+});

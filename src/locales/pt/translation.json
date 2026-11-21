@@ -2296,7 +2296,9 @@
         "localDesc": "Modelos no dispositivo. Privado.",
         "selfHostedDesc": "Seu servidor na sua rede.",
         "enterprise": "Nuvem corporativa",
-        "enterpriseDesc": "O áudio vai para a nuvem da sua organização."
+        "enterpriseDesc": "O áudio vai para a nuvem da sua organização.",
+        "titanium": "{{brand}} cloud",
+        "titaniumDesc": "Incluído na sua licença. Sem configuração."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Resultados confiáveis. Sem configuração.",
@@ -2325,6 +2327,10 @@
         "switchedEnterprise": {
           "title": "Nuvem corporativa selecionada",
           "description": "A ditado agora usa a transcrição gerida pela sua organização."
+        },
+        "switchedTitanium": {
+          "title": "{{brand}} cloud",
+          "description": "Usando a transcrição na nuvem do {{brand}}."
         }
       },
       "gpuDevice": {
@@ -2390,7 +2396,12 @@
         }
       },
       "meetingEnterpriseOnly": "A sua organização só permite transcrição em nuvem corporativa, que ainda não abrange a gravação de reuniões.",
-      "meetingCloudSignedOut": "As gravações de notas não podem começar no {{brand}} Cloud enquanto você estiver desconectado. Escolha outro motor acima."
+      "meetingCloudSignedOut": "As gravações de notas não podem começar no {{brand}} Cloud enquanto você estiver desconectado. Escolha outro motor acima.",
+      "titaniumEngine": {
+        "connected": "Conectado",
+        "expires": "A licença expira em {{date}}",
+        "retry": "Tentar novamente"
+      }
     },
     "intelligence": {
       "gpuDevice": {
