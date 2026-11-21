@@ -100,13 +100,13 @@ struct TrackpadGesture {
   mutating func ended(at point: CGPoint, time: TimeInterval) -> TrackpadOutput {
     defer { state = .idle }
     switch state {
-    case .idle, .swiping:
+    case .idle:
       return .none
-    case let .pending(start, startTime):
-      // A long press that never became a drag (the timer didn't run) types nothing,
-      // like a hold-and-release on the iOS space bar.
-      let quick = time - startTime < TrackpadGesture.holdThreshold
-      return quick && TrackpadGesture.distance(start, point) <= TrackpadGesture.slop ? .typeSpace : .none
+    case .swiping, .pending:
+      // Any press that didn't become the trackpad is a space, however far the thumb slid on
+      // the way: on a phone, fast space taps slide more than a tap's worth, and a space that
+      // doesn't register runs two words together.
+      return .typeSpace
     case .tracking:
       return .ended
     }

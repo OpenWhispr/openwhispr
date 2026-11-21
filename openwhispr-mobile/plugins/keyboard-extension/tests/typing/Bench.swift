@@ -60,6 +60,7 @@ extension AutocorrectParameters {
     case "inflectedPenalty": inflectedPenalty = value
     case "margin": margin = value
     case "realWordMargin": realWordMargin = value
+    case "missedSpace": missedSpace = value
     case "sameKeyMargin": sameKeyMargin = value
     case "completionPenalty": completionPenalty = value
     default: fatalError("Unknown parameter \(name)")

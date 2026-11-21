@@ -43,6 +43,9 @@ extension TypingTests {
       for character in "teh " { document.apply(session.insert(String(character))) }
       check("a word typed again after its correction is kept (\(corrected) → \(document.text))", corrected == "I saw the " && document.text.hasSuffix("teh "))
     }
+    // A missed space is put back; the second word is never dropped.
+    check("a missed space is put back", typed("I need help withthis now ") == "I need help with this now ")
+    check("a missed space after a name is put back", typed("My friend Kimis here ") == "My friend Kim is here ")
     // A letter straight after the full stop: an address or abbreviation, not a sentence end.
     check("a correction before a full stop is undone when a letter follows", typed("I asked i.e. him ") .hasPrefix("I asked i.e."))
     check("an address keeps its lower case", typed("Mail kent.shoemaker now ").contains("kent.shoemaker"))

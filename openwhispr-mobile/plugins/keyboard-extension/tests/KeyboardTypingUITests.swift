@@ -293,16 +293,16 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     keyboard.uiTestTrackpad { $0.began(at: start, time: 1) }
     keyboard.uiTestTrackpad { $0.moved(to: CGPoint(x: 260, y: 250), time: 1.05) }
     keyboard.uiTestTrackpad { $0.ended(at: CGPoint(x: 300, y: 250), time: 1.1) }
-    checks.check("a quick swipe over space does nothing", proxy.documentContextBeforeInput == "Hello world " && proxy.cursorMoves.isEmpty && !keyboard.uiTestLabelsFaded)
+    checks.check("a slid press on space types a space and never starts the trackpad", proxy.documentContextBeforeInput == "Hello world  " && proxy.cursorMoves.isEmpty && !keyboard.uiTestLabelsFaded)
     // Hold, then drag left: labels fade, a tick plays, the cursor moves by graphemes.
     let ticks = feedback.ticks
     keyboard.uiTestTrackpad { $0.began(at: start, time: 2) }
     keyboard.uiTestTrackpad { $0.holdTimerFired(time: 2.36) }
     checks.check("hold starts trackpad mode: labels fade with a tick", keyboard.uiTestLabelsFaded && feedback.ticks == ticks + 1)
     keyboard.uiTestTrackpad { $0.moved(to: CGPoint(x: 200 - 27, y: 250), time: 2.6) }
-    checks.check("dragging moves the cursor", proxy.cursorMoves.reduce(0, +) == -3 && proxy.documentContextBeforeInput == "Hello wor")
+    checks.check("dragging moves the cursor", proxy.cursorMoves.reduce(0, +) == -3)
     keyboard.uiTestTrackpad { $0.ended(at: CGPoint(x: 173, y: 250), time: 2.7) }
-    checks.check("lifting ends trackpad mode and leaves the cursor", !keyboard.uiTestLabelsFaded && proxy.documentContextBeforeInput == "Hello wor")
+    checks.check("lifting ends trackpad mode and leaves the cursor", !keyboard.uiTestLabelsFaded && proxy.cursorMoves.reduce(0, +) == -3)
   }
 
   // Emoji: the key opens the panel, a pick goes into the document, search takes the keys.

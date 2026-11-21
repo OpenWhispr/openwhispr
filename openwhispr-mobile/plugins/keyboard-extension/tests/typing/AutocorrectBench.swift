@@ -15,6 +15,20 @@ enum AutocorrectBench {
     return String(document.text.dropFirst(context.count).dropLast())
   }
 
+  /// The length of the longest run of words the two share in order.
+  static func commonWords(_ a: [Substring], _ b: [Substring]) -> Int {
+    var previous = [Int](repeating: 0, count: b.count + 1)
+    for word in a {
+      var current = [0]
+      current.reserveCapacity(b.count + 1)
+      for (index, other) in b.enumerated() {
+        current.append(word == other ? previous[index] + 1 : max(previous[index + 1], current[index]))
+      }
+      previous = current
+    }
+    return previous[b.count]
+  }
+
   static func run(_ environment: BenchEnvironment, verbose: Bool) {
     let corrector = environment.corrector()
     let session = TypingSession(corrector: corrector)
@@ -82,7 +96,10 @@ enum AutocorrectBench {
           if verbose { print("  over  \(before) → \(after)") }
         }
       } else {
-        changed += abs(original.count - produced.count) + zip(original, produced).filter { $0 != $1 }.count
+        // A word split in two (a missed space put back) or joined shifts every later word:
+        // the words are lined up first, so it counts as the one word that changed.
+        changed += original.count - commonWords(original, produced)
+        if verbose { print("  over-split  \(sentence)\n           →  \(document.text)") }
       }
     }
     print("over-correction \(language) \(environment.split): \(percent(changed, words)) of words changed (\(changed)/\(words)); capitalisation only \(percent(caseOnly, words)) (\(caseOnly), of which the pronoun I \(pronoun)); other changes \(percent(changed - caseOnly, words)) (\(changed - caseOnly))")

@@ -51,6 +51,8 @@ struct AutocorrectParameters {
   /// afford a small margin since capitalisation-only changes are no longer made for people
   /// who write in lower case; German keeps the larger one.
   var realWordMargin = 0.6
+  /// What reading one typed word as two with a missed space costs.
+  var missedSpace = 2.0
   /// Added to either margin when the correction is the typed word with another regular
   /// ending.
   var otherFormMargin = 1.4
@@ -250,6 +252,9 @@ final class Autocorrector {
     for (id, hit) in found where !typedForms.contains(id) {
       // An apostrophe the user typed is never taken away.
       if apostrophes > 0, !lexicon.utf8(id).contains(0x27) { continue }
+      // Two typed letters dropped is not a slip: it is usually a missed space ("Kimis" is
+      // "Kim is", not "Kim"), which the split below handles.
+      if hit.edits >= 2, key.count - TypingLexicon.key(of: lexicon.word(id)).count >= 2 { continue }
       var score = lexicon.log10Probability(of: id, after: previousID) - hit.cost
       // How the word was capitalised says what kind of word was meant.
       if capitalisedMidSentence {
@@ -289,6 +294,16 @@ final class Autocorrector {
         let replacement = shape.apply(to: lexicon.word(best.id), sentenceStart: sentenceStart)
         if replacement != typed { result.replacement = replacement }
       }
+    }
+    // A missed space: two known words run together ("withthis"). Offered only for a word the
+    // lexicon doesn't have, and only when it beats both leaving the word and any single-word
+    // correction.
+    if typedID == nil, sameKey.isEmpty, typedScore < 0, apostrophes == 0, !deliberate,
+      let split = splitCorrection(of: typed, key: key, previousID: previousID),
+      split.score > typedScore + parameters.margin,
+      split.score > (result.replacement == nil ? -Double.infinity : (scored.first?.score ?? -Double.infinity))
+    {
+      result.replacement = split.text
     }
     if result.replacement == nil, typedID == nil, typedScore < 0, shape == .capitalised, apostrophes == 0,
       !inflected, !result.typedIsKnown,
@@ -458,6 +473,41 @@ final class Autocorrector {
       }
     }
     visit(TypingLexicon.root, 0, 0, 0, .none, 0)
+  }
+
+  // MARK: Missed spaces
+
+  /// The likeliest way to read `typed` as two known words with a space left out, keeping the
+  /// letters as typed.
+  private func splitCorrection(of typed: String, key: [UInt16], previousID: Int?) -> (text: String, score: Double)? {
+    let letters = Array(typed)
+    // Apostrophes are not in the key, so positions only line up for plain letters.
+    guard letters.count == key.count, key.count >= 4 else { return nil }
+    var best: (text: String, score: Double)?
+    for cut in 1..<key.count {
+      let left = Array(key[..<cut]), right = Array(key[cut...])
+      // One-letter words are only "a" and "I"; anything else needs two letters on each side.
+      guard left.count >= 2 || left == [0x61] || left == [0x69], right.count >= 2 || right == [0x61] || right == [0x69]
+      else { continue }
+      guard let leftID = lexicon.ids(forKey: left).first, let rightID = lexicon.ids(forKey: right).first else { continue }
+      // Only a pair the lexicon has seen together: two words that merely exist make a
+      // split out of any unknown word ("Kimberly" is not "Kim be rly").
+      guard lexicon.pairLog10(previous: leftID, word: rightID) != nil else { continue }
+      let score = lexicon.log10Probability(of: leftID, after: previousID)
+        + lexicon.log10Probability(of: rightID, after: leftID) - parameters.missedSpace
+      if best == nil || score > best!.score {
+        // The typed letters keep their case; the lexicon supplies capitals of its own ("I").
+        let leftText = String(letters[..<cut]), rightText = String(letters[cut...])
+        let leftWord = lexicon.word(leftID), rightWord = lexicon.word(rightID)
+        best = (
+          (leftText.lowercased() == leftWord.lowercased() && leftText == leftText.lowercased() ? leftWord : leftText)
+            + " "
+            + (rightText == rightText.lowercased() ? rightWord : rightText),
+          score
+        )
+      }
+    }
+    return best
   }
 
   // MARK: Inflections

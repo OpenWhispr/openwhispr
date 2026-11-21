@@ -91,11 +91,11 @@ extension TypingTests {
     check("trackpad: a quick swipe does nothing", gesture.moved(to: CGPoint(x: 140, y: 20), time: 0.05) == .none)
     check("trackpad: a swipe never starts trackpad mode", gesture.holdTimerFired(time: hold) == .none)
     check("trackpad: nor when it lingers", gesture.moved(to: CGPoint(x: 200, y: 20), time: hold + 0.5) == .none)
-    check("trackpad: a swipe types no space", gesture.ended(at: CGPoint(x: 200, y: 20), time: hold + 0.6) == .none)
+    check("trackpad: a press that slid still types its space", gesture.ended(at: CGPoint(x: 200, y: 20), time: hold + 0.6) == .typeSpace)
 
     gesture = TrackpadGesture()
     _ = gesture.began(at: origin, time: 0)
-    check("trackpad: a long press without the timer types nothing", gesture.ended(at: origin, time: hold + 0.3) == .none)
+    check("trackpad: a press that never became the trackpad types a space", gesture.ended(at: origin, time: hold + 0.3) == .typeSpace)
 
     gesture = TrackpadGesture()
     _ = gesture.began(at: origin, time: 0)
