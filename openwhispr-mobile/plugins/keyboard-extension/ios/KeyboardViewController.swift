@@ -2585,13 +2585,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// Text the session doesn't decide on.
   private func insertUntracked(_ text: String) {
     textDocumentProxy.insertText(text)
-    typedDocument = textDocumentProxy.documentIdentifier
+    typedDocument = currentDocumentID
   }
 
   private func performEdit(_ edit: TextEdit) {
     for _ in 0..<edit.deleteCount { textDocumentProxy.deleteBackward() }
     if !edit.insert.isEmpty { textDocumentProxy.insertText(edit.insert) }
-    typedDocument = textDocumentProxy.documentIdentifier
+    typedDocument = currentDocumentID
   }
 
   /// Backspace: undoes the correction just made or removes a swiped word whole; otherwise
@@ -2884,12 +2884,20 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     refreshAfterEdit()
   }
 
+  /// The field's identifier, or nil while iOS has none to give. Swift declares it
+  /// non-optional, but before the keyboard is connected to a field (its first appearance,
+  /// an early textDidChange) the proxy answers nil and the bridged read traps, so it is read
+  /// through Objective-C.
+  private var currentDocumentID: UUID? {
+    (textDocumentProxy as? NSObject)?.value(forKey: "documentIdentifier") as? UUID
+  }
+
   private func noteFieldReport() {
     let proxy = textDocumentProxy
     if proxy.hasText || proxy.documentContextBeforeInput?.isEmpty == false
       || proxy.documentContextAfterInput?.isEmpty == false
     {
-      reportingDocument = proxy.documentIdentifier
+      reportingDocument = currentDocumentID
     }
   }
 
@@ -2897,7 +2905,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// reported no text in it since. Some hosts never report it, so shift and the return key
   /// can't go by it there.
   private var fieldHidesItsText: Bool {
-    let document = textDocumentProxy.documentIdentifier
+    // No document yet: nothing was typed into it, so nothing is hidden.
+    guard let document = currentDocumentID else { return false }
     return typedDocument == document && reportingDocument != document
   }
 

@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,12 +24,16 @@ def main():
     ).strip()
     with tempfile.TemporaryDirectory(prefix="keyboard-touch-") as directory:
         source = Path(directory) / "keyboard-with-touch-tests.swift"
+        # A snapshot of the other sources: a file edited mid-compile fails the build.
+        snapshot = Path(directory) / "sources"
+        snapshot.mkdir()
         # The tests reach the controller's private members, so they share its file. The
         # other keyboard sources compile as files of their own, as in the extension target
         # (a Jest test keeps that target's list equal to ios/*.swift). #sourceLocation keeps
         # compiler errors and traps pointing at the real files.
         controller = plugin / "ios/KeyboardViewController.swift"
         others = sorted(set((plugin / "ios").glob("*.swift")) - {controller})
+        others = [Path(shutil.copy2(path, snapshot / path.name)) for path in others]
 
         def located(path):
             return f"#sourceLocation(file: {json.dumps(str(path), ensure_ascii=False)}, line: 1)\n"
