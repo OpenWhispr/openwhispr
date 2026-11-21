@@ -236,7 +236,9 @@ function isOAuthSchemeRegistered() {
 // can launch the project app instead of opening bare Electron.
 function getProtocolAppArgs() {
   if (!shouldRegisterProtocolWithAppArg()) return [];
-  return [process.argv[1] ? path.resolve(process.argv[1]) : path.resolve(".")];
+  // Skip Chromium switches (e.g. --remote-debugging-port from OW_DEBUG_CDP) that precede the app path.
+  const appArg = process.argv.slice(1).find((arg) => !arg.startsWith("--"));
+  return [appArg ? path.resolve(appArg) : path.resolve(".")];
 }
 
 // Register custom protocol for OAuth callbacks.

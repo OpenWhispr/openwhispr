@@ -122,7 +122,12 @@ class TitaniumSession extends EventEmitter {
     }
     const act = parsed.searchParams.get("act");
     const state = parsed.searchParams.get("state");
-    if (!pending || pending.expiresAt <= this.now()) return this.fail("no_pending_sign_in");
+    if (!pending || pending.expiresAt <= this.now()) {
+      // A browser can deliver the same callback twice; after a completed sign-in that
+      // duplicate must not replace the signed-in state with an error.
+      if (!pending && this.session) return { ok: false, error: "no_pending_sign_in" };
+      return this.fail("no_pending_sign_in");
+    }
     if (!state || state !== pending.state) return this.fail("state_mismatch");
     if (!act) return this.fail(parsed.searchParams.get("error") || "missing_act");
     this.pending = null; // single use, whatever happens next
