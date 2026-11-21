@@ -1,5 +1,6 @@
 import CoreText
 import UIKit
+import WebKit
 
 /// Whether the running system can draw an emoji. The catalog lists every emoji Unicode has,
 /// and one the system's font doesn't know would show as a box or as its parts side by side.
@@ -43,9 +44,12 @@ protocol EmojiPanelDelegate: AnyObject {
 /// It replaces the key rows; while searching it is only the field and one strip of results
 /// (`searchHeight`), since the letter keys have to stay on screen to type the query.
 ///
-/// Emoji are drawn as text in reused cells, and the lists are the catalog's own arrays, so
-/// scrolling through all of them holds no more than the cells on screen.
-final class EmojiPanelView: UIView, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+/// Every emoji is drawn as HTML text in one web view, never by UIKit: CoreText keeps a bitmap
+/// of each colour glyph it rasterises in a cache that is never emptied, about 60–100 MB for
+/// the whole catalog, charged to this process, which iOS ends at roughly 40 MB. In a web view
+/// the glyphs are drawn, and cached, in WebKit's own process. The field, the tab bar and the
+/// "no results" label stay native.
+final class EmojiPanelView: UIView, WKNavigationDelegate {
   /// The height to give the panel while `isSearching`.
   static let searchHeight: CGFloat = 86
 
@@ -56,6 +60,8 @@ final class EmojiPanelView: UIView, UICollectionViewDataSource, UICollectionView
     didSet {
       guard language != oldValue else { return }
       updateLabels()
+      // The page carries each emoji's name in the typing language, so it is built again.
+      if webView != nil { loadPage() }
       updateSearchResults()
     }
   }
@@ -71,19 +77,26 @@ final class EmojiPanelView: UIView, UICollectionViewDataSource, UICollectionView
     }
   }
 
-  private enum Item {
-    /// A recently used emoji, as it was inserted.
-    case recent(String)
-    case emoji(Emoji)
-  }
-
   private let catalog: EmojiCatalog
   private let preferences: EmojiPreferences
   private var recents: [String] = []
   private var results: [Emoji] = []
 
-  private let layout = UICollectionViewFlowLayout()
-  private let collection: UICollectionView
+  /// Made when the panel first comes on screen: the web view and its page of every emoji.
+  private var webView: WKWebView?
+  private let messages = EmojiMessageHandler()
+  /// Whether the page has loaded and shows the panel's current state. Until then the grid
+  /// is empty; the tests and the simulator harness wait for it.
+  private(set) var isContentReady = false
+  private var pageMetrics: [CGFloat] = []
+
+  /// For screenshot tests: the emoji as WebKit draws them, and where in the panel. A layer
+  /// render of the panel shows none of it, since the page is drawn in another process.
+  func snapshotContent(_ completion: @escaping (UIImage?, CGRect) -> Void) {
+    guard let webView else { return completion(nil, .zero) }
+    webView.takeSnapshot(with: nil) { image, _ in completion(image, webView.frame) }
+  }
+
   private let searchField = UIControl()
   private let searchIcon = UIImageView()
   private let searchLabel = UILabel()
@@ -95,29 +108,21 @@ final class EmojiPanelView: UIView, UICollectionViewDataSource, UICollectionView
   private let deleteButton = UIButton(type: .system)
   private var tabButtons: [UIButton] = []
   private var selectedSection = 0
-  private var emojiFont = UIFont.systemFont(ofSize: 30)
-  private var laidOutSize = CGSize.zero
   private var deleteTimer: Timer?
-
-  private let toneShield = UIControl()
-  private let tonePicker = EmojiTonePicker()
-  private var toneBase: Emoji?
 
   private static let searchRowHeight: CGFloat = 38
   private static let tabBarHeight: CGFloat = 40
-  private static let cellIdentifier = "emoji"
 
   init(catalog: EmojiCatalog, preferences: EmojiPreferences, language: TypingLanguage) {
     self.catalog = catalog
     self.preferences = preferences
     self.language = language
-    collection = UICollectionView(frame: .zero, collectionViewLayout: layout)
     super.init(frame: .zero)
     backgroundColor = .clear
-    setUpCollection()
+    messages.target = self
+    setUpEmptyLabel()
     setUpSearchField()
     setUpTabBar()
-    setUpTonePicker()
     updateLabels()
     reloadRecents()
   }
@@ -154,60 +159,40 @@ final class EmojiPanelView: UIView, UICollectionViewDataSource, UICollectionView
     recents = preferences.recents.filter(catalog.canDraw)
     // With nothing used yet the panel opens on the smileys, so that is the tab to mark.
     if recents.isEmpty, selectedSection == 0, !isSearching { selectedSection = 1 }
-    collection.reloadData()
+    showRecents()
+    if isSearching, searchText.isEmpty { showStrip() }
     updateTabs()
   }
 
   private func modeChanged() {
-    hideTonePicker()
     stopDeleting()
     tabBar.isHidden = isSearching
     updateSearchField()
+    run("mode", isSearching)
     updateSearchResults()
-    collection.setContentOffset(CGPoint(x: -collection.contentInset.left, y: 0), animated: false)
     setNeedsLayout()
   }
 
   private func updateSearchResults() {
     results = isSearching ? catalog.search(searchText, language: language, limit: 60) : []
     emptyLabel.isHidden = !(isSearching && !searchText.isEmpty && results.isEmpty)
-    guard isSearching else { return }
-    collection.reloadData()
-    collection.setContentOffset(CGPoint(x: -collection.contentInset.left, y: 0), animated: false)
+    if isSearching { showStrip() }
   }
 
-  // MARK: Items
+  /// The search strip: the results, or Recents for an empty query, as Apple's search does.
+  private func showStrip() {
+    guard isContentReady else { return }
+    run("results", searchText.isEmpty ? recents.map(recentCell).joined() : results.map(cell).joined())
+  }
 
-  private var sectionCount: Int { isSearching ? 1 : 1 + catalog.categories.count }
+  private func showRecents() {
+    // Not before the page can take it: building the cells looks every recent emoji up.
+    guard isContentReady else { return }
+    run("recents", recents.map(recentCell).joined())
+  }
 
   private func itemCount(in section: Int) -> Int {
-    // An empty query shows Recents, as Apple's search does.
-    if isSearching { return searchText.isEmpty ? recents.count : results.count }
-    return section == 0 ? recents.count : catalog.categories[section - 1].emoji.count
-  }
-
-  private func item(at indexPath: IndexPath) -> Item {
-    if isSearching { return searchText.isEmpty ? .recent(recents[indexPath.item]) : .emoji(results[indexPath.item]) }
-    if indexPath.section == 0 { return .recent(recents[indexPath.item]) }
-    return .emoji(catalog.categories[indexPath.section - 1].emoji[indexPath.item])
-  }
-
-  /// What the cell shows and a tap inserts: the emoji in the skin tone the user picked for it.
-  private func string(for item: Item) -> String {
-    switch item {
-    case .recent(let string):
-      return string
-    case .emoji(let emoji):
-      guard let tone = preferences.skinTone(for: emoji), catalog.canDraw(tone) else { return emoji.string }
-      return tone
-    }
-  }
-
-  private func base(of item: Item) -> Emoji? {
-    switch item {
-    case .recent(let string): return catalog.emoji(matching: string)
-    case .emoji(let emoji): return emoji
-    }
+    section == 0 ? recents.count : catalog.categories[section - 1].emoji.count
   }
 
   private func pick(_ string: String) {
@@ -215,28 +200,7 @@ final class EmojiPanelView: UIView, UICollectionViewDataSource, UICollectionView
     delegate?.emojiPanel(self, didPick: string)
   }
 
-  // MARK: Collection view
-
-  private func setUpCollection() {
-    layout.scrollDirection = .horizontal
-    layout.minimumLineSpacing = 0
-    layout.minimumInteritemSpacing = 0
-    // Smaller than any panel until the first layout sizes the cells; the flow layout complains
-    // about items taller than the collection view.
-    layout.itemSize = CGSize(width: 30, height: 30)
-    collection.backgroundColor = .clear
-    collection.showsHorizontalScrollIndicator = false
-    collection.alwaysBounceHorizontal = true
-    collection.isPrefetchingEnabled = false
-    collection.contentInset = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: 4)
-    collection.dataSource = self
-    collection.delegate = self
-    collection.register(EmojiCell.self, forCellWithReuseIdentifier: EmojiPanelView.cellIdentifier)
-    let press = UILongPressGestureRecognizer(target: self, action: #selector(longPressed(_:)))
-    press.minimumPressDuration = 0.35
-    collection.addGestureRecognizer(press)
-    addSubview(collection)
-
+  private func setUpEmptyLabel() {
     emptyLabel.font = .systemFont(ofSize: 15)
     emptyLabel.textColor = .secondaryLabel
     emptyLabel.textAlignment = .center
@@ -244,56 +208,251 @@ final class EmojiPanelView: UIView, UICollectionViewDataSource, UICollectionView
     addSubview(emptyLabel)
   }
 
-  func numberOfSections(in collectionView: UICollectionView) -> Int { sectionCount }
+  // MARK: The page
 
-  func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-    itemCount(in: section)
+  /// One emoji of the page. `b` names the emoji a long press offers skin tones for; the text
+  /// is what a tap inserts: the emoji in the tone the user picked for it.
+  private func cell(_ emoji: Emoji) -> String {
+    var shown = emoji.string
+    if let tone = preferences.skinTone(for: emoji), catalog.canDraw(tone) { shown = tone }
+    let tones = emoji.hasSkinTones ? " b=\"\(EmojiPanelView.escaped(emoji.string))\"" : ""
+    let name = EmojiPanelView.escaped(catalog.name(of: emoji, language: language))
+    return "<i role=button aria-label=\"\(name)\"\(tones)>\(EmojiPanelView.escaped(shown))</i>"
   }
 
-  func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-    let cell = collectionView.dequeueReusableCell(withReuseIdentifier: EmojiPanelView.cellIdentifier, for: indexPath)
-    if let cell = cell as? EmojiCell { configure(cell, at: indexPath) }
-    return cell
+  /// A recently used emoji, shown as it was inserted. `r` keeps a later tone pick from
+  /// changing it.
+  private func recentCell(_ string: String) -> String {
+    let base = catalog.emoji(matching: string)
+    let tones = base?.hasSkinTones == true ? " b=\"\(EmojiPanelView.escaped(base?.string ?? ""))\"" : ""
+    let name = EmojiPanelView.escaped(base.map { catalog.name(of: $0, language: language) } ?? string)
+    return "<i r role=button aria-label=\"\(name)\"\(tones)>\(EmojiPanelView.escaped(string))</i>"
   }
 
-  private func configure(_ cell: EmojiCell, at indexPath: IndexPath) {
-    let item = item(at: indexPath)
-    cell.label.font = emojiFont
-    cell.label.text = string(for: item)
-    if case .emoji(let emoji) = item {
-      cell.accessibilityLabel = catalog.name(of: emoji, language: language)
-    } else {
-      cell.accessibilityLabel = cell.label.text
-    }
+  private static func escaped(_ text: String) -> String {
+    text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+      .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
   }
 
-  func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-    collectionView.deselectItem(at: indexPath, animated: false)
-    pick(string(for: item(at: indexPath)))
+  private func makeWebView() -> WKWebView {
+    let configuration = WKWebViewConfiguration()
+    configuration.websiteDataStore = .nonPersistent()
+    configuration.dataDetectorTypes = []
+    configuration.userContentController.add(messages, name: "emoji")
+    let webView = WKWebView(frame: .zero, configuration: configuration)
+    webView.navigationDelegate = self
+    webView.allowsLinkPreview = false
+    // Transparent, so the system keyboard's backdrop shows through as it does between keys.
+    webView.isOpaque = false
+    webView.backgroundColor = .clear
+    webView.underPageBackgroundColor = .clear
+    webView.scrollView.backgroundColor = .clear
+    webView.scrollView.showsHorizontalScrollIndicator = false
+    webView.scrollView.showsVerticalScrollIndicator = false
+    webView.scrollView.alwaysBounceVertical = false
+    webView.scrollView.contentInsetAdjustmentBehavior = .never
+    return webView
   }
 
-  func collectionView(
-    _ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout,
-    insetForSectionAt section: Int
-  ) -> UIEdgeInsets {
-    // A gap after each category, so where one ends shows while scrolling.
-    let isLast = section == sectionCount - 1
-    return UIEdgeInsets(top: 0, left: 0, bottom: 0, right: itemCount(in: section) == 0 || isLast ? 0 : 14)
-  }
-
-  func scrollViewDidScroll(_ scrollView: UIScrollView) {
-    guard !isSearching else { return }
-    let probe = CGPoint(
-      x: scrollView.contentOffset.x + scrollView.contentInset.left + layout.itemSize.width / 2,
-      y: layout.itemSize.height / 2
+  private func loadPage() {
+    isContentReady = false
+    pageMetrics = []
+    let sections = catalog.categories.map { "<section>\($0.emoji.map(cell).joined())</section>" }.joined()
+    webView?.loadHTMLString(
+      EmojiPanelView.pageHead + "<div id=g><section></section>\(sections)</div><div id=s></div><div id=t></div>"
+        + "<script>\(EmojiPanelView.pageScript)</script>",
+      baseURL: nil
     )
-    if let section = collection.indexPathForItem(at: probe)?.section, section != selectedSection {
-      selectedSection = section
-      updateTabs()
+  }
+
+  /// The page is this panel's own text: nothing in it may go anywhere else.
+  func webView(
+    _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+    decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+  ) {
+    decisionHandler(navigationAction.request.url?.absoluteString == "about:blank" ? .allow : .cancel)
+  }
+
+  /// WebKit's process was ended (memory pressure): the page is gone, so build it again.
+  func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { loadPage() }
+
+  /// Calls one of the page's functions. Before the page has loaded nothing is sent: once it
+  /// has, `pageLoaded` gives it the panel's whole state.
+  private func run(_ function: String, _ arguments: Any...) {
+    guard isContentReady, let data = try? JSONSerialization.data(withJSONObject: arguments),
+      let json = String(data: data, encoding: .utf8)
+    else { return }
+    webView?.evaluateJavaScript("\(function).apply(null,\(json))", completionHandler: nil)
+  }
+
+  private func pageLoaded() {
+    isContentReady = true
+    updatePageMetrics()
+    showRecents()
+    run("mode", isSearching)
+    if isSearching { showStrip() }
+  }
+
+  fileprivate func handle(_ body: Any) {
+    guard let message = body as? [String: Any], let kind = message["t"] as? String else { return }
+    switch kind {
+    case "ready":
+      pageLoaded()
+    case "tap":
+      if let string = message["s"] as? String, !string.isEmpty { pick(string) }
+    case "section":
+      if let section = message["i"] as? Int, tabButtons.indices.contains(section), !isSearching {
+        selectedSection = section
+        updateTabs()
+      }
+    case "hold":
+      // A long press on an emoji with skin tones: the page shows the choices.
+      guard let string = message["b"] as? String, let base = catalog.emoji(matching: string) else { return }
+      let tones = catalog.variants(of: base)
+      if !tones.isEmpty { run("showTones", [base.string] + tones, message["s"] as? String ?? "") }
+    case "tone":
+      guard let string = message["b"] as? String, let base = catalog.emoji(matching: string),
+        let tone = message["s"] as? String, tone == base.string || catalog.variants(of: base).contains(tone)
+      else { return }
+      preferences.setSkinTone(tone, for: base)
+      run("setTone", base.string, tone)
+      pick(tone)
+    default:
+      break
     }
   }
 
-  func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { hideTonePicker() }
+  /// Sizes the cells so whole rows fill the height, at about the system keyboard's emoji size.
+  private func updatePageMetrics() {
+    guard let size = webView?.bounds.size, size.width > 0, size.height > 0 else { return }
+    let rows = max(1, Int(size.height / 32))
+    let cellHeight = (size.height / CGFloat(rows)).rounded(.down)
+    // Columns no wider than a comfortable target: a single tall row (landscape) would
+    // otherwise spread a handful of emoji across the screen.
+    let columns = max(1, Int((size.width - 8) / min(max(cellHeight, 40), 46)))
+    let metrics = [
+      ((size.width - 8) / CGFloat(columns)).rounded(.down), cellHeight, CGFloat(rows),
+      min(32, (cellHeight * 0.8).rounded()),
+    ]
+    guard metrics != pageMetrics, isContentReady else { return }
+    pageMetrics = metrics
+    run("layout", metrics[0], metrics[1], metrics[2], metrics[3])
+  }
+
+  private static let pageHead = """
+    <!doctype html><meta charset=utf-8>
+    <meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta http-equiv=Content-Security-Policy content="default-src 'none';style-src 'unsafe-inline';script-src 'unsafe-inline'">
+    <meta name=color-scheme content="light dark">
+    <style>
+    :root{color-scheme:light dark;--cw:40px;--ch:36px;--rows:4;--fs:28px;--press:rgba(118,118,128,.12);--bubble:#fff;--blue:#007aff}
+    @media(prefers-color-scheme:dark){:root{--press:rgba(118,118,128,.24);--bubble:#5c5c5c;--blue:#0a84ff}}
+    html,body{margin:0;height:100%;background:transparent;overflow-y:hidden;touch-action:pan-x;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-text-size-adjust:none;
+    -webkit-tap-highlight-color:transparent;font-family:"Apple Color Emoji"}
+    body{padding:0 4px;width:max-content;min-width:calc(100% - 8px)}
+    #g{display:flex;width:max-content}
+    section,#s{display:grid;grid-auto-flow:column;grid-template-rows:repeat(var(--rows),var(--ch));grid-auto-columns:var(--cw)}
+    section{margin-right:14px}section:empty{display:none}section:last-child{margin-right:0}
+    #s,body.q #g{display:none}body.q #s{display:grid}
+    i{font-style:normal;font-size:var(--fs);line-height:var(--ch);text-align:center;border-radius:8px}
+    i.p{background:var(--press)}
+    #t{display:none;position:fixed;padding:5px;border-radius:12px;background:var(--bubble);box-shadow:0 2px 6px rgba(0,0,0,.25)}
+    #t b{font-weight:normal;font-size:30px;width:42px;height:min(46px,calc(100vh - 12px));line-height:min(46px,calc(100vh - 12px));text-align:center;border-radius:8px}
+    #t b.on{background:var(--blue)}
+    </style>
+    """
+
+  /// Touch handling and the calls the panel makes. A tap is a touch that neither moved nor
+  /// scrolled the page; a hold on an emoji with tones asks the panel for them, and the same
+  /// finger can slide onto one, as on Apple's keyboard.
+  private static let pageScript = """
+    var grid=document.getElementById('g'),strip=document.getElementById('s'),tones=document.getElementById('t');
+    var secs=grid.children,cur=-1,held=null,touch=null,timer=0,frame=0,pad=4,cw=40;
+    function post(m){webkit.messageHandlers.emoji.postMessage(m)}
+    function cellOf(e){return e&&e.closest?e.closest('i'):null}
+    function touchOf(list,id){for(var k=0;k<list.length;k++)if(list[k].identifier===id)return list[k];return null}
+    function closeTones(){tones.style.display='none';tones.textContent='';held=null}
+    function optionAt(x,y){
+      if(!held||!tones.children.length)return null;
+      var r=tones.getBoundingClientRect();
+      if(x<r.left||x>r.right||y<r.top-24||y>r.bottom+24)return null;
+      for(var k=0;k<tones.children.length;k++){var q=tones.children[k].getBoundingClientRect();if(x>=q.left&&x<q.right)return tones.children[k]}
+      return null}
+    function mark(o){for(var k=0;k<tones.children.length;k++)tones.children[k].classList.toggle('on',tones.children[k]===o)}
+    function choose(o){post({t:'tone',b:held.getAttribute('b'),s:o.textContent});closeTones()}
+    function far(t,u){return Math.abs(t.clientX-u.x)>8||Math.abs(t.clientY-u.y)>8}
+    function drop(){clearTimeout(timer);if(touch){if(touch.c)touch.c.classList.remove('p');touch.dead=true}}
+    document.addEventListener('touchstart',function(e){
+      if(touch)return;
+      var t=e.changedTouches[0],c=cellOf(e.target);
+      if(held){
+        var o=optionAt(t.clientX,t.clientY);
+        if(o){mark(o);touch={id:t.identifier,pick:true}}else{closeTones();touch={id:t.identifier,dead:true}}
+        return}
+      if(!c)return;
+      touch={id:t.identifier,c:c,x:t.clientX,y:t.clientY,sx:window.scrollX};
+      c.classList.add('p');
+      if(c.hasAttribute('b'))timer=setTimeout(function(){
+        if(!touch||touch.c!==c||touch.dead)return;
+        touch.hold=true;held=c;post({t:'hold',b:c.getAttribute('b'),s:c.textContent})},400);
+    },{passive:true});
+    document.addEventListener('touchmove',function(e){
+      if(!touch||touch.dead)return;
+      var t=touchOf(e.changedTouches,touch.id);if(!t)return;
+      if(touch.pick){e.preventDefault();mark(optionAt(t.clientX,t.clientY));return}
+      if(touch.hold){
+        e.preventDefault();
+        // The bubble can open under the finger; only a finger that then moves is choosing.
+        if(far(t,touch))touch.slid=true;
+        if(touch.slid)mark(optionAt(t.clientX,t.clientY));
+        return}
+      if(far(t,touch)||Math.abs(window.scrollX-touch.sx)>2)drop();
+    },{passive:false});
+    document.addEventListener('touchend',function(e){
+      if(!touch)return;
+      var t=touchOf(e.changedTouches,touch.id);if(!t)return;
+      var u=touch;touch=null;clearTimeout(timer);
+      if(u.c)u.c.classList.remove('p');
+      if(u.dead)return;
+      if(u.pick||u.hold){var o=u.pick||u.slid?optionAt(t.clientX,t.clientY):null;if(o)choose(o);return}
+      if(Math.abs(window.scrollX-u.sx)>2)return;
+      post({t:'tap',s:u.c.textContent});
+    },{passive:true});
+    document.addEventListener('touchcancel',function(){drop();touch=null},{passive:true});
+    function report(){
+      if(document.body.className)return;
+      var x=window.scrollX+pad+cw/2,s=-1;
+      for(var k=0;k<secs.length;k++)if(secs[k].offsetWidth&&secs[k].offsetLeft<=x)s=k;
+      if(s>=0&&s!==cur){cur=s;post({t:'section',i:s})}}
+    window.addEventListener('scroll',function(){
+      if(held&&!touch)closeTones();
+      if(!frame)frame=requestAnimationFrame(function(){frame=0;report()})},{passive:true});
+    function layout(w,h,rows,fs){
+      var a=cellOf(document.elementFromPoint(pad+2,2)),st=document.documentElement.style;
+      cw=w;st.setProperty('--cw',w+'px');st.setProperty('--ch',h+'px');st.setProperty('--rows',rows);st.setProperty('--fs',fs+'px');
+      closeTones();
+      // Back to the emoji the user was at: a new cell size moves every column.
+      if(a&&!document.body.className)window.scrollTo(a.offsetLeft-pad,0)}
+    function recents(html){secs[0].innerHTML=html;report()}
+    function mode(searching){closeTones();document.body.className=searching?'q':'';window.scrollTo(0,0);cur=-1;report()}
+    function results(html){closeTones();strip.innerHTML=html;window.scrollTo(0,0)}
+    function go(i){var s=secs[i];if(s&&s.offsetWidth){closeTones();window.scrollTo(s.offsetLeft-pad,0)}}
+    function setTone(b,s){
+      var all=document.querySelectorAll('i[b]:not([r])');
+      for(var k=0;k<all.length;k++)if(all[k].getAttribute('b')===b)all[k].textContent=s}
+    function showTones(options,selected){
+      if(!held)return;
+      tones.textContent='';
+      options.forEach(function(s){var e=document.createElement('b');e.textContent=s;if(s===selected)e.className='on';tones.appendChild(e)});
+      tones.style.display='flex';
+      var r=held.getBoundingClientRect(),w=tones.offsetWidth,h=tones.offsetHeight;
+      // Above the emoji when there is room, else below it, else (the search strip) over it.
+      var y=r.top-h-4;if(y<2)y=r.bottom+4;if(y+h>innerHeight)y=Math.max(0,(innerHeight-h)/2);
+      tones.style.left=Math.min(Math.max(4,r.left+r.width/2-w/2),Math.max(4,innerWidth-w-4))+'px';
+      tones.style.top=y+'px'}
+    post({t:'ready'});
+    """
 
   // MARK: Search field
 
@@ -413,13 +572,8 @@ final class EmojiPanelView: UIView, UICollectionViewDataSource, UICollectionView
 
   @objc private func tabTapped(_ button: UIButton) {
     let section = button.tag
-    guard !isSearching, itemCount(in: section) > 0,
-      let frame = collection.layoutAttributesForItem(at: IndexPath(item: 0, section: section))?.frame
-    else { return }
-    hideTonePicker()
-    let inset = collection.contentInset
-    let furthest = max(-inset.left, collection.contentSize.width + inset.right - collection.bounds.width)
-    collection.setContentOffset(CGPoint(x: min(frame.minX - inset.left, furthest), y: 0), animated: false)
+    guard !isSearching, itemCount(in: section) > 0 else { return }
+    run("go", section)
     // At the far end the scroll can stop short of the section; the tapped tab is still the one.
     selectedSection = section
     updateTabs()
@@ -444,78 +598,22 @@ final class EmojiPanelView: UIView, UICollectionViewDataSource, UICollectionView
     deleteTimer = nil
   }
 
-  // MARK: Skin tones
-
-  private func setUpTonePicker() {
-    toneShield.isHidden = true
-    toneShield.addTarget(self, action: #selector(hideTonePicker), for: .touchDown)
-    addSubview(toneShield)
-    tonePicker.isHidden = true
-    tonePicker.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(toneTapped(_:))))
-    addSubview(tonePicker)
-  }
-
-  @objc private func longPressed(_ press: UILongPressGestureRecognizer) {
-    switch press.state {
-    case .began:
-      guard let indexPath = collection.indexPathForItem(at: press.location(in: collection)),
-        let cell = collection.cellForItem(at: indexPath), let base = base(of: item(at: indexPath))
-      else { return }
-      let tones = catalog.variants(of: base)
-      guard !tones.isEmpty else { return }
-      toneBase = base
-      tonePicker.show([base.string] + tones, selected: string(for: .emoji(base)))
-      placeTonePicker(over: convert(cell.frame, from: collection))
-    case .changed:
-      // One gesture like Apple's: hold, slide to a tone, let go.
-      if !tonePicker.isHidden { tonePicker.highlight(at: press.location(in: tonePicker)) }
-    case .ended:
-      if !tonePicker.isHidden, let tone = tonePicker.option(at: press.location(in: tonePicker)) { choose(tone) }
-    default:
-      break
-    }
-  }
-
-  private func placeTonePicker(over cell: CGRect) {
-    let size = tonePicker.intrinsicContentSize
-    let x = min(max(4, cell.midX - size.width / 2), max(4, bounds.width - size.width - 4))
-    // Above the emoji when there is room in the panel, else below it: never under the finger,
-    // or the hold itself would pick a tone.
-    let above = cell.minY - size.height - 4
-    tonePicker.frame = CGRect(origin: CGPoint(x: x, y: above >= 2 ? above : cell.maxY + 4), size: size)
-    tonePicker.isHidden = false
-    toneShield.isHidden = false
-  }
-
-  @objc private func toneTapped(_ tap: UITapGestureRecognizer) {
-    if let tone = tonePicker.option(at: tap.location(in: tonePicker)) { choose(tone) }
-  }
-
-  private func choose(_ tone: String) {
-    guard let base = toneBase else { return }
-    preferences.setSkinTone(tone, for: base)
-    hideTonePicker()
-    pick(tone)
-    for cell in collection.visibleCells {
-      if let cell = cell as? EmojiCell, let indexPath = collection.indexPath(for: cell) { configure(cell, at: indexPath) }
-    }
-  }
-
-  @objc private func hideTonePicker() {
-    tonePicker.isHidden = true
-    toneShield.isHidden = true
-    toneBase = nil
-  }
-
   // MARK: Layout
 
   override func didMoveToWindow() {
     super.didMoveToWindow()
-    if window == nil {
+    guard window != nil else {
       stopDeleting()
-      hideTonePicker()
-    } else {
-      reloadRecents()
+      return
+    }
+    reloadRecents()
+    if webView == nil {
+      // Only now: a keyboard that never opens the panel never starts a web view for it.
+      let webView = makeWebView()
+      insertSubview(webView, belowSubview: emptyLabel)
+      self.webView = webView
+      setNeedsLayout()
+      loadPage()
     }
   }
 
@@ -544,130 +642,21 @@ final class EmojiPanelView: UIView, UICollectionViewDataSource, UICollectionView
       button.frame = CGRect(x: slot.midX - side / 2, y: slot.midY - 13, width: side, height: 26)
     }
 
-    collection.frame = CGRect(
+    let content = CGRect(
       x: 0, y: rowHeight, width: bounds.width, height: max(0, bounds.height - rowHeight - barHeight)
     )
-    emptyLabel.frame = collection.frame
-    toneShield.frame = bounds
-    updateGrid()
-  }
-
-  /// Sizes the cells so whole rows fill the height, at about the system keyboard's emoji size.
-  private func updateGrid() {
-    let size = collection.bounds.size
-    guard size != laidOutSize, size.width > 0, size.height > 0 else { return }
-    // Where the user was, to return there: a new cell size moves every column.
-    let anchor = collection.indexPathForItem(
-      at: CGPoint(x: collection.contentOffset.x + collection.contentInset.left + layout.itemSize.width / 2, y: 1)
-    )
-    laidOutSize = size
-    let rows = max(1, Int(size.height / 34))
-    let cellHeight = (size.height / CGFloat(rows)).rounded(.down)
-    let columns = max(1, Int(size.width / max(cellHeight, 40)))
-    layout.itemSize = CGSize(width: (size.width / CGFloat(columns)).rounded(.down), height: cellHeight)
-    emojiFont = .systemFont(ofSize: min(32, (cellHeight * 0.8).rounded()))
-    layout.invalidateLayout()
-    collection.reloadData()
-    collection.layoutIfNeeded()
-    if let anchor, anchor.section < sectionCount, anchor.item < itemCount(in: anchor.section),
-      let frame = collection.layoutAttributesForItem(at: anchor)?.frame
-    {
-      collection.contentOffset = CGPoint(x: frame.minX - collection.contentInset.left, y: 0)
-    }
+    webView?.frame = content
+    emptyLabel.frame = content
+    updatePageMetrics()
   }
 }
 
-/// One emoji, drawn as text. A label, not an image: the system caches glyphs for the font, and
-/// nothing per emoji stays alive once the cell is reused.
-private final class EmojiCell: UICollectionViewCell {
-  let label = UILabel()
+/// Hands the page's messages to the panel without the web view's configuration keeping the
+/// panel alive (a user content controller retains its handlers).
+private final class EmojiMessageHandler: NSObject, WKScriptMessageHandler {
+  weak var target: EmojiPanelView?
 
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    label.textAlignment = .center
-    label.frame = contentView.bounds
-    label.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    contentView.addSubview(label)
-    contentView.layer.cornerRadius = 8
-    isAccessibilityElement = true
-    accessibilityTraits = .button
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-  override var isHighlighted: Bool {
-    didSet { contentView.backgroundColor = isHighlighted ? .tertiarySystemFill : .clear }
-  }
-}
-
-/// The bubble with an emoji's plain form and its five skin tones.
-private final class EmojiTonePicker: UIView {
-  private var labels: [UILabel] = []
-  private var options: [String] = []
-  private static let optionSize = CGSize(width: 42, height: 46)
-  private static let padding: CGFloat = 5
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    // An opaque key-popup colour: the bubble covers emoji, which must not show through.
-    backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.36, alpha: 1) : .white }
-    layer.cornerRadius = 12
-    layer.cornerCurve = .continuous
-    layer.shadowColor = UIColor.black.cgColor
-    layer.shadowOpacity = 0.25
-    layer.shadowRadius = 6
-    layer.shadowOffset = CGSize(width: 0, height: 2)
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-  override var intrinsicContentSize: CGSize {
-    CGSize(
-      width: CGFloat(options.count) * EmojiTonePicker.optionSize.width + 2 * EmojiTonePicker.padding,
-      height: EmojiTonePicker.optionSize.height + 2 * EmojiTonePicker.padding
-    )
-  }
-
-  func show(_ options: [String], selected: String) {
-    self.options = options
-    labels.forEach { $0.removeFromSuperview() }
-    labels = options.enumerated().map { index, option in
-      let label = UILabel()
-      label.text = option
-      label.font = .systemFont(ofSize: 30)
-      label.textAlignment = .center
-      label.layer.cornerRadius = 8
-      label.layer.masksToBounds = true
-      label.frame = CGRect(
-        origin: CGPoint(
-          x: EmojiTonePicker.padding + CGFloat(index) * EmojiTonePicker.optionSize.width, y: EmojiTonePicker.padding
-        ),
-        size: EmojiTonePicker.optionSize
-      )
-      addSubview(label)
-      return label
-    }
-    highlight(options.firstIndex(of: selected))
-  }
-
-  /// The option under a point, with some slack above and below for a sliding finger.
-  func option(at point: CGPoint) -> String? { index(at: point).map { options[$0] } }
-
-  func highlight(at point: CGPoint) {
-    if let index = index(at: point) { highlight(index) }
-  }
-
-  private func index(at point: CGPoint) -> Int? {
-    guard bounds.insetBy(dx: 0, dy: -24).contains(point) else { return nil }
-    let index = Int((point.x - EmojiTonePicker.padding) / EmojiTonePicker.optionSize.width)
-    return options.indices.contains(index) ? index : nil
-  }
-
-  private func highlight(_ index: Int?) {
-    for (position, label) in labels.enumerated() {
-      label.backgroundColor = position == index ? .systemBlue : .clear
-    }
+  func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+    MainActor.assumeIsolated { target?.handle(message.body) }
   }
 }

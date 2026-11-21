@@ -42,6 +42,9 @@ extension TypingTests {
       check("emoji: English name", catalog.name(of: pizza, language: .english) == "pizza")
       check("emoji: German name", catalog.name(of: pizza, language: .german) == "Pizza")
     }
+    if let thumb = find("👍") {
+      check("emoji: a toned emoji keeps its own name", catalog.name(of: thumb, language: .english) == "thumbs up")
+    }
     if let last = all.last {
       check("emoji: the last emoji has a name", !catalog.name(of: last, language: .german).isEmpty)
     }
@@ -67,6 +70,7 @@ extension TypingTests {
     check("emoji search: an empty query finds nothing", search("  ", .english).isEmpty && search("", .german).isEmpty)
     check("emoji search: no match is empty", search("qqqq", .english).isEmpty)
     check("emoji search: tones aren't results", !search("thumbs up", .english).contains("👍🏽"))
+    check("emoji search: a tone's name doesn't find the emoji", !search("dark skin", .english, limit: 500).contains("👍"))
 
     // The suggestion bar's emoji
     func offered(_ word: String, _ language: TypingLanguage) -> String? {

@@ -112,9 +112,14 @@ def words_of(text):
 
 
 def skeleton(emoji):
-    """An emoji without its skin tones and variation selectors, to match it with CLDR's keys
-    and its tones with their base."""
+    """An emoji without its skin tones and variation selectors, to match a tone with its base."""
     return "".join(c for c in emoji if ord(c) not in TONES and ord(c) != VARIATION_SELECTOR)
+
+
+def annotation_key(emoji):
+    """How CLDR keys an emoji: without variation selectors. Skin tones stay, or a toned
+    variant's name ("thumbs up: dark skin tone") would replace its base emoji's."""
+    return emoji.replace(chr(VARIATION_SELECTOR), "")
 
 
 def read_emoji():
@@ -165,13 +170,13 @@ def read_emoji():
 
 
 def read_annotations(language):
-    """CLDR's name and keywords by emoji skeleton."""
+    """CLDR's name and keywords by `annotation_key`."""
     names, keywords = {}, {}
     pattern = re.compile(r'<annotation cp="([^"]*)"((?: [a-z]+="[^"]*")*)>(.*?)</annotation>')
     for kind in ("annotations", "annotationsDerived"):
         text = (CACHE / f"cldr/{kind}-{language}.xml").read_text(encoding="utf-8")
         for key, attributes, value in pattern.findall(text):
-            key, value = skeleton(html.unescape(key)), html.unescape(value)
+            key, value = annotation_key(html.unescape(key)), html.unescape(value)
             if 'type="tts"' in attributes:
                 names[key] = value.strip()
             else:
@@ -227,7 +232,7 @@ def main():
         names, keywords = read_annotations(language)
         english_names = read_annotations("en")[0]
         for entry in entries:
-            key = skeleton(entry["emoji"])
+            key = annotation_key(entry["emoji"])
             # Emoji newer than the CLDR download have no annotation yet.
             entry["names"][language] = names.get(key) or english_names.get(key) or entry["name"]
             entry["keywords"][language] = keywords.get(key, [])
