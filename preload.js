@@ -718,6 +718,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   llmCliInstallStart: (seat, consentedUrl) =>
     ipcRenderer.invoke("llm-cli-install-start", seat, consentedUrl),
   llmCliInstallCancel: (seat) => ipcRenderer.invoke("llm-cli-install-cancel", seat),
+  llmCliSignInStart: (seat) => ipcRenderer.invoke("llm-cli-signin-start", seat),
+  llmCliSignInSubmitCode: (seat, code) =>
+    ipcRenderer.invoke("llm-cli-signin-submit-code", seat, code),
+  llmCliSignInCancel: (seat) => ipcRenderer.invoke("llm-cli-signin-cancel", seat),
+  llmCliSignOut: (seat) => ipcRenderer.invoke("llm-cli-signout", seat),
   onLlmCliEvent: registerListener(
     "llm-cli-event",
     (callback) => (_event, payload) => callback(payload)

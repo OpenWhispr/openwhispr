@@ -169,3 +169,66 @@ test("detect and test channels delegate to the detector and validate the seat", 
   detector.emit("codex", { status: "signed-in" });
   assert.deepEqual(events, [{ type: "state", seat: "codex", state: { status: "signed-in" } }]);
 });
+
+test("sign-in channels validate the seat, strip the done promise and emit signin-result", async () => {
+  const ipcMain = makeIpcMain();
+  const events = [];
+  const calls = [];
+  const signIn = {
+    start: async ({ seat }) => ({ ok: true, done: Promise.resolve({ ok: true }), seat }),
+    submitCode: (arg) => (calls.push(arg), { ok: true }),
+    cancel: async (seat) => calls.push(["cancel", seat]),
+    signOut: async ({ seat }) => ({ ok: true, affectsTerminalCli: seat === "codex" }),
+  };
+  registerLlmCliIpc({
+    ipcMain,
+    runner: {},
+    detector: makeDetector(),
+    installer: {},
+    signIn,
+    emitEvent: (event) => events.push(event),
+  });
+  const started = await ipcMain.handlers.get("llm-cli-signin-start")({}, "claude");
+  assert.deepEqual(started, { ok: true, seat: "claude" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(events.at(-1), {
+    type: "signin-result",
+    seat: "claude",
+    ok: true,
+    code: undefined,
+  });
+  assert.equal(
+    (await ipcMain.handlers.get("llm-cli-signin-start")({}, "bogus")).code,
+    "invalid-input"
+  );
+  assert.deepEqual(await ipcMain.handlers.get("llm-cli-signin-submit-code")({}, "claude", "abc"), {
+    ok: true,
+  });
+  assert.equal(
+    (await ipcMain.handlers.get("llm-cli-signin-submit-code")({}, "claude", 5)).code,
+    "invalid-input"
+  );
+  await ipcMain.handlers.get("llm-cli-signin-cancel")({}, "claude");
+  assert.deepEqual(calls, [{ seat: "claude", code: "abc" }, ["cancel", "claude"]]);
+  assert.deepEqual(await ipcMain.handlers.get("llm-cli-signout")({}, "codex"), {
+    ok: true,
+    affectsTerminalCli: true,
+  });
+});
+
+test("install channels accept only a seat and a bounded url string", async () => {
+  const ipcMain = makeIpcMain();
+  const seen = [];
+  const installer = {
+    install: async (arg) => (seen.push(arg.seat), { ok: true }),
+    cancel: (seat) => seen.push(["cancel", seat]),
+  };
+  registerLlmCliIpc({ ipcMain, runner: {}, detector: makeDetector(), installer, signIn: {} });
+  const start = ipcMain.handlers.get("llm-cli-install-start");
+  assert.equal((await start({}, "gemini", "https://x")).code, "invalid-input");
+  assert.equal((await start({}, "codex", { url: 1 })).code, "invalid-input");
+  assert.equal((await start({}, "codex", "x".repeat(3000))).code, "invalid-input");
+  assert.deepEqual(await start({}, "codex", "https://chatgpt.com/codex/install.ps1"), { ok: true });
+  await ipcMain.handlers.get("llm-cli-install-cancel")({}, "codex");
+  assert.deepEqual(seen, ["codex", ["cancel", "codex"]]);
+});

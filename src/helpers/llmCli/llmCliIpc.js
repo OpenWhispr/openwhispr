@@ -30,6 +30,7 @@ function registerLlmCliIpc({
   runner,
   detector,
   installer,
+  signIn,
   emitEvent = () => {},
   logger = {},
 }) {
@@ -56,6 +57,33 @@ function registerLlmCliIpc({
 
   ipcMain.handle("llm-cli-install-cancel", async (_event, seat) => {
     if (isSeat(seat)) installer.cancel(seat);
+  });
+
+  // Sign-in runs in the background; its outcome arrives as a signin-result
+  // event next to the state events. Nothing returned or emitted carries a token.
+  ipcMain.handle("llm-cli-signin-start", async (_event, seat) => {
+    if (!isSeat(seat)) return invalid("unknown seat");
+    const { done, ...started } = await signIn.start({ seat });
+    if (done) {
+      void done.then((result) =>
+        emitEvent({ type: "signin-result", seat, ok: result.ok, code: result.code })
+      );
+    }
+    return started;
+  });
+
+  ipcMain.handle("llm-cli-signin-submit-code", async (_event, seat, code) => {
+    if (!isSeat(seat) || typeof code !== "string") return invalid("invalid code submission");
+    return signIn.submitCode({ seat, code });
+  });
+
+  ipcMain.handle("llm-cli-signin-cancel", async (_event, seat) => {
+    if (isSeat(seat)) await signIn.cancel(seat);
+  });
+
+  ipcMain.handle("llm-cli-signout", async (_event, seat) => {
+    if (!isSeat(seat)) return invalid("unknown seat");
+    return signIn.signOut({ seat });
   });
 
   // Mirrors enterprise-stream-start/part/cancel so the renderer shim in 08-03
@@ -127,27 +155,43 @@ function registerLlmCliIpc({
 // Composition root, called once from ipcHandlers.js. Electron is required here
 // only so the adapter above stays testable without it.
 function initLlmCliIpc({ logger } = {}) {
-  const { ipcMain, BrowserWindow } = require("electron");
+  const path = require("path");
+  const { app, ipcMain, BrowserWindow, safeStorage, shell } = require("electron");
   const { createRunner } = require("./llmCliRunner");
   const { createDetector } = require("./llmCliDetect");
   const { createInstaller } = require("./llmCliInstaller");
+  const { createSignIn } = require("./llmCliSignIn");
+  const { createTokenStore } = require("./llmCliTokenStore");
 
+  const log = (...args) => logger?.debug?.(...args);
+  const tokenStore = createTokenStore({
+    safeStorage,
+    dir: path.join(app.getPath("userData"), "secure-keys"),
+  });
   const holder = { detector: null };
   const runner = createRunner({
     resolveExe: (seat) => holder.detector.resolveExe(seat),
-    log: (...args) => logger?.debug?.(...args),
+    getClaudeToken: async () => tokenStore.load(),
+    log,
   });
-  const detector = createDetector({ runner, log: (...args) => logger?.debug?.(...args) });
+  const detector = createDetector({ runner, tokenStore, log });
   holder.detector = detector;
-  const installer = createInstaller({ detector, log: (...args) => logger?.debug?.(...args) });
+  const installer = createInstaller({ detector, log });
 
   const emitEvent = (event) => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send("llm-cli-event", event);
     }
   };
-  registerLlmCliIpc({ ipcMain, runner, detector, installer, emitEvent, logger });
-  return { runner, detector, installer };
+  const signIn = createSignIn({
+    detector,
+    tokenStore,
+    openExternal: (url) => shell.openExternal(url),
+    emit: emitEvent,
+    log,
+  });
+  registerLlmCliIpc({ ipcMain, runner, detector, installer, signIn, emitEvent, logger });
+  return { runner, detector, installer, signIn };
 }
 
 module.exports = { registerLlmCliIpc, initLlmCliIpc, SEATS, isSeat };
