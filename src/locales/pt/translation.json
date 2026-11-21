@@ -909,6 +909,10 @@
     "titaniumSignIn": {
       "message": "Entre no Titanium para usar a transcrição na nuvem do {{brand}}.",
       "action": "Entrar com Titanium"
+    },
+    "titaniumNoLicense": {
+      "message": "Sua conta Titanium não tem uma licença do {{brand}}. Entre em contato com {{supportEmail}} para obter uma.",
+      "action": "Falar com o suporte"
     }
   },
   "hooks": {
@@ -4091,7 +4095,8 @@
     "connectors": {
       "description": "Deixe o assistente usar suas ferramentas. Você aprova cada e-mail, mensagem e issue antes do envio."
     },
-    "readDocs": "Ler a documentação"
+    "readDocs": "Ler a documentação",
+    "notAvailableInBuild": "Não disponível nesta versão"
   },
   "connectors": {
     "approval": {

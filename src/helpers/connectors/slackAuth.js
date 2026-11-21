@@ -214,6 +214,8 @@ function createSlackAuth({
     markReconnect: login.markReconnect,
     revoke,
     statusOf,
+    // False in a build without a Slack client id, so Settings does not offer Connect.
+    isConfigured: () => Boolean(getClientId()),
   };
 }
 

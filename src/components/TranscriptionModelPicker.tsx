@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } fro
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { useTitaniumAuth } from "../hooks/useTitaniumAuth";
-import { DEFAULT_STT, TITANIUM, TITANIUM_ENABLED } from "../config/forkRuntime";
+import { DEFAULT_STT, SUPPORT_EMAIL, TITANIUM, TITANIUM_ENABLED } from "../config/forkRuntime";
 import { isTitaniumServiceUrl } from "../helpers/titanium/titaniumHosts";
 import {
   resolveSttEndpointNotice,
@@ -1222,6 +1222,8 @@ export default function TranscriptionModelPicker({
         }),
         titaniumEnabled: TITANIUM_ENABLED,
         titaniumSignedIn: titaniumAuth.signedIn,
+        titaniumLicensed: titaniumAuth.licensed,
+        titaniumLicenseReason: titaniumAuth.reason,
       })
     : null;
   // The check's config does not change when Titanium signs in, so ask again explicitly.
@@ -1238,9 +1240,11 @@ export default function TranscriptionModelPicker({
   const customFailureReason =
     sttNotice === "titaniumSignIn"
       ? t("transcription.titaniumSignIn.message")
-      : sttNotice === "unauthorized"
-        ? t("reasoning.custom.endpointUnauthorized")
-        : undefined;
+      : sttNotice === "titaniumNoLicense"
+        ? t("transcription.titaniumNoLicense.message")
+        : sttNotice === "unauthorized"
+          ? t("reasoning.custom.endpointUnauthorized")
+          : undefined;
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
@@ -1508,6 +1512,18 @@ export default function TranscriptionModelPicker({
                       disabled={titaniumAuth.pending}
                     >
                       {t("transcription.titaniumSignIn.action")}
+                    </Button>
+                  )}
+
+                  {sttNotice === "titaniumNoLicense" && SUPPORT_EMAIL && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() =>
+                        void window.electronAPI?.openExternal?.(`mailto:${SUPPORT_EMAIL}`)
+                      }
+                    >
+                      {t("transcription.titaniumNoLicense.action")}
                     </Button>
                   )}
 

@@ -762,7 +762,8 @@
     "connectors": {
       "description": "دع المساعد يستخدم أدواتك. توافق على كل بريد ورسالة ومهمة قبل إرسالها."
     },
-    "readDocs": "اقرأ الوثائق"
+    "readDocs": "اقرأ الوثائق",
+    "notAvailableInBuild": "غير متاح في هذا الإصدار"
   },
   "connectors": {
     "approval": {
@@ -4397,6 +4398,10 @@
     "titaniumSignIn": {
       "message": "سجّل الدخول إلى Titanium لاستخدام النسخ السحابي في {{brand}}.",
       "action": "تسجيل الدخول عبر Titanium"
+    },
+    "titaniumNoLicense": {
+      "message": "لا يحتوي حسابك على Titanium على ترخيص {{brand}}. تواصل مع {{supportEmail}} للحصول على واحد.",
+      "action": "التواصل مع الدعم"
     }
   },
   "cleanupPrompt": "التنظيف",

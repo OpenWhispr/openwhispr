@@ -3205,7 +3205,13 @@ declare global {
       >;
 
       // Google Calendar
-      gcalStartOAuth?: () => Promise<{ success: boolean; email?: string; error?: string }>;
+      gcalStartOAuth?: () => Promise<{
+        success: boolean;
+        email?: string;
+        error?: string;
+        errorCode?: string;
+      }>;
+      calendarGetOAuthConfigured?: () => Promise<{ google: boolean; microsoft: boolean }>;
       gcalDisconnect?: (email?: string) => Promise<{ success: boolean; error?: string }>;
       gcalGetConnectionStatus?: () => Promise<{
         connected: boolean;

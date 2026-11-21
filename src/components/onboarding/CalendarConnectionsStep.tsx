@@ -5,6 +5,8 @@ import { Button } from "../ui/button";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
+import { useCalendarOAuthConfigured } from "../../hooks/useCalendarOAuthConfigured";
+import { isCalendarOAuthConfigured } from "../../utils/connectorEligibility";
 import googleCalendarIcon from "../../assets/icons/google-calendar.svg";
 import microsoftCalendarIcon from "../../assets/icons/microsoft-calendar.webp";
 import appleCalendarIcon from "../../assets/icons/apple-calendar.webp";
@@ -16,6 +18,7 @@ export default function CalendarConnectionsStep() {
   const { t } = useTranslation();
   const store = useSettingsStore();
   const systemAudio = useSystemAudioPermission();
+  const oauthConfigured = useCalendarOAuthConfigured();
   const [connecting, setConnecting] = useState<ProviderId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [appleDenied, setAppleDenied] = useState(false);
@@ -103,15 +106,21 @@ export default function CalendarConnectionsStep() {
       id: "google" as const,
       icon: googleCalendarIcon,
       title: t("onboarding.rehaul.notes.connectors.googleTitle"),
-      description: t("onboarding.rehaul.notes.connectors.googleDescription"),
+      description: isCalendarOAuthConfigured(oauthConfigured, "google")
+        ? t("onboarding.rehaul.notes.connectors.googleDescription")
+        : t("integrations.notAvailableInBuild"),
       connected: store.gcalAccounts.length > 0,
+      configured: isCalendarOAuthConfigured(oauthConfigured, "google"),
     },
     {
       id: "microsoft" as const,
       icon: microsoftCalendarIcon,
       title: t("onboarding.rehaul.notes.connectors.microsoftTitle"),
-      description: t("onboarding.rehaul.notes.connectors.microsoftDescription"),
+      description: isCalendarOAuthConfigured(oauthConfigured, "microsoft")
+        ? t("onboarding.rehaul.notes.connectors.microsoftDescription")
+        : t("integrations.notAvailableInBuild"),
       connected: store.mcalAccounts.length > 0,
+      configured: isCalendarOAuthConfigured(oauthConfigured, "microsoft"),
     },
     ...(isMac
       ? [
@@ -121,6 +130,7 @@ export default function CalendarConnectionsStep() {
             title: t("onboarding.rehaul.notes.connectors.appleTitle"),
             description: t("onboarding.rehaul.notes.connectors.appleDescription"),
             connected: store.appleCalendarConnected,
+            configured: true,
           },
         ]
       : []),
@@ -227,7 +237,7 @@ export default function CalendarConnectionsStep() {
             ) : (
               <Button
                 type="button"
-                disabled={connecting !== null}
+                disabled={connecting !== null || !provider.configured}
                 onClick={() => void connect(provider.id)}
                 className="h-8 shrink-0 gap-1.5 rounded-[38px] px-3 text-xs"
               >

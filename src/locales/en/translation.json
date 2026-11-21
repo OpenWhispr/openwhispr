@@ -930,6 +930,10 @@
     "titaniumSignIn": {
       "message": "Sign in to Titanium to use {{brand}} cloud transcription.",
       "action": "Sign in with Titanium"
+    },
+    "titaniumNoLicense": {
+      "message": "Your Titanium account has no {{brand}} license. Contact {{supportEmail}} to get one.",
+      "action": "Contact support"
     }
   },
   "hooks": {
@@ -4263,7 +4267,8 @@
     "connectors": {
       "description": "Let the assistant use your tools. You approve every email, message and issue before it goes out."
     },
-    "readDocs": "Read the docs"
+    "readDocs": "Read the docs",
+    "notAvailableInBuild": "Not available in this build"
   },
   "connectors": {
     "approval": {

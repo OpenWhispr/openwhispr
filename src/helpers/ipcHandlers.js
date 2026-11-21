@@ -12366,9 +12366,15 @@ class IPCHandlers {
         return await this.googleCalendarManager.startOAuth();
       } catch (error) {
         debugLogger.error("Google Calendar OAuth failed", { error: error.message }, "calendar");
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, errorCode: error.code };
       }
     });
+
+    // Fork builds carry no calendar OAuth client ids; the renderer hides Connect without one.
+    ipcMain.handle("calendar-get-oauth-configured", () => ({
+      google: this.googleCalendarManager.oauth.isConfigured(),
+      microsoft: this.microsoftCalendarManager.oauth.isConfigured(),
+    }));
 
     ipcMain.handle("gcal-disconnect", async (_event, email) => {
       try {
@@ -12470,7 +12476,7 @@ class IPCHandlers {
         return await this.microsoftCalendarManager.startOAuth();
       } catch (error) {
         debugLogger.error("Microsoft Calendar OAuth failed", { error: error.message }, "calendar");
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, errorCode: error.code };
       }
     });
 

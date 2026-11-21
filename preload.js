@@ -1333,6 +1333,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Google Calendar
   gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),
+  calendarGetOAuthConfigured: () => ipcRenderer.invoke("calendar-get-oauth-configured"),
   gcalDisconnect: (email) => ipcRenderer.invoke("gcal-disconnect", email),
   gcalGetConnectionStatus: () => ipcRenderer.invoke("gcal-get-connection-status"),
   gcalGetCalendars: () => ipcRenderer.invoke("gcal-get-calendars"),

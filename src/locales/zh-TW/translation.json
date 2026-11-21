@@ -930,6 +930,10 @@
     "titaniumSignIn": {
       "message": "請登入 Titanium 以使用 {{brand}} 雲端轉錄。",
       "action": "使用 Titanium 登入"
+    },
+    "titaniumNoLicense": {
+      "message": "你的 Titanium 帳戶沒有 {{brand}} 授權。請聯絡 {{supportEmail}} 取得。",
+      "action": "聯絡支援"
     }
   },
   "hooks": {
@@ -4091,7 +4095,8 @@
     "connectors": {
       "description": "讓助理使用您的工具。每封郵件、每則訊息和每個議題送出前都需要您核准。"
     },
-    "readDocs": "閱讀文件"
+    "readDocs": "閱讀文件",
+    "notAvailableInBuild": "此版本無法使用"
   },
   "connectors": {
     "approval": {

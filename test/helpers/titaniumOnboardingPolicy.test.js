@@ -146,3 +146,44 @@ test("STT retry does not fire without a prior sign-in notice or when already sig
   const already = { signedIn: true, signedOutNotice: null };
   assert.equal(stepSttRetry(already, { signedIn: true, notice: "unauthorized" }).retry, false);
 });
+
+test("STT notice: a signed-in account without a license gets the no-license notice, never an API key", async () => {
+  const { resolveSttEndpointNotice } = await load();
+  const signedIn = {
+    refused: true,
+    hasApiKey: false,
+    isTitaniumEndpoint: true,
+    titaniumEnabled: true,
+    titaniumSignedIn: true,
+  };
+  const noLicense = { titaniumLicensed: false, titaniumLicenseReason: "no_license" };
+  assert.equal(resolveSttEndpointNotice({ ...signedIn, ...noLicense }), "titaniumNoLicense");
+  // signed out still asks to sign in first
+  assert.equal(
+    resolveSttEndpointNotice({ ...signedIn, ...noLicense, titaniumSignedIn: false }),
+    "titaniumSignIn"
+  );
+  // a licensed user, or an unknown license, keeps the generic refusal
+  assert.equal(
+    resolveSttEndpointNotice({ ...signedIn, titaniumLicensed: true, titaniumLicenseReason: null }),
+    "unauthorized"
+  );
+  assert.equal(resolveSttEndpointNotice(signedIn), "unauthorized");
+  // not our host, or not refused: no license notice
+  assert.equal(
+    resolveSttEndpointNotice({ ...signedIn, ...noLicense, isTitaniumEndpoint: false }),
+    "unauthorized"
+  );
+  assert.equal(resolveSttEndpointNotice({ ...signedIn, ...noLicense, refused: false }), null);
+});
+
+test("STT retry: the no-license notice does not trigger a sign-in retry", async () => {
+  const { stepSttRetry } = await load();
+  let step = stepSttRetry(
+    { signedIn: false, signedOutNotice: null },
+    { signedIn: true, notice: "titaniumNoLicense" }
+  );
+  assert.equal(step.retry, false);
+  step = stepSttRetry(step.state, { signedIn: true, notice: "titaniumNoLicense" });
+  assert.equal(step.retry, false);
+});

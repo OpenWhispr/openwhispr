@@ -930,6 +930,10 @@
     "titaniumSignIn": {
       "message": "Titanium にサインインして、{{brand}} のクラウド文字起こしを利用してください。",
       "action": "Titanium でサインイン"
+    },
+    "titaniumNoLicense": {
+      "message": "Titanium アカウントに {{brand}} のライセンスがありません。取得するには {{supportEmail}} までご連絡ください。",
+      "action": "サポートに連絡"
     }
   },
   "hooks": {
@@ -4091,7 +4095,8 @@
     "connectors": {
       "description": "アシスタントがあなたのツールを使えるようにします。メール、メッセージ、課題はすべて送信前にあなたが承認します。"
     },
-    "readDocs": "ドキュメントを読む"
+    "readDocs": "ドキュメントを読む",
+    "notAvailableInBuild": "このビルドでは利用できません"
   },
   "connectors": {
     "approval": {

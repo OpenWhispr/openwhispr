@@ -68,3 +68,18 @@ export function connectorEligibilityFor(input: ConnectorEligibilityInput): Conne
     reason: !isSignedIn ? "signedOut" : !hasPlan ? "planRequired" : null,
   };
 }
+
+export type CalendarOAuthProvider = "google" | "microsoft";
+export type CalendarOAuthConfigured = Record<CalendarOAuthProvider, boolean>;
+
+/**
+ * Whether a calendar's Connect may be offered: its OAuth client id must be in the
+ * build (fork builds ship none). `null` is main's answer not having arrived yet;
+ * Connect stays offered then and main refuses a flow without a client id.
+ */
+export function isCalendarOAuthConfigured(
+  configured: CalendarOAuthConfigured | null,
+  provider: CalendarOAuthProvider
+): boolean {
+  return configured === null ? true : configured[provider] !== false;
+}

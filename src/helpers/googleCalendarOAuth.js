@@ -1,6 +1,7 @@
 const { net } = require("electron");
 const { runOAuthLoopbackFlow, OAuthFlowError } = require("./oauthLoopbackFlow");
 const { calendarResultPage, defaultI18n } = require("./calendarOAuthResultPage");
+const { isClientIdConfigured, assertClientIdConfigured } = require("./calendarOAuthConfig");
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -17,11 +18,17 @@ class GoogleCalendarOAuth {
     return process.env.GOOGLE_CALENDAR_CLIENT_ID;
   }
 
+  isConfigured() {
+    return isClientIdConfigured(this.getClientId());
+  }
+
   getClientSecret() {
     return process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
   }
 
   startOAuthFlow() {
+    // Never open the browser on a client_id=undefined URL.
+    assertClientIdConfigured(this.getClientId(), "GOOGLE_CALENDAR_CLIENT_ID");
     return runOAuthLoopbackFlow({
       errorParam: "gcal_error",
       renderResultPage: ({ ok }) => calendarResultPage({ i18n: this.i18n || defaultI18n() }, ok),

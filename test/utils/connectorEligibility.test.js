@@ -113,3 +113,14 @@ test("upstream: an org that turns connectors off blocks them, and a failed fetch
   );
   assert.equal(failed.connectorsAllowed, false);
 });
+
+test("calendar connect: offered unless main says the OAuth client id is missing", async () => {
+  const { isCalendarOAuthConfigured } = await load();
+  const both = { google: true, microsoft: true };
+  assert.equal(isCalendarOAuthConfigured(both, "google"), true);
+  assert.equal(isCalendarOAuthConfigured({ google: false, microsoft: true }, "google"), false);
+  assert.equal(isCalendarOAuthConfigured({ google: false, microsoft: true }, "microsoft"), true);
+  assert.equal(isCalendarOAuthConfigured({ google: true, microsoft: false }, "microsoft"), false);
+  // main's answer not here yet: offered, and main refuses a flow without a client id
+  assert.equal(isCalendarOAuthConfigured(null, "google"), true);
+});
