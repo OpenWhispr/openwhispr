@@ -713,6 +713,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   // Subscription-CLI seats (claude, codex, grok, agy); channels are registered
   // by src/helpers/llmCli/llmCliIpc.js and kept in parity by llmCliIpc.test.js.
+  llmCliDetect: () => ipcRenderer.invoke("llm-cli-detect"),
+  llmCliTest: (seat) => ipcRenderer.invoke("llm-cli-test", seat),
+  onLlmCliEvent: registerListener(
+    "llm-cli-event",
+    (callback) => (_event, payload) => callback(payload)
+  ),
   llmCliStreamStart: (payload) => ipcRenderer.invoke("llm-cli-stream-start", payload),
   llmCliStreamCancel: (streamId) => ipcRenderer.invoke("llm-cli-stream-cancel", streamId),
   onLlmCliStreamPart: registerListener(

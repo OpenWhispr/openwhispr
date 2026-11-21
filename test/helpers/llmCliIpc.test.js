@@ -12,6 +12,17 @@ function makeIpcMain() {
   return { handlers, handle: (channel, fn) => handlers.set(channel, fn) };
 }
 
+function makeDetector(overrides = {}) {
+  const listeners = new Set();
+  return {
+    onChange: (fn) => listeners.add(fn),
+    emit: (seat, state) => listeners.forEach((fn) => fn(seat, state)),
+    detectAll: async () => ({ codex: { status: "installed" } }),
+    testSeat: async (seat) => ({ ok: true, seat }),
+    ...overrides,
+  };
+}
+
 function makeSender() {
   const sent = [];
   const listeners = new Map();
@@ -34,7 +45,7 @@ test("stream channels are registered and relay parts then done", async () => {
       return { ok: true, text: "hi" };
     },
   };
-  registerLlmCliIpc({ ipcMain, runner });
+  registerLlmCliIpc({ ipcMain, runner, detector: makeDetector() });
   assert.ok(ipcMain.handlers.has("llm-cli-stream-start"));
   assert.ok(ipcMain.handlers.has("llm-cli-stream-cancel"));
 
@@ -62,7 +73,7 @@ test("a failed run sends a redacted error part", async () => {
       message: "bad sk-ant-oat01-abcdefghij",
     }),
   };
-  registerLlmCliIpc({ ipcMain, runner });
+  registerLlmCliIpc({ ipcMain, runner, detector: makeDetector() });
   const sender = makeSender();
   const result = await ipcMain.handlers.get("llm-cli-stream-start")(
     { sender },
@@ -78,6 +89,7 @@ test("unknown seat, oversize payload and bad ids are rejected before the runner"
   let called = 0;
   registerLlmCliIpc({
     ipcMain,
+    detector: makeDetector(),
     runner: {
       runStream: async () => {
         called += 1;
@@ -112,7 +124,7 @@ test("stream-cancel aborts the in-flight run", async () => {
         });
       }),
   };
-  registerLlmCliIpc({ ipcMain, runner });
+  registerLlmCliIpc({ ipcMain, runner, detector: makeDetector() });
   const sender = makeSender();
   const pending = ipcMain.handlers.get("llm-cli-stream-start")(
     { sender },
@@ -134,4 +146,26 @@ test("preload and llmCliIpc.js agree on every llm-cli channel (invoke and event)
   const preload = channelsIn("preload.js");
   assert.ok(ipc.size > 0);
   assert.deepEqual([...preload].sort(), [...ipc].sort());
+});
+
+test("detect and test channels delegate to the detector and validate the seat", async () => {
+  const ipcMain = makeIpcMain();
+  const detector = makeDetector();
+  const events = [];
+  registerLlmCliIpc({
+    ipcMain,
+    runner: {},
+    detector,
+    emitEvent: (event) => events.push(event),
+  });
+  assert.deepEqual(await ipcMain.handlers.get("llm-cli-detect")({}), {
+    codex: { status: "installed" },
+  });
+  assert.deepEqual(await ipcMain.handlers.get("llm-cli-test")({}, "agy"), {
+    ok: true,
+    seat: "agy",
+  });
+  assert.equal((await ipcMain.handlers.get("llm-cli-test")({}, "gemini")).code, "invalid-input");
+  detector.emit("codex", { status: "signed-in" });
+  assert.deepEqual(events, [{ type: "state", seat: "codex", state: { status: "signed-in" } }]);
 });

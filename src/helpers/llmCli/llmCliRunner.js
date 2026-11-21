@@ -67,7 +67,11 @@ function createRunner({
     return { ok: false, code, message };
   }
 
-  async function runStream({ seat, modelId, prompt, onPart = () => {}, signal } = {}) {
+  async function runStream({ seat, modelId, prompt, onPart = () => {}, signal, totalMs } = {}) {
+    const runLimits =
+      Number.isFinite(totalMs) && totalMs > 0
+        ? { ...limits, totalMs: Math.min(limits.totalMs, totalMs) }
+        : limits;
     const provider = policy.getProvider(seat);
     if (!provider) return fail("invalid-input", "unknown seat");
 
@@ -178,7 +182,7 @@ function createRunner({
         const armIdle = () => {
           const id = setTimeout(
             () => terminate("timeout", "no output within the idle limit"),
-            firstOutputSeen ? limits.idleMs : limits.firstOutputMs
+            firstOutputSeen ? runLimits.idleMs : runLimits.firstOutputMs
           );
           timers.push(id);
           return id;
@@ -189,7 +193,7 @@ function createRunner({
           firstOutputSeen = true;
           idleTimer = armIdle();
         };
-        timers.push(setTimeout(() => terminate("timeout", "total time limit"), limits.totalMs));
+        timers.push(setTimeout(() => terminate("timeout", "total time limit"), runLimits.totalMs));
 
         if (signal) {
           onAbort = () => terminate("killed", "cancelled");

@@ -6,6 +6,7 @@ const fs = require("fs");
 const os = require("os");
 const { isRestorablePasteTarget } = require("./windowsPasteTarget");
 const { titaniumServiceKeyFor, onTitaniumStateChanged } = require("./titanium/titaniumIpc");
+const { initLlmCliIpc } = require("./llmCli/llmCliIpc");
 const { sttApiStreamUrl } = require("./sttApiStreamPolicy");
 const { createSttApiPreviewStream } = require("./sttApiStreaming");
 const { forkWebSearch } = require("./forkWebSearch");
@@ -1596,6 +1597,8 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    initLlmCliIpc({ logger: debugLogger });
+
     ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
       this.windowManager.setOnboardingWindowMode(mode)
     );

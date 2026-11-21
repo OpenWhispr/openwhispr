@@ -25,8 +25,18 @@ function invalid(message) {
   return { success: false, code: "invalid-input", error: message };
 }
 
-function registerLlmCliIpc({ ipcMain, runner, logger = {} }) {
+function registerLlmCliIpc({ ipcMain, runner, detector, emitEvent = () => {}, logger = {} }) {
   const streamAborts = new Map(); // streamId -> AbortController
+
+  // Seat state changes (detect, test, install, sign-in) reach every window.
+  detector.onChange((seat, state) => emitEvent({ type: "state", seat, state }));
+
+  ipcMain.handle("llm-cli-detect", async () => detector.detectAll());
+
+  ipcMain.handle("llm-cli-test", async (_event, seat) => {
+    if (!isSeat(seat)) return invalid("unknown seat");
+    return detector.testSeat(seat);
+  });
 
   // Mirrors enterprise-stream-start/part/cancel so the renderer shim in 08-03
   // reuses the same shape: parts are relayed verbatim, ending with {done} or
@@ -94,4 +104,28 @@ function registerLlmCliIpc({ ipcMain, runner, logger = {} }) {
   });
 }
 
-module.exports = { registerLlmCliIpc, SEATS, isSeat };
+// Composition root, called once from ipcHandlers.js. Electron is required here
+// only so the adapter above stays testable without it.
+function initLlmCliIpc({ logger } = {}) {
+  const { ipcMain, BrowserWindow } = require("electron");
+  const { createRunner } = require("./llmCliRunner");
+  const { createDetector } = require("./llmCliDetect");
+
+  const holder = { detector: null };
+  const runner = createRunner({
+    resolveExe: (seat) => holder.detector.resolveExe(seat),
+    log: (...args) => logger?.debug?.(...args),
+  });
+  const detector = createDetector({ runner, log: (...args) => logger?.debug?.(...args) });
+  holder.detector = detector;
+
+  const emitEvent = (event) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send("llm-cli-event", event);
+    }
+  };
+  registerLlmCliIpc({ ipcMain, runner, detector, emitEvent, logger });
+  return { runner, detector };
+}
+
+module.exports = { registerLlmCliIpc, initLlmCliIpc, SEATS, isSeat };
