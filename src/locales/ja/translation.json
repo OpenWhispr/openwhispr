@@ -932,8 +932,7 @@
       "action": "Titanium でサインイン"
     },
     "titaniumNoLicense": {
-      "message": "Titanium アカウントに {{brand}} のライセンスがありません。取得するには {{supportEmail}} までご連絡ください。",
-      "action": "サポートに連絡"
+      "message": "Titanium アカウントに {{brand}} のライセンスがありません。取得するには {{supportEmail}} までご連絡ください。"
     }
   },
   "hooks": {
@@ -2317,7 +2316,9 @@
         "localDesc": "端末上のモデル。完全プライベート。",
         "selfHostedDesc": "自前サーバーをネットワーク上に。",
         "enterprise": "エンタープライズクラウド",
-        "enterpriseDesc": "音声は組織自身のクラウドに送信されます。"
+        "enterpriseDesc": "音声は組織自身のクラウドに送信されます。",
+        "titanium": "{{brand}} クラウド",
+        "titaniumDesc": "ライセンスに含まれています。設定は不要です。"
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "信頼できる精度。設定不要。",
@@ -2346,6 +2347,10 @@
         "switchedEnterprise": {
           "title": "エンタープライズクラウドを選択しました",
           "description": "音声入力は組織が管理する文字起こしを使用します。"
+        },
+        "switchedTitanium": {
+          "title": "{{brand}} クラウド",
+          "description": "{{brand}} クラウド文字起こしを使用中です。"
         }
       },
       "gpuDevice": {
@@ -2411,7 +2416,12 @@
         }
       },
       "meetingEnterpriseOnly": "組織はエンタープライズクラウドの文字起こしのみを許可しており、会議の録音にはまだ対応していません。",
-      "meetingCloudSignedOut": "サインアウト中は {{brand}} Cloud でノート録音を開始できません。上で別のエンジンを選択してください。"
+      "meetingCloudSignedOut": "サインアウト中は {{brand}} Cloud でノート録音を開始できません。上で別のエンジンを選択してください。",
+      "titaniumEngine": {
+        "connected": "接続済み",
+        "expires": "ライセンスの有効期限: {{date}}",
+        "retry": "再試行"
+      }
     },
     "intelligence": {
       "gpuDevice": {

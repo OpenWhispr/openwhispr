@@ -6,12 +6,14 @@ const fork = require("../../src/config/fork.config.json");
 
 const load = () => import("../../src/services/cleanupAuth.ts");
 
-test("a stored key always wins, on any host", async () => {
+// A stored key is never sent to our own host: there the license always wins, the
+// same rule as STT (customTranscriptionKeySource). Elsewhere the stored key is used.
+test("our host always takes the license; a stored key wins only on other hosts", async () => {
   const { cleanupKeySource } = await load();
 
   assert.equal(
     cleanupKeySource({ storedKey: "sk-mine", baseUrl: "https://x/v1", isTitaniumService: true }),
-    "stored"
+    "titanium"
   );
   assert.equal(
     cleanupKeySource({ storedKey: "sk-mine", baseUrl: "https://y/v1", isTitaniumService: false }),
@@ -94,9 +96,22 @@ test("isAvailable: Custom on our host with a license is available, and the licen
   assert.equal(await reasoningService.getApiKey("custom"), "license/key.sig");
 });
 
-test("a stored cleanup key wins over the license and the license is never requested", async (t) => {
+test("on our host a stored cleanup key is never sent; the license is the key", async (t) => {
+  const reasoningService = await loadReasoningService(t, {
+    electronAPI: {
+      getCleanupCustomKey: async () => "sk-stored",
+      getTitaniumServiceKey: async () => "license/key.sig",
+    },
+  });
+
+  assert.equal(await reasoningService.isAvailable(), true);
+  assert.equal(await reasoningService.getApiKey("custom"), "license/key.sig");
+});
+
+test("on a foreign host a stored cleanup key is used and the license is never requested", async (t) => {
   let licenseRequested = false;
   const reasoningService = await loadReasoningService(t, {
+    baseUrl: "https://llm.example.invalid/v1/chat/completions",
     electronAPI: {
       getCleanupCustomKey: async () => "sk-stored",
       getTitaniumServiceKey: async () => {

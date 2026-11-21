@@ -932,8 +932,7 @@
       "action": "Accedi con Titanium"
     },
     "titaniumNoLicense": {
-      "message": "Il tuo account Titanium non ha una licenza {{brand}}. Contatta {{supportEmail}} per ottenerne una.",
-      "action": "Contatta il supporto"
+      "message": "Il tuo account Titanium non ha una licenza {{brand}}. Contatta {{supportEmail}} per ottenerne una."
     }
   },
   "hooks": {
@@ -2317,7 +2316,9 @@
         "localDesc": "Modelli sul dispositivo. Totalmente privato.",
         "selfHostedDesc": "Il tuo server nella tua rete.",
         "enterprise": "Cloud aziendale",
-        "enterpriseDesc": "L'audio viene inviato al cloud della tua organizzazione."
+        "enterpriseDesc": "L'audio viene inviato al cloud della tua organizzazione.",
+        "titanium": "{{brand}} cloud",
+        "titaniumDesc": "Incluso nella tua licenza. Nessuna configurazione necessaria."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Risultati affidabili. Nessuna configurazione necessaria.",
@@ -2346,6 +2347,10 @@
         "switchedEnterprise": {
           "title": "Cloud aziendale selezionato",
           "description": "La dettatura ora usa la trascrizione gestita dalla tua organizzazione."
+        },
+        "switchedTitanium": {
+          "title": "{{brand}} cloud",
+          "description": "Uso della trascrizione cloud di {{brand}}."
         }
       },
       "gpuDevice": {
@@ -2411,7 +2416,12 @@
         }
       },
       "meetingEnterpriseOnly": "La tua organizzazione consente solo la trascrizione su cloud aziendale, che non copre ancora la registrazione delle riunioni.",
-      "meetingCloudSignedOut": "Le registrazioni delle note non possono avviarsi con {{brand}} Cloud finché non hai effettuato l'accesso. Scegli un altro motore qui sopra."
+      "meetingCloudSignedOut": "Le registrazioni delle note non possono avviarsi con {{brand}} Cloud finché non hai effettuato l'accesso. Scegli un altro motore qui sopra.",
+      "titaniumEngine": {
+        "connected": "Connesso",
+        "expires": "La licenza scade il {{date}}",
+        "retry": "Riprova"
+      }
     },
     "intelligence": {
       "gpuDevice": {

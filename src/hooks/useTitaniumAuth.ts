@@ -70,5 +70,9 @@ export function useTitaniumAuth() {
     const next = await window.electronAPI?.titaniumAuthSignOut?.();
     if (next) publish(next);
   }, []);
-  return { ...state, signIn, signOut };
+  const refresh = useCallback(async () => {
+    const next = await window.electronAPI?.titaniumAuthGetState?.();
+    if (next) publish(next);
+  }, []);
+  return { ...state, signIn, signOut, refresh };
 }

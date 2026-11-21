@@ -932,8 +932,7 @@
       "action": "使用 Titanium 登录"
     },
     "titaniumNoLicense": {
-      "message": "你的 Titanium 账户没有 {{brand}} 许可证。请联系 {{supportEmail}} 获取。",
-      "action": "联系支持"
+      "message": "你的 Titanium 账户没有 {{brand}} 许可证。请联系 {{supportEmail}} 获取。"
     }
   },
   "hooks": {
@@ -2317,7 +2316,9 @@
         "localDesc": "设备端模型，完全私密。",
         "selfHostedDesc": "你的服务器，在你的网络上。",
         "enterprise": "企业云",
-        "enterpriseDesc": "音频将发送到贵组织自己的云。"
+        "enterpriseDesc": "音频将发送到贵组织自己的云。",
+        "titanium": "{{brand}} 云端",
+        "titaniumDesc": "已包含在您的许可证中，无需设置。"
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "准确可靠，无需设置。",
@@ -2346,6 +2347,10 @@
         "switchedEnterprise": {
           "title": "已选择企业云",
           "description": "听写现在使用贵组织管理的转录部署。"
+        },
+        "switchedTitanium": {
+          "title": "{{brand}} 云端",
+          "description": "正在使用 {{brand}} 云端转录。"
         }
       },
       "gpuDevice": {
@@ -2411,7 +2416,12 @@
         }
       },
       "meetingEnterpriseOnly": "贵组织仅允许企业云转录，暂不支持会议录音。",
-      "meetingCloudSignedOut": "未登录时，无法使用 {{brand}} Cloud 开始笔记录音。请在上方选择其他引擎。"
+      "meetingCloudSignedOut": "未登录时，无法使用 {{brand}} Cloud 开始笔记录音。请在上方选择其他引擎。",
+      "titaniumEngine": {
+        "connected": "已连接",
+        "expires": "许可证将于 {{date}} 到期",
+        "retry": "重试"
+      }
     },
     "intelligence": {
       "gpuDevice": {

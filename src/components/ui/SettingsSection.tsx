@@ -137,8 +137,8 @@ export function SectionHeader({ title, description }: { title: string; descripti
   );
 }
 
-export interface InferenceModeOption {
-  id: InferenceMode;
+export interface InferenceModeOption<M extends string = InferenceMode> {
+  id: M;
   disabled?: boolean;
   badge?: string;
   /** Clicking the tile asks the user to sign in, so it reads as an action, not as disabled. */
@@ -148,14 +148,14 @@ export interface InferenceModeOption {
   icon: React.ReactNode;
 }
 
-export function InferenceModeSelector({
+export function InferenceModeSelector<M extends string = InferenceMode>({
   modes,
   activeMode,
   onSelect,
 }: {
-  modes: InferenceModeOption[];
-  activeMode: InferenceMode | null;
-  onSelect: (mode: InferenceMode) => void;
+  modes: InferenceModeOption<M>[];
+  activeMode: M | null;
+  onSelect: (mode: M) => void;
 }) {
   const { t } = useTranslation();
 
