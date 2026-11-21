@@ -2,6 +2,7 @@
 
     python3 tests/run-keyboard-sim-harness.py <simulator udid> [--perf] [--tests]
         [--screenshots <dir> --device <se|promax>]
+        [--host-field <text> [--dark] [--number-pad] --capture <png>]
 
 The app holds the production keyboard sources in a real window on a real iOS: the typing UI
 checks, true light and dark screenshots, and the latency and memory figures (-O build). The
@@ -13,6 +14,7 @@ import json
 from pathlib import Path
 import platform
 import plistlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -37,6 +39,10 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="keyboard-sim-") as directory:
         directory = Path(directory)
+        # A snapshot of the other sources: a file edited mid-compile fails the build.
+        snapshot = directory / "sources"
+        snapshot.mkdir()
+        others = [Path(shutil.copy2(path, snapshot / path.name)) for path in others]
         source = directory / "keyboard-with-tests.swift"
         source.write_text(
             located(controller) + controller.read_text()
@@ -72,10 +78,19 @@ def main():
             ["xcrun", "simctl", "launch", "--terminate-running-process", udid, BUNDLE_ID, "--output", str(output), *arguments],
             check=True, capture_output=True,
         )
-        deadline = time.time() + 900
+        if "--capture" in sys.argv:
+            # With --host-field: a screenshot of the simulator once the keyboard is up.
+            time.sleep(7)
+            subprocess.run(
+                ["xcrun", "simctl", "io", udid, "screenshot", sys.argv[sys.argv.index("--capture") + 1]],
+                check=True, capture_output=True,
+            )
+        deadline = time.time() + 480
         while not (output / "done").exists():
             if time.time() > deadline:
-                raise SystemExit("The harness app did not finish in 15 minutes.")
+                progress = output / "progress.txt"
+                print(progress.read_text() if progress.exists() else "(no progress written)")
+                raise SystemExit("The harness app did not finish in time.")
             time.sleep(1)
         result = (output / "result.txt").read_text()
         print(result)

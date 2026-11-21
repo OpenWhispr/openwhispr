@@ -5,7 +5,7 @@ Taken 2026-11-20 on iOS 26.5 simulators, region en_ZA, Apple keyboards: English 
 - `kbq-SE`: iPhone SE (3rd generation), UDID 261F1F4E-A08E-4EC2-9BE2-E465CDEE0ACB, 375×667 pt, Touch ID
 - `kbq-ProMax`: iPhone 17 Pro Max, UDID 4B28D4FE-F5B5-409E-8407-A925CB10A84B, 440×956 pt, Face ID
 
-Names are `<device>-<keyboard>-<appearance>-<orientation>-<state>.png`. "rest" is an empty field; "typing" has "Hel" (English) or "Hal" (German) typed, so the suggestion bar shows candidates. Landscape files are stored in the device's raw portrait orientation (the keyboard runs down the left side); rotate them 90° clockwise to view.
+Names are `<device>-<keyboard>-<appearance>-<orientation>-<state>.png`. "rest" is an empty field; "typing" has "Hel" (English) or "Hal" (German) typed, so the suggestion bar shows candidates. Landscape files are stored upright (2868×1320 and 1334×750).
 
 | Device  | Files                                                                                                                                                                                                 |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
