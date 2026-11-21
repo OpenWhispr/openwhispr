@@ -3852,7 +3852,10 @@
           "title": "目錄",
           "empty": "新增標題以產生目錄。"
         }
-      }
+      },
+      "muteMic": "將麥克風靜音",
+      "unmuteMic": "取消麥克風靜音",
+      "micMuted": "麥克風已靜音"
     },
     "participants": {
       "attendee": "位與會者",
@@ -3999,7 +4002,8 @@
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",
-      "waitingForMicrophone": "等待麥克風"
+      "waitingForMicrophone": "等待麥克風",
+      "micMuted": "麥克風已靜音"
     },
     "context": {
       "moveToFolder": "移動到資料夾",

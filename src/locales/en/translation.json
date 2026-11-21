@@ -4411,7 +4411,10 @@
           "title": "Contents",
           "empty": "Add headings to build the table of contents."
         }
-      }
+      },
+      "muteMic": "Mute microphone",
+      "unmuteMic": "Unmute microphone",
+      "micMuted": "Microphone muted"
     },
     "participants": {
       "attendee": "attendee",
@@ -4558,7 +4561,8 @@
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
-      "waitingForMicrophone": "Waiting for microphone"
+      "waitingForMicrophone": "Waiting for microphone",
+      "micMuted": "Microphone muted"
     },
     "empty": {
       "title": "No notes here yet",

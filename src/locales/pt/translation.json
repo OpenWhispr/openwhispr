@@ -3858,7 +3858,10 @@
           "title": "Conteúdo",
           "empty": "Adicione títulos para criar o sumário."
         }
-      }
+      },
+      "muteMic": "Silenciar microfone",
+      "unmuteMic": "Ativar microfone",
+      "micMuted": "Microfone silenciado"
     },
     "participants": {
       "attendee": "participante",
@@ -4005,7 +4008,8 @@
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",
-      "waitingForMicrophone": "Aguardando microfone"
+      "waitingForMicrophone": "Aguardando microfone",
+      "micMuted": "Microfone silenciado"
     },
     "context": {
       "moveToFolder": "Mover para pasta",

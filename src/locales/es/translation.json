@@ -3904,7 +3904,10 @@
           "title": "Contenido",
           "empty": "Añade encabezados para crear el índice."
         }
-      }
+      },
+      "muteMic": "Silenciar micrófono",
+      "unmuteMic": "Activar micrófono",
+      "micMuted": "Micrófono silenciado"
     },
     "participants": {
       "attendee": "asistente",
@@ -4051,7 +4054,8 @@
     },
     "meetingPill": {
       "returnToNote": "Volver a la grabación",
-      "waitingForMicrophone": "Esperando el micrófono"
+      "waitingForMicrophone": "Esperando el micrófono",
+      "micMuted": "Micrófono silenciado"
     },
     "context": {
       "moveToFolder": "Mover a carpeta",

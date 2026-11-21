@@ -3950,7 +3950,10 @@
           "title": "Содержание",
           "empty": "Добавьте заголовки, чтобы построить оглавление."
         }
-      }
+      },
+      "muteMic": "Выключить микрофон",
+      "unmuteMic": "Включить микрофон",
+      "micMuted": "Микрофон выключен"
     },
     "participants": {
       "attendee": "участник",
@@ -4097,7 +4100,8 @@
     },
     "meetingPill": {
       "returnToNote": "Вернуться к записи",
-      "waitingForMicrophone": "Ожидание микрофона"
+      "waitingForMicrophone": "Ожидание микрофона",
+      "micMuted": "Микрофон выключен"
     },
     "context": {
       "moveToFolder": "Переместить в папку",

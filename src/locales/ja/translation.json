@@ -3747,7 +3747,10 @@
           "title": "目次",
           "empty": "見出しを追加すると目次が作成されます。"
         }
-      }
+      },
+      "muteMic": "マイクをミュート",
+      "unmuteMic": "マイクのミュートを解除",
+      "micMuted": "マイクはミュート中"
     },
     "participants": {
       "attendee": "名の参加者",
@@ -4082,7 +4085,8 @@
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",
-      "waitingForMicrophone": "マイクを待っています"
+      "waitingForMicrophone": "マイクを待っています",
+      "micMuted": "マイクはミュート中"
     },
     "onboarding": {
       "llm": {

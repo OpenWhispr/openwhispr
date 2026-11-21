@@ -4417,7 +4417,10 @@
           "title": "Sommaire",
           "empty": "Ajoutez des titres pour créer la table des matières."
         }
-      }
+      },
+      "muteMic": "Couper le microphone",
+      "unmuteMic": "Réactiver le microphone",
+      "micMuted": "Microphone coupé"
     },
     "participants": {
       "attendee": "participant",
@@ -4564,7 +4567,8 @@
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",
-      "waitingForMicrophone": "En attente du microphone"
+      "waitingForMicrophone": "En attente du microphone",
+      "micMuted": "Microphone coupé"
     },
     "empty": {
       "title": "Aucune note ici pour l'instant",

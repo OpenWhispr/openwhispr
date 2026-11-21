@@ -12970,6 +12970,15 @@ class IPCHandlers {
       }
     );
 
+    ipcMain.handle("meeting-transcription-set-mic-muted", (event, sessionId, muted) => {
+      const updated = this.meetingDetectionEngine?.setRecordingMicMuted(
+        sessionId,
+        muted === true,
+        event.sender
+      );
+      return updated === true ? { success: true } : { success: false, reason: "stale-session" };
+    });
+
     const streamingStartFailure = (err) => {
       const result = toPolicyFailure(err);
       if (err.messageKey) result.messageKey = err.messageKey;

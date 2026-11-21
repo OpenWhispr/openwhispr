@@ -146,3 +146,31 @@ test("unknown sources are ignored", () => {
 
   assert.deepEqual(changes, []);
 });
+
+test("a held mic counts as active without audible chunks, and reset releases it", () => {
+  const { monitor, changes } = createMonitor();
+
+  monitor.setMicHeld(true);
+  monitor.tick(START);
+  assert.deepEqual(monitor.getState(), { micActive: true, systemActive: false });
+
+  monitor.tick(START + MIC_ACTIVITY_TAIL_MS * 5);
+  assert.equal(monitor.getState().micActive, true, "a held mic never times out");
+
+  monitor.reset();
+  monitor.tick(START + MIC_ACTIVITY_TAIL_MS * 6);
+  assert.equal(monitor.getState().micActive, false);
+  assert.deepEqual(changes, [{ micActive: true, systemActive: false }]);
+});
+
+test("releasing a held mic lets it go quiet after its tail", () => {
+  const { monitor } = createMonitor();
+
+  monitor.setMicHeld(true);
+  monitor.tick(START);
+  monitor.setMicHeld(false);
+  monitor.tick(START + MIC_ACTIVITY_TAIL_MS - 1);
+  assert.equal(monitor.getState().micActive, true);
+  monitor.tick(START + MIC_ACTIVITY_TAIL_MS);
+  assert.equal(monitor.getState().micActive, false);
+});
