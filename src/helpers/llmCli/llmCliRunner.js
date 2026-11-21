@@ -13,34 +13,42 @@ const STDOUT_CAP = 2 * 1024 * 1024;
 const STDERR_CAP = 8 * 1024;
 const MESSAGE_CAP = 500;
 
-// Windows: taskkill /T /F reaps the whole tree (the CLIs spawn children).
+// Windows: taskkill /T /F reaps the whole tree (the CLIs spawn children). It is
+// awaited and child.kill() is not called first: killing the parent first makes
+// taskkill fail with "process not found" and leaves descendants alive.
 // POSIX: the child leads its own process group (detached), so a negative pid
 // kills the group.
 function defaultKillTree(child, { platform = process.platform, spawn = nodeSpawn } = {}) {
-  if (!child || !child.pid) return;
+  if (!child || !child.pid) return Promise.resolve();
   if (platform === "win32") {
-    try {
-      spawn("taskkill", ["/T", "/F", "/PID", String(child.pid)], {
-        windowsHide: true,
-        shell: false,
-        stdio: "ignore",
-      }).on("error", () => {});
-    } catch {
-      // The direct kill below still runs.
-    }
-  } else {
-    try {
-      process.kill(-child.pid, "SIGKILL");
-    } catch {
-      // Group already gone; the direct kill below is a harmless no-op.
-    }
+    return new Promise((resolve) => {
+      try {
+        const killer = spawn("taskkill", ["/T", "/F", "/PID", String(child.pid)], {
+          windowsHide: true,
+          shell: false,
+          stdio: "ignore",
+        });
+        killer.on("error", () => resolve());
+        killer.on("exit", () => resolve());
+      } catch {
+        resolve();
+      }
+    });
+  }
+  try {
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    // Group already gone.
   }
   try {
     child.kill("SIGKILL");
   } catch {
     // Already exited.
   }
+  return Promise.resolve();
 }
+
+const CLOSE_WAIT_MS = 5000;
 
 function appendCapped(current, chunk, cap) {
   const next = current + chunk;
@@ -158,13 +166,26 @@ function createRunner({
           clearTimers();
           resolve(result);
         };
+        let markClosed;
+        const closed = new Promise((resolve) => {
+          markClosed = resolve;
+        });
         const terminate = (code, message) => {
           if (run.terminated) return;
           run.terminated = code;
-          killTree(child);
-          // The close event follows the kill; settle now so a child that
-          // lingers cannot hold the caller.
-          settle(fail(code, message));
+          clearTimers();
+          // Resolve only after the tree-kill finished and the child closed, so the
+          // run dir is no longer held. The wait is bounded so a stuck pipe cannot
+          // hold the caller forever.
+          Promise.resolve(killTree(child))
+            .catch(() => {})
+            .then(() =>
+              Promise.race([
+                closed,
+                new Promise((resolve) => timers.push(setTimeout(resolve, CLOSE_WAIT_MS))),
+              ])
+            )
+            .then(() => settle(fail(code, message)));
         };
         run.cancel = () => terminate("killed", "cancelled");
 
@@ -236,7 +257,8 @@ function createRunner({
         });
 
         child.on("close", (exitCode) => {
-          if (settled) return;
+          markClosed();
+          if (settled || run.terminated) return;
           if (seat === "claude" && lineBuf.trim()) handleClaudeLine(lineBuf);
           const classifyText = `${stderrTail}\n${seat === "claude" ? "" : stdoutText.slice(-STDERR_CAP)}`;
           const failure = (code) =>
@@ -294,7 +316,12 @@ function createRunner({
       if (onAbort && signal) signal.removeEventListener("abort", onAbort);
       if (runDir) {
         try {
-          fs.rmSync(runDir, { recursive: true, force: true });
+          await fs.promises.rm(runDir, {
+            recursive: true,
+            force: true,
+            maxRetries: 10,
+            retryDelay: 100,
+          });
         } catch (error) {
           log("llm-cli run dir cleanup failed", error && error.code);
         }

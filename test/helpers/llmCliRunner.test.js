@@ -5,13 +5,13 @@ const os = require("os");
 const path = require("path");
 const childProcess = require("child_process");
 
-const { createRunner } = require("../../src/helpers/llmCli/llmCliRunner");
+const { createRunner, defaultKillTree } = require("../../src/helpers/llmCli/llmCliRunner");
 
 const FAKE = path.join(__dirname, "..", "fixtures", "llm-cli", "fake-cli.js");
 const CANARY_TOKEN = `sk-ant-oat01-${"A".repeat(110)}`;
 const PLAIN_TOKEN = "plain-canary-token-value-0001";
 
-function makeHarness({ mode, extraEnv = {}, token = null, timeouts = {} } = {}) {
+function makeHarness({ mode, extraEnv = {}, token = null, timeouts = {}, killTree } = {}) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-cli-runner-"));
   const reportFile = path.join(tmpDir, "report.json");
   const children = [];
@@ -32,6 +32,7 @@ function makeHarness({ mode, extraEnv = {}, token = null, timeouts = {} } = {}) 
     resolveExe: async () => ({ exe: process.execPath, args: [FAKE] }),
     getClaudeToken: async () => token,
     timeouts,
+    ...(killTree ? { killTree } : {}),
   });
   const report = () => JSON.parse(fs.readFileSync(reportFile, "utf8"));
   return { runner, children, report, tmpDir };
@@ -115,6 +116,26 @@ test("a hung CLI is killed at the idle timeout with code timeout and the child i
   assert.equal(await waitGone(h.children[0]), true);
 });
 
+test("a killed run resolves only after the tree-kill is awaited and the run dir is gone", async () => {
+  const events = [];
+  const h = makeHarness({
+    mode: "hang",
+    timeouts: { firstOutputMs: 300, idleMs: 300 },
+    killTree: async (child) => {
+      events.push("kill-start");
+      await new Promise((r) => setTimeout(r, 300));
+      child.kill("SIGKILL");
+      events.push("kill-done");
+    },
+  });
+  const result = await h.runner.runStream({ seat: "codex", prompt: "hello" });
+  events.push("resolved");
+  assert.equal(result.code, "timeout");
+  assert.deepEqual(events, ["kill-start", "kill-done", "resolved"]);
+  assert.equal(h.children[0].exitCode !== null || h.children[0].signalCode !== null, true);
+  assert.deepEqual(fs.readdirSync(path.join(h.tmpDir, "runs")), []);
+});
+
 test("cancel through the abort signal kills the child", async () => {
   const h = makeHarness({ mode: "hang" });
   const controller = new AbortController();
@@ -160,4 +181,20 @@ test("unknown seat and bad prompt are invalid-input", async () => {
   const h = makeHarness({ mode: "codex-ok" });
   assert.equal((await h.runner.runStream({ seat: "nope", prompt: "x" })).code, "invalid-input");
   assert.equal((await h.runner.runStream({ seat: "codex", prompt: "" })).code, "invalid-input");
+});
+
+test("win32 tree-kill awaits taskkill and never calls child.kill first", async () => {
+  const { EventEmitter } = require("events");
+  const calls = [];
+  const killer = new EventEmitter();
+  const spawn = (cmd, args) => {
+    calls.push([cmd, ...args]);
+    setTimeout(() => killer.emit("exit", 0), 50);
+    return killer;
+  };
+  const child = { pid: 4242, kill: () => calls.push(["child.kill"]) };
+  const done = defaultKillTree(child, { platform: "win32", spawn });
+  assert.deepEqual(calls, [["taskkill", "/T", "/F", "/PID", "4242"]]);
+  await done;
+  assert.deepEqual(calls, [["taskkill", "/T", "/F", "/PID", "4242"]]);
 });
