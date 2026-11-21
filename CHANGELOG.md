@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Cantonese (yue) dictation language.** Cantonese joins the language picker. (#2944)
+- **Cantonese (yue) dictation language.** Cantonese joins the language picker, transcribed natively on Whisper large/turbo (local and Groq), and mapped for engines without a Cantonese code: `zh` on pre-large-v3 local Whisper and Cohere Transcribe, `zh-HK` on Deepgram, auto-detect on Mistral and xAI. The wake word now hears Cantonese, and output is written in Traditional characters. (#2944, thanks @alex-tw-lam)
 
 ## [1.12.0] - 2026-11-17
 

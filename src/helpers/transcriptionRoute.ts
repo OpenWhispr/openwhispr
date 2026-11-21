@@ -454,13 +454,19 @@ export function resolveTranscriptionRoute({
   const model = resolveByokModel(provider, request?.model ?? s.cloudTranscriptionModel);
 
   if (provider === "tinfoil" || provider === "mistral" || provider === "xai") {
+    // Voxtral only accepts ISO 639-1 codes and answers 422 for "yue" (639-3);
+    // drop it to auto-detect, the same escape the xai guard below uses.
+    const proxiedLanguage =
+      (provider === "mistral" && language === "yue") ||
+      (provider === "xai" && language && !XAI_STT_LANGUAGES.has(language))
+        ? undefined
+        : language;
     return {
       transport: "proxied",
       provider,
       // Tinfoil's attested client resolves its own model; xAI's API takes none.
       model: provider === "mistral" ? model : provider === "xai" ? "grok-stt" : null,
-      language:
-        provider === "xai" && language && !XAI_STT_LANGUAGES.has(language) ? undefined : language,
+      language: proxiedLanguage,
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }

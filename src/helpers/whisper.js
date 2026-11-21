@@ -43,6 +43,20 @@ const WAKE_GPU_RETRY_DELAY_MS = 30000;
 // Room a download reserves: the model file plus headroom.
 const WHISPER_DISK_SPACE_FACTOR = 1.2;
 
+// Models whose vocabulary carries the Cantonese token. On the older
+// 99-language models (tiny/base/small/medium) "yue" resolves to language id
+// 99, which whisper.cpp maps onto the <|translate|> token (50358) — the
+// decoder then translates to English instead of transcribing. Pin "zh" there:
+// the decoder still hears Chinese, and the cleanup prompt (which keeps the
+// user's language) restores written Cantonese. large/turbo are large-v3,
+// where 50358 really is <|yue|>.
+const WHISPER_CPP_YUE_MODELS = new Set(["large", "turbo"]);
+
+function resolveWhisperCppLanguage(model, language) {
+  if (language === "yue" && !WHISPER_CPP_YUE_MODELS.has(model)) return "zh";
+  return language;
+}
+
 function getWhisperModelConfig(modelName) {
   const modelInfo = modelRegistryData.whisperModels[modelName];
   if (!modelInfo) return null;
@@ -673,7 +687,7 @@ class WhisperManager extends EventEmitter {
     }
 
     const model = options.model || "base";
-    const language = options.language || null;
+    const language = resolveWhisperCppLanguage(model, options.language || null);
     const initialPrompt = options.initialPrompt || null;
     const vadEnabled = options.vadEnabled === true;
     const vadConfig = options.vadConfig || null;
@@ -1280,3 +1294,4 @@ module.exports = WhisperManager;
 module.exports.shouldRewarmOnWake = shouldRewarmOnWake;
 module.exports.resolveFailedGpuBackends = resolveFailedGpuBackends;
 module.exports.WHISPER_DISK_SPACE_FACTOR = WHISPER_DISK_SPACE_FACTOR;
+module.exports.resolveWhisperCppLanguage = resolveWhisperCppLanguage;

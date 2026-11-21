@@ -458,13 +458,16 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 
 ### 6. Language Support
 
-60 languages supported, defined in `src/config/languageRegistry.json` and read through
+61 languages supported, defined in `src/config/languageRegistry.json` and read through
 `src/utils/languageSupport.ts`:
 
-- Each entry has a two-letter code, label, flag, and per-engine support flags
-  (`whisper`, `parakeet`, `assemblyai`) — 59 Whisper, 26 Parakeet, 7 AssemblyAI
-- "auto" is a 61st entry for automatic detection
-- Passed to whisper.cpp via -l parameter
+- Each entry has an ISO language code (`yue`, Cantonese, is the one three-letter
+  code), label, flag, and per-engine support flags
+  (`whisper`, `parakeet`, `assemblyai`) — 60 Whisper, 26 Parakeet, 7 AssemblyAI
+- "auto" is a 62nd entry for automatic detection
+- Passed to whisper.cpp via -l parameter; engines without a code for a language
+  map it at their boundary (`yue` → `zh` on pre-large-v3 whisper.cpp and Cohere,
+  `zh-HK` on Deepgram, dropped to auto-detect for Mistral and xAI)
 
 ### 7. Agent Naming System
 

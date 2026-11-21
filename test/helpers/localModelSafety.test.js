@@ -34,6 +34,8 @@ test("a Cohere model without English falls back to a language it supports", () =
     assert.equal(resolveModelLanguage("cohere-de-only", "ja"), "de");
     assert.equal(resolveModelLanguage("cohere-de-only", "fr-CA"), "fr");
     assert.equal(resolveModelLanguage(cohereId, "xx"), "en");
+    // Cantonese has no Cohere code; zh beats the English fallback.
+    assert.equal(resolveModelLanguage(cohereId, "yue"), "zh");
   } finally {
     store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 });
   }

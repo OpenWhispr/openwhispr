@@ -301,6 +301,14 @@ test("an explicit language is sent as is", () => {
   assert.equal(params.get("model"), "nova-3");
 });
 
+test("Cantonese is sent as Deepgram's zh-HK code", () => {
+  const streaming = new DeepgramStreaming();
+  const params = new URL(streaming.buildWebSocketUrl({ token: "t", language: "yue" })).searchParams;
+  assert.equal(params.get("language"), "zh-HK");
+  // zh-HK is nova-2, like every other zh code.
+  assert.equal(params.get("model"), "nova-2");
+});
+
 test("a warm connection is reused when the two option sets build the same URL", async () => {
   // buildWebSocketUrl folds "auto" into multi and skips empty keyterms, so
   // the guard has to fold them the same way — otherwise every dictation cold

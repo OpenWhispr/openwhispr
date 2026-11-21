@@ -92,6 +92,10 @@ export function isChineseText(text) {
 export function resolveChineseScriptTarget(preferredLanguage, chineseScriptPreference, text) {
   if (preferredLanguage === "zh-CN") return "simplified";
   if (preferredLanguage === "zh-TW") return "traditional";
+  // Written Cantonese uses Traditional characters (Hong Kong standard); the
+  // registry instruction says the same, so the prompt hint and the
+  // deterministic OpenCC pass agree.
+  if (preferredLanguage === "yue") return "traditional";
 
   if ((!preferredLanguage || preferredLanguage === "auto") && isChineseText(text)) {
     const preference = normalizeChineseScriptPreference(chineseScriptPreference);
