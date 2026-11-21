@@ -48,7 +48,9 @@ extension AutocorrectParameters {
     case "secondEditPenalty": secondEditPenalty = value
     case "unknownWord": unknownWord = value
     case "unknownName": unknownName = value
-    case "unknownLengthBonus": unknownLengthBonus = value
+    case "unknownLengthPenalty": unknownLengthPenalty = value
+    case "nameLengthPenalty": nameLengthPenalty = value
+    case "inflectedPenalty": inflectedPenalty = value
     case "margin": margin = value
     case "realWordMargin": realWordMargin = value
     case "sameKeyMargin": sameKeyMargin = value

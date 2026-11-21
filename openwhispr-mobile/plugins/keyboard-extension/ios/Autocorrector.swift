@@ -26,8 +26,13 @@ struct AutocorrectParameters {
   var unknownWord = -7.4
   /// The same for a capitalised word mid-sentence, which is usually a name.
   var unknownName = -5.6
-  /// Per letter beyond eight: long unknown words are compounds and names, not slips.
-  var unknownLengthBonus = 0.12
+  /// Per letter beyond four, taken off both of the above: the longer an unknown word, the
+  /// less likely it sits one slip from a real word by chance.
+  var unknownLengthPenalty = 0.3
+  var nameLengthPenalty = 0.1
+  /// A known word with a regular ending the lexicon happens to lack ("shuttles", "googled")
+  /// scores as its stem less this.
+  var inflectedPenalty = 1.0
   /// A correction has to beat the typed word by this much.
   var margin = 0.25
   /// …and by this much when the typed word is a word itself ("form" → "from").
@@ -74,6 +79,10 @@ final class Autocorrector {
   var learned = SupplementaryWords()
   /// Words whose correction the user undid: never corrected again this session.
   var keptAsTyped: Set<String> = []
+
+  /// The user turned down a correction of this word; however it is capitalised next time,
+  /// it stays as typed.
+  func keepAsTyped(_ word: String) { keptAsTyped.insert(word.lowercased()) }
 
   init(lexicon: TypingLexicon, language: TypingLanguage, geometry: KeyGeometry) {
     self.lexicon = lexicon
@@ -137,12 +146,16 @@ final class Autocorrector {
     } else if isCompound(key) {
       result.typedIsKnown = true
       typedScore = 0
+    } else if let stem = inflectionStem(of: key) {
+      typedScore = lexicon.log10Frequency(stem) - parameters.inflectedPenalty
     } else {
       let capitalised = shape != .lower && !sentenceStart
-      typedScore = (capitalised ? parameters.unknownName : parameters.unknownWord)
-        + parameters.unknownLengthBonus * Double(max(0, key.count - 8))
+      let extra = Double(max(0, key.count - 4))
+      typedScore = capitalised
+        ? parameters.unknownName - parameters.nameLengthPenalty * extra
+        : parameters.unknownWord - parameters.unknownLengthPenalty * extra
     }
-    if keptAsTyped.contains(typed) {
+    if keptAsTyped.contains(typed.lowercased()) {
       result.typedIsKnown = true
       typedScore = 0
     }
@@ -298,6 +311,38 @@ final class Autocorrector {
       }
     }
     visit(TypingLexicon.root, 0, 0, 0, .none, 0)
+  }
+
+  // MARK: Inflections
+
+  private static let englishEndings = ["s", "es", "ed", "d", "ing", "ly", "er", "ers", "est", "ness", "less", "ful", "able", "ment", "ments", "ings"]
+  private static let germanEndings = ["e", "en", "er", "es", "em", "n", "s", "st", "t", "te", "ten", "test", "tet", "ung", "ungen", "heit", "keit", "lich", "isch", "chen", "in", "innen"]
+
+  /// The most frequent known word that `key` is a regular form of, when there is one: the
+  /// word plus an ending, with English's dropped e ("hoping") and y → i ("tried") allowed.
+  private func inflectionStem(of key: [UInt16]) -> Int? {
+    let endings = language == .german ? Autocorrector.germanEndings : Autocorrector.englishEndings
+    var best: Int?
+    func offer(_ stem: [UInt16]) {
+      guard stem.count >= 3, let id = lexicon.ids(forKey: stem).first else { return }
+      if best == nil || lexicon.log10Frequency(id) > lexicon.log10Frequency(best!) { best = id }
+    }
+    for ending in endings {
+      let units = Array(ending.utf16)
+      guard key.count > units.count + 2, Array(key.suffix(units.count)) == units else { continue }
+      let stem = Array(key.dropLast(units.count))
+      offer(stem)
+      guard language == .english else { continue }
+      if ["ed", "ing", "er", "ers", "est", "able", "ings"].contains(ending) {
+        offer(stem + [0x65])  // hop(e) + ing
+        // A doubled consonant: "stopped" → stop.
+        if stem.count >= 4, stem[stem.count - 1] == stem[stem.count - 2] { offer(Array(stem.dropLast())) }
+      }
+      if ["es", "ed", "er", "est"].contains(ending), stem.last == 0x69 {
+        offer(Array(stem.dropLast()) + [0x79])  // tri(y) + ed
+      }
+    }
+    return best
   }
 
   // MARK: Compounds

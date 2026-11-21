@@ -120,6 +120,7 @@ def choose_vocabulary(language, config):
     initial = Counter()  # form -> count at a sentence start
     web = Counter()      # key -> count in the web corpus
     edited = Counter()   # key -> count in news and Wikipedia
+    curated = Counter()  # key -> count in Tatoeba, whose sentences are proofread
     totals = Counter()
     for kind, sentence in sentences(config):
         for form, starts in tokens(sentence, letters):
@@ -134,6 +135,8 @@ def choose_vocabulary(language, config):
             elif kind != "tatoeba":
                 edited[key] += 1
                 totals["edited"] += 1
+            else:
+                curated[key] += 1
 
     # Grouped by spelling without regard to case: "we're" and "were" share a key in the
     # trie but are words of their own here.
@@ -184,15 +187,20 @@ def choose_vocabulary(language, config):
             if count >= MIN_COUNT:
                 counts[form] = count
 
-    counts = drop_likely_typos(counts, config, web, edited, totals)
+    counts = drop_likely_typos(counts, config, web, edited, curated, totals)
     ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[: config["max_words"]]
     return dict(ranked)
 
 
-def drop_likely_typos(counts, config, web, edited, totals):
+def drop_likely_typos(counts, config, web, edited, curated, totals):
     """Web text carries its typos ("teh", "recieve") often enough to pass MIN_COUNT. A word is
     taken for one when a word one edit away is at least 50 times as common and edited text
-    (news, Wikipedia) writes the word under an eighth as often as the web does."""
+    (news, Wikipedia) writes the word under an eighth as often as the web does.
+
+    Two kinds of word look like that and are kept: names and acronyms, which are mostly
+    written with a capital ("iOS", "AWS", "Yelp"; a typo rarely is), and everyday words that
+    news and Wikipedia have little use for ("yup", "tart", German "dein", "gibst"), which
+    proofread Tatoeba sentences do use."""
     if not totals["web"] or not totals["edited"]:
         return counts
     key_counts = Counter()
@@ -200,9 +208,16 @@ def drop_likely_typos(counts, config, web, edited, totals):
         key_counts[key_of(form)] += count
     alphabet = config["letters"]
     edited_per_web = totals["edited"] / totals["web"]
+    dominant = {}
+    for form, count in counts.items():
+        key = key_of(form)
+        if key not in dominant or count > counts[dominant[key]]:
+            dominant[key] = form
     dropped = []
     for key, count in key_counts.items():
         if len(key) < 3:
+            continue
+        if dominant[key] != dominant[key].lower() or curated[key] >= 2:
             continue
         expected_edited = web[key] * edited_per_web
         if edited[key] >= 3 and edited[key] >= 0.12 * expected_edited:

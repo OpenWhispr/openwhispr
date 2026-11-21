@@ -216,7 +216,7 @@ final class TypingSession {
       let current = correction.replacement + correction.delimiter
       if tail.hasSuffix(current) {
         let edit = TextEdit(deleteCount: current.count, insert: correction.original + correction.delimiter)
-        corrector.keptAsTyped.insert(correction.original)
+        corrector.keepAsTyped(correction.original)
         if policy.learns, let learnedWords, correction.original.allSatisfy(\.isLetter) {
           learnedWords.learn(correction.original)
           corrector.learned.insert(correction.original)
@@ -375,7 +375,7 @@ final class TypingSession {
     let typed = String(composing)
     switch suggestion.kind {
     case .typed:
-      corrector.keptAsTyped.insert(typed)
+      corrector.keepAsTyped(typed)
       if policy.learns, let learnedWords, typed.allSatisfy(\.isLetter), typed.count >= 2 {
         learnedWords.learn(typed)
         corrector.learned.insert(typed)
