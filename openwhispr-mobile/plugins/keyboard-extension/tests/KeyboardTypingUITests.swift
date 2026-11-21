@@ -322,6 +322,24 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     checks.check("URL field: no emoji key", url.uiTestEmojiKey?.isHidden == true)
   }
 
+  // The German rows (eleven keys) and English on QWERTZ pass the same routing checks as
+  // QWERTY at the smallest and largest phones, in both orientations: no tap is dropped and
+  // every key takes the touches nearest to it.
+  // On the Mac runner, like the QWERTY sweeps: a view with no screen has whole-point pixels,
+  // which the sweep's edge sampling assumes.
+  #if !targetEnvironment(simulator)
+  for (name, language, layout) in [("German QWERTZ", TypingLanguage.german, KeyLayoutKind.qwertz), ("English QWERTZ", .english, .qwertz)] {
+    var settings = TypingSettings(defaults: nil, preferredLanguages: [language.rawValue])
+    settings.language = language
+    settings.layout = layout
+    KeyboardViewController.typingSettingsOverride = settings
+    KeyboardTouchTests.checkProductionLayout("\(name) portrait with globe", width: 375, globe: true, &checks)
+    KeyboardTouchTests.checkProductionLayout("\(name) portrait", width: 440, &checks)
+    KeyboardTouchTests.checkProductionLayout("\(name) landscape with globe", width: 667, globe: true, landscape: true, &checks)
+    KeyboardTouchTests.checkProductionLayout("\(name) landscape", width: 956, landscape: true, &checks)
+  }
+  #endif
+
   // Number pad fields get a pad.
   do {
     let (keyboard, proxy, _) = makeTypingKeyboard { $0.keyboardType = .numberPad }
@@ -369,6 +387,7 @@ private enum KeyboardScreenshots {
 
   /// In the simulator harness: a real window, so appearance and fonts are the device's own.
   static var hostWindow: UIWindow?
+  private static var hostKeyboard: KeyboardViewController?
 
   /// `devicePrefix` limits the run to one device's sizes ("se" on the SE simulator).
   static func render(to directory: URL, devicePrefix: String? = nil) {
@@ -413,15 +432,14 @@ private enum KeyboardScreenshots {
     let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: device.width, page: page) {
       $0.overrideUserInterfaceStyle = dark ? .dark : .light
       // In a window before its keys are built, so every colour resolves for the appearance.
+      // Its view only: as a child controller the keyboard would ask its parent for the host
+      // app with private keys that only a real keyboard host answers.
       if let root = hostWindow?.rootViewController {
-        root.children.forEach { child in
-          child.view.removeFromSuperview()
-          child.removeFromParent()
-        }
-        root.addChild($0)
+        root.view.subviews.forEach { $0.removeFromSuperview() }
         root.view.addSubview($0.view)
       }
     }
+    hostKeyboard = keyboard
     keyboard.viewWillAppear(false)
     keyboard.uiTestSyncGeometry()
     switch state {
@@ -460,6 +478,20 @@ private enum KeyboardScreenshots {
       view.subviews.forEach(redraw)
     }
     traits.performAsCurrent { redraw(keyboard.view) }
+    // The emoji are a web page, loaded and drawn in WebKit's process: wait for it and ask
+    // WebKit for its picture, since a layer render sees none of it. Only in a real window.
+    var emoji: (image: UIImage, frame: CGRect)?
+    if state == "emoji", hostWindow != nil, let panel = keyboard.uiTestEmojiPanel {
+      let deadline = Date().addingTimeInterval(10)
+      while !panel.isContentReady, Date() < deadline { keyboard.uiTestPump() }
+      RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+      var answered = false
+      panel.snapshotContent { image, frame in
+        if let image { emoji = (image, panel.convert(frame, to: keyboard.view)) }
+        answered = true
+      }
+      while !answered, Date() < deadline { keyboard.uiTestPump() }
+    }
     let glassAbove: CGFloat = device.landscape ? 0 : 17
     let size = CGSize(width: device.width, height: height + glassAbove)
     let format = UIGraphicsImageRendererFormat()
@@ -471,6 +503,7 @@ private enum KeyboardScreenshots {
       context.fill(CGRect(origin: .zero, size: size))
       context.cgContext.translateBy(x: 0, y: glassAbove)
       traits.performAsCurrent { keyboard.view.layer.render(in: context.cgContext) }
+      emoji?.image.draw(in: emoji?.frame ?? .zero)
     }
   }
 }

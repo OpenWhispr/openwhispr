@@ -1439,6 +1439,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     preferredContentSize = CGSize(width: view.bounds.width, height: keyboardHeight)
   }
 
+  override func textWillChange(_ textInput: UITextInput?) {
+    super.textWillChange(textInput)
+    // Moving to another field: its keyboard type may differ (a number pad, a URL row).
+    DispatchQueue.main.async { [weak self] in self?.refreshFieldAwareKeys() }
+  }
+
   override func textDidChange(_ textInput: UITextInput?) {
     super.textDidChange(textInput)
     noteFieldReport()
@@ -1461,6 +1467,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
+    // The field's traits can arrive after viewWillAppear with no textDidChange to announce
+    // them (an empty number field): the pad, the bottom row and the return key follow here.
+    refreshFieldAwareKeys()
     // Without Full Access every write below is a no-op and every resume gate
     // reads a dead App Group. Today this method reaches refreshRecordButton()
     // anyway, but only because four separate resume gates each happen to fail

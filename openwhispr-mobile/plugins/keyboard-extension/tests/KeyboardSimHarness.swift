@@ -19,14 +19,27 @@ private func physFootprintMB() -> Double {
 }
 
 private extension KeyboardViewController {
-  var harnessEmojiCollection: UICollectionView? {
-    var found: UICollectionView?
+  /// The scroll view of the web view the emoji panel draws its emoji in.
+  var harnessEmojiCollection: UIScrollView? {
+    var found: UIScrollView?
     func visit(_ view: UIView) {
-      if let collection = view as? UICollectionView, found == nil { found = collection }
+      if let web = view as? WKWebView, found == nil { found = web.scrollView }
       view.subviews.forEach(visit)
     }
     if let panel = emojiPanel { visit(panel) }
     return found
+  }
+
+  /// The emoji page loads in WebKit's process; wait until it shows the panel's state.
+  func harnessAwaitEmojiPage() {
+    let deadline = Date().addingTimeInterval(10)
+    // Loaded, and its width known here: the scroll view learns it with WebKit's next frame.
+    while Date() < deadline,
+      emojiPanel?.isContentReady == false
+        || (harnessEmojiCollection.map { $0.contentSize.width <= 980 } ?? false)
+    {
+      RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+    }
   }
 
   /// A key press as UIKit delivers it at touch-up, timed to the moment insertText returns.
@@ -51,23 +64,29 @@ private extension KeyboardViewController {
 private enum SimHarness {
   static var window: UIWindow?
   static var lines: [String] = []
+  static var output: URL?
+  /// Keeps the keyboard on screen alive.
+  static var mounted: KeyboardViewController?
 
+  /// Written out line by line, so a run that stalls shows how far it got.
   static func log(_ line: String) {
     lines.append(line)
     print(line)
+    if let output {
+      try? lines.joined(separator: "\n").write(to: output.appendingPathComponent("progress.txt"), atomically: true, encoding: .utf8)
+    }
   }
 
   static func pump(_ seconds: TimeInterval = 0.002) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
 
   /// A keyboard at the bottom of the window, as iOS would place it.
   static func mount(_ keyboard: KeyboardViewController) {
-    guard let window else { return }
-    window.rootViewController?.children.forEach { child in
-      child.view.removeFromSuperview()
-      child.removeFromParent()
-    }
-    window.rootViewController?.addChild(keyboard)
-    window.rootViewController?.view.addSubview(keyboard.view)
+    guard let window, let root = window.rootViewController else { return }
+    // Its view only, not a child controller: the keyboard looks up its host through its
+    // parent with private keys that only a real keyboard host answers.
+    root.view.subviews.forEach { $0.removeFromSuperview() }
+    mounted = keyboard
+    root.view.addSubview(keyboard.view)
     let height = keyboard.uiTestContentHeight
     keyboard.view.frame = CGRect(x: 0, y: window.bounds.height - height - 40, width: window.bounds.width, height: height)
     keyboard.view.layoutIfNeeded()
@@ -101,7 +120,7 @@ private enum SimHarness {
     // Typing: dev sentences, letters and spaces as their keys type them.
     let sentencesURL = typingResources.deletingLastPathComponent().deletingLastPathComponent()
       .appendingPathComponent("tests/benchmarks/sentences.\(language.rawValue).dev.txt")
-    let text = ((try? String(contentsOf: sentencesURL, encoding: .utf8)) ?? "").prefix(12_000)
+    let text = ((try? String(contentsOf: sentencesURL, encoding: .utf8)) ?? "").prefix(4_000)
     var letterTimes: [Double] = []
     var spaceTimes: [Double] = []
     for character in text {
@@ -156,20 +175,20 @@ private enum SimHarness {
     keyboard.uiTestTapEmojiKey()
     keyboard.view.layoutIfNeeded()
     pump(0.05)
+    keyboard.harnessAwaitEmojiPage()
     if let collection = keyboard.harnessEmojiCollection {
-      collection.layoutIfNeeded()
       let end = max(0, collection.contentSize.width - collection.bounds.width)
       var offset: CGFloat = 0
       while offset < end {
         offset = min(end, offset + collection.bounds.width * 0.8)
         collection.setContentOffset(CGPoint(x: offset, y: 0), animated: false)
-        collection.layoutIfNeeded()
-        pump(0.004)
+        // Long enough for WebKit to draw each screenful, as a finger scrolling would.
+        pump(0.03)
         peak = max(peak, physFootprintMB())
       }
       log(String(format: "  emoji panel scrolled %.0f pt of content", end))
     } else {
-      log("  emoji panel: no collection view found")
+      log("  emoji panel: no web view found")
     }
     sample("scrolling the emoji panel")
     if let panel = keyboard.uiTestEmojiPanel { keyboard.emojiPanelDidTapLetters(panel) }
@@ -189,13 +208,140 @@ private enum SimHarness {
   }
 
   static func run(arguments: [String], output: URL) {
+    self.output = output
     TestEnvironment.install()
     TestEnvironment.globe = UIScreen.main.bounds.width <= 375
     func argument(_ flag: String) -> String? {
       arguments.firstIndex(of: flag).flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
     }
+    if let text = argument("--host-field") {
+      // A focused text view, so iOS brings up whichever keyboard is current: with the dev
+      // keyboard selected, that is the real installed extension. The runner screenshots it.
+      let field = UITextView(frame: CGRect(x: 16, y: 80, width: (window?.bounds.width ?? 402) - 32, height: 160))
+      field.font = .systemFont(ofSize: 20)
+      field.text = text
+      if arguments.contains("--number-pad") { field.keyboardType = .numberPad }
+      if arguments.contains("--url") { field.keyboardType = .URL }
+      window?.overrideUserInterfaceStyle = arguments.contains("--dark") ? .dark : .light
+      window?.rootViewController?.view.addSubview(field)
+      field.becomeFirstResponder()
+      if let typed = argument("--host-types") {
+        // The host changes the text itself a moment later, as a user's first key would.
+        Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { _ in field.insertText(typed) }
+      }
+      // Back to UIKit's own run loop while the keyboard is up: iOS doesn't present its
+      // keyboard to an app that is stuck inside one long callback.
+      Timer.scheduledTimer(withTimeInterval: Double(argument("--hold") ?? "12") ?? 12, repeats: false) { _ in
+        MainActor.assumeIsolated {
+          log("host field held")
+          finish(output: output)
+        }
+      }
+      return
+    }
+    if arguments.contains("--emoji-web-experiment") {
+      // The same grid as text in a web view: are the glyph caches charged to this process?
+      let catalog = EmojiCatalog(url: typingResources.appendingPathComponent("emoji.bin"))
+      let all = (catalog?.categories ?? []).flatMap { $0.emoji.map(\.string) }
+      log(String(format: "web: before %.1f MB", physFootprintMB()))
+      let web = WKWebView(frame: CGRect(x: 0, y: 300, width: window?.bounds.width ?? 402, height: 220))
+      window?.rootViewController?.view.addSubview(web)
+      let cells = all.map { "<span>\($0)</span>" }.joined()
+      let html = "<meta name=viewport content='width=device-width,initial-scale=1'><style>body{margin:0;font-size:30px;display:grid;grid-auto-flow:column;grid-template-rows:repeat(5,44px);grid-auto-columns:44px;width:max-content}span{text-align:center;line-height:44px}</style>" + cells
+      web.loadHTMLString(html, baseURL: nil)
+      pump(3)
+      log(String(format: "web: loaded %.1f MB, content width %.0f", physFootprintMB(), web.scrollView.contentSize.width))
+      let end = max(0, web.scrollView.contentSize.width - web.bounds.width)
+      var offset: CGFloat = 0
+      var peak = physFootprintMB()
+      while offset < end {
+        offset = min(end, offset + 300)
+        web.scrollView.setContentOffset(CGPoint(x: offset, y: 0), animated: false)
+        pump(0.03)
+        peak = max(peak, physFootprintMB())
+      }
+      pump(1)
+      log(String(format: "web: after scrolling everything %.1f MB, peak %.1f MB", physFootprintMB(), peak))
+    }
+    if let mode = argument("--emoji-cache-experiment") {
+      // How much memory drawing every emoji costs, by how the font is obtained.
+      let catalog = EmojiCatalog(url: typingResources.appendingPathComponent("emoji.bin"))
+      let all = (catalog?.categories ?? []).flatMap { $0.emoji.map(\.string) }
+      let systemFont = CTFontCreateWithName("AppleColorEmoji" as CFString, 30, nil)
+      let url = (CTFontCopyAttribute(systemFont, kCTFontURLAttribute) as? URL) ?? URL(fileURLWithPath: "/")
+      log("emoji font file: \(url.path)")
+      func privateFont() -> CTFont? {
+        guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor],
+          let descriptor = descriptors.first else { return nil }
+        return CTFontCreateWithFontDescriptor(descriptor, 30, nil)
+      }
+      let size = CGSize(width: 40, height: 40)
+      let format = UIGraphicsImageRendererFormat()
+      format.scale = 3
+      let renderer = UIGraphicsImageRenderer(size: size, format: format)
+      log(String(format: "%@: before %.1f MB, %d emoji, private font available %@", mode, physFootprintMB(), all.count, privateFont() == nil ? "no" : "yes"))
+      var font: CTFont? = mode == "system" ? CTFontCreateWithName("AppleColorEmoji" as CFString, 30, nil) : privateFont()
+      var peak = physFootprintMB()
+      for (index, emoji) in all.enumerated() {
+        autoreleasepool {
+          if mode == "private-recycled", index % 150 == 0 { font = privateFont() }
+          guard let font else { return }
+          let line = CTLineCreateWithAttributedString(
+            NSAttributedString(string: emoji, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
+          )
+          _ = renderer.image { context in
+            context.cgContext.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+            context.cgContext.textPosition = CGPoint(x: 4, y: 30)
+            CTLineDraw(line, context.cgContext)
+          }
+        }
+        peak = max(peak, physFootprintMB())
+      }
+      log(String(format: "%@: after %.1f MB, peak %.1f MB", mode, physFootprintMB(), peak))
+      font = nil
+      pump(0.5)
+      log(String(format: "%@: after releasing the font %.1f MB", mode, physFootprintMB()))
+      UIApplication.shared.perform(Selector(("_performMemoryWarning")))
+      pump(2)
+      log(String(format: "%@: after a simulated memory warning %.1f MB", mode, physFootprintMB()))
+      pump(20)
+      log(String(format: "%@: 20 s later %.1f MB", mode, physFootprintMB()))
+    }
+    if arguments.contains("--emoji-memory") {
+      // Scrolls the emoji panel end to end, then idles so the process can be inspected
+      // from the Mac (vmmap, footprint).
+      let (keyboard, _, _) = makeTypingKeyboard(width: window?.bounds.width ?? 402)
+      mount(keyboard)
+      log(String(format: "before emoji: %.1f MB", physFootprintMB()))
+      keyboard.uiTestTapEmojiKey()
+      keyboard.view.layoutIfNeeded()
+      pump(0.05)
+      keyboard.harnessAwaitEmojiPage()
+      log(String(format: "emoji page loaded: %.1f MB", physFootprintMB()))
+      if let collection = keyboard.harnessEmojiCollection {
+        let end = max(0, collection.contentSize.width - collection.bounds.width)
+        var offset: CGFloat = 0
+        while offset < end {
+          offset = min(end, offset + collection.bounds.width * 0.8)
+          collection.setContentOffset(CGPoint(x: offset, y: 0), animated: false)
+          // Long enough for WebKit to draw each screenful, as a finger scrolling would.
+          pump(0.03)
+        }
+        log(String(format: "emoji panel scrolled %.0f pt of content", end))
+      } else {
+        log("emoji panel: no web view found")
+      }
+      log(String(format: "after emoji scroll: %.1f MB (pid %d)", physFootprintMB(), getpid()))
+      pump(Double(argument("--hold") ?? "0") ?? 0)
+      log(String(format: "after hold: %.1f MB", physFootprintMB()))
+    }
     if arguments.contains("--perf") {
-      for language in [TypingLanguage.english, .german] { perf(language: language) }
+      // One language per launch for the memory figure: a second session in the same
+      // process starts on top of the first one's footprint.
+      let only = argument("--perf-language").flatMap(TypingLanguage.init(rawValue:))
+      for language in [TypingLanguage.english, .german] where only == nil || only == language {
+        perf(language: language)
+      }
     }
     if arguments.contains("--tests") {
       var checks = TouchChecks()
@@ -208,6 +354,10 @@ private enum SimHarness {
       KeyboardScreenshots.render(to: URL(fileURLWithPath: directory), devicePrefix: argument("--device"))
       log("screenshots written to \(directory)")
     }
+    finish(output: output)
+  }
+
+  static func finish(output: URL) -> Never {
     try? lines.joined(separator: "\n").write(to: output.appendingPathComponent("result.txt"), atomically: true, encoding: .utf8)
     try? "done".write(to: output.appendingPathComponent("done"), atomically: true, encoding: .utf8)
     exit(0)
