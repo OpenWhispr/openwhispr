@@ -1,3 +1,5 @@
+import { isTitaniumServiceUrl } from "./titaniumHosts.js";
+
 // ESM, pure (no electron, no React): decides which Titanium sign-in surfaces the
 // renderer shows. The components stay thin adapters over these functions.
 
@@ -118,7 +120,8 @@ export function resolveSttEndpointNotice({
  * The Settings "EdgeAssistant cloud" speech-to-text tab is a derived view over the
  * existing fields (no persisted mode of its own): it is current when Titanium is
  * offered, the cloud route is Custom (not local) and its endpoint is one of our
- * hosts. Anything else keeps the `mode` the store derived.
+ * hosts. `destinationUrl` is where requests actually go (transcriptionDestinationUrl),
+ * so a retained self-hosted URL that wins routing keeps the Self-Hosted tab. Anything else keeps the `mode` the store derived.
  */
 export function resolveTranscriptionEngineTab({
   mode,
@@ -126,14 +129,15 @@ export function resolveTranscriptionEngineTab({
   cloudTranscriptionMode,
   cloudTranscriptionProvider,
   titaniumEnabled,
-  isTitaniumUrl,
+  destinationUrl,
+  forkConfig,
 }) {
   const isTitaniumRoute =
     titaniumEnabled &&
     !useLocalWhisper &&
     cloudTranscriptionMode === "byok" &&
     cloudTranscriptionProvider === "custom" &&
-    isTitaniumUrl;
+    isTitaniumServiceUrl(destinationUrl, forkConfig);
   return isTitaniumRoute ? "titanium" : mode;
 }
 

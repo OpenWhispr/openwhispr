@@ -2732,6 +2732,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     s.setUploadCloudTranscriptionMode(cloudTranscriptionMode);
     s.setUploadCloudTranscriptionProvider(cloudTranscriptionProvider);
     s.setUploadCloudTranscriptionModel(cloudTranscriptionModel);
+    // The route resolver prefers a saved self-hosted URL, so a cleared one must clear in
+    // every scope (meetings have no remote model field).
+    if (settings.remoteTranscriptionUrl !== undefined) {
+      s.setMeetingRemoteTranscriptionUrl(settings.remoteTranscriptionUrl);
+      s.setUploadRemoteTranscriptionUrl(settings.remoteTranscriptionUrl);
+    }
+    if (settings.remoteTranscriptionModel !== undefined)
+      s.setUploadRemoteTranscriptionModel(settings.remoteTranscriptionModel);
     // Seed the per-provider model memory so a later provider switch-and-return
     // in any scope restores the model onboarding chose.
     if (cloudTranscriptionProvider && cloudTranscriptionModel) {

@@ -194,7 +194,8 @@ const titaniumRoute = {
   cloudTranscriptionMode: "byok",
   cloudTranscriptionProvider: "custom",
   titaniumEnabled: true,
-  isTitaniumUrl: true,
+  destinationUrl: "https://stt.titaniumlabs.test/v1",
+  forkConfig: { DEFAULT_STT: { baseUrl: "https://stt.titaniumlabs.test/v1" } },
 };
 
 test("engine tab: titanium only for an enabled, non-local custom route on our host", async () => {
@@ -202,9 +203,17 @@ test("engine tab: titanium only for an enabled, non-local custom route on our ho
   assert.equal(resolveTranscriptionEngineTab(titaniumRoute), "titanium");
   const keep = (over) => resolveTranscriptionEngineTab({ ...titaniumRoute, ...over });
   assert.equal(keep({ titaniumEnabled: false }), "self-hosted");
-  assert.equal(keep({ isTitaniumUrl: false }), "self-hosted");
+  assert.equal(keep({ destinationUrl: "https://other.example.com/v1" }), "self-hosted");
   assert.equal(keep({ cloudTranscriptionProvider: "openai", mode: "providers" }), "providers");
   assert.equal(keep({ useLocalWhisper: true, mode: "local" }), "local");
+  // a stale self-hosted URL that wins routing: the Titanium base URL is not the destination
+  const { transcriptionDestinationUrl } = await import("../../src/helpers/transcriptionAuth.js");
+  const stale = {
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "https://old.example.com/v1",
+    cloudTranscriptionBaseUrl: "https://stt.titaniumlabs.test/v1",
+  };
+  assert.equal(keep({ destinationUrl: transcriptionDestinationUrl(stale) }), "self-hosted");
   assert.equal(keep({ cloudTranscriptionMode: "openwhispr", mode: "openwhispr" }), "openwhispr");
 });
 
@@ -258,10 +267,24 @@ test("selecting EdgeAssistant cloud through the real store resolves the route to
   store.setRemoteTranscriptionUrl("https://old.example.com/v1");
   store.setRemoteTranscriptionModel("old-model");
   store.setTranscriptionMode("self-hosted");
+  store.setMeetingRemoteTranscriptionUrl("https://old.example.com/v1");
+  store.setUploadRemoteTranscriptionUrl("https://old.example.com/v1");
+  store.setUploadRemoteTranscriptionModel("old-model");
   store.setCloudTranscriptionForAllScopes(titaniumEngineSettings(stt));
-  const after = useSettingsStore.getState();
+  let after = useSettingsStore.getState();
   assert.equal(after.remoteTranscriptionUrl, "");
+  assert.equal(after.remoteTranscriptionModel, "");
+  assert.equal(after.meetingRemoteTranscriptionUrl, "");
+  assert.equal(after.uploadRemoteTranscriptionUrl, "");
+  assert.equal(after.uploadRemoteTranscriptionModel, "");
   const route = resolveTranscriptionRoute({ settings: after });
   assert.equal(route.provider, "custom");
   assert.ok(route.endpoint.startsWith(stt.baseUrl));
+
+  // reselecting while already on the tab re-applies the clearing payload
+  store.setRemoteTranscriptionUrl("https://again.example.com/v1");
+  useSettingsStore.getState().setCloudTranscriptionForAllScopes(titaniumEngineSettings(stt));
+  after = useSettingsStore.getState();
+  assert.equal(after.remoteTranscriptionUrl, "");
+  assert.ok(resolveTranscriptionRoute({ settings: after }).endpoint.startsWith(stt.baseUrl));
 });

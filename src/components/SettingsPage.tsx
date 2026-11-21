@@ -12,6 +12,7 @@ import {
   settingsOnLeavingTitaniumEngine,
   titaniumEngineSettings,
 } from "../helpers/titanium/titaniumOnboardingPolicy.js";
+import { transcriptionDestinationUrl } from "../helpers/transcriptionAuth.js";
 import TitaniumEnginePanel from "./TitaniumEnginePanel";
 import { cloudFeatureVisible } from "../config/cloudFeatures";
 import { gateSettingsSection } from "../config/cloudSections";
@@ -630,7 +631,12 @@ function TranscriptionSection({
     cloudTranscriptionMode,
     cloudTranscriptionProvider,
     titaniumEnabled: titaniumTabOffered,
-    isTitaniumUrl,
+    destinationUrl: transcriptionDestinationUrl({
+      transcriptionMode,
+      remoteTranscriptionUrl,
+      cloudTranscriptionBaseUrl,
+    }),
+    forkConfig: { DEFAULT_STT, TITANIUM },
   });
   const transcriptionTabs: InferenceModeOption<InferenceMode | "titanium">[] = titaniumTabOffered
     ? transcriptionModes.flatMap((option) =>
@@ -649,9 +655,11 @@ function TranscriptionSection({
     : transcriptionModes;
   const handleTranscriptionModeSelect = (mode: InferenceMode | "titanium") => {
     if (mode === "titanium") {
-      if (!titaniumTabOffered || activeTranscriptionTab === "titanium") return;
-      useSettingsStore.getState().updateTranscriptionSettings(titaniumEngineSettings(DEFAULT_STT));
-      setTranscriptionMode("self-hosted");
+      if (!titaniumTabOffered) return;
+      // Always applied, even when active: it clears any stale self-hosted URL.
+      useSettingsStore
+        .getState()
+        .setCloudTranscriptionForAllScopes(titaniumEngineSettings(DEFAULT_STT));
       toast({
         title: t("settingsPage.transcription.toasts.switchedTitanium.title"),
         description: t("settingsPage.transcription.toasts.switchedTitanium.description"),
