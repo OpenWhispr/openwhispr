@@ -61,6 +61,8 @@ Spike on `spike/keyboard-local-speech` (`a2d126ed9`, never merged); full notes a
 
 ## Waiting on Chad
 
+**Decided by Chad, 2026-11-21:** keep the lower-case-writer rule (item 1); top bar A (item 4); German misspellings are accepted as unmeasured on this dataset, to be judged by typing German on a phone (item 3). Those three items are closed; the rest are still open.
+
 1. **Lower-case writers.** Someone who starts a sentence in lower case had to turn shift off to do it, so until they start one with a capital again the keyboard no longer makes capitalisation-only corrections for them ("i" → "I", "french" → "French"); real corrections still happen. This took English over-correction on test from 1.18% to 0.63% (the informal test text is full of lower-case writers). For everyone else "i" → "I" and proper nouns work as before. Say if you would rather always capitalise.
 2. **English real-word margin** went from 1.0 to 0.6 with that headroom ("form" → "from" style corrections fire a little more readily): typos 89.94% → 90.24% on test. German keeps 1.0.
 3. **German misspellings (51.6%, target 80%) cannot reach the target on this data.** The German Wikipedia list gives 64 test pairs; 22% of the answers are not in the lexicon and 13% are "czech…" for "tschech…". A larger, licensed German misspelling corpus would be needed to measure this properly; the GitHub Typo Corpus was rejected for its per-repository licences.
@@ -337,3 +339,9 @@ Spike: `spike/keyboard-local-speech`, commit `a2d126ed9`, worktree `worktrees/ke
 - First test look: English typos 89.94% and over-correction 1.18% missed. The breakdown showed 0.88% was capitalisation only, in text whose writers never capitalise.
 - Change (dev only): `TypingSession` notes a sentence begun in lower case and skips capitalisation-only replacements until a sentence begins with a capital. Dev over-correction 0.88% → 0.47%, accuracy unchanged. With that room, English `realWordMargin` 1.0 → 0.6 and `otherFormMargin` 1.0 → 1.4 (keeps "space shuttles" from becoming "shuttle"); German unchanged. Dev: en 84.3% / 91.0% / 0.51%, de 50.7% / 91.4% / 0.79%.
 - Test, third look: en 84.53% / 90.24% / 0.63%; de 51.56% / 91.36% / 0.84%. Touch tests 526/526, engine tests 230/230.
+
+### 2026-11-21 — Chad's decisions
+
+- Lower-case-writer rule: keep.
+- Top bar: A (the strip). B stays available behind `keyboard_suggestion_bar_style`.
+- German misspellings (51.6% on 64 pairs): accepted as unmeasured; no new corpus for now.
