@@ -25,6 +25,24 @@ extension TypingTests {
     check("capitals are left out for someone writing in lower case", typed("i think i like french food ") == "i think i like french food ")
     check("lower-case writing still gets real corrections", typed("i think teh food is good ") == "i think the food is good ")
     check("a new sentence with a capital brings capitals back", typed("ok. Then i left ") == "ok. Then I left ")
+    // A real word is not swapped for a commoner one a key-slip away without support from the
+    // sentence, least of all a name.
+    check("a name stays: Kim is not I'm", typed("My friend Kim is here ") == "My friend Kim is here ")
+    check("a name at the start of a sentence stays", typed("Kim is here ") == "Kim is here ")
+    check("context still fixes a real-word slip", typed("He went away form here ") == "He went away from here ")
+    // Corrected, deleted and typed again the same way: it is kept.
+    do {
+      session.reset()
+      var document = BenchDocument()
+      for character in "I saw teh " { document.apply(session.insert(String(character))) }
+      let corrected = document.text
+      // Delete the corrected word and the space, then type the original again.
+      for _ in 0..<4 {
+        if let edit = session.backspace() { document.apply(edit) } else { document.text.removeLast() }
+      }
+      for character in "teh " { document.apply(session.insert(String(character))) }
+      check("a word typed again after its correction is kept (\(corrected) → \(document.text))", corrected == "I saw the " && document.text.hasSuffix("teh "))
+    }
     // A letter straight after the full stop: an address or abbreviation, not a sentence end.
     check("a correction before a full stop is undone when a letter follows", typed("I asked i.e. him ") .hasPrefix("I asked i.e."))
     check("an address keeps its lower case", typed("Mail kent.shoemaker now ").contains("kent.shoemaker"))

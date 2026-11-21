@@ -262,7 +262,18 @@ final class Autocorrector {
     scored.sort { $0.score != $1.score ? $0.score > $1.score : $0.id < $1.id }
     mergeCaseForms(&scored, typedInLowerCase: shape == .lower)
 
-    if let best = scored.first, typedScore < 0, !deliberate {
+    // A word the lexicon has under this spelling (in any capitalisation) is a real word. It
+    // gives way to a different word only on evidence from the sentence: the word before must
+    // have been seen with the replacement ("away form" → "from"). Frequency alone is not
+    // evidence ("Kim" is not "I'm"), and a real word typed with a capital mid-sentence is a
+    // name and stays.
+    var mayReplace = true
+    if let best = scored.first, best.edits > 0, !sameKey.isEmpty {
+      let typedAsName = shape == .capitalised && !sentenceStart
+      let contextSupports = previousID.map { lexicon.pairLog10(previous: $0, word: best.id) != nil } ?? false
+      mayReplace = !typedAsName && contextSupports
+    }
+    if let best = scored.first, typedScore < 0, !deliberate, mayReplace {
       var needed: Double
       if typedID != nil {
         needed = best.edits == 0 ? parameters.sameKeyMargin : parameters.realWordMargin

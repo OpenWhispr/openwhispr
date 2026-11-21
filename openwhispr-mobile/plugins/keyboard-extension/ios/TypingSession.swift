@@ -187,6 +187,9 @@ final class TypingSession {
         edit = TextEdit(deleteCount: typed.count, insert: replacement + text)
         lastCorrection = (typed, replacement, text)
       } else {
+        // Another word went by untouched: the last correction is no longer "just now".
+        lastCorrectedWord = nil
+        retypedAfterCorrection = nil
         noteKept(typed, wordStart: word.startIndex)
       }
     }
@@ -202,8 +205,26 @@ final class TypingSession {
     guard !context.glued else { return nil }
     guard let replacement = correction(for: typed, context: context).replacement else { return nil }
     if writesInLowerCase, replacement.lowercased() == typed.lowercased() { return nil }
+    // Corrected a moment ago, deleted, and typed again the same way: the user means it. It
+    // stays, from now on.
+    if let insisted = retypedAfterCorrection, insisted == typed.lowercased() {
+      retypedAfterCorrection = nil
+      corrector.keepAsTyped(typed)
+      if policy.learns, let learnedWords, typed.allSatisfy(\.isLetter), typed.count >= 2 {
+        learnedWords.learn(typed)
+        corrector.learned.insert(typed)
+      }
+      return nil
+    }
+    lastCorrectedWord = typed.lowercased()
+    retypedAfterCorrection = nil
     return replacement
   }
+
+  /// The word the last correction replaced, and whether the user has started deleting since:
+  /// together they tell a retyped word from the same slip made twice in different places.
+  private var lastCorrectedWord: String?
+  private var retypedAfterCorrection: String?
 
   private func correction(for typed: String, context: Context) -> CorrectionResult {
     if let cached = cachedCorrection, cached.tail == tail { return cached.result }
@@ -229,6 +250,11 @@ final class TypingSession {
   /// plain delete of one character, which the caller makes.
   func backspace() -> TextEdit? {
     endsWithAutoSpace = false
+    if let word = lastCorrectedWord {
+      // Deleting right after a correction: the next word typed is a second attempt at it.
+      retypedAfterCorrection = word
+      lastCorrectedWord = nil
+    }
     if let correction = lastCorrection {
       lastCorrection = nil
       let current = correction.replacement + correction.delimiter
@@ -312,6 +338,8 @@ final class TypingSession {
     lastSwipe = nil
     endsWithAutoSpace = false
     writesInLowerCase = false
+    lastCorrectedWord = nil
+    retypedAfterCorrection = nil
     cachedBar = nil
     cachedCorrection = nil
   }
