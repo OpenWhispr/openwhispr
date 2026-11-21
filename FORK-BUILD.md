@@ -1,4 +1,4 @@
-# Signed fork build: EdgeAssistant (finedesignz/openwhispr)
+# Signed fork build: EdgeAssistant (finedesignz/edgeassistant)
 
 `electron-builder.fork.json` extends the upstream `electron-builder.json` and overrides:
 
@@ -56,7 +56,7 @@ Why the Google client secret may ship: Google issues a "Desktop app" client a se
 
 Publish to `finedesignz/edgeassistant` as a non-draft release marked latest, with `latest.yml`, the installer and its `.blockmap`. Asset names must match `latest.yml`, which uses the same dashed name (`EdgeAssistant-Setup-<version>.exe`), so upload the installer as built. The app's updater reads the build-generated `app-update.yml` and checks this repo.
 
-Note: `download:brand-fonts` needs access to a private upstream release; without it the app uses its bundled font.
+Note: `download:brand-fonts` fetches OpenWhispr's licensed Yowza font from the private `OpenWhispr/brand-assets` repo. This account has no access (GitHub API returns 404), and the font license forbids redistribution, so EdgeAssistant intentionally ships the bundled Noto Sans. The step logs "no access" and continues; do not set `BRAND_FONTS_REQUIRED=1` for fork builds, it would fail every one.
 
 ## Rebrand to EdgeAssistant: what stays the same
 
