@@ -186,6 +186,7 @@ test("sign-in channels validate the seat, strip the done promise and emit signin
     detector: makeDetector(),
     installer: {},
     signIn,
+    prefs: makePrefs({ claudeEnabled: true }),
     emitEvent: (event) => events.push(event),
   });
   const started = await ipcMain.handlers.get("llm-cli-signin-start")({}, "claude");
@@ -231,4 +232,130 @@ test("install channels accept only a seat and a bounded url string", async () =>
   assert.deepEqual(await start({}, "codex", "https://chatgpt.com/codex/install.ps1"), { ok: true });
   await ipcMain.handlers.get("llm-cli-install-cancel")({}, "codex");
   assert.deepEqual(seen, ["codex", ["cancel", "codex"]]);
+});
+
+const os = require("os");
+const childProcess = require("child_process");
+const { createRunner } = require("../../src/helpers/llmCli/llmCliRunner");
+const { createPrefs } = require("../../src/helpers/llmCli/llmCliPrefs");
+
+function makePrefs(initial) {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llm-cli-prefs-")), "p.json");
+  if (initial) fs.writeFileSync(file, JSON.stringify(initial));
+  return createPrefs({ file });
+}
+
+function gateHarness(prefs) {
+  const ipcMain = makeIpcMain();
+  const hits = { stream: 0, test: 0, signin: 0 };
+  registerLlmCliIpc({
+    ipcMain,
+    runner: {
+      runStream: async () => (hits.stream++, { ok: true }),
+      cancel: () => {},
+    },
+    detector: makeDetector({ testSeat: async () => (hits.test++, { ok: true }) }),
+    installer: {},
+    signIn: { start: async () => (hits.signin++, { ok: true }), cancel: async () => {} },
+    prefs,
+  });
+  return { ipcMain, hits };
+}
+
+test("prefs: fresh profile is claudeEnabled false; only claudeEnabled boolean is accepted", async () => {
+  const { ipcMain } = gateHarness(makePrefs());
+  assert.deepEqual(await ipcMain.handlers.get("llm-cli-get-prefs")({}), { claudeEnabled: false });
+  const set = ipcMain.handlers.get("llm-cli-set-pref");
+  assert.equal((await set({}, "other", true)).code, "invalid-input");
+  assert.equal((await set({}, "claudeEnabled", "yes")).code, "invalid-input");
+  assert.equal((await set({}, "__proto__", true)).code, "invalid-input");
+  assert.deepEqual(await set({}, "claudeEnabled", true), {
+    success: true,
+    prefs: { claudeEnabled: true },
+  });
+  assert.deepEqual(await ipcMain.handlers.get("llm-cli-get-prefs")({}), { claudeEnabled: true });
+});
+
+test("prefs persist to the file and a corrupt file reads as defaults", () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llm-cli-prefs-")), "p.json");
+  createPrefs({ file }).set("claudeEnabled", true);
+  assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).claudeEnabled, true);
+  assert.equal(createPrefs({ file }).get().claudeEnabled, true);
+  fs.writeFileSync(file, "{not json");
+  assert.deepEqual(createPrefs({ file }).get(), { claudeEnabled: false });
+});
+
+test("claude gate: stream, test and signin-start return claude-disabled when the pref is off", async () => {
+  const off = gateHarness(makePrefs());
+  const sender = makeSender();
+  const stream = await off.ipcMain.handlers.get("llm-cli-stream-start")(
+    { sender },
+    { streamId: "g1", seat: "claude", prompt: "x" }
+  );
+  assert.equal(stream.code, "claude-disabled");
+  assert.equal(sender.sent[0].payload.code, "claude-disabled");
+  assert.equal(
+    (await off.ipcMain.handlers.get("llm-cli-test")({}, "claude")).code,
+    "claude-disabled"
+  );
+  assert.equal(
+    (await off.ipcMain.handlers.get("llm-cli-signin-start")({}, "claude")).code,
+    "claude-disabled"
+  );
+  assert.deepEqual(off.hits, { stream: 0, test: 0, signin: 0 });
+  // Other seats are never gated.
+  assert.equal((await off.ipcMain.handlers.get("llm-cli-test")({}, "codex")).ok, true);
+
+  const on = gateHarness(makePrefs({ claudeEnabled: true }));
+  await on.ipcMain.handlers.get("llm-cli-stream-start")(
+    { sender: makeSender() },
+    { streamId: "g2", seat: "claude", prompt: "x" }
+  );
+  await on.ipcMain.handlers.get("llm-cli-test")({}, "claude");
+  await on.ipcMain.handlers.get("llm-cli-signin-start")({}, "claude");
+  assert.deepEqual(on.hits, { stream: 1, test: 1, signin: 1 });
+});
+
+test("quit hook cancels a hung run and the child process is gone", async () => {
+  const fake = path.join(__dirname, "..", "fixtures", "llm-cli", "fake-cli.js");
+  const children = [];
+  const runner = createRunner({
+    spawn: (...args) => {
+      const child = childProcess.spawn(...args);
+      children.push(child);
+      return child;
+    },
+    tmpDir: fs.mkdtempSync(path.join(os.tmpdir(), "llm-cli-quit-")),
+    env: { ...process.env, FAKE_CLI_MODE: "hang" },
+    resolveExe: async () => ({ exe: process.execPath, args: [fake] }),
+  });
+  const ipcMain = makeIpcMain();
+  let quit = null;
+  const calls = [];
+  registerLlmCliIpc({
+    ipcMain,
+    runner,
+    detector: makeDetector(),
+    installer: { cancelAll: () => calls.push("installer") },
+    signIn: { cancelAll: async () => calls.push("signIn") },
+    prefs: makePrefs(),
+    onQuit: (fn) => (quit = fn),
+  });
+  const pending = ipcMain.handlers.get("llm-cli-stream-start")(
+    { sender: makeSender() },
+    { streamId: "q1", seat: "codex", prompt: "hello" }
+  );
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  quit();
+  const result = await pending;
+  assert.equal(result.code, "killed");
+  assert.deepEqual(calls.sort(), ["installer", "signIn"]);
+  const child = children[0];
+  const gone =
+    child.exitCode !== null ||
+    (await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), 8000);
+      child.once("exit", () => (clearTimeout(timer), resolve(true)));
+    }));
+  assert.equal(gone, true);
 });

@@ -56,6 +56,64 @@ export interface TitaniumAuthState {
   error: string | null;
 }
 
+// Subscription-CLI seats (fork). Channel contract: src/helpers/llmCli/llmCliIpc.js.
+export type LlmCliSeat = "claude" | "codex" | "grok" | "agy";
+export type LlmCliSeatStatus =
+  | "missing"
+  | "installing"
+  | "installed"
+  | "outdated"
+  | "signing-in"
+  | "signed-in"
+  | "signed-out"
+  | "error";
+export interface LlmCliSeatState {
+  status: LlmCliSeatStatus;
+  version?: string | null;
+  path?: string | null;
+  missingFlags?: string[];
+  errorCode?: string;
+  lastError?: string;
+  authKnown?: boolean;
+}
+export type LlmCliSeatStates = Record<LlmCliSeat, LlmCliSeatState>;
+export interface LlmCliPrefs {
+  claudeEnabled: boolean;
+}
+export type LlmCliEvent =
+  | { type: "state"; seat: LlmCliSeat; state: LlmCliSeatState }
+  | { type: "install-progress"; seat: LlmCliSeat; line: string }
+  | {
+      type: "signin-prompt";
+      seat: LlmCliSeat;
+      kind: "browser" | "device-code" | "terminal-guide";
+      url?: string;
+      code?: string;
+      awaitingCode?: boolean;
+      guideKey?: string;
+    }
+  | { type: "signin-result"; seat: LlmCliSeat; ok: boolean; code?: string };
+export interface LlmCliResult {
+  ok?: boolean;
+  success?: boolean;
+  code?: string;
+  error?: string;
+  guided?: boolean;
+  url?: string;
+  messageKey?: string;
+  kind?: string;
+  affectsTerminalCli?: boolean;
+  state?: LlmCliSeatState;
+  publisher?: string | null;
+  lines?: string[];
+}
+export interface LlmCliStreamPayload {
+  streamId: string;
+  seat: LlmCliSeat;
+  modelId?: string;
+  prompt: unknown;
+}
+
 export interface MainWindowInputRegion {
   viewportWidth: number;
   viewportHeight: number;
@@ -2233,6 +2291,32 @@ declare global {
           part?: unknown;
           done?: boolean;
           error?: string;
+        }) => void
+      ) => () => void;
+      // Subscription CLIs (fork)
+      llmCliDetect?: () => Promise<LlmCliSeatStates>;
+      llmCliTest?: (seat: LlmCliSeat) => Promise<LlmCliResult>;
+      llmCliInstallStart?: (seat: LlmCliSeat, consentedUrl: string) => Promise<LlmCliResult>;
+      llmCliInstallCancel?: (seat: LlmCliSeat) => Promise<void>;
+      llmCliSignInStart?: (seat: LlmCliSeat) => Promise<LlmCliResult>;
+      llmCliSignInSubmitCode?: (seat: LlmCliSeat, code: string) => Promise<LlmCliResult>;
+      llmCliSignInCancel?: (seat: LlmCliSeat) => Promise<void>;
+      llmCliSignOut?: (seat: LlmCliSeat) => Promise<LlmCliResult>;
+      llmCliGetPrefs?: () => Promise<LlmCliPrefs>;
+      llmCliSetPref?: (
+        key: "claudeEnabled",
+        value: boolean
+      ) => Promise<{ success: boolean; prefs?: LlmCliPrefs; code?: string; error?: string }>;
+      onLlmCliEvent?: (callback: (event: LlmCliEvent) => void) => () => void;
+      llmCliStreamStart?: (payload: LlmCliStreamPayload) => Promise<LlmCliResult>;
+      llmCliStreamCancel?: (streamId: string) => Promise<void>;
+      onLlmCliStreamPart?: (
+        callback: (payload: {
+          streamId: string;
+          part?: unknown;
+          done?: boolean;
+          error?: string;
+          code?: string;
         }) => void
       ) => () => void;
       listBedrockModels?: (config: Record<string, unknown>) => Promise<{

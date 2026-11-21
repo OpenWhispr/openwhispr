@@ -31,10 +31,38 @@ function registerLlmCliIpc({
   detector,
   installer,
   signIn,
+  prefs,
+  onQuit = () => {},
   emitEvent = () => {},
   logger = {},
 }) {
   const streamAborts = new Map(); // streamId -> AbortController
+
+  // The Claude seat stays off until the setting is on. Enforced here, on every
+  // claude entry point, whatever the renderer sends.
+  const gated = (seat) =>
+    seat === "claude" && !policy.isSeatEnabled("claude", prefs.get())
+      ? { success: false, ok: false, code: "claude-disabled", error: "claude-disabled" }
+      : null;
+
+  // An app quit must not leave a CLI process behind.
+  onQuit(() => {
+    runner.cancelAll?.();
+    installer.cancelAll?.();
+    void signIn.cancelAll?.();
+  });
+
+  ipcMain.handle("llm-cli-get-prefs", async () => prefs.get());
+
+  ipcMain.handle("llm-cli-set-pref", async (_event, key, value) => {
+    const next = prefs.set(key, value);
+    if (!next) return invalid("unsupported preference");
+    if (key === "claudeEnabled" && value === false) {
+      runner.cancel?.("claude");
+      void signIn.cancel?.("claude");
+    }
+    return { success: true, prefs: next };
+  });
 
   // Seat state changes (detect, test, install, sign-in) reach every window.
   detector.onChange((seat, state) => emitEvent({ type: "state", seat, state }));
@@ -43,7 +71,7 @@ function registerLlmCliIpc({
 
   ipcMain.handle("llm-cli-test", async (_event, seat) => {
     if (!isSeat(seat)) return invalid("unknown seat");
-    return detector.testSeat(seat);
+    return gated(seat) || detector.testSeat(seat);
   });
 
   // The only renderer value accepted is the url the consent dialog displayed;
@@ -63,6 +91,8 @@ function registerLlmCliIpc({
   // event next to the state events. Nothing returned or emitted carries a token.
   ipcMain.handle("llm-cli-signin-start", async (_event, seat) => {
     if (!isSeat(seat)) return invalid("unknown seat");
+    const blocked = gated(seat);
+    if (blocked) return blocked;
     const { done, ...started } = await signIn.start({ seat });
     if (done) {
       void done.then((result) =>
@@ -102,6 +132,17 @@ function registerLlmCliIpc({
       return invalid("invalid modelId");
     }
     if (streamAborts.has(streamId)) return invalid("duplicate streamId");
+    const blocked = gated(seat);
+    if (blocked) {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send("llm-cli-stream-part", {
+          streamId,
+          error: blocked.error,
+          code: blocked.code,
+        });
+      }
+      return blocked;
+    }
 
     const send = (message) => {
       if (!event.sender.isDestroyed()) {
@@ -162,6 +203,7 @@ function initLlmCliIpc({ logger } = {}) {
   const { createInstaller } = require("./llmCliInstaller");
   const { createSignIn } = require("./llmCliSignIn");
   const { createTokenStore } = require("./llmCliTokenStore");
+  const { createPrefs } = require("./llmCliPrefs");
 
   const log = (...args) => logger?.debug?.(...args);
   const tokenStore = createTokenStore({
@@ -190,7 +232,21 @@ function initLlmCliIpc({ logger } = {}) {
     emit: emitEvent,
     log,
   });
-  registerLlmCliIpc({ ipcMain, runner, detector, installer, signIn, emitEvent, logger });
+  const prefs = createPrefs({
+    file: path.join(app.getPath("userData"), "llm-cli-prefs.json"),
+    log,
+  });
+  registerLlmCliIpc({
+    ipcMain,
+    runner,
+    detector,
+    installer,
+    signIn,
+    prefs,
+    onQuit: (fn) => app.on("before-quit", fn),
+    emitEvent,
+    logger,
+  });
   return { runner, detector, installer, signIn };
 }
 
