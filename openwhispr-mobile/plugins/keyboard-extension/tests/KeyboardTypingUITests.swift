@@ -289,11 +289,12 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     keyboard.uiTestTrackpad { $0.began(at: start, time: 0) }
     keyboard.uiTestTrackpad { $0.ended(at: start, time: 0.08) }
     checks.check("space tap types a space", proxy.documentContextBeforeInput == "Hello world ")
-    // A quick swipe across the bar types nothing and never starts the trackpad.
+    // A press that slides across the bar still types its space (here the second in a row,
+    // so the double-space full stop) and never starts the trackpad.
     keyboard.uiTestTrackpad { $0.began(at: start, time: 1) }
     keyboard.uiTestTrackpad { $0.moved(to: CGPoint(x: 260, y: 250), time: 1.05) }
     keyboard.uiTestTrackpad { $0.ended(at: CGPoint(x: 300, y: 250), time: 1.1) }
-    checks.check("a slid press on space types a space and never starts the trackpad", proxy.documentContextBeforeInput == "Hello world  " && proxy.cursorMoves.isEmpty && !keyboard.uiTestLabelsFaded)
+    checks.check("a slid press on space types a space and never starts the trackpad", proxy.documentContextBeforeInput == "Hello world. " && proxy.cursorMoves.isEmpty && !keyboard.uiTestLabelsFaded)
     // Hold, then drag left: labels fade, a tick plays, the cursor moves by graphemes.
     let ticks = feedback.ticks
     keyboard.uiTestTrackpad { $0.began(at: start, time: 2) }
