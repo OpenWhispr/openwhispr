@@ -92,6 +92,20 @@ test("codex run argv ends with stdin marker and never carries the prompt", () =>
   assert.strictEqual(argv[argv.indexOf("-o") + 1], "/tmp/out.txt");
 });
 
+test("grok child env turns off the Claude and Cursor config imports", () => {
+  const env = mod.buildChildEnv("grok", { PATH: "/bin", GROK_CLAUDE_MCPS_ENABLED: "1" });
+  assert.strictEqual(env.PATH, "/bin");
+  for (const vendor of ["CLAUDE", "CURSOR"]) {
+    for (const kind of ["MCPS", "HOOKS", "SKILLS", "RULES", "AGENTS"]) {
+      assert.strictEqual(env[`GROK_${vendor}_${kind}_ENABLED`], "0", `${vendor} ${kind}`);
+    }
+  }
+  for (const seat of ["claude", "codex", "agy"]) {
+    const other = mod.buildChildEnv(seat, {});
+    assert.ok(!("GROK_CLAUDE_MCPS_ENABLED" in other), seat);
+  }
+});
+
 test("child env removes every scrub key, keeps PATH and CODEX_HOME", () => {
   const base = { PATH: "/bin", CODEX_HOME: "/x/codex", Openai_Api_Key: "sk-x" };
   for (const k of mod.SCRUB_ENV_KEYS) base[k] = "secret";

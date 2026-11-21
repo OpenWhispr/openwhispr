@@ -202,6 +202,13 @@ test("classifyStderr", () => {
   assert.strictEqual(mod.classifyStderr("agy", "authentication required"), "not-signed-in");
   assert.strictEqual(mod.classifyStderr("codex", "rate limit exceeded"), "quota-or-rate-limit");
   assert.strictEqual(mod.classifyStderr("codex", "weekly quota used"), "quota-or-rate-limit");
+  assert.strictEqual(
+    mod.classifyStderr(
+      "grok",
+      '{"type":"error","message":"API error (status 402 Payment Required): Grok Build usage balance exhausted"}'
+    ),
+    "quota-or-rate-limit"
+  );
   assert.strictEqual(mod.classifyStderr("codex", "something else"), null);
   assert.strictEqual(mod.classifyStderr("nope", "not logged in"), null);
 });

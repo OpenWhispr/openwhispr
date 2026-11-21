@@ -23,6 +23,24 @@ const SCRUB_ENV_KEYS = Object.freeze([
   "GROK_API_KEY",
 ]);
 
+// grok (1.0.70) imports the user's Claude Code and Cursor setup into every
+// headless run: MCP servers (~/.claude.json, ~/.cursor/mcp.json), settings
+// hooks, skills, rules and CLAUDE.md. It prints nothing until that session
+// setup finishes, so a machine with ~20 MCP servers and 13 SessionStart hooks
+// stays silent past the runner's first-output limit (measured: no output in
+// 31 s+, versus a structured reply in ~13 s with the imports off). A text
+// completion seat must not run the user's tools or ingest their agent rules.
+const GROK_ISOLATION_ENV = Object.freeze(
+  Object.fromEntries(
+    ["CLAUDE", "CURSOR"].flatMap((vendor) =>
+      ["MCPS", "HOOKS", "SKILLS", "RULES", "AGENTS"].map((kind) => [
+        `GROK_${vendor}_${kind}_ENABLED`,
+        "0",
+      ])
+    )
+  )
+);
+
 const CLAUDE_TOKEN_ENV = "CLAUDE_CODE_OAUTH_TOKEN";
 const SHIM_EXTENSIONS = Object.freeze([".cmd", ".bat", ".ps1"]);
 const STDIN_MARKER = "-";
@@ -425,6 +443,7 @@ function buildChildEnv(seat, baseEnv = {}, opts = {}) {
     }
   }
   if (seat === "agy") out.NO_BROWSER = "1";
+  if (seat === "grok") Object.assign(out, GROK_ISOLATION_ENV);
   return out;
 }
 
@@ -876,7 +895,8 @@ function extractDeviceCode(text) {
 
 const SIGNED_OUT_RE =
   /not (?:logged|signed) in|please (?:log|sign) ?in|run [^\n]{0,30}(?:log ?in|auth)|unauthori[sz]ed|authentication (?:failed|required|error)|invalid[^\n]{0,20}(?:token|credentials)|token (?:has )?expired|session expired|oauth|\b401\b/i;
-const QUOTA_RE = /rate.?limit|usage limit|quota|too many requests|overloaded|\b429\b/i;
+const QUOTA_RE =
+  /rate.?limit|usage limit|quota|too many requests|overloaded|usage balance|payment required|\b429\b/i;
 
 function classifyStderr(seat, text) {
   if (!getProvider(seat)) return null;
