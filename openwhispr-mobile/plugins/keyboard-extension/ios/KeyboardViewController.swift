@@ -3439,12 +3439,19 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       }
     }
     let readout = UIAction(title: diagnostics.summary, attributes: .disabled) { _ in }
+    var dictationLine = "in-keyboard dictation needs iOS 26"
+    if #available(iOS 26.0, *) {
+      let app = KeyboardHandoffProvider.shared
+      dictationLine = "app session ready \(app.isBackgroundSessionReady() ? "yes" : "no"), app foreground \(app.isContainingAppForeground() ? "yes" : "no"), own app \(hostIsOwnApp ? "yes" : "no") · "
+        + DirectDictationRuntime.shared.diagnosticsSummary
+    }
+    let dictationReadout = UIAction(title: dictationLine, attributes: .disabled) { _ in }
     let reset = UIAction(title: "Reset counts") { [weak self] _ in self?.diagnostics = TypingDiagnostics() }
     return UIMenu(title: "Typing", options: .displayInline, children: [
       UIMenu(title: "", options: .displayInline, children: languageActions),
       UIMenu(title: "", options: .displayInline, children: layoutActions),
       UIMenu(title: "", options: .displayInline, children: aidActions),
-      UIMenu(title: "Diagnostics (counts only)", options: .displayInline, children: [readout, reset]),
+      UIMenu(title: "Diagnostics (counts only)", options: .displayInline, children: [readout, dictationReadout, reset]),
     ])
   }
 
