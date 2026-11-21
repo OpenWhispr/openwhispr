@@ -94,6 +94,7 @@
     "**/node_modules/ffmpeg-static/**/*",
     "**/node_modules/ps-list/**/*",
     "**/node_modules/better-sqlite3/**/*",
+    "**/node_modules/node-pty/**/*",
     "**/node_modules/onnxruntime-node/**/*",
     "**/node_modules/@napi-rs/keyring/**/*",
     "src/workers/**/*"
