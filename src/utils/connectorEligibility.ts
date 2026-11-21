@@ -83,3 +83,11 @@ export function isCalendarOAuthConfigured(
 ): boolean {
   return configured === null ? true : configured[provider] !== false;
 }
+
+/**
+ * Whether the Home "Connect your calendar" card is shown: only once main has
+ * answered and at least one calendar OAuth client is in this build.
+ */
+export function shouldShowCalendarConnectCard(configured: CalendarOAuthConfigured | null): boolean {
+  return configured !== null && (configured.google || configured.microsoft);
+}
