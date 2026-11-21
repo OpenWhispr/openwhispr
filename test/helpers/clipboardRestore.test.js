@@ -1047,16 +1047,14 @@ test("failed wtype continues to native Shift+Insert uinput", async () => {
   assert.deepEqual(spawnCalls[1].args, ["--uinput", "--shift-insert"]);
 });
 
-// Warp binds paste to Ctrl+Shift+V only, and COSMIC's own app ids must not read as the
-// "st" terminal ("system76").
+// cosmic-comp drops wtype's modifiers (pop-os/cosmic-comp#2945), so terminals skip it
+// even when installed, and COSMIC's own app ids must not read as the "st" terminal ("system76").
 for (const [appId, expected] of [
   [
-    "dev.warp.warp",
-    {
-      command: "wtype",
-      args: ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"],
-    },
+    "com.mitchellh.ghostty",
+    { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
   ],
+  ["dev.warp.warp", { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] }],
   [
     "com.system76.cosmicedit",
     { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
@@ -1103,9 +1101,8 @@ test("COSMIC ignores xdotool and keeps Shift+Insert for a window that is not a t
   );
 });
 
-// On COSMIC wtype only pastes into terminals, so it is reported for the guidance
-// without becoming the paste method.
-test("COSMIC reports wtype without making it the paste method", async (t) => {
+// cosmic-comp drops wtype's modifiers, so wtype is neither reported nor used there.
+test("COSMIC ignores wtype and pastes with uinput", async (t) => {
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "linux" });
   t.after(() => Object.defineProperty(process, "platform", platform));
@@ -1118,7 +1115,7 @@ test("COSMIC reports wtype without making it the paste method", async (t) => {
     manager.commandExists = (command) => hasWtype && command === "wtype";
     const status = await withWaylandEnvironment("COSMIC", () => manager.checkPasteTools());
     assert.equal(status.isCosmic, true);
-    assert.equal(status.hasWtype, hasWtype);
+    assert.equal(status.hasWtype, false);
     assert.equal(status.method, "uinput");
     assert.deepEqual(status.tools, []);
   }

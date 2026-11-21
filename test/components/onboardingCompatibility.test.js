@@ -121,7 +121,11 @@ test("Back can be shown and held inert, so the footer stays put while onboarding
   );
   const back = (props) =>
     renderToStaticMarkup(
-      React.createElement(OnboardingShell, { onBack: () => {}, ...props }, React.createElement("div"))
+      React.createElement(
+        OnboardingShell,
+        { onBack: () => {}, ...props },
+        React.createElement("div")
+      )
     ).match(/<button[^>]*aria-label="common\.back"[^>]*>/)?.[0];
 
   assert.ok(back({}), "Back is shown");
@@ -178,15 +182,15 @@ test("Linux onboarding shows paste-tool installation and recheck guidance", asyn
   assertGuidancePrecedesActions(markup, "sudo apt install xdotool");
 });
 
-// COSMIC pastes into other apps without wtype, but terminals like Warp only take
-// the Ctrl+Shift+V that wtype sends there.
-test("COSMIC onboarding recommends wtype for terminals until it is installed", async (t) => {
+// cosmic-comp drops the modifiers wtype sends (pop-os/cosmic-comp#2945), so installing
+// it would break terminal paste there.
+test("COSMIC onboarding does not recommend wtype", async (t) => {
   const vite = await createOnboardingRenderer(t);
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
     "/components/onboarding/CompactPermissionsStep.tsx"
   );
 
-  const render = (hasWtype, available = true) =>
+  const render = (available) =>
     renderToStaticMarkup(
       React.createElement(CompactPermissionsStep, {
         permissions: permissions({
@@ -198,7 +202,7 @@ test("COSMIC onboarding recommends wtype for terminals until it is installed", a
             isWayland: true,
             isWlroots: false,
             isCosmic: true,
-            hasWtype,
+            hasWtype: false,
             recommendedInstall: available ? undefined : "xdotool",
           },
         }),
@@ -207,18 +211,11 @@ test("COSMIC onboarding recommends wtype for terminals until it is installed", a
       })
     );
 
-  const missing = render(false);
-  assert.match(missing, /pasteToolsInfo\.wtypeCosmicTerminalsDescription/);
-  assert.match(missing, /sudo apt install wtype/);
-  assert.doesNotMatch(missing, /pasteToolsInfo\.withoutToolPrefix/);
-  assertGuidancePrecedesActions(missing, "sudo apt install wtype");
+  assert.doesNotMatch(render(true), /sudo apt install/);
 
-  assert.doesNotMatch(render(true), /sudo apt install wtype/);
-
-  // With nothing pasting at all, wtype alone would only fix terminals.
-  const unavailable = render(false, false);
+  const unavailable = render(false);
   assert.match(unavailable, /sudo apt install xdotool/);
-  assert.doesNotMatch(unavailable, /wtypeCosmicTerminalsDescription/);
+  assert.doesNotMatch(unavailable, /sudo apt install wtype/);
 });
 
 test("permissions offers Back ahead of Continue and gates Continue on microphone access", async (t) => {
