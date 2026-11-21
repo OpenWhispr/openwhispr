@@ -226,3 +226,147 @@ test("sign out: claude confirms with the token-stays-valid text; agy is a guide 
   assert.equal(agy.required, false);
   assert.equal(agy.guide, true);
 });
+
+// ---- Hard-rule sweep (D-05, LLM-08, LLM-09) ----
+
+const fs = require("fs");
+const path = require("path");
+
+const ROOT = path.join(__dirname, "../..");
+const LOCALES = ["ar", "de", "en", "es", "fr", "it", "ja", "pt", "ru", "zh-CN", "zh-TW"];
+
+function readSource(rel) {
+  return fs.readFileSync(path.join(ROOT, rel), "utf8");
+}
+
+function leafKeys(value, prefix = "") {
+  if (value === null || typeof value !== "object") return [prefix];
+  return Object.entries(value).flatMap(([key, child]) =>
+    leafKeys(child, prefix ? `${prefix}.${key}` : key)
+  );
+}
+
+function localeDoc(locale) {
+  return JSON.parse(readSource(`src/locales/${locale}/translation.json`));
+}
+
+test("all 11 locale files carry the same subscriptions key set as English", () => {
+  assert.equal(
+    fs.readdirSync(path.join(ROOT, "src/locales")).filter((d) => LOCALES.includes(d)).length,
+    11
+  );
+  const en = localeDoc("en");
+  const expected = [
+    ...leafKeys(en.llmSubscriptions, "llmSubscriptions"),
+    ...leafKeys(en.settingsModal.sections.subscriptions, "settingsModal.sections.subscriptions"),
+  ].sort();
+  assert.ok(expected.length > 60, "the English key set is populated");
+  for (const locale of LOCALES) {
+    const doc = localeDoc(locale);
+    const actual = [
+      ...leafKeys(doc.llmSubscriptions, "llmSubscriptions"),
+      ...leafKeys(doc.settingsModal.sections.subscriptions, "settingsModal.sections.subscriptions"),
+    ].sort();
+    assert.deepEqual(actual, expected, locale);
+  }
+});
+
+test("no locale leaves a subscriptions string empty, and brand names stay untranslated", () => {
+  for (const locale of LOCALES) {
+    const doc = localeDoc(locale);
+    for (const key of leafKeys(doc.llmSubscriptions)) {
+      const value = key.split(".").reduce((o, k) => o[k], doc.llmSubscriptions);
+      assert.equal(typeof value, "string", `${locale} ${key}`);
+      assert.ok(value.trim().length > 0, `${locale} ${key} is empty`);
+    }
+    assert.match(doc.llmSubscriptions.seats.claude, /Claude/, locale);
+    assert.match(doc.llmSubscriptions.seats.codex, /Codex/, locale);
+    assert.match(doc.llmSubscriptions.seats.grok, /Grok/, locale);
+    assert.match(doc.llmSubscriptions.seats.agy, /Antigravity/, locale);
+  }
+});
+
+test("every key the section and view model use exists in English", () => {
+  const en = localeDoc("en");
+  const has = (key) => key.split(".").reduce((o, k) => (o ? o[k] : undefined), en) !== undefined;
+  const sources = [
+    "src/components/settings/LlmSubscriptionsSection.tsx",
+    "src/components/settings/CliProviderPicker.tsx",
+    "src/helpers/llmCli/llmCliSeatView.js",
+  ].map(readSource);
+  for (const src of sources) {
+    for (const match of src.matchAll(/["'`](llmSubscriptions\.[A-Za-z.-]+)["'`]/g)) {
+      assert.ok(has(match[1]), `missing key ${match[1]}`);
+    }
+  }
+  for (const seat of ["claude", "codex", "grok", "agy"])
+    assert.ok(has(`llmSubscriptions.seats.${seat}`));
+  for (const status of [
+    "missing",
+    "installing",
+    "installed",
+    "outdated",
+    "signing-in",
+    "signed-in",
+    "signed-out",
+    "error",
+  ]) {
+    assert.ok(has(`llmSubscriptions.status.${status}`), status);
+  }
+});
+
+test("new TSX files import no lucide-react and no /assets/ literal path", () => {
+  for (const rel of [
+    "src/components/settings/LlmSubscriptionsSection.tsx",
+    "src/components/settings/CliProviderPicker.tsx",
+    "src/hooks/useLlmCliProviders.ts",
+    "src/services/ai/cliChatModel.ts",
+    "src/services/ai/inferenceProviders/cliSubscription.ts",
+  ]) {
+    const src = readSource(rel);
+    assert.doesNotMatch(src, /lucide-react/, rel);
+    assert.doesNotMatch(src, /["'`]\/assets\//, rel);
+  }
+});
+
+test("LLM_POLICY_PROVIDER_IDS is unchanged by this phase (D-05)", () => {
+  const src = readSource("src/stores/settingsStore.ts");
+  const block = src.match(/export const LLM_POLICY_PROVIDER_IDS = \[([\s\S]*?)\] as const;/);
+  assert.ok(block, "LLM_POLICY_PROVIDER_IDS declared");
+  assert.equal(
+    block[1].replace(/\s+/g, " ").trim(),
+    '...modelRegistryData.cloudProviders.map((provider) => provider.id), "openrouter", "custom",'
+  );
+  const data = require("../../src/models/modelRegistryData.json");
+  assert.deepEqual(
+    [...data.cloudProviders.map((p) => p.id), "openrouter", "custom"],
+    ["openai", "anthropic", "gemini", "groq", "tinfoil", "corti", "openrouter", "custom"]
+  );
+  assert.doesNotMatch(block[1], /cli/i, "no CLI id in the BYOK policy list");
+});
+
+test("BYOK key handling does not mention the CLI seats", () => {
+  assert.doesNotMatch(readSource("src/config/secretKeys.js"), /cli-|llmCli/i);
+});
+
+test("the Claude token env var is main-only: no renderer source references it", () => {
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (["node_modules", "locales", "dist"].includes(entry.name)) continue;
+        if (full.endsWith(path.join("src", "helpers"))) continue;
+        walk(full);
+      } else if (
+        /\.(ts|tsx|js|jsx)$/.test(entry.name) &&
+        /CLAUDE_CODE_OAUTH_TOKEN/.test(fs.readFileSync(full, "utf8"))
+      ) {
+        offenders.push(path.relative(ROOT, full));
+      }
+    }
+  };
+  for (const dir of ["src/components", "src/services", "src/hooks", "src/stores"])
+    walk(path.join(ROOT, dir));
+  assert.deepEqual(offenders, []);
+});
