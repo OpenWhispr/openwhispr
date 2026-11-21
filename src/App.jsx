@@ -411,6 +411,15 @@ export default function App() {
   };
 
   const micTooltip = getMicTooltip();
+  let dictationAnnouncement = "";
+  if (micState === "recording" || micState === "unavailable") {
+    dictationAnnouncement = micTooltip;
+  } else if (voiceActivity.isAgentThinking) {
+    dictationAnnouncement = t("agentMode.input.thinking");
+  } else if (isProcessing || isStopping) {
+    dictationAnnouncement = t("agentMode.input.transcribing");
+  }
+
   const panelOpen = liveTranscript.open;
   const panelMounted = liveTranscript.mounted;
   const canReopenLiveTranscript =
@@ -493,6 +502,9 @@ export default function App() {
 
   return (
     <div className="dictation-window">
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {dictationAnnouncement}
+      </div>
       <div
         className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50 transition-opacity duration-150 ease-out ${
           pillVisuallySuppressed ? "pointer-events-none" : ""
