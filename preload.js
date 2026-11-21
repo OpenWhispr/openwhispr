@@ -711,6 +711,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "enterprise-stream-part",
     (callback) => (_event, payload) => callback(payload)
   ),
+  // Subscription-CLI seats (claude, codex, grok, agy); channels are registered
+  // by src/helpers/llmCli/llmCliIpc.js and kept in parity by llmCliIpc.test.js.
+  llmCliStreamStart: (payload) => ipcRenderer.invoke("llm-cli-stream-start", payload),
+  llmCliStreamCancel: (streamId) => ipcRenderer.invoke("llm-cli-stream-cancel", streamId),
+  onLlmCliStreamPart: registerListener(
+    "llm-cli-stream-part",
+    (callback) => (_event, payload) => callback(payload)
+  ),
   listBedrockModels: (config) => ipcRenderer.invoke("bedrock-list-models", config),
   getManagedEnterpriseConfig: (accountId, workspaceId, expectedAuthGeneration, forceRefresh) =>
     ipcRenderer.invoke(
