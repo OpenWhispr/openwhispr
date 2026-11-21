@@ -963,6 +963,7 @@
     "browsedCustomHint": "当前仍在使用 {{current}}。输入模型名称即可切换到你的自定义端点。",
     "customInUseHint": "当前仍在使用你的自定义端点。选择一个模型即可切换到 {{provider}}。",
     "customProvider": "自定义",
+    "providerUnavailable": "此处无法使用 {{provider}}。选择一个模型即可切换服务商。",
     "fallback": {
       "whisperModelDescription": "模型",
       "parakeetModelDescription": "NVIDIA Parakeet 模型"
@@ -5071,6 +5072,7 @@
     "waitingForAnswer": "等待回答"
   },
   "integrations": {
+    "apiAccessDisabled": "您的组织已关闭 API 和 MCP 访问权限。",
     "title": "集成",
     "googleCalendar": {
       "title": "Google 日历",

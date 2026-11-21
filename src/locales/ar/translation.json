@@ -726,6 +726,7 @@
     }
   },
   "integrations": {
+    "apiAccessDisabled": "أوقفت مؤسستك الوصول إلى واجهة API وMCP.",
     "title": "التكاملات (Integrations)",
     "googleCalendar": {
       "title": "تقويم Google",
@@ -6466,6 +6467,7 @@
     "browsedCustomHint": "لا يزال {{current}} قيد الاستخدام. أدخل اسم نموذج للتبديل إلى نقطة النهاية المخصصة الخاصة بك.",
     "customInUseHint": "لا تزال نقطة النهاية المخصصة الخاصة بك قيد الاستخدام. اختر نموذجًا للتبديل إلى {{provider}}.",
     "customProvider": "مخصص",
+    "providerUnavailable": "لا يمكن استخدام {{provider}} هنا. اختر نموذجًا للتبديل إلى مزود آخر.",
     "fallback": {
       "whisperModelDescription": "النموذج",
       "parakeetModelDescription": "نموذج NVIDIA Parakeet"

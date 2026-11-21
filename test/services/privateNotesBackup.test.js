@@ -321,9 +321,12 @@ test("Backup off leaves ordinary Private content local and does not recover pers
   const { device, cloud } = ctx;
   storage.setItem("cloudBackupEnabled", "false");
   const note = device.db.saveNote("Local only", "Local content").note;
+  device.db.updateNote(note.id, { content: "Local edit" });
+  await device.service.pushEntity("note", note.id);
   cloud.seedNote({ client_note_id: "retained-note", content: "Cloud copy" });
   await device.service.syncAll(true);
   assert.equal(device.db.getNote(note.id).cloud_id, null);
+  assert.equal(device.db.getNote(note.id).content, "Local edit");
   assert.equal(device.db.getNoteByClientId("retained-note"), null);
   assert.equal(cloud.logFor("/api/notes/batch-create").length, 0);
   assert.equal(cloud.logFor("/api/me/private-notes/on-device").length, 0);

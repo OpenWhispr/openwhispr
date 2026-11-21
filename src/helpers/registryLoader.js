@@ -3,8 +3,10 @@ const path = require("node:path");
 const { verifyEnvelope, MAX_ENVELOPE_BYTES } = require("../models/registryEnvelope.cjs");
 const { validateManifest, acceptCatalog } = require("../models/registrySchema.cjs");
 
+// Published from model-registry/ in this repository. Apps released before the registry
+// moved here read OpenWhispr/model-registry's `published` branch, which mirrors this one.
 const REGISTRY_URL =
-  "https://raw.githubusercontent.com/OpenWhispr/model-registry/published/v2/manifest.json";
+  "https://raw.githubusercontent.com/OpenWhispr/openwhispr/model-registry-published/v2/manifest.json";
 // A stolen signing key could otherwise publish the largest possible version once and
 // lock every app out of all later corrections.
 const MAX_VERSION_STEP = 10000;

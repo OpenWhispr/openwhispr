@@ -963,6 +963,7 @@
     "browsedCustomHint": "{{current}} wird weiterhin verwendet. Geben Sie einen Modellnamen ein, um zu Ihrem benutzerdefinierten Endpunkt zu wechseln.",
     "customInUseHint": "Ihr benutzerdefinierter Endpunkt wird weiterhin verwendet. Wählen Sie ein Modell, um zu {{provider}} zu wechseln.",
     "customProvider": "Benutzerdefiniert",
+    "providerUnavailable": "{{provider}} kann hier nicht verwendet werden. Wähle ein Modell, um den Anbieter zu wechseln.",
     "fallback": {
       "whisperModelDescription": "Modell",
       "parakeetModelDescription": "NVIDIA-Parakeet-Modell"
@@ -5431,6 +5432,7 @@
     "waitingForAnswer": "Warte auf Antwort"
   },
   "integrations": {
+    "apiAccessDisabled": "Ihre Organisation hat den Zugriff auf die API und MCP deaktiviert.",
     "title": "Integrationen",
     "googleCalendar": {
       "title": "Google Calendar",

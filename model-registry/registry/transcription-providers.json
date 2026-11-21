@@ -1,0 +1,200 @@
+[
+  {
+    "id": "openai",
+    "name": "OpenAI",
+    "baseUrl": "https://api.openai.com/v1",
+    "models": [
+      {
+        "id": "gpt-transcribe",
+        "name": "GPT Transcribe",
+        "description": "Newest, most accurate transcription",
+        "descriptionKey": "models.descriptions.transcription.openai_gpt_transcribe"
+      },
+      {
+        "id": "gpt-4o-mini-transcribe",
+        "name": "GPT-4o Mini Transcribe",
+        "description": "Fast and accurate transcription",
+        "descriptionKey": "models.descriptions.transcription.openai_gpt_4o_mini_transcribe",
+        "streaming": true
+      },
+      {
+        "id": "gpt-4o-transcribe",
+        "name": "GPT-4o Transcribe",
+        "description": "Most accurate transcription",
+        "descriptionKey": "models.descriptions.transcription.openai_gpt_4o_transcribe",
+        "streaming": true
+      },
+      {
+        "id": "whisper-1",
+        "name": "Whisper",
+        "description": "Original Whisper model",
+        "descriptionKey": "models.descriptions.transcription.openai_whisper_1"
+      }
+    ],
+    "defaultModel": "gpt-transcribe"
+  },
+  {
+    "id": "groq",
+    "name": "Groq",
+    "baseUrl": "https://api.groq.com/openai/v1",
+    "models": [
+      {
+        "id": "whisper-large-v3",
+        "name": "Whisper Large v3",
+        "description": "High accuracy speech recognition",
+        "descriptionKey": "models.descriptions.transcription.groq_whisper_large_v3"
+      },
+      {
+        "id": "whisper-large-v3-turbo",
+        "name": "Whisper Large v3 Turbo",
+        "description": "216x real-time speed",
+        "descriptionKey": "models.descriptions.transcription.groq_whisper_large_v3_turbo"
+      }
+    ],
+    "defaultModel": "whisper-large-v3"
+  },
+  {
+    "id": "xai",
+    "name": "xAI",
+    "baseUrl": "https://api.x.ai/v1",
+    "models": [
+      {
+        "id": "grok-stt",
+        "name": "Grok STT",
+        "description": "High-accuracy speech recognition by xAI",
+        "descriptionKey": "models.descriptions.transcription.xai_grok_stt"
+      }
+    ],
+    "defaultModel": "grok-stt"
+  },
+  {
+    "id": "mistral",
+    "name": "Mistral",
+    "baseUrl": "https://api.mistral.ai/v1",
+    "models": [
+      {
+        "id": "voxtral-mini-latest",
+        "name": "Voxtral Mini",
+        "description": "Fast multilingual transcription",
+        "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
+      },
+      {
+        "id": "voxtral-mini-transcribe-3-0",
+        "name": "Voxtral Mini Transcribe 3",
+        "description": "Fast transcription in 50+ languages (preview)",
+        "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_transcribe_3_0"
+      },
+      {
+        "id": "voxtral-small-transcribe-3-0",
+        "name": "Voxtral Small Transcribe 3",
+        "description": "Most accurate Voxtral, 50+ languages (preview)",
+        "descriptionKey": "models.descriptions.transcription.mistral_voxtral_small_transcribe_3_0"
+      }
+    ],
+    "defaultModel": "voxtral-mini-latest"
+  },
+  {
+    "id": "gemini",
+    "name": "Gemini",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+    "batchModel": "gemini-3.5-transcribe",
+    "models": [
+      {
+        "id": "gemini-3.5-transcribe",
+        "name": "Gemini 3.5 Transcribe",
+        "description": "Google's Gemini speech-to-text",
+        "descriptionKey": "models.descriptions.transcription.gemini_3_5_transcribe"
+      },
+      {
+        "id": "gemini-3.5-transcribe-live",
+        "name": "Gemini 3.5 Transcribe Live",
+        "description": "Realtime streaming speech-to-text",
+        "descriptionKey": "models.descriptions.transcription.gemini_3_5_transcribe_live",
+        "streaming": true
+      }
+    ],
+    "defaultModel": "gemini-3.5-transcribe"
+  },
+  {
+    "id": "corti",
+    "name": "Corti",
+    "baseUrl": "https://api.us.corti.app/v2",
+    "models": [
+      {
+        "id": "corti-transcribe",
+        "name": "Corti Transcribe",
+        "description": "Clinical-grade medical transcription",
+        "descriptionKey": "models.descriptions.transcription.corti_transcribe",
+        "streaming": true
+      }
+    ],
+    "defaultModel": "corti-transcribe"
+  },
+  {
+    "id": "tinfoil",
+    "name": "Tinfoil",
+    "baseUrl": "https://inference.tinfoil.sh/v1",
+    "batchModel": "voxtral-small-24b",
+    "models": [
+      {
+        "id": "voxtral-mini-4b-realtime",
+        "name": "Voxtral",
+        "description": "Verifiably private transcription",
+        "descriptionKey": "models.descriptions.transcription.tinfoil_voxtral",
+        "streaming": true
+      }
+    ],
+    "defaultModel": "voxtral-mini-4b-realtime"
+  },
+  {
+    "id": "deepgram",
+    "name": "Deepgram",
+    "baseUrl": "https://api.deepgram.com/v1",
+    "models": [
+      {
+        "id": "nova-3",
+        "name": "Nova-3",
+        "description": "Deepgram's most accurate realtime model",
+        "descriptionKey": "models.descriptions.transcription.deepgram_nova_3",
+        "streaming": true
+      }
+    ],
+    "defaultModel": "nova-3"
+  },
+  {
+    "id": "assemblyai",
+    "name": "AssemblyAI",
+    "baseUrl": "https://api.assemblyai.com/v2",
+    "models": [
+      {
+        "id": "universal-3-6-pro",
+        "name": "Universal-3.6 Pro",
+        "description": "Highest accuracy realtime, 32 languages",
+        "descriptionKey": "models.descriptions.transcription.assemblyai_universal_3_6_pro",
+        "streaming": true
+      },
+      {
+        "id": "universal-3-5-pro",
+        "name": "Universal-3.5 Pro",
+        "description": "Highest accuracy realtime, 18 languages",
+        "descriptionKey": "models.descriptions.transcription.assemblyai_universal_3_5_pro",
+        "streaming": true
+      },
+      {
+        "id": "universal-streaming-english",
+        "name": "Universal Streaming (English)",
+        "description": "Immutable realtime transcripts, English",
+        "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_english",
+        "streaming": true
+      },
+      {
+        "id": "universal-streaming-multilingual",
+        "name": "Universal Streaming (Multilingual)",
+        "description": "Immutable realtime transcripts, multilingual",
+        "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_multilingual",
+        "streaming": true
+      }
+    ],
+    "defaultModel": "universal-3-6-pro"
+  }
+]

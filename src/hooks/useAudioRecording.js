@@ -1,3 +1,4 @@
+import { refreshEnterpriseIdentityForUse } from "../stores/enterpriseIdentityStore";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import AudioManager from "../helpers/audioManager";
@@ -230,7 +231,7 @@ export const useAudioRecording = (toast, options = {}) => {
       let attempt = null;
       try {
         if (!manager || agentRecordingRef.current) return false;
-        const policyState = usePolicyStore.getState();
+        let policyState = usePolicyStore.getState();
         if (!isDictationRecordingAllowed(policyState)) {
           const refusal = transcriptionChoiceRefusal(policyState, getSettings(), "dictation");
           toast({
@@ -260,6 +261,17 @@ export const useAudioRecording = (toast, options = {}) => {
         // microphone; AudioManager confirms the same value once recording.
         setIsAssistantVoice(voiceAgentRequested);
         if (!(await attempt.admission) || !current()) return false;
+        const refresh = refreshEnterpriseIdentityForUse();
+        if (refresh) {
+          await refresh;
+          policyState = usePolicyStore.getState();
+          if (
+            !current() ||
+            !isDictationRecordingAllowed(policyState) ||
+            (voiceAgentRequested && !isAgentAllowed(policyState))
+          )
+            return false;
+        }
 
         // Both routes reuse the prepared mic. Batch dictation buffers pre-roll
         // once audio arrives, and streaming starts collecting PCM in its worklet.

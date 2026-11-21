@@ -1,5 +1,6 @@
 import { getSettings } from "../stores/settingsStore";
 import { getEffectiveDictionaryWords } from "../utils/snippets";
+import { refreshEnterpriseIdentityForUse } from "../stores/enterpriseIdentityStore";
 import { withSessionRefresh } from "../lib/auth";
 import {
   resolveTranscriptionRoute,
@@ -152,6 +153,9 @@ export async function transcribeFile(
 ): Promise<FileTranscriptionResult> {
   // Managed enterprise STT outranks every personal lane, OpenWhispr Cloud and
   // local included: under managed_required no audio may leave the tenant.
+  const refresh = refreshEnterpriseIdentityForUse();
+  if (refresh) await refresh;
+  signal?.throwIfAborted();
   const managed = getManagedTranscriptionResolution();
   if (managed?.kind === "error") {
     return {
@@ -305,8 +309,14 @@ export async function transcribeFileWithSpeakers(
   cfg: FileTranscriptionConfig,
   diarization: DiarizationSettings,
   durationSeconds?: number | null,
-  opts: { requestId?: string; timestamps?: boolean } = {}
+  {
+    isCancelled,
+    ...opts
+  }: { requestId?: string; timestamps?: boolean; isCancelled?: () => boolean } = {}
 ): Promise<FileTranscriptionResult> {
+  const refresh = refreshEnterpriseIdentityForUse();
+  if (refresh) await refresh;
+  if (isCancelled?.()) return { success: false, code: "AUDIO_OPERATION_CANCELLED" };
   const byokDiarize = shouldUseByokDiarize(cfg, diarization.enabled);
   const diarizePromise =
     diarization.enabled && diarization.localModelsReady && !byokDiarize

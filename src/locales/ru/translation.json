@@ -963,6 +963,7 @@
     "browsedCustomHint": "Сейчас используется {{current}}. Введите название модели, чтобы перейти на вашу пользовательскую конечную точку.",
     "customInUseHint": "Сейчас используется ваша пользовательская конечная точка. Выберите модель, чтобы перейти на {{provider}}.",
     "customProvider": "Пользовательский",
+    "providerUnavailable": "{{provider}} здесь использовать нельзя. Выберите модель, чтобы сменить провайдера.",
     "fallback": {
       "whisperModelDescription": "Модель",
       "parakeetModelDescription": "Модель NVIDIA Parakeet"
@@ -5239,6 +5240,7 @@
     "waitingForAnswer": "Ожидание ответа"
   },
   "integrations": {
+    "apiAccessDisabled": "Ваша организация отключила доступ к API и MCP.",
     "title": "Интеграции",
     "googleCalendar": {
       "title": "Google Calendar",

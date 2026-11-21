@@ -1,3 +1,4 @@
+import { refreshEnterpriseIdentityForUse } from "../../stores/enterpriseIdentityStore";
 import type { NoteItem, NoteWriteGuard } from "../../types/electron";
 import i18n from "../../i18n";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
@@ -615,6 +616,11 @@ export function createChatTurnEngine(
           },
         ]);
       };
+      const refresh = refreshEnterpriseIdentityForUse();
+      if (refresh) {
+        await refresh;
+        if (cancelled()) return;
+      }
       const currentOpenNote = turnOptions.openNote;
       const settings = getSettings();
       const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {

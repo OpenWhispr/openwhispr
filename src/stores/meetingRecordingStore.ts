@@ -1,3 +1,4 @@
+import { refreshEnterpriseIdentityForUse } from "./enterpriseIdentityStore";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
@@ -938,39 +939,48 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
   // note session can be released. Live recordings and explicit starts stay accepted.
   if (isStartingFlag && !args.canAutoStart) return true;
   if (args.canAutoStart && !args.canAutoStart()) return false;
-  const policy = usePolicyStore.getState();
-  if (!isMeetingAllowedByPolicy(policy)) {
-    logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
-    const refusal = isAudioFeatureAllowed(policy, "meeting")
-      ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
-      : meetingPolicyRefusalError(policy);
-    reportMeetingError(refusal);
-    void window.electronAPI?.meetingRecordingRefused?.({
-      noteId: args.noteId,
-      startSource: args.startSource,
-      reason: refusal,
-    });
-    return false;
-  }
-
-  // Resolve the managed route before any capture so a failure never lights the mic indicator.
-  const managed = getManagedTranscriptionResolution("realtime");
-  if (managed?.kind === "error") {
-    logger.warn(
-      "Meeting recording blocked by managed audio setup",
-      { code: managed.code },
-      "meeting"
-    );
-    reportMeetingError(describeMeetingSetupError(managed));
-    return true;
-  }
-
   const sessionId = createMeetingRecordingSessionId();
   let automaticStartSuppressed = false;
   let automaticStartCancelled = false;
   let recordingDisabled = false;
   await meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {
     if (isRecordingFlag || isStartingFlag) return;
+    const refresh = refreshEnterpriseIdentityForUse();
+    if (refresh) {
+      await refresh;
+      if (!startOperation.isCurrent()) {
+        automaticStartCancelled = Boolean(args.canAutoStart);
+        return;
+      }
+    }
+    const policy = usePolicyStore.getState();
+    if (!isMeetingAllowedByPolicy(policy)) {
+      logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
+      const refusal = isAudioFeatureAllowed(policy, "meeting")
+        ? (transcriptionChoiceRefusal(policy, getSettings(), "meeting")?.code ?? "policyRestricted")
+        : meetingPolicyRefusalError(policy);
+      reportMeetingError(refusal);
+      void window.electronAPI?.meetingRecordingRefused?.({
+        noteId: args.noteId,
+        startSource: args.startSource,
+        reason: refusal,
+      });
+      recordingDisabled = true;
+      return;
+    }
+
+    // Resolve the managed route before any capture so a failure never lights the mic indicator.
+    const managed = getManagedTranscriptionResolution("realtime");
+    if (managed?.kind === "error") {
+      logger.warn(
+        "Meeting recording blocked by managed audio setup",
+        { code: managed.code },
+        "meeting"
+      );
+      reportMeetingError(describeMeetingSetupError(managed));
+      return;
+    }
+
     // Asked inside the start, so a stop during the lookup still cancels it.
     if (await window.electronAPI?.isMeetingRecordingDisabled?.()) {
       logger.warn("Meeting recording disabled by administrator", {}, "meeting");

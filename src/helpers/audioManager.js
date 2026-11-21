@@ -1,4 +1,5 @@
 import { sarvamKeyterms } from "../utils/sarvam.js";
+import { refreshEnterpriseIdentityForUse } from "../stores/enterpriseIdentityStore.ts";
 import { selfHostedSttRequest } from "./selfHostedSttHeaders.js";
 import i18n from "../i18n";
 import ReasoningService from "../services/ReasoningService";
@@ -2373,7 +2374,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (processingPipeline && this._activeProcessingPipeline !== processingPipeline) return;
     const wasCancelled = () => this._shouldAbandonProcessingPipeline(pipeline);
     const pipelineStart = performance.now();
-    const settings = getSettings();
+    let settings = getSettings();
     let noAudioDetected = false;
     const speechGateDecision = getLocalSpeechGateDecision(this._localSpeechGateState);
     this._localSpeechGateState = null;
@@ -2403,6 +2404,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     try {
+      const refresh = refreshEnterpriseIdentityForUse();
+      if (refresh) {
+        await refresh;
+        if (wasCancelled()) return;
+        settings = getSettings();
+      }
       const useLocalWhisper = settings.useLocalWhisper;
       const localProvider = settings.localTranscriptionProvider;
       const whisperModel = settings.whisperModel;

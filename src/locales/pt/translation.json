@@ -942,6 +942,7 @@
     "browsedCustomHint": "{{current}} continua em uso. Insira o nome de um modelo para mudar para o seu endpoint personalizado.",
     "customInUseHint": "O seu endpoint personalizado continua em uso. Escolha um modelo para mudar para {{provider}}.",
     "customProvider": "Personalizado",
+    "providerUnavailable": "{{provider}} não pode ser usado aqui. Escolha um modelo para trocar de provedor.",
     "fallback": {
       "whisperModelDescription": "Modelo",
       "parakeetModelDescription": "Modelo NVIDIA Parakeet"
@@ -5098,6 +5099,7 @@
     "waitingForAnswer": "Aguardando resposta"
   },
   "integrations": {
+    "apiAccessDisabled": "Sua organização desativou o acesso à API e ao MCP.",
     "title": "Integrações",
     "googleCalendar": {
       "title": "Google Calendar",
