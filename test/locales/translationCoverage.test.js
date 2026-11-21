@@ -37,8 +37,9 @@ const ARABIC_PLURAL_BASES = [
   "workspaces.cancelInvitations.done",
   "workspaces.cancelInvitations.partial",
   "workspaces.removeMembers.failedTitle",
-  "settingsPage.unifiedBilling.seatUpdated",
-  "settingsPage.unifiedBilling.confirmSeats.description",
+  "settingsPage.billing.addSeats.confirm",
+  "settingsPage.billing.personal.badges.trial",
+  "settingsPage.billing.workspace.badges.trial",
   "settingsPage.privacy.retentionDays",
   "settingsPage.privacy.audioStorageHistoryFiles",
   "settingsPage.privacy.hoursAgo",
@@ -95,7 +96,6 @@ const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
   "workspaces.invite.seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",
   "notes.upload.partialWarningCount":
     "عدد الأجزاء الصوتية التي تعذر تفريغها: {{failed}} من أصل {{total}}.",
-  "settingsPage.account.planDescriptions.trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
   "emailVerification.resendIn": "إعادة الإرسال بعد {{seconds}} ث",
   "insights.wpmCoverage": "استنادًا إلى نسبة {{count}}% من الكلمات المقاسة",
   "dictionary.promptLimitNotice":
@@ -330,6 +330,64 @@ test("the dictionary's counted strings define every plural form they need", () =
         .filter((key) => typeof translated.get(key) !== "string")
     );
     assert.deepEqual(missing, [], `${lang}/translation is missing:\n${missing.join("\n")}`);
+  }
+});
+
+test("billing summaries and seat purchases have localized copy, variables and plural forms", () => {
+  const billingPrefix = "settingsPage.billing.";
+  const en = flatten(load("en", "translation"));
+  const addSeatsKeys = [...en.keys()]
+    .filter((key) => key.startsWith(billingPrefix + "addSeats.") && !PLURAL_SUFFIX.test(key))
+    .map((key) => key.slice(billingPrefix.length));
+  const ordinaryKeys = [
+    ...addSeatsKeys,
+    "personal.actions.cancelTrial",
+    "personal.actions.cancelBusiness",
+    "personal.actions.keepPlan",
+    "personal.badges.stripeTrial",
+    "personal.price.trialStarts",
+    "personal.price.trialYearlyStarts",
+    "personal.banners.endingDated.title",
+    "personal.banners.endingDated.body",
+    "personal.banners.ending.title",
+    "personal.banners.ending.body",
+    "personal.banners.paymentFailedRetry.title",
+    "personal.banners.paymentFailedRetry.body",
+    "personal.banners.coveredStripeTrial.title",
+    "personal.banners.coveredStripeTrial.body",
+    "personal.banners.coveredStripeTrialUnnamed.title",
+    "personal.banners.coveredStripeTrialUnnamed.body",
+    "personal.details.firstInvoice",
+    "personal.details.ends",
+    "personal.details.ended",
+    ...["personal", "workspace"].flatMap((view) =>
+      ["nextInvoice", "nextRetry", "amountDue", "billingContact"].map(
+        (key) => `${view}.details.${key}`
+      )
+    ),
+    "workspace.interval.monthly",
+    "workspace.interval.annual",
+    "workspace.planLine.seatPrice",
+    "workspace.planLine.customPricing",
+  ];
+  const confirm = billingPrefix + "addSeats.confirm";
+  assert.ok(addSeatsKeys.includes("addSeats.proration"));
+  for (const lang of languages) {
+    const translated = flatten(load(lang, "translation"));
+    const keys = ordinaryKeys.map((key) => billingPrefix + key);
+    for (const category of new Intl.PluralRules(lang).resolvedOptions().pluralCategories) {
+      const key = `${confirm}_${category}`;
+      keys.push(key);
+      assert.deepEqual(variables(translated.get(key)), ["count"], `${lang}/translation ${key}`);
+    }
+    for (const key of keys) {
+      assert.ok(translated.get(key)?.trim(), `${lang}/translation is missing ${key}`);
+    }
+    assert.deepEqual(
+      interpolationMismatches(en, new Map(keys.map((key) => [key, translated.get(key)]))),
+      [],
+      `${lang}/translation`
+    );
   }
 });
 

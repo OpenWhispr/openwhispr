@@ -260,3 +260,12 @@ test("personalBusyAction: checkout beats retry beats the clicked portal action",
   );
   assert.equal(personalBusyAction({ ...idle, isOpeningBilling: true, portalAction: null }), null);
 });
+
+test("Cancel Business and Keep Business each open the personal Stripe portal once", () => {
+  const { calls, handlers } = recorder();
+  for (const action of [{ kind: "cancelBusiness" }, { kind: "keepPlan", plan: "Business" }]) {
+    assert.equal(isPortalAction(action.kind), true);
+    runPersonalAction(action, handlers);
+  }
+  assert.deepEqual(calls, [["openBillingPortal"], ["openBillingPortal"]]);
+});

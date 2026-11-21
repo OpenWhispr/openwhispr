@@ -1673,18 +1673,7 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "addSeat": "添加席位",
-      "seatUpdated_one": "工作区容量已更新为 {{count}} 个席位",
-      "seatUpdated_other": "工作区容量已更新为 {{count}} 个席位",
-      "seatUpdateFailed": "无法更新工作区席位",
-      "confirmSeats": {
-        "title": "要添加工作区席位吗？",
-        "description_one": "将 {{workspace}} 增加到 {{count}} 个席位。Stripe 将按比例计费。",
-        "description_other": "将 {{workspace}} 增加到 {{count}} 个席位。Stripe 将按比例计费。",
-        "newCapacity": "新容量",
-        "chargeToday": "今日收费",
-        "confirm": "添加席位"
-      }
+      "seatUpdateFailed": "无法更新工作区席位"
     },
     "account": {
       "billing": {
@@ -3130,6 +3119,28 @@
       "upgradedDescription": "{{workspace}} 现已升级到 Enterprise。"
     },
     "billing": {
+      "addSeats": {
+        "title": "添加席位",
+        "invoiceDate": "下期账单 · {{date}}",
+        "quantity": "要添加的席位数",
+        "decrease": "减少席位",
+        "increase": "增加席位",
+        "now": "当前",
+        "after": "添加后",
+        "inUse": "使用中",
+        "pending": "待处理的邀请",
+        "available": "可用",
+        "total": "席位总数",
+        "price": "价格",
+        "perMonth": "{{price}} / 席位 / 月",
+        "proration": "计入下期账单",
+        "confirm_one": "添加 {{count}} 个席位",
+        "confirm_other": "添加 {{count}} 个席位",
+        "adding": "正在添加…",
+        "failure": "无法添加席位。未收取任何费用。",
+        "success": "席位已添加。{{workspace}} 现有 {{count}} 个席位。",
+        "previewFailed": "无法加载席位价格。"
+      },
       "free": {
         "inviteTeammates": "邀请团队成员",
         "upgradeToBusiness": "升级到 Business",
@@ -3204,6 +3215,9 @@
           "body": "您的访问权限不受影响。"
         },
         "actions": {
+          "cancelTrial": "取消试用",
+          "cancelBusiness": "取消 Business",
+          "keepPlan": "保留 {{plan}}",
           "subscribePro": "订阅 Pro",
           "manageBilling": "管理账单",
           "updatePayment": "更新付款方式",
@@ -3223,6 +3237,7 @@
           "unknown": "您手机的应用商店"
         },
         "badges": {
+          "stripeTrial": "试用期",
           "trial_one": "试用 · 剩余 {{count}} 天",
           "trial_other": "试用 · 剩余 {{count}} 天",
           "pastDue": "逾期未付",
@@ -3231,11 +3246,25 @@
           "monthly": "按月"
         },
         "price": {
+          "trialStarts": "{{date}}开始计费",
+          "trialYearlyStarts": "{{date}}起按年计费",
           "free": "$0",
           "billedYearly": "按年计费",
           "proMonthly": "{{price}} / 月"
         },
         "banners": {
+          "endingDated": {
+            "title": "{{plan}} 将于{{date}}结束",
+            "body": "你可以在账单门户保留当前方案。"
+          },
+          "ending": {
+            "title": "{{plan}} 已安排终止",
+            "body": "你可以在账单门户保留当前方案。"
+          },
+          "paymentFailedRetry": {
+            "title": "付款失败",
+            "body": "付款成功前适用免费方案的限额。下次重试日期为{{date}}。"
+          },
           "coveredPastDue": {
             "title": "{{workspace}} 已为您提供权益",
             "body": "您的 {{plan}} 付款失败。取消 {{plan}} 即可停止重试。"
@@ -3243,6 +3272,14 @@
           "coveredPastDueUnnamed": {
             "title": "已有工作区为您提供权益",
             "body": "您的 {{plan}} 付款失败。取消 {{plan}} 即可停止重试。"
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} 已为您提供权益",
+            "body": "Pro 试用结束后将转为付费订阅。"
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "已有工作区为您提供权益",
+            "body": "Pro 试用结束后将转为付费订阅。"
           },
           "coveredPaying": {
             "title": "{{workspace}} 已为您提供权益",
@@ -3282,6 +3319,13 @@
           }
         },
         "details": {
+          "nextInvoice": "下期账单",
+          "firstInvoice": "首张账单",
+          "nextRetry": "下次重试扣款",
+          "amountDue": "应付金额",
+          "ends": "结束日期",
+          "ended": "已结束",
+          "billingContact": "账单联系人",
           "periodEnds": "当前周期结束",
           "billedThrough": "计费渠道",
           "accessUntil": "可用至",
@@ -3302,7 +3346,13 @@
           "cancelled": "已取消",
           "paused": "已暂停"
         },
+        "interval": {
+          "monthly": "月付",
+          "annual": "年付"
+        },
         "planLine": {
+          "seatPrice": "每席位每月 {{price}}",
+          "customPricing": "定制定价",
           "free": "$0",
           "invoicedByOpenWhispr": "由 OpenWhispr 开具发票",
           "paidBy": "由 {{workspace}} 付费",
@@ -3367,6 +3417,10 @@
           "pendingInvites_other": "{{count}} 个待接受邀请"
         },
         "details": {
+          "nextInvoice": "下一张账单",
+          "nextRetry": "下次扣款尝试",
+          "amountDue": "应付金额",
+          "billingContact": "账单联系人",
           "firstInvoice": "首张账单",
           "ends": "结束日期",
           "ended": "结束于",

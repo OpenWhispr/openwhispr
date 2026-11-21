@@ -13764,8 +13764,14 @@ class IPCHandlers {
       )
     );
 
-    ipcMain.handle("cloud-billing-portal", (event) =>
-      fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
+    ipcMain.handle("cloud-billing-portal", (event, expectedAuthGeneration) =>
+      fetchStripeUrl(
+        event,
+        "/api/stripe/portal",
+        "Cloud billing portal error",
+        undefined,
+        expectedAuthGeneration
+      )
     );
 
     ipcMain.handle("cloud-switch-plan", async (event, opts) => {

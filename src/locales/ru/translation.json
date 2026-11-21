@@ -1673,22 +1673,7 @@
   },
   "settingsPage": {
     "unifiedBilling": {
-      "addSeat": "Добавить место",
-      "seatUpdated_one": "Вместимость рабочего пространства обновлена до {{count}} места",
-      "seatUpdated_few": "Вместимость рабочего пространства обновлена до {{count}} мест",
-      "seatUpdated_many": "Вместимость рабочего пространства обновлена до {{count}} мест",
-      "seatUpdated_other": "Вместимость рабочего пространства обновлена до {{count}} мест",
-      "seatUpdateFailed": "Не удалось обновить места рабочего пространства",
-      "confirmSeats": {
-        "title": "Добавить место в рабочее пространство?",
-        "description_one": "Увеличить {{workspace}} до {{count}} места. Stripe пересчитает стоимость пропорционально.",
-        "description_few": "Увеличить {{workspace}} до {{count}} мест. Stripe пересчитает стоимость пропорционально.",
-        "description_many": "Увеличить {{workspace}} до {{count}} мест. Stripe пересчитает стоимость пропорционально.",
-        "description_other": "Увеличить {{workspace}} до {{count}} мест. Stripe пересчитает стоимость пропорционально.",
-        "newCapacity": "Новая вместимость",
-        "chargeToday": "Списание сегодня",
-        "confirm": "Добавить место"
-      }
+      "seatUpdateFailed": "Не удалось обновить места рабочего пространства"
     },
     "account": {
       "billing": {
@@ -3222,6 +3207,30 @@
       "upgradedDescription": "{{workspace}} теперь на плане Enterprise."
     },
     "billing": {
+      "addSeats": {
+        "title": "Добавить места",
+        "invoiceDate": "Следующий счёт · {{date}}",
+        "quantity": "Сколько мест добавить",
+        "decrease": "Уменьшить количество мест",
+        "increase": "Увеличить количество мест",
+        "now": "Сейчас",
+        "after": "После",
+        "inUse": "Занято",
+        "pending": "Ожидающие приглашения",
+        "available": "Доступно",
+        "total": "Всего мест",
+        "price": "Цена",
+        "perMonth": "{{price}} / место / месяц",
+        "proration": "В следующем счёте",
+        "confirm_one": "Добавить {{count}} место",
+        "confirm_other": "Добавить {{count}} места",
+        "adding": "Добавление…",
+        "failure": "Не удалось добавить места. Деньги не списаны.",
+        "success": "Места добавлены. Всего мест в {{workspace}} — {{count}}.",
+        "previewFailed": "Не удалось загрузить стоимость мест.",
+        "confirm_few": "Добавить {{count}} места",
+        "confirm_many": "Добавить {{count}} мест"
+      },
       "free": {
         "inviteTeammates": "Пригласить коллег",
         "upgradeToBusiness": "Перейти на Business",
@@ -3296,6 +3305,9 @@
           "body": "Ваш доступ не изменился."
         },
         "actions": {
+          "cancelTrial": "Отменить пробный период",
+          "cancelBusiness": "Отменить Business",
+          "keepPlan": "Сохранить {{plan}}",
           "subscribePro": "Подписаться на Pro",
           "manageBilling": "Управление оплатой",
           "updatePayment": "Обновить оплату",
@@ -3315,6 +3327,7 @@
           "unknown": "Магазин приложений вашего телефона"
         },
         "badges": {
+          "stripeTrial": "Пробный период",
           "trial_one": "Пробный период · остался {{count}} день",
           "trial_few": "Пробный период · осталось {{count}} дня",
           "trial_many": "Пробный период · осталось {{count}} дней",
@@ -3325,11 +3338,25 @@
           "monthly": "Ежемесячная"
         },
         "price": {
+          "trialStarts": "Оплата начнётся {{date}}",
+          "trialYearlyStarts": "Ежегодная оплата с {{date}}",
           "free": "$0",
           "billedYearly": "Годовая оплата",
           "proMonthly": "{{price}} / месяц"
         },
         "banners": {
+          "endingDated": {
+            "title": "План {{plan}} завершится {{date}}",
+            "body": "Вы можете сохранить план на портале оплаты."
+          },
+          "ending": {
+            "title": "Действие плана {{plan}} скоро закончится",
+            "body": "Вы можете сохранить план на портале оплаты."
+          },
+          "paymentFailedRetry": {
+            "title": "Оплата не прошла",
+            "body": "До момента оплаты действуют ограничения бесплатного плана. Следующая попытка — {{date}}."
+          },
           "coveredPastDue": {
             "title": "{{workspace}} уже покрывает вас",
             "body": "Оплата {{plan}} не прошла. Отмените {{plan}}, чтобы остановить повторные попытки."
@@ -3337,6 +3364,14 @@
           "coveredPastDueUnnamed": {
             "title": "Рабочее пространство уже покрывает вас",
             "body": "Оплата {{plan}} не прошла. Отмените {{plan}}, чтобы остановить повторные попытки."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} уже покрывает вас",
+            "body": "По окончании пробного периода Pro станет платной подпиской."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "Рабочее пространство уже покрывает вас",
+            "body": "По окончании пробного периода Pro станет платной подпиской."
           },
           "coveredPaying": {
             "title": "{{workspace}} уже покрывает вас",
@@ -3376,6 +3411,13 @@
           }
         },
         "details": {
+          "nextInvoice": "Следующий счёт",
+          "firstInvoice": "Первый счёт",
+          "nextRetry": "Следующая попытка оплаты",
+          "amountDue": "Сумма к оплате",
+          "ends": "Завершится",
+          "ended": "Завершился",
+          "billingContact": "Контакт для выставления счетов",
           "periodEnds": "Текущий период заканчивается",
           "billedThrough": "Оплата через",
           "accessUntil": "Доступ до",
@@ -3398,7 +3440,13 @@
           "cancelled": "Отменено",
           "paused": "Приостановлено"
         },
+        "interval": {
+          "monthly": "Ежемесячно",
+          "annual": "Ежегодно"
+        },
         "planLine": {
+          "seatPrice": "{{price}} за место в месяц",
+          "customPricing": "Индивидуальная цена",
           "free": "$0",
           "invoicedByOpenWhispr": "Счета выставляет OpenWhispr",
           "paidBy": "Оплачивает {{workspace}}",
@@ -3467,6 +3515,10 @@
           "pendingInvites_other": "{{count}} приглашения ожидают"
         },
         "details": {
+          "nextInvoice": "Следующий счёт",
+          "nextRetry": "Следующая попытка оплаты",
+          "amountDue": "Сумма к оплате",
+          "billingContact": "Контакт для оплаты",
           "firstInvoice": "Первый счёт",
           "ends": "Заканчивается",
           "ended": "Закончился",

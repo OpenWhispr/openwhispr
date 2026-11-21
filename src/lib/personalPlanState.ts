@@ -1,7 +1,11 @@
+import type { BillingInvoiceValue } from "../components/settings/billing/billingFormat";
 import type { BillingTone } from "../components/settings/billing/billingTones";
 import type { UseUsageResult } from "../hooks/useUsage";
+import type { BillingSummary } from "../services/BillingSummaryService";
 import type { ProviderStore } from "./usageStore";
 import type { BusinessTileAction } from "./workspaceBilling";
+
+const DAY_MS = 86_400_000;
 
 export type PersonalAction =
   | { kind: "subscribePro" }
@@ -11,6 +15,9 @@ export type PersonalAction =
   | { kind: "signIn" }
   | { kind: "retry" }
   | { kind: "cancelPro" }
+  | { kind: "cancelTrial" }
+  | { kind: "cancelBusiness" }
+  | { kind: "keepPlan"; plan: "Pro" | "Business" }
   | { kind: "business"; action: BusinessTileAction };
 
 export interface PersonalBanner {
@@ -25,6 +32,7 @@ export interface PersonalBanner {
 export type PersonalUsage = Pick<
   UseUsageResult,
   | "status"
+  | "subscriptionStatus"
   | "plan"
   | "isTrial"
   | "trialDaysLeft"
@@ -48,16 +56,17 @@ export interface PersonalPlanInput {
   /** From `coveringWorkspaces()`; empty while the workspace list loads. */
   coveringWorkspaceNames: string[];
   businessAction: BusinessTileAction;
+  summary?: BillingSummary;
+  now: number;
 }
 
 export type PersonalTier = "free" | "pro" | "business";
 
 /** Plan names are brand names: shown as they are in every language. */
-const PERSONAL_PLAN_NAMES: Record<PersonalTier, string> = {
-  free: "Free",
+const PERSONAL_PLAN_NAMES = {
   pro: "Pro",
   business: "Business",
-};
+} as const;
 
 export type PersonalUsageRow =
   | {
@@ -71,7 +80,11 @@ export type PersonalUsageRow =
 
 export interface PersonalDetail {
   labelKey: string;
-  value: { kind: "date"; iso: string } | { kind: "storeName"; store: ProviderStore | null };
+  value:
+    | { kind: "date"; iso: string }
+    | ({ kind: "invoice" } & BillingInvoiceValue)
+    | { kind: "text"; text: string }
+    | { kind: "storeName"; store: ProviderStore | null };
 }
 
 export interface PersonalPrice {
@@ -110,6 +123,9 @@ interface Facts {
   /** A Stripe subscription, paid or past due: the portal can manage and cancel it. */
   stripeBilled: boolean;
   cardlessTrial: boolean;
+  stripeTrial: boolean;
+  ending: boolean;
+  summary?: BillingSummary;
   storePastDue: boolean;
   storeCanceled: boolean;
 }
@@ -137,13 +153,22 @@ function resolveTier(usage: PersonalUsage): PersonalTier {
   return usage.isTrial ? "pro" : "free";
 }
 
-function resolveBadge({ usage, tier, storePastDue, storeCanceled }: Facts): PersonalBadge | null {
+function resolveBadge(
+  { usage, tier, stripeTrial, storePastDue, storeCanceled }: Facts,
+  now: number
+): PersonalBadge | null {
   if (usage.isTrial) {
     return {
       key: "badges.trial",
       params: { days: String(usage.trialDaysLeft ?? 0) },
       tone: "info",
     };
+  }
+  if (stripeTrial) {
+    const end = Date.parse(usage.currentPeriodEnd ?? "");
+    if (!Number.isFinite(end)) return { key: "badges.stripeTrial", tone: "info" };
+    const days = Math.max(0, Math.ceil((end - now) / DAY_MS));
+    return { key: "badges.trial", params: { days: String(days) }, tone: "info" };
   }
   if (usage.isPastDue || storePastDue) return { key: "badges.pastDue", tone: "destructive" };
   if (storeCanceled) return { key: "badges.cancelled", tone: "destructive" };
@@ -154,11 +179,30 @@ function resolveBadge({ usage, tier, storePastDue, storeCanceled }: Facts): Pers
   return null;
 }
 
-function resolvePrice({ usage, tier, stripeBilled }: Facts): PersonalPrice | null {
+function resolvePrice({
+  usage,
+  tier,
+  stripeBilled,
+  stripeTrial,
+  ending,
+  summary,
+}: Facts): PersonalPrice | null {
   if (tier === "free") return { key: "price.free" };
   // Only Stripe Pro has a known price: Business has none here, a store may charge another,
   // and a cardless trial pays nothing (its badge says so).
   if (!stripeBilled || tier !== "pro") return null;
+  if (stripeTrial) {
+    if (ending) return null;
+    const date = summary?.next_invoice?.date;
+    // Usage infers cadence from the current trial period. A short trial cannot establish monthly billing.
+    if (date) {
+      return {
+        key: usage.billingInterval === "annual" ? "price.trialYearlyStarts" : "price.trialStarts",
+        params: { date },
+      };
+    }
+    return usage.billingInterval === "annual" ? { key: "price.billedYearly" } : null;
+  }
   if (usage.billingInterval === "annual") return { key: "price.billedYearly" };
   return { key: "price.proMonthly" };
 }
@@ -198,7 +242,7 @@ function banner(
 }
 
 function coveredBanner(facts: Facts, workspaceName: string | undefined): PersonalBanner {
-  const { usage, tier, stripeBilled } = facts;
+  const { usage, tier, stripeBilled, stripeTrial, ending } = facts;
   const named = (
     id: string,
     action?: PersonalAction,
@@ -210,21 +254,42 @@ function coveredBanner(facts: Facts, workspaceName: string | undefined): Persona
       action,
     });
   // The plan still being paid for, by its brand name.
-  const paid = { plan: PERSONAL_PLAN_NAMES[tier] };
+  const plan = PERSONAL_PLAN_NAMES[tier === "business" ? "business" : "pro"];
+  const cancel: PersonalAction = { kind: tier === "business" ? "cancelBusiness" : "cancelPro" };
 
-  if (usage.isPastDue) return named("coveredPastDue", { kind: "cancelPro" }, paid);
-  if (stripeBilled) return named("coveredPaying", { kind: "cancelPro" }, paid);
+  if (ending) return named("covered");
+  if (usage.isPastDue) return named("coveredPastDue", cancel, { plan });
+  if (stripeTrial && tier === "pro") return named("coveredStripeTrial", { kind: "cancelTrial" });
+  if (stripeBilled) return named("coveredPaying", cancel, { plan });
   if (usage.storeBilling) return named("coveredStore");
   return named("covered");
 }
 
 function resolveBanners(facts: Facts, coveringWorkspaceNames: string[]): PersonalBanner[] {
-  const { usage, tier, covered, storePastDue } = facts;
-  if (covered) return [coveredBanner(facts, coveringWorkspaceNames[0])];
-
+  const { usage, tier, covered, storePastDue, ending, summary } = facts;
   const banners: PersonalBanner[] = [];
+  if (ending) {
+    const plan = PERSONAL_PLAN_NAMES[tier === "business" ? "business" : "pro"];
+    const date = usage.currentPeriodEnd;
+    banners.push(
+      banner("ending", "warning", {
+        keyId: date ? "endingDated" : "ending",
+        params: date ? { plan, date } : { plan },
+        action: { kind: "keepPlan", plan },
+      })
+    );
+  }
+  if (covered) return [...banners, coveredBanner(facts, coveringWorkspaceNames[0])];
+
   if (usage.isPastDue) {
-    banners.push(banner("paymentFailed", "destructive", { action: { kind: "updatePayment" } }));
+    const retry = summary?.outstanding_invoice?.next_payment_attempt;
+    banners.push(
+      banner("paymentFailed", "destructive", {
+        keyId: retry ? "paymentFailedRetry" : "paymentFailed",
+        params: retry ? { date: retry } : undefined,
+        action: { kind: "updatePayment" },
+      })
+    );
   }
   if (storePastDue) banners.push(banner("storeRenewalFailed", "destructive"));
   if (tier === "free" && usage.isOverLimit) banners.push(banner("weeklyLimit", "warning"));
@@ -249,8 +314,10 @@ function dateDetail(labelKey: string, iso: string | null): PersonalDetail[] {
   return iso ? [{ labelKey, value: { kind: "date", iso } }] : [];
 }
 
-function resolveDetails({ usage, stripeBilled, storeCanceled }: Facts): PersonalDetail[] {
-  if (stripeBilled) return dateDetail("details.periodEnds", usage.currentPeriodEnd);
+function resolveDetails(
+  { usage, stripeBilled, stripeTrial, storeCanceled, cardlessTrial, ending, summary }: Facts,
+  now: number
+): PersonalDetail[] {
   if (usage.storeBilling) {
     return [
       {
@@ -263,7 +330,50 @@ function resolveDetails({ usage, stripeBilled, storeCanceled }: Facts): Personal
       ),
     ];
   }
-  return [];
+  const details: PersonalDetail[] = [];
+  const next = summary?.next_invoice;
+  const outstanding = summary?.outstanding_invoice;
+  const { currentPeriodEnd, subscriptionStatus } = usage;
+  if (cardlessTrial) return details;
+
+  if (ending) {
+    details.push(...dateDetail("details.ends", currentPeriodEnd));
+  } else if (
+    subscriptionStatus === "canceled" &&
+    currentPeriodEnd &&
+    Date.parse(currentPeriodEnd) <= now
+  ) {
+    details.push(...dateDetail("details.ended", currentPeriodEnd));
+  } else if (
+    stripeBilled &&
+    !usage.isPastDue &&
+    next &&
+    (next.date || (Number.isFinite(next.amount) && next.currency?.trim()))
+  ) {
+    details.push({
+      labelKey: stripeTrial ? "details.firstInvoice" : "details.nextInvoice",
+      value: { kind: "invoice", ...next },
+    });
+  } else if (stripeBilled && (stripeTrial || !outstanding)) {
+    details.push(...dateDetail("details.periodEnds", currentPeriodEnd));
+  }
+
+  if (outstanding) {
+    const { next_payment_attempt: date, amount_remaining: amount, currency } = outstanding;
+    if (date || (Number.isFinite(amount) && currency?.trim())) {
+      details.push({
+        labelKey: date ? "details.nextRetry" : "details.amountDue",
+        value: { kind: "invoice", date, amount, currency },
+      });
+    }
+  }
+  if (summary?.billing_email?.trim()) {
+    details.push({
+      labelKey: "details.billingContact",
+      value: { kind: "text", text: summary.billing_email },
+    });
+  }
+  return details;
 }
 
 export function personalPlanState(input: PersonalPlanInput): PersonalPlanState {
@@ -274,12 +384,24 @@ export function personalPlanState(input: PersonalPlanInput): PersonalPlanState {
   if (usage.status !== "success") return { kind: "loading" };
 
   const cardlessTrial = isCardlessTrial(usage);
+  const summary = cardlessTrial || usage.storeBilling ? undefined : input.summary;
+  const stripeBilled =
+    !usage.storeBilling && !cardlessTrial && (usage.isPastDue || usage.isPersonallySubscribed);
+  const stripeTrial = stripeBilled && usage.subscriptionStatus === "trialing";
   const facts: Facts = {
     usage,
     tier: resolveTier(usage),
     covered: usage.entitledWorkspaceIds.length > 0,
-    stripeBilled: usage.isPastDue || (usage.isPersonallySubscribed && !cardlessTrial),
+    stripeBilled,
     cardlessTrial,
+    stripeTrial,
+    ending: Boolean(
+      summary?.cancel_at_period_end &&
+      stripeBilled &&
+      !usage.isPastDue &&
+      (usage.subscriptionStatus === "active" || stripeTrial)
+    ),
+    summary,
     storePastDue: usage.storeBilling?.status === "past_due",
     storeCanceled: usage.storeBilling?.status === "canceled",
   };
@@ -287,11 +409,11 @@ export function personalPlanState(input: PersonalPlanInput): PersonalPlanState {
   return {
     kind: "ready",
     tier: facts.tier,
-    badge: resolveBadge(facts),
+    badge: resolveBadge(facts, input.now),
     price: resolvePrice(facts),
     actions: resolveActions(facts, input.businessAction),
     banners: resolveBanners(facts, input.coveringWorkspaceNames),
     usage: resolveUsage(facts),
-    details: resolveDetails(facts),
+    details: resolveDetails(facts, input.now),
   };
 }

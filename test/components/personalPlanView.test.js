@@ -293,3 +293,23 @@ test("the trial badge's day count reaches t() as a number, for its plural forms"
   );
   assert.match(container.textContent, new RegExp(`${P}.badges.trial\\{[^}]*"count":1[,}]`));
 });
+
+test("scheduled Business cancellation renders Keep Business and a formatted balance", async (t) => {
+  const { container, render, actions } = await setup(t);
+  await render(
+    ready({
+      tier: "business",
+      actions: [{ kind: "keepPlan", plan: "Business" }],
+      details: [
+        { labelKey: "details.amountDue", value: { kind: "invoice", amount: 0, currency: "usd" } },
+        { labelKey: "details.billingContact", value: { kind: "text", text: "payer@example.test" } },
+      ],
+    })
+  );
+  assert.match(container.textContent, /\$0\.00/);
+  assert.match(container.textContent, /payer@example\.test/);
+  const keep = findButton(container, P + '.actions.keepPlan{"plan":"Business"}');
+  assert.ok(keep);
+  await React.act(async () => keep.click());
+  assert.deepEqual(actions, [{ kind: "keepPlan", plan: "Business" }]);
+});

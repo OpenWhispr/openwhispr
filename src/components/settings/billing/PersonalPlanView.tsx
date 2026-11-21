@@ -21,7 +21,7 @@ import {
   UsageMeterRow,
   UsageValueRow,
 } from "./BillingUi";
-import { translationParams } from "./billingFormat";
+import { formatBillingInvoice, translationParams } from "./billingFormat";
 import { isPortalAction } from "./personalGridHandlers";
 
 interface PersonalPlanViewProps {
@@ -50,6 +50,8 @@ function actionLabel(t: Translate, action: PersonalAction): string {
       return action.store === "play_store"
         ? t("settingsPage.account.billing.manageInGooglePlay")
         : t("settingsPage.account.billing.manageInAppStore");
+    case "keepPlan":
+      return t(`${P}.actions.keepPlan`, { plan: action.plan });
     case "signIn":
       return t("common.signIn");
     case "retry":
@@ -213,6 +215,8 @@ export function PersonalPlanView({
 
   const detailValue = (detail: PersonalDetail): string => {
     if (detail.value.kind === "date") return formatDate(detail.value.iso);
+    if (detail.value.kind === "invoice") return formatBillingInvoice(detail.value, language);
+    if (detail.value.kind === "text") return detail.value.text;
     if (detail.value.store === "app_store") return t(`${P}.stores.appStore`);
     if (detail.value.store === "play_store") return t(`${P}.stores.playStore`);
     return t(`${P}.stores.unknown`);

@@ -2428,18 +2428,7 @@
       }
     },
     "unifiedBilling": {
-      "addSeat": "Platz hinzufügen",
-      "seatUpdated_one": "Workspace-Kapazität auf {{count}} Platz aktualisiert",
-      "seatUpdated_other": "Workspace-Kapazität auf {{count}} Plätze aktualisiert",
-      "seatUpdateFailed": "Workspace-Plätze konnten nicht aktualisiert werden",
-      "confirmSeats": {
-        "title": "Workspace-Platz hinzufügen?",
-        "description_one": "{{workspace}} auf {{count}} Platz erweitern. Stripe berechnet die Änderung anteilig.",
-        "description_other": "{{workspace}} auf {{count}} Plätze erweitern. Stripe berechnet die Änderung anteilig.",
-        "newCapacity": "Neue Kapazität",
-        "chargeToday": "Heute fällig",
-        "confirm": "Platz hinzufügen"
-      }
+      "seatUpdateFailed": "Workspace-Plätze konnten nicht aktualisiert werden"
     },
     "account": {
       "billing": {
@@ -3224,6 +3213,28 @@
       "upgradedDescription": "{{workspace}} ist jetzt auf Enterprise."
     },
     "billing": {
+      "addSeats": {
+        "title": "Plätze hinzufügen",
+        "invoiceDate": "Nächste Rechnung · {{date}}",
+        "quantity": "Zusätzliche Plätze",
+        "decrease": "Plätze verringern",
+        "increase": "Plätze erhöhen",
+        "now": "Jetzt",
+        "after": "Danach",
+        "inUse": "Belegt",
+        "pending": "Ausstehende Einladungen",
+        "available": "Verfügbar",
+        "total": "Plätze insgesamt",
+        "price": "Preis",
+        "perMonth": "{{price}} / Platz / Monat",
+        "proration": "Auf der nächsten Rechnung",
+        "confirm_one": "{{count}} Platz hinzufügen",
+        "confirm_other": "{{count}} Plätze hinzufügen",
+        "adding": "Wird hinzugefügt…",
+        "failure": "Plätze konnten nicht hinzugefügt werden. Es wurde nichts berechnet.",
+        "success": "Plätze hinzugefügt. {{workspace}} hat jetzt insgesamt {{count}} Plätze.",
+        "previewFailed": "Die Preise konnten nicht geladen werden."
+      },
       "free": {
         "inviteTeammates": "Teammitglieder einladen",
         "upgradeToBusiness": "Auf Business upgraden",
@@ -3298,6 +3309,9 @@
           "body": "Dein Zugriff bleibt unverändert."
         },
         "actions": {
+          "cancelTrial": "Testphase kündigen",
+          "cancelBusiness": "Business kündigen",
+          "keepPlan": "{{plan}} behalten",
           "subscribePro": "Pro abonnieren",
           "manageBilling": "Abrechnung verwalten",
           "updatePayment": "Zahlung aktualisieren",
@@ -3317,6 +3331,7 @@
           "unknown": "App-Store deines Telefons"
         },
         "badges": {
+          "stripeTrial": "Testphase",
           "trial_one": "Testphase · noch {{count}} Tag",
           "trial_other": "Testphase · noch {{count}} Tage",
           "pastDue": "Überfällig",
@@ -3325,11 +3340,25 @@
           "monthly": "Monatlich"
         },
         "price": {
+          "trialStarts": "Abrechnung ab {{date}}",
+          "trialYearlyStarts": "Jährliche Abrechnung ab {{date}}",
           "free": "$0",
           "billedYearly": "Jährliche Abrechnung",
           "proMonthly": "{{price}} / Monat"
         },
         "banners": {
+          "endingDated": {
+            "title": "{{plan}} endet am {{date}}",
+            "body": "Du kannst deinen Tarif im Abrechnungsportal behalten."
+          },
+          "ending": {
+            "title": "{{plan}} läuft aus",
+            "body": "Du kannst deinen Tarif im Abrechnungsportal behalten."
+          },
+          "paymentFailedRetry": {
+            "title": "Zahlung fehlgeschlagen",
+            "body": "Bis zur erfolgreichen Zahlung gelten die Limits des kostenlosen Tarifs. Nächster Versuch am {{date}}."
+          },
           "coveredPastDue": {
             "title": "{{workspace}} deckt dich bereits ab",
             "body": "Deine {{plan}}-Zahlung ist fehlgeschlagen. Kündige {{plan}}, um die erneuten Versuche zu stoppen."
@@ -3337,6 +3366,14 @@
           "coveredPastDueUnnamed": {
             "title": "Ein Workspace deckt dich bereits ab",
             "body": "Deine {{plan}}-Zahlung ist fehlgeschlagen. Kündige {{plan}}, um die erneuten Versuche zu stoppen."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} deckt dich bereits ab",
+            "body": "Am Ende der Testphase wird Pro zu einem kostenpflichtigen Abo."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "Ein Workspace deckt dich bereits ab",
+            "body": "Am Ende der Testphase wird Pro zu einem kostenpflichtigen Abo."
           },
           "coveredPaying": {
             "title": "{{workspace}} deckt dich bereits ab",
@@ -3376,6 +3413,13 @@
           }
         },
         "details": {
+          "nextInvoice": "Nächste Rechnung",
+          "firstInvoice": "Erste Rechnung",
+          "nextRetry": "Nächster Zahlungsversuch",
+          "amountDue": "Offener Betrag",
+          "ends": "Endet am",
+          "ended": "Beendet am",
+          "billingContact": "Rechnungskontakt",
           "periodEnds": "Aktueller Zeitraum endet",
           "billedThrough": "Abgerechnet über",
           "accessUntil": "Zugriff bis",
@@ -3396,7 +3440,13 @@
           "cancelled": "Gekündigt",
           "paused": "Pausiert"
         },
+        "interval": {
+          "monthly": "Monatlich",
+          "annual": "Jährlich"
+        },
         "planLine": {
+          "seatPrice": "{{price}} pro Platz und Monat",
+          "customPricing": "Individuelle Preise",
           "free": "$0",
           "invoicedByOpenWhispr": "Abgerechnet durch OpenWhispr",
           "paidBy": "Bezahlt von {{workspace}}",
@@ -3461,6 +3511,10 @@
           "pendingInvites_other": "{{count}} offene Einladungen"
         },
         "details": {
+          "nextInvoice": "Nächste Rechnung",
+          "nextRetry": "Nächster Zahlungsversuch",
+          "amountDue": "Offener Betrag",
+          "billingContact": "Rechnungskontakt",
           "firstInvoice": "Erste Rechnung",
           "ends": "Endet",
           "ended": "Endete",

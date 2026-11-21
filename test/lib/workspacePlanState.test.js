@@ -34,8 +34,6 @@ const workspace = (overrides = {}) => ({
   ...overrides,
 });
 const people = (members, invitations) => ({
-  status: "known",
-  count: members + invitations,
   members,
   invitations,
 });
@@ -77,6 +75,8 @@ test("Business member: managed seat, unlimited use, workspace details", () => {
     badge: null,
     managedBadge: true,
     planLine: { key: "planLine.paidBy", params: { workspace: "Acme" } },
+    billingInterval: null,
+    seatPrice: null,
     planActions: [],
     freeCta: false,
     banner: null,
@@ -115,6 +115,8 @@ test("Business owner (Stripe): Manage billing, Upgrade to Enterprise, Add seats,
     badge: null,
     managedBadge: false,
     planLine: null,
+    billingInterval: null,
+    seatPrice: null,
     planActions: [{ kind: "manageBilling" }, { kind: "upgradeEnterprise" }],
     freeCta: false,
     banner: null,
@@ -291,7 +293,7 @@ test("Business owner with every seat used: no seats left caption, with pending i
       addSeats: true,
     },
   ]);
-  const unknown = workspacePlanState(full, { status: "loading" }, NOW);
+  const unknown = workspacePlanState(full, { members: "loading", invitations: "loading" }, NOW);
   assert.equal(unknown.usage[0].captionKey, "usage.noSeatsLeft");
 });
 
@@ -535,6 +537,8 @@ test("free workspace owner: free buttons, members count, plans grid", () => {
     badge: null,
     managedBadge: false,
     planLine: { key: "planLine.free" },
+    billingInterval: null,
+    seatPrice: null,
     planActions: [],
     freeCta: true,
     banner: null,
@@ -545,20 +549,27 @@ test("free workspace owner: free buttons, members count, plans grid", () => {
 });
 
 test("free workspace owner: members count unknown while it loads, then from the list", () => {
-  assert.deepEqual(workspacePlanState(free(), { status: "loading" }, NOW).usage, [
-    { kind: "members", count: null },
-  ]);
+  assert.deepEqual(
+    workspacePlanState(free(), { members: "loading", invitations: "loading" }, NOW).usage,
+    [{ kind: "members", count: null }]
+  );
   assert.deepEqual(workspacePlanState(free({ member_count: 4 }), null, NOW).usage, [
     { kind: "members", count: 4 },
   ]);
-  assert.deepEqual(workspacePlanState(free({ member_count: 4 }), { status: "failed" }, NOW).usage, [
-    { kind: "members", count: 4 },
-  ]);
+  assert.deepEqual(
+    workspacePlanState(free({ member_count: 4 }), { members: "failed", invitations: null }, NOW)
+      .usage,
+    [{ kind: "members", count: 4 }]
+  );
 });
 
 test("a members count that failed or was never read drops the row, never shows a dash", () => {
   for (const role of ["owner", "admin"]) {
-    assert.deepEqual(workspacePlanState(free({ role }), { status: "failed" }, NOW).usage, [], role);
+    assert.deepEqual(
+      workspacePlanState(free({ role }), { members: "failed", invitations: null }, NOW).usage,
+      [],
+      role
+    );
     assert.deepEqual(workspacePlanState(free({ role }), null, NOW).usage, [], role);
   }
 });
@@ -607,7 +618,7 @@ test("long workspace and manager names pass through untouched", () => {
   assert.deepEqual(state.details.rows.at(-1), managerRow(longManager, null));
 });
 
-test("manager email: the API's email field, or the manager name when it is an address", () => {
+test("manager email: only the API's email field is copyable", () => {
   const withEmail = workspacePlanState(
     workspace({ role: "member", billing_manager_email: "dana@acme.com" }),
     null,
@@ -619,7 +630,7 @@ test("manager email: the API's email field, or the manager name when it is an ad
     null,
     NOW
   );
-  assert.deepEqual(nameIsEmail.details.rows.at(-1), managerRow("dana@acme.com", "dana@acme.com"));
+  assert.deepEqual(nameIsEmail.details.rows.at(-1), managerRow("dana@acme.com", null));
   const noManager = workspacePlanState(
     workspace({ role: "member", billing_manager: null }),
     null,
@@ -734,4 +745,125 @@ test("Stripe incomplete_expired reads as ended, for owners and members", () => {
   assert.deepEqual(member.badge, { key: "badges.paused", tone: "warning" });
   assert.equal(member.banner.titleKey, "banners.memberPaused.title");
   assert.deepEqual(member.planActions, [{ kind: "viewPersonal" }]);
+});
+
+test("list counts override legacy counts independently, preserving zero", () => {
+  const freeWithCount = free({ member_count: 0 });
+  assert.deepEqual(workspacePlanState(freeWithCount, people(6, 2), NOW).usage, [
+    { kind: "members", count: 0 },
+  ]);
+  const full = workspace({ seats: 7, seats_used: 7, member_count: 6, invitation_count: 3 });
+  const usage = workspacePlanState(full, people(6, 1), NOW).usage[0];
+  assert.equal(usage.captionKey, "usage.noSeatsLeftWithInvites");
+  assert.deepEqual(usage.params, { count: "3" });
+  assert.equal(
+    workspacePlanState({ ...full, invitation_count: 0 }, people(6, 1), NOW).usage[0].captionKey,
+    "usage.noSeatsLeft"
+  );
+});
+
+const billingSummary = {
+  interval: "annual",
+  unit_amount: 24000,
+  next_invoice: { date: PERIOD_END, amount: 72000, currency: "usd" },
+  billing_email: "customer@example.test",
+};
+
+const invoiceCases = [
+  ["active", false, "details.nextInvoice"],
+  ["trialing", false, "details.firstInvoice"],
+  ["active", true, "details.ends"],
+  ["trialing", true, "details.ends"],
+  ["past_due", true, "details.nextRetry"],
+  ["unpaid", true, "details.amountDue"],
+  ["paused", true, "details.amountDue"],
+  ["incomplete", true, "details.amountDue"],
+  ["canceled", true, "details.ended"],
+];
+
+for (const [status, cancel, labelKey] of invoiceCases) {
+  test(`owner billing details: ${status}, cancel flag ${cancel}`, () => {
+    const outstanding =
+      status === "active" || status === "trialing"
+        ? null
+        : {
+            amount_remaining: 1900,
+            currency: "usd",
+            next_payment_attempt: status === "past_due" ? PERIOD_END : null,
+          };
+    const plan = workspacePlanState(
+      workspace({
+        status,
+        current_period_end: status === "canceled" ? ENDED_AT : PERIOD_END,
+      }),
+      null,
+      NOW,
+      { ...billingSummary, cancel_at_period_end: cancel, outstanding_invoice: outstanding }
+    );
+    const rows = plan.details.rows;
+    assert.ok(rows.some((row) => row.labelKey === labelKey));
+    assert.deepEqual(rows.at(-1), {
+      labelKey: "details.billingContact",
+      value: { kind: "text", text: "customer@example.test" },
+    });
+    if (outstanding) {
+      assert.equal(
+        rows.some(
+          (row) => row.labelKey === "details.ends" || row.labelKey === "details.nextInvoice"
+        ),
+        false
+      );
+      assert.deepEqual(
+        rows.find(
+          (row) =>
+            row.labelKey === (status === "past_due" ? "details.nextRetry" : "details.amountDue")
+        ).value,
+        {
+          kind: "invoice",
+          date: outstanding.next_payment_attempt,
+          amount: 1900,
+          currency: "usd",
+        }
+      );
+    }
+  });
+}
+
+test("the live cancellation flag supersedes a stale workspace list flag", () => {
+  const ending = workspace({ cancel_at_period_end: true });
+  const repurchased = workspacePlanState(ending, null, NOW, {
+    ...billingSummary,
+    cancel_at_period_end: false,
+  });
+  assert.equal(repurchased.banner, null);
+  assert.equal(repurchased.details.rows[0].labelKey, "details.nextInvoice");
+  assert.equal(
+    workspacePlanState(ending, null, NOW, billingSummary).banner.action.kind,
+    "keepPlan"
+  );
+});
+
+test("Stripe summary interval and price stay with the billing owner", () => {
+  const owner = workspacePlanState(workspace(), null, NOW, billingSummary);
+  assert.deepEqual(owner.billingInterval, "annual");
+  assert.deepEqual(owner.seatPrice, { amount: 2000, currency: "usd" });
+  const undated = workspacePlanState(workspace(), null, NOW, {
+    ...billingSummary,
+    next_invoice: null,
+  });
+  assert.equal(undated.billingInterval, "annual");
+  assert.equal(undated.seatPrice, null);
+  const admin = workspacePlanState(workspace({ role: "admin" }), null, NOW, billingSummary);
+  assert.equal(admin.billingInterval, null);
+  assert.equal(admin.seatPrice, null);
+  assert.deepEqual(admin.details, memberDetails("admin", "paidSeat"));
+  assert.deepEqual(admin.planActions, []);
+  const enterprise = workspacePlanState(
+    workspace({ plan: "enterprise" }),
+    null,
+    NOW,
+    billingSummary
+  );
+  assert.equal(enterprise.seatPrice, null);
+  assert.equal(enterprise.details.rows[0].labelKey, "details.nextInvoice");
 });

@@ -48,6 +48,7 @@ import { executeAccountDeletion } from "../lib/accountDeletionFlow";
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { checkoutErrorDescriptionKey } from "../lib/billingPortalError";
 import { useBillingPortal } from "../hooks/useBillingPortal";
+import { usePersonalPlanBilling } from "../hooks/usePersonalPlanBilling";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
 import PermissionCard from "./ui/PermissionCard";
@@ -175,7 +176,7 @@ import {
   coveringWorkspaces,
   entitledWorkspacePlans,
 } from "../lib/workspaceBilling";
-import { personalPlanState, showsCreatorLink, type PersonalAction } from "../lib/personalPlanState";
+import { showsCreatorLink, type PersonalAction } from "../lib/personalPlanState";
 import { PersonalPlanView } from "./settings/billing/PersonalPlanView";
 import { formatBillingDate } from "./settings/billing/billingFormat";
 import { PlansGrid, type ProCardAction } from "./settings/billing/PlansGrid";
@@ -1969,7 +1970,6 @@ export default function SettingsPage({
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
   const [eraseDeviceData, setEraseDeviceData] = useState(false);
-  const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
   const [yearlyBilling, setYearlyBilling] = useState(true);
   const [proCheckoutOpening, setProCheckoutOpening] = useState(false);
   // The portal opens for several actions; only the one clicked should spin.
@@ -2052,7 +2052,16 @@ export default function SettingsPage({
     }
   }, [usage, yearlyBilling, toast, t]);
 
-  const personalState = personalPlanState({
+  const billingEnabled = Boolean(AUTH_URL) && activeSection === "plansBilling" && isLoaded;
+  const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(
+    usage,
+    billingEnabled &&
+      billingView.kind === "personal" &&
+      Boolean(isSignedIn && (usage?.isPersonallySubscribed || usage?.isPastDue))
+  );
+  const { state: personalState, refreshSummary: refreshPersonalSummary } = usePersonalPlanBilling({
+    enabled: billingEnabled,
+    view: billingView.kind,
     signedIn: Boolean(isSignedIn),
     usage: usage ?? null,
     coveringWorkspaceNames: coveringWorkspaces(usage?.entitledWorkspaceIds, billingWorkspaces).map(
@@ -2063,7 +2072,7 @@ export default function SettingsPage({
   const showCreatorLink = showsCreatorLink(usage ?? null);
   const personalHandlers: PersonalPlanHandlers = {
     subscribePro: () => void subscribePro(),
-    openBillingPortal: () => void openBillingPortal(),
+    openBillingPortal: () => void openBillingPortal(refreshPersonalSummary),
     openExternal: (url) => void window.electronAPI?.openExternal?.(url),
     signIn: requestSignIn,
     retry: () => void usage?.retry(),

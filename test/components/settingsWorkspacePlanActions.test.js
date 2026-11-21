@@ -53,6 +53,7 @@ async function setup(t) {
   const state = {
     workspaceRefreshes: [],
     portalIds: [],
+    authGeneration: 7,
     openedUrls: [],
     toasts: [],
     consoleOpens: 0,
@@ -79,7 +80,7 @@ async function setup(t) {
       "/lib/auth": `export const withSessionRefresh = (operation) => operation();
         export const openAdminConsole = async () => { globalThis.__settingsBillingTest.consoleOpens++; };`,
       "/lib/authRequestContext":
-        "export const hasValidatedAuthContext = () => true; export const getValidatedAuthGeneration = () => 7;",
+        "export const hasValidatedAuthContext = () => true; export const getValidatedAuthGeneration = () => globalThis.__settingsBillingTest.authGeneration;",
       "/stores/workspaceStore": `export const useWorkspaceStore = (select) => select({
         refresh: async (options) => { globalThis.__settingsBillingTest.workspaceRefreshes.push(options); }
       });`,
@@ -103,6 +104,7 @@ async function setup(t) {
   );
   const { PlansGrid } = await vite.ssrLoadModule("/components/settings/billing/PlansGrid.tsx");
   const { useUsage } = await vite.ssrLoadModule("/hooks/useUsage.ts");
+  const { useBillingPortal } = await vite.ssrLoadModule("/hooks/useBillingPortal.ts");
   const entitledIds = (workspaces) =>
     workspaces
       .filter((workspace) => hasActiveWorkspaceSubscription(workspace))
@@ -148,6 +150,7 @@ async function setup(t) {
     container,
     root,
     useUsage,
+    useBillingPortal,
     propsFor,
     signedOut,
     render,
@@ -680,4 +683,185 @@ test("cards: Enterprise checkout offers the purchase and contact sales", async (
     { kind: "checkout" },
     { kind: "contactSales", ownerName: null },
   ]);
+});
+
+test("personal portal refreshes details once on return for the same sign-in", async (t) => {
+  const { happyWindow, state, root, useUsage } = await setup(t);
+  let usageCalls = 0;
+  let refreshes = 0;
+  let latestUsage;
+  happyWindow.electronAPI.cloudUsage = async () => {
+    usageCalls++;
+    return {
+      success: true,
+      plan: "pro",
+      status: "trialing",
+      isTrial: false,
+      isSubscribed: true,
+      entitlementSources: { personal: true, workspaceIds: [] },
+    };
+  };
+  const portalGenerations = [];
+  happyWindow.electronAPI.cloudBillingPortal = async (generation) => {
+    portalGenerations.push(generation);
+    return { success: true, url: "https://stripe.test/personal" };
+  };
+  function Harness() {
+    latestUsage = useUsage();
+    return null;
+  }
+  await React.act(async () => root.render(React.createElement(Harness)));
+  assert.equal(latestUsage.status, "success");
+  assert.equal(latestUsage.subscriptionStatus, "trialing");
+  await React.act(async () => latestUsage.openBillingPortal(() => refreshes++));
+  assert.deepEqual(state.openedUrls, ["https://stripe.test/personal"]);
+  assert.deepEqual(portalGenerations, [7]);
+  assert.equal(refreshes, 0);
+  await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
+  assert.equal(usageCalls, 2);
+  assert.equal(refreshes, 1);
+  await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
+  assert.equal(refreshes, 1);
+});
+
+test("personal portal focus ignores a return after the authenticated generation changes", async (t) => {
+  const { happyWindow, state, root, useUsage } = await setup(t);
+  let usageCalls = 0;
+  let refreshes = 0;
+  let latestUsage;
+  happyWindow.electronAPI.cloudUsage = async () => {
+    usageCalls++;
+    return { success: true, plan: "pro", status: "active", isSubscribed: true };
+  };
+  happyWindow.electronAPI.cloudBillingPortal = async () => ({
+    success: true,
+    url: "https://stripe.test/personal",
+  });
+  function Harness() {
+    latestUsage = useUsage();
+    return null;
+  }
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => latestUsage.openBillingPortal(() => refreshes++));
+  assert.deepEqual(state.openedUrls, ["https://stripe.test/personal"]);
+  state.authGeneration++;
+  await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
+  assert.equal(usageCalls, 1);
+  assert.equal(refreshes, 0);
+});
+
+for (const departure of ["workspace", "revisit", "unmount"]) {
+  for (const success of [true, false]) {
+    test(`personal portal drops a delayed ${success ? "URL" : "failure"} after ${departure}`, async (t) => {
+      const { happyWindow, state, root, useUsage, useBillingPortal } = await setup(t);
+      happyWindow.electronAPI.cloudUsage = async () => ({
+        success: true,
+        plan: "pro",
+        status: "active",
+        isSubscribed: true,
+      });
+      let resolvePortal;
+      happyWindow.electronAPI.cloudBillingPortal = () =>
+        new Promise((resolve) => {
+          resolvePortal = resolve;
+        });
+      let open;
+      function Harness({ personal }) {
+        open = useBillingPortal(useUsage(), personal).openBillingPortal;
+        return null;
+      }
+      const show = (personal) =>
+        React.act(async () => root.render(React.createElement(Harness, { personal })));
+      await show(true);
+      let pending;
+      await React.act(async () => {
+        pending = open();
+      });
+      if (departure === "unmount") await React.act(async () => root.render(null));
+      else await show(false);
+      if (departure === "revisit") await show(true);
+      await React.act(async () => {
+        resolvePortal({ success, url: "https://stripe.test/old-personal" });
+        await pending;
+      });
+      assert.deepEqual(state.openedUrls, []);
+      assert.deepEqual(state.toasts, []);
+    });
+  }
+}
+
+test("a new Personal visit can open its portal while the old URL is pending", async (t) => {
+  const { happyWindow, state, root, useUsage, useBillingPortal } = await setup(t);
+  const requests = [];
+  let usageCalls = 0;
+  let refreshes = 0;
+  let portal;
+  happyWindow.electronAPI.cloudUsage = async () => {
+    usageCalls++;
+    return { success: true, plan: "pro", status: "active", isSubscribed: true };
+  };
+  happyWindow.electronAPI.cloudBillingPortal = () =>
+    new Promise((resolve) => requests.push(resolve));
+  function Harness({ personal }) {
+    portal = useBillingPortal(useUsage(), personal);
+    return null;
+  }
+  const show = (personal) =>
+    React.act(async () => root.render(React.createElement(Harness, { personal })));
+  await show(true);
+  await React.act(async () => {
+    void portal.openBillingPortal();
+  });
+  await show(false);
+  await show(true);
+  assert.equal(portal.isOpening, false);
+  await React.act(async () => {
+    void portal.openBillingPortal(() => refreshes++);
+  });
+  assert.equal(requests.length, 2);
+  await React.act(async () => requests.shift()({ success: true, url: "https://stripe.test/old" }));
+  assert.deepEqual(state.openedUrls, []);
+  assert.equal(portal.isOpening, true);
+  await React.act(async () => requests.shift()({ success: true, url: "https://stripe.test/new" }));
+  assert.deepEqual(state.openedUrls, ["https://stripe.test/new"]);
+  assert.deepEqual(state.toasts, []);
+  await show(false);
+  await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
+  assert.equal(refreshes, 0);
+  assert.equal(usageCalls, 1);
+});
+
+test("a failed browser launch reports the portal failure and ignores a later focus", async (t) => {
+  const { happyWindow, state, root, useUsage, useBillingPortal } = await setup(t);
+  let usageCalls = 0;
+  let refreshes = 0;
+  let openPortal;
+  happyWindow.electronAPI.cloudUsage = async () => {
+    usageCalls++;
+    return { success: true, plan: "pro", status: "active", isSubscribed: true };
+  };
+  happyWindow.electronAPI.cloudBillingPortal = async () => ({
+    success: true,
+    url: "https://stripe.test/personal",
+  });
+  happyWindow.electronAPI.openExternal = async () => ({
+    success: false,
+    error: "No browser registered",
+  });
+  function Harness() {
+    openPortal = useBillingPortal(useUsage()).openBillingPortal;
+    return null;
+  }
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => openPortal(() => refreshes++));
+  assert.deepEqual(state.toasts, [
+    {
+      title: "settingsPage.account.billing.couldNotOpenTitle",
+      description: "settingsPage.account.billing.couldNotOpenDescription",
+      variant: "destructive",
+    },
+  ]);
+  await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
+  assert.equal(usageCalls, 1);
+  assert.equal(refreshes, 0);
 });
