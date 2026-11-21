@@ -4143,7 +4143,8 @@
     "connectors": {
       "description": "Deja que el asistente use tus herramientas. Apruebas cada correo, mensaje e incidencia antes de que se envíe."
     },
-    "readDocs": "Leer la documentación"
+    "readDocs": "Leer la documentación",
+    "notAvailableInBuild": "No disponible en esta versión"
   },
   "connectors": {
     "approval": {

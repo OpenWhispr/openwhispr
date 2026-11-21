@@ -195,9 +195,15 @@ function createSlackConnector({ api, auth, directory, credentials }) {
 
     async getStatus() {
       const entry = credentials.read(credentials.activeAccountId(), "slack");
-      return entry
-        ? auth.statusOf(entry.credential)
-        : { connected: false, accountLabel: null, workspaceLabel: null, needsReconnect: false };
+      // A login left by a build that had a client id still shows, so Disconnect stays available.
+      if (entry) return { ...auth.statusOf(entry.credential), configured: true };
+      return {
+        connected: false,
+        configured: auth.isConfigured(),
+        accountLabel: null,
+        workspaceLabel: null,
+        needsReconnect: false,
+      };
     },
 
     async getBinding() {

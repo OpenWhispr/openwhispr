@@ -1,6 +1,7 @@
 const { net } = require("electron");
 const { runOAuthLoopbackFlow, OAuthFlowError } = require("./oauthLoopbackFlow");
 const { calendarResultPage, defaultI18n } = require("./calendarOAuthResultPage");
+const { isClientIdConfigured, assertClientIdConfigured } = require("./calendarOAuthConfig");
 
 // The "common" tenant covers both work/school (M365) and personal
 // (outlook.com) accounts. Desktop apps are public clients: PKCE, no secret.
@@ -37,12 +38,14 @@ class MicrosoftCalendarOAuth {
     return process.env.MICROSOFT_CALENDAR_CLIENT_ID;
   }
 
+  isConfigured() {
+    return isClientIdConfigured(this.getClientId());
+  }
+
   startOAuthFlow() {
-    if (!this.getClientId()) {
-      // Fail fast instead of opening the browser on a client_id=undefined URL
-      // and hanging until the loopback flow times out.
-      throw new Error("MICROSOFT_CALENDAR_CLIENT_ID is not configured");
-    }
+    // Fail fast instead of opening the browser on a client_id=undefined URL
+    // and hanging until the loopback flow times out.
+    assertClientIdConfigured(this.getClientId(), "MICROSOFT_CALENDAR_CLIENT_ID");
     return runOAuthLoopbackFlow({
       errorParam: "mcal_error",
       renderResultPage: ({ ok }) => calendarResultPage({ i18n: this.i18n || defaultI18n() }, ok),

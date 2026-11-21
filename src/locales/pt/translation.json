@@ -4091,7 +4091,8 @@
     "connectors": {
       "description": "Deixe o assistente usar suas ferramentas. Você aprova cada e-mail, mensagem e issue antes do envio."
     },
-    "readDocs": "Ler a documentação"
+    "readDocs": "Ler a documentação",
+    "notAvailableInBuild": "Não disponível nesta versão"
   },
   "connectors": {
     "approval": {

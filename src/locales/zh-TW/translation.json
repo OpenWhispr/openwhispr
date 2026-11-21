@@ -4091,7 +4091,8 @@
     "connectors": {
       "description": "讓助理使用您的工具。每封郵件、每則訊息和每個議題送出前都需要您核准。"
     },
-    "readDocs": "閱讀文件"
+    "readDocs": "閱讀文件",
+    "notAvailableInBuild": "此版本無法使用"
   },
   "connectors": {
     "approval": {

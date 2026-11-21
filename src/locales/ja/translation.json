@@ -4091,7 +4091,8 @@
     "connectors": {
       "description": "アシスタントがあなたのツールを使えるようにします。メール、メッセージ、課題はすべて送信前にあなたが承認します。"
     },
-    "readDocs": "ドキュメントを読む"
+    "readDocs": "ドキュメントを読む",
+    "notAvailableInBuild": "このビルドでは利用できません"
   },
   "connectors": {
     "approval": {

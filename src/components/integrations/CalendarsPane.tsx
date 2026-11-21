@@ -11,6 +11,8 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import type { CalendarAccount, MicrosoftCalendarAccount } from "../../types/calendar";
+import { useCalendarOAuthConfigured } from "../../hooks/useCalendarOAuthConfigured";
+import { isCalendarOAuthConfigured } from "../../utils/connectorEligibility";
 import { IntegrationsPane } from "./IntegrationsPane";
 import googleCalendarIcon from "../../assets/icons/google-calendar.svg";
 import microsoftCalendarIcon from "../../assets/icons/microsoft-calendar.webp";
@@ -21,10 +23,19 @@ interface ProviderRowProps {
   i18nKey: string;
   connected: boolean;
   isConnecting: boolean;
+  /** False in a build without this provider's OAuth client id: Connect is disabled. */
+  configured?: boolean;
   onConnect: () => void;
 }
 
-function ProviderRow({ icon, i18nKey, connected, isConnecting, onConnect }: ProviderRowProps) {
+function ProviderRow({
+  icon,
+  i18nKey,
+  connected,
+  isConnecting,
+  configured = true,
+  onConnect,
+}: ProviderRowProps) {
   const { t } = useTranslation();
   return (
     <SettingsPanelRow>
@@ -35,7 +46,7 @@ function ProviderRow({ icon, i18nKey, connected, isConnecting, onConnect }: Prov
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold text-foreground">{t(`${i18nKey}.title`)}</p>
           <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
-            {t(`${i18nKey}.description`)}
+            {configured ? t(`${i18nKey}.description`) : t("integrations.notAvailableInBuild")}
           </p>
         </div>
         {connected ? (
@@ -43,7 +54,12 @@ function ProviderRow({ icon, i18nKey, connected, isConnecting, onConnect }: Prov
             {t(`${i18nKey}.connected`)}
           </Badge>
         ) : (
-          <Button size="sm" onClick={onConnect} disabled={isConnecting} className="shrink-0">
+          <Button
+            size="sm"
+            onClick={onConnect}
+            disabled={isConnecting || !configured}
+            className="shrink-0"
+          >
             {isConnecting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
@@ -149,6 +165,7 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
     appleCalendarConnected,
     setAppleCalendarConnected,
   } = useSettingsStore();
+  const oauthConfigured = useCalendarOAuthConfigured();
   const [isConnecting, setIsConnecting] = useState(false);
   const [disconnectingEmail, setDisconnectingEmail] = useState<string | null>(null);
   const [confirmDisconnectEmail, setConfirmDisconnectEmail] = useState<string | null>(null);
@@ -336,6 +353,7 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
           i18nKey="integrations.googleCalendar"
           connected={gcalAccounts.length > 0}
           isConnecting={isConnecting}
+          configured={isCalendarOAuthConfigured(oauthConfigured, "google")}
           onConnect={handleConnect}
         />
         <CalendarAccountRows
@@ -354,6 +372,7 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
           i18nKey="integrations.microsoftCalendar"
           connected={mcalAccounts.length > 0}
           isConnecting={isMsConnecting}
+          configured={isCalendarOAuthConfigured(oauthConfigured, "microsoft")}
           onConnect={handleMicrosoftConnect}
         />
         <CalendarAccountRows

@@ -4263,7 +4263,8 @@
     "connectors": {
       "description": "Laissez l'assistant utiliser vos outils. Vous approuvez chaque e-mail, message et ticket avant son envoi."
     },
-    "readDocs": "Lire la documentation"
+    "readDocs": "Lire la documentation",
+    "notAvailableInBuild": "Non disponible dans cette version"
   },
   "connectors": {
     "approval": {

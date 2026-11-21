@@ -16,6 +16,7 @@ const {
 const BOUND = { binding: BINDING };
 const NOT_CONNECTED = {
   connected: false,
+  configured: true,
   accountLabel: null,
   workspaceLabel: null,
   needsReconnect: false,
@@ -552,6 +553,29 @@ test("the binding and status follow the active account's login", async () => {
   credentials.switchAccount("acct-2");
   assert.equal(await connector.getBinding(), null);
   assert.deepEqual(await connector.getStatus(), NOT_CONNECTED);
+});
+
+test("a build without a Slack client id reports the connector as not configured", async () => {
+  const [{ createSlackConnector }, { createSlackAuth }] = await Promise.all([
+    import("../../../src/helpers/connectors/slackConnector.js"),
+    import("../../../src/helpers/connectors/slackAuth.js"),
+  ]);
+  const build = (getClientId) => {
+    const credentials = memoryCredentials(CONNECTED);
+    credentials.switchAccount("acct-2");
+    const auth = createSlackAuth({
+      api: null,
+      credentials,
+      getClientId,
+      OAuthFlowError: Error,
+      runOAuthLoopbackFlow: async () => {
+        throw new Error("not used in these tests");
+      },
+    });
+    return createSlackConnector({ api: null, auth, directory: null, credentials });
+  };
+  assert.equal((await build(() => undefined).getStatus()).configured, false);
+  assert.equal((await build(() => "123.456").getStatus()).configured, true);
 });
 
 test("a Slack login is the same account only for the same user in the same workspace", async () => {

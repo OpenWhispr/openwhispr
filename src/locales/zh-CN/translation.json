@@ -4091,7 +4091,8 @@
     "connectors": {
       "description": "让助手使用您的工具。每封邮件、每条消息和每个议题发出前都需要您批准。"
     },
-    "readDocs": "阅读文档"
+    "readDocs": "阅读文档",
+    "notAvailableInBuild": "此版本不可用"
   },
   "connectors": {
     "approval": {

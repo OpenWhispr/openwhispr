@@ -4263,7 +4263,8 @@
     "connectors": {
       "description": "Lass den Assistenten deine Tools nutzen. Du bestätigst jede E-Mail, jede Nachricht und jedes Issue, bevor es rausgeht."
     },
-    "readDocs": "Dokumentation lesen"
+    "readDocs": "Dokumentation lesen",
+    "notAvailableInBuild": "In dieser Version nicht verfügbar"
   },
   "connectors": {
     "approval": {

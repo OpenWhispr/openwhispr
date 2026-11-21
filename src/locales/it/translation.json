@@ -4091,7 +4091,8 @@
     "connectors": {
       "description": "Lascia che l'assistente usi i tuoi strumenti. Approvi ogni email, messaggio e issue prima dell'invio."
     },
-    "readDocs": "Leggi la documentazione"
+    "readDocs": "Leggi la documentazione",
+    "notAvailableInBuild": "Non disponibile in questa versione"
   },
   "connectors": {
     "approval": {
