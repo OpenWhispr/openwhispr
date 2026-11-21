@@ -8,6 +8,7 @@ const ElevenLabsStreaming = require("../../src/helpers/elevenLabsStreaming");
 const createWatchdog = require("../../src/helpers/meetingSystemAudioWatchdog");
 const createMeetingSystemAudioHandover = require("../../src/helpers/meetingSystemAudioHandover");
 const micGate = require("../../src/helpers/meetingMicGate");
+const { createLocalChunkClock } = require("../../src/helpers/meetingLocalChunkClock");
 
 // Execute the real IPC closures with only their native/network boundaries replaced.
 const ipcPath = path.join(__dirname, "../../src/helpers/ipcHandlers.js");
@@ -87,6 +88,7 @@ function harness({ native = true, local = false } = {}) {
     ...micGate,
     meetingLocalMode: local,
     meetingLocalBuffers: { mic: [], system: [] },
+    meetingLocalChunkClock: createLocalChunkClock(),
     meetingSendCounts: { mic: 0, system: 0 },
     _meetingSystemStreaming: { sendAudio: (buffer) => streamed.push(buffer) },
     meetingReconnectAudioBuffers: { mic: [], system: [] },
