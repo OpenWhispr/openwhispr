@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.6] - 2026-11-20
+
+### Fixed
+
+- Grok seat hang: the Grok CLI connect no longer hangs.
+- E2E fixes E6-E9: connect buttons are gated until sign-in, a notice shows when there is no license, the Home calendar card works, and the EdgeAssistant cloud STT engine is selectable.
+
+### Added
+
+- LLM subscription connect through the official CLIs (Phase 8). The Claude seat is off by default.
+
 ## [1.10.4] - 2026-10-21
 
 Tone & Style writes your dictation, and the assistant's drafts, in the tone you pick for each kind of app. The AI Summary now writes detailed notes by default, and you can link a calendar event to any note, pick a reasoning effort for each model scope and ask the chat how OpenWhispr works. This release also keeps your transcript when a later step fails, and fixes meeting transcripts, Linux paste and local Whisper on Windows.
