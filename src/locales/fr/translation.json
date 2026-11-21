@@ -2193,7 +2193,9 @@
         "providersDesc": "Utilisez votre propre clé API pour connecter votre fournisseur de LLM préféré.",
         "localDesc": "Modèles sur l'appareil. 100 % privé.",
         "selfHostedDesc": "Votre serveur sur votre réseau.",
-        "enterpriseDesc": "Utilisez le compte cloud de votre organisation (AWS, Azure, GCP)."
+        "enterpriseDesc": "Utilisez le compte cloud de votre organisation (AWS, Azure, GCP).",
+        "subscription": "Abonnement",
+        "subscriptionDesc": "Utilisez votre abonnement Claude, Codex, Grok ou Antigravity connecté."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",
@@ -5259,7 +5261,9 @@
       "helper": "Les CLI d'abonnement repondent uniquement par texte (sans outils EdgeAssistant) et sont plus lents que les fournisseurs d'API ; le nettoyage de la dictee ne les propose donc pas.",
       "useApi": "Utiliser un fournisseur d'API",
       "modelLabel": "Modele",
-      "defaultModel": "Modele par defaut du CLI"
+      "defaultModel": "Modele par defaut du CLI",
+      "empty": "Aucune CLI d'abonnement n'est encore connectée.",
+      "openSubscriptions": "Ouvrir Abonnements"
     }
   }
 }

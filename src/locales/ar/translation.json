@@ -3547,7 +3547,9 @@
         "providersDesc": "استخدم مفتاح API الخاص بك للاتصال بمزود LLM المفضل لديك.",
         "localDesc": "نماذج على الجهاز. خاصة بالكامل.",
         "selfHostedDesc": "خادمك الخاص على شبكتك.",
-        "enterpriseDesc": "استخدم الحساب السحابي لمؤسستك (AWS، Azure، GCP)."
+        "enterpriseDesc": "استخدم الحساب السحابي لمؤسستك (AWS، Azure، GCP).",
+        "subscription": "الاشتراك",
+        "subscriptionDesc": "استخدم اشتراكك المسجَّل الدخول في Claude أو Codex أو Grok أو Antigravity."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "دقة موثوقة. لا حاجة للإعداد.",
@@ -5381,7 +5383,9 @@
       "helper": "تُجيب واجهات الاشتراك CLI بالنص فقط (دون أدوات EdgeAssistant) وهي أبطأ من مزوّدي API، لذلك لا يعرضها تنظيف الإملاء.",
       "useApi": "استخدام مزوّد API بدلًا من ذلك",
       "modelLabel": "النموذج",
-      "defaultModel": "النموذج الافتراضي للواجهة"
+      "defaultModel": "النموذج الافتراضي للواجهة",
+      "empty": "لم يتم تسجيل الدخول إلى أي واجهة اشتراك (CLI) بعد.",
+      "openSubscriptions": "فتح الاشتراكات"
     }
   }
 }

@@ -1899,7 +1899,9 @@
         "localDesc": "端末上のモデル。完全プライベート。",
         "selfHostedDesc": "自前サーバーをネットワーク上に。",
         "enterprise": "エンタープライズ",
-        "enterpriseDesc": "組織のクラウドアカウントを使用 (AWS, Azure, GCP)。"
+        "enterpriseDesc": "組織のクラウドアカウントを使用 (AWS, Azure, GCP)。",
+        "subscription": "サブスクリプション",
+        "subscriptionDesc": "サインイン済みの Claude、Codex、Grok、Antigravity のサブスクリプションを使用します。"
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "信頼できる精度。設定不要。",
@@ -5259,7 +5261,9 @@
       "helper": "サブスクリプション CLI はテキストのみで応答し（EdgeAssistant のツールなし）、API プロバイダーより遅いため、ディクテーションのクリーンアップでは選択できません。",
       "useApi": "代わりに API プロバイダーを使う",
       "modelLabel": "モデル",
-      "defaultModel": "CLI の既定モデル"
+      "defaultModel": "CLI の既定モデル",
+      "empty": "サインイン済みのサブスクリプション CLI はまだありません。",
+      "openSubscriptions": "サブスクリプションを開く"
     }
   }
 }

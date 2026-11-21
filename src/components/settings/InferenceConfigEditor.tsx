@@ -1,7 +1,16 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "../icons";
+import {
+  Cloud,
+  Key,
+  Cpu,
+  Network,
+  Building2,
+  ShieldCheck,
+  AlertTriangle,
+  Terminal,
+} from "../icons";
 import {
   LLM_ENTERPRISE_POLICY_PROVIDER_IDS,
   LLM_POLICY_PROVIDER_IDS,
@@ -36,8 +45,16 @@ import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
 import CliProviderPicker from "./CliProviderPicker";
-import { CLI_SCOPE_ALLOWLIST } from "../../helpers/llmCliProviders.js";
-import { isCliProviderId } from "../../helpers/llmCli/llmCliRouting.js";
+import { CLOUD_ENABLED } from "../../config/forkRuntime";
+import { useLlmCliProviders } from "../../hooks/useLlmCliProviders";
+import { cliPickerSeats } from "../../helpers/llmCli/llmCliRouting.js";
+import {
+  SUBSCRIPTION_MODE_ID,
+  deriveDisplayMode,
+  isCloudModeOffered,
+  isSubscriptionModeOffered,
+  subscriptionSelectPatch,
+} from "../../helpers/llmCli/subscriptionMode.js";
 
 // Radix Select can't hold an empty value, so Auto ("") gets a sentinel.
 const AUTO_REASONING_EFFORT_VALUE = "__auto__";
@@ -75,7 +92,15 @@ export default function InferenceConfigEditor({
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
   const managedAvailable = useManagedScopeResolution(scope, "managed");
 
-  const { modes, effectiveMode, isModeAllowed } = usePolicyModeOptions<InferenceModeOption>(
+  const cli = useLlmCliProviders();
+  const subscriptionOffered = isSubscriptionModeOffered(scope);
+  const [subscriptionPending, setSubscriptionPending] = useState(false);
+
+  const {
+    modes: policyModes,
+    effectiveMode,
+    isModeAllowed,
+  } = usePolicyModeOptions<InferenceModeOption>(
     (
       [
         {
@@ -111,7 +136,9 @@ export default function InferenceConfigEditor({
           icon: <Building2 className="w-4 h-4" />,
         },
       ] as InferenceModeOption[]
-    ).filter((mode) => !allowedModes || allowedModes.includes(mode.id)),
+    )
+      .filter((mode) => !allowedModes || allowedModes.includes(mode.id))
+      .filter((mode) => mode.id !== "openwhispr" || isCloudModeOffered(CLOUD_ENABLED)),
     "llm",
     config.mode,
     {
@@ -119,6 +146,24 @@ export default function InferenceConfigEditor({
       enterpriseProviders: LLM_ENTERPRISE_POLICY_PROVIDER_IDS,
     }
   );
+
+  const displayMode = deriveDisplayMode(effectiveMode, config.provider, subscriptionPending);
+  const modes: InferenceModeOption<InferenceMode | typeof SUBSCRIPTION_MODE_ID>[] = [];
+  for (const mode of policyModes) {
+    modes.push(mode);
+    if (
+      mode.id === "providers" &&
+      subscriptionOffered &&
+      (!allowedModes || allowedModes.includes("providers"))
+    ) {
+      modes.push({
+        id: SUBSCRIPTION_MODE_ID,
+        label: t("settingsPage.aiModels.modes.subscription"),
+        description: t("settingsPage.aiModels.modes.subscriptionDesc"),
+        icon: <Terminal className="w-4 h-4" />,
+      });
+    }
+  }
 
   const setField = useCallback(
     <K extends keyof Omit<typeof config, "scope">>(field: K) =>
@@ -129,13 +174,26 @@ export default function InferenceConfigEditor({
   );
 
   const handleModeSelect = useCallback(
-    (mode: InferenceMode) => {
+    (selected: InferenceMode | typeof SUBSCRIPTION_MODE_ID) => {
+      if (selected === SUBSCRIPTION_MODE_ID) {
+        if (!isModeAllowed("providers") || displayMode === SUBSCRIPTION_MODE_ID) return;
+        const seat = cliPickerSeats(scope, cli.prefs, cli.seats)[0] ?? null;
+        setSubscriptionPending(true);
+        setResolvedLLMConfig(
+          scope,
+          subscriptionSelectPatch(seat) as Parameters<typeof setResolvedLLMConfig>[1]
+        );
+        onModeChange?.("providers");
+        return;
+      }
+      const mode = selected;
+      setSubscriptionPending(false);
       if (!isModeAllowed(mode)) return;
       if (mode === "openwhispr" && !isSignedIn) {
         requestSignIn();
         return;
       }
-      if (mode === effectiveMode) return;
+      if (mode === effectiveMode && displayMode !== SUBSCRIPTION_MODE_ID) return;
 
       setResolvedLLMConfig(
         scope,
@@ -143,7 +201,18 @@ export default function InferenceConfigEditor({
       );
       onModeChange?.(mode);
     },
-    [scope, config.provider, config.model, effectiveMode, isSignedIn, onModeChange, isModeAllowed]
+    [
+      scope,
+      config.provider,
+      config.model,
+      effectiveMode,
+      displayMode,
+      cli.prefs,
+      cli.seats,
+      isSignedIn,
+      onModeChange,
+      isModeAllowed,
+    ]
   );
 
   const setMode = setField("mode");
@@ -259,17 +328,11 @@ export default function InferenceConfigEditor({
         </div>
       )}
       {modes.length > 1 && (
-        <InferenceModeSelector
-          modes={modes}
-          activeMode={effectiveMode}
-          onSelect={handleModeSelect}
-        />
+        <InferenceModeSelector modes={modes} activeMode={displayMode} onSelect={handleModeSelect} />
       )}
 
-      {effectiveMode === "providers" &&
-        !isCliProviderId(config.provider) &&
-        renderModelSelector("cloud")}
-      {effectiveMode === "providers" && CLI_SCOPE_ALLOWLIST.includes(scope) && (
+      {displayMode === "providers" && renderModelSelector("cloud")}
+      {displayMode === SUBSCRIPTION_MODE_ID && (
         <CliProviderPicker scope={scope} provider={config.provider} model={config.model} />
       )}
       {effectiveMode === "local" && renderModelSelector("local")}

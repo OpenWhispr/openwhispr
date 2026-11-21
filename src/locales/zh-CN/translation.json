@@ -1899,7 +1899,9 @@
         "localDesc": "设备端模型，完全私密。",
         "selfHostedDesc": "你的服务器，在你的网络上。",
         "enterprise": "企业级",
-        "enterpriseDesc": "使用你组织的云账号（AWS、Azure、GCP）。"
+        "enterpriseDesc": "使用你组织的云账号（AWS、Azure、GCP）。",
+        "subscription": "订阅",
+        "subscriptionDesc": "使用已登录的 Claude、Codex、Grok 或 Antigravity 订阅。"
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "准确可靠，无需设置。",
@@ -5259,7 +5261,9 @@
       "helper": "订阅 CLI 只返回文本（没有 EdgeAssistant 工具），并且比 API 提供商慢，因此听写清理不提供它们。",
       "useApi": "改用 API 提供商",
       "modelLabel": "模型",
-      "defaultModel": "CLI 默认模型"
+      "defaultModel": "CLI 默认模型",
+      "empty": "尚未登录任何订阅 CLI。",
+      "openSubscriptions": "打开订阅"
     }
   }
 }

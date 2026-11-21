@@ -1,6 +1,7 @@
 import { CLOUD_ENABLED } from "../config/forkRuntime";
 import { gateSettingsSection } from "../config/cloudSections";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { OPEN_SETTINGS_SECTION_EVENT } from "../helpers/llmCli/subscriptionMode.js";
 import { useTranslation } from "react-i18next";
 import { usePolicyStore } from "../stores/policyStore";
 import {
@@ -192,6 +193,15 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
     setActiveSection(section);
     setInitialSubTab(subTab);
   };
+
+  useEffect(() => {
+    const onOpenSection = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
+      if (detail === "subscriptions") handleSectionChange("subscriptions");
+    };
+    window.addEventListener(OPEN_SETTINGS_SECTION_EVENT, onOpenSection);
+    return () => window.removeEventListener(OPEN_SETTINGS_SECTION_EVENT, onOpenSection);
+  }, []);
 
   return (
     <SidebarModal<SettingsSectionType>

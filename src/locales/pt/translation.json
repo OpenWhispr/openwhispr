@@ -1878,7 +1878,9 @@
         "localDesc": "Modelos no dispositivo. Privado.",
         "selfHostedDesc": "Seu servidor na sua rede.",
         "enterprise": "Corporativo",
-        "enterpriseDesc": "Use a conta de nuvem da sua organização (AWS, Azure, GCP)."
+        "enterpriseDesc": "Use a conta de nuvem da sua organização (AWS, Azure, GCP).",
+        "subscription": "Assinatura",
+        "subscriptionDesc": "Use sua assinatura do Claude, Codex, Grok ou Antigravity com sessão iniciada."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Resultados confiáveis. Sem configuração.",
@@ -5259,7 +5261,9 @@
       "helper": "Os CLIs de assinatura respondem apenas com texto (sem ferramentas do EdgeAssistant) e sao mais lentos que os provedores de API, por isso a limpeza do ditado nao os oferece.",
       "useApi": "Usar um provedor de API",
       "modelLabel": "Modelo",
-      "defaultModel": "Modelo padrao do CLI"
+      "defaultModel": "Modelo padrao do CLI",
+      "empty": "Nenhuma CLI de assinatura com sessão iniciada ainda.",
+      "openSubscriptions": "Abrir Assinaturas"
     }
   }
 }

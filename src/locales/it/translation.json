@@ -1899,7 +1899,9 @@
         "localDesc": "Modelli sul dispositivo. Totalmente privato.",
         "selfHostedDesc": "Il tuo server nella tua rete.",
         "enterprise": "Enterprise",
-        "enterpriseDesc": "Usa l'account cloud della tua organizzazione (AWS, Azure, GCP)."
+        "enterpriseDesc": "Usa l'account cloud della tua organizzazione (AWS, Azure, GCP).",
+        "subscription": "Abbonamento",
+        "subscriptionDesc": "Usa il tuo abbonamento Claude, Codex, Grok o Antigravity con accesso effettuato."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Risultati affidabili. Nessuna configurazione necessaria.",
@@ -5259,7 +5261,9 @@
       "helper": "I CLI di abbonamento rispondono solo con testo (senza strumenti EdgeAssistant) e sono piu lenti dei provider API, quindi la pulizia della dettatura non li offre.",
       "useApi": "Usa invece un provider API",
       "modelLabel": "Modello",
-      "defaultModel": "Modello predefinito del CLI"
+      "defaultModel": "Modello predefinito del CLI",
+      "empty": "Nessuna CLI di abbonamento ha ancora effettuato l'accesso.",
+      "openSubscriptions": "Apri Abbonamenti"
     }
   }
 }

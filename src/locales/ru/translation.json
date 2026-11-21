@@ -1903,7 +1903,9 @@
         "localDesc": "Модели на устройстве. Полная приватность.",
         "selfHostedDesc": "Свой сервер в вашей сети.",
         "enterprise": "Корпоративный",
-        "enterpriseDesc": "Используйте облачный аккаунт вашей организации (AWS, Azure, GCP)."
+        "enterpriseDesc": "Используйте облачный аккаунт вашей организации (AWS, Azure, GCP).",
+        "subscription": "Подписка",
+        "subscriptionDesc": "Используйте вашу подписку Claude, Codex, Grok или Antigravity, в которую выполнен вход."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Надёжные результаты. Без настройки.",
@@ -5305,7 +5307,9 @@
       "helper": "CLI по подписке отвечают только текстом (без инструментов EdgeAssistant) и медленнее API-провайдеров, поэтому очистка диктовки их не предлагает.",
       "useApi": "Использовать API-провайдера",
       "modelLabel": "Модель",
-      "defaultModel": "Модель CLI по умолчанию"
+      "defaultModel": "Модель CLI по умолчанию",
+      "empty": "Ни одна CLI подписки пока не авторизована.",
+      "openSubscriptions": "Открыть подписки"
     }
   }
 }

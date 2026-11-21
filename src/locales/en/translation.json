@@ -2193,7 +2193,9 @@
         "providersDesc": "Use your own API key to connect your preferred LLM provider.",
         "localDesc": "On-device models. Fully private.",
         "selfHostedDesc": "Your own server on your network.",
-        "enterpriseDesc": "Use your organization's cloud account (AWS, Azure, GCP)."
+        "enterpriseDesc": "Use your organization's cloud account (AWS, Azure, GCP).",
+        "subscription": "Subscription",
+        "subscriptionDesc": "Use your signed-in Claude, Codex, Grok or Antigravity subscription."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
@@ -5259,7 +5261,9 @@
       "helper": "Subscription CLIs answer text only (no EdgeAssistant tools) and are slower than API providers, so dictation cleanup does not offer them.",
       "useApi": "Use an API provider instead",
       "modelLabel": "Model",
-      "defaultModel": "CLI default model"
+      "defaultModel": "CLI default model",
+      "empty": "No subscription CLI is signed in yet.",
+      "openSubscriptions": "Open Subscriptions"
     }
   }
 }

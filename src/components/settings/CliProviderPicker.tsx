@@ -5,10 +5,11 @@ import { useLlmCliProviders } from "../../hooks/useLlmCliProviders";
 import { setResolvedLLMConfig } from "../../stores/settingsStore";
 import type { InferenceScope } from "../../config/inferenceScopes";
 import { CLI_DEFAULT_MODEL, cliPickerSeats } from "../../helpers/llmCli/llmCliRouting.js";
+import { OPEN_SETTINGS_SECTION_EVENT } from "../../helpers/llmCli/subscriptionMode.js";
 
 // Subscription CLI group of the provider picker. The caller mounts it only for scopes the
 // allowlist offers (chat and the dictation agent); it lists signed-in, enabled seats and
-// renders nothing when there are none. Dictation cleanup never mounts it (D-03).
+// shows a link to the Subscriptions page when there are none. Dictation cleanup never mounts it (D-03).
 interface CliProviderPickerProps {
   scope: InferenceScope;
   provider: string;
@@ -19,7 +20,25 @@ export default function CliProviderPicker({ scope, provider, model }: CliProvide
   const { t } = useTranslation();
   const cli = useLlmCliProviders();
   const seats = cliPickerSeats(scope, cli.prefs, cli.seats);
-  if (seats.length === 0) return null;
+  if (seats.length === 0) {
+    return (
+      <div className="space-y-2 pt-1">
+        <p className="text-xs text-muted-foreground">{t("llmSubscriptions.picker.empty")}</p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent(OPEN_SETTINGS_SECTION_EVENT, { detail: "subscriptions" })
+            )
+          }
+        >
+          {t("llmSubscriptions.picker.openSubscriptions")}
+        </Button>
+      </div>
+    );
+  }
   const active = seats.find((s) => s.id === provider);
 
   return (

@@ -1951,7 +1951,9 @@
         "localDesc": "Modelos en el dispositivo. Privado.",
         "selfHostedDesc": "Tu servidor en tu red.",
         "enterprise": "Empresarial",
-        "enterpriseDesc": "Usa la cuenta en la nube de tu organización (AWS, Azure, GCP)."
+        "enterpriseDesc": "Usa la cuenta en la nube de tu organización (AWS, Azure, GCP).",
+        "subscription": "Suscripción",
+        "subscriptionDesc": "Usa tu suscripción de Claude, Codex, Grok o Antigravity con sesión iniciada."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Resultados fiables. Sin configuración.",
@@ -5259,7 +5261,9 @@
       "helper": "Los CLI de suscripcion solo responden con texto (sin herramientas de EdgeAssistant) y son mas lentos que los proveedores de API, por eso la limpieza del dictado no los ofrece.",
       "useApi": "Usar un proveedor de API",
       "modelLabel": "Modelo",
-      "defaultModel": "Modelo predeterminado del CLI"
+      "defaultModel": "Modelo predeterminado del CLI",
+      "empty": "Aún no hay ninguna CLI de suscripción con sesión iniciada.",
+      "openSubscriptions": "Abrir Suscripciones"
     }
   }
 }
