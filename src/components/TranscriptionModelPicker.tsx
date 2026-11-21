@@ -6,7 +6,7 @@ import { DEFAULT_STT, TITANIUM, TITANIUM_ENABLED } from "../config/forkRuntime";
 import { isTitaniumServiceUrl } from "../helpers/titanium/titaniumHosts";
 import {
   resolveSttEndpointNotice,
-  shouldRetrySttCheck,
+  stepSttRetry,
 } from "../helpers/titanium/titaniumOnboardingPolicy.js";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
@@ -1225,19 +1225,15 @@ export default function TranscriptionModelPicker({
       })
     : null;
   // The check's config does not change when Titanium signs in, so ask again explicitly.
-  const wasTitaniumSignedIn = useRef(titaniumAuth.signedIn);
+  const sttRetryState = useRef({ signedIn: titaniumAuth.signedIn, signedOutNotice: null });
   const retryCheck = check.retry;
   useEffect(() => {
-    if (
-      shouldRetrySttCheck({
-        wasSignedIn: wasTitaniumSignedIn.current,
-        signedIn: titaniumAuth.signedIn,
-        notice: sttNotice,
-      })
-    ) {
-      retryCheck();
-    }
-    wasTitaniumSignedIn.current = titaniumAuth.signedIn;
+    const step = stepSttRetry(sttRetryState.current, {
+      signedIn: titaniumAuth.signedIn,
+      notice: sttNotice,
+    });
+    sttRetryState.current = step.state;
+    if (step.retry) retryCheck();
   }, [titaniumAuth.signedIn, sttNotice, retryCheck]);
   const customFailureReason =
     sttNotice === "titaniumSignIn"

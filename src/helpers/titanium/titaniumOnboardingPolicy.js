@@ -65,12 +65,22 @@ export function resolveTitaniumSetupAction({ titaniumSignedIn }) {
 }
 
 /**
- * Whether the Speech-to-Text connection check must be sent again: Titanium has just
- * become signed in while the last answer was the sign-in notice. The config itself
- * did not change, so the auto-check would otherwise keep showing the stale refusal.
+ * Follows the Titanium sign-in over time to decide when the Speech-to-Text connection
+ * check must be sent again. The check's config does not change on sign-in, so without
+ * this the auto-check keeps the stale refusal. `retry` is true on the render where
+ * Titanium turns signed-in after the sign-in notice was showing; by then the current
+ * notice has already moved on, so the notice shown while signed out is remembered.
+ * Feed it every render: `next = stepSttRetry(next.state, { signedIn, notice })`.
  */
-export function shouldRetrySttCheck({ wasSignedIn, signedIn, notice }) {
-  return !wasSignedIn && Boolean(signedIn) && notice === "titaniumSignIn";
+export const INITIAL_STT_RETRY_STATE = { signedIn: false, signedOutNotice: null };
+
+export function stepSttRetry(state, { signedIn, notice }) {
+  const signedInNow = Boolean(signedIn);
+  const retry = !state.signedIn && signedInNow && state.signedOutNotice === "titaniumSignIn";
+  return {
+    retry,
+    state: { signedIn: signedInNow, signedOutNotice: signedInNow ? null : notice },
+  };
 }
 
 /**

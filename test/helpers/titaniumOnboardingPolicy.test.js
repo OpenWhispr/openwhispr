@@ -117,14 +117,32 @@ test("account session: Titanium decides without hosted cloud, upstream otherwise
   );
 });
 
-test("STT check is re-sent when Titanium signs in over the sign-in notice", async () => {
-  const { shouldRetrySttCheck } = await load();
-  const notice = "titaniumSignIn";
-  assert.equal(shouldRetrySttCheck({ wasSignedIn: false, signedIn: true, notice }), true);
-  assert.equal(shouldRetrySttCheck({ wasSignedIn: true, signedIn: true, notice }), false);
-  assert.equal(shouldRetrySttCheck({ wasSignedIn: false, signedIn: false, notice }), false);
-  assert.equal(
-    shouldRetrySttCheck({ wasSignedIn: false, signedIn: true, notice: "unauthorized" }),
-    false
-  );
+test("STT check is re-sent after the real sequence: signed out, 401 notice, sign-in", async () => {
+  const { stepSttRetry, resolveSttEndpointNotice } = await load();
+  const ours = { hasApiKey: false, isTitaniumEndpoint: true, titaniumEnabled: true };
+  const noticeFor = (refused, titaniumSignedIn) =>
+    resolveSttEndpointNotice({ ...ours, refused, titaniumSignedIn });
+  let state = { signedIn: false, signedOutNotice: null };
+  const render = (signedIn, notice) => {
+    const step = stepSttRetry(state, { signedIn, notice });
+    state = step.state;
+    return step.retry;
+  };
+
+  assert.equal(render(false, noticeFor(false, false)), false); // checking
+  assert.equal(render(false, noticeFor(true, false)), false); // 401 -> sign-in notice
+  assert.equal(noticeFor(true, false), "titaniumSignIn");
+  // Sign-in lands while the old refusal is still held: the notice has already moved on.
+  assert.equal(noticeFor(true, true), "unauthorized");
+  assert.equal(render(true, noticeFor(true, true)), true); // retry fires once
+  assert.equal(render(true, noticeFor(false, true)), false); // fresh check passes, notice clears
+  assert.equal(noticeFor(false, true), null);
+});
+
+test("STT retry does not fire without a prior sign-in notice or when already signed in", async () => {
+  const { stepSttRetry } = await load();
+  const unauthorized = { signedIn: false, signedOutNotice: "unauthorized" };
+  assert.equal(stepSttRetry(unauthorized, { signedIn: true, notice: null }).retry, false);
+  const already = { signedIn: true, signedOutNotice: null };
+  assert.equal(stepSttRetry(already, { signedIn: true, notice: "unauthorized" }).retry, false);
 });
