@@ -25,7 +25,14 @@ function invalid(message) {
   return { success: false, code: "invalid-input", error: message };
 }
 
-function registerLlmCliIpc({ ipcMain, runner, detector, emitEvent = () => {}, logger = {} }) {
+function registerLlmCliIpc({
+  ipcMain,
+  runner,
+  detector,
+  installer,
+  emitEvent = () => {},
+  logger = {},
+}) {
   const streamAborts = new Map(); // streamId -> AbortController
 
   // Seat state changes (detect, test, install, sign-in) reach every window.
@@ -36,6 +43,19 @@ function registerLlmCliIpc({ ipcMain, runner, detector, emitEvent = () => {}, lo
   ipcMain.handle("llm-cli-test", async (_event, seat) => {
     if (!isSeat(seat)) return invalid("unknown seat");
     return detector.testSeat(seat);
+  });
+
+  // The only renderer value accepted is the url the consent dialog displayed;
+  // the installer compares it byte-for-byte with the policy table.
+  ipcMain.handle("llm-cli-install-start", async (_event, seat, consentedUrl) => {
+    if (!isSeat(seat) || typeof consentedUrl !== "string" || consentedUrl.length > 2048) {
+      return invalid("invalid install request");
+    }
+    return installer.install({ seat, consentedUrl, onProgress: emitEvent });
+  });
+
+  ipcMain.handle("llm-cli-install-cancel", async (_event, seat) => {
+    if (isSeat(seat)) installer.cancel(seat);
   });
 
   // Mirrors enterprise-stream-start/part/cancel so the renderer shim in 08-03
@@ -110,6 +130,7 @@ function initLlmCliIpc({ logger } = {}) {
   const { ipcMain, BrowserWindow } = require("electron");
   const { createRunner } = require("./llmCliRunner");
   const { createDetector } = require("./llmCliDetect");
+  const { createInstaller } = require("./llmCliInstaller");
 
   const holder = { detector: null };
   const runner = createRunner({
@@ -118,14 +139,15 @@ function initLlmCliIpc({ logger } = {}) {
   });
   const detector = createDetector({ runner, log: (...args) => logger?.debug?.(...args) });
   holder.detector = detector;
+  const installer = createInstaller({ detector, log: (...args) => logger?.debug?.(...args) });
 
   const emitEvent = (event) => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send("llm-cli-event", event);
     }
   };
-  registerLlmCliIpc({ ipcMain, runner, detector, emitEvent, logger });
-  return { runner, detector };
+  registerLlmCliIpc({ ipcMain, runner, detector, installer, emitEvent, logger });
+  return { runner, detector, installer };
 }
 
 module.exports = { registerLlmCliIpc, initLlmCliIpc, SEATS, isSeat };

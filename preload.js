@@ -715,6 +715,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // by src/helpers/llmCli/llmCliIpc.js and kept in parity by llmCliIpc.test.js.
   llmCliDetect: () => ipcRenderer.invoke("llm-cli-detect"),
   llmCliTest: (seat) => ipcRenderer.invoke("llm-cli-test", seat),
+  llmCliInstallStart: (seat, consentedUrl) =>
+    ipcRenderer.invoke("llm-cli-install-start", seat, consentedUrl),
+  llmCliInstallCancel: (seat) => ipcRenderer.invoke("llm-cli-install-cancel", seat),
   onLlmCliEvent: registerListener(
     "llm-cli-event",
     (callback) => (_event, payload) => callback(payload)
