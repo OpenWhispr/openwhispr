@@ -367,12 +367,16 @@ private enum KeyboardScreenshots {
     Device(name: "promax", width: 956, landscape: true, globe: false),
   ]
 
-  static func render(to directory: URL) {
+  /// In the simulator harness: a real window, so appearance and fonts are the device's own.
+  static var hostWindow: UIWindow?
+
+  /// `devicePrefix` limits the run to one device's sizes ("se" on the SE simulator).
+  static func render(to directory: URL, devicePrefix: String? = nil) {
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let layouts: [(String, TypingLanguage, KeyLayoutKind)] = [
       ("en", .english, .qwerty), ("de", .german, .qwertz), ("en-qwertz", .english, .qwertz),
     ]
-    for device in devices {
+    for device in devices where devicePrefix == nil || device.name == devicePrefix {
       for (layoutName, language, layout) in layouts {
         for dark in [false, true] {
           var states = ["rest", "typing"]
@@ -405,8 +409,18 @@ private enum KeyboardScreenshots {
     if state == "numberpad" { proxy.keyboardType = .numberPad }
     TestEnvironment.proxy = proxy
     let page: TestPage = state == "numbers" ? .numbers : (state == "symbols" ? .symbols : .letters)
+    hostWindow?.overrideUserInterfaceStyle = dark ? .dark : .light
     let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: device.width, page: page) {
       $0.overrideUserInterfaceStyle = dark ? .dark : .light
+      // In a window before its keys are built, so every colour resolves for the appearance.
+      if let root = hostWindow?.rootViewController {
+        root.children.forEach { child in
+          child.view.removeFromSuperview()
+          child.removeFromParent()
+        }
+        root.addChild($0)
+        root.view.addSubview($0.view)
+      }
     }
     keyboard.viewWillAppear(false)
     keyboard.uiTestSyncGeometry()

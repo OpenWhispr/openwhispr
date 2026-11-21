@@ -115,7 +115,10 @@ private final class TestTextProxy: NSObject, UITextDocumentProxy {
   }
   func setMarkedText(_ markedText: String, selectedRange: NSRange) {}
   func unmarkText() {}
+  /// When insertText last returned, for the simulator harness's latency measurement.
+  private(set) var lastInsertAt: CFTimeInterval = 0
   func insertText(_ text: String) {
+    defer { lastInsertAt = CACurrentMediaTime() }
     inserted.append(text)
     guard tracksText else { return }
     documentContextBeforeInput = (documentContextBeforeInput ?? "") + text
@@ -253,6 +256,16 @@ private struct TouchChecks {
 private enum KeyboardTouchTests {
   @MainActor
   static func main() {
+    #if targetEnvironment(simulator)
+    // Built as an app for the simulator (run-keyboard-sim-harness.py): UIKit runs the show.
+    runSimHarnessApp()
+    #else
+    runOnMac()
+    #endif
+  }
+
+  @MainActor
+  static func runOnMac() {
     var checks = TouchChecks()
     TestEnvironment.install()
     // `--screenshots <directory>` renders the visual-review PNGs instead of testing.
