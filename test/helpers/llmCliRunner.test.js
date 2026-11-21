@@ -198,3 +198,127 @@ test("win32 tree-kill awaits taskkill and never calls child.kill first", async (
   await done;
   assert.deepEqual(calls, [["taskkill", "/T", "/F", "/PID", "4242"]]);
 });
+
+// ---- fake-child helpers: cancel during async resolve, multibyte output ----
+
+function makeFakeSpawnHarness({ resolveExe, getClaudeToken } = {}) {
+  const { EventEmitter } = require("events");
+  const { PassThrough } = require("stream");
+  const calls = [];
+  const spawn = (...args) => {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.stdin = new PassThrough();
+    child.pid = 4243;
+    calls.push({ args, child });
+    return child;
+  };
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-cli-runner-fake-"));
+  const runner = createRunner({
+    spawn,
+    tmpDir: path.join(tmpDir, "runs"),
+    env: { ...process.env },
+    resolveExe: resolveExe || (async () => ({ exe: process.execPath, args: [] })),
+    getClaudeToken: getClaudeToken || (async () => CANARY_TOKEN),
+    killTree: async (child) => child.emit("close", null),
+    timeouts: { firstOutputMs: 300, idleMs: 300, totalMs: 600 },
+  });
+  return { runner, calls };
+}
+
+// Writes `bytes` split at `at`, closes stdout, then emits close(0).
+async function feedAndClose(child, bytes, at) {
+  child.stdout.write(bytes.subarray(0, at));
+  await new Promise((resolve) => setImmediate(resolve));
+  child.stdout.write(bytes.subarray(at));
+  child.stdout.end();
+  await new Promise((resolve) => setImmediate(resolve));
+  child.emit("close", 0);
+}
+
+async function waitForSpawn(calls) {
+  for (let i = 0; i < 100 && calls.length === 0; i += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return calls[0];
+}
+
+for (const gated of ["resolveExe", "getClaudeToken"]) {
+  for (const how of ["runner.cancel", "AbortSignal"]) {
+    test(`a ${how} during async ${gated} spawns nothing and returns killed`, async () => {
+      let release;
+      const gate = new Promise((resolve) => (release = resolve));
+      const opts =
+        gated === "resolveExe"
+          ? {
+              resolveExe: async () => {
+                await gate;
+                return { exe: process.execPath, args: [] };
+              },
+            }
+          : {
+              getClaudeToken: async () => {
+                await gate;
+                return CANARY_TOKEN;
+              },
+            };
+      const h = makeFakeSpawnHarness(opts);
+      const controller = new AbortController();
+      const run = h.runner.runStream({ seat: "claude", prompt: "hi", signal: controller.signal });
+      if (how === "runner.cancel") h.runner.cancel("claude");
+      else controller.abort();
+      release();
+      const result = await run;
+      assert.equal(h.calls.length, 0, "spawned after a cancel");
+      assert.equal(result.ok, false);
+      assert.equal(result.code, "killed");
+      assert.equal(h.runner.isBusy("claude"), false);
+    });
+  }
+}
+
+test("agy buffered stdout keeps a multibyte character split across chunks", async () => {
+  const h = makeFakeSpawnHarness();
+  const run = h.runner.runStream({ seat: "agy", prompt: "hi" });
+  const spawned = await waitForSpawn(h.calls);
+  const bytes = Buffer.from("café");
+  await feedAndClose(spawned.child, bytes, bytes.indexOf(0xc3) + 1);
+  const result = await run;
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.text, "café");
+});
+
+test("claude streamed stdout keeps a multibyte character split across chunks", async () => {
+  const h = makeFakeSpawnHarness();
+  const parts = [];
+  const run = h.runner.runStream({ seat: "claude", prompt: "hi", onPart: (p) => parts.push(p) });
+  const spawned = await waitForSpawn(h.calls);
+  const delta = {
+    type: "stream_event",
+    event: { type: "content_block_delta", delta: { type: "text_delta", text: "café" } },
+  };
+  const final = { type: "result", is_error: false, result: "café" };
+  const bytes = Buffer.from(`${JSON.stringify(delta)}\n${JSON.stringify(final)}\n`);
+  await feedAndClose(spawned.child, bytes, bytes.indexOf(0xc3) + 1);
+  const result = await run;
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.text, "café");
+  assert.equal(parts.find((p) => p.type === "text-delta").delta, "café");
+});
+
+test("stderr keeps a multibyte character split across chunks (failure message)", async () => {
+  const h = makeFakeSpawnHarness();
+  const run = h.runner.runStream({ seat: "agy", prompt: "hi" });
+  const spawned = await waitForSpawn(h.calls);
+  const bytes = Buffer.from("boom café");
+  spawned.child.stderr.write(bytes.subarray(0, bytes.indexOf(0xc3) + 1));
+  await new Promise((resolve) => setImmediate(resolve));
+  spawned.child.stderr.write(bytes.subarray(bytes.indexOf(0xc3) + 1));
+  spawned.child.stdout.end();
+  await new Promise((resolve) => setImmediate(resolve));
+  spawned.child.emit("close", 2);
+  const result = await run;
+  assert.equal(result.ok, false);
+  assert.ok(result.message.includes("café"), result.message);
+});

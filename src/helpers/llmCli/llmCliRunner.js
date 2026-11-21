@@ -92,13 +92,24 @@ function createRunner({
     if (active.has(seat)) return fail("busy", "a run is already active for this seat");
     if (signal?.aborted) return fail("killed", "cancelled before start");
 
-    const run = { seat, child: null, terminated: null, cancel: null };
+    // A cancel can arrive while the exe or token is still resolving, before there
+    // is a child to kill. Record it now; the spawn path checks the flag.
+    let cancelled = false;
+    const run = {
+      seat,
+      child: null,
+      terminated: null,
+      cancel: () => {
+        cancelled = true;
+      },
+    };
     active.set(seat, run);
 
     let runDir = null;
     let token = null;
     const timers = [];
-    let onAbort = null;
+    const onAbort = () => run.cancel();
+    if (signal) signal.addEventListener("abort", onAbort, { once: true });
     try {
       const resolved = await resolveExe(seat);
       const exe = typeof resolved === "string" ? resolved : resolved?.exe;
@@ -109,6 +120,8 @@ function createRunner({
         token = await getClaudeToken();
         if (!token) return fail("not-signed-in", "no stored claude token");
       }
+      // Last checkpoint before the synchronous path to spawn().
+      if (cancelled) return fail("killed", "cancelled");
 
       fs.mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
       runDir = fs.mkdtempSync(path.join(tmpDir, "run-"));
@@ -147,6 +160,10 @@ function createRunner({
           return;
         }
         run.child = child;
+        // Decode with the stream's own incremental decoder so a multibyte
+        // character split across chunks is not corrupted.
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
 
         let settled = false;
         let stdoutText = "";
@@ -216,11 +233,6 @@ function createRunner({
         };
         timers.push(setTimeout(() => terminate("timeout", "total time limit"), runLimits.totalMs));
 
-        if (signal) {
-          onAbort = () => terminate("killed", "cancelled");
-          signal.addEventListener("abort", onAbort, { once: true });
-        }
-
         const handleClaudeLine = (line) => {
           const event = policy.parseClaudeStreamLine(line);
           if (!event) return;
@@ -231,7 +243,7 @@ function createRunner({
 
         child.stdout.on("data", (chunk) => {
           touch();
-          const text = chunk.toString("utf8");
+          const text = chunk;
           if (seat === "claude") {
             lineBuf += text;
             if (lineBuf.length > STDOUT_CAP) lineBuf = "";
@@ -246,7 +258,7 @@ function createRunner({
         });
         child.stderr.on("data", (chunk) => {
           touch();
-          stderrTail = appendCapped(stderrTail, chunk.toString("utf8"), STDERR_CAP);
+          stderrTail = appendCapped(stderrTail, chunk, STDERR_CAP);
         });
         // A CLI that exits before reading stdin raises EPIPE; the exit code
         // decides the outcome.
@@ -313,7 +325,7 @@ function createRunner({
       });
     } finally {
       for (const t of timers.splice(0)) clearTimeout(t);
-      if (onAbort && signal) signal.removeEventListener("abort", onAbort);
+      if (signal) signal.removeEventListener("abort", onAbort);
       if (runDir) {
         try {
           await fs.promises.rm(runDir, {
