@@ -88,7 +88,7 @@ test("grok is guided with the guide url; nothing is spawned", async () => {
 test("valid codex install: table command, hidden, scrubbed env, progress, then re-detect", async () => {
   const h = makeHarness({
     exe: "C:\\codex.exe",
-    signature: { Status: "Valid", Subject: "CN=OpenAI, O=OpenAI" },
+    signature: { Status: "Valid", Subject: 'CN="OpenAI OpCo, LLC", O="OpenAI OpCo, LLC"' },
   });
   const progress = [];
   const pending = h.installer.install({
@@ -108,15 +108,15 @@ test("valid codex install: table command, hidden, scrubbed env, progress, then r
   const result = await pending;
   assert.equal(result.ok, true);
   assert.equal(result.state.status, "installed");
-  assert.equal(result.publisher, "CN=OpenAI, O=OpenAI");
+  assert.equal(result.publisher, 'CN="OpenAI OpCo, LLC", O="OpenAI OpCo, LLC"');
   assert.ok(progress.every((e) => e.type === "install-progress" && e.seat === "codex"));
   assert.ok(!JSON.stringify(progress).includes("abcdefghijklmnop"));
-  assert.ok(progress.some((e) => e.line.includes("publisher: CN=OpenAI")));
+  assert.ok(progress.some((e) => e.line.includes("publisher: CN=\"OpenAI OpCo")));
   assert.deepEqual(h.applied[0].slice(0, 2), ["codex", "INSTALL_START"]);
 });
 
 test("one install per seat runs at a time; the kept lines are capped at 200", async () => {
-  const h = makeHarness({ exe: "C:\\codex.exe", signature: { Status: "Valid", Subject: "CN=X" } });
+  const h = makeHarness({ exe: "C:\\codex.exe", signature: { Status: "Valid", Subject: "CN=OpenAI OpCo, LLC" } });
   const url = policy.installSpec("codex", "win32").url;
   const first = h.installer.install({ seat: "codex", consentedUrl: url });
   await new Promise((r) => setImmediate(r));
@@ -198,6 +198,39 @@ test("claude publisher check is enforced: not valid or wrong subject is signatur
   await new Promise((r) => setImmediate(r));
   finishOk(ok);
   assert.equal((await pending).ok, true);
+});
+
+test("codex and agy publisher checks are enforced: wrong publisher is signature-invalid", async () => {
+  for (const [seat, publisher] of [
+    ["codex", "OpenAI OpCo, LLC"],
+    ["agy", "Google LLC"],
+  ]) {
+    for (const signature of [
+      { Status: "NotSigned", Subject: "" },
+      { Status: "Valid", Subject: "CN=Somebody Else" },
+      { Status: "HashMismatch", Subject: `CN="${publisher}"` },
+    ]) {
+      const h = makeHarness({ signature });
+      h.detector.detectOne = async () => {
+        throw new Error("must not re-detect an untrusted binary");
+      };
+      const pending = h.installer.install({
+        seat,
+        consentedUrl: policy.installSpec(seat, "win32").url,
+      });
+      await new Promise((r) => setImmediate(r));
+      finishOk(h);
+      assert.equal((await pending).code, "signature-invalid", seat);
+    }
+    const ok = makeHarness({ signature: { Status: "Valid", Subject: `CN="${publisher}", O="${publisher}"` } });
+    const pending = ok.installer.install({
+      seat,
+      consentedUrl: policy.installSpec(seat, "win32").url,
+    });
+    await new Promise((r) => setImmediate(r));
+    finishOk(ok);
+    assert.equal((await pending).ok, true, seat);
+  }
 });
 
 test("cancel kills the install", async () => {

@@ -562,14 +562,14 @@ const INSTALL_SCRIPTS = Object.freeze({
   codex: {
     win32: "https://chatgpt.com/codex/install.ps1",
     posix: "https://chatgpt.com/codex/install.sh",
-    publisher: null,
-    publisherCheck: "report-only",
+    publisher: "OpenAI OpCo, LLC",
+    publisherCheck: "enforce",
   },
   agy: {
     win32: "https://antigravity.google/cli/install.ps1",
     posix: "https://antigravity.google/cli/install.sh",
-    publisher: null,
-    publisherCheck: "report-only",
+    publisher: "Google LLC",
+    publisherCheck: "enforce",
   },
 });
 

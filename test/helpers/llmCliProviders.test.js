@@ -403,7 +403,15 @@ test("installSpec urls and publisher checks (D-02)", () => {
     "https://chatgpt.com/codex/install.ps1"
   );
   assert.strictEqual(mod.installSpec("codex", "linux").url, "https://chatgpt.com/codex/install.sh");
-  assert.strictEqual(mod.installSpec("codex", "win32").publisherCheck, "report-only");
+  for (const [seat, platform, publisher] of [
+    ["codex", "win32", "OpenAI OpCo, LLC"],
+    ["codex", "linux", "OpenAI OpCo, LLC"],
+    ["agy", "win32", "Google LLC"],
+    ["agy", "darwin", "Google LLC"],
+  ]) {
+    const spec = mod.installSpec(seat, platform);
+    assert.deepStrictEqual([spec.publisher, spec.publisherCheck], [publisher, "enforce"], seat);
+  }
   assert.strictEqual(
     mod.installSpec("agy", "win32").url,
     "https://antigravity.google/cli/install.ps1"
@@ -412,7 +420,6 @@ test("installSpec urls and publisher checks (D-02)", () => {
     mod.installSpec("agy", "darwin").url,
     "https://antigravity.google/cli/install.sh"
   );
-  assert.strictEqual(mod.installSpec("agy", "darwin").publisherCheck, "report-only");
   for (const platform of ["win32", "darwin", "linux"]) {
     assert.deepStrictEqual(mod.installSpec("grok", platform), {
       kind: "guided",

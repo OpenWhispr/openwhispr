@@ -388,7 +388,7 @@ test("e2e codex: detect, install, sign-in, stream, cancel, sign-out in order, no
     const argLine = args.join(" ");
     let out = "";
     let code = 0;
-    if (key === "powershell.exe") out = JSON.stringify({ Status: "Valid", Subject: "CN=OpenAI" });
+    if (key === "powershell.exe") out = JSON.stringify({ Status: "Valid", Subject: "CN=OpenAI OpCo, LLC" });
     else if (argLine === "--version") out = "codex-cli 0.157.0";
     else if (argLine === "exec --help")
       out =

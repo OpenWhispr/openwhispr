@@ -160,9 +160,8 @@ function createInstaller({
             detector.apply(seat, { type: "INSTALL_FAIL", code: "signature-invalid" });
             return done({ ok: false, code: "signature-invalid" });
           }
-        } else if (publisher) {
-          emitLine(`publisher: ${publisher}`);
         }
+        if (publisher) emitLine(`publisher: ${publisher}`);
       }
 
       const state = await detector.detectOne(seat);
