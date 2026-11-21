@@ -661,8 +661,209 @@ const ERROR_CODES = Object.freeze([
   "quarantined-or-missing",
 ]);
 
+// ---- Output parsers (D-01, D-03) ----
+// Every parser returns data and never throws on hostile input. All input is
+// capped at 2 MB before any regex runs; every regex is linear (no nested or
+// overlapping unbounded quantifiers).
+
+const PARSER_INPUT_CAP = 2 * 1024 * 1024;
+
+function capInput(text) {
+  if (typeof text !== "string") return "";
+  return text.length > PARSER_INPUT_CAP ? text.slice(0, PARSER_INPUT_CAP) : text;
+}
+
+function stripAnsi(text) {
+  let out = capInput(text);
+  out = out.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "");
+  out = out.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "");
+  out = out.replace(/\x1b[@-Z\\-_]/g, "");
+  out = out.replace(/\r\n/g, "\n");
+  // A bare carriage return redraws the line: keep what was drawn last.
+  if (out.includes("\r")) {
+    out = out
+      .split("\n")
+      .map((line) => {
+        const idx = line.lastIndexOf("\r");
+        if (idx === -1) return line;
+        const tail = line.slice(idx + 1);
+        return tail.length > 0 ? tail : line.slice(0, idx).split("\r").pop();
+      })
+      .join("\n");
+  }
+  return out;
+}
+
+function lastTokenLength(line) {
+  let i = line.length - 1;
+  while (i >= 0 && line[i] !== " " && line[i] !== "\t") i -= 1;
+  return line.length - 1 - i;
+}
+
+// A terminal wraps long tokens and URLs at the column limit. A line ending in a
+// long unbroken token whose successor has no whitespace is one logical line.
+function joinWrappedLines(text) {
+  const lines = text.split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    let line = lines[i].trimEnd();
+    while (
+      lastTokenLength(line) >= 20 &&
+      i + 1 < lines.length &&
+      lines[i + 1].trim().length > 0 &&
+      !/\s/.test(lines[i + 1].trim())
+    ) {
+      i += 1;
+      line += lines[i].trim();
+    }
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+// Long-lived Claude setup token (oat01 only; API keys are refused, rule 22c).
+function extractSetupToken(text) {
+  const joined = joinWrappedLines(stripAnsi(text));
+  const match = /sk-ant-oat01-[A-Za-z0-9_-]{1,150}/.exec(joined);
+  if (!match) return null;
+  return match[0].length >= 100 ? match[0] : null;
+}
+
+function extractSignInUrl(seat, text) {
+  const joined = joinWrappedLines(stripAnsi(text));
+  const re = /https:\/\/[^\s<>"'\x00-\x1f]{1,2000}/g;
+  let m;
+  let guard = 0;
+  while ((m = re.exec(joined)) !== null && guard < 200) {
+    guard += 1;
+    const candidate = m[0].replace(/[.,;:)\]}]+$/, "");
+    if (isAllowedSignInUrl(seat, candidate)) return candidate;
+  }
+  return null;
+}
+
+function extractDeviceCode(text) {
+  const clean = stripAnsi(text);
+  if (!/https:\/\/[^\s]{4,}/.test(clean)) return null;
+  const re = /\b([A-Z0-9]{4,5}-[A-Z0-9]{4,5})\b/g;
+  let m;
+  let guard = 0;
+  while ((m = re.exec(clean)) !== null && guard < 200) {
+    guard += 1;
+    if (/[A-Z]/.test(m[1])) return m[1];
+  }
+  return null;
+}
+
+const SIGNED_OUT_RE =
+  /not (?:logged|signed) in|please (?:log|sign) ?in|run [^\n]{0,30}(?:log ?in|auth)|unauthori[sz]ed|authentication (?:failed|required|error)|invalid[^\n]{0,20}(?:token|credentials)|token (?:has )?expired|session expired|oauth|\b401\b/i;
+const QUOTA_RE = /rate.?limit|usage limit|quota|too many requests|overloaded|\b429\b/i;
+
+function classifyStderr(seat, text) {
+  if (!getProvider(seat)) return null;
+  const clean = capInput(text);
+  if (SIGNED_OUT_RE.test(clean)) return "not-signed-in";
+  if (QUOTA_RE.test(clean)) return "quota-or-rate-limit";
+  return null;
+}
+
+function parseClaudeStreamLine(line) {
+  if (typeof line !== "string" || line.length === 0 || line.length > PARSER_INPUT_CAP) return null;
+  let obj;
+  try {
+    obj = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (!obj || typeof obj !== "object") return null;
+  if (obj.type === "stream_event") {
+    const ev = obj.event;
+    if (
+      ev &&
+      ev.type === "content_block_delta" &&
+      ev.delta &&
+      ev.delta.type === "text_delta" &&
+      typeof ev.delta.text === "string"
+    ) {
+      return { type: "text-delta", text: ev.delta.text };
+    }
+    return null;
+  }
+  if (obj.type === "result") {
+    const body = typeof obj.result === "string" ? obj.result : "";
+    if (obj.is_error === true) {
+      let code = "exit-nonzero";
+      if (obj.api_error_status === 401 || /login|authenticat|oauth|expired|invalid.*token/i.test(body)) {
+        code = "not-signed-in";
+      } else if (/rate limit|usage limit|quota|overloaded/i.test(body)) {
+        code = "quota-or-rate-limit";
+      }
+      return { type: "error", code };
+    }
+    if (obj.is_error === false) return { type: "final", text: body };
+  }
+  return null;
+}
+
+function parseCodexFinal({ fileText, stderrText } = {}) {
+  const message = typeof fileText === "string" ? capInput(fileText).trim() : "";
+  if (message.length > 0) return { type: "final", text: message };
+  const code = classifyStderr("codex", stderrText);
+  if (code) return { type: "error", code };
+  return { type: "error", code: "parse-failed" };
+}
+
+const JSON_RESULT_FIELDS = Object.freeze(["result", "text", "response", "content", "message", "output"]);
+
+function parseJsonResult(seat, stdoutText) {
+  if (!getProvider(seat)) return { type: "error", code: "parse-failed" };
+  const raw = capInput(stdoutText).trim();
+  if (raw.length === 0) return { type: "error", code: "parse-failed" };
+  let doc;
+  try {
+    doc = JSON.parse(raw);
+  } catch {
+    return { type: "final", text: raw };
+  }
+  if (typeof doc === "string") {
+    return doc.trim().length > 0 ? { type: "final", text: doc } : { type: "error", code: "parse-failed" };
+  }
+  if (doc && typeof doc === "object" && !Array.isArray(doc)) {
+    for (const field of JSON_RESULT_FIELDS) {
+      const value = doc[field];
+      if (typeof value === "string" && value.trim().length > 0) return { type: "final", text: value };
+    }
+  }
+  return { type: "error", code: "parse-failed" };
+}
+
+function scrubFixture(text) {
+  let out = capInput(text);
+  out = out.replace(/[A-Za-z]:(?:\\{1,2}|\/)Users(?:\\{1,2}|\/)[^\\/\s"']+/g, "<HOME>");
+  out = out.replace(/\/(?:Users|home)\/[^/\s"']+/g, "<HOME>");
+  out = out.replace(/sk-ant-[A-Za-z0-9_-]{6,}/g, "sk-ant-REDACTED");
+  out = out.replace(/\bsk-[A-Za-z0-9]{16,}/g, "sk-REDACTED");
+  out = out.replace(/eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, "JWT-REDACTED");
+  out = out.replace(/[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){1,5}/g, "user@example.invalid");
+  out = out.replace(
+    /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g,
+    "UUID-REDACTED"
+  );
+  out = out.replace(/\b(org|acct|account|user|team)[-_][A-Za-z0-9]{8,}\b/g, "$1-REDACTED");
+  return out;
+}
+
 module.exports = Object.freeze({
   LLM_CLI_PROVIDERS,
+  stripAnsi,
+  extractSetupToken,
+  extractSignInUrl,
+  extractDeviceCode,
+  classifyStderr,
+  parseClaudeStreamLine,
+  parseCodexFinal,
+  parseJsonResult,
+  scrubFixture,
   SCRUB_ENV_KEYS,
   STDIN_MARKER,
   AGY_PROMPT_MAX_CHARS,
