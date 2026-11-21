@@ -85,13 +85,57 @@ private final class TestTextProxy: NSObject, UITextDocumentProxy {
   var autocapitalizationType: UITextAutocapitalizationType = .sentences
   var smartQuotesType: UITextSmartQuotesType = .default
   var isSecureTextEntry = false
+  var autocorrectionType: UITextAutocorrectionType = .default
+  var spellCheckingType: UITextSpellCheckingType = .default
+  var textContentType: UITextContentType!
   private(set) var inserted = [String]()
+  private(set) var deletes = 0
+  private(set) var cursorMoves = [Int]()
+  /// A field that reports its text at once: inserts and deletes change the text before
+  /// the cursor. Off, the proxy is a host that reports nothing by itself, as most tests need.
+  var tracksText = false
 
-  func adjustTextPosition(byCharacterOffset offset: Int) {}
+  func adjustTextPosition(byCharacterOffset offset: Int) {
+    cursorMoves.append(offset)
+    guard tracksText else { return }
+    // UTF-16 units, as hosts count them.
+    var before = Array((documentContextBeforeInput ?? "").utf16)
+    var after = Array((documentContextAfterInput ?? "").utf16)
+    if offset < 0 {
+      let moved = min(-offset, before.count)
+      after.insert(contentsOf: before.suffix(moved), at: 0)
+      before.removeLast(moved)
+    } else {
+      let moved = min(offset, after.count)
+      before.append(contentsOf: after.prefix(moved))
+      after.removeFirst(moved)
+    }
+    documentContextBeforeInput = String(utf16CodeUnits: before, count: before.count)
+    documentContextAfterInput = String(utf16CodeUnits: after, count: after.count)
+  }
   func setMarkedText(_ markedText: String, selectedRange: NSRange) {}
   func unmarkText() {}
-  func insertText(_ text: String) { inserted.append(text) }
-  func deleteBackward() {}
+  func insertText(_ text: String) {
+    inserted.append(text)
+    guard tracksText else { return }
+    documentContextBeforeInput = (documentContextBeforeInput ?? "") + text
+    hasText = true
+  }
+  func deleteBackward() {
+    deletes += 1
+    guard tracksText, var before = documentContextBeforeInput, !before.isEmpty else { return }
+    before.removeLast()
+    documentContextBeforeInput = before
+    hasText = !before.isEmpty || !(documentContextAfterInput ?? "").isEmpty
+  }
+}
+
+/// Counts feedback calls: a simulator has no Taptic Engine to feel.
+private final class CountingKeyFeedback: KeyFeedbackGenerating {
+  var clicks = 0, taps = 0, ticks = 0
+  func click() { clicks += 1 }
+  func tap() { taps += 1 }
+  func tick() { ticks += 1 }
 }
 
 private enum TestPage {
@@ -105,10 +149,14 @@ private extension KeyboardViewController {
 
   /// The production keyboard laid out at `width` and its content height (or `height`), in
   /// the stubbed TestEnvironment.
-  static func makeLaidOutKeyboard(width: CGFloat, page: TestPage = .letters, height: CGFloat? = nil)
-    -> KeyboardViewController
-  {
+  static func makeLaidOutKeyboard(
+    width: CGFloat, page: TestPage = .letters, height: CGFloat? = nil,
+    prepare: (KeyboardViewController) -> Void = { _ in }
+  ) -> KeyboardViewController {
     let controller = KeyboardViewController()
+    // Before the view loads: an appearance override set later doesn't reach colours that
+    // an off-window view has already resolved.
+    prepare(controller)
     controller.loadViewIfNeeded()
     if page != .letters {
       controller.handleModeKeyTapped()
@@ -207,6 +255,11 @@ private enum KeyboardTouchTests {
   static func main() {
     var checks = TouchChecks()
     TestEnvironment.install()
+    // `--screenshots <directory>` renders the visual-review PNGs instead of testing.
+    if let flag = CommandLine.arguments.firstIndex(of: "--screenshots"), CommandLine.arguments.count > flag + 1 {
+      KeyboardScreenshots.render(to: URL(fileURLWithPath: CommandLine.arguments[flag + 1]))
+      return
+    }
     checkSyntheticRows(&checks)
     checkEdgeTies(&checks)
     checkOtherControls(&checks)
@@ -239,6 +292,7 @@ private enum KeyboardTouchTests {
     checkLayoutChanges(&checks)
     checkTyping(&checks)
     checkDirectDictation(&checks)
+    checkTypingHelp(&checks)
 
     print("Keyboard touch routing: \(checks.count - checks.failures.count)/\(checks.count) passed")
     if !checks.failures.isEmpty {

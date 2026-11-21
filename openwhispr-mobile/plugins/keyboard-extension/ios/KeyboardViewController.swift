@@ -329,6 +329,8 @@ private final class KeyButton: UIButton {
   var imageOffsetY: CGFloat = 0 {
     didSet { setNeedsLayout() }
   }
+  /// What holding the key offers, where that isn't the letter's accents (the phone pad's +).
+  var alternates: [String]?
   /// Trackpad mode: the key keeps its shape and loses its label, as Apple's keys do.
   var labelsFaded = false {
     didSet {
@@ -1179,6 +1181,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   var keyFeedback: KeyFeedbackGenerating = SystemKeyFeedback()
   private let numberPadStack = UIStackView()
   private var isNumberPadShown = false
+  private weak var bottomRow: UIStackView?
+  // Emoji: loaded the first time the panel opens or a word asks for its emoji.
+  private var emojiCatalog: EmojiCatalog?
+  private var didLoadEmojiCatalog = false
+  private var emojiPreferences: EmojiPreferences?
+  private var emojiPanel: EmojiPanelView?
+  private var emojiPanelConstraints: [NSLayoutConstraint] = []
+  private var isEmojiPanelShown = false
+  private var isEmojiSearching = false
   private var emojiKeyConstraints: (withEmoji: [NSLayoutConstraint], withoutEmoji: [NSLayoutConstraint]) = ([], [])
 
   private let recordingCanvas = UIView()
@@ -1415,6 +1426,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // The keys keep their height at the bottom; the card above them takes the extra.
     let showsCardHeight = isAgentReviewShown || isAgentActionInFlight
     let keyboardHeight = contentHeight + (showsCardHeight ? Metrics.agentReviewExtraHeight : 0)
+      + emojiSearchExtraHeight
 
     if let keyboardHeightConstraint {
       keyboardHeightConstraint.constant = keyboardHeight
@@ -1662,6 +1674,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func applyDoubleSpacePeriod() -> Bool {
+    guard !isEmojiSearching else { return false }
     // Space over a selection replaces it with a space, never ". ".
     guard (textDocumentProxy.selectedText ?? "").isEmpty else { return false }
     let context = textDocumentProxy.documentContextBeforeInput ?? ""
@@ -2555,6 +2568,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   /// A key's text: through the typing session, which may correct the word it ends.
   private func typeText(_ text: String) {
+    if isEmojiSearching {
+      // The letter keys type the emoji search, not the document.
+      if text == "\n" { endEmojiSearch() } else { emojiPanel?.appendSearch(text) }
+      return
+    }
     lastKeystrokeAt = CACurrentMediaTime()
     guard let session = typing else {
       insertUntracked(text)
@@ -2579,6 +2597,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// Backspace: undoes the correction just made or removes a swiped word whole; otherwise
   /// one character.
   private func deleteBackwardOnce() {
+    if isEmojiSearching {
+      emojiPanel?.deleteSearchBackward()
+      return
+    }
     lastKeystrokeAt = CACurrentMediaTime()
     if let edit = typing?.backspace() {
       performEdit(edit)
@@ -2634,6 +2656,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     engine.session.resync(before: textDocumentProxy.documentContextBeforeInput)
     suggestionBar.quotes = typingSettings.language == .german ? ("\u{201E}", "\u{201C}") : ("\u{201C}", "\u{201D}")
     if let geometry = laidOutKeyGeometry() { engine.corrector.geometry = geometry }
+    let language = typingSettings.language
+    engine.session.emojiForWord = { [weak self] word in
+      guard let self, let catalog = self.loadedEmojiCatalog(),
+        let emoji = catalog.emoji(forWord: word, language: language)
+      else { return nil }
+      return self.emojiPreferences?.preferred(for: emoji) ?? emoji.string
+    }
     // iOS text replacements and contact names. Asked once per keyboard; the answer comes
     // later on the main queue. Not in the test harness, which has no system lexicon.
     if Self.typingResourcesOverride == nil {
@@ -2790,6 +2819,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
     pillCenterConstraint?.isActive = !compact
     pillCompactConstraints.forEach { $0.isActive = compact }
+    topBar.setNeedsLayout()
     topBar.touchOutsetTarget = compact ? recordButton : nil
     refreshPillTouchReservation()
   }
@@ -2801,7 +2831,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       keyboardRowsStack.excludedRegion = nil
       return
     }
-    view.layoutIfNeeded()
+    topBar.layoutIfNeeded()
     let pill = recordButton.convert(recordButton.bounds, to: keyboardRowsStack)
     keyboardRowsStack.excludedRegion = CGRect(
       x: pill.minX, y: pill.maxY, width: pill.width, height: Metrics.compactPillTouchOutset
@@ -3030,7 +3060,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     keyboardRowsStack.translatesAutoresizingMaskIntoConstraints = false
     rootStack.addArrangedSubview(keyboardRowsStack)
 
-    [lettersRowsStack, numbersRowsStack, symbolsRowsStack].forEach { stack in
+    [lettersRowsStack, numbersRowsStack, symbolsRowsStack, numberPadStack].forEach { stack in
       stack.axis = .vertical
       stack.spacing = metrics.rowGap
       stack.translatesAutoresizingMaskIntoConstraints = false
@@ -3147,13 +3177,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard let key = gesture.view as? KeyButton, let letter = key.output?.first else { return }
     switch gesture.state {
     case .began:
-      let accents = KeyRows.accents(for: letter, language: typingSettings.language)
-      guard !accents.isEmpty else { return }
-      // The key's own letter first, as on Apple's keyboard: holding and letting go types it.
-      let options = ([letter] + accents).map { character -> String in
-        let text = String(character)
-        let upper = text.uppercased()
-        return isShiftEnabled && upper.count == 1 ? upper : text
+      let options: [String]
+      if let alternates = key.alternates {
+        options = [String(letter)] + alternates
+      } else {
+        let accents = KeyRows.accents(for: letter, language: typingSettings.language)
+        guard !accents.isEmpty else { return }
+        // The key's own letter first, as on Apple's keyboard: holding and letting go types it.
+        options = ([letter] + accents).map { character -> String in
+          let text = String(character)
+          let upper = text.uppercased()
+          return isShiftEnabled && upper.count == 1 ? upper : text
+        }
       }
       keyPopup.hide()
       accentKey = key
@@ -3183,7 +3218,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func typeAccent(_ text: String) {
     playKeyClick()
     typeText(text)
-    if !isCapsLocked {
+    if !isCapsLocked, !isNumberPadShown {
       let shiftStaysOn = fieldCapitalization == .allCharacters
       if shiftStaysOn != isShiftEnabled {
         isShiftEnabled = shiftStaysOn
@@ -3322,7 +3357,193 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     showEmojiPanel()
   }
 
-  private func showEmojiPanel() {}
+  private func loadedEmojiCatalog() -> EmojiCatalog? {
+    if didLoadEmojiCatalog { return emojiCatalog }
+    didLoadEmojiCatalog = true
+    guard let resources = Self.typingResourcesOverride ?? Bundle.main.resourceURL else { return nil }
+    emojiCatalog = EmojiCatalog(
+      url: resources.appendingPathComponent("emoji.bin"), isDrawable: EmojiDrawability.canDraw
+    )
+    let storage = hasFullAccess ? KeyboardHandoffProvider.shared.containerURL() : nil
+    emojiPreferences = EmojiPreferences(url: storage?.appendingPathComponent("keyboard-emoji.json"))
+    return emojiCatalog
+  }
+
+  /// While the emoji search is open the keyboard is taller by what the search strip needs
+  /// beyond the toolbar it covers; the keys keep their height at the bottom.
+  private var emojiSearchExtraHeight: CGFloat {
+    guard isEmojiSearching else { return 0 }
+    return max(0, EmojiPanelView.searchHeight - (contentHeight - keyboardRowsHeight - metrics.bottomPadding))
+  }
+
+  private var keyboardRowsHeight: CGFloat { 4 * metrics.keyHeight + 3 * metrics.rowGap }
+
+  private func showEmojiPanel() {
+    guard !isEmojiPanelShown, let catalog = loadedEmojiCatalog(), let preferences = emojiPreferences else { return }
+    let panel: EmojiPanelView
+    if let existing = emojiPanel {
+      panel = existing
+      panel.language = typingSettings.language
+    } else {
+      panel = EmojiPanelView(catalog: catalog, preferences: preferences, language: typingSettings.language)
+      panel.delegate = self
+      panel.translatesAutoresizingMaskIntoConstraints = false
+      emojiPanel = panel
+    }
+    keyPopup.hide()
+    isEmojiPanelShown = true
+    view.addSubview(panel)
+    layoutEmojiPanel()
+    keyboardRowsStack.alpha = 0
+    keyboardRowsStack.isUserInteractionEnabled = false
+    panel.reloadRecents()
+  }
+
+  /// The panel covers the key rows; while searching it is a strip above them, over the toolbar.
+  private func layoutEmojiPanel() {
+    guard let panel = emojiPanel, panel.superview != nil else { return }
+    NSLayoutConstraint.deactivate(emojiPanelConstraints)
+    if isEmojiSearching {
+      emojiPanelConstraints = [
+        panel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+        panel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        panel.bottomAnchor.constraint(equalTo: keyboardRowsStack.topAnchor),
+        panel.heightAnchor.constraint(equalToConstant: EmojiPanelView.searchHeight),
+      ]
+    } else {
+      emojiPanelConstraints = [
+        panel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+        panel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        panel.topAnchor.constraint(equalTo: keyboardRowsStack.topAnchor),
+        panel.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      ]
+    }
+    NSLayoutConstraint.activate(emojiPanelConstraints)
+  }
+
+  private func hideEmojiPanel() {
+    guard isEmojiPanelShown else { return }
+    if isEmojiSearching { endEmojiSearch() }
+    isEmojiPanelShown = false
+    emojiPanel?.removeFromSuperview()
+    keyboardRowsStack.alpha = 1
+    keyboardRowsStack.isUserInteractionEnabled = true
+    refreshAfterEdit()
+  }
+
+  private func beginEmojiSearch() {
+    guard isEmojiPanelShown, !isEmojiSearching, let panel = emojiPanel else { return }
+    isEmojiSearching = true
+    panel.beginSearch()
+    // The letter keys come back to type the query; the toolbar steps aside for the strip.
+    keyboardRowsStack.alpha = 1
+    keyboardRowsStack.isUserInteractionEnabled = true
+    topBar.alpha = 0
+    topBar.isUserInteractionEnabled = false
+    if layoutMode != .letters { returnToLetters() }
+    layoutEmojiPanel()
+    applyKeyboardHeight()
+    view.setNeedsLayout()
+  }
+
+  private func endEmojiSearch() {
+    guard isEmojiSearching, let panel = emojiPanel else { return }
+    isEmojiSearching = false
+    panel.endSearch()
+    topBar.alpha = 1
+    topBar.isUserInteractionEnabled = true
+    keyboardRowsStack.alpha = 0
+    keyboardRowsStack.isUserInteractionEnabled = false
+    layoutEmojiPanel()
+    applyKeyboardHeight()
+    view.setNeedsLayout()
+  }
+
+  // MARK: Number pad
+
+  private var wantsNumberPad: Bool {
+    switch textDocumentProxy.keyboardType ?? .default {
+    case .numberPad, .decimalPad, .phonePad, .asciiCapableNumberPad: return true
+    default: return false
+    }
+  }
+
+  /// Apple's pad for number fields: 1–9, then the field's own key (decimal point, or + on
+  /// the phone pad), 0 and delete. The globe key shares the bottom-left cell when iOS asks
+  /// for one, since a pad has no other row to put it in.
+  private func buildNumberPad() {
+    numberPadStack.arrangedSubviews.forEach { view in
+      numberPadStack.removeArrangedSubview(view)
+      view.removeFromSuperview()
+    }
+    func padKey(_ title: String) -> KeyButton {
+      let key = makeKeyButton(display: title, output: title, role: .utility)
+      key.titleLabel?.font = UIFont.systemFont(ofSize: 25, weight: .regular)
+      key.titleBaselineFromCenter = nil
+      key.addTarget(self, action: #selector(handlePadKeyTapped(_:)), for: .touchUpInside)
+      return key
+    }
+    func padRow(_ keys: [UIView]) {
+      let row = UIStackView(arrangedSubviews: keys)
+      row.axis = .horizontal
+      row.spacing = metrics.keyGap
+      row.distribution = .fillEqually
+      row.translatesAutoresizingMaskIntoConstraints = false
+      numberPadStack.addArrangedSubview(row)
+      constrainRowHeight(row)
+    }
+    for digits in ["123", "456", "789"] { padRow(digits.map { padKey(String($0)) }) }
+
+    var corner: [UIView] = []
+    if needsInputModeSwitchKey { corner.append(makeNextKeyboardButton()) }
+    switch textDocumentProxy.keyboardType ?? .default {
+    case .decimalPad:
+      corner.append(padKey(Locale.current.decimalSeparator ?? "."))
+    case .phonePad:
+      let plus = padKey("+")
+      plus.alternates = ["*", "#", ",", ";"]
+      let hold = UILongPressGestureRecognizer(target: self, action: #selector(handleAccentHold(_:)))
+      hold.minimumPressDuration = 0.4
+      plus.addGestureRecognizer(hold)
+      corner.append(plus)
+    default:
+      break
+    }
+    let cornerCell: UIView
+    if corner.isEmpty {
+      cornerCell = UIView()
+    } else {
+      let stack = UIStackView(arrangedSubviews: corner)
+      stack.axis = .horizontal
+      stack.spacing = metrics.keyGap
+      stack.distribution = .fillEqually
+      cornerCell = stack
+    }
+    padRow([cornerCell, padKey("0"), makeBackspaceButton()])
+    builtNumberPadType = textDocumentProxy.keyboardType
+  }
+
+  @objc private func handlePadKeyTapped(_ sender: KeyButton) {
+    guard let output = sender.output else { return }
+    playKeyClick()
+    typeText(output)
+    refreshAfterEdit()
+  }
+
+  private func makeBackspaceButton() -> KeyButton {
+    let backspace = makeKeyButton(display: nil, imageSystemName: "delete.left", role: .utility)
+    backspace.imageOffsetY = metrics.keycaps.edgeGlyphOffset
+    backspace.accessibilityLabel = "delete"
+    backspace.addTarget(self, action: #selector(handleBackspaceTapped), for: .touchUpInside)
+    let longPress = UILongPressGestureRecognizer(
+      target: self,
+      action: #selector(handleBackspaceLongPress(_:))
+    )
+    longPress.minimumPressDuration = 0.35
+    backspace.addGestureRecognizer(longPress)
+    return backspace
+  }
+  private var builtNumberPadType: UIKeyboardType?
 
   /// (row width − (n − 1) gaps) / n for the n keys of the widest letter row.
   private func refreshLetterWidthGuide() {
@@ -3362,7 +3583,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func rebuildKeyboard() {
     keyPopup.hide()
-    for stack in [keyboardRowsStack, lettersRowsStack, numbersRowsStack, symbolsRowsStack] {
+    for stack in [keyboardRowsStack, lettersRowsStack, numbersRowsStack, symbolsRowsStack, numberPadStack] {
       stack.arrangedSubviews.forEach { view in
         stack.removeArrangedSubview(view)
         view.removeFromSuperview()
@@ -3391,6 +3612,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     keyboardRowsStack.addArrangedSubview(lettersRowsStack)
     keyboardRowsStack.addArrangedSubview(numbersRowsStack)
     keyboardRowsStack.addArrangedSubview(symbolsRowsStack)
+    keyboardRowsStack.addArrangedSubview(numberPadStack)
+    numberPadStack.isHidden = true
 
     refreshLetterWidthGuide()
     let letters = letterRows.map { row in row.map { (display: String($0), output: String($0)) } }
@@ -3466,7 +3689,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       metrics = nextMetrics
       applyRootPadding()
       rootHeightConstraint?.constant = contentHeight
-      [keyboardRowsStack, lettersRowsStack, numbersRowsStack, symbolsRowsStack].forEach {
+      [keyboardRowsStack, lettersRowsStack, numbersRowsStack, symbolsRowsStack, numberPadStack].forEach {
         $0.spacing = metrics.rowGap
       }
       keyWidthGuideConstraint?.constant = -0.9 * metrics.keyGap
@@ -3502,9 +3725,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func refreshVisibleKeyboardMode() {
     keyPopup.hide()
     buildPageIfNeeded()
-    lettersRowsStack.isHidden = layoutMode != .letters
-    numbersRowsStack.isHidden = layoutMode != .numbers
-    symbolsRowsStack.isHidden = layoutMode != .symbols
+    isNumberPadShown = wantsNumberPad
+    if isNumberPadShown, numberPadStack.arrangedSubviews.isEmpty || builtNumberPadType != textDocumentProxy.keyboardType {
+      buildNumberPad()
+    }
+    numberPadStack.isHidden = !isNumberPadShown
+    bottomRow?.isHidden = isNumberPadShown
+    lettersRowsStack.isHidden = isNumberPadShown || layoutMode != .letters
+    numbersRowsStack.isHidden = isNumberPadShown || layoutMode != .numbers
+    symbolsRowsStack.isHidden = isNumberPadShown || layoutMode != .symbols
     let modeLabel = layoutMode == .letters ? metrics.keycaps.label123 : metrics.keycaps.labelABC
     modeButton?.setTitle(layoutMode == .letters ? "123" : "ABC", for: .normal)
     modeButton?.accessibilityLabel = layoutMode == .letters ? "numbers" : "letters"
@@ -3531,6 +3760,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func refreshFieldAwareKeys() {
+    if wantsNumberPad != isNumberPadShown
+      || (isNumberPadShown && builtNumberPadType != textDocumentProxy.keyboardType)
+    {
+      // The field changed between a number pad and a full keyboard.
+      refreshVisibleKeyboardMode()
+      return
+    }
     refreshReturnKey()
     refreshBottomRow()
   }
@@ -3715,16 +3951,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   ) {
     let rowContainer = addRowContainer(to: stack)
 
-    let backspace = makeKeyButton(display: nil, imageSystemName: "delete.left", role: .utility)
-    backspace.imageOffsetY = metrics.keycaps.edgeGlyphOffset
-    backspace.accessibilityLabel = "delete"
-    backspace.addTarget(self, action: #selector(handleBackspaceTapped), for: .touchUpInside)
-    let longPress = UILongPressGestureRecognizer(
-      target: self,
-      action: #selector(handleBackspaceLongPress(_:))
-    )
-    longPress.minimumPressDuration = 0.35
-    backspace.addGestureRecognizer(longPress)
+    let backspace = makeBackspaceButton()
 
     for item in [leadingKey, keys, backspace] {
       rowContainer.addSubview(item)
@@ -3751,6 +3978,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     row.translatesAutoresizingMaskIntoConstraints = false
     stack.addArrangedSubview(row)
     constrainRowHeight(row)
+    bottomRow = row
 
     let modeButton = makeKeyButton(display: layoutMode == .letters ? "123" : "ABC", role: .utility)
     modeButton.addTarget(self, action: #selector(handleModeKeyTapped), for: .touchUpInside)
@@ -3954,6 +4182,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       deletePreviousWordChunk()
     } else if deleteRepeatCount == 0 {
       deleteBackwardOnce()
+    } else if isEmojiSearching {
+      emojiPanel?.deleteSearchBackward()
     } else {
       textDocumentProxy.deleteBackward()
       typing?.noteDeletedBackward()
@@ -3982,6 +4212,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func deletePreviousWordChunk() {
+    if isEmojiSearching {
+      emojiPanel?.deleteSearchBackward()
+      return
+    }
     guard let context = textDocumentProxy.documentContextBeforeInput, !context.isEmpty else {
       textDocumentProxy.deleteBackward()
       typing?.noteDeletedBackward()
@@ -6303,4 +6537,31 @@ private struct KeyboardHandoffProvider {
 
 extension KeyboardViewController: UIInputViewAudioFeedback {
   var enableInputClicksWhenVisible: Bool { true }
+}
+
+extension KeyboardViewController: EmojiPanelDelegate {
+  func emojiPanel(_ panel: EmojiPanelView, didPick emoji: String) {
+    playKeyClick()
+    // Past the search routing: a picked emoji always goes into the document.
+    let searching = isEmojiSearching
+    isEmojiSearching = false
+    typeText(emoji)
+    isEmojiSearching = searching
+    refreshAfterEdit()
+  }
+
+  func emojiPanelDidTapDelete(_ panel: EmojiPanelView) {
+    playKeyClick()
+    deleteBackwardOnce()
+    refreshAfterEdit()
+  }
+
+  func emojiPanelDidTapLetters(_ panel: EmojiPanelView) {
+    playKeyClick()
+    hideEmojiPanel()
+  }
+
+  func emojiPanelDidTapSearch(_ panel: EmojiPanelView) { beginEmojiSearch() }
+
+  func emojiPanelDidCancelSearch(_ panel: EmojiPanelView) { endEmojiSearch() }
 }

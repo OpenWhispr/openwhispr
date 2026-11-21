@@ -34,7 +34,9 @@ struct AutocorrectParameters {
   var realWordMargin = 1.6
   /// A real word is only swapped for a much more frequent form of the same key ("ill" → "I'll").
   var sameKeyMargin = 1.2
-  var completionPenalty = 0.9
+  /// How much less a completion counts than a correction of the same probability, when
+  /// ranking the bar's alternatives.
+  var completionPenalty = 0.4
 }
 
 struct CorrectionResult {
@@ -178,11 +180,15 @@ final class Autocorrector {
     if wantsAlternatives {
       var seen: Set<String> = [typed]
       if let replacement = result.replacement { seen.insert(replacement) }
-      for candidate in scored.prefix(6) {
-        let word = shape.apply(to: lexicon.word(candidate.id), sentenceStart: sentenceStart)
-        if seen.insert(word).inserted { result.alternatives.append(word) }
+      // Corrections and completions compete on one scale, so "Hel" offers "Hello" and
+      // "Help" ahead of unlikely respellings.
+      var offers = scored.prefix(6).map { (id: $0.id, score: $0.score) }
+      for completion in scoredCompletions(ofKey: key, previousID: previousID, limit: 4) {
+        offers.append((completion.id, completion.score - parameters.completionPenalty))
       }
-      for word in completions(ofKey: key, previousID: previousID, shape: shape, sentenceStart: sentenceStart, limit: 4) {
+      offers.sort { $0.score != $1.score ? $0.score > $1.score : $0.id < $1.id }
+      for offer in offers {
+        let word = shape.apply(to: lexicon.word(offer.id), sentenceStart: sentenceStart)
         if seen.insert(word).inserted { result.alternatives.append(word) }
       }
     }
@@ -332,6 +338,11 @@ final class Autocorrector {
   func completions(ofKey key: [UInt16], previousID: Int?, shape: CaseShape, sentenceStart: Bool, limit: Int)
     -> [String]
   {
+    scoredCompletions(ofKey: key, previousID: previousID, limit: limit)
+      .map { shape.apply(to: lexicon.word($0.id), sentenceStart: sentenceStart) }
+  }
+
+  private func scoredCompletions(ofKey key: [UInt16], previousID: Int?, limit: Int) -> [(id: Int, score: Double)] {
     guard !key.isEmpty, let node = lexicon.node(forKey: key) else { return [] }
     let range = lexicon.words(under: node)
     let exact = lexicon.terminals(of: node)
@@ -354,7 +365,7 @@ final class Autocorrector {
         offer(follower.id, lexicon.log10Probability(of: follower.id, after: previousID))
       }
     }
-    return best.prefix(limit).map { shape.apply(to: lexicon.word($0.id), sentenceStart: sentenceStart) }
+    return Array(best.prefix(limit))
   }
 
   /// The likeliest next words after `previous` (nil: at the start of a sentence).
@@ -369,7 +380,8 @@ final class Autocorrector {
       best.insert((follower.id, follower.log10), at: position)
       if best.count > limit { best.removeLast() }
     }
-    return best.map { CaseShape.lower.apply(to: lexicon.word($0.id), sentenceStart: sentenceStart) }
+    // A prediction opens the sentence, so it takes the capital shift would have given it.
+    return best.map { sentenceStart ? CaseShape.capitalisingFirst(lexicon.word($0.id)) : lexicon.word($0.id) }
   }
 }
 
@@ -399,7 +411,9 @@ enum CaseShape {
     switch self {
     case .upper: return word.uppercased()
     case .capitalised, .mixed: return CaseShape.capitalisingFirst(word)
-    case .lower: return sentenceStart ? CaseShape.capitalisingFirst(word) : word
+    // Typed in lower case at the start of a sentence means shift was turned off on purpose
+    // (the keyboard turns it on there by itself), so the word stays as the lexicon has it.
+    case .lower: return word
     }
   }
 
