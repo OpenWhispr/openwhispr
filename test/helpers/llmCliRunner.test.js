@@ -199,6 +199,80 @@ test("win32 tree-kill awaits taskkill and never calls child.kill first", async (
   assert.deepEqual(calls, [["taskkill", "/T", "/F", "/PID", "4242"]]);
 });
 
+test("posix tree-kill signals the process group, then the child, and never runs taskkill", async () => {
+  const { mock } = require("node:test");
+  const killed = mock.method(process, "kill", () => true);
+  try {
+    const calls = [];
+    const spawn = (cmd) => calls.push(["spawn", cmd]);
+    const child = { pid: 5151, kill: (sig) => calls.push(["child.kill", sig]) };
+    await defaultKillTree(child, { platform: "linux", spawn });
+    assert.deepEqual(
+      killed.mock.calls.map((c) => c.arguments),
+      [[-5151, "SIGKILL"]]
+    );
+    assert.deepEqual(calls, [["child.kill", "SIGKILL"]]);
+  } finally {
+    killed.mock.restore();
+  }
+});
+
+test("posix tree-kill tolerates an already-gone group (ESRCH)", async () => {
+  const { mock } = require("node:test");
+  const killed = mock.method(process, "kill", () => {
+    throw Object.assign(new Error("kill ESRCH"), { code: "ESRCH" });
+  });
+  try {
+    const child = {
+      pid: 5152,
+      kill: () => {
+        throw new Error("already exited");
+      },
+    };
+    await defaultKillTree(child, { platform: "linux" });
+    assert.equal(killed.mock.calls.length, 1);
+  } finally {
+    killed.mock.restore();
+  }
+});
+
+for (const [platform, detached] of [
+  ["linux", true],
+  ["darwin", true],
+  ["win32", false],
+]) {
+  test(`runner spawns ${platform} children with detached=${detached} so the group kill can reach them`, async () => {
+    const { EventEmitter } = require("events");
+    const { PassThrough } = require("stream");
+    const spawned = [];
+    const runner = createRunner({
+      spawn: (exe, args, opts) => {
+        const child = new EventEmitter();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.stdin = new PassThrough();
+        child.pid = 4244;
+        spawned.push({ opts, child });
+        return child;
+      },
+      platform,
+      tmpDir: path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llm-cli-runner-plat-")), "runs"),
+      env: { ...process.env },
+      resolveExe: async () => ({ exe: process.execPath, args: [] }),
+      killTree: async (child) => child.emit("close", null),
+      timeouts: { firstOutputMs: 300, idleMs: 300, totalMs: 600 },
+    });
+    const run = runner.runStream({ seat: "codex", prompt: "hi" });
+    for (let i = 0; i < 100 && spawned.length === 0; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(spawned[0].opts.detached, detached);
+    assert.equal(spawned[0].opts.shell, false);
+    runner.cancel("codex");
+    assert.equal((await run).code, "killed");
+  });
+}
+
 // ---- fake-child helpers: cancel during async resolve, multibyte output ----
 
 function makeFakeSpawnHarness({ resolveExe, getClaudeToken } = {}) {

@@ -357,8 +357,11 @@ test("quit hook cancels a hung run and the child process is gone", async () => {
   assert.equal(result.code, "killed");
   assert.deepEqual(calls.sort(), ["installer", "signIn"]);
   const child = children[0];
+  // A POSIX SIGKILL leaves exitCode null and sets signalCode; the exit event
+  // has already fired by the time the run resolves, so it must be read here.
   const gone =
     child.exitCode !== null ||
+    child.signalCode !== null ||
     (await new Promise((resolve) => {
       const timer = setTimeout(() => resolve(false), 8000);
       child.once("exit", () => (clearTimeout(timer), resolve(true)));
