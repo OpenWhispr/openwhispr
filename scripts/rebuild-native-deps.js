@@ -32,6 +32,9 @@ async function rebuildNativeDeps({ appDir, electronVersion, arch, platform }) {
     arch,
     platform,
     ignoreModules: NODE_API_PREBUILT_MODULES,
+    // Always rebuild: a later `npm rebuild` can swap in a Node-ABI binary while
+    // leaving @electron/rebuild's .forge-meta marker, which would skip the module.
+    force: true,
     buildFromSource: false,
     mode: "sequential",
     disablePreGypCopy: true,
