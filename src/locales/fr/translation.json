@@ -391,6 +391,12 @@
             "title": "Auto-hébergé",
             "description": "Connectez votre propre modèle hébergé."
           }
+        },
+        "titanium": {
+          "title": "Cloud {{brand}} (Titanium)",
+          "description": "Transcrivez sur les serveurs hébergés de Titanium. Connectez-vous avec votre compte Titanium ; aucune clé API n'est nécessaire.",
+          "signIn": "Se connecter avec Titanium",
+          "continue": "Continuer"
         }
       },
       "provider": {
@@ -920,6 +926,10 @@
     "tinfoil": {
       "transportNote": "Tinfoil diffuse avec Voxtral Mini 4B et traite les lots avec Voxtral Small 24B.",
       "docsLink": "Voir la documentation"
+    },
+    "titaniumSignIn": {
+      "message": "Connectez-vous à Titanium pour utiliser la transcription cloud de {{brand}}.",
+      "action": "Se connecter avec Titanium"
     }
   },
   "hooks": {
@@ -1230,7 +1240,12 @@
     },
     "welcomeSubtitle": "Le pouvoir de votre voix. À vos conditions.",
     "welcomeTitle": "Bienvenue sur {{brand}}",
-    "sessionExpired": "Session expirée. Veuillez relancer le processus d'inscription."
+    "sessionExpired": "Session expirée. Veuillez relancer le processus d'inscription.",
+    "titanium": {
+      "signIn": "Se connecter avec Titanium",
+      "subtitle": "Connectez-vous avec votre compte Titanium pour utiliser la transcription cloud de {{brand}}.",
+      "signedInAs": "Connecté en tant que {{email}}"
+    }
   },
   "calendar": {
     "title": "Google Agenda",

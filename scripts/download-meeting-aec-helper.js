@@ -18,7 +18,7 @@ const {
 } = require("./lib/download-utils");
 
 // Fork-built helper releases (same tags as upstream). SIDECAR_RELEASE_REPO overrides.
-const REPO = process.env.SIDECAR_RELEASE_REPO || "finedesignz/openwhispr";
+const REPO = process.env.SIDECAR_RELEASE_REPO || "finedesignz/edgeassistant";
 const TAG_PREFIX = "meeting-aec-helper-v";
 const VERSION_OVERRIDE = process.env.MEETING_AEC_HELPER_VERSION || null;
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");

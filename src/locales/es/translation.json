@@ -391,6 +391,12 @@
             "title": "Autoalojado",
             "description": "Conecta tu propio modelo alojado."
           }
+        },
+        "titanium": {
+          "title": "Nube de {{brand}} (Titanium)",
+          "description": "Transcribe en los servidores alojados de Titanium. Inicia sesión con tu cuenta de Titanium; no necesitas clave de API.",
+          "signIn": "Iniciar sesión con Titanium",
+          "continue": "Continuar"
         }
       },
       "provider": {
@@ -920,6 +926,10 @@
     "tinfoil": {
       "transportNote": "Tinfoil transmite con Voxtral Mini 4B y procesa por lotes con Voxtral Small 24B.",
       "docsLink": "Ver la documentación"
+    },
+    "titaniumSignIn": {
+      "message": "Inicia sesión en Titanium para usar la transcripción en la nube de {{brand}}.",
+      "action": "Iniciar sesión con Titanium"
     }
   },
   "hooks": {
@@ -1230,7 +1240,12 @@
     },
     "welcomeSubtitle": "El poder de tu voz. En tus términos.",
     "welcomeTitle": "Bienvenido a {{brand}}",
-    "sessionExpired": "Sesión expirada"
+    "sessionExpired": "Sesión expirada",
+    "titanium": {
+      "signIn": "Iniciar sesión con Titanium",
+      "subtitle": "Inicia sesión con tu cuenta de Titanium para usar la transcripción en la nube de {{brand}}.",
+      "signedInAs": "Sesión iniciada como {{email}}"
+    }
   },
   "cleanupPrompt": "Corrección",
   "developerSection": {

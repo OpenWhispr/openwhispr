@@ -8,13 +8,13 @@ current_phase_name: "Connectors on Titanium accounts"
 status: milestone_complete_with_gaps
 last_updated: "2026-11-20"
 last_activity: 2026-11-20
-last_activity_desc: "Phases 1-7 merged; v1.10.5 signed draft release; gaps in v1.0-MILESTONE-AUDIT.md"
+last_activity_desc: "Phases 1-7 merged; v1.10.5 signed draft release; open gaps: 06-03 blocked (gate 4), 06-04 partial, AUTH-01 dev/staging schemes, E2E sign-in unproven"
 progress:
   total_phases: 7
   completed_phases: 7
   total_plans: 14
-  completed_plans: 13
-  percent: 93
+  completed_plans: 12
+  percent: 86
 ---
 
 # Project State
@@ -24,30 +24,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-08)
 
 **Core value:** A user installs Titanium Whisper, signs in with their Titanium account, and dictates through our servers with no API keys and no OpenWhispr-hosted service.
-**Current focus:** Close phase 3-4 leftovers (PRs #17, #18, #19), then execute Phase 5
+**Current focus:** Close the v1.0 gaps below. Publishing the v1.10.5 draft release (12b gate 2, owner action) is separate.
 
 ## Current Position
 
-- Phase 1 (Fork CI) merged: PR #10. Leftover in review: PR #17 (CI-02 mobile CI gated; CI-04 tests fixed at the root: CRLF on Windows checkouts, `.gitattributes`; PR #4 cherry-picked and closed).
-- Phase 2 (rebrand) complete: PR #11 and PR #12. Visible brand EdgeAssistant; appId `com.titaniumlabs.titaniumwhisper`, scheme `titaniumwhisper://`, userData "Titanium Whisper" kept.
-- Phases 3-4 code merged: PR #11 (Titanium sign-in, app side of stt-api auth), PR #15 (CLAUDE.md exclude), stt-api PR #26 (license-key bearer).
-- In review: PR #18 (AUTH-01: `titanium-whisper` provisioned, product id bbe843ac-4de5-486c-85e2-1a1b7e533e5f, `titaniumwhisper://auth` return origin allowed, proven by API 200 vs 400 for other schemes; stt-api Coolify env set), PR #19 (STT-03: `stt.titaniumlabs.us` live with valid TLS, old Coolify host kept, saved-URL migration).
-- stt-api prod fix: `limits_memory` 256m was below the 2048m reservation, causing failed deploys and an engine restart loop; set to 4096m, healthz warm with 0 crashes.
-- Phases 5, 6, 7 planned (2, 4 and 3 plans); not started. No fork release since v1.10.4.
-- PR #14 (milestone summary) merging.
+- Phases 1-7 merged. Plans: 12 of 14 complete; 06-03 BLOCKED (gate 4), 06-04 PARTIAL (server proofs only). Requirements checked: CI-02, CI-04, AUTH-01, STT-03 (PRs #17, #18, #19 merged), AUTH-05 re-homed to Phase 7 (fork `isPaid` = offline Titanium license; lookup endpoint not built, tiers deferred to v2 AUTH-08).
+- Phase 6 production proof (2026-11-20, https://stt.titaniumlabs.us, Coolify deploy xgi4idzkb1hny6prghtlazeb): `/healthz` 200, `verify-stream-segments` PASS, `verify-chat-completions` PASS, web search 200, OAuth relay 302 (valid state) / 400 (malformed). See `phases/06-hosted-services/06-04-SUMMARY.md`.
+- Release: v1.10.5 signed DRAFT on `finedesignz/edgeassistant`.
+- stt-api prod fix kept: `limits_memory` 4096m (was 256m below the 2048m reservation).
 
-## Not yet verified
+## Open gaps
 
-- End-to-end sign-in round trip through the UI.
-- Dictation with a license key end to end (pending PR #18/#19 merges).
+- 06-03 own OAuth clients (Google, Microsoft, Slack, Linear): BLOCKED at 12b gate 4; Pass items `edgeassistant-oauth-{google,entra,slack,linear}` absent (confirmed 2026-11-20 with `pass-keys`). Build ships without client ids; calendars show Connect without client ids. FEAT-03 unmet, FEAT-02 end-to-end unproven. See `06-03-SUMMARY.md`.
+- 06-04 not run: Slack/Linear/Google/Microsoft end-to-end OAuth, signed build with client ids, packaged-app web search turn. `verify-http-api` and `verify-scribe` are local-engine gates, not run against prod by design.
+- AUTH-01 open item: `titaniumwhisper-dev://auth` and `titaniumwhisper-staging://auth` not yet allowed in the titanium-licensing app row (memlog request 1795213470930-0).
+- End-to-end sign-in round trip and dictation with a real license key in the packaged app: UNPROVEN (needs a test license key).
+- Phase 1 criterion 3 PARTIAL: 20 Windows-only local test failures (`phases/04-leftovers-VERIFICATION.md`).
+- Phase 7 residual: note Share button still opens `ShareNoteDialog` with sync/link controls (FEAT-06 partial, `07-VERIFICATION.md`).
 
 ## Blockers / External dependencies
 
-- Phase 7 dependency titanium-licensing v3.5 Phase 32 (IDP-32) is merged (PR #304, 2026-10-14); no longer a blocker.
-- Phase 6 needs our own Google/Microsoft/Slack/Linear OAuth apps and a web-search provider key (plan 06-03 provisions the OAuth clients into Pass).
-- AUTH-05 (plan lookup) was moved to Phase 6 but is in no Phase 6 plan; needs a plan or a re-home.
+- Phase 6 needs our own Google/Microsoft/Slack/Linear OAuth apps (owner-held admin logins); web-search provider key is set in prod.
+- Phase 7 dependency IDP-32 merged (titanium-licensing PR #304, 2026-10-14); not a blocker.
 - Woodpecker API access is failing (401) - not needed by this roadmap (GitHub Actions is the fork's CI).
 
 ## Decisions
 
-See PROJECT.md Key Decisions.
+See PROJECT.md Key Decisions. AUTH-05: valid offline Titanium license = paid plan in a fork build (Phase 7, 07-01).

@@ -370,6 +370,12 @@
             "title": "Auto-hospedado",
             "description": "Conecte seu próprio modelo hospedado."
           }
+        },
+        "titanium": {
+          "title": "Nuvem do {{brand}} (Titanium)",
+          "description": "Transcreva nos servidores hospedados da Titanium. Entre com sua conta Titanium; não é preciso chave de API.",
+          "signIn": "Entrar com Titanium",
+          "continue": "Continuar"
         }
       },
       "provider": {
@@ -899,6 +905,10 @@
     "tinfoil": {
       "transportNote": "O Tinfoil transmite com o Voxtral Mini 4B e processa em lote com o Voxtral Small 24B.",
       "docsLink": "Ver a documentação"
+    },
+    "titaniumSignIn": {
+      "message": "Entre no Titanium para usar a transcrição na nuvem do {{brand}}.",
+      "action": "Entrar com Titanium"
     }
   },
   "hooks": {
@@ -1209,7 +1219,12 @@
       "protocolUnavailable": "Login pelo navegador indisponível — registre novamente o protocolo openwhispr:// nas configurações de Aplicativos Padrão do sistema."
     },
     "welcomeSubtitle": "O poder da sua voz. Nos seus termos.",
-    "welcomeTitle": "Boas-vindas ao {{brand}}"
+    "welcomeTitle": "Boas-vindas ao {{brand}}",
+    "titanium": {
+      "signIn": "Entrar com Titanium",
+      "subtitle": "Entre com sua conta Titanium para usar a transcrição na nuvem do {{brand}}.",
+      "signedInAs": "Conectado como {{email}}"
+    }
   },
   "cleanupPrompt": "Limpeza",
   "developerSection": {

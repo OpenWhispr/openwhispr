@@ -128,6 +128,12 @@ async function createAuthenticationRenderer(t) {
           return { t(key, options) { return options ? key + ":" + JSON.stringify(options) : key; } };
         }
       `,
+      // The Titanium branch reads this store; these tests render the hosted-auth branch.
+      "/hooks/useTitaniumAuth": `
+        export function useTitaniumAuth() {
+          return { signedIn: false, loaded: true, pending: false, error: null, email: null, signIn: async () => ({}) };
+        }
+      `,
       // Records the pending write instead of firing it, so the test can tell a
       // scheduled draft apart from a persisted one.
       "/hooks/useDebouncedCallback": `

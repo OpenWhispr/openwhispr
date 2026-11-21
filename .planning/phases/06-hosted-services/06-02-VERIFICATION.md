@@ -64,3 +64,25 @@ Score: 6/7. behavior_unverified: 0.
 ## Decision
 
 CONTENT BLOCK. Fix titaniumServiceKeyFor (https-only, origin match, allow-list not derived from overridable config) with tests, push, re-QC. Not owner sign-off territory.
+
+
+## Re-verification 2026-11-20
+
+Scope: branch feat/tiwh-v1-gaps (origin/main + PR #28), fix commits 68b7c1230 and da227f96d. Tests run per file with `--import ./test/setup/forkEnv.js --import tsx --test --test-force-exit`.
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 5 (gap) | License key only to owned hosts, https only, exact origin | PASS | `titaniumIpc.js` `httpsOriginOf()` returns "" for non-https or URLs with userinfo; `titaniumServiceKeyFor` compares exact origin (scheme+host+port) against the set built from DEFAULT_STT, SERVICES_URL and `TITANIUM.serviceHosts` (bare hosts validated `^[a-z0-9.-]+$`, taken as https/443). http://, ftp://, :8443 and userinfo URLs return null. `titaniumServiceKey.test.js` "the key goes only to an https URL whose exact origin is a configured https origin": 6/6 pass. |
+| 5b | Allow-list not derived from overridable config | PASS | da227f96d: default `forkConfig` arg is the shipped `fork.config.json`, not the runtime-env-resolved config, so a `VITE_SERVICES_URL` / `dist/runtime-env.json` override still receives requests but never the key. Test "the default allowlist ignores a runtime VITE_SERVICES_URL override" passes. Shipped `SERVICES_URL` is `https://stt.titaniumlabs.us` (`fork.config.json:12`). |
+| 3 | web_search transport | PASS | `forkWebSearch.js` rejects a non-https or userinfo `servicesUrl` before attaching Authorization (SERVER_ERROR "must use https", no fetch). `forkWebSearch.test.js` 8/8 pass. Error-code mapping unchanged. |
+| 1,2,4,6,7 | Calendar page, Slack/Linear relay, web-search gating, fork-write-env, no upstream ids | PASS (unchanged) | Untouched by the fixes; no regression in the targeted tests. |
+
+Requirements: FEAT-01 PASS (code), FEAT-02 PASS (code), FEAT-03 PASS (the transport gap that made it PARTIAL is closed). Live proof of FEAT-01/02 still depends on OAuth client ids (06-03 BLOCKED, 12b gate 4); out of scope for code readiness.
+
+Residual (non-blocking): the declared T-06-08 mitigation is now implemented, not deferred.
+
+Score: 7/7. behavior_unverified: 0.
+
+Ship verdict: PASS. The CONTENT BLOCK is resolved. (CI `quality` on PR #28 was still pending at check time.)
+
+Verifier: Claude (gsd-verifier), re-verification.

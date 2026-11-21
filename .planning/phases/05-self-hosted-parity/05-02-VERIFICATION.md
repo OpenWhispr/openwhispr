@@ -47,3 +47,26 @@ Verdict: PARTIAL. Do not mark phase 5 desktop done until the sign-out gap is clo
 - Server contract dependency: desktop assumes PR #27 merged (subprotocol, chat/completions); not yet on stt-api main.
 
 Verifier: Claude (gsd-verifier) + codex read-only seat.
+
+
+## Re-verification 2026-11-20
+
+Scope: branch feat/tiwh-v1-gaps (origin/main + PR #28), fix commits dd60d0194, 11b0aba0e, ed1b2d645. Single Claude verifier, goal-backward from the original gap plus the PARTIAL warnings. Tests run one file at a time (`node --import ./test/setup/forkEnv.js --import tsx --test --test-force-exit <file>`); a combined 11-file run showed 17 spurious failures from process contention that all pass alone, so only per-file results are cited.
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 4 (gap) | Sign-out / account switch stops or invalidates warm and live stt-api meeting sockets | PASS (helper-level) | `meetingStreamingProviders.js` adds `licenseFingerprint` (sha256 prefix, never the key) as `credentialIdentity` in the connection key, plus `isSttApiConnectionStale` / `isSttApiConnectionKey`. `ipcHandlers.js:230-236` re-reads the fingerprint per prepare/start, so the warm-reuse compare at `:9289-9298` and `:9403-9430` fails after sign-out and the next start falls to `realtimeTokenProviders.js:92-96`, which returns `TITANIUM_SIGN_IN_REQUIRED` when signed out. `onTitaniumStateChanged(...)` at `ipcHandlers.js:8967` calls `dropSttApiMeetingStreams` (disconnect mic+system, one `signInExpired` fatal for an active recording). `titaniumIpc.js` fans `session.on("changed")` out to main-process listeners. Tests: meetingStreamingProviders 16/16 (incl. "stale after sign-out or an account change", "license fingerprint, never the key"), titaniumStateListeners 3/3. Caveat: the `ipcHandlers` wiring itself (prepare after sign-out rejects) has no integration test; helpers are unit-tested only. |
+| P2 | Cancelled prepare leaves keepalive running | PASS | `meeting-transcription-cancel` drops an unrecorded stt-api stream (`ipcHandlers.js ~9283-9290`); `sttApiStreaming.js` open handler refuses to arm keep-alive when `this.ws !== socket` and the interval self-stops when the socket is superseded. sttApiStreaming 12/12. |
+| 2 | Key never logged | PASS | `openai.ts` `apiKeyPreview` line removed (dd60d0194). titaniumStateListeners test "cleanup request path never logs any part of the key" passes. |
+| 5 | No BYOK regression | PASS (code), test FAILING | Store defaults reverted (`settingsStore.ts` cleanupProvider "openai", OpenAI base URL, model ""). Cleanup moves to our server only via the `forkCleanupSeed.ts` sign-in seed, gated by `shouldSeedSttApiCleanup` (licensed, no stored provider/url/model, mode unset or "providers", no BYOK key across 15+ key fields incl. per-scope custom keys) and only after `areSecretsHydrated()` (11b0aba0e). Wired: `useSettings.ts:144 startCleanupSeeding`. |
+| 1,3,6 | Bearer-only/allow-listed, frame contract, i18n | PASS (unchanged) | Not touched by the fixes; `titaniumServiceKey` 6/6. |
+
+Defects found on re-verification:
+- WARNING (CI-visible): `test/services/cleanupAuth.test.js` "a fresh signed-in install is seeded onto our server and persists the choice" FAILS (`false !== true` at :169), reproduced alone and consistently. Cause: commit 11b0aba0e added the `areSecretsHydrated()` guard to `seedSttApiCleanup` but did not update the test harness (`loadSeed` never hydrates secrets). Pre-existing on origin/main (PR #28 does not touch these files); NOT in the known-failure list (byokSavedConfig). The sibling tests ("stored provider never overwritten", "BYOK never changed", "signed-out keeps default") now pass vacuously because the seed returns false before any check, so they no longer prove their invariants. No test covers the hydration guard itself.
+- Server dependency from the original report (stt-api PR #27 on stt-api main) not re-checked in this pass.
+
+Score: 6/6 truths hold in code; behavior_unverified: 1 (ipcHandlers sign-out wiring, helper-level evidence only).
+
+Ship verdict: PASS-WITH-FIX. The original BLOCKER (sign-out reuse) is closed. Fix the stale cleanupAuth seed test (hydrate secrets in `loadSeed`, add a test that an un-hydrated seed returns false) so the BYOK-invariant tests are meaningful again and CI quality is not red from it.
+
+Verifier: Claude (gsd-verifier), re-verification.

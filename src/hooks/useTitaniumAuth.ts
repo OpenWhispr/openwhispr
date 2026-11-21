@@ -19,12 +19,18 @@ const SIGNED_OUT: TitaniumAuthState = {
   error: null,
 };
 
-let current: TitaniumAuthState = SIGNED_OUT;
+// `loaded` is false until the main process has answered once, so a consumer can tell
+// "signed out" from "not asked yet".
+type TitaniumAuthSnapshot = TitaniumAuthState & { loaded: boolean };
+
+const INITIAL: TitaniumAuthSnapshot = { ...SIGNED_OUT, loaded: false };
+
+let current: TitaniumAuthSnapshot = INITIAL;
 let started = false;
 const listeners = new Set<() => void>();
 
 function publish(next: TitaniumAuthState) {
-  current = next;
+  current = { ...next, loaded: true };
   for (const listener of listeners) listener();
 }
 
@@ -33,10 +39,14 @@ function start() {
   started = true;
   const api = window.electronAPI;
   api?.onTitaniumAuthChanged?.(publish);
+  if (!api?.titaniumAuthGetState) {
+    publish(SIGNED_OUT);
+    return;
+  }
   void api
-    ?.titaniumAuthGetState?.()
-    .then((state) => state && publish(state))
-    .catch(() => undefined);
+    .titaniumAuthGetState()
+    .then((state) => publish(state ?? SIGNED_OUT))
+    .catch(() => publish(SIGNED_OUT));
 }
 
 function subscribe(listener: () => void) {
@@ -45,13 +55,13 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-export function getTitaniumAuthState(): TitaniumAuthState {
+export function getTitaniumAuthState(): TitaniumAuthSnapshot {
   start();
   return current;
 }
 
 export function useTitaniumAuth() {
-  const state = useSyncExternalStore(subscribe, getTitaniumAuthState, () => SIGNED_OUT);
+  const state = useSyncExternalStore(subscribe, getTitaniumAuthState, () => INITIAL);
   const signIn = useCallback(async () => {
     const result = await window.electronAPI?.titaniumAuthSignIn?.();
     return result ?? { started: false, error: "unavailable" };

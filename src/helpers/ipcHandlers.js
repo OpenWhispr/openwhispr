@@ -1718,9 +1718,18 @@ class IPCHandlers {
       }
       return testProviderConnection(config, fetch, runPaidKeyCheck);
     };
-    ipcMain.handle("test-provider-connection", (_event, config) =>
-      cachedConnectionCheck(config, () => checkProviderConnection(config))
-    );
+    // Our own STT host authenticates with the Titanium license, which only this process
+    // holds. A keyless check of that host is refused even when signed in.
+    const withTitaniumCredential = (config) => {
+      if (String(config?.provider || "").toLowerCase() !== "custom") return config;
+      if (typeof config?.apiKey === "string" && config.apiKey.trim()) return config;
+      const key = titaniumServiceKeyFor(config?.baseUrl);
+      return key ? { ...config, apiKey: key } : config;
+    };
+    ipcMain.handle("test-provider-connection", (_event, rawConfig) => {
+      const config = withTitaniumCredential(rawConfig);
+      return cachedConnectionCheck(config, () => checkProviderConnection(config));
+    });
 
     ipcMain.handle("window-minimize", () => {
       if (this.windowManager.controlPanelWindow) {

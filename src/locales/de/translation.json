@@ -391,6 +391,12 @@
             "title": "Selbst gehostet",
             "description": "Verbinden Sie Ihr eigenes gehostetes Modell."
           }
+        },
+        "titanium": {
+          "title": "{{brand}}-Cloud (Titanium)",
+          "description": "Transkribiere auf den gehosteten Servern von Titanium. Melde dich mit deinem Titanium-Konto an; ein API-Schlüssel ist nicht nötig.",
+          "signIn": "Mit Titanium anmelden",
+          "continue": "Weiter"
         }
       },
       "provider": {
@@ -920,6 +926,10 @@
     "tinfoil": {
       "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
       "docsLink": "Zur Dokumentation"
+    },
+    "titaniumSignIn": {
+      "message": "Melde dich bei Titanium an, um die Cloud-Transkription von {{brand}} zu nutzen.",
+      "action": "Mit Titanium anmelden"
     }
   },
   "hooks": {
@@ -1230,7 +1240,12 @@
     },
     "welcomeSubtitle": "Die Kraft Ihrer Stimme. Zu Ihren Bedingungen.",
     "welcomeTitle": "Willkommen bei {{brand}}",
-    "sessionExpired": "Sitzung abgelaufen"
+    "sessionExpired": "Sitzung abgelaufen",
+    "titanium": {
+      "signIn": "Mit Titanium anmelden",
+      "subtitle": "Melde dich mit deinem Titanium-Konto an, um die Cloud-Transkription von {{brand}} zu nutzen.",
+      "signedInAs": "Angemeldet als {{email}}"
+    }
   },
   "calendar": {
     "title": "Google Kalender",

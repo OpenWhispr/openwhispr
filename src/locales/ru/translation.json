@@ -391,6 +391,12 @@
             "title": "Свой сервер",
             "description": "Подключите свою размещённую модель."
           }
+        },
+        "titanium": {
+          "title": "Облако {{brand}} (Titanium)",
+          "description": "Расшифровка на серверах Titanium. Войдите в аккаунт Titanium; ключ API не нужен.",
+          "signIn": "Войти через Titanium",
+          "continue": "Продолжить"
         }
       },
       "provider": {
@@ -920,6 +926,10 @@
     "tinfoil": {
       "transportNote": "Tinfoil использует Voxtral Mini 4B для потоковой обработки и Voxtral Small 24B для пакетной.",
       "docsLink": "Открыть документацию"
+    },
+    "titaniumSignIn": {
+      "message": "Войдите в Titanium, чтобы использовать облачную расшифровку {{brand}}.",
+      "action": "Войти через Titanium"
     }
   },
   "hooks": {
@@ -1230,7 +1240,12 @@
     },
     "welcomeSubtitle": "Сила вашего голоса. На ваших условиях.",
     "welcomeTitle": "Добро пожаловать в {{brand}}",
-    "sessionExpired": "Сессия истекла. Пожалуйста, войдите снова."
+    "sessionExpired": "Сессия истекла. Пожалуйста, войдите снова.",
+    "titanium": {
+      "signIn": "Войти через Titanium",
+      "subtitle": "Войдите в аккаунт Titanium, чтобы использовать облачную расшифровку {{brand}}.",
+      "signedInAs": "Вы вошли как {{email}}"
+    }
   },
   "cleanupPrompt": "Очистка",
   "developerSection": {

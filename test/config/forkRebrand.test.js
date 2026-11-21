@@ -27,7 +27,7 @@ test("install identity is unchanged so the installed build updates in place", ()
   assert.deepEqual(builder.protocols.schemes, ["titaniumwhisper"]);
   assert.equal(builder.publish.provider, "github");
   assert.equal(builder.publish.owner, "finedesignz");
-  assert.equal(builder.publish.repo, "openwhispr");
+  assert.equal(builder.publish.repo, "edgeassistant");
 });
 
 test("main.js pins userData to USER_DATA_DIR, not to the product name", () => {

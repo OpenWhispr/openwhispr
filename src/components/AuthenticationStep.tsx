@@ -20,6 +20,9 @@ import { EMAIL_REGEX } from "../utils/validation";
 import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
 import ForgotPasswordView from "./ForgotPasswordView";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
+import { useTitaniumAuth } from "../hooks/useTitaniumAuth";
+import { TITANIUM_ENABLED } from "../config/forkRuntime";
+import { resolveAuthStepMode } from "../helpers/titanium/titaniumOnboardingPolicy.js";
 import {
   RESUME_DRAFT_PERSIST_DELAY_MS,
   type OnboardingAuthDraft,
@@ -46,6 +49,16 @@ interface AuthenticationStepProps {
 }
 
 type SsoDiscovery = OnboardingSsoDiscoveryDraft;
+
+// Mirrors the keys under titaniumAccount.errors; anything else renders as "generic".
+const TITANIUM_ERROR_KEYS: Record<string, true> = {
+  state_mismatch: true,
+  no_pending_sign_in: true,
+  exchange_unreachable: true,
+  invalid_code_verifier: true,
+  token_not_found: true,
+  app_mismatch: true,
+};
 
 const EXISTING_ACCOUNT_ERROR_CODES = new Set([
   "USER_ALREADY_EXISTS",
@@ -150,6 +163,7 @@ export default function AuthenticationStep({
     ? "text-2xl font-semibold tracking-tight"
     : "onboarding-display-title";
   const { isSignedIn, isLoaded, user } = useAuth();
+  const titanium = useTitaniumAuth();
   const [authMode, setAuthMode] = useState<OnboardingAuthMode>(resumeState?.authMode ?? null);
   const [email, setEmail] = useState(resumeState?.email ?? "");
   const [password, setPassword] = useState("");
@@ -417,8 +431,64 @@ export default function AuthenticationStep({
     setFullName("");
   }, []);
 
+  const authStepMode = resolveAuthStepMode({
+    authConfigured: Boolean(AUTH_URL && authClient),
+    titaniumEnabled: TITANIUM_ENABLED,
+  });
+
+  // No hosted OpenWhispr auth, but the fork signs in through Titanium.
+  if (authStepMode === "titanium") {
+    const titaniumError = titanium.error
+      ? t(
+          `titaniumAccount.errors.${titanium.error in TITANIUM_ERROR_KEYS ? titanium.error : "generic"}`
+        )
+      : null;
+    return (
+      <CompactOnboardingFrame embedded={embedded}>
+        <div className={`${frameInset("pt-48")} text-center`}>
+          <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
+          <p className="mt-3 text-base text-muted-foreground">
+            {titanium.signedIn
+              ? t("auth.titanium.signedInAs", { email: titanium.email ?? "" })
+              : t("auth.titanium.subtitle")}
+          </p>
+          {titaniumError && (
+            <div
+              role="alert"
+              className="mt-4 rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive"
+            >
+              {titaniumError}
+            </div>
+          )}
+          {titanium.signedIn ? (
+            <Button onClick={onAuthComplete} className="mt-8 h-12 w-full">
+              {t("auth.common.continue")}
+              <ArrowRight className="size-4 rtl:rotate-180" />
+            </Button>
+          ) : (
+            <>
+              <Button onClick={() => void titanium.signIn()} className="mt-8 h-12 w-full">
+                {titanium.pending ? t("titaniumAccount.signInAgain") : t("auth.titanium.signIn")}
+              </Button>
+              {titanium.pending && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t("titaniumAccount.signedOut.pending")}
+                </p>
+              )}
+            </>
+          )}
+          {onContinueWithoutAccount && !titanium.signedIn && (
+            <Button variant="ghost" onClick={onContinueWithoutAccount} className="mt-3 h-12 w-full">
+              {t("auth.getStarted")}
+            </Button>
+          )}
+        </div>
+      </CompactOnboardingFrame>
+    );
+  }
+
   // Auth not configured state
-  if (!AUTH_URL || !authClient) {
+  if (authStepMode === "unconfigured") {
     return (
       <CompactOnboardingFrame embedded={embedded}>
         <div className={`${frameInset("pt-48")} text-center`}>

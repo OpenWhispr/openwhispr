@@ -29,7 +29,12 @@ import { getProviderIcon, isMonochromeProvider } from "@/utils/providerIcons";
 import { cn } from "../lib/utils";
 // Only the Local card opens the warning dialog now — BYOK goes
 // straight through from the "Choose your API setup" modal.
-import { CLOUD_ENABLED } from "../../config/forkRuntime";
+import { CLOUD_ENABLED, TITANIUM_ENABLED } from "../../config/forkRuntime";
+import { useTitaniumAuth } from "../../hooks/useTitaniumAuth";
+import {
+  resolveTitaniumSetupAction,
+  shouldOfferTitaniumSetup,
+} from "../../helpers/titanium/titaniumOnboardingPolicy.js";
 import warningBackdrop from "../../assets/onboarding-setup-warning-hero.webp";
 import apiSetupHero from "../../assets/onboarding-api-setup-hero.webp";
 
@@ -45,6 +50,8 @@ interface SetupChoiceStepProps {
   isSignedIn: boolean;
   agentAllowed: boolean;
   onSelect: (mode: SetupMode, options?: { selfHosted?: boolean }) => void;
+  /** Picks the Titanium-hosted STT endpoint; called only once Titanium is signed in. */
+  onSelectTitanium?: () => void;
   onRequestAuthentication: () => void;
 }
 
@@ -122,9 +129,11 @@ export default function SetupChoiceStep({
   isSignedIn,
   agentAllowed,
   onSelect,
+  onSelectTitanium,
   onRequestAuthentication,
 }: SetupChoiceStepProps) {
   const { t } = useTranslation();
+  const titanium = useTitaniumAuth();
   const policy = usePolicySnapshot();
   const [pending, setPending] = useState<WarningSetupMode | null>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
@@ -155,6 +164,17 @@ export default function SetupChoiceStep({
     selfHosted: selfHostedAllowed,
   } = availability;
   const cloudAllowed = cloudPolicyAllowed && CLOUD_ENABLED;
+  const titaniumAllowed =
+    Boolean(onSelectTitanium) &&
+    shouldOfferTitaniumSetup({
+      titaniumEnabled: TITANIUM_ENABLED,
+      policyAllowsCloud: cloudPolicyAllowed,
+    });
+  const titaniumAction = resolveTitaniumSetupAction({ titaniumSignedIn: titanium.signedIn });
+  const chooseTitanium = () => {
+    if (titaniumAction === "continue") onSelectTitanium?.();
+    else void titanium.signIn();
+  };
   const moreOptionsAllowed = byokAllowed || selfHostedAllowed;
 
   const chooseCloud = () => {
@@ -347,6 +367,38 @@ export default function SetupChoiceStep({
               {isSignedIn
                 ? t("onboarding.rehaul.setupChoice.cloud.continue")
                 : t("onboarding.rehaul.setupChoice.cloud.signIn")}
+            </CardAction>
+          </SetupCard>
+        )}
+
+        {titaniumAllowed && (
+          <SetupCard>
+            <div className="relative z-10 flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <span className="flex size-9 items-center justify-center rounded-full bg-gradient-to-b from-[#4079ed] to-[#244587] text-white">
+                  <BrandMark className="size-6" />
+                </span>
+                <span className="rounded-[47px] bg-[var(--onboarding-accent)] px-[9px] py-1 text-[10px] leading-[1.4] text-[var(--onboarding-accent-foreground)]">
+                  {t("common.recommended")}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <h2 className="onboarding-card-title text-[var(--onboarding-text-primary)]">
+                  {t("onboarding.rehaul.setupChoice.titanium.title")}
+                </h2>
+                <p className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                  {titanium.pending
+                    ? t("titaniumAccount.signedOut.pending")
+                    : t("onboarding.rehaul.setupChoice.titanium.description")}
+                </p>
+              </div>
+            </div>
+            <CardAction brand onClick={chooseTitanium}>
+              {titaniumAction === "continue"
+                ? t("onboarding.rehaul.setupChoice.titanium.continue")
+                : titanium.pending
+                  ? t("titaniumAccount.signInAgain")
+                  : t("onboarding.rehaul.setupChoice.titanium.signIn")}
             </CardAction>
           </SetupCard>
         )}

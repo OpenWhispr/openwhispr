@@ -1302,7 +1302,12 @@
     },
     "welcomeSubtitle": "قوة صوتك. بشروطك.",
     "welcomeTitle": "مرحبًا بك في {{brand}}",
-    "sessionExpired": "انتهت الجلسة. يرجى إعادة بدء عملية التسجيل."
+    "sessionExpired": "انتهت الجلسة. يرجى إعادة بدء عملية التسجيل.",
+    "titanium": {
+      "signIn": "تسجيل الدخول عبر Titanium",
+      "subtitle": "سجّل الدخول بحساب Titanium لاستخدام النسخ السحابي في {{brand}}.",
+      "signedInAs": "تم تسجيل الدخول باسم {{email}}"
+    }
   },
   "workspaces": {
     "switcher": {
@@ -2802,6 +2807,12 @@
             "title": "مستضاف ذاتيًا",
             "description": "اربط نموذجك المستضاف ذاتيًا."
           }
+        },
+        "titanium": {
+          "title": "سحابة {{brand}} (Titanium)",
+          "description": "انسخ على خوادم Titanium المستضافة. سجّل الدخول بحساب Titanium، ولا حاجة إلى مفتاح API.",
+          "signIn": "تسجيل الدخول عبر Titanium",
+          "continue": "متابعة"
         }
       },
       "provider": {
@@ -4382,6 +4393,10 @@
     "tinfoil": {
       "transportNote": "يستخدم Tinfoil نموذج Voxtral Mini 4B للتفريغ المباشر (البث)، ونموذج Voxtral Small 24B للمعالجة الدفعية.",
       "docsLink": "قراءة الوثائق"
+    },
+    "titaniumSignIn": {
+      "message": "سجّل الدخول إلى Titanium لاستخدام النسخ السحابي في {{brand}}.",
+      "action": "تسجيل الدخول عبر Titanium"
     }
   },
   "cleanupPrompt": "التنظيف",

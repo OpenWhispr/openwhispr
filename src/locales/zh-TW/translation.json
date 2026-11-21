@@ -391,6 +391,12 @@
             "title": "自架主機",
             "description": "連接你自己託管的模型。"
           }
+        },
+        "titanium": {
+          "title": "{{brand}} 雲端（Titanium）",
+          "description": "在 Titanium 代管的伺服器上轉錄。使用 Titanium 帳號登入即可，無需 API 金鑰。",
+          "signIn": "使用 Titanium 登入",
+          "continue": "繼續"
         }
       },
       "provider": {
@@ -920,6 +926,10 @@
     "tinfoil": {
       "transportNote": "Tinfoil 串流轉錄使用 Voxtral Mini 4B，批次轉錄使用 Voxtral Small 24B。",
       "docsLink": "查看文件"
+    },
+    "titaniumSignIn": {
+      "message": "請登入 Titanium 以使用 {{brand}} 雲端轉錄。",
+      "action": "使用 Titanium 登入"
     }
   },
   "hooks": {
@@ -1230,7 +1240,12 @@
     },
     "welcomeSubtitle": "你的聲音，由你掌控。",
     "welcomeTitle": "歡迎使用 {{brand}}",
-    "sessionExpired": "工作階段已過期，請重新登入。"
+    "sessionExpired": "工作階段已過期，請重新登入。",
+    "titanium": {
+      "signIn": "使用 Titanium 登入",
+      "subtitle": "使用 Titanium 帳號登入，即可使用 {{brand}} 雲端轉錄。",
+      "signedInAs": "已登入：{{email}}"
+    }
   },
   "cleanupPrompt": "文字整理",
   "developerSection": {

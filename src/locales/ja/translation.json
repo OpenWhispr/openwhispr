@@ -391,6 +391,12 @@
             "title": "セルフホスト",
             "description": "自分でホストしているモデルを接続します。"
           }
+        },
+        "titanium": {
+          "title": "{{brand}} クラウド（Titanium）",
+          "description": "Titanium のホスティングサーバーで文字起こしします。Titanium アカウントでサインインするだけで、API キーは不要です。",
+          "signIn": "Titanium でサインイン",
+          "continue": "続ける"
         }
       },
       "provider": {
@@ -920,6 +926,10 @@
     "tinfoil": {
       "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
       "docsLink": "ドキュメントを見る"
+    },
+    "titaniumSignIn": {
+      "message": "Titanium にサインインして、{{brand}} のクラウド文字起こしを利用してください。",
+      "action": "Titanium でサインイン"
     }
   },
   "hooks": {
@@ -1230,7 +1240,12 @@
       "protocolUnavailable": "ブラウザでのサインインを利用できません — システムの「既定のアプリ」設定で openwhispr:// プロトコルを再登録してください。"
     },
     "welcomeSubtitle": "あなたの声の力を、あなたのやり方で。",
-    "welcomeTitle": "{{brand}} へようこそ"
+    "welcomeTitle": "{{brand}} へようこそ",
+    "titanium": {
+      "signIn": "Titanium でサインイン",
+      "subtitle": "Titanium アカウントでサインインして、{{brand}} のクラウド文字起こしを利用します。",
+      "signedInAs": "{{email}} としてサインイン中"
+    }
   },
   "cleanupPrompt": "クリーンアップ",
   "developerSection": {
