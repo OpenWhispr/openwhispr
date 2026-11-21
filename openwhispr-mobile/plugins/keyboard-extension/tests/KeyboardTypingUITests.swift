@@ -271,6 +271,12 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     } else {
       checks.check("laid-out geometry is available", false)
     }
+    // A fast tap that slid off its key arrives as a very short swipe: it types that key.
+    let (sliding, slidingProxy, _) = makeTypingKeyboard()
+    if let start = sliding.uiTestGeometry?.centres["h"] {
+      sliding.uiTestSwipe([start, CGPoint(x: start.x + 12, y: start.y + 4), CGPoint(x: start.x + 34, y: start.y + 6)])
+      checks.check("a short slide types the key it began on", slidingProxy.documentContextBeforeInput == "H")
+    }
   }
 
   // Space-bar trackpad.

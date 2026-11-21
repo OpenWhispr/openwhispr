@@ -881,6 +881,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     /// After the last key, suggestions for the next word stay this long before the strip
     /// returns to the dictation pill.
     static let suggestionRestDelay: TimeInterval = 3
+    /// How long after the last key a host's report of the text is taken as current.
+    static let fieldReportSettleDelay: TimeInterval = 0.4
     /// Where the pill's icon starts; the animated dots overlay the icon's place.
     static let pillLeadingInset: CGFloat = 16
     static let toolbarButtonSize: CGFloat = 36
@@ -1157,6 +1159,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var suggestionRefreshScheduled = false
   private var lastKeystrokeAt: CFTimeInterval = 0
   private var suggestionRestTimer: Timer?
+  private var fieldSyncTimer: Timer?
   /// The pill shows its resting state ("Tap to speak" / "Activate"), not a take in progress.
   private var isPillIdle = false
   private var pillTitle = ""
@@ -1518,6 +1521,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     directKeyboardWillDisappear()
     stopDeleteRepeating()
     suggestionRestTimer?.invalidate()
+    fieldSyncTimer?.invalidate()
     issueResetTimer?.invalidate()
     waitForTranscriptTimer?.invalidate()
     waitForAgentResultTimer?.invalidate()
@@ -2587,7 +2591,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       insertUntracked(text)
       return
     }
-    session.policy = fieldPolicy
     performEdit(session.insert(text))
   }
 
@@ -2731,6 +2734,21 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// The field's text or cursor may have changed under the keyboard.
   private func syncTypingSessionWithField() {
     guard didLoadTypingEngine, let session = typingEngine?.session else { return }
+    // Hosts report the keyboard's own typing back late, sometimes several keys late. While
+    // keys are coming in, the session's own record of the text is the right one and a stale
+    // report would only wind it back, so reports wait until typing pauses.
+    let sinceKey = CACurrentMediaTime() - lastKeystrokeAt
+    guard sinceKey >= Metrics.fieldReportSettleDelay else {
+      fieldSyncTimer?.invalidate()
+      let timer = Timer(timeInterval: Metrics.fieldReportSettleDelay - sinceKey + 0.02, repeats: false) { [weak self] _ in
+        self?.syncTypingSessionWithField()
+      }
+      RunLoop.main.add(timer, forMode: .common)
+      fieldSyncTimer = timer
+      return
+    }
+    // The field's rules are read here, not on every key: they change with the field, and
+    // each read goes to the host.
     session.policy = fieldPolicy
     let proxy = textDocumentProxy
     // A field that reports nothing (it hides its text, or the host never reports) leaves
@@ -2830,6 +2848,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     pillCompactConstraints.forEach { $0.isActive = compact }
     topBar.setNeedsLayout()
     topBar.touchOutsetTarget = compact ? recordButton : nil
+    // Laid out now, in both directions: left to the next pass, the pill kept its old frame
+    // for a while (its full title squeezed into the round button on the way back).
+    topBar.layoutIfNeeded()
     refreshPillTouchReservation()
   }
 
@@ -3154,10 +3175,24 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func commitSwipe(path: [CGPoint]) {
     guard let engine = loadedTypingEngine(), let decoder = swipeDecoder else { return }
     let session = engine.session
-    session.policy = fieldPolicy
     let context = session.nextLetterContext()
-    let words = decoder.decode(path: path, previous: context.previous, sentenceStart: context.sentenceStart, limit: 4)
-    guard let best = words.first else { return }
+    // A fast tap that slid off its key reaches here as a very short swipe. It was a key
+    // press, and the recogniser has already cancelled the key's own touch, so the key it
+    // began on is typed here; the same goes for a path no word fits.
+    var length: CGFloat = 0
+    for (from, to) in zip(path, path.dropFirst()) { length += hypot(to.x - from.x, to.y - from.y) }
+    let pitch = engine.corrector.geometry.pitch
+    let words = length >= 1.5 * pitch
+      ? decoder.decode(path: path, previous: context.previous, sentenceStart: context.sentenceStart, limit: 4)
+      : []
+    guard let best = words.first else {
+      if let start = path.first, let key = keyboardRowsStack.hitTest(start, with: nil) as? KeyButton,
+        let code = key.output?.utf16.first, letterButtonsByCode[code] === key
+      {
+        handleCharacterKeyTapped(key)
+      }
+      return
+    }
     // Shift applies to a swiped word as to a typed one: a capital with shift on (the start
     // of a sentence included), capitals throughout under caps lock.
     func cased(_ word: String) -> String {

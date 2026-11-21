@@ -21,8 +21,11 @@ final class SystemKeyFeedback: KeyFeedbackGenerating {
 
   func click() { UIDevice.current.playInputClick() }
 
+  /// Softer than a full light impact, which felt too strong on every key on a phone.
+  private static let tapIntensity: CGFloat = 0.5
+
   func tap() {
-    impact.impactOccurred()
+    impact.impactOccurred(intensity: SystemKeyFeedback.tapIntensity)
     // Keeps the Taptic Engine awake for the next key, so fast typing doesn't drop taps.
     impact.prepare()
   }
