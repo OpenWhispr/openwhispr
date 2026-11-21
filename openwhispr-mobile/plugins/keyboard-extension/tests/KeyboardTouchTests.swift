@@ -72,11 +72,18 @@ private extension KeyboardViewController {
 
   /// The production keyboard laid out at `width` and its content height (or `height`), in
   /// the stubbed TestEnvironment.
-  static func makeLaidOutKeyboard(width: CGFloat, page: TestPage = .letters, height: CGFloat? = nil)
-    -> KeyboardViewController
-  {
+  static func makeLaidOutKeyboard(
+    width: CGFloat,
+    page: TestPage = .letters,
+    height: CGFloat? = nil,
+    letterLayout: KeyboardLetterLayout = .english
+  ) -> KeyboardViewController {
     let controller = KeyboardViewController()
     controller.loadViewIfNeeded()
+    if controller.letterLayout != letterLayout {
+      controller.letterLayout = letterLayout
+      controller.rebuildKeyboard()
+    }
     if page != .letters {
       controller.handleModeKeyTapped()
     }
@@ -178,6 +185,14 @@ private enum KeyboardTouchTests {
     checkProductionLayout("landscape with globe", width: 667, globe: true, landscape: true, &checks)
     checkProductionLayout("iPad", width: 1024, tablet: true, &checks)
     checkProductionLayout("iPad floating", width: 320, tablet: true, &checks)
+    for layout in [KeyboardLetterLayout.german, .swissFrench] {
+      for width: CGFloat in [360, 402, 440] {
+        checkProductionLayout("\(layout)", width: width, letterLayout: layout, &checks)
+      }
+      checkProductionLayout("\(layout) landscape", width: 852, landscape: true, letterLayout: layout, &checks)
+      checkProductionLayout("\(layout) iPad", width: 1024, tablet: true, letterLayout: layout, &checks)
+      checkProductionLayout("\(layout) with globe", width: 375, globe: true, letterLayout: layout, &checks)
+    }
     let fieldTypes: [(UIKeyboardType, String)] = [(.URL, "URL"), (.emailAddress, "email"), (.webSearch, "web search"), (.twitter, "twitter")]
     for (type, name) in fieldTypes {
       let proxy = TestTextProxy()
@@ -192,6 +207,7 @@ private enum KeyboardTouchTests {
     checkFieldAwareKeys(&checks)
     checkLayoutChanges(&checks)
     checkTyping(&checks)
+    checkLetterLayouts(&checks)
 
     print("Keyboard touch routing: \(checks.count - checks.failures.count)/\(checks.count) passed")
     if !checks.failures.isEmpty {
@@ -354,6 +370,7 @@ private enum KeyboardTouchTests {
     landscape: Bool = false,
     tablet: Bool = false,
     proxy: TestTextProxy? = nil,
+    letterLayout: KeyboardLetterLayout = .english,
     _ checks: inout TouchChecks
   ) {
     TestEnvironment.reset()
@@ -362,7 +379,9 @@ private enum KeyboardTouchTests {
     TestEnvironment.landscape = landscape
     TestEnvironment.tablet = tablet
     TestEnvironment.proxy = proxy ?? TestTextProxy()
-    let controller = KeyboardViewController.makeLaidOutKeyboard(width: width, page: page)
+    let controller = KeyboardViewController.makeLaidOutKeyboard(
+      width: width, page: page, letterLayout: letterLayout
+    )
     let rows = controller.touchTestRows
     let layout = "\(Int(width)) pt \(name) \(page)"
     checks.check(
@@ -611,6 +630,72 @@ private enum KeyboardTouchTests {
     checks.check("iPad: 309pt, with a gap above the toolbar", tablet.touchTestIsTablet && tablet.touchTestKeyboardHeight == 309 && tablet.touchTestStripTop > 0)
     let floating = KeyboardViewController.makeLaidOutKeyboard(width: 320)
     checks.check("floating iPad keyboard: phone metrics", !floating.touchTestIsTablet)
+  }
+
+  /// The German and Swiss French pages: the stored values, eleven equal keys filling the
+  /// top rows, the third row beside unchanged shift and delete keys, and accented letters
+  /// typed and capitalised like any other.
+  @MainActor
+  static func checkLetterLayouts(_ checks: inout TouchChecks) {
+    TestEnvironment.reset()
+    defer { TestEnvironment.reset() }
+
+    checks.check("no stored layout reads as English", KeyboardLetterLayout(storedValue: nil) == .english)
+    checks.check("an unknown layout reads as English", KeyboardLetterLayout(storedValue: "xx") == .english)
+    checks.check("de reads as German", KeyboardLetterLayout(storedValue: "de") == .german)
+    checks.check("fr_CH reads as Swiss French", KeyboardLetterLayout(storedValue: "fr_CH") == .swissFrench)
+    checks.check("English is ten keys wide", KeyboardLetterLayout.english.columns == 10)
+    for layout in [KeyboardLetterLayout.german, .swissFrench] {
+      checks.check("\(layout) rows are 11, 11 and 7 keys", layout.rows.map(\.count) == [11, 11, 7])
+      checks.check("\(layout) is QWERTZ", layout.rows[0][5] == "z" && layout.rows[2][0] == "y")
+      let letters = layout.rows.flatMap { $0 }
+      checks.check("\(layout) has no repeated key", Set(letters).count == letters.count)
+    }
+    checks.check("German has ü ö ä", KeyboardLetterLayout.german.rows[0].last == "ü" && KeyboardLetterLayout.german.rows[1].suffix(2) == ["ö", "ä"])
+    checks.check("Swiss French has è é à", KeyboardLetterLayout.swissFrench.rows[0].last == "è" && KeyboardLetterLayout.swissFrench.rows[1].suffix(2) == ["é", "à"])
+
+    for width: CGFloat in [360, 402, 1024] {
+      TestEnvironment.tablet = width > 800
+      let english = KeyboardViewController.makeLaidOutKeyboard(width: width)
+      let german = KeyboardViewController.makeLaidOutKeyboard(width: width, letterLayout: .german)
+      let rows = german.touchTestRows
+      let rects = german.touchTestLetters.map { $0.convert($0.bounds, to: rows) }
+      let top = Array(rects.prefix(11))
+      let widths = rects.map(\.width)
+      checks.check(
+        "\(Int(width)) pt German: 29 letter keys of one width",
+        rects.count == 29 && widths.allSatisfy { abs($0 - widths[0]) < 0.5 }
+      )
+      checks.check(
+        "\(Int(width)) pt German: the top row fills the rows",
+        abs(top.first!.minX - rows.bounds.minX) < 1 && abs(top.last!.maxX - rows.bounds.maxX) < 1
+      )
+      let englishRows = english.touchTestRows
+      let englishTop = english.touchTestLetters.prefix(10).map { $0.convert($0.bounds, to: englishRows) }
+      checks.check(
+        "\(Int(width)) pt German keys are narrower than English",
+        widths[0] < englishTop[0].width
+      )
+      checks.check(
+        "\(Int(width)) pt German: the third row stays between shift and delete",
+        rects[22].minX > rows.bounds.minX + englishTop[0].width && rects[28].maxX < rows.bounds.maxX - englishTop[0].width
+      )
+      TestEnvironment.tablet = false
+    }
+
+    let proxy = TestTextProxy()
+    TestEnvironment.proxy = proxy
+    let german = KeyboardViewController.makeLaidOutKeyboard(width: 402, letterLayout: .german)
+    german.touchTestTapLetter(10)
+    german.touchTestTapLetter(21)
+    german.touchTestTapLetter(5)
+    checks.check("German types Ü at a sentence start, then ä and z (\(proxy.inserted))", proxy.inserted == ["Ü", "ä", "z"])
+
+    let swissProxy = TestTextProxy()
+    TestEnvironment.proxy = swissProxy
+    let swiss = KeyboardViewController.makeLaidOutKeyboard(width: 402, letterLayout: .swissFrench)
+    for index in [10, 20, 21, 22] { swiss.touchTestTapLetter(index) }
+    checks.check("Swiss French types È at a sentence start, then é à y (\(swissProxy.inserted))", swissProxy.inserted == ["È", "é", "à", "y"])
   }
 
   /// Shift, delete and quotes.
