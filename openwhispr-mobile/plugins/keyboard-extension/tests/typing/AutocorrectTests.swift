@@ -6,6 +6,28 @@ extension TypingTests {
   static func runAutocorrectTests(plugin: URL) {
     runEnglishAutocorrectTests(BenchEnvironment(plugin: plugin, language: .english, layout: .qwerty, split: "dev"))
     runGermanAutocorrectTests(BenchEnvironment(plugin: plugin, language: .german, layout: .qwertz, split: "dev"))
+    runSessionTests(BenchEnvironment(plugin: plugin, language: .english, layout: .qwerty, split: "dev"))
+  }
+
+  /// Whole lines typed through a session, key by key.
+  private static func runSessionTests(_ environment: BenchEnvironment) {
+    let session = TypingSession(corrector: environment.corrector())
+    session.policy = TypingFieldPolicy(autocorrects: true, suggests: false, learns: false)
+    func typed(_ text: String) -> String {
+      session.reset()
+      var document = BenchDocument()
+      for character in text { document.apply(session.insert(String(character))) }
+      return document.text
+    }
+    // A capital at the start: the writer uses capitals, so the keyboard supplies the rest.
+    check("capitals are added for someone who uses them", typed("I think i like french food ") == "I think I like French food ")
+    // Lower case at the start means shift was turned off there: capitals are left out.
+    check("capitals are left out for someone writing in lower case", typed("i think i like french food ") == "i think i like french food ")
+    check("lower-case writing still gets real corrections", typed("i think teh food is good ") == "i think the food is good ")
+    check("a new sentence with a capital brings capitals back", typed("ok. Then i left ") == "ok. Then I left ")
+    // A letter straight after the full stop: an address or abbreviation, not a sentence end.
+    check("a correction before a full stop is undone when a letter follows", typed("I asked i.e. him ") .hasPrefix("I asked i.e."))
+    check("an address keeps its lower case", typed("Mail kent.shoemaker now ").contains("kent.shoemaker"))
   }
 
   /// `expect("teh", "the", after: "this is")` checks the correction; a word expected to stay

@@ -75,6 +75,11 @@ final class TypingSession {
   /// The space before the cursor was added with a suggestion or a swipe: punctuation takes
   /// its place.
   private var endsWithAutoSpace = false
+  /// The user began a sentence in lower case. The keyboard turns shift on there by itself,
+  /// so they turned it off: they write in lower case, and corrections that would only add a
+  /// capital ("i" → "I", "french" → "French") are left out until they begin a sentence with
+  /// a capital again.
+  private var writesInLowerCase = false
   private var cachedBar: (tail: String, suggestions: [Suggestion])?
   private var cachedCorrection: (tail: String, result: CorrectionResult)?
   private static let tailLimit = 240
@@ -151,6 +156,9 @@ final class TypingSession {
     lastSwipe = nil
 
     if TypingSession.isWordCharacter(first) {
+      if first.isLetter, composing.isEmpty, context(before: tail.endIndex).sentenceStart {
+        writesInLowerCase = first.isLowercase
+      }
       // A letter straight after the full stop that triggered a correction: the word was the
       // start of an address or an abbreviation ("kent.shoemaker@…", "i.e."), so it goes back
       // to how it was typed.
@@ -192,7 +200,9 @@ final class TypingSession {
     guard typed.first != "'", typed.last != "'", typed.first != "\u{2019}", typed.last != "\u{2019}" else { return nil }
     let context = context(before: wordStart)
     guard !context.glued else { return nil }
-    return correction(for: typed, context: context).replacement
+    guard let replacement = correction(for: typed, context: context).replacement else { return nil }
+    if writesInLowerCase, replacement.lowercased() == typed.lowercased() { return nil }
+    return replacement
   }
 
   private func correction(for typed: String, context: Context) -> CorrectionResult {
@@ -301,6 +311,7 @@ final class TypingSession {
     lastCorrection = nil
     lastSwipe = nil
     endsWithAutoSpace = false
+    writesInLowerCase = false
     cachedBar = nil
     cachedCorrection = nil
   }

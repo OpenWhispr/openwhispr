@@ -47,11 +47,13 @@ struct AutocorrectParameters {
   var capitalisedForLowerCase = 0.9
   /// A correction has to beat the typed word by this much.
   var margin = 0.05
-  /// …and by this much when the typed word is a word itself ("form" → "from").
-  var realWordMargin = 1.0
+  /// …and by this much when the typed word is a word itself ("form" → "from"). English can
+  /// afford a small margin since capitalisation-only changes are no longer made for people
+  /// who write in lower case; German keeps the larger one.
+  var realWordMargin = 0.6
   /// Added to either margin when the correction is the typed word with another regular
   /// ending.
-  var otherFormMargin = 1.0
+  var otherFormMargin = 1.4
   /// log10 P of a German compound of known words that the lexicon lacks: only a listed
   /// word a slip away and far likelier replaces it ("Lebenstil" → "Lebensstil").
   var compoundWord = -7.0
@@ -66,6 +68,8 @@ struct AutocorrectParameters {
 
   init(language: TypingLanguage = .english) {
     guard language == .german else { return }
+    realWordMargin = 1.0
+    otherFormMargin = 1.0
     // The German keyboard has umlaut keys, and "schon" and "schön" are both words.
     accentSubstitution = 1.8
     missedLetter = 1.7
