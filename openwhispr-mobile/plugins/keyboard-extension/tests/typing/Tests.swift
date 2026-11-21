@@ -19,6 +19,7 @@ enum TypingTests {
     runTrackpadTests()
     runEmojiTests(plugin: plugin)
     runSwipeTests(plugin: plugin)
+    runAutocorrectTests(plugin: plugin)
     print("Typing engine tests: \(checks - failures)/\(checks) passed")
     return failures == 0
   }

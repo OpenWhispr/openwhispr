@@ -44,6 +44,13 @@ extension AutocorrectParameters {
     case "missedDoubleLetter": missedDoubleLetter = value
     case "extraLetter": extraLetter = value
     case "extraNeighbour": extraNeighbour = value
+    case "extraDoubleLetter": extraDoubleLetter = value
+    case "inflectedCeiling": inflectedCeiling = value
+    case "lowerCaseForCapitalised": lowerCaseForCapitalised = value
+    case "capitalisedForLowerCase": capitalisedForLowerCase = value
+    case "otherFormMargin": otherFormMargin = value
+    case "compoundPenalty": compoundPenalty = value
+    case "compoundWord": compoundWord = value
     case "firstLetterPenalty": firstLetterPenalty = value
     case "secondEditPenalty": secondEditPenalty = value
     case "unknownWord": unknownWord = value

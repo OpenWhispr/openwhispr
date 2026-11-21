@@ -58,8 +58,11 @@ enum AutocorrectBench {
     }
     print("typos \(language)-\(layout) \(environment.split): top-1 \(percent(right, total)) (\(right)/\(total)), left unchanged \(percent(unchanged, total)), intended word not in the lexicon \(percent(missing, total))")
 
-    // Over-correction: type every sentence as written and count the words that change.
-    var changed = 0, words = 0
+    // Over-correction: type every sentence as written and count the words that change. The
+    // headline figure is strict: every changed word counts. Changes that only add a capital
+    // ("i" → "I", "french" → "French") are also counted on their own, since the source text
+    // is informal and a keyboard is meant to make them.
+    var changed = 0, words = 0, caseOnly = 0, pronoun = 0
     for sentence in environment.lines("sentences.\(language).\(environment.split).txt") {
       session.reset()
       var document = BenchDocument()
@@ -72,13 +75,17 @@ enum AutocorrectBench {
       if original.count == produced.count {
         for (before, after) in zip(original, produced) where before != after {
           changed += 1
+          if before.lowercased() == after.lowercased() {
+            caseOnly += 1
+            if before.lowercased().hasPrefix("i") && (before.count == 1 || before.dropFirst().first == "'" || before.dropFirst().first == "\u{2019}") { pronoun += 1 }
+          }
           if verbose { print("  over  \(before) → \(after)") }
         }
       } else {
         changed += abs(original.count - produced.count) + zip(original, produced).filter { $0 != $1 }.count
       }
     }
-    print("over-correction \(language) \(environment.split): \(percent(changed, words)) of words changed (\(changed)/\(words))")
+    print("over-correction \(language) \(environment.split): \(percent(changed, words)) of words changed (\(changed)/\(words)); capitalisation only \(percent(caseOnly, words)) (\(caseOnly), of which the pronoun I \(pronoun)); other changes \(percent(changed - caseOnly, words)) (\(changed - caseOnly))")
     print(String(format: "autocorrect bench took %.1f s", Date().timeIntervalSince(started)))
   }
 }

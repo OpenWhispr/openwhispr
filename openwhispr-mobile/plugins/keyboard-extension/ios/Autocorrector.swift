@@ -1,47 +1,88 @@
 import Foundation
 
 /// Costs and thresholds of the correction model, in log10 units so they add to the language
-/// model's log10 probabilities. Tuned on the benchmark dev splits only.
+/// model's log10 probabilities. Tuned on the benchmark dev splits only. The defaults are
+/// English's; `init(language:)` has what German changes.
 struct AutocorrectParameters {
   /// A neighbouring key hit instead (distance up to ~1.3 key pitches).
   var adjacentSubstitution = 1.5
   /// Any other letter typed instead.
-  var farSubstitution = 3.6
+  var farSubstitution = 4.2
   /// A vowel for another vowel: a spelling mistake more than a slip.
-  var vowelSubstitution = 2.5
-  /// u for ü, a for ä, o for ö, ss for ß.
+  var vowelSubstitution = 2.8
+  /// u typed for ü, a for ä, o for ö, ss for ß: the quick way to type them on a keyboard
+  /// that has them only behind a held key.
   var accentSubstitution = 0.6
-  var transposition = 1.8
-  var missedLetter = 2.3
+  var transposition = 1.4
+  var missedLetter = 2.1
   /// The second of a double letter missed ("accomodate").
-  var missedDoubleLetter = 1.3
-  var extraLetter = 3.0
-  /// An extra letter that doubles its neighbour or sits on a key next to it.
-  var extraNeighbour = 1.9
+  var missedDoubleLetter = 0.5
+  var extraLetter = 3.3
+  /// An extra letter on a key next to the one before or after it.
+  var extraNeighbour = 2.3
+  /// A letter typed twice ("sufferring").
+  var extraDoubleLetter = 1.3
   /// Added to an edit of the first letter, which is rarely the wrong one.
-  var firstLetterPenalty = 0.7
+  var firstLetterPenalty = 0.3
   /// A second edit in the same word costs this much more.
   var secondEditPenalty = 0.6
   /// log10 P that a typed word the lexicon lacks is what the user meant.
-  var unknownWord = -7.4
+  var unknownWord = -8.0
   /// The same for a capitalised word mid-sentence, which is usually a name.
-  var unknownName = -5.6
+  var unknownName = -7.0
   /// Per letter beyond four, taken off both of the above: the longer an unknown word, the
   /// less likely it sits one slip from a real word by chance.
-  var unknownLengthPenalty = 0.3
-  var nameLengthPenalty = 0.1
+  var unknownLengthPenalty = 0.4
+  var nameLengthPenalty = 0.5
   /// A known word with a regular ending the lexicon happens to lack ("shuttles", "googled")
-  /// scores as its stem less this.
+  /// scores as its stem less this…
   var inflectedPenalty = 1.0
+  /// …but never above this: a form more frequent than the lexicon's rarest words would be in
+  /// the lexicon, so "woulds" is no likelier than they are.
+  var inflectedCeiling = -7.6
+  /// Typed with a capital mid-sentence, a correction to a word the lexicon writes in lower
+  /// case costs this: the capital says name (or, in German, noun).
+  var lowerCaseForCapitalised = 0.9
+  /// Typed in lower case, a correction to a word the lexicon only has capitalised costs this.
+  var capitalisedForLowerCase = 0.9
   /// A correction has to beat the typed word by this much.
-  var margin = 0.25
+  var margin = 0.05
   /// …and by this much when the typed word is a word itself ("form" → "from").
-  var realWordMargin = 1.6
+  var realWordMargin = 1.0
+  /// Added to either margin when the correction is the typed word with another regular
+  /// ending.
+  var otherFormMargin = 1.0
+  /// log10 P of a German compound of known words that the lexicon lacks: only a listed
+  /// word a slip away and far likelier replaces it ("Lebenstil" → "Lebensstil").
+  var compoundWord = -7.0
+  /// Taken off a German compound mended in one part ("Hundeschuke" → "Hundeschule"), which
+  /// scores as the mended part.
+  var compoundPenalty = 2.0
   /// A real word is only swapped for a much more frequent form of the same key ("ill" → "I'll").
   var sameKeyMargin = 1.2
   /// How much less a completion counts than a correction of the same probability, when
   /// ranking the bar's alternatives.
   var completionPenalty = 0.4
+
+  init(language: TypingLanguage = .english) {
+    guard language == .german else { return }
+    // The German keyboard has umlaut keys, and "schon" and "schön" are both words.
+    accentSubstitution = 1.8
+    missedLetter = 1.7
+    // Double letters are everywhere in German, so one typed is less often a slip.
+    extraDoubleLetter = 2.3
+    // The lexicon is half again as large and the words longer: fewer strangers.
+    unknownWord = -8.8
+    unknownLengthPenalty = 0.6
+    inflectedCeiling = -9.4
+    margin = 0.45
+    // A capital mid-sentence is a noun, not a name: no reason to leave the word alone, and
+    // every reason to correct it to a noun.
+    unknownName = -7.9
+    lowerCaseForCapitalised = 1.5
+    compoundWord = -9.0
+    compoundPenalty = 3.5
+  }
 }
 
 struct CorrectionResult {
@@ -75,7 +116,7 @@ final class Autocorrector {
   let lexicon: TypingLexicon
   let language: TypingLanguage
   var geometry: KeyGeometry
-  var parameters = AutocorrectParameters()
+  var parameters: AutocorrectParameters
   var learned = SupplementaryWords()
   /// Words whose correction the user undid: never corrected again this session.
   var keptAsTyped: Set<String> = []
@@ -88,12 +129,19 @@ final class Autocorrector {
     self.lexicon = lexicon
     self.language = language
     self.geometry = geometry
+    parameters = AutocorrectParameters(language: language)
   }
 
   // MARK: Correction
 
   private struct Found {
     var cost: Double
+    var edits: Int
+  }
+
+  private struct Candidate {
+    var id: Int
+    var score: Double
     var edits: Int
   }
 
@@ -140,24 +188,49 @@ final class Autocorrector {
       }
       return result
     }
-    if let typedID {
+    // The typed word in its other capitalisation ("Hell" and "hell") is the same word: its
+    // forms count together, and none of them is a correction of another.
+    let typedLower = typed.lowercased()
+    var typedForms: [Int] = []
+    if typedID != nil {
+      typedForms = sameKey.filter { lexicon.word($0).lowercased() == typedLower }
+    }
+    let capitalisedMidSentence = shape == .capitalised && !sentenceStart
+    var inflected = false
+    if typedID != nil {
       result.typedIsKnown = true
-      typedScore = lexicon.log10Probability(of: typedID, after: previousID)
+      typedScore = log10(typedForms.reduce(0) { $0 + pow(10, lexicon.log10Probability(of: $1, after: previousID)) })
     } else if isCompound(key) {
       result.typedIsKnown = true
-      typedScore = 0
+      typedScore = parameters.compoundWord
     } else if let stem = inflectionStem(of: key) {
-      typedScore = lexicon.log10Frequency(stem) - parameters.inflectedPenalty
+      inflected = true
+      typedScore = min(lexicon.log10Frequency(stem) - parameters.inflectedPenalty, parameters.inflectedCeiling)
     } else {
-      let capitalised = shape != .lower && !sentenceStart
       let extra = Double(max(0, key.count - 4))
-      typedScore = capitalised
+      typedScore = capitalisedMidSentence
         ? parameters.unknownName - parameters.nameLengthPenalty * extra
         : parameters.unknownWord - parameters.unknownLengthPenalty * extra
     }
-    if keptAsTyped.contains(typed.lowercased()) {
+    if keptAsTyped.contains(typedLower) {
       result.typedIsKnown = true
       typedScore = 0
+    }
+    // All capitals are typed on purpose, also for a word the lexicon has.
+    let deliberate = shape == .upper
+
+    // "Alqn's": a possessive of a word the lexicon has no possessive for is corrected as
+    // that word.
+    if typedID == nil, typedScore < 0, apostrophes == 1, !deliberate {
+      for suffix in ["'s", "\u{2019}s"] where typed.hasSuffix(suffix) {
+        let stem = String(typed.dropLast(suffix.count))
+        guard stem.count >= 3 else { continue }
+        let inner = correct(stem, previous: previous, sentenceStart: sentenceStart, wantsAlternatives: false)
+        if let replacement = inner.replacement, !replacement.contains("'") {
+          result.replacement = replacement + suffix
+          return result
+        }
+      }
     }
 
     var found: [Int: Found] = [:]
@@ -168,26 +241,45 @@ final class Autocorrector {
     }
     for id in sameKey { found[id] = Found(cost: 0, edits: 0) }
 
-    var scored: [(id: Int, score: Double, edits: Int)] = []
+    var scored: [Candidate] = []
     scored.reserveCapacity(found.count)
-    for (id, hit) in found where id != typedID {
+    for (id, hit) in found where !typedForms.contains(id) {
       // An apostrophe the user typed is never taken away.
       if apostrophes > 0, !lexicon.utf8(id).contains(0x27) { continue }
-      scored.append((id, lexicon.log10Probability(of: id, after: previousID) - hit.cost, hit.edits))
+      var score = lexicon.log10Probability(of: id, after: previousID) - hit.cost
+      // How the word was capitalised says what kind of word was meant.
+      if capitalisedMidSentence {
+        if hit.edits > 0, !hasCapital(id) { score -= parameters.lowerCaseForCapitalised }
+      } else if shape == .lower, hasCapital(id) {
+        score -= parameters.capitalisedForLowerCase
+      }
+      scored.append(Candidate(id: id, score: score, edits: hit.edits))
     }
     scored.sort { $0.score != $1.score ? $0.score > $1.score : $0.id < $1.id }
+    mergeCaseForms(&scored, typedInLowerCase: shape == .lower)
 
-    if let best = scored.first, typedScore < 0 {
-      let needed: Double
+    if let best = scored.first, typedScore < 0, !deliberate {
+      var needed: Double
       if typedID != nil {
         needed = best.edits == 0 ? parameters.sameKeyMargin : parameters.realWordMargin
       } else {
         needed = parameters.margin
       }
+      // "shuttles" for "shuttle": another form of the same word is rarely a slip, and the
+      // word before says little about which form was meant.
+      if best.edits > 0, areFormsOfOneWord(key, TypingLexicon.key(of: lexicon.word(best.id))) {
+        needed += parameters.otherFormMargin
+      }
       if best.score > typedScore + needed {
         let replacement = shape.apply(to: lexicon.word(best.id), sentenceStart: sentenceStart)
         if replacement != typed { result.replacement = replacement }
       }
+    }
+    if result.replacement == nil, typedID == nil, typedScore < 0, shape == .capitalised, apostrophes == 0,
+      !inflected, !result.typedIsKnown,
+      let compound = compoundCorrection(of: key), compound.score > typedScore + parameters.margin
+    {
+      result.replacement = shape.apply(to: compound.text, sentenceStart: sentenceStart)
     }
 
     if wantsAlternatives {
@@ -195,7 +287,7 @@ final class Autocorrector {
       if let replacement = result.replacement { seen.insert(replacement) }
       // Corrections and completions compete on one scale, so "Hel" offers "Hello" and
       // "Help" ahead of unlikely respellings.
-      var offers = scored.prefix(6).map { (id: $0.id, score: $0.score) }
+      var offers = scored.prefix(6).map { (id: Int, score: Double)($0.id, $0.score) }
       for completion in scoredCompletions(ofKey: key, previousID: previousID, limit: 4) {
         offers.append((completion.id, completion.score - parameters.completionPenalty))
       }
@@ -206,6 +298,43 @@ final class Autocorrector {
       }
     }
     return result
+  }
+
+  /// Whether the lexicon writes the word with a capital ("Monday", "iPhone", German nouns).
+  private func hasCapital(_ id: Int) -> Bool {
+    let word = lexicon.word(id)
+    return word != word.lowercased()
+  }
+
+  /// "Department" and "department" are one word to correct to: among the best candidates,
+  /// forms that differ only in capitals pool their scores, and the form that goes in is the
+  /// lower-case one when the word was typed in lower case, else the likelier one.
+  /// `scored` is sorted best first and stays so.
+  private func mergeCaseForms(_ scored: inout [Candidate], typedInLowerCase: Bool) {
+    var changed = false
+    var index = 0
+    while index < min(scored.count, 3) {
+      let first = scored[index]
+      let lower = lexicon.word(first.id).lowercased()
+      var forms = [first]
+      for sibling in lexicon.ids(forKey: TypingLexicon.key(of: lower)) where sibling != first.id {
+        guard lexicon.word(sibling).lowercased() == lower,
+          let other = scored.firstIndex(where: { $0.id == sibling && $0.edits == first.edits })
+        else { continue }
+        // Always further down: a likelier form would have taken this one in already.
+        forms.append(scored.remove(at: other))
+      }
+      if forms.count > 1 {
+        // `first` was the likeliest of them.
+        var chosen = first
+        if typedInLowerCase, let plain = forms.first(where: { lexicon.word($0.id) == lower }) { chosen = plain }
+        chosen.score = log10(forms.reduce(0) { $0 + pow(10, $1.score) })
+        scored[index] = chosen
+        changed = true
+      }
+      index += 1
+    }
+    if changed { scored.sort { $0.score != $1.score ? $0.score > $1.score : $0.id < $1.id } }
   }
 
   /// Typed with shift held, a word still counts as typed: "Sie" for "sie", "HELLO" for "hello".
@@ -226,18 +355,14 @@ final class Autocorrector {
   private static let vowels: Set<UInt16> = Set("aeiouyäöü".utf16)
 
   private func substitutionCost(typed: UInt16, intended: UInt16) -> Double {
-    if KeyGeometry.unaccented(intended) == typed || KeyGeometry.unaccented(typed) == intended {
-      return parameters.accentSubstitution
-    }
+    // One way only: the plain letter is the quick way to type the accented one, but nobody
+    // holds a key for ü and means u.
+    if KeyGeometry.unaccented(intended) == typed { return parameters.accentSubstitution }
     if geometry.areNeighbours(typed, intended) { return parameters.adjacentSubstitution }
     if Autocorrector.vowels.contains(typed), Autocorrector.vowels.contains(intended) {
       return parameters.vowelSubstitution
     }
     return parameters.farSubstitution
-  }
-
-  private func isNeighbour(_ a: UInt16, _ b: UInt16) -> Bool {
-    a == b || geometry.areNeighbours(a, b)
   }
 
   private enum LastEdit { case none, extra, missed }
@@ -297,8 +422,15 @@ final class Autocorrector {
       // An extra letter typed here.
       if last != .missed {
         let nextTyped = position + 1 < count ? key[position + 1] : 0
-        let near = (previous != 0 && isNeighbour(typed, previous)) || (nextTyped != 0 && isNeighbour(typed, nextTyped))
-        let extra = cost + editCost(near ? parameters.extraNeighbour : parameters.extraLetter, at: position, edits: edits)
+        let base: Double
+        if typed == previous || typed == nextTyped {
+          base = parameters.extraDoubleLetter
+        } else if (previous != 0 && geometry.areNeighbours(typed, previous)) || (nextTyped != 0 && geometry.areNeighbours(typed, nextTyped)) {
+          base = parameters.extraNeighbour
+        } else {
+          base = parameters.extraLetter
+        }
+        let extra = cost + editCost(base, at: position, edits: edits)
         if extra <= budget { visit(node, position + 1, extra, edits + 1, .extra, previous) }
       }
       // Two letters swapped.
@@ -318,6 +450,9 @@ final class Autocorrector {
   private static let englishEndings = ["s", "es", "ed", "d", "ing", "ly", "er", "ers", "est", "ness", "less", "ful", "able", "ment", "ments", "ings"]
   private static let germanEndings = ["e", "en", "er", "es", "em", "n", "s", "st", "t", "te", "ten", "test", "tet", "ung", "ungen", "heit", "keit", "lich", "isch", "chen", "in", "innen"]
 
+  private static let englishEndingKeys = Set(englishEndings.map { Array($0.utf16) })
+  private static let germanEndingKeys = Set(germanEndings.map { Array($0.utf16) })
+
   /// The most frequent known word that `key` is a regular form of, when there is one: the
   /// word plus an ending, with English's dropped e ("hoping") and y → i ("tried") allowed.
   private func inflectionStem(of key: [UInt16]) -> Int? {
@@ -331,7 +466,7 @@ final class Autocorrector {
       let units = Array(ending.utf16)
       guard key.count > units.count + 2, Array(key.suffix(units.count)) == units else { continue }
       let stem = Array(key.dropLast(units.count))
-      offer(stem)
+      if language == .german || Autocorrector.englishTakes(ending, after: stem) { offer(stem) }
       guard language == .english else { continue }
       if ["ed", "ing", "er", "ers", "est", "able", "ings"].contains(ending) {
         offer(stem + [0x65])  // hop(e) + ing
@@ -345,13 +480,98 @@ final class Autocorrector {
     return best
   }
 
+  /// English spelling's say in which ending a word takes as it stands: "-d" only after e
+  /// ("googled", never "wheeld"), "-es" after a sibilant or o and "-s" elsewhere, and no
+  /// vowel ending straight after e ("hoping", never "hopeing").
+  private static func englishTakes(_ ending: String, after stem: [UInt16]) -> Bool {
+    guard let last = stem.last else { return false }
+    let before = stem.count > 1 ? stem[stem.count - 2] : 0
+    // s, x, z, ch, sh
+    let sibilant = last == 0x73 || last == 0x78 || last == 0x7A || (last == 0x68 && (before == 0x63 || before == 0x73))
+    switch ending {
+    case "d": return last == 0x65
+    case "s": return !sibilant
+    case "es": return sibilant || last == 0x6F
+    case "ed", "ing", "er", "ers", "est", "able", "ings": return last != 0x65
+    default: return true
+    }
+  }
+
+  /// Whether two keys are one stem with different regular endings ("evacuates" and
+  /// "evacuated", "napkin" and "napkins").
+  private func areFormsOfOneWord(_ a: [UInt16], _ b: [UInt16]) -> Bool {
+    var shared = 0
+    while shared < a.count, shared < b.count, a[shared] == b[shared] { shared += 1 }
+    guard shared >= 3 else { return false }
+    let endings = language == .german ? Autocorrector.germanEndingKeys : Autocorrector.englishEndingKeys
+    func isEnding(_ rest: ArraySlice<UInt16>) -> Bool { rest.isEmpty || endings.contains(Array(rest)) }
+    // The endings may share their first letters ("-es" and "-ed").
+    for stem in stride(from: shared, through: max(3, shared - 2), by: -1) {
+      if isEnding(a[stem...]), isEnding(b[stem...]) { return true }
+    }
+    return false
+  }
+
   // MARK: Compounds
 
-  /// A German word made of two or three known words, with an optional linking s
-  /// ("Arbeitszimmer"). Such a word is taken as spelled right.
+  /// A German word made of two or three known words, with an optional linking element
+  /// between them ("Arbeitszimmer"). Such a word is taken as a word.
   func isCompound(_ key: [UInt16]) -> Bool {
     guard language == .german, key.count >= 8 else { return false }
     return compoundParts(key, from: 0, partsLeft: 3)
+  }
+
+  /// Rare words make false joins; a part has to be a reasonably common word.
+  private static let compoundPartFloor = -6.2
+  /// What German puts between the parts ("Arbeit-s-zimmer", "Diele-n-boden"), longest first.
+  private static let linkingElements: [[UInt16]] = ["es", "en", "er", "s", "n", "e"].map { Array($0.utf16) }
+
+  private func isCompoundPart(_ id: Int) -> Bool {
+    lexicon.log10Frequency(id) > Autocorrector.compoundPartFloor
+  }
+
+  /// A common word, with or without a linking element after it.
+  private func isCompoundHead(_ key: [UInt16]) -> Bool {
+    if lexicon.ids(forKey: key).contains(where: isCompoundPart) { return true }
+    for link in Autocorrector.linkingElements where key.count >= link.count + 3 && Array(key.suffix(link.count)) == link {
+      if lexicon.ids(forKey: Array(key.dropLast(link.count))).contains(where: isCompoundPart) { return true }
+    }
+    return false
+  }
+
+  /// "Hundeschuke" → "hundeschule": a noun compound the lexicon lacks, with one slip in one
+  /// of its two parts and the other part standing as typed. The score is on the candidates'
+  /// scale. A compound is what its last part is, so that part has to be a noun.
+  private func compoundCorrection(of key: [UInt16]) -> (text: String, score: Double)? {
+    guard language == .german, key.count >= 8 else { return nil }
+    var best: (text: String, score: Double)?
+    func mended(_ part: [UInt16], noun: Bool) -> (word: String, score: Double)? {
+      // A part that is a word, however rare, was not mistyped.
+      guard lexicon.ids(forKey: part).isEmpty else { return nil }
+      var found: [Int: Found] = [:]
+      search(key: part, maxEdits: 1, budget: 3.2, into: &found)
+      var top: (id: Int, score: Double)?
+      for (id, hit) in found where isCompoundPart(id) && (!noun || hasCapital(id)) {
+        let score = lexicon.log10Frequency(id) - hit.cost
+        if top == nil || score > top!.score || (score == top!.score && id < top!.id) { top = (id, score) }
+      }
+      return top.map { (lexicon.word($0.id).lowercased(), $0.score - parameters.compoundPenalty) }
+    }
+    func offer(_ text: String, _ score: Double) {
+      if best == nil || score > best!.score { best = (text, score) }
+    }
+    for split in 4...(key.count - 4) {
+      let head = Array(key[..<split]), tail = Array(key[split...])
+      if isCompoundHead(head), let fix = mended(tail, noun: true) {
+        offer(String(utf16CodeUnits: head, count: head.count) + fix.word, fix.score)
+      }
+      if lexicon.ids(forKey: tail).contains(where: { isCompoundPart($0) && hasCapital($0) }),
+        let fix = mended(head, noun: false)
+      {
+        offer(fix.word + String(utf16CodeUnits: tail, count: tail.count), fix.score)
+      }
+    }
+    return best
   }
 
   private func compoundParts(_ key: [UInt16], from start: Int, partsLeft: Int) -> Bool {
@@ -363,15 +583,13 @@ final class Autocorrector {
       position += 1
       let length = position - start
       guard length >= 3, !lexicon.terminals(of: node).isEmpty else { continue }
-      // Rare words make false joins; a part has to be a reasonably common word.
-      guard lexicon.log10Frequency(lexicon.terminals(of: node).lowerBound) > -6.2 else { continue }
+      guard isCompoundPart(lexicon.terminals(of: node).lowerBound) else { continue }
       if position == key.count { return start > 0 }
       guard partsLeft > 1 else { continue }
       if compoundParts(key, from: position, partsLeft: partsLeft - 1) { return true }
-      if key[position] == 0x73, position + 1 < key.count,
-        compoundParts(key, from: position + 1, partsLeft: partsLeft - 1)
-      {
-        return true
+      for link in Autocorrector.linkingElements
+      where position + link.count < key.count && Array(key[position..<(position + link.count)]) == link {
+        if compoundParts(key, from: position + link.count, partsLeft: partsLeft - 1) { return true }
       }
     }
     return false

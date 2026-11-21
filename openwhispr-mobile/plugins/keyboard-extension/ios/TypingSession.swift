@@ -151,8 +151,16 @@ final class TypingSession {
     lastSwipe = nil
 
     if TypingSession.isWordCharacter(first) {
+      // A letter straight after the full stop that triggered a correction: the word was the
+      // start of an address or an abbreviation ("kent.shoemaker@…", "i.e."), so it goes back
+      // to how it was typed.
+      if let correction = lastCorrection, correction.delimiter == ".",
+        tail.hasSuffix(correction.replacement + ".")
+      {
+        edit = TextEdit(deleteCount: correction.replacement.count + 1, insert: correction.original + "." + text)
+      }
       lastCorrection = nil
-      append(edit)
+      apply(edit)
       return edit
     }
 
