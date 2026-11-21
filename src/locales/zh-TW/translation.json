@@ -1600,6 +1600,10 @@
       "titaniumAccount": {
         "label": "Titanium 帳戶",
         "description": "登入與授權"
+      },
+      "subscriptions": {
+        "label": "訂閱",
+        "description": "Claude、Codex、Grok、Antigravity"
       }
     },
     "title": "設定"
@@ -5158,6 +5162,87 @@
       "token_not_found": "此連結已使用或已過期。請重新開始登入。",
       "app_mismatch": "此登入屬於其他應用程式。請從這裡重新開始。",
       "generic": "登入未完成。請再試一次。"
+    }
+  },
+  "llmSubscriptions": {
+    "title": "訂閱",
+    "description": "使用您自己的 Claude、Codex、Grok 或 Antigravity 登入來進行聊天和聽寫代理。不使用 API 金鑰。",
+    "version": "v{{version}}",
+    "status": {
+      "missing": "未安裝",
+      "installing": "正在安裝",
+      "installed": "已安裝",
+      "outdated": "需要更新",
+      "signing-in": "正在登入",
+      "signed-in": "已登入",
+      "signed-out": "已登出",
+      "error": "錯誤"
+    },
+    "seats": {
+      "claude": "使用您的 Claude 訂閱的 Claude Code CLI。",
+      "codex": "使用您的 ChatGPT 訂閱的 Codex CLI。",
+      "grok": "使用您的 X 帳號的 Grok CLI。",
+      "agy": "使用您的 Google 帳號的 Antigravity CLI。"
+    },
+    "actions": {
+      "install": "安裝",
+      "openGuide": "開啟安裝指南",
+      "signIn": "登入",
+      "test": "測試",
+      "redetect": "重新偵測",
+      "signOut": "登出",
+      "cancel": "取消",
+      "copy": "複製",
+      "openInBrowser": "在瀏覽器中開啟",
+      "submitCode": "提交代碼"
+    },
+    "outdatedHint": "此 CLI 版本低於應用程式測試所用的版本。請更新後選擇重新偵測。",
+    "testOk": "測試通過。",
+    "claude": {
+      "toggleLabel": "啟用 Claude 席位",
+      "notice": "Anthropic 的條款可能不允許在第三方應用程式中使用 Claude 訂閱。啟用即表示風險自負。"
+    },
+    "install": {
+      "title": "安裝 {{seat}}",
+      "description": "這會下載並執行供應商的安裝程式。繼續之前請檢查位址和指令。",
+      "urlLabel": "安裝程式位址",
+      "commandLabel": "將執行的指令",
+      "confirm": "安裝",
+      "guided": "請從官方頁面安裝 Grok CLI，然後選擇重新偵測。"
+    },
+    "signIn": {
+      "deviceUrlLabel": "開啟此位址",
+      "deviceCodeLabel": "輸入此代碼",
+      "waiting": "正在等待登入完成。",
+      "claudeInstructions": "開啟該位址並登入，然後貼上頁面上顯示的代碼。",
+      "codeLabel": "授權碼",
+      "codePlaceholder": "貼上代碼",
+      "agyGuide": "在終端機中執行一次 agy 並使用 Google 帳號登入，然後選擇重新偵測。"
+    },
+    "signOut": {
+      "title": "登出 {{seat}}？",
+      "terminalCli": "這也會登出終端機中的 {{seat}} CLI。",
+      "claudeToken": "已儲存的權杖將從此應用程式中刪除。在您於 Claude 帳號頁面撤銷之前，它仍然有效。",
+      "agyGuide": "請在終端機中使用 agy CLI 登出 Antigravity。",
+      "confirm": "登出"
+    },
+    "errors": {
+      "not-installed": "CLI 未安裝。",
+      "outdated": "CLI 版本過舊，不適用於此應用程式。請更新後重新偵測。",
+      "not-signed-in": "未登入。請登入後重試。",
+      "api-key-login-refused": "此應用程式只使用訂閱登入，絕不使用 API 金鑰。",
+      "timeout": "CLI 回應時間過長。",
+      "killed": "CLI 已停止。",
+      "quota-or-rate-limit": "已達到使用或速率限制。請稍後重試。",
+      "exit-nonzero": "CLI 因錯誤結束。",
+      "parse-failed": "無法讀取 CLI 的回答。",
+      "claude-disabled": "Claude 席位已關閉。",
+      "busy": "此席位已有另一個請求正在執行。",
+      "invalid-input": "請求無效。",
+      "signature-invalid": "無法驗證安裝程式的簽章。",
+      "install-failed": "安裝未完成。",
+      "quarantined-or-missing": "安裝已被移除，可能是被防毒軟體刪除。",
+      "generic": "發生錯誤。請重試。"
     }
   }
 }

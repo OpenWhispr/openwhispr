@@ -1600,6 +1600,10 @@
       "titaniumAccount": {
         "label": "Account Titanium",
         "description": "Accesso e licenza"
+      },
+      "subscriptions": {
+        "label": "Abbonamenti",
+        "description": "Claude, Codex, Grok, Antigravity"
       }
     },
     "title": "Impostazioni"
@@ -5158,6 +5162,87 @@
       "token_not_found": "Quel link è già stato usato o è scaduto. Ricomincia l'accesso.",
       "app_mismatch": "Quell'accesso era per un'altra app. Ricomincia da qui.",
       "generic": "L'accesso non è stato completato. Riprova."
+    }
+  },
+  "llmSubscriptions": {
+    "title": "Abbonamenti",
+    "description": "Usa il tuo accesso a Claude, Codex, Grok o Antigravity per la chat e l'agente di dettatura. Non vengono usate chiavi API.",
+    "version": "v{{version}}",
+    "status": {
+      "missing": "Non installato",
+      "installing": "Installazione",
+      "installed": "Installato",
+      "outdated": "Aggiornamento necessario",
+      "signing-in": "Accesso in corso",
+      "signed-in": "Accesso eseguito",
+      "signed-out": "Disconnesso",
+      "error": "Errore"
+    },
+    "seats": {
+      "claude": "CLI di Claude Code con il tuo abbonamento Claude.",
+      "codex": "CLI di Codex con il tuo abbonamento ChatGPT.",
+      "grok": "CLI di Grok con il tuo account X.",
+      "agy": "CLI di Antigravity con il tuo account Google."
+    },
+    "actions": {
+      "install": "Installa",
+      "openGuide": "Apri la guida all'installazione",
+      "signIn": "Accedi",
+      "test": "Prova",
+      "redetect": "Rileva di nuovo",
+      "signOut": "Esci",
+      "cancel": "Annulla",
+      "copy": "Copia",
+      "openInBrowser": "Apri nel browser",
+      "submitCode": "Invia codice"
+    },
+    "outdatedHint": "Questo CLI e piu vecchio della versione testata con l'app. Aggiornalo e scegli Rileva di nuovo.",
+    "testOk": "Prova superata.",
+    "claude": {
+      "toggleLabel": "Attiva la postazione Claude",
+      "notice": "I termini di Anthropic potrebbero non consentire un abbonamento Claude in app di terze parti. Lo attivi a tuo rischio."
+    },
+    "install": {
+      "title": "Installa {{seat}}",
+      "description": "Questo scarica ed esegue il programma di installazione del fornitore. Controlla l'indirizzo e il comando prima di continuare.",
+      "urlLabel": "Indirizzo del programma di installazione",
+      "commandLabel": "Comando che verra eseguito",
+      "confirm": "Installa",
+      "guided": "Installa il CLI di Grok dalla pagina ufficiale, poi scegli Rileva di nuovo."
+    },
+    "signIn": {
+      "deviceUrlLabel": "Apri questo indirizzo",
+      "deviceCodeLabel": "Inserisci questo codice",
+      "waiting": "In attesa del completamento dell'accesso.",
+      "claudeInstructions": "Apri l'indirizzo, accedi e incolla il codice mostrato nella pagina.",
+      "codeLabel": "Codice di autorizzazione",
+      "codePlaceholder": "Incolla il codice",
+      "agyGuide": "Esegui agy una volta in un terminale e accedi con il tuo account Google. Poi scegli Rileva di nuovo."
+    },
+    "signOut": {
+      "title": "Uscire da {{seat}}?",
+      "terminalCli": "Questo disconnette anche il CLI di {{seat}} nel tuo terminale.",
+      "claudeToken": "Il token salvato viene rimosso da questa app. Resta valido finche non lo revochi nella pagina del tuo account Claude.",
+      "agyGuide": "Esci da Antigravity con il CLI agy in un terminale.",
+      "confirm": "Esci"
+    },
+    "errors": {
+      "not-installed": "Il CLI non e installato.",
+      "outdated": "Il CLI e troppo vecchio per questa app. Aggiornalo e rileva di nuovo.",
+      "not-signed-in": "Accesso non eseguito. Accedi e riprova.",
+      "api-key-login-refused": "Questa app usa solo l'accesso con abbonamento, mai chiavi API.",
+      "timeout": "Il CLI ha impiegato troppo tempo a rispondere.",
+      "killed": "Il CLI e stato interrotto.",
+      "quota-or-rate-limit": "Limite di utilizzo raggiunto. Riprova piu tardi.",
+      "exit-nonzero": "Il CLI e terminato con un errore.",
+      "parse-failed": "Impossibile leggere la risposta del CLI.",
+      "claude-disabled": "La postazione Claude e disattivata.",
+      "busy": "Un'altra richiesta e gia in corso per questa postazione.",
+      "invalid-input": "La richiesta non era valida.",
+      "signature-invalid": "Impossibile verificare la firma del programma di installazione.",
+      "install-failed": "L'installazione non e stata completata.",
+      "quarantined-or-missing": "L'installazione e stata rimossa, forse da un antivirus.",
+      "generic": "Qualcosa e andato storto. Riprova."
     }
   }
 }

@@ -1694,6 +1694,10 @@
       "titaniumAccount": {
         "label": "Compte Titanium",
         "description": "Connexion et licence"
+      },
+      "subscriptions": {
+        "label": "Abonnements",
+        "description": "Claude, Codex, Grok, Antigravity"
       }
     },
     "title": "Paramètres"
@@ -5158,6 +5162,87 @@
       "token_not_found": "Ce lien a déjà été utilisé ou a expiré. Recommencez la connexion.",
       "app_mismatch": "Cette connexion concernait une autre app. Recommencez depuis ici.",
       "generic": "La connexion n'a pas abouti. Réessayez."
+    }
+  },
+  "llmSubscriptions": {
+    "title": "Abonnements",
+    "description": "Utilisez votre propre connexion Claude, Codex, Grok ou Antigravity pour le chat et l'agent de dictee. Aucune cle API n'est utilisee.",
+    "version": "v{{version}}",
+    "status": {
+      "missing": "Non installe",
+      "installing": "Installation",
+      "installed": "Installe",
+      "outdated": "Mise a jour requise",
+      "signing-in": "Connexion en cours",
+      "signed-in": "Connecte",
+      "signed-out": "Deconnecte",
+      "error": "Erreur"
+    },
+    "seats": {
+      "claude": "CLI Claude Code avec votre abonnement Claude.",
+      "codex": "CLI Codex avec votre abonnement ChatGPT.",
+      "grok": "CLI Grok avec votre compte X.",
+      "agy": "CLI Antigravity avec votre compte Google."
+    },
+    "actions": {
+      "install": "Installer",
+      "openGuide": "Ouvrir le guide d'installation",
+      "signIn": "Se connecter",
+      "test": "Tester",
+      "redetect": "Detecter a nouveau",
+      "signOut": "Se deconnecter",
+      "cancel": "Annuler",
+      "copy": "Copier",
+      "openInBrowser": "Ouvrir dans le navigateur",
+      "submitCode": "Envoyer le code"
+    },
+    "outdatedHint": "Ce CLI est plus ancien que la version testee avec l'application. Mettez-le a jour, puis choisissez Detecter a nouveau.",
+    "testOk": "Test reussi.",
+    "claude": {
+      "toggleLabel": "Activer le siege Claude",
+      "notice": "Les conditions d'Anthropic peuvent interdire l'usage d'un abonnement Claude dans des applications tierces. Vous l'activez a vos risques."
+    },
+    "install": {
+      "title": "Installer {{seat}}",
+      "description": "Ceci telecharge et execute l'installateur du fournisseur. Verifiez l'adresse et la commande avant de continuer.",
+      "urlLabel": "Adresse de l'installateur",
+      "commandLabel": "Commande qui sera executee",
+      "confirm": "Installer",
+      "guided": "Installez le CLI Grok depuis la page officielle, puis choisissez Detecter a nouveau."
+    },
+    "signIn": {
+      "deviceUrlLabel": "Ouvrez cette adresse",
+      "deviceCodeLabel": "Saisissez ce code",
+      "waiting": "En attente de la fin de la connexion.",
+      "claudeInstructions": "Ouvrez l'adresse, connectez-vous, puis collez le code affiche sur la page.",
+      "codeLabel": "Code d'autorisation",
+      "codePlaceholder": "Collez le code",
+      "agyGuide": "Lancez agy une fois dans un terminal et connectez-vous avec votre compte Google. Puis choisissez Detecter a nouveau."
+    },
+    "signOut": {
+      "title": "Se deconnecter de {{seat}} ?",
+      "terminalCli": "Cela deconnecte aussi le CLI {{seat}} dans votre terminal.",
+      "claudeToken": "Le jeton enregistre est supprime de cette application. Il reste valide jusqu'a sa revocation sur la page de votre compte Claude.",
+      "agyGuide": "Deconnectez-vous d'Antigravity avec le CLI agy dans un terminal.",
+      "confirm": "Se deconnecter"
+    },
+    "errors": {
+      "not-installed": "Le CLI n'est pas installe.",
+      "outdated": "Le CLI est trop ancien pour cette application. Mettez-le a jour puis detectez a nouveau.",
+      "not-signed-in": "Non connecte. Connectez-vous et reessayez.",
+      "api-key-login-refused": "Cette application utilise uniquement la connexion par abonnement, jamais de cle API.",
+      "timeout": "Le CLI a mis trop de temps a repondre.",
+      "killed": "Le CLI a ete arrete.",
+      "quota-or-rate-limit": "Limite d'utilisation atteinte. Reessayez plus tard.",
+      "exit-nonzero": "Le CLI s'est termine avec une erreur.",
+      "parse-failed": "La reponse du CLI est illisible.",
+      "claude-disabled": "Le siege Claude est desactive.",
+      "busy": "Une autre requete est deja en cours pour ce siege.",
+      "invalid-input": "La requete n'etait pas valide.",
+      "signature-invalid": "La signature de l'installateur n'a pas pu etre verifiee.",
+      "install-failed": "L'installation ne s'est pas terminee.",
+      "quarantined-or-missing": "L'installation a ete supprimee, peut-etre par un antivirus.",
+      "generic": "Une erreur s'est produite. Reessayez."
     }
   }
 }

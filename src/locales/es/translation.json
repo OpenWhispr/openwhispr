@@ -1652,6 +1652,10 @@
       "titaniumAccount": {
         "label": "Cuenta Titanium",
         "description": "Inicio de sesión y licencia"
+      },
+      "subscriptions": {
+        "label": "Suscripciones",
+        "description": "Claude, Codex, Grok, Antigravity"
       }
     },
     "title": "Ajustes"
@@ -5158,6 +5162,87 @@
       "token_not_found": "Ese enlace ya se usó o caducó. Vuelve a iniciar sesión.",
       "app_mismatch": "Ese inicio de sesión era para otra app. Vuelve a iniciar sesión desde aquí.",
       "generic": "El inicio de sesión no terminó. Inténtalo de nuevo."
+    }
+  },
+  "llmSubscriptions": {
+    "title": "Suscripciones",
+    "description": "Usa tu propio inicio de sesion de Claude, Codex, Grok o Antigravity para el chat y el agente de dictado. No se usan claves de API.",
+    "version": "v{{version}}",
+    "status": {
+      "missing": "No instalado",
+      "installing": "Instalando",
+      "installed": "Instalado",
+      "outdated": "Actualizacion necesaria",
+      "signing-in": "Iniciando sesion",
+      "signed-in": "Sesion iniciada",
+      "signed-out": "Sesion cerrada",
+      "error": "Error"
+    },
+    "seats": {
+      "claude": "CLI de Claude Code con tu suscripcion de Claude.",
+      "codex": "CLI de Codex con tu suscripcion de ChatGPT.",
+      "grok": "CLI de Grok con tu cuenta de X.",
+      "agy": "CLI de Antigravity con tu cuenta de Google."
+    },
+    "actions": {
+      "install": "Instalar",
+      "openGuide": "Abrir guia de instalacion",
+      "signIn": "Iniciar sesion",
+      "test": "Probar",
+      "redetect": "Detectar de nuevo",
+      "signOut": "Cerrar sesion",
+      "cancel": "Cancelar",
+      "copy": "Copiar",
+      "openInBrowser": "Abrir en el navegador",
+      "submitCode": "Enviar codigo"
+    },
+    "outdatedHint": "Este CLI es mas antiguo que la version con la que se probo la app. Actualizalo y elige Detectar de nuevo.",
+    "testOk": "Prueba superada.",
+    "claude": {
+      "toggleLabel": "Activar el asiento de Claude",
+      "notice": "Los terminos de Anthropic pueden no permitir una suscripcion de Claude en aplicaciones de terceros. Lo activas bajo tu propio riesgo."
+    },
+    "install": {
+      "title": "Instalar {{seat}}",
+      "description": "Esto descarga y ejecuta el instalador del proveedor. Revisa la direccion y el comando antes de continuar.",
+      "urlLabel": "Direccion del instalador",
+      "commandLabel": "Comando que se ejecutara",
+      "confirm": "Instalar",
+      "guided": "Instala el CLI de Grok desde la pagina oficial y elige Detectar de nuevo."
+    },
+    "signIn": {
+      "deviceUrlLabel": "Abre esta direccion",
+      "deviceCodeLabel": "Introduce este codigo",
+      "waiting": "Esperando a que termine el inicio de sesion.",
+      "claudeInstructions": "Abre la direccion, inicia sesion y pega el codigo que aparece en la pagina.",
+      "codeLabel": "Codigo de autorizacion",
+      "codePlaceholder": "Pega el codigo",
+      "agyGuide": "Ejecuta agy una vez en una terminal e inicia sesion con tu cuenta de Google. Luego elige Detectar de nuevo."
+    },
+    "signOut": {
+      "title": "¿Cerrar sesion en {{seat}}?",
+      "terminalCli": "Esto tambien cierra la sesion del CLI de {{seat}} en tu terminal.",
+      "claudeToken": "El token guardado se elimina de esta app. Sigue siendo valido hasta que lo revoques en la pagina de tu cuenta de Claude.",
+      "agyGuide": "Cierra sesion en Antigravity con el CLI agy en una terminal.",
+      "confirm": "Cerrar sesion"
+    },
+    "errors": {
+      "not-installed": "El CLI no esta instalado.",
+      "outdated": "El CLI es demasiado antiguo para esta app. Actualizalo y detecta de nuevo.",
+      "not-signed-in": "Sesion no iniciada. Inicia sesion e intentalo de nuevo.",
+      "api-key-login-refused": "Esta app solo usa el inicio de sesion de suscripcion, nunca claves de API.",
+      "timeout": "El CLI tardo demasiado en responder.",
+      "killed": "El CLI se detuvo.",
+      "quota-or-rate-limit": "Se alcanzo el limite de uso. Intentalo mas tarde.",
+      "exit-nonzero": "El CLI termino con un error.",
+      "parse-failed": "No se pudo leer la respuesta del CLI.",
+      "claude-disabled": "El asiento de Claude esta desactivado.",
+      "busy": "Ya hay otra solicitud en curso para este asiento.",
+      "invalid-input": "La solicitud no era valida.",
+      "signature-invalid": "No se pudo verificar la firma del instalador.",
+      "install-failed": "La instalacion no termino.",
+      "quarantined-or-missing": "Se elimino la instalacion, posiblemente por un antivirus.",
+      "generic": "Algo salio mal. Intentalo de nuevo."
     }
   }
 }
