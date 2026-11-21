@@ -5243,6 +5243,13 @@
       "install-failed": "La instalacion no termino.",
       "quarantined-or-missing": "Se elimino la instalacion, posiblemente por un antivirus.",
       "generic": "Algo salio mal. Intentalo de nuevo."
+    },
+    "picker": {
+      "group": "CLI de suscripcion",
+      "helper": "Los CLI de suscripcion solo responden con texto (sin herramientas de EdgeAssistant) y son mas lentos que los proveedores de API, por eso la limpieza del dictado no los ofrece.",
+      "useApi": "Usar un proveedor de API",
+      "modelLabel": "Modelo",
+      "defaultModel": "Modelo predeterminado del CLI"
     }
   }
 }

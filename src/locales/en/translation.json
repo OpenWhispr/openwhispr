@@ -5243,6 +5243,13 @@
       "install-failed": "The install did not finish.",
       "quarantined-or-missing": "The install was removed, possibly by antivirus software.",
       "generic": "Something went wrong. Try again."
+    },
+    "picker": {
+      "group": "Subscription CLIs",
+      "helper": "Subscription CLIs answer text only (no EdgeAssistant tools) and are slower than API providers, so dictation cleanup does not offer them.",
+      "useApi": "Use an API provider instead",
+      "modelLabel": "Model",
+      "defaultModel": "CLI default model"
     }
   }
 }

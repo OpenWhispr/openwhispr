@@ -5243,6 +5243,13 @@
       "install-failed": "L'installazione non e stata completata.",
       "quarantined-or-missing": "L'installazione e stata rimossa, forse da un antivirus.",
       "generic": "Qualcosa e andato storto. Riprova."
+    },
+    "picker": {
+      "group": "CLI di abbonamento",
+      "helper": "I CLI di abbonamento rispondono solo con testo (senza strumenti EdgeAssistant) e sono piu lenti dei provider API, quindi la pulizia della dettatura non li offre.",
+      "useApi": "Usa invece un provider API",
+      "modelLabel": "Modello",
+      "defaultModel": "Modello predefinito del CLI"
     }
   }
 }

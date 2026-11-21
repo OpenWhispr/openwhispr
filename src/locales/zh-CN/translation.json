@@ -5243,6 +5243,13 @@
       "install-failed": "安装未完成。",
       "quarantined-or-missing": "安装已被移除，可能是被杀毒软件删除。",
       "generic": "出了点问题。请重试。"
+    },
+    "picker": {
+      "group": "订阅 CLI",
+      "helper": "订阅 CLI 只返回文本（没有 EdgeAssistant 工具），并且比 API 提供商慢，因此听写清理不提供它们。",
+      "useApi": "改用 API 提供商",
+      "modelLabel": "模型",
+      "defaultModel": "CLI 默认模型"
     }
   }
 }

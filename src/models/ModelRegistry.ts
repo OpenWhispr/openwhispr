@@ -3,6 +3,7 @@ import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
+import { isCliProviderId } from "../helpers/llmCli/llmCliRouting.js";
 
 export interface ModelDefinition {
   id: string;
@@ -266,6 +267,7 @@ export function isProviderValidForMode(provider: string, mode: InferenceMode): b
   switch (mode) {
     case "providers":
       return (
+        isCliProviderId(provider) ||
         provider === "custom" ||
         provider === "openrouter" ||
         modelRegistry.getCloudProviders().some((p) => p.id === provider)

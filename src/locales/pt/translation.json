@@ -5243,6 +5243,13 @@
       "install-failed": "A instalacao nao foi concluida.",
       "quarantined-or-missing": "A instalacao foi removida, possivelmente por um antivirus.",
       "generic": "Algo deu errado. Tente novamente."
+    },
+    "picker": {
+      "group": "CLIs de assinatura",
+      "helper": "Os CLIs de assinatura respondem apenas com texto (sem ferramentas do EdgeAssistant) e sao mais lentos que os provedores de API, por isso a limpeza do ditado nao os oferece.",
+      "useApi": "Usar um provedor de API",
+      "modelLabel": "Modelo",
+      "defaultModel": "Modelo padrao do CLI"
     }
   }
 }

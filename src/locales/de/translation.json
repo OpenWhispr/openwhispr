@@ -5243,6 +5243,13 @@
       "install-failed": "Die Installation wurde nicht abgeschlossen.",
       "quarantined-or-missing": "Die Installation wurde entfernt, moeglicherweise durch eine Antivirensoftware.",
       "generic": "Etwas ist schiefgelaufen. Versuche es erneut."
+    },
+    "picker": {
+      "group": "Abonnement-CLIs",
+      "helper": "Abonnement-CLIs antworten nur mit Text (keine EdgeAssistant-Werkzeuge) und sind langsamer als API-Anbieter, daher bietet die Diktatbereinigung sie nicht an.",
+      "useApi": "Stattdessen einen API-Anbieter nutzen",
+      "modelLabel": "Modell",
+      "defaultModel": "Standardmodell des CLI"
     }
   }
 }
