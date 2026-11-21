@@ -89,7 +89,7 @@ test("claude sign-in: allowed url opened, code written, token captured to the st
   const h = makeClaudeHarness();
   const started = await h.signIn.start({ seat: "claude" });
   assert.equal(started.ok, true);
-  assert.equal(h.ptyCalls[0].options.cols, 500);
+  assert.equal(h.ptyCalls[0].options.cols, 4096);
   assert.deepEqual(h.ptyCalls[0].args, ["setup-token"]);
   assert.equal(h.ptyCalls[0].options.env.ANTHROPIC_API_KEY, undefined);
 
@@ -129,6 +129,35 @@ test("claude sign-in: a token split across pty chunks at every boundary is saved
     assert.deepEqual(h.saved, [TOKEN], `split ${split}`);
     assert.ok(!JSON.stringify([h.events, h.logs, result]).includes("sk-ant-oat01"));
   }
+});
+
+test("claude sign-in: a wrapped token, split at every chunk boundary, is saved whole and never as a prefix", async () => {
+  for (const width of [80, 100]) {
+    const text = `Your token:\r\n${wrap(TOKEN, width)}\r\n\r\nStore it safely\r\n`;
+    for (let split = 1; split < text.length; split += 1) {
+      const h = makeClaudeHarness();
+      const started = await h.signIn.start({ seat: "claude" });
+      h.pty.dataCb(text.slice(0, split));
+      await tick();
+      const where = `width ${width} split ${split}`;
+      assert.ok(h.saved.length === 0 || h.saved[0] === TOKEN, `prefix saved: ${where}`);
+      h.pty.dataCb(text.slice(split));
+      const result = await started.done;
+      assert.equal(result.ok, true, where);
+      assert.deepEqual(h.saved, [TOKEN], where);
+    }
+  }
+});
+
+test("claude sign-in: a wrapped token followed only by a line break is completed on pty exit, whole", async () => {
+  const h = makeClaudeHarness();
+  const started = await h.signIn.start({ seat: "claude" });
+  h.pty.dataCb(`Your token:\r\n${wrap(TOKEN, 100)}\r\n`);
+  await tick();
+  assert.deepEqual(h.saved, []);
+  h.pty.exitCb({ exitCode: 0 });
+  assert.equal((await started.done).ok, true);
+  assert.deepEqual(h.saved, [TOKEN]);
 });
 
 test("claude sign-in: an undelimited token is accepted when the pty exits", async () => {
@@ -185,7 +214,7 @@ test("claude: encryption unavailable at save fails the flow without leaking the 
     },
   });
   const started = await h.signIn.start({ seat: "claude" });
-  h.pty.dataCb(`${TOKEN}\r\n`);
+  h.pty.dataCb(`${TOKEN}\r\n\r\nStore it safely\r\n`);
   const result = await started.done;
   assert.equal(result.ok, false);
   assert.ok(!JSON.stringify([h.events, h.logs, result]).includes(TOKEN));

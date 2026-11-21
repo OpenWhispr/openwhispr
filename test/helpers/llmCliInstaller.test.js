@@ -116,7 +116,7 @@ test("valid codex install: table command, hidden, scrubbed env, progress, then r
 });
 
 test("one install per seat runs at a time; the kept lines are capped at 200", async () => {
-  const h = makeHarness({ exe: "C:\\codex.exe", signature: { Status: "Valid", Subject: "CN=OpenAI OpCo, LLC" } });
+  const h = makeHarness({ exe: "C:\\codex.exe", signature: { Status: "Valid", Subject: 'CN="OpenAI OpCo, LLC"' } });
   const url = policy.installSpec("codex", "win32").url;
   const first = h.installer.install({ seat: "codex", consentedUrl: url });
   await new Promise((r) => setImmediate(r));
@@ -189,7 +189,7 @@ test("claude publisher check is enforced: not valid or wrong subject is signatur
     assert.deepEqual(h.applied.at(-1), ["claude", "INSTALL_FAIL", "signature-invalid"]);
   }
   const ok = makeHarness({
-    signature: { Status: "Valid", Subject: "CN=Anthropic, PBC, O=Anthropic" },
+    signature: { Status: "Valid", Subject: 'CN="Anthropic, PBC", O="Anthropic, PBC"' },
   });
   const pending = ok.installer.install({
     seat: "claude",
@@ -209,6 +209,8 @@ test("codex and agy publisher checks are enforced: wrong publisher is signature-
       { Status: "NotSigned", Subject: "" },
       { Status: "Valid", Subject: "CN=Somebody Else" },
       { Status: "HashMismatch", Subject: `CN="${publisher}"` },
+      { Status: "Valid", Subject: `CN=Somebody Else, OU=${publisher} tools` },
+      { Status: "Valid", Subject: `CN="${publisher} Evil", O="${publisher}"` },
     ]) {
       const h = makeHarness({ signature });
       h.detector.detectOne = async () => {

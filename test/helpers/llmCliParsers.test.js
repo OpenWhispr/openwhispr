@@ -19,7 +19,7 @@ test("extractSetupToken: plain, colored, wrapped; null for partial and api keys"
   assert.ok(TOKEN.length >= 100);
   const plain = `Your OAuth token:\n\n${TOKEN}\n\nStore this token securely.\n`;
   assert.strictEqual(mod.extractSetupToken(plain), TOKEN);
-  assert.strictEqual(mod.extractSetupToken(`\x1b[1;32m${TOKEN}\x1b[0m\r\n`), TOKEN);
+  assert.strictEqual(mod.extractSetupToken(`\x1b[1;32m${TOKEN}\x1b[0m\r\n\r\nStore it`), TOKEN);
   const wrapped = `${TOKEN.slice(0, 80)}\n${TOKEN.slice(80)}\n\nStore this token securely. You will not see it again.\n`;
   assert.strictEqual(mod.extractSetupToken(wrapped), TOKEN);
   assert.strictEqual(mod.extractSetupToken(`${TOKEN.slice(0, 80)}\n`), null);
@@ -32,8 +32,48 @@ test("extractSetupToken: a token still at the end of the buffer is not delimited
   assert.strictEqual(mod.extractSetupToken(TOKEN), null);
   assert.strictEqual(mod.extractSetupToken(`x\n${TOKEN}\x1b[0`), null);
   assert.strictEqual(mod.extractSetupToken(TOKEN, { final: true }), TOKEN);
-  assert.strictEqual(mod.extractSetupToken(`${TOKEN}\n`), TOKEN);
+  assert.strictEqual(mod.extractSetupToken(`${TOKEN} more`), TOKEN);
+  assert.strictEqual(mod.extractSetupToken(`${TOKEN}\n\nStore this token securely.`), TOKEN);
   assert.strictEqual(mod.extractSetupToken(`${TOKEN}\n`, { final: true }), TOKEN);
+});
+
+test("extractSetupToken: a line break right after a long prefix is a possible wrap, not a delimiter", () => {
+  for (const width of [80, 100, 110]) {
+    const head = TOKEN.slice(0, width);
+    const tail = TOKEN.slice(width);
+    assert.strictEqual(mod.extractSetupToken(`${head}\r\n`), null, `width ${width}`);
+    assert.strictEqual(mod.extractSetupToken(`${head}\r\n${tail.slice(0, 5)}`), null);
+    assert.strictEqual(mod.extractSetupToken(`${head}\r\n${tail}`, { final: true }), TOKEN);
+    assert.strictEqual(mod.extractSetupToken(`${head}\r\n${tail}\r\n\r\nStore it`), TOKEN);
+  }
+});
+
+test("subjectMatchesPublisher: exact CN (and O where present), quoted commas, no substring match", () => {
+  const ok = (subject, publisher) => mod.subjectMatchesPublisher(subject, publisher);
+  const openai = 'CN="OpenAI OpCo, LLC", O="OpenAI OpCo, LLC", L=San Francisco, S=California, C=US';
+  assert.strictEqual(ok(openai, "OpenAI OpCo, LLC"), true);
+  assert.strictEqual(ok("CN=Google LLC, O=Google LLC, L=Mountain View, C=US", "Google LLC"), true);
+  assert.strictEqual(ok("CN=Google LLC, L=Mountain View", "Google LLC"), true);
+  assert.strictEqual(ok('CN="Anthropic, PBC", O="Anthropic, PBC", C=US', "Anthropic, PBC"), true);
+  assert.strictEqual(ok("cn=Google LLC", "Google LLC"), true);
+  for (const bad of [
+    "CN=Evil, OU=Google LLC tools",
+    "CN=Google LLC Evil, O=Google LLC",
+    "CN=Somebody Else",
+    "CN=Evil, OU=Google LLC",
+    "CN=Google LLC, O=Evil Corp",
+    "CN=Google LLC, CN=Evil",
+    "CN=Evil, CN=Google LLC",
+    "O=Google LLC",
+    "Google LLC",
+    "CN=Google LLC, Evil",
+    'CN="Google LLC',
+    "",
+    null,
+  ]) {
+    assert.strictEqual(ok(bad, "Google LLC"), false, String(bad));
+  }
+  assert.strictEqual(ok("CN=OpenAI OpCo, LLC, O=OpenAI OpCo, LLC", "OpenAI OpCo, LLC"), false);
 });
 
 test("extractSignInUrl returns the first allowlisted URL only", () => {

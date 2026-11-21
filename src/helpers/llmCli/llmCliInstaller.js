@@ -155,7 +155,9 @@ function createInstaller({
         publisher = signature ? signature.subject : null;
         if (spec.publisherCheck === "enforce") {
           const trusted =
-            signature && signature.status === "Valid" && signature.subject.includes(spec.publisher);
+            signature &&
+            signature.status === "Valid" &&
+            policy.subjectMatchesPublisher(signature.subject, spec.publisher);
           if (!trusted) {
             detector.apply(seat, { type: "INSTALL_FAIL", code: "signature-invalid" });
             return done({ ok: false, code: "signature-invalid" });

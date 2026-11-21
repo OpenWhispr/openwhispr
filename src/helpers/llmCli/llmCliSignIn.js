@@ -11,7 +11,7 @@ const { defaultKillTree } = require("./llmCliRunner");
 
 const BUFFER_CAP = 64 * 1024;
 const CODE_MAX = 512;
-const PTY_COLS = 500; // wide enough that the long token is not wrapped
+const PTY_COLS = 4096; // wide enough that the CLI never wraps the long token
 const AGY_GUIDE_KEY = "llmCli.signIn.agyTerminalGuide";
 
 // Table-derived launch of agy in its own visible terminal. Linux has no

@@ -776,8 +776,76 @@ function extractSetupToken(text, { final = false } = {}) {
   const match = /sk-ant-oat01-[A-Za-z0-9_-]{1,150}/.exec(joined);
   if (!match || match[0].length < 100) return null;
   const end = match.index + match[0].length;
-  if (end < joined.length) return /\s/.test(joined[end]) ? match[0] : null;
-  return final ? match[0] : null;
+  if (end >= joined.length) return final ? match[0] : null;
+  if (!/\s/.test(joined[end])) return null;
+  if (final) return match[0];
+  // A line break alone is not proof the token ended: a terminal that wraps it
+  // inserts one mid-token. Wrapped segments are rejoined above, so a break only
+  // counts once content follows it.
+  const rest = joined.slice(end);
+  const gap = /^\s*/.exec(rest)[0];
+  if (/[\r\n]/.test(gap) && gap.length === rest.length) return null;
+  return match[0];
+}
+
+// Parses an X.500 subject as .NET prints it (RDNs split on commas outside double
+// quotes, "" escapes a quote). Anything malformed returns null.
+function parseSubject(subject) {
+  if (typeof subject !== "string" || subject.length === 0 || subject.length > 2048) return null;
+  const out = [];
+  const n = subject.length;
+  let i = 0;
+  while (i < n) {
+    while (i < n && subject[i] === " ") i += 1;
+    const eq = subject.indexOf("=", i);
+    if (eq === -1) return null;
+    const key = subject.slice(i, eq).trim().toUpperCase();
+    if (!/^[A-Z0-9.]+$/.test(key)) return null;
+    i = eq + 1;
+    while (i < n && subject[i] === " ") i += 1;
+    let value = "";
+    if (subject[i] === '"') {
+      i += 1;
+      let closed = false;
+      while (i < n) {
+        if (subject[i] === '"') {
+          if (subject[i + 1] === '"') {
+            value += '"';
+            i += 2;
+            continue;
+          }
+          closed = true;
+          i += 1;
+          break;
+        }
+        value += subject[i];
+        i += 1;
+      }
+      if (!closed) return null;
+      while (i < n && subject[i] === " ") i += 1;
+      if (i < n && subject[i] !== ",") return null;
+    } else {
+      const comma = subject.indexOf(",", i);
+      const stop = comma === -1 ? n : comma;
+      value = subject.slice(i, stop).trim();
+      if (value.includes('"')) return null;
+      i = stop;
+    }
+    out.push([key, value]);
+    i += 1;
+  }
+  return out;
+}
+
+// The signing subject must name exactly the expected publisher: one CN equal to
+// it, and every O (when present) equal to it. No substring matching.
+function subjectMatchesPublisher(subject, publisher) {
+  if (typeof publisher !== "string" || publisher.length === 0) return false;
+  const rdns = parseSubject(subject);
+  if (!rdns) return false;
+  const cns = rdns.filter(([key]) => key === "CN");
+  if (cns.length !== 1 || cns[0][1] !== publisher) return false;
+  return rdns.filter(([key]) => key === "O").every(([, value]) => value === publisher);
 }
 
 function extractSignInUrl(seat, text) {
@@ -924,6 +992,7 @@ export {
   LLM_CLI_PROVIDERS,
   stripAnsi,
   extractSetupToken,
+  subjectMatchesPublisher,
   extractSignInUrl,
   extractDeviceCode,
   classifyStderr,
