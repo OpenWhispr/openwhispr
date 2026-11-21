@@ -80,3 +80,23 @@ test("a disabled control describes why to assistive tech, not only in its toolti
   assert.ok(html.includes(`id="${describedBy}" hidden="">${reason}<`));
   assert.ok(html.includes(`title="${reason}"`));
 });
+
+test("an idle control offers a choice of what to record beside the record button", async (t) => {
+  const html = await renderRecordControl(t, { elapsedMs: null, isRecording: false });
+
+  assert.match(html, /aria-label="notes.editor.transcribe"/);
+  assert.match(html, /aria-label="notes.editor.recordSource.menuLabel"/);
+  assert.match(html, /aria-haspopup="menu"/);
+});
+
+test("a disabled control also disables the record source menu", async (t) => {
+  const html = await renderRecordControl(t, {
+    elapsedMs: null,
+    isRecording: false,
+    disabled: true,
+    disabledReason: "Meeting recording is disabled by your organization.",
+  });
+
+  const trigger = html.match(/<button[^>]*aria-haspopup="menu"[^>]*>/)?.[0] ?? "";
+  assert.match(trigger, /disabled=""/);
+});

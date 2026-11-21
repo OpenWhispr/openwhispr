@@ -136,6 +136,8 @@ interface MeetingRecordingState {
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
   /** The user muted the microphone for this recording; system audio keeps going. */
   micMuted: boolean;
+  /** What the live recording captures; "system" never opens the microphone. */
+  recordingAudioSource: MeetingAudioSource;
   windowWidth: number;
 }
 
@@ -551,6 +553,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
   micMuted: false,
+  recordingAudioSource: "both",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
 }));
 
@@ -626,7 +629,8 @@ const applyMicMuted = (stream: MediaStream | null, muted: boolean) => {
 
 export function setMicMuted(muted: boolean): void {
   if (!isRecordingFlag) return;
-  if (useMeetingRecordingStore.getState().micMuted === muted) return;
+  const { micMuted, recordingAudioSource } = useMeetingRecordingStore.getState();
+  if (recordingAudioSource === "system" || micMuted === muted) return;
   applyMicMuted(micStream, muted);
   useMeetingRecordingStore.setState(
     muted ? { micMuted: true, micPartial: "", currentMicLevel: 0 } : { micMuted: false }
@@ -950,7 +954,11 @@ export interface StartRecordingArgs {
   autoEndEligible: boolean;
   startSource?: MeetingStartSource;
   canAutoStart?: () => boolean;
+  /** "system" records system audio only and never opens the microphone. */
+  audioSource?: MeetingAudioSource;
 }
+
+export type MeetingAudioSource = "both" | "system";
 
 export type StartRecordingResult = boolean | "cancelled";
 
@@ -1054,7 +1062,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       Math.min(MAX_SPEAKER_COUNT, args.expectedCount ?? DEFAULT_EXPECTED_SPEAKER_COUNT)
     );
 
-    logger.info("Meeting transcription starting...", {}, "meeting");
+    const audioSource: MeetingAudioSource = args.audioSource ?? "both";
+    const systemAudioOnly = audioSource === "system";
+    logger.info("Meeting transcription starting...", { audioSource }, "meeting");
     const seed = args.seedSegments ?? [];
     const locks = new Map<string, string>();
     const keepSeedSelfLocks = !args.recorderName && !seed.some((segment) => segment.recorderName);
@@ -1110,6 +1120,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       systemAudioInterrupted: null,
       micCaptureStatus: "inactive",
       micMuted: false,
+      recordingAudioSource: audioSource,
     });
 
     isRecordingFlag = true;
@@ -1149,7 +1160,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       setupSystemCaptureResult = { stream: null, error: null };
       isRecordingFlag = false;
       isStartingFlag = false;
-      useMeetingRecordingStore.setState({ micMuted: false });
+      useMeetingRecordingStore.setState({ micMuted: false, recordingAudioSource: "both" });
       await teardownFailedMeetingRecordingSetup({
         stopBarrier: meetingRecordingStopBarrier,
         cleanup,
@@ -1214,6 +1225,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         await teardownStart();
         return;
       }
+      if (systemAudioOnly && initialSystemAudioAccess.mode === "unsupported") {
+        logger.warn("System-audio-only recording is unsupported on this device", {}, "meeting");
+        reportMeetingError("systemAudioOnlyUnavailable", {
+          isRecording: false,
+          isTranscribing: false,
+        });
+        await teardownStart();
+        return;
+      }
       // Resolved before any capture starts: a selection that cannot transcribe must fail
       // here, not after the user has already shared a screen that would stay live.
       const meetingTranscriptionOptions = getMeetingTranscriptionOptions();
@@ -1227,7 +1247,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
 
       const micCapturePromise = getMeetingMicConstraints()
         .then(async (constraints) => {
-          if (!beginCapture()) return null;
+          // A system-audio-only recording never opens the mic, so no prompt or indicator.
+          if (systemAudioOnly || !beginCapture()) return null;
           try {
             return await navigator.mediaDevices.getUserMedia(constraints);
           } catch (err) {
@@ -1392,6 +1413,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           isRecording: false,
           isTranscribing: false,
           micMuted: false,
+          recordingAudioSource: "both",
         });
         releaseSession();
         stopMediaStream(setupSystemCaptureResult.stream);
@@ -1433,16 +1455,26 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       }
       const systemCaptureError = systemAudioHandledInMain ? null : systemCaptureResult.error;
 
-      if (!micResult && (systemAudioHandledInMain || systemCaptureResult.stream)) {
+      if (
+        !micResult &&
+        !systemAudioOnly &&
+        (systemAudioHandledInMain || systemCaptureResult.stream)
+      ) {
         reportMeetingError("Microphone capture failed. Continuing with system audio only.");
       }
 
       if (!micResult && !systemCaptureResult.stream && !systemAudioHandledInMain) {
-        logger.error("Meeting transcription has no available audio source", {}, "meeting");
+        logger.error(
+          "Meeting transcription has no available audio source",
+          { systemAudioOnly },
+          "meeting"
+        );
         reportMeetingError(
-          systemAudioMode === "unsupported"
-            ? "No microphone is available and system audio capture is unsupported on this device."
-            : systemCaptureError?.message ||
+          systemAudioOnly
+            ? systemCaptureError?.message || "systemAudioOnlyUnavailable"
+            : systemAudioMode === "unsupported"
+              ? "No microphone is available and system audio capture is unsupported on this device."
+              : systemCaptureError?.message ||
                 "No microphone is available and system audio capture could not be started.",
           { isRecording: false, isTranscribing: false }
         );
@@ -1968,6 +2000,7 @@ export async function stopRecording(
       systemAudioInterrupted: null,
       currentMicLevel: 0,
       micMuted: false,
+      recordingAudioSource: "both",
       recordingStartedAt: null,
     });
     return { diarizationSessionId: null, stopped: false, cancelledStart: true };
@@ -2091,6 +2124,7 @@ export async function stopRecording(
       systemAudioInterrupted: null,
       currentMicLevel: 0,
       micMuted: false,
+      recordingAudioSource: "both",
       recordingStartedAt: null,
     });
 

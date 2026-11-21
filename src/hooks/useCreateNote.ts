@@ -10,6 +10,7 @@ import {
 import {
   startRecording,
   useMeetingRecordingStore,
+  type MeetingAudioSource,
   type StartRecordingResult,
 } from "../stores/meetingRecordingStore";
 import { useTranscriptionContextAllowed } from "./usePolicy";
@@ -22,7 +23,8 @@ export function startRecordingForNote(
   note: NoteItem | null,
   recorderName: string | undefined,
   startSource: MeetingStartSource,
-  canAutoStart?: () => boolean
+  canAutoStart?: () => boolean,
+  audioSource?: MeetingAudioSource
 ): Promise<StartRecordingResult> {
   return startRecording({
     noteId: note?.id ?? null,
@@ -36,6 +38,7 @@ export function startRecordingForNote(
     autoEndEligible: isMeetingAutoEndEligible(note),
     startSource,
     canAutoStart,
+    audioSource,
   });
 }
 

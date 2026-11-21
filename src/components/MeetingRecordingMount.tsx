@@ -49,6 +49,8 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   signInRequired: "notes.meeting.signInRequired",
   // Mid-recording, so no Sign in action: signing in reloads this window and the recording with it.
   signInExpired: "notes.meeting.signInExpired",
+  // A system-audio-only recording on a device that cannot capture system audio.
+  systemAudioOnlyUnavailable: "notes.meeting.systemAudioOnlyUnavailable",
 };
 
 export default function MeetingRecordingMount(): null {

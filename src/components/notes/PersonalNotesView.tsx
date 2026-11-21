@@ -84,6 +84,7 @@ import {
   lockSpeaker,
   setSessionDiarizationEnabled,
   setSessionExpectedCount,
+  type MeetingAudioSource,
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import { startRecordingForNote, useCreateNote } from "../../hooks/useCreateNote";
@@ -455,11 +456,13 @@ export default function PersonalNotesView({
       : undefined;
 
   const startRecording = useCallback(
-    () =>
+    (audioSource?: MeetingAudioSource) =>
       startRecordingForNote(
         activeNote ?? null,
         recordingRecorderName(activeNote ?? null, user, t),
-        "record-button"
+        "record-button",
+        undefined,
+        audioSource
       ),
     [activeNote, user, t]
   );

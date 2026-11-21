@@ -3750,7 +3750,14 @@
       },
       "muteMic": "マイクをミュート",
       "unmuteMic": "マイクのミュートを解除",
-      "micMuted": "マイクはミュート中"
+      "micMuted": "マイクはミュート中",
+      "recordSource": {
+        "menuLabel": "録音する音声を選択",
+        "both": "マイク + システム音声",
+        "system": "システム音声のみ",
+        "systemUnavailable": "このデバイスではシステム音声を取り込めません"
+      },
+      "systemAudioOnly": "システム音声のみ"
     },
     "participants": {
       "attendee": "名の参加者",
@@ -4081,7 +4088,8 @@
       "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。",
       "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。",
       "stoppedPolicyUnresolved": "組織の設定を確認できなかったため、録音を停止しました。",
-      "stoppedWorkspaceChanged": "ワークスペースを切り替えたため、録音を停止しました。"
+      "stoppedWorkspaceChanged": "ワークスペースを切り替えたため、録音を停止しました。",
+      "systemAudioOnlyUnavailable": "システム音声を取り込めなかったため、システム音声のみの録音は開始されませんでした。システム音声へのアクセスを確認して、もう一度お試しください。"
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",

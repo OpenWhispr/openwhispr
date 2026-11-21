@@ -3907,7 +3907,14 @@
       },
       "muteMic": "Silenciar micrófono",
       "unmuteMic": "Activar micrófono",
-      "micMuted": "Micrófono silenciado"
+      "micMuted": "Micrófono silenciado",
+      "recordSource": {
+        "menuLabel": "Elegir qué grabar",
+        "both": "Micrófono + audio del sistema",
+        "system": "Solo audio del sistema",
+        "systemUnavailable": "La captura del audio del sistema no está disponible en este dispositivo"
+      },
+      "systemAudioOnly": "Solo audio del sistema"
     },
     "participants": {
       "attendee": "asistente",
@@ -4050,7 +4057,8 @@
       "recordingDisabledByOrg": "Tu organización ha desactivado la grabación de reuniones.",
       "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta.",
       "stoppedPolicyUnresolved": "La grabación se detuvo porque no se pudieron comprobar los ajustes de tu organización.",
-      "stoppedWorkspaceChanged": "La grabación se detuvo porque cambiaste de espacio de trabajo."
+      "stoppedWorkspaceChanged": "La grabación se detuvo porque cambiaste de espacio de trabajo.",
+      "systemAudioOnlyUnavailable": "No se pudo capturar el audio del sistema, así que la grabación solo de audio del sistema no se inició. Revisa el acceso al audio del sistema e inténtalo de nuevo."
     },
     "meetingPill": {
       "returnToNote": "Volver a la grabación",

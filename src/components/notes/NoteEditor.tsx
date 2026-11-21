@@ -51,6 +51,7 @@ import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
 import {
   useMeetingRecordingStore,
+  type MeetingAudioSource,
   type TranscriptSegment,
 } from "../../stores/meetingRecordingStore";
 import {
@@ -185,6 +186,7 @@ type LiveMeetingTranscriptChatProps = Omit<
   | "systemPartialSpeakerName"
   | "isRecording"
   | "micMuted"
+  | "systemAudioOnly"
 >;
 
 // Subscribes to live transcript state at this leaf so per-update re-renders
@@ -200,6 +202,7 @@ function LiveMeetingTranscriptChat({
   const systemPartialSpeakerId = useMeetingRecordingStore((s) => s.systemPartialSpeakerId);
   const systemPartialSpeakerName = useMeetingRecordingStore((s) => s.systemPartialSpeakerName);
   const micMuted = useMeetingRecordingStore((s) => s.micMuted);
+  const systemAudioOnly = useMeetingRecordingStore((s) => s.recordingAudioSource === "system");
 
   const knownSpeakers = useMemo(
     () => buildKnownSpeakers(speakerProfiles ?? [], segments, speakerMappings ?? {}),
@@ -216,6 +219,7 @@ function LiveMeetingTranscriptChat({
       systemPartialSpeakerId={systemPartialSpeakerId}
       systemPartialSpeakerName={systemPartialSpeakerName}
       micMuted={micMuted}
+      systemAudioOnly={systemAudioOnly}
       speakerMappings={speakerMappings}
       speakerProfiles={knownSpeakers}
     />
@@ -230,7 +234,7 @@ interface NoteEditorProps {
   isRecording: boolean;
   isProcessing: boolean;
   recordingAllowed?: boolean;
-  onStartRecording: () => void;
+  onStartRecording: (audioSource?: MeetingAudioSource) => void;
   onStopRecording: () => void;
   onExportNote?: (format: "md" | "txt") => void;
   /** recorderLabel names the original recorder when someone else exports the note. */
@@ -298,10 +302,11 @@ export default function NoteEditor({
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
-  const handleStartRecording = (): void => {
+  const handleStartRecording = (audioSource?: MeetingAudioSource): void => {
     markNoteEdited(note.id);
-    onStartRecording();
+    onStartRecording(audioSource);
   };
+  const recordingAudioSource = useMeetingRecordingStore((s) => s.recordingAudioSource);
   const recordingRefusal = meetingRecordingRefusal(usePolicySnapshot());
   const recordingChoiceRefusal = useTranscriptionChoiceRefusal("meeting");
   // An upload's transcription lives in its transcript, so until the user writes
@@ -1412,7 +1417,7 @@ export default function NoteEditor({
                   onStop={onStopRecording}
                 />
               )}
-              {canEditNote && isRecording && <MicMuteButton />}
+              {canEditNote && isRecording && recordingAudioSource !== "system" && <MicMuteButton />}
               <div className={cn(SPLIT_BUTTON_GROUP_CLASS, "h-[30px] shrink-0")}>
                 <button
                   type="button"
@@ -1579,7 +1584,7 @@ export default function NoteEditor({
                 {canEditNote && recordingAllowed && (
                   <Button
                     className="mt-6 rounded-full px-5 font-medium"
-                    onClick={handleStartRecording}
+                    onClick={() => handleStartRecording()}
                     disabled={isProcessing}
                   >
                     {t("notes.editor.startRecording")}

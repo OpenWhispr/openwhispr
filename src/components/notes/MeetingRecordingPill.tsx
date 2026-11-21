@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { MicOff, Square } from "../icons";
+import { MicOff, Square, Volume } from "../icons";
 import { stopRecording, useMeetingRecordingStore } from "../../stores/meetingRecordingStore";
 import { cn } from "../lib/utils";
 import { isControlPanelWindow } from "../../utils/windowContext";
@@ -39,6 +39,7 @@ export default function MeetingRecordingPill({
   const micLevel = useMeetingRecordingStore((s) => s.currentMicLevel);
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
   const micMuted = useMeetingRecordingStore((s) => s.micMuted);
+  const systemAudioOnly = useMeetingRecordingStore((s) => s.recordingAudioSource === "system");
   const isWaitingForMic =
     !micMuted && (micCaptureStatus === "reconnecting" || micCaptureStatus === "unavailable");
   const [isStopping, setIsStopping] = useState(false);
@@ -95,7 +96,13 @@ export default function MeetingRecordingPill({
             "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
           )}
         >
-          {micMuted ? (
+          {systemAudioOnly ? (
+            <Volume
+              size={14}
+              className="text-primary/70"
+              aria-label={t("notes.editor.systemAudioOnly")}
+            />
+          ) : micMuted ? (
             <MicOff size={14} className="text-amber-600 dark:text-amber-400" />
           ) : (
             <div className="flex items-end gap-0.75 h-4">

@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Check, Loader2, MicOff, Sparkles, Users, X } from "../icons";
+import { Check, Loader2, MicOff, Sparkles, Users, Volume, X } from "../icons";
 import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { Toggle } from "../ui/toggle";
@@ -876,6 +876,8 @@ interface MeetingTranscriptChatProps {
   recorderLabel?: string;
   /** The live recording's microphone is muted; system audio is still transcribed. */
   micMuted?: boolean;
+  /** The live recording captures system audio only; the microphone was never opened. */
+  systemAudioOnly?: boolean;
 }
 
 export function MeetingTranscriptChat({
@@ -903,6 +905,7 @@ export function MeetingTranscriptChat({
   contentClassName,
   recorderLabel: recorderLabelProp,
   micMuted = false,
+  systemAudioOnly = false,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
   const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
@@ -1034,6 +1037,15 @@ export function MeetingTranscriptChat({
                 </span>
               )}
             </div>
+            {isRecording && systemAudioOnly && (
+              <span
+                role="status"
+                className="flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-primary"
+              >
+                <Volume size={12} className="shrink-0" />
+                {t("notes.editor.systemAudioOnly")}
+              </span>
+            )}
             {isRecording && micMuted && (
               <span
                 role="status"

@@ -3557,7 +3557,14 @@
       },
       "muteMic": "كتم الميكروفون",
       "unmuteMic": "إلغاء كتم الميكروفون",
-      "micMuted": "الميكروفون مكتوم"
+      "micMuted": "الميكروفون مكتوم",
+      "recordSource": {
+        "menuLabel": "اختر ما تريد تسجيله",
+        "both": "الميكروفون + صوت النظام",
+        "system": "صوت النظام فقط",
+        "systemUnavailable": "التقاط صوت النظام غير متاح على هذا الجهاز"
+      },
+      "systemAudioOnly": "صوت النظام فقط"
     },
     "participants": {
       "attendee": "حاضر",
@@ -3700,7 +3707,8 @@
       "recordingDisabledByOrg": "تم تعطيل تسجيل الاجتماعات بواسطة مؤسستك.",
       "stoppedAccountChanged": "توقف التسجيل لأنك سجّلت الخروج أو بدّلت الحساب.",
       "stoppedPolicyUnresolved": "توقف التسجيل لأنه تعذّر التحقق من إعدادات مؤسستك.",
-      "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل."
+      "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل.",
+      "systemAudioOnlyUnavailable": "تعذّر التقاط صوت النظام، لذا لم يبدأ تسجيل صوت النظام فقط. تحقّق من إذن الوصول إلى صوت النظام ثم أعد المحاولة."
     },
     "meetingPill": {
       "returnToNote": "العودة إلى التسجيل",

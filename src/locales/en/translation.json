@@ -4414,7 +4414,14 @@
       },
       "muteMic": "Mute microphone",
       "unmuteMic": "Unmute microphone",
-      "micMuted": "Microphone muted"
+      "micMuted": "Microphone muted",
+      "recordSource": {
+        "menuLabel": "Choose what to record",
+        "both": "Microphone + system audio",
+        "system": "System audio only",
+        "systemUnavailable": "System audio capture isn't available on this device"
+      },
+      "systemAudioOnly": "System audio only"
     },
     "participants": {
       "attendee": "attendee",
@@ -4557,7 +4564,8 @@
       "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
       "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
       "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked.",
-      "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces."
+      "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces.",
+      "systemAudioOnlyUnavailable": "System audio couldn't be captured, so the system-audio-only recording didn't start. Check system audio access and try again."
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
