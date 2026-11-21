@@ -10,7 +10,7 @@ Keep responses focused and brief. Keep caveats short. Explain things at a high l
 
 ## Project
 
-Electron 41 desktop dictation app with context isolation.
+Electron 43 desktop dictation app with context isolation.
 - Renderer: React 19, TypeScript, Tailwind v4, Vite, shadcn/ui on Radix.
 - Main process: better-sqlite3.
 - Speech-to-text: whisper.cpp, NVIDIA Parakeet/Cohere through sherpa-onnx, and cloud providers.

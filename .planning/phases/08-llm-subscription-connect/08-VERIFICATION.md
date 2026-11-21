@@ -37,7 +37,7 @@ Main-process load of the ESM policy module: `require()` of `llmCliProviders.js`,
 - Installer run on a clean Windows machine and antivirus behavior: not run (all four CLIs already installed; the run would modify this PC).
 - grok `-p` hang root cause: observed hang (no output until the idle limit, 4 runs, about 30 s each); cause not investigated. Bounded by the idle timeout, no workaround added.
 - agy headless sign-in: no flag exists; only the run-agy-once guide is implemented. agy answered here because a Google sign-in already exists on this PC.
-- Windows publisher check for codex and agy installs: report-only; vendors publish no signer name.
+- Windows publisher check for codex and agy installs: enforced (`publisherCheck: "enforce"`, `llmCliInstaller.js`); the Authenticode subject must have exactly one CN equal to the expected publisher and every O equal to it (`subjectMatchesPublisher`). Not run against a real vendor installer on a clean machine.
 - Packaged build loading the ESM module via require(esm) from the real app.asar: only a test asar was checked.
 
 ---
@@ -80,7 +80,7 @@ Totals: 9/9 must-check items PASS; requirements 5 PASS, 4 PARTIAL, 0 MISSING.
 
 ### Findings
 
-- WARNING: the first section's UNVERIFIED line "Windows publisher check for codex and agy: report-only" is stale. Code enforces it since b4d1d656d (table above). Doc should be corrected.
+- RESOLVED: the UNVERIFIED line on the Windows publisher check said "report-only"; corrected to match the code (exact CN/O match enforced since b4d1d656d).
 - WARNING: in-app chat through a seat, consent dialog, sign-out confirm and the chat-picker CLI group are not visually evidenced (see LLM-06).
 - INFO: grok `-p` hang remains, bounded by idle timeout; agy headless sign-in is guide-only; clean-machine install and packed-app `require(esm)` unverified.
 - No BLOCKER found: no failed truth, no stub, no unwired artifact.
