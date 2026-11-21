@@ -9,6 +9,8 @@ import { lanProvider } from "./lan";
 import { openaiProvider } from "./openai";
 import { tinfoilProvider } from "./tinfoil";
 import { cortiProvider } from "./corti";
+import { cliSubscriptionProvider } from "./cliSubscription";
+import { LLM_CLI_PROVIDERS } from "../../../helpers/llmCliProviders.js";
 
 export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Object.freeze({
   openai: openaiProvider,
@@ -25,6 +27,8 @@ export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Ob
   vertex: enterpriseProvider,
   openwhispr: openwhisprProvider,
   lan: lanProvider,
+  // Every cli-* seat id maps to the one subscription provider (fork, phase 8).
+  ...Object.fromEntries(LLM_CLI_PROVIDERS.map((p) => [p.id, cliSubscriptionProvider])),
 });
 
 export type { InferenceProvider, ProviderContext, ProviderCallParams } from "./types";

@@ -25,6 +25,10 @@ npx electron-builder --win nsis --publish never --config electron-builder.fork.j
 
 Output: `dist/EdgeAssistant-Setup-<version>.exe`. Signing happens during bundling. Verify with `Get-AuthenticodeSignature` on the installer and on `dist/win-unpacked/edgeassistant.exe` (Status Valid, CN=Titanium Labs LLC). Delete `dist/win-unpacked` after any failed signed build.
 
+## Native modules
+
+`npm ci` (postinstall) and packaging (the `beforePack` hook, with `npmRebuild: false`) both rebuild Electron-ABI modules through `scripts/rebuild-native-deps.js`, not `electron-builder install-app-deps`. `node-pty` is Node-API and ships win32/darwin prebuilds that load under Electron, so the script skips it (`NODE_API_PREBUILT_MODULES`). Letting `@electron/rebuild` recompile it needs MSVC with Spectre libs and runs winpty's `GetCommitHash.bat`, which fails with `gyp: Call to 'cmd /c "cd shared && GetCommitHash.bat"' returned exit status 1` in shells that set `NoDefaultCurrentDirectoryInExePath=1` (Claude Code shells do). Check a build with `$env:ELECTRON_RUN_AS_NODE='1'; npx electron -e "require('node-pty'); require('better-sqlite3')"`.
+
 ## OAuth client ids (calendars, Slack, Linear)
 
 The Google and Microsoft calendar and the Slack and Linear connectors read their OAuth client ids from `resources/.env`. Write them before `electron-builder` with `scripts/fork-write-env.mjs`. It reads five variables from the build shell, writes them into the repo-root `.env` (packaged as `resources/.env`), keeps every other line, and exits 1 naming any missing or malformed key. It prints key names only, never values. Without client ids the Gmail, GitHub, calendar, Slack and Linear rows hide or report "not configured"; no upstream OpenWhispr client id is ever embedded.

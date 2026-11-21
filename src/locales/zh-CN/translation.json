@@ -1599,6 +1599,10 @@
       "titaniumAccount": {
         "label": "Titanium 账户",
         "description": "登录与许可证"
+      },
+      "subscriptions": {
+        "label": "订阅",
+        "description": "Claude、Codex、Grok、Antigravity"
       }
     },
     "title": "设置"
@@ -5168,6 +5172,94 @@
       "token_not_found": "该链接已被使用或已过期。请重新开始登录。",
       "app_mismatch": "该登录属于其他应用。请从这里重新开始。",
       "generic": "登录未完成。请重试。"
+    }
+  },
+  "llmSubscriptions": {
+    "title": "订阅",
+    "description": "使用您自己的 Claude、Codex、Grok 或 Antigravity 登录来进行聊天和听写代理。不使用 API 密钥。",
+    "version": "v{{version}}",
+    "status": {
+      "missing": "未安装",
+      "installing": "正在安装",
+      "installed": "已安装",
+      "outdated": "需要更新",
+      "signing-in": "正在登录",
+      "signed-in": "已登录",
+      "signed-out": "已退出",
+      "error": "错误"
+    },
+    "seats": {
+      "claude": "使用您的 Claude 订阅的 Claude Code CLI。",
+      "codex": "使用您的 ChatGPT 订阅的 Codex CLI。",
+      "grok": "使用您的 X 账号的 Grok CLI。",
+      "agy": "使用您的 Google 账号的 Antigravity CLI。"
+    },
+    "actions": {
+      "install": "安装",
+      "openGuide": "打开安装指南",
+      "signIn": "登录",
+      "test": "测试",
+      "redetect": "重新检测",
+      "signOut": "退出登录",
+      "cancel": "取消",
+      "copy": "复制",
+      "openInBrowser": "在浏览器中打开",
+      "submitCode": "提交代码"
+    },
+    "outdatedHint": "此 CLI 版本低于应用测试所用的版本。请更新后选择重新检测。",
+    "testOk": "测试通过。",
+    "claude": {
+      "toggleLabel": "启用 Claude 席位",
+      "notice": "Anthropic 的条款可能不允许在第三方应用中使用 Claude 订阅。启用即表示风险自负。"
+    },
+    "install": {
+      "title": "安装 {{seat}}",
+      "description": "这将下载并运行供应商的安装程序。继续之前请检查地址和命令。",
+      "urlLabel": "安装程序地址",
+      "commandLabel": "将运行的命令",
+      "confirm": "安装",
+      "guided": "请从官方页面安装 Grok CLI，然后选择重新检测。"
+    },
+    "signIn": {
+      "deviceUrlLabel": "打开此地址",
+      "deviceCodeLabel": "输入此代码",
+      "waiting": "正在等待登录完成。",
+      "claudeInstructions": "打开该地址并登录，然后粘贴页面上显示的代码。",
+      "codeLabel": "授权码",
+      "codePlaceholder": "粘贴代码",
+      "agyGuide": "在终端中运行一次 agy 并使用 Google 账号登录，然后选择重新检测。"
+    },
+    "signOut": {
+      "title": "退出 {{seat}} 登录？",
+      "terminalCli": "这也会退出终端中的 {{seat}} CLI 登录。",
+      "claudeToken": "已保存的令牌将从此应用中删除。在您于 Claude 账号页面撤销之前，它仍然有效。",
+      "agyGuide": "请在终端中使用 agy CLI 退出 Antigravity 登录。",
+      "confirm": "退出登录"
+    },
+    "errors": {
+      "not-installed": "CLI 未安装。",
+      "outdated": "CLI 版本过旧，不适用于此应用。请更新后重新检测。",
+      "not-signed-in": "未登录。请登录后重试。",
+      "api-key-login-refused": "此应用只使用订阅登录，从不使用 API 密钥。",
+      "timeout": "CLI 响应时间过长。",
+      "killed": "CLI 已停止。",
+      "quota-or-rate-limit": "已达到使用或速率限制。请稍后重试。",
+      "exit-nonzero": "CLI 因错误退出。",
+      "parse-failed": "无法读取 CLI 的回答。",
+      "claude-disabled": "Claude 席位已关闭。",
+      "busy": "此席位已有另一个请求正在运行。",
+      "invalid-input": "请求无效。",
+      "signature-invalid": "无法验证安装程序的签名。",
+      "install-failed": "安装未完成。",
+      "quarantined-or-missing": "安装已被移除，可能是被杀毒软件删除。",
+      "generic": "出了点问题。请重试。"
+    },
+    "picker": {
+      "group": "订阅 CLI",
+      "helper": "订阅 CLI 只返回文本（没有 EdgeAssistant 工具），并且比 API 提供商慢，因此听写清理不提供它们。",
+      "useApi": "改用 API 提供商",
+      "modelLabel": "模型",
+      "defaultModel": "CLI 默认模型"
     }
   }
 }

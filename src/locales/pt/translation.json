@@ -1578,6 +1578,10 @@
       "titaniumAccount": {
         "label": "Conta Titanium",
         "description": "Login e licença"
+      },
+      "subscriptions": {
+        "label": "Assinaturas",
+        "description": "Claude, Codex, Grok, Antigravity"
       }
     },
     "title": "Configurações"
@@ -5168,6 +5172,94 @@
       "token_not_found": "Esse link já foi usado ou expirou. Comece o login novamente.",
       "app_mismatch": "Esse login era de outro app. Comece novamente por aqui.",
       "generic": "O login não foi concluído. Tente de novo."
+    }
+  },
+  "llmSubscriptions": {
+    "title": "Assinaturas",
+    "description": "Use seu proprio login do Claude, Codex, Grok ou Antigravity no chat e no agente de ditado. Nenhuma chave de API e usada.",
+    "version": "v{{version}}",
+    "status": {
+      "missing": "Nao instalado",
+      "installing": "Instalando",
+      "installed": "Instalado",
+      "outdated": "Atualizacao necessaria",
+      "signing-in": "Entrando",
+      "signed-in": "Conectado",
+      "signed-out": "Desconectado",
+      "error": "Erro"
+    },
+    "seats": {
+      "claude": "CLI do Claude Code com sua assinatura do Claude.",
+      "codex": "CLI do Codex com sua assinatura do ChatGPT.",
+      "grok": "CLI do Grok com sua conta do X.",
+      "agy": "CLI do Antigravity com sua conta do Google."
+    },
+    "actions": {
+      "install": "Instalar",
+      "openGuide": "Abrir guia de instalacao",
+      "signIn": "Entrar",
+      "test": "Testar",
+      "redetect": "Detectar novamente",
+      "signOut": "Sair",
+      "cancel": "Cancelar",
+      "copy": "Copiar",
+      "openInBrowser": "Abrir no navegador",
+      "submitCode": "Enviar codigo"
+    },
+    "outdatedHint": "Este CLI e mais antigo que a versao testada com o app. Atualize-o e escolha Detectar novamente.",
+    "testOk": "Teste aprovado.",
+    "claude": {
+      "toggleLabel": "Ativar o assento do Claude",
+      "notice": "Os termos da Anthropic podem nao permitir uma assinatura do Claude em apps de terceiros. Voce ativa isso por sua conta e risco."
+    },
+    "install": {
+      "title": "Instalar {{seat}}",
+      "description": "Isto baixa e executa o instalador do fornecedor. Confira o endereco e o comando antes de continuar.",
+      "urlLabel": "Endereco do instalador",
+      "commandLabel": "Comando que sera executado",
+      "confirm": "Instalar",
+      "guided": "Instale o CLI do Grok pela pagina oficial e escolha Detectar novamente."
+    },
+    "signIn": {
+      "deviceUrlLabel": "Abra este endereco",
+      "deviceCodeLabel": "Digite este codigo",
+      "waiting": "Aguardando o fim do login.",
+      "claudeInstructions": "Abra o endereco, entre e cole o codigo exibido na pagina.",
+      "codeLabel": "Codigo de autorizacao",
+      "codePlaceholder": "Cole o codigo",
+      "agyGuide": "Execute o agy uma vez em um terminal e entre com sua conta do Google. Depois escolha Detectar novamente."
+    },
+    "signOut": {
+      "title": "Sair do {{seat}}?",
+      "terminalCli": "Isto tambem desconecta o CLI do {{seat}} no seu terminal.",
+      "claudeToken": "O token salvo e removido deste app. Ele continua valido ate voce revoga-lo na pagina da sua conta do Claude.",
+      "agyGuide": "Saia do Antigravity com o CLI agy em um terminal.",
+      "confirm": "Sair"
+    },
+    "errors": {
+      "not-installed": "O CLI nao esta instalado.",
+      "outdated": "O CLI e antigo demais para este app. Atualize-o e detecte novamente.",
+      "not-signed-in": "Nao conectado. Entre e tente novamente.",
+      "api-key-login-refused": "Este app usa somente o login de assinatura, nunca chaves de API.",
+      "timeout": "O CLI demorou demais para responder.",
+      "killed": "O CLI foi interrompido.",
+      "quota-or-rate-limit": "Limite de uso atingido. Tente novamente mais tarde.",
+      "exit-nonzero": "O CLI terminou com um erro.",
+      "parse-failed": "Nao foi possivel ler a resposta do CLI.",
+      "claude-disabled": "O assento do Claude esta desativado.",
+      "busy": "Ja ha outra solicitacao em andamento para este assento.",
+      "invalid-input": "A solicitacao nao era valida.",
+      "signature-invalid": "Nao foi possivel verificar a assinatura do instalador.",
+      "install-failed": "A instalacao nao foi concluida.",
+      "quarantined-or-missing": "A instalacao foi removida, possivelmente por um antivirus.",
+      "generic": "Algo deu errado. Tente novamente."
+    },
+    "picker": {
+      "group": "CLIs de assinatura",
+      "helper": "Os CLIs de assinatura respondem apenas com texto (sem ferramentas do EdgeAssistant) e sao mais lentos que os provedores de API, por isso a limpeza do ditado nao os oferece.",
+      "useApi": "Usar um provedor de API",
+      "modelLabel": "Modelo",
+      "defaultModel": "Modelo padrao do CLI"
     }
   }
 }

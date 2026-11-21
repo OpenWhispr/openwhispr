@@ -1599,6 +1599,10 @@
       "titaniumAccount": {
         "label": "Titanium アカウント",
         "description": "サインインとライセンス"
+      },
+      "subscriptions": {
+        "label": "サブスクリプション",
+        "description": "Claude、Codex、Grok、Antigravity"
       }
     },
     "title": "設定"
@@ -5168,6 +5172,94 @@
       "token_not_found": "このリンクは使用済みか期限切れです。サインインをやり直してください。",
       "app_mismatch": "このサインインは別のアプリ用でした。ここからやり直してください。",
       "generic": "サインインが完了しませんでした。もう一度お試しください。"
+    }
+  },
+  "llmSubscriptions": {
+    "title": "サブスクリプション",
+    "description": "チャットとディクテーションエージェントで、ご自身の Claude、Codex、Grok、Antigravity のサインインを使います。API キーは使用しません。",
+    "version": "v{{version}}",
+    "status": {
+      "missing": "未インストール",
+      "installing": "インストール中",
+      "installed": "インストール済み",
+      "outdated": "更新が必要",
+      "signing-in": "サインイン中",
+      "signed-in": "サインイン済み",
+      "signed-out": "サインアウト済み",
+      "error": "エラー"
+    },
+    "seats": {
+      "claude": "Claude サブスクリプションで使う Claude Code CLI。",
+      "codex": "ChatGPT サブスクリプションで使う Codex CLI。",
+      "grok": "X アカウントで使う Grok CLI。",
+      "agy": "Google アカウントで使う Antigravity CLI。"
+    },
+    "actions": {
+      "install": "インストール",
+      "openGuide": "インストールガイドを開く",
+      "signIn": "サインイン",
+      "test": "テスト",
+      "redetect": "再検出",
+      "signOut": "サインアウト",
+      "cancel": "キャンセル",
+      "copy": "コピー",
+      "openInBrowser": "ブラウザーで開く",
+      "submitCode": "コードを送信"
+    },
+    "outdatedHint": "この CLI はアプリでテストしたバージョンより古いです。更新してから再検出を選択してください。",
+    "testOk": "テストに成功しました。",
+    "claude": {
+      "toggleLabel": "Claude 枠を有効にする",
+      "notice": "Anthropic の規約では、サードパーティアプリでの Claude サブスクリプションの利用が認められない場合があります。有効にする場合は自己責任となります。"
+    },
+    "install": {
+      "title": "{{seat}} をインストール",
+      "description": "提供元のインストーラーをダウンロードして実行します。続行する前にアドレスとコマンドを確認してください。",
+      "urlLabel": "インストーラーのアドレス",
+      "commandLabel": "実行されるコマンド",
+      "confirm": "インストール",
+      "guided": "公式ページから Grok CLI をインストールし、再検出を選択してください。"
+    },
+    "signIn": {
+      "deviceUrlLabel": "このアドレスを開く",
+      "deviceCodeLabel": "このコードを入力",
+      "waiting": "サインインの完了を待っています。",
+      "claudeInstructions": "アドレスを開いてサインインし、ページに表示されるコードを貼り付けてください。",
+      "codeLabel": "認証コード",
+      "codePlaceholder": "コードを貼り付け",
+      "agyGuide": "ターミナルで agy を一度実行し、Google アカウントでサインインしてください。その後、再検出を選択します。"
+    },
+    "signOut": {
+      "title": "{{seat}} からサインアウトしますか?",
+      "terminalCli": "ターミナルの {{seat}} CLI もサインアウトされます。",
+      "claudeToken": "保存されたトークンはこのアプリから削除されます。Claude アカウントのページで取り消すまで有効です。",
+      "agyGuide": "ターミナルで agy CLI を使って Antigravity からサインアウトしてください。",
+      "confirm": "サインアウト"
+    },
+    "errors": {
+      "not-installed": "CLI がインストールされていません。",
+      "outdated": "CLI がこのアプリには古すぎます。更新してから再検出してください。",
+      "not-signed-in": "サインインしていません。サインインしてもう一度お試しください。",
+      "api-key-login-refused": "このアプリはサブスクリプションのサインインのみを使い、API キーは使いません。",
+      "timeout": "CLI の応答に時間がかかりすぎました。",
+      "killed": "CLI が停止されました。",
+      "quota-or-rate-limit": "利用上限またはレート制限に達しました。後でもう一度お試しください。",
+      "exit-nonzero": "CLI がエラーで終了しました。",
+      "parse-failed": "CLI の応答を読み取れませんでした。",
+      "claude-disabled": "Claude 枠はオフです。",
+      "busy": "この枠では別のリクエストがすでに実行中です。",
+      "invalid-input": "リクエストが無効でした。",
+      "signature-invalid": "インストーラーの署名を確認できませんでした。",
+      "install-failed": "インストールが完了しませんでした。",
+      "quarantined-or-missing": "インストールが削除されました。ウイルス対策ソフトによる可能性があります。",
+      "generic": "問題が発生しました。もう一度お試しください。"
+    },
+    "picker": {
+      "group": "サブスクリプション CLI",
+      "helper": "サブスクリプション CLI はテキストのみで応答し（EdgeAssistant のツールなし）、API プロバイダーより遅いため、ディクテーションのクリーンアップでは選択できません。",
+      "useApi": "代わりに API プロバイダーを使う",
+      "modelLabel": "モデル",
+      "defaultModel": "CLI の既定モデル"
     }
   }
 }

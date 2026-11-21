@@ -35,6 +35,9 @@ import { requestSignIn } from "../../utils/requestSignIn";
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
+import CliProviderPicker from "./CliProviderPicker";
+import { CLI_SCOPE_ALLOWLIST } from "../../helpers/llmCliProviders.js";
+import { isCliProviderId } from "../../helpers/llmCli/llmCliRouting.js";
 
 // Radix Select can't hold an empty value, so Auto ("") gets a sentinel.
 const AUTO_REASONING_EFFORT_VALUE = "__auto__";
@@ -263,7 +266,12 @@ export default function InferenceConfigEditor({
         />
       )}
 
-      {effectiveMode === "providers" && renderModelSelector("cloud")}
+      {effectiveMode === "providers" &&
+        !isCliProviderId(config.provider) &&
+        renderModelSelector("cloud")}
+      {effectiveMode === "providers" && CLI_SCOPE_ALLOWLIST.includes(scope) && (
+        <CliProviderPicker scope={scope} provider={config.provider} model={config.model} />
+      )}
       {effectiveMode === "local" && renderModelSelector("local")}
 
       {effectiveMode === "self-hosted" && (

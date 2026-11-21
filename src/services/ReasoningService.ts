@@ -24,6 +24,8 @@ import { streamText, stepCountIs } from "ai";
 import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
+import { createCliChatModel } from "./ai/cliChatModel";
+import { cliSeatForProviderId, isCliProviderId } from "../helpers/llmCli/llmCliRouting.js";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import type { InferenceScope } from "../config/inferenceScopes";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
@@ -872,6 +874,7 @@ class ReasoningService extends BaseReasoningService {
       lanUrl: config.lanUrl,
       customApiKey: config.customApiKey,
       isEnterpriseProvider: isEnterpriseProvider(provider),
+      isCliProvider: isCliProviderId(provider),
     });
     const mode: InferenceMode =
       route.kind === "self-hosted"
@@ -887,6 +890,7 @@ class ReasoningService extends BaseReasoningService {
     const abortController = new AbortController();
     this.streamAbortController = abortController;
     const isEnterprise = route.kind === "enterprise";
+    const isCli = route.kind === "cli";
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
 
@@ -922,9 +926,9 @@ class ReasoningService extends BaseReasoningService {
     let apiKey = "";
     let baseURL: string | undefined;
 
-    if (isEnterprise) {
-      // Enterprise SDKs run in the main process; the model below proxies
-      // doStream over IPC, so no key or base URL is resolved here.
+    if (isEnterprise || isCli) {
+      // Enterprise SDKs and subscription CLIs run in the main process; the model
+      // below proxies doStream over IPC, so no key or base URL is resolved here.
     } else if (isLanChat) {
       apiKey = route.apiKey;
       baseURL = resolveSelfHostedOpenAIBase(route.baseUrl);
@@ -944,12 +948,14 @@ class ReasoningService extends BaseReasoningService {
     // No Tinfoil model offers a level, so this needn't wait for the registry refresh below.
     const reasoningEffort = chosenReasoningEffort(aiProvider, model, config, baseURL);
     // Resolving a Tinfoil model refreshes the registry, so read model config after it.
-    const aiModel = isEnterprise
-      ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
-      : await getAIModel(aiProvider, model, apiKey, baseURL, {
-          disableThinking: openrouterDisableThinking,
-          reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
-        });
+    const aiModel = isCli
+      ? createCliChatModel(cliSeatForProviderId(provider)!, model)
+      : isEnterprise
+        ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
+        : await getAIModel(aiProvider, model, apiKey, baseURL, {
+            disableThinking: openrouterDisableThinking,
+            reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+          });
 
     if (abortController.signal.aborted) {
       yield { type: "done", finishReason: "stop" };
@@ -1012,8 +1018,9 @@ class ReasoningService extends BaseReasoningService {
         role: m.role as "system" | "user" | "assistant",
         content: m.content,
       })) as import("ai").ModelMessage[],
-      tools: tools || undefined,
-      stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
+      // A CLI seat runs with its own tools off and answers text only.
+      tools: isCli ? undefined : tools || undefined,
+      stopWhen: stepCountIs(tools && !isCli ? ReasoningService.MAX_TOOL_STEPS : 1),
       prepareStep: ({ messages }) => ({ messages: compactTranscriptHistory(messages) }),
       abortSignal: abortController.signal,
       ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
@@ -1396,6 +1403,8 @@ class ReasoningService extends BaseReasoningService {
   async isAvailable(): Promise<boolean> {
     try {
       const settings = getSettings();
+      // Dictation cleanup never runs on a subscription CLI (D-03: 10 to 26 s warm).
+      if (isCliProviderId(settings.cleanupProvider)) return false;
       // Mirrors processText's precedence: managed access outranks every manual route.
       if (
         getManagedScopeResolution("dictationCleanup", settings.enterpriseSetupMode).kind ===

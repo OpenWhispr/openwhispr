@@ -1,0 +1,59 @@
+# EdgeAssistant LLM subscription-OAuth design (research, read-only)
+
+Date 2026-11-20. AAF citations are against `origin/main` (ce29cdf2, 2026-11-20) read via `git show`; the canonical `C:\Users\artic\GitHub\agentautofix` working tree is STALE (HEAD 46d05f86, 2026-09-20) and lacks these files. EdgeAssistant citations are `C:\Users\artic\GitHub\openwhispr-fix-dup-imports`. No secrets read or copied; env var names only.
+
+## 0. Headline finding (corrects the premise)
+
+Neither AAF nor Zenexa implements its own OAuth client for Claude/Codex/Gemini/Grok. Both are CLI-MEDIATED: the official vendor CLI performs the OAuth; our code only hosts the CLI, relays the sign-in link/code, stores the resulting credential, and later calls the CLI headless with that credential materialized in a throwaway home. AAF never calls a provider HTTP API with the subscription token (the one HTTP call is the Codex token refresh). Zenexa has NO user-facing connect flow at all.
+
+## 1. Per provider (AAF, `src/...` on origin/main)
+
+| Provider | Flow type | Endpoint named in code | Stored credential | Refresh | Use |
+|---|---|---|---|---|---|
+| Claude | `claude setup-token` run in a pty (`script`); CLI prints claude.ai/claude.com `.../oauth/authorize` URL, operator pastes the one-time code back to CLI stdin | none in our code; URL regex `claudeSetupTokenLogin.ts:51`, host check `:61-69`; header says "never builds an OAuth URL, holds an OAuth client identifier, or talks to any provider endpoint" `:7-9` | `sk-ant-oat01-...` setup token (`TOKEN_RE` `:54`) | none: durable, non-rotating | `claude -p --output-format json --tools "" --strict-mcp-config` with env `CLAUDE_CODE_OAUTH_TOKEN`, throwaway `CLAUDE_CONFIG_DIR`, `ANTHROPIC_API_KEY` deleted: `providerProbe.ts:85-100`; models via `transports.ts:25-30,55-86` |
+| Codex/OpenAI | `codex login --device-auth` in throwaway `CODEX_HOME`; device URL `https://auth.openai.com/codex/device` + one-time code surfaced to operator, CLI polls itself: `codexDeviceLogin.ts:1-21,46-47` (browser-callback variant explicitly rejected, redirect is a loopback listener, `:11-13`) | token refresh: client id const `CODEX_OAUTH_CLIENT_ID` and `CODEX_TOKEN_URL=https://auth.openai.com/oauth/token`, `codexTokenRefresh.ts:30-33` | whole `auth.json` text (tokens.access_token/refresh_token/id_token, last_refresh) | AAF refreshes proactively on timer (expiry < 2d or age > 5d), atomic via `credentialRepo.rotateCredentialLocked`; refresh token is single-use: `codexTokenRefresh.ts:2-25,35-36`; 4xx marks credential `error` | `codex exec --sandbox read-only --skip-git-repo-check --ephemeral --output-last-message <file> -` with throwaway `CODEX_HOME/auth.json`, `OPENAI_API_KEY`/`GEMINI_API_KEY` deleted: `reviewer/codex.ts:29-38,75-90` |
+| Gemini (house rule: `agy`, NOT `gemini`) | Browser OAuth ceremony once, out-of-band, on a machine with a browser (Google account); NOT automated in AAF | n/a | file `$HOME/.gemini/antigravity-cli/antigravity-oauth-token` (`providerProbe.ts:160-173`; reviewer leg earlier used `oauth_creds.json` blob, `reviewer/agy.ts:16-30`) | none in AAF | `agy -p "<prompt>"` (prompt as argv, not stdin: `agy.ts:49-65`), `HOME` = throwaway, `NO_BROWSER=1`, `GEMINI_API_KEY`/`GOOGLE_API_KEY` stripped: `providerProbe.ts:177-185`. `gemini` CLI dead (`IneligibleTierError`): `agy.ts:6-14` |
+| Grok | `grok login --device-auth` in throwaway HOME/GROK_HOME; URL `https://accounts.x.ai/oauth2/device` + code: `grokDeviceLogin.ts:1-18,43` | none in our code | `<GROK_HOME>/auth.json` byte-exact | rotation write-back mirrors codex (`providerProbe.ts:193-196`) | `grok -p <prompt> --output-format json --permission-mode dontAsk --tools todo_write --disallowed-tools ... --no-subagents`, `XAI_API_KEY`/`GROK_API_KEY` stripped: `providerProbe.ts:197-225` |
+
+Shared plumbing: paste validation rejects API-key shapes first (`providerPaste.ts:19-45`, rule 22c); one-attempt-at-a-time, per-user-bound login state; connect routes GET/POST/DELETE `routes/api/settings/providers/{claude,codex,grok}/login/+server.ts` via `connectRoute.ts:1-45` (session guard + JSON content-type as CSRF control); credential type `ProviderName = 'claude_code'|'codex'|'agy'|'grok'` `credentialRepo.ts:15`.
+
+## 2. Where the code lives; who holds tokens
+
+- AAF: per-app, NOT a shared package. Server-side SvelteKit web app (`src/lib/server/settings/*`, `src/routes/api/settings/providers/*`) plus worker (`src/worker/reviewer/*`). Tokens held SERVER-SIDE: `provider_credentials` table, AES-256-GCM with dedicated `PROVIDER_SECRET_KEY` (`providerCrypto.ts:1-29`, `credentialRepo.ts:1-15`); worker env fallbacks `CLAUDE_CODE_OAUTH_TOKEN`, `CODEX_AUTH_JSON_B64`, `AGY_OAUTH_CREDS_JSON_B64` (README.md:287-289). Single-owner operational table, not per-end-user.
+- Codex login/refresh was ported FROM titanium-edge-aios (`codexDeviceLogin.ts:3-4`, `codexTokenRefresh.ts:2-3`, `titanium-edge-aios/core/subscription_cli_auth.py`, `core/cli_runner.py:316,1227,1581`), which is the older Python original and also handles `~/.gemini/oauth_creds.json` (`subscription_cli_auth.py:45-60`).
+- Zenexa: no LLM connect flow. Only `CLAUDE_CODE_OAUTH_TOKEN` as a GitHub Actions secret minted by `claude setup-token` (`.github/CLAUDE_CODE_SETUP.md:38,48`, `.github/workflows/claude.yml:37`, `claude-code-review.yml:130`). Zenexa's OAuth code (google_*, gmail, stripe, GHL) is app-integration OAuth, unrelated.
+- Neither implements per-end-user subscription connection. Both are single-owner seats.
+
+## 3. Reusable from desktop directly? Recommendation
+
+Facts: (a) the vendor CLIs own the OAuth and all client ids; AAF deliberately avoids implementing it. (b) Codex's browser-callback mode redirects to a loopback listener (works on a desktop, only fails on servers: `codexDeviceLogin.ts:11-13`); device-code works anywhere. (c) A desktop user's machine is exactly where a CLI browser flow works natively.
+
+Recommendation: LOCAL CLI-MEDIATED, in the Electron main process, no hosted broker. Reasons: no tokens leave the user's machine (a broker would custody every user's subscription credential, a far bigger liability than AAF's single owner seat); no OAuth client ids to own or keep in sync with four vendors; matches the proven AAF argv shapes. Do NOT use `src/helpers/oauthLoopbackFlow.js` for these four providers: it is a PKCE loopback runner that needs provider client id/secret and authorize/token endpoints (`oauthLoopbackFlow.js:53-75,75-100`), which we do not hold and AAF deliberately never uses. Keep it for connectors (it is used by gmail/slack/linear/calendar). Titanium session helper (`src/helpers/titanium/titaniumSession.js`, safeStorage session, `/api/exchange`) is relevant only as the storage pattern (safeStorage-encrypted file) and as account gating, not as an LLM OAuth path.
+
+Hard dependency to state: each provider needs its CLI installed on the user's PC (`claude`, `codex`, `grok`, `agy`). Detect with PATH probe; offer install guidance; this is a product decision point (UNVERIFIED how the owner wants to ship/bundle CLIs). Windows pty: AAF uses Unix `script` to host `claude setup-token` (`claudeSetupTokenLogin.ts:2-5`), unavailable on Windows; options (UNVERIFIED, needs a live probe) are node-pty/ConPTY or letting the user run `claude setup-token` in their own terminal and paste the `sk-ant-oat01-` token (the AAF paste path, `providerPaste.ts`). Codex/Grok `--device-auth` need no pty (plain spawn, regex the stdout): `codexDeviceLogin.ts:46-63`.
+
+## 4. EdgeAssistant side: current API-key plumbing and minimal change set
+
+Current plumbing (worktree `openwhispr-fix-dup-imports`):
+- Key manifest `src/config/secretKeys.js:9-120` (`BYOK_API_KEYS`: OPENAI/ANTHROPIC/GEMINI/GROQ/XAI/MISTRAL/OPENROUTER/TINFOIL... with `get*/save*/storeKey`); `src/helpers/environment.js:10-26` builds `SECRET_KEYS`, safeStorage encrypts (load `:131`, per-key accessors `:285-377`, generated accessors `:533`).
+- Renderer: `src/services/ReasoningService.ts:142,204-294` fetches via `window.electronAPI.getAnthropicKey()` etc, caches; providers in `src/services/ai/inferenceProviders/{anthropic,openai,gemini,groq,...}.ts` (anthropic delegates to `window.electronAPI.processAnthropicReasoning`, `anthropic.ts:25`; gemini uses `x-goog-api-key`, `gemini.ts:57,120`; openai uses `Authorization: Bearer`, `openai.ts:159,300`).
+- Main: `src/helpers/ipcHandlers.js:5013` (`x-api-key`), `:5793-5798` (`https://api.anthropic.com/v1/messages`, `anthropic-version: 2023-06-01`), `:7207`, `:11111-11114`; `src/helpers/providerConnectionTest.js`.
+- UI: `src/components/ReasoningModelSelector.tsx`, `src/components/onboarding/ProviderSetupStep.tsx`, `src/components/TranscriptionModelPicker.tsx`, `src/components/ui/PromptStudio.tsx`; state `src/stores/settingsStore.ts`, `src/hooks/useSettings.ts`; types `src/types/electron.ts`; `src/config/forkCleanupSeed.ts`; models `src/models/modelRegistryData.json` (xai entries are STT).
+
+Minimal set (new inference transport, not a rewrite of key plumbing):
+1. NEW `src/helpers/llmCliProviders.js` (pure policy module per fork pattern, Electron-free): per provider `{bin, buildEnv(credential), argv(prompt), parseOutput, loginArgv}`; port the argv/env shapes above (claude/codex/agy/grok), strip all API-key env vars, throwaway home per call, extract device URL/code with the AAF regexes. Add `test/helpers/llmCliProviders.test.js`.
+2. NEW IPC handlers in `src/helpers/ipcHandlers.js` AND `preload.js` (hard rule): `llm-cli-status`, `llm-cli-connect-start|cancel|state`, `llm-cli-run`; store credential via the existing safeStorage mechanism (`environment.js`), never `.env`. Add new secret names to `secretKeys.js`/SECRET_KEYS (12-key limit note in CLAUDE.md: update the count/doc).
+3. `src/services/ai/inferenceProviders/` add a `cliSubscription.ts` provider (calls `llm-cli-run`) registered in `index.ts`; `ReasoningService.ts` route for the new provider ids; `src/types/electron.ts` typings.
+4. UI: replace key-entry fields with a Connect/Disconnect row (status, link, code) in `ReasoningModelSelector.tsx`, `ProviderSetupStep.tsx`; i18n keys in all 9 locale files (hard rule).
+5. `src/models/modelRegistryData.json`: add provider entries with subscription model ids (Claude: `claude-haiku-4-5-20251001`, `claude-sonnet-5`, `claude-opus-5` per `transports.ts:26-30`); retire/hide API-key providers (remap via `src/config/retiredCloudModels.ts`).
+6. Remove BYOK paths only after the CLI path is verified (separate task/PR).
+Latency note: CLI spawn per request is slow for dictation cleanup; fine for chat/agent reasoning, a product risk for pill cleanup (UNVERIFIED, needs measurement).
+
+## 5. Risks (evidenced only)
+
+- Raw-API use of the subscription token is entitlement-limited: AAF's raw SDK transport with `CLAUDE_CODE_OAUTH_TOKEN` hit 328/328 headerless 429s for sonnet in the 2026-09-10 outage and is pinned to haiku only; the CLI transport is entitled to sonnet-5/opus-5 (`transports.ts:8-16`). So do NOT port to direct HTTP with the token; go through the CLI.
+- Claude setup-token lacks usage-poll scope (403, `titanium-edge-aios db/models/claude_accounts.py:16-21`): quota/usage UI is not possible from it.
+- Codex refresh token is single-use; concurrent runs or a lost write-back kill the credential (`codexTokenRefresh.ts:4-12`); needs a single-writer lock in the desktop main process.
+- Quota is shared with the user's own seat; AAF serializes reviewer CLI calls on a shared seat (`README.md:293`, `REVIEW_SHARED_SEAT`).
+- agy auth file layout drifts by OS/version (OS keyring on some builds: memory `agy-auth-is-os-keyring` cited at `providerProbe.ts:161`); needs Windows live verification (UNVERIFIED).
+- No provider-ToS text is present in either repo on third-party apps using subscription OAuth; marked UNVERIFIED, owner/panel call before shipping to external users.

@@ -1,0 +1,1 @@
+{"conversation_id":"UUID-REDACTED","status":"SUCCESS","response":"OK\n","duration_seconds":3.5920307,"num_turns":1,"usage":{"input_tokens":9942,"output_tokens":5,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":9947}}

@@ -1,5 +1,6 @@
 {
   "appId": "com.gizmolabs.openwhispr",
+  "beforePack": "scripts/rebuild-native-deps.js",
   "afterPack": "scripts/afterPack.js",
   "extraMetadata": {
     "windowsTrayIdentity": true
@@ -12,7 +13,7 @@
   "directories": {
     "output": "dist"
   },
-  "npmRebuild": true,
+  "npmRebuild": false,
   "buildDependenciesFromSource": false,
   "files": [
     "main.js",
@@ -94,6 +95,7 @@
     "**/node_modules/ffmpeg-static/**/*",
     "**/node_modules/ps-list/**/*",
     "**/node_modules/better-sqlite3/**/*",
+    "**/node_modules/node-pty/**/*",
     "**/node_modules/onnxruntime-node/**/*",
     "**/node_modules/@napi-rs/keyring/**/*",
     "src/workers/**/*"

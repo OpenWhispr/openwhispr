@@ -181,6 +181,7 @@ import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
 import ToneStyleSection from "./settings/ToneStyleSection";
 import TitaniumAccountSection from "./settings/TitaniumAccountSection";
+import LlmSubscriptionsSection from "./settings/LlmSubscriptionsSection";
 import { showForkSttLanguageWarning } from "../config/forkSttLanguage";
 import { InfoBox } from "./ui/InfoBox";
 import { formatAmount } from "../utils/formatAmount";
@@ -198,6 +199,7 @@ export type SettingsSectionType =
   | "toneStyle"
   | "speechToText"
   | "llms"
+  | "subscriptions"
   | "privacyData"
   | "system";
 
@@ -3077,6 +3079,9 @@ export default function SettingsPage({
 
       case "titaniumAccount":
         return <TitaniumAccountSection />;
+
+      case "subscriptions":
+        return <LlmSubscriptionsSection />;
 
       case "toneStyle":
         return (

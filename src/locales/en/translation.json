@@ -1693,6 +1693,10 @@
       "titaniumAccount": {
         "label": "Titanium account",
         "description": "Sign in & license"
+      },
+      "subscriptions": {
+        "label": "Subscriptions",
+        "description": "Claude, Codex, Grok, Antigravity"
       }
     },
     "title": "Settings"
@@ -5168,6 +5172,94 @@
       "token_not_found": "That sign-in link was already used or has expired. Start sign-in again.",
       "app_mismatch": "That sign-in was for a different app. Start sign-in again from here.",
       "generic": "Sign-in didn't finish. Try again."
+    }
+  },
+  "llmSubscriptions": {
+    "title": "Subscriptions",
+    "description": "Use your own Claude, Codex, Grok or Antigravity sign-in for chat and the dictation agent. No API keys are involved.",
+    "version": "v{{version}}",
+    "status": {
+      "missing": "Not installed",
+      "installing": "Installing",
+      "installed": "Installed",
+      "outdated": "Update needed",
+      "signing-in": "Signing in",
+      "signed-in": "Signed in",
+      "signed-out": "Signed out",
+      "error": "Error"
+    },
+    "seats": {
+      "claude": "Claude Code CLI with your Claude subscription.",
+      "codex": "Codex CLI with your ChatGPT subscription.",
+      "grok": "Grok CLI with your X account.",
+      "agy": "Antigravity CLI with your Google account."
+    },
+    "actions": {
+      "install": "Install",
+      "openGuide": "Open install guide",
+      "signIn": "Sign in",
+      "test": "Test",
+      "redetect": "Re-detect",
+      "signOut": "Sign out",
+      "cancel": "Cancel",
+      "copy": "Copy",
+      "openInBrowser": "Open in browser",
+      "submitCode": "Submit code"
+    },
+    "outdatedHint": "This CLI is older than the version this app was tested with. Update it, then choose Re-detect.",
+    "testOk": "Test passed.",
+    "claude": {
+      "toggleLabel": "Enable the Claude seat",
+      "notice": "Anthropic's terms may not allow a Claude subscription in third-party apps. You enable this at your own risk."
+    },
+    "install": {
+      "title": "Install {{seat}}",
+      "description": "This downloads and runs the vendor's installer. Check the address and the command before you continue.",
+      "urlLabel": "Installer address",
+      "commandLabel": "Command that will run",
+      "confirm": "Install",
+      "guided": "Install the Grok CLI from the official page, then choose Re-detect."
+    },
+    "signIn": {
+      "deviceUrlLabel": "Open this address",
+      "deviceCodeLabel": "Enter this code",
+      "waiting": "Waiting for sign-in to finish.",
+      "claudeInstructions": "Open the address, sign in, then paste the code shown on the page.",
+      "codeLabel": "Authorization code",
+      "codePlaceholder": "Paste the code",
+      "agyGuide": "Run agy once in a terminal and sign in with your Google account. Then choose Re-detect."
+    },
+    "signOut": {
+      "title": "Sign out of {{seat}}?",
+      "terminalCli": "This also signs out the {{seat}} CLI in your terminal.",
+      "claudeToken": "The stored token is removed from this app. It stays valid until you revoke it on your Claude account page.",
+      "agyGuide": "Sign out of Antigravity with the agy CLI in a terminal.",
+      "confirm": "Sign out"
+    },
+    "errors": {
+      "not-installed": "The CLI is not installed.",
+      "outdated": "The CLI is too old for this app. Update it and re-detect.",
+      "not-signed-in": "Not signed in. Sign in and try again.",
+      "api-key-login-refused": "This app uses subscription sign-in only, never API keys.",
+      "timeout": "The CLI took too long to answer.",
+      "killed": "The CLI was stopped.",
+      "quota-or-rate-limit": "Usage limit or rate limit reached. Try again later.",
+      "exit-nonzero": "The CLI exited with an error.",
+      "parse-failed": "The CLI answer could not be read.",
+      "claude-disabled": "The Claude seat is turned off.",
+      "busy": "Another request is already running for this seat.",
+      "invalid-input": "The request was not valid.",
+      "signature-invalid": "The installer's signature could not be verified.",
+      "install-failed": "The install did not finish.",
+      "quarantined-or-missing": "The install was removed, possibly by antivirus software.",
+      "generic": "Something went wrong. Try again."
+    },
+    "picker": {
+      "group": "Subscription CLIs",
+      "helper": "Subscription CLIs answer text only (no EdgeAssistant tools) and are slower than API providers, so dictation cleanup does not offer them.",
+      "useApi": "Use an API provider instead",
+      "modelLabel": "Model",
+      "defaultModel": "CLI default model"
     }
   }
 }

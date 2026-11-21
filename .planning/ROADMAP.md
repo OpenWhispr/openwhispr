@@ -12,6 +12,7 @@
 - [x] **Phase 5: Self-hosted transcription parity** — WS streaming client, diarization/timestamps, cleanup via stt-api (2/2 plans; re-verified 2026-11-20)
 - [ ] **Phase 6: Hosted services** — web search endpoint, Slack/Linear OAuth relay, calendar OAuth clients (2/4 complete; 06-03 BLOCKED at 12b gate 4, 06-04 PARTIAL)
 - [x] **Phase 7: Connectors on Titanium accounts** — connectors keyed to Titanium account id; capability text; dropped features hidden (3/3 plans; gaps PR #28)
+- [ ] **Phase 8: LLM subscription connect** — Claude, Codex, Grok and Gemini (agy) connect through each vendor's official CLI on the user's PC; no API keys (3/4 plans; 08-04 proof in progress)
 
 ## Phase Details
 
@@ -120,6 +121,26 @@ Plans:
 - [x] 07-02-PLAN.md - renderer: Titanium connector eligibility, capability text to Titanium account, 9-locale copy, sign-in copy guard test, Gmail row (wave 2)
 - [x] 07-03-PLAN.md - dropped features: cloudFeatures registry, gate every entry point, mount-site guard test (wave 1)
 
+### Phase 8: LLM subscription connect
+
+**Goal:** EdgeAssistant connects to LLM providers through the user's own subscription, with no API keys: Claude, Codex, Grok and Gemini (Antigravity) sign in through each vendor's official CLI, hosted locally by the Electron main process.
+**Depends on:** Phase 7
+**Requirements:** LLM-01..LLM-09
+**Success criteria:**
+
+1. Settings has a Subscriptions section showing the four seats with detect, consent install, sign-in and sign-out; tokens never reach the renderer, logs or `.env`
+2. Chat and the dictation agent can pick a signed-in seat; dictation cleanup, vision and note formatting cannot (scope allowlist)
+3. The Claude seat is off until its setting is on, enforced in main
+4. Real CLIs answer through the real runner, or fail with a classified, bounded outcome (timeout, signed-out, quota)
+
+**Plans:** 4 plans
+
+Plans:
+- [x] 08-01-PLAN.md - pure policy module: provider table, detection, argv, state machine, parsing (wave 1)
+- [x] 08-02-PLAN.md - main-process runtime: detect, consent install, sign-in, sign-out, streaming runner, IPC (wave 2)
+- [x] 08-03-PLAN.md - renderer: Subscriptions section, CLI provider shim and scope-gated picker, 11 locales (wave 3)
+- [ ] 08-04-PLAN.md - prove against the real CLIs and the running app; verification (wave 4)
+
 ## Progress
 
 | Phase | Status | Plans | Progress |
@@ -131,3 +152,4 @@ Plans:
 | 5     | ○      | 0/2   | 0%       |
 | 6     | ○      | 0/4   | 0%       |
 | 7     | ○      | 0/3   | 0%       |
+| 8     | ◆      | 3/4   | 75%      |

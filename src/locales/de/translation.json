@@ -1693,6 +1693,10 @@
       "titaniumAccount": {
         "label": "Titanium-Konto",
         "description": "Anmeldung und Lizenz"
+      },
+      "subscriptions": {
+        "label": "Abonnements",
+        "description": "Claude, Codex, Grok, Antigravity"
       }
     },
     "title": "Einstellungen"
@@ -5168,6 +5172,94 @@
       "token_not_found": "Dieser Link wurde schon benutzt oder ist abgelaufen. Starte die Anmeldung neu.",
       "app_mismatch": "Diese Anmeldung galt einer anderen App. Starte sie hier neu.",
       "generic": "Die Anmeldung wurde nicht abgeschlossen. Versuche es erneut."
+    }
+  },
+  "llmSubscriptions": {
+    "title": "Abonnements",
+    "description": "Nutze deine eigene Anmeldung bei Claude, Codex, Grok oder Antigravity fuer den Chat und den Diktier-Agenten. API-Schluessel werden nicht verwendet.",
+    "version": "v{{version}}",
+    "status": {
+      "missing": "Nicht installiert",
+      "installing": "Wird installiert",
+      "installed": "Installiert",
+      "outdated": "Update erforderlich",
+      "signing-in": "Anmeldung laeuft",
+      "signed-in": "Angemeldet",
+      "signed-out": "Abgemeldet",
+      "error": "Fehler"
+    },
+    "seats": {
+      "claude": "Claude-Code-CLI mit deinem Claude-Abonnement.",
+      "codex": "Codex-CLI mit deinem ChatGPT-Abonnement.",
+      "grok": "Grok-CLI mit deinem X-Konto.",
+      "agy": "Antigravity-CLI mit deinem Google-Konto."
+    },
+    "actions": {
+      "install": "Installieren",
+      "openGuide": "Installationsanleitung oeffnen",
+      "signIn": "Anmelden",
+      "test": "Testen",
+      "redetect": "Erneut erkennen",
+      "signOut": "Abmelden",
+      "cancel": "Abbrechen",
+      "copy": "Kopieren",
+      "openInBrowser": "Im Browser oeffnen",
+      "submitCode": "Code senden"
+    },
+    "outdatedHint": "Dieses CLI ist aelter als die getestete Version. Aktualisiere es und waehle Erneut erkennen.",
+    "testOk": "Test bestanden.",
+    "claude": {
+      "toggleLabel": "Claude-Platz aktivieren",
+      "notice": "Die Bedingungen von Anthropic erlauben ein Claude-Abonnement in Apps von Drittanbietern moeglicherweise nicht. Du aktivierst dies auf eigenes Risiko."
+    },
+    "install": {
+      "title": "{{seat}} installieren",
+      "description": "Dies laedt das Installationsprogramm des Anbieters herunter und fuehrt es aus. Pruefe Adresse und Befehl, bevor du fortfaehrst.",
+      "urlLabel": "Adresse des Installationsprogramms",
+      "commandLabel": "Befehl, der ausgefuehrt wird",
+      "confirm": "Installieren",
+      "guided": "Installiere das Grok-CLI ueber die offizielle Seite und waehle dann Erneut erkennen."
+    },
+    "signIn": {
+      "deviceUrlLabel": "Oeffne diese Adresse",
+      "deviceCodeLabel": "Gib diesen Code ein",
+      "waiting": "Warte, bis die Anmeldung abgeschlossen ist.",
+      "claudeInstructions": "Oeffne die Adresse, melde dich an und fuege den auf der Seite angezeigten Code ein.",
+      "codeLabel": "Autorisierungscode",
+      "codePlaceholder": "Code einfuegen",
+      "agyGuide": "Fuehre agy einmal in einem Terminal aus und melde dich mit deinem Google-Konto an. Waehle dann Erneut erkennen."
+    },
+    "signOut": {
+      "title": "Von {{seat}} abmelden?",
+      "terminalCli": "Dadurch wird auch das {{seat}}-CLI in deinem Terminal abgemeldet.",
+      "claudeToken": "Das gespeicherte Token wird aus dieser App entfernt. Es bleibt gueltig, bis du es auf der Claude-Kontoseite widerrufst.",
+      "agyGuide": "Melde dich in einem Terminal mit dem agy-CLI von Antigravity ab.",
+      "confirm": "Abmelden"
+    },
+    "errors": {
+      "not-installed": "Das CLI ist nicht installiert.",
+      "outdated": "Das CLI ist fuer diese App zu alt. Aktualisiere es und erkenne erneut.",
+      "not-signed-in": "Nicht angemeldet. Melde dich an und versuche es erneut.",
+      "api-key-login-refused": "Diese App nutzt nur die Abonnement-Anmeldung, niemals API-Schluessel.",
+      "timeout": "Das CLI hat zu lange gebraucht.",
+      "killed": "Das CLI wurde beendet.",
+      "quota-or-rate-limit": "Nutzungs- oder Ratenlimit erreicht. Versuche es spaeter erneut.",
+      "exit-nonzero": "Das CLI wurde mit einem Fehler beendet.",
+      "parse-failed": "Die Antwort des CLI konnte nicht gelesen werden.",
+      "claude-disabled": "Der Claude-Platz ist deaktiviert.",
+      "busy": "Fuer diesen Platz laeuft bereits eine andere Anfrage.",
+      "invalid-input": "Die Anfrage war ungueltig.",
+      "signature-invalid": "Die Signatur des Installationsprogramms konnte nicht geprueft werden.",
+      "install-failed": "Die Installation wurde nicht abgeschlossen.",
+      "quarantined-or-missing": "Die Installation wurde entfernt, moeglicherweise durch eine Antivirensoftware.",
+      "generic": "Etwas ist schiefgelaufen. Versuche es erneut."
+    },
+    "picker": {
+      "group": "Abonnement-CLIs",
+      "helper": "Abonnement-CLIs antworten nur mit Text (keine EdgeAssistant-Werkzeuge) und sind langsamer als API-Anbieter, daher bietet die Diktatbereinigung sie nicht an.",
+      "useApi": "Stattdessen einen API-Anbieter nutzen",
+      "modelLabel": "Modell",
+      "defaultModel": "Standardmodell des CLI"
     }
   }
 }

@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Users,
   SquareSparkle,
+  Terminal,
 } from "./icons";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { AccountAvatar, SettingsSectionType } from "./SettingsPage";
@@ -130,6 +131,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         label: t("settingsModal.sections.llms.label"),
         icon: Brain,
         description: t("settingsModal.sections.llms.description"),
+        group: t("settingsModal.groups.aiModels"),
+      },
+      {
+        id: "subscriptions",
+        label: t("settingsModal.sections.subscriptions.label"),
+        icon: Terminal,
+        description: t("settingsModal.sections.subscriptions.description"),
         group: t("settingsModal.groups.aiModels"),
       },
       {

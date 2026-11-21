@@ -711,6 +711,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "enterprise-stream-part",
     (callback) => (_event, payload) => callback(payload)
   ),
+  // Subscription-CLI seats (claude, codex, grok, agy); channels are registered
+  // by src/helpers/llmCli/llmCliIpc.js and kept in parity by llmCliIpc.test.js.
+  llmCliDetect: () => ipcRenderer.invoke("llm-cli-detect"),
+  llmCliTest: (seat) => ipcRenderer.invoke("llm-cli-test", seat),
+  llmCliInstallStart: (seat, consentedUrl) =>
+    ipcRenderer.invoke("llm-cli-install-start", seat, consentedUrl),
+  llmCliInstallCancel: (seat) => ipcRenderer.invoke("llm-cli-install-cancel", seat),
+  llmCliSignInStart: (seat) => ipcRenderer.invoke("llm-cli-signin-start", seat),
+  llmCliSignInSubmitCode: (seat, code) =>
+    ipcRenderer.invoke("llm-cli-signin-submit-code", seat, code),
+  llmCliSignInCancel: (seat) => ipcRenderer.invoke("llm-cli-signin-cancel", seat),
+  llmCliSignOut: (seat) => ipcRenderer.invoke("llm-cli-signout", seat),
+  llmCliGetPrefs: () => ipcRenderer.invoke("llm-cli-get-prefs"),
+  llmCliSetPref: (key, value) => ipcRenderer.invoke("llm-cli-set-pref", key, value),
+  onLlmCliEvent: registerListener(
+    "llm-cli-event",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  llmCliStreamStart: (payload) => ipcRenderer.invoke("llm-cli-stream-start", payload),
+  llmCliStreamCancel: (streamId) => ipcRenderer.invoke("llm-cli-stream-cancel", streamId),
+  onLlmCliStreamPart: registerListener(
+    "llm-cli-stream-part",
+    (callback) => (_event, payload) => callback(payload)
+  ),
   listBedrockModels: (config) => ipcRenderer.invoke("bedrock-list-models", config),
   getManagedEnterpriseConfig: (accountId, workspaceId, expectedAuthGeneration, forceRefresh) =>
     ipcRenderer.invoke(
