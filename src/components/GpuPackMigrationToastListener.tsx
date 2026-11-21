@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "./ui/useToast";
 import { isControlPanelWindow } from "../utils/windowContext";
@@ -12,7 +12,51 @@ import { isControlPanelWindow } from "../utils/windowContext";
  */
 export default function GpuPackMigrationToastListener() {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast();
+  const activeNotice = useRef<{ id: string; packs: string[] } | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    let checking = false;
+    const checkRepaired = async () => {
+      const notice = activeNotice.current;
+      if (!notice || checking) return;
+      checking = true;
+      try {
+        const repaired = await Promise.all(
+          notice.packs.map(async (pack) => {
+            const api = window.electronAPI;
+            const status =
+              pack === "CUDA whisper"
+                ? await api?.getCudaWhisperStatus?.()
+                : pack === "Vulkan whisper"
+                  ? await api?.getVulkanWhisperStatus?.()
+                  : pack === "Vulkan llama"
+                    ? await api?.getLlamaVulkanStatus?.()
+                    : null;
+            return status?.downloaded === true && !("needsUpdate" in status && status.needsUpdate);
+          })
+        );
+        if (!disposed && activeNotice.current === notice && repaired.every(Boolean)) {
+          activeNotice.current = null;
+          dismiss(notice.id);
+        }
+      } catch {
+        // A failed status request is not evidence that the pack was repaired.
+      } finally {
+        checking = false;
+      }
+    };
+    // Downloads can finish in another window; llama has no shared status event.
+    const timer = setInterval(() => void checkRepaired(), 2000);
+    const unsubscribe = window.electronAPI?.onWhisperGpuStatusChanged?.(() => void checkRepaired());
+    void checkRepaired();
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      unsubscribe?.();
+    };
+  }, [dismiss]);
 
   useEffect(() => {
     // Taking the notice clears it, so it is shown even if this effect was
@@ -27,7 +71,7 @@ export default function GpuPackMigrationToastListener() {
       const settingsSection = notice.packs.every((pack) => pack.endsWith("llama"))
         ? "llms"
         : "speechToText";
-      toast({
+      const id = toast({
         title: t("app.toasts.gpuPackMigration.title"),
         description: t("app.toasts.gpuPackMigration.description", {
           packs: notice.packs.join(", "),
@@ -36,15 +80,26 @@ export default function GpuPackMigrationToastListener() {
           {
             label: t("providerErrors.openSettings"),
             icon: "settings",
-            onClick: () => {
-              void window.electronAPI?.openSettingsSection?.(settingsSection);
+            dismissOnClick: false,
+            onClick: async () => {
+              const result = await window.electronAPI?.openSettingsSection?.(settingsSection);
+              if (result?.success && activeNotice.current) {
+                dismiss(activeNotice.current.id);
+                activeNotice.current = null;
+              }
             },
           },
         ],
         // An app started to the tray may take the notice at login, before
         // anyone is looking, so the pill keeps it until it is dismissed.
         duration: inControlPanel ? 15000 : 0,
+        presentation: inControlPanel ? "standard" : "dictation-error",
+        dismissible: true,
+        onSettled: () => {
+          if (activeNotice.current?.id === id) activeNotice.current = null;
+        },
       });
+      activeNotice.current = { id, packs: notice.packs };
     };
 
     if (isControlPanelWindow()) {
@@ -52,7 +107,7 @@ export default function GpuPackMigrationToastListener() {
       return undefined;
     }
     return window.electronAPI?.onGpuPackMigrationNoticeReady?.(() => void takeAndShow());
-  }, [toast, t]);
+  }, [toast, dismiss, t]);
 
   return null;
 }
