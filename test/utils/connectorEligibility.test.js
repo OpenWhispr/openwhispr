@@ -124,3 +124,11 @@ test("calendar connect: offered unless main says the OAuth client id is missing"
   // main's answer not here yet: offered, and main refuses a flow without a client id
   assert.equal(isCalendarOAuthConfigured(null, "google"), true);
 });
+
+test("home connect card: hidden while unanswered and when no calendar OAuth client is built in", async () => {
+  const { shouldShowCalendarConnectCard } = await load();
+  assert.equal(shouldShowCalendarConnectCard(null), false);
+  assert.equal(shouldShowCalendarConnectCard({ google: false, microsoft: false }), false);
+  assert.equal(shouldShowCalendarConnectCard({ google: true, microsoft: false }), true);
+  assert.equal(shouldShowCalendarConnectCard({ google: false, microsoft: true }), true);
+});

@@ -187,3 +187,104 @@ test("STT retry: the no-license notice does not trigger a sign-in retry", async 
   step = stepSttRetry(step.state, { signedIn: true, notice: "titaniumNoLicense" });
   assert.equal(step.retry, false);
 });
+
+const titaniumRoute = {
+  mode: "self-hosted",
+  useLocalWhisper: false,
+  cloudTranscriptionMode: "byok",
+  cloudTranscriptionProvider: "custom",
+  titaniumEnabled: true,
+  destinationUrl: "https://stt.titaniumlabs.test/v1",
+  forkConfig: { DEFAULT_STT: { baseUrl: "https://stt.titaniumlabs.test/v1" } },
+};
+
+test("engine tab: titanium only for an enabled, non-local custom route on our host", async () => {
+  const { resolveTranscriptionEngineTab } = await load();
+  assert.equal(resolveTranscriptionEngineTab(titaniumRoute), "titanium");
+  const keep = (over) => resolveTranscriptionEngineTab({ ...titaniumRoute, ...over });
+  assert.equal(keep({ titaniumEnabled: false }), "self-hosted");
+  assert.equal(keep({ destinationUrl: "https://other.example.com/v1" }), "self-hosted");
+  assert.equal(keep({ cloudTranscriptionProvider: "openai", mode: "providers" }), "providers");
+  assert.equal(keep({ useLocalWhisper: true, mode: "local" }), "local");
+  // a stale self-hosted URL that wins routing: the Titanium base URL is not the destination
+  const { transcriptionDestinationUrl } = await import("../../src/helpers/transcriptionAuth.js");
+  const stale = {
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "https://old.example.com/v1",
+    cloudTranscriptionBaseUrl: "https://stt.titaniumlabs.test/v1",
+  };
+  assert.equal(keep({ destinationUrl: transcriptionDestinationUrl(stale) }), "self-hosted");
+  assert.equal(keep({ cloudTranscriptionMode: "openwhispr", mode: "openwhispr" }), "openwhispr");
+});
+
+test("titaniumEngineSettings is the payload the setup card writes", async () => {
+  const { titaniumEngineSettings } = await load();
+  assert.deepEqual(titaniumEngineSettings({ baseUrl: "https://stt.test/v1", model: "scribe" }), {
+    remoteTranscriptionUrl: "",
+    remoteTranscriptionModel: "",
+    useLocalWhisper: false,
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionBaseUrl: "https://stt.test/v1",
+    cloudTranscriptionModel: "scribe",
+  });
+});
+
+test("leaving the titanium tab clears the base URL only when it is ours", async () => {
+  const { settingsOnLeavingTitaniumEngine } = await load();
+  assert.deepEqual(settingsOnLeavingTitaniumEngine({ isTitaniumUrl: true }), {
+    cloudTranscriptionBaseUrl: "",
+  });
+  assert.deepEqual(settingsOnLeavingTitaniumEngine({ isTitaniumUrl: false }), {});
+});
+
+test("titanium engine state: signedOut, noLicense or licensed", async () => {
+  const { resolveTitaniumEngineState } = await load();
+  assert.equal(
+    resolveTitaniumEngineState({ signedIn: false, licensed: false, reason: "signed_out" }),
+    "signedOut"
+  );
+  assert.equal(
+    resolveTitaniumEngineState({ signedIn: true, licensed: false, reason: "no_license" }),
+    "noLicense"
+  );
+  assert.equal(
+    resolveTitaniumEngineState({ signedIn: true, licensed: true, reason: null }),
+    "licensed"
+  );
+});
+
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+
+test("selecting EdgeAssistant cloud through the real store resolves the route to the Titanium URL", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-titanium-engine-test-" });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { resolveTranscriptionRoute } = await vite.ssrLoadModule("/helpers/transcriptionRoute.ts");
+  const { titaniumEngineSettings } = await load();
+  const stt = { baseUrl: "https://stt.titaniumlabs.test/v1", model: "scribe" };
+  const store = useSettingsStore.getState();
+  store.setRemoteTranscriptionUrl("https://old.example.com/v1");
+  store.setRemoteTranscriptionModel("old-model");
+  store.setTranscriptionMode("self-hosted");
+  store.setMeetingRemoteTranscriptionUrl("https://old.example.com/v1");
+  store.setUploadRemoteTranscriptionUrl("https://old.example.com/v1");
+  store.setUploadRemoteTranscriptionModel("old-model");
+  store.setCloudTranscriptionForAllScopes(titaniumEngineSettings(stt));
+  let after = useSettingsStore.getState();
+  assert.equal(after.remoteTranscriptionUrl, "");
+  assert.equal(after.remoteTranscriptionModel, "");
+  assert.equal(after.meetingRemoteTranscriptionUrl, "");
+  assert.equal(after.uploadRemoteTranscriptionUrl, "");
+  assert.equal(after.uploadRemoteTranscriptionModel, "");
+  const route = resolveTranscriptionRoute({ settings: after });
+  assert.equal(route.provider, "custom");
+  assert.ok(route.endpoint.startsWith(stt.baseUrl));
+
+  // reselecting while already on the tab re-applies the clearing payload
+  store.setRemoteTranscriptionUrl("https://again.example.com/v1");
+  useSettingsStore.getState().setCloudTranscriptionForAllScopes(titaniumEngineSettings(stt));
+  after = useSettingsStore.getState();
+  assert.equal(after.remoteTranscriptionUrl, "");
+  assert.ok(resolveTranscriptionRoute({ settings: after }).endpoint.startsWith(stt.baseUrl));
+});

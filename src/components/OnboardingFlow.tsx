@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "./icons";
 import { CLOUD_ENABLED, DEFAULT_STT, TITANIUM_ENABLED } from "../config/forkRuntime";
-import { shouldOfferAuthStep } from "../helpers/titanium/titaniumOnboardingPolicy.js";
+import {
+  shouldOfferAuthStep,
+  titaniumEngineSettings,
+} from "../helpers/titanium/titaniumOnboardingPolicy.js";
 import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
 import { hasUseCaseIntent } from "./onboarding/useCases";
@@ -788,13 +791,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const handleTitaniumSetup = useCallback(async () => {
     setSetupMode("byok");
     setSelfHostedRequested(false);
-    settingsStore.setCloudTranscriptionForAllScopes({
-      useLocalWhisper: false,
-      cloudTranscriptionMode: "byok",
-      cloudTranscriptionProvider: "custom",
-      cloudTranscriptionBaseUrl: DEFAULT_STT.baseUrl,
-      cloudTranscriptionModel: DEFAULT_STT.model,
-    });
+    settingsStore.setCloudTranscriptionForAllScopes(titaniumEngineSettings(DEFAULT_STT));
     await finalizeOnboarding("byok");
   }, [finalizeOnboarding, setSelfHostedRequested, setSetupMode, settingsStore]);
 

@@ -932,8 +932,7 @@
       "action": "Mit Titanium anmelden"
     },
     "titaniumNoLicense": {
-      "message": "Dein Titanium-Konto hat keine {{brand}}-Lizenz. Wende dich an {{supportEmail}}, um eine zu erhalten.",
-      "action": "Support kontaktieren"
+      "message": "Dein Titanium-Konto hat keine {{brand}}-Lizenz. Wende dich an {{supportEmail}}, um eine zu erhalten."
     }
   },
   "hooks": {
@@ -2615,7 +2614,9 @@
         "localDesc": "Modelle auf dem Gerät. Voll privat.",
         "selfHostedDesc": "Eigener Server in Ihrem Netzwerk.",
         "enterprise": "Unternehmens-Cloud",
-        "enterpriseDesc": "Audio wird an die eigene Cloud Ihrer Organisation gesendet."
+        "enterpriseDesc": "Audio wird an die eigene Cloud Ihrer Organisation gesendet.",
+        "titanium": "{{brand}} Cloud",
+        "titaniumDesc": "Im Lieferumfang deiner Lizenz. Keine Einrichtung nötig."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
@@ -2644,6 +2645,10 @@
         "switchedEnterprise": {
           "title": "Unternehmens-Cloud ausgewählt",
           "description": "Diktate verwenden jetzt die von Ihrer Organisation verwaltete Transkription."
+        },
+        "switchedTitanium": {
+          "title": "{{brand}} Cloud",
+          "description": "Die {{brand}}-Cloud-Transkription wird verwendet."
         }
       },
       "gpuDevice": {
@@ -2709,7 +2714,12 @@
         }
       },
       "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt.",
-      "meetingCloudSignedOut": "Notizaufnahmen mit {{brand}} Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine."
+      "meetingCloudSignedOut": "Notizaufnahmen mit {{brand}} Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine.",
+      "titaniumEngine": {
+        "connected": "Verbunden",
+        "expires": "Lizenz läuft am {{date}} ab",
+        "retry": "Erneut versuchen"
+      }
     },
     "intelligence": {
       "gpuDevice": {

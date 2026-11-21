@@ -86,7 +86,12 @@ import {
   isManagedTranscriptionActive,
 } from "../services/managedTranscription.ts";
 import { getTranscriptionApiKey } from "../services/fileTranscription";
-import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
+import {
+  canReuseCachedTranscriptionKey,
+  customTranscriptionKeySource,
+  shouldSkipTranscriptionApiKey,
+  transcriptionDestinationUrl,
+} from "./transcriptionAuth";
 import {
   isOrukeetStreaming,
   isSelfHostedTranscription,
@@ -2713,7 +2718,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const provider = s.cloudTranscriptionProvider || "openai";
 
     // Check cache (invalidate if provider changed)
-    if (this.cachedApiKey !== null && this.cachedApiKeyProvider === provider) {
+    const destinationUrl = transcriptionDestinationUrl(s);
+    const isTitaniumService = isTitaniumServiceUrl(destinationUrl, { DEFAULT_STT, TITANIUM });
+    if (
+      this.cachedApiKey !== null &&
+      this.cachedApiKeyProvider === provider &&
+      canReuseCachedTranscriptionKey({ provider, isTitaniumService })
+    ) {
       return this.cachedApiKey;
     }
 
@@ -2745,14 +2756,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "transcription"
       );
 
-      // Fork: with no key of their own, signed-in users reach our STT API with their
-      // Titanium license (main only hands it out for our own hosts). Not cached, so
-      // signing in or out takes effect on the next request.
-      if (!apiKey) {
+      // Fork: on our own hosts the signed-in user's Titanium license always wins and a
+      // stored custom key is never sent (main only hands the license out for our own
+      // hosts). Not cached, so signing in or out takes effect on the next request.
+      if (
+        customTranscriptionKeySource({
+          storedKey: apiKey,
+          isTitaniumService,
+        }) === "titanium"
+      ) {
+        apiKey = "";
         try {
-          const titaniumKey = await window.electronAPI.getTitaniumServiceKey?.(
-            s.cloudTranscriptionBaseUrl || ""
-          );
+          const titaniumKey = await window.electronAPI.getTitaniumServiceKey?.(destinationUrl);
           if (titaniumKey) return titaniumKey;
         } catch {
           // Signed out or unavailable: fall through to an unauthenticated request.

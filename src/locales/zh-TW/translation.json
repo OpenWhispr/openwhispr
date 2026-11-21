@@ -932,8 +932,7 @@
       "action": "使用 Titanium 登入"
     },
     "titaniumNoLicense": {
-      "message": "你的 Titanium 帳戶沒有 {{brand}} 授權。請聯絡 {{supportEmail}} 取得。",
-      "action": "聯絡支援"
+      "message": "你的 Titanium 帳戶沒有 {{brand}} 授權。請聯絡 {{supportEmail}} 取得。"
     }
   },
   "hooks": {
@@ -2321,7 +2320,9 @@
         "localDesc": "裝置端模型，完全私密。",
         "selfHostedDesc": "你的伺服器，在你的網路上。",
         "enterprise": "企業雲端",
-        "enterpriseDesc": "音訊會傳送到貴組織自己的雲端。"
+        "enterpriseDesc": "音訊會傳送到貴組織自己的雲端。",
+        "titanium": "{{brand}} 雲端",
+        "titaniumDesc": "已包含在您的授權中，無需設定。"
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "準確可靠，無需設定。",
@@ -2350,6 +2351,10 @@
         "switchedEnterprise": {
           "title": "已選擇企業雲端",
           "description": "聽寫現在使用貴組織管理的轉錄部署。"
+        },
+        "switchedTitanium": {
+          "title": "{{brand}} 雲端",
+          "description": "正在使用 {{brand}} 雲端轉錄。"
         }
       },
       "gpuDevice": {
@@ -2415,7 +2420,12 @@
         }
       },
       "meetingEnterpriseOnly": "貴組織僅允許企業雲端轉錄，尚不支援會議錄音。",
-      "meetingCloudSignedOut": "未登入時，無法使用 {{brand}} Cloud 開始筆記錄音。請在上方選擇其他引擎。"
+      "meetingCloudSignedOut": "未登入時，無法使用 {{brand}} Cloud 開始筆記錄音。請在上方選擇其他引擎。",
+      "titaniumEngine": {
+        "connected": "已連線",
+        "expires": "授權將於 {{date}} 到期",
+        "retry": "重試"
+      }
     },
     "intelligence": {
       "gpuDevice": {

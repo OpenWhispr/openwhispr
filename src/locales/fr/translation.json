@@ -932,8 +932,7 @@
       "action": "Se connecter avec Titanium"
     },
     "titaniumNoLicense": {
-      "message": "Votre compte Titanium n'a pas de licence {{brand}}. Contactez {{supportEmail}} pour en obtenir une.",
-      "action": "Contacter le support"
+      "message": "Votre compte Titanium n'a pas de licence {{brand}}. Contactez {{supportEmail}} pour en obtenir une."
     }
   },
   "hooks": {
@@ -2615,7 +2614,9 @@
         "localDesc": "Modèles sur l'appareil. 100 % privé.",
         "selfHostedDesc": "Votre serveur sur votre réseau.",
         "enterprise": "Cloud d'entreprise",
-        "enterpriseDesc": "L'audio est envoyé vers le cloud de votre organisation."
+        "enterpriseDesc": "L'audio est envoyé vers le cloud de votre organisation.",
+        "titanium": "{{brand}} cloud",
+        "titaniumDesc": "Inclus avec votre licence. Aucune configuration requise."
       },
       "openwhisprCloud": "{{brand}} Cloud",
       "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",
@@ -2644,6 +2645,10 @@
         "switchedEnterprise": {
           "title": "Cloud d'entreprise sélectionné",
           "description": "La dictée utilise désormais la transcription gérée par votre organisation."
+        },
+        "switchedTitanium": {
+          "title": "{{brand}} cloud",
+          "description": "Utilisation de la transcription cloud de {{brand}}."
         }
       },
       "gpuDevice": {
@@ -2709,7 +2714,12 @@
         }
       },
       "meetingEnterpriseOnly": "Votre organisation n'autorise que la transcription cloud d'entreprise, qui ne couvre pas encore l'enregistrement des réunions.",
-      "meetingCloudSignedOut": "Les enregistrements de notes ne peuvent pas démarrer avec {{brand}} Cloud tant que vous êtes déconnecté. Choisissez un autre moteur ci-dessus."
+      "meetingCloudSignedOut": "Les enregistrements de notes ne peuvent pas démarrer avec {{brand}} Cloud tant que vous êtes déconnecté. Choisissez un autre moteur ci-dessus.",
+      "titaniumEngine": {
+        "connected": "Connecté",
+        "expires": "La licence expire le {{date}}",
+        "retry": "Réessayer"
+      }
     },
     "intelligence": {
       "gpuDevice": {

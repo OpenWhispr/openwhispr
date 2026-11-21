@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } fro
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { useTitaniumAuth } from "../hooks/useTitaniumAuth";
-import { DEFAULT_STT, SUPPORT_EMAIL, TITANIUM, TITANIUM_ENABLED } from "../config/forkRuntime";
+import { DEFAULT_STT, TITANIUM, TITANIUM_ENABLED } from "../config/forkRuntime";
 import { isTitaniumServiceUrl } from "../helpers/titanium/titaniumHosts";
 import {
   resolveSttEndpointNotice,
@@ -1512,18 +1512,6 @@ export default function TranscriptionModelPicker({
                       disabled={titaniumAuth.pending}
                     >
                       {t("transcription.titaniumSignIn.action")}
-                    </Button>
-                  )}
-
-                  {sttNotice === "titaniumNoLicense" && SUPPORT_EMAIL && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() =>
-                        void window.electronAPI?.openExternal?.(`mailto:${SUPPORT_EMAIL}`)
-                      }
-                    >
-                      {t("transcription.titaniumNoLicense.action")}
                     </Button>
                   )}
 

@@ -18,6 +18,8 @@ import { getMeetingJoinUrl } from "../helpers/meetingJoinUrl";
 import TouchGrass from "./TouchGrass";
 import { createGrassRustle, type GrassRustle } from "../utils/grassRustle";
 import { formatTimeRange, parseEventDate } from "../utils/dateFormatting";
+import { useCalendarOAuthConfigured } from "../hooks/useCalendarOAuthConfigured";
+import { shouldShowCalendarConnectCard } from "../utils/connectorEligibility";
 
 interface UpcomingMeetingsProps {
   events: CalendarEvent[];
@@ -360,6 +362,7 @@ export default function UpcomingMeetings({
   onConnectCalendar,
 }: UpcomingMeetingsProps) {
   const { t } = useTranslation();
+  const oauthConfigured = useCalendarOAuthConfigured();
   const systemAudio = useSystemAudioPermission();
   const needsSystemAudioGrant = !systemAudio.granted && canManageSystemAudioInApp(systemAudio);
 
@@ -382,7 +385,7 @@ export default function UpcomingMeetings({
       )}
 
       {/* Calendar not connected */}
-      {!isLoading && !isConnected && (
+      {!isLoading && !isConnected && shouldShowCalendarConnectCard(oauthConfigured) && (
         <EmptyStateCard
           className="px-4 py-8"
           icon={Calendar}

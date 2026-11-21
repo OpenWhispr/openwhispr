@@ -1,4 +1,19 @@
-import { BRAND_NAME, CLOUD_ENABLED, SITE_URL } from "../config/forkRuntime";
+import {
+  BRAND_NAME,
+  CLOUD_ENABLED,
+  DEFAULT_STT,
+  SITE_URL,
+  TITANIUM,
+  TITANIUM_ENABLED,
+} from "../config/forkRuntime";
+import { isTitaniumServiceUrl } from "../helpers/titanium/titaniumHosts";
+import {
+  resolveTranscriptionEngineTab,
+  settingsOnLeavingTitaniumEngine,
+  titaniumEngineSettings,
+} from "../helpers/titanium/titaniumOnboardingPolicy.js";
+import { transcriptionDestinationUrl } from "../helpers/transcriptionAuth.js";
+import TitaniumEnginePanel from "./TitaniumEnginePanel";
 import { cloudFeatureVisible } from "../config/cloudFeatures";
 import { gateSettingsSection } from "../config/cloudSections";
 import React, { useState, useCallback, useEffect, useRef } from "react";
@@ -150,6 +165,7 @@ import {
   isAgentAllowed,
   isCloudBackupAllowed,
   isEnterpriseTranscriptionOfferable,
+  isProviderAllowedByPolicy,
   lockedLocalHistoryValue,
   maxAudioRetentionDays,
 } from "../stores/policyRules";
@@ -604,13 +620,67 @@ function TranscriptionSection({
       enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
     }
   );
-  const handleTranscriptionModeSelect = (mode: InferenceMode) => {
+  // EdgeAssistant cloud is a derived tab over the Custom route on our own host, not a
+  // persisted mode, and is offered under the same policy gate as self-hosted setup.
+  const titaniumTabOffered =
+    TITANIUM_ENABLED &&
+    isModeAllowed("self-hosted") &&
+    isProviderAllowedByPolicy(policySnapshot, "transcription", "custom");
+  const isTitaniumUrl = isTitaniumServiceUrl(cloudTranscriptionBaseUrl, { DEFAULT_STT, TITANIUM });
+  const activeTranscriptionTab: InferenceMode | "titanium" = resolveTranscriptionEngineTab({
+    mode: effectiveTranscriptionMode,
+    useLocalWhisper,
+    cloudTranscriptionMode,
+    cloudTranscriptionProvider,
+    titaniumEnabled: titaniumTabOffered,
+    destinationUrl: transcriptionDestinationUrl({
+      transcriptionMode,
+      remoteTranscriptionUrl,
+      cloudTranscriptionBaseUrl,
+    }),
+    forkConfig: { DEFAULT_STT, TITANIUM },
+  });
+  const transcriptionTabs: InferenceModeOption<InferenceMode | "titanium">[] = titaniumTabOffered
+    ? transcriptionModes.flatMap((option) =>
+        option.id === "providers"
+          ? [
+              option,
+              {
+                id: "titanium" as const,
+                label: t("settingsPage.transcription.modes.titanium"),
+                description: t("settingsPage.transcription.modes.titaniumDesc"),
+                icon: <Cloud className="w-4 h-4" />,
+              },
+            ]
+          : [option]
+      )
+    : transcriptionModes;
+  const handleTranscriptionModeSelect = (mode: InferenceMode | "titanium") => {
+    if (mode === "titanium") {
+      if (!titaniumTabOffered) return;
+      // Always applied, even when active: it clears any stale self-hosted URL.
+      useSettingsStore
+        .getState()
+        .setCloudTranscriptionForAllScopes(titaniumEngineSettings(DEFAULT_STT));
+      toast({
+        title: t("settingsPage.transcription.toasts.switchedTitanium.title"),
+        description: t("settingsPage.transcription.toasts.switchedTitanium.description"),
+        variant: "success",
+        duration: 3000,
+      });
+      return;
+    }
     if (!isModeAllowed(mode)) return;
     if (mode === "openwhispr" && !isSignedIn) {
       requestSignIn();
       return;
     }
-    if (mode === effectiveTranscriptionMode) return;
+    if (mode === activeTranscriptionTab) return;
+    if (activeTranscriptionTab === "titanium") {
+      useSettingsStore
+        .getState()
+        .updateTranscriptionSettings(settingsOnLeavingTitaniumEngine({ isTitaniumUrl }));
+    }
     setTranscriptionMode(mode);
     setUseLocalWhisper(mode === "local");
     updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
@@ -787,16 +857,18 @@ function TranscriptionSection({
             </div>
           )}
           <InferenceModeSelector
-            modes={transcriptionModes}
-            activeMode={effectiveTranscriptionMode}
+            modes={transcriptionTabs}
+            activeMode={activeTranscriptionTab}
             onSelect={handleTranscriptionModeSelect}
           />
+
+          {activeTranscriptionTab === "titanium" && <TitaniumEnginePanel />}
 
           {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
           {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
           {previewAvailable && renderPreviewToggle()}
 
-          {effectiveTranscriptionMode === "self-hosted" && (
+          {activeTranscriptionTab === "self-hosted" && (
             <SelfHostedPanel
               service="transcription"
               url={remoteTranscriptionUrl}
