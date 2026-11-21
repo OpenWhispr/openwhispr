@@ -116,3 +116,179 @@ test("seat state: missing -> DETECTED -> AUTH signed-in", () => {
   s = mod.reduceSeatState(s, { type: "AUTH", result: "signed-in" });
   assert.strictEqual(s.status, "signed-in");
 });
+
+// ---- Task 2: claude, grok, agy, safety ----
+
+const CANARY = "sk-ant-oat01-CANARYCANARYCANARY0123456789";
+
+test("claude detection and version", () => {
+  const list = mod.detectionCandidates("claude", "win32", WIN_ENV);
+  assert.ok(list.some((c) => c.path === "C:\\Users\\u\\.local\\bin\\claude.exe"));
+  assert.strictEqual(mod.parseVersion("claude", "2.1.330 (Claude Code)"), "2.1.330");
+});
+
+test("claude run argv: stream-json, no tools, never --bare, no prompt", () => {
+  const argv = mod.buildRunArgv("claude", { model: "haiku" });
+  assert.deepStrictEqual(argv.slice(0, 3), ["-p", "--output-format", "stream-json"]);
+  for (const flag of [
+    "--verbose",
+    "--include-partial-messages",
+    "--strict-mcp-config",
+    "--no-session-persistence",
+  ]) {
+    assert.ok(argv.includes(flag), flag);
+  }
+  assert.strictEqual(argv[argv.indexOf("--tools") + 1], "");
+  assert.strictEqual(argv[argv.indexOf("--permission-mode") + 1], "dontAsk");
+  assert.strictEqual(argv[argv.indexOf("--model") + 1], "haiku");
+  assert.ok(!argv.includes("--bare"));
+});
+
+test("claude env carries the token only when given; others never do", () => {
+  const base = { PATH: "/bin", ANTHROPIC_API_KEY: "x", CLAUDE_CODE_OAUTH_TOKEN: "ambient" };
+  const withTok = mod.buildChildEnv("claude", base, { oauthToken: CANARY, configDir: "/cfg" });
+  assert.strictEqual(withTok.CLAUDE_CODE_OAUTH_TOKEN, CANARY);
+  assert.strictEqual(withTok.CLAUDE_CONFIG_DIR, "/cfg");
+  assert.ok(!("ANTHROPIC_API_KEY" in withTok));
+  const noTok = mod.buildChildEnv("claude", base);
+  assert.ok(!("CLAUDE_CODE_OAUTH_TOKEN" in noTok));
+  assert.ok(!("CLAUDE_CONFIG_DIR" in noTok));
+  for (const seat of ["codex", "grok", "agy"]) {
+    const env = mod.buildChildEnv(seat, base, { oauthToken: CANARY, configDir: "/cfg" });
+    assert.ok(!("CLAUDE_CODE_OAUTH_TOKEN" in env), seat);
+    assert.ok(!("CLAUDE_CONFIG_DIR" in env), seat);
+  }
+});
+
+test("grok detection, version and argv (prompt in a file)", () => {
+  const list = mod.detectionCandidates("grok", "win32", WIN_ENV);
+  assert.ok(list.some((c) => c.path === "C:\\Users\\u\\.grok\\bin\\grok.exe"));
+  assert.strictEqual(mod.parseVersion("grok", "grok 1.0.70 (f50904eaee6c) [stable]"), "1.0.70");
+  const argv = mod.buildRunArgv("grok", { model: "grok-4", promptFile: "/tmp/p.txt" });
+  assert.strictEqual(argv[argv.indexOf("--prompt-file") + 1], "/tmp/p.txt");
+  assert.strictEqual(argv[argv.indexOf("--output-format") + 1], "json");
+  assert.strictEqual(argv[argv.indexOf("--permission-mode") + 1], "dontAsk");
+  assert.ok(argv.includes("--no-subagents"));
+  assert.strictEqual(argv[argv.indexOf("--max-turns") + 1], "1");
+  assert.ok(!argv.includes("-p") && !argv.includes("--single"));
+  assert.throws(() => mod.buildRunArgv("grok", {}), /promptFile/);
+});
+
+test("agy detection, version, argv, env, prompt cap", () => {
+  const list = mod.detectionCandidates("agy", "win32", {
+    ...WIN_ENV,
+    LOCALAPPDATA: "C:\\Users\\u\\AppData\\Local",
+  });
+  assert.ok(list.some((c) => c.path === "C:\\Users\\u\\AppData\\Local\\agy\\bin\\agy.exe"));
+  assert.strictEqual(mod.parseVersion("agy", "1.5.13\n"), "1.5.13");
+  const argv = mod.buildRunArgv("agy", {
+    model: "gemini-3-pro",
+    prompt: "hello",
+    printTimeoutSeconds: 90,
+  });
+  assert.deepStrictEqual(argv, [
+    "-p",
+    "hello",
+    "--output-format",
+    "json",
+    "--print-timeout",
+    "90s",
+    "--model",
+    "gemini-3-pro",
+  ]);
+  assert.strictEqual(mod.buildChildEnv("agy", {}).NO_BROWSER, "1");
+  assert.doesNotThrow(() =>
+    mod.buildRunArgv("agy", { prompt: "a".repeat(mod.AGY_PROMPT_MAX_CHARS) })
+  );
+  assert.throws(
+    () => mod.buildRunArgv("agy", { prompt: "a".repeat(mod.AGY_PROMPT_MAX_CHARS + 1) }),
+    /too long/
+  );
+  const dashed = mod.buildRunArgv("agy", { prompt: "--sandbox evil" });
+  assert.ok(!dashed[1].startsWith("-"));
+});
+
+test("isSafeModelId allowlist", () => {
+  for (const ok of ["haiku", "claude-sonnet-5", "gpt-5.5", "grok-4", "gemini-3-pro", "a".repeat(80)]) {
+    assert.strictEqual(mod.isSafeModelId(ok), true, ok);
+  }
+  for (const bad of ["", "-m", "a b", "a;b", 'a"b', "a\0b", "a".repeat(81), 5, null]) {
+    assert.strictEqual(mod.isSafeModelId(bad), false, String(bad));
+  }
+  assert.throws(() => mod.buildRunArgv("claude", { model: "a;b" }), /unsafe model/);
+});
+
+test("assertPromptOk", () => {
+  assert.strictEqual(mod.assertPromptOk("hi"), "hi");
+  for (const bad of ["a\0b", 5, "", "a".repeat(200001)]) {
+    assert.throws(
+      () => mod.assertPromptOk(bad),
+      (e) => e.code === "invalid-input"
+    );
+  }
+  assert.doesNotThrow(() => mod.assertPromptOk("a".repeat(200000)));
+});
+
+test("flattenPromptToText keeps text parts only", () => {
+  const text = mod.flattenPromptToText([
+    { role: "system", content: "Be brief." },
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Look at " },
+        { type: "image", image: "AAAA" },
+        { type: "text", text: "this" },
+      ],
+    },
+    {
+      role: "assistant",
+      content: [{ type: "tool-call", toolName: "x" }, { type: "text", text: "Ok." }],
+    },
+    { role: "tool", content: [{ type: "tool-result", result: "tool-output-marker" }] },
+  ]);
+  assert.strictEqual(text, "System: Be brief.\n\nUser: Look at this\n\nAssistant: Ok.");
+  assert.ok(!text.includes("AAAA") && !text.includes("tool-output-marker"));
+});
+
+test("redactSecrets", () => {
+  const out = mod.redactSecrets(
+    `tok ${CANARY} auth Bearer abcdefghijklmnopqrstuvwxyz0123456789 jwt eyJhbGciOi.eyJzdWIiOiIx.abcDEF123 and my-literal-value`,
+    ["my-literal-value"]
+  );
+  assert.ok(!out.includes("CANARYCANARY"));
+  assert.ok(!out.includes("abcdefghijklmnopqrstuvwxyz"));
+  assert.ok(!out.includes("eyJhbGciOi"));
+  assert.ok(!out.includes("my-literal-value"));
+  assert.strictEqual(mod.redactSecrets(42), "");
+});
+
+test("canary: no argv builder output carries the token, no env carries a scrub key", () => {
+  const cases = [
+    ["claude", { model: "haiku", oauthToken: CANARY }],
+    ["codex", { model: "gpt-5.5", outputFile: "/tmp/o.txt", oauthToken: CANARY }],
+    ["grok", { model: "grok-4", promptFile: "/tmp/p.txt", oauthToken: CANARY }],
+    ["agy", { model: "gemini-3-pro", prompt: "hi", oauthToken: CANARY }],
+  ];
+  for (const [seat, opts] of cases) {
+    assert.ok(!JSON.stringify(mod.buildRunArgv(seat, opts)).includes(CANARY), seat);
+    const base = {};
+    for (const k of mod.SCRUB_ENV_KEYS) base[k] = "v";
+    const env = mod.buildChildEnv(seat, base, opts);
+    for (const k of mod.SCRUB_ENV_KEYS) assert.ok(!(k in env), `${seat} ${k}`);
+  }
+});
+
+test("every row lists requiredFlags and testedVersion", () => {
+  assert.deepStrictEqual(mod.LLM_CLI_PROVIDERS.map((p) => p.seat).sort(), [
+    "agy",
+    "claude",
+    "codex",
+    "grok",
+  ]);
+  for (const p of mod.LLM_CLI_PROVIDERS) {
+    assert.ok(p.requiredFlags.length > 0, p.seat);
+    assert.match(p.testedVersion, /^\d+\.\d+\.\d+$/);
+    for (const m of p.models) assert.ok(mod.isSafeModelId(m));
+  }
+  assert.strictEqual(mod.getProvider("claude").tokenEnvVar, "CLAUDE_CODE_OAUTH_TOKEN");
+});
