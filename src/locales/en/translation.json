@@ -3233,6 +3233,8 @@
         "adding": "Adding…",
         "failure": "Couldn’t confirm the seat change. Checking the current total.",
         "success": "{{workspace}} now has {{count}} seats.",
+        "limitReached": "The workspace has reached its seat limit.",
+        "occupancyMinimum": "The total must be at least {{minimum}} to cover occupied seats.",
         "previewFailed": "Couldn’t load seat pricing."
       },
       "free": {
@@ -3343,8 +3345,7 @@
           "trialStarts": "Billing starts {{date}}",
           "trialYearlyStarts": "Billed yearly from {{date}}",
           "free": "$0",
-          "billedYearly": "Billed yearly",
-          "proMonthly": "{{price}} / month"
+          "billedYearly": "Billed yearly"
         },
         "banners": {
           "endingDated": {
@@ -3361,11 +3362,11 @@
           },
           "coveredPastDue": {
             "title": "{{workspace}} already covers you",
-            "body": "Your {{plan}} payment failed. Cancel {{plan}} to stop the retries."
+            "body": "Review the failed payment in the billing portal."
           },
           "coveredPastDueUnnamed": {
             "title": "A workspace already covers you",
-            "body": "Your {{plan}} payment failed. Cancel {{plan}} to stop the retries."
+            "body": "Review the failed payment in the billing portal."
           },
           "coveredStripeTrial": {
             "title": "{{workspace}} already covers you",
@@ -3385,11 +3386,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} already covers you",
-            "body": "You still pay for {{plan}}. Cancel it in your phone's app store."
+            "body": "You can review your {{plan}} purchase in your phone's app store."
           },
           "coveredStoreUnnamed": {
             "title": "A workspace already covers you",
-            "body": "You still pay for {{plan}}. Cancel it in your phone's app store."
+            "body": "You can review your {{plan}} purchase in your phone's app store."
           },
           "covered": {
             "title": "{{workspace}} covers you",
@@ -3422,8 +3423,7 @@
           "billingContact": "Billing contact",
           "periodEnds": "Current period ends",
           "billedThrough": "Billed through",
-          "accessUntil": "Access until",
-          "renews": "Renews"
+          "accessUntil": "Access until"
         }
       },
       "workspace": {
@@ -3474,7 +3474,7 @@
           },
           "paymentFailed": {
             "title": "Payment failed",
-            "body": "Update the payment to keep {{plan}} for your members."
+            "body": "Update the payment to restore {{plan}} for your members."
           },
           "paused": {
             "title": "{{plan}} is paused",
@@ -3494,7 +3494,7 @@
           },
           "memberPaymentProblem": {
             "title": "{{workspace}} has a payment problem",
-            "body": "Access may end soon."
+            "body": "Your personal plan applies until the workspace payment goes through."
           },
           "memberPaused": {
             "title": "The plan for {{workspace}} is paused",

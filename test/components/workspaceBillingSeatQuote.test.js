@@ -5,7 +5,6 @@ const { createRendererServer, installHappyDom } = require("../lib/rendererTestHa
 
 const ADD_SEAT = "settingsPage.billing.addSeats.title";
 const CONFIRM = "settingsPage.billing.addSeats.confirm";
-const SEAT_UPDATE_FAILED = "settingsPage.unifiedBilling.seatUpdateFailed";
 
 const paidWorkspace = (id) => ({
   id,
@@ -38,6 +37,13 @@ async function setup(t) {
   });
   const happyWindow = await installHappyDom(context);
   const state = {
+    CloudApiError: class CloudApiError extends Error {
+      constructor(message, status, code) {
+        super(message);
+        this.status = status;
+        this.code = code;
+      }
+    },
     previewCalls: [],
     previews: [],
     refreshes: 0,
@@ -82,7 +88,8 @@ async function setup(t) {
       // The card's free-workspace path reads these; the real modules start i18n.
       "/services/BillingSummaryService":
         "export const getBillingSummary = async () => { globalThis.__seatQuoteTest.summaryReads++; return undefined; };",
-      "/services/cloudApi": "export class CloudApiError extends Error {}",
+      "/services/cloudApi":
+        "export const CloudApiError = globalThis.__seatQuoteTest.CloudApiError;",
       "/services/InvitationsService": "export const InvitationsService = { list: async () => [] };",
       "/ui/useToast":
         "export const useToast = () => ({ toast: (value) => globalThis.__seatQuoteTest.toasts.push(value) });",
@@ -197,7 +204,11 @@ test("without a validated sign-in no quote is requested", async (t) => {
   await render(paidWorkspace("a"));
   await click(ADD_SEAT);
   assert.deepEqual(state.previewCalls, []);
-  assert.equal(state.toasts.at(-1).title, SEAT_UPDATE_FAILED);
+  const add = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === ADD_SEAT
+  );
+  assert.equal(add.disabled, true);
+  assert.deepEqual(state.toasts, []);
   assert.equal(dialogOpen(container), false);
 });
 
@@ -452,4 +463,174 @@ test("a cap change clamps the selection and zero uses the newest workspace snaps
     command("total") + "1919"
   );
   assert.equal(primary(container).disabled, true);
+});
+
+test("a change to the billing terms invalidates the seat price before confirmation", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  let workspace = paidWorkspace("a");
+  await render(workspace);
+  await click(ADD_SEAT);
+  await resolvePreview("a", { ...quote(11), proration_amount: 1000 });
+  for (const changed of [
+    { plan: "enterprise" },
+    { stripe_subscription_id: "sub_new" },
+    { current_period_end: "2027-01-01T00:00:00.000Z" },
+  ]) {
+    workspace = { ...workspace, ...changed };
+    const before = state.previewCalls.length;
+    await render(workspace);
+    assert.equal(state.previewCalls.length, before + 1);
+    assert.equal(primary(container).disabled, true);
+    assert.doesNotMatch(container.querySelector('[role="dialog"]').textContent, /\$10\.00/);
+    await click(CONFIRM);
+    assert.deepEqual(state.updateSeatsCalls, []);
+    await resolvePreview("a", { ...quote(11), proration_amount: 1000 });
+  }
+  await click(CONFIRM);
+  assert.deepEqual(state.updateSeatsCalls, [["a", 11, 7]]);
+});
+
+test("the seat quote must cover the current occupancy", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  await render({ ...paidWorkspace("a"), seats_used: 13 });
+  await click(ADD_SEAT);
+  await resolvePreview("a", { ...quote(11), seats_used: 13 });
+  assert.equal(primary(container).disabled, true);
+  assert.match(container.querySelector('[role="status"]').textContent, /occupancyMinimum/);
+  await click(CONFIRM);
+  assert.deepEqual(state.updateSeatsCalls, []);
+  await click(command("increase"));
+  await click(command("increase"));
+  await resolvePreview("a", { ...quote(13), current_quantity: 10, seats_used: 13 });
+  assert.equal(primary(container).disabled, false);
+  await click(CONFIRM);
+  assert.deepEqual(state.updateSeatsCalls, [["a", 13, 7]]);
+});
+
+test("a stale-occupancy refusal allows changing the quantity after the new preview", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  await render(paidWorkspace("a"));
+  await click(ADD_SEAT);
+  await resolvePreview("a", quote(11));
+  const purchase = Promise.withResolvers();
+  state.pendingPurchase = purchase.promise;
+  await click(CONFIRM);
+  await settle(() =>
+    purchase.reject(new state.CloudApiError("Occupied", 409, "seat_quantity_stale"))
+  );
+  await resolvePreview("a", { ...quote(11), seats_used: 13 });
+  assert.equal(primary(container).disabled, true);
+  await click(command("increase"));
+  assert.deepEqual(state.previewCalls.at(-1), ["a", 2, 7]);
+});
+
+test("opening at the cached ceiling can buy a seat released on another device", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  await render({ ...paidWorkspace("a"), seats: 500 });
+  await click(ADD_SEAT);
+  assert.equal(state.refreshes, 1);
+  assert.deepEqual(state.previewCalls, [["a", 1, 7]]);
+  await resolvePreview("a", quote(500));
+  assert.equal(primary(container).disabled, false);
+  await click(CONFIRM);
+  assert.deepEqual(state.updateSeatsCalls, [["a", 500, 7]]);
+});
+
+test("a confirmed ceiling resolves an interrupted final-seat purchase even with a stale list", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  await render({ ...paidWorkspace("a"), seats: 499 });
+  await click(ADD_SEAT);
+  await resolvePreview("a", quote(500));
+  const purchase = Promise.withResolvers();
+  state.pendingPurchase = purchase.promise;
+  await click(CONFIRM);
+  await settle(() => purchase.reject(Error("mirror failed")));
+  await settle(() => state.previews.at(-1).reject(new state.CloudApiError("Invalid request", 400)));
+  assert.equal(dialogOpen(container), true);
+  assert.equal(primary(container).disabled, true);
+  await click("common.retry");
+  await settle(() =>
+    state.previews.at(-1).reject(new state.CloudApiError("Workspace seat limit exceeded", 400))
+  );
+  assert.equal(dialogOpen(container), false);
+  assert.equal(state.toasts.at(-1).title, command("limitReached"));
+  assert.deepEqual(state.updateSeatsCalls, [["a", 500, 7]]);
+});
+
+test("a larger occupancy floor during recovery requires selecting and confirming a new total", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  await render(paidWorkspace("a"));
+  await click(ADD_SEAT);
+  await resolvePreview("a", quote(11));
+  const purchase = Promise.withResolvers();
+  state.pendingPurchase = purchase.promise;
+  await click(CONFIRM);
+  await settle(() => purchase.reject(Error("response lost")));
+  await resolvePreview("a", { ...quote(11), seats_used: 45 });
+  assert.equal(primary(container).disabled, true);
+  const slider = container.querySelector("input[type=range]");
+  assert.equal(slider.max, "35");
+  await settle(() => {
+    Object.getOwnPropertyDescriptor(globalThis.window.HTMLInputElement.prototype, "value").set.call(
+      slider,
+      "35"
+    );
+    slider.dispatchEvent(new globalThis.window.Event("input", { bubbles: true }));
+  });
+  assert.equal(primary(container).disabled, true);
+  await resolvePreview("a", { ...quote(45), current_quantity: 10, seats_used: 45 });
+  assert.deepEqual(state.updateSeatsCalls, [["a", 11, 7]]);
+  state.pendingPurchase = Promise.resolve({ quantity: 45 });
+  await click(CONFIRM);
+  assert.deepEqual(state.updateSeatsCalls, [
+    ["a", 11, 7],
+    ["a", 45, 7],
+  ]);
+});
+
+test("a late purchase response from a replaced subscription cannot close its new quote", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  const workspace = paidWorkspace("a");
+  await render(workspace);
+  await click(ADD_SEAT);
+  await resolvePreview("a", quote(11));
+  const purchase = Promise.withResolvers();
+  state.pendingPurchase = purchase.promise;
+  await click(CONFIRM);
+  await render({ ...workspace, stripe_subscription_id: "replacement" });
+  await settle(() => purchase.resolve({ quantity: 11 }));
+  assert.equal(dialogOpen(container), true);
+  assert.equal(state.toasts.length, 0);
+  assert.equal(primary(container).disabled, true);
+  await resolvePreview("a", quote(13));
+  assert.equal(primary(container).disabled, false);
+});
+
+test("a second interrupted write for the same total probes one seat again at the ceiling", async (t) => {
+  const { state, container, render, click, resolvePreview } = await setup(t);
+  await render({ ...paidWorkspace("a"), seats: 497 });
+  await click(ADD_SEAT);
+  await click(command("increase"));
+  await click(command("increase"));
+  const quoteThree = { ...quote(500), current_quantity: 497 };
+  await resolvePreview("a", quoteThree);
+  const first = Promise.withResolvers();
+  state.pendingPurchase = first.promise;
+  await click(CONFIRM);
+  await settle(() => first.reject(Error("connection lost")));
+  await resolvePreview("a", quote(498));
+  await resolvePreview("a", quoteThree);
+  const second = Promise.withResolvers();
+  state.pendingPurchase = second.promise;
+  await click(CONFIRM);
+  await settle(() => second.reject(Error("Stripe updated before mirror failed")));
+  assert.deepEqual(state.previewCalls.at(-1), ["a", 1, 7]);
+  await settle(() =>
+    state.previews.at(-1).reject(new state.CloudApiError("Workspace seat limit exceeded", 400))
+  );
+  assert.equal(dialogOpen(container), false);
+  assert.deepEqual(state.updateSeatsCalls, [
+    ["a", 500, 7],
+    ["a", 500, 7],
+  ]);
 });

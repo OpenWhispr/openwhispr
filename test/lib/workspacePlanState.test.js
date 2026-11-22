@@ -172,6 +172,12 @@ test("Business owner set to cancel: ends banner with Keep plan, ends date", () =
   assert.deepEqual(state.planActions, [{ kind: "manageBilling" }, { kind: "upgradeEnterprise" }]);
 });
 
+test("past-due copy reflects the loss of workspace entitlement as soon as the payment fails", () => {
+  const { workspace: copy } = require("../../src/locales/en/translation.json").settingsPage.billing;
+  assert.ok(copy.banners.paymentFailed.body.includes("restore {{plan}}"));
+  assert.match(copy.banners.memberPaymentProblem.body, /Your personal plan applies/);
+});
+
 test("Business owner past due: destructive badge, payment failed banner, no Add seats", () => {
   const state = workspacePlanState(workspace({ status: "past_due" }), people(3, 0), NOW);
   assert.deepEqual(state.badge, { key: "badges.pastDue", tone: "destructive" });

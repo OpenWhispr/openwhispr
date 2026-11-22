@@ -152,3 +152,22 @@ test("zero seats leave occupancy and the authorized summary invoice unchanged", 
   );
   assert.equal(addSeatsState({ workspace, selectedDelta: 0 }).proration, null);
 });
+
+test("large occupancy shortfalls can reach their floor without exceeding the workspace cap", () => {
+  const { addSeatsState } = loadModel();
+  for (const [selectedDelta, seatLimit, maxDelta, nextQuantity] of [
+    [0, 500, 35, null],
+    [20, 500, 35, null],
+    [35, 500, 35, 45],
+    [40, 40, 30, null],
+  ]) {
+    const state = addSeatsState({
+      workspace: { seats: 10, seats_used: 45, seat_limit: seatLimit },
+      selectedDelta,
+      preview: { ...annualPreview, seats_used: 45, next_quantity: 10 + selectedDelta },
+    });
+    assert.equal(state.maxDelta, maxDelta);
+    assert.equal(state.nextQuantity, nextQuantity);
+    assert.equal(state.occupancyMinimum, selectedDelta > 0 && nextQuantity === null ? 45 : null);
+  }
+});

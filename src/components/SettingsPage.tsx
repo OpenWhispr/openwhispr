@@ -1486,6 +1486,7 @@ export default function SettingsPage({
   const businessTile = businessTileAction({
     // Until usage loads, its covering ids read as none, which would offer a covered member a workspace.
     listLoaded: billingWorkspacesLoaded && usage?.status === "success",
+    listError: billingWorkspacesError,
     entitledWorkspaceIds: usage?.entitledWorkspaceIds,
     workspaces: billingWorkspaces,
     defaultWorkspaceId,
@@ -1493,6 +1494,7 @@ export default function SettingsPage({
   const enterpriseTile = enterpriseTileAction({
     // Until usage loads, its covering ids read as none, which would ask a covered member to contact sales.
     listLoaded: billingWorkspacesLoaded && usage?.status === "success",
+    listError: billingWorkspacesError,
     entitledWorkspaceIds: usage?.entitledWorkspaceIds,
     workspaces: billingWorkspaces,
     defaultWorkspaceId,
@@ -2051,12 +2053,6 @@ export default function SettingsPage({
   }, [usage, yearlyBilling, toast, t]);
 
   const billingEnabled = Boolean(AUTH_URL) && activeSection === "plansBilling" && isLoaded;
-  const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(
-    usage,
-    billingEnabled &&
-      billingView.kind === "personal" &&
-      Boolean(isSignedIn && (usage?.isPersonallySubscribed || usage?.isPastDue))
-  );
   const { state: personalState, refreshSummary: refreshPersonalSummary } = usePersonalPlanBilling({
     enabled: billingEnabled,
     view: billingView.kind,
@@ -2070,6 +2066,13 @@ export default function SettingsPage({
       businessAction || enterpriseAction || enterpriseTile.kind === "viewWorkspace"
     ),
   });
+  const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(
+    usage,
+    billingEnabled &&
+      billingView.kind === "personal" &&
+      personalState.kind === "ready" &&
+      personalState.actions.some((action) => action.kind === "manageBilling")
+  );
   const showCreatorLink = showsCreatorLink(usage ?? null);
   const personalHandlers: PersonalPlanHandlers = {
     subscribePro: () => void subscribePro(),
@@ -2490,7 +2493,7 @@ export default function SettingsPage({
                     request={billingRequest}
                     onChange={onBillingRequestChange ?? noop}
                     personalPlanLabel={
-                      personalState.kind === "ready"
+                      personalState.kind === "ready" && personalState.tier
                         ? t(`settingsPage.account.planLabels.${personalState.tier}`)
                         : null
                     }

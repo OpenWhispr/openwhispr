@@ -830,7 +830,33 @@ test("a new Personal visit can open its portal while the old URL is pending", as
   await show(false);
   await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
   assert.equal(refreshes, 0);
-  assert.equal(usageCalls, 1);
+  assert.equal(usageCalls, 2);
+});
+
+test("a successful personal portal refreshes usage after Settings unmounts", async (t) => {
+  const { happyWindow, root, useUsage, useBillingPortal } = await setup(t);
+  let usageCalls = 0;
+  let summaryCalls = 0;
+  let open;
+  happyWindow.electronAPI.cloudUsage = async () => {
+    usageCalls++;
+    return { success: true, plan: "pro", status: "active", isSubscribed: true };
+  };
+  happyWindow.electronAPI.cloudBillingPortal = async () => ({
+    success: true,
+    url: "https://stripe.test/personal",
+  });
+  function Harness() {
+    open = useBillingPortal(useUsage()).openBillingPortal;
+    return null;
+  }
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => open(() => summaryCalls++));
+  await React.act(async () => root.render(null));
+  await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
+  await React.act(async () => happyWindow.dispatchEvent(new happyWindow.Event("focus")));
+  assert.equal(usageCalls, 2);
+  assert.equal(summaryCalls, 0);
 });
 
 test("a failed browser launch reports the portal failure and ignores a later focus", async (t) => {

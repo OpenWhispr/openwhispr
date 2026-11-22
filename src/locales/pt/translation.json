@@ -3125,6 +3125,8 @@
         "adding": "A adicionar…",
         "failure": "Não foi possível confirmar a alteração. A verificar o total de lugares.",
         "success": "{{workspace}} tem agora {{count}} lugares.",
+        "limitReached": "O espaço de trabalho atingiu o limite de assentos.",
+        "occupancyMinimum": "O total deve ser de pelo menos {{minimum}} para cobrir os assentos ocupados.",
         "previewFailed": "Não foi possível carregar os preços."
       },
       "free": {
@@ -3235,8 +3237,7 @@
           "trialStarts": "Cobrança a partir de {{date}}",
           "trialYearlyStarts": "Cobrança anual a partir de {{date}}",
           "free": "$0",
-          "billedYearly": "Cobrança anual",
-          "proMonthly": "{{price}} / mês"
+          "billedYearly": "Cobrança anual"
         },
         "banners": {
           "endingDated": {
@@ -3253,11 +3254,11 @@
           },
           "coveredPastDue": {
             "title": "{{workspace}} já cobre você",
-            "body": "O pagamento do {{plan}} falhou. Cancele o {{plan}} para parar as novas tentativas."
+            "body": "Confira o pagamento que falhou no portal de cobrança."
           },
           "coveredPastDueUnnamed": {
             "title": "Um espaço de trabalho já cobre você",
-            "body": "O pagamento do {{plan}} falhou. Cancele o {{plan}} para parar as novas tentativas."
+            "body": "Confira o pagamento que falhou no portal de cobrança."
           },
           "coveredStripeTrial": {
             "title": "{{workspace}} já cobre você",
@@ -3277,11 +3278,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} já cobre você",
-            "body": "Você ainda paga pelo {{plan}}. Cancele na loja de apps do seu celular."
+            "body": "Você pode consultar sua compra de {{plan}} na loja de aplicativos do celular."
           },
           "coveredStoreUnnamed": {
             "title": "Um espaço de trabalho já cobre você",
-            "body": "Você ainda paga pelo {{plan}}. Cancele na loja de apps do seu celular."
+            "body": "Você pode consultar sua compra de {{plan}} na loja de aplicativos do celular."
           },
           "covered": {
             "title": "{{workspace}} cobre você",
@@ -3314,8 +3315,7 @@
           "billingContact": "Contato de cobrança",
           "periodEnds": "O período atual termina",
           "billedThrough": "Cobrado por",
-          "accessUntil": "Acesso até",
-          "renews": "Renova em"
+          "accessUntil": "Acesso até"
         }
       },
       "workspace": {
@@ -3366,7 +3366,7 @@
           },
           "paymentFailed": {
             "title": "Falha no pagamento",
-            "body": "Atualize o pagamento para seus membros manterem o {{plan}}."
+            "body": "Atualize a forma de pagamento para que seus membros voltem a usar o {{plan}}."
           },
           "paused": {
             "title": "{{plan}} está pausado",
@@ -3386,7 +3386,7 @@
           },
           "memberPaymentProblem": {
             "title": "{{workspace}} tem um problema de pagamento",
-            "body": "O acesso pode terminar em breve."
+            "body": "Seu plano pessoal se aplica até que o pagamento do espaço de trabalho seja aprovado."
           },
           "memberPaused": {
             "title": "O plano de {{workspace}} está pausado",

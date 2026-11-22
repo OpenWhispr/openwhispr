@@ -269,6 +269,32 @@ test("Stripe Business owner: Upgrade to Enterprise opens the dialog for this wor
   assert.equal(container.querySelector("[data-enterprise-dialog]") !== null, false);
 });
 
+test("cached workspace billing is read-only until the sign-in is validated", async (t) => {
+  const { state, render, container, click, waitFor } = await setup(t);
+  const current = workspace({ status: "past_due" });
+  await render(workspace());
+  await click(UPGRADE_ENTERPRISE);
+  assert.equal(await waitFor(() => state.enterpriseDialogs.length > 0), true);
+  globalThis.__gen = null;
+  await render(current);
+  const button = (label) =>
+    [...container.querySelectorAll("button")].find((item) => item.textContent === label);
+  assert.equal(container.querySelector("[data-enterprise-dialog]"), null);
+  assert.equal(button(MANAGE_BILLING).disabled, true);
+  assert.equal(button(UPDATE_PAYMENT).disabled, true);
+  await click(UPDATE_PAYMENT);
+  assert.deepEqual(state.portalCalls, []);
+
+  await render(workspace({ role: "member", is_billable: false }), { onViewPersonal: () => {} });
+  assert.equal(button(VIEW_PERSONAL).disabled, false);
+
+  globalThis.__gen = 8;
+  await render(current);
+  assert.equal(button(UPDATE_PAYMENT).disabled, false);
+  await click(UPDATE_PAYMENT);
+  assert.deepEqual(state.portalCalls, [["a", 8]]);
+});
+
 test("Manage billing opens this workspace's portal", async (t) => {
   const { state, render, click } = await setup(t);
   await render(workspace());

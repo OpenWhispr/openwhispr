@@ -111,16 +111,16 @@ export default function WorkspaceBillingCard({
     subscribeAuthRequestContext,
     getValidatedAuthGeneration
   );
+  const billingTerms = JSON.stringify([
+    workspace.plan,
+    workspace.status,
+    workspace.stripe_subscription_id,
+    workspace.current_period_end,
+    workspace.cancel_at_period_end,
+  ]);
   const { summary, refresh: refreshBillingSummary } = useBillingSummary(
     { kind: "workspace", workspaceId: workspace.id, canManageBilling },
-    JSON.stringify([
-      workspace.plan,
-      workspace.status,
-      workspace.stripe_subscription_id,
-      workspace.current_period_end,
-      workspace.cancel_at_period_end,
-      workspace.seats,
-    ])
+    JSON.stringify([billingTerms, workspace.seats])
   );
   const [seatSplit, setSeatSplit] = useState<{
     workspace: Workspace;
@@ -171,8 +171,13 @@ export default function WorkspaceBillingCard({
       ? seatSplit.pending
       : 0;
   const [busy, setBusy] = useState<Busy | null>(null);
+  const billingDisabled = busy !== null || authGeneration === null;
+  const [inviteWorkspaceId, setInviteWorkspaceId] = useState<string | null>(null);
+  const [enterpriseWorkspaceId, setEnterpriseWorkspaceId] = useState<string | null>(null);
   const billingRequest = useRef<symbol | null>(null);
   useLayoutEffect(() => {
+    setInviteWorkspaceId(null);
+    setEnterpriseWorkspaceId(null);
     setBusy(null);
     return () => {
       billingRequest.current = null;
@@ -194,9 +199,6 @@ export default function WorkspaceBillingCard({
     needsInvitations
   );
   const freeCta = freeWorkspaceCta(workspace, people);
-  // Bound to its workspace, so the dialog never invites into one the card no longer shows.
-  const [inviteWorkspaceId, setInviteWorkspaceId] = useState<string | null>(null);
-  const [enterpriseWorkspaceId, setEnterpriseWorkspaceId] = useState<string | null>(null);
 
   function formatDate(iso: string): string {
     return formatBillingDate(iso, i18n.language);
@@ -208,8 +210,9 @@ export default function WorkspaceBillingCard({
 
   async function openBilling(kind: Busy, getUrl: () => Promise<string>): Promise<void> {
     if (billingRequest.current) return;
-    const request = Symbol();
     const generation = getValidatedAuthGeneration();
+    if (generation === null) return;
+    const request = Symbol();
     const isCurrent = (): boolean =>
       billingRequest.current === request && getValidatedAuthGeneration() === generation;
     billingRequest.current = request;
@@ -254,7 +257,7 @@ export default function WorkspaceBillingCard({
       <PillButton
         variant={variant}
         icon={UserPlus}
-        disabled={busy !== null}
+        disabled={billingDisabled}
         onClick={() => setInviteWorkspaceId(workspace.id)}
       >
         {t("settingsPage.billing.free.inviteTeammates")}
@@ -267,7 +270,7 @@ export default function WorkspaceBillingCard({
       <PillButton
         variant={variant}
         busy={busy === "checkout"}
-        disabled={busy !== null}
+        disabled={billingDisabled}
         onClick={startBusinessCheckout}
       >
         {t("settingsPage.billing.free.upgradeToBusiness")}
@@ -437,7 +440,7 @@ export default function WorkspaceBillingCard({
         variant="secondary"
         icon={ACTION_ICONS[action.kind]}
         busy={busy === action.kind}
-        disabled={busy !== null}
+        disabled={action.kind === "viewPersonal" ? busy !== null : billingDisabled}
         onClick={() => runAction(action)}
       >
         {label}
@@ -529,7 +532,7 @@ export default function WorkspaceBillingCard({
               row.addSeats ? (
                 <PillButton
                   variant="primary"
-                  disabled={busy !== null}
+                  disabled={billingDisabled}
                   onClick={(event) => {
                     seatTrigger.current = event.currentTarget;
                     runAction({ kind: "addSeats" });
@@ -549,9 +552,9 @@ export default function WorkspaceBillingCard({
   const gridBusiness: BusinessCardAction =
     freeCta === "none"
       ? { kind: "none" }
-      : { kind: "checkout", busy: busy === "checkout", disabled: busy !== null };
+      : { kind: "checkout", busy: busy === "checkout", disabled: billingDisabled };
   const gridEnterprise: EnterpriseCardAction = canSelfServeEnterprise(workspace)
-    ? { kind: "checkout" }
+    ? { kind: "checkout", disabled: billingDisabled }
     : { kind: "contactSales", ownerName: null };
 
   function runGridEnterprise(action: EnterpriseCardAction): void {
@@ -591,6 +594,11 @@ export default function WorkspaceBillingCard({
 
   return (
     <div className="flex flex-col gap-5">
+      {authGeneration === null && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {t("settingsPage.account.offlineAccount.description")}
+        </p>
+      )}
       {banner && (
         <BillingBanner
           tone={banner.tone}
@@ -699,6 +707,7 @@ export default function WorkspaceBillingCard({
 
       {showAddSeats && seatOpening && (
         <AddSeatsDialog
+          key={billingTerms}
           workspace={workspace}
           planName={planName}
           identity={seatOpening}

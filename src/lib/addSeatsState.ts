@@ -3,7 +3,7 @@ import type { SeatPreview } from "../services/WorkspacesService";
 import type { Workspace } from "../types/electron";
 import { formatAmount } from "../utils/formatAmount";
 
-const LEGACY_WORKSPACE_SEAT_LIMIT = 500;
+export const LEGACY_WORKSPACE_SEAT_LIMIT = 500;
 const MAX_SEAT_DELTA = 20;
 
 type SeatInterval = NonNullable<SeatPreview["interval"]>;
@@ -29,6 +29,7 @@ interface AddSeatsInput {
 export interface AddSeatsState {
   delta: number;
   maxDelta: number;
+  occupancyMinimum: number | null;
   rows: SeatRow[];
   nextQuantity: number | null;
   unitPrice: string | null;
@@ -48,10 +49,19 @@ export function addSeatsState({
 }: AddSeatsInput): AddSeatsState {
   const purchased = preview?.current_quantity ?? workspace.seats;
   const seatLimit = workspace.seat_limit ?? LEGACY_WORKSPACE_SEAT_LIMIT;
-  const maxDelta = Math.max(0, Math.min(MAX_SEAT_DELTA, seatLimit - purchased));
+  const occupied = preview?.seats_used ?? workspace.seats_used;
+  // The API refuses a purchase below occupancy. A workspace with a larger existing
+  // shortfall must be able to reach that floor in one explicitly confirmed change.
+  const maxChange = Math.max(MAX_SEAT_DELTA, (occupied ?? purchased) - purchased);
+  const maxDelta = Math.max(0, Math.min(maxChange, seatLimit - purchased));
   const delta = Math.min(maxDelta, Math.max(0, Math.trunc(selectedDelta)));
   const purchasedAfter = purchased + delta;
-  const quote = delta > 0 && preview?.next_quantity === purchasedAfter ? preview : null;
+  const occupancyMinimum =
+    delta > 0 && occupied != null && purchasedAfter < occupied ? occupied : null;
+  const quote =
+    delta > 0 && occupancyMinimum === null && preview?.next_quantity === purchasedAfter
+      ? preview
+      : null;
 
   const rows: SeatRow[] = [];
   if (preview?.member_seats != null) {
@@ -61,7 +71,6 @@ export function addSeatsState({
   if (preview?.pending_seats != null) {
     rows.push({ kind: "pending", now: preview.pending_seats, after: preview.pending_seats });
   }
-  const occupied = preview?.seats_used ?? workspace.seats_used;
   if (occupied != null) {
     rows.push({
       kind: "available",
@@ -89,6 +98,7 @@ export function addSeatsState({
   return {
     delta,
     maxDelta,
+    occupancyMinimum,
     rows,
     nextQuantity: quote?.next_quantity ?? null,
     unitPrice:

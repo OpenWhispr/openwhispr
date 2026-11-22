@@ -3139,6 +3139,8 @@
         "adding": "正在添加…",
         "failure": "无法确认席位变更。正在检查当前席位总数。",
         "success": "{{workspace}} 现有 {{count}} 个席位。",
+        "limitReached": "工作区已达到席位上限。",
+        "occupancyMinimum": "席位总数必须至少为 {{minimum}}，以容纳已占用的席位。",
         "previewFailed": "无法加载席位价格。"
       },
       "free": {
@@ -3249,8 +3251,7 @@
           "trialStarts": "{{date}}开始计费",
           "trialYearlyStarts": "{{date}}起按年计费",
           "free": "$0",
-          "billedYearly": "按年计费",
-          "proMonthly": "{{price}} / 月"
+          "billedYearly": "按年计费"
         },
         "banners": {
           "endingDated": {
@@ -3267,11 +3268,11 @@
           },
           "coveredPastDue": {
             "title": "{{workspace}} 已为您提供权益",
-            "body": "您的 {{plan}} 付款失败。取消 {{plan}} 即可停止重试。"
+            "body": "请在账单门户中查看失败的付款。"
           },
           "coveredPastDueUnnamed": {
             "title": "已有工作区为您提供权益",
-            "body": "您的 {{plan}} 付款失败。取消 {{plan}} 即可停止重试。"
+            "body": "请在账单门户中查看失败的付款。"
           },
           "coveredStripeTrial": {
             "title": "{{workspace}} 已为您提供权益",
@@ -3291,11 +3292,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} 已为您提供权益",
-            "body": "您仍在为 {{plan}} 付费。请在您手机的应用商店中取消。"
+            "body": "你可以在手机的应用商店中查看 {{plan}} 的购买记录。"
           },
           "coveredStoreUnnamed": {
             "title": "已有工作区为您提供权益",
-            "body": "您仍在为 {{plan}} 付费。请在您手机的应用商店中取消。"
+            "body": "你可以在手机的应用商店中查看 {{plan}} 的购买记录。"
           },
           "covered": {
             "title": "{{workspace}} 为您提供权益",
@@ -3328,8 +3329,7 @@
           "billingContact": "账单联系人",
           "periodEnds": "当前周期结束",
           "billedThrough": "计费渠道",
-          "accessUntil": "可用至",
-          "renews": "续订日期"
+          "accessUntil": "可用至"
         }
       },
       "workspace": {
@@ -3380,7 +3380,7 @@
           },
           "paymentFailed": {
             "title": "付款失败",
-            "body": "请更新付款方式，让成员继续使用 {{plan}}。"
+            "body": "请更新付款方式，为成员恢复 {{plan}}。"
           },
           "paused": {
             "title": "{{plan}} 已暂停",
@@ -3400,7 +3400,7 @@
           },
           "memberPaymentProblem": {
             "title": "{{workspace}} 的付款出现问题",
-            "body": "访问权限可能很快结束。"
+            "body": "工作区付款成功前，您使用的是个人方案。"
           },
           "memberPaused": {
             "title": "{{workspace}} 的方案已暂停",

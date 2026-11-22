@@ -106,7 +106,7 @@ export type PersonalPlanState =
   | { kind: "failed" }
   | {
       kind: "ready";
-      tier: PersonalTier;
+      tier: PersonalTier | null;
       showPlansGrid: boolean;
       badge: PersonalBadge | null;
       /** `null` when this build can't know what the plan costs. */
@@ -120,7 +120,7 @@ export type PersonalPlanState =
 
 interface Facts {
   usage: PersonalUsage;
-  tier: PersonalTier;
+  tier: PersonalTier | null;
   covered: boolean;
   /** A Stripe subscription, paid or past due: the portal can manage and cancel it. */
   stripeBilled: boolean;
@@ -147,8 +147,10 @@ export function showsCreatorLink(
   return !usage?.isPersonallySubscribed || isCardlessTrial(usage);
 }
 
-function resolveTier(usage: PersonalUsage): PersonalTier {
-  // Past due isn't entitled, so it reports no personal source, but the plan is still theirs.
+function resolveTier(usage: PersonalUsage): PersonalTier | null {
+  // Migrated workspace dunning retains the old tier but clears the personal period.
+  // A personal row with an unknown period is indistinguishable from that response.
+  if (usage.isPastDue && !usage.currentPeriodEnd) return null;
   if (usage.isPastDue || usage.isPersonallySubscribed || usage.storeBilling) {
     return usage.plan === "business" ? "business" : "pro";
   }
@@ -190,8 +192,7 @@ function resolvePrice({
   summary,
 }: Facts): PersonalPrice | null {
   if (tier === "free") return { key: "price.free" };
-  // Only Stripe Pro has a known price: Business has none here, a store may charge another,
-  // and a cardless trial pays nothing (its badge says so).
+  // Usage supplies cadence. Only an invoice establishes what the subscriber owes.
   if (!stripeBilled || tier !== "pro") return null;
   if (stripeTrial) {
     if (ending) return null;
@@ -205,8 +206,7 @@ function resolvePrice({
     }
     return usage.billingInterval === "annual" ? { key: "price.billedYearly" } : null;
   }
-  if (usage.billingInterval === "annual") return { key: "price.billedYearly" };
-  return usage.billingInterval === "monthly" ? { key: "price.proMonthly" } : null;
+  return usage.billingInterval === "annual" ? { key: "price.billedYearly" } : null;
 }
 
 function businessActions(action: BusinessTileAction): PersonalAction[] {
@@ -218,7 +218,14 @@ function resolveActions(facts: Facts, businessAction: BusinessTileAction): Perso
   const { usage, tier, covered, stripeBilled, cardlessTrial } = facts;
   if (usage.isPastDue) return [{ kind: "manageBilling" }];
   if (tier === "free" || cardlessTrial) {
-    return covered ? [] : [{ kind: "subscribePro" }, ...businessActions(businessAction)];
+    // A canceled customer can still pay their personal invoices through the portal.
+    const balanceActions: PersonalAction[] =
+      (facts.summary?.outstanding_invoice?.amount_remaining ?? 0) > 0
+        ? [{ kind: "manageBilling" }]
+        : [];
+    return covered
+      ? balanceActions
+      : [{ kind: "subscribePro" }, ...balanceActions, ...businessActions(businessAction)];
   }
   if (stripeBilled) return [{ kind: "manageBilling" }, ...businessActions(businessAction)];
   const storeName = usage.storeBilling?.store;
@@ -260,10 +267,11 @@ function coveredBanner(facts: Facts, workspaceName: string | undefined): Persona
   const cancel: PersonalAction = { kind: tier === "business" ? "cancelBusiness" : "cancelPro" };
 
   if (ending || facts.storeCanceled) return named("covered");
-  if (usage.isPastDue) return named("coveredPastDue", cancel, { plan });
+  if (usage.isPastDue) return named("coveredPastDue", { kind: "updatePayment" });
   if (stripeTrial && tier === "pro") return named("coveredStripeTrial", { kind: "cancelTrial" });
   if (stripeBilled) return named("coveredPaying", cancel, { plan });
-  if (usage.storeBilling) return named("coveredStore", undefined, { plan });
+  if (usage.storeBilling && usage.currentPeriodEnd)
+    return named("coveredStore", undefined, { plan });
   return named("covered");
 }
 
@@ -327,7 +335,7 @@ function resolveDetails(
         value: { kind: "storeName", store: usage.storeBilling.store },
       },
       ...dateDetail(
-        storeCanceled ? "details.accessUntil" : "details.renews",
+        storeCanceled ? "details.accessUntil" : "details.periodEnds",
         usage.currentPeriodEnd
       ),
     ];

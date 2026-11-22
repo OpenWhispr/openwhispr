@@ -117,7 +117,7 @@ test("covered + Stripe Pro: warning banner with Cancel Pro, which reports cancel
     ready({
       tier: "pro",
       badge: { key: "badges.monthly", tone: "info" },
-      price: { key: "price.proMonthly" },
+      price: null,
       actions: [{ kind: "manageBilling" }],
       banners: [
         {
@@ -152,12 +152,12 @@ test("store App Store: Manage in App Store button and App Store in the details",
   await render(
     ready({
       tier: "pro",
-      price: { key: "price.proMonthly" },
+      price: null,
       actions: [{ kind: "manageInStore", store: "app_store" }],
       usage: [{ kind: "unlimited" }],
       details: [
         { labelKey: "details.billedThrough", value: { kind: "storeName", store: "app_store" } },
-        { labelKey: "details.renews", value: { kind: "date", iso: PERIOD_END } },
+        { labelKey: "details.periodEnds", value: { kind: "date", iso: PERIOD_END } },
       ],
     })
   );

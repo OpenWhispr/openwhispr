@@ -180,7 +180,7 @@ test("Stripe Pro monthly with a Business workspace plan: only Manage billing, mo
   const result = ready(STRIPE_PRO, { businessAction: { kind: "workspacePlan" } });
   assert.deepEqual(actionKinds(result), ["manageBilling"]);
   assert.deepEqual(result.badge, { key: "badges.monthly", tone: "info" });
-  assert.deepEqual(result.price, { key: "price.proMonthly" });
+  assert.equal(result.price, null);
   assert.deepEqual(result.usage, [{ kind: "unlimited" }]);
   assert.deepEqual(result.details, [
     { labelKey: "details.periodEnds", value: { kind: "date", iso: PERIOD_END } },
@@ -235,7 +235,7 @@ test("past due: payment failed banner with Update payment, past due badge, words
   assert.equal(failed.tone, "destructive");
   assert.deepEqual(failed.action, { kind: "updatePayment" });
   assert.deepEqual(result.badge, { key: "badges.pastDue", tone: "destructive" });
-  assert.deepEqual(result.price, { key: "price.proMonthly" });
+  assert.equal(result.price, null);
   assert.equal(result.usage[0].kind, "words");
   assert.deepEqual(result.details, [
     { labelKey: "details.periodEnds", value: { kind: "date", iso: PERIOD_END } },
@@ -278,8 +278,8 @@ test("covered past due: Manage billing and the covered past due banner, never pa
   assert.deepEqual(bannerIds(result), ["coveredPastDue"]);
   const pastDue = banner(result, "coveredPastDue");
   assert.equal(pastDue.tone, "warning");
-  assert.deepEqual(pastDue.params, { workspace: "Acme", plan: "Pro" });
-  assert.deepEqual(pastDue.action, { kind: "cancelPro" });
+  assert.deepEqual(pastDue.params, { workspace: "Acme" });
+  assert.deepEqual(pastDue.action, { kind: "updatePayment" });
   assert.deepEqual(result.usage, [{ kind: "unlimited" }]);
 });
 
@@ -291,18 +291,15 @@ test("covered banners name a personal Business plan as Business, named or not", 
     { ...PAST_DUE, plan: "business", isSubscribed: true, entitledWorkspaceIds: ["ws-1"] },
     { coveringWorkspaceNames: ["Acme"] }
   );
-  assert.deepEqual(banner(pastDue, "coveredPastDue").params, {
-    workspace: "Acme",
-    plan: "Business",
-  });
+  assert.deepEqual(banner(pastDue, "coveredPastDue").params, { workspace: "Acme" });
 });
 
-test("App Store: Manage in store, billed through and renews details", () => {
+test("App Store: Manage in store, billed through and period end details", () => {
   const result = ready(store());
   assert.deepEqual(result.actions, [{ kind: "manageInStore", store: "app_store" }]);
   assert.deepEqual(result.details, [
     { labelKey: "details.billedThrough", value: { kind: "storeName", store: "app_store" } },
-    { labelKey: "details.renews", value: { kind: "date", iso: PERIOD_END } },
+    { labelKey: "details.periodEnds", value: { kind: "date", iso: PERIOD_END } },
   ]);
   assert.deepEqual(result.badge, { key: "badges.monthly", tone: "info" });
   assert.deepEqual(result.banners, []);
@@ -520,7 +517,7 @@ test("API: active Stripe Pro manages billing and Pro is the current plan", () =>
   const { result, proCard } = fromPayload(API.stripePro);
   assert.equal(result.tier, "pro");
   assert.deepEqual(actionKinds(result), ["manageBilling", "business"]);
-  assert.deepEqual(result.price, { key: "price.proMonthly" });
+  assert.equal(result.price, null);
   assert.equal(proCard, "current");
 });
 
@@ -554,16 +551,16 @@ test("API: an uncovered past due payer keeps Pro, fixes payment in the portal, n
   assert.deepEqual(actionKinds(result), ["manageBilling"]);
   assert.deepEqual(bannerIds(result), ["paymentFailed"]);
   assert.deepEqual(result.badge, { key: "badges.pastDue", tone: "destructive" });
-  assert.deepEqual(result.price, { key: "price.proMonthly" });
+  assert.equal(result.price, null);
   assert.equal(proCard, "none");
 });
 
-test("API: a covered past due payer keeps the portal and can cancel Pro", () => {
+test("API: a covered past due payer can review the failed payment", () => {
   const { result, proCard } = fromPayload(covered(API.pastDue));
   assert.equal(result.tier, "pro");
   assert.deepEqual(actionKinds(result), ["manageBilling"]);
   assert.deepEqual(bannerIds(result), ["coveredPastDue"]);
-  assert.deepEqual(banner(result, "coveredPastDue").action, { kind: "cancelPro" });
+  assert.deepEqual(banner(result, "coveredPastDue").action, { kind: "updatePayment" });
   assert.equal(proCard, "none");
 });
 
@@ -763,4 +760,60 @@ test("a covered Stripe Pro trial shows its trial time and can be cancelled in th
   );
   assert.deepEqual(result.badge, { key: "badges.trial", params: { days: "5" }, tone: "info" });
   assert.deepEqual(result.banners[0].action, { kind: "cancelTrial" });
+});
+
+test("migrated workspace dunning does not claim a personal tier or suggest cancellation", () => {
+  const migrated = apiPayload({ plan: "business", status: "past_due" });
+  for (const payload of [migrated, covered(migrated)]) {
+    const { result, proCard } = fromPayload(payload);
+    assert.equal(result.tier, null);
+    assert.equal(result.price, null);
+    assert.deepEqual(actionKinds(result), ["manageBilling"]);
+    assert.equal(result.banners[0].action.kind, "updatePayment");
+    assert.equal(result.banners[0].params?.plan, undefined);
+    assert.equal(proCard, "none");
+  }
+});
+
+test("non-renewing mobile access has no recurring-payment or cancellation warning", () => {
+  const payload = covered(
+    apiPayload({ ...SUBSCRIBED, plan: "pro" }, { provider: true, providerStore: "app_store" })
+  );
+  const { result } = fromPayload(payload);
+  assert.deepEqual(bannerIds(result), ["covered"]);
+  assert.deepEqual(
+    result.details.map((detail) => detail.labelKey),
+    ["details.billedThrough"]
+  );
+  assert.deepEqual(result.actions, [{ kind: "manageInStore", store: "app_store" }]);
+});
+
+test("a verified outstanding personal invoice keeps the portal accessible after cancellation", () => {
+  const canceled = apiPayload({ status: "canceled" });
+  for (const payload of [canceled, covered(canceled)]) {
+    const current = fromApi(payload);
+    const outstanding_invoice = {
+      amount_remaining: 2500,
+      currency: "usd",
+      next_payment_attempt: null,
+    };
+    const { actions, details } = ready(current, { summary: { outstanding_invoice } });
+    assert.ok(actions.some((action) => action.kind === "manageBilling"));
+    assert.equal(details[0].labelKey, "details.amountDue");
+    assert.equal(
+      actions.some((action) => action.kind === "subscribePro"),
+      !payload.isSubscribed
+    );
+    assert.ok(
+      !ready(current, { summary: {} }).actions.some((action) => action.kind === "manageBilling")
+    );
+  }
+});
+
+test("a discounted monthly Pro subscriber sees the invoice amount without a catalog price", () => {
+  const next_invoice = { amount: 640, currency: "usd", date: PERIOD_END };
+  const result = ready(fromApi(API.stripePro), { summary: { next_invoice } });
+  assert.equal(result.price, null);
+  assert.equal(result.badge.key, "badges.monthly");
+  assert.deepEqual(result.details[0].value, { kind: "invoice", ...next_invoice });
 });

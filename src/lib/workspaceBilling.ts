@@ -176,12 +176,13 @@ type BusinessTileWorkspace = Pick<Workspace, "id"> & WorkspaceBillingState;
  */
 export function businessTileAction(input: {
   listLoaded: boolean;
+  listError: boolean;
   entitledWorkspaceIds: string[] | undefined;
   workspaces: BusinessTileWorkspace[];
   defaultWorkspaceId: string | null;
 }): BusinessTileAction {
   // An unloaded list reads as empty, which must never send a member to "Create workspace".
-  if (!input.listLoaded) return { kind: "none" };
+  if (!input.listLoaded || input.listError) return { kind: "none" };
 
   const covering = coveringWorkspaces(input.entitledWorkspaceIds, input.workspaces);
   if (covering.some((workspace) => workspace.plan === "business")) {
@@ -217,12 +218,13 @@ type EnterpriseTileWorkspace = Pick<Workspace, "id" | "billing_manager"> & Works
  */
 export function enterpriseTileAction(input: {
   listLoaded: boolean;
+  listError: boolean;
   entitledWorkspaceIds: string[] | undefined;
   workspaces: EnterpriseTileWorkspace[];
   defaultWorkspaceId: string | null;
   activeWorkspaceId: string | null;
 }): EnterpriseTileAction {
-  if (!input.listLoaded) return { kind: "none" };
+  if (!input.listLoaded || input.listError) return { kind: "none" };
 
   const eligible = input.workspaces.filter(
     (workspace) => canSelfServeEnterprise(workspace) || canUpgradeWorkspaceToEnterprise(workspace)

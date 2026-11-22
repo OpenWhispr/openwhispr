@@ -104,11 +104,7 @@ export function useUsage(): UseUsageResult | null {
   const snapshot = useSyncExternalStore(subscribeUsage, getUsageState);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const checkoutInFlightRef = useRef(false);
-  const pendingRefetchRef = useRef<{
-    generation: number;
-    onReturn?: () => void;
-    signal?: AbortSignal;
-  } | null>(null);
+  const checkoutReturnGeneration = useRef<number | null>(null);
 
   const accountId = isSignedIn ? (user?.id ?? null) : null;
   const state = snapshot.accountId === accountId ? snapshot : null;
@@ -124,12 +120,11 @@ export function useUsage(): UseUsageResult | null {
     void loadUsage(fetchUsageResponse);
 
     const handleFocus = () => {
-      const pending = pendingRefetchRef.current;
-      if (!pending) return;
-      pendingRefetchRef.current = null;
-      if (pending.signal?.aborted || pending.generation !== getValidatedAuthGeneration()) return;
-      void loadUsage(fetchUsageResponse, { force: true });
-      pending.onReturn?.();
+      const generation = checkoutReturnGeneration.current;
+      checkoutReturnGeneration.current = null;
+      if (generation !== null && generation === getValidatedAuthGeneration()) {
+        void loadUsage(fetchUsageResponse, { force: true });
+      }
     };
     const handleUsageChanged = () => {
       void loadUsage(fetchUsageResponse, { force: true });
@@ -171,7 +166,7 @@ export function useUsage(): UseUsageResult | null {
         const result = await window.electronAPI.cloudCheckout(opts, generation);
         if (generation !== getValidatedAuthGeneration()) return UNCONFIRMED_SESSION;
         if (result.success && result.url) {
-          pendingRefetchRef.current = { generation };
+          checkoutReturnGeneration.current = generation;
           await window.electronAPI.openExternal(result.url);
           return { success: true };
         }
@@ -211,8 +206,14 @@ export function useUsage(): UseUsageResult | null {
         if (signal?.aborted || generation !== getValidatedAuthGeneration())
           return UNCONFIRMED_SESSION;
         if (result.success && result.url) {
-          const pending = { generation, onReturn, signal };
-          pendingRefetchRef.current = pending;
+          // The browser visit outlives Settings. Refresh the signed-in account on
+          // return even if the original view and its summary have gone away.
+          const handleReturn = (): void => {
+            if (generation !== getValidatedAuthGeneration()) return;
+            void loadUsage(fetchUsageResponse, { force: true });
+            if (!signal?.aborted) onReturn?.();
+          };
+          window.addEventListener("focus", handleReturn, { once: true });
           try {
             const opened = await window.electronAPI.openExternal(result.url);
             if (opened?.success === false) {
@@ -220,7 +221,7 @@ export function useUsage(): UseUsageResult | null {
             }
             return { success: true };
           } catch (error) {
-            if (pendingRefetchRef.current === pending) pendingRefetchRef.current = null;
+            window.removeEventListener("focus", handleReturn);
             return {
               success: false,
               error: error instanceof Error ? error.message : "Failed to open billing portal",

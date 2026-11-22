@@ -42,7 +42,7 @@ export type BusinessCardAction =
   BusinessTileAction | { kind: "checkout"; busy: boolean; disabled: boolean };
 
 /** The personal tile's actions, plus a workspace view's own Enterprise purchase dialog. */
-export type EnterpriseCardAction = EnterpriseTileAction | { kind: "checkout" };
+export type EnterpriseCardAction = EnterpriseTileAction | { kind: "checkout"; disabled: boolean };
 
 export type PlanCardId = "pro" | "business" | "enterprise";
 
@@ -282,7 +282,12 @@ export function PlansGrid({
   // Purchases are sales-assisted too, so a quieter contact link sits under the button.
   const purchaseButton = (action: EnterpriseCardAction, label: string): ReactElement => (
     <>
-      <PillButton variant="secondary" onClick={() => onEnterprise(action)} className={CARD_BUTTON}>
+      <PillButton
+        variant="secondary"
+        disabled={action.kind === "checkout" && action.disabled}
+        onClick={() => onEnterprise(action)}
+        className={CARD_BUTTON}
+      >
         {label}
       </PillButton>
       <button

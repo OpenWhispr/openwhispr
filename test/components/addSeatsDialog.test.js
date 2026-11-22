@@ -60,6 +60,7 @@ test.before(async (t) => {
         export const useTranslation = () => ({ t, i18n: { language: "en" } });
       `,
 
+      "/services/cloudApi": "export class CloudApiError extends Error {}",
       "/authRequestContext": "export const getValidatedAuthGeneration = () => 7;",
       "/services/WorkspacesService":
         "export const WorkspacesService = { previewSeats: (...args) => globalThis.__previewSeats(...args), updateSeats: (...args) => globalThis.__updateSeats(...args) };",
@@ -218,7 +219,7 @@ test("an owner already at the cap can close the dialog from initial keyboard foc
   assert.equal(byName("Increase seats").disabled, true);
   assert.equal(byName("Add seats").disabled, true);
   assert.equal(happyWindow.document.activeElement === byName("Cancel"), true);
-  assert.deepEqual(previewCalls, []);
+  assert.deepEqual(previewCalls, [1]);
   await click("Cancel");
   await waitForFocus();
   assert.equal(happyWindow.document.activeElement.textContent, "Open");

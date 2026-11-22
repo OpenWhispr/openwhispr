@@ -3240,6 +3240,8 @@
         "adding": "Ajout en cours…",
         "failure": "Impossible de confirmer la modification. Vérification du nombre de places en cours.",
         "success": "{{workspace}} dispose maintenant de {{count}} places.",
+        "limitReached": "L’espace de travail a atteint sa limite de places.",
+        "occupancyMinimum": "Le total doit être d’au moins {{minimum}} pour couvrir les places occupées.",
         "previewFailed": "Impossible de charger les tarifs."
       },
       "free": {
@@ -3350,8 +3352,7 @@
           "trialStarts": "Facturation à partir du {{date}}",
           "trialYearlyStarts": "Facturation annuelle à partir du {{date}}",
           "free": "$0",
-          "billedYearly": "Facturation annuelle",
-          "proMonthly": "{{price}} / mois"
+          "billedYearly": "Facturation annuelle"
         },
         "banners": {
           "endingDated": {
@@ -3368,11 +3369,11 @@
           },
           "coveredPastDue": {
             "title": "{{workspace}} vous couvre déjà",
-            "body": "Votre paiement {{plan}} a échoué. Résiliez {{plan}} pour arrêter les nouvelles tentatives."
+            "body": "Consultez le paiement échoué dans le portail de facturation."
           },
           "coveredPastDueUnnamed": {
             "title": "Un espace de travail vous couvre déjà",
-            "body": "Votre paiement {{plan}} a échoué. Résiliez {{plan}} pour arrêter les nouvelles tentatives."
+            "body": "Consultez le paiement échoué dans le portail de facturation."
           },
           "coveredStripeTrial": {
             "title": "{{workspace}} vous couvre déjà",
@@ -3392,11 +3393,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} vous couvre déjà",
-            "body": "Vous payez toujours {{plan}}. Résiliez-le dans la boutique d'applications de votre téléphone."
+            "body": "Vous pouvez consulter votre achat {{plan}} dans la boutique d’applications de votre téléphone."
           },
           "coveredStoreUnnamed": {
             "title": "Un espace de travail vous couvre déjà",
-            "body": "Vous payez toujours {{plan}}. Résiliez-le dans la boutique d'applications de votre téléphone."
+            "body": "Vous pouvez consulter votre achat {{plan}} dans la boutique d’applications de votre téléphone."
           },
           "covered": {
             "title": "{{workspace}} vous couvre",
@@ -3429,8 +3430,7 @@
           "billingContact": "Contact de facturation",
           "periodEnds": "Fin de la période en cours",
           "billedThrough": "Facturé via",
-          "accessUntil": "Accès jusqu'au",
-          "renews": "Renouvellement"
+          "accessUntil": "Accès jusqu'au"
         }
       },
       "workspace": {
@@ -3481,7 +3481,7 @@
           },
           "paymentFailed": {
             "title": "Échec du paiement",
-            "body": "Mettez à jour le paiement pour que vos membres gardent {{plan}}."
+            "body": "Mettez à jour le moyen de paiement pour que vos membres retrouvent l’accès à {{plan}}."
           },
           "paused": {
             "title": "{{plan}} est en pause",
@@ -3501,7 +3501,7 @@
           },
           "memberPaymentProblem": {
             "title": "{{workspace}} a un problème de paiement",
-            "body": "L'accès pourrait bientôt prendre fin."
+            "body": "Votre forfait personnel s’applique jusqu’à ce que le paiement de l’espace de travail aboutisse."
           },
           "memberPaused": {
             "title": "Le forfait de {{workspace}} est en pause",

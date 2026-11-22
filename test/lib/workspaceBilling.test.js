@@ -446,6 +446,14 @@ const tileInput = (o) => ({
   ...o,
 });
 
+test("a failed workspace list cannot offer Create workspace or Contact sales", () => {
+  for (const entitledWorkspaceIds of [[], ["team"]]) {
+    const input = tileInput({ listError: true, entitledWorkspaceIds });
+    assert.deepEqual(businessTileAction(input), { kind: "none" });
+    assert.deepEqual(enterpriseTileAction(input), { kind: "none" });
+  }
+});
+
 test("businessTileAction: unresolved list offers nothing", () => {
   assert.deepEqual(businessTileAction(tileInput({ listLoaded: false })), { kind: "none" });
 });

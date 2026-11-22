@@ -3139,6 +3139,8 @@
         "adding": "追加中…",
         "failure": "シート数の変更を確認できませんでした。現在の合計を確認しています。",
         "success": "{{workspace}} の合計は {{count}} シートです。",
+        "limitReached": "ワークスペースのシート数が上限に達しました。",
+        "occupancyMinimum": "使用中のシートを確保するには、合計 {{minimum}} シート以上が必要です。",
         "previewFailed": "シート料金を読み込めませんでした。"
       },
       "free": {
@@ -3249,8 +3251,7 @@
           "trialStarts": "{{date}}から請求開始",
           "trialYearlyStarts": "{{date}}から年払い",
           "free": "$0",
-          "billedYearly": "年払い",
-          "proMonthly": "{{price}} / 月"
+          "billedYearly": "年払い"
         },
         "banners": {
           "endingDated": {
@@ -3267,11 +3268,11 @@
           },
           "coveredPastDue": {
             "title": "{{workspace}} がすでに対象にしています",
-            "body": "{{plan}} の支払いに失敗しました。再試行を止めるには {{plan}} を解約してください。"
+            "body": "請求ポータルで失敗した支払いを確認してください。"
           },
           "coveredPastDueUnnamed": {
             "title": "ワークスペースがすでに対象にしています",
-            "body": "{{plan}} の支払いに失敗しました。再試行を止めるには {{plan}} を解約してください。"
+            "body": "請求ポータルで失敗した支払いを確認してください。"
           },
           "coveredStripeTrial": {
             "title": "{{workspace}} がすでに対象にしています",
@@ -3291,11 +3292,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} がすでに対象にしています",
-            "body": "{{plan}} の料金は引き続き発生しています。スマートフォンのアプリストアで解約してください。"
+            "body": "スマートフォンのアプリストアで {{plan}} の購入内容を確認できます。"
           },
           "coveredStoreUnnamed": {
             "title": "ワークスペースがすでに対象にしています",
-            "body": "{{plan}} の料金は引き続き発生しています。スマートフォンのアプリストアで解約してください。"
+            "body": "スマートフォンのアプリストアで {{plan}} の購入内容を確認できます。"
           },
           "covered": {
             "title": "{{workspace}} の対象です",
@@ -3328,8 +3329,7 @@
           "billingContact": "請求先連絡先",
           "periodEnds": "現在の期間の終了日",
           "billedThrough": "請求元",
-          "accessUntil": "利用期限",
-          "renews": "更新日"
+          "accessUntil": "利用期限"
         }
       },
       "workspace": {
@@ -3380,7 +3380,7 @@
           },
           "paymentFailed": {
             "title": "支払いに失敗しました",
-            "body": "メンバーが {{plan}} を使い続けられるよう、支払い方法を更新してください。"
+            "body": "メンバーが再び {{plan}} を利用できるよう、支払い方法を更新してください。"
           },
           "paused": {
             "title": "{{plan}} は一時停止中です",
@@ -3400,7 +3400,7 @@
           },
           "memberPaymentProblem": {
             "title": "{{workspace}} の支払いに問題があります",
-            "body": "まもなく利用できなくなる可能性があります。"
+            "body": "ワークスペースの支払いが完了するまで、個人プランが適用されます。"
           },
           "memberPaused": {
             "title": "{{workspace}} のプランは一時停止中です",

@@ -39,3 +39,13 @@ test("invoice presentation combines supplied values and keeps zero with or witho
   assert.equal(formatBillingInvoice({ date }, "en"), "Dec 20, 2026");
   assert.equal(formatBillingInvoice({ amount: 1200 }, "en"), "");
 });
+
+test("a yen invoice displays the full amount returned by Stripe", () => {
+  const {
+    formatBillingInvoice,
+  } = require("../../src/components/settings/billing/billingFormat.ts");
+  assert.equal(
+    formatBillingInvoice({ amount: 2000, currency: "jpy" }, "ja"),
+    (2000).toLocaleString(undefined, { style: "currency", currency: "JPY" })
+  );
+});

@@ -3233,6 +3233,8 @@
         "adding": "Wird hinzugefügt…",
         "failure": "Die Änderung konnte nicht bestätigt werden. Die aktuelle Anzahl wird geprüft.",
         "success": "{{workspace}} hat jetzt insgesamt {{count}} Plätze.",
+        "limitReached": "Der Arbeitsbereich hat sein Platzlimit erreicht.",
+        "occupancyMinimum": "Die Gesamtzahl muss mindestens {{minimum}} betragen, um alle belegten Plätze abzudecken.",
         "previewFailed": "Die Preise konnten nicht geladen werden."
       },
       "free": {
@@ -3343,8 +3345,7 @@
           "trialStarts": "Abrechnung ab {{date}}",
           "trialYearlyStarts": "Jährliche Abrechnung ab {{date}}",
           "free": "$0",
-          "billedYearly": "Jährliche Abrechnung",
-          "proMonthly": "{{price}} / Monat"
+          "billedYearly": "Jährliche Abrechnung"
         },
         "banners": {
           "endingDated": {
@@ -3361,11 +3362,11 @@
           },
           "coveredPastDue": {
             "title": "{{workspace}} deckt dich bereits ab",
-            "body": "Deine {{plan}}-Zahlung ist fehlgeschlagen. Kündige {{plan}}, um die erneuten Versuche zu stoppen."
+            "body": "Prüfe die fehlgeschlagene Zahlung im Abrechnungsportal."
           },
           "coveredPastDueUnnamed": {
             "title": "Ein Workspace deckt dich bereits ab",
-            "body": "Deine {{plan}}-Zahlung ist fehlgeschlagen. Kündige {{plan}}, um die erneuten Versuche zu stoppen."
+            "body": "Prüfe die fehlgeschlagene Zahlung im Abrechnungsportal."
           },
           "coveredStripeTrial": {
             "title": "{{workspace}} deckt dich bereits ab",
@@ -3385,11 +3386,11 @@
           },
           "coveredStore": {
             "title": "{{workspace}} deckt dich bereits ab",
-            "body": "Du zahlst weiterhin für {{plan}}. Kündige es im App-Store deines Telefons."
+            "body": "Du kannst deinen {{plan}}-Kauf im App-Store deines Smartphones einsehen."
           },
           "coveredStoreUnnamed": {
             "title": "Ein Workspace deckt dich bereits ab",
-            "body": "Du zahlst weiterhin für {{plan}}. Kündige es im App-Store deines Telefons."
+            "body": "Du kannst deinen {{plan}}-Kauf im App-Store deines Smartphones einsehen."
           },
           "covered": {
             "title": "{{workspace}} deckt dich ab",
@@ -3422,8 +3423,7 @@
           "billingContact": "Rechnungskontakt",
           "periodEnds": "Aktueller Zeitraum endet",
           "billedThrough": "Abgerechnet über",
-          "accessUntil": "Zugriff bis",
-          "renews": "Verlängert sich am"
+          "accessUntil": "Zugriff bis"
         }
       },
       "workspace": {
@@ -3474,7 +3474,7 @@
           },
           "paymentFailed": {
             "title": "Zahlung fehlgeschlagen",
-            "body": "Aktualisiere die Zahlung, damit deine Mitglieder {{plan}} behalten."
+            "body": "Aktualisiere die Zahlungsmethode, damit deine Mitglieder {{plan}} wieder nutzen können."
           },
           "paused": {
             "title": "{{plan}} ist pausiert",
@@ -3494,7 +3494,7 @@
           },
           "memberPaymentProblem": {
             "title": "{{workspace}} hat ein Zahlungsproblem",
-            "body": "Der Zugriff könnte bald enden."
+            "body": "Dein persönlicher Plan gilt, bis die Zahlung für den Arbeitsbereich erfolgreich ist."
           },
           "memberPaused": {
             "title": "Der Plan von {{workspace}} ist pausiert",

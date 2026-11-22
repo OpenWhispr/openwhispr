@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { addSeatsState } from "../../../lib/addSeatsState";
+import { CloudApiError } from "../../../services/cloudApi";
+import { addSeatsState, LEGACY_WORKSPACE_SEAT_LIMIT } from "../../../lib/addSeatsState";
 import {
   currentBillingIdentity,
   isSameBillingIdentity,
@@ -60,9 +61,13 @@ export function AddSeatsDialog({
   // A repeated 10 → 15 → 10 list snapshot is a new observation. Only the preview
   // requested against this observation can override its counts or authorize a purchase.
   const { seats, seats_used, seat_limit } = workspace;
+  const interval = summary?.interval;
+  const unitAmount = summary?.unit_amount;
+  const currency = summary?.next_invoice?.currency;
+  const cachedAtLimit = seats >= (seat_limit ?? LEGACY_WORKSPACE_SEAT_LIMIT);
   const seatSnapshot = useMemo(
-    () => ({ seats, seats_used, seat_limit }),
-    [seats, seats_used, seat_limit]
+    () => ({ seats, seats_used, seat_limit, interval, unitAmount, currency }),
+    [seats, seats_used, seat_limit, interval, unitAmount, currency]
   );
   const [quote, setQuote] = useState<{
     version: number;
@@ -71,6 +76,7 @@ export function AddSeatsDialog({
     retryTarget: number | null;
     snapshot: typeof seatSnapshot;
   } | null>(null);
+  const [fullSnapshot, setFullSnapshot] = useState<typeof seatSnapshot | null>(null);
   const [previewError, setPreviewError] = useState(false);
   const [adding, setAdding] = useState(false);
   const latestRefresh = useRef(refreshWorkspace);
@@ -85,15 +91,17 @@ export function AddSeatsDialog({
   });
   const { delta, maxDelta } = model;
   // Read the smallest quote first so an already-applied increase near the ceiling can be observed.
-  const previewDelta =
-    retryTarget !== null && baseline?.retryTarget !== retryTarget ? Math.min(1, maxDelta) : delta;
+  const probeCapacity =
+    (retryTarget !== null && baseline?.retryTarget !== retryTarget) || (!baseline && cachedAtLimit);
+  const previewDelta = probeCapacity ? 1 : delta;
+  const currentPreview = baseline?.version === version.current && baseline.delta === delta;
   const fresh =
-    baseline?.version === version.current &&
-    baseline.delta === delta &&
+    currentPreview &&
     model.nextQuantity !== null &&
     (retryTarget === null || model.nextQuantity <= retryTarget);
   const priced = delta === 0 || fresh;
-  const pending = delta > 0 && !fresh && !previewError;
+  const pending = delta > 0 && !currentPreview && !previewError;
+  const quantityLocked = adding || (retryTarget !== null && !currentPreview);
   const workspaceId = workspace.id;
 
   function current(): boolean {
@@ -108,13 +116,20 @@ export function AddSeatsDialog({
   }, []);
 
   useLayoutEffect(() => {
+    if (cachedAtLimit) void latestRefresh.current().catch(() => {});
+  }, [cachedAtLimit]);
+
+  useLayoutEffect(() => {
+    if (retryTarget === null && maxDelta > 0) setSelected(delta);
+  }, [retryTarget, maxDelta, delta]);
+
+  useLayoutEffect(() => {
     const request = ++version.current;
     const valid = (): boolean =>
       active.current &&
       request === version.current &&
       isSameBillingIdentity(identity, currentBillingIdentity(workspaceId));
     setPreviewError(false);
-    if (retryTarget === null) setSelected(delta);
     if (previewDelta > 0 && !locked.current) {
       void WorkspacesService.previewSeats(workspaceId, previewDelta, identity.authGeneration).then(
         (preview) => {
@@ -131,8 +146,19 @@ export function AddSeatsDialog({
             snapshot: seatSnapshot,
           });
         },
-        () => {
+        (error: unknown) => {
           if (!valid()) return;
+          // Both API versions return this exact refusal before pricing an over-limit change.
+          // A one-seat probe proves the limit was reached, even if the DB mirror is still behind Stripe.
+          if (
+            previewDelta === 1 &&
+            error instanceof CloudApiError &&
+            error.status === 400 &&
+            error.message === "Workspace seat limit exceeded"
+          ) {
+            setFullSnapshot(seatSnapshot);
+            return;
+          }
           setPreviewError(true);
           // Keep the recovery baseline so a failed remaining-seat quote waits for Retry.
           // A newer workspace snapshot will independently invalidate it.
@@ -141,25 +167,33 @@ export function AddSeatsDialog({
         }
       );
     }
-  }, [delta, previewDelta, retryTarget, revision, workspaceId, identity, seatSnapshot]);
+  }, [previewDelta, retryTarget, revision, workspaceId, identity, seatSnapshot]);
 
   useLayoutEffect(() => {
+    const atLimit = fullSnapshot === seatSnapshot;
+    const reachedTarget =
+      retryTarget !== null && purchased >= retryTarget && (!cachedAtLimit || baseline !== null);
     if (
-      retryTarget === null ||
-      purchased < retryTarget ||
+      (!atLimit && !reachedTarget) ||
       locked.current ||
       !isSameBillingIdentity(identity, currentBillingIdentity(workspaceId))
     )
       return;
     locked.current = true;
     toast({
-      title: t(PREFIX + "success", { workspace: workspace.name, count: purchased }),
-      variant: "success",
+      title: atLimit
+        ? t(PREFIX + "limitReached")
+        : t(PREFIX + "success", { workspace: workspace.name, count: purchased }),
+      variant: atLimit ? "default" : "success",
     });
     onClose();
     refreshSummary();
     void refreshWorkspace().catch(() => {});
   }, [
+    fullSnapshot,
+    seatSnapshot,
+    cachedAtLimit,
+    baseline,
     retryTarget,
     purchased,
     identity,
@@ -173,7 +207,7 @@ export function AddSeatsDialog({
   ]);
 
   function select(value: number): void {
-    if (locked.current || (retryTarget !== null && !fresh) || delta === value) return;
+    if (locked.current || quantityLocked || delta === value) return;
     setRetryTarget(null);
     ++version.current;
     setSelected(value);
@@ -206,12 +240,17 @@ export function AddSeatsDialog({
         identity.authGeneration
       );
       total = result.quantity;
-    } catch {
+    } catch (error) {
       if (!current()) return;
-      toast({ title: t(PREFIX + "failure"), variant: "destructive" });
+      const occupancyChanged =
+        error instanceof CloudApiError && error.code === "seat_quantity_stale";
+      if (!occupancyChanged) toast({ title: t(PREFIX + "failure"), variant: "destructive" });
       locked.current = false;
       setAdding(false);
-      setRetryTarget(model.nextQuantity);
+      // Each interrupted write needs its own one-seat probe, including a second try
+      // for the same total. Keep its observed capacity until that probe returns.
+      setQuote((previous) => (previous ? { ...previous, retryTarget: null } : previous));
+      setRetryTarget(occupancyChanged ? null : model.nextQuantity);
       retryPreview();
       return;
     }
@@ -225,7 +264,6 @@ export function AddSeatsDialog({
     void refreshWorkspace().catch(() => {});
   }
 
-  const quantityLocked = adding || (retryTarget !== null && !fresh);
   const ticks = [0, 5, 10, 15, 20].filter((tick) => tick < maxDelta).concat(maxDelta);
   const invoice = priced ? model.invoice : null;
   const priceRows = [
@@ -249,6 +287,13 @@ export function AddSeatsDialog({
     : delta === 0
       ? t(PREFIX + "title")
       : t(PREFIX + "confirm", { count: delta });
+  const notice = previewError
+    ? t(PREFIX + "previewFailed")
+    : model.occupancyMinimum !== null
+      ? t(PREFIX + "occupancyMinimum", { minimum: model.occupancyMinimum })
+      : maxDelta === 0 && baseline
+        ? t(PREFIX + "limitReached")
+        : "";
   return (
     <Dialog
       open
@@ -401,14 +446,8 @@ export function AddSeatsDialog({
             ))}
           </dl>
         )}
-        <div role="status" aria-live="polite" className={previewError ? "text-sm" : "sr-only"}>
-          {adding
-            ? t(PREFIX + "adding")
-            : previewError
-              ? t(PREFIX + "previewFailed")
-              : pending
-                ? t("common.loading")
-                : ""}
+        <div role="status" aria-live="polite" className={notice ? "text-sm" : "sr-only"}>
+          {adding ? t(PREFIX + "adding") : notice || (pending ? t("common.loading") : "")}
         </div>
         <DialogFooter>
           {previewError && (

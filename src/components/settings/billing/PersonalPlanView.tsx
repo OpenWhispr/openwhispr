@@ -34,7 +34,6 @@ interface PersonalPlanViewProps {
 }
 
 const P = "settingsPage.billing.personal";
-const PRICING = "settingsPage.account.pricing";
 
 const TIER_ICONS: Record<PersonalTier, ComponentType<{ className?: string }>> = {
   free: User,
@@ -253,8 +252,12 @@ export function PersonalPlanView({
           <BillingRow>
             <div className="flex min-w-0 flex-col gap-1">
               <PlanName
-                icon={TIER_ICONS[state.tier]}
-                name={t(`settingsPage.account.planLabels.${state.tier}`)}
+                icon={state.tier ? TIER_ICONS[state.tier] : User}
+                name={
+                  state.tier
+                    ? t(`settingsPage.account.planLabels.${state.tier}`)
+                    : t("settingsPage.billing.picker.personal")
+                }
                 badge={
                   state.badge
                     ? {
@@ -269,10 +272,7 @@ export function PersonalPlanView({
               />
               {state.price && (
                 <p dir="auto" className="text-xs text-muted-foreground">
-                  {t(`${P}.${state.price.key}`, {
-                    price: t(`${PRICING}.pro.monthlyPrice`),
-                    ...translationParams(state.price.params, formatDate),
-                  })}
+                  {t(`${P}.${state.price.key}`, translationParams(state.price.params, formatDate))}
                 </p>
               )}
             </div>
