@@ -138,6 +138,20 @@ test("getRawKey returns $NAME for shell-imported secrets and saving that ref doe
   else process.env.OPENAI_API_KEY = previousOpenAI;
 });
 
+test("Corti runtime credentials trim shell padding and treat a blank export as missing", (t) => {
+  const env = new EnvironmentManager();
+  t.mock.method(env, "_getRawKey", () => "$GROQ_API_KEY");
+  const previous = process.env.GROQ_API_KEY;
+  t.after(() => {
+    if (previous === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = previous;
+  });
+  process.env.GROQ_API_KEY = "  fixture-id\n";
+  assert.equal(env.getCortiClientId(), "fixture-id");
+  process.env.GROQ_API_KEY = "   ";
+  assert.equal(env.getCortiClientSecret(), "");
+});
+
 test("resolveSecretRef only expands known secret names", () => {
   const previousOpenAI = process.env.OPENAI_API_KEY;
   const env = new EnvironmentManager();
@@ -310,10 +324,129 @@ test("clearing legacy Cleanup preserves another scope's reference across a resta
 
 test("Cleanup expands the selected shell field's reference once", (t) => {
   const env = isolateCleanupSettings(t);
-  process.env.CUSTOM_CLEANUP_API_KEY = "$GROQ_API_KEY";
+  process.env.CUSTOM_CLEANUP_API_KEY = "  $GROQ_API_KEY  ";
   process.env.GROQ_API_KEY = "fake-reference-target";
   env._shellImportedSecrets.add("CUSTOM_CLEANUP_API_KEY");
   assert.equal(env.getCleanupCustomKey(), "fake-reference-target");
+  const shown = env.getRawCleanupCustomKey();
+  assert.equal(shown, "$GROQ_API_KEY");
+  assert.equal(env.resolveSecretRef(shown), "fake-reference-target");
+  env.saveCleanupCustomKey(shown);
+  assert.equal(env._shellImportedSecrets.has("CUSTOM_CLEANUP_API_KEY"), true);
+  env.saveCustomTranscriptionKey("$CUSTOM_CLEANUP_API_KEY");
+  assert.equal(env.getCustomTranscriptionKey(), "");
+  process.env.GROQ_API_KEY = "$OPENAI_API_KEY";
+  assert.equal(env.resolveSecretRef(shown), "");
+});
+
+test("cross-scope startup seeding retains a destination imported after its initial read", (t) => {
+  const env = isolateCleanupSettings(t);
+  process.env.OPENROUTER_API_KEY = "shell-router";
+  env._shellImportedSecrets.add("OPENROUTER_API_KEY");
+  const result = env.saveOpenrouterKey("older-custom", "if-empty");
+  assert.equal(result.retained, "$OPENROUTER_API_KEY");
+  assert.equal(env.getOpenrouterKey(), "shell-router");
+  assert.ok(env._shellImportedSecrets.has("OPENROUTER_API_KEY"));
+});
+
+test("an acknowledged migration survives restart with the plaintext fallback", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const file = path.join(fakeElectron.app.getPath("userData"), ".env");
+  fs.writeFileSync(file, "# Existing user configuration\nUNRELATED_FLAG=keep\n");
+  process.env.GROQ_API_KEY = "launcher-only";
+  assert.deepEqual(await env.saveOpenrouterKey("from-legacy#custom", "if-empty"), { success: true });
+  process.env = require("dotenv").parse(fs.readFileSync(file));
+  assert.equal(process.env.UNRELATED_FLAG, "keep");
+  assert.equal(process.env.GROQ_API_KEY, undefined);
+  EnvironmentManager._resetShellImportedSecrets();
+  assert.equal(new EnvironmentManager().getOpenrouterKey(), "from-legacy#custom");
+});
+
+test("a migration blocked by storage failure preserves the displaced shell alias for a retry", async (t) => {
+  const env = isolateCleanupSettings(t);
+  process.env.TRANSLATION_CUSTOM_API_KEY = "shell-translation";
+  env._shellImportedSecrets.add("TRANSLATION_CUSTOM_API_KEY");
+  const write = t.mock.method(env, "_persistMigratedPlaintext", async () => { throw new Error("disk full"); });
+  assert.equal((await env.saveTranslationCustomKey("older-user-setting", true)).success, false);
+  assert.equal(env.getRawKey("TRANSLATION_CUSTOM_API_KEY"), "$TRANSLATION_CUSTOM_API_KEY");
+  assert.equal(env.getTranslationCustomKey(), "shell-translation");
+  write.mock.restore();
+  assert.deepEqual(await env.saveTranslationCustomKey("older-user-setting", true), { success: true });
+});
+
+test("concurrent migrations observe the same disk failure and a later user edit survives it", async (t) => {
+  const env = isolateCleanupSettings(t);
+  let rejectWrite;
+  t.mock.method(env, "_persistMigratedPlaintext", () =>
+    new Promise((_resolve, reject) => { rejectWrite = reject; })
+  );
+  const first = env.saveOpenrouterKey("upgrade-source", "if-empty");
+  const second = env.saveOpenrouterKey("another-window", "if-empty");
+  env.saveOpenrouterKey("user-edit");
+  rejectWrite(new Error("disk full"));
+  assert.equal((await first).success, false);
+  assert.equal((await second).success, false);
+  assert.equal(env.getOpenrouterKey(), "user-edit");
+});
+
+test("an unreadable encrypted upgrade slot survives conditional migration until the store recovers", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const crypto = require("../../src/helpers/secretCrypto");
+  t.mock.method(crypto, "isAvailable", () => true);
+  t.mock.method(crypto, "encrypt", (value) => Buffer.from(value));
+  const decrypt = t.mock.method(crypto, "decrypt", () => { throw new Error("locked"); });
+  const slot = env._getSecretFilePath("TRANSLATION_CUSTOM_API_KEY");
+  fs.mkdirSync(path.dirname(slot), { recursive: true });
+  fs.writeFileSync(slot, "encrypted-old-setting");
+  await env._loadAllSecrets();
+  const shell = require("../../src/helpers/envKeyResolve");
+  const importMissing = shell.importMissingSecretsFromLoginShell;
+  t.mock.method(shell, "importMissingSecretsFromLoginShell", (options) =>
+    importMissing({
+      ...options,
+      platform: "linux",
+      passwdShell: "/bin/bash",
+      existsSync: () => true,
+      execFile: async () => ({
+        stdout: shell.ENV_EXPORT_SENTINEL +
+          "\nTRANSLATION_CUSTOM_API_KEY=wrong-shell-account\0GROQ_API_KEY=shell-account\0",
+      }),
+    })
+  );
+  assert.deepEqual(await env._importLoginShellSecrets(), ["GROQ_API_KEY"]);
+  assert.equal(env.getTranslationCustomKey(), "");
+  process.env.TRANSLATION_CUSTOM_API_KEY = "inherited-value";
+  await env._loadAllSecrets();
+  assert.equal(env.getTranslationCustomKey(), "inherited-value");
+  assert.equal((await env.saveTranslationCustomKey("stale-upgrade-copy", true)).success, false);
+  assert.equal(fs.readFileSync(slot, "utf8"), "encrypted-old-setting");
+  decrypt.mock.mockImplementation((blob) => ({ value: blob.toString(), needsReencrypt: false }));
+  await env._loadAllSecrets();
+  assert.deepEqual(await env._importLoginShellSecrets(), []);
+  assert.equal(env.getTranslationCustomKey(), "encrypted-old-setting");
+});
+
+test("legacy scoped references replace shell aliases and survive restart", async (t) => {
+  const env = isolateCleanupSettings(t);
+  process.env.TRANSLATION_CUSTOM_API_KEY = "$GROQ_API_KEY";
+  process.env.GROQ_API_KEY = "fixture-target";
+  env._shellImportedSecrets.add("TRANSLATION_CUSTOM_API_KEY");
+  const alias = env.getRawKey("TRANSLATION_CUSTOM_API_KEY");
+  env.saveTranslationCustomKey(alias);
+  assert.ok(env._shellImportedSecrets.has("TRANSLATION_CUSTOM_API_KEY"));
+  await env.saveTranslationCustomKey(alias, true);
+  assert.equal(env._shellImportedSecrets.has("TRANSLATION_CUSTOM_API_KEY"), false);
+  const retained = env.saveTranslationCustomKey("stale-local-copy", true);
+  assert.equal(retained.retained, alias);
+  process.env = require("dotenv").parse(fs.readFileSync((await env.saveAllKeysToEnvFile()).path));
+  EnvironmentManager._resetShellImportedSecrets();
+  const restarted = new EnvironmentManager();
+  assert.equal(restarted.getTranslationCustomKey(), "fixture-target");
+  assert.equal(restarted.getRawKey("TRANSLATION_CUSTOM_API_KEY"), alias);
+  restarted.saveTranslationCustomKey("");
+  const delayedMigration = restarted.saveTranslationCustomKey("stale-local-copy", true);
+  assert.equal(delayedMigration.retained, "");
+  assert.equal(restarted.getRawKey("TRANSLATION_CUSTOM_API_KEY"), "");
 });
 
 test("a late shell import cannot undo an explicit clear of Cleanup", async (t) => {
@@ -358,6 +491,44 @@ test("migration and restart retain encrypted legacy keys referenced by other sco
   await restarted._loadAllSecrets();
   assert.equal(restarted.getCleanupCustomKey(), "replacement");
   assert.equal(restarted.resolveSecretRef("$CUSTOM_REASONING_API_KEY"), "");
+});
+
+test("the legacy Cleanup alias survives a reference migrated later from renderer storage", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const crypto = require("../../src/helpers/secretCrypto");
+  t.mock.method(crypto, "isAvailable", () => true);
+  t.mock.method(crypto, "encrypt", (value) => Buffer.from(value));
+  t.mock.method(crypto, "decrypt", (blob) => ({ value: blob.toString(), needsReencrypt: false }));
+  process.env.CUSTOM_REASONING_API_KEY = "profile-cleanup";
+  await env._migrateToSecureStorage();
+  // Main initializes before renderer localStorage is available.
+  await env.saveTranslationCustomKey("$CUSTOM_REASONING_API_KEY", true);
+  assert.equal(env.getTranslationCustomKey(), "profile-cleanup");
+  process.env = {};
+  EnvironmentManager._resetShellImportedSecrets();
+  const restarted = new EnvironmentManager();
+  await restarted._loadAllSecrets();
+  assert.equal(restarted.getCleanupCustomKey(), "profile-cleanup");
+  assert.equal(restarted.getTranslationCustomKey(), "profile-cleanup");
+});
+
+test("interrupted migration preserves an existing encrypted slot when the keyring is locked", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const crypto = require("../../src/helpers/secretCrypto");
+  t.mock.method(crypto, "isAvailable", () => true);
+  t.mock.method(crypto, "encrypt", (value) => Buffer.from(value));
+  const decrypt = t.mock.method(crypto, "decrypt", () => { throw new Error("locked"); });
+  const slot = env._getSecretFilePath("OPENAI_API_KEY");
+  fs.mkdirSync(path.dirname(slot), { recursive: true });
+  fs.writeFileSync(slot, "encrypted-user-setting");
+  process.env.OPENAI_API_KEY = "older-copy";
+  await env._migrateToSecureStorage();
+  assert.equal(fs.readFileSync(slot, "utf8"), "encrypted-user-setting");
+  assert.equal(fs.existsSync(env._getMigrationSentinelPath()), false);
+  decrypt.mock.mockImplementation((blob) => ({ value: blob.toString(), needsReencrypt: false }));
+  await env._migrateToSecureStorage();
+  await env._loadAllSecrets();
+  assert.equal(env.getOpenAIKey(), "encrypted-user-setting");
 });
 
 test("the self-hosted headers secret is stored but never a $VAR target or shell import", () => {

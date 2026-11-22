@@ -1763,6 +1763,11 @@ export interface ReferralItem {
   first_payment_at: string | null;
 }
 
+export type SecretKeySaveResult = { success: boolean; reason?: string; retained?: string };
+// A legacy plaintext migration can supersede a shell import. Cross-scope seeding
+// uses "if-empty" to preserve every existing destination, including shell imports.
+type SecretKeyMigration = boolean | "if-empty";
+
 declare global {
   interface Window {
     commitHeldSpaceDeletes?: () => Promise<void>;
@@ -2529,6 +2534,7 @@ declare global {
       getOpenAIKey: () => Promise<string>;
       saveOpenAIKey: (key: string) => Promise<{ success: boolean }>;
       resolveSecretRef?: (value: string) => Promise<string>;
+      getConfiguredSecretRefs?: (references: string[]) => Promise<string[]>;
       getAnthropicKey: () => Promise<string | null>;
       saveAnthropicKey: (key: string) => Promise<void>;
       getUiLanguage: () => Promise<string>;
@@ -2963,7 +2969,10 @@ declare global {
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;
       getOpenrouterKey: () => Promise<string | null>;
-      saveOpenrouterKey: (key: string) => Promise<void>;
+      saveOpenrouterKey: (
+        key: string,
+        migration?: SecretKeyMigration
+      ) => Promise<SecretKeySaveResult>;
 
       // xAI API key management
       getXaiKey?: () => Promise<string | null>;
@@ -3027,15 +3036,30 @@ declare global {
       getCleanupCustomKey?: () => Promise<string | null>;
       saveCleanupCustomKey?: (key: string) => Promise<void>;
       getNoteFormattingCustomKey?: () => Promise<string | null>;
-      saveNoteFormattingCustomKey?: (key: string) => Promise<void>;
+      saveNoteFormattingCustomKey?: (
+        key: string,
+        migrateLegacy?: boolean
+      ) => Promise<SecretKeySaveResult>;
       getTranslationCustomKey?: () => Promise<string | null>;
-      saveTranslationCustomKey?: (key: string) => Promise<void>;
+      saveTranslationCustomKey?: (
+        key: string,
+        migrateLegacy?: boolean
+      ) => Promise<SecretKeySaveResult>;
       getDictationAgentCustomKey?: () => Promise<string | null>;
-      saveDictationAgentCustomKey?: (key: string) => Promise<void>;
+      saveDictationAgentCustomKey?: (
+        key: string,
+        migration?: SecretKeyMigration
+      ) => Promise<SecretKeySaveResult>;
       getDictationAgentVisionCustomKey?: () => Promise<string | null>;
-      saveDictationAgentVisionCustomKey?: (key: string) => Promise<void>;
+      saveDictationAgentVisionCustomKey?: (
+        key: string,
+        migrateLegacy?: boolean
+      ) => Promise<SecretKeySaveResult>;
       getChatAgentCustomKey?: () => Promise<string | null>;
-      saveChatAgentCustomKey?: (key: string) => Promise<void>;
+      saveChatAgentCustomKey?: (
+        key: string,
+        migrateLegacy?: boolean
+      ) => Promise<SecretKeySaveResult>;
 
       // Enterprise provider key persistence
       getBedrockRegion?: () => Promise<string | null>;

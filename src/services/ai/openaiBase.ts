@@ -4,6 +4,8 @@ import { getSettings } from "../../stores/settingsStore";
 import { isSecureHttpEndpoint, matchesHost } from "../../utils/urlUtils";
 import logger from "../../utils/logger";
 import i18n from "../../i18n";
+import { PROVIDER_ERROR_CODES, providerError } from "../../helpers/providerHttpErrors.js";
+import { resolveApiKey } from "../../utils/resolveApiKey";
 
 // Never falls back: rerouting an invalid Custom endpoint to api.openai.com
 // would send the prompt and the custom API key to a host the user never chose.
@@ -72,6 +74,16 @@ export function canBorrowCleanupCustomKey(requestBaseUrl: string | undefined): b
   const cleanupBase = getSettings().cleanupCloudBaseUrl?.trim();
   const requestBase = requestBaseUrl?.trim();
   return !!requestBase && requestBase === cleanupBase;
+}
+
+// A blank field permits anonymous access or the shared cleanup key. An explicit
+// credential must resolve before any prompt can be sent under another identity.
+export async function resolveCustomLlmKey(storedKey?: string): Promise<string> {
+  const key = await resolveApiKey(storedKey);
+  if (storedKey?.trim() && !key) {
+    throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, { provider: "Custom", surface: "llm" });
+  }
+  return key;
 }
 
 export function resolveSelfHostedOpenAIBase(configuredBaseUrl: string): string {

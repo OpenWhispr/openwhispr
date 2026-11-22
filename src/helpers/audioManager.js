@@ -730,6 +730,7 @@ class AudioManager {
     this.onTranscriptionComplete = null;
     this.onPartialTranscript = null;
     this.micCaptureStatus = "inactive";
+    this.apiKeyGeneration = 0;
     this.cachedApiKey = null;
     this.cachedApiKeyProvider = null;
     this._micWarmedAt = 0;
@@ -775,6 +776,7 @@ class AudioManager {
     });
 
     this._onApiKeyChanged = () => {
+      this.apiKeyGeneration += 1;
       this.cachedApiKey = null;
       this.cachedApiKeyProvider = null;
       // Replace a socket warmed with the previous key now rather than at the next
@@ -2916,6 +2918,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return this.cachedApiKey;
     }
 
+    const generation = this.apiKeyGeneration;
     let apiKey = null;
 
     if (provider === "custom") {
@@ -3088,8 +3091,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     }
 
-    this.cachedApiKey = apiKey;
-    this.cachedApiKeyProvider = provider;
+    if (generation === this.apiKeyGeneration) {
+      this.cachedApiKey = apiKey;
+      this.cachedApiKeyProvider = provider;
+    }
     return apiKey;
   }
 

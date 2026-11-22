@@ -2700,23 +2700,29 @@ class IPCHandlers {
     // Counts changes to any key in Settings. A streaming socket keeps the count it
     // was opened under, so a start never reuses one authenticated before a change.
     let credentialGeneration = 0;
-    const saveSecretKey = (envName, saver, storeKey) => (event, key) => {
-      if (typeof key !== "string") throw new TypeError("API key must be a string");
-      // Committing an unedited key field saves the same value again. Compare the
-      // stored value, not its expansion, so an unedited $VAR is no change either.
-      const changed = this.environmentManager.getRawFieldValue(envName) !== key;
-      const result = this.environmentManager[saver](key);
-      // A rejected $VAR reference left the stored key as it was.
-      if (!changed || result?.success === false) return result;
-      credentialGeneration += 1;
-      // Notify peers by setting name only; leave the editor's pending input alone.
-      for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed() && win.webContents.id !== event.sender.id) {
-          win.webContents.send("api-key-updated", storeKey);
-        }
-      }
-      return result;
-    };
+    const saveSecretKey =
+      (envName, saver, storeKey) =>
+      (event, key, migration = false) => {
+        if (typeof key !== "string") throw new TypeError("API key must be a string");
+        // Committing an unedited key field saves the same value again. Compare the
+        // stored value, not its expansion, so an unedited $VAR is no change either.
+        const changed = this.environmentManager.getRawFieldValue(envName) !== key;
+        const mode = migration === "if-empty" ? migration : migration === true;
+        const result = this.environmentManager[saver](key, mode);
+        const complete = (saved) => {
+          if (!changed || saved?.success === false || typeof saved?.retained === "string")
+            return saved;
+          credentialGeneration += 1;
+          // Notify peers by setting name only; leave the editor's pending input alone.
+          for (const win of BrowserWindow.getAllWindows()) {
+            if (!win.isDestroyed() && win.webContents.id !== event.sender.id) {
+              win.webContents.send("api-key-updated", storeKey);
+            }
+          }
+          return saved;
+        };
+        return result instanceof Promise ? result.then(complete) : complete(result);
+      };
 
     for (const k of BYOK_API_KEYS) {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager.getRawKey(k.env));
@@ -2727,9 +2733,18 @@ class IPCHandlers {
       return this.environmentManager.resolveSecretRef(value);
     });
 
+    // Chat readiness needs to know which references work, without reading their credentials.
+    ipcMain.handle("get-configured-secret-refs", (_event, references) => {
+      const { isEnvRef } = require("./envRef.cjs");
+      if (!Array.isArray(references)) return [];
+      return [...new Set(references)].filter(
+        (value) => isEnvRef(value) && this.environmentManager.resolveSecretRef(value)
+      );
+    });
+
     // The login-shell import runs after windows may have read their keys; tell
     // every window which fields it filled so they read them again.
-    this.environmentManager.onLoginShellImport?.((names) => {
+    this.environmentManager?.onLoginShellImport?.((names) => {
       const { secretStoreKey } = require("../config/secretKeys");
       const storeKeys = new Set(names.map(secretStoreKey).filter(Boolean));
       if (storeKeys.size === 0) return;

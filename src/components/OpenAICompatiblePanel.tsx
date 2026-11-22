@@ -78,9 +78,9 @@ export default function OpenAICompatiblePanel({
   const [modelsError, setModelsError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
   const lastLoadedBaseRef = useRef<string | null>(null);
-  // The trimmed key the last list load was sent with.
   const lastLoadedKeyRef = useRef<string | null>(null);
-  const pendingBaseRef = useRef<string | null>(null);
+  const lastLoadedRevisionRef = useRef(0);
+  const pendingLoadRef = useRef<{ base: string } | null>(null);
   const latestBaseRef = useRef<string>(normalizeBaseUrl(baseUrl));
   const keyDraft = useCredentialDraft();
   const apiKey = keyDraft.value("apiKey", savedApiKey);
@@ -129,6 +129,10 @@ export default function OpenAICompatiblePanel({
     ready: checkReady && visible,
     delayMs,
   });
+  const revisionRef = useRef(check.credentialRevision);
+  useEffect(() => {
+    revisionRef.current = check.credentialRevision;
+  }, [check.credentialRevision]);
   const followKeyDraft = keyDraft.follow;
   const refused = credentialDraftRefused(provider, check.failure?.errorCode);
   useEffect(() => {
@@ -136,8 +140,9 @@ export default function OpenAICompatiblePanel({
       phase: check.phase,
       checked: { apiKey },
       refused,
+      credentialRevision: check.credentialRevision,
     });
-  }, [check.phase, apiKey, refused, followKeyDraft]);
+  }, [check.phase, check.credentialRevision, apiKey, refused, followKeyDraft]);
 
   useEffect(() => {
     latestBaseRef.current = normalizedBase;
@@ -173,13 +178,14 @@ export default function OpenAICompatiblePanel({
       }
 
       if (!force && lastLoadedBaseRef.current === normalized) return;
-      if (!force && pendingBaseRef.current === normalized) return;
+      if (!force && pendingLoadRef.current?.base === normalized) return;
 
       if (baseOverride !== undefined) {
         latestBaseRef.current = normalized;
       }
 
-      pendingBaseRef.current = normalized;
+      const request = { base: normalized };
+      pendingLoadRef.current = request;
 
       // Keep the previous list visible while refreshing so the searchable list
       // (and its query state) isn't unmounted mid-fetch.
@@ -190,29 +196,34 @@ export default function OpenAICompatiblePanel({
 
       const trimmedKey = apiKeyRef.current.trim();
       // The field keeps a $VAR reference as typed; only the request gets its expansion.
+      const sourceRevision = revisionRef.current;
+      lastLoadedRevisionRef.current = sourceRevision;
+      lastLoadedKeyRef.current = trimmedKey;
       const resolvedKey = await resolveApiKey(trimmedKey);
       const effectiveKey = resolvedKey.length > 0 ? resolvedKey : undefined;
-      lastLoadedKeyRef.current = trimmedKey;
-      let activeBase = normalized;
+      const isCurrent = (): boolean =>
+        isMountedRef.current &&
+        pendingLoadRef.current === request &&
+        latestBaseRef.current === normalized &&
+        apiKeyRef.current.trim() === trimmedKey &&
+        revisionRef.current === sourceRevision;
 
       try {
+        if (!isCurrent()) return;
         if (!normalized.includes("://")) {
-          if (isMountedRef.current && latestBaseRef.current === normalized) {
-            setModelsError(t("reasoning.custom.endpointWithProtocol"));
-            setModelsLoading(false);
-          }
+          setModelsError(t("reasoning.custom.endpointWithProtocol"));
           return;
         }
 
         if (!isSecureHttpEndpoint(normalized)) {
-          if (isMountedRef.current && latestBaseRef.current === normalized) {
-            setModelsError(t("reasoning.custom.httpsRequired"));
-            setModelsLoading(false);
-          }
+          setModelsError(t("reasoning.custom.httpsRequired"));
           return;
         }
 
         const headers: Record<string, string> = {};
+        if (trimmedKey && !effectiveKey) {
+          throw new Error(t("onboarding.rehaul.provider.errors.secretRefUnset"));
+        }
         if (effectiveKey) {
           headers.Authorization = `Bearer ${effectiveKey}`;
         }
@@ -276,6 +287,7 @@ export default function OpenAICompatiblePanel({
         let primaryError: Error | null = null;
 
         for (const candidate of candidates) {
+          if (!isCurrent()) return;
           try {
             const options = await fetchModelOptions(candidate);
             if (options.length > 0) {
@@ -290,9 +302,8 @@ export default function OpenAICompatiblePanel({
 
         if (mapped.length === 0 && primaryError) throw primaryError;
 
-        if (isMountedRef.current && latestBaseRef.current === normalized) {
+        if (isCurrent()) {
           if (resolvedBase !== normalized) {
-            activeBase = resolvedBase;
             latestBaseRef.current = resolvedBase;
             setDraftBase(resolvedBase);
             setBaseUrlRef.current(resolvedBase);
@@ -306,7 +317,8 @@ export default function OpenAICompatiblePanel({
           lastLoadedBaseRef.current = resolvedBase;
         }
       } catch (error) {
-        if (isMountedRef.current && latestBaseRef.current === normalized) {
+        if (isCurrent()) {
+          lastLoadedBaseRef.current = null;
           const message = (error as Error).message || t("reasoning.custom.unableToLoadModels");
           const unauthorized = /\b(401|403)\b/.test(message);
           if (unauthorized && !effectiveKey) {
@@ -317,11 +329,9 @@ export default function OpenAICompatiblePanel({
           setModelOptions([]);
         }
       } finally {
-        if (pendingBaseRef.current === normalized) {
-          pendingBaseRef.current = null;
-        }
-        if (isMountedRef.current && latestBaseRef.current === activeBase) {
-          setModelsLoading(false);
+        if (pendingLoadRef.current === request) {
+          pendingLoadRef.current = null;
+          if (isMountedRef.current) setModelsLoading(false);
         }
       }
     },
@@ -337,25 +347,41 @@ export default function OpenAICompatiblePanel({
       return;
     }
     if (!normalizedBase) return;
-    if (pendingBaseRef.current === normalizedBase) return;
+    if (pendingLoadRef.current?.base === normalizedBase) return;
     if (lastLoadedBaseRef.current === normalizedBase) return;
     loadRemoteModels();
   }, [hasBase, normalizedBase, loadRemoteModels]);
 
-  // A key change retries a failed list load once the check for that key has settled, so the
-  // list never gets a half-typed key, and a hidden panel asks nothing: its check is not ready,
-  // so it never settles. It also runs when a load that was in flight settles (`modelsLoading`
-  // drops), since a key typed during that load has a check that settled before the load did.
+  // Different credentials can see different models at the same address. Wait for
+  // the current check to settle and for any older catalog load to finish.
   useEffect(() => {
-    if (check.phase !== "connected" && check.phase !== "unverified" && check.phase !== "failed") {
+    // Clearing OpenRouter's saved key makes its public catalog available without a check.
+    const publicCatalog =
+      visible && provider === "openrouter" && !apiKey.trim() && !savedApiKey.trim();
+    const settled =
+      check.phase === "connected" || check.phase === "unverified" || check.phase === "failed";
+    if (!settled && !publicCatalog) return;
+    if (!hasBase) return;
+    if (pendingLoadRef.current?.base === normalizedBase) return;
+    if (
+      apiKey.trim() === lastLoadedKeyRef.current &&
+      check.credentialRevision === lastLoadedRevisionRef.current
+    ) {
       return;
     }
-    if (!hasBase) return;
-    if (lastLoadedBaseRef.current === normalizedBase) return;
-    if (pendingBaseRef.current === normalizedBase) return;
-    if (apiKey.trim() === lastLoadedKeyRef.current) return;
-    loadRemoteModels();
-  }, [check.phase, apiKey, hasBase, normalizedBase, modelsLoading, loadRemoteModels]);
+    loadRemoteModels(undefined, true);
+  }, [
+    check.phase,
+    check.credentialRevision,
+    apiKey,
+    savedApiKey,
+    provider,
+    visible,
+    hasBase,
+    normalizedBase,
+    modelsLoading,
+    loadRemoteModels,
+  ]);
 
   const applyBase = useCallback(() => {
     const normalized = trimmedDraft ? normalizeBaseUrl(trimmedDraft) : trimmedDraft;

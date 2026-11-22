@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import SecretRefErrorText from "./ui/SecretRefErrorText";
+import { useCredentialDraft } from "../hooks/useCredentialDraft";
 import ModelCardList, { type ModelCardOption } from "./ui/ModelCardList";
 import SearchableModelList from "./ui/SearchableModelList";
 import CustomModelInput from "./ui/CustomModelInput";
@@ -123,19 +124,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
   const store = useSettingsStore();
   const suggestedModels = useSuggestedModels("bedrock");
   const [catalog, setCatalog] = useState<BedrockCatalogState>({ status: "idle" });
-  // The optional session token is typed in a plain field: it is saved when the field
-  // is left, so a $VAR reference is checked once it is complete, not per keystroke.
-  const [sessionTokenDraft, setSessionTokenDraft] = useState<string | null>(null);
-  const [sessionTokenError, setSessionTokenError] = useState<string | null>(null);
-  const commitSessionToken = () => {
-    if (sessionTokenDraft === null) return;
-    const result: unknown = store.setBedrockSessionToken(sessionTokenDraft);
-    if (typeof result === "string" && result) {
-      setSessionTokenError(result);
-      return;
-    }
-    setSessionTokenDraft(null);
-  };
+  const sessionToken = useCredentialDraft();
   const catalogRequestRef = useRef(0);
 
   const regionModels = useMemo(
@@ -256,16 +245,19 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
             </FieldLabel>
             <Input
               dir="ltr"
-              value={sessionTokenDraft ?? store.bedrockSessionToken}
-              onChange={(e) => {
-                setSessionTokenDraft(e.target.value);
-                setSessionTokenError(null);
-              }}
-              onBlur={commitSessionToken}
+              value={sessionToken.value("bedrockSessionToken", store.bedrockSessionToken)}
+              onChange={(e) =>
+                sessionToken.change(
+                  "bedrockSessionToken",
+                  e.target.value,
+                  store.setBedrockSessionToken
+                )
+              }
+              onBlur={sessionToken.save}
               placeholder=""
               className="text-sm"
             />
-            <SecretRefErrorText code={sessionTokenError} />
+            <SecretRefErrorText code={sessionToken.error("bedrockSessionToken")} />
           </div>
         </div>
       )}

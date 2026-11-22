@@ -9,7 +9,11 @@ import { getCloudModel, getOpenAiApiConfig } from "../../../models/ModelRegistry
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
-import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
+import {
+  canBorrowCleanupCustomKey,
+  resolveConfiguredOpenAIBase,
+  resolveCustomLlmKey,
+} from "../openaiBase";
 import {
   applyChatCompletionsParams,
   emptyOutputError,
@@ -161,13 +165,15 @@ export const openaiProvider: InferenceProvider = {
       isCustomProvider,
     });
 
-    const overrideKey = isCustomProvider ? await resolveApiKey(config.customApiKey) : "";
+    const overrideKey = isCustomProvider ? await resolveCustomLlmKey(config.customApiKey) : "";
     const canFallBackToSharedKey = !isCustomProvider || canBorrowCleanupCustomKey(config.baseUrl);
     const apiKey =
       overrideKey ||
       (canFallBackToSharedKey
         ? await resolveApiKey(
-            await ctx.getApiKey(isCustomProvider ? "custom" : isOpenRouter ? "openrouter" : "openai")
+            await ctx.getApiKey(
+              isCustomProvider ? "custom" : isOpenRouter ? "openrouter" : "openai"
+            )
           )
         : "");
 
@@ -306,7 +312,9 @@ export const openaiProvider: InferenceProvider = {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  ...(usableSecret(apiKey) ? { Authorization: `Bearer ${usableSecret(apiKey)}` } : {}),
+                  ...(usableSecret(apiKey)
+                    ? { Authorization: `Bearer ${usableSecret(apiKey)}` }
+                    : {}),
                   ...openCodeHeaders,
                 },
                 body: JSON.stringify(requestBody),

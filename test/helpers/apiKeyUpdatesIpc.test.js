@@ -847,6 +847,45 @@ test("a rejected $VAR reference notifies no one", (t) => {
   assert.deepEqual(notifications, []);
 });
 
+test("a delayed legacy migration that retains an explicit clear does not notify peers", (t) => {
+  const retained = { success: true, retained: "" };
+  t.mock.method(environmentManager, "saveTranslationCustomKey", (_key, migrateLegacy) => {
+    assert.equal(migrateLegacy, true);
+    return retained;
+  });
+  notifications.length = 0;
+  assert.deepEqual(invoke("save-translation-custom-key", "stale-copy", true), retained);
+  assert.deepEqual(notifications, []);
+});
+
+test("startup seeding asks main to fill only an empty destination", (t) => {
+  const retained = { success: true, retained: "$OPENROUTER_API_KEY" };
+  t.mock.method(environmentManager, "saveOpenrouterKey", (_key, migration) => {
+    assert.equal(migration, "if-empty");
+    return retained;
+  });
+  notifications.length = 0;
+  assert.deepEqual(invoke("save-openrouter-key", "old-custom", "if-empty"), retained);
+  assert.deepEqual(notifications, []);
+});
+
+test("a pending upgrade save only notifies peers after it is durable", async (t) => {
+  let finish;
+  t.mock.method(environmentManager, "saveOpenrouterKey", () =>
+    new Promise((resolve) => { finish = resolve; })
+  );
+  notifications.length = 0;
+  const failed = invoke("save-openrouter-key", "older-copy", "if-empty");
+  assert.deepEqual(notifications, []);
+  finish({ success: false, reason: "storage-unavailable" });
+  assert.equal((await failed).success, false);
+  assert.deepEqual(notifications, []);
+  const success = invoke("save-openrouter-key", "older-copy", "if-empty");
+  finish({ success: true });
+  await success;
+  assert.deepEqual(notifications, [[2, "api-key-updated", "openrouterApiKey"]]);
+});
+
 // provider, the instance it keeps, the saver of the key it reads, and the session
 // token that key mints.
 const STREAMING = [

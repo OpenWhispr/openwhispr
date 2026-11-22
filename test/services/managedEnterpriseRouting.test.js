@@ -24,6 +24,62 @@ const SCOPE_SETTINGS = [
 
 const MANAGED_MODEL = "anthropic.claude-sonnet-4-20250514-v1:0";
 
+for (const scenario of [
+  "upgrade",
+  "late import",
+  "explicit modes",
+  "named profile",
+  "incomplete pair",
+]) {
+  test(`enterprise credentials retain their prior auth method on ${scenario}`, async (t) => {
+    const initialStorage = { enterpriseSetupMode: "manual" };
+    if (scenario === "explicit modes") {
+      Object.assign(initialStorage, { bedrockAuthMode: "sso", vertexAuthMode: "adc" });
+    }
+    if (scenario === "named profile") initialStorage.bedrockProfile = "company";
+    let imported = scenario !== "late import";
+    let update;
+    installBrowserGlobals(t, {
+      initialStorage,
+      window: {
+        dispatchEvent() {},
+        electronAPI: {
+          setDictionary: async () => {},
+          onApiKeyUpdated: (callback) => {
+            update = callback;
+          },
+          getBedrockAccessKeyId: async () => (imported ? "synthetic-id" : ""),
+          getBedrockSecretAccessKey: async () =>
+            imported && scenario !== "incomplete pair" ? "synthetic-secret" : "",
+          getVertexApiKey: async () => (imported ? "$VERTEX_API_KEY" : ""),
+        },
+      },
+    });
+    const vite = await createRendererServer(t);
+    const { initializeSettings } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+    const { getEnterpriseCallSettings } = await vite.ssrLoadModule(
+      "/services/ai/enterpriseSettings.ts"
+    );
+    await initializeSettings();
+    if (!imported) {
+      imported = true;
+      for (const key of ["bedrockAccessKeyId", "bedrockSecretAccessKey", "vertexApiKey"]) {
+        await update(key);
+      }
+    }
+    const bedrock = getEnterpriseCallSettings("bedrock", "dictationCleanup");
+    const vertex = getEnterpriseCallSettings("vertex", "chatIntelligence");
+    assert.equal(bedrock.bedrockProfile, initialStorage.bedrockProfile || "");
+    const useKeys = scenario !== "explicit modes" && scenario !== "named profile";
+    assert.equal(bedrock.bedrockAccessKeyId, useKeys ? "synthetic-id" : "");
+    assert.equal(
+      bedrock.bedrockSecretAccessKey,
+      useKeys && scenario !== "incomplete pair" ? "synthetic-secret" : ""
+    );
+    assert.equal(vertex.apiKey, scenario === "explicit modes" ? "" : "$VERTEX_API_KEY");
+  });
+}
+
 test("manual inference sends credentials for the selected auth method", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t);

@@ -35,6 +35,7 @@ import {
 } from "../utils/modelPickerStyles";
 import {
   selectPolicyEffectiveSettings,
+  secretInputError,
   selectResolvedMeetingTranscription,
   selectResolvedUploadTranscription,
   useSettingsStore,
@@ -416,6 +417,14 @@ const PROVIDER_CREDENTIALS: Record<
 };
 
 const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
+
+const cortiCredentialGroup = {
+  fields: PROVIDER_CREDENTIALS.corti.fields.map(({ key }) => key),
+  validate(field: string, value: string): string | null {
+    if (field !== "cortiClientId" && field !== "cortiClientSecret") return null;
+    return secretInputError(field, value, useSettingsStore.getState()[field]);
+  },
+};
 
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> =
   LOCAL_ASR_ORGANIZATIONS;
@@ -1312,7 +1321,7 @@ export default function TranscriptionModelPicker({
 
   const providerCredentials =
     PROVIDER_CREDENTIALS[displayedCloudProvider] ?? PROVIDER_CREDENTIALS.openai;
-  const keyDraft = useCredentialDraft();
+  const keyDraft = useCredentialDraft(cortiCredentialGroup);
   const credentialValues: Record<ProviderCredentialField["key"], string> = {
     openaiApiKey: keyDraft.value("openaiApiKey", openaiApiKey),
     groqApiKey: keyDraft.value("groqApiKey", groqApiKey),
@@ -1444,8 +1453,9 @@ export default function TranscriptionModelPicker({
       phase: check.phase,
       checked: JSON.parse(checkedFields),
       refused,
+      credentialRevision: check.credentialRevision,
     });
-  }, [check.phase, checkedFields, refused, followKeyDraft]);
+  }, [check.phase, check.credentialRevision, checkedFields, refused, followKeyDraft]);
   const customFailureReason =
     !customKey.trim() && check.failure?.errorCode === "credentialsRejected"
       ? t("reasoning.custom.endpointUnauthorized")
@@ -1791,7 +1801,9 @@ export default function TranscriptionModelPicker({
                         ) : (
                           <ProviderCheckField
                             aria-label={label}
-                            check={field.key === checkedCredential && !fieldError ? check : undefined}
+                            check={
+                              field.key === checkedCredential && !fieldError ? check : undefined
+                            }
                             error={fieldError}
                             invalidOn="credentialsRejected"
                             type={field.input === "secret" ? "password" : "text"}

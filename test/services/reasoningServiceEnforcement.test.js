@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { deferred } = require("../helpers/harness/deferred");
 
 const enTranslations = require("../../src/locales/en/translation.json");
 
@@ -43,6 +44,19 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
   const { resolveConfiguredOpenAIBase } = await vite.ssrLoadModule("/services/ai/openaiBase.ts");
   const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
   await i18n.changeLanguage("en");
+
+  await t.test("a delayed credential read cannot repopulate an invalidated cache", async () => {
+    const held = deferred();
+    global.window.electronAPI.getOpenAIKey = () => held.promise;
+    const first = reasoningService.getApiKey("openai");
+    reasoningService.clearApiKeyCache("openai");
+    global.window.electronAPI.getOpenAIKey = async () => "new-fixture";
+    held.resolve("old-fixture");
+    await first;
+    assert.equal(await reasoningService.getApiKey("openai"), "new-fixture");
+    reasoningService.clearApiKeyCache("openai");
+    delete global.window.electronAPI.getOpenAIKey;
+  });
 
   const setPolicy = (overrides) => {
     usePolicyStore.setState({
@@ -243,56 +257,98 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
     );
   });
 
-  await t.test("a scope's custom endpoint never borrows the cleanup key", async () => {
-    setPolicy({ llmModes: ["providers"], llmByokProviders: ["custom"] });
-    useSettingsStore.setState({
-      cleanupMode: "providers",
-      cleanupProvider: "custom",
-      cleanupCloudBaseUrl: "https://cleanup.example.com/v1",
-      cleanupCustomApiKey: "cleanup-secret",
-    });
-
-    const originalFetch = globalThis.fetch;
-    const requests = [];
-    globalThis.fetch = async (url, init) => {
-      requests.push({ url: String(url), auth: init?.headers?.Authorization });
-      return new Response(JSON.stringify({ error: "expected test stop" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
+  await t.test(
+    "a scope borrows the cleanup key only for a blank field at the same endpoint",
+    async () => {
+      setPolicy({ llmModes: ["providers"], llmByokProviders: ["custom"] });
+      useSettingsStore.setState({
+        cleanupMode: "providers",
+        cleanupProvider: "custom",
+        cleanupCloudBaseUrl: "https://cleanup.example.com/v1",
+        cleanupCustomApiKey: "cleanup-secret",
       });
-    };
 
-    try {
-      await rejectsExpectedTestStop(
-        reasoningService.processText("hi", "other-model", null, {
-          provider: "custom",
-          baseUrl: "https://other-scope.example.com/v1",
-          inferenceScope: "chatIntelligence",
-        })
-      );
-      assert.ok(requests.length > 0);
-      for (const request of requests) {
-        assert.ok(request.url.startsWith("https://other-scope.example.com/v1/"));
-        assert.equal(
-          request.auth,
-          undefined,
-          "the cleanup key must not ride to another scope's endpoint"
+      const originalFetch = globalThis.fetch;
+      const requests = [];
+      globalThis.fetch = async (url, init) => {
+        requests.push({ url: String(url), auth: init?.headers?.Authorization });
+        return new Response(JSON.stringify({ error: "expected test stop" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        });
+      };
+
+      try {
+        await rejectsExpectedTestStop(
+          reasoningService.processText("hi", "other-model", null, {
+            provider: "custom",
+            baseUrl: "https://other-scope.example.com/v1",
+            inferenceScope: "chatIntelligence",
+          })
         );
-      }
+        assert.ok(requests.length > 0);
+        for (const request of requests) {
+          assert.ok(request.url.startsWith("https://other-scope.example.com/v1/"));
+          assert.equal(
+            request.auth,
+            undefined,
+            "the cleanup key must not ride to another scope's endpoint"
+          );
+        }
 
-      // The cleanup endpoint itself still gets the shared key.
-      requests.length = 0;
-      await rejectsExpectedTestStop(
-        reasoningService.processText("hi", "cleanup-model", null, {
+        // Older storage can contain whitespace. The cleanup endpoint still gets
+        // the renderer's saved key while the replacement reaches main.
+        global.window.electronAPI.getCleanupCustomKey = async () => "  ";
+        requests.length = 0;
+        await rejectsExpectedTestStop(
+          reasoningService.processText("hi", "cleanup-model", null, {
+            provider: "custom",
+            baseUrl: "https://cleanup.example.com/v1",
+          })
+        );
+        assert.ok(requests.some((request) => request.auth === "Bearer cleanup-secret"));
+
+        const config = {
           provider: "custom",
           baseUrl: "https://cleanup.example.com/v1",
-        })
-      );
-      assert.ok(requests.some((request) => request.auth === "Bearer cleanup-secret"));
-    } finally {
-      globalThis.fetch = originalFetch;
+          inferenceScope: "noteFormatting",
+          systemPrompt: "Format this note",
+          customApiKey: "$GROQ_API_KEY",
+        };
+        global.window.electronAPI.resolveSecretRef = async () => "scope-secret";
+        requests.length = 0;
+        await rejectsExpectedTestStop(
+          reasoningService.processText("hi", "custom-model", null, config)
+        );
+        assert.ok(requests.some((request) => request.auth === "Bearer scope-secret"));
+
+        global.window.electronAPI.resolveSecretRef = async () => "";
+        requests.length = 0;
+        await assert.rejects(reasoningService.processText("hi", "custom-model", null, config), {
+          code: "API_KEY_MISSING",
+        });
+        for (const method of ["processTextStreaming", "processTextStreamingAI"]) {
+          const stream = reasoningService[method](
+            [{ role: "user", content: "hi" }],
+            "custom-model",
+            "custom",
+            config
+          );
+          await assert.rejects(stream.next(), { code: "API_KEY_MISSING" });
+        }
+        global.window.electronAPI.getCleanupCustomKey = async () => "$GROQ_API_KEY";
+        await assert.rejects(
+          reasoningService.processText("hi", "custom-model", null, { ...config, customApiKey: "" }),
+          { code: "API_KEY_MISSING" }
+        );
+        assert.deepEqual(requests, []);
+      } finally {
+        delete global.window.electronAPI.resolveSecretRef;
+        delete global.window.electronAPI.getCleanupCustomKey;
+        globalThis.fetch = originalFetch;
+      }
     }
-  });
+  );
 
   await t.test("normal cleanup uses its saved valid Custom endpoint", async () => {
     setPolicy({ llmModes: ["providers"], llmByokProviders: ["custom"] });

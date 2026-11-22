@@ -634,6 +634,40 @@ test("Done is offered only after Settings opened, and llms checks the chat's key
   useSettingsStore.setState(previous, true);
 });
 
+test("chat recovery and Done follow the current value of a referenced credential", async (t) => {
+  let configured = false;
+  const store = await loadStore({
+    getConfiguredSecretRefs: async (refs) => {
+      assert.deepEqual(refs, ["$GROQ_API_KEY"]);
+      return configured ? refs : [];
+    },
+  });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const original = useSettingsStore.getState();
+  t.after(() => useSettingsStore.setState(original, true));
+  useSettingsStore.setState({
+    chatAgentMode: "providers",
+    chatAgentProvider: "openai",
+    chatAgentModel: "gpt-5-mini",
+    openaiApiKey: "$GROQ_API_KEY",
+    geminiApiKey: "fixture-literal",
+  });
+  for (const ready of [false, true]) {
+    configured = ready;
+    const id = `ref-${ready}`;
+    const pending = store.requestInteraction(context(id).value, {
+      kind: "settings",
+      target: "llms",
+    });
+    await store.confirmSettingsDone(`m1::${id}`);
+    assert.deepEqual(await pending, { status: "done", ready });
+    assert.deepEqual(
+      await store.getMissingApiKeyProviders(useSettingsStore.getState(), ["openai", "gemini"]),
+      ready ? [] : ["openai"]
+    );
+  }
+});
+
 test("Done never asks for a key the chat's model doesn't use", async () => {
   const store = await loadStore();
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");

@@ -125,7 +125,8 @@ export default function InferenceConfigEditor({
 
   const setField = useCallback(
     <K extends keyof Omit<typeof config, "scope">>(field: K) =>
-      (value: NonNullable<(typeof config)[K]>) => setResolvedLLMConfig(scope, { [field]: value }),
+      (value: NonNullable<(typeof config)[K]>) =>
+        setResolvedLLMConfig(scope, { [field]: value }),
     [scope]
   );
 

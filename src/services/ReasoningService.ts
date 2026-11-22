@@ -37,6 +37,7 @@ import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders
 import {
   canBorrowCleanupCustomKey,
   resolveConfiguredOpenAIBase,
+  resolveCustomLlmKey,
   resolveSelfHostedOpenAIBase,
 } from "./ai/openaiBase";
 import {
@@ -257,6 +258,7 @@ function logParamFallback(logEvent: string) {
 
 class ReasoningService extends BaseReasoningService {
   private apiKeyCache: SecureCache<string>;
+  private apiKeyGeneration = 0;
   private static readonly MAX_TOOL_STEPS = 20;
   private cacheCleanupStop: (() => void) | undefined;
   private activeStreamControllers = new Set<AbortController>();
@@ -332,13 +334,11 @@ class ReasoningService extends BaseReasoningService {
     if (provider === "custom") {
       let customKey = "";
       try {
-        customKey = (await window.electronAPI?.getCleanupCustomKey?.()) || "";
+        customKey = (await window.electronAPI?.getCleanupCustomKey?.())?.trim() || "";
       } catch (err) {
         logger.logReasoning("CUSTOM_KEY_IPC_FALLBACK", { error: (err as Error)?.message });
       }
-      customKey =
-        (await resolveApiKey(customKey)) ||
-        (await resolveApiKey(getSettings().cleanupCustomApiKey || ""));
+      customKey = await resolveCustomLlmKey(customKey || getSettings().cleanupCustomApiKey);
 
       logger.logReasoning("CUSTOM_KEY_RETRIEVAL", {
         provider,
@@ -360,6 +360,7 @@ class ReasoningService extends BaseReasoningService {
     });
 
     if (!storedKey) {
+      const generation = this.apiKeyGeneration;
       try {
         const keyGetters = {
           openai: () => window.electronAPI.getOpenAIKey(),
@@ -377,7 +378,7 @@ class ReasoningService extends BaseReasoningService {
           hasKey: !!storedKey,
         });
 
-        if (storedKey) {
+        if (storedKey && generation === this.apiKeyGeneration) {
           this.apiKeyCache.set(provider, storedKey);
         }
       } catch (error) {
@@ -415,7 +416,7 @@ class ReasoningService extends BaseReasoningService {
   ): Promise<{ apiKey: string; baseURL?: string }> {
     const providerKey = toByokStreamProvider(provider);
     const overrideKey =
-      providerKey === "custom" ? await resolveApiKey(config.customApiKey) : "";
+      providerKey === "custom" ? await resolveCustomLlmKey(config.customApiKey) : "";
     const canFallBackToSharedKey =
       providerKey !== "custom" || canBorrowCleanupCustomKey(config.baseUrl);
     const apiKey = overrideKey || (canFallBackToSharedKey ? await this.getApiKey(providerKey) : "");
@@ -820,7 +821,7 @@ class ReasoningService extends BaseReasoningService {
     if (isLanChat) {
       const baseUrl = resolveSelfHostedOpenAIBase(route.baseUrl);
       endpoint = buildApiUrl(baseUrl, "/chat/completions");
-      apiKey = await resolveApiKey(route.apiKey);
+      apiKey = await resolveCustomLlmKey(route.apiKey);
     } else if (isLocalProvider) {
       const port = await startLocalStreamServer(model, abortController, assertStreamAllowed);
       if (port === null) return;
@@ -1156,7 +1157,7 @@ class ReasoningService extends BaseReasoningService {
         // Enterprise SDKs run in the main process; the model below proxies
         // doStream over IPC, so no key or base URL is resolved here.
       } else if (isLanChat) {
-        apiKey = await resolveApiKey(route.apiKey);
+        apiKey = await resolveCustomLlmKey(route.apiKey);
         baseURL = resolveSelfHostedOpenAIBase(route.baseUrl);
       } else if (isLocalProvider) {
         const port = await startLocalStreamServer(model, abortController, assertStreamAllowed);
@@ -1936,6 +1937,7 @@ class ReasoningService extends BaseReasoningService {
       | "openrouter"
       | "corti"
   ): void {
+    this.apiKeyGeneration += 1;
     if (provider) {
       if (provider !== "custom") {
         this.apiKeyCache.delete(provider);

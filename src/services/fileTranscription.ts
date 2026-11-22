@@ -11,7 +11,6 @@ import {
 } from "./managedTranscription";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
 import type { LocalTranscriptionProvider } from "../types/electron";
-import { resolveApiKey } from "../utils/resolveApiKey";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -147,6 +146,7 @@ export async function transcribeFile(
     durationSeconds?: number;
   } = {}
 ): Promise<FileTranscriptionResult> {
+  signal?.throwIfAborted();
   // Managed enterprise STT outranks every personal lane, OpenWhispr Cloud and
   // local included: under managed_required no audio may leave the tenant.
   const refresh = refreshEnterpriseIdentityForUse();
@@ -213,7 +213,8 @@ export async function transcribeFile(
     ...(route.transport === "proxied" && route.provider === "assemblyai"
       ? { durationSeconds }
       : {}),
-    apiKey: await resolveApiKey(cfg.getApiKey()),
+    // Main registers the cancel id before expanding the credential.
+    apiKey: cfg.getApiKey(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,

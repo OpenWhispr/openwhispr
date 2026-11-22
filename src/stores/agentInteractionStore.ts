@@ -14,6 +14,7 @@ import { isConnectorReady, refreshConnectorStatus } from "./connectorStatusStore
 import type { CalendarProvider } from "../utils/calendarConnect";
 import type { SettingsState } from "./settingsStore";
 import { getCachedPlatform } from "../utils/platform";
+import { isEnvRef } from "../helpers/envRef";
 
 // Every surface that renders a card imports this store, and the settings
 // store brings the app's i18n setup with it, so it loads only when used.
@@ -32,6 +33,20 @@ const API_KEY_SETTERS = {
 
 type ApiKeyProvider = keyof typeof API_KEY_SETTERS;
 export const API_KEY_PROVIDERS = Object.keys(API_KEY_SETTERS) as ApiKeyProvider[];
+
+export async function getMissingApiKeyProviders(
+  settings: SettingsState,
+  providers: ApiKeyProvider[]
+): Promise<ApiKeyProvider[]> {
+  const keys = providers.map((provider) => settings[`${provider}ApiKey`]?.trim() ?? "");
+  const references = [...new Set(keys.filter(isEnvRef))];
+  const configured = references.length
+    ? await window.electronAPI?.getConfiguredSecretRefs?.(references).catch(() => [])
+    : [];
+  return providers.filter(
+    (_, index) => !keys[index] || (isEnvRef(keys[index]) && !configured?.includes(keys[index]))
+  );
+}
 
 /**
  * Cards with no dismiss control of their own: Esc in one dismisses it, and
@@ -505,7 +520,7 @@ async function settingsReady(
       inferenceScope: payload.scope ?? "chatIntelligence",
     }).config;
     if (mode !== "providers" || !Object.hasOwn(API_KEY_SETTERS, provider)) return undefined;
-    return Boolean(settings[`${provider as ApiKeyProvider}ApiKey`]);
+    return (await getMissingApiKeyProviders(settings, [provider as ApiKeyProvider])).length === 0;
   }
   if (target === "integrations.calendars") {
     const { getSettings, selectCalendarConnected } = await loadSettingsStore();

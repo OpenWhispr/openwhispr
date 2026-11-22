@@ -12,9 +12,11 @@ import { readStoredAccountScopeUserId } from "../lib/authAccountScope";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
 import logger from "../utils/logger";
-import { classifySecretInput } from "../helpers/envRef";
+import { classifySecretInput, isEnvRef } from "../helpers/envRef";
+import { notifySecretChanges } from "../helpers/secretRevisions";
 import whisperVadConstants from "../constants/whisperVad.json";
 import type {
+  SecretKeySaveResult,
   ChineseScriptPreference,
   LocalTranscriptionProvider,
   InferenceMode,
@@ -1760,6 +1762,17 @@ const SAVER_ENV: Record<RefSecretProvider, string> = {
 // Keep in lockstep with SECRET_ENV_NAMES in src/config/secretKeys.js.
 const SECRET_ENV_SET = new Set<string>([...Object.values(SAVER_ENV), "CUSTOM_REASONING_API_KEY"]);
 
+// Checks submit the raw references to main. Only publish after main can resolve
+// the new source value, including a save or shell import in another window.
+function publishSecretChange(provider: SecretProvider): void {
+  if (provider === "selfHostedSttHeaders") return;
+  if (provider === "cleanupCustom") {
+    notifySecretChanges(SAVER_ENV[provider], "CUSTOM_REASONING_API_KEY");
+  } else {
+    notifySecretChanges(SAVER_ENV[provider]);
+  }
+}
+
 export type SecretInputError = "self-reference" | "unknown-ref";
 type SecretSetter = (key: string) => SecretInputError | null;
 
@@ -1798,51 +1811,84 @@ function applySecretInput(
     return error;
   }
   useSettingsStore.setState({ [storeKey]: trimmed });
-  debouncedSaveSecret(saver, trimmed, { storeKey, previous: current });
+  debouncedSaveSecret(saver, trimmed, { storeKey, previous: current, cacheProvider });
   if (cacheProvider !== false) invalidateApiKeyCaches(cacheProvider);
   return null;
 }
 
-type SecretSaveResult = { success?: boolean; reason?: string } | void | null;
+type SecretSaveResult = SecretKeySaveResult | void | null;
 
-const secretSaveTimers: Partial<Record<SecretProvider, ReturnType<typeof setTimeout>>> = {};
+type PendingSecretSave = {
+  timer: ReturnType<typeof setTimeout>;
+  changed: boolean;
+  refresh?: () => void;
+};
+const pendingSecretSaves = new Map<SecretProvider, PendingSecretSave>();
+const secretReadVersions = new Map<SecretProvider, number>();
+
+function secretProviderForStoreKey(storeKey: string): SecretProvider {
+  return (
+    storeKey in SECRET_IPC_SAVERS ? storeKey : storeKey.replace(/ApiKey$/, "")
+  ) as SecretProvider;
+}
+
+function advanceSecretVersion(provider: SecretProvider): number {
+  const version = (secretReadVersions.get(provider) ?? 0) + 1;
+  secretReadVersions.set(provider, version);
+  return version;
+}
+
 function debouncedSaveSecret(
   provider: SecretProvider,
   key: string,
-  rollback?: { storeKey: string; previous: string }
-) {
+  rollback?: {
+    storeKey: string;
+    previous: string;
+    cacheProvider?: Parameters<typeof invalidateApiKeyCaches>[0] | false;
+  }
+): void {
   if (!isBrowser) return;
   debouncedPersistToEnv();
-  const timer = secretSaveTimers[provider];
-  if (timer) clearTimeout(timer);
-  secretSaveTimers[provider] = setTimeout(() => {
+  advanceSecretVersion(provider);
+  const previous = pendingSecretSaves.get(provider);
+  if (previous) clearTimeout(previous.timer);
+  const changed = Boolean(previous?.changed || (rollback && key !== rollback.previous));
+  const timer = setTimeout(async () => {
     const api = window.electronAPI;
     const save = api?.[SECRET_IPC_SAVERS[provider]] as
       ((k: string) => Promise<SecretSaveResult>) | undefined;
-    if (!save) return;
-    save(key)
-      .then((result) => {
-        if (!result || result.success !== false) return;
-        if (rollback) {
-          const current = String(useSettingsStore.getState()[rollback.storeKey] ?? "");
-          if (current === key) {
-            useSettingsStore.setState({ [rollback.storeKey]: rollback.previous });
-          }
+    try {
+      if (!save) return;
+      const result = await save(key);
+      if (!result || result.success !== false) {
+        if (rollback) localStorage.removeItem(rollback.storeKey);
+        publishSecretChange(provider);
+        // A request during the debounce may have cached main's old credential.
+        if (rollback && changed) {
+          if (rollback.cacheProvider === false) window.dispatchEvent(new Event("api-key-changed"));
+          else invalidateApiKeyCaches(rollback.cacheProvider);
         }
-        logger.warn(
-          "Rejected secret persist",
-          { provider, reason: result.reason },
-          "settings"
-        );
-      })
-      .catch((err) => {
-        logger.warn(
-          "Failed to persist secret",
-          { provider, error: (err as Error).message },
-          "settings"
-        );
-      });
+      } else {
+        if (rollback && pendingSecretSaves.get(provider)?.timer === timer) {
+          useSettingsStore.setState({ [rollback.storeKey]: rollback.previous });
+        }
+        logger.warn("Rejected secret persist", { provider, reason: result.reason }, "settings");
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to persist secret",
+        { provider, error: (err as Error).message },
+        "settings"
+      );
+    } finally {
+      const pending = pendingSecretSaves.get(provider);
+      if (pending?.timer === timer) {
+        pendingSecretSaves.delete(provider);
+        pending.refresh?.();
+      }
+    }
   }, 250);
+  pendingSecretSaves.set(provider, { timer, changed, refresh: previous?.refresh });
 }
 
 const STALE_SECRET_LOCALSTORAGE_KEYS = [
@@ -2697,8 +2743,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setXaiApiKey: createSecretSetter("xaiApiKey", "xai"),
   setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
   setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
-  setCortiClientId: (key: string) => applySecretInput("cortiClientId", "cortiClientId", key, "corti"),
-  setCortiClientSecret: (key: string) => applySecretInput("cortiClientSecret", "cortiClientSecret", key, "corti"),
+  setCortiClientId: (key: string) =>
+    applySecretInput("cortiClientId", "cortiClientId", key, "corti"),
+  setCortiClientSecret: (key: string) =>
+    applySecretInput("cortiClientSecret", "cortiClientSecret", key, "corti"),
   setCortiApiKey: createSecretSetter("cortiApiKey", "cortiApiKey", "corti"),
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
@@ -2707,8 +2755,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
   setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
   setElevenlabsApiKey: createSecretSetter("elevenlabsApiKey", "elevenlabs"),
-  setCustomTranscriptionApiKey: (key: string) => applySecretInput("customTranscriptionApiKey", "customTranscription", key, "custom"),
-  setCleanupCustomApiKey: (key: string) => applySecretInput("cleanupCustomApiKey", "cleanupCustom", key, "custom"),
+  setCustomTranscriptionApiKey: (key: string) =>
+    applySecretInput("customTranscriptionApiKey", "customTranscription", key, "custom"),
+  setCleanupCustomApiKey: (key: string) =>
+    applySecretInput("cleanupCustomApiKey", "cleanupCustom", key, "custom"),
 
   // Enterprise provider setters
   setEnterpriseSetupMode: createStringSetter("enterpriseSetupMode") as (
@@ -2733,9 +2783,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     window.electronAPI?.saveBedrockProfile?.(value);
     debouncedPersistToEnv();
   },
-  setBedrockAccessKeyId: (key: string) => applySecretInput("bedrockAccessKeyId", "bedrockAccessKeyId", key, false),
-  setBedrockSecretAccessKey: (key: string) => applySecretInput("bedrockSecretAccessKey", "bedrockSecretAccessKey", key, false),
-  setBedrockSessionToken: (key: string) => applySecretInput("bedrockSessionToken", "bedrockSessionToken", key, false),
+  setBedrockAccessKeyId: (key: string) =>
+    applySecretInput("bedrockAccessKeyId", "bedrockAccessKeyId", key, false),
+  setBedrockSecretAccessKey: (key: string) =>
+    applySecretInput("bedrockSecretAccessKey", "bedrockSecretAccessKey", key, false),
+  setBedrockSessionToken: (key: string) =>
+    applySecretInput("bedrockSessionToken", "bedrockSessionToken", key, false),
   setAzureEndpoint: (value: string) => {
     if (isBrowser) localStorage.setItem("azureEndpoint", value);
     set({ azureEndpoint: value });
@@ -4168,33 +4221,79 @@ export function isCloudTranslationMode() {
 // moving to the OS secure store. Prefer the secure value; otherwise push the
 // legacy plaintext copy into the secure store — the stale-secret sweep in
 // initializeSettings then strips it from localStorage.
-// The getter shows a key the login shell imported as `$<its own name>`, a value no
-// one can save (a self-reference). It means nothing is stored for the field, so the
-// legacy localStorage key still has to be moved into the secure store.
-export function isShellImportMarker(value: string, envName: string): boolean {
-  const trimmed = value.trim();
-  return trimmed === `$${envName}` || trimmed === `\${${envName}}`;
-}
-
 async function migrateScopeCustomKeys(
-  entries: ReadonlyArray<[keyof SettingsState & string, string | null | undefined, string, string]>
+  entries: ReadonlyArray<[keyof SettingsState & string, string | null | undefined, string]>,
+  pendingLegacy: Set<string>
 ): Promise<Partial<SettingsState>> {
   const updates: Record<string, string> = {};
-  for (const [storeKey, secureValue, saverName, envName] of entries) {
+  for (const [storeKey, secureValue, saverName] of entries) {
+    if (secretReadVersions.has(secretProviderForStoreKey(storeKey))) continue;
     let value = secureValue || "";
-    const persisted = Boolean(value) && !isShellImportMarker(value, envName);
-    if (!persisted) {
-      const legacy = localStorage.getItem(storeKey)?.trim() || "";
-      if (legacy) {
-        value = legacy;
-        const save = window.electronAPI?.[saverName as keyof typeof window.electronAPI] as
-          ((key: string) => Promise<unknown>) | undefined;
-        await save?.(legacy);
+    const legacy = localStorage.getItem(storeKey)?.trim();
+    // A displayed reference can come from secure storage or the login shell.
+    // Main checks its origin at the time of the save, including concurrent edits.
+    if (legacy && (!value || isEnvRef(value))) {
+      const save = window.electronAPI?.[saverName as keyof typeof window.electronAPI] as
+        ((key: string, migrateLegacy: true) => Promise<SecretSaveResult>) | undefined;
+      try {
+        const result = await save?.(legacy, true);
+        if (result && result.success) value = result.retained ?? legacy;
+        else pendingLegacy.add(storeKey);
+      } catch {
+        pendingLegacy.add(storeKey);
       }
     }
     updates[storeKey] = value;
   }
   return updates as Partial<SettingsState>;
+}
+
+async function seedStartupCredential(
+  storeKey: "openrouterApiKey" | "dictationAgentCustomApiKey",
+  source: string
+): Promise<boolean> {
+  const provider = secretProviderForStoreKey(storeKey);
+  if (useSettingsStore.getState()[storeKey] || secretReadVersions.has(provider)) return true;
+  if (!source) return true;
+  const api = window.electronAPI;
+  const save =
+    storeKey === "openrouterApiKey" ? api?.saveOpenrouterKey : api?.saveDictationAgentCustomKey;
+  if (!save) return false;
+  try {
+    // A peer can replace or remove the destination after our last read. Main
+    // retains that edit atomically when asked to migrate an older credential.
+    const result = await save(source, "if-empty");
+    if (!result?.success) return false;
+    if (!secretReadVersions.has(provider)) {
+      useSettingsStore.setState({ [storeKey]: result.retained ?? source });
+      publishSecretChange(provider);
+      invalidateApiKeyCaches();
+    }
+    return true;
+  } catch {
+    logger.warn("Failed to seed provider credential", { storeKey }, "settings");
+    return false;
+  }
+}
+
+// Older installs selected credentials implicitly. Wait for the keys, including
+// late shell imports, and preserve any auth method the user already picked.
+function migrateEnterpriseAuthModes(): void {
+  const settings = useSettingsStore.getState();
+  const bedrockAuthMode =
+    localStorage.getItem("bedrockAuthMode") ??
+    (!settings.bedrockProfile.trim() &&
+    (settings.bedrockAccessKeyId || settings.bedrockSecretAccessKey)
+      ? "keys"
+      : null);
+  if (bedrockAuthMode && bedrockAuthMode !== settings.bedrockAuthMode) {
+    settings.setBedrockAuthMode(bedrockAuthMode);
+  }
+  const vertexAuthMode =
+    localStorage.getItem("vertexAuthMode") ?? (settings.vertexApiKey ? "apikey" : null);
+  if (vertexAuthMode && vertexAuthMode !== settings.vertexAuthMode) {
+    settings.setVertexAuthMode(vertexAuthMode);
+  }
 }
 
 let hasInitialized = false;
@@ -4207,7 +4306,9 @@ export async function initializeSettings(): Promise<void> {
 
   const state = useSettingsStore.getState();
   let hydratingSecrets = true;
+  let hydratedSecretsSuccessfully = false;
   const pendingSecretUpdates = new Set<string>();
+  const pendingLegacy = new Set<string>();
 
   // Queue updates until hydration can no longer overwrite them.
   const refreshApiKey = async (storeKey: string) => {
@@ -4216,21 +4317,38 @@ export async function initializeSettings(): Promise<void> {
       pendingSecretUpdates.add(storeKey);
       return;
     }
-    const saver =
-      SECRET_IPC_SAVERS[storeKey as SecretProvider] ||
-      SECRET_IPC_SAVERS[storeKey.replace(/ApiKey$/, "") as SecretProvider];
+    const provider = secretProviderForStoreKey(storeKey);
+    const saver = SECRET_IPC_SAVERS[provider];
     if (!saver) return;
     const getter = window.electronAPI?.[
       saver.replace(/^save/, "get") as keyof typeof window.electronAPI
     ] as (() => Promise<string | null>) | undefined;
     if (!getter) return;
+    const pending = pendingSecretSaves.get(provider);
+    if (pending) {
+      // A peer or shell import can notify us before main receives this window's edit.
+      pending.refresh = () => {
+        void refreshApiKey(storeKey);
+      };
+      return;
+    }
+    const version = advanceSecretVersion(provider);
     try {
       const key = await getter();
+      if (version !== secretReadVersions.get(provider)) return;
       if (key !== null && typeof key !== "string") return;
       useSettingsStore.setState({
         [storeKey]:
           storeKey === "selfHostedSttHeaders" ? parseSelfHostedSttHeaders(key) : key || "",
       });
+      if (
+        storeKey === "bedrockAccessKeyId" ||
+        storeKey === "bedrockSecretAccessKey" ||
+        storeKey === "vertexApiKey"
+      ) {
+        migrateEnterpriseAuthModes();
+      }
+      publishSecretChange(provider);
       invalidateApiKeyCaches();
     } catch {
       logger.warn("Failed to refresh API key", { storeKey }, "settings");
@@ -4317,7 +4435,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getElevenlabsKey?.(),
       ]);
 
-      useSettingsStore.setState({
+      const hydratedSecrets = {
         openaiApiKey: openai || "",
         anthropicApiKey: anthropic || "",
         geminiApiKey: gemini || "",
@@ -4333,18 +4451,20 @@ export async function initializeSettings(): Promise<void> {
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",
         bedrockAccessKeyId: bedrockAccessKeyId || "",
-        ...(await migrateScopeCustomKeys([
-          ["noteFormattingCustomApiKey", noteFormattingCustom, "saveNoteFormattingCustomKey", "NOTE_FORMATTING_CUSTOM_API_KEY"],
-          ["translationCustomApiKey", translationCustom, "saveTranslationCustomKey", "TRANSLATION_CUSTOM_API_KEY"],
-          ["dictationAgentCustomApiKey", dictationAgentCustom, "saveDictationAgentCustomKey", "DICTATION_AGENT_CUSTOM_API_KEY"],
+        ...(await migrateScopeCustomKeys(
           [
-            "dictationAgentVisionCustomApiKey",
-            dictationAgentVisionCustom,
-            "saveDictationAgentVisionCustomKey",
-            "DICTATION_AGENT_VISION_CUSTOM_API_KEY",
+            ["noteFormattingCustomApiKey", noteFormattingCustom, "saveNoteFormattingCustomKey"],
+            ["translationCustomApiKey", translationCustom, "saveTranslationCustomKey"],
+            ["dictationAgentCustomApiKey", dictationAgentCustom, "saveDictationAgentCustomKey"],
+            [
+              "dictationAgentVisionCustomApiKey",
+              dictationAgentVisionCustom,
+              "saveDictationAgentVisionCustomKey",
+            ],
+            ["chatAgentCustomApiKey", chatAgentCustom, "saveChatAgentCustomKey"],
           ],
-          ["chatAgentCustomApiKey", chatAgentCustom, "saveChatAgentCustomKey", "CHAT_AGENT_CUSTOM_API_KEY"],
-        ])),
+          pendingLegacy
+        )),
         bedrockSecretAccessKey: bedrockSecretAccessKey || "",
         bedrockSessionToken: bedrockSessionToken || "",
         azureApiKey: azureApiKey || "",
@@ -4352,14 +4472,18 @@ export async function initializeSettings(): Promise<void> {
         deepgramApiKey: deepgram || "",
         assemblyaiApiKey: assemblyai || "",
         elevenlabsApiKey: elevenlabs || "",
-      });
-
-      if (localStorage.getItem("_dictationAgentSeeded") === "key-pending") {
-        const { chatAgentCustomApiKey, setDictationAgentCustomApiKey } =
-          useSettingsStore.getState();
-        if (chatAgentCustomApiKey) setDictationAgentCustomApiKey(chatAgentCustomApiKey);
-        localStorage.setItem("_dictationAgentSeeded", "1");
-      }
+      };
+      // A local edit or a newer notification may have arrived while the startup
+      // getters were pending. Keep the edited field and replay notifications below.
+      useSettingsStore.setState(
+        Object.fromEntries(
+          Object.entries(hydratedSecrets).filter(
+            ([key]) =>
+              !secretReadVersions.has(secretProviderForStoreKey(key)) &&
+              !pendingSecretUpdates.has(key)
+          )
+        )
+      );
 
       if (!localStorage.getItem("enterpriseSetupMode")) {
         // One-time migration. "Managed by default" is meant to equip employees who never chose a
@@ -4381,25 +4505,12 @@ export async function initializeSettings(): Promise<void> {
       }
 
       for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {
-        localStorage.removeItem(key);
+        if (!pendingLegacy.has(key)) localStorage.removeItem(key);
       }
       // Latch for the one-time semantic reindex that no longer exists (#2143).
       localStorage.removeItem("semanticReindexVersion");
 
-      // Users who configured OpenRouter through the Custom tab keep their key
-      // in the shared custom slot — seed the dedicated slot from it once.
-      if (!openrouter && customRx) {
-        const hydrated = useSettingsStore.getState();
-        const usesOpenRouterViaCustom = (Object.keys(INFERENCE_SCOPES) as InferenceScope[]).some(
-          (scope) => {
-            const cfg = selectResolvedLLMConfig(hydrated, scope);
-            return cfg.provider === "custom" && (cfg.cloudBaseUrl || "").includes("openrouter.ai");
-          }
-        );
-        if (usesOpenRouterViaCustom) {
-          hydrated.setOpenrouterApiKey(customRx);
-        }
-      }
+      hydratedSecretsSuccessfully = true;
     } catch (err) {
       logger.warn(
         "Failed to hydrate secrets from main process",
@@ -4410,6 +4521,38 @@ export async function initializeSettings(): Promise<void> {
       hydratingSecrets = false;
       await Promise.all([...pendingSecretUpdates].map(refreshApiKey));
       pendingSecretUpdates.clear();
+      migrateEnterpriseAuthModes();
+    }
+
+    if (hydratedSecretsSuccessfully) {
+      if (
+        localStorage.getItem("_dictationAgentSeeded") === "key-pending" &&
+        !pendingLegacy.has("chatAgentCustomApiKey") &&
+        !pendingLegacy.has("dictationAgentCustomApiKey")
+      ) {
+        const { chatAgentCustomApiKey } = useSettingsStore.getState();
+        if (await seedStartupCredential("dictationAgentCustomApiKey", chatAgentCustomApiKey)) {
+          localStorage.setItem("_dictationAgentSeeded", "1");
+        }
+      }
+      const hydrated = useSettingsStore.getState();
+      // Older OpenRouter configurations stored their key on the Custom tab.
+      if (hydrated.cleanupCustomApiKey && !localStorage.getItem("_openrouterCustomKeySeeded")) {
+        const usesOpenRouterViaCustom = (Object.keys(INFERENCE_SCOPES) as InferenceScope[]).some(
+          (scope) => {
+            const config = selectResolvedLLMConfig(hydrated, scope);
+            return (
+              config.provider === "custom" && (config.cloudBaseUrl || "").includes("openrouter.ai")
+            );
+          }
+        );
+        if (
+          usesOpenRouterViaCustom &&
+          (await seedStartupCredential("openrouterApiKey", hydrated.cleanupCustomApiKey))
+        ) {
+          localStorage.setItem("_openrouterCustomKeySeeded", "1");
+        }
+      }
     }
 
     // Sync dictation key from main process.

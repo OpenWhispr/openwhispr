@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const React = require("react");
 const { mountSettingsPanel } = require("../lib/settingsPanelHarness");
 
 const PANEL = "/components/OpenAICompatiblePanel.tsx";
@@ -141,6 +142,27 @@ test("OpenRouter checks its key, which holds the status", async (t) => {
   assert.equal(panel.field("common.apiKey").props.invalidOn, "credentialsRejected");
 });
 
+test("clearing OpenRouter's saved key reloads its public catalog", async (t) => {
+  const panel = await mount(t, {
+    overrides: {
+      provider: "openrouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      lockedBaseUrl: true,
+      apiKeyRequired: true,
+      apiKey: "private",
+    },
+  });
+  await panel.wait(0);
+  await panel.answer({ success: true });
+  await panel.setProps({ apiKey: "" });
+  await panel.wait(500);
+  const authorizations = globalThis.fetch.mock.calls.map(
+    ({ arguments: [, init] }) => init.headers.Authorization
+  );
+  assert.deepEqual(authorizations, ["Bearer private", undefined]);
+  assert.equal(panel.phase(), "idle");
+});
+
 test("a hidden server panel sends nothing until it is shown, then asks again", async (t) => {
   const panel = await mount(t, { visible: false });
   await panel.wait(5000);
@@ -214,6 +236,51 @@ test("a key typed while the list is still loading retries once the load settles"
   assert.equal(globalThis.fetch.mock.calls.length, 2, "once");
 });
 
+test("a settled reference or literal replacement reloads a previously successful catalog", async (t) => {
+  const values = { $GROQ_API_KEY: "first", $OPENAI_API_KEY: "second" };
+  const panel = await mount(t, {
+    overrides: { apiKey: "$GROQ_API_KEY" },
+    electronAPI: { resolveSecretRef: async (ref) => values[ref] },
+    fetch: async (_url, { headers }) => respond(200, { data: [{ id: headers.Authorization }] })(),
+  });
+  const listed = () => panel.find((node) => Array.isArray(node.props?.models))[0]?.props.models;
+  await panel.wait(0);
+  await panel.answer({ success: true });
+  assert.equal(listed()[0].value, "Bearer first");
+  for (const [key, expected] of [
+    ["$OPENAI_API_KEY", "second"],
+    ["literal", "literal"],
+  ]) {
+    const priorRequests = globalThis.fetch.mock.calls.length;
+    await panel.setProps({ apiKey: key });
+    await panel.wait(500);
+    assert.equal(globalThis.fetch.mock.calls.length, priorRequests);
+    await panel.answer({ success: true });
+    assert.equal(listed()[0].value, `Bearer ${expected}`);
+  }
+});
+
+test("a pending catalog cannot display the previous literal key's models during an edit", async (t) => {
+  let respondToFirst;
+  const first = new Promise((resolve) => {
+    respondToFirst = resolve;
+  });
+  const panel = await mount(t, {
+    overrides: { apiKey: "first" },
+    fetch: (_url, { headers }) => (headers.Authorization === "Bearer first" ? first : modelList()),
+  });
+  await panel.wait(0);
+  await panel.answer({ success: true });
+  await panel.setProps({ apiKey: "second" });
+  respondToFirst(await respond(200, { data: [{ id: "only-for-first" }] })());
+  await panel.wait(500);
+  const models = () =>
+    panel.find((node) => Array.isArray(node.props?.models))[0]?.props.models ?? [];
+  assert.deepEqual(models(), []);
+  await panel.answer({ success: true });
+  assert.equal(models()[0].value, "llama-test");
+});
+
 test("a hidden panel's failed list stays quiet when its key changes elsewhere", async (t) => {
   const panel = await mount(t, { fetch: respond(401), visible: false });
   await panel.wait(0);
@@ -263,6 +330,58 @@ test("an unset Custom reference stays in the editor and never replaces the saved
   assert.equal(panel.field(OPTIONAL_KEY).props.value, "$OPENAI_API_KEY");
   await panel.unmount();
   assert.deepEqual(saved, []);
+});
+
+test("a referenced source changed in another window or this one rechecks the key and models", async (t) => {
+  const saved = [];
+  let source = "";
+  let refresh;
+  const panel = await mount(t, {
+    props: savingKey(saved),
+    electronAPI: {
+      setDictionary: async () => {},
+      onApiKeyUpdated: (listener) => {
+        refresh = listener;
+      },
+      getOpenAIKey: async () => source,
+      saveOpenAIKey: async (key) => {
+        source = key;
+        return { success: true };
+      },
+      resolveSecretRef: async () => source,
+    },
+  });
+  const { initializeSettings } = await panel.vite.ssrLoadModule("/stores/settingsStore.ts");
+  await React.act(initializeSettings);
+  await panel.type(OPTIONAL_KEY, "$OPENAI_API_KEY");
+  await panel.blur(OPTIONAL_KEY);
+  await panel.wait(0);
+  await panel.answer({ success: false, errorCode: "secretRefUnset" });
+  assert.deepEqual(saved, []);
+
+  source = "peer-value";
+  await React.act(() => refresh("openaiApiKey"));
+  assert.equal(panel.phase(), "waiting");
+  await panel.wait(500);
+  assert.equal(panel.requests().at(-1).apiKey, "$OPENAI_API_KEY");
+  await panel.answer({ success: false, errorCode: "network", unverified: true });
+  assert.deepEqual(saved, ["$OPENAI_API_KEY"]);
+  const requestsBeforeClear = globalThis.fetch.mock.calls.length;
+  assert.equal(
+    globalThis.fetch.mock.calls.at(-1).arguments[1].headers.Authorization,
+    "Bearer peer-value"
+  );
+
+  await React.act(async () => {
+    panel.state().setOpenaiApiKey("");
+  });
+  await panel.wait(250);
+  assert.equal(source, "");
+  assert.equal(panel.phase(), "waiting");
+  await panel.wait(500);
+  await panel.answer({ success: false, errorCode: "secretRefUnset" });
+  assert.equal(panel.phase(), "failed");
+  assert.equal(globalThis.fetch.mock.calls.length, requestsBeforeClear);
 });
 
 test("the scoped self-hosted key setter passes its validation error back to the editor", async (t) => {

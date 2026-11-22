@@ -1216,6 +1216,36 @@ test("a throwing cancelled transport saves the stopped reply exactly once", asyn
   assert.equal(harness.completed[0][3].turn.status, "stopped");
 });
 
+test("chat offers key recovery when a configured reference loses its source", async (t) => {
+  let sourceAvailable = true;
+  const harness = await renderChatStreaming(
+    t,
+    { allowInteractions: true },
+    {
+      settings: {
+        ...BYOK,
+        openaiApiKey: "fixture-openai",
+        anthropicApiKey: "$CORTI_CLIENT_SECRET",
+        geminiApiKey: "fixture-gemini",
+        groqApiKey: "fixture-groq",
+        openrouterApiKey: "fixture-openrouter",
+        tinfoilApiKey: "fixture-tinfoil",
+      },
+      electronAPI: {
+        getConfiguredSecretRefs: async (references) => {
+          assert.deepEqual(references, ["$CORTI_CLIENT_SECRET"]);
+          return sourceAvailable ? references : [];
+        },
+      },
+    }
+  );
+  await harness.captured.sendToAI("First message", []);
+  assert.equal(harness.offered[0].includes("request_api_key"), false);
+  sourceAvailable = false;
+  await harness.captured.sendToAI("Second message", []);
+  assert.equal(harness.offered[1].includes("request_api_key"), true);
+});
+
 test("a local-only policy never advertises provider key setup", async (t) => {
   const harness = await renderChatStreaming(
     t,

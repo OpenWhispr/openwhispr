@@ -8,9 +8,16 @@
 
 const fs = require("fs");
 const os = require("os");
+const path = require("path");
 const { promisify } = require("util");
 const execFileAsync = promisify(require("child_process").execFile);
-const { ENV_REF_RE, isEnvRef, envRefName, usableSecret, classifySecretInput } = require("./envRef.cjs");
+const {
+  ENV_REF_RE,
+  isEnvRef,
+  envRefName,
+  usableSecret,
+  classifySecretInput,
+} = require("./envRef.cjs");
 
 const ENV_EXPORT_SENTINEL = "__OW_ENV__";
 
@@ -42,13 +49,14 @@ function buildShellImportScript(shell, names) {
   // A login profile can override a default it sourced from ~/.bashrc. Capture
   // those exports first, then consult ~/.bashrc only for names still missing.
   return [
+    ...(bash ? [fs.readFileSync(path.join(__dirname, "observeBashLogin.sh"), "utf8")] : []),
     `printf '%s\\n' '${ENV_EXPORT_SENTINEL}'`,
     `__ow_emit() { printenv "$__ow_n" >/dev/null && printf '%s=%s\\0' "$__ow_n" ${value}; }`,
     "__ow_missing=()",
     `for __ow_n in ${safe.join(" ")}; do __ow_emit || __ow_missing+=("$__ow_n"); done`,
     ...(bash
       ? [
-          'if (( ${#__ow_missing[@]} )) && [ -r "$HOME/.bashrc" ]; then',
+          'if [[ -z ${__ow_rc_seen:-} && -r "$HOME/.bashrc" ]] && (( ${#__ow_missing[@]} )); then',
           '  . "$HOME/.bashrc" >/dev/null 2>&1',
           '  for __ow_n in "${__ow_missing[@]}"; do __ow_emit || :; done',
           "fi",
@@ -92,7 +100,11 @@ function passwdLoginShell() {
   }
 }
 
-function resolveLoginShell(env = process.env, existsSync = fs.existsSync, passwdShell = passwdLoginShell()) {
+function resolveLoginShell(
+  env = process.env,
+  existsSync = fs.existsSync,
+  passwdShell = passwdLoginShell()
+) {
   if (env.SHELL) {
     return isTrustedLoginShell(env.SHELL) && existsSync(env.SHELL) ? env.SHELL : null;
   }
@@ -143,9 +155,13 @@ async function importMissingSecretsFromLoginShell({
   const shell = resolveLoginShell(env, existsSync, passwdShell);
   if (!shell) return { imported: [], reason: "no-trusted-shell" };
 
-  // -ilc: a login, interactive shell reads the login files and ~/.zshrc; the
-  // script reads ~/.bashrc for bash (see buildShellImportScript).
-  const args = ["-ilc", buildShellImportScript(shell, names)];
+  // Zsh reads its normal startup files. Bash loads its login files in the
+  // script so we can detect whether they included .bashrc.
+  const args = [
+    ...(/bash$/.test(shell) ? ["--noprofile"] : []),
+    "-ilc",
+    buildShellImportScript(shell, names),
+  ];
   const opts = {
     encoding: "utf8",
     timeout: 1500,

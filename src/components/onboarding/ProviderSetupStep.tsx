@@ -17,7 +17,7 @@ import { ProviderIcon } from "../ui/ProviderIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "../ui/select";
 import { useConnectionAutoCheck } from "../../hooks/useConnectionAutoCheck";
 import { isWindowSwitchBlur } from "../../hooks/useFocusHold";
-import { useSettingsStore } from "../../stores/settingsStore";
+import { secretInputError, useSettingsStore } from "../../stores/settingsStore";
 import { normalizeBaseUrl } from "../../config/constants";
 import { withHttpsScheme } from "../../utils/urlUtils";
 import { isByokTranscriptionModelAllowed } from "../../services/managedTranscription";
@@ -505,6 +505,11 @@ export function ByokProviderStep({
         store.switchReasoningProvider("chatIntelligence", selectedProvider, selectedModel);
         store.setChatAgentModel(selectedModel);
       } else if (isCortiTranscription) {
+        const current = useSettingsStore.getState();
+        must(secretInputError("cortiClientId", draftCortiClientId, current.cortiClientId));
+        must(
+          secretInputError("cortiClientSecret", draftCortiClientSecret, current.cortiClientSecret)
+        );
         must(store.setCortiClientId(draftCortiClientId));
         must(store.setCortiClientSecret(draftCortiClientSecret));
       } else {

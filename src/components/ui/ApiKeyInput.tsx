@@ -70,7 +70,8 @@ export default function ApiKeyInput({
             })
           : code === "unknown-ref"
             ? t("apiKeyInput.unknownRef", {
-                defaultValue: "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY).",
+                defaultValue:
+                  "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY).",
               })
             : (err as Error).message
       );

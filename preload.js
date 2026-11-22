@@ -38,7 +38,8 @@ const BYOK_KEY_BRIDGES = [
 const secretKeyApi = {};
 for (const k of BYOK_KEY_BRIDGES) {
   secretKeyApi[k.get] = () => ipcRenderer.invoke(`get-${k.base}-key`);
-  secretKeyApi[k.save] = (key) => ipcRenderer.invoke(`save-${k.base}-key`, key);
+  secretKeyApi[k.save] = (key, migration = false) =>
+    ipcRenderer.invoke(`save-${k.base}-key`, key, migration);
 }
 
 /**
@@ -517,6 +518,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // BYOK API keys (get/save for every provider in the secretKeys manifest)
   ...secretKeyApi,
   resolveSecretRef: (value) => ipcRenderer.invoke("resolve-secret-ref", value),
+  getConfiguredSecretRefs: (references) =>
+    ipcRenderer.invoke("get-configured-secret-refs", references),
 
   // Clipboard functions
   checkAccessibilityPermission: (silent) =>

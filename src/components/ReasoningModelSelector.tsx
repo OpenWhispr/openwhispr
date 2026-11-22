@@ -487,8 +487,16 @@ export default function ReasoningModelSelector({
       phase: check.phase,
       checked: { [displayedCloudProvider]: typedKey },
       refused,
+      credentialRevision: check.credentialRevision,
     });
-  }, [check.phase, displayedCloudProvider, typedKey, refused, followKeyDraft]);
+  }, [
+    check.phase,
+    check.credentialRevision,
+    displayedCloudProvider,
+    typedKey,
+    refused,
+    followKeyDraft,
+  ]);
 
   const localProviders = useMemo<LocalProvider[]>(() => {
     return modelRegistry.getAllProviders().map((provider) => ({

@@ -121,6 +121,22 @@ test("an unset Corti secret keeps both saved credentials through blur and closin
   assert.equal(panel.state().cortiClientSecret, "old-secret");
 });
 
+test("a locally rejected Corti field preserves the entire pair after an unverified check", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "corti", selectedCloudModel: "corti-transcribe" },
+    secrets: { cortiClientId: "old-id", cortiClientSecret: "old-secret" },
+  });
+  await panel.type(CLIENT_ID, "new-id");
+  await panel.type(CLIENT_SECRET, "$CORTI_CLIENT_SECRET");
+  await panel.blur(CLIENT_SECRET);
+  await panel.wait(0);
+  await panel.answer({ success: false, errorCode: "network", unverified: true });
+  assert.equal(panel.field(CLIENT_SECRET).props.error, "apiKeyInput.selfReference");
+  await panel.unmount();
+  assert.equal(panel.state().cortiClientId, "old-id");
+  assert.equal(panel.state().cortiClientSecret, "old-secret");
+});
+
 test("Corti: the secret holds the status, checked with ID, region and tenant", async (t) => {
   const panel = await mount(t, {
     overrides: { selectedCloudProvider: "corti", selectedCloudModel: "corti-transcribe" },

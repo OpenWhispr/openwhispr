@@ -6,13 +6,8 @@ const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
 const { BYOK_API_KEYS, SECRET_ENV_NAMES, NON_REF_SECRET_ENV } = require("../config/secretKeys");
-const {
-  isEnvRef,
-  envRefName,
-  resolveEnvRef,
-  importMissingSecretsFromLoginShell,
-  classifySecretInput,
-} = require("./envKeyResolve");
+const envKeyResolve = require("./envKeyResolve");
+const { isEnvRef, usableSecret, envRefName, resolveEnvRef, classifySecretInput } = envKeyResolve;
 
 // Every name EnvironmentManager encrypts and persists. SECRET_REF_NAMES (shared
 // with secretKeys.js) are the credentials a $VAR field may point at and the
@@ -26,6 +21,15 @@ const CLEANUP_FALLBACK_DISABLED = "CUSTOM_CLEANUP_LEGACY_FALLBACK_DISABLED";
 
 function hasLegacyCleanupReference() {
   return SECRET_ENV_NAMES.some((name) => envRefName(process.env[name]) === LEGACY_CLEANUP_KEY);
+}
+
+function secretEnvLine(name, value) {
+  const { parse } = require("dotenv");
+  for (const quote of ["", "'", '"', "`"]) {
+    const line = `${name}=${quote}${value}${quote}\n`;
+    if (parse(line)[name] === value) return line;
+  }
+  throw new Error(`Cannot represent ${name} in plaintext storage`);
 }
 
 const PERSISTED_KEYS = [
@@ -81,6 +85,8 @@ const shellImportedSecrets = new Set();
 // Counts Settings saves per secret, so a login-shell import that was already
 // waiting on the shell never overwrites a key the user saved meanwhile.
 const secretSaveCounts = new Map();
+const pendingMigrations = new Map();
+const unreadableSecrets = new Set();
 // Called with the env names a login-shell import filled, so open windows that
 // read their keys before the import finished can read them again.
 const shellImportListeners = new Set();
@@ -143,13 +149,15 @@ class EnvironmentManager {
 
   async _importLoginShellSecrets() {
     const savesAtStart = new Map(secretSaveCounts);
-    const { imported, reason } = await importMissingSecretsFromLoginShell({
-      secretNames: SECRET_ENV_NAMES,
+    const { imported, reason } = await envKeyResolve.importMissingSecretsFromLoginShell({
+      secretNames: SECRET_ENV_NAMES.filter((name) => !unreadableSecrets.has(name)),
       env: process.env,
       importedSet: this._shellImportedSecrets,
       // Re-checked after the shell answers: a key saved in Settings meanwhile wins.
       canImport: (name) =>
-        !process.env[name] && (secretSaveCounts.get(name) || 0) === (savesAtStart.get(name) || 0),
+        !process.env[name] &&
+        !unreadableSecrets.has(name) &&
+        (secretSaveCounts.get(name) || 0) === (savesAtStart.get(name) || 0),
     });
     debugLogger.info(
       "login-shell secret import",
@@ -200,10 +208,16 @@ class EnvironmentManager {
     try {
       const buffer = await fsPromises.readFile(filePath);
       const { value, needsReencrypt } = secretCrypto.decrypt(buffer);
+      unreadableSecrets.delete(envVarName);
+      this._shellImportedSecrets.delete(envVarName);
       process.env[envVarName] = value;
       if (needsReencrypt) await this._saveSecretKey(envVarName, value);
     } catch (error) {
-      if (error.code === "ENOENT") return;
+      if (error.code === "ENOENT") {
+        unreadableSecrets.delete(envVarName);
+        return;
+      }
+      unreadableSecrets.add(envVarName);
       debugLogger.error(
         "Failed to decrypt secret — user must re-enter",
         { key: envVarName, code: error.code, error: error.message },
@@ -212,55 +226,54 @@ class EnvironmentManager {
     }
   }
 
-  async _saveSecretKey(envVarName, value) {
-    if (!value) {
-      await this._deleteSecretKey(envVarName);
-      return;
-    }
-
-    process.env[envVarName] = value;
-
-    const dir = this._getSecureKeysDir();
-    await fsPromises.mkdir(dir, { recursive: true });
-
+  _saveSecretKey(envVarName, value) {
+    if (value) process.env[envVarName] = value;
+    else delete process.env[envVarName];
     const filePath = this._getSecretFilePath(envVarName);
-    const tmpPath = `${filePath}.tmp`;
-    const encrypted = secretCrypto.encrypt(value);
-
-    await fsPromises.writeFile(tmpPath, encrypted);
-    await fsPromises.rename(tmpPath, filePath);
-  }
-
-  async _deleteSecretKey(envVarName) {
-    delete process.env[envVarName];
-    try {
-      await fsPromises.unlink(this._getSecretFilePath(envVarName));
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-    }
+    // An upgrade copy and a user's edit can otherwise race on the same .tmp file.
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(async () => {
+        if (!value) return fsPromises.rm(filePath, { force: true });
+        await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+        const tmpPath = `${filePath}.tmp`;
+        await fsPromises.writeFile(tmpPath, secretCrypto.encrypt(value));
+        await fsPromises.rename(tmpPath, filePath);
+      });
+    return envWriteQueue;
   }
 
   async _migrateToSecureStorage() {
     const dir = this._getSecureKeysDir();
     await fsPromises.mkdir(dir, { recursive: true });
 
-    // Old releases used the legacy slot for Cleanup. An explicit reference
-    // from any scope needs that slot to survive encryption under its own name.
-    if (process.env[LEGACY_CLEANUP_KEY] && !hasLegacyCleanupReference()) {
-      if (!process.env.CUSTOM_CLEANUP_API_KEY && process.env[CLEANUP_FALLBACK_DISABLED] !== "true") {
-        process.env.CUSTOM_CLEANUP_API_KEY = process.env[LEGACY_CLEANUP_KEY];
-      }
-      delete process.env[LEGACY_CLEANUP_KEY];
+    // Keep the original name as a reference target. Older references may still
+    // be in renderer localStorage when main encrypts the profile.
+    if (
+      process.env[LEGACY_CLEANUP_KEY] &&
+      !fs.existsSync(this._getSecretFilePath(LEGACY_CLEANUP_KEY)) &&
+      !hasLegacyCleanupReference() &&
+      !process.env.CUSTOM_CLEANUP_API_KEY &&
+      process.env[CLEANUP_FALLBACK_DISABLED] !== "true"
+    ) {
+      process.env.CUSTOM_CLEANUP_API_KEY = process.env[LEGACY_CLEANUP_KEY];
     }
 
     const migrated = [];
     try {
       for (const name of SECRET_KEYS) {
+        const file = this._getSecretFilePath(name);
+        // A previous upgrade may have encrypted this slot before it stopped.
+        // Verify the existing copy before trusting or replacing it.
+        if (fs.existsSync(file)) {
+          process.env[name] = secretCrypto.decrypt(await fsPromises.readFile(file)).value;
+          continue;
+        }
         const value = process.env[name];
         if (!value) continue;
         await this._saveSecretKey(name, value);
         // Round-trip verify before stripping plaintext .env.
-        const buffer = await fsPromises.readFile(this._getSecretFilePath(name));
+        const buffer = await fsPromises.readFile(file);
         if (secretCrypto.decrypt(buffer).value !== value) {
           throw new Error(`round-trip verification failed for ${name}`);
         }
@@ -293,6 +306,26 @@ class EnvironmentManager {
     return envWriteQueue;
   }
 
+  _persistMigratedPlaintext(name, value) {
+    const file = path.join(app.getPath("userData"), ".env");
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(async () => {
+        let content = "";
+        try {
+          content = await fsPromises.readFile(file, "utf8");
+        } catch (error) {
+          if (error.code !== "ENOENT") throw error;
+        }
+        // Migrating one field must preserve unrelated config and launcher-only credentials.
+        if (content && !content.endsWith("\n")) content += "\n";
+        const tmp = `${file}.tmp`;
+        await fsPromises.writeFile(tmp, content + secretEnvLine(name, value), { mode: 0o600 });
+        await fsPromises.rename(tmp, file);
+      });
+    return envWriteQueue;
+  }
+
   async _writeEnvFile(envPath) {
     // Only strip plaintext secrets once migration has fully completed —
     // otherwise a partial-migration recovery can lose unencrypted secrets.
@@ -307,7 +340,7 @@ class EnvironmentManager {
           key === "SELF_HOSTED_STT_HEADERS" && !process.env[key].startsWith("base64:")
             ? `base64:${Buffer.from(process.env[key], "utf8").toString("base64")}`
             : process.env[key];
-        envContent += `${key}=${value}\n`;
+        envContent += SECRET_REF_SET.has(key) ? secretEnvLine(key, value) : `${key}=${value}\n`;
       }
     }
     const tmpPath = `${envPath}.tmp`;
@@ -320,8 +353,13 @@ class EnvironmentManager {
   }
 
   getRawKey(envVarName) {
-    if (this._shellImportedSecrets.has(envVarName)) return `$${envVarName}`;
-    return this._getRawKey(envVarName);
+    const raw = this._getRawKey(envVarName);
+    // A shell-exported reference is already safe to display. Wrapping it in
+    // another reference would require two hops when the renderer uses it.
+    if (this._shellImportedSecrets.has(envVarName)) {
+      return isEnvRef(raw) ? raw.trim() : `$${envVarName}`;
+    }
+    return raw;
   }
 
   _cleanupCustomEnvName() {
@@ -347,8 +385,7 @@ class EnvironmentManager {
     const raw = value || "";
     const name = envRefName(raw);
     if (name && !SECRET_REF_SET.has(name)) return "";
-    const resolved = resolveEnvRef(raw, process.env);
-    return isEnvRef(resolved) ? "" : resolved;
+    return usableSecret(resolveEnvRef(raw, process.env));
   }
 
   _getKey(envVarName) {
@@ -358,30 +395,69 @@ class EnvironmentManager {
     return SECRET_REF_SET.has(envVarName) ? this.resolveSecretRef(raw) : raw;
   }
 
-  _saveKey(envVarName, key) {
+  _saveKey(envVarName, key, migration = false) {
     const trimmed = typeof key === "string" ? key.trim() : key;
+    if (migration && unreadableSecrets.has(envVarName)) {
+      return { success: false, reason: "storage-unavailable" };
+    }
+    const pending = pendingMigrations.get(envVarName);
+    if (migration && pending) {
+      return pending.then((result) =>
+        result.success ? { success: true, retained: this.getRawKey(envVarName) } : result
+      );
+    }
     if (SECRET_REF_SET.has(envVarName)) {
-      const reason = classifySecretInput(trimmed, envVarName, SECRET_REF_SET);
-      if (reason === "self-reference" && shellImportedSecrets.has(envVarName)) {
-        return { success: true };
+      const imported = this._shellImportedSecrets.has(envVarName);
+      const shown = this.getRawKey(envVarName);
+      const keepShown = shown && (!imported || migration === "if-empty");
+      if (migration && (keepShown || secretSaveCounts.has(envVarName))) {
+        return { success: true, retained: shown };
       }
+      if (!migration && imported && trimmed === shown) return { success: true };
+      const reason = classifySecretInput(trimmed, envVarName, SECRET_REF_SET);
       if (reason) return { success: false, reason };
     }
-    secretSaveCounts.set(envVarName, (secretSaveCounts.get(envVarName) || 0) + 1);
-    this._shellImportedSecrets.delete(envVarName);
+    const previous = process.env[envVarName];
+    const version = (secretSaveCounts.get(envVarName) || 0) + 1;
+    secretSaveCounts.set(envVarName, version);
+    const wasImported = this._shellImportedSecrets.delete(envVarName);
+    let write;
     if (SECRET_KEY_SET.has(envVarName) && this._encryptionAvailable()) {
-      this._saveSecretKey(envVarName, key).catch((error) => {
+      write = this._saveSecretKey(envVarName, key);
+    } else {
+      if (key) process.env[envVarName] = key;
+      else delete process.env[envVarName];
+      if (migration) write = this._persistMigratedPlaintext(envVarName, key);
+    }
+    if (migration) {
+      const persisted = write
+        .then(
+          () => ({ success: true }),
+          () => {
+            if (secretSaveCounts.get(envVarName) === version) {
+              // A failed upgrade write must leave its source eligible for the next attempt.
+              secretSaveCounts.delete(envVarName);
+              if (previous === undefined) delete process.env[envVarName];
+              else process.env[envVarName] = previous;
+              if (wasImported) this._shellImportedSecrets.add(envVarName);
+            }
+            return { success: false, reason: "storage-unavailable" };
+          }
+        )
+        .finally(() => pendingMigrations.delete(envVarName));
+      pendingMigrations.set(envVarName, persisted);
+      return persisted;
+    }
+    write?.then(
+      () => unreadableSecrets.delete(envVarName),
+      (error) => {
         debugLogger.error(
           "Failed to persist encrypted secret",
           { key: envVarName, error: error.message },
           "environment"
         );
-      });
-    } else if (key) {
-      process.env[envVarName] = key;
-    } else {
-      delete process.env[envVarName];
-    }
+      }
+    );
     return { success: true };
   }
 
@@ -444,7 +520,9 @@ class EnvironmentManager {
     if (!trimmed && process.env[CLEANUP_FALLBACK_DISABLED] !== "true") {
       process.env[CLEANUP_FALLBACK_DISABLED] = "true";
       this.saveAllKeysToEnvFile().catch((error) => {
-        debugLogger.error("Failed to persist the cleared Cleanup setting", { error: error.message });
+        debugLogger.error("Failed to persist the cleared Cleanup setting", {
+          error: error.message,
+        });
       });
     }
     if (
@@ -699,10 +777,16 @@ class EnvironmentManager {
       secretSaveCounts.set(name, (secretSaveCounts.get(name) || 0) + 1);
     }
 
-    await Promise.all([
-      fsPromises.rm(path.join(app.getPath("userData"), ".env"), { force: true }),
-      fsPromises.rm(this._getSecureKeysDir(), { recursive: true, force: true }),
-    ]);
+    unreadableSecrets.clear();
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(() =>
+        Promise.all([
+          fsPromises.rm(path.join(app.getPath("userData"), ".env"), { force: true }),
+          fsPromises.rm(this._getSecureKeysDir(), { recursive: true, force: true }),
+        ])
+      );
+    await envWriteQueue;
     return { success: true };
   }
 
@@ -739,8 +823,8 @@ for (const k of BYOK_API_KEYS) {
   EnvironmentManager.prototype[k.get] = function () {
     return this._getKey(k.env);
   };
-  EnvironmentManager.prototype[k.save] = function (key) {
-    return this._saveKey(k.env, key);
+  EnvironmentManager.prototype[k.save] = function (key, migration = false) {
+    return this._saveKey(k.env, key, migration);
   };
 }
 
@@ -748,5 +832,6 @@ module.exports = EnvironmentManager;
 module.exports._resetShellImportedSecrets = () => {
   shellImportedSecrets.clear();
   secretSaveCounts.clear();
+  unreadableSecrets.clear();
   shellImportListeners.clear();
 };

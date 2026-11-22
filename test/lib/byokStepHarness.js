@@ -131,6 +131,10 @@ async function mountByokStep(
     value: (placeholder) => input(placeholder)?.props.value,
     type: (placeholder, value) =>
       act(() => input(placeholder).props.onChange({ target: { value } })),
+    typeLabeled: (label, value) =>
+      act(() =>
+        find((node) => node.props?.label === label)[0].props.onChange({ target: { value } })
+      ),
     // [provider, model] in the hosted half; absent while the card is self-hosted.
     selectValues: () =>
       find((node) => typeof node.props?.onValueChange === "function").map(

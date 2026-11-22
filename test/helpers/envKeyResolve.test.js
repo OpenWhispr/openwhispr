@@ -374,8 +374,11 @@ test(
     const { env } = await importFromRealShell(
       "/bin/bash",
       {
-        ".bashrc": "export OPENAI_API_KEY=default-account\nexport GROQ_API_KEY=rc-only\n",
-        ".bash_profile": '. "$HOME/.bashrc"\nexport OPENAI_API_KEY=profile-account\n',
+        ".bashrc":
+          '[[ ! -f "$HOME/ran" ]] || exit 10\n: > "$HOME/ran"\nexport OPENAI_API_KEY=default-account\nexport GROQ_API_KEY=rc-only\n',
+        ".bash_profile": 'set -eu\n. "$HOME/include"\nexport OPENAI_API_KEY=profile-account\n',
+        include: '. "$HOME/.bashrc"\n',
+        ".bash_login": "exit 11\n",
       },
       ["OPENAI_API_KEY", "GROQ_API_KEY", "CUSTOM_TRANSCRIPTION_API_KEY"]
     );
@@ -383,6 +386,72 @@ test(
     assert.equal(env.GROQ_API_KEY, "rc-only");
   }
 );
+
+test(
+  "Bash consults an independent bashrc once without overriding login exports",
+  {
+    skip: !fs.existsSync("/bin/bash"),
+  },
+  async () => {
+    const { env } = await importFromRealShell(
+      "/bin/bash",
+      {
+        ".bash_login": "set -eu\nexport OPENAI_API_KEY=login\n",
+        ".profile": "exit 11\n",
+        ".bashrc": "export OPENAI_API_KEY=rc\nexport GROQ_API_KEY=rc\n",
+      },
+      ["OPENAI_API_KEY", "GROQ_API_KEY"]
+    );
+    assert.equal(env.OPENAI_API_KEY, "login");
+    assert.equal(env.GROQ_API_KEY, "rc");
+  }
+);
+
+for (const trap of ["trap", "builtin trap", "command trap", "command builtin trap", "command -p -- builtin -- trap"]) {
+  test(
+    `Bash preserves a profile's ${trap} DEBUG hook and runs its .bashrc once`,
+    { skip: !fs.existsSync("/bin/bash") },
+    async () => {
+      const { env } = await importFromRealShell(
+        "/bin/bash",
+        {
+          ".profile": [
+            "set -eu",
+            `${trap} 'export OPENAI_API_KEY=hook' DEBUG`,
+            '. "$HOME/.bashrc"',
+            '[[ $(type -t builtin) == builtin && $(type -t trap) == builtin && $(type -t command) == builtin ]] || exit 11',
+          ].join("\n"),
+          ".bashrc":
+            '[[ ! -f "$HOME/ran" ]] || exit 10\n: > "$HOME/ran"\nexport GROQ_API_KEY=rc\n',
+        },
+        ["OPENAI_API_KEY", "GROQ_API_KEY", "CUSTOM_TRANSCRIPTION_API_KEY"]
+      );
+      assert.equal(env.OPENAI_API_KEY, "hook");
+      assert.equal(env.GROQ_API_KEY, "rc");
+    }
+  );
+
+  test(
+    `a profile's guarded ${trap} DEBUG hook still allows independent .bashrc exports`,
+    { skip: !fs.existsSync("/bin/bash") },
+    async () => {
+      const { env } = await importFromRealShell(
+        "/bin/bash",
+        {
+          ".bash_profile": [
+            `[[ -z $(${trap} -p DEBUG) ]] || exit 12`,
+            `${trap} -- 'export OPENAI_API_KEY=hook' DEBUG`,
+            `[[ $(${trap} -p DEBUG) == *OPENAI_API_KEY* ]] || exit 13`,
+          ].join("\n"),
+          ".bashrc": "export GROQ_API_KEY=rc-only\n",
+        },
+        ["OPENAI_API_KEY", "GROQ_API_KEY"]
+      );
+      assert.equal(env.OPENAI_API_KEY, "hook");
+      assert.equal(env.GROQ_API_KEY, "rc-only");
+    }
+  );
+}
 
 test(
   "real login zsh keeps apostrophes, quotes and # in a value",

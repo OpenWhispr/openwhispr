@@ -4,11 +4,17 @@ import type { ConnectionAutoCheck } from "./useConnectionAutoCheck";
 // A save returns an error code (a $VAR reference the store refused) or nothing.
 type Drafts = Record<string, { value: string; save: (value: string) => unknown }>;
 
+interface CredentialGroup {
+  fields: readonly string[];
+  validate: (field: string, value: string) => string | null;
+}
+
 export interface CredentialCheckReport {
   phase: ConnectionAutoCheck["phase"];
   /** The fields the check's request carries (Corti's region too), with their values. */
   checked: Record<string, string>;
   refused: boolean;
+  credentialRevision?: number;
 }
 
 // A custom server may reject a check for reasons unrelated to the supplied key.
@@ -34,7 +40,7 @@ const refusalKey = (field: string, request: string, value: string) =>
  * provider, a hidden panel), no answer is coming, so it is saved as it stands. Closing
  * Settings saves whatever wasn't refused.
  */
-export function useCredentialDraft() {
+export function useCredentialDraft(group?: CredentialGroup) {
   const [drafts, setDrafts] = useState<Drafts>({});
   // Why a field's draft wasn't saved; the draft stays so the user can fix it.
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -54,36 +60,52 @@ export function useCredentialDraft() {
 
   // Saves the drafts of `fields`, except those of a credential with a refused draft. With
   // `values`, only drafts that still hold the value an answer was for.
-  const settle = useCallback((fields: readonly string[], values?: Record<string, string>) => {
-    const refused = (field: string) => {
-      const draft = latest.current[field];
-      return (
-        Boolean(draft) &&
-        [answered.current[field], asking.current[field]].some(
-          (request) =>
-            request !== undefined && refusals.current.has(refusalKey(field, request, draft.value))
-        )
-      );
-    };
-    const saved = new Set<Drafts[string]>();
-    for (const field of fields) {
-      const draft = latest.current[field];
-      if (!draft || (values && draft.value !== values[field])) continue;
-      if ((groups.current[field] ?? [field]).some(refused)) continue;
-      const result: unknown = draft.save(draft.value);
-      if (typeof result === "string" && result) {
-        setErrors((current) => ({ ...current, [field]: result }));
-        continue;
+  const settle = useCallback(
+    (fields: readonly string[], values?: Record<string, string>) => {
+      // Validate the entire credential before invoking any setter. Blur and
+      // unmount can both settle drafts before a connection check has answered.
+      const invalid: Record<string, string> = {};
+      if (group && fields.some((field) => group.fields.includes(field))) {
+        for (const field of group.fields) {
+          const draft = latest.current[field];
+          const error = draft && group.validate(field, draft.value);
+          if (error) invalid[field] = error;
+        }
       }
-      saved.add(draft);
-      left.current.delete(field);
-    }
-    if (saved.size === 0) return;
-    const keep = (current: Drafts) =>
-      Object.fromEntries(Object.entries(current).filter(([, draft]) => !saved.has(draft)));
-    latest.current = keep(latest.current);
-    setDrafts(keep);
-  }, []);
+      const groupInvalid = Object.keys(invalid).length > 0;
+      if (groupInvalid) setErrors((current) => ({ ...current, ...invalid }));
+      const refused = (field: string) => {
+        const draft = latest.current[field];
+        return (
+          Boolean(draft) &&
+          [answered.current[field], asking.current[field]].some(
+            (request) =>
+              request !== undefined && refusals.current.has(refusalKey(field, request, draft.value))
+          )
+        );
+      };
+      const saved = new Set<Drafts[string]>();
+      for (const field of fields) {
+        const draft = latest.current[field];
+        if (!draft || (values && draft.value !== values[field])) continue;
+        if (groupInvalid && group?.fields.includes(field)) continue;
+        if ((groups.current[field] ?? [field]).some(refused)) continue;
+        const result: unknown = draft.save(draft.value);
+        if (typeof result === "string" && result) {
+          setErrors((current) => ({ ...current, [field]: result }));
+          continue;
+        }
+        saved.add(draft);
+        left.current.delete(field);
+      }
+      if (saved.size === 0) return;
+      const keep = (current: Drafts) =>
+        Object.fromEntries(Object.entries(current).filter(([, draft]) => !saved.has(draft)));
+      latest.current = keep(latest.current);
+      setDrafts(keep);
+    },
+    [group]
+  );
 
   // Unmounting fires no blur, as when Escape closes Settings.
   useEffect(() => () => settle(Object.keys(latest.current)), [settle]);
@@ -97,11 +119,11 @@ export function useCredentialDraft() {
   }, [settle]);
 
   const follow = useCallback(
-    ({ phase, checked, refused }: CredentialCheckReport) => {
+    ({ phase, checked, refused, credentialRevision = 0 }: CredentialCheckReport) => {
       const now = phase === "idle" ? [] : Object.keys(checked);
       const dropped = carried.current.filter((field) => !now.includes(field));
       carried.current = now;
-      const request = JSON.stringify(checked);
+      const request = JSON.stringify([checked, credentialRevision]);
       for (const field of now) {
         asking.current[field] = request;
         groups.current[field] = now;

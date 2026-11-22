@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- API key fields now interpret a whole-field `$NAME` or `${NAME}` as a reference to an OpenWhispr credential. For example, a custom endpoint can use `$OPENAI_API_KEY`. This also applies to saved values on upgrade. If your custom server uses that exact spelling as a literal password, rotate its password before upgrading and save the replacement in Settings. A dollar sign within a longer token keeps its literal meaning.
+- On macOS and Linux, an empty key field can now use a matching export from Bash or Zsh. If your custom transcription endpoint uses anonymous access, leave `CUSTOM_TRANSCRIPTION_API_KEY` unset.
+
 ## [1.12.0] - 2026-11-17
 
 A new assistant window you can use from any app, and workspaces that grow into a full team space: Private sections for your own notes, Teams, Teamspaces, Guests and a People page. Setup on a new computer is one screen with model picks for that machine, the model list updates from a signed catalog between releases, and chats keep answering while you work elsewhere. Organizations get managed device and update policy, accounts no longer share history, dictionary or chats on a shared computer, and this release fixes team notes that stalled after a sync race.
