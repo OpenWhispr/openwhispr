@@ -306,11 +306,34 @@ test("a call opens on its tone once it listens and closes on its tone at End", a
   assert.deepEqual(calls.cues, ["start", "end"]);
 });
 
-test("an End before the call got going makes no tone", async (t) => {
-  const { hook, calls, act, begin } = await mountVoiceCall(t);
+test("an End before the call got going makes no tone, even once main's session exists", async (t) => {
+  const { hook, calls, pending, act, begin } = await mountVoiceCall(t);
   await begin();
+  await act(() => pending.readiness[0].resolve({ ready: true }));
+  await act(() => pending.start[0].resolve({ sessionId: 7, sampleRate: 44100 }));
+  // The mic is still opening (a first permission prompt, a headset switching profile).
   await act(() => hook.current.end());
   assert.deepEqual(calls.cues, []);
+});
+
+test("a line that introduces a list doesn't use up one of the sentences said aloud", async (t) => {
+  const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("give me four tips for better sleep");
+  await act(() =>
+    lastTurn().speech.onText(
+      "Here are four tips for better sleep:\n1. Keep a regular bedtime.\n2. Keep it dark.\n3. Skip late caffeine.\n4. Wind down first.\n"
+    )
+  );
+  await act(() => lastTurn().speech.onEnd("complete"));
+
+  assert.deepEqual(spokenTexts(calls), [
+    "Here are four tips for better sleep:",
+    "Keep a regular bedtime.",
+    "Keep it dark.",
+    "Skip late caffeine.",
+    "Wind down first.",
+  ]);
 });
 
 test("an End while readiness is pending: nothing opens, and the mic claim is given back", async (t) => {

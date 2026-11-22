@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import logger from "../../utils/logger";
-import { createSpeechChunker } from "../../services/voice/speechChunker";
+import { CLAUSE_TERMINATORS, createSpeechChunker } from "../../services/voice/speechChunker";
 import { spellOutDates } from "../../services/voice/spokenDates";
 import { playCallEndCue, playCallStartCue } from "../../utils/dictationCues";
 import { createPcmPlayer, type PcmPlayer } from "../../services/voice/pcmPlayer";
@@ -152,6 +152,8 @@ export function useVoiceCall({
   const [harnessAvailable, setHarnessAvailable] = useState(false);
   const activeRef = useRef(false);
   const sessionIdRef = useRef<number | null>(null);
+  // The call opened on its tone, so it closes on one.
+  const startCuePlayedRef = useRef(false);
   const attemptRef = useRef<string | null>(null);
   const micRef = useRef<MicStream | null>(null);
   const micMutedRef = useRef(false);
@@ -368,7 +370,8 @@ export function useVoiceCall({
         return;
       }
       if (replyChunksRef.current < MAX_SPOKEN_CHUNKS) {
-        replyChunksRef.current += 1;
+        // A line ending at a clause ("Here are four tips:") introduces the sentences after it.
+        if (!CLAUSE_TERMINATORS.has(chunk.at(-1) ?? "")) replyChunksRef.current += 1;
         speakChunk(chunk);
       } else {
         cutShortRef.current = true;
@@ -493,8 +496,10 @@ export function useVoiceCall({
     startGenerationRef.current += 1;
     if (!activeRef.current) return;
     activeRef.current = false;
-    // Only a call that got going closes on a tone; a start that never did makes no sound.
-    if (sessionIdRef.current !== null) void playCallEndCue();
+    if (startCuePlayedRef.current) {
+      startCuePlayedRef.current = false;
+      void playCallEndCue();
+    }
     dropAnswer("stopped");
     if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
     sessionTimerRef.current = null;
@@ -853,6 +858,7 @@ export function useVoiceCall({
         if (isStale()) return abandon();
         micRef.current = mic;
         setSession("active");
+        startCuePlayedRef.current = true;
         void playCallStartCue();
         logger.info("Voice call started", { ...info, language }, "voice-call");
         heardLanguageRef.current = null;
