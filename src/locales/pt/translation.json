@@ -5055,8 +5055,6 @@
       "actions": {
         "start": "Iniciar Voice Agent",
         "settings": "Configurações",
-        "transcript": "Mostrar chat",
-        "hideTranscript": "Ocultar chat",
         "micOff": "Desligar microfone",
         "micOn": "Ligar microfone",
         "end": "Encerrar chamada",

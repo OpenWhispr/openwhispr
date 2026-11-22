@@ -5388,8 +5388,6 @@
       "actions": {
         "start": "Voice Agent starten",
         "settings": "Einstellungen",
-        "transcript": "Chat anzeigen",
-        "hideTranscript": "Chat ausblenden",
         "micOff": "Mikrofon ausschalten",
         "micOn": "Mikrofon einschalten",
         "end": "Anruf beenden",

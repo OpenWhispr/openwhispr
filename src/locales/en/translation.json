@@ -5388,8 +5388,6 @@
       "actions": {
         "start": "Start Voice Agent",
         "settings": "Settings",
-        "transcript": "Show chat",
-        "hideTranscript": "Hide chat",
         "micOff": "Turn microphone off",
         "micOn": "Turn microphone on",
         "end": "End call",

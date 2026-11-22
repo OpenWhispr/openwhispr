@@ -4,6 +4,7 @@ import { resolveChatStreamingInference } from "../../helpers/dictationAgentInfer
 import logger from "../../utils/logger";
 import { CLAUSE_TERMINATORS, createSpeechChunker } from "../../services/voice/speechChunker";
 import { spellOutDates } from "../../services/voice/spokenDates";
+import { playCallEndCue, playCallStartCue } from "../../utils/dictationCues";
 import { createPcmPlayer, type PcmPlayer } from "../../services/voice/pcmPlayer";
 import { startMicStream, type MicStream } from "../../services/voice/micStream";
 import {
@@ -493,6 +494,8 @@ export function useVoiceCall({
     startGenerationRef.current += 1;
     if (!activeRef.current) return;
     activeRef.current = false;
+    // Only a call that got going closes on a tone; a start that never did makes no sound.
+    if (sessionIdRef.current !== null) void playCallEndCue();
     dropAnswer("stopped");
     if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
     sessionTimerRef.current = null;
@@ -851,6 +854,7 @@ export function useVoiceCall({
         if (isStale()) return abandon();
         micRef.current = mic;
         setSession("active");
+        void playCallStartCue();
         logger.info("Voice call started", { ...info, language }, "voice-call");
         heardLanguageRef.current = null;
         prepareLines(language === "auto" ? uiSpokenLanguage(settings.uiLanguage) : language);

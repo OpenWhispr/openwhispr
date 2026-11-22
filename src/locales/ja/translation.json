@@ -5028,8 +5028,6 @@
       "actions": {
         "start": "Voice Agent を開始",
         "settings": "設定",
-        "transcript": "チャットを表示",
-        "hideTranscript": "チャットを隠す",
         "micOff": "マイクをオフ",
         "micOn": "マイクをオン",
         "end": "通話を終了",

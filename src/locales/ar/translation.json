@@ -2862,8 +2862,6 @@
       "actions": {
         "start": "بدء Voice Agent",
         "settings": "الإعدادات",
-        "transcript": "إظهار المحادثة",
-        "hideTranscript": "إخفاء المحادثة",
         "micOff": "إيقاف الميكروفون",
         "micOn": "تشغيل الميكروفون",
         "end": "إنهاء المكالمة",

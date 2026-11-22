@@ -28,7 +28,6 @@ export {
   ListOrdered,
   Maximize,
   MessageCircleQuestion,
-  Messages,
   MicOff,
   Minimize,
   Office,

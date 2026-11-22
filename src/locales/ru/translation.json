@@ -5196,8 +5196,6 @@
       "actions": {
         "start": "Запустить Voice Agent",
         "settings": "Настройки",
-        "transcript": "Показать чат",
-        "hideTranscript": "Скрыть чат",
         "micOff": "Выключить микрофон",
         "micOn": "Включить микрофон",
         "end": "Завершить звонок",

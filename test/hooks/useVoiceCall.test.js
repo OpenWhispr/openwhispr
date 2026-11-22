@@ -31,6 +31,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
   });
 
   const calls = {
+    cues: [],
     readiness: [],
     starts: [],
     stopIds: [],
@@ -114,6 +115,7 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
     reportTurnEvent: () => {},
   };
   globalThis.__voiceCall = {
+    cues: calls.cues,
     settings: {
       localTranscriptionProvider: "nvidia",
       parakeetModel: "parakeet-unified-en-0.6b",
@@ -193,6 +195,10 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
         export function resolveChatStreamingInference() {
           return { config: { mode: "local", model: "voice-brain", provider: "qwen" } };
         }
+      `,
+      "/utils/dictationCues": `
+        export const playCallStartCue = async () => globalThis.__voiceCall.cues.push("start");
+        export const playCallEndCue = async () => globalThis.__voiceCall.cues.push("end");
       `,
       "/services/voice/micStream": `
         export function startMicStream(options) {
@@ -287,6 +293,25 @@ async function mountVoiceCall(t, { settings = {}, voiceState = true } = {}) {
 }
 
 const spokenTexts = (calls) => calls.spoken.map(({ text }) => text);
+
+test("a call opens on its tone once it listens and closes on its tone at End", async (t) => {
+  const { hook, calls, pending, act, begin, openMic } = await mountVoiceCall(t);
+  await begin();
+  assert.deepEqual(calls.cues, [], "no tone while it starts");
+  await act(() => pending.readiness[0].resolve({ ready: true }));
+  await act(() => pending.start[0].resolve({ sessionId: 7, sampleRate: 44100 }));
+  await act(() => pending.mic[0].resolve(openMic()));
+  assert.deepEqual(calls.cues, ["start"]);
+  await act(() => hook.current.end());
+  assert.deepEqual(calls.cues, ["start", "end"]);
+});
+
+test("an End before the call got going makes no tone", async (t) => {
+  const { hook, calls, act, begin } = await mountVoiceCall(t);
+  await begin();
+  await act(() => hook.current.end());
+  assert.deepEqual(calls.cues, []);
+});
 
 test("an End while readiness is pending: nothing opens, and the mic claim is given back", async (t) => {
   const { hook, calls, pending, act, begin } = await mountVoiceCall(t);

@@ -5415,8 +5415,6 @@
       "actions": {
         "start": "Démarrer Voice Agent",
         "settings": "Réglages",
-        "transcript": "Afficher le chat",
-        "hideTranscript": "Masquer le chat",
         "micOff": "Couper le micro",
         "micOn": "Activer le micro",
         "end": "Terminer l'appel",

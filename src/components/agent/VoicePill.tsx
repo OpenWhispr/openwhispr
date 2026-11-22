@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Messages, Mic, MicOff, Settings, X } from "../icons";
+import { Keyboard, Maximize, Mic, MicOff, Minimize, Settings, X } from "../icons";
 import { cn } from "../lib/utils";
 import { ICON_BUTTON } from "../chat/interactions/cardStyles";
 import { useAgentWindowDrag } from "./useAgentWindowDrag";
@@ -66,13 +66,13 @@ interface VoicePillProps {
   onMic: () => void;
   onEnd: () => void;
   onStopReply: () => void;
-  /** Stopped: the pill is inert, and a click on it goes back to typing. */
+  /** Stopped: in place of the controls, Back to typing. */
   onLeave: () => void;
   /** A card waits behind the pill: its cap brings it back. */
   onShowCard?: () => void;
 }
 
-/** A voice call's pill: its status above, then sound, Settings, Chat, Microphone and End. */
+/** A voice call's pill: its status above, then sound, Settings, Expand (or Minimize), Microphone and End. */
 export function VoicePill({
   status,
   notice = null,
@@ -208,87 +208,77 @@ export function VoicePill({
             />
           ))}
         </div>
-        {/* Stopped: the controls fade on the pill's own surface. */}
-        <div
-          className={cn("ms-auto flex items-center gap-0.5", stopped && "opacity-40")}
-          aria-hidden={stopped || undefined}
-          inert={stopped || undefined}
-        >
-          <button
-            type="button"
-            onClick={onSettings}
-            disabled={starting}
-            aria-label={t("agentWindow.call.actions.settings")}
-            aria-pressed={settingsOpen}
-            title={t("agentWindow.call.actions.settings")}
-            className={cn(ICON_BUTTON, settingsOpen && "bg-foreground/10 text-foreground")}
-          >
-            <Settings size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={onTranscript}
-            disabled={starting}
-            aria-label={t(
-              inModal
-                ? "agentWindow.call.actions.hideTranscript"
-                : "agentWindow.call.actions.transcript"
-            )}
-            aria-pressed={inModal}
-            title={t(
-              inModal
-                ? "agentWindow.call.actions.hideTranscript"
-                : "agentWindow.call.actions.transcript"
-            )}
-            className={ICON_BUTTON}
-          >
-            <Messages size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={onMic}
-            disabled={starting}
-            aria-label={t(
-              micMuted ? "agentWindow.call.actions.micOn" : "agentWindow.call.actions.micOff"
-            )}
-            aria-pressed={micMuted}
-            title={t(
-              micMuted ? "agentWindow.call.actions.micOn" : "agentWindow.call.actions.micOff"
-            )}
-            className={ICON_BUTTON}
-          >
-            {micMuted || stopped ? <MicOff size={15} /> : <Mic size={15} />}
-          </button>
-          {sessionControl === "stopReply" ? (
-            <button
-              type="button"
-              onClick={onStopReply}
-              aria-label={t("agentWindow.call.actions.stopReply")}
-              title={t("agentWindow.call.actions.stopReply")}
-              className="voice-pill-swap voice-pill-swap-slow ms-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-[filter] hover:brightness-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              <span className="size-2.5 rounded-[2px] bg-current" aria-hidden="true" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onEnd}
-              aria-label={t("agentWindow.call.actions.end")}
-              title={t("agentWindow.call.actions.end")}
-              className="voice-pill-swap ms-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-destructive text-white transition-[filter] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              <X size={14} strokeWidth={2.5} />
-            </button>
-          )}
-        </div>
-        {stopped && (
+        {stopped ? (
           <button
             type="button"
             onClick={onLeave}
-            aria-label={t("agentWindow.call.actions.backToText")}
-            title={t("agentWindow.call.actions.backToText")}
-            className="absolute inset-0 rounded-full focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
-          />
+            className="ms-auto flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-[13px] text-foreground transition-colors hover:bg-foreground/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+          >
+            <Keyboard size={15} className="shrink-0" />
+            <span className="truncate">{t("agentWindow.call.actions.backToText")}</span>
+          </button>
+        ) : (
+          <div className="ms-auto flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={onSettings}
+              disabled={starting}
+              aria-label={t("agentWindow.call.actions.settings")}
+              aria-pressed={settingsOpen}
+              title={t("agentWindow.call.actions.settings")}
+              className={cn(ICON_BUTTON, settingsOpen && "bg-foreground/10 text-foreground")}
+            >
+              <Settings size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={onTranscript}
+              disabled={starting}
+              aria-label={t(
+                inModal ? "agentWindow.actions.collapse" : "agentWindow.actions.expand"
+              )}
+              title={t(inModal ? "agentWindow.actions.collapse" : "agentWindow.actions.expand")}
+              className={ICON_BUTTON}
+            >
+              {inModal ? <Minimize size={15} /> : <Maximize size={15} />}
+            </button>
+            <button
+              type="button"
+              onClick={onMic}
+              disabled={starting}
+              aria-label={t(
+                micMuted ? "agentWindow.call.actions.micOn" : "agentWindow.call.actions.micOff"
+              )}
+              aria-pressed={micMuted}
+              title={t(
+                micMuted ? "agentWindow.call.actions.micOn" : "agentWindow.call.actions.micOff"
+              )}
+              className={ICON_BUTTON}
+            >
+              {micMuted ? <MicOff size={15} /> : <Mic size={15} />}
+            </button>
+            {sessionControl === "stopReply" ? (
+              <button
+                type="button"
+                onClick={onStopReply}
+                aria-label={t("agentWindow.call.actions.stopReply")}
+                title={t("agentWindow.call.actions.stopReply")}
+                className="voice-pill-swap voice-pill-swap-slow ms-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-[filter] hover:brightness-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <span className="size-2.5 rounded-[2px] bg-current" aria-hidden="true" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onEnd}
+                aria-label={t("agentWindow.call.actions.end")}
+                title={t("agentWindow.call.actions.end")}
+                className="voice-pill-swap ms-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-destructive text-white transition-[filter] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <X size={14} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

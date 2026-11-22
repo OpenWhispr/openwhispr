@@ -5049,8 +5049,6 @@
       "actions": {
         "start": "Avvia Voice Agent",
         "settings": "Impostazioni",
-        "transcript": "Mostra chat",
-        "hideTranscript": "Nascondi chat",
         "micOff": "Spegni il microfono",
         "micOn": "Accendi il microfono",
         "end": "Termina chiamata",

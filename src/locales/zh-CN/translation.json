@@ -5028,8 +5028,6 @@
       "actions": {
         "start": "开始 Voice Agent",
         "settings": "设置",
-        "transcript": "显示聊天",
-        "hideTranscript": "隐藏聊天",
         "micOff": "关闭麦克风",
         "micOn": "打开麦克风",
         "end": "结束通话",
