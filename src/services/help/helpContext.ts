@@ -22,7 +22,6 @@ export function projectHelpSettings(
   if (topic === "hotkeys") {
     add("dictationKey", state.activeDictationKey || state.dictationKey);
     add("voiceAgentKey", state.voiceAgentKey);
-    add("voiceCallKey", state.voiceCallKey);
     add("translationKey", state.translationKey);
     add("meetingKey", state.meetingKey);
     add("activationMode", state.activationMode);

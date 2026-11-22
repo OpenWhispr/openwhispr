@@ -14,7 +14,6 @@ const SLOT_TOGGLE_METHOD = {
   dictation: "Toggle",
   meeting: "ToggleMeeting",
   voiceAgent: "ToggleVoiceAgent",
-  voiceCall: "ToggleVoiceCall",
   translation: "ToggleTranslation",
 };
 

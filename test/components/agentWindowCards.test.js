@@ -112,7 +112,7 @@ async function mountWindow(t, { platform } = {}) {
     turn.abort();
   });
   const happyWindow = await installHappyDom(t);
-  const main = { layouts: [], handlers: {}, hides: 0 };
+  const main = { layouts: [], handlers: {} };
   const on = (name) => (callback) => {
     main.handlers[name] = callback;
     return () => {};
@@ -123,16 +123,12 @@ async function mountWindow(t, { platform } = {}) {
       main.layouts.push(request);
       return true;
     },
-    agentWindowHide: async () => {
-      main.hides += 1;
-      return true;
-    },
+    agentWindowHide: async () => true,
     agentWindowSetVoiceState: async () => true,
     captureSelectedText: async () => null,
     onAgentWindowHotkey: on("hotkey"),
     onAgentWindowOpen: on("open"),
     onAgentWindowCommand: on("command"),
-    onAgentWindowCallHotkey: on("callHotkey"),
     onAgentWindowDismiss: on("dismiss"),
     onCancelHotkeyPressed: on("cancel"),
     connectorCancel: async () => ({ cancelled: true }),
@@ -1473,61 +1469,6 @@ test("in a call, Esc while a card sends stops only speech: the send's turn goes 
   assert.equal(globalThis.__chat.cancels, 0, "its outcome is still told");
   assert.ok(view.button("End call"), "the call goes on");
   await view.waitForLayout("modal");
-});
-
-test("the voice call hotkey starts a call from a hidden window; the next press ends it and hides the window", async (t) => {
-  const view = await mountWindow(t);
-  await React.act(async () => view.main.handlers.callHotkey());
-  await view.settle();
-  assert.ok(view.button("End call"), "the call runs");
-  assert.ok(view.main.layouts.at(-1).call, "the window is sized as a call");
-
-  await React.act(async () => view.main.handlers.callHotkey());
-  await view.settle();
-  assert.ok(!view.button("End call"), "the call ended");
-  assert.equal(view.main.hides, 1, "the window the press opened went away with it");
-});
-
-test("the voice call hotkey hides only a window it opened for the call it ends", async (t) => {
-  const view = await mountWindow(t);
-  await React.act(async () => view.main.handlers.callHotkey());
-  await view.settle();
-  await React.act(async () => view.main.handlers.dismiss());
-  await view.settle();
-  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
-  await view.settle();
-  await React.act(async () => view.button("Start Voice Agent").click());
-  await view.settle();
-  assert.ok(view.button("End call"), "a call started from the pill runs");
-  const hides = view.main.hides;
-
-  await React.act(async () => view.main.handlers.callHotkey());
-  await view.settle();
-  assert.ok(!view.button("End call"), "the hotkey ended it");
-  assert.equal(view.main.hides, hides, "the window the user opened stays");
-});
-
-test("the voice call hotkey ends a call in the transcript and keeps the window; it starts none over a reply", async (t) => {
-  const view = await mountWindow(t);
-  const callStatus = () =>
-    view.host.querySelector('[data-voice-pill] [role="status"]')?.textContent ?? null;
-  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
-  await view.settle();
-  await view.chat({ messages: [user, finished] });
-  await React.act(async () => view.main.handlers.callHotkey());
-  await view.settle();
-  assert.notEqual(callStatus(), null, "the call runs in the open modal");
-  assert.notEqual(callStatus(), "Stopped");
-
-  await React.act(async () => view.main.handlers.callHotkey());
-  await view.settle();
-  assert.equal(callStatus(), "Stopped", "the transcript shows the call ended");
-  assert.equal(view.main.hides, 0, "the transcript stays");
-
-  await view.chat({ busy: true, messages: [user, reply([], "Here is")] });
-  await React.act(async () => view.main.handlers.callHotkey());
-  await view.settle();
-  assert.equal(callStatus(), "Stopped", "no call starts over a running reply");
 });
 
 test("Esc over selected text clears the selection and keeps the chat", async (t) => {

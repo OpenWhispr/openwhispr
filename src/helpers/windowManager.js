@@ -1110,10 +1110,6 @@ class WindowManager {
     this.agentWindow?.handleHotkey();
   }
 
-  sendToggleVoiceCall() {
-    this.agentWindow?.toggleCall();
-  }
-
   sendToggleTranslation() {
     this._sendDictationToggle("toggle-translation", "translation");
   }

@@ -1799,7 +1799,6 @@ declare global {
         callback: (payload: { layout: AgentWindowLayout }) => void
       ) => () => void;
       onAgentWindowCommand?: (callback: (command: AgentWindowCommand) => void) => () => void;
-      onAgentWindowCallHotkey?: (callback: () => void) => () => void;
       onAgentWindowDismiss?: (callback: () => void) => () => void;
       /** The dictation window's view of the agent's microphone: no dictation starts while it records. */
       onAgentRecordingChanged?: (callback: (recording: boolean) => void) => () => void;
@@ -3635,8 +3634,6 @@ declare global {
       // Agent Mode
       updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       getVoiceAgentKey?: () => Promise<string>;
-      updateVoiceCallHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
-      getVoiceCallKey?: () => Promise<string>;
       updateTranslationHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       getTranslationKey?: () => Promise<string>;
       createAgentConversation?: (

@@ -15222,39 +15222,6 @@ class IPCHandlers {
       return this.environmentManager.getVoiceAgentKey?.() || "";
     });
 
-    ipcMain.handle("update-voice-call-hotkey", async (_event, hotkey) => {
-      const hotkeyManager = this.windowManager.hotkeyManager;
-      const voiceCallCallback = this.windowManager._voiceCallHotkeyCallback;
-      if (!voiceCallCallback) {
-        return { success: false };
-      }
-
-      if (!hotkey) {
-        const removed = await hotkeyManager.unregisterSlot("voiceCall");
-        if (removed === false) return { success: false };
-        this.environmentManager.saveVoiceCallKey?.("");
-        this.windowManager.reconcileNativeKeyListeners();
-        this._notifyHotkeyChanged("");
-        return { success: true, message: "Voice call hotkey cleared" };
-      }
-
-      const result = await hotkeyManager.registerSlot("voiceCall", hotkey, voiceCallCallback, {
-        atomic: true,
-      });
-      this.windowManager.reconcileNativeKeyListeners();
-      if (result.success) {
-        this.environmentManager.saveVoiceCallKey?.(hotkey);
-        this._notifyHotkeyChanged(hotkey);
-        return { success: true, message: `Voice call hotkey updated to: ${hotkey}` };
-      }
-
-      return { success: false, message: result.error };
-    });
-
-    ipcMain.handle("get-voice-call-key", async () => {
-      return this.environmentManager.getVoiceCallKey?.() || "";
-    });
-
     ipcMain.handle("update-translation-hotkey", async (_event, hotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const translationCallback = this.windowManager._translationHotkeyCallback;

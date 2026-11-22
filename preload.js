@@ -105,10 +105,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "agent-window-command",
     (callback) => (_event, command) => callback(command)
   ),
-  onAgentWindowCallHotkey: registerListener(
-    "agent-window-call-hotkey",
-    (callback) => () => callback()
-  ),
   onAgentWindowDismiss: registerListener("agent-window-dismiss", (callback) => () => callback()),
   onAgentRecordingChanged: registerListener(
     "agent-recording-changed",
@@ -1264,8 +1260,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Agent mode
   updateVoiceAgentHotkey: (hotkey) => ipcRenderer.invoke("update-voice-agent-hotkey", hotkey),
   getVoiceAgentKey: () => ipcRenderer.invoke("get-voice-agent-key"),
-  updateVoiceCallHotkey: (hotkey) => ipcRenderer.invoke("update-voice-call-hotkey", hotkey),
-  getVoiceCallKey: () => ipcRenderer.invoke("get-voice-call-key"),
   updateTranslationHotkey: (hotkey) => ipcRenderer.invoke("update-translation-hotkey", hotkey),
   getTranslationKey: () => ipcRenderer.invoke("get-translation-key"),
   onPreviewText: registerListener("preview-text", (callback) => (_event, text) => callback(text)),

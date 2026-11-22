@@ -2872,10 +2872,6 @@
         "title": "Raccourci de l'assistant vocal",
         "description": "Dites une demande et l'assistant répond dans sa propre fenêtre, en utilisant vos notes, votre calendrier et les outils web. Le texte que vous surlignez avant l'accompagne comme contexte."
       },
-      "voiceCallHotkey": {
-        "title": "Raccourci Voice Agent",
-        "description": "Lance un appel mains libres avec l'assistant : parlez et écoutez ses réponses. Appuyez à nouveau pour terminer l'appel."
-      },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
         "title": "Microphone"

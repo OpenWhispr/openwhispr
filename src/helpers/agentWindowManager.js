@@ -94,16 +94,6 @@ class AgentWindowManager {
     this._send("agent-window-hotkey", { external });
   }
 
-  // The voice call hotkey: the renderer starts a call, or ends the one running.
-  toggleCall() {
-    const windowManager = this.windowManager;
-    if (windowManager._onboardingActive || windowManager.hotkeyManager.isInListeningMode()) return;
-    if (windowManager.isDictationActive()) return;
-    this._ensureWindow();
-    void this._show(() => windowManager._resolveActiveDisplay());
-    this._send("agent-window-call-hotkey");
-  }
-
   // The tray's and the pill menu's Ask assistant: no app was pressed in, so
   // the window opens where the cursor is.
   open({ layout = "typing" } = {}) {

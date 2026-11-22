@@ -2112,10 +2112,6 @@
         "title": "Scorciatoia dell'assistente vocale",
         "description": "Pronuncia una richiesta e l'assistente risponde nella sua finestra, usando le tue note, il calendario e gli strumenti web. Il testo che evidenzi prima lo accompagna come contesto."
       },
-      "voiceCallHotkey": {
-        "title": "Scorciatoia di Voice Agent",
-        "description": "Avvia una chiamata a mani libere con l'assistente: parla e ascolta le sue risposte. Premila di nuovo per terminare la chiamata."
-      },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",
         "title": "Microfono"
