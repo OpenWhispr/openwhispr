@@ -213,6 +213,39 @@ for (const maxTokens of [128, 8192]) {
   });
 }
 
+// Thinking counts toward max_tokens, so a model that thinks by default can spend
+// the whole cleanup budget before writing any text.
+for (const [model, disableThinking, expected] of [
+  ["claude-sonnet-5-5", true, { type: "between_tools" }],
+  ["claude-haiku-5-5", true, { type: "disabled" }],
+  ["claude-opus-5", true, { type: "disabled" }],
+  ["claude-sonnet-5", true, { type: "disabled" }],
+  ["claude-sonnet-5-5", false, undefined],
+  ["claude-haiku-5-5", undefined, undefined],
+  // Opus 5.5 rejects any way of turning thinking off.
+  ["claude-opus-5-5", true, undefined],
+  // Older models don't think unless asked.
+  ["claude-opus-4-8", true, undefined],
+  ["claude-haiku-4-5", true, undefined],
+]) {
+  test(`${model} with disableThinking=${disableThinking} sends thinking ${JSON.stringify(expected)}`, async () => {
+    let requestBody;
+    fetchBehavior = async (_url, init) => {
+      requestBody = JSON.parse(init.body);
+      return Response.json({ content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" });
+    };
+
+    const result = await anthropicHandler({}, "short dictation", model, null, {
+      disableThinking,
+      requireCompleteOutput: true,
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(requestBody.max_tokens, 4096);
+    assert.deepEqual(requestBody.thinking, expected);
+  });
+}
+
 // The deadline comes from AbortSignal.timeout; swapping it for a controller's
 // signal lets a test expire it at once instead of waiting 30 seconds.
 function stubDeadline(t) {

@@ -63,6 +63,7 @@ const {
 } = require("./productPolicy");
 const { createCloudConfigRequestHandler } = require("./cloudConfigRequest");
 const { extractAnthropicText, describeMissingAnthropicText } = require("./anthropicResponse");
+const { anthropicThinkingConfig } = require("./anthropicThinking");
 const {
   createPolicyResponseError,
   readPolicyResponseError,
@@ -7697,12 +7698,14 @@ class IPCHandlers {
           // Claude models from Opus 4.7 onward reject `temperature` with a 400;
           // the renderer derives support from the model registry.
           const useTemperature = config?.supportsTemperature === true;
+          const thinking = anthropicThinkingConfig(modelId, config?.disableThinking);
           const requestBody = {
             model: modelId,
             messages: [{ role: "user", content: userContent }],
             system: systemPrompt,
             max_tokens: config?.maxTokens || 4096,
             ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
+            ...(thinking ? { thinking } : {}),
           };
 
           const response = await proxyFetch("https://api.anthropic.com/v1/messages", {
