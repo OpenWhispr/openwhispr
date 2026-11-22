@@ -153,6 +153,23 @@ const mergeSpeakerFields = (
   return normalizeTranscriptSegment(merged);
 };
 
+function orderTimedSegments(segments: TranscriptSegment[]) {
+  const timedSlots: number[] = [];
+  segments.forEach((segment, index) => {
+    if (typeof segment.timestamp === "number" && Number.isFinite(segment.timestamp)) {
+      timedSlots.push(index);
+    }
+  });
+  const byTime = [...timedSlots].sort((left, right) => {
+    return segments[left]!.timestamp! - segments[right]!.timestamp! || left - right;
+  });
+  const ordered = segments.slice();
+  byTime.forEach((sourceIndex, position) => {
+    ordered[timedSlots[position]!] = segments[sourceIndex]!;
+  });
+  return ordered;
+}
+
 export const mergeTranscriptSegments = (
   existingSegments: TranscriptSegment[],
   incomingSegments: TranscriptSegment[],
@@ -162,8 +179,10 @@ export const mergeTranscriptSegments = (
     return normalizeTranscriptSegments(existingSegments);
   }
   if (existingSegments.length === 0) {
-    return incomingSegments.map((segment, index) =>
-      normalizeTranscriptSegment({ ...segment, id: segment.id || `merged-${index}` })
+    return orderTimedSegments(
+      incomingSegments.map((segment, index) =>
+        normalizeTranscriptSegment({ ...segment, id: segment.id || `merged-${index}` })
+      )
     );
   }
 
