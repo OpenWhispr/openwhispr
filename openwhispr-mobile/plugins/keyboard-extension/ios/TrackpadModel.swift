@@ -149,9 +149,13 @@ struct TrackpadCursorModel {
   /// The column vertical moves aim for, kept across short lines until a sideways move.
   private var wantedColumn: Int?
 
-  init(before: String, after: String) {
+  /// About how many characters fit on one row of the field, when the caller can guess.
+  private let wrapWidth: Int?
+
+  init(before: String, after: String, wrapWidth: Int? = nil) {
     characters = Array(before) + Array(after)
     index = before.count
+    self.wrapWidth = wrapWidth
   }
 
   var before: String { String(characters[..<index]) }
@@ -169,23 +173,46 @@ struct TrackpadCursorModel {
     return go(to: index + steps)
   }
 
-  /// Moves `lines` hard lines (down is positive), keeping the column where the line is long
-  /// enough. Soft-wrapped lines can't be seen from here, so only line breaks count. At the
-  /// first or last line it stays put.
+  /// Moves `lines` lines (down is positive), keeping the column where the line is long
+  /// enough. Line breaks are the only lines that can be seen from here. A paragraph the
+  /// host wraps over several rows has none, so with `wrapWidth` set, a move whose line-break
+  /// target is further than one row away goes one estimated row instead. At the first or
+  /// last row it stays put.
   mutating func moveVertically(_ lines: Int) -> Int {
     guard lines != 0 else { return 0 }
     var starts = [0]
     for (position, character) in characters.enumerated() where character.isNewline {
       starts.append(position + 1)
     }
+    var total = 0
+    for _ in 0..<abs(lines) {
+      let moved = moveOneLine(down: lines > 0, starts: starts)
+      if moved == 0 { break }
+      total += moved
+    }
+    return total
+  }
+
+  private mutating func moveOneLine(down: Bool, starts: [Int]) -> Int {
     let line = (starts.lastIndex { $0 <= index }) ?? 0
-    let column = wantedColumn ?? (index - starts[line])
-    let target = min(max(line + lines, 0), starts.count - 1)
-    guard target != line else { return 0 }
-    wantedColumn = column
-    // A line's length leaves out the break that ends it.
-    let end = target + 1 < starts.count ? starts[target + 1] - 1 : characters.count
-    return go(to: min(starts[target] + column, end))
+    let target = line + (down ? 1 : -1)
+    var hard: Int?
+    if target >= 0, target < starts.count {
+      let column = wantedColumn ?? (index - starts[line])
+      // A line's length leaves out the break that ends it.
+      let end = target + 1 < starts.count ? starts[target + 1] - 1 : characters.count
+      hard = min(starts[target] + column, end)
+      if wrapWidth.map({ abs(hard! - index) <= $0 }) ?? true {
+        wantedColumn = column
+        return go(to: hard!)
+      }
+    }
+    guard let wrapWidth else { return 0 }
+    // A wrapped row: one row's worth of text along, never past the line-break target.
+    let soft = index + (down ? wrapWidth : -wrapWidth)
+    if hard == nil, soft < 0 || soft > characters.count { return 0 }
+    wantedColumn = nil
+    return go(to: soft)
   }
 
   private mutating func go(to position: Int) -> Int {

@@ -165,6 +165,17 @@ extension TypingTests {
     check("cursor: stays on the last line", cursor.moveVertically(1) == 0)
     check("cursor: a sideways move resets the column", cursor.moveHorizontally(-1) == -1 && cursor.moveVertically(-1) == -14)
     check("cursor: column 3 of the third line", cursor.before == "first line\nab\nthi")
+    // A wrapped paragraph: no line breaks, so a row is an estimate.
+    let paragraph = String(repeating: "word ", count: 30)
+    var wrapped = TrackpadCursorModel(before: paragraph, after: "", wrapWidth: 40)
+    check("cursor: up in a wrapped paragraph moves one row", wrapped.moveVertically(-1) == -40)
+    check("cursor: up two more rows", wrapped.moveVertically(-2) == -80)
+    check("cursor: stops short of a full row from the start", wrapped.moveVertically(-1) == 0 && wrapped.before.count == 30)
+    check("cursor: down a row", wrapped.moveVertically(1) == 40)
+    var mixed = TrackpadCursorModel(before: paragraph + "\nshort\nend", after: "", wrapWidth: 40)
+    check("cursor: a near line break still keeps the column", mixed.moveVertically(-1) == -6 && mixed.before.hasSuffix("\nsho"))
+    check("cursor: then rows into the long paragraph", mixed.moveVertically(-1) == -40)
+
     var windows = TrackpadCursorModel(before: "ab\r\ncd", after: "")
     check("cursor: \\r\\n is one line break", windows.moveVertically(-1) == -4 && windows.before == "ab")
     var empty = TrackpadCursorModel(before: "", after: "")

@@ -1168,6 +1168,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var pillTitle = ""
   private var pillCenterConstraint: NSLayoutConstraint?
   private var pillCompactConstraints: [NSLayoutConstraint] = []
+  private var pillMinWidthConstraint: NSLayoutConstraint?
   private var suggestionStripConstraints: [NSLayoutConstraint] = []
   private var suggestionRowConstraints: [NSLayoutConstraint] = []
   private var emojiButton: KeyButton?
@@ -2542,6 +2543,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let pillCenter = recordButton.centerXAnchor.constraint(equalTo: stripGuide.centerXAnchor)
     pillCenter.isActive = true
     pillCenterConstraint = pillCenter
+    let pillMinWidth = recordButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
+    // Below the cap on the pill's width, which a very long title must still respect.
+    pillMinWidth.priority = .defaultHigh
+    pillMinWidth.isActive = true
+    pillMinWidthConstraint = pillMinWidth
     pillCompactConstraints = [
       recordButton.widthAnchor.constraint(equalToConstant: Metrics.compactPillWidth),
       recordButton.trailingAnchor.constraint(
@@ -2699,6 +2705,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         DispatchQueue.main.async { engine?.setSystemEntries(entries) }
       }
     }
+    // The rows were laid out before the engine existed: build the swipe decoder and the
+    // key targets now, or a swipe as the very first touch would have nothing to decode it.
+    refreshLaidOutGeometry()
     return engine
   }
 
@@ -2864,6 +2873,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         : NSDirectionalEdgeInsets(top: 8, leading: Metrics.pillLeadingInset, bottom: 8, trailing: 18)
       recordButton.configuration = config
     }
+    // The full pill is sized by its content, and on a phone it sometimes kept the round
+    // button's width with its title back. A floor from the title's own size holds it open.
+    pillMinWidthConstraint?.constant = compact ? 0 : fullPillWidth()
     pillCenterConstraint?.isActive = !compact
     pillCompactConstraints.forEach { $0.isActive = compact }
     topBar.setNeedsLayout()
@@ -2872,6 +2884,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // for a while (its full title squeezed into the round button on the way back).
     topBar.layoutIfNeeded()
     refreshPillTouchReservation()
+  }
+
+  private func fullPillWidth() -> CGFloat {
+    let font = UIFont.systemFont(ofSize: 16, weight: .semibold)
+    let title = ceil((pillTitle as NSString).size(withAttributes: [.font: font]).width)
+    let image = recordButton.configuration?.image.map { ceil($0.size.width) + 7 } ?? 0
+    return Metrics.pillLeadingInset + image + title + 18
   }
 
   /// The compact pill's target reaches 4pt into the gap above row 1; the rows give that
@@ -3422,7 +3441,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       setKeyLabelsFaded(true)
       trackpadCursor = TrackpadCursorModel(
         before: textDocumentProxy.documentContextBeforeInput ?? "",
-        after: textDocumentProxy.documentContextAfterInput ?? ""
+        after: textDocumentProxy.documentContextAfterInput ?? "",
+        // The field's width and font can't be read; body text in a full-width field
+        // fits about a character per 10pt.
+        wrapWidth: max(20, Int(view.bounds.width / 10))
       )
     case let .move(steps, lines):
       guard var cursor = trackpadCursor else { return }
