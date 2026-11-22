@@ -238,7 +238,7 @@ final class DirectDictation {
     guard state == .recording, job != nil else { return }
     try? job?.writer?.append(data)
     job?.meter.add(data)
-    onLevel?(directMeterLevel(rms: rms))
+    onLevel?(directMeterLevel(rms: rms * DirectGain.displayBoost))
   }
 
   private func captureEnded(_ reason: String) {
@@ -273,14 +273,16 @@ final class DirectDictation {
     let store = deps.store
     let jobId = current.jobId
 
-    if current.meter.result().noSpeechLikely {
+    let gain = DirectGain.factor(peakSample: current.writer?.peakSample ?? 0)
+    let activity = current.meter.result(gain: gain)
+    DirectDictation.lastTake = "take \(current.durationMs) ms, peak sample \(current.writer?.peakSample ?? 0), gain \(String(format: "%.1f", gain)), speech check \(activity.reason) (peak \(Int(activity.peakDb)) dB, speech \(activity.speechMs) ms), upload \(shouldUpload)"
+    if activity.noSpeechLikely {
       store.cancel(jobId: jobId)
       job = nil
       state = shouldUpload ? .failed(.noSpeech) : .idle
       return
     }
 
-    let gain = DirectGain.factor(peakSample: current.writer?.peakSample ?? 0)
     do {
       try deps.encode(store.pcmURL(jobId: jobId), store.audioURL(jobId: jobId), gain)
       try? FileManager.default.removeItem(at: store.pcmURL(jobId: jobId))
@@ -324,10 +326,18 @@ final class DirectDictation {
     }
   }
 
+  /// What the last take and the last request came to, for the diagnostics menu: figures and
+  /// status codes only.
+  static var lastTake = "none"
+  static var lastResponse = "none"
+
   private func transcribed(token: Int, status: Int, body: Data) {
     guard let current = job, current.token == token else { return }
     inFlight = nil
-    switch DirectDictationRequests.parseTranscribe(status: status, body: body) {
+    let outcome = DirectDictationRequests.parseTranscribe(status: status, body: body)
+    let code = ((try? JSONSerialization.jsonObject(with: body)) as? [String: Any])?["code"] as? String
+    DirectDictation.lastResponse = "transcribe HTTP \(status)\(code.map { " code \($0)" } ?? ""), \(body.count) bytes, attempt \(current.attempt)"
+    switch outcome {
     case let .success(text, original, applied):
       // As the app: a fused request that came back without cleanup gets one cleanup pass.
       if current.context.config.cleanup.enabled && applied == false {

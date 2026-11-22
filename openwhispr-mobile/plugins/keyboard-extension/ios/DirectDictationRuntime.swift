@@ -81,7 +81,7 @@ final class DirectDictationRuntime {
       session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: "+"),
       capture.starts, capture.started, capture.chunks, capture.sampleRate, capture.peakRms, capture.lastEnd,
       String(describing: dictation.state)
-    )
+    ) + " · " + DirectDictation.lastTake + " · " + DirectDictation.lastResponse
   }
 
   /// Moves the hidden web view into this controller's view. The web view is only made for a

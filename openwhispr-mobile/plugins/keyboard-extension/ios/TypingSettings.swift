@@ -21,6 +21,9 @@ struct TypingSettings: Equatable {
   var swipeEnabled = true
   var smartTargetsEnabled = true
   var autocorrectEnabled = true
+  /// A test aid, off unless switched on in the keyboard's menu: saves each swipe's finger
+  /// path and the words it decoded to a file in the App Group container, for tuning.
+  var swipeTracesEnabled = false
 
   static let languageKey = "keyboard_typing_language"
   static let layoutKey = "keyboard_typing_layout"
@@ -29,6 +32,7 @@ struct TypingSettings: Equatable {
   static let swipeKey = "keyboard_swipe_typing_enabled"
   static let smartTargetsKey = "keyboard_smart_targets_enabled"
   static let autocorrectKey = "keyboard_autocorrect_enabled"
+  static let swipeTracesKey = "keyboard_debug_swipe_traces"
   /// Milliseconds since 1970, set by the app's "Clear learned words"; the keyboard drops
   /// what it learned before then.
   static let learnedWordsClearedAtKey = "keyboard_learned_words_cleared_at_ms"
@@ -53,6 +57,7 @@ struct TypingSettings: Equatable {
     swipeEnabled = defaults?.string(forKey: TypingSettings.swipeKey) != "0"
     smartTargetsEnabled = defaults?.string(forKey: TypingSettings.smartTargetsKey) != "0"
     autocorrectEnabled = defaults?.string(forKey: TypingSettings.autocorrectKey) != "0"
+    swipeTracesEnabled = defaults?.string(forKey: TypingSettings.swipeTracesKey) == "1"
   }
 
   /// Records a language picked in the keyboard. The layout follows the language only when

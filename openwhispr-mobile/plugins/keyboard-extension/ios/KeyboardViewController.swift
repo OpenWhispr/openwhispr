@@ -3178,7 +3178,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       swipeTrail.show(recognizer.path, color: Palette.accent)
     case .ended:
       swipeTrail.show([], color: Palette.accent)
-      commitSwipe(path: recognizer.path)
+      commitSwipe(path: recognizer.path, times: recognizer.times)
     case .cancelled, .failed:
       swipeTrail.show([], color: Palette.accent)
     default:
@@ -3186,7 +3186,39 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  private func commitSwipe(path: [CGPoint]) {
+  /// Test aid: one JSON line per swipe (finger path, key positions, what was decoded), kept
+  /// in the App Group container while the menu's "Record swipe traces" is on.
+  private func recordSwipeTrace(path: [CGPoint], times: [TimeInterval], words: [String], geometry: KeyGeometry) {
+    guard typingSettings.swipeTracesEnabled, let container = KeyboardHandoffProvider.shared.containerURL() else { return }
+    let start = times.first ?? 0
+    var centres: [String: [Double]] = [:]
+    for (letter, centre) in geometry.centres { centres[String(letter)] = [Double(centre.x), Double(centre.y)] }
+    let record: [String: Any] = [
+      "at": Int(Date().timeIntervalSince1970),
+      "language": typingSettings.language.rawValue,
+      "layout": typingSettings.layout.rawValue,
+      "pitch": Double(geometry.pitch),
+      "rowPitch": Double(geometry.rowPitch),
+      "centres": centres,
+      "points": path.enumerated().map { index, point in
+        [Double(point.x), Double(point.y), times.indices.contains(index) ? times[index] - start : 0]
+      },
+      "decoded": words,
+    ]
+    guard let data = try? JSONSerialization.data(withJSONObject: record), var line = String(data: data, encoding: .utf8)
+    else { return }
+    line += "\n"
+    let url = container.appendingPathComponent("keyboard-swipe-traces.jsonl")
+    if let handle = try? FileHandle(forWritingTo: url) {
+      handle.seekToEndOfFile()
+      handle.write(Data(line.utf8))
+      try? handle.close()
+    } else {
+      try? Data(line.utf8).write(to: url)
+    }
+  }
+
+  private func commitSwipe(path: [CGPoint], times: [TimeInterval] = []) {
     guard let engine = loadedTypingEngine(), let decoder = swipeDecoder else { return }
     let session = engine.session
     let context = session.nextLetterContext()
@@ -3202,6 +3234,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       : decoder.decode(path: path, previous: context.previous, sentenceStart: context.sentenceStart, limit: 4)
     diagnostics.swipes += 1
     if isShort { diagnostics.shortSwipes += 1 } else if words.isEmpty { diagnostics.emptySwipes += 1 }
+    recordSwipeTrace(path: path, times: times, words: words, geometry: engine.corrector.geometry)
     guard let best = words.first else {
       if let start = path.first, let key = keyboardRowsStack.hitTest(start, with: nil) as? KeyButton,
         let code = key.output?.utf16.first, letterButtonsByCode[code] === key
@@ -3432,6 +3465,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       ("Swipe typing", TypingSettings.swipeKey, typingSettings.swipeEnabled),
       ("Smart key targets", TypingSettings.smartTargetsKey, typingSettings.smartTargetsEnabled),
       ("Autocorrect", TypingSettings.autocorrectKey, typingSettings.autocorrectEnabled),
+      ("Record swipe traces (test)", TypingSettings.swipeTracesKey, typingSettings.swipeTracesEnabled),
     ]
     let aidActions = aids.map { title, key, isOn in
       UIAction(title: title, state: isOn ? .on : .off) { [weak self] _ in
@@ -3465,6 +3499,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       switch key {
       case TypingSettings.swipeKey: override.swipeEnabled = enabled
       case TypingSettings.smartTargetsKey: override.smartTargetsEnabled = enabled
+      case TypingSettings.swipeTracesKey: override.swipeTracesEnabled = enabled
       default: override.autocorrectEnabled = enabled
       }
       Self.typingSettingsOverride = override

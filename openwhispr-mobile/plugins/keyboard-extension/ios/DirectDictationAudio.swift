@@ -46,6 +46,9 @@ final class PcmFileWriter {
 enum DirectGain {
   static let targetPeak: Float = 0.7 * 32_767
   static let maximum: Float = 31.6  // 30 dB
+  /// What the waveform adds to a live level: the take's own gain isn't known until it ends,
+  /// so the bars use the typical shortfall of a capture without voice processing (25 dB).
+  static let displayBoost: Float = 17.8
 
   /// clamp(targetPeak / peakSample, 1, maximum); 1 when peakSample is 0.
   static func factor(peakSample: Int) -> Float {
@@ -94,7 +97,10 @@ struct SpeechActivityMeter {
     if start > 0 { pending.removeFirst(start) }
   }
 
-  func result() -> SpeechActivity {
+  /// `gain`: the factor the take will be amplified by before it is sent. The check judges the
+  /// take at that level: a capture without WebKit's voice processing is about 25 dB quieter
+  /// than the app's recordings, and at its raw level ordinary speech reads as silence.
+  func result(gain: Float = 1) -> SpeechActivity {
     var meter = self
     // The app's file loop reads a shorter last frame; so does this.
     if !meter.pending.isEmpty {
@@ -108,7 +114,8 @@ struct SpeechActivityMeter {
       )
     }
 
-    let values = meter.frameDbValues
+    let gainDb = 20 * log10(Double(max(gain, 1)))
+    let values = meter.frameDbValues.map { min(0, $0 + gainDb) }
     let analyzedMs = Double(meter.analyzedSamples) / Double(sampleRate) * 1000
     let peakDb = values.max() ?? -120
     let averageDb = values.reduce(0, +) / Double(values.count)

@@ -186,7 +186,10 @@ final class Autocorrector {
         }
       }
     }
-    if typedID == nil, let learnedWord = learned.word(forKey: key) {
+    // Learned and system-supplied words only stand in where the lexicon has nothing under
+    // this spelling. iOS's own word list (contacts, replacements) can carry entries like "i",
+    // which must not shadow the lexicon's "I".
+    if typedID == nil, sameKey.isEmpty, let learnedWord = learned.word(forKey: key) {
       result.typedIsKnown = true
       if learnedWord != typed, shape == .lower, learnedWord.lowercased() != typed {
         // Learned with capitals or an apostrophe of its own.
