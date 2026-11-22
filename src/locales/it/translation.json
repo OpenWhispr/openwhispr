@@ -3322,6 +3322,7 @@
         },
         "details": {
           "nextInvoice": "Prossima fattura",
+          "finalInvoice": "Fattura finale",
           "firstInvoice": "Prima fattura",
           "nextRetry": "Prossimo tentativo di addebito",
           "amountDue": "Importo dovuto",
@@ -3422,6 +3423,7 @@
           "nextRetry": "Prossimo tentativo di pagamento",
           "amountDue": "Importo dovuto",
           "billingContact": "Contatto per la fatturazione",
+          "finalInvoice": "Fattura finale",
           "firstInvoice": "Prima fattura",
           "ends": "Termina",
           "ended": "Terminato",

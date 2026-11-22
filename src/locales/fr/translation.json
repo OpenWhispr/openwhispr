@@ -3422,6 +3422,7 @@
         },
         "details": {
           "nextInvoice": "Prochaine facture",
+          "finalInvoice": "Facture finale",
           "firstInvoice": "Première facture",
           "nextRetry": "Prochaine tentative de paiement",
           "amountDue": "Montant dû",
@@ -3522,6 +3523,7 @@
           "nextRetry": "Prochaine tentative de paiement",
           "amountDue": "Montant dû",
           "billingContact": "Contact de facturation",
+          "finalInvoice": "Facture finale",
           "firstInvoice": "Première facture",
           "ends": "Se termine",
           "ended": "Terminé",

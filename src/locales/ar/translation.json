@@ -6282,6 +6282,7 @@
         },
         "details": {
           "nextInvoice": "الفاتورة التالية",
+          "finalInvoice": "الفاتورة النهائية",
           "firstInvoice": "الفاتورة الأولى",
           "nextRetry": "محاولة الدفع التالية",
           "amountDue": "المبلغ المستحق",
@@ -6394,6 +6395,7 @@
           "nextRetry": "محاولة الدفع التالية",
           "amountDue": "المبلغ المستحق",
           "billingContact": "جهة اتصال الفوترة",
+          "finalInvoice": "الفاتورة النهائية",
           "firstInvoice": "أول فاتورة",
           "ends": "تنتهي",
           "ended": "انتهت",

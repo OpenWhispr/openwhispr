@@ -3374,6 +3374,7 @@
         },
         "details": {
           "nextInvoice": "Próxima factura",
+          "finalInvoice": "Factura final",
           "firstInvoice": "Primera factura",
           "nextRetry": "Próximo intento de cobro",
           "amountDue": "Importe pendiente",
@@ -3474,6 +3475,7 @@
           "nextRetry": "Próximo intento de pago",
           "amountDue": "Importe pendiente",
           "billingContact": "Contacto de facturación",
+          "finalInvoice": "Factura final",
           "firstInvoice": "Primera factura",
           "ends": "Termina",
           "ended": "Terminó",

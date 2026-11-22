@@ -808,6 +808,17 @@ for (const [status, cancel, labelKey] of invoiceCases) {
     );
     const rows = plan.details.rows;
     assert.ok(rows.some((row) => row.labelKey === labelKey));
+    assert.deepEqual(
+      rows.filter((row) => row.labelKey === "details.finalInvoice"),
+      cancel && status !== "canceled"
+        ? [
+            {
+              labelKey: "details.finalInvoice",
+              value: { kind: "invoice", ...billingSummary.next_invoice },
+            },
+          ]
+        : []
+    );
     assert.deepEqual(rows.at(-1), {
       labelKey: "details.billingContact",
       value: { kind: "text", text: "customer@example.test" },
@@ -834,6 +845,15 @@ for (const [status, cancel, labelKey] of invoiceCases) {
     }
   });
 }
+
+test("a past-due workspace with no balance keeps its period end alongside its final invoice", () => {
+  const summary = { ...billingSummary, cancel_at_period_end: true, outstanding_invoice: null };
+  const plan = workspacePlanState(workspace({ status: "past_due" }), null, NOW, summary);
+  assert.deepEqual(
+    plan.details.rows.map((row) => row.labelKey),
+    ["details.periodEnds", "details.finalInvoice", "details.billingContact"]
+  );
+});
 
 test("the live cancellation flag supersedes a stale workspace list flag", () => {
   const ending = workspace({ cancel_at_period_end: true });

@@ -3321,6 +3321,7 @@
         },
         "details": {
           "nextInvoice": "次回の請求",
+          "finalInvoice": "最終請求",
           "firstInvoice": "初回の請求",
           "nextRetry": "次回の支払い再試行",
           "amountDue": "未払い額",
@@ -3421,6 +3422,7 @@
           "nextRetry": "次回の支払い試行",
           "amountDue": "未払い金額",
           "billingContact": "請求先連絡先",
+          "finalInvoice": "最終請求",
           "firstInvoice": "初回請求日",
           "ends": "終了日",
           "ended": "終了日",

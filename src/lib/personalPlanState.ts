@@ -342,6 +342,8 @@ function resolveDetails(
   }
   const details: PersonalDetail[] = [];
   const next = summary?.next_invoice;
+  const hasNextInvoice =
+    next && (next.date || (Number.isFinite(next.amount) && next.currency?.trim()));
   const outstanding = summary?.outstanding_invoice;
   const { currentPeriodEnd, subscriptionStatus } = usage;
   if (cardlessTrial) return details;
@@ -354,18 +356,17 @@ function resolveDetails(
     Date.parse(currentPeriodEnd) <= now
   ) {
     details.push(...dateDetail("details.ended", currentPeriodEnd));
-  } else if (
-    stripeBilled &&
-    !usage.isPastDue &&
-    next &&
-    (next.date || (Number.isFinite(next.amount) && next.currency?.trim()))
-  ) {
+  } else if (stripeBilled && !usage.isPastDue && hasNextInvoice) {
     details.push({
       labelKey: stripeTrial ? "details.firstInvoice" : "details.nextInvoice",
       value: { kind: "invoice", ...next },
     });
   } else if (stripeBilled && (stripeTrial || !outstanding)) {
     details.push(...dateDetail("details.periodEnds", currentPeriodEnd));
+  }
+
+  if (hasNextInvoice && (ending || (usage.isPastDue && summary?.cancel_at_period_end))) {
+    details.push({ labelKey: "details.finalInvoice", value: { kind: "invoice", ...next } });
   }
 
   if (outstanding) {

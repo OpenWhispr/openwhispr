@@ -3415,6 +3415,7 @@
         },
         "details": {
           "nextInvoice": "Nächste Rechnung",
+          "finalInvoice": "Schlussrechnung",
           "firstInvoice": "Erste Rechnung",
           "nextRetry": "Nächster Zahlungsversuch",
           "amountDue": "Offener Betrag",
@@ -3515,6 +3516,7 @@
           "nextRetry": "Nächster Zahlungsversuch",
           "amountDue": "Offener Betrag",
           "billingContact": "Rechnungskontakt",
+          "finalInvoice": "Schlussrechnung",
           "firstInvoice": "Erste Rechnung",
           "ends": "Endet",
           "ended": "Endete",

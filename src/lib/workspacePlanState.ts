@@ -348,6 +348,9 @@ function billingRows(facts: Facts): WorkspaceDetailRow[] {
     }
   }
 
+  if (next && status !== "canceled" && (ending || summary?.cancel_at_period_end)) {
+    rows.push(...invoiceRow("details.finalInvoice", next));
+  }
   rows.push(...balanceRows);
   if (summary?.billing_email?.trim()) {
     rows.push({

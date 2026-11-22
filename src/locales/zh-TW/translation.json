@@ -3321,6 +3321,7 @@
         },
         "details": {
           "nextInvoice": "下一期帳單",
+          "finalInvoice": "最終帳單",
           "firstInvoice": "首張帳單",
           "nextRetry": "下次重試扣款",
           "amountDue": "應付金額",
@@ -3421,6 +3422,7 @@
           "nextRetry": "下次扣款嘗試",
           "amountDue": "應付金額",
           "billingContact": "帳單聯絡人",
+          "finalInvoice": "最終帳單",
           "firstInvoice": "首張帳單",
           "ends": "結束日期",
           "ended": "結束於",

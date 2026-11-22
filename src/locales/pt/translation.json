@@ -3307,6 +3307,7 @@
         },
         "details": {
           "nextInvoice": "Próxima fatura",
+          "finalInvoice": "Fatura final",
           "firstInvoice": "Primeira fatura",
           "nextRetry": "Próxima tentativa de cobrança",
           "amountDue": "Valor em aberto",
@@ -3407,6 +3408,7 @@
           "nextRetry": "Próxima tentativa de pagamento",
           "amountDue": "Valor em aberto",
           "billingContact": "Contato de cobrança",
+          "finalInvoice": "Fatura final",
           "firstInvoice": "Primeira fatura",
           "ends": "Termina",
           "ended": "Terminou",

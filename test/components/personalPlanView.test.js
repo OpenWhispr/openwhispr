@@ -317,22 +317,49 @@ test("the trial badge's day count reaches t() as a number, for its plural forms"
   assert.match(container.textContent, new RegExp(`${P}.badges.trial\\{[^}]*"count":1[,}]`));
 });
 
-test("scheduled Business cancellation renders Keep Business and a formatted balance", async (t) => {
-  const { container, render, actions } = await setup(t);
-  await render(
-    ready({
-      tier: "business",
-      actions: [{ kind: "keepPlan", plan: "Business" }],
-      details: [
-        { labelKey: "details.amountDue", value: { kind: "invoice", amount: 0, currency: "usd" } },
-        { labelKey: "details.billingContact", value: { kind: "text", text: "payer@example.test" } },
-      ],
-    })
-  );
+test("scheduled Business cancellation renders the final invoice, balance and Keep Business", async (t) => {
+  const { container, render, actions, vite } = await setup(t);
+  const { personalPlanState } = await vite.ssrLoadModule("/lib/personalPlanState.ts");
+  const input = {
+    signedIn: true,
+    now: Date.parse("2026-12-15T00:00:00Z"),
+    usage: {
+      status: "success",
+      plan: "business",
+      subscriptionStatus: "active",
+      isSubscribed: true,
+      isPersonallySubscribed: true,
+      currentPeriodEnd: PERIOD_END,
+      entitledWorkspaceIds: [],
+    },
+    coveringWorkspaceNames: [],
+    businessAction: { kind: "none" },
+    hasWorkspacePlanAction: false,
+    summary: {
+      cancel_at_period_end: true,
+      next_invoice: {
+        date: new Date(2026, 11, 23, 12).toISOString(),
+        amount: 1875,
+        currency: "usd",
+      },
+      outstanding_invoice: { next_payment_attempt: null, amount_remaining: 0, currency: "usd" },
+      billing_email: "payer@example.test",
+    },
+  };
+  await render(personalPlanState(input));
+  assert.ok(container.textContent.includes(`${P}.details.ends`));
+  assert.ok(container.textContent.includes(`${P}.details.finalInvoice`));
+  assert.ok(container.textContent.includes("Dec 23, 2026 · $18.75"));
   assert.match(container.textContent, /\$0\.00/);
   assert.match(container.textContent, /payer@example\.test/);
   const keep = findButton(container, P + '.actions.keepPlan{"plan":"Business"}');
   assert.ok(keep);
   await React.act(async () => keep.click());
   assert.deepEqual(actions, [{ kind: "keepPlan", plan: "Business" }]);
+
+  await render(
+    personalPlanState({ ...input, summary: { ...input.summary, cancel_at_period_end: false } })
+  );
+  assert.ok(!container.textContent.includes(`${P}.details.finalInvoice`));
+  assert.ok(container.textContent.includes(`${P}.details.nextInvoice`));
 });

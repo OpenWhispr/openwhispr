@@ -418,12 +418,18 @@ test("owner billing details use the viewed workspace and disappear when its role
     cancel_at_period_end: true,
     interval: "annual",
     unit_amount: 24000,
-    next_invoice: { date: null, amount: 72000, currency: "usd" },
+    next_invoice: {
+      date: new Date(2026, 11, 23, 12).toISOString(),
+      amount: 72000,
+      currency: "usd",
+    },
     billing_email: "billing@example.test",
   };
   await render(workspace({ id: "viewed" }));
   assert.equal(has(`${W}.details.ends`), true);
   assert.equal(has(`${W}.details.firstInvoice`), false);
+  assert.equal(has(`${W}.details.finalInvoice`), true);
+  assert.equal(has("Dec 23, 2026 · $720.00"), true);
   assert.equal(has(`${W}.interval.annual`), true);
   assert.equal(has(`${W}.planLine.seatPrice`), true);
   assert.equal(text().includes("billing@example.test"), true);
@@ -432,6 +438,7 @@ test("owner billing details use the viewed workspace and disappear when its role
   state.summary = { ...state.summary, cancel_at_period_end: false };
   await React.act(async () => state.refreshOnReturn());
   assert.equal(has(`${W}.details.ends`), false);
+  assert.equal(has(`${W}.details.finalInvoice`), false);
   assert.equal(has(`${W}.details.nextInvoice`), true);
   assert.equal(has("$720.00"), true);
   await render(workspace({ id: "viewed", role: "member" }));

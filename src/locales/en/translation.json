@@ -3415,6 +3415,7 @@
         },
         "details": {
           "nextInvoice": "Next invoice",
+          "finalInvoice": "Final invoice",
           "firstInvoice": "First invoice",
           "nextRetry": "Next retry",
           "amountDue": "Amount due",
@@ -3515,6 +3516,7 @@
           "nextRetry": "Next retry",
           "amountDue": "Amount due",
           "billingContact": "Billing contact",
+          "finalInvoice": "Final invoice",
           "firstInvoice": "First invoice",
           "ends": "Ends",
           "ended": "Ended",

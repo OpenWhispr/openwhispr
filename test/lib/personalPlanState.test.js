@@ -694,6 +694,9 @@ test("personal balance survives cancellation and uses retry only when supplied",
         }
       );
       assert.deepEqual(result.details, [
+        ...(status === "past_due"
+          ? [{ labelKey: "details.finalInvoice", value: { kind: "invoice", ...NEXT_INVOICE } }]
+          : []),
         {
           labelKey: retry ? "details.nextRetry" : "details.amountDue",
           value: { kind: "invoice", date: retry, amount: 1500, currency: "eur" },
@@ -705,7 +708,7 @@ test("personal balance survives cancellation and uses retry only when supplied",
   }
 });
 
-test("scheduled cancellation overrides the first or next invoice and the covered cancel action", () => {
+test("scheduled cancellation shows its end date and final invoice and keeps the covered plan action", () => {
   for (const subscriptionStatus of ["active", "trialing"]) {
     const result = ready(
       { ...STRIPE_PRO, plan: "business", subscriptionStatus, entitledWorkspaceIds: ["ws"] },
@@ -713,12 +716,23 @@ test("scheduled cancellation overrides the first or next invoice and the covered
     );
     assert.deepEqual(result.details, [
       { labelKey: "details.ends", value: { kind: "date", iso: PERIOD_END } },
+      { labelKey: "details.finalInvoice", value: { kind: "invoice", ...NEXT_INVOICE } },
       CONTACT,
     ]);
     assert.deepEqual(result.banners.map((banner) => banner.action).filter(Boolean), [
       { kind: "keepPlan", plan: "Business" },
     ]);
   }
+});
+
+test("a canceling Personal plan with no final invoice only shows the end date", () => {
+  const result = ready(
+    { ...STRIPE_PRO, subscriptionStatus: "active" },
+    { summary: { cancel_at_period_end: true, next_invoice: null } }
+  );
+  assert.deepEqual(result.details, [
+    { labelKey: "details.ends", value: { kind: "date", iso: PERIOD_END } },
+  ]);
 });
 
 test("a covered personal Business payer can cancel Business", () => {
