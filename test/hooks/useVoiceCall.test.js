@@ -923,7 +923,7 @@ test("fillers don't count against what a reply may say aloud", async (t) => {
   ]);
 });
 
-test("a first chunk cut at a clause doesn't use up one of the sentences said aloud", async (t) => {
+test("a long opening sentence is said whole, as one of the sentences said aloud", async (t) => {
   const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
   await startListening();
   await say("give me four tips for better sleep");
@@ -935,8 +935,7 @@ test("a first chunk cut at a clause doesn't use up one of the sentences said alo
   await act(() => lastTurn().speech.onEnd("complete"));
 
   assert.deepEqual(spokenTexts(calls), [
-    "Keep a consistent bedtime and wake-up time,",
-    "even on weekends.",
+    "Keep a consistent bedtime and wake-up time, even on weekends.",
     "Keep it dark.",
     "Skip late caffeine.",
     "Wind down first.",

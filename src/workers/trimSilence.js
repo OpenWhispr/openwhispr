@@ -6,7 +6,9 @@ const WINDOW_MS = 10;
 // ("h", "f", "th") sit well above it.
 const SILENCE_RATIO = 0.02;
 const KEEP_LEAD_MS = 50;
-const KEEP_TRAIL_MS = 250;
+// With the next clip's lead-in, 420 ms between sentences: Supertonic's own pause between two
+// sentences it reads in one go is about 410 ms, and 300 ms read as rushed.
+const KEEP_TRAIL_MS = 370;
 
 const msToSamples = (ms, sampleRate) => Math.round((ms * sampleRate) / 1000);
 

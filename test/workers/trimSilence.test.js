@@ -6,7 +6,10 @@ const { trimSilence, KEEP_LEAD_MS, KEEP_TRAIL_MS } = require("../../src/workers/
 const RATE = 1000;
 const silence = (ms) => new Array(ms).fill(0);
 const tone = (ms, amplitude) =>
-  Array.from({ length: ms }, (_, index) => amplitude * Math.sin((2 * Math.PI * 100 * index) / RATE));
+  Array.from(
+    { length: ms },
+    (_, index) => amplitude * Math.sin((2 * Math.PI * 100 * index) / RATE)
+  );
 const clip = (...parts) => new Float32Array(parts.flat());
 
 test("silence at both ends is cut to a short lead-in and a sentence pause", () => {
@@ -21,7 +24,7 @@ test("silence at both ends is cut to a short lead-in and a sentence pause", () =
 
 test("a quiet start to the speech is kept", () => {
   const trimmed = trimSilence(
-    clip(silence(200), tone(100, 0.05), tone(200, 0.5), silence(300)),
+    clip(silence(200), tone(100, 0.05), tone(200, 0.5), silence(600)),
     RATE
   );
 

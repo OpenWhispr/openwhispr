@@ -8,9 +8,6 @@ interface SpeechChunker {
 
 // "।" ends a Hindi sentence.
 const SENTENCE_TERMINATORS = new Set([".", "!", "?", "…", "।"]);
-export const CLAUSE_TERMINATORS = new Set([",", ";", ":"]);
-// The first chunk may end at a clause this far in, so a long opening sentence's audio starts sooner.
-const FIRST_CHUNK_MIN_CHARS = 24;
 
 const isWhitespace = (char: string | undefined): boolean => char !== undefined && /\s/.test(char);
 const isLowercase = (char: string | undefined): boolean =>
@@ -42,11 +39,11 @@ export function toSpeakableText(text: string): string {
 
 /**
  * Splits a streamed answer into chunks worth handing to TTS one at a time: whole
- * sentences (or lines); only the first chunk may stop at a clause.
+ * sentences (or lines). A sentence cut at a comma was voiced as two, each with an
+ * ending of its own.
  */
 export function createSpeechChunker(): SpeechChunker {
   let buffer = "";
-  let emittedCount = 0;
 
   const findBoundary = (): number => {
     for (let index = 0; index < buffer.length; index += 1) {
@@ -70,24 +67,13 @@ export function createSpeechChunker(): SpeechChunker {
         }
         return index + 1;
       }
-      if (
-        emittedCount === 0 &&
-        CLAUSE_TERMINATORS.has(char) &&
-        index + 1 >= FIRST_CHUNK_MIN_CHARS &&
-        // "Sat, Nov 22" stays together: "Sat" alone could be the word.
-        !endsWithDateAbbreviation(buffer.slice(0, index))
-      ) {
-        return index + 1;
-      }
     }
     return -1;
   };
 
   const emit = (raw: string, out: string[]): void => {
     const speakable = toSpeakableText(raw);
-    if (!speakable) return;
-    emittedCount += 1;
-    out.push(speakable);
+    if (speakable) out.push(speakable);
   };
 
   const drain = (): string[] => {
@@ -114,7 +100,6 @@ export function createSpeechChunker(): SpeechChunker {
     },
     reset() {
       buffer = "";
-      emittedCount = 0;
     },
   };
 }

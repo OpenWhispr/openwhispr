@@ -14,7 +14,7 @@ test("emits a sentence as soon as its terminator is followed by whitespace", asy
   assert.deepEqual(chunker.flush(), ["The first"]);
 });
 
-test("only a long first chunk may stop at a clause, and no chunk is cut for its length", async () => {
+test("a chunk is a whole sentence: none is cut at a comma or for its length", async () => {
   const { createSpeechChunker } = await load();
   const chunker = createSpeechChunker();
   const out = pushAll(chunker, [
@@ -22,8 +22,7 @@ test("only a long first chunk may stop at a clause, and no chunk is cut for its 
     "baked bread. Every morning, before the sun rose over the valley, she lit her oven. ",
   ]);
   assert.deepEqual(out, [
-    "Sure, high above the misty peaks of the Ember Range,",
-    "a dragon named Cinder baked bread.",
+    "Sure, high above the misty peaks of the Ember Range, a dragon named Cinder baked bread.",
     "Every morning, before the sun rose over the valley, she lit her oven.",
   ]);
   const unpunctuated = createSpeechChunker();
@@ -92,10 +91,6 @@ test("a period after an abbreviated date word doesn't end the sentence", async (
     "Your review is on Nov. 19 at 3 PM.",
   ]);
   assert.deepEqual(chunker.flush(), ["Then"]);
-  const opening = createSpeechChunker();
-  assert.deepEqual(pushAll(opening, ["Your next meeting is on Sat, Nov 22. "]), [
-    "Your next meeting is on Sat, Nov 22.",
-  ]);
   assert.deepEqual(pushAll(createSpeechChunker(), ["I'm free on Fri. ", "Want to meet? "]), [
     "I'm free on Fri.",
     "Want to meet?",
