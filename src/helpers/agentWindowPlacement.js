@@ -23,6 +23,10 @@ const CALL_PILL = { width: 240, height: 65 };
 const CALL_CARD_MAX_HEIGHT = 520;
 // A call's answer and connect cards are 450px wide in the reference (its questions 420px, centred).
 const CALL_CARD_WIDTH = 450;
+// In the transcript the call's pill sits inside the modal's bottom padding and border
+// (AgentModal's footer, 12px and 1px): 13px above where a lone pill sits. A call's compact
+// layouts are lifted by that much, so Expand and Minimize leave the pill where it is.
+const CALL_WINDOW_LIFT = 13;
 
 const standaloneSize = (
   cardHeight,
@@ -153,7 +157,7 @@ function computeAgentWindowBounds({
   const width = Math.min(size.width, workArea.width);
   const height = Math.min(size.height, workArea.height);
   const x = Math.round(anchor.centerX - width / 2);
-  const y = Math.round(anchor.bottom - height);
+  const y = Math.round(anchor.bottom - height - (call ? CALL_WINDOW_LIFT : 0));
   return {
     x: Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - width)),
     y: Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - height)),
@@ -164,6 +168,7 @@ function computeAgentWindowBounds({
 
 module.exports = {
   AGENT_LAYOUT_SIZES,
+  CALL_WINDOW_LIFT,
   WAITING_PILL_SIZE,
   computeAgentAnchor,
   clampAgentAnchor,

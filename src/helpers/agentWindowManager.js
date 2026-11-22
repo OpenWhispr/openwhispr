@@ -7,6 +7,7 @@ const { plasmaWorkAreas } = require("./plasmaWorkAreas");
 const { AGENT_WINDOW_CONFIG, WindowPositionUtil } = require("./windowConfig");
 const {
   AGENT_LAYOUT_SIZES,
+  CALL_WINDOW_LIFT,
   computeAgentAnchor,
   clampAgentAnchor,
   computeAgentWindowBounds,
@@ -48,7 +49,10 @@ class AgentWindowManager {
       constrainBounds: (bounds) => {
         const display = this._windowDisplay();
         this.anchor = clampAgentAnchor(
-          { centerX: bounds.x + bounds.width / 2, bottom: bounds.y + bounds.height },
+          {
+            centerX: bounds.x + bounds.width / 2,
+            bottom: bounds.y + bounds.height + (this.call ? CALL_WINDOW_LIFT : 0),
+          },
           display.workArea || display.bounds,
           this._defaultAnchor(display).bottom
         );

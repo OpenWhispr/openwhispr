@@ -145,7 +145,11 @@ Module._load = function loadWithStubs(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 const { AgentWindowManager } = require("../../src/helpers/agentWindowManager");
-const { AGENT_LAYOUT_SIZES, WAITING_PILL_SIZE } = require("../../src/helpers/agentWindowPlacement");
+const {
+  AGENT_LAYOUT_SIZES,
+  CALL_WINDOW_LIFT,
+  WAITING_PILL_SIZE,
+} = require("../../src/helpers/agentWindowPlacement");
 Module._load = originalLoad;
 
 function createWindowManager(overrides = {}) {
@@ -276,6 +280,23 @@ for (const platform of ["darwin", "win32", "linux"]) {
     assert.equal(win.bounds.x + win.bounds.width / 2, 620);
   });
 }
+
+test("a call's compact pill holds still under a drag, and the transcript's pill opens where it was", async (t) => {
+  cursor = { x: 720, y: 400 };
+  const { manager, win } = await openedManager();
+  t.after(() => manager.dragManager.cleanup());
+  manager.setLayout(fromAgent(win), { layout: "pill", focus: false, call: true });
+  const before = { ...win.bounds };
+  manager.setDragging(fromAgent(win), true);
+  manager.dragManager.updateWindowPosition();
+  assert.deepEqual(win.bounds, before, "a drag that hasn't moved leaves the window in place");
+  cursor = { x: 620, y: 300 };
+  manager.dragManager.updateWindowPosition();
+  manager.setDragging(fromAgent(win), false);
+  const pillBottom = win.bounds.y + win.bounds.height - 8;
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+  assert.equal(win.bounds.y + win.bounds.height - 8 - CALL_WINDOW_LIFT, pillBottom);
+});
 
 test("dragging stays in the lower centered region and stops when the modal leaves", async (t) => {
   cursor = { x: 720, y: 400 };
