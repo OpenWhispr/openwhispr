@@ -26,6 +26,7 @@ const cloudSession = {
   expiresIn: 60,
   singleUse: true,
 };
+const { secretResolverMethods } = require("./harness/secretResolver");
 const { once, EventEmitter } = require("node:events");
 const { WebSocket, WebSocketServer } = require("ws");
 const orukeetStreamingModule = require("../../src/helpers/orukeetStreaming");
@@ -297,7 +298,7 @@ test(
 test("self-hosted IPC still retries a capacity-refused commit without re-uploading", async (t) => {
   refuseCommit = "once";
   const before = commitCount;
-  target.environmentManager = { getCustomTranscriptionKey: () => "test-key" };
+  target.environmentManager = secretResolverMethods({ CUSTOM_TRANSCRIPTION_API_KEY: "test-key" });
   t.after(async () => {
     refuseCommit = false;
     delete target.environmentManager;
@@ -843,9 +844,25 @@ test("a stop during a start waiting on a warmup opens no new session", async () 
 
 const selfHostedOptions = { ...managedOptions, mode: "byok", baseUrl: cloudSession.baseUrl };
 
+test("Orukeet rejects a missing Custom key reference before opening a socket", async (t) => {
+  await handlers.get("dictation-realtime-stop")();
+  target.environmentManager = secretResolverMethods({
+    CUSTOM_TRANSCRIPTION_API_KEY: "$GROQ_API_KEY",
+  });
+  t.after(() => {
+    delete target.environmentManager;
+  });
+  const before = opened;
+  for (const method of ["dictation-realtime-warmup", "dictation-realtime-start"]) {
+    const result = await handlers.get(method)(event, selfHostedOptions);
+    assert.equal(result.code, "API_KEY_MISSING");
+  }
+  assert.equal(opened, before);
+});
+
 test("self-hosted Orukeet: a start during a warmup still replaces that warmup", async (t) => {
   await handlers.get("dictation-realtime-stop")();
-  target.environmentManager = { getCustomTranscriptionKey: () => "test-key" };
+  target.environmentManager = secretResolverMethods({ CUSTOM_TRANSCRIPTION_API_KEY: "test-key" });
   t.after(async () => {
     delete target.environmentManager;
     await handlers.get("dictation-realtime-stop")();
@@ -865,7 +882,7 @@ test("self-hosted Orukeet: a start during a warmup still replaces that warmup", 
 
 test("self-hosted Orukeet: a warmup still replaces a socket that carried audio", async (t) => {
   await handlers.get("dictation-realtime-stop")();
-  target.environmentManager = { getCustomTranscriptionKey: () => "test-key" };
+  target.environmentManager = secretResolverMethods({ CUSTOM_TRANSCRIPTION_API_KEY: "test-key" });
   t.after(async () => {
     delete target.environmentManager;
     await handlers.get("dictation-realtime-stop")();
@@ -885,7 +902,7 @@ test("custom Orukeet excludes self-hosted headers; self-hosted mode includes the
   const capture = (_socket, request) => requests.push(request);
   server.on("connection", capture);
   target.environmentManager = {
-    getCustomTranscriptionKey: () => "test-key",
+    ...secretResolverMethods({ CUSTOM_TRANSCRIPTION_API_KEY: "test-key" }),
     getSelfHostedSttHeaders: () =>
       JSON.stringify({
         dictation: [
@@ -928,7 +945,7 @@ test("self-hosted Orukeet: a warm custom socket is not reused once headers apply
   const capture = (_socket, request) => requests.push(request);
   server.on("connection", capture);
   target.environmentManager = {
-    getCustomTranscriptionKey: () => "test-key",
+    ...secretResolverMethods({ CUSTOM_TRANSCRIPTION_API_KEY: "test-key" }),
     getSelfHostedSttHeaders: () =>
       JSON.stringify({ dictation: [{ name: "X-API-Key", value: "self-hosted-only" }] }),
   };

@@ -98,7 +98,10 @@ import {
   isManagedTranscriptionActive,
 } from "../services/managedTranscription.ts";
 import { getTranscriptionApiKey } from "../services/fileTranscription";
-import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
+import {
+  customTranscriptionKeyForRequest,
+  shouldSkipTranscriptionApiKey,
+} from "./transcriptionAuth";
 import { supportsWhisperSegments } from "./uploadTimestamps";
 import { dropNoSpeechSegments } from "./noSpeechSegments";
 import {
@@ -2913,6 +2916,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const provider = s.cloudTranscriptionProvider || "openai";
 
+    if (provider === "custom") {
+      // Pick the credential before resolving it, so an unavailable reference
+      // cannot fall back to an older account. Recheck it for each recording.
+      const rawKey =
+        s.customTranscriptionApiKey?.trim() ||
+        (await window.electronAPI.getCustomTranscriptionKey?.());
+      return customTranscriptionKeyForRequest(rawKey, await resolveApiKey(rawKey)) || null;
+    }
+
     // Check cache (invalidate if provider changed)
     if (this.cachedApiKey !== null && this.cachedApiKeyProvider === provider) {
       return this.cachedApiKey;
@@ -2921,37 +2933,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const generation = this.apiKeyGeneration;
     let apiKey = null;
 
-    if (provider === "custom") {
-      // Prefer store value (user-entered via UI) over main process (.env)
-      apiKey = await resolveApiKey(s.customTranscriptionApiKey);
-      if (!apiKey) {
-        try {
-          apiKey = await resolveApiKey(await window.electronAPI.getCustomTranscriptionKey?.());
-        } catch (err) {
-          logger.debug(
-            "Failed to get custom transcription key via IPC",
-            { error: err?.message },
-            "transcription"
-          );
-        }
-      }
-      apiKey = apiKey || "";
-
-      logger.debug(
-        "Custom STT API key retrieval",
-        {
-          provider,
-          hasKey: !!apiKey,
-          keyLength: apiKey?.length || 0,
-        },
-        "transcription"
-      );
-
-      // For custom, we allow null/empty - the endpoint may not require auth
-      if (!apiKey) {
-        apiKey = null;
-      }
-    } else if (provider === "mistral") {
+    if (provider === "mistral") {
       // Prefer store value (user-entered via UI) over main process (.env)
       // to avoid stale keys in process.env after auth mode transitions
       apiKey = await resolveApiKey(s.mistralApiKey);

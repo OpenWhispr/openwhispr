@@ -71,6 +71,7 @@ const {
 const { classifyAndLog } = require("./networkErrors");
 const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
 const { ipcErrorFields } = require("./ipcErrorFields");
+const { customTranscriptionKeyForRequest } = require("./transcriptionAuth");
 const {
   PROVIDER_ERROR_CODES,
   isProviderSettingsTarget,
@@ -7020,11 +7021,19 @@ class IPCHandlers {
       }
     });
 
+    const getCustomTranscriptionKeyForRequest = (
+      rawKey = this.environmentManager.getRawKey("CUSTOM_TRANSCRIPTION_API_KEY")
+    ) => {
+      return customTranscriptionKeyForRequest(
+        rawKey,
+        this.environmentManager.resolveSecretRef(rawKey)
+      );
+    };
     // Headers and redirect mode for a request to the self-hosted speech server of `surface`
     // ("dictation" or "upload"), with the custom key for a route that takes one (Orukeet's).
-    const selfHostedRequest = (surface, route) => {
+    const selfHostedRequest = (surface, route, rawKey) => {
       const key =
-        route?.auth.keyRef === "custom" ? this.environmentManager.getCustomTranscriptionKey() : "";
+        route?.auth.keyRef === "custom" ? getCustomTranscriptionKeyForRequest(rawKey) : "";
       return selfHostedSttRequest(
         parseSelfHostedSttHeaders(this.environmentManager.getSelfHostedSttHeaders())[surface],
         key ? { Authorization: `Bearer ${key}` } : {}
@@ -9845,7 +9854,7 @@ class IPCHandlers {
               : provider === "xai"
                 ? this.environmentManager.getXaiKey()
                 : route.auth.keyRef === "custom"
-                  ? this.environmentManager.getCustomTranscriptionKey()
+                  ? getCustomTranscriptionKeyForRequest()
                   : route.auth.keyRef === "groq"
                     ? this.environmentManager.getGroqKey()
                     : route.auth.keyRef === "openrouter"
@@ -12188,7 +12197,7 @@ class IPCHandlers {
               });
             } else {
               await streaming.connect({
-                apiKey: this.environmentManager.getCustomTranscriptionKey(),
+                apiKey: getCustomTranscriptionKeyForRequest(),
                 headers:
                   options.transcriptionMode === "self-hosted"
                     ? selfHostedRequest("dictation").headers
@@ -14131,14 +14140,8 @@ class IPCHandlers {
         return runAudioJob(event, resolvedPurpose, cancel, async (signal) => {
           let cleanupUpload = null;
           let providerErrorContext = null;
-          let apiKey = "";
           try {
             signal.throwIfAborted();
-            // A $VAR field is expanded here, on the way to the provider; leftover
-            // references are never sent.
-            apiKey = require("./envRef.cjs").usableSecret(
-              this.environmentManager.resolveSecretRef(rawApiKey)
-            );
             if (typeof filePath !== "string") {
               return { success: false, error: "Invalid file path" };
             }
@@ -14196,6 +14199,11 @@ class IPCHandlers {
               model: route.model,
               surface: "transcription",
             };
+            const suppliedKey = typeof rawApiKey === "string" ? rawApiKey.trim() : "";
+            const apiKey =
+              route.provider === "custom"
+                ? getCustomTranscriptionKeyForRequest(suppliedKey)
+                : this.environmentManager.resolveSecretRef(suppliedKey);
 
             // OpenRouter's upstream providers stop after ~60 s of work per request,
             // so its uploads go out in 4-minute pieces, cut straight from the source
@@ -14268,7 +14276,11 @@ class IPCHandlers {
                 { model: route.model, language: route.language }
               );
               // A voice draft goes to dictation's server, a file to the Upload tab's.
-              const request = selfHostedRequest(audioFilePurpose(filePath, purpose), route);
+              const request = selfHostedRequest(
+                audioFilePurpose(filePath, purpose),
+                route,
+                suppliedKey || undefined
+              );
               const data = await postMultipart(
                 new URL(route.endpoint),
                 body,
