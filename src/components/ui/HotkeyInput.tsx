@@ -286,6 +286,8 @@ export function HotkeyInput({
   const modifierCodesRef = useRef<Partial<Record<ModifierKind, string>>>({});
   const platform = getPlatform();
   const isMac = platform === "darwin";
+  // Windows records middle and side buttons from the page; macOS also through its listener.
+  const capturesMouse = isMac || platform === "win32";
 
   const setCapturing = useCallback((capturing: boolean) => {
     isCapturingRef.current = capturing;
@@ -534,7 +536,7 @@ export function HotkeyInput({
       if (disabled) return;
 
       const mouseHotkey = mouseButtonHotkeyFromDomButton(e.button);
-      if (!isMac || !mouseHotkey) {
+      if (!capturesMouse || !mouseHotkey) {
         if (!isCapturingRef.current) {
           // The focused hero surface replaces the element beneath the pointer
           // while it enters capture mode. Preventing the initiating click keeps
@@ -562,12 +564,12 @@ export function HotkeyInput({
       e.stopPropagation();
       pendingDomMouseButtonRef.current = e.button;
     },
-    [disabled, isMac]
+    [disabled, capturesMouse]
   );
 
   const handleMouseUp = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (disabled || !isMac) return;
+      if (disabled || !capturesMouse) return;
       const mouseHotkey = mouseButtonHotkeyFromDomButton(e.button);
       if (!mouseHotkey) return;
 
@@ -584,16 +586,16 @@ export function HotkeyInput({
       pendingDomMouseButtonRef.current = null;
       finalizeCapture(mouseHotkey);
     },
-    [disabled, isMac, finalizeCapture]
+    [disabled, capturesMouse, finalizeCapture]
   );
 
   const preventMouseDefault = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!isMac || !mouseButtonHotkeyFromDomButton(e.button)) return;
+      if (!capturesMouse || !mouseButtonHotkeyFromDomButton(e.button)) return;
       e.preventDefault();
       e.stopPropagation();
     },
-    [isMac]
+    [capturesMouse]
   );
 
   // Deliberately does not clear the parent's error (handleKeyDown does that on the
@@ -679,7 +681,7 @@ export function HotkeyInput({
   }, []);
 
   useEffect(() => {
-    if (!isCapturing || !isMac) return;
+    if (!isCapturing || !capturesMouse) return;
 
     const handleMouseDown = (event: MouseEvent) => {
       const mouseHotkey = mouseButtonHotkeyFromDomButton(event.button);
@@ -743,7 +745,7 @@ export function HotkeyInput({
       window.removeEventListener("click", preventMouseDefault, true);
       disposeNative?.();
     };
-  }, [isCapturing, isMac, finalizeCapture]);
+  }, [isCapturing, capturesMouse, finalizeCapture]);
 
   useEffect(() => {
     if (!isCapturing || !isMac) return;
@@ -881,7 +883,7 @@ export function HotkeyInput({
               </div>
             ) : (
               <span className="text-xs text-muted-foreground">
-                {isMac ? t("hotkeyInput.captureMac") : t("hotkeyInput.pressAnyKey")}
+                {capturesMouse ? t("hotkeyInput.captureMac") : t("hotkeyInput.pressAnyKey")}
               </span>
             )}
             {validationWarning && (
@@ -998,7 +1000,7 @@ export function HotkeyInput({
                 </div>
               ) : (
                 <span className="text-xs text-muted-foreground">
-                  {isMac ? t("hotkeyInput.captureMac") : t("hotkeyInput.tryShortcut")}
+                  {capturesMouse ? t("hotkeyInput.captureMac") : t("hotkeyInput.tryShortcut")}
                 </span>
               )}
             </div>

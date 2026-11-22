@@ -6325,7 +6325,7 @@
       "callbackRequired": "دالة الاستدعاء مطلوبة لإعداد اختصار لوحة المفاتيح",
       "globeOnlyMac": "مفتاح Globe متوفر فقط على نظام macOS.",
       "fnCombinationUnsupported": "يمكن استخدام مفتاح Globe/Fn بمفرده فقط.",
-      "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة حاليًا على نظام macOS فقط.",
+      "mouseButtonOnlyMac": "تعمل اختصارات أزرار الماوس على نظام macOS، وعلى Windows مع الزر الأوسط والأزرار الجانبية.",
       "alreadyRegistered": "\"{{hotkey}}\" مسجل بالفعل بواسطة تطبيق آخر.",
       "osReserved": "قد يكون \"{{hotkey}}\" محجوزًا بواسطة بيئة سطح المكتب لديك.",
       "keyNotInKeymap": "لا يمكن لـ GNOME استخدام \"{{hotkey}}\" مع تخطيط لوحة المفاتيح الحالي. اختر مفتاحًا آخر.",

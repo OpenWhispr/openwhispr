@@ -86,6 +86,12 @@ function isMouseButtonHotkey(hotkey) {
   return canonicalizeMouseButtonHotkey(hotkey) !== null;
 }
 
+// The Windows listener hooks only the middle and side buttons (3-5).
+function isMouseButtonSupportedOn(mouseButton, platform) {
+  if (platform === "darwin") return true;
+  return platform === "win32" && Number(mouseButton.slice("MouseButton".length)) <= 5;
+}
+
 function normalizeHotkeyList(value) {
   return [
     ...new Set(
@@ -539,14 +545,21 @@ class HotkeyManager extends EventEmitter {
    * instead of globalShortcut. Modifier-only and right-side-modifier combos never
    * register through globalShortcut, and in push-to-talk mode dictation also needs
    * raw key-down/key-up events. Only the dictation slot supports push-to-talk;
-   * every other slot is tap-to-toggle. Globe/mouse hotkeys are macOS-only.
+   * every other slot is tap-to-toggle. Globe hotkeys are macOS-only; mouse buttons also use the Windows listener.
    * Each slot may bind several hotkeys, so we evaluate every one.
    */
   getNativeListenerKeys(activationMode) {
     const keys = [];
     for (const [slotName, slot] of this.slots) {
       for (const hotkey of slot.hotkeys ?? []) {
-        if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
+        if (!hotkey || isGlobeLikeHotkey(hotkey)) continue;
+        const mouseButton = canonicalizeMouseButtonHotkey(hotkey);
+        if (mouseButton) {
+          if (process.platform === "win32" && isMouseButtonSupportedOn(mouseButton, "win32")) {
+            keys.push(mouseButton);
+          }
+          continue;
+        }
         const pushToTalk = slotName === "dictation" && activationMode === "push";
         if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
           keys.push(hotkey);
@@ -760,11 +773,13 @@ class HotkeyManager extends EventEmitter {
     try {
       const mouseButton = canonicalizeMouseButtonHotkey(hotkey);
       if (mouseButton) {
-        if (process.platform !== "darwin") {
+        if (!isMouseButtonSupportedOn(mouseButton, process.platform)) {
           return { success: false, hotkey, error: i18nMain.t("hotkey.errors.mouseButtonOnlyMac") };
         }
+        const unavailable = this._nativeListenerUnavailable(hotkey);
+        if (unavailable) return unavailable;
         debugLogger.log(
-          `[HotkeyManager] Mouse button "${mouseButton}" set - using macOS native listener`
+          `[HotkeyManager] Mouse button "${mouseButton}" set - using native mouse listener`
         );
         return { success: true, hotkey: mouseButton, accelerator: null };
       }

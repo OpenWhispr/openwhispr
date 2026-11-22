@@ -1126,7 +1126,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   : getRecommendedDictationHotkeys(platform, recommendedDictationHotkey)
               }
               captureLabel={t(
-                platform === "darwin"
+                platform === "darwin" || platform === "win32"
                   ? "hotkeyInput.captureMac"
                   : "onboarding.rehaul.hotkey.capture"
               )}

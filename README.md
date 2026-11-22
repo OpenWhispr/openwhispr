@@ -65,14 +65,14 @@ brew install --cask openwhispr
 
 OpenWhispr is MIT-licensed. Everything that runs on your device is free, with no account and no word limit:
 
-| Free from OpenWhispr (on-device or your own keys) | Free OpenWhispr Cloud | Paid Cloud plans |
-| --- | --- | --- |
-| Local transcription (Whisper, Parakeet, Cohere, Orukeet) | 2,000 hosted words/week | Unlimited cloud transcription |
-| Local AI models and the local AI agent | 5 hours of meeting recordings/month | 20 hours/month (Pro) or unlimited (Business) meeting recordings |
-| Local speaker diarization | Teamspaces for signed-in users | Sync across devices |
-| Local notes, folders, and semantic search\* | | Public note links |
-| Custom dictionary and 100+ languages | | Personal API access and MCP integration |
-| Cloud transcription with your own API keys (provider charges and limits apply) | | Mobile app, workspace roles, and SSO |
+| Free from OpenWhispr (on-device or your own keys)                              | Free OpenWhispr Cloud               | Paid Cloud plans                                                |
+| ------------------------------------------------------------------------------ | ----------------------------------- | --------------------------------------------------------------- |
+| Local transcription (Whisper, Parakeet, Cohere, Orukeet)                       | 2,000 hosted words/week             | Unlimited cloud transcription                                   |
+| Local AI models and the local AI agent                                         | 5 hours of meeting recordings/month | 20 hours/month (Pro) or unlimited (Business) meeting recordings |
+| Local speaker diarization                                                      | Teamspaces for signed-in users      | Sync across devices                                             |
+| Local notes, folders, and semantic search\*                                    |                                     | Public note links                                               |
+| Custom dictionary and 100+ languages                                           |                                     | Personal API access and MCP integration                         |
+| Cloud transcription with your own API keys (provider charges and limits apply) |                                     | Mobile app, workspace roles, and SSO                            |
 
 The free Cloud allowance is 2,000 words/week and 5 hours of meeting recordings/month; the remaining Cloud features in the third column require a paid plan. Teamspaces are free for signed-in users; creating a team inside a workspace requires the Business plan. See **Settings → Plans** in the app for current pricing.
 
@@ -93,9 +93,9 @@ The list of models the desktop app offers lives in [`model-registry`](model-regi
 
 The commands above run the desktop application, which remains at the repository root. The Expo mobile application lives in [`openwhispr-mobile`](openwhispr-mobile/) with its own dependencies, lockfile, build configuration, and release process. See the [mobile README](openwhispr-mobile/README.md) for its setup instructions.
 
-### Mouse shortcuts on macOS
+### Mouse shortcuts
 
-In onboarding or Settings, click a shortcut field and press your mouse's middle or auxiliary button. Buttons 3 through 32 use the same toggle and push-to-talk controls as keyboard shortcuts. Left and right clicks stay available for normal navigation. Accessibility permission is required. No mouse brand selection is needed; buttons must be exposed as mouse buttons by macOS. If your mouse software remaps a button to a keyboard key, record that key instead. Windows and Linux mouse shortcuts are not supported yet.
+In onboarding or Settings, click a shortcut field and press your mouse's middle or auxiliary button. On macOS, buttons 3 through 32 use the same toggle and push-to-talk controls as keyboard shortcuts. Left and right clicks stay available for normal navigation. Accessibility permission is required on macOS. No mouse brand selection is needed; buttons must be exposed as mouse buttons by macOS. If your mouse software remaps a button to a keyboard key, record that key instead. On Windows, the middle and side buttons (3 to 5) can be bound the same way. Linux mouse shortcuts are not supported yet.
 
 ## Documentation
 

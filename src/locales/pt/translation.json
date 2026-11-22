@@ -118,7 +118,7 @@
       "callbackRequired": "Uma função de callback é obrigatória para configurar o atalho",
       "globeOnlyMac": "A tecla Globe está disponível apenas no macOS.",
       "fnCombinationUnsupported": "A tecla Globe/Fn só pode ser usada sozinha.",
-      "mouseButtonOnlyMac": "Atalhos com botões do mouse atualmente são compatíveis apenas no macOS.",
+      "mouseButtonOnlyMac": "Atalhos com botões do mouse funcionam no macOS e, no Windows, com o botão do meio e os botões laterais.",
       "alreadyRegistered": "\"{{hotkey}}\" já está registrada por outro aplicativo.",
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
       "keyNotInKeymap": "O GNOME não consegue usar \"{{hotkey}}\" com o seu layout de teclado. Escolha outra tecla.",

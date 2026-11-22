@@ -593,10 +593,13 @@ export function validateHotkey(
   }
 
   if (isMouseButtonHotkey(hotkey)) {
-    if (platform !== "darwin") {
+    // The Windows listener hooks only the middle and side buttons.
+    const button = getMouseButtonNumber(hotkey) ?? 0;
+    if (platform !== "darwin" && !(platform === "win32" && button <= 5)) {
       return {
         valid: false,
-        error: "Mouse button hotkeys are currently supported on macOS only.",
+        error:
+          "Mouse button hotkeys are supported on macOS, and on Windows for the middle and side buttons.",
         errorCode: "MOUSE_BUTTON_UNSUPPORTED",
       };
     }

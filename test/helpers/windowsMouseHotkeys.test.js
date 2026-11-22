@@ -36,18 +36,16 @@ test("Windows mouse buttons use native listeners in both Tap and Hold, across sl
     ]);
     assert.deepEqual(manager.getNativeListenerKeys("tap"), ["MouseButton4", "MouseButton5"]);
     assert.deepEqual(manager.getNativeListenerKeys("push"), ["MouseButton4", "F8", "MouseButton5"]);
-    for (const button of [
-      "MouseButton1",
-      "MouseButton2",
-      "MouseButton3",
-      "MouseButton4",
-      "MouseButton5",
-    ]) {
+    for (const button of ["MouseButton3", "MouseButton4", "MouseButton5"]) {
       assert.deepEqual(
         manager._registerSingleHotkey(button, () => {}),
         { success: true, hotkey: button, accelerator: null }
       );
     }
+    // The Windows hook reports only the middle and side buttons.
+    assert.equal(manager._registerSingleHotkey("MouseButton6", () => {}).success, false);
+    manager.slots = new Map([["dictation", { hotkeys: ["MouseButton6"] }]]);
+    assert.deepEqual(manager.getNativeListenerKeys("push"), []);
     assert.equal(acceleratorRegistrations, 0);
   }));
 test("Windows rejects mouse shortcuts when the native binary is unavailable", () =>

@@ -118,7 +118,7 @@
       "callbackRequired": "设置快捷键需要回调函数",
       "globeOnlyMac": "Globe 键仅在 macOS 上可用。",
       "fnCombinationUnsupported": "Globe/Fn 键只能单独使用。",
-      "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
+      "mouseButtonOnlyMac": "鼠标按键快捷键可在 macOS 上使用；在 Windows 上可使用中键和侧键。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
       "keyNotInKeymap": "GNOME 无法在当前键盘布局下使用 \"{{hotkey}}\"。请选择其他按键。",

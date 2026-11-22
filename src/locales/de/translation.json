@@ -118,7 +118,7 @@
       "callbackRequired": "Eine Callback-Funktion ist für das Hotkey-Setup erforderlich",
       "globeOnlyMac": "Die Globe-Taste ist nur auf macOS verfügbar.",
       "fnCombinationUnsupported": "Die Globe/Fn-Taste kann nur allein verwendet werden.",
-      "mouseButtonOnlyMac": "Maustasten-Hotkeys werden derzeit nur auf macOS unterstützt.",
+      "mouseButtonOnlyMac": "Maustasten-Hotkeys funktionieren auf macOS und unter Windows mit der mittleren Taste und den Seitentasten.",
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
       "keyNotInKeymap": "GNOME kann „{{hotkey}}“ mit Ihrer Tastaturbelegung nicht verwenden. Wählen Sie eine andere Taste.",
