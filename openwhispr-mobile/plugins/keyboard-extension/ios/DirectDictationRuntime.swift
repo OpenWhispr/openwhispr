@@ -67,23 +67,6 @@ final class DirectDictationRuntime {
     )
   }
 
-  /// Why the keyboard can or can't record by itself right now, and what the last capture
-  /// did. For the diagnostics menu.
-  var diagnosticsSummary: String {
-    let session = AVAudioSession.sharedInstance()
-    let capture = WebAudioCapture.diagnostics
-    return String(
-      format: "container %@, eligible %@, mic %@, other audio %@, output %@ · captures %d (started %d), %d chunks at %d Hz, peak %.3f, last end: %@ · state %@",
-      hasContainer ? "yes" : "no",
-      dictation.isEligible ? "yes" : "no",
-      AVAudioApplication.shared.recordPermission == .granted ? "granted" : "not granted",
-      session.isOtherAudioPlaying ? "yes" : "no",
-      session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: "+"),
-      capture.starts, capture.started, capture.chunks, capture.sampleRate, capture.peakRms, capture.lastEnd,
-      String(describing: dictation.state)
-    ) + " · " + DirectDictation.lastTake + " · " + DirectDictation.lastResponse
-  }
-
   /// Moves the hidden web view into this controller's view. The web view is only made for a
   /// keyboard that can dictate this way.
   func attach(to view: UIView) {

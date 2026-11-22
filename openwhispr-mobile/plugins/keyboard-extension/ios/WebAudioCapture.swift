@@ -41,18 +41,6 @@ final class WebAudioCapture: NSObject {
   private var startWhenReady = false
   private var heartbeat: Timer?
 
-  /// What the last capture did, for the keyboard's diagnostics menu: counts and reasons
-  /// only, never audio.
-  struct Diagnostics {
-    var starts = 0
-    var started = 0
-    var chunks = 0
-    var peakRms: Float = 0
-    var sampleRate = 0
-    var lastEnd = "none"
-  }
-  private(set) static var diagnostics = Diagnostics()
-
   /// The web view must live in the keyboard's view hierarchy for WebKit to capture. It is made
   /// on the first attach, so a keyboard that never dictates this way never loads WebKit.
   func attach(to view: UIView) {
@@ -71,9 +59,6 @@ final class WebAudioCapture: NSObject {
       return
     }
     isCapturing = true
-    Self.diagnostics.starts += 1
-    Self.diagnostics.chunks = 0
-    Self.diagnostics.peakRms = 0
     guard isReady else {
       startWhenReady = true
       return
@@ -135,7 +120,6 @@ final class WebAudioCapture: NSObject {
     startWhenReady = false
     guard isCapturing else { return }
     isCapturing = false
-    Self.diagnostics.lastEnd = reason
     onEnded?(reason)
   }
 
@@ -146,16 +130,12 @@ final class WebAudioCapture: NSObject {
       isReady = true
       if startWhenReady && isCapturing { beginCapture() }
     case "started":
-      Self.diagnostics.started += 1
-      Self.diagnostics.sampleRate = (message["sampleRate"] as? NSNumber)?.intValue ?? 0
       onStarted?()
     case "audio":
       guard isCapturing, let base64 = message["data"] as? String, let data = Data(base64Encoded: base64) else {
         return
       }
       let rms = (message["rms"] as? NSNumber)?.floatValue ?? 0
-      Self.diagnostics.chunks += 1
-      Self.diagnostics.peakRms = max(Self.diagnostics.peakRms, rms)
       onAudio?(data, rms)
     case "interrupted", "failed":
       finish(reason: "\(type): \(message["reason"] as? String ?? "unknown")")

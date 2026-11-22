@@ -287,13 +287,13 @@ private final class KeyboardRowsStack: UIStackView {
     subviews.forEach(visit)
     // Between letter keys the boundary leans toward the letter the word is likely to
     // continue with; the resolver answers nil to keep the nearest key.
-    if let nearest, let resolved = letterResolver?(point, nearest, event?.timestamp) { return resolved }
+    if let nearest, let resolved = letterResolver?(point, nearest) { return resolved }
     return nearest ?? defaultTarget
   }
 
   /// Dynamic hit targets: given a touch (its point, the nearest key and the event's time,
   /// which tells one touch's repeated hit tests apart), the letter key it means.
-  var letterResolver: ((CGPoint, KeyButton, TimeInterval?) -> KeyButton?)?
+  var letterResolver: ((CGPoint, KeyButton) -> KeyButton?)?
 }
 
 private extension UIColor {
@@ -1472,9 +1472,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     reloadTypingSettings()
-    if typingSettings.swipeTracesEnabled, let container = KeyboardHandoffProvider.shared.containerURL() {
-      _ = swipeTraceURL(in: container)
-    }
     noteFieldReport()
     syncTypingSessionWithField()
     syncShiftWithContextIfNeeded()
@@ -1555,13 +1552,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   @objc private func handleCharacterKeyTapped(_ sender: KeyButton) {
     guard let output = sender.output else { return }
-    let started = CACurrentMediaTime()
-    defer {
-      let elapsed = (CACurrentMediaTime() - started) * 1000
-      diagnostics.keys += 1
-      if elapsed > 8 { diagnostics.slowKeys += 1 }
-      diagnostics.slowestKeyMs = max(diagnostics.slowestKeyMs, elapsed)
-    }
     playKeyClick()
 
     let insertion = layoutMode == .letters && isShiftEnabled ? output.uppercased() : output
@@ -2626,7 +2616,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func performEdit(_ edit: TextEdit) {
-    if edit.deleteCount > 0, !edit.insert.isEmpty { diagnostics.corrections += 1 }
     for _ in 0..<edit.deleteCount { textDocumentProxy.deleteBackward() }
     if !edit.insert.isEmpty { textDocumentProxy.insertText(edit.insert) }
     typedDocument = currentDocumentID
@@ -2822,11 +2811,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func refreshSuggestions() {
-    let started = CACurrentMediaTime()
     let suggestions = didLoadTypingEngine || lastKeystrokeAt > 0 ? (typing?.suggestions() ?? []) : []
     suggestionBar.show(suggestions)
     updateSuggestionBarVisibility()
-    diagnostics.slowestSuggestionMs = max(diagnostics.slowestSuggestionMs, (CACurrentMediaTime() - started) * 1000)
   }
 
   /// "row": the bar has its own row and always shows. "strip": it takes the pill's place
@@ -3176,8 +3163,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     rootStack.addSubview(keyPopup)
     rootStack.addSubview(accentPopup)
     accentPopup.isHidden = true
-    keyboardRowsStack.letterResolver = { [weak self] point, nearest, time in
-      self?.resolveLetterKey(at: point, nearest: nearest, time: time)
+    keyboardRowsStack.letterResolver = { [weak self] point, nearest in
+      self?.resolveLetterKey(at: point, nearest: nearest)
     }
 
     swipeRecognizer.addTarget(self, action: #selector(handleSwipeTyping(_:)))
@@ -3210,7 +3197,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       swipeTrail.show(recognizer.path, color: Palette.accent)
     case .ended:
       swipeTrail.show([], color: Palette.accent)
-      commitSwipe(path: recognizer.path, times: recognizer.times)
+      commitSwipe(path: recognizer.path)
     case .cancelled, .failed:
       swipeTrail.show([], color: Palette.accent)
     default:
@@ -3218,52 +3205,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  /// Test aid: one JSON line per swipe (finger path, key positions, what was decoded), kept
-  /// in the App Group container while the menu's "Record swipe traces" is on.
-  private func recordSwipeTrace(path: [CGPoint], times: [TimeInterval], words: [String], geometry: KeyGeometry) {
-    guard typingSettings.swipeTracesEnabled, let container = KeyboardHandoffProvider.shared.containerURL() else { return }
-    let start = times.first ?? 0
-    var centres: [String: [Double]] = [:]
-    for (letter, centre) in geometry.centres { centres[String(letter)] = [Double(centre.x), Double(centre.y)] }
-    let record: [String: Any] = [
-      "at": Int(Date().timeIntervalSince1970),
-      "language": typingSettings.language.rawValue,
-      "layout": typingSettings.layout.rawValue,
-      "pitch": Double(geometry.pitch),
-      "rowPitch": Double(geometry.rowPitch),
-      "centres": centres,
-      "points": path.enumerated().map { index, point in
-        [Double(point.x), Double(point.y), times.indices.contains(index) ? times[index] - start : 0]
-      },
-      "decoded": words,
-    ]
-    guard let data = try? JSONSerialization.data(withJSONObject: record), var line = String(data: data, encoding: .utf8)
-    else { return }
-    line += "\n"
-    let url = swipeTraceURL(in: container)
-    if let handle = try? FileHandle(forWritingTo: url) {
-      handle.seekToEndOfFile()
-      handle.write(Data(line.utf8))
-      try? handle.close()
-    } else {
-      try? Data(line.utf8).write(to: url)
-    }
-  }
-
-  /// Under Library/Caches: the only part of the group container a Mac can read off a
-  /// connected phone. Traces an earlier build left at the container's root are moved here.
-  private func swipeTraceURL(in container: URL) -> URL {
-    let folder = container.appendingPathComponent("Library/Caches", isDirectory: true)
-    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-    let url = folder.appendingPathComponent("keyboard-swipe-traces.jsonl")
-    let old = container.appendingPathComponent("keyboard-swipe-traces.jsonl")
-    if FileManager.default.fileExists(atPath: old.path), !FileManager.default.fileExists(atPath: url.path) {
-      try? FileManager.default.moveItem(at: old, to: url)
-    }
-    return url
-  }
-
-  private func commitSwipe(path: [CGPoint], times: [TimeInterval] = []) {
+  private func commitSwipe(path: [CGPoint]) {
     guard let engine = loadedTypingEngine(), let decoder = swipeDecoder else { return }
     let session = engine.session
     let context = session.nextLetterContext()
@@ -3277,9 +3219,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let words = isShort
       ? []
       : decoder.decode(path: path, previous: context.previous, sentenceStart: context.sentenceStart, limit: 4)
-    diagnostics.swipes += 1
-    if isShort { diagnostics.shortSwipes += 1 } else if words.isEmpty { diagnostics.emptySwipes += 1 }
-    recordSwipeTrace(path: path, times: times, words: words, geometry: engine.corrector.geometry)
     guard let best = words.first else {
       if let start = path.first, let key = keyboardRowsStack.hitTest(start, with: nil) as? KeyButton,
         let code = key.output?.utf16.first, letterButtonsByCode[code] === key
@@ -3306,7 +3245,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   /// Dynamic hit targets, for touches whose nearest key is a letter, in fields that get
   /// typing help. Nil keeps the nearest key.
-  private func resolveLetterKey(at point: CGPoint, nearest: KeyButton, time: TimeInterval? = nil) -> KeyButton? {
+  private func resolveLetterKey(at point: CGPoint, nearest: KeyButton) -> KeyButton? {
     guard typingSettings.smartTargetsEnabled,
       layoutMode == .letters, didLoadTypingEngine, let engine = typingEngine, let model = hitTargets,
       let code = nearest.output?.utf16.first, letterButtonsByCode[code] === nearest,
@@ -3317,36 +3256,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       ? TypingLexicon.sentenceStart : context.previous.flatMap { engine.lexicon.id(of: $0) }
     guard let letter = model.letter(at: point, prefix: TypingLexicon.key(of: context.prefix), previousID: previous)
     else { return nil }
-    let resolved = letterButtonsByCode[letter]
-    if let resolved, resolved !== nearest, let time, time != diagnostics.lastShiftedTouch {
-      diagnostics.lastShiftedTouch = time
-      diagnostics.shiftedTargets += 1
-    }
-    return resolved
+    return letterButtonsByCode[letter]
   }
-
-  /// Counts and timings for tuning on a phone: how often each typing aid stepped in and how
-  /// long keys took. Never what was typed.
-  private struct TypingDiagnostics {
-    var keys = 0
-    var slowKeys = 0
-    var slowestKeyMs = 0.0
-    var slowestSuggestionMs = 0.0
-    var shiftedTargets = 0
-    var lastShiftedTouch: TimeInterval = 0
-    var swipes = 0
-    var shortSwipes = 0
-    var emptySwipes = 0
-    var corrections = 0
-
-    var summary: String {
-      String(
-        format: "%d keys, %d over 8 ms (slowest %.1f ms), suggestions up to %.1f ms · %d shifted targets · %d swipes (%d short, %d no word) · %d corrections",
-        keys, slowKeys, slowestKeyMs, slowestSuggestionMs, shiftedTargets, swipes, shortSwipes, emptySwipes, corrections
-      )
-    }
-  }
-  private var diagnostics = TypingDiagnostics()
 
   // MARK: Long-press accents
 
@@ -3513,7 +3424,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     button.accessibilityLabel = "Emoji"
     button.accessibilityHint = "Hold to change the typing language"
     button.addTarget(self, action: #selector(handleEmojiKeyTapped), for: .touchUpInside)
-    // Built each time it opens, so the ticks and the diagnostics line are current.
+    // Built each time it opens, so the ticks are current.
     button.menu = UIMenu(children: [
       UIDeferredMenuElement.uncached { [weak self] completion in
         completion(self.map { [$0.typingLanguageMenu()] } ?? [])
@@ -3539,32 +3450,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       ("Swipe typing", TypingSettings.swipeKey, typingSettings.swipeEnabled),
       ("Smart key targets", TypingSettings.smartTargetsKey, typingSettings.smartTargetsEnabled),
       ("Autocorrect", TypingSettings.autocorrectKey, typingSettings.autocorrectEnabled),
-      ("Record swipe traces (test)", TypingSettings.swipeTracesKey, typingSettings.swipeTracesEnabled),
     ]
     let aidActions = aids.map { title, key, isOn in
       UIAction(title: title, state: isOn ? .on : .off) { [weak self] _ in
         self?.setTypingAid(key, enabled: !isOn)
       }
     }
-    let readout = UIAction(title: diagnostics.summary, attributes: .disabled) { _ in }
-    var dictationLine = "in-keyboard dictation needs iOS 26"
-    if #available(iOS 26.0, *) {
-      let app = KeyboardHandoffProvider.shared
-      dictationLine = "app session ready \(app.isBackgroundSessionReady() ? "yes" : "no"), app foreground \(app.isContainingAppForeground() ? "yes" : "no"), own app \(hostIsOwnApp ? "yes" : "no") · "
-        + DirectDictationRuntime.shared.diagnosticsSummary
-    }
-    let dictationReadout = UIAction(title: dictationLine, attributes: .disabled) { _ in }
-    // The menu cuts long lines off, so the readout can be typed into the field to read or copy.
-    let typedSummary = diagnostics.summary
-    let typeOut = UIAction(title: "Type diagnostics into this field") { [weak self] _ in
-      self?.insertUntracked("\n[OpenWhispr keyboard diagnostics]\n" + typedSummary + "\n" + dictationLine + "\n")
-    }
-    let reset = UIAction(title: "Reset counts") { [weak self] _ in self?.diagnostics = TypingDiagnostics() }
     return UIMenu(title: "Typing", options: .displayInline, children: [
       UIMenu(title: "", options: .displayInline, children: languageActions),
       UIMenu(title: "", options: .displayInline, children: layoutActions),
       UIMenu(title: "", options: .displayInline, children: aidActions),
-      UIMenu(title: "Diagnostics (counts only)", options: .displayInline, children: [typeOut, readout, dictationReadout, reset]),
     ])
   }
 
@@ -3573,7 +3468,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       switch key {
       case TypingSettings.swipeKey: override.swipeEnabled = enabled
       case TypingSettings.smartTargetsKey: override.smartTargetsEnabled = enabled
-      case TypingSettings.swipeTracesKey: override.swipeTracesEnabled = enabled
       default: override.autocorrectEnabled = enabled
       }
       Self.typingSettingsOverride = override
@@ -4644,7 +4538,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// mid-action follow-up keeps its retained card (existing versions stay
   /// insertable) with a note, matching the agent_error/cancel behaviour.
   private func surfaceHandoffFailure(title: String) {
-    noteDictationDebug("app-path failure shown: \(title), status \(KeyboardHandoffProvider.shared.transcriptionStatus() ?? "nil")")
     waitForTranscriptTimer?.invalidate()
     waitForTranscriptTimer = nil
     if isAgentGenerating {
@@ -4888,7 +4781,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func showIssueState(title: String) {
-    noteDictationDebug("issue shown: \(title)")
     KeyboardLog.ui.error("Issue state shown: \(title, privacy: .public)")
     KeyboardLog.echo("Issue state shown: \(title)")
     dictationLinkHosting?.view.isUserInteractionEnabled = false
@@ -4997,7 +4889,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       // the app can recover the handoff when the deep link never reaches JS
       // (cold-launch getInitialURL races deliver null and the tap dies).
       if dictationLinkHosting?.view.isUserInteractionEnabled == true {
-        noteDictationDebug("tap: hand-off link (opens the app)")
         KeyboardHandoffProvider.shared.markHandoffIntent()
       }
     case .cancelled, .failed:
@@ -5526,20 +5417,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     if isDirectTakeActive { renderDirectState(direct.state) }
   }
 
-  /// A running record of what dictation did, kept in the shared defaults so it can be read
-  /// off a test phone: which path a tap took, states, counts and reasons. No audio, no text.
-  private func noteDictationDebug(_ event: String) {
-    guard hasFullAccess, let defaults = KeyboardHandoffProvider.shared.sharedDefaults() else { return }
-    var lines = (defaults.string(forKey: "keyboard_debug_dictation") ?? "").split(separator: "\n").map(String.init)
-    var line = "\(Int(Date().timeIntervalSince1970)) \(event)"
-    if #available(iOS 26.0, *) { line += " | " + DirectDictationRuntime.shared.diagnosticsSummary }
-    lines.append(line)
-    defaults.set(lines.suffix(30).joined(separator: "\n"), forKey: "keyboard_debug_dictation")
-  }
-
   private func renderDirectState(_ state: DirectDictationState) {
     logRecordMarker("direct.\(state)")
-    noteDictationDebug("direct state \(state)")
     switch state {
     case .starting:
       showTransientRecordState(title: "Starting", systemImage: "ellipsis", background: Palette.accent, duration: 3.0)
@@ -5573,7 +5452,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func handleDirectRecordTapped() {
-    noteDictationDebug("tap: in-keyboard path")
     recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
     logRecordMarker("handleDirectRecordTapped")
     // Music or Bluetooth audio may have started since the pill was drawn; recording here would
@@ -5598,7 +5476,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     cancelledProcessingJobId = nil
     isRemoteRecordingActive = false
     didRequestStopForCurrentSession = false
-    noteDictationDebug("tap: app-session path")
     logRecordMarker("handleDarwinRecordTapped.beforeRequest")
     KeyboardHandoffProvider.shared.requestStart()
     isDarwinStartPending = true

@@ -142,8 +142,6 @@ final class SwipeTypingRecognizer: UIGestureRecognizer {
   /// keyboard that can decode swipes; also the distance between key centres.
   var canStartSwipe: ((CGPoint) -> CGFloat?)?
   private(set) var path: [CGPoint] = []
-  /// When each point of `path` was sampled, for the swipe-trace recorder.
-  private(set) var times: [TimeInterval] = []
   private var classifier: SwipeGestureClassifier?
   private weak var trackedTouch: UITouch?
 
@@ -164,7 +162,6 @@ final class SwipeTypingRecognizer: UIGestureRecognizer {
     }
     trackedTouch = touch
     path = [point]
-    times = [touch.timestamp]
     classifier = SwipeGestureClassifier(pitch: pitch, startsOnLetter: true)
     _ = classifier?.add(point, at: touch.timestamp)
   }
@@ -176,7 +173,6 @@ final class SwipeTypingRecognizer: UIGestureRecognizer {
     for sample in samples {
       let point = sample.location(in: view)
       path.append(point)
-      times.append(sample.timestamp)
       let verdict = classifier?.add(point, at: sample.timestamp)
       if state == .possible {
         if verdict == .swipe {
@@ -206,7 +202,6 @@ final class SwipeTypingRecognizer: UIGestureRecognizer {
     classifier = nil
     // The path is read by the action for .ended, which runs before reset.
     path = []
-    times = []
   }
 }
 
