@@ -158,6 +158,8 @@ struct TrackpadCursorModel {
     self.wrapWidth = wrapWidth
   }
 
+  var isAtStart: Bool { index == 0 }
+  var isAtEnd: Bool { index == characters.count }
   var before: String { String(characters[..<index]) }
   var after: String { String(characters[index...]) }
 
@@ -210,7 +212,9 @@ struct TrackpadCursorModel {
     guard let wrapWidth else { return 0 }
     // A wrapped row: one row's worth of text along, never past the line-break target.
     let soft = index + (down ? wrapWidth : -wrapWidth)
-    if hard == nil, soft < 0 || soft > characters.count { return 0 }
+    // Less than a row from the end of the known text: go to that end. The caller steps
+    // on from there into text the host hasn't handed over.
+    if hard == nil, soft < 0 || soft > characters.count { return go(to: down ? characters.count : 0) }
     wantedColumn = nil
     return go(to: soft)
   }

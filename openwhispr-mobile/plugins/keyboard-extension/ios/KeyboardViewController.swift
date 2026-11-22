@@ -882,6 +882,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     /// After the last key, suggestions for the next word stay this long before the strip
     /// returns to the dictation pill.
     static let suggestionRestDelay: TimeInterval = 3
+    /// How long the host gets to report the text around a cursor that left the known text.
+    static let trackpadSnapshotDelay: TimeInterval = 0.08
     /// How long after the last key a host's report of the text is taken as current.
     static let fieldReportSettleDelay: TimeInterval = 0.4
     /// How often the recording waveform takes one step, whichever recorder feeds it.
@@ -1180,6 +1182,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // Space-bar trackpad.
   private var trackpadGesture = TrackpadGesture()
   private var trackpadCursor: TrackpadCursorModel?
+  private var trackpadLeftKnownText = false
+  private var trackpadLeftKnownTextAt: CFTimeInterval = 0
   private var trackpadHoldTimer: Timer?
   // Long-press accents.
   private let accentPopup = AccentPopupView()
@@ -2836,7 +2840,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       return
     }
     var shows = false
-    if isPillIdle, !suggestionBar.suggestions.isEmpty, let session = typing {
+    // Whether there are suggestions right now doesn't count: the pill moving aside and back
+    // with every word that has none looked jumpy. It stays aside for the typing session.
+    if isPillIdle, lastKeystrokeAt > 0, let session = typing, session.policy.suggests {
       if !session.composing.isEmpty {
         shows = true
       } else {
@@ -3439,26 +3445,52 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       keyPopup.hide()
       keyFeedback.tick()
       setKeyLabelsFaded(true)
-      trackpadCursor = TrackpadCursorModel(
-        before: textDocumentProxy.documentContextBeforeInput ?? "",
-        after: textDocumentProxy.documentContextAfterInput ?? "",
-        // The field's width and font can't be read; body text in a full-width field
-        // fits about a character per 10pt.
-        wrapWidth: max(20, Int(view.bounds.width / 10))
-      )
+      trackpadLeftKnownText = false
+      trackpadCursor = makeTrackpadCursor()
     case let .move(steps, lines):
+      let now = CACurrentMediaTime()
+      if trackpadLeftKnownText {
+        // The cursor stepped out of the text the model knew. The host reports the new
+        // surroundings a moment later; until then a move would be a guess.
+        guard now - trackpadLeftKnownTextAt >= Metrics.trackpadSnapshotDelay else { return }
+        trackpadLeftKnownText = false
+        trackpadCursor = makeTrackpadCursor()
+      }
       guard var cursor = trackpadCursor else { return }
-      let offset = cursor.move(steps: steps, lines: lines)
+      var offset = cursor.move(steps: steps, lines: lines)
       trackpadCursor = cursor
+      if offset == 0 {
+        // Hosts hand over only the paragraph around the cursor. At its edge, one step
+        // crosses the break into the next paragraph, whose text is then read afresh.
+        let back = steps < 0 || lines < 0, forward = steps > 0 || lines > 0
+        if back, cursor.isAtStart { offset = -1 } else if forward, cursor.isAtEnd { offset = 1 }
+        if offset != 0 {
+          trackpadLeftKnownText = true
+          trackpadLeftKnownTextAt = now
+        }
+      }
       if offset != 0 { textDocumentProxy.adjustTextPosition(byCharacterOffset: offset) }
     case .ended:
       setKeyLabelsFaded(false)
       // The host reports the new cursor late; the drag's own model says where it is.
-      if let cursor = trackpadCursor, didLoadTypingEngine { typingEngine?.session.resync(before: cursor.before) }
+      if let cursor = trackpadCursor, !trackpadLeftKnownText, didLoadTypingEngine {
+        typingEngine?.session.resync(before: cursor.before)
+      }
+      trackpadLeftKnownText = false
       trackpadCursor = nil
       syncShiftWithContextIfNeeded()
       refreshAfterEdit()
     }
+  }
+
+  private func makeTrackpadCursor() -> TrackpadCursorModel {
+    TrackpadCursorModel(
+      before: textDocumentProxy.documentContextBeforeInput ?? "",
+      after: textDocumentProxy.documentContextAfterInput ?? "",
+      // The field's width and font can't be read; body text in a full-width field
+      // fits about a character per 10pt.
+      wrapWidth: max(20, Int(view.bounds.width / 10))
+    )
   }
 
   private func setKeyLabelsFaded(_ faded: Bool) {
