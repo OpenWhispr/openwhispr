@@ -137,12 +137,20 @@ const WL_COPY_TIMEOUT_MS = 200;
 // wl-copy doesn't run xdg-mime to sniff it.
 const MAX_ARG_BYTES = 128 * 1024;
 
+// wl-copy forks a server that keeps the selection and inherits stderr, so spawnSync
+// would wait for that pipe until the timeout. Nothing reads its output; ignore both.
+const WL_COPY_STDIO = ["pipe", "ignore", "ignore"];
+
 function spawnWlCopy(flags, text) {
   if (Buffer.byteLength(text) < MAX_ARG_BYTES) {
-    return spawnSync("wl-copy", [...flags, "--", text], { timeout: WL_COPY_TIMEOUT_MS });
+    return spawnSync("wl-copy", [...flags, "--", text], {
+      stdio: WL_COPY_STDIO,
+      timeout: WL_COPY_TIMEOUT_MS,
+    });
   }
   return spawnSync("wl-copy", [...flags, "--type", "text/plain"], {
     input: text,
+    stdio: WL_COPY_STDIO,
     timeout: WL_COPY_TIMEOUT_MS,
   });
 }
@@ -331,7 +339,7 @@ class ClipboardManager {
   _writeClipboardTextAll(text) {
     if (this._isWayland() && this.commandExists("wl-copy")) {
       try {
-        spawnSync("wl-copy", ["--", text], { timeout: 200 });
+        spawnSync("wl-copy", ["--", text], { stdio: WL_COPY_STDIO, timeout: 200 });
       } catch {}
     }
     if (process.platform === "linux" && this.commandExists("xclip")) {
@@ -837,19 +845,16 @@ class ClipboardManager {
         String(MODIFIER_RELEASE_WAIT_MS),
       ]);
       let stdout = "";
-      let timedOut = false;
+      let settled = false;
       const timeoutId = setTimeout(() => {
-        timedOut = true;
+        settled = true;
         killProcess(proc, "SIGKILL");
         resolve(unknown);
       }, MODIFIER_RELEASE_WAIT_MS + 1000);
 
-      proc.stdout?.on("data", (data) => {
-        stdout += data.toString();
-      });
-
-      proc.on("close", () => {
-        if (timedOut) return;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timeoutId);
         const [, state = "unknown", waitedMs = "0"] =
           stdout.match(/^MODIFIERS (released|held|unknown) (\d+)$/m) || [];
@@ -868,9 +873,20 @@ class ClipboardManager {
           );
         }
         resolve({ state, waitedMs: Number(waitedMs) });
+      };
+
+      // The helper closes every input device it opened before exiting, and each close
+      // waits out a kernel RCU grace period, so resolve on the line, not on exit.
+      proc.stdout?.on("data", (data) => {
+        stdout += data.toString();
+        if (/^MODIFIERS \w+ \d+\n/m.test(stdout)) finish();
       });
 
+      proc.on("close", finish);
+
       proc.on("error", () => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timeoutId);
         resolve(unknown);
       });

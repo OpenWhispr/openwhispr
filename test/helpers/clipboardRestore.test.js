@@ -4,6 +4,8 @@ const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 const childProcess = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 const fakeClipboard = {
   text: "",
@@ -1919,6 +1921,48 @@ test("modifiers still held leave the text on the clipboard without injecting", a
   assert.equal(result.pasted, false);
   assert.equal(result.reason, "modifiers-held");
   assert.equal(restoreScheduled, false, "the transcript stays on the clipboard");
+});
+
+test("the modifier wait resolves on the helper's line without waiting for it to exit", async () => {
+  const TestClipboardManager = loadClipboardManager({
+    spawn: () => {
+      const helper = new EventEmitter();
+      helper.stdout = new EventEmitter();
+      // The helper still has input devices to close, so "close" never comes here.
+      process.nextTick(() => helper.stdout.emit("data", "MODIFIERS released 0\n"));
+      return helper;
+    },
+    realModifierWait: true,
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+
+  assert.deepEqual(await manager._awaitModifierRelease(), { state: "released", waitedMs: 0 });
+});
+
+test("a wl-copy write returns once wl-copy exits, not when its server does", async (t) => {
+  if (process.platform === "win32") return t.skip("needs a POSIX shell");
+  // Like wl-copy, the stand-in leaves a server running that inherits stderr.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wl-copy-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(
+    path.join(dir, "wl-copy"),
+    "#!/bin/sh\nexec 0</dev/null 1>/dev/null\n( sleep 3 ) &\nexit 0\n",
+    { mode: 0o755 }
+  );
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${dir}${path.delimiter}${previousPath}`;
+  t.after(() => (process.env.PATH = previousPath));
+  resetClipboard({ text: "" });
+  const manager = new ClipboardManager();
+  manager.commandExists = (command) => command === "wl-copy";
+
+  const startedAt = Date.now();
+  const wrote = manager._writeClipboardWayland("dictated text");
+  const elapsedMs = Date.now() - startedAt;
+
+  assert.equal(wrote, true);
+  assert.ok(elapsedMs < 150, `wl-copy took ${elapsedMs} ms, about its 200 ms timeout`);
 });
 
 // Stands in for `command -v` (only `installed` commands exist, and succeed) and for
