@@ -1,6 +1,9 @@
+// PCM16 mono; the samples start right after the header.
+export const WAV_HEADER_BYTES = 44;
+
 export function buildWav(samples: Int16Array, sampleRate: number): Blob {
   const dataSize = samples.length * 2;
-  const buffer = new ArrayBuffer(44 + dataSize);
+  const buffer = new ArrayBuffer(WAV_HEADER_BYTES + dataSize);
   const view = new DataView(buffer);
 
   const writeString = (offset: number, str: string) => {
@@ -23,7 +26,7 @@ export function buildWav(samples: Int16Array, sampleRate: number): Blob {
   writeString(36, "data");
   view.setUint32(40, dataSize, true);
 
-  const output = new Int16Array(buffer, 44);
+  const output = new Int16Array(buffer, WAV_HEADER_BYTES);
   output.set(samples);
 
   return new Blob([buffer], { type: "audio/wav" });

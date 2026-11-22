@@ -1,13 +1,17 @@
-import { buildWav } from "../utils/wavBuilder";
+import { buildWav, WAV_HEADER_BYTES } from "../utils/wavBuilder";
 
 // Decodes an offline Parakeet recording's finished stretches while the user is
-// still speaking, so after stop only the tail is left to transcribe. Each
-// stretch ends at a clear pause, which is where the batch path already splits
-// long audio (parakeetSegmentation), so the pieces decode the same way.
+// still speaking, so after stop only the tail is left to transcribe. Recordings
+// the batch path would keep whole are never cut, and longer ones are cut at
+// clear pauses. Each stretch is capitalised and punctuated on its own, so a
+// long recording gets more seams than the batch path's one per 15 s.
 
 const SAMPLE_RATE = 16000;
 const FRAME_SAMPLES = 160; // 10 ms
 const FRAMES_PER_SECOND = SAMPLE_RATE / FRAME_SAMPLES;
+// The batch path decodes a recording up to its segment cap plus tail allowance
+// in one piece (parakeetSegmentation); cutting earlier would change the text.
+const FIRST_CUT_SECONDS = 15.5;
 // A stretch shorter than this is left to grow: a lone short clause decodes
 // with too little context.
 const MIN_SECONDS = 6;
@@ -18,15 +22,22 @@ const FORCED_SEARCH_SECONDS = 4;
 // Twice the batch splitter's window: a pause this long is rarely inside a word
 // or a sentence, so live cuts seldom split a clause the cleanup must rejoin.
 const PAUSE_FRAMES = 20;
-// A pause is a window this much quieter than the stretch's average frame.
-const PAUSE_ENERGY_RATIO = 0.1;
+// A pause is a window 15 dB below the stretch's average frame. Soft syllables
+// sit within about 12 dB of it; at 20 dB most real pauses no longer qualify
+// and cuts fall back to the quietest moment.
+const PAUSE_ENERGY_RATIO = 0.03;
 // The newest audio may be the start of a word that is still arriving.
-const GUARD_SECONDS = 0.3;
+const GUARD_FRAMES = 0.3 * FRAMES_PER_SECOND;
 // A tail shorter than this holds no word; skipping it saves a round trip.
 const MIN_TAIL_SECONDS = 0.1;
+// Decoded alone, a tail this short invents filler from room tone or drops a
+// lone word, so one with speech is decoded together with the stretch before it.
+const SHORT_TAIL_SECONDS = 2;
+// parakeetServer's SILENCE_RMS_THRESHOLD: quieter audio is never decoded, so
+// an empty result below it means silence, and above it a failed decode.
+const SILENCE_RMS = 0.001;
 // How much new audio arrives between looks for a cut.
 const CHECK_SAMPLES = SAMPLE_RATE / 2;
-const WAV_HEADER_BYTES = 44;
 
 function frameEnergies(samples) {
   const energies = new Float64Array(Math.floor(samples.length / FRAME_SAMPLES));
@@ -41,6 +52,9 @@ function frameEnergies(samples) {
   return energies;
 }
 
+const averageOf = (energies) =>
+  energies.reduce((sum, energy) => sum + energy, 0) / Math.max(1, energies.length);
+
 // The window of PAUSE_FRAMES starting in [from, to] with the least energy.
 function quietestWindow(energies, from, to) {
   let best = null;
@@ -53,6 +67,23 @@ function quietestWindow(energies, from, to) {
   return best;
 }
 
+// The average frame energy of the loudest PAUSE_FRAMES window.
+function loudestWindowEnergy(energies) {
+  let best = 0;
+  let sum = 0;
+  for (let i = 0; i < energies.length; i++) {
+    sum += energies[i] - (energies[i - PAUSE_FRAMES] ?? 0);
+    best = Math.max(best, sum);
+  }
+  return best / PAUSE_FRAMES;
+}
+
+function rms(samples) {
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) sum += (samples[i] / 32768) ** 2;
+  return Math.sqrt(sum / Math.max(1, samples.length));
+}
+
 // Where to end the next finished stretch of `samples` (int16 PCM since the
 // last cut), as a sample offset, or null while it should keep growing.
 export function findLiveCut(samples) {
@@ -62,15 +93,16 @@ export function findLiveCut(samples) {
   const maxFrames = MAX_SECONDS * FRAMES_PER_SECOND;
   if (frames < minFrames) return null;
 
-  const average = energies.reduce((sum, energy) => sum + energy, 0) / frames;
-  const searchEnd = Math.min(frames - GUARD_SECONDS * FRAMES_PER_SECOND, maxFrames) - PAUSE_FRAMES;
-  if (searchEnd >= minFrames) {
+  // An all-silent stretch (a muted mic) has no pause to find.
+  const average = averageOf(energies);
+  const searchEnd = Math.min(frames - GUARD_FRAMES, maxFrames) - PAUSE_FRAMES;
+  if (average > 0 && searchEnd >= minFrames) {
     const pause = quietestWindow(energies, minFrames, searchEnd);
-    if (pause.energy / PAUSE_FRAMES <= average * PAUSE_ENERGY_RATIO) {
+    if (pause.energy / PAUSE_FRAMES < average * PAUSE_ENERGY_RATIO) {
       return (pause.start + PAUSE_FRAMES / 2) * FRAME_SAMPLES;
     }
   }
-  if (frames < maxFrames) return null;
+  if (frames < maxFrames + GUARD_FRAMES) return null;
   const forced = quietestWindow(
     energies,
     maxFrames - FORCED_SEARCH_SECONDS * FRAMES_PER_SECOND,
@@ -81,15 +113,19 @@ export function findLiveCut(samples) {
 
 export class LiveParakeetDecoder {
   // `tap` is the recording's PcmTap; `transcribe` takes a 16 kHz PCM16 WAV
-  // ArrayBuffer and resolves like electronAPI.transcribeLocalParakeet.
+  // ArrayBuffer and resolves like electronAPI.transcribeLocalParakeet; `route`
+  // is the { model, language } it decodes with.
   // Driven by the tap's own audio, so nothing outlives the recording.
-  constructor(tap, transcribe) {
+  constructor(tap, transcribe, route) {
     this._tap = tap;
     this._transcribe = transcribe;
+    this._route = route;
     this._cut = 0;
     this._checkedAt = 0;
     this._parts = [];
+    this._inFlight = null;
     this._failed = false;
+    this._finished = null;
     this._onSamples = (count) => {
       if (count - this._checkedAt < CHECK_SAMPLES) return;
       this._checkedAt = count;
@@ -100,24 +136,34 @@ export class LiveParakeetDecoder {
 
   _poll() {
     const end = this._tap.sampleCount;
-    if (this._failed || end - this._cut < MIN_SECONDS * SAMPLE_RATE) return;
+    // One stretch in flight at a time, so a cancelled recording leaves at most
+    // one decode running.
+    if (this._failed || this._inFlight || end < FIRST_CUT_SECONDS * SAMPLE_RATE) return;
+    if (end - this._cut < MIN_SECONDS * SAMPLE_RATE) return;
     const pending = this._tap.copySamples(this._cut, end);
     const cut = findLiveCut(pending);
     if (cut === null) return;
-    const part = this._decode(pending.subarray(0, cut));
-    // Marks the run failed early; finish() still sees the rejection.
-    part.catch(() => {
-      this._failed = true;
-    });
-    this._parts.push(part);
+    const text = this._decode(pending.subarray(0, cut));
+    this._inFlight = text;
+    text.then(
+      () => {
+        this._inFlight = null;
+      },
+      // Marks the run failed early; finish() still sees the rejection.
+      () => {
+        this._failed = true;
+      }
+    );
+    this._parts.push({ start: this._cut, text });
     this._cut += cut;
   }
 
   async _decode(samples) {
     const wav = await buildWav(samples, SAMPLE_RATE).arrayBuffer();
     const result = await this._transcribe(wav);
-    if (result?.success) return result.text;
-    if (result?.code === "NO_SPEECH_DETECTED") return "";
+    // A partial decode is left to the batch path, which reports it to the user.
+    if (result?.success && !result.warning) return result.text;
+    if (result?.code === "NO_SPEECH_DETECTED" && rms(samples) < SILENCE_RMS) return "";
     throw new Error(result?.message || "Live Parakeet segment failed");
   }
 
@@ -128,21 +174,43 @@ export class LiveParakeetDecoder {
 
   // The recording's text from the decoded stretches plus its tail, or null
   // when the caller should decode the whole recording instead: nothing was
-  // decoded live, the full capture is missing, or a stretch failed.
-  async finish(rawWav) {
+  // decoded live, the full capture is missing, a stretch failed, or the
+  // recording now goes to another model or language than `route`.
+  finish(rawWav, route) {
     this.stop();
+    if (route?.model !== this._route?.model || route?.language !== this._route?.language) {
+      return Promise.resolve(null);
+    }
+    this._finished ??= this._finish(rawWav);
+    return this._finished;
+  }
+
+  async _finish(rawWav) {
     if (!this._parts.length || !rawWav || this._failed) return null;
     try {
       const samples = new Int16Array(await rawWav.arrayBuffer(), WAV_HEADER_BYTES);
       if (samples.length < this._cut) return null;
+      const parts = this._parts.map((part) => part.text);
       const tail = samples.subarray(this._cut);
-      const tailPart =
-        tail.length >= MIN_TAIL_SECONDS * SAMPLE_RATE ? this._decode(tail) : Promise.resolve("");
-      const text = (await Promise.all([...this._parts, tailPart])).filter(Boolean).join(" ");
+      if (tail.length >= MIN_TAIL_SECONDS * SAMPLE_RATE && this._hasSpeech(samples, tail)) {
+        if (tail.length < SHORT_TAIL_SECONDS * SAMPLE_RATE) {
+          const last = this._parts[this._parts.length - 1];
+          parts[parts.length - 1] = this._decode(samples.subarray(last.start));
+        } else {
+          parts.push(this._decode(tail));
+        }
+      }
+      const text = (await Promise.all(parts)).filter(Boolean).join(" ");
       return text || null;
     } catch {
       return null;
     }
+  }
+
+  // Whether the tail holds anything louder than the recording's pauses.
+  _hasSpeech(samples, tail) {
+    const average = averageOf(frameEnergies(samples));
+    return loudestWindowEnergy(frameEnergies(tail)) > average * PAUSE_ENERGY_RATIO;
   }
 
   get segmentCount() {

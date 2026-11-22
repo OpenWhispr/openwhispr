@@ -1565,12 +1565,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   _startLiveDecoder() {
     const settings = getSettings();
     if (!this._batchPcmTap || settings.localTranscriptionProvider !== "nvidia") return;
-    const options = {
+    const route = {
       model: settings.parakeetModel || "parakeet-tdt-0.6b-v3",
       language: getBaseLanguageCode(this.getEffectiveSttLanguage(settings)),
     };
-    this._liveDecoder = new LiveParakeetDecoder(this._batchPcmTap, (wav) =>
-      window.electronAPI.transcribeLocalParakeet(wav, options)
+    this._liveDecoder = new LiveParakeetDecoder(
+      this._batchPcmTap,
+      (wav) => window.electronAPI.transcribeLocalParakeet(wav, route),
+      route
     );
   }
 
@@ -2812,10 +2814,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       let result;
+      const language = getBaseLanguageCode(this.getEffectiveSttLanguage(getSettings()));
       const streamedText =
         typeof metadata.streamedText === "string" ? metadata.streamedText.trim() : null;
       const liveStart = performance.now();
-      const liveText = streamedText ? null : await metadata.liveDecoder?.finish(metadata.rawWav);
+      // A model or language changed mid-recording discards the live pieces.
+      const liveText = streamedText
+        ? null
+        : await metadata.liveDecoder?.finish(metadata.rawWav, { model, language });
       // An empty stream is indistinguishable from silence; let the offline decode settle it.
       if (streamedText) {
         logger.debug("Parakeet using committed streaming transcript", { model }, "performance");
@@ -2850,7 +2856,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const transcriptionStart = performance.now();
         result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, {
           model,
-          language: getBaseLanguageCode(this.getEffectiveSttLanguage(getSettings())),
+          language,
         });
         if (isTranscriptionPolicyRefusal(result)) throw errorFromIpcResult(result);
         timings.transcriptionProcessingDurationMs = Math.round(
