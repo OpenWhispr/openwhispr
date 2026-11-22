@@ -42,6 +42,7 @@ function setup() {
     hotkeyManager: {
       isInListeningMode: () => state.listening,
       slotHasHotkey: (slot, key) => slot === (state.slot || "dictation") && key === state.hotkey,
+      logHotkeyEvent: () => {},
     },
     isMouseButtonHotkey: (key) => /^MouseButton(?:[3-9]|[12][0-9]|3[0-2])$/.test(key),
     capturedMouseButtons: new Set(),
