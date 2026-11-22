@@ -14,7 +14,9 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { glassEdge, gloss, glossPressed, home } from '../home/kit';
 import { APP_LOGOS, type AppLogo } from './appLogos';
-import { EXAMPLES, exampleResult, parseExample } from './examples';
+import { useTranslation } from 'react-i18next';
+import { exampleResult, exampleSet, parseExample } from './examples';
+import type { ExampleSet } from './examplesI18n';
 import { useStyleT, type StyleKey } from './strings';
 import type { DictationTone, ToneKind } from './toneStyle';
 
@@ -118,6 +120,12 @@ export const KIND_ROW: Record<ToneKind, StyleKey> = {
   other: 'rowOther',
 };
 
+/** The tone examples in the app's language. */
+export function useExamples(): ExampleSet {
+  const { i18n } = useTranslation();
+  return exampleSet(i18n.language);
+}
+
 export function useToneText() {
   const t = useStyleT();
   return {
@@ -153,7 +161,7 @@ export function DiffText({ example, width }: { example: string; width?: number }
   );
 }
 
-function PersonalPreview({ example }: { example: string }) {
+function PersonalPreview({ example, set }: { example: string; set: ExampleSet }) {
   return (
     <>
       <View
@@ -168,9 +176,7 @@ function PersonalPreview({ example }: { example: string }) {
           borderBottomLeftRadius: 6,
         }}
       >
-        <Text style={{ fontSize: 15, lineHeight: 20, color: home.text }}>
-          What are you up to later?
-        </Text>
+        <Text style={{ fontSize: 15, lineHeight: 20, color: home.text }}>{set.question}</Text>
       </View>
       <View
         style={{
@@ -193,7 +199,7 @@ function PersonalPreview({ example }: { example: string }) {
 
 const ALEX = require('../../../assets/android/style/alex-morgan.jpg');
 
-function WorkPreview({ example }: { example: string }) {
+function WorkPreview({ example }: { example: string; set: ExampleSet }) {
   return (
     <>
       <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '500', color: home.secondary }}>
@@ -215,12 +221,12 @@ function WorkPreview({ example }: { example: string }) {
   );
 }
 
-function EmailPreview({ example }: { example: string }) {
+function EmailPreview({ example, set }: { example: string; set: ExampleSet }) {
   return (
     <>
       <View style={{ gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary }}>To</Text>
+          <Text style={{ fontSize: 13, lineHeight: 18, color: home.secondary }}>{set.to}</Text>
           <View
             style={{
               backgroundColor: '#FFFFFF',
@@ -237,7 +243,7 @@ function EmailPreview({ example }: { example: string }) {
           </View>
         </View>
         <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: home.text }}>
-          Re: Proposal
+          {set.subject}
         </Text>
       </View>
       <View style={{ height: 1, backgroundColor: 'rgba(0,0,0,0.06)' }} />
@@ -246,13 +252,13 @@ function EmailPreview({ example }: { example: string }) {
   );
 }
 
-function OtherPreview({ example }: { example: string }) {
+function OtherPreview({ example, set }: { example: string; set: ExampleSet }) {
   return (
     <>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <SvgXml xml={APP_LOGOS.notion} width={18} height={18} />
         <Text style={{ fontSize: 13, lineHeight: 17, fontWeight: '500', color: home.secondary }}>
-          Call notes
+          {set.notes}
         </Text>
       </View>
       <DiffText example={example} />
@@ -263,7 +269,8 @@ function OtherPreview({ example }: { example: string }) {
 /** The example drawn as it lands in that kind of app, on the grey preview panel. */
 export function InAppPreview({ kind, tone }: { kind: ToneKind; tone: DictationTone }) {
   const t = useStyleT();
-  const example = EXAMPLES[kind][tone] ?? '';
+  const set = useExamples();
+  const example = set.examples[kind][tone] ?? '';
   const Preview =
     kind === 'personal'
       ? PersonalPreview
@@ -281,7 +288,7 @@ export function InAppPreview({ kind, tone }: { kind: ToneKind; tone: DictationTo
       })}
       style={{ backgroundColor: ink.preview, borderRadius: 14, padding: 12, gap: 8 }}
     >
-      <Preview example={example} />
+      <Preview example={example} set={set} />
     </View>
   );
 }
@@ -366,7 +373,7 @@ export function ToneSlider({
       }
       onLayout={(event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width)}
       {...pan.panHandlers}
-      style={{ height: 54 }}
+      style={{ paddingTop: 36 }}
     >
       {/* Nothing inside takes the touch, so the slider reads every position against itself. */}
       <View
@@ -402,28 +409,6 @@ export function ToneSlider({
               }}
             />
           ))}
-        {width > 0 &&
-          options.map((option, i) => (
-            <Text
-              key={option}
-              numberOfLines={1}
-              style={{
-                position: 'absolute',
-                top: 36,
-                ...(i === 0
-                  ? { left: 0 }
-                  : i === options.length - 1
-                    ? { right: 0, textAlign: 'right' as const }
-                    : { left: 0, right: 0, textAlign: 'center' as const }),
-                fontSize: 13,
-                lineHeight: 17,
-                fontWeight: i === index ? '700' : '500',
-                color: i === index ? home.text : home.secondary,
-              }}
-            >
-              {tone.name(option)}
-            </Text>
-          ))}
         {width > 0 && (
           <View
             pointerEvents="none"
@@ -444,6 +429,26 @@ export function ToneSlider({
             <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFFFFF' }} />
           </View>
         )}
+      </View>
+      {/* Each stop's name gets a third of the width and wraps there, so long names (Russian)
+          never run into each other. */}
+      <View pointerEvents="none" style={{ flexDirection: 'row', gap: 8 }}>
+        {options.map((option, i) => (
+          <Text
+            key={option}
+            numberOfLines={2}
+            style={{
+              flex: 1,
+              textAlign: i === 0 ? 'left' : i === options.length - 1 ? 'right' : 'center',
+              fontSize: 13,
+              lineHeight: 17,
+              fontWeight: i === index ? '700' : '500',
+              color: i === index ? home.text : home.secondary,
+            }}
+          >
+            {tone.name(option)}
+          </Text>
+        ))}
       </View>
     </View>
   );

@@ -1,10 +1,11 @@
 import type { DictationTone, ToneKind } from './toneStyle';
 import type { AppLogo } from './appLogos';
+import { EXAMPLE_TRANSLATIONS, type ExampleSet } from './examplesI18n';
 
 /**
  * The example for each kind and tone (Figma "Styles · Variant B", 20 Nov): one spoken sentence as
  * it lands in that kind of app. `~words~` were dropped by the tone, `+words+` added or changed;
- * everything else was said as is. English in every language.
+ * everything else was said as is. Other languages are in `examplesI18n.ts`.
  */
 export const EXAMPLES: Record<ToneKind, Partial<Record<DictationTone, string>>> = {
   personal: {
@@ -81,3 +82,18 @@ export const KIND_APPS: Record<ToneKind, AppLogo[]> = {
   email: ['gmail', 'outlook', 'protonMail'],
   other: ['notion', 'chatgpt'],
 };
+
+const ENGLISH: ExampleSet = {
+  question: 'What are you up to later?',
+  to: 'To',
+  subject: 'Re: Proposal',
+  notes: 'Call notes',
+  intro: INTRO_EXAMPLES,
+  examples: EXAMPLES,
+};
+
+/** The examples in the app's language (`zh-CN`, `pt-BR`…), English when it has none. */
+export function exampleSet(language: string | undefined): ExampleSet {
+  const code = language ?? 'en';
+  return EXAMPLE_TRANSLATIONS[code] ?? EXAMPLE_TRANSLATIONS[code.split('-')[0]] ?? ENGLISH;
+}

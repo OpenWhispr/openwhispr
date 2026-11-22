@@ -17,7 +17,8 @@ import { gloss, glassEdge, home, TILE_FILL } from '../home/kit';
 import { useNavigationBarCanvas } from '../navigationBar';
 import { showToast } from '../settings/kit';
 import { APP_LOGOS, type AppLogo } from './appLogos';
-import { INTRO_EXAMPLES, KIND_APPS } from './examples';
+import { useTranslation } from 'react-i18next';
+import { KIND_APPS } from './examples';
 import {
   AppMarks,
   CloseButton,
@@ -28,6 +29,7 @@ import {
   PickedCheck,
   ink,
   useToneText,
+  useExamples,
 } from './kit';
 import { useStyleT, type StyleKey } from './strings';
 import {
@@ -149,11 +151,13 @@ export default function ToneSetupScreen() {
 function Intro({ onStart, onClose }: { onStart: () => void; onClose: () => void }) {
   const t = useStyleT();
   const tone = useToneText();
-  const fan: { tone: keyof typeof INTRO_EXAMPLES; x: number; y: number; rotate: string }[] = [
-    { tone: 'formal', x: -78, y: 14, rotate: '-6deg' },
-    { tone: 'very_casual', x: 78, y: 14, rotate: '6deg' },
-    { tone: 'casual', x: 0, y: 0, rotate: '0deg' },
-  ];
+  const { intro } = useExamples();
+  const fan: { tone: 'formal' | 'casual' | 'very_casual'; x: number; y: number; rotate: string }[] =
+    [
+      { tone: 'formal', x: -78, y: 14, rotate: '-6deg' },
+      { tone: 'very_casual', x: 78, y: 14, rotate: '6deg' },
+      { tone: 'casual', x: 0, y: 0, rotate: '0deg' },
+    ];
   return (
     <View style={{ flex: 1 }}>
       <View style={{ paddingTop: 16, paddingHorizontal: 20 }}>
@@ -197,7 +201,7 @@ function Intro({ onStart, onClose }: { onStart: () => void; onClose: () => void 
                 </Text>
               </View>
               <View style={{ backgroundColor: ink.preview, borderRadius: 10, padding: 10 }}>
-                <DiffText example={INTRO_EXAMPLES[card.tone]} />
+                <DiffText example={intro[card.tone]} />
               </View>
             </View>
           );
@@ -287,6 +291,8 @@ function KindStep({
 }) {
   const t = useStyleT();
   const tone = useToneText();
+  // The cards keep the app's direction inside a deck that always runs left to right.
+  const cardDirection = useTranslation().i18n.dir() === 'rtl' ? 'rtl' : 'ltr';
   const { width } = useWindowDimensions();
   const options = TONE_OPTIONS[kind];
   const [index, setIndex] = useState(Math.max(0, options.indexOf(initial)));
@@ -340,7 +346,9 @@ function KindStep({
         contentOffset={{ x: index * interval, y: 0 }}
         onMomentumScrollEnd={settle}
         onScrollEndDrag={settle}
-        style={{ flexGrow: 0 }}
+        // The deck runs left to right in every language: Android measures a right-to-left
+        // horizontal scroll from the other end, which landed Arabic on the wrong card.
+        style={{ flexGrow: 0, direction: 'ltr' }}
         contentContainerStyle={{
           paddingHorizontal: side,
           paddingTop: 28,
@@ -369,6 +377,7 @@ function KindStep({
                   paddingHorizontal: 16,
                   gap: 12,
                   opacity: picked ? 1 : 0.55,
+                  direction: cardDirection,
                 },
                 picked && { borderWidth: 2, borderColor: ink.pickedRing },
               ]}
@@ -393,7 +402,13 @@ function KindStep({
       </ScrollView>
       <View
         importantForAccessibility="no-hide-descendants"
-        style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, paddingTop: 4 }}
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'center',
+          gap: 6,
+          paddingTop: 4,
+          direction: 'ltr',
+        }}
       >
         {options.map((option, i) => (
           <View
@@ -495,7 +510,18 @@ function Summary({
               >
                 {t(KIND_ROW[kind])}
               </Text>
-              <Text style={{ fontSize: 15, lineHeight: 20, color: home.secondary }}>
+              {/* Capped and wrapping, so a long tone name (Russian, Japanese) never breaks the
+                  row's label mid-word. */}
+              <Text
+                style={{
+                  flexShrink: 1,
+                  maxWidth: '40%',
+                  fontSize: 15,
+                  lineHeight: 20,
+                  color: home.secondary,
+                  textAlign: 'right',
+                }}
+              >
                 {tone.name(tones[kind])}
               </Text>
               <SystemIcon

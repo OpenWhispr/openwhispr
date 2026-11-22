@@ -3,8 +3,15 @@ import { useConfigStore } from '@/store/useConfigStore';
 import StyleScreen from '../StyleScreen';
 import ToneSetupScreen from '../style/ToneSetupScreen';
 import { ToneStyleNudge } from '../style/ToneStyleNudge';
-import { exampleResult, parseExample } from '../style/examples';
-import { normalizeToneStyles, readToneStyle, toneKindForApp } from '../style/toneStyle';
+import { exampleResult, exampleSet, parseExample } from '../style/examples';
+import { EXAMPLE_TRANSLATIONS } from '../style/examplesI18n';
+import {
+  TONE_KINDS,
+  TONE_OPTIONS,
+  normalizeToneStyles,
+  readToneStyle,
+  toneKindForApp,
+} from '../style/toneStyle';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -20,7 +27,9 @@ jest.mock('expo-router', () => ({
     canGoBack: () => true,
   },
 }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en', dir: () => 'ltr' } }),
+}));
 jest.mock('@/android/strings', () => ({
   __esModule: true,
   default: { addResourceBundle: jest.fn(), t: (key: string) => key },
@@ -219,5 +228,27 @@ describe('Home card', () => {
     setStyle({ setUp: true });
     render(<ToneStyleNudge words={500} />);
     expect(screen.queryByText('nudgeTitle')).toBeNull();
+  });
+});
+
+describe('examples in every language', () => {
+  const languages = ['en', ...Object.keys(EXAMPLE_TRANSLATIONS)];
+  it.each(languages)('%s has every kind and tone, with balanced markup', (language) => {
+    const set = exampleSet(language);
+    const lines = [
+      ...Object.values(set.intro),
+      ...TONE_KINDS.flatMap((kind) => TONE_OPTIONS[kind].map((tone) => set.examples[kind][tone])),
+    ];
+    for (const line of lines) {
+      expect(line).toBeTruthy();
+      expect((line!.match(/~/g) ?? []).length % 2).toBe(0);
+      expect((line!.match(/\+/g) ?? []).length % 2).toBe(0);
+      expect(exampleResult(line!)).not.toMatch(/[~+]/);
+    }
+  });
+  it('finds a language by its base code and falls back to English', () => {
+    expect(exampleSet('pt-BR')).toBe(EXAMPLE_TRANSLATIONS.pt);
+    expect(exampleSet('zh-TW')).toBe(EXAMPLE_TRANSLATIONS['zh-TW']);
+    expect(exampleSet('nl').question).toBe('What are you up to later?');
   });
 });
