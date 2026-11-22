@@ -14,6 +14,7 @@ extension SwipeParameters {
     case "farthest": farthest = value
     case "languageWeight": languageWeight = value
     case "cornerCut": cornerCut = value
+    case "endWeight": endWeight = value
     default: fatalError("Unknown parameter \(name)")
     }
   }
@@ -167,5 +168,41 @@ enum SwipeBench {
     print(String(format: "  weighted  top-1 %.2f%%  top-3 %.2f%%", 100 * weightedTop1 / weight, 100 * weightedTop3 / weight))
     print("  uniform   top-1 \(percent(top1, words))  top-3 \(percent(top3, words))")
     print(String(format: "  decode    mean %.2f ms  p95 %.2f ms  max %.2f ms", mean, p95, times.last ?? 0))
+  }
+}
+
+/// Real swipes recorded on a phone (tests/benchmarks/swipe-traces.real.<lang>.jsonl): each
+/// line has the word that was meant, the key positions at the time and the finger's path.
+/// The simulated benchmark says whether the decoder works; this says whether it works on
+/// fingers.
+enum SwipeRealBench {
+  static func run(_ environment: BenchEnvironment, verbose: Bool) {
+    let lexicon = environment.lexicon()
+    var top1 = 0, top3 = 0, total = 0
+    for line in environment.lines("swipe-traces.real.\(environment.language.rawValue).jsonl") {
+      guard let record = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any],
+        let intended = record["intended"] as? String,
+        let rawCentres = record["centres"] as? [String: [Double]],
+        let points = record["points"] as? [[Double]],
+        let pitch = record["pitch"] as? Double, let rowPitch = record["rowPitch"] as? Double
+      else { continue }
+      var centres: [Character: CGPoint] = [:]
+      for (letter, point) in rawCentres where point.count == 2 {
+        if let character = letter.first { centres[character] = CGPoint(x: point[0], y: point[1]) }
+      }
+      let geometry = KeyGeometry(
+        centres: centres, pitch: CGFloat(pitch), keySize: CGSize(width: pitch - 6, height: rowPitch - 11),
+        rowPitch: CGFloat(rowPitch)
+      )
+      let decoder = SwipeDecoder(lexicon: lexicon, geometry: geometry)
+      for (name, value) in environment.overrides { decoder.parameters.set(name, value) }
+      let path = points.map { CGPoint(x: $0[0], y: $0[1]) }
+      let words = decoder.decode(path: path, previous: nil, sentenceStart: false, limit: 3).map { $0.lowercased() }
+      total += 1
+      if words.first == intended { top1 += 1 }
+      if words.contains(intended) { top3 += 1 }
+      if verbose || words.first != intended { print("  \(words.first == intended ? "ok  " : "MISS") \(intended) → \(words)") }
+    }
+    print("real swipes \(environment.language.rawValue): top-1 \(top1)/\(total), top-3 \(top3)/\(total)")
   }
 }

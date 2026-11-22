@@ -5,6 +5,7 @@ import Foundation
 ///     keyboard-typing <plugin dir> test
 ///     keyboard-typing <plugin dir> autocorrect <en|de> <dev|test> [-v] [name=value …]
 ///     keyboard-typing <plugin dir> swipe <en|de> <qwerty|qwertz> <dev|test> [-v]
+///     keyboard-typing <plugin dir> swipe-real <en|de> [-v] [name=value …]
 ///     keyboard-typing <plugin dir> targets <en|de> <qwerty|qwertz> <dev|test>
 @main
 enum TypingMain {
@@ -46,6 +47,8 @@ enum TypingMain {
       AutocorrectBench.run(environment(layoutAt: nil), verbose: verbose)
     case "swipe":
       SwipeBench.run(environment(layoutAt: 1), verbose: verbose)
+    case "swipe-real":
+      SwipeRealBench.run(environment(layoutAt: nil), verbose: verbose)
     case "targets":
       TargetsBench.run(environment(layoutAt: 1), verbose: verbose)
     default:

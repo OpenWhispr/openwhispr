@@ -15,11 +15,20 @@ struct SwipeParameters {
   var offsetWeight = 5.0
   /// A longer path says more about its word: the fit counts 1 + this × the path's length
   /// times, so a long word isn't outvoted by a short common one that fits a little worse.
-  var lengthEvidence = 0.3
+  /// Kept small: tuned on simulated paths it was 0.3, and real fingers then lost common
+  /// words to rarer, longer ones of a similar shape ("message" → "meagre").
+  var lengthEvidence = 0.1
   /// Paths further than this from a word (mean squared distance) are dropped unscored.
   var farthest = 1.1
   /// How much a word's frequency counts against how well it fits the path.
-  var languageWeight = 1.0
+  /// Doubled after replaying swipes recorded on a phone: at 1.0 the right word was usually
+  /// second to a rare word that fitted the wobble of a real path a little better
+  /// ("nice" → "Noyce", "that" → "Thar").
+  var languageWeight = 2.0
+  /// Cost of the squared distance (in key pitches) between the path's two ends and the
+  /// word's first and last keys. A swipe's ends are aimed at, unlike its middle, and they are
+  /// what tells "hello" from "help" and "have" from "gave".
+  var endWeight = 3.0
   /// How far a word's template cuts each corner, as a fraction of the shorter leg. Fingers
   /// round corners, so a template through the exact key centres fits long words badly.
   var cornerCut = 0.25
@@ -128,6 +137,7 @@ final class SwipeDecoder {
     let longest = pathLength * Float(parameters.longestRatio) + Float(parameters.lengthSlack)
     let shapeWeight = Float(parameters.shapeWeight), offsetWeight = Float(parameters.offsetWeight)
     let languageWeight = parameters.languageWeight
+    let endWeight = Float(parameters.endWeight)
     let samples = SwipeDecoder.sampleCount
     let cutoff = Float(parameters.farthest) * Float(samples)
     let evidence = 1 + Float(parameters.lengthEvidence) * pathLength
@@ -165,7 +175,12 @@ final class SwipeDecoder {
           let n = Float(samples)
           let offset = (sumX * sumX + sumY * sumY) / (n * n)
           let shape = max(0, sumSquares / n - offset)
-          let fit = Double(-(shapeWeight * shape + offsetWeight * offset) * evidence)
+          // Where the finger came down and where it lifted are aimed at; the middle is not.
+          let last = 2 * (samples - 1)
+          let startX = pathSamples[0] - templateSamples[0], startY = pathSamples[1] - templateSamples[1]
+          let endX = pathSamples[last] - templateSamples[last], endY = pathSamples[last + 1] - templateSamples[last + 1]
+          let ends = startX * startX + startY * startY + endX * endX + endY * endY
+          let fit = Double(-(shapeWeight * shape + offsetWeight * offset) * evidence - endWeight * ends)
           let node = Int(entry.node)
           let score = fit + languageWeight * lexicon.log10Frequency(lexicon.terminals(of: node).lowerBound)
           if best.count < keep || score > best[best.count - 1].score {
