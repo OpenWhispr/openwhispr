@@ -526,6 +526,7 @@ function initializeCoreManagers() {
   const { createCredentialStore } = require("./src/helpers/connectors/credentialStore");
   const { createConnectorCredentials } = require("./src/helpers/connectors/connectorCredentials");
   const { createConnectors } = require("./src/helpers/connectors/createConnectors");
+  const { createSalesforceNoteReader } = require("./src/helpers/connectors/salesforceNotes");
   const { runOAuthLoopbackFlow, OAuthFlowError } = require("./src/helpers/oauthLoopbackFlow");
   const { broadcastToWindows } = require("./src/helpers/windowBroadcast");
   const { connectorAccountIdFrom } = require("./src/helpers/connectors/connectorIpc");
@@ -553,6 +554,11 @@ function initializeCoreManagers() {
       runOAuthLoopbackFlow,
       OAuthFlowError,
       credentials: connectorCredentials,
+      database: databaseManager,
+      getSalesforceNote: createSalesforceNoteReader({
+        database: databaseManager,
+        getAccountId: getConnectorAccountId,
+      }),
       logger: debugLogger,
       env: process.env,
       openExternal: (url) => require("./src/helpers/externalUrlOpener").openExternalUrl(url),
@@ -1421,6 +1427,11 @@ async function startApp() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
+  windowManager.onDictationStateChanged = (state, voiceAgentRequested) => {
+    ipcHandlers.dictationCleanupPrewarm.setLifecycleState(state, voiceAgentRequested);
+    trayManager?.updateTrayMenu();
+  };
+
   // Create windows FIRST so the user sees UI as soon as possible.
   // A login launch goes to the tray whatever the preference says: the user asked
   // the OS to start us, not to put a window in front of them at every login.
@@ -1663,9 +1674,6 @@ async function startApp() {
 
   trayManager.setWindows(windowManager.mainWindow, windowManager.controlPanelWindow);
   trayManager.setWindowManager(windowManager);
-  // The tray's listen item is a toggle, so it has to rebuild when dictation
-  // starts or stops.
-  windowManager.onDictationStateChanged = () => trayManager.updateTrayMenu();
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 

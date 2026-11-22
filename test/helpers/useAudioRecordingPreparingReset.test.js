@@ -60,6 +60,7 @@ export default class FakeAudioManager {
   emit() { this.callbacks?.onStateChange(this.getState()); }
   setCallbacks(callbacks) { this.callbacks = callbacks; }
   setVoiceAgentRequested(value) { this.voiceAgentRequested = value; }
+  beginSelectionCapture() {}
   setTranslationRequested(value) { this.translationRequested = value; }
   shouldUseStreaming() { return false; }
   isSttConfigStale() { return false; }
@@ -80,6 +81,7 @@ export default class FakeAudioManager {
     if (fixture.open) await fixture.open();
     this.state.isRecording = fixture.startResult;
     if (fixture.startResult) this.emit();
+    if (fixture.afterOpen) await fixture.afterOpen();
     return fixture.startResult;
   }
 }
@@ -136,11 +138,11 @@ async function mountRecording(t, fixture = {}) {
         },
         dictationLifecycleStateChanged:
           fixture.admission ??
-          (async (state, attempt) => {
+          (async (state, attempt, voiceAgentRequested) => {
             reported.push(state);
             // 9425 used a one-way send. Transporting its real state mutation must
             // not fail the base probe merely because that method returned void.
-            const result = main.setDictationLifecycleState(state, attempt);
+            const result = main.setDictationLifecycleState(state, attempt, voiceAgentRequested);
             return result === undefined ? true : result;
           }),
       },
@@ -196,6 +198,38 @@ async function mountRecording(t, fixture = {}) {
     },
   };
 }
+
+test("only dictation and translation warm cleanup across successive assistant and plain takes", async (t) => {
+  const h = await mountRecording(t, { startResult: true });
+  const { createLocalCleanupPrewarm } = require(
+    path.join(sourceRoot, "src/helpers/localCleanupPrewarm")
+  );
+  const starts = [];
+  const prewarm = createLocalCleanupPrewarm({
+    prewarmServer: async (id, signal) => starts.push({ id, signal }),
+  });
+  h.main.onDictationStateChanged = prewarm.setLifecycleState;
+  prewarm.setModel("cleanup");
+
+  for (const [start, expectedStarts] of [
+    [() => h.listeners.ToggleVoiceAgent(), 0],
+    [() => h.api().startRecording({ translationRequested: true }), 1],
+    [() => h.api().startRecording({ voiceAgentRequested: true }), 1],
+    [() => h.listeners.ToggleDictation(), 2],
+  ]) {
+    await React.act(async () => {
+      await start();
+      await flush();
+    });
+    assert.equal(h.main._dictationLifecycleState, "recording");
+    assert.equal(starts.length, expectedStarts);
+    await React.act(async () => {
+      await h.api().cancelRecording();
+    });
+    assert.equal(h.main._dictationLifecycleState, "idle");
+    assert.ok(starts.every(({ signal }) => signal.aborted));
+  }
+});
 
 test("a failed dictation start reports the lifecycle back to idle instead of sticking on preparing", async (t) => {
   const { api, reported } = await mountRecording(t);
@@ -333,6 +367,7 @@ test("a held dictation target reserves ownership before real AudioManager captur
 for (const phase of ["admission", "target", "microphone"]) {
   test(`cancelling dictation during ${phase} abandons capture and releases ownership`, async (t) => {
     const gate = deferred();
+    const recovery = deferred();
     const fixture = { startResult: true };
     let h;
     if (phase === "admission")
@@ -341,8 +376,13 @@ for (const phase of ["admission", "target", "microphone"]) {
         if (state === "preparing") await gate.promise;
         return result === undefined ? true : result;
       };
-    if (phase === "microphone") fixture.open = () => gate.promise;
+    if (phase === "microphone") {
+      fixture.open = () => gate.promise;
+      fixture.afterOpen = () => recovery.promise;
+    }
     h = await mountRecording(t, fixture);
+    const acceptedStates = [];
+    h.main.onDictationStateChanged = (state) => acceptedStates.push(state);
     if (phase === "target")
       globalThis.window.electronAPI.captureDictationTarget = () => gate.promise;
     let starting;
@@ -356,10 +396,19 @@ for (const phase of ["admission", "target", "microphone"]) {
     if (phase === "microphone") assert.equal(h.admitAgent(), false, "opening still owns the mic");
     await React.act(async () => {
       gate.resolve();
+      if (phase === "microphone") {
+        await flush();
+        // The device opened after Esc. Releasing Fn now reads the manager's snapshot
+        // while its stale start is still finishing microphone recovery.
+        h.listeners.CancelDictationPreparation();
+        assert.equal(h.admitAgent(), false);
+        recovery.resolve();
+      }
       await starting;
     });
     assert.equal(h.fixture.manager.getState().isRecording ?? false, false);
     assert.equal(h.main.isDictationActive(), false);
+    assert.ok(!acceptedStates.includes("recording"), "a discarded start never confirms recording");
     assert.equal(h.admitAgent(), true);
   });
 }

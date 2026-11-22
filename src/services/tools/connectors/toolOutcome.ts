@@ -1,3 +1,4 @@
+import { salesforceOutcomeKey } from "../../../utils/salesforceApprovalFields";
 import i18n from "../../../i18n";
 import { useConnectorStatusStore } from "../../../stores/connectorStatusStore";
 import { connectorErrorText } from "../../../utils/connectorErrorCopy";
@@ -141,6 +142,8 @@ export interface ApprovalOutcomeOptions {
 // Gmail Sent folder."); an issue or comment names what may not exist; any
 // other keeps the generic line.
 function unknownDisplayText(destination: string, connectorId?: string, verbKey?: string): string {
+  const salesforceKey = salesforceOutcomeKey(verbKey, "unknown");
+  if (salesforceKey) return i18n.t(salesforceKey, { destination });
   const verb = issueVerb(verbKey);
   if (verb) {
     const copy = issueUnknownCopy(verb, destination);
@@ -156,6 +159,8 @@ function unknownDisplayText(destination: string, connectorId?: string, verbKey?:
 }
 
 function sentDisplayText(destination: string, resultLabel?: string, verbKey?: string): string {
+  const salesforceKey = salesforceOutcomeKey(verbKey, "sent");
+  if (salesforceKey) return i18n.t(salesforceKey, { destination });
   const verb = issueVerb(verbKey);
   if (!verb) return i18n.t("connectors.approval.sent", { destination });
   const copy = issueSentCopy(verb, destination, resultLabel);

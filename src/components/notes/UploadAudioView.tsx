@@ -307,6 +307,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    elevenlabsApiKey,
     openrouterApiKey,
     customTranscriptionApiKey,
   } = apiKeys;
@@ -514,6 +515,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 tinfoilApiKey,
                 deepgramApiKey,
                 assemblyaiApiKey,
+                elevenlabsApiKey,
                 openrouterApiKey,
                 customTranscriptionApiKey,
               })
@@ -564,6 +566,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     tinfoilApiKey,
     deepgramApiKey,
     assemblyaiApiKey,
+    elevenlabsApiKey,
     openrouterApiKey,
     customTranscriptionApiKey,
     cortiClientId,
@@ -835,7 +838,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         buildTranscriptionConfig(),
         diarization,
         currentFile.durationSeconds,
-        { requestId, timestamps: true }
+        { requestId, timestamps: true, isCancelled: () => runId !== runIdRef.current }
       );
 
       if (runId !== runIdRef.current) return;

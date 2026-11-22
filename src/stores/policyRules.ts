@@ -31,6 +31,7 @@ const KNOWN_BYOK_PROVIDER_IDS: Record<PolicyScope, ReadonlySet<string>> = {
   ]),
   llm: new Set([
     ...modelRegistryData.cloudProviders.map((provider) => provider.id),
+    "assemblyai", // Its Dictation endpoint always runs a provider-hosted rewrite.
     "custom",
     "openrouter",
   ]),
@@ -218,6 +219,23 @@ export function isEnterpriseTranscriptionOfferable(state: PolicyDecisionSnapshot
 /** Whether the AI agent (dictation, voice, and chat) is allowed. */
 export function isAgentAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.agentEnabled);
+}
+
+export type ApiAccessRestriction = "disabled" | "versionBlocked" | "unresolved";
+
+/**
+ * Why personal API keys and MCP are unavailable, or null when they aren't
+ * restricted. A policy still loading restricts nothing: most members have no
+ * managed workspace, and the API refuses keys itself while access is off.
+ */
+export function apiAccessRestriction(state: PolicyDecisionSnapshot): ApiAccessRestriction | null {
+  if (state.status === "idle" || state.status === "loading" || state.status === "unmanaged")
+    return null;
+  const policy = managedPolicy(state);
+  if (!policy) return "unresolved";
+  if (policy.features.apiAccessEnabled === false) return "disabled";
+  if (isUpdateRequiredByOrg(state)) return "versionBlocked";
+  return isPolicyActionAllowed(state) ? null : "unresolved";
 }
 
 /** Whether the agent's web_search tool is allowed. */
@@ -540,22 +558,48 @@ export function isLlmSelectionAllowed(
   return true;
 }
 
+export const ASSEMBLYAI_DICTATION_MODEL = "dictation";
+
+export function isAssemblyAiRewriteAllowedByPolicy(state: PolicyDecisionSnapshot): boolean {
+  return isLlmSelectionAllowed(state, { mode: "providers", provider: "assemblyai" });
+}
+
 export interface TranscriptionSelection {
   mode: InferenceMode;
   provider: string;
   model?: string;
 }
 
+export function isByokTranscriptionAllowed(
+  state: PolicyDecisionSnapshot,
+  provider: string,
+  model?: string,
+  allowsPersonalCleanup?: () => boolean
+): boolean {
+  return (
+    isModeAllowedByPolicy(state, "transcription", "providers") &&
+    isProviderAllowedByPolicy(state, "transcription", provider) &&
+    (provider !== "assemblyai" ||
+      model?.trim() !== ASSEMBLYAI_DICTATION_MODEL ||
+      (isAssemblyAiRewriteAllowedByPolicy(state) && (allowsPersonalCleanup?.() ?? true)))
+  );
+}
+
 export function isTranscriptionSelectionAllowed(
   state: PolicyDecisionSnapshot,
-  selection: TranscriptionSelection
+  selection: TranscriptionSelection,
+  allowsPersonalCleanup?: () => boolean
 ): boolean {
   if (selection.mode === "local")
     return isLocalModelAllowedByPolicy(state, "transcription", selection.model ?? "");
+  if (selection.mode === "providers")
+    return isByokTranscriptionAllowed(
+      state,
+      selection.provider,
+      selection.model,
+      allowsPersonalCleanup
+    );
   if (!isModeAllowedByPolicy(state, "transcription", selection.mode)) return false;
-  if (selection.mode === "providers") {
-    return isProviderAllowedByPolicy(state, "transcription", selection.provider);
-  }
   if (selection.mode === "enterprise") {
     return isTranscriptionEnterpriseProviderAllowed(state, selection.provider);
   }
@@ -564,10 +608,10 @@ export function isTranscriptionSelectionAllowed(
 
 export type TranscriptionPolicyContext = "dictation" | "meeting" | "upload";
 
-export function getTranscriptionSelection(
+export function getLocalTranscriptionModel(
   settings: SettingsState,
   context: TranscriptionPolicyContext
-): TranscriptionSelection {
+): string {
   const prefix = context === "dictation" ? "" : context;
   const read = (
     key: "localTranscriptionProvider" | "whisperModel" | "parakeetModel" | "cohereModel"
@@ -576,7 +620,7 @@ export function getTranscriptionSelection(
     return (settings[contextKey as keyof SettingsState] as string) || settings[key];
   };
   const provider = read("localTranscriptionProvider");
-  const model = settings.policyBlockedLocalScopes?.includes(context)
+  return settings.policyBlockedLocalScopes?.includes(context)
     ? ""
     : read(
         provider === "whisper"
@@ -585,22 +629,36 @@ export function getTranscriptionSelection(
             ? "cohereModel"
             : "parakeetModel"
       );
+}
+
+export function getTranscriptionSelection(
+  settings: SettingsState,
+  context: TranscriptionPolicyContext
+): TranscriptionSelection {
+  const localModel = getLocalTranscriptionModel(settings, context);
   if (context === "meeting") {
     return {
-      model,
+      model:
+        settings.meetingTranscriptionMode === "providers"
+          ? settings.meetingCloudTranscriptionModel || settings.cloudTranscriptionModel
+          : localModel,
       mode: settings.meetingTranscriptionMode,
       provider: settings.meetingCloudTranscriptionProvider || settings.cloudTranscriptionProvider,
     };
   }
   if (context === "upload") {
     return {
-      model,
+      model:
+        settings.uploadTranscriptionMode === "providers"
+          ? settings.uploadCloudTranscriptionModel
+          : localModel,
       mode: settings.uploadTranscriptionMode,
       provider: settings.uploadCloudTranscriptionProvider || settings.cloudTranscriptionProvider,
     };
   }
   return {
-    model,
+    model:
+      settings.transcriptionMode === "providers" ? settings.cloudTranscriptionModel : localModel,
     mode: settings.transcriptionMode,
     provider: settings.cloudTranscriptionProvider,
   };
@@ -609,11 +667,16 @@ export function getTranscriptionSelection(
 export function isTranscriptionContextAllowed(
   state: PolicyDecisionSnapshot,
   settings: SettingsState,
-  context: TranscriptionPolicyContext
+  context: TranscriptionPolicyContext,
+  allowsPersonalCleanup?: () => boolean
 ): boolean {
   return (
     isAudioFeatureAllowed(state, context) &&
-    isTranscriptionSelectionAllowed(state, getTranscriptionSelection(settings, context))
+    isTranscriptionSelectionAllowed(
+      state,
+      getTranscriptionSelection(settings, context),
+      allowsPersonalCleanup
+    )
   );
 }
 

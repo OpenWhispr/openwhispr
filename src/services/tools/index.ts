@@ -91,7 +91,8 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
       protectNotes: settings.protectNotes,
     })
   );
-  registry.register(createGetNoteTool(noteScope));
+  const getNoteTool = createGetNoteTool(noteScope);
+  registry.register(getNoteTool);
   registry.register(createCreateNoteTool(noteScope));
   if (!settings.keepNotesUnchanged) registry.register(createUpdateNoteTool(noteScope));
   registry.register(createListFoldersTool(noteScope));
@@ -121,7 +122,8 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     }
   }
 
-  if (settings.connectors) registerConnectorTools(registry, settings.connectors);
+  if (settings.connectors)
+    registerConnectorTools(registry, { ...settings.connectors, readNote: getNoteTool.execute });
 
   if (settings.interactions) {
     for (const tool of createInteractionTools(settings.interactions)) registry.register(tool);

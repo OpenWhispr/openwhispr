@@ -27,6 +27,8 @@ export interface FolderPushInput {
   // space_id leaves whatever scope the server already stored.
   workspace_id?: string | null;
   space_id?: string | null;
+  // The workspace whose Private a personal folder is in; omitted, the server keeps or defaults it.
+  private_workspace_id?: string | null;
 }
 
 export interface FolderCreateResponse {
@@ -119,6 +121,8 @@ export interface NotePushInput {
   // space_id leaves whatever scope the server already stored.
   workspace_id?: string | null;
   space_id?: string | null;
+  /** Placement for a personal folderless create; filed notes inherit it from their folder. */
+  private_workspace_id?: string | null;
   /** Echoes notes.cloud_updated_at so the server can 409 a stale overwrite. */
   base_updated_at?: string;
 }

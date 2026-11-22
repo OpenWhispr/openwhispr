@@ -16,6 +16,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
   { base: "deepgram", get: "getDeepgramKey", save: "saveDeepgramKey" },
   { base: "assemblyai", get: "getAssemblyAIKey", save: "saveAssemblyAIKey" },
+  { base: "elevenlabs", get: "getElevenlabsKey", save: "saveElevenlabsKey" },
   {
     base: "note-formatting-custom",
     get: "getNoteFormattingCustomKey",
@@ -155,8 +156,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
-  dictationLifecycleStateChanged: (state, attempt) =>
-    ipcRenderer.invoke("dictation-lifecycle-state-changed", state, attempt),
+  dictationLifecycleStateChanged: (state, attempt, voiceAgentRequested = false) =>
+    ipcRenderer.invoke("dictation-lifecycle-state-changed", state, attempt, voiceAgentRequested),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>
@@ -244,6 +245,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
   skillsApplyUpdate: (update) => ipcRenderer.invoke("skills-apply-update", update),
   skillsMarkUsed: (name) => ipcRenderer.invoke("skills-mark-used", name),
   skillsUndo: (name, versionId) => ipcRenderer.invoke("skills-undo", name, versionId),
+  getPendingSkills: () => ipcRenderer.invoke("skills-get-pending"),
+  getPendingSkillDeletes: () => ipcRenderer.invoke("skills-get-pending-deletes"),
+  exportSkillForCloud: (name) => ipcRenderer.invoke("skills-export-for-cloud", name),
+  getSkillForCloudMerge: (cloudEntry) =>
+    ipcRenderer.invoke("skills-get-for-cloud-merge", cloudEntry),
+  applySkillFromCloud: (cloudEntry, expectedLocal) =>
+    ipcRenderer.invoke("skills-apply-from-cloud", cloudEntry, expectedLocal),
+  markSkillSynced: (name, cloudId, serverUpdatedAt, expectedHash, expectedEnabled) =>
+    ipcRenderer.invoke(
+      "skills-mark-synced",
+      name,
+      cloudId,
+      serverUpdatedAt,
+      expectedHash,
+      expectedEnabled
+    ),
+  hardDeleteSkill: (name) => ipcRenderer.invoke("skills-hard-delete", name),
+  queueSkillCloudDelete: (name, cloudId) =>
+    ipcRenderer.invoke("skills-queue-cloud-delete", name, cloudId),
+  clearSkillCloudId: (name) => ipcRenderer.invoke("skills-clear-cloud-id", name),
+  broadcastSkillsUpdated: () => ipcRenderer.invoke("skills-broadcast-updated"),
   onSkillsChanged: (callback) => {
     const listener = () => callback?.();
     ipcRenderer.on("skills-changed", listener);
@@ -292,7 +314,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   discardNoteUndo: (id, token) => ipcRenderer.invoke("db-discard-note-undo", id, token),
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
-  exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
+  exportTranscript: (noteId, format, options) =>
+    ipcRenderer.invoke("export-transcript", noteId, format, options),
   exportDictionary: (words) => ipcRenderer.invoke("export-dictionary", words),
   searchNotes: (query, limit, spaceId, folderId, spaceIds) =>
     ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId, spaceIds),
@@ -760,10 +783,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveUiLanguage: (language) => ipcRenderer.invoke("save-ui-language", language),
   setUiLanguage: (language) => ipcRenderer.invoke("set-ui-language", language),
 
-  // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
+  // xAI / AssemblyAI / Mistral transcription proxies (keys handled by the manifest bridge)
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
+  proxyAssemblyAiTranscription: (data) =>
+    ipcRenderer.invoke("proxy-assemblyai-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
+  proxyElevenlabsTranscription: (data) =>
+    ipcRenderer.invoke("proxy-elevenlabs-transcription", data),
 
   // Corti API
   getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),
@@ -971,7 +998,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("affiliate-link", handler);
   },
   getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
-  getEffectivePolicy: () => ipcRenderer.invoke("get-effective-policy"),
+  getEffectivePolicy: (options) => ipcRenderer.invoke("get-effective-policy", options),
   onEffectivePolicyChanged: registerListener(
     "effective-policy-changed",
     (callback) => (_event, snapshot) => callback(snapshot)
@@ -1498,6 +1525,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ),
   markConversationCreateAttempted: (id, expectedAuthGeneration) =>
     ipcRenderer.invoke("db-mark-conversation-create-attempted", id, expectedAuthGeneration),
+  markConversationPending: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-mark-conversation-pending", id, expectedAuthGeneration),
+  getSyncedLinkedConversations: (expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-get-synced-linked-conversations", expectedAuthGeneration),
   clearConversationCreateAttempted: (id) =>
     ipcRenderer.invoke("db-clear-conversation-create-attempted", id),
   acknowledgeConversationCreate: (id, snapshot, cloudId, accountId, authGeneration) =>
@@ -1662,7 +1693,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("connector-recent-actions", connectorId, limit),
   connectorFindContacts: (query) => ipcRenderer.invoke("connector-find-contacts", query),
   connectorNoteAttendees: (request) => ipcRenderer.invoke("connector-note-attendees", request),
-  connectorConnect: (connectorId) => ipcRenderer.invoke("connector-connect", connectorId),
+  connectorConnect: (connectorId, options) =>
+    ipcRenderer.invoke("connector-connect", connectorId, options),
   connectorCancelConnect: (connectorId) =>
     ipcRenderer.invoke("connector-cancel-connect", connectorId),
   connectorDisconnect: (connectorId) => ipcRenderer.invoke("connector-disconnect", connectorId),

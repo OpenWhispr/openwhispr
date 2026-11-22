@@ -34,6 +34,7 @@ function defaultDevicePolicy() {
       allowedModes: [...MODES],
       allowedByokProviders: [
         ...registryData.cloudProviders.map((provider) => provider.id),
+        "assemblyai",
         "openrouter",
         "custom",
       ],

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://docs.openwhispr.com
+    about: Check the documentation for setup, features, and troubleshooting.
+  - name: Security issue
+    url: https://github.com/OpenWhispr/openwhispr/security/advisories/new
+    about: Report vulnerabilities privately, not in a public issue.

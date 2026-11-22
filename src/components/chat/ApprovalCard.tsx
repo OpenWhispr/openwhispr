@@ -35,6 +35,12 @@ import {
   issueVerb,
   toIssueFields,
 } from "../../utils/issueApprovalFields";
+import {
+  salesforceFieldProblem,
+  salesforceFieldsCopyText,
+  salesforceOutcomeKey,
+} from "../../utils/salesforceApprovalFields";
+import { SalesforceApprovalFields } from "./SalesforceApprovalFields";
 import { EmailApprovalFields } from "./EmailApprovalFields";
 import { IssueApprovalFields } from "./IssueApprovalFields";
 import { SlackChannelPicker } from "./SlackChannelPicker";
@@ -133,7 +139,14 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const issueProblem = verb && issueFields ? issueFieldProblem(issueFields, verb) : null;
   // Send commits exactly what the card shows, so it waits until the card
   // holds something the provider would accept.
-  const sendBlocked = Boolean(problems && hasEmailFieldProblem(problems)) || issueProblem !== null;
+  const isSalesforceFields = preview.verbKey === "salesforceFields";
+  const salesforceProblem = isSalesforceFields
+    ? salesforceFieldProblem(preview.salesforceFields, draft.fields)
+    : null;
+  const sendBlocked =
+    salesforceProblem !== null ||
+    Boolean(problems && hasEmailFieldProblem(problems)) ||
+    issueProblem !== null;
   const problemsId = useId();
   const emailProblemText = !problems
     ? null
@@ -149,30 +162,35 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
               ? t("connectors.approval.email.bodyTooLong")
               : null;
   const issueProblemRef = verb && issueProblem ? issueProblemCopy(issueProblem, verb) : null;
-  const problemText = issueProblemRef
-    ? t(issueProblemRef.key, issueProblemRef.values)
-    : emailProblemText;
+  const problemText = salesforceProblem
+    ? t(`connectors.approval.salesforce.${salesforceProblem}`)
+    : issueProblemRef
+      ? t(issueProblemRef.key, issueProblemRef.values)
+      : emailProblemText;
   // Announced by kind, never naming the address being typed, so a screen
   // reader hears each new reason once instead of every partial address.
   const problemAnnouncement =
     problems && problems.invalid.length > 0
       ? t("connectors.approval.email.invalidAddressAnnouncement")
       : problemText;
-  const hasFieldLayout = Boolean(emailFields || issueFields);
-  // Copy takes the message itself, as the card shows it now; in a call an
-  // email's Copy all takes its recipients and subject with it.
+  const hasFieldLayout = Boolean(emailFields || issueFields || isSalesforceFields);
+  // Copy takes the message itself, as the card shows it now; a field card's
+  // message is its included fields, and in a call an email's Copy all takes its
+  // recipients and subject with it.
   const body = emailFields?.body ?? issueFields?.body ?? draft.body;
-  const copyAllText = titleActions
-    ? [
-        `${t("connectors.approval.email.toLabel")}: ${emailFields.to.join(", ")}`,
-        ...(emailFields.cc.length > 0
-          ? [`${t("connectors.approval.email.ccLabel")}: ${emailFields.cc.join(", ")}`]
-          : []),
-        `${t("connectors.approval.email.subjectLabel")}: ${emailFields.subject}`,
-        "",
-        body,
-      ].join("\n")
-    : body;
+  const copyAllText = isSalesforceFields
+    ? salesforceFieldsCopyText(preview.salesforceFields, draft.fields)
+    : titleActions
+      ? [
+          `${t("connectors.approval.email.toLabel")}: ${emailFields.to.join(", ")}`,
+          ...(emailFields.cc.length > 0
+            ? [`${t("connectors.approval.email.ccLabel")}: ${emailFields.cc.join(", ")}`]
+            : []),
+          `${t("connectors.approval.email.subjectLabel")}: ${emailFields.subject}`,
+          "",
+          body,
+        ].join("\n")
+      : body;
   const { copied, copyText, confirmCopied } = useCopyFeedback(copyAllText);
 
   // Each layout names its own button and outcomes ("Create issue",
@@ -181,17 +199,23 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
     defaultValue: t("connectors.approval.send"),
   });
   const sentRef = verb ? issueSentCopy(verb, destination, entry.resultLabel) : null;
-  const sentText = sentRef
-    ? t(sentRef.key, sentRef.values)
-    : entry.outsideThread
-      ? t("connectors.approval.slack.sentOutsideThread", { destination })
-      : t("connectors.approval.sent", { destination });
+  const salesforceSentKey = salesforceOutcomeKey(preview.verbKey, "sent");
+  const salesforceUnknownKey = salesforceOutcomeKey(preview.verbKey, "unknown");
+  const sentText = salesforceSentKey
+    ? t(salesforceSentKey, { destination })
+    : sentRef
+      ? t(sentRef.key, sentRef.values)
+      : entry.outsideThread
+        ? t("connectors.approval.slack.sentOutsideThread", { destination })
+        : t("connectors.approval.sent", { destination });
   const unknownRef = verb ? issueUnknownCopy(verb, destination) : null;
-  const unknownText = emailFields
-    ? t("connectors.approval.email.unknown")
-    : unknownRef
-      ? t(unknownRef.key, unknownRef.values)
-      : t("connectors.approval.unknown", { destination });
+  const unknownText = salesforceUnknownKey
+    ? t(salesforceUnknownKey, { destination })
+    : emailFields
+      ? t("connectors.approval.email.unknown")
+      : unknownRef
+        ? t(unknownRef.key, unknownRef.values)
+        : t("connectors.approval.unknown", { destination });
 
   // Send and Cancel remove the button that had focus; the card keeps it, so
   // keyboard and screen-reader users land on the result.
@@ -301,47 +325,58 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
     </>
   );
 
-  const message =
-    issueFields && verb ? (
-      <IssueApprovalFields
-        connectorId={entry.connectorId}
-        pending={editing}
-        verb={verb}
-        fields={issueFields}
-        editing={editing}
-        problem={issueProblem}
-        problemsId={problemsId}
-        onChange={(patch) => updateApprovalDraft(entry.key, { fields: patch })}
-      />
-    ) : (
-      <>
-        {draft.title !== undefined &&
-          (editing ? (
-            <input
-              aria-label={t("connectors.approval.titleLabel")}
-              className={INLINE_TITLE_FIELD}
-              dir="auto"
-              value={draft.title}
-              onChange={(event) => updateApprovalDraft(entry.key, { title: event.target.value })}
-            />
-          ) : (
-            <p className="mb-1 font-medium" dir="auto">
-              {draft.title}
-            </p>
-          ))}
-        <BodyField
-          value={body}
+  const message = isSalesforceFields ? (
+    <>
+      {preview.salesforceFields && draft.fields && (
+        <SalesforceApprovalFields
+          definitions={preview.salesforceFields}
+          fields={draft.fields}
           editing={editing}
-          label={t(
-            emailFields ? "connectors.approval.email.bodyLabel" : "connectors.approval.bodyLabel"
-          )}
-          invalidBecause={problems?.bodyTooLong ? problemsId : undefined}
-          // In a call the text keeps clear of the message's copy button.
-          className={titleActions ? "pe-8" : undefined}
-          onChange={setBody}
+          problemsId={problemsId}
+          onChange={(fields) => updateApprovalDraft(entry.key, { fields })}
         />
-      </>
-    );
+      )}
+    </>
+  ) : issueFields && verb ? (
+    <IssueApprovalFields
+      connectorId={entry.connectorId}
+      pending={editing}
+      verb={verb}
+      fields={issueFields}
+      editing={editing}
+      problem={issueProblem}
+      problemsId={problemsId}
+      onChange={(patch) => updateApprovalDraft(entry.key, { fields: patch })}
+    />
+  ) : (
+    <>
+      {draft.title !== undefined &&
+        (editing ? (
+          <input
+            aria-label={t("connectors.approval.titleLabel")}
+            className={INLINE_TITLE_FIELD}
+            dir="auto"
+            value={draft.title}
+            onChange={(event) => updateApprovalDraft(entry.key, { title: event.target.value })}
+          />
+        ) : (
+          <p className="mb-1 font-medium" dir="auto">
+            {draft.title}
+          </p>
+        ))}
+      <BodyField
+        value={body}
+        editing={editing}
+        label={t(
+          emailFields ? "connectors.approval.email.bodyLabel" : "connectors.approval.bodyLabel"
+        )}
+        invalidBecause={problems?.bodyTooLong ? problemsId : undefined}
+        // In a call the text keeps clear of the message's copy button.
+        className={titleActions ? "pe-8" : undefined}
+        onChange={setBody}
+      />
+    </>
+  );
 
   const copyButton = (
     <button
@@ -425,7 +460,11 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       {entry.state === "sent" && (
         <span className="inline-flex h-8 items-center gap-1.5 px-2 text-[13px] text-muted-foreground agent:text-[14px]">
           <Check size={14} />
-          {verb ? sentText : t("connectors.approval.sentLabel")}
+          {verb
+            ? sentText
+            : salesforceSentKey
+              ? t("connectors.approval.salesforce.savedLabel")
+              : t("connectors.approval.sentLabel")}
         </span>
       )}
     </>
@@ -473,8 +512,9 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
         data-approval-body=""
         className={cn(
           "group agent-chat-scroll relative overflow-y-auto px-4 py-3 text-[14px] agent:text-[15px]",
-          // Above a call's pill a long message has the room of the call's long card.
-          callPlacement === "compact" ? "max-h-92" : "max-h-44"
+          // Above a call's pill a long message has the room of the call's long card; each
+          // Salesforce field shows its current and new value, so field cards get more room.
+          callPlacement === "compact" ? "max-h-92" : isSalesforceFields ? "max-h-72" : "max-h-44"
         )}
       >
         {titleActions && (

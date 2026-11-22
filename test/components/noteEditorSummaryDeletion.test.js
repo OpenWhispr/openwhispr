@@ -1085,6 +1085,61 @@ test("the note header hands its event link to the dropdown, changeable only by e
   }
 });
 
+test("transcript exports name the recorder only when the creator, or else the owner, is someone else", async (t) => {
+  const bob = {
+    isSignedIn: true,
+    user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+  };
+  const signedOut = { isSignedIn: false, user: null };
+  globalThis.__noteEditorAuth = bob;
+  t.after(() => {
+    delete globalThis.__noteEditorAuth;
+    delete globalThis.__noteEditorRosterId;
+    delete globalThis.__embeddedChatOptions;
+  });
+  let cleanup = () => {};
+  t.after(() => cleanup());
+  const { render, click, latest, unmount, vite } = await loadNoteEditor(t, "editor");
+  cleanup = unmount;
+  const { default: ShareNoteDialog } = await vite.ssrLoadModule(
+    "/components/notes/ShareNoteDialog.tsx"
+  );
+  const formats = ["txt", "srt", "md", "json"];
+  for (const [viewer, ownerId, creatorId, expectedLabel] of [
+    [bob, "bob", "alice", "Alice Recorder"],
+    [bob, "alice", "bob", undefined],
+    [bob, "bob", null, undefined],
+    [bob, "alice", null, "notes.speaker.noteTaker"],
+    [bob, null, null, undefined],
+    [signedOut, "alice", "alice", undefined],
+  ]) {
+    globalThis.__noteEditorAuth = viewer;
+    const exported = [];
+    await render(undefined, {
+      note: {
+        ...NOTE,
+        cloud_id: "shared-note",
+        owner_user_id: ownerId,
+        created_by_user_id: creatorId,
+        participants: creatorId
+          ? JSON.stringify([
+              { email: "alice@example.com", displayName: "Alice Recorder", self: true },
+            ])
+          : null,
+        transcript: JSON.stringify([{ source: "mic", speaker: "you", text: "Original words" }]),
+      },
+      onExportTranscript: (...args) => exported.push(args),
+    });
+    await click("transcript");
+    const { exportOptions } = findElementOfType(latest(), ShareNoteDialog).props;
+    exportOptions.forEach((option) => option.onSelect());
+    assert.deepEqual(
+      exported,
+      formats.map((format) => [format, expectedLabel])
+    );
+  }
+});
+
 test("a teammate's This is me correction saves their identity for display and generation", async (t) => {
   globalThis.__noteEditorAuth = {
     isSignedIn: true,

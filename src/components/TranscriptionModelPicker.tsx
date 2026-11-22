@@ -4,6 +4,7 @@ import { isAwaitingCatalog } from "../models/modelLifecycle.js";
 import { getRegistryData } from "../models/registryData.js";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
@@ -18,6 +19,7 @@ import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownlo
 import {
   getDictationTranscriptionProviders,
   getTranscriptionProviders,
+  getUploadTranscriptionProviders,
   getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
@@ -45,7 +47,12 @@ import {
   type TranscriptionPolicyContext,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
-import { usePolicySnapshot } from "../hooks/usePolicy";
+import { isByokTranscriptionModelAllowed } from "../services/managedTranscription";
+import {
+  useAssemblyAiDictationCleanup,
+  useByokTranscriptionModelAllowed,
+  usePolicySnapshot,
+} from "../hooks/usePolicy";
 import {
   LOCAL_ASR_ORGANIZATIONS,
   getASRModelOrganization,
@@ -294,6 +301,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "tinfoil", name: "Tinfoil" },
   { id: "deepgram", name: "Deepgram" },
   { id: "assemblyai", name: "AssemblyAI" },
+  { id: "elevenlabs", name: "ElevenLabs" },
   { id: "openrouter", name: "OpenRouter" },
   { id: "custom", name: "Custom" },
 ];
@@ -329,6 +337,7 @@ interface ProviderCredentialField {
     | "tinfoilApiKey"
     | "deepgramApiKey"
     | "assemblyaiApiKey"
+    | "elevenlabsApiKey"
     | "openrouterApiKey";
   input: "secret" | "text" | "select";
   labelKey?: string;
@@ -393,6 +402,10 @@ const PROVIDER_CREDENTIALS: Record<
   assemblyai: {
     consoleUrl: "https://www.assemblyai.com/dashboard/api-keys",
     fields: [{ key: "assemblyaiApiKey", input: "secret" }],
+  },
+  elevenlabs: {
+    consoleUrl: "https://elevenlabs.io/app/settings/api-keys",
+    fields: [{ key: "elevenlabsApiKey", input: "secret" }],
   },
   openrouter: {
     consoleUrl: "https://openrouter.ai/keys",
@@ -534,6 +547,8 @@ export default function TranscriptionModelPicker({
   const setDeepgramApiKey = useSettingsStore((s) => s.setDeepgramApiKey);
   const assemblyaiApiKey = useSettingsStore((s) => s.assemblyaiApiKey);
   const setAssemblyaiApiKey = useSettingsStore((s) => s.setAssemblyaiApiKey);
+  const elevenlabsApiKey = useSettingsStore((s) => s.elevenlabsApiKey);
+  const setElevenlabsApiKey = useSettingsStore((s) => s.setElevenlabsApiKey);
   const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
@@ -644,6 +659,9 @@ export default function TranscriptionModelPicker({
   const colorScheme: ColorScheme = variant === "settings" ? "purple" : "blue";
   const styles = useMemo(() => MODEL_PICKER_COLORS[colorScheme], [colorScheme]);
   const policyState = usePolicySnapshot();
+  const assemblyAiCleanup = useAssemblyAiDictationCleanup();
+  const cleanupEnabled = useSettingsStore((state) => state.useCleanupModel);
+  const modelAllowed = useByokTranscriptionModelAllowed(policyState);
   const providerAllowed = useCallback(
     (providerId: string) => isProviderAllowedByPolicy(policyState, "transcription", providerId),
     [policyState]
@@ -656,7 +674,7 @@ export default function TranscriptionModelPicker({
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
     if (transcriptionContext !== "upload") return getDictationTranscriptionProviders();
-    return getTranscriptionProviders().filter(
+    return getUploadTranscriptionProviders().filter(
       (provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
@@ -777,6 +795,31 @@ export default function TranscriptionModelPicker({
     return queuedLoad;
   }, []);
 
+  // What runs for this tab: a blank Note Recording or Upload provider runs on the dictation
+  // one, and a managed policy runs an allowed provider in place of one it refuses.
+  const cloudSelectionInUse = useSettingsStore(
+    useShallow((settings) => {
+      const effective = selectPolicyEffectiveSettings(settings, policyState);
+      const resolved =
+        transcriptionContext === "meeting"
+          ? selectResolvedMeetingTranscription(effective)
+          : transcriptionContext === "upload"
+            ? selectResolvedUploadTranscription(effective)
+            : effective;
+      return {
+        provider: resolved.cloudTranscriptionProvider,
+        model: resolved.cloudTranscriptionModel,
+      };
+    })
+  );
+  const providerInUse = cloudSelectionInUse.provider;
+  // A blank Note Recording or Upload provider is no choice of its own: the tab shows what runs.
+  const inheritsCloudSelection = !selectedCloudProvider && transcriptionContext !== "dictation";
+  const committedCloudProvider = inheritsCloudSelection ? providerInUse : selectedCloudProvider;
+  const committedCloudModel = inheritsCloudSelection
+    ? cloudSelectionInUse.model
+    : selectedCloudModel;
+
   const effectiveCloudSelection = useMemo(() => {
     // Every provider's URL counts as known, including policy-blocked ones and
     // the ones this scope does not offer: otherwise such a provider's stored URL
@@ -798,49 +841,57 @@ export default function TranscriptionModelPicker({
     // known model this scope filters out is still reconciled.
     if (
       !browsedCloudProvider &&
-      cloudProviders.some((provider) => provider.id === selectedCloudProvider) &&
-      isAwaitingCatalog("transcriptionProviders", selectedCloudModel)
+      cloudProviders.some((provider) => provider.id === committedCloudProvider) &&
+      isAwaitingCatalog("transcriptionProviders", committedCloudModel)
     ) {
-      return { provider: selectedCloudProvider, model: selectedCloudModel };
+      return { provider: committedCloudProvider, model: committedCloudModel };
     }
     return (
       reconcileCloudProviderSelection({
-        selectedProvider: browsedCloudProvider ?? selectedCloudProvider,
-        selectedModel: selectedCloudModel,
+        selectedProvider: browsedCloudProvider ?? committedCloudProvider,
+        selectedModel: committedCloudModel,
         allowedProviders: cloudProviders,
         customAllowed: !streamingOnly && providerAllowed("custom"),
         hasCustomUrl,
       }) ?? {
-        provider: browsedCloudProvider ?? selectedCloudProvider,
-        model: selectedCloudModel,
+        provider: browsedCloudProvider ?? committedCloudProvider,
+        model: committedCloudModel,
       }
     );
   }, [
     cloudProviders,
     cloudTranscriptionBaseUrl,
     browsedCloudProvider,
-    selectedCloudProvider,
-    selectedCloudModel,
+    committedCloudProvider,
+    committedCloudModel,
     providerAllowed,
     streamingOnly,
   ]);
   const displayedCloudProvider = effectiveCloudSelection.provider;
   const displayedCloudModel = effectiveCloudSelection.model;
-  // A blank Note Recording or Upload provider runs on the dictation one, and a
-  // managed policy runs an allowed provider in place of one it refuses.
-  const providerInUse = useSettingsStore((settings) => {
-    const effective = selectPolicyEffectiveSettings(settings, policyState);
-    if (transcriptionContext === "meeting") {
-      return selectResolvedMeetingTranscription(effective).cloudTranscriptionProvider;
-    }
-    if (transcriptionContext === "upload") {
-      return selectResolvedUploadTranscription(effective).cloudTranscriptionProvider;
-    }
-    return effective.cloudTranscriptionProvider;
-  });
+  // A tab that is only being browsed, or stands in for a provider this tab can't use, has
+  // no model of this panel's: the key alone is checked.
+  const panelModel = committedCloudProvider === displayedCloudProvider ? displayedCloudModel : "";
+
+  // Only dictation saves its corrected pair. Settings mounts the Note Recording and Upload
+  // pickers beside it, so a correction there rewrote a tab nobody opened (#3100): a blank
+  // provider there runs on dictation's, and one the tab can't use is named, not replaced.
+  const savesCorrectedSelection = transcriptionContext === "dictation";
+  const unavailableProvider =
+    !savesCorrectedSelection &&
+    !browsedCloudProvider &&
+    committedCloudProvider &&
+    committedCloudProvider !== displayedCloudProvider
+      ? committedCloudProvider === "custom"
+        ? t("transcription.customProvider")
+        : committedCloudProvider === "openwhispr"
+          ? t("settingsPage.transcription.modes.openwhispr")
+          : (providerName(committedCloudProvider) ?? committedCloudProvider)
+      : undefined;
 
   useEffect(() => {
     if (
+      !savesCorrectedSelection ||
       effectiveLocal ||
       browsedCloudProvider ||
       !shouldPersistProviderFallback(policyState, isSignedIn) ||
@@ -863,6 +914,7 @@ export default function TranscriptionModelPicker({
     onCloudModelSelect,
     onCloudProviderSelect,
     policyState,
+    savesCorrectedSelection,
     selectedCloudModel,
     selectedCloudProvider,
   ]);
@@ -1148,6 +1200,11 @@ export default function TranscriptionModelPicker({
 
   const handleCloudModelSelect = useCallback(
     (modelId: string) => {
+      if (
+        displayedCloudProvider !== "custom" &&
+        !isByokTranscriptionModelAllowed(displayedCloudProvider, modelId)
+      )
+        return;
       if (displayedCloudProvider !== selectedCloudProvider) {
         switchCloudTranscriptionProvider(transcriptionContext, displayedCloudProvider);
       }
@@ -1267,6 +1324,7 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: keyDraft.value("tinfoilApiKey", tinfoilApiKey),
     deepgramApiKey: keyDraft.value("deepgramApiKey", deepgramApiKey),
     assemblyaiApiKey: keyDraft.value("assemblyaiApiKey", assemblyaiApiKey),
+    elevenlabsApiKey: keyDraft.value("elevenlabsApiKey", elevenlabsApiKey),
     openrouterApiKey: keyDraft.value("openrouterApiKey", openrouterApiKey),
   };
   const customKey = keyDraft.value("customTranscriptionApiKey", customTranscriptionApiKey);
@@ -1283,14 +1341,13 @@ export default function TranscriptionModelPicker({
     tinfoilApiKey: setTinfoilApiKey,
     deepgramApiKey: setDeepgramApiKey,
     assemblyaiApiKey: setAssemblyaiApiKey,
+    elevenlabsApiKey: setElevenlabsApiKey,
     openrouterApiKey: setOpenrouterApiKey,
   };
 
   const endpointHold = useFocusHold();
   const editing = useFocusHold();
   const visible = usePanelVisible();
-  // A tab that is only being browsed has no model of this panel's: the key alone is checked.
-  const panelModel = selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : "";
   const browsedHint =
     browsedCloudProvider && displayedCloudProvider !== providerInUse
       ? browsedTabHint(t, displayedCloudProvider, providerInUse)
@@ -1394,25 +1451,27 @@ export default function TranscriptionModelPicker({
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
     const providerIcon = getRemoteProviderIcon(displayedCloudProvider);
-    return currentCloudProvider.models.map((m) => {
-      // OpenRouter brokers other vendors' models, so the id's prefix
-      // ("openai/…", "google/…") names the model better than OpenRouter's own
-      // mark. Vendors we have no icon for keep it, rather than showing none.
-      const slash = displayedCloudProvider === "openrouter" ? m.id.indexOf("/") : -1;
-      const vendorIcon = slash > 0 ? getRemoteProviderIcon(m.id.slice(0, slash)) : null;
-      const { icon, invertInDark } = vendorIcon?.icon ? vendorIcon : providerIcon;
-      return {
-        value: m.id,
-        label: m.name,
-        description: m.descriptionKey
-          ? t(m.descriptionKey, { defaultValue: m.description })
-          : m.description,
-        icon,
-        invertInDark,
-        legacy: m.legacy,
-      };
-    });
-  }, [currentCloudProvider, displayedCloudProvider, t]);
+    return currentCloudProvider.models
+      .filter((model) => modelAllowed(displayedCloudProvider, model.id))
+      .map((m) => {
+        // OpenRouter brokers other vendors' models, so the id's prefix
+        // ("openai/…", "google/…") names the model better than OpenRouter's own
+        // mark. Vendors we have no icon for keep it, rather than showing none.
+        const slash = displayedCloudProvider === "openrouter" ? m.id.indexOf("/") : -1;
+        const vendorIcon = slash > 0 ? getRemoteProviderIcon(m.id.slice(0, slash)) : null;
+        const { icon, invertInDark } = vendorIcon?.icon ? vendorIcon : providerIcon;
+        return {
+          value: m.id,
+          label: m.name,
+          description: m.descriptionKey
+            ? t(m.descriptionKey, { defaultValue: m.description })
+            : m.description,
+          icon,
+          invertInDark,
+          legacy: m.legacy,
+        };
+      });
+  }, [currentCloudProvider, displayedCloudProvider, modelAllowed, t]);
 
   const progressDisplay = useMemo(() => {
     if (!effectiveLocal) return null;
@@ -1622,6 +1681,12 @@ export default function TranscriptionModelPicker({
             />
           )}
 
+          {unavailableProvider && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {t("transcription.providerUnavailable", { provider: unavailableProvider })}
+            </p>
+          )}
+
           {providerAllowed(displayedCloudProvider) && (
             <div className="space-y-2">
               {displayedCloudProvider === "custom" ? (
@@ -1772,9 +1837,26 @@ export default function TranscriptionModelPicker({
                         </a>
                       </p>
                     )}
+                    {displayedCloudProvider === "elevenlabs" &&
+                      transcriptionContext !== "upload" && (
+                        <p className="text-xs text-muted-foreground/70">
+                          {t("transcription.elevenlabs.keytermsNote")}
+                        </p>
+                      )}
                   </div>
                 </div>
               )}
+              {transcriptionContext === "dictation" &&
+                assemblyAiCleanup &&
+                displayedCloudProvider === "assemblyai" && (
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      cleanupEnabled
+                        ? "settingsPage.aiModels.assemblyAiCleanup.pickerOn"
+                        : "settingsPage.aiModels.assemblyAiCleanup.pickerOff"
+                    )}
+                  </p>
+                )}
               {browsedHint && <p className="text-xs text-muted-foreground">{browsedHint}</p>}
             </div>
           )}

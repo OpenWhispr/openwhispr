@@ -8,6 +8,14 @@ export interface ConnectorPreviewNote {
   values?: Record<string, string>;
 }
 
+export interface SalesforcePreviewField {
+  key: string;
+  name: string;
+  label: string;
+  before: string;
+  maxLength: number;
+}
+
 export interface ConnectorPreview {
   /** i18n suffix under connectors.approval.headers (e.g. "default", "post"). */
   verbKey: string;
@@ -27,6 +35,7 @@ export interface ConnectorPreview {
    * lets the user choose another channel has one (never a thread reply or DM).
    */
   channel?: string;
+  salesforceFields?: SalesforcePreviewField[];
 }
 
 /** Somewhere a card can send to instead: one of the bound login's Slack channels. */

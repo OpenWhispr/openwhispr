@@ -98,6 +98,158 @@ async function renderChatStreaming(
 
 // Typed chat, the voice panel and a note's chat opt in; container chat leaves it off.
 const CONNECTOR_SURFACE = { allowConnectors: true };
+
+for (const provider of ["Cloud", "BYOK"]) {
+  for (const presentFindings of [false, true]) {
+    test(`${provider} keeps the model's reply and saves the rendered Salesforce briefing after it when the model ${presentFindings ? "rewrites it" : "skips analysis"}`, async (t) => {
+      const saved = [];
+      const { captured, reasoningService, getMessages } = await renderChatStreaming(
+        t,
+        {
+          ...CONNECTOR_SURFACE,
+          openNoteId: 7,
+          onStreamComplete: (_id, content) => saved.push(content),
+        },
+        {
+          settings: provider === "BYOK" ? BYOK_SETTINGS : {},
+          electronAPI: {
+            connectorStatus: async () => [
+              { id: "salesforce", connected: true, needsReconnect: false },
+            ],
+            getNote: async () => ({
+              id: 7,
+              space_id: 1,
+              title: "Pilot discussion",
+              content:
+                "Proposed pilot:\n8 reps for two weeks.\n\nUnselected detail:\nRAW_NOTE_SENTINEL",
+              transcript: "",
+              created_at: "2026-11-17 11:07:00",
+            }),
+            connectorQuery: async () => ({
+              status: "ok",
+              truncated: false,
+              items: [
+                {
+                  kind: "record",
+                  Name: "Test 2",
+                  objectType: "Opportunity",
+                  recordId: "006000000000001AAA",
+                  retrievedAt: "2026-11-17T12:09:35.016Z",
+                  Amount: null,
+                  unavailableFields: [],
+                },
+                { kind: "note", noteId: 7 },
+              ],
+            }),
+          },
+        }
+      );
+      async function* stream(execute) {
+        const args = { objectType: "Opportunity", recordId: "006000000000001AAA" };
+        yield { type: "content", text: "Pulling up the record." };
+        yield {
+          type: "tool_calls",
+          calls: [
+            { id: "sf-read", name: "salesforce_get_briefing", arguments: JSON.stringify(args) },
+          ],
+        };
+        const read = await execute("salesforce_get_briefing", args, "sf-read");
+        yield {
+          type: "tool_result",
+          callId: "sf-read",
+          toolName: "salesforce_get_briefing",
+          ...read,
+        };
+        if (presentFindings) {
+          const data = typeof read.data === "string" ? JSON.parse(read.data) : read.data;
+          const presentation = {
+            briefingId: data.briefingId,
+            findings: [
+              {
+                passageId: data.sources[0].passages[0].id,
+                status: "proposed",
+                category: "proposal",
+              },
+            ],
+            conflicts: [],
+          };
+          yield {
+            type: "tool_calls",
+            calls: [
+              {
+                id: "sf-present",
+                name: "salesforce_present_briefing",
+                arguments: JSON.stringify(presentation),
+              },
+            ],
+          };
+          const presented = await execute(
+            "salesforce_present_briefing",
+            presentation,
+            "sf-present"
+          );
+          yield {
+            type: "tool_result",
+            callId: "sf-present",
+            toolName: "salesforce_present_briefing",
+            ...presented,
+          };
+        }
+        yield { type: "content", text: "UNSUPPORTED: 40 reps approved for the pilot." };
+        yield { type: "done", finishReason: "stop" };
+      }
+      if (provider === "Cloud") {
+        reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+          stream((name, args, id) => config.executeToolCall(name, JSON.stringify(args), id))
+        );
+      } else {
+        reasoningService.processTextStreamingAI.mock.mockImplementation(
+          (_messages, _model, _provider, _config, tools) =>
+            stream(async (name, args, id) => {
+              const data = await tools[name].execute(args, { toolCallId: id, messages: [] });
+              return { data, metadata: data, displayText: "Retrieved" };
+            })
+        );
+      }
+      const completed = [];
+      await captured.sendToAI("Brief me on the selected Opportunity", [], {
+        onComplete: (result) => completed.push(result),
+      });
+      // Only read tools ran, but a briefing is never typed into another app.
+      assert.equal(completed[0].onlyRead, false);
+      const reply = getMessages().at(-1);
+      assert.match(reply.content, /Amount: not recorded/);
+      // The day the record was read, in this machine's zone.
+      const retrievedDay = new Date("2026-11-17T12:09:35.016Z").toLocaleDateString("en", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+      assert.ok(reply.content.includes(`Retrieved: ${retrievedDay}`));
+      // The model's own words come first, whole; a rule sets the code-rendered
+      // briefing apart, so a card placed in those words never lands inside it.
+      const briefingStart = reply.content.indexOf("**Test 2**");
+      assert.ok(briefingStart > 0);
+      assert.match(
+        reply.content.slice(0, briefingStart),
+        /^Pulling up the record\.[\s\S]*UNSUPPORTED: 40 reps approved for the pilot\.\n\n---\n\n$/
+      );
+      assert.doesNotMatch(reply.content.slice(briefingStart), /UNSUPPORTED|40 reps/);
+      assert.doesNotMatch(reply.content, /RAW_NOTE_SENTINEL/);
+      assert.ok(reply.toolCalls.every((call) => call.textOffset <= briefingStart));
+      assert.equal(reply.toolCalls[0].textOffset, "Pulling up the record.".length);
+      assert.match(
+        reply.content,
+        presentFindings ? /Proposed.*8 reps for two weeks/s : /Meeting findings were not prepared/
+      );
+      assert.doesNotMatch(
+        JSON.stringify(reply.toolCalls),
+        /RAW_NOTE_SENTINEL|renderedAnswer|sources/
+      );
+      assert.equal(saved.at(-1), reply.content);
+    });
+  }
+}
 const BYOK_SETTINGS = {
   chatAgentMode: "providers",
   chatAgentProvider: "openai",
@@ -975,7 +1127,7 @@ test("signed out, the model is told to point the user at signing in", async (t) 
   );
   assert.match(
     prompt,
-    /- Integrations \(Email, Slack, Linear, GitHub\): needs the user to sign in/
+    /- Integrations \(Email, Slack, Linear, GitHub, Salesforce\): needs the user to sign in/
   );
 });
 
@@ -987,7 +1139,7 @@ test("on a free plan, the model still writes the email and says sending it needs
   const prompt = systemPromptOf(sentMessages[0]);
   assert.match(
     prompt,
-    /still write it in full in your reply, then end with one short sentence on what sending it needs, as its line below says, never on connecting it[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
+    /still write it in full in your reply, then end with one short sentence on what sending it needs, as its line below says, never on connecting it[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub, Salesforce\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
   );
   assert.doesNotMatch(prompt, /Connect Slack and I can post this/);
   assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);

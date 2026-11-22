@@ -223,6 +223,96 @@ for (const prewarm of [false, true]) {
   });
 }
 
+for (const [name, failure, expectedError] of [
+  [
+    "refused key",
+    { success: false, error: "Provider rejected the API key" },
+    "Provider rejected the API key",
+  ],
+  ["expired sign-in", { success: false, code: "AUTH_REQUIRED" }, "signInRequired"],
+  ["policy refusal", { success: false, code: "POLICY_MODEL_BLOCKED" }, "POLICY_MODEL_BLOCKED"],
+  [
+    "thrown policy refusal",
+    Object.assign(new Error("Blocked"), { code: "POLICY_MODEL_BLOCKED" }),
+    "POLICY_MODEL_BLOCKED",
+  ],
+  [
+    "IPC rejection",
+    Object.assign(new Error("Configuration changed"), {
+      messageKey: "common.managedConfigUnavailable",
+    }),
+    "managedConfig:common.managedConfigUnavailable",
+  ],
+]) {
+  test(`${name} ends startup before pending device prompts resolve`, async (t) => {
+    installMicCaptureGlobals(t);
+    const mic = await navigator.mediaDevices.getUserMedia();
+    const stopMic = t.mock.method(mic.getTracks()[0], "stop");
+    const displayTrack = { stop: t.mock.fn() };
+    const display = {
+      getTracks: () => [displayTrack],
+      getAudioTracks: () => [displayTrack],
+      getVideoTracks: () => [],
+    };
+    const micPermission = Promise.withResolvers();
+    const displayPermission = Promise.withResolvers();
+    const requestedMic = Promise.withResolvers();
+    const requestedDisplay = Promise.withResolvers();
+    const startedMain = Promise.withResolvers();
+    const connection = Promise.withResolvers();
+    let sessionId;
+    navigator.mediaDevices.getUserMedia = () => {
+      requestedMic.resolve();
+      return micPermission.promise;
+    };
+    navigator.mediaDevices.getDisplayMedia = () => {
+      requestedDisplay.resolve();
+      return displayPermission.promise;
+    };
+    const stopMain = t.mock.fn(async () => ({ success: true }));
+    const api = {
+      checkSystemAudioAccess: async () => LOOPBACK,
+      meetingTranscriptionStart: (args) => {
+        sessionId = args.sessionId;
+        startedMain.resolve();
+        return connection.promise;
+      },
+      meetingTranscriptionStop: stopMain,
+    };
+    installBrowserGlobals(t, { window: { electronAPI: api, setTimeout } });
+    const vite = await createRendererServer(t, { cachePrefix: "meeting-refused-setup-" });
+    const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+    const starting = store.startRecording(START_ARGS);
+    await Promise.all([startedMain.promise, requestedMic.promise, requestedDisplay.promise]);
+    try {
+      if (failure instanceof Error) connection.reject(failure);
+      else connection.resolve(failure);
+      await new Promise((resolve) => setImmediate(resolve));
+      const state = store.useMeetingRecordingStore.getState();
+      assert.equal(state.error, expectedError);
+      assert.equal(state.isRecording, false);
+      assert.equal(state.isTranscribing, false);
+      await starting;
+      if (failure instanceof Error) {
+        assert.deepEqual(
+          stopMain.mock.calls.map(({ arguments: args }) => args),
+          [[sessionId, "error"]]
+        );
+      } else {
+        assert.equal(stopMain.mock.callCount(), 0, "main already rolled back its refusal");
+      }
+    } finally {
+      micPermission.resolve(mic);
+      displayPermission.resolve(display);
+      await starting;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(stopMic.mock.callCount(), 1);
+    assert.equal(displayTrack.stop.mock.callCount(), 1);
+    assert.equal(store.useMeetingRecordingStore.getState().error, expectedError);
+  });
+}
+
 test("failed cloud startup discards captured speech and releases the microphone", async (t) => {
   const session = await pendingStartup(t);
   session.speak([1234, -4567]);

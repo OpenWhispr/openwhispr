@@ -25,6 +25,8 @@ import { syncPendingAnalytics } from "./AnalyticsService.js";
 import { DictionaryService, type CloudDictionaryEntry } from "./DictionaryService.js";
 import { SharedDictionaryService } from "./SharedDictionaryService";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
+import { SkillsService } from "./SkillsService.js";
+import type { CloudSkillEntry, SkillSyncUnavailable } from "../types/skills";
 import { CloudApiError, isAuthContextError, wasRefusedBeforeSending } from "./cloudApi.js";
 import { LeaderboardService } from "./LeaderboardService";
 import { checkStandInOwnership } from "./standInOwnershipCheck";
@@ -109,6 +111,38 @@ import {
   type PurgedSpaceReason,
   type SyncConsent,
 } from "./syncPassPolicy";
+
+// Batches within the API's caps on count and size; a skill over the size cap on its own can't
+// reach here (the library holds it back as too large to back up).
+function skillBatches<T>(entries: T[]): T[][] {
+  const encoder = new TextEncoder();
+  const batches: T[][] = [];
+  let batch: T[] = [];
+  let bytes = 2;
+  for (const entry of entries) {
+    const size = encoder.encode(JSON.stringify(entry)).length + 1;
+    if (
+      batch.length === SKILL_BATCH_SIZE ||
+      (batch.length > 0 && bytes + size > SKILL_BATCH_BYTES)
+    ) {
+      batches.push(batch);
+      batch = [];
+      bytes = 2;
+    }
+    batch.push(entry);
+    bytes += size;
+  }
+  if (batch.length > 0) batches.push(batch);
+  return batches;
+}
+
+// How a skills pull went: the names it couldn't write, "failed" when it stopped early, or
+// "unsupported" on an API without skills routes.
+type SkillPullResult = { unwritten: Set<string> } | "failed" | "unsupported";
+
+// A lookup of this computer's copy of a skill that main couldn't finish.
+const isSkillLookupFailed = (row: unknown): row is SkillSyncUnavailable =>
+  (row as SkillSyncUnavailable | null | undefined)?.error === "unavailable";
 
 function isHttpStatus(err: unknown, status: number): boolean {
   return err instanceof CloudApiError && err.status === status;
@@ -248,6 +282,10 @@ const BATCH_SIZE = 50;
 const TRANSCRIPTION_BATCH_SIZE = 100;
 const DICTIONARY_BATCH_SIZE = 200;
 const SNIPPET_BATCH_SIZE = 200;
+// The API's caps on one skills batch-create, which it measures as the JSON of the entries.
+const SKILL_BATCH_SIZE = 10;
+const SKILL_BATCH_BYTES = 3 * 1024 * 1024;
+const SKILL_PAGE_SIZE = 50;
 // Minimum gap between auto syncs, measured from the last completed pass in
 // any window (the stamp lives in shared localStorage).
 const AUTO_SYNC_THROTTLE_MS = 20000;
@@ -299,6 +337,8 @@ const SYNC_CURSOR_KEYS = [
   "lastSyncedAt.dictionary.id",
   "lastSyncedAt.snippets",
   "lastSyncedAt.snippets.id",
+  "lastSyncedAt.skills",
+  "lastSyncedAt.skills.id",
 ];
 // Per account: cloud copies of a chat that another account took over while its
 // create was in flight, deleted when the sender is back to do it.
@@ -315,6 +355,11 @@ const UNOWNED_CURSORS_ACCOUNT_KEY = "syncCursors.unownedClaimedBy";
 const UNOWNED_CLAIM_PROGRESS_KEY = "syncCursors.unownedClaimProgress";
 const UNOWNED_CLAIM_RETRY_MS = 5 * 60 * 1000;
 const UNOWNED_CLAIM_MAX_RETRY_MS = 60 * 60 * 1000;
+// Per account: "done" once repair has checked every linked chat for messages its cloud
+// copy is missing (repairUnsentChatMessages), else when a failed check may next
+// run, so one that keeps failing doesn't walk every chat on every pass.
+const CHAT_MESSAGE_REPAIR_PREFIX = "syncCursors.chatMessages:";
+const CHAT_MESSAGE_REPAIR_RETRY_MS = 5 * 60 * 1000;
 // localStorage keys gating what a pass may sync; a change in another window
 // means sync may have just become possible (sign-in, subscription, backup
 // enabled, Insights opt-in).
@@ -668,6 +713,20 @@ function missingConversationMessages<Message extends { role: string; content: st
   });
 }
 
+// Whether a linked chat's cloud copy lacks messages this device holds. The
+// matcher alone can't settle it: an empty reply kept here can take the place
+// of a later reply the copy already holds, and a reply completed here can sit
+// in the place of one the copy holds empty. A copy that is missing messages
+// also holds fewer messages with text than this device does.
+function cloudCopyIsMissingMessages(
+  local: ReadonlyArray<{ role: string; content: string }>,
+  cloud: ReadonlyArray<{ role: string; content: string }>
+): boolean {
+  const withText = (messages: ReadonlyArray<{ content: string }>) =>
+    messages.filter((message) => message.content.length > 0).length;
+  return withText(local) > withText(cloud) && missingConversationMessages(local, cloud).length > 0;
+}
+
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   try {
     const raw = localStorage.getItem(PURGED_SPACE_GUARD_KEY);
@@ -757,6 +816,7 @@ export class SyncService {
   private autoSyncStarted = false;
   private dictionaryDirty = false;
   private snippetsDirty = false;
+  private skillsDirty = false;
   // The sign-in the running pass claimed the cursors under. A pass that went on
   // past an account switch would finish as the next account and stamp that
   // account's values into the departed account's cursor slots.
@@ -961,6 +1021,7 @@ export class SyncService {
       "syncCursors.privateBackup:",
       "syncCursors.privatePlacement:",
       "syncCursors.privatePlacementCandidates:",
+      CHAT_MESSAGE_REPAIR_PREFIX,
     ])
       localStorage.removeItem(`${prefix}${accountId}`);
     // While it is the cursor owner its cursors are the live ones, and the next
@@ -1277,23 +1338,14 @@ export class SyncService {
           if (!this.passIsCurrent()) return;
           await this.relocatePulledPrivateWorkspaces(accountId, authGeneration);
           if (!this.passIsCurrent()) return;
-          if (this.canSync()) await this.syncConversations();
+          if (this.canSync()) await this.syncConversations(accountId);
           if (!this.passIsCurrent()) return;
           if (this.canSync()) await this.syncTranscriptions();
           if (!this.passIsCurrent()) return;
-          // Edits during the awaits above set dictionaryDirty (syncing is already
-          // true), so re-run until clean rather than stalling until the next trigger.
-          if (this.canSync())
-            do {
-              this.dictionaryDirty = false;
-              if (!(await this.syncDictionary())) personalSucceeded = false;
-            } while (this.dictionaryDirty && this.passIsCurrent() && this.canSync());
-          if (!this.passIsCurrent()) return;
-          if (this.canSync())
-            do {
-              this.snippetsDirty = false;
-              await this.syncSnippets();
-            } while (this.snippetsDirty && this.passIsCurrent() && this.canSync());
+          this.dictionaryDirty = true;
+          this.snippetsDirty = true;
+          this.skillsDirty = true;
+          if (!(await this.syncDirtyLibraries())) personalSucceeded = false;
         } else {
           // Backup is off: team-space content still syncs (membership is
           // consent, D7) and note deletes still propagate so revoked/deleted
@@ -1303,12 +1355,14 @@ export class SyncService {
           await this.syncNotes(true);
         }
         if (!this.passIsCurrent()) return;
-        if (personalSucceeded && sharedResult !== "failed" && (full || sharedResult === "synced")) {
-          useSharedDictionaryStore.getState().markSynced(dictionaryGeneration);
-        }
         // Outside the branch above: Insights uploads ride their own opt-in,
         // while queued erasures run for every authenticated account.
         await this.syncAnalytics();
+        if (!(await this.syncDirtyLibraries())) personalSucceeded = false;
+        if (!this.passIsCurrent()) return;
+        if (personalSucceeded && sharedResult !== "failed" && (full || sharedResult === "synced")) {
+          useSharedDictionaryStore.getState().markSynced(dictionaryGeneration);
+        }
         // Stamped after the push, so a pass that moved counters is recorded as
         // work rather than as another empty one. A pass that loses auth before
         // reaching here now leaves the streak unstamped where it used to stamp
@@ -1390,39 +1444,7 @@ export class SyncService {
   }
 
   async syncDictionaryNow(): Promise<DictionarySyncResult> {
-    if (!this.canSync()) return "skipped";
-    // A sync already running will drain dictionaryDirty before it finishes, so
-    // flag a re-run instead of dropping this request.
-    if (this.syncing) {
-      this.dictionaryDirty = true;
-      return "skipped";
-    }
-    // Edits sync right away, possibly before this account's first syncAll()
-    // claimed the shared cursors, so they claim them under the same lock.
-    const accountId = getAuthRequestContextSnapshot().sessionUserId;
-    const authGeneration = getValidatedAuthGeneration();
-    if (!accountId || authGeneration == null) return "skipped";
-    this.syncing = true;
-    let result: DictionarySyncResult = "failed";
-    try {
-      result = await navigator.locks.request(SYNC_ALL_LOCK, async () => {
-        if (!this.claimSyncCursors(accountId, authGeneration)) return "skipped";
-        this.passGeneration = authGeneration;
-        let succeeded = true;
-        do {
-          this.dictionaryDirty = false;
-          if (!(await this.syncDictionary())) succeeded = false;
-        } while (this.dictionaryDirty && this.passIsCurrent());
-        return succeeded ? "synced" : "failed";
-      });
-    } catch (err) {
-      console.error("Dictionary sync failed:", err);
-    } finally {
-      this.syncing = false;
-      this.passGeneration = null;
-    }
-    await this.runDeferredSyncAll();
-    return result;
+    return this.syncLibraryNow("dictionary");
   }
 
   // A pass requested while an edit waited for the lock was deferred to it.
@@ -1454,31 +1476,65 @@ export class SyncService {
   }
 
   async syncSnippetsNow(): Promise<void> {
-    if (!this.canSync()) return;
-    if (this.syncing) {
-      this.snippetsDirty = true;
-      return;
-    }
+    await this.syncLibraryNow("snippets");
+  }
+
+  async syncSkillsNow(): Promise<void> {
+    await this.syncLibraryNow("skills");
+  }
+
+  private async syncLibraryNow(
+    kind: "dictionary" | "snippets" | "skills"
+  ): Promise<DictionarySyncResult> {
+    if (!this.canSync()) return "skipped";
+    this[`${kind}Dirty`] = true;
+    if (this.syncing) return "skipped";
+    // Edits sync right away, possibly before this account's first syncAll()
+    // claimed the shared cursors, so they claim them under the same lock.
     const accountId = getAuthRequestContextSnapshot().sessionUserId;
     const authGeneration = getValidatedAuthGeneration();
-    if (!accountId || authGeneration == null) return;
+    if (!accountId || authGeneration == null) return "skipped";
     this.syncing = true;
+    let result: DictionarySyncResult;
     try {
-      await navigator.locks.request(SYNC_ALL_LOCK, async () => {
-        if (!this.claimSyncCursors(accountId, authGeneration)) return;
+      // Immediate writes share the full pass's lock across renderer windows. Read pending
+      // rows only after acquiring it, so an older upload cannot follow a newer one.
+      result = await navigator.locks.request(SYNC_ALL_LOCK, async () => {
+        if (!this.claimSyncCursors(accountId, authGeneration)) return "skipped";
         this.passGeneration = authGeneration;
-        do {
-          this.snippetsDirty = false;
-          await this.syncSnippets();
-        } while (this.snippetsDirty && this.passIsCurrent());
+        if (!this.canSync()) return "skipped";
+        return (await this.syncDirtyLibraries()) ? "synced" : "failed";
       });
     } catch (err) {
-      console.error("Snippets sync failed:", err);
+      result = isAuthContextError(err) ? "skipped" : "failed";
+      if (!isAuthContextError(err)) console.error("Library sync failed:", err);
     } finally {
       this.syncing = false;
       this.passGeneration = null;
     }
     await this.runDeferredSyncAll();
+    return result;
+  }
+
+  private async syncDirtyLibraries(): Promise<boolean> {
+    let dictionarySucceeded = true;
+    // A write may arrive during a different library's pass, including one already visited.
+    while (
+      this.passIsCurrent() &&
+      this.canSync() &&
+      (this.dictionaryDirty || this.snippetsDirty || this.skillsDirty)
+    ) {
+      for (const kind of ["dictionary", "snippets", "skills"] as const) {
+        if (!this.passIsCurrent() || !this.canSync()) return dictionarySucceeded;
+        if (!this[`${kind}Dirty`]) continue;
+        this[`${kind}Dirty`] = false;
+        if (kind === "dictionary") {
+          if (!(await this.syncDictionary())) dictionarySucceeded = false;
+        } else if (kind === "snippets") await this.syncSnippets();
+        else await this.syncSkills();
+      }
+    }
+    return dictionarySucceeded;
   }
 
   debouncedPush(entityType: string, entityId: number): void {
@@ -4182,12 +4238,64 @@ export class SyncService {
     }
   }
 
-  private async syncConversations(): Promise<void> {
+  private async syncConversations(accountId: string): Promise<void> {
+    await this.repairUnsentChatMessages(accountId);
+    if (!this.passIsCurrent() || !this.canSync()) return;
     await this.pushPendingConversations();
     if (!this.passIsCurrent()) return;
     await this.pushConversationDeletes();
     if (!this.passIsCurrent()) return;
     await this.pullConversations();
+  }
+
+  // Older builds never queued synced chats again. Check each local cloud ID:
+  // a delta pull cannot see unchanged copies, and timestamp-only snapshot
+  // pagination can skip chats created in the same second at a page boundary.
+  private async repairUnsentChatMessages(accountId: string): Promise<void> {
+    const key = `${CHAT_MESSAGE_REPAIR_PREFIX}${accountId}`;
+    const state = localStorage.getItem(key);
+    if (state === "done" || Date.now() < Number(state)) return;
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
+    let checked = false;
+    try {
+      const conversations =
+        (await window.electronAPI.getSyncedLinkedConversations?.(authGeneration)) ?? [];
+      stopIfPullStale(conversations);
+      for (const conversation of conversations) {
+        stopIfSignInReplaced(authGeneration);
+        if (!this.canSync()) return;
+        const local = await window.electronAPI.getAgentConversation?.(conversation.id);
+        if (
+          !local ||
+          local.cloud_id !== conversation.cloud_id ||
+          !(await this.canUploadConversation(local))
+        )
+          continue;
+        try {
+          const { messages } = await ConversationsService.listMessages(
+            conversation.cloud_id,
+            authGeneration
+          );
+          stopIfSignInReplaced(authGeneration);
+          if (cloudCopyIsMissingMessages(local.messages, messages)) {
+            stopIfPullStale(
+              await window.electronAPI.markConversationPending?.(local.id, authGeneration)
+            );
+          }
+        } catch (error) {
+          // Normal delete reconciliation handles cloud copies that no longer exist.
+          if (!isHttpStatus(error, 404)) throw error;
+        }
+      }
+      await assertAuthGenerationCurrent(authGeneration);
+      checked = true;
+    } catch (error) {
+      if (!isAuthContextError(error)) console.error("Chat message repair failed:", error);
+    }
+    // A check the sign-in ended under says nothing about this account's chats.
+    if (!this.passIsCurrent()) return;
+    localStorage.setItem(key, checked ? "done" : String(Date.now() + CHAT_MESSAGE_REPAIR_RETRY_MS));
   }
 
   private async pushPendingConversations(): Promise<void> {
@@ -4303,6 +4411,24 @@ export class SyncService {
 
           // The next push sends what this row is still missing from the cloud.
           if (local?.cloud_id && local.sync_status === "pending") continue;
+
+          // A linked chat the cloud is missing messages of was settled as synced
+          // by an older build, which never queued a chat again after its first
+          // upload; queued now, the next push sends only what's missing. The
+          // counts come first, so a complete chat costs no lookup.
+          if (
+            local?.cloud_id === cloudConv.id &&
+            local.message_count > (cloudConv.messages?.length ?? 0)
+          ) {
+            const full = await window.electronAPI.getAgentConversation?.(local.id);
+            stopIfSignInReplaced(authGeneration);
+            if (full && cloudCopyIsMissingMessages(full.messages, cloudConv.messages ?? [])) {
+              stopIfPullStale(
+                await window.electronAPI.markConversationPending?.(local.id, authGeneration)
+              );
+              continue;
+            }
+          }
 
           // Applying a cloud copy replaces every local message, and messages added
           // after a chat's first create exist only on this device.
@@ -5452,6 +5578,229 @@ export class SyncService {
     } catch (err) {
       if (!isAuthContextError(err)) console.error("Snippet pull failed:", err);
       return false;
+    }
+  }
+
+  private async syncSkills(): Promise<void> {
+    const api = window.electronAPI;
+    const required = [
+      "getPendingSkills",
+      "getPendingSkillDeletes",
+      "exportSkillForCloud",
+      "getSkillForCloudMerge",
+      "applySkillFromCloud",
+      "markSkillSynced",
+      "hardDeleteSkill",
+      "queueSkillCloudDelete",
+      "clearSkillCloudId",
+      "broadcastSkillsUpdated",
+    ] as const;
+    const missing = required.filter((name) => typeof api[name] !== "function");
+    if (missing.length > 0) {
+      throw new Error(`Skill IPC bindings missing — preload out of date: ${missing.join(", ")}`);
+    }
+
+    // Unlike snippets, the pull goes first: a skill this computer has never sent meets a copy
+    // of the same name from another device there, and the newer of the two wins. So no such
+    // skill is sent until a pull has compared it. An API from before skills answers 404 on
+    // every skills route: nothing to do there.
+    const pulled = await this.pullSkills();
+    if (pulled === "unsupported" || !this.passIsCurrent()) return;
+    await this.pushPendingSkills(pulled);
+    if (!this.passIsCurrent()) return;
+    await this.pushSkillDeletes();
+  }
+
+  private async pushPendingSkills(pulled: Exclude<SkillPullResult, "unsupported">): Promise<void> {
+    const pending = (await window.electronAPI.getPendingSkills?.()) ?? [];
+    const updates = [];
+    const creates = [];
+    for (const row of pending) {
+      const exported = await window.electronAPI.exportSkillForCloud?.(row.name);
+      // A skill that needs fixing, or is over the backup caps, stays on this computer.
+      if (!exported || "tooLargeToSync" in exported) continue;
+      const entry = {
+        name: row.name,
+        enabled: row.enabled === 1,
+        content_hash: exported.contentHash,
+        files: exported.files,
+        edited_at: normalizeTimestamp(row.updated_at),
+      };
+      if (row.cloud_id) {
+        const switchOnly = exported.contentHash === row.synced_hash;
+        updates.push({ cloudId: row.cloud_id, entry, switchOnly });
+      } else if (pulled !== "failed" && !pulled.unwritten.has(row.name))
+        creates.push({
+          ...entry,
+          client_skill_id: row.client_skill_id,
+          created_at: row.created_at,
+        });
+    }
+
+    for (const { cloudId, entry, switchOnly } of updates) {
+      try {
+        const { name: _name, ...fields } = entry;
+        // Files unchanged here go unsent, so they can't replace a newer copy from another device.
+        const server = await SkillsService.update(
+          cloudId,
+          switchOnly ? { enabled: entry.enabled, edited_at: entry.edited_at } : fields
+        );
+        await window.electronAPI.markSkillSynced?.(
+          entry.name,
+          server.id,
+          server.updated_at,
+          entry.content_hash,
+          entry.enabled
+        );
+      } catch (err) {
+        if (isHttpStatus(err, 404)) {
+          // Purged in the cloud, or deleted there from another device: the next push creates
+          // it again, so the skill comes back.
+          await window.electronAPI.clearSkillCloudId?.(entry.name);
+        } else {
+          console.error("Skill update sync failed:", err);
+        }
+      }
+    }
+
+    for (const batch of skillBatches(creates)) {
+      try {
+        const { created } = await SkillsService.batchCreate(batch);
+        const byName = new Map(created.map((server) => [server.name, server]));
+        for (const local of batch) {
+          const server = byName.get(local.name);
+          if (!server) continue;
+          const result = await window.electronAPI.markSkillSynced?.(
+            local.name,
+            server.id,
+            server.updated_at,
+            local.content_hash,
+            local.enabled
+          );
+          if (result?.changes !== 0) continue;
+          // Edited meanwhile, it is sent again next pass. Uninstalled meanwhile, the copy
+          // that got through must go too, or the next pull would bring it back.
+          const row = await window.electronAPI.getSkillForCloudMerge?.(server);
+          // A lookup that failed can't tell, so the copy is left as it is.
+          if (isSkillLookupFailed(row)) continue;
+          if (!row || row.deleted_at) {
+            await window.electronAPI.queueSkillCloudDelete?.(local.name, server.id);
+          }
+        }
+      } catch (err) {
+        console.error("Skill batch create failed:", err);
+      }
+    }
+  }
+
+  private async pushSkillDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingSkillDeletes?.()) ?? [];
+    for (const row of deletes) {
+      if (!row.cloud_id) continue;
+      try {
+        await SkillsService.delete(row.cloud_id);
+        await window.electronAPI.hardDeleteSkill?.(row.name);
+      } catch (err) {
+        if (isHttpStatus(err, 404)) {
+          await window.electronAPI.hardDeleteSkill?.(row.name);
+        } else {
+          console.error("Skill delete sync failed:", err);
+        }
+      }
+    }
+  }
+
+  private async pullSkills(): Promise<SkillPullResult> {
+    let changed = false;
+    try {
+      // Listing rescans the skills folder, so an edit made outside the app since it was last
+      // read is a pending change here, which the cloud's copy doesn't replace.
+      await window.electronAPI.skillsList?.();
+      const since = localStorage.getItem("lastSyncedAt.skills") ?? undefined;
+      const sinceId = localStorage.getItem("lastSyncedAt.skills.id") ?? undefined;
+      // A skill that couldn't be written holds the cursor back, so the next pass tries it again.
+      const unwritten = new Set<string>();
+
+      let cursor: string | undefined = since;
+      let cursorId: string | undefined = sinceId;
+      let maxUpdatedAt = normalizeTimestamp(since);
+      let maxId = sinceId ?? "";
+      const cursorField: keyof Pick<CloudSkillEntry, "created_at" | "updated_at"> = since
+        ? "updated_at"
+        : "created_at";
+
+      while (true) {
+        const { entries, hasMore } = since
+          ? await SkillsService.listDelta(cursor, SKILL_PAGE_SIZE, cursorId)
+          : await SkillsService.listSnapshot(cursor, SKILL_PAGE_SIZE, cursorId);
+        if (entries.length === 0) break;
+
+        for (const cloudEntry of entries) {
+          const cloudTs = normalizeTimestamp(cloudEntry.updated_at);
+          const local = await window.electronAPI.getSkillForCloudMerge?.(cloudEntry);
+          // Comparing with nothing would take the cloud's copy over this one.
+          if (isSkillLookupFailed(local)) throw new Error("Couldn't read a skill on this computer");
+
+          if (cloudTs > maxUpdatedAt) {
+            maxUpdatedAt = cloudTs;
+            maxId = cloudEntry.id;
+          } else if (cloudTs === maxUpdatedAt && cloudEntry.id > maxId) {
+            maxId = cloudEntry.id;
+          }
+
+          // A delete wins, as for snippets, except over a skill this computer has never sent.
+          // A change waiting to be sent wins over the cloud's copy (the push that follows
+          // replaces it); a skill never sent meets the cloud's copy, and the one edited last
+          // wins, by when each device edited it rather than when the cloud received it. A
+          // synced skill whose files differ from the cloud's takes them, since a switch-only
+          // push leaves the files another device sent meanwhile in the cloud only.
+          const pending = local?.sync_status === "pending";
+          const shouldApply = cloudEntry.deleted_at
+            ? !!local && !local.deleted_at && !(pending && !local.cloud_id)
+            : !local ||
+              (pending
+                ? !local.cloud_id &&
+                  normalizeTimestamp(cloudEntry.edited_at) > normalizeTimestamp(local.updated_at)
+                : cloudTs > normalizeTimestamp(local.updated_at) ||
+                  local.cloud_id !== cloudEntry.id ||
+                  local.content_hash !== cloudEntry.content_hash);
+          if (!shouldApply) continue;
+          try {
+            const applied = await window.electronAPI.applySkillFromCloud?.(
+              cloudEntry,
+              local ?? null
+            );
+            if (typeof applied === "object") {
+              throw new Error(`Couldn't write the skill: ${applied.error}`);
+            }
+            if (applied) changed = true;
+          } catch (err) {
+            unwritten.add(cloudEntry.name);
+            console.error("Skill pull could not write a skill:", err);
+          }
+        }
+
+        if (!hasMore) break;
+        const last = entries[entries.length - 1];
+        const nextCursor = last[cursorField];
+        if (nextCursor === cursor && last.id === cursorId) break;
+        cursor = nextCursor;
+        cursorId = last.id;
+      }
+
+      // After a sign-in change mid-pull, the pages came from another account than the cursor's.
+      if (unwritten.size === 0 && this.passIsCurrent()) {
+        if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.skills", maxUpdatedAt);
+        if (maxId) localStorage.setItem("lastSyncedAt.skills.id", maxId);
+      }
+      return { unwritten };
+    } catch (err) {
+      if (isHttpStatus(err, 404)) return "unsupported";
+      console.error("Skill pull failed:", err);
+      return "failed";
+    } finally {
+      // Also after a pull that stopped early: the skills it wrote are on disk already.
+      if (changed) await window.electronAPI.broadcastSkillsUpdated?.();
     }
   }
 

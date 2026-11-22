@@ -103,6 +103,7 @@ import DeveloperSection from "./DeveloperSection";
 import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
 import DictationTranslationSettings from "./settings/DictationTranslationSettings";
+import DictationCleanupSettings from "./settings/DictationCleanupSettings";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
@@ -881,25 +882,13 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
   };
 
   return (
-    <div className="space-y-4">
-      <SettingsPanel>
-        <SettingsPanelRow>
-          <SettingsRow
-            label={t("settingsPage.aiModels.enableTextCleanup")}
-            description={t("settingsPage.aiModels.enableTextCleanupDescription")}
-          >
-            <Toggle checked={useCleanupModel} onChange={setUseCleanupModel} />
-          </SettingsRow>
-        </SettingsPanelRow>
-      </SettingsPanel>
-
-      {useCleanupModel && (
-        <>
-          <InferenceConfigEditor scope="dictationCleanup" onModeChange={handleCleanupModeChange} />
-          <GpuDeviceSelector purpose="intelligence" />
-        </>
-      )}
-    </div>
+    <DictationCleanupSettings
+      enabled={useCleanupModel}
+      onEnabledChange={setUseCleanupModel}
+      onModeChange={handleCleanupModeChange}
+    >
+      <GpuDeviceSelector purpose="intelligence" />
+    </DictationCleanupSettings>
   );
 }
 

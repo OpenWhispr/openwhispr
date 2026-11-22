@@ -357,6 +357,34 @@ test("a service named as where it went is not a person it went to", async () => 
   assert.equal(await unbacked("I posted it to Sam.", { earlierCalls: [toEng] }), true);
 });
 
+test("a Salesforce write backs saying so, and only one that went out", async () => {
+  const isOffered = (name) => name.startsWith("salesforce_") || OFFERED.has(name);
+  const destination = "Opportunity: Acme renewal (006000000000001AAA)";
+  const exported = sent("salesforce_export_conversation", { destination });
+  const fields = sent("salesforce_update_fields", { destination });
+  const uncertain = call("salesforce_export_conversation", {
+    metadata: { status: "unknown", destination },
+  });
+  const refused = call("salesforce_export_conversation", {
+    metadata: { status: "failed", destination },
+  });
+  const cases = [
+    ["I've sent the meeting summary to Salesforce.", { turnCalls: [exported] }, false],
+    ["I've sent the field values to Salesforce.", { turnCalls: [fields] }, false],
+    ["I've sent the meeting summary to Salesforce.", { turnCalls: [uncertain] }, false],
+    ["Your summary has been posted to Acme renewal.", { turnCalls: [exported] }, false],
+    ["I've created it in Salesforce.", { turnCalls: [exported] }, false],
+    ["I sent the summary to Salesforce.", { earlierCalls: [exported] }, false],
+    ["I sent the summary to Acme.", { earlierCalls: [exported] }, false],
+    ["I sent the summary to Gabe.", { earlierCalls: [exported] }, true],
+    ["I've sent the meeting summary to Salesforce.", { turnCalls: [refused] }, true],
+    ["I've sent the meeting summary to Salesforce.", {}, true],
+    ["I've emailed the summary to Gabe.", { turnCalls: [exported] }, true],
+  ];
+  for (const [text, calls, expected] of cases)
+    assert.equal(await unbacked(text, { ...calls, isOffered }), expected, text);
+});
+
 test("a very long reply isn't checked, so matching never stalls the chat", async () => {
   const long = `${"word ".repeat(2_000)} I've sent the email to Gabe.`;
   assert.equal(await unbacked(long), false);
@@ -538,4 +566,11 @@ test("a report a lookup could be repeating is left alone; a first-person claim i
   assert.equal(await unbacked("It was sent to Acme.", { turnCalls }), false);
   assert.equal(await unbacked("It was sent to Acme."), true);
   assert.equal(await unbacked("I've sent it to Acme.", { turnCalls }), true);
+  for (const name of [
+    "salesforce_search_records",
+    "salesforce_get_record",
+    "salesforce_get_briefing",
+  ]) {
+    assert.equal(await unbacked("It was sent to Acme.", { turnCalls: [call(name)] }), false, name);
+  }
 });

@@ -73,6 +73,7 @@ test("effective merge intersects permissions without granting disjoint modes", (
   workspace.transcription.allowedModes = ["local"];
   device.transcription.allowedByokProviders = [];
   device.features.meetingRecordingEnabled = false;
+  workspace.features.apiAccessEnabled = false;
   device.dataRetention.audioRetentionMaxDays = 7;
   workspace.dataRetention.localHistoryMode = "always_off";
   device.requiredLocalModels = ["tiny"];
@@ -82,6 +83,7 @@ test("effective merge intersects permissions without granting disjoint modes", (
   const result = mergePolicies([device, workspace]);
   assert.deepEqual(result.transcription.allowedByokProviders, []);
   assert.equal(result.features.meetingRecordingEnabled, false);
+  assert.equal(result.features.apiAccessEnabled, false);
   assert.equal(result.dataRetention.audioRetentionMaxDays, 7);
   assert.equal(result.dataRetention.localHistoryMode, "always_off");
   assert.deepEqual(result.requiredLocalModels, ["base", "tiny"]);

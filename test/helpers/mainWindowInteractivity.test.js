@@ -257,14 +257,28 @@ test("a destroyed window is never touched", () => {
   assert.deepEqual(hoverCycle("linux", win), []);
 });
 
-test("Linux reports visibility and restores capture only after a failed shape writer settles", async () => {
+test("Linux sets the ignore flag before the helper writes the region and restores capture after a writer failure", async () => {
   const original = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "linux", configurable: true });
   try {
     let visible = false;
     const win = { ...fakeWindow(), isVisible: () => visible, isMinimized: () => false };
     const manager = Object.assign(Object.create(WindowManager.prototype), { mainWindow: win });
-    applyInputRegion = async () => undefined;
+    manager.setMainWindowInteractivity(false);
+    const pillRegion = {
+      x: 12,
+      y: 10,
+      width: 40,
+      height: 40,
+      viewportWidth: 208,
+      viewportHeight: 120,
+    };
+    applyInputRegion = async (region) => {
+      // Electron reapplies this flag on every bounds, state and theme change. It must
+      // already match the surface when the helper writes the more precise X11 shape.
+      assert.equal(win.calls.at(-1)?.ignore, region !== null);
+    };
+    await manager.setMainWindowInputRegion(pillRegion);
     assert.equal(await manager.setMainWindowInputRegion(null), false);
     visible = true;
     assert.equal(await manager.setMainWindowInputRegion(null), true);
@@ -273,11 +287,12 @@ test("Linux reports visibility and restores capture only after a failed shape wr
       new Promise((_, reject) => {
         rejectAfterClose = reject;
       });
-    const applying = manager.setMainWindowInputRegion(null);
-    assert.deepEqual(win.calls, []);
+    win.calls.length = 0;
+    const applying = manager.setMainWindowInputRegion(pillRegion);
+    assert.deepEqual(win.calls, [{ ignore: true, options: undefined }]);
     rejectAfterClose(new Error("helper closed"));
     await assert.rejects(applying, /helper closed/);
-    assert.deepEqual(win.calls, [INTERACTIVE]);
+    assert.deepEqual(win.calls, [{ ignore: true, options: undefined }, INTERACTIVE]);
     win.isDestroyed = () => true;
     assert.equal(await manager.setMainWindowInputRegion(null), false);
   } finally {

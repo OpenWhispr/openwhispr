@@ -103,25 +103,54 @@ export function analyzeDictionaryPromptFragment(text, dictionaryPrompt) {
 export function matchesDictionaryPrompt(text, dictionaryPrompt) {
   if (!text || !dictionaryPrompt) return false;
 
-  const normalizedText = normalize(text);
-  const normalizedPrompt = normalize(dictionaryPrompt);
-
+  const terms = promptTerms(dictionaryPrompt);
+  const normalizedPrompt = terms.join(" ");
+  const normalizedText = promptTerms(text).join(" ");
   if (!normalizedText || !normalizedPrompt) return false;
-
   if (normalizedText === normalizedPrompt) return true;
 
-  const dictWords = new Set(normalizedPrompt.split(" "));
-  const uniqueTextWords = new Set(normalizedText.split(" "));
-
-  let matchCount = 0;
-  for (const word of uniqueTextWords) {
-    if (dictWords.has(word)) matchCount++;
+  const textWords = normalizedText.split(" ");
+  const promptWords = normalizedPrompt.split(" ");
+  if (terms.length === 1) {
+    // A single phrase can loop in full; repeating its first word is ordinary speech.
+    return (
+      textWords.length % promptWords.length === 0 &&
+      textWords.every((word, index) => word === promptWords[index % promptWords.length])
+    );
   }
 
-  const textComposition = matchCount / uniqueTextWords.size;
-  const dictionaryUsage = matchCount / dictWords.size;
+  // Count only complete entries in the order sent. Shared vocabulary alone would
+  // discard “Massachusetts General Hospital” for “General Hospital, Massachusetts”.
+  const transcript = ` ${normalizedText} `;
+  const uniqueTextWords = new Set(textWords);
+  const matchedWords = new Set();
+  let offset = 0;
+  let matchedTerms = 0;
+  for (const term of terms) {
+    const words = term.split(" ");
+    if (!uniqueTextWords.has(words[0])) continue;
+    const start = transcript.indexOf(` ${term} `, offset);
+    if (start === -1) continue;
+    offset = start + 1 + term.length;
+    matchedTerms++;
+    for (const word of words) matchedWords.add(word);
+  }
 
-  return textComposition >= 0.9 && dictionaryUsage >= 0.7;
+  const textComposition = matchedWords.size / uniqueTextWords.size;
+  const dictionaryUsage = matchedWords.size / new Set(promptWords).size;
+  return matchedTerms >= 2 && textComposition >= 0.9 && dictionaryUsage >= 0.7;
+}
+
+// A multiword keyterm can account for most of the dictionary's vocabulary
+// by itself. Saying all or part of that one phrase is ordinary dictation.
+export function isSingleKeytermUtterance(text, keyterms) {
+  const textWords = normalize(text).split(" ");
+  return keyterms.some((term) => {
+    const termWords = normalize(term).split(" ");
+    return (
+      textWords.length <= termWords.length && textWords.every((word) => termWords.includes(word))
+    );
+  });
 }
 
 export function isLikelyDictionaryPromptFragment(text, dictionaryPrompt) {

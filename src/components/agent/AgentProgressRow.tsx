@@ -9,6 +9,7 @@ import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import githubMark from "../../assets/icons/github.svg";
 import linearMark from "../../assets/icons/linear.svg";
+import salesforceMark from "../../assets/icons/salesforce.svg";
 import slackMark from "../../assets/icons/slack.svg";
 
 // A connector's own tools show its app's logo, by the tool-name prefix.
@@ -16,6 +17,7 @@ const APP_LOGOS: Record<string, { src: string; monochrome: boolean }> = {
   slack: { src: slackMark, monochrome: false },
   linear: { src: linearMark, monochrome: true },
   github: { src: githubMark, monochrome: true },
+  salesforce: { src: salesforceMark, monochrome: false },
 };
 const MAX_GROUPED_ICONS = 3;
 

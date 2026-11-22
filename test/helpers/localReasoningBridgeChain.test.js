@@ -102,6 +102,7 @@ async function setupChain(t, respond) {
 
   const serverManager = modelManager.serverManager;
   serverManager.cachedServerBinaryPaths = { default: "/stub/llama-server" };
+  serverManager.modelPath = path.join(modelManager.modelsDir, model.fileName);
   serverManager.ready = true;
   serverManager.process = {};
   serverManager.port = server.address().port;
