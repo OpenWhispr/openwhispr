@@ -884,6 +884,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     static let suggestionRestDelay: TimeInterval = 3
     /// How long after the last key a host's report of the text is taken as current.
     static let fieldReportSettleDelay: TimeInterval = 0.4
+    /// How often the recording waveform takes one step, whichever recorder feeds it.
+    static let voiceMeterInterval: TimeInterval = 0.12
     /// Where the pill's icon starts; the animated dots overlay the icon's place.
     static let pillLeadingInset: CGFloat = 16
     static let toolbarButtonSize: CGFloat = 36
@@ -1297,6 +1299,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var cancelledProcessingJobId: String?
   private var voiceMeterHistory: [CGFloat] = []
   private var smoothedVoiceLevel: CGFloat = 0
+  private var pendingDirectLevel: Float = 0
+  private var lastDirectLevelUpdate: TimeInterval = 0
 
   // Agent flow state. isAgentGenerating gates the "Writing" pill + result poll so
   // it can't collide with a normal-dictation transcription. The Link overlay
@@ -4439,7 +4443,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func startRecordingPoll() {
     stopRecordingPoll()
-    recordingPollTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
+    recordingPollTimer = Timer.scheduledTimer(withTimeInterval: Metrics.voiceMeterInterval, repeats: true) { [weak self] _ in
       self?.pollRecordingState()
     }
     if let recordingPollTimer {
@@ -5451,7 +5455,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     direct.onStateChange = { [weak self] state in self?.renderDirectState(state) }
     direct.onLevel = { [weak self] level in
       guard let self, self.directDictation?.state == .recording else { return }
-      self.updateVoiceMeterBars(level: level)
+      // Levels arrive per audio chunk (about 47 a second). The bars move one step per
+      // update and were paced for the app's 0.12 s poll, so the loudest level of each
+      // such window drives one step.
+      self.pendingDirectLevel = max(self.pendingDirectLevel, level)
+      let now = ProcessInfo.processInfo.systemUptime
+      guard now - self.lastDirectLevelUpdate >= Metrics.voiceMeterInterval else { return }
+      self.lastDirectLevelUpdate = now
+      self.updateVoiceMeterBars(level: self.pendingDirectLevel)
+      self.pendingDirectLevel = 0
     }
     direct.onText = { [weak self] text in
       guard let self else { return }
