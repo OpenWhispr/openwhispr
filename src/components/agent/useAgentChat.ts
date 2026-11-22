@@ -56,6 +56,7 @@ export function useAgentChat({
     sourceNoteId: persistence.noteId ?? undefined,
     allowConnectors: true,
     allowInteractions: true,
+    screenOnRequest: true,
     skillsEnabled: true,
     onStreamComplete: persistence.saveAssistantMessage,
     claimConversation: persistence.claimConversation,

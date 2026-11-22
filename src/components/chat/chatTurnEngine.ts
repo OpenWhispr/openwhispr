@@ -72,6 +72,11 @@ import { getLlmDictionaryWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
+import {
+  createLookAtScreenTool,
+  LOOK_AT_SCREEN_PROMPT,
+  LOOK_AT_SCREEN_TOOL,
+} from "../../services/tools/lookAtScreenTool";
 import { adaptToolsForVoice } from "../../services/voice/voiceToolPolicy";
 import type { SpokenLanguage } from "../../services/voice/types";
 import type { SharedDictionaryWord } from "../../services/tools/dictionaryTool";
@@ -249,6 +254,21 @@ export interface OpenNoteContext {
   transcriptPreview: boolean;
 }
 
+// How long a look at the screen waits on the capture before it reports it couldn't read it.
+const SCREEN_CAPTURE_WAIT_MS = 3000;
+
+async function captureScreenNow(): Promise<ChatImageAttachment | null> {
+  try {
+    const image = await Promise.race([
+      window.electronAPI?.captureScreenContext?.(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), SCREEN_CAPTURE_WAIT_MS)),
+    ]);
+    return image ? { image: image.data, mediaType: image.mediaType } : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface ChatTurnOptions {
   userName: string | null;
   isOwnerCurrent?: () => boolean;
@@ -301,6 +321,11 @@ export interface ChatTurnOptions {
   nameUnavailableCapabilities?: boolean;
   /** Disable product-help tools on guided surfaces such as the onboarding demo. */
   productHelpEnabled?: boolean;
+  /**
+   * Offer look_at_screen while screen context is on (the agent window): the user talks
+   * to the assistant while they work, so it sees the screen as it is when it asks.
+   */
+  screenOnRequest?: boolean;
   /** The user's skills reach the model. Off unless a surface opts in. */
   skillsEnabled?: boolean;
   /**
@@ -611,6 +636,7 @@ export function createChatTurnEngine(
       allowConnectors = false,
       nameUnavailableCapabilities = true,
       productHelpEnabled = true,
+      screenOnRequest = false,
       skillsEnabled = false,
       onStreamComplete,
       onTurnCheckpoint,
@@ -790,6 +816,16 @@ export function createChatTurnEngine(
           ? currentOpenNote
           : undefined;
       const policy = usePolicyStore.getState();
+      // A request that already carries a screenshot (taken at the press) has no need to look.
+      const lookAtScreen =
+        screenOnRequest &&
+        supportsTools &&
+        !requestedAttachment &&
+        settings.voiceAgentScreenContext &&
+        isScreenContextAllowed(policy) &&
+        (isCloudAgent ||
+          (providerSupportsImages(llmConfig.provider) &&
+            !!getCloudModel(llmConfig.model, llmConfig.provider)?.supportsVision));
       const calendarConnected = selectCalendarConnected(settings);
       const webSearchEnabled = isWebSearchAllowed(policy);
       const connectorPlan = hasConnectorPlan(getUsageState(), readIsSubscribed());
@@ -818,7 +854,9 @@ export function createChatTurnEngine(
               ),
               // A screenshot reaches a BYOK model that can see; Cloud's chat
               // path doesn't route images yet.
+              // look_at_screen already sees it: the user turned screen context on.
               screenAccess:
+                !lookAtScreen &&
                 !isCloudAgent &&
                 isScreenContextAllowed(policy) &&
                 providerSupportsImages(llmConfig.provider) &&
@@ -883,6 +921,22 @@ export function createChatTurnEngine(
               }
             : undefined,
         });
+        if (lookAtScreen) {
+          registry.register(
+            createLookAtScreenTool({
+              capture: captureScreenNow,
+              describe: isCloudAgent
+                ? (question, screen, signal) =>
+                    ReasoningService.askAboutScreen(
+                      question,
+                      { data: screen.image, mediaType: screen.mediaType },
+                      LOOK_AT_SCREEN_PROMPT,
+                      signal
+                    )
+                : undefined,
+            })
+          );
+        }
         if (options?.voice) {
           adaptToolsForVoice(registry, {
             dryRunWrites: options.voice.dryRunWrites,
@@ -1596,7 +1650,9 @@ export function createChatTurnEngine(
                 {
                   id: currentToolCallId(call.id),
                   name: call.name,
-                  arguments: call.arguments,
+                  // A question to look_at_screen can quote what an earlier look read:
+                  // the chat keeps only that it looked.
+                  arguments: call.name === LOOK_AT_SCREEN_TOOL ? "{}" : call.arguments,
                   status: "executing",
                   startedAt: Date.now(),
                   textOffset: fullContent.length,
