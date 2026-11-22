@@ -60,6 +60,10 @@ export default function AccountLayout() {
         options={{ title: 'Keyboard Tone', headerLargeTitle: false }}
       />
       <Stack.Screen
+        name="keyboard-autocorrection"
+        options={{ title: 'Autocorrection', headerLargeTitle: false }}
+      />
+      <Stack.Screen
         name="hardware-keyboard"
         options={{ title: 'Hardware Keyboard', headerLargeTitle: false }}
       />

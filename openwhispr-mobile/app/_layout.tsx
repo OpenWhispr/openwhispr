@@ -41,6 +41,7 @@ import { initProductEvents } from '@/lib/productEvents';
 import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
+import { startKeyboardAutocorrectionSync } from '@/lib/keyboardAutocorrectionSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
 import { startKeyboardFullAccessProbe } from '@/lib/keyboardFullAccessProbe';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
@@ -121,6 +122,7 @@ function RootLayout() {
     let started = false;
     let stopTone: (() => void) | undefined;
     let stopAgent: (() => void) | undefined;
+    let stopAutocorrection: (() => void) | undefined;
     let stopFullAccessProbe: (() => void) | undefined;
     // Waits for config to hydrate so the probe's Sentry events respect the
     // user's Usage Analytics preference rather than the pre-hydration default.
@@ -130,6 +132,7 @@ function RootLayout() {
         started = true;
         stopTone = startKeyboardToneSync();
         stopAgent = startKeyboardAgentSync();
+        stopAutocorrection = startKeyboardAutocorrectionSync();
         stopFullAccessProbe = startKeyboardFullAccessProbe();
       }
     };
@@ -140,6 +143,7 @@ function RootLayout() {
       unsubscribe();
       stopTone?.();
       stopAgent?.();
+      stopAutocorrection?.();
       stopFullAccessProbe?.();
     };
   }, []);
