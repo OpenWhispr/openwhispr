@@ -121,6 +121,26 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     checks.check("an undone correction isn't made again", proxy.documentContextBeforeInput == "Teh teh ")
   }
 
+  // The pronoun, through the keys: mid-sentence, after a lower-case start, and typed again
+  // after deleting it.
+  do {
+    let (keyboard, proxy, _) = makeTypingKeyboard()
+    keyboard.uiTestType("Now i think i can ")
+    checks.check("i mid-sentence becomes I (got \(proxy.documentContextBeforeInput ?? "nil"))", proxy.documentContextBeforeInput == "Now I think I can ")
+    let (lower, lowerProxy, _) = makeTypingKeyboard { $0.autocapitalizationType = .none }
+    lower.uiTestType("now i think ")
+    checks.check("i becomes I in a field that doesn't capitalise (got \(lowerProxy.documentContextBeforeInput ?? "nil"))", lowerProxy.documentContextBeforeInput == "now I think ")
+    let (again, againProxy, _) = makeTypingKeyboard()
+    again.uiTestType("Now i ")
+    // One backspace takes the capital back this once; it must not turn the correction off.
+    again.touchTestTapDelete()
+    checks.check("backspace after I undoes it once (got \(againProxy.documentContextBeforeInput ?? "nil"))", againProxy.documentContextBeforeInput == "Now i ")
+    again.touchTestTapDelete()
+    again.touchTestTapDelete()
+    again.uiTestType("i am and i go ")
+    checks.check("i is still capitalised afterwards (got \(againProxy.documentContextBeforeInput ?? "nil"))", againProxy.documentContextBeforeInput == "Now I am and I go ")
+  }
+
   // The suggestion bar, strip style: the pill gives way to three slots and a mic button.
   do {
     let (keyboard, proxy, _) = makeTypingKeyboard()

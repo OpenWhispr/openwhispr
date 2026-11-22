@@ -4535,6 +4535,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// mid-action follow-up keeps its retained card (existing versions stay
   /// insertable) with a note, matching the agent_error/cancel behaviour.
   private func surfaceHandoffFailure(title: String) {
+    noteDictationDebug("app-path failure shown: \(title), status \(KeyboardHandoffProvider.shared.transcriptionStatus() ?? "nil")")
     waitForTranscriptTimer?.invalidate()
     waitForTranscriptTimer = nil
     if isAgentGenerating {
@@ -4778,6 +4779,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func showIssueState(title: String) {
+    noteDictationDebug("issue shown: \(title)")
     KeyboardLog.ui.error("Issue state shown: \(title, privacy: .public)")
     KeyboardLog.echo("Issue state shown: \(title)")
     dictationLinkHosting?.view.isUserInteractionEnabled = false
@@ -4886,6 +4888,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       // the app can recover the handoff when the deep link never reaches JS
       // (cold-launch getInitialURL races deliver null and the tap dies).
       if dictationLinkHosting?.view.isUserInteractionEnabled == true {
+        noteDictationDebug("tap: hand-off link (opens the app)")
         KeyboardHandoffProvider.shared.markHandoffIntent()
       }
     case .cancelled, .failed:
@@ -5406,8 +5409,20 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     if isDirectTakeActive { renderDirectState(direct.state) }
   }
 
+  /// A running record of what dictation did, kept in the shared defaults so it can be read
+  /// off a test phone: which path a tap took, states, counts and reasons. No audio, no text.
+  private func noteDictationDebug(_ event: String) {
+    guard hasFullAccess, let defaults = KeyboardHandoffProvider.shared.sharedDefaults() else { return }
+    var lines = (defaults.string(forKey: "keyboard_debug_dictation") ?? "").split(separator: "\n").map(String.init)
+    var line = "\(Int(Date().timeIntervalSince1970)) \(event)"
+    if #available(iOS 26.0, *) { line += " | " + DirectDictationRuntime.shared.diagnosticsSummary }
+    lines.append(line)
+    defaults.set(lines.suffix(30).joined(separator: "\n"), forKey: "keyboard_debug_dictation")
+  }
+
   private func renderDirectState(_ state: DirectDictationState) {
     logRecordMarker("direct.\(state)")
+    noteDictationDebug("direct state \(state)")
     switch state {
     case .starting:
       showTransientRecordState(title: "Starting", systemImage: "ellipsis", background: Palette.accent, duration: 3.0)
@@ -5441,6 +5456,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func handleDirectRecordTapped() {
+    noteDictationDebug("tap: in-keyboard path")
     recordButton.removeTarget(self, action: #selector(handleDirectRecordTapped), for: .touchUpInside)
     logRecordMarker("handleDirectRecordTapped")
     // Music or Bluetooth audio may have started since the pill was drawn; recording here would
@@ -5465,6 +5481,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     cancelledProcessingJobId = nil
     isRemoteRecordingActive = false
     didRequestStopForCurrentSession = false
+    noteDictationDebug("tap: app-session path")
     logRecordMarker("handleDarwinRecordTapped.beforeRequest")
     KeyboardHandoffProvider.shared.requestStart()
     isDarwinStartPending = true

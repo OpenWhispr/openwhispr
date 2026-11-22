@@ -211,7 +211,9 @@ final class TypingSession {
     if writesInLowerCase, !isPronoun, replacement.lowercased() == lowered { return nil }
     // Corrected a moment ago, deleted, and typed again the same way: the user means it. It
     // stays, from now on.
-    if let insisted = retypedAfterCorrection, insisted == typed.lowercased() {
+    if let insisted = retypedAfterCorrection, insisted == typed.lowercased(),
+      TypingLexicon.key(of: typed) != TypingLexicon.key(of: replacement)
+    {
       retypedAfterCorrection = nil
       corrector.keepAsTyped(typed)
       if policy.learns, let learnedWords, typed.allSatisfy(\.isLetter), typed.count >= 2 {
@@ -264,10 +266,16 @@ final class TypingSession {
       let current = correction.replacement + correction.delimiter
       if tail.hasSuffix(current) {
         let edit = TextEdit(deleteCount: current.count, insert: correction.original + correction.delimiter)
-        corrector.keepAsTyped(correction.original)
-        if policy.learns, let learnedWords, correction.original.allSatisfy(\.isLetter) {
-          learnedWords.learn(correction.original)
-          corrector.learned.insert(correction.original)
+        // Undoing a different word means "I meant what I typed": it is kept from now on.
+        // Undoing a capital or an apostrophe ("I", "don't") is a one-off; the keyboard goes
+        // on making that correction.
+        let sameWord = TypingLexicon.key(of: correction.original) == TypingLexicon.key(of: correction.replacement)
+        if !sameWord {
+          corrector.keepAsTyped(correction.original)
+          if policy.learns, let learnedWords, correction.original.allSatisfy(\.isLetter), correction.original.count >= 2 {
+            learnedWords.learn(correction.original)
+            corrector.learned.insert(correction.original)
+          }
         }
         apply(edit)
         return edit
