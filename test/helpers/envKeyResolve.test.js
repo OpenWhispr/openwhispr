@@ -331,18 +331,27 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-async function importFromRealShell(shell, files, names) {
+async function importFromRealShell(shell, files, names, { environment, checkHome } = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "ow-shell-import-"));
   try {
     for (const [name, content] of Object.entries(files)) {
-      fs.writeFileSync(path.join(home, name), content);
+      const file = path.join(home, name);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, content);
     }
-    const env = { SHELL: shell, HOME: home, PATH: "/usr/bin:/bin", USER: "ow-test" };
+    const env = {
+      SHELL: shell,
+      HOME: home,
+      PATH: "/usr/bin:/bin",
+      USER: "ow-test",
+      ...environment?.(home),
+    };
     const result = await importMissingSecretsFromLoginShell({
       secretNames: names,
       env,
       platform: "linux",
     });
+    checkHome?.(home);
     return { ...result, env };
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
@@ -467,3 +476,203 @@ test(
     assert.equal(env.GROQ_API_KEY, value);
   }
 );
+
+for (const restoresTracing of [false, true]) {
+  test(
+    `Bash does not repeat an rc sourced with tracing off (restored: ${restoresTracing})`,
+    {
+      skip: !fs.existsSync("/bin/bash"),
+    },
+    async () => {
+      const { env } = await importFromRealShell(
+        "/bin/bash",
+        {
+          ".bash_profile": ["set +T", '. "$HOME/includes"', restoresTracing ? "set -T" : ":"].join(
+            "\n"
+          ),
+          includes: '. "$HOME/.bashrc"\n',
+          ".bashrc": 'echo rc >> "$HOME/count"\nexport OPENAI_API_KEY=once\n',
+        },
+        ["OPENAI_API_KEY", "GROQ_API_KEY"],
+        {
+          checkHome: (home) =>
+            assert.equal(fs.readFileSync(path.join(home, "count"), "utf8"), "rc\n"),
+        }
+      );
+      assert.equal(env.OPENAI_API_KEY, "once");
+    }
+  );
+}
+
+test(
+  "an independent Bash rc is read when the profile disables tracing",
+  {
+    skip: !fs.existsSync("/bin/bash"),
+  },
+  async () => {
+    const { env } = await importFromRealShell(
+      "/bin/bash",
+      {
+        ".bash_profile":
+          "set +T\ncommand printf ''\ncommand -v true >/dev/null\nbuiltin export GROQ_API_KEY=profile\n",
+        ".bashrc": "export OPENAI_API_KEY=independent-rc\n",
+      },
+      ["OPENAI_API_KEY", "GROQ_API_KEY"]
+    );
+    assert.equal(env.OPENAI_API_KEY, "independent-rc");
+    assert.equal(env.GROQ_API_KEY, "profile");
+  }
+);
+
+for (const includeRc of [false, true]) {
+  test(
+    `Bash follows the files loaded by a prompt helper with tracing disabled (includes rc: ${includeRc})`,
+    { skip: !fs.existsSync("/bin/bash") },
+    async () => {
+      const { env } = await importFromRealShell(
+        "/bin/bash",
+        {
+          ".bash_profile": [
+            "set -eu",
+            "trap 'case $BASH_COMMAND in \": nested\") exit 13;; \": after_prompt\") export ANTHROPIC_API_KEY=hook;; esac' DEBUG",
+            "set +T",
+            ". \"$HOME/aliases\"",
+            'setup_prompt() { [[ $- != *T* ]] || exit 11; . "$HOME/prompt"; }',
+            "setup_prompt",
+            ": after_prompt",
+          ].join("\n"),
+          aliases: ': nested\n[[ $- != *T* ]] || exit 12\nexport GROQ_API_KEY=alias-file\n',
+          prompt: includeRc ? '. "$HOME/.bashrc"\n' : "PROMPT_COMMAND=:\n",
+          ".bashrc": 'echo rc >> "$HOME/count"\nexport OPENAI_API_KEY=rc-only\n',
+        },
+        ["OPENAI_API_KEY", "GROQ_API_KEY", "ANTHROPIC_API_KEY", "CUSTOM_TRANSCRIPTION_API_KEY"],
+        {
+          checkHome: (home) =>
+            assert.equal(fs.readFileSync(path.join(home, "count"), "utf8"), "rc\n"),
+        }
+      );
+      assert.equal(env.OPENAI_API_KEY, "rc-only");
+      assert.equal(env.GROQ_API_KEY, "alias-file");
+      assert.equal(env.ANTHROPIC_API_KEY, "hook");
+    }
+  );
+}
+
+for (const invocation of ["setup-prompt", '"$prompt_helper"', '"${prompt_helper}"']) {
+  test(
+    `Bash observes a prompt helper invoked as ${invocation} without repeating its rc`,
+    { skip: !fs.existsSync("/bin/bash") },
+    async () => {
+      const { env } = await importFromRealShell(
+        "/bin/bash",
+        {
+          ".bash_profile": [
+            "set +T",
+            'setup-prompt() { [[ $- != *T* ]] || exit 11; . "$HOME/.bashrc"; }',
+            "prompt_helper=setup-prompt",
+            invocation,
+          ].join("\n"),
+          ".bashrc": 'echo rc >> "$HOME/count"\nexport OPENAI_API_KEY=rc-only\n',
+        },
+        ["OPENAI_API_KEY", "GROQ_API_KEY"],
+        {
+          checkHome: (home) =>
+            assert.equal(fs.readFileSync(path.join(home, "count"), "utf8"), "rc\n"),
+        }
+      );
+      assert.equal(env.OPENAI_API_KEY, "rc-only");
+    }
+  );
+}
+
+test(
+  "Zsh uses the desktop's ZDOTDIR and XDG configuration paths",
+  {
+    skip: !fs.existsSync("/bin/zsh"),
+  },
+  async () => {
+    const { env } = await importFromRealShell(
+      "/bin/zsh",
+      {
+        ".zshrc": "export OPENAI_API_KEY=old-account\n",
+        "zsh/.zshrc": '. "$XDG_CONFIG_HOME/credentials"\n',
+        "xdg/credentials": "export OPENAI_API_KEY=selected-account\n",
+      },
+      ["OPENAI_API_KEY"],
+      {
+        environment: (home) => ({
+          ZDOTDIR: path.join(home, "zsh"),
+          XDG_CONFIG_HOME: path.join(home, "xdg"),
+        }),
+      }
+    );
+    assert.equal(env.OPENAI_API_KEY, "selected-account");
+  }
+);
+
+test(
+  "reading Zsh credentials does not run login-session cleanup",
+  {
+    skip: !fs.existsSync("/bin/zsh"),
+  },
+  async () => {
+    const { env } = await importFromRealShell(
+      "/bin/zsh",
+      {
+        ".zshrc": "export OPENAI_API_KEY=zsh-account\n",
+        ".zlogout": ': > "$HOME/logged-out"\n',
+      },
+      ["OPENAI_API_KEY"],
+      {
+        checkHome: (home) => assert.equal(fs.existsSync(path.join(home, "logged-out")), false),
+      }
+    );
+    assert.equal(env.OPENAI_API_KEY, "zsh-account");
+  }
+);
+
+test(
+  "a credential probe gives a shell prompt EOF",
+  {
+    skip: !fs.existsSync("/bin/bash"),
+  },
+  async () => {
+    const { env } = await importFromRealShell(
+      "/bin/bash",
+      {
+        ".bash_profile": "read -t 3 answer || :\nexport OPENAI_API_KEY=after-prompt\n",
+      },
+      ["OPENAI_API_KEY"]
+    );
+    assert.equal(env.OPENAI_API_KEY, "after-prompt");
+  }
+);
+
+for (const background of [false, true]) {
+  test(
+    `a startup command holding output pipes cannot stall the probe (background: ${background})`,
+    {
+      skip: !fs.existsSync("/bin/bash"),
+    },
+    async () => {
+      const started = Date.now();
+      const { reason, env } = await importFromRealShell(
+        "/bin/bash",
+        {
+          ".bash_profile": [
+            'trap "" TERM',
+            background ? "sleep 6 &" : "sleep 6",
+            "export OPENAI_API_KEY=after-command",
+          ].join("\n"),
+        },
+        ["OPENAI_API_KEY"]
+      );
+      assert.ok(
+        Date.now() - started < 4500,
+        "the public import promise waited for the six-second command"
+      );
+      assert.equal(reason, background ? "ok" : "exec-failed");
+      assert.equal(env.OPENAI_API_KEY, background ? "after-command" : undefined);
+    }
+  );
+}

@@ -3,9 +3,22 @@
 # when a profile registers a DEBUG handler of its own.
 set -T
 __ow_user_debug=-
+__ow_hide_debug_at=0
 __ow_observe_source() {
   local __ow_status=$?
   __ow_probe_active=1
+  if (( __ow_hide_debug_at && ${#BASH_LINENO[@]} <= __ow_hide_debug_at )); then
+    __ow_hide_debug_at=0
+  fi
+  if (( ${__ow_call_depth:-0} )); then
+    set +T
+    # A function's entry event repeats the invocation before its first command.
+    if (( ${#BASH_LINENO[@]} > __ow_call_depth )) && [[ ${FUNCNAME[1]:-} != source ]]; then
+      __ow_call_depth=0
+      return "$__ow_status"
+    fi
+    __ow_call_depth=0
+  fi
   if [[ -z ${__ow_rc_seen:-} && ${BASH_SOURCE[1]:-} -ef "$HOME/.bashrc" ]]; then
     __ow_rc_seen=1
   fi
@@ -13,6 +26,40 @@ __ow_observe_source() {
   # impending trap invocation, so ordinary builtins (e.g. declare or local)
   # still run in the caller's scope. Never save, evaluate or print BASH_COMMAND.
   [[ -n ${FUNCNAME[1]:-} && ${FUNCNAME[1]} != __ow_* ]] || return "$__ow_status"
+  # With tracing off the caller still receives DEBUG. Pass the observer into
+  # the next source or function, restoring +T before its first command runs.
+  if [[ $- != *T* && -z ${__ow_rc_seen:-} ]]; then
+    case ${BASH_COMMAND%%[[:space:]]*} in
+      # Bash itself resolves a variable used as a command name. Its new frame
+      # identifies a function or source without expanding that variable here.
+      .|source|'$'[a-zA-Z_]*|'"$'[a-zA-Z_]*|'${'[a-zA-Z_]*|'"${'[a-zA-Z_]*)
+        __ow_call_depth=${#BASH_LINENO[@]}
+        ;;
+      command|builtin)
+        local __ow_prefix __ow_builtin
+        for __ow_prefix in '' 'command ' 'command -- ' 'command -p ' 'command -p -- '; do
+          for __ow_builtin in '' 'builtin ' 'builtin -- '; do
+            case $BASH_COMMAND in
+              "${__ow_prefix}${__ow_builtin}."[[:space:]]*|"${__ow_prefix}${__ow_builtin}source"[[:space:]]*)
+                __ow_call_depth=${#BASH_LINENO[@]}
+                break 2
+                ;;
+            esac
+          done
+        done
+        ;;
+      *[!a-zA-Z0-9_-]*|'') ;;
+      *)
+        if declare -F -- "${BASH_COMMAND%%[[:space:]]*}" >/dev/null; then
+          __ow_call_depth=${#BASH_LINENO[@]}
+        fi
+        ;;
+    esac
+    if (( ${__ow_call_depth:-0} )); then
+      if (( ! __ow_hide_debug_at )); then __ow_hide_debug_at=${#BASH_LINENO[@]}; fi
+      set -T
+    fi
+  fi
   case $BASH_COMMAND in
     trap|trap[[:space:]]*)
       if ! declare -F trap >/dev/null; then
@@ -74,7 +121,11 @@ __ow_trap() {
       __ow_user_debug=$__ow_action
       case $__ow_action in
         -|'') command builtin trap '__ow_observe_source || :' DEBUG ;;
-        *) command builtin trap "$__ow_action"$'\n''__ow_observe_source' DEBUG ;;
+        *)
+          # The user's hook stays in the frames to which Bash would have passed
+          # it. A case selector preserves the preceding command's status.
+          command builtin trap 'case $(( __ow_hide_debug_at && ${#BASH_LINENO[@]} >= __ow_hide_debug_at )) in 0)'$'\n'"$__ow_action"$'\n'';; esac; __ow_observe_source' DEBUG
+          ;;
       esac
     else
       command builtin trap "$__ow_action" "$__ow_signal"

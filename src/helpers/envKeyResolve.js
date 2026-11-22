@@ -62,7 +62,8 @@ function buildShellImportScript(shell, names) {
           "fi",
         ]
       : []),
-    "true",
+    // Returning from a login Zsh would run the user's session cleanup (.zlogout).
+    bash ? "true" : "exec /bin/sh -c ':'",
   ].join("\n");
 }
 
@@ -116,6 +117,8 @@ function resolveLoginShell(
 function loginShellChildEnv(env, shell) {
   const child = {
     HOME: env.HOME,
+    ZDOTDIR: env.ZDOTDIR,
+    XDG_CONFIG_HOME: env.XDG_CONFIG_HOME,
     PATH: env.PATH,
     USER: env.USER,
     LOGNAME: env.LOGNAME,
@@ -165,6 +168,7 @@ async function importMissingSecretsFromLoginShell({
   const opts = {
     encoding: "utf8",
     timeout: 1500,
+    killSignal: "SIGKILL",
     maxBuffer: 2 * 1024 * 1024,
     env: loginShellChildEnv(env, shell),
   };
@@ -177,7 +181,10 @@ async function importMissingSecretsFromLoginShell({
       const result = await execFile(shell, args, opts);
       output = (result && result.stdout) || result || "";
     } else {
-      const { stdout } = await execFileAsync(shell, args, opts);
+      const execution = execFileAsync(shell, args, opts);
+      // A profile may prompt even though a desktop launch has no input to supply.
+      execution.child.stdin.end();
+      const { stdout } = await execution;
       output = stdout || "";
     }
   } catch {
