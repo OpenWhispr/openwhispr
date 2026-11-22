@@ -89,58 +89,45 @@
   transition: opacity 120ms ease-out;
 }
 
-/* A call's transcript opening or closing: the panel fades around the pill (AgentWindow's
-   CALL_PANEL_FADE_MS), in after Expand and out before Minimize. Where the window resizes
-   between them (not macOS), the pill shows again at once. The footer, which holds the
-   pill, never fades. */
+/* A call's transcript opening or closing: the panel grows out of its pill after Expand and
+   shrinks back into it before Minimize (AgentWindow's CALL_PANEL_MS), clipped to the
+   pill's box (AgentModal's --call-pill-inset; the fallback is the pill's usual place).
+   The pill sits inside that box throughout, so it never moves. Where the window resizes
+   between them (not macOS), the pill shows again at once. */
 .agent-window-content[data-shown="true"][data-instant] {
   transition: none;
 }
 
 .agent-window-content[data-shown="true"] .agent-modal[data-call-panel="entering"] {
-  animation: agent-call-panel-in 160ms ease-out both;
-}
-
-.agent-window-content[data-shown="true"]
-  .agent-modal[data-call-panel="entering"]
-  > :not(:last-child) {
-  animation: agent-call-chrome-in 160ms ease-out both;
+  animation: agent-call-panel-grow 150ms cubic-bezier(0.2, 0, 0, 1) both;
 }
 
 .agent-modal[data-call-panel="leaving"] {
-  background-color: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  transition:
-    background-color 160ms ease-in,
-    border-color 160ms ease-in,
-    box-shadow 160ms ease-in;
+  animation: agent-call-panel-shrink 150ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
-.agent-modal[data-call-panel="leaving"] > :not(:last-child) {
-  opacity: 0;
-  transition: opacity 160ms ease-in;
-}
-
-@keyframes agent-call-panel-in {
+/* Open, the clip reaches past the panel by the window's margin, so its shadow shows. */
+@keyframes agent-call-panel-grow {
   from {
-    background-color: transparent;
-    border-color: transparent;
-    box-shadow: none;
+    clip-path: inset(var(--call-pill-inset, calc(100% - 78px) calc(50% - 119px) 13px) round 24px);
+  }
+  to {
+    clip-path: inset(-8px round 32px);
   }
 }
 
-@keyframes agent-call-chrome-in {
+@keyframes agent-call-panel-shrink {
   from {
-    opacity: 0;
+    clip-path: inset(-8px round 32px);
+  }
+  to {
+    clip-path: inset(var(--call-pill-inset, calc(100% - 78px) calc(50% - 119px) 13px) round 24px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-modal[data-call-panel],
-  .agent-modal[data-call-panel] > * {
+  .agent-modal[data-call-panel] {
     animation: none !important;
-    transition: none !important;
   }
 }
 

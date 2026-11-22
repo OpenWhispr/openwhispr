@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, GitFork, Minimize, Plus } from "../icons";
 import { cn } from "../lib/utils";
@@ -130,7 +130,7 @@ interface AgentModalProps {
   children: ReactNode;
   /** The composer or the pill, docked at the bottom. */
   footer: ReactNode;
-  /** A call's transcript fading in around its pill, or out before the window shrinks to it. */
+  /** A call's transcript growing out of its pill, or shrinking back into it. */
   callPanel?: "entering" | "leaving" | null;
 }
 
@@ -148,8 +148,23 @@ export function AgentModal({
 }: AgentModalProps) {
   const { t } = useTranslation();
   const dragHandlers = useAgentWindowDrag();
+  const panelRef = useRef<HTMLDivElement>(null);
+  // The pill's box in the panel, which a call's transcript grows out of and shrinks back
+  // into; measured on every render of the animation, since the window may still resize.
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    const pill = panel?.querySelector("[data-voice-pill]");
+    if (!callPanel || !panel || !pill) return;
+    const outer = panel.getBoundingClientRect();
+    const box = pill.getBoundingClientRect();
+    panel.style.setProperty(
+      "--call-pill-inset",
+      `${box.top - outer.top}px ${outer.right - box.right}px ${outer.bottom - box.bottom}px ${box.left - outer.left}px`
+    );
+  });
   return (
     <div
+      ref={panelRef}
       className="agent-modal agent-panel relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-surface-0 shadow-[var(--shadow-modal)]"
       data-call-panel={callPanel ?? undefined}
     >

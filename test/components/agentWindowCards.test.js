@@ -1471,7 +1471,7 @@ test("in a call, Esc while a card sends stops only speech: the send's turn goes 
   await view.waitForLayout("modal");
 });
 
-test("a call's transcript fades out around its pill before the window shrinks to it", async (t) => {
+test("a call's transcript shrinks into its pill before the compact pill takes its place", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.open({ layout: "modal" }));
   await view.settle();
@@ -1484,7 +1484,12 @@ test("a call's transcript fades out around its pill before the window shrinks to
   );
 
   await React.act(async () => headerMinimize.click());
-  assert.equal(modal()?.dataset.callPanel, "leaving", "the panel fades first");
+  assert.equal(modal()?.dataset.callPanel, "leaving", "the panel shrinks first");
+  assert.match(
+    modal().style.getPropertyValue("--call-pill-inset"),
+    /^-?[\d.]+px -?[\d.]+px -?[\d.]+px -?[\d.]+px$/,
+    "into the pill's box"
+  );
   assert.equal(view.layout(), "modal", "while the window still holds it");
   assert.equal(
     view.host.querySelector(".agent-window-content").dataset.instant,

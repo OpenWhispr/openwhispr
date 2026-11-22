@@ -71,10 +71,11 @@ const PRESS_CAPTURE_WAIT_MS = 3000;
 // How long a new step may take to show the card it asks with.
 const STEP_SETTLE_MS = 300;
 const NOTICE_MS = 5000;
-// How long a call's transcript fades in or out around its pill (agent-window.css's call-panel rules).
+// How long a call's transcript takes to grow out of its pill or shrink back into it
+// (agent-window.css's call-panel rules).
 // On macOS a call's pill keeps the transcript's window (agentWindowManager), which never
 // resizes between them; elsewhere the window grows to the transcript and shrinks to the pill.
-const CALL_PANEL_FADE_MS = 160;
+const CALL_PANEL_MS = 150;
 // What the agent pill says once a call ends on its own.
 const CALL_END_NOTICES: Record<VoiceCallEndReason, string> = {
   meeting: "agentWindow.call.notices.endedForMeeting",
@@ -775,7 +776,7 @@ export default function AgentWindow() {
   // A card the user minimized the call's transcript over waits behind the
   // pill, which reads Waiting For Action until its cap brings the card back.
   const [hiddenCallCard, setHiddenCallCard] = useState<string | null>(null);
-  // The call's transcript fading in after Expand, or out before Minimize puts the pill alone.
+  // The call's transcript growing out of its pill after Expand, or shrinking back into it before Minimize.
   const [callPanel, setCallPanel] = useState<"entering" | "leaving" | null>(null);
   const callPanelTimerRef = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(callPanelTimerRef.current), []);
@@ -910,7 +911,7 @@ export default function AgentWindow() {
       (state.notice !== null || (pendingCard !== null && !listening && !transcribing)),
   });
 
-  // The fade is over once the window shows the layout it led to, or with the call.
+  // The animation is over once the window shows the layout it led to, or with the call.
   useEffect(() => {
     if (!callPanel) return undefined;
     if (!state.call || !state.visible) {
@@ -919,8 +920,8 @@ export default function AgentWindow() {
     }
     const arrived = callPanel === "entering" ? state.layout === "modal" : state.layout !== "modal";
     if (!surface.shown || !arrived) return undefined;
-    // Held a fade's length, so the frame that shows the pill again still skips the content's fade-in.
-    const timer = window.setTimeout(() => setCallPanel(null), CALL_PANEL_FADE_MS);
+    // Held the animation's length, so the frame that shows the pill again still skips the content's fade-in.
+    const timer = window.setTimeout(() => setCallPanel(null), CALL_PANEL_MS);
     return () => window.clearTimeout(timer);
   }, [callPanel, state.call, state.visible, state.layout, surface.shown]);
 
@@ -1573,8 +1574,8 @@ export default function AgentWindow() {
   };
   const collapseRef = useRef(collapse);
   collapseRef.current = collapse;
-  // A running call's transcript closes around its pill: the panel fades out, then the pill
-  // shows alone.
+  // A running call's transcript closes into its pill: the panel shrinks to the pill, then the
+  // pill shows alone.
   const minimizeCall = () => {
     if (!callActive || state.layout !== "modal" || callPanel === "leaving") {
       collapse();
@@ -1589,7 +1590,7 @@ export default function AgentWindow() {
       } else {
         setCallPanel(null);
       }
-    }, CALL_PANEL_FADE_MS);
+    }, CALL_PANEL_MS);
   };
   const voicePill = (inModal: boolean) => (
     <VoicePill
@@ -1673,7 +1674,7 @@ export default function AgentWindow() {
                       {callAbovePill}
                     </div>
                   )}
-                  {/* Fading out, the pill already wears its compact look. */}
+                  {/* Shrinking, the pill already wears its compact look. */}
                   {voicePill(callPanel !== "leaving")}
                 </div>
               ) : (
