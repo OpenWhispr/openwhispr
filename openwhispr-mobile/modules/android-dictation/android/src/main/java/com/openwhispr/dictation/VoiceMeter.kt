@@ -19,7 +19,7 @@ import kotlin.math.sqrt
  *   and words, so a hum (even one that starts mid-take) is learned in about a second and a voice never is. Until it has
  *   heard [WARM_UP_MS] of the room the bars rest.
  * - Only sound clearly above that noise moves the bars, on a gentle curve, rising in about 30 ms and
- *   falling back in about 160 ms, like a needle rather than a flicker.
+ *   falling back in about 120 ms (so syllables stay apart), like a needle rather than a flicker.
  */
 class VoiceMeter(private val sampleRate: Int = 16000, private val windowMs: Int = 20) {
   // RBJ high-pass biquad, Q 0.707.
@@ -83,6 +83,6 @@ class VoiceMeter(private val sampleRate: Int = 16000, private val windowMs: Int 
     /** Below 1 lifts quieter speech, so a normal voice moves the bars well. */
     const val CURVE = 0.7f
     const val ATTACK_MS = 30f
-    const val RELEASE_MS = 160f
+    const val RELEASE_MS = 120f
   }
 }

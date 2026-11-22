@@ -114,11 +114,12 @@ class BubbleFace(context: Context) : View(context) {
     duration = 1000; repeatCount = ValueAnimator.INFINITE; interpolator = LinearInterpolator()
     addUpdateListener { level += (target - level) * 0.3f; phase += 0.18f; stepBars(); invalidate() }
   }
-  /** Levels heard in the last 200 ms, so the side bars can follow what the middle did 40 and 80 ms ago. */
+  /** Levels heard in the last 200 ms, so the side bars can follow what the middle did a moment ago. */
   private val heard = ArrayDeque<Pair<Long, Float>>()
   /** The three bars' drawn heights, in dp for a 52 dp bubble (left, middle, right). */
   private val barHeights = BubblePolicy.bars(0f, 0f, 0f)
   private var lastStep = 0L
+  private var wave = 0f
 
   init {
     importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -141,18 +142,21 @@ class BubbleFace(context: Context) : View(context) {
     return value
   }
   /**
-   * Eases each bar toward where the voice puts it, about 90 ms per step, so a pause settles back to the
-   * logo's rest shape in under 200 ms. With animations off the bars hold that shape and only the halo moves.
+   * Eases each bar toward where the voice and the wave put it, the middle in about 70 ms and the sides
+   * gliding in about 160 ms, so a pause settles back to the logo's rest shape in about half a second. With animations off the bars hold that shape and only the halo moves.
    */
   private fun stepBars() {
     val now = SystemClock.uptimeMillis()
     val dt = if (lastStep == 0L) 16L else (now - lastStep).coerceIn(0L, 100L)
     lastStep = now
+    wave = BubblePolicy.waveStep(wave, target, dt)
     val goal = if (look != Look.LISTENING || BubbleMotion.reduced(context)) BubblePolicy.bars(0f, 0f, 0f)
     else BubblePolicy.bars(target, heardAgo(BubblePolicy.SIDE_LAGS_MS[0], now), heardAgo(BubblePolicy.SIDE_LAGS_MS[1], now),
-      sin((System.currentTimeMillis() - started) * 2 * PI / BubblePolicy.BREATH_MS).toFloat())
-    val ease = 1f - exp(-dt / 90f)
-    for (i in 0 until 3) barHeights[i] += (goal[i] - barHeights[i]) * ease
+      wave, sin((System.currentTimeMillis() - started) * 2 * PI / BubblePolicy.BREATH_MS).toFloat())
+    for (i in 0 until 3) {
+      val tau = if (i == 1) BubblePolicy.MIDDLE_EASE_MS else BubblePolicy.SIDE_EASE_MS
+      barHeights[i] += (goal[i] - barHeights[i]) * (1f - exp(-dt / tau))
+    }
   }
 
   /** Moves to [next] with the board's timings; [animate] false jumps (Remove animations, a fresh window). */
@@ -163,7 +167,7 @@ class BubbleFace(context: Context) : View(context) {
     animators.forEach { it.cancel() }; animators.clear()
     if (next == Look.LISTENING) {
       started = System.currentTimeMillis(); target = 0f; level = 0f
-      heard.clear(); lastStep = 0L; BubblePolicy.bars(0f, 0f, 0f).copyInto(barHeights)
+      heard.clear(); lastStep = 0L; wave = 0f; BubblePolicy.bars(0f, 0f, 0f).copyInto(barHeights)
     }
     val glassTo = if (next == Look.ICON) 0f else 1f
     val foldTo = if (next == Look.WRITING) 1f else 0f
