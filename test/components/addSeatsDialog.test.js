@@ -166,6 +166,8 @@ const setRange = (value) =>
     range().dispatchEvent(new happyWindow.Event("input", { bubbles: true }));
   });
 const waitForFocus = () => React.act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+const waitForQuote = () =>
+  React.act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
 
 test("the real dialog opens on the quantity, displays the dated totals and returns focus after purchase", async (t) => {
   const { messages, previewCalls } = await open(t);
@@ -195,7 +197,8 @@ test("the real dialog opens on the quantity, displays the dated totals and retur
   await setRange(20);
   assert.equal(byName("Increase seats").disabled, true);
   assert.equal(amount("Total seats"), "Total seats1030");
-  assert.deepEqual(previewCalls, [1, 5, 4, 5, 20]);
+  await waitForQuote();
+  assert.deepEqual(previewCalls, [1, 20]);
   await click("Add 20 seats");
   await waitForFocus();
   assert.equal(dialog() === null, true);

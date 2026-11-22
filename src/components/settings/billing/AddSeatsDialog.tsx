@@ -26,6 +26,7 @@ const PREFIX = "settingsPage.billing.addSeats.";
 const SURFACE = "overflow-hidden rounded-xl bg-surface-3";
 const STEP_BUTTON =
   "h-7 w-8 rounded-full bg-surface-raised text-sm text-muted-foreground disabled:opacity-40";
+const SEAT_PREVIEW_DEBOUNCE_MS = 300;
 
 interface Props {
   workspace: Workspace;
@@ -54,6 +55,7 @@ export function AddSeatsDialog({
   const active = useRef(false);
   const version = useRef(0);
   const locked = useRef(false);
+  const quantityChanged = useRef(false);
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState(1);
   // A lost response can follow a successful write. Every retry is bounded by the original total.
@@ -130,7 +132,11 @@ export function AddSeatsDialog({
       request === version.current &&
       isSameBillingIdentity(identity, currentBillingIdentity(workspaceId));
     setPreviewError(false);
-    if (previewDelta > 0 && !locked.current) {
+    // A quantity the user is still choosing waits to settle. Every other quote goes out at once.
+    const debounce = quantityChanged.current;
+    quantityChanged.current = false;
+    if (previewDelta <= 0 || locked.current) return;
+    const send = (): void => {
       void WorkspacesService.previewSeats(workspaceId, previewDelta, identity.authGeneration).then(
         (preview) => {
           if (!valid()) return;
@@ -166,7 +172,12 @@ export function AddSeatsDialog({
           void latestRefresh.current().catch(() => {});
         }
       );
+    };
+    if (debounce) {
+      const timer = setTimeout(send, SEAT_PREVIEW_DEBOUNCE_MS);
+      return () => clearTimeout(timer);
     }
+    send();
   }, [previewDelta, retryTarget, revision, workspaceId, identity, seatSnapshot]);
 
   useLayoutEffect(() => {
@@ -210,6 +221,7 @@ export function AddSeatsDialog({
     if (locked.current || quantityLocked || delta === value) return;
     setRetryTarget(null);
     ++version.current;
+    quantityChanged.current = true;
     setSelected(value);
   }
 

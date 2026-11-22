@@ -228,6 +228,8 @@ test("an open quote for A closes when the card shows B, and coming back to A doe
 const command = (key) => "settingsPage.billing.addSeats." + key;
 const primary = (container) => [...container.querySelectorAll('[role="dialog"] button')].at(-1);
 const settle = (fn) => React.act(async () => fn());
+const waitForQuote = () =>
+  React.act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
 
 test("only the newest opening and delta authorize a purchase, including +5 → 0 → +1", async (t) => {
   const { state, container, render, click } = await setup(t);
@@ -241,6 +243,7 @@ test("only the newest opening and delta authorize a purchase, including +5 → 0
     false
   );
   await click(command("increase"));
+  await waitForQuote();
   const old = state.previews.slice();
   await click("common.cancel");
   await click(ADD_SEAT);
@@ -260,6 +263,7 @@ test("a seat retry quotes the outstanding difference to the original total and r
   await render(paidWorkspace("a"));
   await click(ADD_SEAT);
   for (let index = 0; index < 4; index++) await click(command("increase"));
+  await waitForQuote();
   await settle(() => state.previews.at(-1).resolve({ ...quote(15), current_quantity: 10 }));
   const purchase = Promise.withResolvers();
   state.pendingPurchase = purchase.promise;
@@ -299,6 +303,7 @@ test("a failed remaining-seat quote waits for a manual retry and keeps the targe
   await render(paidWorkspace("a"));
   await click(ADD_SEAT);
   await click(command("increase"));
+  await waitForQuote();
   await resolvePreview("a", { ...quote(12), current_quantity: 10 });
   const purchase = Promise.withResolvers();
   state.pendingPurchase = purchase.promise;
@@ -322,6 +327,7 @@ test("a lower seat ceiling during reconciliation allows confirming the newly quo
   await render(paidWorkspace("a"));
   await click(ADD_SEAT);
   for (let index = 0; index < 4; index++) await click(command("increase"));
+  await waitForQuote();
   await resolvePreview("a", { ...quote(15), current_quantity: 10 });
   const purchase = Promise.withResolvers();
   state.pendingPurchase = purchase.promise;
@@ -345,6 +351,7 @@ test("a purchase accepted before its response is lost is reconciled without a se
   await render(paidWorkspace("a"));
   await click(ADD_SEAT);
   for (let index = 0; index < 4; index++) await click(command("increase"));
+  await waitForQuote();
   await resolvePreview("a", { ...quote(15), current_quantity: 10 });
   const purchase = Promise.withResolvers();
   state.pendingPurchase = purchase.promise;
@@ -411,13 +418,14 @@ test("a rejected over-cap preview refreshes the list and requotes a clamped sele
   await render({ ...paidWorkspace("a"), seats: 495, seat_limit: 500 });
   await click(ADD_SEAT);
   for (let index = 0; index < 4; index++) await click(command("increase"));
+  await waitForQuote();
   await settle(() => state.previews.at(-1).reject(Error("Workspace seat limit exceeded")));
   assert.equal(state.refreshes, 1);
   assert.equal(primary(container).disabled, true);
   await render({ ...paidWorkspace("a"), seats: 499, seat_limit: 500 });
   assert.deepEqual(
     state.previewCalls.map((call) => call[1]),
-    [1, 2, 3, 4, 5, 1]
+    [1, 5, 1]
   );
   await settle(() => state.previews.at(-1).resolve(quote(500)));
   assert.equal(primary(container).disabled, false);
@@ -448,6 +456,7 @@ test("a cap change clamps the selection and zero uses the newest workspace snaps
   await render(paidWorkspace("a"));
   await click(ADD_SEAT);
   for (let index = 0; index < 4; index++) await click(command("increase"));
+  await waitForQuote();
   await resolvePreview("a", { ...quote(15), current_quantity: 10 });
   await render({ ...paidWorkspace("a"), seats: 18, seat_limit: 20 });
   assert.deepEqual(state.previewCalls.at(-1), ["a", 2, 7]);
@@ -501,6 +510,7 @@ test("the seat quote must cover the current occupancy", async (t) => {
   assert.deepEqual(state.updateSeatsCalls, []);
   await click(command("increase"));
   await click(command("increase"));
+  await waitForQuote();
   await resolvePreview("a", { ...quote(13), current_quantity: 10, seats_used: 13 });
   assert.equal(primary(container).disabled, false);
   await click(CONFIRM);
@@ -521,6 +531,7 @@ test("a stale-occupancy refusal allows changing the quantity after the new previ
   await resolvePreview("a", { ...quote(11), seats_used: 13 });
   assert.equal(primary(container).disabled, true);
   await click(command("increase"));
+  await waitForQuote();
   assert.deepEqual(state.previewCalls.at(-1), ["a", 2, 7]);
 });
 
@@ -577,6 +588,7 @@ test("a larger occupancy floor during recovery requires selecting and confirming
     );
     slider.dispatchEvent(new globalThis.window.Event("input", { bubbles: true }));
   });
+  await waitForQuote();
   assert.equal(primary(container).disabled, true);
   await resolvePreview("a", { ...quote(45), current_quantity: 10, seats_used: 45 });
   assert.deepEqual(state.updateSeatsCalls, [["a", 11, 7]]);
@@ -612,6 +624,7 @@ test("a second interrupted write for the same total probes one seat again at the
   await click(ADD_SEAT);
   await click(command("increase"));
   await click(command("increase"));
+  await waitForQuote();
   const quoteThree = { ...quote(500), current_quantity: 497 };
   await resolvePreview("a", quoteThree);
   const first = Promise.withResolvers();
