@@ -85,6 +85,9 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "./sarvamRealtimeStreaming") {
       return { SarvamRealtimeStreaming: class extends FakeRealtimeStreaming {} };
     }
+    if (request === "./sarvamTranscription") {
+      return { transcribeWithSarvam: async () => ({ text: "batch transcript" }) };
+    }
     if (request === "./openaiRealtimeStreaming") return FakeRealtimeStreaming;
     if (request === "./realtimeTokenProviders") {
       return {
@@ -123,6 +126,12 @@ function scenario(t) {
     _dictationConnectPromise: null,
     _dictationIdleTimer: null,
     _dictationPreviewEnabled: false,
+    environmentManager: new Proxy(
+      { getSarvamKey: () => "test-key" },
+      {
+        get: (value, property) => value[property] ?? anything(),
+      }
+    ),
     windowManager: { hideTranscriptionPreview() {}, showTranscriptionPreview() {} },
   };
   const IPCHandlers = require(handlersModulePath);
@@ -188,6 +197,9 @@ test("the cloud token request carries the base language code and leaves it unset
   assert.equal(calls.tokens[0].options.language, "zh");
   assert.equal("language" in calls.tokens[1].options, true);
   assert.equal(calls.tokens[1].options.language, undefined);
+  await s.invoke("dictation-realtime-stop");
+  await s.invoke("dictation-realtime-start", byok({ mode: "openwhispr", language: "brx" }));
+  assert.equal(calls.tokens[2].options.language, undefined);
 });
 
 test("the tinfoil branch keeps its language-free connect (voxtral support is unverified)", async (t) => {
@@ -195,6 +207,30 @@ test("the tinfoil branch keeps its language-free connect (voxtral support is unv
   await s.invoke("dictation-realtime-start", byok({ provider: "tinfoil-realtime" }));
   assert.equal(calls.connects.length, 1);
   assert.equal("language" in calls.connects[0].options, false);
+});
+
+test("Cloud dictation ignores a saved personal model when minting and reusing its token", async (t) => {
+  const s = scenario(t);
+  await s.invoke(
+    "dictation-realtime-warmup",
+    byok({ mode: "openwhispr", model: "saaras:v4", language: "brx" })
+  );
+  assert.equal(calls.tokens[0].options.language, undefined);
+  assert.equal("model" in calls.tokens[0].options, false);
+  await s.invoke(
+    "dictation-realtime-start",
+    byok({ mode: "openwhispr", model: "nova-3", language: "auto" })
+  );
+  assert.equal(calls.connects.length, 1);
+});
+
+test("Sarvam dictation still receives a three-letter input language", async (t) => {
+  const s = scenario(t);
+  await s.invoke(
+    "dictation-realtime-start",
+    byok({ provider: "sarvam", model: "saaras:v4", language: "brx", sarvamCaptureId: "take" })
+  );
+  assert.equal(calls.connects[0].options.language, "brx");
 });
 
 test("a start reuses a warm connection minted for the same language and model", async (t) => {
@@ -316,6 +352,40 @@ for (const [label, options] of [
 
 const sarvamRecording = (sarvamCaptureId) =>
   byok({ provider: "sarvam", model: "saaras:v4", sarvamCaptureId });
+
+test("a Sarvam recording cannot recover under a replacement project's key", async (t) => {
+  const { invoke, target } = scenario(t);
+  let key = "project-a";
+  target.environmentManager.getSarvamKey = () => key;
+  target.environmentManager.saveSarvamKey = (value) => {
+    key = value;
+  };
+  const options = { sarvamCaptureId: "recording", model: "saaras:v4" };
+  await invoke("dictation-realtime-start", sarvamRecording("recording"));
+  assert.equal(calls.connects[0].options.apiKey, "project-a");
+  await invoke("dictation-realtime-stop", "recording");
+  await invoke("save-sarvam-key", "project-a");
+  await invoke("save-openai-key", "unrelated-provider");
+  assert.equal((await invoke("proxy-sarvam-transcription", options)).text, "batch transcript");
+  await invoke("save-sarvam-key", "project-b");
+  assert.equal((await invoke("proxy-sarvam-transcription", options)).code, "AUTH_CONTEXT_CHANGED");
+  await invoke("save-sarvam-key", "project-a");
+  assert.equal((await invoke("proxy-sarvam-transcription", options)).code, "AUTH_CONTEXT_CHANGED");
+  assert.equal((await invoke("proxy-sarvam-transcription", {})).text, "batch transcript");
+});
+
+test("a replacement Sarvam key cannot claim a capture while its microphone opens", async (t) => {
+  const { sender, invoke } = scenario(t);
+  const event = { sender };
+  listeners.get("dictation-realtime-reserve")(event, "recording");
+  await invoke("save-sarvam-key", "replacement");
+  const result = await handlers.get("dictation-realtime-start")(
+    event,
+    sarvamRecording("recording")
+  );
+  assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
+  assert.deepEqual(calls.connects, []);
+});
 
 test("cancelling Sarvam before the policy verdict settles prevents a late connection", async (t) => {
   const { invoke, target } = scenario(t);

@@ -4193,6 +4193,7 @@
           "endpointNotFound": "لا توفر نقطة النهاية قائمة نماذج متوافقة مع OpenAI.",
           "transcriptionEndpointNotFound": "لا يستقبل هذا العنوان طلبات التفريغ الصوتي.",
           "modelNotFound": "النموذج المحدد غير متوفر من هذا المزود.",
+          "sarvamSeatBudgetExhausted": "بلغ حساب المستخدم الخاص بك في Sarvam AI حد الإنفاق المخصص له. ارفع الحد للمتابعة.",
           "providerStatus": "أعاد المزود رمز الحالة {{status}}.",
           "timeout": "انتهت مهلة اختبار الاتصال.",
           "network": "تعذر الوصول إلى المزود.",

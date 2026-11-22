@@ -414,6 +414,7 @@
           "endpointNotFound": "このエンドポイントは OpenAI 互換のモデル一覧を公開していません。",
           "transcriptionEndpointNotFound": "このアドレスでは文字起こしを受け付けていません。",
           "modelNotFound": "選択したモデルはこのプロバイダーでは利用できません。",
+          "sarvamSeatBudgetExhausted": "Sarvam AI のシートに設定された利用上限に達しました。続行するには上限を引き上げてください。",
           "providerStatus": "プロバイダーがステータス {{status}} を返しました。",
           "timeout": "接続テストがタイムアウトしました。",
           "network": "プロバイダーに接続できませんでした。",

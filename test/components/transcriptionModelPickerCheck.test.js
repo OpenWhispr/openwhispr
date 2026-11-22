@@ -1039,3 +1039,22 @@ test("Sarvam defaults to code-mixed output and saves the selected mode", async (
     assert.equal(panel.state().sarvamMode, mode);
   }
 });
+
+test("each Sarvam picker preserves its own output mode after upgrading a shared preference", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "sarvam", selectedCloudModel: "saaras:v4" },
+    settings: { sarvamMode: "translate", meetingSarvamMode: "translit" },
+  });
+  const selectedMode = () =>
+    panel.find((node) => typeof node.props?.onValueChange === "function")[0].props.value;
+  await panel.setProps({ transcriptionContext: "upload" });
+  assert.equal(selectedMode(), "translate");
+  await panel.choose("verbatim");
+  await panel.setProps({ transcriptionContext: "meeting" });
+  assert.equal(selectedMode(), "translit");
+  await panel.choose("codemix");
+  await panel.setProps({ transcriptionContext: "dictation" });
+  assert.equal(selectedMode(), "translate");
+  assert.equal(localStorage.getItem("meetingSarvamMode"), "codemix");
+  assert.equal(localStorage.getItem("uploadSarvamMode"), "verbatim");
+});

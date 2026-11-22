@@ -110,6 +110,7 @@ const mergeSpeakerFields = (
 ) => {
   const merged = {
     ...incoming,
+    id: existing.id,
     ...(existing.recorderName ? { recorderName: existing.recorderName } : {}),
   } as TranscriptSegment;
 
@@ -176,7 +177,7 @@ export const mergeTranscriptSegments = (
   const enrichedByIndex = new Map<number, TranscriptSegment>();
   const unmatchedIncoming: TranscriptSegment[] = [];
 
-  incomingSegments.forEach((segment, index) => {
+  incomingSegments.forEach((segment) => {
     const findUnused = (candidates?: number[]) =>
       candidates?.find((candidateIndex) => !usedIndexes.has(candidateIndex));
 
@@ -204,9 +205,8 @@ export const mergeTranscriptSegments = (
         mergeSpeakerFields(existingSegments[matchIndex], segment, splitLiveSpeakers)
       );
     } else {
-      unmatchedIncoming.push(
-        normalizeTranscriptSegment({ ...segment, id: segment.id || `merged-${index}` })
-      );
+      // Provider row numbers start again in each recording of a resumed note.
+      unmatchedIncoming.push(normalizeTranscriptSegment({ ...segment, id: crypto.randomUUID() }));
     }
   });
 

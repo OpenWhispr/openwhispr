@@ -115,6 +115,8 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
     hasRiskyMicDuplicateProfile: () => false,
     removePendingMicFinalsFor: () => [],
     removeRacingMicEntriesFor: () => [],
+    cancelMeetingReconnect: null,
+    drainingMeetingStreams: new Map(),
     clearMeetingSystemAudioSilenceTimer() {},
     stopMeetingSystemAudioWatchdog() {},
     flushPendingMeetingMicChunks() {},
@@ -135,6 +137,7 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
       "const attachMeetingStreamingHandlers = ",
       "const resetMeetingReconnectAudio = "
     )}
+    ${sliceBetween("const stopMeetingReconnect = ", "const resetMeetingStreamingState = ")}
     ${sliceBetween("const disconnectMeetingStreaming = ", "const clearMeetingSystemAudioSilenceTimer = ")}
     ${sliceBetween("const stopMeetingTranscription = ", "const meetingTranscriptionLifecycle = ")}
     this.attach = attachMeetingStreamingHandlers;

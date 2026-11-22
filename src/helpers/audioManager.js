@@ -1,4 +1,4 @@
-import { sarvamKeyterms } from "../utils/sarvam.js";
+import { sarvamKeyterms, sarvamTranscriptLanguage } from "../utils/sarvam.js";
 import { refreshEnterpriseIdentityForUse } from "../stores/enterpriseIdentityStore.ts";
 import { selfHostedSttRequest } from "./selfHostedSttHeaders.js";
 import i18n from "../i18n";
@@ -328,7 +328,8 @@ function resolveReasoningRoute(
   voiceAgentRequested,
   translationRequested,
   screenContext,
-  detectedLanguage
+  detectedLanguage,
+  transcriptLanguage
 ) {
   const wakeWordLanguage = resolveWakeWordLanguage(settings, detectedLanguage, text);
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
@@ -387,6 +388,7 @@ function resolveReasoningRoute(
   // raise the cleanup-failed toast (#2091).
   const cleanupConfig = {
     inferenceScope: /** @type {const} */ ("dictationCleanup"),
+    ...(transcriptLanguage && { language: transcriptLanguage }),
     disableThinking: settings.cleanupDisableThinking,
     reasoningEffort: settings.cleanupReasoningEffort,
     temperature: cleanupTemperature,
@@ -3510,7 +3512,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             purpose: "cleanup",
             ...getCloudLlmDictionaryFields(settings),
             customPrompt,
-            language: this.getCleanupLanguage(settings),
+            language: route.cleanupConfig?.language ?? this.getCleanupLanguage(settings),
             locale: settings.uiLanguage || "en",
             ...(cleanup.meta || {}),
           });
@@ -3549,7 +3551,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         runCleanup,
         runTranslate,
         shouldTranslate: shouldRunTranslateStep(
-          settings.translationSourceLanguage,
+          route.cleanupConfig?.language ?? settings.translationSourceLanguage,
           settings.translationTargetLanguage
         ),
         translateIsCloud: route.config?.provider === "openwhispr",
@@ -3636,7 +3638,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     text,
     source,
     wasCancelled = neverCancelled,
-    { cleanedText } = {}
+    { cleanedText, transcriptLanguage } = {}
   ) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
 
@@ -3744,7 +3746,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           agentName,
           this.voiceAgentRequested,
           this.translationRequested,
-          screenContext
+          screenContext,
+          undefined,
+          transcriptLanguage
         );
         if (this.translationRequested && route.kind !== "translation") {
           this.notifyTranslationFallback("unreachable");
@@ -3759,7 +3763,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             agentName,
             route,
             cleanup: {
-              mode: "model",
+              mode: isCloud ? "cloudReason" : "model",
               model: cleanupModel,
               log: { level: "warn", channel: "notes", extra: { source } },
             },
@@ -4389,7 +4393,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
+        const transcriptLanguage = sarvamTranscriptLanguage(providerName, proxyPayload.sarvamMode);
         const text = await this.processTranscription(proxyText, providerName, wasCancelled, {
+          ...(transcriptLanguage && { transcriptLanguage }),
           // A rewrite of a transcript that recited the dictionary still carries the recital.
           cleanedText: proxyText === result.text ? result.cleanedText : undefined,
         });
@@ -6674,7 +6680,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.voiceAgentRequested,
         this.translationRequested,
         screenContext,
-        streamingSttLanguage
+        streamingSttLanguage,
+        sarvamTranscriptLanguage(providerName, this._activeStreamingConfig?.sarvamMode)
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
@@ -6727,7 +6734,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   ...getCloudLlmDictionaryFields(stSettings),
                   customPrompt,
                   ...toneStyle,
-                  language: this.getCleanupLanguage(stSettings),
+                  language: route.config.language ?? this.getCleanupLanguage(stSettings),
                   locale: stSettings.uiLanguage || "en",
                   sttProvider: providerName,
                   sttModel: streamingSttModel,

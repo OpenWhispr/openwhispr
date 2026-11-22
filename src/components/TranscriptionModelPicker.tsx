@@ -33,6 +33,7 @@ import {
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
 import {
+  SARVAM_MODE_KEYS,
   selectPolicyEffectiveSettings,
   selectResolvedMeetingTranscription,
   selectResolvedUploadTranscription,
@@ -540,7 +541,7 @@ export default function TranscriptionModelPicker({
   const sarvamApiKey = useSettingsStore((s) => s.sarvamApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
   const sarvamModeId = useId();
-  const sarvamMode = useSettingsStore((s) => s.sarvamMode);
+  const sarvamMode = useSettingsStore((s) => s[SARVAM_MODE_KEYS[transcriptionContext]]);
   const setSarvamMode = useSettingsStore((s) => s.setSarvamMode);
   const setSarvamApiKey = useSettingsStore((s) => s.setSarvamApiKey);
   const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
@@ -1834,7 +1835,10 @@ export default function TranscriptionModelPicker({
                       <label className="text-xs font-medium text-foreground" htmlFor={sarvamModeId}>
                         {t("transcription.sarvam.outputMode")}
                       </label>
-                      <Select value={sarvamMode} onValueChange={setSarvamMode}>
+                      <Select
+                        value={sarvamMode}
+                        onValueChange={(mode) => setSarvamMode(mode, transcriptionContext)}
+                      >
                         <SelectTrigger className="h-8 text-sm" id={sarvamModeId}>
                           <SelectValue />
                         </SelectTrigger>

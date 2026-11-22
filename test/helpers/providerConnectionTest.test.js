@@ -1161,6 +1161,18 @@ test("Sarvam checks a subscription key with a file-less transcription request", 
   }
 });
 
+test("Sarvam setup distinguishes an exhausted seat budget from a temporary rate limit", async () => {
+  const check = (code) =>
+    testProviderConnection({ provider: "sarvam", apiKey: "supplied" }, async () =>
+      Response.json({ error: { code } }, { status: 429 })
+    );
+  const spent = await check("seat_budget_exhausted_error");
+  assert.equal(spent.success, false);
+  assert.equal(spent.errorCode, "sarvamSeatBudgetExhausted");
+  assert.ok(!spent.unverified);
+  assert.equal((await check("rate_limit_exceeded_error")).unverified, true);
+});
+
 test("ElevenLabs is checked by a transcription request that carries no audio", async () => {
   const request = resolveProviderRequest({ provider: "elevenlabs", apiKey: "xi-secret" });
   assert.equal(request.endpoint, "https://api.elevenlabs.io/v1/speech-to-text");

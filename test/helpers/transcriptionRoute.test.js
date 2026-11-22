@@ -536,6 +536,32 @@ test("hosted Whisper drops unsupported picker languages and preserves valid lang
   assert.equal(sarvam.language, "brx");
 });
 
+test("GPT-4o transcription omits hints without a two-letter base code", async () => {
+  for (const cloudTranscriptionModel of [
+    "gpt-4o-transcribe",
+    "gpt-4o-mini-transcribe",
+    "gpt-4o-mini-transcribe-2025-12-15",
+  ]) {
+    for (const [preferredLanguage, expected] of [
+      ["brx", undefined],
+      ["hi-IN", "hi"],
+    ]) {
+      const route = await resolve({
+        cloudTranscriptionProvider: "openai",
+        cloudTranscriptionModel,
+        preferredLanguage,
+      });
+      assert.equal(route.language, expected, cloudTranscriptionModel);
+    }
+  }
+  const current = await resolve({
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionModel: "gpt-transcribe",
+    preferredLanguage: "yue",
+  });
+  assert.equal(current.language, "yue");
+});
+
 const MANAGED_STT = {
   kind: "managed",
   provider: "azure",

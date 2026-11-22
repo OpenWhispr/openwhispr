@@ -8,7 +8,10 @@
 // Routes never carry secrets — `auth.keyRef` names the key slot the executor
 // resolves itself.
 import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants.ts";
-import { getBaseLanguageCode, getWhisperLanguageHint } from "../utils/languageSupport.ts";
+import {
+  getBaseLanguageCode,
+  getHostedTranscriptionLanguageHint,
+} from "../utils/languageSupport.ts";
 import {
   isSecureHttpEndpoint,
   isAzureOpenAIEndpoint,
@@ -574,6 +577,6 @@ export function resolveTranscriptionRoute({
     model,
     auth: { scheme: "bearer", keyRef: resolvedProvider },
     sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
-    language: /(?:^|\/)whisper-/.test(model) ? getWhisperLanguageHint(language) : language,
+    language: getHostedTranscriptionLanguageHint(model, language),
   };
 }

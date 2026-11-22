@@ -1882,6 +1882,29 @@ test("a confident unsupported estimate re-transcribes the kept recording through
   assert.equal(usage.length, 0);
 });
 
+test("Sarvam's English translation reaches Cloud cleanup with its output language", async (t) => {
+  const AudioManager = await loadManagerClass(t, {
+    "/stores/settingsStore": `
+      export const getSettings = () => globalThis.__streamingFinalizationSettings;
+      export const getEffectiveCleanupModel = () => null;
+      export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
+      export const isCloudCleanupMode = () => true;
+      export const isCloudDictationAgentMode = () => false;
+      export const isCloudTranslationMode = () => false;
+    `,
+  });
+  const { reasonCalls } = await stopManagedDictation(AudioManager, {
+    final: { success: true, text: "Good morning.", model: "saaras:v4" },
+    language: "hi",
+    providerName: "sarvam",
+    settings: { cloudTranscriptionMode: "byok", useCleanupModel: true, customPrompts: {} },
+    overrides: { _activeStreamingConfig: { sarvamMode: "translate" } },
+  });
+  assert.equal(reasonCalls[0][0], "Good morning.");
+  assert.equal(reasonCalls[0][1].sttLanguage, "hi");
+  assert.equal(reasonCalls[0][1].language, "en");
+});
+
 test("language re-transcription skips streaming cleanup", async (t) => {
   const AudioManager = await loadManagerClass(t, {
     "/stores/settingsStore": `

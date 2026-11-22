@@ -54,6 +54,7 @@ import {
   getKeytermDictionaryWords,
   limitBatchKeyterms,
 } from "../utils/snippets";
+import { sarvamTranscriptLanguage } from "../utils/sarvam";
 import { providerCleanupStandsIn } from "../helpers/dictationRouting";
 import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
 import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
@@ -875,6 +876,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         });
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;
+          const transcriptLanguage = sarvamTranscriptLanguage(
+            result.transcription.provider,
+            s.sarvamMode
+          );
           let finalTranscription = result.transcription;
 
           // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
@@ -904,12 +909,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       currentText,
                       getEffectiveCleanupModel(),
                       agentName,
-                      route.cleanupConfig
+                      { ...route.cleanupConfig, language: transcriptLanguage }
                     ),
                   runTranslate: (currentText: string) =>
                     ReasoningService.processText(currentText, route.model, agentName, route.config),
                   shouldTranslate: shouldRunTranslateStep(
-                    settings.translationSourceLanguage,
+                    transcriptLanguage ?? settings.translationSourceLanguage,
                     settings.translationTargetLanguage
                   ),
                   onCleanupError: (cleanupError: unknown) => {
@@ -985,6 +990,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const reasonedText =
                   providerCleanedText ||
                   (await ReasoningService.processText(rawText, model, getAgentName(), {
+                    language: transcriptLanguage,
                     disableThinking: getSettings().cleanupDisableThinking,
                     reasoningEffort: getSettings().cleanupReasoningEffort,
                     requireCompleteOutput: true,
@@ -1021,8 +1027,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               result.transcription.route_kind === "translation"
                 ? (translationApplied
                     ? s.translationTargetLanguage
-                    : s.translationSourceLanguage) || "auto"
-                : s.preferredLanguage;
+                    : (transcriptLanguage ?? s.translationSourceLanguage)) || "auto"
+                : (transcriptLanguage ?? s.preferredLanguage);
             const scripted = await applyChineseScript(
               finalTranscription.text,
               resolveChineseScriptTarget(

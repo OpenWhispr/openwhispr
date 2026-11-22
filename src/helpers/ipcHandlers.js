@@ -217,6 +217,7 @@ const {
 } = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
+const { DEFAULT_OPENAI_REALTIME_MODEL } = require("../utils/languageSupport.ts");
 const { getCortiToken } = require("./cortiAuth");
 const { ONBOARDING_DEMO_KINDS, ONBOARDING_DEMO_STATUSES } = require("./onboardingInputPolicy");
 const { focusWindowsHotkeyCaptureWindow } = require("./hotkeyCaptureFocus");
@@ -2099,12 +2100,17 @@ class IPCHandlers {
     // One pill recording owns both its socket and its optional whole-audio upload.
     // Closing the socket is a normal step before fallback and doesn't release this owner.
     let sarvamCapture = null;
+    let sarvamKeyGeneration = 0;
     let dictationRecordingOwner = null;
     const { runAbortableOperation } = require("./enterpriseProviderErrors");
     const changedDictationAccount = () =>
       Object.assign(new Error("Authentication context changed during dictation"), {
         code: "AUTH_CONTEXT_CHANGED",
       });
+    const sarvamDictationKey = (capture) => {
+      if (capture && capture.keyGeneration !== sarvamKeyGeneration) throw changedDictationAccount();
+      return this.environmentManager.getSarvamKey();
+    };
     const cancelledDictation = () =>
       Object.assign(createAbortError("Cancelled"), { code: "TRANSCRIPTION_CANCELLED" });
     const retireSarvamCapture = (reason) => {
@@ -2743,6 +2749,7 @@ class IPCHandlers {
       const result = this.environmentManager[saver](key);
       if (!changed) return result;
       credentialGeneration += 1;
+      if (storeKey === "sarvamApiKey") sarvamKeyGeneration += 1;
       // Notify peers by setting name only; leave the editor's pending input alone.
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed() && win.webContents.id !== event.sender.id) {
@@ -6835,7 +6842,7 @@ class IPCHandlers {
     );
 
     const transcribeSarvamDictation = serializeIpcError(
-      async (_event, { audioBuffer, model, language, keyterms, sarvamMode }) =>
+      async ({ audioBuffer, model, language, keyterms, sarvamMode }, capture) =>
         transcribeWithSarvam({
           sarvamMode,
           audioBuffer,
@@ -6843,12 +6850,12 @@ class IPCHandlers {
           language,
           keyterms,
           signal: this._productRequestContext.getStore().signal,
-          apiKey: this.environmentManager.getSarvamKey(),
+          apiKey: sarvamDictationKey(capture),
           fetchImpl: proxyFetch,
         })
     );
     ipcMain.handle("proxy-sarvam-transcription", (event, options) => {
-      const capture = sarvamCapture;
+      const capture = options.sarvamCaptureId === undefined ? null : sarvamCapture;
       if (
         options.sarvamCaptureId !== undefined &&
         (!capture ||
@@ -6859,9 +6866,9 @@ class IPCHandlers {
         return { success: false, ...ipcErrorFields(changedDictationAccount()) };
       return createProductHandler(
         "proxy-sarvam-transcription",
-        transcribeSarvamDictation,
+        (_event, request) => transcribeSarvamDictation(request, capture),
         true,
-        options.sarvamCaptureId !== undefined ? capture.controller.signal : undefined
+        capture?.controller.signal
       )(event, options);
     });
 
@@ -10484,6 +10491,9 @@ class IPCHandlers {
         send("meeting-transcription-error", error.message);
       };
       const recoverConnection = async (error, restoreOldOnFailure) => {
+        const options = meetingConnectionOptions;
+        const current = source === "mic" ? this._meetingMicStreaming : this._meetingSystemStreaming;
+        if (meetingConnectionWin !== win || current !== streaming) return;
         let recovered = false;
         // A fatal provider error (refused key, used-up quota) fails every reconnect
         // the same way, and each successful handshake would reset the retry count.
@@ -10496,7 +10506,12 @@ class IPCHandlers {
             });
           }
         }
-        if (!recovered && !meetingFatalErrorSent) {
+        if (
+          !recovered &&
+          meetingConnectionWin === win &&
+          meetingConnectionOptions === options &&
+          !meetingFatalErrorSent
+        ) {
           meetingFatalErrorSent = true;
           send(
             "meeting-transcription-fatal-error",
@@ -10610,10 +10625,20 @@ class IPCHandlers {
         ]);
         let newMic = null;
         let newSystem = null;
+        const discardReplacements = () => {
+          newMic?.disconnect({ commit: false }).catch(() => {});
+          newSystem?.disconnect({ commit: false }).catch(() => {});
+        };
+        const isCurrent = () =>
+          cancelMeetingReconnect === discardReplacements &&
+          meetingConnectionOptions === options &&
+          meetingConnectionWin === win;
+        cancelMeetingReconnect = discardReplacements;
 
         try {
           const tokenEvent = { sender: win.webContents };
           const currentOptions = await resolveEnterpriseMeetingOptions(tokenEvent, options);
+          if (!isCurrent()) return true;
           if (
             getMeetingConnectionKey(currentOptions, credentialGeneration) !==
             getMeetingConnectionKey(options, credentialGeneration)
@@ -10647,6 +10672,7 @@ class IPCHandlers {
             ...(await enterpriseMeetingConnectOptions(tokenEvent, options)),
           };
 
+          if (!isCurrent()) return true;
           let pairs;
           if (newSystem) {
             const secrets = await fetchRealtimeToken(
@@ -10668,6 +10694,7 @@ class IPCHandlers {
             ];
           }
 
+          if (!isCurrent()) return true;
           await Promise.all(
             pairs.map(({ streaming, secret, source }) =>
               streaming.connect({
@@ -10678,17 +10705,13 @@ class IPCHandlers {
             )
           );
 
+          if (!isCurrent()) {
+            discardReplacements();
+            return true;
+          }
           assertMeetingAllowed();
           if (pairs.some(({ streaming }) => !streaming.isConnected)) {
             throw new Error("Meeting transcription connection closed during reconnect.");
-          }
-
-          if (meetingConnectionOptions !== options) {
-            for (const { streaming } of pairs) streaming.disconnect().catch(() => {});
-            oldMic?.disconnect().catch(() => {});
-            oldSystem?.disconnect().catch(() => {});
-            resetMeetingReconnectAudio();
-            return true;
           }
 
           const replayedMic = replayMeetingReconnectAudio("mic", newMic);
@@ -10699,27 +10722,22 @@ class IPCHandlers {
           this._meetingMicStreaming = newMic;
           this._meetingSystemStreaming = newSystem;
           resetMeetingReconnectAudio();
-          oldMic?.disconnect().catch(() => {});
-          oldSystem?.disconnect().catch(() => {});
+          drainMeetingStream(oldMic);
+          drainMeetingStream(oldSystem);
           meetingConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
 
           debugLogger.info("Meeting streams reconnected", { attempt: meetingReconnectCount });
           meetingReconnectedAt = Date.now();
           return true;
         } catch (error) {
+          discardReplacements();
+          if (!isCurrent()) return true;
           debugLogger.error("Meeting stream reconnect failed", {
             error: error.message,
             attempt: meetingReconnectCount,
           });
-          newMic?.disconnect().catch(() => {});
-          newSystem?.disconnect().catch(() => {});
-          // An org refusal ends the recording instead of keeping the old
-          // sockets; the stop clears the connection options checked next.
-          if (isAudioPolicyRefusal(error)) this._stopMeetingForPolicy(error.code);
-          if (meetingConnectionOptions !== options) {
-            oldMic?.disconnect().catch(() => {});
-            oldSystem?.disconnect().catch(() => {});
-            resetMeetingReconnectAudio();
+          if (isAudioPolicyRefusal(error)) {
+            this._stopMeetingForPolicy(error.code);
             return true;
           }
 
@@ -10739,8 +10757,8 @@ class IPCHandlers {
             this._meetingMicStreaming = oldMic;
             this._meetingSystemStreaming = oldSystem;
           } else {
-            oldMic?.disconnect().catch(() => {});
-            oldSystem?.disconnect().catch(() => {});
+            drainMeetingStream(oldMic);
+            drainMeetingStream(oldSystem);
             this._meetingMicStreaming = null;
             this._meetingSystemStreaming = null;
             meetingConnectionKey = null;
@@ -10755,6 +10773,8 @@ class IPCHandlers {
             );
           }
           return canRestoreOld;
+        } finally {
+          if (cancelMeetingReconnect === discardReplacements) cancelMeetingReconnect = null;
         }
       })();
 
@@ -11090,6 +11110,8 @@ class IPCHandlers {
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
     let meetingReconnectPromise = null;
+    let cancelMeetingReconnect = null;
+    const drainingMeetingStreams = new Map();
     let meetingFatalErrorSent = false;
     let meetingReconnectCount = 0;
     let meetingReconnectedAt = 0;
@@ -11987,6 +12009,21 @@ class IPCHandlers {
       }
     };
 
+    const stopMeetingReconnect = () => {
+      meetingConnectionWin = null;
+      const cancel = cancelMeetingReconnect;
+      cancelMeetingReconnect = null;
+      cancel?.();
+    };
+
+    // A replaced socket can still owe a final when the recording stops.
+    const drainMeetingStream = (stream) => {
+      if (!stream || drainingMeetingStreams.has(stream)) return;
+      const drained = stream.disconnect().catch(() => {});
+      drainingMeetingStreams.set(stream, drained);
+      void drained.then(() => drainingMeetingStreams.delete(stream));
+    };
+
     const resetMeetingStreamingState = () => {
       this._meetingMicStreaming = null;
       this._meetingSystemStreaming = null;
@@ -12009,10 +12046,10 @@ class IPCHandlers {
     };
 
     const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
-      await Promise.all([
-        this._meetingMicStreaming?.disconnect().catch(() => {}),
-        this._meetingSystemStreaming?.disconnect().catch(() => {}),
-      ]);
+      stopMeetingReconnect();
+      drainMeetingStream(this._meetingMicStreaming);
+      drainMeetingStream(this._meetingSystemStreaming);
+      await Promise.all(drainingMeetingStreams.values());
 
       if (flushPending) {
         flushPendingMicFinals(true);
@@ -12083,6 +12120,7 @@ class IPCHandlers {
     };
 
     const rollbackMeetingTranscriptionStart = async () => {
+      stopMeetingReconnect();
       clearMeetingSystemAudioSilenceTimer();
       stopMeetingSystemAudioWatchdog();
       if (this.audioTapManager) {
@@ -12185,6 +12223,12 @@ class IPCHandlers {
       }, idleTimeoutMs);
     };
 
+    // Cloud selects its OpenAI model when minting the token. The saved model belongs to BYOK.
+    const dictationSessionModel = (provider, options) => {
+      if (provider !== "openai-realtime") return options.model;
+      return (options.mode === "byok" && options.model) || DEFAULT_OPENAI_REALTIME_MODEL;
+    };
+
     // What a dictation connection was opened for; a start or warmup reuses one
     // only when nothing about the route changed and, for a connection that reads
     // a saved key, no key was saved since. OpenAI pins the language when the
@@ -12193,16 +12237,17 @@ class IPCHandlers {
     const dictationConnectionKey = (options) => {
       const provider = options.provider || "openai-realtime";
       const readsSavedKey = options.mode === "byok" || provider === "tinfoil-realtime";
+      const model = dictationSessionModel(provider, options);
       return JSON.stringify([
         provider,
         options.mode,
-        options.model,
+        model,
         options.baseUrl,
         provider === "orukeet" ? options.transcriptionMode : null,
         options.pipelineOptions,
         readsSavedKey ? credentialGeneration : null,
         provider === "openai-realtime"
-          ? OpenAIRealtimeStreaming.normalizeLanguage(options.language)
+          ? OpenAIRealtimeStreaming.normalizeLanguage(options.language, model)
           : null,
       ]);
     };
@@ -12271,7 +12316,7 @@ class IPCHandlers {
             if (isCloud) throw new Error("Sarvam dictation requires a personal API key");
             await streaming.connect({
               sarvamMode: options.sarvamMode,
-              apiKey: this.environmentManager.getSarvamKey(),
+              apiKey: sarvamDictationKey(capture),
               model: options.model,
               language: options.language,
               keyterms: options.keyterms,
@@ -12300,13 +12345,15 @@ class IPCHandlers {
             }
             return;
           }
+          const model = dictationSessionModel(provider, options);
           const apiKey = await fetchRealtimeToken(event, {
             mode: options.mode,
             provider,
             purpose: "dictation",
             // Cloud sessions are configured server-side when the secret is minted;
             // the server also owns the managed model, so only the language is sent.
-            language: OpenAIRealtimeStreaming.normalizeLanguage(options.language) ?? undefined,
+            language:
+              OpenAIRealtimeStreaming.normalizeLanguage(options.language, model) ?? undefined,
           });
           ownProductStream(streaming);
           if (provider === "tinfoil-realtime") {
@@ -12321,7 +12368,7 @@ class IPCHandlers {
           } else {
             await streaming.connect({
               apiKey,
-              model: options.model || "gpt-4o-mini-transcribe",
+              model,
               language: options.language,
               // OpenAI rejects rates below 24kHz; the 16kHz capture is upsampled instead.
               captureRate: 16000,
@@ -12917,8 +12964,13 @@ class IPCHandlers {
         meetingTranscriptionStartInProgress ||
         isMeetingStreamingConnected();
       meetingConnectionOptions = null;
+      stopMeetingReconnect();
       this._activeEnterpriseAudioMeeting = false;
-      for (const stream of [this._meetingMicStreaming, this._meetingSystemStreaming]) {
+      for (const stream of new Set([
+        this._meetingMicStreaming,
+        this._meetingSystemStreaming,
+        ...drainingMeetingStreams.keys(),
+      ])) {
         if (stream) {
           stream.coldStartBuffer = [];
           stream.disconnect({ commit: false }).catch(() => {});
@@ -12949,6 +13001,7 @@ class IPCHandlers {
         return { success: false, reason: "stale-session" };
       }
       this.meetingDetectionEngine?.setUserRecording(false);
+      stopMeetingReconnect();
       clearMeetingSystemAudioSilenceTimer();
       stopMeetingSystemAudioWatchdog();
       try {
@@ -13240,6 +13293,7 @@ class IPCHandlers {
         id: captureId,
         sender,
         accountId: this.effectivePolicyManager.getCurrent().accountId,
+        keyGeneration: sarvamKeyGeneration,
         controller: new AbortController(),
         pending: true,
         streaming: null,
@@ -14475,7 +14529,7 @@ class IPCHandlers {
                 sarvamMode,
                 filePath: sourcePath,
                 model: route.model,
-                language: route.language,
+                language: resolvedPurpose === "dictation" ? route.language : undefined,
                 keyterms,
                 apiKey: this.environmentManager.getSarvamKey(),
                 signal,

@@ -478,10 +478,21 @@ async function testProviderConnection(
       request.endpoint,
       request,
       fetchImpl,
-      (response) =>
-        response.status === 400 || response.status === 422
-          ? null
-          : describeStatusFailure(response.status, provider),
+      async (response) => {
+        if (response.status === 400 || response.status === 422) return null;
+        if (
+          response.status === 429 &&
+          (await readJson(response))?.error?.code === "seat_budget_exhausted_error"
+        ) {
+          return {
+            status: response.status,
+            errorCode: "sarvamSeatBudgetExhausted",
+            error:
+              "Your Sarvam AI seat has reached its spending limit. Raise the limit to continue.",
+          };
+        }
+        return describeStatusFailure(response.status, provider);
+      },
       { method: "POST", body }
     );
     return failure ? { success: false, ...failure } : { success: true };

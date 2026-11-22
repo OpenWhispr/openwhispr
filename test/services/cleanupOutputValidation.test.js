@@ -172,6 +172,8 @@ test("cleanup validates completed provider output using the request's prompt set
       getEffectiveDictionaryWords,
       getKeytermDictionaryWords,
       limitBatchKeyterms,
+      sarvamTranscriptLanguage: (await vite.ssrLoadModule("/utils/sarvam.js"))
+        .sarvamTranscriptLanguage,
       getSettings: settingsModule.getSettings,
       getManagedTranscriptionResolution: () => null,
       isTranscriptionContextAllowed: () => true,

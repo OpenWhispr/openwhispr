@@ -163,7 +163,7 @@ export function processBatchQueue(
   const snapshotApiKey = transcribeOpts.transcription.getApiKey();
   const transcription: FileTranscriptionConfig = {
     ...transcribeOpts.transcription,
-    sarvamMode: transcribeOpts.transcription.sarvamMode ?? personalSettings?.sarvamMode,
+    sarvamMode: transcribeOpts.transcription.sarvamMode ?? personalSettings?.uploadSarvamMode,
     getApiKey: () => snapshotApiKey,
   };
 

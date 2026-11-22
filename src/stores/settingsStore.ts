@@ -276,6 +276,20 @@ function readString(key: string, fallback: string): string {
   return localStorage.getItem(key) ?? fallback;
 }
 
+export const SARVAM_MODE_KEYS = {
+  dictation: "sarvamMode",
+  meeting: "meetingSarvamMode",
+  upload: "uploadSarvamMode",
+} as const satisfies Record<TranscriptionPolicyContext, string>;
+
+// Seed each new context once, before a later dictation edit can change its default.
+if (isBrowser) {
+  const previousMode = resolveSarvamMode(localStorage.getItem("sarvamMode"));
+  for (const key of [SARVAM_MODE_KEYS.meeting, SARVAM_MODE_KEYS.upload]) {
+    if (localStorage.getItem(key) === null) localStorage.setItem(key, previousMode);
+  }
+}
+
 // Literal rather than an import from ModelRegistry: ModelRegistry imports this
 // store, so importing back would create a require cycle.
 const DEFAULT_COHERE_MODEL = "cohere-transcribe-03-2026";
@@ -1454,7 +1468,9 @@ export interface SettingsState
   setCleanupCustomApiKey: (key: string) => void;
 
   sarvamMode: SarvamMode;
-  setSarvamMode: (mode: string) => void;
+  meetingSarvamMode: SarvamMode;
+  uploadSarvamMode: SarvamMode;
+  setSarvamMode: (mode: string, context?: TranscriptionPolicyContext) => void;
 
   // Corti (BYOK)
   cortiEnvironment: string;
@@ -1850,6 +1866,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   sarvamMode: resolveSarvamMode(readString("sarvamMode", "")),
+  meetingSarvamMode: resolveSarvamMode(readString("meetingSarvamMode", "")),
+  uploadSarvamMode: resolveSarvamMode(readString("uploadSarvamMode", "")),
   cortiEnvironment: readString("cortiEnvironment", "us"),
   cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
@@ -2601,7 +2619,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setGeminiApiKey: createSecretSetter("geminiApiKey", "gemini", "gemini"),
   setGroqApiKey: createSecretSetter("groqApiKey", "groq", "groq"),
   setXaiApiKey: createSecretSetter("xaiApiKey", "xai"),
-  setSarvamMode: (mode) => createStringSetter("sarvamMode")(resolveSarvamMode(mode)),
+  setSarvamMode: (mode, context = "dictation") =>
+    setStringSetting(SARVAM_MODE_KEYS[context], resolveSarvamMode(mode)),
   setSarvamApiKey: createSecretSetter("sarvamApiKey", "sarvam"),
   setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
   setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
@@ -4674,7 +4693,7 @@ export async function initializeSettings(): Promise<void> {
       } else {
         value = parsed;
       }
-    } else if (key === "sarvamMode") {
+    } else if (key === "sarvamMode" || key === "meetingSarvamMode" || key === "uploadSarvamMode") {
       value = resolveSarvamMode(newValue);
     } else if (key === "emailDraftTarget") {
       value = normalizeEmailDraftTarget(newValue);

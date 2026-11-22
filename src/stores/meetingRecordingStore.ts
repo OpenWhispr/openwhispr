@@ -225,7 +225,7 @@ const getMeetingTranscriptionOptions = () => {
       selectedModel: resolved.cloudTranscriptionModel,
       byokProviders: getMeetingStreamingTranscriptionProviders(),
       managedProviders: useStreamingProvidersStore.getState().providers,
-      sarvamMode: state.sarvamMode,
+      sarvamMode: state.meetingSarvamMode,
       cortiEnvironment: state.cortiEnvironment,
       cortiTenant: state.cortiTenant,
       keyterms:
@@ -975,7 +975,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         startSource: args.startSource,
         reason: refusal,
       });
-      recordingDisabled = true;
+      startRefused = true;
       return;
     }
 

@@ -414,6 +414,7 @@
           "endpointNotFound": "L’endpoint non espone un elenco di modelli compatibile con OpenAI.",
           "transcriptionEndpointNotFound": "Questo indirizzo non accetta trascrizioni.",
           "modelNotFound": "Il modello selezionato non è disponibile presso questo provider.",
+          "sarvamSeatBudgetExhausted": "La tua licenza Sarvam AI ha raggiunto il limite di spesa. Aumenta il limite per continuare.",
           "providerStatus": "Il provider ha restituito lo stato {{status}}.",
           "timeout": "Il test di connessione è scaduto.",
           "network": "Impossibile raggiungere il provider.",

@@ -1171,16 +1171,20 @@ test("Sarvam uploads and history retries use the selected output mode for each o
   fetchResponse = () => Response.json({ transcript: "कल meeting है" });
   fetches.length = 0;
 
-  const upload = await invokeUpload(
-    {
-      provider: "sarvam",
-      model: "saaras:v4",
-      sarvamMode: "codemix",
-      keyterms: ["OpenWhispr"],
-      language: "hi",
-      transcriptionMode: "providers",
-    },
-    wav
+  const settings = {
+    provider: "sarvam",
+    model: "saaras:v4",
+    sarvamMode: "codemix",
+    keyterms: ["OpenWhispr"],
+    language: "hi",
+    transcriptionMode: "providers",
+  };
+  const upload = await invokeUpload(settings, wav);
+  const { path: filePath } = await handlers.get("save-temp-audio")({}, wav);
+  t.after(() => handlers.get("delete-temp-audio")({}, filePath));
+  const draft = await handlers.get("transcribe-audio-file-byok")(
+    { sender: { send() {} } },
+    { ...settings, filePath, purpose: "dictation" }
   );
   const retry = await invoke({
     cloudTranscriptionProvider: "sarvam",
@@ -1188,12 +1192,13 @@ test("Sarvam uploads and history retries use the selected output mode for each o
     cloudTranscriptionMode: "byok",
     transcriptionMode: "providers",
     sarvamMode: "verbatim",
-    preferredLanguage: "auto",
+    preferredLanguage: "ta",
     keyterms: ["OpenWhispr"],
   });
   assert.equal(upload.text, "कल meeting है");
+  assert.equal(draft.success, true);
   assert.equal(retry.success, true);
-  assert.equal(fetches.length, 2);
+  assert.equal(fetches.length, 3);
   for (const { url, init } of fetches) {
     assert.equal(url, "https://api.sarvam.ai/speech-to-text");
     assert.equal(init.headers["api-subscription-key"], "saved-sarvam-key");
@@ -1201,8 +1206,9 @@ test("Sarvam uploads and history retries use the selected output mode for each o
   const fields = ({ init: { body } }) =>
     ["model", "mode", "language_code", "keyterms"].map((field) => body.get(field));
   assert.deepEqual(fetches.map(fields), [
+    ["saaras:v4", "codemix", null, '["OpenWhispr"]'],
     ["saaras:v4", "codemix", "hi-IN", '["OpenWhispr"]'],
-    ["saaras:v3", "verbatim", null, null],
+    ["saaras:v3", "verbatim", "ta-IN", null],
   ]);
 });
 

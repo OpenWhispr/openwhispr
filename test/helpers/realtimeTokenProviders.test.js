@@ -236,6 +236,11 @@ test("wire bodies identify dictation and meetings explicitly, including single-s
     language: undefined,
     purpose: "dictation",
   });
+  await fetchRealtimeTokenForProvider("openai-realtime", cloudDeps, {
+    mode: "openwhispr",
+    language: "brx",
+    purpose: "dictation",
+  });
   // Meeting with system audio.
   await fetchRealtimeTokenForProvider(
     "openai-realtime",
@@ -251,7 +256,7 @@ test("wire bodies identify dictation and meetings explicitly, including single-s
     {
       mode: "openwhispr",
       model: "gpt-4o-mini-transcribe",
-      language: undefined,
+      language: "brx",
       purpose: "meeting",
     },
     { streams: 1 }
@@ -270,6 +275,7 @@ test("wire bodies identify dictation and meetings explicitly, including single-s
         path: "/api/openai-realtime-token",
         body: { language: "de", streams: 1, purpose: "dictation" },
       },
+      { path: "/api/openai-realtime-token", body: { streams: 1, purpose: "dictation" } },
       { path: "/api/openai-realtime-token", body: { streams: 1, purpose: "dictation" } },
       {
         path: "/api/openai-realtime-token",

@@ -792,3 +792,37 @@ test("a self correction during resumed recording leaves earlier recorders alone"
   assert.equal(segments[1].speakerName, "Bob Corrected");
   await store.stopRecording();
 });
+
+test("two late completions keep distinct, stable row IDs in the next live recording", async (t) => {
+  const { api, state, notes } = createElectronAPI();
+  const store = await loadStore(t, api);
+  const note = notes.get(NOTE_ID);
+  const start = () => store.startRecording({ ...START_ARGS, noteTranscript: note.transcript });
+  for (const text of ["first", "second"]) {
+    await start();
+    state.segmentCallback({ type: "final", source: "system", text, timestamp: Date.now() });
+    state.stopDiarizationSessionId = text;
+    await store.stopRecording();
+  }
+  await start();
+  const rows = () => store.useMeetingRecordingStore.getState().segments;
+  const originalIds = rows().map((row) => row.id);
+  for (const sessionId of ["first", "second"]) {
+    state.diarizationCallback({
+      noteId: NOTE_ID,
+      sessionId,
+      segments: [
+        diarized(sessionId, 0.1, "Alice"),
+        { ...diarized(sessionId + " tail", 0.5, "Alice"), id: "segment-1" },
+      ],
+    });
+    await settle();
+  }
+  assert.deepEqual(
+    rows().map((row) => row.text),
+    ["first", "first tail", "second", "second tail"]
+  );
+  assert.deepEqual([rows()[0].id, rows()[2].id], originalIds);
+  assert.equal(new Set(rows().map((row) => row.id)).size, 4);
+  await store.stopRecording();
+});

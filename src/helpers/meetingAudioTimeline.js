@@ -1,3 +1,5 @@
+const { captureStartFromDelivery } = require("./meetingCaptureClock");
+
 // PCM16 mono at the native tap's 24kHz. Reuse bounded silence blocks even if
 // recovery takes a long time; never allocate the entire missing interval.
 const SAMPLE_RATE = 24000;
@@ -17,13 +19,13 @@ const createMeetingAudioTimeline = ({ now = () => performance.now(), wallNow = D
       recovering = true;
     },
     write(buffer, emit) {
-      const receivedAt = now();
-      startedAt ??= receivedAt;
-      wallStartedAt ??= wallNow();
+      const firstSampleAt = captureStartFromDelivery(buffer, now());
+      startedAt ??= firstSampleAt;
+      wallStartedAt ??= captureStartFromDelivery(buffer, wallNow());
       if (recovering) {
         // Repair only explicit capture restarts. Arrival jitter and buffered
         // delivery during normal capture must not manufacture gaps.
-        const elapsedSamples = Math.round(((receivedAt - startedAt) * SAMPLE_RATE) / 1000);
+        const elapsedSamples = Math.round(((firstSampleAt - startedAt) * SAMPLE_RATE) / 1000);
         let missingSamples = Math.max(0, elapsedSamples - samples);
         while (missingSamples > 0) {
           const count = Math.min(missingSamples, SILENCE_SAMPLES);

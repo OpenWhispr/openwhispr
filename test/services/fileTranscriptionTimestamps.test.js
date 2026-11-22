@@ -73,7 +73,7 @@ test("Sarvam sends the saved output mode with file and chat microphone requests"
   });
   const { transcribeFile } = await vite.ssrLoadModule("/services/fileTranscription.ts");
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  useSettingsStore.getState().setSarvamMode("verbatim");
+  useSettingsStore.getState().setSarvamMode("verbatim", "upload");
   const config = {
     ...byokConfig(),
     cloudTranscriptionProvider: "sarvam",
@@ -85,8 +85,8 @@ test("Sarvam sends the saved output mode with file and chat microphone requests"
     requests.push(options);
     return { success: true, text: "Hello" };
   };
-  await transcribeFile("/tmp/upload.wav", config, false, { timestamps: true });
   useSettingsStore.getState().setSarvamMode("translit");
+  await transcribeFile("/tmp/upload.wav", config, false, { timestamps: true });
   await transcribeFile("/tmp/chat.wav", config, false, { purpose: "dictation" });
   assert.deepEqual(
     requests.map(({ sarvamMode }) => sarvamMode),
@@ -104,11 +104,11 @@ test("Sarvam keeps the starting output mode throughout an upload queue", async (
     "/stores/batchQueueStore.ts"
   );
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  useSettingsStore.getState().setSarvamMode("verbatim");
+  useSettingsStore.getState().setSarvamMode("verbatim", "upload");
   const modes = [];
   window.electronAPI.transcribeAudioFileByok = async ({ sarvamMode }) => {
     modes.push(sarvamMode);
-    useSettingsStore.getState().setSarvamMode("translate");
+    useSettingsStore.getState().setSarvamMode("translate", "upload");
     return { success: true, text: "Hello" };
   };
   window.electronAPI.saveNote = async () => ({ success: true, note: { id: 42 } });

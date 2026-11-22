@@ -1,5 +1,7 @@
 import registry from "../config/languageRegistry.json" with { type: "json" };
 
+export const DEFAULT_OPENAI_REALTIME_MODEL = "gpt-4o-mini-transcribe";
+
 function buildLanguageSet(key: "whisper" | "assemblyai"): Set<string> {
   const set = new Set<string>();
   for (const lang of registry.languages) {
@@ -35,6 +37,20 @@ export function getWhisperLanguageHint(language: string | null | undefined): str
   // The picker also lists cloud-only languages and omits some valid Whisper codes.
   const preference = registry.languages.find((entry) => entry.code === base);
   return preference?.whisper === false ? undefined : language;
+}
+
+export function getHostedTranscriptionLanguageHint(
+  model: string | undefined,
+  language: string | undefined
+): string | undefined {
+  if (model && /(?:^|\/)whisper-/.test(model)) return getWhisperLanguageHint(language);
+  if (model && /(?:^|\/)gpt-4o-(?:mini-)?transcribe(?:-|$)/.test(model)) {
+    // GPT-4o's singular language field expects ISO 639-1. Several languages
+    // offered for Sarvam only have three-letter codes, so leave detection on.
+    const base = getBaseLanguageCode(language);
+    return base && /^[a-z]{2}$/i.test(base) ? base.toLowerCase() : undefined;
+  }
+  return language;
 }
 
 export function getLanguageInstruction(language: string | undefined): string {

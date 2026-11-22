@@ -227,7 +227,11 @@ export async function transcribeFile(
     provider: cfg.cloudTranscriptionProvider,
     language: cfg.language,
     ...(sarvamSettings && {
-      sarvamMode: cfg.sarvamMode ?? sarvamSettings.sarvamMode,
+      sarvamMode:
+        cfg.sarvamMode ??
+        (opts.purpose === "dictation"
+          ? sarvamSettings.sarvamMode
+          : sarvamSettings.uploadSarvamMode),
       keyterms: getEffectiveDictionaryWords(sarvamSettings),
     }),
     environment: cfg.cortiEnvironment,

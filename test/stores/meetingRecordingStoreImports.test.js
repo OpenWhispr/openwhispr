@@ -100,7 +100,8 @@ test("personal meeting options preserve manual enterprise preference while requi
   useSettingsStore.setState({
     meetingCloudTranscriptionProvider: "sarvam",
     meetingCloudTranscriptionModel: "saaras:v4",
-    sarvamMode: "translit",
+    sarvamMode: "verbatim",
+    meetingSarvamMode: "translit",
     sharedDictionaryHints: { space: [sharedTerm], workspace: [] },
   });
   await prepareTranscription();

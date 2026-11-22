@@ -21,6 +21,16 @@ export function resolveSarvamMode(mode) {
   return SARVAM_MODES.find((candidate) => candidate === mode) ?? "codemix";
 }
 
+/**
+ * Translate produces English independently of the recognition language hint.
+ * @param {string | null | undefined} provider
+ * @param {unknown} mode
+ * @returns {"en" | undefined}
+ */
+export function sarvamTranscriptLanguage(provider, mode) {
+  return provider === "sarvam" && mode === "translate" ? "en" : undefined;
+}
+
 export function sarvamLanguage(language) {
   const base = language?.toLowerCase().split("-")[0];
   const code = base === "or" ? "od" : base;
