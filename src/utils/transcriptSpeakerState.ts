@@ -220,7 +220,26 @@ export const mergeTranscriptSegments = (
     (segment, index) => enrichedByIndex.get(index) ?? normalizeTranscriptSegment(segment)
   );
 
-  return [...preserved, ...unmatchedIncoming];
+  // A risky mic line can be released after a later line was already saved.
+  // The plain-text builder sorts for that. The saved rows have to as well,
+  // or the late line is read and exported after speech it preceded.
+  const ordered = [...preserved];
+  for (const segment of unmatchedIncoming) {
+    const timestamp = segment.timestamp;
+    if (typeof timestamp !== "number" || !Number.isFinite(timestamp)) {
+      ordered.push(segment);
+      continue;
+    }
+    const index = ordered.findIndex(
+      (row) =>
+        typeof row.timestamp === "number" &&
+        Number.isFinite(row.timestamp) &&
+        row.timestamp > timestamp
+    );
+    if (index < 0) ordered.push(segment);
+    else ordered.splice(index, 0, segment);
+  }
+  return ordered;
 };
 
 export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>

@@ -87,14 +87,44 @@ function normalizeSegmentTimestamps(segments, note) {
   });
 }
 
+function spokenTimestamp(segment) {
+  return typeof segment.timestamp === "number" && Number.isFinite(segment.timestamp)
+    ? segment.timestamp
+    : null;
+}
+
+// Held mic lines are appended when they are released, so a saved note can
+// list an earlier line after a later one. Export follows spoken time.
+function inSpokenOrder(segments) {
+  return segments
+    .map((segment, index) => ({ segment, index }))
+    .sort((left, right) => {
+      const leftTimestamp = spokenTimestamp(left.segment);
+      const rightTimestamp = spokenTimestamp(right.segment);
+      if (leftTimestamp == null && rightTimestamp == null) return left.index - right.index;
+      if (leftTimestamp == null) return 1;
+      if (rightTimestamp == null) return -1;
+      return leftTimestamp - rightTimestamp || left.index - right.index;
+    })
+    .map((item) => item.segment);
+}
+
 function mergeSegments(segments) {
   const merged = [];
   let lastTimestamp = null;
-  for (const seg of segments) {
+  for (const seg of inSpokenOrder(segments)) {
     if (!seg.text?.trim()) continue;
     const ts = seg.timestamp || 0;
     const last = merged[merged.length - 1];
-    if (last && speakerKey(last) === speakerKey(seg) && ts - lastTimestamp < 2) {
+    // A negative gap is an earlier line, not a continuation. `ts - last < 2`
+    // is true for every backwards pair, which glues them and ends the cue
+    // before it starts.
+    if (
+      last &&
+      speakerKey(last) === speakerKey(seg) &&
+      ts >= lastTimestamp &&
+      ts - lastTimestamp < 2
+    ) {
       last.text = last.text + " " + seg.text.trim();
       last.endTimestamp = ts;
     } else {
