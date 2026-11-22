@@ -1,4 +1,5 @@
 import { fireEvent, render } from '@testing-library/react-native';
+import { Text } from 'react-native';
 import { PrivateWorkspaceSwitcher } from '../PrivateWorkspaceSwitcher';
 
 jest.mock('@react-native-menu/menu', () => require('./menuViewMock'));
@@ -11,43 +12,45 @@ const WORKSPACES = [
   { id: 'acme', name: 'Acme' },
 ];
 
+const mockNotesState = {
+  privateWorkspaces: WORKSPACES,
+  defaultPrivateWorkspaceId: 'own',
+  activePrivateWorkspaceId: 'own',
+  setActivePrivateWorkspace: jest.fn(),
+  isInitialized: true,
+  initialize: jest.fn(),
+};
+jest.mock('@/store/useNotesStore', () => ({
+  useNotesStore: (select: (state: typeof mockNotesState) => unknown) => select(mockNotesState),
+}));
+
 describe('PrivateWorkspaceSwitcher', () => {
-  it('renders nothing for a single workspace', () => {
-    const { toJSON } = render(
-      <PrivateWorkspaceSwitcher
-        defaultId="own"
-        workspaces={[WORKSPACES[0]]}
-        activeId="own"
-        onSelect={jest.fn()}
-      />,
-    );
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockNotesState.privateWorkspaces = WORKSPACES;
+    mockNotesState.activePrivateWorkspaceId = 'own';
+  });
+
+  it('keeps the Folders heading and omits the Account row for a single workspace', () => {
+    mockNotesState.privateWorkspaces = [WORKSPACES[0]];
+    const { toJSON, rerender, getByText, queryByRole } = render(<PrivateWorkspaceSwitcher />);
     expect(toJSON()).toBeNull();
+    rerender(<PrivateWorkspaceSwitcher heading={<Text>Folders</Text>} />);
+    expect(getByText('Folders')).toBeTruthy();
+    expect(queryByRole('button')).toBeNull();
   });
 
   it('names the active workspace and checks it in the menu', () => {
-    const { getByLabelText, getByTestId } = render(
-      <PrivateWorkspaceSwitcher
-        defaultId="own"
-        workspaces={WORKSPACES}
-        activeId="acme"
-        onSelect={jest.fn()}
-      />,
-    );
+    mockNotesState.activePrivateWorkspaceId = 'acme';
+    const { getByLabelText, getByTestId } = render(<PrivateWorkspaceSwitcher />);
     expect(getByLabelText('Workspace: Acme')).toBeTruthy();
     expect(getByTestId('menu-acme').props.accessibilityState.selected).toBe(true);
     expect(getByTestId('menu-own').props.accessibilityState.selected).toBe(false);
   });
 
   it('switches to another workspace, and ignores a pick of the active one', () => {
-    const onSelect = jest.fn();
-    const { getByTestId } = render(
-      <PrivateWorkspaceSwitcher
-        defaultId="own"
-        workspaces={WORKSPACES}
-        activeId="own"
-        onSelect={onSelect}
-      />,
-    );
+    const onSelect = mockNotesState.setActivePrivateWorkspace;
+    const { getByTestId } = render(<PrivateWorkspaceSwitcher />);
     fireEvent.press(getByTestId('menu-own'));
     expect(onSelect).not.toHaveBeenCalled();
     fireEvent.press(getByTestId('menu-acme'));
@@ -55,14 +58,8 @@ describe('PrivateWorkspaceSwitcher', () => {
   });
 
   it('shows the first workspace when the active one isn’t listed', () => {
-    const { getByLabelText } = render(
-      <PrivateWorkspaceSwitcher
-        defaultId="own"
-        workspaces={WORKSPACES}
-        activeId="gone"
-        onSelect={jest.fn()}
-      />,
-    );
+    mockNotesState.activePrivateWorkspaceId = 'gone';
+    const { getByLabelText } = render(<PrivateWorkspaceSwitcher />);
     expect(getByLabelText('Workspace: Mine')).toBeTruthy();
   });
 });

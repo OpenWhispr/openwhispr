@@ -193,6 +193,9 @@ jest.mock('@/components/ui/SettingsScreen', () => ({
   },
 }));
 jest.mock('@/components/ui/PlanBadge', () => ({ PlanBadge: () => null }));
+jest.mock('@/components/notes/PrivateWorkspaceSwitcher', () => ({
+  PrivateWorkspaceSwitcher: () => null,
+}));
 jest.mock('@/components/ui/UsageMeter', () => ({ UsageMeter: () => null }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/GlassBackButton', () => ({ GlassBackButton: () => null }));

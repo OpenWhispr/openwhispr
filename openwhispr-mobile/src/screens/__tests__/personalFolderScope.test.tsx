@@ -77,7 +77,6 @@ jest.mock('expo-router', () => ({
 jest.mock('@react-native-menu/menu', () =>
   require('../../components/notes/__tests__/menuViewMock'),
 );
-jest.mock('@/components/notes/NotesTopBar', () => ({ NotesTopBar: () => null }));
 jest.mock('@/components/notes/SyncStatusLabel', () => ({ SyncStatusLabel: () => null }));
 jest.mock('@/components/ui/Fab', () => ({
   Fab: () => null,
