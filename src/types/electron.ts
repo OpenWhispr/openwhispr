@@ -1776,6 +1776,7 @@ declare global {
       onPermissionGuideState?: (callback: (state: PermissionGuideState) => void) => () => void;
       onPermissionGuideAction?: (callback: (action: PermissionGuideAction) => void) => () => void;
       agentWindowReady?: () => void;
+      agentWindowSetPointerOverContent?: (over: boolean) => void;
       /** Bounds for a layout, and keyboard focus for typing in it. */
       agentWindowSetLayout?: (request: {
         layout: AgentWindowLayout;

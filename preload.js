@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   // The agent window (`?agent=true`) and the dictation window's ways into it.
   agentWindowReady: () => ipcRenderer.send("agent-window-ready"),
+  agentWindowSetPointerOverContent: (over) => ipcRenderer.send("agent-window-pointer", over),
   agentWindowSetLayout: (request) => ipcRenderer.invoke("agent-window-set-layout", request),
   agentWindowHide: () => ipcRenderer.invoke("agent-window-hide"),
   agentWindowSetDragging: (dragging) => ipcRenderer.send("agent-window-drag", dragging),

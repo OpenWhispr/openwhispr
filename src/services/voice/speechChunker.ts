@@ -8,8 +8,6 @@ interface SpeechChunker {
 
 // "।" ends a Hindi sentence.
 const SENTENCE_TERMINATORS = new Set([".", "!", "?", "…", "।"]);
-export const CLAUSE_TERMINATORS = new Set([",", ";", ":"]);
-
 const isWhitespace = (char: string | undefined): boolean => char !== undefined && /\s/.test(char);
 const isLowercase = (char: string | undefined): boolean =>
   char !== undefined && char !== char.toUpperCase() && char === char.toLowerCase();

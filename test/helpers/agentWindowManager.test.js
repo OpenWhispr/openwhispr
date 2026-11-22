@@ -305,7 +305,7 @@ for (const platform of ["win32", "linux"]) {
   });
 }
 
-test("on macOS a call's pill keeps the transcript's window, so Expand and Minimize resize nothing", async (t) => {
+test("on macOS a call's pill keeps the transcript's window, and clicks pass through all but what it shows", async (t) => {
   cursor = { x: 720, y: 400 };
   const { manager, win } = await openedManager();
   t.after(() => manager.dragManager.cleanup());
@@ -340,8 +340,22 @@ test("on macOS a call's pill keeps the transcript's window, so Expand and Minimi
   });
   assert.notEqual(win.bounds.height, dragged.height);
   assert.equal(win.bounds.y + win.bounds.height + CALL_WINDOW_LIFT, dragged.y + dragged.height);
-  // macOS passes clicks through the transparent parts by itself, until a value is set.
-  assert.ok(!win.calls.some(([name]) => name === "setIgnoreMouseEvents"));
+  assert.equal(win.ignoringMouse, false, "a card above the pill takes clicks");
+
+  // Clicks pass through the empty part of the pill's window, never the pill itself.
+  manager.setLayout(fromAgent(win), { layout: "pill", focus: false, call: true });
+  assert.equal(win.ignoringMouse, "forward");
+  manager.setPointerOverContent({}, true);
+  assert.equal(win.ignoringMouse, "forward", "another window can't take the clicks");
+  manager.setPointerOverContent(fromAgent(win), true);
+  assert.equal(win.ignoringMouse, false, "over the pill, the window takes the click");
+  manager.setPointerOverContent(fromAgent(win), false);
+  assert.equal(win.ignoringMouse, "forward");
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+  assert.equal(win.ignoringMouse, false, "the transcript takes every click");
+  manager.setLayout(fromAgent(win), { layout: "pill", focus: false, call: true });
+  manager.hide(fromAgent(win));
+  assert.equal(win.ignoringMouse, false, "the next show takes clicks again");
 });
 
 test("dragging stays in the lower centered region and stops when the modal leaves", async (t) => {

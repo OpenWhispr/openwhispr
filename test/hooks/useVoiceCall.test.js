@@ -336,6 +336,26 @@ test("a line that introduces a list doesn't use up one of the sentences said alo
   ]);
 });
 
+test("a list whose lines end in commas still stops at four spoken lines", async (t) => {
+  const { calls, act, startListening, say, lastTurn } = await mountVoiceCall(t);
+  await startListening();
+  await say("which days am I free");
+  await act(() =>
+    lastTurn().speech.onText("You're free on:\nMonday,\nTuesday,\nWednesday,\nThursday,\nFriday.\n")
+  );
+  await act(() => lastTurn().speech.onEnd("complete"));
+
+  const spoken = spokenTexts(calls);
+  assert.deepEqual(spoken.slice(0, 5), [
+    "You're free on:",
+    "Monday,",
+    "Tuesday,",
+    "Wednesday,",
+    "Thursday,",
+  ]);
+  assert.ok(!spoken.includes("Friday."), "the fifth is in the chat, not read out");
+});
+
 test("an End while readiness is pending: nothing opens, and the mic claim is given back", async (t) => {
   const { hook, calls, pending, act, begin } = await mountVoiceCall(t);
 

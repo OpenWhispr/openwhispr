@@ -49,6 +49,7 @@ import {
   type PendingCard,
 } from "./agentWindowState";
 import { useAgentSurface } from "./useAgentSurface";
+import { usePointerOverContent } from "./usePointerOverContent";
 import { useAgentVoice, type AgentVoiceIntent } from "./useAgentVoice";
 import { useAgentChat } from "./useAgentChat";
 import { useVoiceCall, type VoiceCallEndReason, type VoiceCallTurn } from "./useVoiceCall";
@@ -836,7 +837,7 @@ export default function AgentWindow() {
   }, [agentAllowed, callActive, endCall, policyResolved, refuseIfRestricted]);
 
   // A call Stopped in the transcript goes back to typing at the first key
-  // typed, as at a click on its pill; the key starts on the draft.
+  // typed, as at Back to typing on its pill; the key starts on the draft.
   const callStopped = state.layout === "modal" && Boolean(state.call?.stopped);
   useEffect(() => {
     if (!callStopped) return undefined;
@@ -910,6 +911,12 @@ export default function AgentWindow() {
       state.layout === "pill" &&
       (state.notice !== null || (pendingCard !== null && !listening && !transcribing)),
   });
+  // Main lets clicks through the empty part of a call's window (macOS): it hears whether
+  // the pointer is over what the window shows, checked again once a new layout is on screen.
+  usePointerOverContent(
+    callKeepsTranscriptWindow,
+    `${state.layout}:${state.call !== null}:${surface.shown}`
+  );
 
   // The animation is over once the window shows the layout it led to, or with the call.
   useEffect(() => {

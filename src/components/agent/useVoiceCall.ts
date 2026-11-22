@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import logger from "../../utils/logger";
-import { CLAUSE_TERMINATORS, createSpeechChunker } from "../../services/voice/speechChunker";
+import { createSpeechChunker } from "../../services/voice/speechChunker";
 import { spellOutDates } from "../../services/voice/spokenDates";
 import { playCallEndCue, playCallStartCue } from "../../utils/dictationCues";
 import { createPcmPlayer, type PcmPlayer } from "../../services/voice/pcmPlayer";
@@ -370,8 +370,8 @@ export function useVoiceCall({
         return;
       }
       if (replyChunksRef.current < MAX_SPOKEN_CHUNKS) {
-        // A line ending at a clause ("Here are four tips:") introduces the sentences after it.
-        if (!CLAUSE_TERMINATORS.has(chunk.at(-1) ?? "")) replyChunksRef.current += 1;
+        // A line that introduces a list ("Here are four tips:") doesn't count: its items do.
+        if (!chunk.endsWith(":")) replyChunksRef.current += 1;
         speakChunk(chunk);
       } else {
         cutShortRef.current = true;

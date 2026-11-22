@@ -42,6 +42,10 @@ class AgentWindowManager {
     this.wide = false;
     // The layouts of a voice call (its pill and the cards above it).
     this.call = false;
+    // Whether the pointer is over something the window shows, and whether clicks
+    // pass through the rest (a call's pill on macOS, _keepsTranscriptWindow).
+    this.pointerOverContent = false;
+    this.passingClicks = false;
     this.anchor = null;
     this.displayId = null;
     this.savedAnchors = new Map();
@@ -173,8 +177,15 @@ class AgentWindowManager {
     this.contentHeight = standalone ? request.contentHeight : 0;
     this.wide = request.layout === "pill" && request.wide === true;
     this._applyBounds();
+    this._applyClickThrough();
     if (refocus) this._setKeyboardFocus(focus);
     return true;
+  }
+
+  setPointerOverContent(event, over) {
+    if (!isFromWindow(event, this.window)) return;
+    this.pointerOverContent = over === true;
+    this._applyClickThrough();
   }
 
   hide(event) {
@@ -303,6 +314,8 @@ class AgentWindowManager {
   // The window is gone (crash, failed load): nothing it held may block dictation.
   _forget() {
     void this.dragManager.stopWindowDrag();
+    this.pointerOverContent = false;
+    this.passingClicks = false;
     this.window = null;
     this.ready = false;
     this.pending = null;
@@ -356,6 +369,7 @@ class AgentWindowManager {
     this.wide = false;
     this.call = false;
     if (this.anchor) this._applyBounds();
+    this._applyClickThrough();
   }
 
   _place(display) {
@@ -427,10 +441,22 @@ class AgentWindowManager {
 
   // On macOS a call's pill keeps the transcript's window: a transparent window can't
   // resize and draw its new size in the same frame, so Expand and Minimize would blink
-  // the pill. The renderer places the pill where the transcript's sits; macOS passes
-  // clicks through the window's transparent parts on its own.
+  // the pill. The renderer places the pill where the transcript's sits, and clicks pass
+  // through the rest (_applyClickThrough): macOS doesn't let them through on its own.
   _keepsTranscriptWindow() {
     return this.platform === "darwin" && this.call && this.layout === "pill";
+  }
+
+  // Clicks reach the app behind everywhere but what the window shows, while a call's
+  // pill keeps the transcript's window (the renderer reports the pointer).
+  _applyClickThrough() {
+    const win = this.window;
+    if (!win || win.isDestroyed()) return;
+    const passing = this._keepsTranscriptWindow() && !this.pointerOverContent;
+    if (passing === this.passingClicks) return;
+    this.passingClicks = passing;
+    if (passing) win.setIgnoreMouseEvents(true, { forward: true });
+    else win.setIgnoreMouseEvents(false);
   }
 
   // A call layout with a window of its own, lifted so its pill sits where the transcript's does.
