@@ -32,6 +32,31 @@ function secretEnvLine(name, value) {
   throw new Error(`Cannot represent ${name} in plaintext storage`);
 }
 
+async function readProfileEnv(file) {
+  try {
+    return require("dotenv").parse(await fsPromises.readFile(file));
+  } catch (error) {
+    if (error.code === "ENOENT") return {};
+    throw error;
+  }
+}
+
+async function writeEncryptedFile(file, value, verify = false) {
+  if (!value) return fsPromises.rm(file, { force: true });
+  await fsPromises.mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
+  try {
+    await fsPromises.writeFile(tmp, secretCrypto.encrypt(value));
+    if (verify && secretCrypto.decrypt(await fsPromises.readFile(tmp)).value !== value) {
+      throw new Error("Encrypted credential failed round-trip verification");
+    }
+    await fsPromises.rename(tmp, file);
+  } catch (error) {
+    await fsPromises.rm(tmp, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
 const PERSISTED_KEYS = [
   ...SECRET_KEYS,
   CLEANUP_FALLBACK_DISABLED,
@@ -130,10 +155,10 @@ class EnvironmentManager {
   // both no-ops on fresh installs, so neither path triggers Keychain until
   // the user actually saves their first secret.
   async init() {
-    if (!fs.existsSync(this._getMigrationSentinelPath())) {
-      await this._migrateToSecureStorage();
-    }
-    await this._loadAllSecrets();
+    const fallback = fs.existsSync(this._getMigrationSentinelPath())
+      ? undefined
+      : await this._migrateToSecureStorage();
+    await this._loadAllSecrets(fallback);
     // After stored secrets win: fill any still-empty keys from a login shell
     // (so ~/.zshrc exports work when launched from a desktop icon). Never
     // persist these — that would copy shell secrets into Settings. Do not
@@ -199,20 +224,40 @@ class EnvironmentManager {
     return path.join(this._getSecureKeysDir(), `${envVarName}.enc`);
   }
 
-  async _loadAllSecrets() {
-    await Promise.all(SECRET_KEYS.map((name) => this._loadSecretKey(name)));
+  _loadAllSecrets(fallback = new Map()) {
+    const versions = new Map(secretSaveCounts);
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(() =>
+        Promise.all(
+          SECRET_KEYS.map((name) =>
+            this._loadSecretKey(name, versions.get(name), fallback.get(name))
+          )
+        )
+      );
+    return envWriteQueue;
   }
 
-  async _loadSecretKey(envVarName) {
+  async _loadSecretKey(envVarName, version, fallback) {
     const filePath = this._getSecretFilePath(envVarName);
     try {
       const buffer = await fsPromises.readFile(filePath);
       const { value, needsReencrypt } = secretCrypto.decrypt(buffer);
+      if (version !== secretSaveCounts.get(envVarName)) return;
       unreadableSecrets.delete(envVarName);
       this._shellImportedSecrets.delete(envVarName);
-      process.env[envVarName] = value;
-      if (needsReencrypt) await this._saveSecretKey(envVarName, value);
+      process.env[envVarName] = fallback && fallback.version === version ? fallback.value : value;
+      if (needsReencrypt && process.env[envVarName] === value) {
+        await writeEncryptedFile(filePath, value, true).catch((error) => {
+          debugLogger.error(
+            "Failed to update credential encryption",
+            { key: envVarName, code: error.code },
+            "environment"
+          );
+        });
+      }
     } catch (error) {
+      if (version !== secretSaveCounts.get(envVarName)) return;
       if (error.code === "ENOENT") {
         unreadableSecrets.delete(envVarName);
         return;
@@ -231,20 +276,19 @@ class EnvironmentManager {
     else delete process.env[envVarName];
     const filePath = this._getSecretFilePath(envVarName);
     // An upgrade copy and a user's edit can otherwise race on the same .tmp file.
-    envWriteQueue = envWriteQueue
-      .catch(() => {})
-      .then(async () => {
-        if (!value) return fsPromises.rm(filePath, { force: true });
-        await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
-        const tmpPath = `${filePath}.tmp`;
-        await fsPromises.writeFile(tmpPath, secretCrypto.encrypt(value));
-        await fsPromises.rename(tmpPath, filePath);
-      });
+    envWriteQueue = envWriteQueue.catch(() => {}).then(() => writeEncryptedFile(filePath, value));
     return envWriteQueue;
   }
 
-  async _migrateToSecureStorage() {
+  _migrateToSecureStorage() {
+    const versions = new Map(secretSaveCounts);
+    envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._migrateProfileSecrets(versions));
+    return envWriteQueue;
+  }
+
+  async _migrateProfileSecrets(versions) {
     const dir = this._getSecureKeysDir();
+    const envPath = path.join(app.getPath("userData"), ".env");
     await fsPromises.mkdir(dir, { recursive: true });
 
     // Keep the original name as a reference target. Older references may still
@@ -259,44 +303,54 @@ class EnvironmentManager {
       process.env.CUSTOM_CLEANUP_API_KEY = process.env[LEGACY_CLEANUP_KEY];
     }
 
-    const migrated = [];
+    const fallback = new Map();
+    let failed = false;
+    let count = 0;
+    let profile;
     try {
-      for (const name of SECRET_KEYS) {
-        const file = this._getSecretFilePath(name);
-        // A previous upgrade may have encrypted this slot before it stopped.
-        // Verify the existing copy before trusting or replacing it.
-        if (fs.existsSync(file)) {
-          process.env[name] = secretCrypto.decrypt(await fsPromises.readFile(file)).value;
-          continue;
-        }
-        const value = process.env[name];
-        if (!value) continue;
-        await this._saveSecretKey(name, value);
-        // Round-trip verify before stripping plaintext .env.
-        const buffer = await fsPromises.readFile(file);
-        if (secretCrypto.decrypt(buffer).value !== value) {
-          throw new Error(`round-trip verification failed for ${name}`);
-        }
-        migrated.push(name);
-      }
+      profile = await readProfileEnv(envPath);
     } catch (error) {
       debugLogger.error(
-        "Secret migration aborted — plaintext .env preserved",
-        { error: error.message, migrated },
+        "Could not read profile for secret migration",
+        { code: error.code },
         "environment"
       );
       return;
     }
+    for (const name of SECRET_KEYS) {
+      try {
+        if (versions.get(name) !== secretSaveCounts.get(name)) continue;
+        const file = this._getSecretFilePath(name);
+        let value = profile[name] || process.env[name];
+        if (fs.existsSync(file)) {
+          // Before migration completes, the profile's plaintext is still where
+          // earlier releases saved user edits. An inherited variable has no such precedence.
+          const encrypted = secretCrypto.decrypt(await fsPromises.readFile(file)).value;
+          if (versions.get(name) !== secretSaveCounts.get(name)) continue;
+          value = profile[name] || encrypted;
+          process.env[name] = value;
+          if (value === encrypted) continue;
+        }
+        if (!value) continue;
+        await writeEncryptedFile(file, value, true);
+        count++;
+      } catch (error) {
+        failed = true;
+        if (profile[name])
+          fallback.set(name, { value: profile[name], version: versions.get(name) });
+        debugLogger.error(
+          "Could not migrate credential; profile preserved",
+          { key: name, code: error.code },
+          "environment"
+        );
+      }
+    }
+    if (failed) return fallback;
 
     // Write sentinel before stripping plaintext from .env so a crash mid-rewrite is recoverable.
     await fsPromises.writeFile(this._getMigrationSentinelPath(), "");
-    const envPath = path.join(app.getPath("userData"), ".env");
-    if (fs.existsSync(envPath)) await this._writeEnvFileAtomic(envPath);
-    debugLogger.info(
-      "Migrated secrets to encrypted storage",
-      { count: migrated.length },
-      "environment"
-    );
+    if (fs.existsSync(envPath)) await this._writeEnvFile(envPath);
+    debugLogger.info("Migrated secrets to encrypted storage", { count }, "environment");
   }
 
   _writeEnvFileAtomic(envPath) {
@@ -311,6 +365,9 @@ class EnvironmentManager {
     envWriteQueue = envWriteQueue
       .catch(() => {})
       .then(async () => {
+        if (fs.existsSync(this._getSecretFilePath(name))) {
+          throw new Error("Cannot seed over an existing encrypted credential");
+        }
         let content = "";
         try {
           content = await fsPromises.readFile(file, "utf8");
@@ -331,9 +388,39 @@ class EnvironmentManager {
     // otherwise a partial-migration recovery can lose unencrypted secrets.
     const stripSecrets =
       this._encryptionAvailable() && fs.existsSync(this._getMigrationSentinelPath());
+    const keepPlaintext = new Map();
+    if (stripSecrets) {
+      // A vault can recover after an already-migrated profile used plaintext
+      // fallback. Verify each saved slot before discarding that fallback.
+      const profile = await readProfileEnv(envPath);
+      for (const name of SECRET_KEYS) {
+        if (!profile[name] || (!process.env[name] && secretSaveCounts.has(name))) continue;
+        const file = this._getSecretFilePath(name);
+        try {
+          if (fs.existsSync(file)) {
+            const encrypted = secretCrypto.decrypt(await fsPromises.readFile(file)).value;
+            // A completed migration normally uses the encrypted slot. If Settings
+            // still uses the fallback, that is the value to secure before stripping it.
+            if (encrypted === profile[name] || process.env[name] !== profile[name]) continue;
+          }
+          await writeEncryptedFile(file, profile[name], true);
+        } catch (error) {
+          // Keep this field for another attempt while allowing other preferences to save.
+          keepPlaintext.set(name, profile[name]);
+          debugLogger.warn(
+            "Could not secure profile credential",
+            { key: name, code: error.code },
+            "environment"
+          );
+        }
+      }
+    }
     let envContent = "# OpenWhispr Environment Variables\n";
     for (const key of PERSISTED_KEYS) {
-      if (stripSecrets && SECRET_KEY_SET.has(key)) continue;
+      if (stripSecrets && SECRET_KEY_SET.has(key)) {
+        if (keepPlaintext.has(key)) envContent += secretEnvLine(key, keepPlaintext.get(key));
+        continue;
+      }
       if (this._shellImportedSecrets.has(key)) continue;
       if (process.env[key]) {
         const value =
@@ -363,9 +450,15 @@ class EnvironmentManager {
   }
 
   _cleanupCustomEnvName() {
-    return process.env.CUSTOM_CLEANUP_API_KEY || process.env[CLEANUP_FALLBACK_DISABLED] === "true"
-      ? "CUSTOM_CLEANUP_API_KEY"
-      : LEGACY_CLEANUP_KEY;
+    const current = "CUSTOM_CLEANUP_API_KEY";
+    if (process.env[CLEANUP_FALLBACK_DISABLED] === "true" || unreadableSecrets.has(current)) {
+      return current;
+    }
+    const legacyConfigured =
+      !this._shellImportedSecrets.has(LEGACY_CLEANUP_KEY) &&
+      (process.env[LEGACY_CLEANUP_KEY] || unreadableSecrets.has(LEGACY_CLEANUP_KEY));
+    if (this._shellImportedSecrets.has(current) && legacyConfigured) return LEGACY_CLEANUP_KEY;
+    return process.env[current] ? current : LEGACY_CLEANUP_KEY;
   }
 
   getRawCleanupCustomKey() {
@@ -502,14 +595,12 @@ class EnvironmentManager {
 
   saveCleanupCustomKey(key) {
     const trimmed = typeof key === "string" ? key.trim() : "";
-    // The field shows a shell-imported legacy alias as $CUSTOM_REASONING_API_KEY.
-    // Committing it unchanged keeps the import as it is (never saved, never cleared).
-    const previous = this.getRawCleanupCustomKey();
+    // An unchanged legacy field should not replace a separate shell export
+    // under the canonical name or remove the legacy value referenced elsewhere.
     if (
       trimmed &&
-      !this._getRawKey("CUSTOM_CLEANUP_API_KEY") &&
-      this._shellImportedSecrets.has(LEGACY_CLEANUP_KEY) &&
-      trimmed === previous
+      this._cleanupCustomEnvName() === LEGACY_CLEANUP_KEY &&
+      trimmed === this.getRawCleanupCustomKey()
     ) {
       return { success: true };
     }
