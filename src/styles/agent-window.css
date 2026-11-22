@@ -89,9 +89,10 @@
   transition: opacity 120ms ease-out;
 }
 
-/* A call's transcript opening or closing: the pill shows again at once, and the panel
-   fades around it (AgentWindow's CALL_PANEL_FADE_MS), in after the window grows and out
-   before it shrinks. The footer, which holds the pill, never fades. */
+/* A call's transcript opening or closing: the panel fades around the pill (AgentWindow's
+   CALL_PANEL_FADE_MS), in after Expand and out before Minimize. Where the window resizes
+   between them (not macOS), the pill shows again at once. The footer, which holds the
+   pill, never fades. */
 .agent-window-content[data-shown="true"][data-instant] {
   transition: none;
 }

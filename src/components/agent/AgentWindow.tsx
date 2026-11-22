@@ -32,6 +32,7 @@ import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
 import type { ChatImageAttachment, Message } from "../chat/types";
 import { unsentForkContext, type AgentSelectionContext } from "../../utils/agentSelectionContext";
+import { getCachedPlatform } from "../../utils/platform";
 import type { AgentWindowCommand, AgentWindowLayout } from "../../types/electron";
 import {
   agentWindowReducer,
@@ -71,6 +72,8 @@ const PRESS_CAPTURE_WAIT_MS = 3000;
 const STEP_SETTLE_MS = 300;
 const NOTICE_MS = 5000;
 // How long a call's transcript fades in or out around its pill (agent-window.css's call-panel rules).
+// On macOS a call's pill keeps the transcript's window (agentWindowManager), which never
+// resizes between them; elsewhere the window grows to the transcript and shrinks to the pill.
 const CALL_PANEL_FADE_MS = 160;
 // What the agent pill says once a call ends on its own.
 const CALL_END_NOTICES: Record<VoiceCallEndReason, string> = {
@@ -772,7 +775,7 @@ export default function AgentWindow() {
   // A card the user minimized the call's transcript over waits behind the
   // pill, which reads Waiting For Action until its cap brings the card back.
   const [hiddenCallCard, setHiddenCallCard] = useState<string | null>(null);
-  // The call's transcript fading in after Expand, or out before Minimize shrinks the window.
+  // The call's transcript fading in after Expand, or out before Minimize puts the pill alone.
   const [callPanel, setCallPanel] = useState<"entering" | "leaving" | null>(null);
   const callPanelTimerRef = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(callPanelTimerRef.current), []);
@@ -890,6 +893,9 @@ export default function AgentWindow() {
     onOpen: () => moveOnItsOwn({ type: "expand" }),
   });
 
+  const callKeepsTranscriptWindow = getCachedPlatform() === "darwin";
+  const inTranscriptWindow =
+    callKeepsTranscriptWindow && state.call !== null && state.layout === "pill";
   const surface = useAgentSurface({
     visible: state.visible,
     layout: state.layout,
@@ -897,6 +903,7 @@ export default function AgentWindow() {
     ...(standalone ? { contentHeight: cardHeight } : {}),
     // The call's transcript is the typed modal, so only its compact layouts are sized as a call.
     call: state.call !== null && state.layout !== "modal",
+    callKeepsTranscriptWindow,
     // Only the pill that reads "Waiting for answer", or a notice, needs the wider window.
     wide:
       state.layout === "pill" &&
@@ -1566,8 +1573,8 @@ export default function AgentWindow() {
   };
   const collapseRef = useRef(collapse);
   collapseRef.current = collapse;
-  // A running call's transcript closes around its pill: the panel fades out while the
-  // window still holds it, then the window shrinks to the pill.
+  // A running call's transcript closes around its pill: the panel fades out, then the pill
+  // shows alone.
   const minimizeCall = () => {
     if (!callActive || state.layout !== "modal" || callPanel === "leaving") {
       collapse();
@@ -1635,7 +1642,10 @@ export default function AgentWindow() {
       <div
         className={cn(
           "agent-window-content flex h-full w-full flex-col items-center justify-end",
-          (state.layout === "typing" || standalone) && "gap-3"
+          (state.layout === "typing" || standalone) && "gap-3",
+          // In the transcript's window, the pill sits where the transcript's does: above its
+          // border and bottom padding (AgentModal).
+          inTranscriptWindow && "pb-[13px]"
         )}
         data-shown={surface.shown}
         data-instant={callPanel !== null || undefined}

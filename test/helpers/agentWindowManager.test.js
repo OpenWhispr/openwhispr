@@ -89,6 +89,10 @@ class FakeBrowserWindow {
   setFocusable(value) {
     this.calls.push(["setFocusable", value]);
   }
+  setIgnoreMouseEvents(ignore, options) {
+    this.ignoringMouse = ignore && options?.forward === true ? "forward" : ignore;
+    this.calls.push(["setIgnoreMouseEvents", ignore, options]);
+  }
   focus() {
     this.focused = true;
     this.calls.push(["focus"]);
@@ -281,21 +285,63 @@ for (const platform of ["darwin", "win32", "linux"]) {
   });
 }
 
-test("a call's compact pill holds still under a drag, and the transcript's pill opens where it was", async (t) => {
+for (const platform of ["win32", "linux"]) {
+  test(`on ${platform} a call's compact pill holds still under a drag, and the transcript's pill opens where it was`, async (t) => {
+    cursor = { x: 720, y: 400 };
+    const { manager, win } = await openedManager({ platform });
+    t.after(() => manager.dragManager.cleanup());
+    manager.setLayout(fromAgent(win), { layout: "pill", focus: false, call: true });
+    const before = { ...win.bounds };
+    manager.setDragging(fromAgent(win), true);
+    manager.dragManager.updateWindowPosition();
+    assert.deepEqual(win.bounds, before, "a drag that hasn't moved leaves the window in place");
+    cursor = { x: 620, y: 300 };
+    manager.dragManager.updateWindowPosition();
+    manager.setDragging(fromAgent(win), false);
+    const pillBottom = win.bounds.y + win.bounds.height - 8;
+    manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+    assert.equal(win.bounds.y + win.bounds.height - 8 - CALL_WINDOW_LIFT, pillBottom);
+    assert.ok(!win.calls.some(([name]) => name === "setIgnoreMouseEvents"));
+  });
+}
+
+test("on macOS a call's pill keeps the transcript's window, so Expand and Minimize resize nothing", async (t) => {
   cursor = { x: 720, y: 400 };
   const { manager, win } = await openedManager();
   t.after(() => manager.dragManager.cleanup());
+  const resizes = () => win.calls.filter(([name]) => name === "setBounds").length;
+
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+  const transcript = { ...win.bounds };
+  const count = resizes();
   manager.setLayout(fromAgent(win), { layout: "pill", focus: false, call: true });
-  const before = { ...win.bounds };
+  assert.equal(resizes(), count, "Minimize resizes nothing");
+  assert.deepEqual(win.bounds, transcript);
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+  assert.equal(resizes(), count, "Expand resizes nothing");
+
+  manager.setLayout(fromAgent(win), { layout: "pill", focus: false, call: true });
   manager.setDragging(fromAgent(win), true);
   manager.dragManager.updateWindowPosition();
-  assert.deepEqual(win.bounds, before, "a drag that hasn't moved leaves the window in place");
+  assert.deepEqual(win.bounds, transcript, "a drag that hasn't moved leaves the window in place");
   cursor = { x: 620, y: 300 };
   manager.dragManager.updateWindowPosition();
   manager.setDragging(fromAgent(win), false);
-  const pillBottom = win.bounds.y + win.bounds.height - 8;
+  const dragged = { ...win.bounds };
   manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
-  assert.equal(win.bounds.y + win.bounds.height - 8 - CALL_WINDOW_LIFT, pillBottom);
+  assert.deepEqual(win.bounds, dragged, "the transcript opens where the pill was dragged");
+
+  // A card above the pill has a window of its own size, lifted so its pill sits where the transcript's does.
+  manager.setLayout(fromAgent(win), {
+    layout: "standalone",
+    focus: false,
+    call: true,
+    contentHeight: 200,
+  });
+  assert.notEqual(win.bounds.height, dragged.height);
+  assert.equal(win.bounds.y + win.bounds.height + CALL_WINDOW_LIFT, dragged.y + dragged.height);
+  // macOS passes clicks through the transparent parts by itself, until a value is set.
+  assert.ok(!win.calls.some(([name]) => name === "setIgnoreMouseEvents"));
 });
 
 test("dragging stays in the lower centered region and stops when the modal leaves", async (t) => {

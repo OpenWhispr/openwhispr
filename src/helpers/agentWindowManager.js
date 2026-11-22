@@ -51,7 +51,7 @@ class AgentWindowManager {
         this.anchor = clampAgentAnchor(
           {
             centerX: bounds.x + bounds.width / 2,
-            bottom: bounds.y + bounds.height + (this.call ? CALL_WINDOW_LIFT : 0),
+            bottom: bounds.y + bounds.height + (this._sizedAsCall() ? CALL_WINDOW_LIFT : 0),
           },
           display.workArea || display.bounds,
           this._defaultAnchor(display).bottom
@@ -417,12 +417,25 @@ class AgentWindowManager {
   _bounds(display) {
     return computeAgentWindowBounds({
       anchor: this.anchor,
-      layout: this.layout,
+      layout: this._keepsTranscriptWindow() ? "modal" : this.layout,
       workArea: display.workArea || display.bounds,
       contentHeight: this.contentHeight,
       wide: this.wide,
-      call: this.call,
+      call: this._sizedAsCall(),
     });
+  }
+
+  // On macOS a call's pill keeps the transcript's window: a transparent window can't
+  // resize and draw its new size in the same frame, so Expand and Minimize would blink
+  // the pill. The renderer places the pill where the transcript's sits; macOS passes
+  // clicks through the window's transparent parts on its own.
+  _keepsTranscriptWindow() {
+    return this.platform === "darwin" && this.call && this.layout === "pill";
+  }
+
+  // A call layout with a window of its own, lifted so its pill sits where the transcript's does.
+  _sizedAsCall() {
+    return this.call && !this._keepsTranscriptWindow();
   }
 
   // Displays changed: re-anchor on the window's display.

@@ -3,6 +3,19 @@ import type { AgentWindowLayout } from "../../types/electron";
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
+// The window size a layout takes: on macOS a call's pill keeps the transcript's window
+// (agentWindowManager), so Expand and Minimize in a call resize nothing.
+const windowSize = (
+  layout: AgentWindowLayout,
+  call: boolean,
+  callKeepsTranscriptWindow: boolean
+) =>
+  call && layout === "pill" && callKeepsTranscriptWindow
+    ? "modal"
+    : call
+      ? `call-${layout}`
+      : layout;
+
 // A resize that changes nothing fires no event; don't wait on it for long.
 const RESIZE_WAIT_MS = 120;
 const waitForResize = () =>
@@ -30,6 +43,7 @@ export function useAgentSurface({
   contentHeight,
   wide = false,
   call = false,
+  callKeepsTranscriptWindow = false,
 }: {
   visible: boolean;
   layout: AgentWindowLayout;
@@ -40,18 +54,20 @@ export function useAgentSurface({
   wide?: boolean;
   /** A voice call's layouts: its taller pill, with cards above it. */
   call?: boolean;
+  /** macOS: a call's pill keeps the transcript's window. */
+  callKeepsTranscriptWindow?: boolean;
 }) {
   const [shown, setShown] = useState(false);
-  // The layout main last sized the window for; a hide shrinks it to the pill.
-  const appliedLayoutRef = useRef<AgentWindowLayout>("pill");
-  const appliedCallRef = useRef(false);
+  // The size main last gave the window; a hide shrinks it to the pill.
+  const appliedSizeRef = useRef("pill");
+  const size = windowSize(layout, call, callKeepsTranscriptWindow);
 
   useEffect(() => {
     if (!visible) return undefined;
     let current = true;
     const widePill = layout === "pill" && wide;
     void (async () => {
-      const resizes = appliedLayoutRef.current !== layout || appliedCallRef.current !== call;
+      const resizes = appliedSizeRef.current !== size;
       if (resizes) {
         setShown(false);
         await nextFrame();
@@ -70,8 +86,7 @@ export function useAgentSurface({
         ...(widePill ? { wide: true } : {}),
         ...(call ? { call: true } : {}),
       });
-      appliedLayoutRef.current = layout;
-      appliedCallRef.current = call;
+      appliedSizeRef.current = size;
       if (resizes) {
         await resized;
         await nextFrame();
@@ -81,7 +96,7 @@ export function useAgentSurface({
     return () => {
       current = false;
     };
-  }, [visible, layout, focus, contentHeight, wide, call]);
+  }, [visible, layout, focus, contentHeight, wide, call, size]);
 
   // Close: transparent first, so the next show never paints this frame.
   const hide = useCallback(async () => {
@@ -89,19 +104,16 @@ export function useAgentSurface({
     await nextFrame();
     await nextFrame();
     await window.electronAPI?.agentWindowHide?.();
-    appliedLayoutRef.current = "pill";
-    appliedCallRef.current = false;
+    appliedSizeRef.current = "pill";
   }, []);
 
   // Main already hid the window (onboarding took the screen).
   const forgetBounds = useCallback(() => {
     setShown(false);
-    appliedLayoutRef.current = "pill";
-    appliedCallRef.current = false;
+    appliedSizeRef.current = "pill";
   }, []);
 
   // Hidden in the very render whose layout the window isn't sized for yet, so no
   // frame shows it at the old size, whatever set the layout.
-  const sized = appliedLayoutRef.current === layout && appliedCallRef.current === call;
-  return { shown: shown && sized, hide, forgetBounds };
+  return { shown: shown && appliedSizeRef.current === size, hide, forgetBounds };
 }
