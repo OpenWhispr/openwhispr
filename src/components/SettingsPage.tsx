@@ -99,6 +99,7 @@ import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
+import { FourierPilotOption } from "./settings/FourierPilotOption";
 import DeveloperSection from "./DeveloperSection";
 import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
@@ -478,6 +479,7 @@ function GranolaImportSection({
 }
 
 interface TranscriptionSectionProps {
+  accountId?: string;
   isSignedIn: boolean;
   cloudTranscriptionMode: string;
   setCloudTranscriptionMode: (mode: string) => void;
@@ -515,6 +517,7 @@ interface TranscriptionSectionProps {
 }
 
 function TranscriptionSection({
+  accountId,
   isSignedIn,
   cloudTranscriptionMode,
   setCloudTranscriptionMode,
@@ -803,6 +806,9 @@ function TranscriptionSection({
             onSelect={handleTranscriptionModeSelect}
           />
 
+          {effectiveTranscriptionMode === "openwhispr" && accountId && (
+            <FourierPilotOption key={accountId} account={accountId} />
+          )}
           {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
           {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
           {previewAvailable && renderPreviewToggle()}
@@ -5144,6 +5150,7 @@ EOF`,
             renderDictation={() => (
               <div className="space-y-6">
                 <TranscriptionSection
+                  accountId={isSignedIn && !isOfflineAccount ? user?.id : undefined}
                   isSignedIn={isSignedIn ?? false}
                   cloudTranscriptionMode={cloudTranscriptionMode}
                   setCloudTranscriptionMode={setCloudTranscriptionMode}

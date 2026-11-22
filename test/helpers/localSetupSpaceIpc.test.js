@@ -61,7 +61,8 @@ test("the download checks use the exported factors, not their own literals", () 
     new RegExp(`checkDiskSpace\\(\\s*modelsDir,\\s*modelConfig\\.size \\* ${factor}\\s*\\)`);
   const checks = {
     "whisper.js": sizeCheck("WHISPER_DISK_SPACE_FACTOR"),
-    "parakeet.js": sizeCheck("PARAKEET_DISK_SPACE_FACTOR"),
+    "parakeet.js":
+      /parakeetDownloadSpace\(\s*modelConfig\.size,\s*modelType,\s*PARAKEET_DISK_SPACE_FACTOR\s*\)/,
     "modelManagerBridge.js": /set\(modelId, requiredBytes \* LLM_DISK_SPACE_FACTOR\)/,
     "gpuBinaryManager.js": /\* DISK_SPACE_MULTIPLIER;/,
   };

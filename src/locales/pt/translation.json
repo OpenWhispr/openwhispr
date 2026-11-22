@@ -2440,6 +2440,7 @@
         "modelsReady": "Modelos prontos",
         "deleteModels": "Excluir modelos"
       },
+      "fourierEnglishPilot": "Transcreve ao terminar a gravação se o idioma selecionado for inglês e o dicionário estiver vazio.",
       "transcriptionPreview": "Pré-visualização ao vivo",
       "transcriptionPreviewDescription": "Mostrar transcrição em janela flutuante antes da limpeza",
       "aec": {

@@ -14,6 +14,7 @@ import {
   dismissPastePermissionNotice,
 } from "../utils/permissions";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
+import { FOURIER_PREFERENCE_PREFIX } from "../helpers/fourierPilotSelection";
 import { isManagedOrukeetStream } from "../helpers/transcriptionFallback";
 import {
   effectiveLocalHistoryEnabled,
@@ -1225,6 +1226,12 @@ export const useAudioRecording = (toast, options = {}) => {
       audioManagerRef.current.invalidateSttConfig();
       loadAndWarmSttConfig({ warmMic: false });
     });
+    const onFourierPreferenceChange = (event) => {
+      if (event.newValue === "1" && event.key?.startsWith(FOURIER_PREFERENCE_PREFIX)) {
+        audioManagerRef.current.invalidateSttConfig();
+      }
+    };
+    window.addEventListener("storage", onFourierPreferenceChange);
 
     const handleToggle = async ({
       voiceAgentRequested = false,
@@ -1332,6 +1339,7 @@ export const useAudioRecording = (toast, options = {}) => {
       if (recordingAttemptRef.current) recordingAttemptRef.current.abandoned = true;
       unsubscribePolicy();
       unsubscribeAuthBoundary();
+      window.removeEventListener("storage", onFourierPreferenceChange);
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
       disposeTranslationToggle?.();

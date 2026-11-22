@@ -9325,6 +9325,16 @@ class IPCHandlers {
       logger: debugLogger,
       configPath: "stt-config",
     });
+    const fourierDictationFields = (accountId, language, authHeader) => {
+      if (!accountId || language?.toLowerCase() !== "en") return {};
+      const state = tokenStore.getState();
+      if (!state.token || authHeader.Authorization !== `Bearer ${state.token}`) return {};
+      const scope = accountScopeBinding.resolveActiveAccountScope({
+        ...state,
+        binding: accountScopeBinding.read(),
+      });
+      return scope?.accountId === accountId ? { model: "oruk-fourier-2b", language: "en" } : {};
+    };
     const handleNoteRecordingConfigRequest = createCloudConfigRequestHandler({
       getApiUrl,
       getAuthHeader,
@@ -9355,6 +9365,7 @@ class IPCHandlers {
         const multipartFields = {
           source: "dictation",
           language: opts.language,
+          ...fourierDictationFields(opts.fourierAccount, opts.language, authHeader),
           prompt: opts.prompt,
           sendLogs: opts.sendLogs,
           clientType: "desktop",
@@ -9657,6 +9668,7 @@ class IPCHandlers {
               if (apiUrl) {
                 const multipartFields = {
                   language,
+                  ...fourierDictationFields(settings.fourierAccount, language, authHeader),
                   clientType: "desktop",
                   source: "dictation",
                   appVersion: app.getVersion(),
@@ -13978,6 +13990,9 @@ class IPCHandlers {
 
           const multipartFields = {
             source: purpose === "dictation" ? "dictation" : "file_upload",
+            ...(purpose === "dictation"
+              ? fourierDictationFields(opts.fourierAccount, opts.language, authHeader)
+              : {}),
             clientType: "desktop",
             appVersion: app.getVersion(),
             clientVersion: app.getVersion(),

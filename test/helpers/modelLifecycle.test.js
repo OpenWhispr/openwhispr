@@ -316,6 +316,25 @@ test("a retired file on disk outranks another download, but not its named replac
   assert.equal(named.settings.useSettingsStore.getState().whisperModel, "medium");
 });
 
+test("retiring Fourier honors a downloaded Orukeet replacement in the same settings slot", async (t) => {
+  const store = await import("../../src/models/registryData.js");
+  const { retiredLocalSpeechReplacement } = await import("../../src/models/modelLifecycle.js");
+  const data = structuredClone(seed);
+  const apply = (catalog) =>
+    store.replaceRegistryData({ data: catalog, manifestVersion: store.getRegistryVersion() + 1 });
+  t.after(() => apply(structuredClone(seed)));
+  retireLocal(data, "parakeetModels", "oruk-fourier-2b", "orukeet-v0.1.0");
+  apply(data);
+  assert.equal(
+    retiredLocalSpeechReplacement(
+      "parakeetModels",
+      "oruk-fourier-2b",
+      (id) => id === "orukeet-v0.1.0"
+    ),
+    "orukeet-v0.1.0"
+  );
+});
+
 test("a retired multilingual model never moves to an English-only one, or a blocked one", async () => {
   const store = await import("../../src/models/registryData.js");
   const { retiredLocalSpeechReplacement } = await import("../../src/models/modelLifecycle.js");

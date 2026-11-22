@@ -6094,6 +6094,7 @@
         "modelsReady": "النماذج جاهزة",
         "deleteModels": "حذف النماذج"
       },
+      "fourierEnglishPilot": "يبدأ النسخ عند انتهاء التسجيل إذا اخترت الإنجليزية وكان القاموس فارغًا.",
       "transcriptionPreview": "معاينة التفريغ المباشر",
       "transcriptionPreviewDescription": "إظهار التفريغ في نافذة عائمة قبل التنقيح",
       "aec": {

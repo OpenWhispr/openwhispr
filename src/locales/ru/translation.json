@@ -2467,6 +2467,7 @@
         "modelsReady": "Модели готовы",
         "deleteModels": "Удалить модели"
       },
+      "fourierEnglishPilot": "Расшифровывает речь после записи, если выбран английский язык и словарь пуст.",
       "transcriptionPreview": "Предпросмотр транскрипции",
       "transcriptionPreviewDescription": "Показывать транскрипцию в плавающем окне перед очисткой",
       "aec": {
