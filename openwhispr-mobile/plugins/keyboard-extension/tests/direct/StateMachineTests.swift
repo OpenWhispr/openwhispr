@@ -232,7 +232,7 @@ extension DirectDictationTests {
     let h = Harness()
     defer { h.cleanup() }
     h.record(seconds: 2)
-    try? Data("cut off".utf8).write(to: h.store.audioURL(jobId: "job-1").appendingPathExtension("partial"))
+    try? Data("cut off".utf8).write(to: DirectAudioEncoder.partialURL(for: h.store.audioURL(jobId: "job-1")))
     h.restartProcess()
     h.dictation.keyboardDidAppear()
     expect(h.encodeGains.count, 1, "recover: the take is encoded")

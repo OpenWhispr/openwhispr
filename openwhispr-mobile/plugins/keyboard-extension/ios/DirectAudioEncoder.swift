@@ -13,11 +13,18 @@ enum DirectAudioEncoder {
     defer { try? input.close() }
     // Written aside and moved into place, so a keyboard killed mid-encode never leaves a cut-off
     // .m4a that would be uploaded as the take; its .pcm is encoded again instead.
-    let partial = m4aURL.appendingPathExtension("partial")
+    let partial = partialURL(for: m4aURL)
     try? FileManager.default.removeItem(at: partial)
     try write(from: input, to: partial, gain: gain)
     try? FileManager.default.removeItem(at: m4aURL)
     try FileManager.default.moveItem(at: partial, to: m4aURL)
+  }
+
+  /// Where a take is encoded before it is moved into place: "<name>.partial.m4a". The name
+  /// must still end in .m4a, because AVAudioFile chooses the container from the extension:
+  /// ending in ".partial" it wrote a CoreAudio (CAF) file, which the server could not read.
+  static func partialURL(for m4aURL: URL) -> URL {
+    m4aURL.deletingPathExtension().appendingPathExtension("partial").appendingPathExtension(m4aURL.pathExtension)
   }
 
   // A separate function so the AVAudioFile is released, and the file finalized, on return.

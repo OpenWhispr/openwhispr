@@ -1463,6 +1463,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
     reloadTypingSettings()
+    if typingSettings.swipeTracesEnabled, let container = KeyboardHandoffProvider.shared.containerURL() {
+      _ = swipeTraceURL(in: container)
+    }
     noteFieldReport()
     syncTypingSessionWithField()
     syncShiftWithContextIfNeeded()
@@ -3208,7 +3211,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard let data = try? JSONSerialization.data(withJSONObject: record), var line = String(data: data, encoding: .utf8)
     else { return }
     line += "\n"
-    let url = container.appendingPathComponent("keyboard-swipe-traces.jsonl")
+    let url = swipeTraceURL(in: container)
     if let handle = try? FileHandle(forWritingTo: url) {
       handle.seekToEndOfFile()
       handle.write(Data(line.utf8))
@@ -3216,6 +3219,19 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     } else {
       try? Data(line.utf8).write(to: url)
     }
+  }
+
+  /// Under Library/Caches: the only part of the group container a Mac can read off a
+  /// connected phone. Traces an earlier build left at the container's root are moved here.
+  private func swipeTraceURL(in container: URL) -> URL {
+    let folder = container.appendingPathComponent("Library/Caches", isDirectory: true)
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let url = folder.appendingPathComponent("keyboard-swipe-traces.jsonl")
+    let old = container.appendingPathComponent("keyboard-swipe-traces.jsonl")
+    if FileManager.default.fileExists(atPath: old.path), !FileManager.default.fileExists(atPath: url.path) {
+      try? FileManager.default.moveItem(at: old, to: url)
+    }
+    return url
   }
 
   private func commitSwipe(path: [CGPoint], times: [TimeInterval] = []) {

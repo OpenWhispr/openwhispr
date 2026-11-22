@@ -47,6 +47,9 @@ extension DirectDictationTests {
     try! quiet.append(pcm(seconds: 1, amplitude: 0.05))
     quiet.close()
     try! DirectAudioEncoder.encodeAAC(pcmURL: pcmURL, m4aURL: m4aURL, gain: 10)
+    // An MPEG-4 file, not CoreAudio: bytes 4-8 of an MP4 are "ftyp".
+    let header = (try? Data(contentsOf: m4aURL).prefix(8)) ?? Data()
+    expect(String(decoding: header.suffix(4), as: UTF8.self), "ftyp", "the take is written as MPEG-4")
     let boosted = decodedRms(m4aURL)
     expect(boosted.rate, 16_000, "AAC sample rate")
     expect(abs(boosted.frames - 16_000) < 3_000, true, "about one second of frames")

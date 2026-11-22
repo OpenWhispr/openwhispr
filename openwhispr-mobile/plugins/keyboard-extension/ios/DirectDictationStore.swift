@@ -41,7 +41,7 @@ final class DirectDictationStore {
   func bodyURL(jobId: String) -> URL { directory.appendingPathComponent("\(jobId).body") }
   private func recordURL(jobId: String) -> URL { directory.appendingPathComponent("\(jobId).json") }
   // DirectAudioEncoder writes here first, then moves the finished file to audioURL.
-  private func partialURL(jobId: String) -> URL { audioURL(jobId: jobId).appendingPathExtension("partial") }
+  private func partialURL(jobId: String) -> URL { DirectAudioEncoder.partialURL(for: audioURL(jobId: jobId)) }
 
   /// Written before recording starts, so audio on disk always has an owner.
   func begin(jobId: String, userId: String, tone: String) throws {
