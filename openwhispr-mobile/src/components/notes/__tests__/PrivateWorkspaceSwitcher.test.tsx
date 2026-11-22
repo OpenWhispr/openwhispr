@@ -1,6 +1,7 @@
 import { fireEvent, render } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 import { PrivateWorkspaceSwitcher } from '../PrivateWorkspaceSwitcher';
+import { showMenu } from './menuViewMock';
 
 jest.mock('@react-native-menu/menu', () => require('./menuViewMock'));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
@@ -46,6 +47,19 @@ describe('PrivateWorkspaceSwitcher', () => {
     expect(getByLabelText('Workspace: Acme')).toBeTruthy();
     expect(getByTestId('menu-acme').props.accessibilityState.selected).toBe(true);
     expect(getByTestId('menu-own').props.accessibilityState.selected).toBe(false);
+  });
+
+  it('opens the Android menu when a screen reader activates the trigger', () => {
+    const platform = jest.replaceProperty(Platform, 'OS', 'android');
+    try {
+      const { getByRole } = render(<PrivateWorkspaceSwitcher />);
+      const trigger = getByRole('button', { name: 'Workspace: Mine' });
+      expect(trigger.props.accessibilityActions).toContainEqual({ name: 'activate' });
+      fireEvent(trigger, 'accessibilityAction', { nativeEvent: { actionName: 'activate' } });
+      expect(showMenu).toHaveBeenCalledTimes(1);
+    } finally {
+      platform.restore();
+    }
   });
 
   it('switches to another workspace, and ignores a pick of the active one', () => {

@@ -1,6 +1,6 @@
-import { useEffect, type ReactElement } from 'react';
-import { View } from 'react-native';
-import { MenuView, type MenuAction } from '@react-native-menu/menu';
+import { useEffect, useRef, type ReactElement } from 'react';
+import { Platform, View } from 'react-native';
+import { MenuView, type MenuAction, type MenuComponentRef } from '@react-native-menu/menu';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
@@ -14,6 +14,7 @@ export function PrivateWorkspaceSwitcher({
 }: {
   heading?: ReactElement;
 }): ReactElement | null {
+  const menuRef = useRef<MenuComponentRef>(null);
   const workspaces = useNotesStore((state) => state.privateWorkspaces);
   const activeId = useNotesStore((state) => state.activePrivateWorkspaceId);
   const defaultId = useNotesStore((state) => state.defaultPrivateWorkspaceId);
@@ -55,6 +56,7 @@ export function PrivateWorkspaceSwitcher({
 
   const menu = (
     <MenuView
+      ref={menuRef}
       title="Switch workspace"
       actions={actions}
       shouldOpenOnLongPress={false}
@@ -70,6 +72,10 @@ export function PrivateWorkspaceSwitcher({
         accessibilityRole="button"
         accessibilityLabel={`${heading ? 'Folders, ' : ''}Workspace: ${current.name}`}
         accessibilityHint="Switches the workspace whose notes are shown"
+        accessibilityActions={Platform.OS === 'android' ? [{ name: 'activate' }] : undefined}
+        onAccessibilityAction={
+          Platform.OS === 'android' ? () => menuRef.current?.show() : undefined
+        }
         pointerEvents="none"
         className={heading ? 'min-h-[44px] items-center justify-center px-2' : undefined}
       >
