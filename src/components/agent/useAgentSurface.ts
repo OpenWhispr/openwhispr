@@ -100,5 +100,8 @@ export function useAgentSurface({
     appliedCallRef.current = false;
   }, []);
 
-  return { shown, hide, forgetBounds };
+  // Hidden in the very render whose layout the window isn't sized for yet, so no
+  // frame shows it at the old size, whatever set the layout.
+  const sized = appliedLayoutRef.current === layout && appliedCallRef.current === call;
+  return { shown: shown && sized, hide, forgetBounds };
 }

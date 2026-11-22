@@ -1471,6 +1471,32 @@ test("in a call, Esc while a card sends stops only speech: the send's turn goes 
   await view.waitForLayout("modal");
 });
 
+test("a call's transcript fades out around its pill before the window shrinks to it", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, finished] });
+  await React.act(async () => view.button("Start Voice Agent").click());
+  await view.waitForLayout("modal");
+  const modal = () => view.host.querySelector(".agent-modal");
+  const headerMinimize = view.host.querySelector(
+    '.agent-modal header button[aria-label="Minimize"]'
+  );
+
+  await React.act(async () => headerMinimize.click());
+  assert.equal(modal()?.dataset.callPanel, "leaving", "the panel fades first");
+  assert.equal(view.layout(), "modal", "while the window still holds it");
+  assert.equal(
+    view.host.querySelector(".agent-window-content").dataset.instant,
+    "true",
+    "and the pill will show again at once"
+  );
+
+  await view.wait(400);
+  assert.equal(modal(), null, "then the window goes back to the call's compact pill");
+  assert.ok(view.host.querySelector("[data-voice-pill]"));
+});
+
 test("Esc over selected text clears the selection and keeps the chat", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.open({ layout: "modal" }));

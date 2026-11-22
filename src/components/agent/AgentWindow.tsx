@@ -70,6 +70,8 @@ const PRESS_CAPTURE_WAIT_MS = 3000;
 // How long a new step may take to show the card it asks with.
 const STEP_SETTLE_MS = 300;
 const NOTICE_MS = 5000;
+// How long a call's transcript fades in or out around its pill (agent-window.css's call-panel rules).
+const CALL_PANEL_FADE_MS = 160;
 // What the agent pill says once a call ends on its own.
 const CALL_END_NOTICES: Record<VoiceCallEndReason, string> = {
   meeting: "agentWindow.call.notices.endedForMeeting",
@@ -770,6 +772,10 @@ export default function AgentWindow() {
   // A card the user minimized the call's transcript over waits behind the
   // pill, which reads Waiting For Action until its cap brings the card back.
   const [hiddenCallCard, setHiddenCallCard] = useState<string | null>(null);
+  // The call's transcript fading in after Expand, or out before Minimize shrinks the window.
+  const [callPanel, setCallPanel] = useState<"entering" | "leaving" | null>(null);
+  const callPanelTimerRef = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(callPanelTimerRef.current), []);
   const callCardHidden = callCard !== null && callCard.id === hiddenCallCard;
 
   // The compact call shows what is above its pill (its settings, why it
@@ -896,6 +902,20 @@ export default function AgentWindow() {
       state.layout === "pill" &&
       (state.notice !== null || (pendingCard !== null && !listening && !transcribing)),
   });
+
+  // The fade is over once the window shows the layout it led to, or with the call.
+  useEffect(() => {
+    if (!callPanel) return undefined;
+    if (!state.call || !state.visible) {
+      setCallPanel(null);
+      return undefined;
+    }
+    const arrived = callPanel === "entering" ? state.layout === "modal" : state.layout !== "modal";
+    if (!surface.shown || !arrived) return undefined;
+    // Held a fade's length, so the frame that shows the pill again still skips the content's fade-in.
+    const timer = window.setTimeout(() => setCallPanel(null), CALL_PANEL_FADE_MS);
+    return () => window.clearTimeout(timer);
+  }, [callPanel, state.call, state.visible, state.layout, surface.shown]);
 
   // Another app's selection and a screenshot, read at the press, ride with
   // the request it starts.
@@ -1544,6 +1564,26 @@ export default function AgentWindow() {
     if (state.call && pendingCard) setHiddenCallCard(pendingCard.id);
     dispatch({ type: "collapse", pending: Boolean(pendingCard) });
   };
+  const collapseRef = useRef(collapse);
+  collapseRef.current = collapse;
+  // A running call's transcript closes around its pill: the panel fades out while the
+  // window still holds it, then the window shrinks to the pill.
+  const minimizeCall = () => {
+    if (!callActive || state.layout !== "modal" || callPanel === "leaving") {
+      collapse();
+      return;
+    }
+    setCallPanel("leaving");
+    window.clearTimeout(callPanelTimerRef.current);
+    callPanelTimerRef.current = window.setTimeout(() => {
+      const current = stateRef.current;
+      if (current.call && !current.call.stopped && current.layout === "modal") {
+        collapseRef.current();
+      } else {
+        setCallPanel(null);
+      }
+    }, CALL_PANEL_FADE_MS);
+  };
   const voicePill = (inModal: boolean) => (
     <VoicePill
       status={callStatus}
@@ -1555,7 +1595,14 @@ export default function AgentWindow() {
       settingsOpen={Boolean(state.call?.settings)}
       inModal={inModal}
       onSettings={() => dispatch({ type: "callSettings", open: !state.call?.settings })}
-      onTranscript={() => (state.layout === "modal" ? collapse() : dispatch({ type: "expand" }))}
+      onTranscript={() => {
+        if (state.layout === "modal") {
+          minimizeCall();
+          return;
+        }
+        setCallPanel("entering");
+        dispatch({ type: "expand" });
+      }}
       onMic={() => void voiceCall.setMicMuted(!voiceCall.micMuted)}
       onEnd={endCall}
       // Over a waiting or sending card, Stop silences only its read-out: the card and its turn stay.
@@ -1591,6 +1638,7 @@ export default function AgentWindow() {
           (state.layout === "typing" || standalone) && "gap-3"
         )}
         data-shown={surface.shown}
+        data-instant={callPanel !== null || undefined}
         onPointerDown={(event) => {
           if (cardShown) setCardClicked(true);
           setMovedAway(false);
@@ -1605,7 +1653,8 @@ export default function AgentWindow() {
             conversationId={conversationId}
             onNewChat={newChat}
             onSelectChat={switchChat}
-            onCollapse={collapse}
+            onCollapse={minimizeCall}
+            callPanel={callPanel}
             footer={
               state.call ? (
                 <div className="relative flex flex-col items-center">
@@ -1614,7 +1663,8 @@ export default function AgentWindow() {
                       {callAbovePill}
                     </div>
                   )}
-                  {voicePill(true)}
+                  {/* Fading out, the pill already wears its compact look. */}
+                  {voicePill(callPanel !== "leaving")}
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2">

@@ -130,6 +130,8 @@ interface AgentModalProps {
   children: ReactNode;
   /** The composer or the pill, docked at the bottom. */
   footer: ReactNode;
+  /** A call's transcript fading in around its pill, or out before the window shrinks to it. */
+  callPanel?: "entering" | "leaving" | null;
 }
 
 /** The expanded assistant: chat controls and title, the conversation, and the input docked below. */
@@ -142,11 +144,15 @@ export function AgentModal({
   onCollapse,
   children,
   footer,
+  callPanel = null,
 }: AgentModalProps) {
   const { t } = useTranslation();
   const dragHandlers = useAgentWindowDrag();
   return (
-    <div className="agent-modal agent-panel relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-surface-0 shadow-[var(--shadow-modal)]">
+    <div
+      className="agent-modal agent-panel relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-surface-0 shadow-[var(--shadow-modal)]"
+      data-call-panel={callPanel ?? undefined}
+    >
       <div
         data-glow={glow}
         className="agent-modal-glow pointer-events-none absolute inset-x-0 bottom-0 h-1/2"
