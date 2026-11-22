@@ -253,6 +253,77 @@ test("a key goes straight to the settings saver and never into the store or resu
   assert.equal(serialized.includes("gsk_secret_value"), false);
 });
 
+test("a recovery card preserves the working key until the submitted reference resolves", async (t) => {
+  let available = false;
+  const store = await loadStore({
+    getConfiguredSecretRefs: async (refs) => (available ? refs : []),
+  });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const previous = useSettingsStore.getState();
+  t.after(() => useSettingsStore.setState(previous));
+  const saved = [];
+  useSettingsStore.setState({
+    groqApiKey: "existing-key",
+    setGroqApiKey(value) {
+      saved.push(value);
+      useSettingsStore.setState({ groqApiKey: value });
+      return null;
+    },
+  });
+  const key = "m1::recover-ref";
+  const pending = store.requestInteraction(context("recover-ref").value, {
+    kind: "apiKey",
+    provider: "groq",
+    providerName: "Groq",
+  });
+  t.after(() => store.cancelInteraction(key));
+  await store.submitApiKey(key, "$OPENAI_API_KEY");
+  const entry = store.useAgentInteractionStore.getState().entries[key];
+  assert.equal(entry.state, "pending");
+  assert.equal(entry.error, "secretRefUnset");
+  assert.equal(useSettingsStore.getState().groqApiKey, "existing-key");
+  assert.deepEqual(saved, []);
+  available = true;
+  await store.submitApiKey(key, "$OPENAI_API_KEY");
+  assert.deepEqual(await pending, { status: "saved" });
+  assert.deepEqual(saved, ["$OPENAI_API_KEY"]);
+});
+
+test("cancelling a recovery card while its reference is checked prevents the save", async (t) => {
+  const lookup = Promise.withResolvers();
+  const started = Promise.withResolvers();
+  const store = await loadStore({
+    getConfiguredSecretRefs: () => {
+      started.resolve();
+      return lookup.promise;
+    },
+  });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const previous = useSettingsStore.getState();
+  t.after(() => useSettingsStore.setState(previous));
+  const saved = [];
+  useSettingsStore.setState({
+    setGroqApiKey: (value) => {
+      saved.push(value);
+      return null;
+    },
+  });
+  const key = "m1::cancel-ref";
+  const pending = store.requestInteraction(context("cancel-ref").value, {
+    kind: "apiKey",
+    provider: "groq",
+    providerName: "Groq",
+  });
+  t.after(() => store.cancelInteraction(key));
+  const submission = store.submitApiKey(key, "${OPENAI_API_KEY}");
+  await Promise.race([started.promise, submission]);
+  store.cancelInteraction(key);
+  lookup.resolve(["${OPENAI_API_KEY}"]);
+  await submission;
+  assert.deepEqual(await pending, { status: "cancelled" });
+  assert.deepEqual(saved, []);
+});
+
 test("a connection is reported only once the connector's status says connected", async () => {
   let connected = false;
   const store = await loadStore({

@@ -41,6 +41,7 @@ export function describeSecretRefError(
 ): string | undefined {
   if (code === "self-reference") return t("apiKeyInput.selfReference");
   if (code === "unknown-ref") return t("apiKeyInput.unknownRef");
+  if (code === "secretRefUnset") return t("onboarding.rehaul.provider.errors.secretRefUnset");
   return code || undefined;
 }
 

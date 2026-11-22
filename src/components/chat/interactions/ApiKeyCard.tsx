@@ -50,6 +50,7 @@ export function ApiKeyCard({
           ref={inputRef}
           dir="ltr"
           type="password"
+          readOnly={entry.state === "working"}
           aria-invalid={entry.error ? true : undefined}
           autoComplete="off"
           spellCheck={false}
@@ -60,7 +61,10 @@ export function ApiKeyCard({
           onChange={(event) => setHasValue(event.target.value.trim() !== "")}
           className={CARD_FIELD}
         />
-        <SubmitArrowButton label={t("agentMode.interactions.apiKey.save")} disabled={!hasValue} />
+        <SubmitArrowButton
+          label={t("agentMode.interactions.apiKey.save")}
+          disabled={!hasValue || entry.state === "working"}
+        />
       </form>
       <SecretRefErrorText code={entry.error} />
     </div>

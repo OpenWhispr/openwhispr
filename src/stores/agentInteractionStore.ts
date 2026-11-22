@@ -34,17 +34,20 @@ const API_KEY_SETTERS = {
 type ApiKeyProvider = keyof typeof API_KEY_SETTERS;
 export const API_KEY_PROVIDERS = Object.keys(API_KEY_SETTERS) as ApiKeyProvider[];
 
+async function getConfiguredRefs(references: string[]): Promise<string[]> {
+  if (!references.length) return [];
+  return (await window.electronAPI?.getConfiguredSecretRefs?.(references).catch(() => [])) ?? [];
+}
+
 export async function getMissingApiKeyProviders(
   settings: SettingsState,
   providers: ApiKeyProvider[]
 ): Promise<ApiKeyProvider[]> {
   const keys = providers.map((provider) => settings[`${provider}ApiKey`]?.trim() ?? "");
   const references = [...new Set(keys.filter(isEnvRef))];
-  const configured = references.length
-    ? await window.electronAPI?.getConfiguredSecretRefs?.(references).catch(() => [])
-    : [];
+  const configured = await getConfiguredRefs(references);
   return providers.filter(
-    (_, index) => !keys[index] || (isEnvRef(keys[index]) && !configured?.includes(keys[index]))
+    (_, index) => !keys[index] || (isEnvRef(keys[index]) && !configured.includes(keys[index]))
   );
 }
 
@@ -481,15 +484,32 @@ export async function submitApiKey(key: string, value: string): Promise<void> {
   const secret = value.trim();
   const { provider } = entry.payload;
   if (!secret || !Object.hasOwn(API_KEY_SETTERS, provider)) return;
-  const { useSettingsStore } = await loadSettingsStore();
-  if (!isOpen(key)) return;
-  if (!isApiKeySetupAllowed(provider, entry.payload.scope ?? "chatIntelligence")) {
+  const waiter = waiters.get(key);
+  patchEntry(key, { state: "working", error: undefined });
+  const { useSettingsStore, secretInputError } = await loadSettingsStore();
+  if (waiters.get(key) !== waiter) return;
+  const keyProvider = provider as ApiKeyProvider;
+  const scope = entry.payload.scope ?? "chatIntelligence";
+  let referenceError: string | null = null;
+  if (isEnvRef(secret) && isApiKeySetupAllowed(provider, scope)) {
+    referenceError = secretInputError(
+      keyProvider,
+      secret,
+      useSettingsStore.getState()[`${keyProvider}ApiKey`]
+    );
+    if (!referenceError) {
+      const configured = await getConfiguredRefs([secret]);
+      if (waiters.get(key) !== waiter) return;
+      if (!configured.includes(secret)) referenceError = "secretRefUnset";
+    }
+  }
+  if (!isApiKeySetupAllowed(provider, scope)) {
     settle(key, { status: "unavailable", reason: "policy_blocked" });
     return;
   }
-  const error = useSettingsStore.getState()[API_KEY_SETTERS[provider as ApiKeyProvider]](secret);
+  const error = referenceError ?? useSettingsStore.getState()[API_KEY_SETTERS[keyProvider]](secret);
   if (error) {
-    patchEntry(key, { error });
+    patchEntry(key, { state: "pending", error });
     return;
   }
   settle(key, { status: "saved" });
