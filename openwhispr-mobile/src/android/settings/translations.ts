@@ -199,7 +199,7 @@ export const settingsTranslations: Record<
     promptIntro:
       'Las instrucciones que sigue la IA al limpiar el dictado de la app, la burbuja y las grabaciones subidas.',
     promptFooter:
-      'Se usa en cada limpieza. El idioma, el diccionario y el tono se añaden automáticamente.',
+      'Se usa en cada limpieza. El idioma y el diccionario se añaden automáticamente. Un prompt personalizado desactiva Tone & Style.',
     promptLong: 'Las instrucciones largas ralentizan la limpieza.',
     savePrompt: 'Guardar instrucción',
     promptSaved: 'Instrucción guardada',
@@ -505,7 +505,7 @@ export const settingsTranslations: Record<
     promptIntro:
       'Les consignes que l’IA suit pour nettoyer la dictée de l’app, de la bulle et des enregistrements importés.',
     promptFooter:
-      'Utilisée pour chaque nettoyage. La langue, le dictionnaire et le ton sont ajoutés automatiquement.',
+      'Utilisée pour chaque nettoyage. La langue et le dictionnaire sont ajoutés automatiquement. Une invite personnalisée désactive Tone & Style.',
     promptLong: 'Les consignes longues ralentissent le nettoyage.',
     savePrompt: 'Enregistrer la consigne',
     promptSaved: 'Consigne enregistrée',
@@ -810,7 +810,7 @@ export const settingsTranslations: Record<
     promptIntro:
       'Die Anweisungen, denen die KI beim Bereinigen von Diktaten aus der App, der Blase und hochgeladenen Aufnahmen folgt.',
     promptFooter:
-      'Wird bei jeder Bereinigung verwendet. Sprache, Wörterbuch und Ton werden automatisch ergänzt.',
+      'Wird bei jeder Bereinigung verwendet. Sprache und Wörterbuch werden automatisch ergänzt. Ein eigener Prompt schaltet Tone & Style aus.',
     promptLong: 'Lange Anweisungen verlangsamen die Bereinigung.',
     savePrompt: 'Anweisung speichern',
     promptSaved: 'Anweisung gespeichert',
@@ -1111,7 +1111,7 @@ export const settingsTranslations: Record<
     promptIntro:
       'As instruções que a IA segue ao limpar o ditado do app, da bolha e de gravações enviadas.',
     promptFooter:
-      'Usada em toda limpeza. Idioma, dicionário e tom são adicionados automaticamente.',
+      'Usada em toda limpeza. Idioma e dicionário são adicionados automaticamente. Um prompt personalizado desativa o Tone & Style.',
     promptLong: 'Instruções longas deixam a limpeza mais lenta.',
     savePrompt: 'Salvar instrução',
     promptSaved: 'Instrução salva',
@@ -1412,7 +1412,7 @@ export const settingsTranslations: Record<
     promptIntro:
       'Le istruzioni che l’IA segue per ripulire il testo dettato dall’app, dalla bolla e dalle registrazioni caricate.',
     promptFooter:
-      'Usata a ogni pulizia. Lingua, dizionario e tono vengono aggiunti automaticamente.',
+      'Usata a ogni pulizia. Lingua e dizionario vengono aggiunti automaticamente. Un prompt personalizzato disattiva Tone & Style.',
     promptLong: 'Le istruzioni lunghe rallentano la pulizia.',
     savePrompt: 'Salva istruzione',
     promptSaved: 'Istruzione salvata',
@@ -1714,7 +1714,8 @@ export const settingsTranslations: Record<
     cleanupPrompt: 'Инструкция очистки',
     promptIntro:
       'Инструкции, которым ИИ следует при очистке диктовки из приложения, кнопки и загруженных записей.',
-    promptFooter: 'Используется при каждой очистке. Язык, словарь и тон добавляются автоматически.',
+    promptFooter:
+      'Используется при каждой очистке. Язык и словарь добавляются автоматически. Свой промпт отключает Tone & Style.',
     promptLong: 'Длинные инструкции замедляют очистку.',
     savePrompt: 'Сохранить инструкцию',
     promptSaved: 'Инструкция сохранена',
@@ -2012,7 +2013,8 @@ export const settingsTranslations: Record<
     cleanup: '润色',
     cleanupPrompt: '润色提示词',
     promptIntro: 'AI 在润色应用、悬浮球和上传录音的听写内容时遵循的指令。',
-    promptFooter: '每次润色都会使用。语言、词典和语气会自动添加。',
+    promptFooter:
+      '每次润色都会使用。语言和词典会自动添加。使用自定义提示词时，Tone & Style 会关闭。',
     promptLong: '提示词过长会拖慢润色。',
     savePrompt: '保存提示词',
     promptSaved: '提示词已保存',
@@ -2295,7 +2297,7 @@ export const settingsTranslations: Record<
     cleanup: '潤飾',
     cleanupPrompt: '潤飾提示詞',
     promptIntro: 'AI 在潤飾應用程式、懸浮球和上傳錄音的聽寫內容時遵循的指令。',
-    promptFooter: '每次潤飾都會使用。語言、詞典和語氣會自動加入。',
+    promptFooter: '每次潤飾都會使用。語言和詞典會自動加入。使用自訂提示詞時，Tone & Style 會關閉。',
     promptLong: '提示詞過長會拖慢潤飾。',
     savePrompt: '儲存提示詞',
     promptSaved: '提示詞已儲存',
@@ -2586,7 +2588,8 @@ export const settingsTranslations: Record<
     cleanupPrompt: '整形プロンプト',
     promptIntro:
       'アプリ、バブル、アップロードした録音の音声入力を整形するときに AI が従う指示です。',
-    promptFooter: '整形のたびに使われます。言語、辞書、トーンは自動で追加されます。',
+    promptFooter:
+      '整形のたびに使われます。言語と辞書は自動で追加されます。カスタムプロンプトを使うと Tone & Style はオフになります。',
     promptLong: 'プロンプトが長いと整形が遅くなります。',
     savePrompt: 'プロンプトを保存',
     promptSaved: 'プロンプトを保存しました',
@@ -2881,7 +2884,8 @@ export const settingsTranslations: Record<
     cleanupPrompt: 'تعليمات التحسين',
     promptIntro:
       'التعليمات التي يتبعها الذكاء الاصطناعي عند تحسين الإملاء من التطبيق والفقاعة والتسجيلات المرفوعة.',
-    promptFooter: 'تُستخدم في كل عملية تحسين. تُضاف اللغة والقاموس والنبرة تلقائيًا.',
+    promptFooter:
+      'تُستخدم في كل عملية تحسين. تُضاف اللغة والقاموس تلقائيًا. الموجّه المخصص يوقف Tone & Style.',
     promptLong: 'التعليمات الطويلة تبطئ التحسين.',
     savePrompt: 'حفظ التعليمات',
     promptSaved: 'تم حفظ التعليمات',

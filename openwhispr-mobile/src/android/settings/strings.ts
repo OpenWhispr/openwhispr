@@ -309,7 +309,8 @@ export const settingsEnglish = {
   cleanupPrompt: 'Cleanup prompt',
   promptIntro:
     'The instructions the AI follows when it cleans up dictation from the app, the bubble and uploaded recordings.',
-  promptFooter: 'Used for every cleanup. Language, dictionary and tone are added automatically.',
+  promptFooter:
+    'Used for every cleanup. Language and dictionary are added automatically. A custom prompt turns off Tone & Style.',
   promptLong: 'Long prompts slow down cleanup.',
   savePrompt: 'Save prompt',
   promptSaved: 'Prompt saved',
