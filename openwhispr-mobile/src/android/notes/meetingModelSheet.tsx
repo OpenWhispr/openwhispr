@@ -38,9 +38,18 @@ export function MeetingModelRow({
   const reduceMotion = useReduceMotion();
   const { ready, progress } = useModelsReady();
   const [landed, setLanded] = useState<AndroidModelId | null>(null);
+  // A row whose download was seen stays put after the last byte, while its files are checked,
+  // or it would unmount before it can say the model landed.
+  const [watching, setWatching] = useState<AndroidModelId[]>([]);
+  const downloading = Object.keys(progress) as AndroidModelId[];
+  useEffect(() => {
+    const fresh = downloading.filter((id) => !watching.includes(id));
+    if (fresh.length) setWatching((current) => [...current, ...fresh]);
+  }, [downloading, watching]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
   const land = (id: AndroidModelId) => (ok: boolean) => {
+    setWatching((current) => current.filter((item) => item !== id));
     if (!ok) return;
     setLanded(id);
     timer.current = setTimeout(() => {
@@ -49,9 +58,9 @@ export function MeetingModelRow({
     }, FOLD_AFTER_MS);
   };
 
-  const speech = meetingModelRows().find(
-    (row) => progress[row.id] !== undefined || landed === row.id,
-  );
+  const shown = (id: AndroidModelId) =>
+    progress[id] !== undefined || landed === id || watching.includes(id);
+  const speech = meetingModelRows().find((row) => shown(row.id));
   if (speech)
     return (
       <ModelRow
@@ -74,7 +83,7 @@ export function MeetingModelRow({
         onPress={onChoose}
       />
     );
-  if (needsSpeakers || landed === SPEAKERS.id || progress[SPEAKERS.id] !== undefined)
+  if (needsSpeakers || shown(SPEAKERS.id))
     return (
       <ModelRow
         row={SPEAKERS}
@@ -99,12 +108,15 @@ export function MeetingModelRow({
 export function MeetingModelList({ onSpeechReady }: { onSpeechReady: () => void }) {
   const t = useNotesT();
   const reduceMotion = useReduceMotion();
-  const { ready, progress } = useModelsReady();
+  const { ready, checked, progress } = useModelsReady();
   const rows = meetingModelRows();
   // Only another speech model dims a row; Meeting speakers can download at the same time.
   const downloading = rows.find((row) => progress[row.id] !== undefined)?.id;
-  // Meeting speakers shows while it is missing, and stays put while it downloads or lands.
-  const [showSpeakers] = useState(() => !ready[SPEAKERS.id]);
+  // Meeting speakers shows once it is known to be missing, and stays while it downloads or lands.
+  const [showSpeakers, setShowSpeakers] = useState(false);
+  useEffect(() => {
+    if (checked && !ready[SPEAKERS.id]) setShowSpeakers(true);
+  }, [checked, ready]);
   return (
     <>
       <Group footer={t('speechModelListFooter')}>
