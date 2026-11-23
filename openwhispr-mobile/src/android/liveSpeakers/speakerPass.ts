@@ -103,6 +103,23 @@ function mapSpeakers(lines: PassLine[], turns: PassTurn[]): Map<number, string> 
       mapping.set(id, label);
       taken.add(label);
     });
+  // A minor pass speaker whose lines the live voiceprints gave to someone another pass speaker
+  // already took is that same person split in two by the pass (A73: two short host questions,
+  // 5 s of a 5-minute meeting, came out as their own speaker), so it joins them rather than
+  // becoming someone new. A pass speaker with more of the meeting than that keeps its own label.
+  const totals = new Map<number, number>();
+  for (const turn of turns)
+    if (turn.speakerId !== null)
+      totals.set(turn.speakerId, (totals.get(turn.speakerId) ?? 0) + turn.endMs - turn.startMs);
+  const speech = [...totals.values()].reduce((sum, total) => sum + total, 0);
+  for (const [key, amount] of shared) {
+    const id = Number(key.slice(0, key.indexOf('|')));
+    if (mapping.has(id) || (totals.get(id) ?? 0) >= speech * STRAY_SPEAKER_SHARE) continue;
+    const best = [...shared.entries()]
+      .filter(([other]) => Number(other.slice(0, other.indexOf('|'))) === id)
+      .reduce((top, entry) => (entry[1] > top[1] ? entry : top), [key, amount]);
+    mapping.set(id, best[0].slice(best[0].indexOf('|') + 1));
+  }
   let next =
     Math.max(
       -1,

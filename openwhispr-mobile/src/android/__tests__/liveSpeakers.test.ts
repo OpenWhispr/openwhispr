@@ -276,6 +276,37 @@ describe('applySpeakerPass', () => {
       'speaker_3',
     ]);
   });
+
+  it('keeps the live speaker for a sliver the pass split off someone already matched', () => {
+    // A73, Cloud podcast: live had the host's short question as speaker_0, the pass made it its
+    // own speaker (5 s of a 5-minute meeting) while its speaker 1 was already the host.
+    const segments = applySpeakerPass(
+      [
+        { text: 'Welcome back.', startMs: 0, endMs: 6000, label: 'speaker_0' },
+        { text: 'Thanks for having me.', startMs: 6000, endMs: 150000, label: 'speaker_1' },
+        { text: 'What changed?', startMs: 150000, endMs: 152500, label: 'speaker_0' },
+        { text: 'Scope first.', startMs: 152500, endMs: 294000, label: 'speaker_1' },
+        { text: 'And then?', startMs: 294000, endMs: 296500, label: 'speaker_0' },
+        { text: 'We ship.', startMs: 296500, endMs: 300000, label: 'speaker_1' },
+      ],
+      [
+        { startMs: 0, endMs: 6000, speakerId: 1 },
+        { startMs: 6000, endMs: 150000, speakerId: 0 },
+        { startMs: 150000, endMs: 152500, speakerId: 2 },
+        { startMs: 152500, endMs: 294000, speakerId: 0 },
+        { startMs: 294000, endMs: 296500, speakerId: 2 },
+        { startMs: 296500, endMs: 300000, speakerId: 0 },
+      ],
+    );
+    expect(segments.map((segment) => segment.speakerLabel)).toEqual([
+      'speaker_0',
+      'speaker_1',
+      'speaker_0',
+      'speaker_1',
+      'speaker_0',
+      'speaker_1',
+    ]);
+  });
 });
 
 describe('Deepgram speaker runs', () => {
