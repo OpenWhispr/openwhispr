@@ -17,10 +17,10 @@ import {
   isDictationContext,
 } from '../../lib/dictationHints';
 import {
-  GROQ_PROMPT_CHARS,
   MAX_SHARED_KEYTERMS,
   PROMPT_HEAD_TERMS,
   WHISPER_PROMPT_CHARS,
+  cloudDictationPrompt,
   dictionaryPromptLimit,
   formatDictionaryPrompt,
   promptLimitKeepingPersonal,
@@ -523,19 +523,8 @@ export class TranscriptionService {
       parameters.clientAudioMimeType = finalMimeType;
       parameters.clientAudioFileName = uploadFileName;
     }
-    // OpenWhispr Cloud's Groq provider keeps only the head 896 characters, its
-    // Whisper decoder reads only the decoder window, and its Gemini route keeps
-    // the first PROMPT_HEAD_TERMS terms, so shared words fill at most that;
-    // personal words are never cut.
-    const promptTiers = buildDictationHintTiers(isDictationContext(options.requestContext));
-    const prompt = formatDictionaryPrompt(
-      promptTiers,
-      promptLimitKeepingPersonal(promptTiers, GROQ_PROMPT_CHARS),
-      {
-        sharedChars: sharedDictionaryPromptChars(GROQ_PROMPT_CHARS),
-        sharedWords: MAX_SHARED_KEYTERMS,
-        totalTerms: PROMPT_HEAD_TERMS,
-      },
+    const prompt = cloudDictationPrompt(
+      buildDictationHintTiers(isDictationContext(options.requestContext)),
     );
     if (prompt) {
       parameters.prompt = prompt;
