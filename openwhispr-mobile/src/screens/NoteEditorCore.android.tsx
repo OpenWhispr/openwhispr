@@ -30,6 +30,7 @@ import { buildDictationHintTiers, buildEffectiveDictionaryWords } from '@/lib/di
 import { useActionProcessing } from '@/hooks/useActionProcessing';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { EditableMarkdown } from '@/components/notes/EditableMarkdown.android';
+import { LiveMarkdown } from '@/android/notes/liveMarkdown';
 import { resolveNoteBodyView, type NoteBodyView } from '@/lib/notes/noteBodyTabs';
 import { NoteShareSheet } from '@/components/notes/NoteShareSheet';
 import { ConflictBanner } from '@/components/notes/ConflictBanner';
@@ -1538,7 +1539,6 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                 <TextInput
                   ref={contentInputRef}
                   testID="note-content-input"
-                  value={content}
                   onChangeText={handleContentChange}
                   selection={selection}
                   onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
@@ -1558,7 +1558,10 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                     color: homeTokens.text,
                     padding: 0,
                   }}
-                />
+                >
+                  {/* Styled children instead of `value`: the Markdown shows formatted as it's typed. */}
+                  <LiveMarkdown text={content} />
+                </TextInput>
               </View>
             ) : shouldShowTranscriptStatus ? (
               <View

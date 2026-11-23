@@ -46,6 +46,12 @@ import type { Action, Note, Segment, Speaker, SpeakerProfile } from '@/data/type
 import type { Folder, Space } from '@/data';
 import type { UserConfig } from '@/types';
 
+type RenderedNode = { children: (RenderedNode | string)[] };
+/** The notes input shows its text as styled children (no `value`); join them back. */
+function noteText(node: RenderedNode | string): string {
+  return typeof node === 'string' ? node : node.children.map(noteText).join('');
+}
+
 // Jest resolves the default file; load the Android entry Metro picks on Android.
 jest.mock('@/components/notes/AttendeesSheet', () =>
   jest.requireActual('@/components/notes/AttendeesSheet.android'),
@@ -1090,7 +1096,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNotesState.notes = [mockNote];
     const { getByTestId, getByText, queryByText } = render(<NoteEditorScreen />);
     expect(queryByText('## Summary')).toBeNull();
-    if (tab === 'notes') expect(getByTestId('note-content-input').props.value).toBe(shown);
+    if (tab === 'notes') expect(noteText(getByTestId('note-content-input'))).toBe(shown);
     else expect(getByText(shown)).toBeTruthy();
   });
 
@@ -1114,7 +1120,7 @@ describe('NoteEditorScreen body tabs', () => {
 
     fireEvent.press(getByTestId('note-tab-notes'));
 
-    expect(getByTestId('note-content-input').props.value).toBe('Alice owns the launch checklist.');
+    expect(noteText(getByTestId('note-content-input'))).toBe('Alice owns the launch checklist.');
     expect(queryByText('Transcribing audio...')).toBeNull();
   });
 
@@ -1177,7 +1183,7 @@ describe('NoteEditorScreen body tabs', () => {
     expect(queryByTestId('note-content-input')).toBeNull();
 
     fireEvent.press(getByTestId('note-tab-notes'));
-    expect(getByTestId('note-content-input').props.value).toBe('');
+    expect(noteText(getByTestId('note-content-input'))).toBe('');
     expect(getByTestId('note-content-input').props.editable).toBe(true);
     expect(getByTestId('note-content-input').props.placeholder).toBe(
       'Type your notes, or dictate with the bubble',
@@ -1209,7 +1215,7 @@ describe('NoteEditorScreen body tabs', () => {
     expect(getByTestId('note-tab-transcript')).toBeTruthy();
 
     fireEvent.press(getByTestId('note-tab-notes'));
-    expect(getByTestId('note-content-input').props.value).toBe('Send the revised checklist.');
+    expect(noteText(getByTestId('note-content-input'))).toBe('Send the revised checklist.');
     expect(getByTestId('note-content-input').props.editable).toBe(true);
 
     fireEvent.press(getByTestId('note-tab-transcript'));
@@ -1235,7 +1241,7 @@ describe('NoteEditorScreen body tabs', () => {
 
     fireEvent.press(bodyTab);
 
-    expect(getByTestId('note-content-input').props.value).toBe('Alice can take the first pass.');
+    expect(noteText(getByTestId('note-content-input'))).toBe('Alice can take the first pass.');
   });
 
   it('saves edits to the typed meeting notes without learning dictionary corrections', () => {
@@ -1243,7 +1249,7 @@ describe('NoteEditorScreen body tabs', () => {
     const { getByTestId } = render(<NoteEditorScreen />);
     fireEvent.press(getByTestId('note-tab-notes'));
     const input = getByTestId('note-content-input');
-    expect(input.props.value).toBe('Alice owns the launch checklist.');
+    expect(noteText(input)).toBe('Alice owns the launch checklist.');
 
     fireEvent.changeText(input, 'Alice owns the launch checklist and the demo.');
     act(() => {
@@ -1968,7 +1974,7 @@ it('keeps typed content across a language change and deletes with Undo instead o
     mockEditorLanguage = 'ar';
     view.rerender(<NoteEditorScreen />);
     expect(view.getByPlaceholderText('Title').props.value).toBe('Literal title');
-    expect(view.getByTestId('note-content-input').props.value).toBe('Keep my typed draft');
+    expect(noteText(view.getByTestId('note-content-input'))).toBe('Keep my typed draft');
 
     fireEvent.press(view.getByLabelText('More'));
     fireEvent.press(view.getByTestId('menu-delete-note'));
