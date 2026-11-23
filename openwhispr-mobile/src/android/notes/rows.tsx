@@ -22,6 +22,7 @@ import { plainNoteText } from './liveMarkdownSpans';
 import { NoteTile, notesLook } from './look';
 import { consumeRestored } from './pendingDeletes';
 import { useNotesT, type NotesT } from './strings';
+import { theme } from '../theme';
 
 export type NoteKind = 'meeting' | 'upload' | 'note';
 
@@ -137,7 +138,7 @@ export function NoteRow({
         paddingLeft: 14,
         paddingRight: 12,
         paddingVertical: 12,
-        backgroundColor: selected ? notesLook.selectedRow : pressed ? '#F7F7F6' : home.surface,
+        backgroundColor: selected ? notesLook.selectedRow : pressed ? theme.surface2 : home.surface,
       })}
     >
       {selectMode && <SelectCircle selected={Boolean(selected)} />}
@@ -405,7 +406,7 @@ export function SwipeRow({
                 bottom: 0,
                 right: ACTION_WIDTH,
                 width: ACTION_WIDTH,
-                backgroundColor: '#E8E7E4',
+                backgroundColor: theme.track,
               },
               moveStyle,
             ]}

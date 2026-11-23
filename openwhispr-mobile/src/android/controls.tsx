@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -11,6 +11,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
+import { AppFont } from '@/lib/fonts';
 import { flat, glass, inset, theme } from './theme';
 
 /**
@@ -123,21 +124,17 @@ function Sweep({ height }: { height: number }) {
  * The one search field: a flat white field, corners 12, 48 tall, a magnifier and a tertiary
  * placeholder, and a clear button once something is typed.
  */
-export function SearchField({
-  value,
-  onChangeText,
-  placeholder,
-  clearLabel,
-  style,
-  ...input
-}: {
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder: string;
-  /** TalkBack's name for the clear button. */
-  clearLabel: string;
-  style?: StyleProp<ViewStyle>;
-} & Omit<TextInputProps, 'value' | 'onChangeText' | 'placeholder' | 'style'>) {
+export const SearchField = forwardRef<
+  TextInput,
+  {
+    value: string;
+    onChangeText: (text: string) => void;
+    placeholder: string;
+    /** TalkBack's name for the clear button. */
+    clearLabel: string;
+    style?: StyleProp<ViewStyle>;
+  } & Omit<TextInputProps, 'value' | 'onChangeText' | 'placeholder' | 'style'>
+>(function SearchField({ value, onChangeText, placeholder, clearLabel, style, ...input }, ref) {
   return (
     <View
       style={[
@@ -155,6 +152,7 @@ export function SearchField({
     >
       <SystemIcon name="magnifyingglass" mdName="Search" size={18} color={theme.tertiary} />
       <TextInput
+        ref={ref}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -169,6 +167,7 @@ export function SearchField({
           paddingHorizontal: 10,
           fontSize: 16,
           color: theme.ink,
+          fontFamily: AppFont.regular,
         }}
       />
       {value ? (
@@ -176,7 +175,10 @@ export function SearchField({
           cssInterop={false}
           accessibilityRole="button"
           accessibilityLabel={clearLabel}
-          onPress={() => onChangeText('')}
+          onPress={() => {
+            onChangeText('');
+            if (ref && typeof ref === 'object') ref.current?.focus();
+          }}
           hitSlop={4}
           style={({ pressed }) => ({
             width: 44,
@@ -191,4 +193,4 @@ export function SearchField({
       ) : null}
     </View>
   );
-}
+});

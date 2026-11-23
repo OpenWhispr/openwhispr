@@ -9,8 +9,8 @@ import { createCloudMeetingContext } from './cloudMeetingContext';
 import { useCloudMeeting, CloudMeetingFinishError } from './useCloudMeeting';
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording.android';
 import { Text } from '@/components/ui/Text';
+import { theme } from './theme';
 import { ProcessingWaveform } from '@/components/features/WaveformVisualizer';
-import { BRAND } from '@/config/colors';
 import { notesRepository } from '@/data';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -453,9 +453,18 @@ export function CloudMeetingScreen(): React.JSX.Element {
       />
     );
   return (
-    <View className="flex-1 items-center justify-center gap-7 bg-systemBackground px-6">
-      <ProcessingWaveform color={BRAND} size={48} />
-      <Text>{t('meetingSaveForLater')}</Text>
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 28,
+        paddingHorizontal: 24,
+        backgroundColor: theme.canvas,
+      }}
+    >
+      <ProcessingWaveform color={theme.accent} size={48} />
+      <Text style={{ color: theme.ink }}>{t('meetingSaveForLater')}</Text>
     </View>
   );
 }

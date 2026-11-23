@@ -138,15 +138,18 @@ export function OutlineButton({
   icon,
   onPress,
   disabled,
+  testID,
 }: {
   label: string;
   icon?: LucideIconName;
   onPress: () => void;
   disabled?: boolean;
+  testID?: string;
 }) {
   return (
     <Pressable
       cssInterop={false}
+      testID={testID}
       accessibilityRole="button"
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
@@ -177,14 +180,17 @@ export function GlassButton({
   label,
   onPress,
   disabled,
+  testID,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  testID?: string;
 }) {
   return (
     <Pressable
       cssInterop={false}
+      testID={testID}
       accessibilityRole="button"
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}

@@ -60,11 +60,6 @@ const LOGOS = new Set([
  * so the list only shrinks.
  */
 const PENDING = new Set([
-  // 2 · Notes
-  'src/android/notes/noteParts.tsx',
-  'src/android/notes/rows.tsx',
-  'src/android/notes/NotesRoot.tsx',
-  'src/android/notes/moveSheet.tsx',
   // 5 · Settings
   'src/android/settings/SizeLookScreen.tsx',
   'src/android/settings/ModelListRow.tsx',

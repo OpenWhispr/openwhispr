@@ -313,7 +313,7 @@ function SelectHeader({ count, onClose }: { count: number; onClose: () => void }
   const t = useNotesT();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 47 }}>
-      <IconButton icon="X" label={t('close')} onPress={onClose} color={home.accent} />
+      <IconButton icon="X" label={t('close')} onPress={onClose} />
       <Text
         accessibilityRole="header"
         accessibilityLiveRegion="polite"

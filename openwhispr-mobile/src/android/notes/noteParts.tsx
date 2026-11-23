@@ -9,6 +9,7 @@ import { gloss, glossPressed, home } from '../home/kit';
 import { edge, edgeCard, look } from '../settings/look';
 import { useReduceMotion } from '../settings/kit';
 import { BackButton, IconButton, notesLook } from './look';
+import { raised, raisedPressed } from '../theme';
 import { initialsOf } from './initials';
 import { useNotesT } from './strings';
 import { wordAtPoint, type TextLine } from './wordAtPoint';
@@ -187,7 +188,10 @@ export function NoteTabs({
   );
 }
 
-/** A white chip with a 10% hairline: the template chip and Make shorter/longer. */
+/**
+ * A raised white chip (a secondary button, glossy white 3b): the template chip and Make
+ * shorter/longer. Label and icons in ink, never blue on white.
+ */
 export function SoftChip({
   label,
   icon,
@@ -211,20 +215,21 @@ export function SoftChip({
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled || !onPress}
       onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 32,
-        paddingHorizontal: 10,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.10)',
-        backgroundColor: pressed ? '#F7F7F6' : home.surface,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        opacity: disabled ? 0.5 : 1,
-      })}
+      style={({ pressed }) => [
+        raised,
+        {
+          minHeight: 32,
+          paddingHorizontal: 10,
+          borderRadius: 999,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          opacity: disabled ? 0.5 : 1,
+        },
+        pressed && raisedPressed,
+      ]}
     >
-      {icon ? <SystemIcon name="circle" mdName={icon} size={14} color={home.accent} /> : null}
+      {icon ? <SystemIcon name="circle" mdName={icon} size={14} color={home.text} /> : null}
       <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: '500', color: home.text }}>
         {label}
       </Text>

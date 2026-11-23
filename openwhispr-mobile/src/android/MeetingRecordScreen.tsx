@@ -12,9 +12,9 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/Text';
-import { Button } from '@/components/ui/Button';
+import { theme } from './theme';
+import { GlassButton, OutlineButton } from './processingFable/look';
 import { ProcessingWaveform } from '@/components/features/WaveformVisualizer';
-import { BRAND } from '@/config/colors';
 import { notesRepository } from '@/data';
 import type { Note } from '@/data/types';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
@@ -681,51 +681,62 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   if (phase === 'unsupported') {
     return (
       <View
-        className="flex-1 gap-4 bg-systemBackground px-6"
         style={{
+          flex: 1,
+          gap: 16,
+          paddingHorizontal: 24,
           paddingTop: headerHeight,
+          backgroundColor: theme.canvas,
         }}
       >
-        <Text accessibilityRole="header" className="text-2xl font-bold text-label">
+        <Text
+          accessibilityRole="header"
+          style={{ fontSize: 24, lineHeight: 32, fontWeight: '700', color: theme.ink }}
+        >
           Not available on this device
         </Text>
-        <Text className="text-base text-secondaryLabel">{t('meetingPrivateBody')}</Text>
-        <Button variant="secondary" onPress={() => router.back()}>
-          Go back
-        </Button>
+        <Text style={{ fontSize: 16, lineHeight: 24, color: theme.secondary }}>
+          {t('meetingPrivateBody')}
+        </Text>
+        <OutlineButton label="Go back" onPress={() => router.back()} />
       </View>
     );
   }
   if (phase === 'needs-model') {
     return (
       <View
-        className="flex-1 gap-4 bg-systemBackground px-6"
         style={{
+          flex: 1,
+          gap: 16,
+          paddingHorizontal: 24,
           paddingTop: headerHeight,
+          backgroundColor: theme.canvas,
         }}
       >
-        <Text accessibilityRole="header" className="text-2xl font-bold text-label">
+        <Text
+          accessibilityRole="header"
+          style={{ fontSize: 24, lineHeight: 32, fontWeight: '700', color: theme.ink }}
+        >
           {t('meetingSpeakerModels')}
         </Text>
-        <Text className="text-base text-secondaryLabel">{t('meetingDownloadBody')}</Text>
-        <Button
+        <Text style={{ fontSize: 16, lineHeight: 24, color: theme.secondary }}>
+          {t('meetingDownloadBody')}
+        </Text>
+        <GlassButton
           testID="model-download"
+          label="Download"
           onPress={() => {
             confirmDownload().catch(Sentry.captureException);
           }}
-        >
-          Download
-        </Button>
-        <Button
+        />
+        <OutlineButton
           testID="model-cancel"
-          variant="secondary"
+          label="Cancel"
           onPress={() => {
             invalidateStart();
             setPhase('prompt');
           }}
-        >
-          Cancel
-        </Button>
+        />
       </View>
     );
   }
@@ -768,10 +779,19 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
   }
 
   return (
-    <View className="flex-1 items-center justify-center gap-7 bg-systemBackground px-6">
-      <ProcessingWaveform color={BRAND} size={48} />
-      <View className="items-center gap-1.5">
-        <Text className="text-lg font-semibold text-label">
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 28,
+        paddingHorizontal: 24,
+        backgroundColor: theme.canvas,
+      }}
+    >
+      <ProcessingWaveform color={theme.accent} size={48} />
+      <View style={{ alignItems: 'center', gap: 6 }}>
+        <Text style={{ fontSize: 18, lineHeight: 28, fontWeight: '600', color: theme.ink }}>
           {phase === 'cancelling'
             ? t('meetingSaveForLater')
             : phase === 'cloud-finalizing'
@@ -781,7 +801,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
                 : 'Preparing meeting notes…'}
         </Text>
         {phase !== 'cancelling' && (
-          <Text className="text-[13px] text-tertiaryLabel">
+          <Text style={{ fontSize: 13, lineHeight: 18, color: theme.tertiary }}>
             {phase === 'cloud-finalizing'
               ? t('meetingFinishingBody')
               : phase === 'downloading'
@@ -791,9 +811,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         )}
       </View>
       {phase === 'downloading' && (
-        <Button
+        <OutlineButton
           testID="model-download-cancel"
-          variant="secondary"
+          label={t('cancel')}
           onPress={() => {
             invalidateStart();
             setPhase('prompt');
@@ -801,9 +821,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
               require('@/android/models') as typeof import('@/android/models');
             cancelAndroidDownload('meeting-speakers').catch(Sentry.captureException);
           }}
-        >
-          {t('cancel')}
-        </Button>
+        />
       )}
     </View>
   );
