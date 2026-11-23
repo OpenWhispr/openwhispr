@@ -1,28 +1,46 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { STT_EXPERIMENT_CONFIG_TTL_MS } from "../../helpers/dictationStreamingRouting";
 import { fourierPreferenceKey } from "../../helpers/fourierPilotSelection";
 import { SettingsPanel, SettingsPanelRow, SettingsRow } from "../ui/SettingsSection";
+import { usePanelVisible } from "../ui/usePanelVisible";
 import { Toggle } from "../ui/toggle";
 
-export function FourierPilotOption({ account }: { account: string }) {
+export function FourierPilotOption({ account }: { account: string }): React.JSX.Element | null {
   const { t } = useTranslation();
+  const visible = usePanelVisible();
   const [option, setOption] = useState<{ account: string; key: string; enabled: boolean } | null>(
     null
   );
   useEffect(() => {
+    if (!visible) return;
     let current = true;
-    window.electronAPI
-      .getSttConfig?.()
-      .then((config) => {
-        const key = fourierPreferenceKey(config);
-        if (current && key && config?.optionalBatchModelAccount === account)
-          setOption({ account, key, enabled: localStorage.getItem(key) === "1" });
-      })
-      .catch(() => {});
+    let pending = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const refresh = async (): Promise<void> => {
+      if (document.hidden || pending || !window.electronAPI.getSttConfig) return;
+      clearTimeout(timer);
+      pending = true;
+      const config = await window.electronAPI.getSttConfig().catch(() => null);
+      pending = false;
+      if (!current) return;
+
+      const key =
+        config?.optionalBatchModelAccount === account ? fourierPreferenceKey(config) : null;
+      setOption(key ? { account, key, enabled: localStorage.getItem(key) === "1" } : null);
+      // Recheck an advertised pilot or retry a failed lookup. Other accounts need no polling.
+      if (key || !config?.success) timer = setTimeout(refresh, STT_EXPERIMENT_CONFIG_TTL_MS);
+    };
+
+    void refresh();
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       current = false;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", refresh);
     };
-  }, [account]);
+  }, [account, visible]);
   if (!option || option.account !== account) return null;
   return (
     <SettingsPanel>

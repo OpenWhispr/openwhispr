@@ -213,7 +213,7 @@ import {
   isCloudMeteredStream,
   evaluateOrukeetLanguageRouting,
   hasOrukeetExperiment,
-  ORUKEET_EXPERIMENT_CONFIG_TTL_MS,
+  STT_EXPERIMENT_CONFIG_TTL_MS,
 } from "./dictationStreamingRouting";
 import { selectedFourierBatch } from "./fourierPilotSelection";
 
@@ -1306,7 +1306,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // takes effect on the next recording after at most 30 s of cached config.
     const ttl =
       hasOrukeetExperiment(this.sttConfig) || this.sttConfig?.optionalBatchModels?.length
-        ? ORUKEET_EXPERIMENT_CONFIG_TTL_MS
+        ? STT_EXPERIMENT_CONFIG_TTL_MS
         : STT_CONFIG_TTL_MS;
     return !this.sttConfig || !this.sttConfigFetchedAt || now - this.sttConfigFetchedAt > ttl;
   }
