@@ -104,6 +104,29 @@ In the generated Xcode workspace, select your Apple development team for the mai
 
 Maintainers shipping a separate fork must also replace the organization-specific Expo owner, Apple team, EAS project, update URL, and App Store submission values in `app.base.json` and `eas.json`. Those release settings are separate from the local identity overrides above.
 
+## iOS Releases
+
+1.2.4 (40) crashed at launch for every iOS 27 user: EAS had moved its `latest` image to Xcode 27, and iOS 27 refuses to launch an app built with the iOS 27 SDK unless it uses the UIScene lifecycle. Two checks keep that from happening again:
+
+- Every build profile in `eas.json` pins `ios.image` to an image listed in `ALLOWED_IOS_IMAGES` in `scripts/check-eas-ios-images.js`, and Mobile CI fails otherwise (`npm run check:eas-ios-images`). Moving to a new Xcode is a reviewed edit to that list. An Xcode 27 or later image also needs the UIScene lifecycle and a passing launch check below.
+- Before a build is submitted, `npm run verify:ios-launch -- <build id>` downloads its IPA and runs that binary on every installed iOS 27 or later simulator runtime. It fails straight away when the app was built with the iOS 27 SDK or later and has no `UIApplicationSceneManifest`; otherwise it retags the binaries for the simulator (keeping their SDK, so UIKit behaves as on a device), signs them ad hoc, and requires the app to stay up for 30 seconds with no UIKit launch failure in the log. It needs macOS, Xcode with the iOS 27+ simulator runtimes (`xcodebuild -downloadPlatform iOS`), installed dependencies and an EAS login.
+
+Release flow, from `openwhispr-mobile/`:
+
+```bash
+eas build --profile production --platform ios
+```
+
+```bash
+npm run verify:ios-launch -- <build id>
+```
+
+```bash
+eas submit --platform ios --id <build id>
+```
+
+Build without `--auto-submit`, so nothing reaches TestFlight before the launch check passes. Keep phased release on for App Store versions in App Store Connect: crash reports there and in Xcode Organizer arrive about a day late, and phased release lets you pause a version that slips through while it has reached only a small share of users.
+
 ## Dependency Overrides
 
 `package.json` can't carry comments, so the reason for each entry under `overrides` is kept here. Remove an override once the package it patches no longer needs it.
