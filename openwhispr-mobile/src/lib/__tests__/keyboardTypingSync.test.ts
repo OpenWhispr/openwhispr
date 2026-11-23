@@ -90,6 +90,21 @@ describe('startKeyboardTypingSync', () => {
     expect('keyboard_typing_language' in store).toBe(false);
   });
 
+  it('mirrors and adopts "other", a language without typing help', async () => {
+    setConfig({ keyboardTypingLanguage: 'other' });
+    const stop = startKeyboardTypingSync();
+    await settle();
+    expect(store.keyboard_typing_language).toBe('other');
+    stop();
+
+    setConfig({ keyboardTypingLanguage: 'en' });
+    store.keyboard_typing_language = 'other';
+    const stopAgain = startKeyboardTypingSync();
+    await settle();
+    expect(useConfigStore.getState().config?.keyboardTypingLanguage).toBe('other');
+    stopAgain();
+  });
+
   it('adopts a language the keyboard wrote while config had none', async () => {
     store.keyboard_typing_language = 'de';
     const stop = startKeyboardTypingSync();

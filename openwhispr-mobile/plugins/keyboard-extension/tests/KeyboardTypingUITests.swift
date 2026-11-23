@@ -128,6 +128,54 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     checks.check("an undone correction isn't made again", proxy.documentContextBeforeInput == "Teh teh ")
   }
 
+  // "Other" language: the keyboard has no word list for it, so it leaves the text alone.
+  do {
+    var settings = TypingSettings(defaults: nil, preferredLanguages: ["en"])
+    settings.typingHelpEnabled = false
+    KeyboardViewController.typingSettingsOverride = settings
+    KeyboardViewController.typingResourcesOverride = typingResources
+    let proxy = TestTextProxy()
+    proxy.tracksText = true
+    proxy.documentContextBeforeInput = ""
+    TestEnvironment.proxy = proxy
+    let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+    keyboard.viewWillAppear(false)
+    keyboard.uiTestType("Teh lekker")
+    checks.check(
+      "other language: nothing is corrected (got \(proxy.documentContextBeforeInput ?? "nil"))",
+      proxy.documentContextBeforeInput == "Teh lekker"
+    )
+    checks.check(
+      "other language: no suggestions, pill stays put",
+      keyboard.uiTestSuggestions.isEmpty && !keyboard.uiTestStripShowsSuggestions
+    )
+  }
+  do {
+    let defaults = UserDefaults(suiteName: "keyboard-other-language-test")!
+    defer { defaults.removePersistentDomain(forName: "keyboard-other-language-test") }
+    TypingSettings.storeOtherLanguage(in: defaults)
+    checks.check("other language: stored value turns typing help off", !TypingSettings(defaults: defaults).typingHelpEnabled)
+    checks.check(
+      "unset on a French-first device: no typing help",
+      !TypingSettings(defaults: nil, preferredLanguages: ["fr-FR", "en-US"]).typingHelpEnabled
+    )
+    checks.check(
+      "unset on an English- or German-first device: typing help",
+      TypingSettings(defaults: nil, preferredLanguages: ["en-ZA", "af-ZA"]).typingHelpEnabled
+        && TypingSettings(defaults: nil, preferredLanguages: ["de-DE", "fr-FR"]).typingHelpEnabled
+    )
+    let emptyDefaults = UserDefaults(suiteName: "keyboard-other-language-test-empty")!
+    defer { emptyDefaults.removePersistentDomain(forName: "keyboard-other-language-test-empty") }
+    TypingSettings.store(language: .english, in: emptyDefaults)
+    checks.check(
+      "a chosen language wins over a French-first device",
+      TypingSettings(defaults: emptyDefaults, preferredLanguages: ["fr-FR"]).typingHelpEnabled
+    )
+    TypingSettings.store(language: .german, in: defaults)
+    let german = TypingSettings(defaults: defaults)
+    checks.check("picking a language turns typing help back on", german.typingHelpEnabled && german.language == .german)
+  }
+
   do {
     let (keyboard, proxy, _) = makeTypingKeyboard()
     keyboard.uiTestType("Teh")

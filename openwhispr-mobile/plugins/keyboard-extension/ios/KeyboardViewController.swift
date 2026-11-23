@@ -2688,6 +2688,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     applyLearnedWordsClearIfNeeded()
     guard next != typingSettings else { return }
     let keysChanged = next.language != typingSettings.language || next.layout != typingSettings.layout
+      || next.typingHelpEnabled != typingSettings.typingHelpEnabled
     let barChanged = next.barStyle != typingSettings.barStyle
     typingSettings = next
     if keysChanged {
@@ -2709,8 +2710,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       return typingEngine
     }
     // Without Full Access the keyboard keeps to plain typing: there is no bar to show a
-    // correction in and nowhere to keep learned words.
-    guard hasFullAccess else { return nil }
+    // correction in and nowhere to keep learned words. The same for a language it has no
+    // word list for.
+    guard hasFullAccess, typingSettings.typingHelpEnabled else { return nil }
     didLoadTypingEngine = true
     guard let resources = Self.typingResourcesOverride ?? Bundle.main.resourceURL else { return nil }
     let storage = KeyboardHandoffProvider.shared.containerURL()
@@ -3514,11 +3516,17 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func typingLanguageMenu() -> UIMenu {
     let languages: [(TypingLanguage, String)] = [(.english, "English"), (.german, "Deutsch")]
     let layouts: [(KeyLayoutKind, String)] = [(.qwerty, "QWERTY"), (.qwertz, "QWERTZ")]
-    let languageActions = languages.map { language, title in
-      UIAction(title: title, state: language == typingSettings.language ? .on : .off) { [weak self] _ in
+    let hasHelp = typingSettings.typingHelpEnabled
+    var languageActions = languages.map { language, title in
+      UIAction(title: title, state: hasHelp && language == typingSettings.language ? .on : .off) { [weak self] _ in
         self?.pickTypingLanguage(language)
       }
     }
+    languageActions.append(
+      UIAction(title: "Other (no typing help)", state: hasHelp ? .off : .on) { [weak self] _ in
+        self?.pickOtherTypingLanguage()
+      }
+    )
     let layoutActions = layouts.map { layout, title in
       UIAction(title: title, state: layout == typingSettings.layout ? .on : .off) { [weak self] _ in
         self?.pickKeyLayout(layout)
@@ -3537,7 +3545,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     return UIMenu(title: "Typing", options: .displayInline, children: [
       UIMenu(title: "", options: .displayInline, children: languageActions),
       UIMenu(title: "", options: .displayInline, children: layoutActions),
-      UIMenu(title: "", options: .displayInline, children: aidActions),
+      // The switches have nothing to switch without typing help.
+      UIMenu(title: "", options: .displayInline, children: hasHelp ? aidActions : []),
     ])
   }
 
@@ -3561,9 +3570,20 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       // A layout nobody chose follows the language.
       if override.layout == override.language.defaultLayout { override.layout = language.defaultLayout }
       override.language = language
+      override.typingHelpEnabled = true
       Self.typingSettingsOverride = override
     } else {
       TypingSettings.store(language: language, in: KeyboardHandoffProvider.shared.sharedDefaults())
+    }
+    reloadTypingSettings()
+  }
+
+  private func pickOtherTypingLanguage() {
+    if var override = Self.typingSettingsOverride {
+      override.typingHelpEnabled = false
+      Self.typingSettingsOverride = override
+    } else {
+      TypingSettings.storeOtherLanguage(in: KeyboardHandoffProvider.shared.sharedDefaults())
     }
     reloadTypingSettings()
   }

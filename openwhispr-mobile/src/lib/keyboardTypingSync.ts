@@ -20,6 +20,7 @@ export const KEYBOARD_TYPING_KEYS = {
 export const KEYBOARD_TYPING_LANGUAGES: { value: KeyboardTypingLanguage; label: string }[] = [
   { value: 'en', label: 'English' },
   { value: 'de', label: 'Deutsch' },
+  { value: 'other', label: 'Other (no typing help)' },
 ];
 
 export const KEYBOARD_TYPING_LAYOUTS: { value: KeyboardTypingLayout; label: string }[] = [

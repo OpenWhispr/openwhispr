@@ -224,6 +224,7 @@ export default function PreferencesScreen() {
             icon="character.bubble"
             mdIcon="Languages"
             title="Typing language"
+            subtitle="Suggestions and autocorrect work in English and German"
             rightElement={
               <TypingPicker
                 label="Typing language"

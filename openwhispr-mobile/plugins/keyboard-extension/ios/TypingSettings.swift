@@ -21,8 +21,14 @@ struct TypingSettings: Equatable {
   var swipeEnabled = true
   var smartTargetsEnabled = true
   var autocorrectEnabled = true
+  /// False when the user types in a language the keyboard has no word list for: no
+  /// suggestions, corrections, swipe or smart targets, which would all pull towards English
+  /// or German words. The keys, haptics and trackpad stay.
+  var typingHelpEnabled = true
 
   static let languageKey = "keyboard_typing_language"
+  /// Stored under `languageKey` for a language without typing help.
+  static let otherLanguageValue = "other"
   static let layoutKey = "keyboard_typing_layout"
   static let hapticsKey = "keyboard_haptics_enabled"
   static let barStyleKey = "keyboard_suggestion_bar_style"
@@ -36,13 +42,24 @@ struct TypingSettings: Equatable {
   /// The style used when none is stored. Flip this to compare the two layouts.
   static let defaultBarStyle = SuggestionBarStyle.strip
 
-  /// Unset values fall back to the device: German when it comes before English in the
-  /// preferred languages, and the layout that language usually has.
+  /// Unset values fall back to the device: typing help when its first preferred language is
+  /// English or German, German rows when German comes before English, and the layout that
+  /// language usually has.
   init(
     defaults: UserDefaults?,
     preferredLanguages: [String] = Locale.preferredLanguages
   ) {
-    let language = defaults?.string(forKey: TypingSettings.languageKey).flatMap(TypingLanguage.init(rawValue:))
+    let storedLanguage = defaults?.string(forKey: TypingSettings.languageKey)
+    if let storedLanguage {
+      typingHelpEnabled = storedLanguage != TypingSettings.otherLanguageValue
+    } else {
+      // Nobody chose: help only when the device's first language is one the keyboard has a
+      // word list for. A French speaker's text must not be corrected towards English.
+      let first = preferredLanguages.first.map { String($0.lowercased().prefix(2)) }
+      typingHelpEnabled = first.map { TypingLanguage(rawValue: $0) != nil } ?? true
+    }
+    // "Other" still needs letter rows and an emoji search language: the device's.
+    let language = storedLanguage.flatMap(TypingLanguage.init(rawValue:))
       ?? TypingLanguage.preferred(from: preferredLanguages)
     self.language = language
     layout = defaults?.string(forKey: TypingSettings.layoutKey).flatMap(KeyLayoutKind.init(rawValue:))
@@ -59,6 +76,10 @@ struct TypingSettings: Equatable {
   /// the user never chose one.
   static func store(language: TypingLanguage, in defaults: UserDefaults?) {
     defaults?.set(language.rawValue, forKey: languageKey)
+  }
+
+  static func storeOtherLanguage(in defaults: UserDefaults?) {
+    defaults?.set(otherLanguageValue, forKey: languageKey)
   }
 
   static func store(layout: KeyLayoutKind, in defaults: UserDefaults?) {

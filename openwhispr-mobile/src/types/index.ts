@@ -8,7 +8,8 @@ import type {
 export type ProcessingMode = 'cloud' | 'private' | 'providers';
 export type TranscriptionProvider = 'local' | 'cloud' | 'byok';
 export type KeyboardTone = 'default' | 'formal' | 'casual' | 'very_casual' | 'excited';
-export type KeyboardTypingLanguage = 'en' | 'de';
+// 'other': a language the keyboard has no word list for, typed without suggestions or autocorrect.
+export type KeyboardTypingLanguage = 'en' | 'de' | 'other';
 export type KeyboardTypingLayout = 'qwerty' | 'qwertz';
 export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 
