@@ -161,7 +161,7 @@ export const notesEnglish = {
   addedPeople_one: '{{name}} added',
   nameOrEmail: 'Name or email',
   addPeopleHint:
-    'From your calendars and people on your other notes. Type a full email to add someone new.',
+    'Your workspace first, then people from your calendars and other notes. Type a full email to add someone new.',
   addEmail: 'Add {{email}}',
   addPerson: 'Add {{name}}',
   // Calendar event (N7, N8)
