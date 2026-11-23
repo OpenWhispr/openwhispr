@@ -9,10 +9,11 @@ import {
   buildCalendarMeetingContext,
   parseCalendarParticipants,
 } from '@/lib/calendar/meetingContext';
-import { noteTakenAt } from '@/lib/notes/noteMeta';
+import { formatNoteMetaDate, markViewer, noteTakenAt } from '@/lib/notes/noteMeta';
 import { Sentry } from '@/lib/sentry';
 import { safeHaptics } from '@/lib/utils';
 import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useNotesStore } from '@/store/useNotesStore';
 import { showToast } from '../settings/kit';
 import { EventSheet, PeopleSheet } from './chipSheets';
@@ -31,6 +32,8 @@ import {
   withPeople,
   withoutPerson,
 } from './noteMeta';
+import i18n from '../strings';
+import { initialsOf } from './initials';
 import { notesT, useNotesT } from './strings';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -373,5 +376,65 @@ export function NoteChips({
         onUnlink={unlink}
       />
     </>
+  );
+}
+
+/**
+ * The same chips on the recording screen (Josh, 23 Nov): the note being recorded already exists,
+ * so its folder, people and calendar event can be set while it records, not only afterwards.
+ */
+export function RecordingNoteChips({ noteId }: { noteId: number }) {
+  const notes = useNotesStore((state) => state.notes);
+  const spaces = useNotesStore((state) => state.spaces);
+  const privateFolders = useNotesStore((state) => state.folders);
+  const spaceFolders = useNotesStore((state) => state.spaceFolders);
+  const getSpaceFolders = useNotesStore((state) => state.getSpaceFolders);
+  const user = useAuthStore((state) => state.user);
+  const [moveVisible, setMoveVisible] = useState(false);
+  const note = useMemo(
+    () => notes.find((value) => value.id === noteId) ?? notesRepository.getNoteById(noteId),
+    [notes, noteId],
+  );
+  const noteSpace =
+    note?.spaceId != null ? spaces.find((space) => space.id === note.spaceId) : null;
+  const spaceUnknown = note?.spaceId != null && !noteSpace;
+  const folderName = useMemo(() => {
+    if (!note?.folderId || spaceUnknown) return null;
+    const folders = noteSpace?.kind === 'team' ? getSpaceFolders(noteSpace.id) : privateFolders;
+    return folders.find((folder) => folder.id === note.folderId)?.name ?? null;
+    // The store's folder lists stand in for "the repository changed".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note?.folderId, noteSpace, spaceUnknown, privateFolders, spaceFolders, getSpaceFolders]);
+  const own = !note?.ownerUserId || note.ownerUserId === user?.id;
+  const attendees = useMemo(
+    () =>
+      markViewer(parseCalendarParticipants(note?.participants ?? null) ?? [], {
+        creatorIsViewer: own,
+        viewerEmail: user?.email ?? null,
+      }),
+    [note?.participants, own, user?.email],
+  );
+  if (!note) return null;
+  const dateLabel = formatNoteMetaDate(
+    noteTakenAt(note.createdAt, note.cloudUpdatedAt ?? note.updatedAt),
+    new Date(),
+    { language: i18n.language, today: notesT('today'), yesterday: notesT('yesterday') },
+  );
+  return (
+    <NoteChips
+      note={note}
+      dateLabel={dateLabel}
+      folderName={folderName}
+      canMove={!spaceUnknown}
+      attendees={attendees}
+      viewerInitials={
+        own || attendees.some((person) => person.self)
+          ? initialsOf(user?.name || user?.email)
+          : null
+      }
+      viewerEmail={user?.email ?? null}
+      moveVisible={moveVisible}
+      onMoveVisibleChange={setMoveVisible}
+    />
   );
 }

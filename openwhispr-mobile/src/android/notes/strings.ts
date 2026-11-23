@@ -222,7 +222,7 @@ export const notesEnglish = {
   // Start sheet (R0)
   noEvent: 'No calendar event',
   noEventBody: 'Name it yourself afterwards',
-  liveOnCloud: 'Live on Cloud',
+  liveOnCloud: 'OpenWhispr Cloud',
   liveOnCloudBody: 'Words appear as people talk',
   onPhone: 'On this phone',
   onPhoneBody: 'Afterwards · speakers named',
