@@ -12,6 +12,10 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { useUsageStore } from '@/store/useUsageStore';
 import {
+  isSuperwallIdentityReady,
+  waitForSuperwallIdentity,
+} from '@/store/useSuperwallIdentityStore';
+import {
   isTransactionalSuperwallPlacement,
   resolveSuperwallPlacementName,
   SUPERWALL_PLACEMENTS,
@@ -328,7 +332,12 @@ export function DisabledSuperwallGateProvider({ children }: Props) {
   );
 
   const value = useMemo(
-    () => ({ register, state: { status: 'idle' } as const, isConfigured: true }),
+    () => ({
+      register,
+      state: { status: 'idle' } as const,
+      isConfigured: true,
+      requiresIdentity: false,
+    }),
     [register],
   );
 
@@ -663,6 +672,64 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
         return false;
       }
 
+      // An App Store purchase made before identify(billingUserId) reaches the
+      // server with no app user id, so it could never be attributed; a signed-out
+      // guest has no identity to attribute to at all. A non-transactional
+      // placement guards recording starts, where waiting would cost the user's
+      // first words: run the feature at once and never register it, so nothing
+      // can present or sell unattributed.
+      if (!isSuperwallIdentityReady() && !isTransactionalSuperwallPlacement(placement)) {
+        debugLog('identity not ready: running non-transactional feature without presenting', {
+          placement,
+        });
+        activePlacementRef.current = null;
+        feature?.();
+        runAccessGrantedWithoutPurchaseCallback(onAccessGrantedWithoutPurchase, placement);
+        return true;
+      }
+
+      // Transactional placements wait for the identity, up to the grace period.
+      // Only a pending identity yields: awaiting an already-ready one would
+      // defer every ordinary registration by a microtask.
+      if (user && !isSuperwallIdentityReady()) {
+        // The bridge identifies only once usage has the billing id; a launch
+        // load that failed would otherwise leave this wait to time out.
+        if (!useUsageStore.getState().usage?.billingUserId) useUsageStore.getState().load();
+        const identified = await waitForSuperwallIdentity(undefined, signal);
+        const sessionChanged = useAuthStore.getState().user?.id !== user.id;
+        if (signal?.aborted || sessionChanged) {
+          if (activePlacementRef.current === placement) activePlacementRef.current = null;
+          return false;
+        }
+        if (pendingGateRef.current) {
+          // Another registration took the gate while this one waited.
+          if (passesThroughWhenBlocked) {
+            feature?.();
+            runAccessGrantedWithoutPurchaseCallback(onAccessGrantedWithoutPurchase, placement);
+            return true;
+          }
+          return false;
+        }
+        if (!identified) {
+          debugLog('BLOCKED: Superwall identity not ready', { placement });
+          Sentry.addBreadcrumb({
+            category: 'superwall',
+            message: 'placement blocked while the billing identity is pending',
+            level: 'warning',
+            data: { placement },
+          });
+          activePlacementRef.current = null;
+          if (passesThroughWhenBlocked || canOpenExistingBilling(placement)) {
+            feature?.();
+            runAccessGrantedWithoutPurchaseCallback(onAccessGrantedWithoutPurchase, placement);
+            return true;
+          }
+          showBillingUnavailable();
+          return false;
+        }
+        activePlacementRef.current = placement;
+      }
+
       return new Promise<boolean>((resolve) => {
         const gate: PendingGate = {
           placement,
@@ -783,7 +850,10 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
     ],
   );
 
-  const value = useMemo(() => ({ register, state, isConfigured }), [isConfigured, register, state]);
+  const value = useMemo(
+    () => ({ register, state, isConfigured, requiresIdentity: true }),
+    [isConfigured, register, state],
+  );
 
   return (
     <SuperwallGateContext.Provider value={value}>

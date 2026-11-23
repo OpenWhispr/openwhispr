@@ -1715,7 +1715,7 @@
         "label": "Profile"
       },
       "plansBilling": {
-        "description": "Plans, usage & billing",
+        "description": "Manage your plan, usage and billing.",
         "label": "Plan & Billing"
       },
       "workspaceGeneral": {
@@ -2311,26 +2311,12 @@
         "resentNoEmail": "Invitation updated, but the email couldn't be delivered."
       },
       "billing": {
-        "plan": "Plan",
-        "seats": "Seats",
-        "ownerOnly": "Only the workspace owner can manage the subscription.",
         "nextInvoice": "Next invoice",
-        "manageStripe": "Manage in Stripe",
-        "startSubscription": "Start subscription",
-        "provisionedPlan": "Set up by OpenWhispr. Contact sales to change the plan or seats.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Free",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Active",
-          "trialing": "Trialing",
-          "past_due": "Past due",
-          "canceled": "Canceled",
-          "incomplete": "Incomplete",
-          "unpaid": "Unpaid"
         }
       },
       "developer": {
@@ -2442,47 +2428,16 @@
       }
     },
     "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
-      "addSeat": "Add seat",
-      "seatUpdated_one": "Workspace capacity updated to {{count}} seat",
-      "seatUpdated_other": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
-      "personalPlanTitle": "Personal plan",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
-      "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description_one": "Increase {{workspace}} to {{count}} seat. Stripe will prorate the change.",
-        "description_other": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
-      }
+      "seatUpdateFailed": "Couldn't update workspace seats"
     },
     "account": {
-      "badges": {
-        "free": "Free",
-        "limitReached": "Cloud limit reached",
-        "pastDue": "Past due",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Trial"
-      },
       "billing": {
         "couldNotOpenDescription": "We had trouble opening the billing page. Please try again.",
         "couldNotOpenTitle": "Couldn't open billing",
-        "manageBilling": "Manage Billing",
-        "opening": "Opening...",
-        "updatePaymentMethod": "Update Payment Method",
         "contactOwnerTitle": "Contact your workspace owner",
         "contactOwnerDescription": "Only the workspace owner can update billing for this workspace.",
         "manageInAppStore": "Manage in App Store",
-        "manageInGooglePlay": "Manage in Google Play",
-        "managedInMobileStore": "Billed through your phone's app store. Manage it from your phone."
+        "manageInGooglePlay": "Manage in Google Play"
       },
       "checkout": {
         "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
@@ -2501,20 +2456,6 @@
         "title": "Showing your last sign-in",
         "description": "Sync and account changes are paused until OpenWhispr can reach its servers."
       },
-      "pastDue": {
-        "description": "You're on the free plan for now. Update your payment method to get back to Pro.",
-        "title": "We couldn't process your payment"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} OpenWhispr Cloud words this week",
-        "byokUnlimited": "Your own API keys and local models remain unlimited.",
-        "nextBilling": "Next billing: {{date}}",
-        "pastDue": "{{used}} / {{limit}} OpenWhispr Cloud words this week - update payment to restore Pro",
-        "trial": "{{days}} days remaining - unlimited transcriptions",
-        "unlimited": "Unlimited",
-        "accessUntil": "Access until {{date}}",
-        "storePaymentIssue": "Your app store couldn't renew this subscription. Update your payment method there to keep your plan."
-      },
       "planLabels": {
         "free": "Free",
         "pro": "Pro",
@@ -2524,81 +2465,24 @@
       "pricing": {
         "title": "Plans",
         "billedYearly": "Billed yearly",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "forever",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2,000 words/week transcription",
-            "5 hours of meeting recordings/month",
-            "## Always free",
-            "Unlimited local AI models",
-            "Unlimited cloud transcription with your own API keys",
-            "100+ languages supported",
-            "Custom dictionary",
-            "Zero data retention",
-            "Community support"
-          ]
-        },
         "pro": {
           "name": "Pro",
           "monthlyPrice": "$8",
-          "monthlyPeriod": "/mo",
-          "annualPrice": "$80",
-          "annualPeriod": "/yr",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "All Free features +",
-          "features": [
-            "Unlimited cloud transcription",
-            "20 hours of meeting recordings/month",
-            "Sync across devices",
-            "Share notes with public links",
-            "Personal API access",
-            "MCP integration in all your apps",
-            "Unlimited mobile Cloud",
-            "Email support"
-          ],
-          "cta": "Get Started",
-          "switchToAnnual": "Switch to Annual"
+          "annualEquivalent": "$6.67"
         },
         "business": {
           "name": "Business",
           "monthlyPrice": "$16",
-          "monthlyPeriod": "/mo",
-          "annualPrice": "$160",
-          "annualPeriod": "/yr",
           "annualEquivalent": "$13.33",
-          "includesPrefix": "All Pro features +",
-          "badge": "Most Popular",
-          "features": [
-            "Unlimited meeting recordings",
-            "Workspace roles & member management",
-            "Assistant mode",
-            "Chat over your data",
-            "Priority support"
-          ],
-          "cta": "Get Started",
-          "switchToAnnual": "Switch to Annual"
+          "cta": "Get Started"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "Custom",
-          "subtitle": "For advanced security & support",
-          "includesPrefix": "All Business features +",
-          "features": [
-            "Managed API credits",
-            "Cloud sync across devices",
-            "Team features & admin",
-            "SSO & compliance",
-            "Dedicated support"
-          ],
           "cta": "Contact Sales",
           "upgradeCta": "Upgrade to Enterprise",
           "askOwner": "Ask {{name}} to upgrade your workspace."
         },
-        "currentPlan": "Current plan",
-        "yourPersonalPlan": "Your personal plan",
         "yourWorkspacePlan": "Your workspace's plan",
         "manage": "Manage",
         "coveredByWorkspace": "Included with your workspace plan",
@@ -2620,7 +2504,6 @@
           "confirm": "Confirm"
         }
       },
-      "rollingWeeklyLimit": "Rolling weekly limit",
       "signOut": {
         "endMeetingDescription": "Signing out stops the meeting that's recording. What it has captured so far stays in its note.",
         "endMeetingTitle": "End the meeting recording?",
@@ -2641,11 +2524,7 @@
         "description": "Unlimited transcriptions, priority processing, and more.",
         "title": "Try Pro free for 7 days"
       },
-      "signedOutPlans": {
-        "button": "Create Free Account"
-      },
       "user": "User",
-      "wordsRemaining": "{{remaining}} remaining",
       "deleteAccount": {
         "label": "Delete Account",
         "labelDescription": "Permanently delete your account and personal cloud data. Other local users and workspace-owned content are preserved.",
@@ -2696,10 +2575,6 @@
           "noPassword": "No password is set for this account.",
           "generic": "Something went wrong. Please try again."
         }
-      },
-      "planUnavailable": {
-        "title": "Plan unavailable",
-        "description": "We couldn't load your plan right now. Your access is unchanged."
       }
     },
     "agentConfig": {
@@ -3336,6 +3211,326 @@
       "upgradeCta": "Upgrade now",
       "upgradedTitle": "Upgraded to Enterprise",
       "upgradedDescription": "{{workspace}} is now on Enterprise."
+    },
+    "billing": {
+      "addSeats": {
+        "title": "Add seats",
+        "invoiceDate": "Next invoice · {{date}}",
+        "quantity": "Seats to add",
+        "decrease": "Decrease seats",
+        "increase": "Increase seats",
+        "now": "Now",
+        "after": "After",
+        "inUse": "In use",
+        "pending": "Pending seats",
+        "available": "Available",
+        "total": "Total seats",
+        "price": "Price",
+        "perMonth": "{{price}} / seat / month",
+        "proration": "Added to next invoice",
+        "confirm_one": "Add {{count}} seat",
+        "confirm_other": "Add {{count}} seats",
+        "adding": "Adding…",
+        "failure": "Couldn’t confirm the seat change. Checking the current total.",
+        "success": "{{workspace}} now has {{count}} seats.",
+        "limitReached": "The workspace has reached its seat limit.",
+        "occupancyMinimum": "The total must be at least {{minimum}} to cover occupied seats.",
+        "previewFailed": "Couldn’t load seat pricing."
+      },
+      "free": {
+        "inviteTeammates": "Invite teammates",
+        "upgradeToBusiness": "Upgrade to Business",
+        "proHint": "Just you? Pro is {{price}} / month.",
+        "viewPersonal": "View Personal plan",
+        "countFailed": "Couldn't check who is in this workspace."
+      },
+      "errors": {
+        "noTeammates": "Invite a teammate before starting Business."
+      },
+      "picker": {
+        "label": "Plan shown",
+        "personal": "Personal",
+        "workspaces": "Workspaces",
+        "loadFailed": "Couldn't load workspaces"
+      },
+      "workspaceUnavailable": {
+        "title": "Workspace plan unavailable",
+        "description": "Your access is unchanged."
+      },
+      "tiles": {
+        "upgradeWorkspace": "Upgrade a workspace",
+        "createWorkspace": "Create workspace"
+      },
+      "plans": {
+        "pricePerMonth": "{{price}} / month",
+        "pricePerMonthYearly": "{{price}} / month, billed yearly",
+        "pricePerSeat": "{{price}} / seat / month",
+        "pricePerSeatYearly": "{{price}} / seat / month, billed yearly",
+        "yourPlan": "Your plan",
+        "pro": {
+          "includes": "Everything in Free, plus",
+          "features": {
+            "unlimitedCloud": "Unlimited cloud transcription",
+            "syncDevices": "Sync across devices",
+            "publicLinks": "Public links for notes",
+            "apiMcp": "Personal API and MCP access",
+            "mobileApp": "Mobile app"
+          }
+        },
+        "business": {
+          "includes": "Everything in Pro, plus",
+          "features": {
+            "workspaceRoles": "Workspace roles and members",
+            "assistantMode": "Assistant mode",
+            "chatOverData": "Chat over your data",
+            "prioritySupport": "Priority support"
+          }
+        },
+        "enterprise": {
+          "includes": "Everything in Business, plus",
+          "features": {
+            "managedCredits": "Managed API credits",
+            "ssoCompliance": "SSO and compliance",
+            "adminControls": "Admin controls and policies",
+            "dedicatedSupport": "Dedicated support"
+          }
+        }
+      },
+      "personal": {
+        "blocks": {
+          "currentPlan": "Current Plan",
+          "usage": "Usage",
+          "billingDetails": "Billing Details"
+        },
+        "signedOut": {
+          "title": "Not signed in",
+          "body": "Sign in to see your plan."
+        },
+        "failed": {
+          "title": "Plan unavailable",
+          "body": "Your access is unchanged."
+        },
+        "actions": {
+          "cancelTrial": "Cancel trial",
+          "cancelBusiness": "Cancel Business",
+          "keepPlan": "Keep {{plan}}",
+          "subscribePro": "Subscribe to Pro",
+          "manageBilling": "Manage billing",
+          "updatePayment": "Update payment",
+          "cancelPro": "Cancel Pro"
+        },
+        "usage": {
+          "cloudTranscription": "Cloud transcription",
+          "unlimited": "Unlimited",
+          "wordsValue": "{{used}} / {{limit}} words",
+          "wordsLeft": "{{remaining}} words left in the last 7 days",
+          "rolling": "Counts the last 7 days. Local models and your own API keys are unlimited.",
+          "limitReached": "Limit reached. Local models and your own API keys still work."
+        },
+        "stores": {
+          "appStore": "App Store",
+          "playStore": "Google Play",
+          "unknown": "Your phone's app store"
+        },
+        "badges": {
+          "stripeTrial": "Trial",
+          "trial_one": "Trial · {{count}} day left",
+          "trial_other": "Trial · {{count}} days left",
+          "pastDue": "Past due",
+          "cancelled": "Cancelled",
+          "yearly": "Yearly",
+          "monthly": "Monthly"
+        },
+        "price": {
+          "trialStarts": "Billing starts {{date}}",
+          "trialYearlyStarts": "Billed yearly from {{date}}",
+          "free": "$0",
+          "billedYearly": "Billed yearly"
+        },
+        "banners": {
+          "endingDated": {
+            "title": "{{plan}} ends {{date}}",
+            "body": "You can keep your plan in the billing portal."
+          },
+          "ending": {
+            "title": "{{plan}} is set to end",
+            "body": "You can keep your plan in the billing portal."
+          },
+          "paymentFailedRetry": {
+            "title": "Payment failed",
+            "body": "Free limits apply until the payment goes through. Next retry {{date}}."
+          },
+          "coveredPastDue": {
+            "title": "{{workspace}} already covers you",
+            "body": "Review the failed payment in the billing portal."
+          },
+          "coveredPastDueUnnamed": {
+            "title": "A workspace already covers you",
+            "body": "Review the failed payment in the billing portal."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} already covers you",
+            "body": "Your Pro trial will become a paid subscription when it ends."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "A workspace already covers you",
+            "body": "Your Pro trial will become a paid subscription when it ends."
+          },
+          "coveredPaying": {
+            "title": "{{workspace}} already covers you",
+            "body": "You still pay for {{plan}}."
+          },
+          "coveredPayingUnnamed": {
+            "title": "A workspace already covers you",
+            "body": "You still pay for {{plan}}."
+          },
+          "coveredStore": {
+            "title": "{{workspace}} already covers you",
+            "body": "You can review your {{plan}} purchase in your phone's app store."
+          },
+          "coveredStoreUnnamed": {
+            "title": "A workspace already covers you",
+            "body": "You can review your {{plan}} purchase in your phone's app store."
+          },
+          "covered": {
+            "title": "{{workspace}} covers you",
+            "body": "Your workspace seat gives you unlimited use here too."
+          },
+          "coveredUnnamed": {
+            "title": "A workspace covers you",
+            "body": "Your workspace seat gives you unlimited use here too."
+          },
+          "paymentFailed": {
+            "title": "Payment failed",
+            "body": "Free limits apply until the payment goes through."
+          },
+          "storeRenewalFailed": {
+            "title": "Renewal failed",
+            "body": "Your phone's app store is retrying. Update your payment there."
+          },
+          "weeklyLimit": {
+            "title": "Weekly limit reached",
+            "body": "Cloud transcription comes back as words from more than 7 days ago drop off. Local models and your own API keys still work."
+          }
+        },
+        "details": {
+          "nextInvoice": "Next invoice",
+          "finalInvoice": "Final invoice",
+          "firstInvoice": "First invoice",
+          "nextRetry": "Next retry",
+          "amountDue": "Amount due",
+          "ends": "Ends",
+          "ended": "Ended",
+          "billingContact": "Billing contact",
+          "periodEnds": "Current period ends",
+          "billedThrough": "Billed through",
+          "accessUntil": "Access until"
+        }
+      },
+      "workspace": {
+        "managedAccount": "Managed account",
+        "billingDetails": "Billing Details",
+        "workspaceDetails": "Workspace Details",
+        "badges": {
+          "trial_one": "Trial · {{count}} day left",
+          "trial_other": "Trial · {{count}} days left",
+          "trialUndated": "Trial",
+          "pastDue": "Past due",
+          "unpaid": "Unpaid",
+          "incomplete": "Incomplete",
+          "cancelled": "Cancelled",
+          "paused": "Paused"
+        },
+        "interval": {
+          "monthly": "Monthly",
+          "annual": "Yearly"
+        },
+        "planLine": {
+          "seatPrice": "{{price}} per seat per month",
+          "customPricing": "Custom pricing",
+          "free": "$0",
+          "invoicedByOpenWhispr": "Invoiced by OpenWhispr",
+          "paidBy": "Paid by {{workspace}}",
+          "personalApplies": "Your personal plan applies"
+        },
+        "actions": {
+          "manageBilling": "Manage billing",
+          "updatePayment": "Update payment",
+          "finishCheckout": "Finish checkout",
+          "keepPlan": "Keep {{plan}}",
+          "resubscribe": "Resubscribe",
+          "openConsole": "Open console",
+          "upgradeEnterprise": "Upgrade to Enterprise",
+          "viewPersonal": "View personal plan",
+          "copyEmail": "Copy email"
+        },
+        "banners": {
+          "ends": {
+            "title": "{{plan}} ends {{date}}",
+            "body": "Your members keep {{plan}} until then."
+          },
+          "endsUndated": {
+            "title": "{{plan}} is set to end",
+            "body": "Your members keep {{plan}} until the current period ends."
+          },
+          "paymentFailed": {
+            "title": "Payment failed",
+            "body": "Update the payment to restore {{plan}} for your members."
+          },
+          "paused": {
+            "title": "{{plan}} is paused",
+            "body": "Your members are on their personal plans until the payment goes through."
+          },
+          "checkoutIncomplete": {
+            "title": "Checkout not finished",
+            "body": "Finish checkout to start {{plan}} for your members."
+          },
+          "ended": {
+            "title": "{{plan}} ended {{date}}",
+            "body": "Your members are back on their personal plans."
+          },
+          "endedUndated": {
+            "title": "{{plan}} ended",
+            "body": "Your members are back on their personal plans."
+          },
+          "memberPaymentProblem": {
+            "title": "{{workspace}} has a payment problem",
+            "body": "Your personal plan applies until the workspace payment goes through."
+          },
+          "memberPaused": {
+            "title": "The plan for {{workspace}} is paused",
+            "body": "Your personal plan applies until it comes back."
+          }
+        },
+        "usage": {
+          "seats": "Seats",
+          "members": "Members",
+          "noSeatsLeft": "No seats left",
+          "noSeatsLeftWithInvites_one": "No seats left · {{count}} pending invite",
+          "noSeatsLeftWithInvites_other": "No seats left · {{count}} pending invites",
+          "pendingInvites_one": "{{count}} pending invite",
+          "pendingInvites_other": "{{count}} pending invites"
+        },
+        "details": {
+          "nextInvoice": "Next invoice",
+          "nextRetry": "Next retry",
+          "amountDue": "Amount due",
+          "billingContact": "Billing contact",
+          "finalInvoice": "Final invoice",
+          "firstInvoice": "First invoice",
+          "ends": "Ends",
+          "ended": "Ended",
+          "billing": "Billing",
+          "periodEnds": "Current period ends",
+          "workspace": "Workspace",
+          "yourRole": "Your role",
+          "yourSeat": "Your seat",
+          "managedBy": "Managed by",
+          "invoicedByOpenWhispr": "Invoiced by OpenWhispr",
+          "paidSeat": "Paid seat",
+          "noPaidSeat": "No paid seat"
+        }
+      }
     }
   },
   "models": {
@@ -3506,6 +3701,9 @@
         "liquidai_lfm2_2_6b_q4_k_m": "Balanced LFM2 for higher quality cleanup",
         "liquidai_lfm2_5_350m_q8_0": "Ultra-light model for fast dictation cleanup",
         "liquidai_lfm2_5_230m_q8_0": "Tiny model, instant cleanup on modest hardware",
+        "liquidai_lfm3_1_7b_qad_q4_0": "Liquid AI's newest small model",
+        "liquidai_lfm3_vl_2b_qad_q4_0": "Liquid AI's LFM3 vision model, used here for text",
+        "liquidai_lfm3_omni_2b_q4_0": "Liquid AI's LFM3 multimodal model, used here for text",
         "qwen_qwen3_5_0_8b_q4_k_m": "Tiny Qwen3.5 for the fastest cleanup",
         "qwen_qwen3_8_27b_q4_k_m": "Most capable Qwen model for 32 GB machines",
         "qwen_qwen3_6_35b_a3b_q4_k_m": "Fast mixture-of-experts model, 3B active parameters",

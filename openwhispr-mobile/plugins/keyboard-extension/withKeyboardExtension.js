@@ -14,13 +14,48 @@ const {
 
 const EXTENSION_NAME = 'OpenWhisprKeyboard';
 const EXTENSION_BUNDLE_ID_SUFFIX = 'keyboard';
-// Copied from ios/ into the generated project and wired into the keyboard target.
+// Data files in ios/Resources, bundled flat into the keyboard's .appex so
+// `Bundle.main.resourceURL/<name>` resolves at runtime.
+const RESOURCE_FILES = ['lexicon-en.bin', 'lexicon-de.bin', 'emoji.bin'];
+// Copied from ios/ into the generated project and wired into the keyboard target. `source`
+// is the path inside ios/ when it differs from the name the file gets in the project.
 const EXTENSION_FILES = [
   { name: 'KeyboardViewController.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
   { name: 'KeyboardCapitalization.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectAudioRoute.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'WebAudioCapture.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationRuntime.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictation.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyboardCredentialStore.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationStore.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationRequests.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'SnippetExpander.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectAudioEncoder.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationAudio.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'DirectDictationConfig.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyGeometry.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'TypingLexicon.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'Autocorrector.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'TypingSession.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'TypingSettings.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'TypingEngine.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'SuggestionBarView.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'KeyboardInteractions.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'HitTargetModel.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'TrackpadModel.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'SwipeDecoder.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'EmojiCatalog.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  { name: 'EmojiPanelView.swift', fileType: 'sourcecode.swift', phase: 'Sources' },
+  ...RESOURCE_FILES.map((name) => ({
+    name,
+    source: path.join('Resources', name),
+    fileType: 'file',
+    phase: 'Resources',
+  })),
 ];
 const BUILD_PHASE_ISA = {
   Sources: 'PBXSourcesBuildPhase',
+  Resources: 'PBXResourcesBuildPhase',
 };
 
 function firstScheme(value) {
@@ -75,7 +110,10 @@ function writeExtensionSupportFiles(platformProjectRoot, environment) {
   }
 
   for (const file of EXTENSION_FILES) {
-    fs.copyFileSync(path.join(pluginSourceDir, file.name), path.join(extensionDir, file.name));
+    fs.copyFileSync(
+      path.join(pluginSourceDir, file.source ?? file.name),
+      path.join(extensionDir, file.name),
+    );
   }
 
   const infoPlist = readPlist(path.join(pluginSourceDir, 'Info.plist'));
@@ -251,16 +289,21 @@ function ensurePhaseMembershipForTarget(xcodeProject, targetUuid, buildFileUuid,
     targetPhase.files.push({ value: buildFileUuid, comment: `${fileName} in ${phase}` });
   }
 
-  for (const [phaseUuid, other] of Object.entries(allPhases)) {
-    if (phaseUuid.endsWith('_comment') || phaseUuid === targetPhaseUuid) {
-      continue;
-    }
+  // A build file belongs to one phase: take it out of every other one, the app target's
+  // and a phase of the wrong kind included.
+  for (const otherIsa of Object.values(BUILD_PHASE_ISA)) {
+    const phases = xcodeProject.hash.project.objects[otherIsa] || {};
+    for (const [phaseUuid, other] of Object.entries(phases)) {
+      if (phaseUuid.endsWith('_comment') || phaseUuid === targetPhaseUuid) {
+        continue;
+      }
 
-    if (!Array.isArray(other?.files)) {
-      continue;
-    }
+      if (!Array.isArray(other?.files)) {
+        continue;
+      }
 
-    other.files = other.files.filter((entry) => entry?.value !== buildFileUuid);
+      other.files = other.files.filter((entry) => entry?.value !== buildFileUuid);
+    }
   }
 }
 
@@ -334,8 +377,8 @@ function ensureExtensionGroup(xcodeProject) {
   return groupKey;
 }
 
-// Every source the keyboard needs, in its own target only. Throws rather
-// than letting prebuild ship a keyboard that doesn't compile.
+// Every source and data file the keyboard needs, in its own target only. Throws rather
+// than letting prebuild ship a keyboard that doesn't compile or misses its data.
 function ensureExtensionFiles(xcodeProject, targetUuid, groupKey) {
   for (const file of EXTENSION_FILES) {
     const fileRefUuid =
@@ -394,7 +437,7 @@ function withKeyboardExtension(config) {
         sourceTree: '"<group>"',
       });
 
-      // Add the extension target; ensureExtensionFiles below gives it its Sources phase.
+      // Add the extension target; ensureExtensionFiles below gives it its build phases.
       const target = xcodeProject.addTarget(
         EXTENSION_NAME,
         'app_extension',
@@ -494,6 +537,7 @@ function withKeyboardExtension(config) {
 
 module.exports = withKeyboardExtension;
 module.exports.EXTENSION_FILES = EXTENSION_FILES;
+module.exports.RESOURCE_FILES = RESOURCE_FILES;
 module.exports.ensureExtensionFiles = ensureExtensionFiles;
 module.exports.ensureExtensionGroup = ensureExtensionGroup;
 module.exports.writeExtensionSupportFiles = writeExtensionSupportFiles;

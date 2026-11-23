@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { safeHaptics } from '@/lib/utils';
 type NotesTopBarProps = {
   showBack?: boolean;
   title?: string;
+  wrapTitle?: (heading: ReactElement) => ReactElement;
   rightSlots?: ReactNode;
   searchValue: string;
   onSearchChange: (q: string) => void;
@@ -21,14 +22,24 @@ type NotesTopBarProps = {
 export function NotesTopBar({
   showBack,
   title,
+  wrapTitle,
   rightSlots,
   searchValue,
   onSearchChange,
   onSearchSubmit,
   onCompose,
-}: NotesTopBarProps) {
+}: NotesTopBarProps): ReactElement {
   const insets = useSafeAreaInsets();
   const hasTopRow = Boolean(showBack || rightSlots || title);
+  const heading = title ? (
+    <Text
+      accessibilityRole="header"
+      numberOfLines={1}
+      className="text-[17px] font-semibold text-label"
+    >
+      {title}
+    </Text>
+  ) : null;
 
   return (
     <View className="px-4" style={{ paddingTop: insets.top + 8 }}>
@@ -36,15 +47,16 @@ export function NotesTopBar({
         <View className="mb-3 min-h-[44px] flex-row items-center justify-between">
           {showBack ? <GlassBackButton fallbackRoute="/(tabs)/(notes)" /> : <View />}
 
-          {title && (
-            <View pointerEvents="none" className="absolute inset-0 items-center justify-center">
-              <Text
-                accessibilityRole="header"
-                numberOfLines={1}
-                className="text-[17px] font-semibold text-label"
-              >
-                {title}
-              </Text>
+          {heading && (
+            <View
+              pointerEvents={wrapTitle ? 'box-none' : 'none'}
+              className={
+                wrapTitle
+                  ? 'min-w-0 flex-1 items-center'
+                  : 'absolute inset-0 items-center justify-center'
+              }
+            >
+              {wrapTitle ? wrapTitle(heading) : heading}
             </View>
           )}
 

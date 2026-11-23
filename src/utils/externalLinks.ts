@@ -1,3 +1,14 @@
+export async function openExternalUrl(url: string, failureMessage: string): Promise<void> {
+  if (window.electronAPI?.openExternal) {
+    const result = await window.electronAPI.openExternal(url);
+    if (result?.success === false) throw new Error(result.error || failureMessage);
+    return;
+  }
+  const opened = window.open(url, "_blank");
+  if (!opened) throw new Error(failureMessage);
+  opened.opener = null;
+}
+
 export function openExternalLink(url: string): void {
   if (window.electronAPI?.openExternal) {
     window.electronAPI.openExternal(url);

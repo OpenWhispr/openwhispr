@@ -14,7 +14,7 @@ function addBackgroundUploadRecovery(contents) {
   if (!APP_DELEGATE_CLASS.test(contents)) {
     throw new Error('[background-uploader] Could not find the Expo AppDelegate class.');
   }
-  return `import BackgroundUploader\n${contents.replace(
+  return `internal import BackgroundUploader\n${contents.replace(
     APP_DELEGATE_CLASS,
     (declaration) => `${declaration}\n${RECOVERY_CALLBACK}`,
   )}`;

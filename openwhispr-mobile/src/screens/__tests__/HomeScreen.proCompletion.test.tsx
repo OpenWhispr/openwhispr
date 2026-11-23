@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import type { Transcript } from '@/types';
 
 let mockRouteParams: { proCompletion?: string } = {};
 const mockRouterSetParams = jest.fn();
@@ -11,7 +12,7 @@ const mockProcessingModeStoreState = {
   setActiveMode: jest.fn(),
 };
 const mockTranscriptStoreState = {
-  transcripts: [],
+  transcripts: [] as Transcript[],
   deleteTranscript: jest.fn(),
   retryTranscript: jest.fn(),
 };
@@ -156,6 +157,32 @@ jest.mock('@/components/ui/UsageMeter', () => ({ UsageLimitBanner: () => null })
 jest.mock('@/components/ui/GradientGlassSurface', () => ({ GradientGlassSurface: () => null }));
 
 import HomeScreen from '../HomeScreen';
+
+describe('HomeScreen recent transcriptions', () => {
+  afterEach(() => {
+    mockTranscriptStoreState.transcripts = [];
+  });
+
+  it('shows the newest 30 entries in descending order', () => {
+    mockTranscriptStoreState.transcripts = Array.from(
+      { length: 31 },
+      (_, index): Transcript => ({
+        id: String(index),
+        text: `Dictation ${index}`,
+        createdAt: index,
+        updatedAt: index,
+        provider: 'cloud',
+      }),
+    );
+    render(<HomeScreen />);
+
+    const rows = screen.getAllByText(/^Dictation \d+$/);
+    expect(rows).toHaveLength(30);
+    expect(rows[0]).toHaveTextContent('Dictation 30');
+    expect(rows[29]).toHaveTextContent(/^Dictation 1$/);
+    expect(screen.queryByText('Dictation 0')).toBeNull();
+  });
+});
 
 describe('HomeScreen Pro completion', () => {
   beforeEach(() => {
