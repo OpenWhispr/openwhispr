@@ -54,11 +54,11 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import { useAuthStore } from '@/store/useAuthStore';
-import { useUsageStore } from '@/store/useUsageStore';
+import { useUsageStore } from '@/store/useUsageStore.android';
 import { useEndedSession } from '../auth/endedSession';
 import { SESSION_CHECK_TIMEOUT_MS, observeEndedSessions } from '../authLifecycle';
 
-const alex = { id: 'alex', email: 'alex@example.com', isAnonymous: false };
+const alex = { id: 'alex', email: 'alex@example.com', emailVerified: true, isAnonymous: false };
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -150,7 +150,12 @@ it('asks once about an expired saved session and keeps its account when it ended
 });
 
 it('signs an anonymous session out as before when it ended', async () => {
-  const anonymous = { id: 'anon', email: 'temp@anon.invalid', isAnonymous: true };
+  const anonymous = {
+    id: 'anon',
+    email: 'temp@anon.invalid',
+    emailVerified: false,
+    isAnonymous: true,
+  };
   mockGetStoredSession.mockResolvedValue('openwhispr.session_token=t');
   mockReadSavedSession.mockResolvedValue({ user: anonymous, current: true });
   mockCheckSession.mockResolvedValue({ state: 'ended' });

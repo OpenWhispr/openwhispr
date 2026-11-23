@@ -13,9 +13,10 @@ import { look } from '../settings/look';
 import { markEndedSheetShown, useEndedSession } from '../auth/endedSession';
 import { useLaunchT } from './strings';
 
-// The Android splash (app.base.json): brand blue, with assets/splash-icon.png drawn 288 dp wide in
-// the middle of the screen. The slow-open screen repeats it exactly, so the hand-off can't be seen.
-const SPLASH_BLUE = colors.brandMid;
+// The Android splash (app.base.json): Home's off-white canvas (Josh, 23 Nov), with
+// assets/splash-icon.png drawn 288 dp wide in the middle of the screen. The slow-open screen
+// repeats it exactly, so the hand-off can't be seen.
+const SPLASH_CANVAS = look.canvas;
 const SPLASH_ICON = require('../../../assets/splash-icon.png');
 const SPLASH_ICON_DP = 288;
 // The tile inside that image is 128 dp; the line sits 20 dp under it.
@@ -29,7 +30,7 @@ export function LaunchSplash({ slow }: { slow: boolean }) {
   const t = useLaunchT();
   return (
     <View style={launch.screen} accessibilityLabel={slow ? t('opening') : undefined}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Image
         source={SPLASH_ICON}
         style={{ width: SPLASH_ICON_DP, height: SPLASH_ICON_DP }}
@@ -125,7 +126,7 @@ export function SignedOutSheet() {
 const launch = StyleSheet.create({
   screen: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: SPLASH_BLUE,
+    backgroundColor: SPLASH_CANVAS,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -137,7 +138,7 @@ const launch = StyleSheet.create({
     marginTop: LINE_OFFSET,
     alignItems: 'center',
   },
-  line: { color: 'rgba(255,255,255,0.78)', fontSize: 15, lineHeight: 20, textAlign: 'center' },
+  line: { color: colors.tertiary, fontSize: 15, lineHeight: 20, textAlign: 'center' },
   errorScreen: { flex: 1, backgroundColor: look.canvas, paddingHorizontal: 16 },
   errorBody: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   errorTile: {

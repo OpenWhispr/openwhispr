@@ -120,7 +120,7 @@
           "android": {
             "image": "./assets/splash-icon.png",
             "imageWidth": 288,
-            "backgroundColor": "#154BD4"
+            "backgroundColor": "#F2F1EF"
           }
         }
       ]
