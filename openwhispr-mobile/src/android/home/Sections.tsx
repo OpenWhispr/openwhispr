@@ -16,25 +16,49 @@ import { useHomeT, type HomeKey } from './strings';
 import { home, IconTile, SectionHeader, TileButton, type } from './kit';
 import { edge, edgeCard, look } from '../settings/look';
 import { BottomSheet, PillAction } from '../settings/kit';
-import { tipsVisible, useTips } from './tipsState';
+import { tipsVisible, useTips, type TipId } from './tipsState';
 import { relativeDate, wordSafeLines, type HomeStats } from './model';
 
-const TIPS: { video: number; poster: number; title: HomeKey; body: HomeKey }[] = [
+const TIPS: { id: TipId; video: number; poster: number; title: HomeKey; body: HomeKey }[] = [
   {
-    video: require('./assets/tip-1-start-dictating.mp4'),
-    poster: require('./assets/tip-1-start-dictating-poster.webp'),
+    id: 'dictate',
+    video: require('./assets/tip-1-dictation.mp4'),
+    poster: require('./assets/tip-1-dictation-poster.webp'),
     title: 'tip1Title',
     body: 'tip1Body',
   },
   {
-    video: require('./assets/tip-2-bubble-size.mp4'),
-    poster: require('./assets/tip-2-bubble-size-poster.webp'),
+    id: 'assistant',
+    video: require('./assets/tip-2-assistant.mp4'),
+    poster: require('./assets/tip-2-assistant-poster.webp'),
+    title: 'tipAssistantTitle',
+    body: 'tipAssistantBody',
+  },
+  {
+    id: 'translate',
+    video: require('./assets/tip-3-translate.mp4'),
+    poster: require('./assets/tip-3-translate-poster.webp'),
+    title: 'tipTranslateTitle',
+    body: 'tipTranslateBody',
+  },
+  {
+    id: 'edit',
+    video: require('./assets/tip-4-edit.mp4'),
+    poster: require('./assets/tip-4-edit-poster.webp'),
+    title: 'tipEditTitle',
+    body: 'tipEditBody',
+  },
+  {
+    id: 'size',
+    video: require('./assets/tip-5-bubble-size.mp4'),
+    poster: require('./assets/tip-5-bubble-size-poster.webp'),
     title: 'tip2Title',
     body: 'tip2Body',
   },
   {
-    video: require('./assets/tip-3-hide-bubble.mp4'),
-    poster: require('./assets/tip-3-hide-bubble-poster.webp'),
+    id: 'hide',
+    video: require('./assets/tip-6-hide-bubble.mp4'),
+    poster: require('./assets/tip-6-hide-bubble-poster.webp'),
     title: 'tip3Title',
     body: 'tip3Body',
   },
@@ -183,7 +207,7 @@ export function Tips() {
   // Tips goes only once its sheet has closed, so the last video is never cut short.
   if (!tipsVisible(tips) && open === null) return null;
   const close = () => {
-    if (open !== null) tips.watch(open);
+    if (open !== null) tips.watch(TIPS[open].id);
     setOpen(null);
   };
   return (
