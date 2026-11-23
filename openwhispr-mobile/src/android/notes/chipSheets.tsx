@@ -394,6 +394,7 @@ export function EventSheet({
   onClose,
   linked,
   event,
+  joinUrl,
   events,
   noteDate,
   startPicking,
@@ -407,6 +408,8 @@ export function EventSheet({
   /** The note has a link, whether or not this phone's calendars have the event. */
   linked: boolean;
   event: GoogleCalendarEvent | null;
+  /** A Meet link read from Google when the event's own text has none. */
+  joinUrl?: string | null;
   events: GoogleCalendarEvent[];
   noteDate: Date;
   startPicking?: boolean;
@@ -513,7 +516,7 @@ export function EventSheet({
     );
   }
 
-  const url = meetingUrlOf(event);
+  const url = meetingUrlOf(event) ?? joinUrl ?? null;
   const guests = event ? eventPeople(event).filter((person) => !person.self) : [];
   const guestNames = guests
     .slice(0, 2)

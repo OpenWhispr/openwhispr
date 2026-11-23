@@ -355,7 +355,13 @@ export function NoSummaryCard({
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <Text style={{ color: home.accent, fontSize: 14, lineHeight: 20, fontWeight: '500' }}>
+          {/* Keyed by the label so Android measures it again when the template's name arrives
+              after the card is laid out; otherwise it stays clipped at its first width. */}
+          <Text
+            key={templateName}
+            numberOfLines={1}
+            style={{ color: home.accent, fontSize: 14, lineHeight: 20, fontWeight: '500' }}
+          >
             {t('templateLabel', { name: templateName })}
           </Text>
           <SystemIcon name="chevron.down" mdName="ChevronDown" size={14} color={home.accent} />
