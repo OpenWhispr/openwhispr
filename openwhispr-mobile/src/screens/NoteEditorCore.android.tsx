@@ -30,6 +30,8 @@ import { buildDictationHintTiers, buildEffectiveDictionaryWords } from '@/lib/di
 import { useActionProcessing } from '@/hooks/useActionProcessing';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { EditableMarkdown } from '@/components/notes/EditableMarkdown.android';
+import { LiveMarkdown, NotesReadView } from '@/android/notes/liveMarkdown';
+import { toggleCheck } from '@/android/notes/liveMarkdownSpans';
 import { resolveNoteBodyView, type NoteBodyView } from '@/lib/notes/noteBodyTabs';
 import { NoteShareSheet } from '@/components/notes/NoteShareSheet';
 import { ConflictBanner } from '@/components/notes/ConflictBanner';
@@ -273,6 +275,8 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     const [exportVisible, setExportVisible] = useState(false);
     const [templateVisible, setTemplateVisible] = useState(false);
     const [notesFocused, setNotesFocused] = useState(false);
+    // Typed notes read as formatted text; a tap swaps in the editor until it loses focus.
+    const [notesEditing, setNotesEditing] = useState(false);
     const [cloudSheet, setCloudSheet] = useState<{
       body: string;
       onUse: () => void;
@@ -1344,7 +1348,9 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     const formatNotes = (kind: 'bold' | 'italic' | 'bullet' | 'check' | 'heading') => {
       const result = applyFormat(contentRef.current, selectionRef.current, kind);
       handleContentChange(result.text);
-      setSelection({ start: result.caret, end: result.caret });
+      // The input draws its text from children, which Android applies after a selection set in the
+      // same render; placing the caret a frame later keeps it between the marks just added.
+      requestAnimationFrame(() => setSelection({ start: result.caret, end: result.caret }));
     };
 
     return (
@@ -1532,30 +1538,48 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                     )}
                   </Text>
                 ) : null}
-                <TextInput
-                  ref={contentInputRef}
-                  testID="note-content-input"
-                  value={content}
-                  onChangeText={handleContentChange}
-                  selection={selection}
-                  onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
-                  onFocus={() => setNotesFocused(true)}
-                  onBlur={() => setNotesFocused(false)}
-                  placeholder={notesT('notesPlaceholder')}
-                  placeholderTextColor={homeTokens.tertiary}
-                  multiline
-                  // The recording screen still writes these notes until the recording stops.
-                  editable={!isEnhancing && transcriptStatus !== 'recording'}
-                  textAlignVertical="top"
-                  style={{
-                    minHeight: 160,
-                    fontFamily: AppFont.regular,
-                    fontSize: 16,
-                    lineHeight: 26,
-                    color: homeTokens.text,
-                    padding: 0,
-                  }}
-                />
+                {content.trim() && !notesEditing ? (
+                  <NotesReadView
+                    text={content}
+                    editable={!isEnhancing && transcriptStatus !== 'recording'}
+                    onEdit={(caret) => {
+                      setSelection({ start: caret, end: caret });
+                      setNotesEditing(true);
+                    }}
+                    onToggle={(line) => handleContentChange(toggleCheck(content, line))}
+                  />
+                ) : (
+                  <TextInput
+                    ref={contentInputRef}
+                    testID="note-content-input"
+                    onChangeText={handleContentChange}
+                    selection={selection}
+                    onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
+                    autoFocus={notesEditing}
+                    onFocus={() => setNotesFocused(true)}
+                    onBlur={() => {
+                      setNotesFocused(false);
+                      setNotesEditing(false);
+                    }}
+                    placeholder={notesT('notesPlaceholder')}
+                    placeholderTextColor={homeTokens.tertiary}
+                    multiline
+                    // The recording screen still writes these notes until the recording stops.
+                    editable={!isEnhancing && transcriptStatus !== 'recording'}
+                    textAlignVertical="top"
+                    style={{
+                      minHeight: 160,
+                      fontFamily: AppFont.regular,
+                      fontSize: 16,
+                      lineHeight: 26,
+                      color: homeTokens.text,
+                      padding: 0,
+                    }}
+                  >
+                    {/* Styled children instead of `value`: the Markdown shows formatted as it's typed. */}
+                    <LiveMarkdown text={content} caret={selection.end} />
+                  </TextInput>
+                )}
               </View>
             ) : shouldShowTranscriptStatus ? (
               <View

@@ -37,12 +37,16 @@ const translateTarget = () =>
  * A tap dictates (talking over highlighted text replaces it); the hold menu picks Assistant (write),
  * Translate, or Edit selection, which arrive as the onStart event's mode.
  */
-async function dictationJob(selection: string, mode: DictationMode): Promise<AndroidJob> {
+async function dictationJob(
+  selection: string,
+  mode: DictationMode,
+  app: string | undefined,
+): Promise<AndroidJob> {
   // The bubble can run before the app is opened; its data must be loaded first.
   await bootAppData();
   const { error, blocked } = useAccountData.getState();
   if (error || blocked) throw new Error(error ?? i18n.t('bootError'));
-  return createAndroidJob(mode, translateTarget(), selection);
+  return createAndroidJob(mode, translateTarget(), selection, app);
 }
 
 /** Why the Assistant can't run right now, for the menu's greyed row: "" when it can. */
@@ -102,10 +106,10 @@ export function startBubblePipeline(): void {
       void native.setStatus('retry', { message: 'failed' });
     return current.signal.aborted;
   };
-  const prepare = (selection: string, mode: DictationMode) => {
+  const prepare = (selection: string, mode: DictationMode, app: string | undefined) => {
     controller?.abort();
     controller = new AbortController();
-    job = dictationJob(selection, mode);
+    job = dictationJob(selection, mode, app);
     // Reported when the recording arrives; a dictation cancelled before then has nothing to report.
     job.catch(() => undefined);
   };
@@ -175,15 +179,15 @@ export function startBubblePipeline(): void {
     useBubbleResult.getState().dismiss();
   });
   let lastMode: DictationMode = 'dictate';
-  dictationEvents.addListener('onStart', ({ selection, mode }) => {
+  dictationEvents.addListener('onStart', ({ selection, mode, app }) => {
     dropKept();
     lastMode = bubbleMode(mode, selection);
-    prepare(selection, lastMode);
+    prepare(selection, lastMode, app);
   });
   dictationEvents.addListener('onRecording', (audio) => {
     void run(audio);
   });
-  dictationEvents.addListener('onRetry', ({ selection }) => {
+  dictationEvents.addListener('onRetry', ({ selection, app }) => {
     const audio = kept;
     kept = null;
     if (!audio) {
@@ -191,7 +195,7 @@ export function startBubblePipeline(): void {
       return;
     }
     // A retried take runs in the mode it was recorded in.
-    prepare(selection, bubbleMode(lastMode, selection));
+    prepare(selection, bubbleMode(lastMode, selection), app);
     void run(audio);
   });
   dictationEvents.addListener('onDismiss', dropKept);

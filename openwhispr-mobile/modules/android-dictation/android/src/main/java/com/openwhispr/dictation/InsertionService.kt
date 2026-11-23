@@ -19,6 +19,11 @@ class InsertionService : AccessibilityService() {
   }
   private data class Target(val node: AccessibilityNodeInfo, val text: String, val start: Int, val end: Int)
   private var target: Target? = null
+  /**
+   * The package of the app the last captured field belongs to, "" when there was no field. Tone &
+   * Style picks the kind of app from it; only the package name leaves the service, never the text.
+   */
+  var targetApp: String = ""; private set
   private val handler = Handler(Looper.getMainLooper())
   /** The field the last dictation went into, read again for 45 s so a fix there can be learned. */
   private var watched: AccessibilityNodeInfo? = null
@@ -26,7 +31,10 @@ class InsertionService : AccessibilityService() {
   private val poll = Runnable { pollField() }
   private var lastLogged: String? = null
   private fun readField(node: AccessibilityNodeInfo): Field =
-    InsertionPlan.field(node.text?.toString().orEmpty(), node.textSelectionStart, node.textSelectionEnd, node.isShowingHintText)
+    InsertionPlan.field(
+      node.text?.toString().orEmpty(), node.textSelectionStart, node.textSelectionEnd, node.isShowingHintText,
+      node.hintText?.toString(),
+    )
 
   override fun onServiceConnected() { instance = this; refreshTyping(); DictationService.emit?.invoke("onStatusChange", emptyMap()) }
   // Focus and window changes only decide whether the bubble shows. They check whether the focused
@@ -107,7 +115,9 @@ class InsertionService : AccessibilityService() {
     // A new dictation ends the watch on the last one's field.
     stopWatch()
     clearTarget()
+    targetApp = ""
     val node = focusedField() ?: return ""
+    targetApp = node.packageName?.toString().orEmpty()
     if (!node.isEditable || node.isPassword) { node.recycle(); return "" }
     val (text, start, end) = readField(node)
     if (start < 0 || end < start || end > text.length) {
