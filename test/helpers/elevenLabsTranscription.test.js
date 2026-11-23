@@ -326,6 +326,27 @@ test("a refusal that isn't about keyterms is not retried", async () => {
   assert.equal(noTerms.calls.length, 1);
 });
 
+test("unrelated errors mentioning keywords do not upload the recording twice", async () => {
+  for (const [status, body] of [
+    [400, '<html><head><meta name="keywords" content="gateway"></head></html>'],
+    [400, JSON.stringify({ detail: { param: "file", message: "Invalid file keywords.wav" } })],
+    [422, JSON.stringify({ detail: [{ loc: ["body", "file"], input: "keyterms" }] })],
+  ]) {
+    let uploads = 0;
+    await assert.rejects(
+      transcribeWithElevenLabs(
+        { audioBuffer: AUDIO, keyterms: ["OpenWhispr"], apiKey: "k" },
+        async () => {
+          uploads++;
+          return new Response(body, { status });
+        }
+      ),
+      { code: "PROVIDER_BAD_REQUEST" }
+    );
+    assert.equal(uploads, 1);
+  }
+});
+
 test("cancelling during a keyterm rejection prevents the second audio upload", async () => {
   const controller = new AbortController();
   let uploads = 0;

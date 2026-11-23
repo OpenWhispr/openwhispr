@@ -17,6 +17,20 @@ const SILENCE_MARKER = "[pause]";
 // ElevenLabs lists Filipino rather than Tagalog, so the app's "tl" goes out as "fil".
 const LANGUAGE_CODES = { tl: "fil" };
 
+function isKeytermRefusal(errorText) {
+  let detail;
+  try {
+    detail = JSON.parse(errorText)?.detail;
+  } catch {
+    return false;
+  }
+  const isKeytermField = (field) => field === "keywords" || field === "keyterms";
+  if (Array.isArray(detail)) {
+    return detail.some((error) => error?.loc?.[0] === "body" && isKeytermField(error.loc[1]));
+  }
+  return isKeytermField(detail?.param);
+}
+
 async function transcribeWithElevenLabs(
   { audioBuffer, model, fileName, contentType, language, keyterms, apiKey, signal },
   fetchImpl
@@ -78,14 +92,8 @@ async function transcribeWithElevenLabs(
 
   let { response, errorText } = await send(terms);
   // ElevenLabs counts a keyterm's words after its own normalisation, which the filter
-  // above can't reproduce. The dictation matters more than the hint, so a request
-  // refused over its keyterms goes again without them. Its errors call them keywords;
-  // the request's own field is keyterms, so either word marks such a refusal.
-  if (
-    terms.length > 0 &&
-    [400, 422].includes(response.status) &&
-    /keyterm|keyword/i.test(errorText)
-  ) {
+  // above can't reproduce. Retry without hints only when the provider identifies their field.
+  if (terms.length > 0 && [400, 422].includes(response.status) && isKeytermRefusal(errorText)) {
     debugLogger.warn("ElevenLabs refused the keyterms; retrying without them", {
       status: response.status,
       body: redactProviderBody(errorText),

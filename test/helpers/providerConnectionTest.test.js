@@ -1223,3 +1223,41 @@ test("ElevenLabs: a refused key fails the check, an exhausted quota does not", a
   assert.equal(unverified.errorCode, "providerStatus");
   assert.equal(unverified.unverified, true);
 });
+
+test("ElevenLabs leaves unrelated or unreadable validation responses unverified", async () => {
+  for (const status of [400, 422]) {
+    for (const body of [
+      "<html>Bad Request</html>",
+      "",
+      JSON.stringify({ detail: { code: "invalid_parameters", param: "model_id" } }),
+      JSON.stringify({
+        detail: { code: "invalid_parameters", param: "file", message: "Invalid encoding" },
+      }),
+      JSON.stringify({ detail: [{ loc: ["body", "file"], type: "invalid_type" }] }),
+    ]) {
+      const result = await testProviderConnection(
+        { provider: "elevenlabs", apiKey: "k" },
+        async () => new Response(body, { status })
+      );
+      assert.equal(result.success, false);
+      assert.equal(result.unverified, true);
+      assert.equal(result.status, status);
+    }
+  }
+});
+
+test("ElevenLabs recognizes missing-file validation, quota and legacy key refusals", async () => {
+  const check = (status, detail) =>
+    testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, async () =>
+      Response.json({ detail }, { status })
+    );
+  const missingFile = [{ loc: ["body", "file"], type: "missing" }];
+  assert.deepEqual(await check(422, missingFile), { success: true });
+  for (const status of [400, 401, 422]) {
+    assert.deepEqual(await check(status, { status: "quota_exceeded" }), { success: true });
+    assert.equal(
+      (await check(status, { status: "invalid_api_key" })).errorCode,
+      "credentialsRejected"
+    );
+  }
+});

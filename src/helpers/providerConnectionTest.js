@@ -356,7 +356,7 @@ async function readJson(response) {
   }
 }
 
-// Gemini, xAI, Corti and ElevenLabs answer a made-up key with a 400, which on its own
+// Gemini, xAI and Corti answer a made-up key with a 400, which on its own
 // can also mean a malformed request. Their error bodies say which it was.
 const KEY_REJECTED_BY_BODY = {
   gemini: (_, body) =>
@@ -366,7 +366,6 @@ const KEY_REJECTED_BY_BODY = {
     status === 400 && typeof body?.error === "string" && /incorrect api key/i.test(body.error),
   // Corti's gateway turns an unknown key away before routing, with no body at all.
   corti: (status, body) => status === 400 && body === undefined,
-  elevenlabs: (_, body) => body?.detail?.code === "invalid_api_key",
 };
 
 async function describeResponseFailure(response, provider) {
@@ -553,6 +552,25 @@ async function testDeepgramKey(request, fetchImpl) {
   return fallback ? { success: false, ...fallback } : { success: true };
 }
 
+function isElevenLabsMissingFile(detail) {
+  if (Array.isArray(detail)) {
+    const [error] = detail;
+    return (
+      detail.length === 1 &&
+      ["missing", "value_error.missing"].includes(error?.type) &&
+      Array.isArray(error.loc) &&
+      error.loc.length === 2 &&
+      error.loc[0] === "body" &&
+      error.loc[1] === "file"
+    );
+  }
+  return (
+    detail?.code === "invalid_parameters" &&
+    detail.param === "file" &&
+    detail.message === "Must provide either file or a URL parameter."
+  );
+}
+
 // ElevenLabs is checked by key alone: a transcription request with a model and no audio is
 // refused as invalid (400 or 422) once the key is accepted. A key out of quota is still
 // the user's key, so it passes; transcription then reports the quota.
@@ -567,19 +585,17 @@ async function testElevenLabsKey(request, fetchImpl) {
       // 402 is how ElevenLabs now reports a key with no credit left; 401 quota_exceeded
       // below is the older form of the same answer.
       if (response.ok || response.status === 402) return null;
-      // A made-up key can get the same 400 as the missing audio, so only a key the body
-      // refuses fails the check.
-      if ([400, 422].includes(response.status)) {
-        const refusal = await describeResponseFailure(response, "elevenlabs");
-        return refusal.errorCode === "credentialsRejected" ? refusal : null;
+      const status = response.status;
+      const failure = describeStatusFailure(status, "elevenlabs");
+      if (![400, 401, 422].includes(status)) return failure;
+      const detail = (await readJson(response))?.detail;
+      if (detail?.status === "quota_exceeded") return null;
+      if (status === 401) return failure;
+      if (detail?.code === "invalid_api_key" || detail?.status === "invalid_api_key") {
+        return { ...describeStatusFailure(401, "elevenlabs"), status };
       }
-      if (
-        response.status === 401 &&
-        (await readJson(response))?.detail?.status === "quota_exceeded"
-      ) {
-        return null;
-      }
-      return describeStatusFailure(response.status, "elevenlabs");
+      // Only the expected missing-file response confirms the key was accepted.
+      return isElevenLabsMissingFile(detail) ? null : { ...failure, unverified: true };
     },
     { method: "POST", body }
   );
