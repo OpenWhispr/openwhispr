@@ -269,6 +269,7 @@ class AndroidDictationModule : Module() {
       try { next.start(); recorder = next } catch (error: Exception) { next.close(); throw error }
     }
     Function("getRecordingLevel") { recorder?.level ?: 0f }
+    Function("getMeetingLevel") { MeetingCaptureService.instance?.level ?: 0f }
     AsyncFunction("stopRecording") { cancel: Boolean ->
       val active = recorder ?: error("No recording is active.")
       try { active.stop(cancel) } finally { active.close(); recorder = null }

@@ -76,10 +76,9 @@ describe.each([
       const empty = content.name === 'empty';
       const active = platform === 'ios' || status !== 'error';
       expect(!!screen.queryByText('Listening… speak to see the transcript.')).toBe(empty && active);
-      // Android follows Figma R1: a blue "Listening…" under the live transcript.
-      expect(!!screen.queryByText(platform === 'android' ? 'Listening…' : 'Transcribing…')).toBe(
-        !empty && active,
-      );
+      // Android shows no tail under the transcript: the status pill's waveform shows it hears.
+      expect(!!screen.queryByText('Listening…')).toBe(false);
+      expect(!!screen.queryByText('Transcribing…')).toBe(platform === 'ios' && !empty && active);
       expect(!!screen.queryByText('Connection lost')).toBe(status === 'error');
       // Android shows reconnecting in the status pill itself.
       if (platform === 'android') {
@@ -170,9 +169,8 @@ describe.each([
       expect(!!screen.queryByText('Listening… speak to see the transcript.')).toBe(
         platform === 'ios' && name === 'empty',
       );
-      expect(!!screen.queryByText(platform === 'android' ? 'Listening…' : 'Transcribing…')).toBe(
-        platform === 'ios' && name !== 'empty',
-      );
+      expect(!!screen.queryByText('Listening…')).toBe(false);
+      expect(!!screen.queryByText('Transcribing…')).toBe(platform === 'ios' && name !== 'empty');
     },
   );
 

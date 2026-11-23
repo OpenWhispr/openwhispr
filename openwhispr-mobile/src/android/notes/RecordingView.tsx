@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useNavigation } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AppFont } from '@/lib/fonts';
 import { gloss, glossPressed, home } from '../home/kit';
 import { edge, edgeCard, look } from '../settings/look';
@@ -11,6 +10,96 @@ import { useNavigationBarCanvas } from '../navigationBar';
 import { IconButton, notesLook } from './look';
 import { MetaChip, NoteTabs, type NoteTab } from './noteParts';
 import { useNotesT } from './strings';
+import { useReduceMotion } from '../settings/kit';
+import { AndroidDictation } from '../../../modules/android-dictation/src';
+
+const BAR_WIDTH = 3;
+const BAR_GAP = 3;
+const BAR_STEP = BAR_WIDTH + BAR_GAP;
+const BAR_MAX = 18;
+const MAX_BARS = 80;
+const TICK_MS = 80;
+
+// The recorder reports -60..-20 dBFS as 0..1. A meeting mic hears people across a room, so
+// speech sits lower than in Try it (held close): start the bars at 0.15, full at 0.6.
+const barHeight = (level: number) =>
+  Math.max(3, Math.round(Math.min(1, Math.max(0, (level - 0.15) / 0.45)) * BAR_MAX));
+
+/** Each bar leans on the one before it, so the shape rises and falls rather than flickering. */
+export const smoothLevel = (previous: number, level: number) => previous * 0.45 + level * 0.55;
+
+/**
+ * The meeting's loudness as bars filling the rest of the status pill, newest on the right, so
+ * the user can see the phone hears the room. The row glides left between readings instead of
+ * jumping a bar at a time (not with reduced motion). Flat while it connects or reconnects, and
+ * absent on builds whose native module can't report the level.
+ */
+function MeetingWaveform({ live }: { live: boolean }) {
+  const [width, setWidth] = useState(0);
+  const [levels, setLevels] = useState<number[]>(() => Array(MAX_BARS).fill(0));
+  const reduceMotion = useReduceMotion();
+  const offset = useRef(new Animated.Value(0)).current;
+  const readLevel = AndroidDictation?.getMeetingLevel;
+  useEffect(() => {
+    if (!live || !readLevel) return;
+    const timer = setInterval(() => {
+      const level = readLevel() ?? 0;
+      setLevels((previous) => [
+        ...previous.slice(1),
+        smoothLevel(previous[previous.length - 1], level),
+      ]);
+      if (!reduceMotion) {
+        offset.setValue(BAR_STEP);
+        Animated.timing(offset, {
+          toValue: 0,
+          duration: TICK_MS,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }).start();
+      }
+    }, TICK_MS);
+    return () => clearInterval(timer);
+  }, [live, readLevel, reduceMotion, offset]);
+  if (!readLevel) return null;
+  // One bar more than fits, so the oldest slides out under the pill's edge.
+  const count = Math.max(0, Math.min(MAX_BARS, Math.floor((width + BAR_GAP) / BAR_STEP) + 1));
+  return (
+    <View
+      testID="meeting-waveform"
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      style={{ flex: 1, height: BAR_MAX, overflow: 'hidden' }}
+    >
+      <Animated.View
+        testID="meeting-waveform-bars"
+        style={[
+          {
+            position: 'absolute',
+            right: 0,
+            height: BAR_MAX,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: BAR_GAP,
+          },
+          { transform: [{ translateX: offset }] },
+        ]}
+      >
+        {levels.slice(MAX_BARS - count).map((level, index) => (
+          <View
+            key={index}
+            style={{
+              width: BAR_WIDTH,
+              height: live ? barHeight(level) : 3,
+              borderRadius: 999,
+              backgroundColor: live ? home.accent : home.tertiary,
+            }}
+          />
+        ))}
+      </Animated.View>
+    </View>
+  );
+}
 
 const clock = (seconds: number): string =>
   `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -117,6 +206,7 @@ export function RecordingView({
           >
             {pill}
           </Text>
+          {status === 'error' ? null : <MeetingWaveform live={status === 'live'} />}
         </View>
       </View>
       <View style={{ flex: 1, padding: 16, gap: 12 }}>
@@ -199,19 +289,6 @@ export function RecordingView({
           </Text>
         </Pressable>
       </View>
-    </View>
-  );
-}
-
-/** "Listening…" under the live transcript, as in R1. */
-export function ListeningLine() {
-  const t = useNotesT();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4 }}>
-      <SystemIcon name="waveform" mdName="AudioLines" size={14} color={home.accent} />
-      <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: home.accent }}>
-        {t('listening')}
-      </Text>
     </View>
   );
 }

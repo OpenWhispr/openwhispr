@@ -237,7 +237,6 @@ export const notesEnglish = {
   recording: 'Recording · {{time}}',
   reconnecting: 'Reconnecting · {{time}}',
   liveTranscript: 'Live transcript',
-  listening: 'Listening…',
   stopAndSave: 'Stop and save',
   minimise: 'Back to notes',
   notesWhileRecording: 'Jot decisions, follow-ups or context while recording…',

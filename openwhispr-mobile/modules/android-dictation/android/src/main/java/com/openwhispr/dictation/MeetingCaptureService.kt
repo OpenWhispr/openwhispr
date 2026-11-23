@@ -23,6 +23,8 @@ class MeetingCaptureService : Service() {
   internal var route: MeetingCaptureRoute? = null; private set
   private var captureToken: String? = null
   private var recorder: WavRecorder? = null
+  /** Loudness of the meeting's latest read, 0..1; 0 when nothing is recording. */
+  val level: Float get() = recorder?.level ?: 0f
   private val handler = Handler(Looper.getMainLooper())
   override fun onBind(intent: Intent?) = null
   @Synchronized override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

@@ -2,8 +2,6 @@ import { useEffect, useRef } from 'react';
 import type React from 'react';
 import { ScrollView, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { BRAND } from '@/config/colors';
-import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 import { getSpeakerDisplayColor, getSpeakerDisplayName } from '@/lib/diarization/transcriptDisplay';
 
@@ -21,7 +19,7 @@ interface LiveTranscriptListViewProps extends LiveTranscriptListProps {
 
 /**
  * Live cloud-transcript view: finalized utterances as rows, plus the in-progress
- * partial in lighter grey with a "Transcribing…" tail, auto-scrolling to the
+ * partial in lighter grey, auto-scrolling to the
  * bottom as new text arrives. When a line's speaker is known, the speaker's name
  * shows above it wherever the speaker changes, numbered in the order people first
  * spoke, as the saved transcript numbers them.
@@ -89,14 +87,6 @@ export function LiveTranscriptListView({
       })}
       {partialText ? (
         <Text className="text-[16px] leading-6 text-tertiaryLabel">{partialText}</Text>
-      ) : null}
-      {!isEmpty && active ? (
-        <View className="flex-row items-center gap-1.5 pb-2">
-          <SystemIcon name="waveform" mdName="AudioLines" size={14} color={BRAND} />
-          <Text className="text-[14px] font-medium" style={{ color: BRAND }}>
-            Listening…
-          </Text>
-        </View>
       ) : null}
     </ScrollView>
   );
