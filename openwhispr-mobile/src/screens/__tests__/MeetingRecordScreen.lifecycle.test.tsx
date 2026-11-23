@@ -46,6 +46,7 @@ let mockModeListener: ((state: unknown, previous: unknown) => void) | undefined;
 let mockParams = { folderId: '2' };
 
 const mockCancelDownload = jest.fn(async (_id: string) => undefined);
+jest.mock('@/android/notes/noteChips', () => ({ RecordingNoteChips: () => null }));
 jest.mock('@/android/meetingRouting', () => ({ meetingOnDevice: () => false }));
 // The R1 layout itself is tested on its own; here only its notes field and Stop matter.
 jest.mock('@/android/notes/RecordingView', () => {

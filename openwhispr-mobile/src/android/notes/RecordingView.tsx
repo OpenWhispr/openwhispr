@@ -28,6 +28,7 @@ export function RecordingView({
   elapsedSeconds,
   title,
   chips,
+  meta,
   rawNotes,
   onChangeRawNotes,
   transcript,
@@ -40,6 +41,8 @@ export function RecordingView({
   elapsedSeconds: number;
   title: string;
   chips: string[];
+  /** The note's own chips (folder, people, event), editable while it records; replaces `chips`. */
+  meta?: React.ReactNode;
   rawNotes: string;
   onChangeRawNotes: (text: string) => void;
   /** The live transcript; null when this recording is transcribed afterwards (on the phone). */
@@ -120,11 +123,13 @@ export function RecordingView({
         <Text style={notesLook.title} numberOfLines={2}>
           {title}
         </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {chips.map((chip) => (
-            <MetaChip key={chip} label={chip} />
-          ))}
-        </View>
+        {meta ?? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {chips.map((chip) => (
+              <MetaChip key={chip} label={chip} />
+            ))}
+          </View>
+        )}
         {status === 'error' && error ? (
           <Text style={{ fontSize: 13, lineHeight: 18, color: look.error }}>{error}</Text>
         ) : null}

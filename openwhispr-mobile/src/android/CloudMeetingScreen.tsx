@@ -397,6 +397,7 @@ export function CloudMeetingScreen(): React.JSX.Element {
         partialText={cloud.partialText}
         title={selectedMeetingContext?.title}
         peopleCount={selectedMeetingContext?.participants?.length}
+        noteId={noteId}
         onStop={() => {
           if (phase === 'cancel-failed')
             cancel(capture.current, true).catch(Sentry.captureException);
