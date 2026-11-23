@@ -1,5 +1,10 @@
 import { PermissionsAndroid } from 'react-native';
-import { PracticeRecorder, requestMicrophone } from '../onboarding/practiceRecorder';
+import {
+  PracticeRecorder,
+  practiceFailure,
+  requestMicrophone,
+} from '../onboarding/practiceRecorder';
+import { onboardingEnglish } from '../onboarding/strings';
 
 const mockStart = jest.fn(async () => {});
 const mockStop = jest.fn(async (_cancel: boolean) => ({
@@ -145,6 +150,86 @@ describe('practice recorder', () => {
     await recorder.start();
     await expect(recorder.finish()).rejects.toThrow('offline');
     expect(mockDelete).toHaveBeenCalled();
+  });
+});
+
+describe('practice recorder, starting twice', () => {
+  it('shares one start when the bubble is tapped again while it starts', async () => {
+    let open = () => {};
+    mockStart.mockImplementationOnce(() => new Promise<void>((resolve) => (open = resolve)));
+    const recorder = new PracticeRecorder();
+    const first = recorder.start();
+    const second = recorder.start();
+    expect(recorder.busy).toBe(true);
+    open();
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(mockStart).toHaveBeenCalledTimes(1);
+    expect(recorder.active).toBe(true);
+  });
+
+  it('does not start again once listening', async () => {
+    const recorder = new PracticeRecorder();
+    await recorder.start();
+    await expect(recorder.start()).resolves.toBe(true);
+    expect(mockStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('ends a recording nothing owns and starts its own', async () => {
+    mockStart.mockRejectedValueOnce(
+      new Error(
+        "Call to function 'AndroidDictation.startRecording' has been rejected.\n→ Caused by: java.lang.IllegalStateException: A recording is already active.",
+      ),
+    );
+    const recorder = new PracticeRecorder();
+    await expect(recorder.start()).resolves.toBe(true);
+    expect(mockStop).toHaveBeenCalledWith(true);
+    expect(mockDelete).toHaveBeenCalledWith('file:///cache/practice.wav', { idempotent: true });
+    expect(mockStart).toHaveBeenCalledTimes(2);
+    expect(recorder.active).toBe(true);
+  });
+
+  it('leaves another recording alone (the bubble is busy) and fails plainly', async () => {
+    mockStart.mockRejectedValueOnce(new Error('Finish your current recording first.'));
+    const recorder = new PracticeRecorder();
+    await expect(recorder.start()).rejects.toThrow('Finish your current recording first.');
+    expect(mockStop).not.toHaveBeenCalled();
+    expect(recorder.busy).toBe(false);
+  });
+
+  it('stops a recording that opens after the screen cancelled it', async () => {
+    let open = () => {};
+    mockStart.mockImplementationOnce(() => new Promise<void>((resolve) => (open = resolve)));
+    const recorder = new PracticeRecorder();
+    const starting = recorder.start();
+    const cancelling = recorder.cancel();
+    open();
+    await expect(starting).resolves.toBe(false);
+    await cancelling;
+    expect(mockStop).toHaveBeenCalledWith(true);
+    expect(recorder.busy).toBe(false);
+  });
+});
+
+describe('practice failure copy', () => {
+  const t = (key: 'noSpeech' | 'practiceFailed') => onboardingEnglish[key];
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  afterAll(() => warn.mockRestore());
+
+  it('never shows the native exception', () => {
+    const text = practiceFailure(
+      t,
+      new Error(
+        "Call to function 'AndroidDictation.startRecording' has been rejected.\n→ Caused by: java.lang.IllegalStateException: A recording is already active.",
+      ),
+    );
+    expect(text).toBe('That didn’t work. Tap the bubble to try again.');
+    expect(text).not.toMatch(/AndroidDictation|Exception|already active/);
+  });
+
+  it('says it heard nothing when there was no speech', () => {
+    expect(practiceFailure(t, new Error('We didn’t hear any speech.'))).toBe(
+      onboardingEnglish.noSpeech,
+    );
   });
 });
 
