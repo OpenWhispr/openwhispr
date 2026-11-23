@@ -33,7 +33,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     micNeededTitle: 'Se necesita el micrófono',
     micNeededBody: 'OpenWhispr necesita el micrófono para oírte. Puedes permitirlo en Ajustes.',
     openSettings: 'Abrir Ajustes',
-    practiceFailed: 'No ha funcionado: {{message}} Toca la burbuja para intentarlo de nuevo.',
+    practiceFailed: 'No ha funcionado. Toca la burbuja para intentarlo de nuevo.',
     noSpeech: 'No hemos oído nada. Toca la burbuja e inténtalo de nuevo.',
     languagesTitle: 'Elige tus [idiomas]',
     languagesBody:
@@ -188,7 +188,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     micNeededBody:
       'OpenWhispr a besoin du microphone pour vous entendre. Vous pouvez l’autoriser dans les Paramètres.',
     openSettings: 'Ouvrir les Paramètres',
-    practiceFailed: 'Ça n’a pas marché : {{message}} Touchez la bulle pour réessayer.',
+    practiceFailed: 'Ça n’a pas marché. Touchez la bulle pour réessayer.',
     noSpeech: 'Nous n’avons rien entendu. Touchez la bulle et réessayez.',
     languagesTitle: 'Choisissez vos [langues]',
     languagesBody:
@@ -344,8 +344,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     micNeededBody:
       'OpenWhispr braucht das Mikrofon, um dich zu hören. Du kannst es in den Einstellungen erlauben.',
     openSettings: 'Einstellungen öffnen',
-    practiceFailed:
-      'Das hat nicht geklappt: {{message}} Tippe auf die Blase, um es erneut zu versuchen.',
+    practiceFailed: 'Das hat nicht geklappt. Tippe auf die Blase, um es erneut zu versuchen.',
     noSpeech: 'Wir haben nichts gehört. Tippe auf die Blase und versuche es erneut.',
     languagesTitle: 'Wähle deine [Sprachen]',
     languagesBody:
@@ -502,7 +501,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     micNeededBody:
       'O OpenWhispr precisa do microfone para ouvir você. Você pode permitir nas Configurações.',
     openSettings: 'Abrir Configurações',
-    practiceFailed: 'Não funcionou: {{message}} Toque na bolha para tentar de novo.',
+    practiceFailed: 'Não funcionou. Toque na bolha para tentar de novo.',
     noSpeech: 'Não ouvimos nada. Toque na bolha e tente de novo.',
     languagesTitle: 'Escolha seus [idiomas]',
     languagesBody:
@@ -659,7 +658,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     micNeededBody:
       'OpenWhispr ha bisogno del microfono per ascoltarti. Puoi consentirlo nelle Impostazioni.',
     openSettings: 'Apri Impostazioni',
-    practiceFailed: 'Non ha funzionato: {{message}} Tocca la bolla per riprovare.',
+    practiceFailed: 'Non ha funzionato. Tocca la bolla per riprovare.',
     noSpeech: 'Non abbiamo sentito nulla. Tocca la bolla e riprova.',
     languagesTitle: 'Scegli le tue [lingue]',
     languagesBody:
@@ -815,7 +814,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     micNeededBody:
       'OpenWhispr нужен микрофон, чтобы вас слышать. Разрешить его можно в настройках.',
     openSettings: 'Открыть настройки',
-    practiceFailed: 'Не получилось: {{message}} Нажмите на пузырёк, чтобы повторить.',
+    practiceFailed: 'Не получилось. Нажмите на пузырёк, чтобы повторить.',
     noSpeech: 'Мы ничего не услышали. Нажмите на пузырёк и попробуйте ещё раз.',
     languagesTitle: 'Выберите [языки]',
     languagesBody: 'Мы выбрали их по языкам вашего телефона. Добавьте или удалите любые.',
@@ -970,7 +969,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     micNeededTitle: '需要麦克风权限',
     micNeededBody: 'OpenWhispr 需要使用麦克风才能听到你说话。你可以在“设置”中允许。',
     openSettings: '打开设置',
-    practiceFailed: '没有成功：{{message}} 点按气泡重试。',
+    practiceFailed: '没有成功。点按气泡重试。',
     noSpeech: '我们没有听到声音。点按气泡再试一次。',
     languagesTitle: '选择你的[语言]',
     languagesBody: '我们根据你手机的语言做了选择。你可以随意添加或移除。',
@@ -1117,7 +1116,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     micNeededTitle: '需要麥克風權限',
     micNeededBody: 'OpenWhispr 需要使用麥克風才能聽到你說話。你可以在「設定」中允許。',
     openSettings: '開啟設定',
-    practiceFailed: '沒有成功：{{message}} 輕點氣泡重試。',
+    practiceFailed: '沒有成功。輕點氣泡重試。',
     noSpeech: '我們沒有聽到聲音。輕點氣泡再試一次。',
     languagesTitle: '選擇你的[語言]',
     languagesBody: '我們根據你手機的語言做了選擇。你可以隨意新增或移除。',
@@ -1266,8 +1265,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     micNeededTitle: 'マイクが必要です',
     micNeededBody: 'OpenWhispr が声を聞き取るにはマイクが必要です。設定で許可できます。',
     openSettings: '設定を開く',
-    practiceFailed:
-      'うまくいきませんでした：{{message}} バブルをタップしてもう一度お試しください。',
+    practiceFailed: 'うまくいきませんでした。バブルをタップしてもう一度お試しください。',
     noSpeech: '音声が聞き取れませんでした。バブルをタップして、もう一度お試しください。',
     languagesTitle: '[言語]を選択',
     languagesBody: 'お使いのスマートフォンの言語から選びました。自由に追加または削除できます。',
@@ -1420,7 +1418,7 @@ export const onboardingTranslations: Record<string, Partial<Record<OnboardingKey
     micNeededTitle: 'الميكروفون مطلوب',
     micNeededBody: 'يحتاج OpenWhispr إلى الميكروفون ليسمعك. يمكنك السماح به من الإعدادات.',
     openSettings: 'فتح الإعدادات',
-    practiceFailed: 'لم تنجح المحاولة: {{message}} المس الفقاعة للمحاولة مرة أخرى.',
+    practiceFailed: 'لم تنجح المحاولة. المس الفقاعة للمحاولة مرة أخرى.',
     noSpeech: 'لم نسمع شيئًا. المس الفقاعة وحاول مرة أخرى.',
     languagesTitle: 'اختر [لغاتك]',
     languagesBody: 'اخترنا هذه اللغات من لغات هاتفك. أضف أو أزل ما تشاء.',

@@ -57,6 +57,20 @@ async function formatPractice(
   }
 }
 
+/**
+ * The practice's own words for a failure: no speech, or try again. The raw error (a native exception,
+ * an HTTP status) goes to the log, never to the card.
+ */
+export function practiceFailure(
+  t: (key: 'noSpeech' | 'practiceFailed') => string,
+  failure: unknown,
+): string {
+  const message = failure instanceof Error ? failure.message : String(failure);
+  if (/hear|speech/i.test(message)) return t('noSpeech');
+  console.warn('[onboarding] practice failed', message);
+  return t('practiceFailed');
+}
+
 export type MicAccess = 'granted' | 'denied' | 'blocked';
 
 // Android's own dialog ("While using the app / Only this time / Don't allow").
@@ -68,26 +82,69 @@ export async function requestMicrophone(): Promise<MicAccess> {
   return result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN ? 'blocked' : 'denied';
 }
 
+// The native module keeps one in-app recording. "Already active" there means a recording nothing
+// here owns any more: a practice screen that unmounted, or was rebuilt by a sign-in, while its start
+// was still in flight (Josh's A73, 23 Nov: a recording left open for 4 minutes).
+const ALREADY_ACTIVE = /already active/i;
+
+async function discard(audio: { uri?: string } | null): Promise<void> {
+  if (audio?.uri) await FileSystem.deleteAsync(audio.uri, { idempotent: true }).catch(() => {});
+}
+
 // The practice bubble records inside the app, so it works before the overlay and
 // accessibility switches are on, and runs the same pipeline the real bubble uses.
 export class PracticeRecorder {
   private recording = false;
+  private starting: Promise<boolean> | null = null;
+  private cancelRequested = false;
   private controller: AbortController | null = null;
 
-  async start(): Promise<void> {
-    if (!AndroidDictation) throw new Error('Dictation is not available on this device.');
+  /**
+   * Starts listening; resolves false when a cancel came in while it started. A second call while one
+   * is starting or listening shares it rather than asking the native module for a second recording.
+   */
+  start(): Promise<boolean> {
+    if (!AndroidDictation)
+      return Promise.reject(new Error('Dictation is not available on this device.'));
+    if (this.recording) return Promise.resolve(true);
+    if (this.starting) return this.starting;
     this.controller?.abort();
-    await AndroidDictation.startRecording();
+    this.cancelRequested = false;
+    const starting = this.open().finally(() => {
+      if (this.starting === starting) this.starting = null;
+    });
+    this.starting = starting;
+    return starting;
+  }
+
+  private async open(): Promise<boolean> {
+    const dictation = AndroidDictation!;
+    try {
+      await dictation.startRecording();
+    } catch (error) {
+      if (!ALREADY_ACTIVE.test((error as Error).message)) throw error;
+      await discard(await dictation.stopRecording(true).catch(() => null));
+      await dictation.startRecording();
+    }
+    if (this.cancelRequested) {
+      await discard(await dictation.stopRecording(true).catch(() => null));
+      return false;
+    }
     this.recording = true;
+    return true;
   }
 
   async cancel(): Promise<void> {
     this.controller?.abort();
     this.controller = null;
+    if (this.starting) {
+      this.cancelRequested = true;
+      await this.starting.catch(() => false);
+      return;
+    }
     if (!this.recording || !AndroidDictation) return;
     this.recording = false;
-    const audio = await AndroidDictation.stopRecording(true).catch(() => null);
-    if (audio?.uri) await FileSystem.deleteAsync(audio.uri, { idempotent: true }).catch(() => {});
+    await discard(await AndroidDictation.stopRecording(true).catch(() => null));
   }
 
   async finish(format?: PracticeFormat): Promise<string> {
@@ -128,5 +185,10 @@ export class PracticeRecorder {
 
   get active(): boolean {
     return this.recording;
+  }
+
+  /** Listening, or on the way to it. */
+  get busy(): boolean {
+    return this.recording || this.starting !== null;
   }
 }

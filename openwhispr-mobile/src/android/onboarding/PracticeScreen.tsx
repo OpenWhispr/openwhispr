@@ -6,7 +6,7 @@ import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { CircleButton, GlassButton, PillButton, colors, s } from './kit';
 import { PracticeBubble, type BubbleState } from './PracticeBubble';
 import { AppCard, DoneLine, Hint, fieldText, useKeyboardAnchor } from './practiceParts';
-import { PracticeRecorder, requestMicrophone } from './practiceRecorder';
+import { PracticeRecorder, practiceFailure, requestMicrophone } from './practiceRecorder';
 import { useOnboardingT } from './strings';
 
 /** P1a Tap here → focused → listening → writing → pasted ✓ → tap outside → done. */
@@ -32,7 +32,7 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
     mounted.current = true;
     const current = recorder.current;
     const app = AppState.addEventListener('change', (state) => {
-      if (state !== 'active' && current.active) {
+      if (state !== 'active' && current.busy) {
         void current.cancel();
         setPhase((value) => (value === 'listening' ? 'focused' : value));
       }
@@ -44,23 +44,28 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
     };
   }, []);
 
+  // Taps queued behind a busy JS thread (a sign-in finishing) all arrive as starts.
+  const starting = useRef(false);
   const start = async () => {
+    if (starting.current) return;
+    starting.current = true;
     setError('');
-    const access = await requestMicrophone();
-    if (access !== 'granted') {
-      Alert.alert(t('micNeededTitle'), t('micNeededBody'), [
-        { text: t('cancel'), style: 'cancel' },
-        ...(access === 'blocked'
-          ? [{ text: t('openSettings'), onPress: () => AndroidDictation?.openSettings('app') }]
-          : []),
-      ]);
-      return;
-    }
     try {
-      await recorder.current.start();
-      setPhase('listening');
+      const access = await requestMicrophone();
+      if (access !== 'granted') {
+        Alert.alert(t('micNeededTitle'), t('micNeededBody'), [
+          { text: t('cancel'), style: 'cancel' },
+          ...(access === 'blocked'
+            ? [{ text: t('openSettings'), onPress: () => AndroidDictation?.openSettings('app') }]
+            : []),
+        ]);
+        return;
+      }
+      if ((await recorder.current.start()) && mounted.current) setPhase('listening');
     } catch (failure) {
-      setError(t('practiceFailed', { message: (failure as Error).message }));
+      if (mounted.current) setError(practiceFailure(t, failure));
+    } finally {
+      starting.current = false;
     }
   };
 
@@ -73,8 +78,7 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
       setPhase('pasted');
     } catch (failure) {
       if (!mounted.current) return;
-      const message = (failure as Error).message;
-      setError(/hear|speech/i.test(message) ? t('noSpeech') : t('practiceFailed', { message }));
+      setError(practiceFailure(t, failure));
       setPhase(text ? 'pasted' : 'focused');
     }
   };
@@ -85,7 +89,7 @@ export function PracticeScreen({ onBack, onNext }: { onBack: () => void; onNext:
   };
 
   const onBlur = () => {
-    if (recorder.current.active) cancel();
+    if (recorder.current.busy) cancel();
     if (text && phase === 'pasted') {
       Keyboard.dismiss();
       setPhase('done');

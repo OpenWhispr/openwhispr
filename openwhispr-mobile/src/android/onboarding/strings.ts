@@ -37,7 +37,7 @@ export const onboardingEnglish = {
   micNeededTitle: 'Microphone needed',
   micNeededBody: 'OpenWhispr needs the microphone to hear you. You can allow it in Settings.',
   openSettings: 'Open Settings',
-  practiceFailed: 'That didn’t work: {{message}} Tap the bubble to try again.',
+  practiceFailed: 'That didn’t work. Tap the bubble to try again.',
   practiceRetryHold: '{{message}} Hold the bubble to try again.',
   noSpeech: 'We didn’t hear anything. Tap the bubble and try again.',
   languagesTitle: 'Choose your [languages]',

@@ -17,7 +17,7 @@ import {
   useKeyboardAnchor,
 } from './practiceParts';
 import { diffWords, type DiffRun } from './practiceDiff';
-import { PracticeRecorder, requestMicrophone } from './practiceRecorder';
+import { PracticeRecorder, practiceFailure, requestMicrophone } from './practiceRecorder';
 import i18n from '../strings';
 import { useOnboardingT, type OnboardingKey } from './strings';
 
@@ -107,7 +107,7 @@ export function PracticeMenuScreen({
     mounted.current = true;
     const current = recorder.current;
     const app = AppState.addEventListener('change', (state) => {
-      if (state !== 'active' && current.active) {
+      if (state !== 'active' && current.busy) {
         void current.cancel();
         setPhase(kind === 'edit' ? 'select' : 'hold');
       }
@@ -152,26 +152,32 @@ export function PracticeMenuScreen({
 
   const restart = () => setPhase(kind === 'edit' ? (selected ? 'hold' : 'select') : 'hold');
 
+  // Taps queued behind a busy JS thread (a sign-in finishing) all arrive as starts.
+  const starting = useRef(false);
   const pick = async () => {
+    if (starting.current) return;
+    starting.current = true;
     setError('');
     safeHaptics('selection');
-    const access = await requestMicrophone();
-    if (access !== 'granted') {
-      Alert.alert(t('micNeededTitle'), t('micNeededBody'), [
-        { text: t('cancel'), style: 'cancel' },
-        ...(access === 'blocked'
-          ? [{ text: t('openSettings'), onPress: () => AndroidDictation?.openSettings('app') }]
-          : []),
-      ]);
-      restart();
-      return;
-    }
     try {
-      await recorder.current.start();
-      setPhase('listening');
+      const access = await requestMicrophone();
+      if (access !== 'granted') {
+        Alert.alert(t('micNeededTitle'), t('micNeededBody'), [
+          { text: t('cancel'), style: 'cancel' },
+          ...(access === 'blocked'
+            ? [{ text: t('openSettings'), onPress: () => AndroidDictation?.openSettings('app') }]
+            : []),
+        ]);
+        restart();
+        return;
+      }
+      if ((await recorder.current.start()) && mounted.current) setPhase('listening');
     } catch (failure) {
-      setError(t('practiceFailed', { message: (failure as Error).message }));
+      if (!mounted.current) return;
+      setError(practiceFailure(t, failure));
       restart();
+    } finally {
+      starting.current = false;
     }
   };
 
@@ -197,11 +203,7 @@ export function PracticeMenuScreen({
       if (!mounted.current) return;
       const message = (failure as Error).message;
       setError(
-        /hear|speech/i.test(message)
-          ? t('noSpeech')
-          : ownEditMessage(message)
-            ? t('practiceRetryHold', { message })
-            : t('practiceFailed', { message }),
+        ownEditMessage(message) ? t('practiceRetryHold', { message }) : practiceFailure(t, failure),
       );
       restart();
     }
