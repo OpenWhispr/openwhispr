@@ -189,12 +189,6 @@ export function NoteChips({
     [note?.participants],
   );
   const people = attendees.filter((person) => !person.self && !person.resource);
-  const fromEvent = event
-    ? (() => {
-        const keys = new Set(eventPeople(event).map((person) => person.email));
-        return people.filter((person) => person.email && keys.has(person.email)).length;
-      })()
-    : 0;
   const candidates = useMemo(
     () =>
       peopleSheet === 'add' || peopleSheet === 'list' ? knownPeople(events, noteId ?? -1) : [],
@@ -339,8 +333,6 @@ export function NoteChips({
         onClose={() => setPeopleSheet(null)}
         people={people}
         viewer={viewerInitials ? { initials: viewerInitials } : null}
-        eventTitle={event?.summary?.trim() || null}
-        fromEventCount={fromEvent}
         candidates={candidates}
         workspace={workspace.people}
         viewerEmail={viewerEmail}

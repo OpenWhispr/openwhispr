@@ -153,15 +153,11 @@ export const notesEnglish = {
   organizerEmail: 'Organizer · {{email}}',
   you: 'You',
   tookNotes: 'Took these notes',
-  cameFromEvent: '{{count}} came from {{event}} on Google Calendar.',
-  cameFromEvent_one: '1 came from {{event}} on Google Calendar.',
   removePerson: 'Remove {{name}}',
   removedPerson: '{{name}} removed',
   addedPeople: '{{count}} people added',
   addedPeople_one: '{{name}} added',
   nameOrEmail: 'Name or email',
-  addPeopleHint:
-    'Your workspace first, then people from your calendars and other notes. Type a full email to add someone new.',
   addEmail: 'Add {{email}}',
   addPerson: 'Add {{name}}',
   // Calendar event (N7, N8)

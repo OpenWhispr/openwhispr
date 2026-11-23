@@ -126,8 +126,6 @@ export function PeopleSheet({
   onClose,
   people,
   viewer,
-  eventTitle,
-  fromEventCount,
   candidates,
   workspace,
   viewerEmail,
@@ -142,8 +140,6 @@ export function PeopleSheet({
   people: CalendarParticipant[];
   /** You, when the note is yours: "You · Took these notes". */
   viewer: { initials: string } | null;
-  eventTitle: string | null;
-  fromEventCount: number;
   candidates: CalendarParticipant[];
   /** People in your workspace matching what's typed; they're suggested first. */
   workspace: CalendarParticipant[];
@@ -294,7 +290,6 @@ export function PeopleSheet({
             </Card>
           ) : null}
         </ScrollView>
-        <Text style={notesLook.rowSub}>{t('addPeopleHint')}</Text>
         <GlassButton label={t('done')} onPress={done} />
       </BottomSheet>
     );
@@ -342,11 +337,6 @@ export function PeopleSheet({
             <PersonRow title={t('you')} subtitle={t('tookNotes')} initials={viewer.initials} />
           ) : null}
         </Card>
-        {eventTitle && fromEventCount > 0 ? (
-          <Text style={notesLook.rowSub}>
-            {t('cameFromEvent', { count: fromEventCount, event: eventTitle })}
-          </Text>
-        ) : null}
       </ScrollView>
     </BottomSheet>
   );
