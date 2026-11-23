@@ -3339,6 +3339,7 @@
         "gemini_gemini_3_8_flash": "O modelo Flash mais capaz",
         "gemini_gemini_4_argon": "O modelo de raciocínio de ponta do Google",
         "tinfoil_kimi_k3": "Modelo principal privado da Moonshot com raciocínio nativo e visão, contexto de 256K",
+        "tinfoil_kimi_k3_1_pro": "Modelo principal privado da Moonshot para programação de longo prazo e trabalho agêntico, contexto de 256K",
         "tinfoil_deepseek_v4_1_flash": "Modelo DeepSeek privado e rápido com raciocínio opcional, contexto de 1M"
       },
       "enterprise": {

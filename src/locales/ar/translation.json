@@ -357,6 +357,7 @@
         "gemini_gemini_3_8_flash": "نموذج Flash الأكثر قدرة",
         "gemini_gemini_4_argon": "نموذج الاستنتاج الرائد من Google",
         "tinfoil_kimi_k3": "نموذج Moonshot الرائد الخاص مع استنتاج أصلي ورؤية، سياق 256K",
+        "tinfoil_kimi_k3_1_pro": "نموذج Moonshot الرائد الخاص للبرمجة طويلة المدى والعمل الوكيلي، سياق 256K",
         "tinfoil_deepseek_v4_1_flash": "نموذج DeepSeek خاص وسريع مع استنتاج اختياري، سياق 1M"
       },
       "enterprise": {
