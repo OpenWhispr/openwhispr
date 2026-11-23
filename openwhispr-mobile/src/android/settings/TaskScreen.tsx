@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
@@ -10,7 +9,7 @@ import { resolveCustomPrompt } from '@/config/prompts/registry';
 import { cloudAccessFor } from '@/lib/aiWorkflows';
 import { providerDisplayName, type InferenceMode } from '@/lib/mobileProviders';
 import { switchWorkflowMode } from '@/lib/workflowModeSwitch.android';
-import { home, type } from '../home/kit';
+import { home } from '../home/kit';
 import { BottomSheet, Group, ListRow, SettingsPage, useReduceMotion } from './kit';
 import { KEY_CHECK_COLORS } from './KeyCheckMark';
 import type { KeyProviderId } from './keyCheck';
@@ -145,9 +144,6 @@ function MeetingsTask() {
   ];
   return (
     <SettingsPage title={t('meetings')}>
-      <Text style={[type.subhead, { color: home.secondary, paddingHorizontal: 4 }]}>
-        {t('meetingsIntro')}
-      </Text>
       <Group title={t('transcribeMeetings')}>
         {rows.map((row) => (
           <ListRow

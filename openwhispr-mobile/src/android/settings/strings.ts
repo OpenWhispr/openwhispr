@@ -265,8 +265,6 @@ export const settingsEnglish = {
   done: 'Done',
   meetingCloudValue: 'OpenWhispr Cloud',
   meetingPhoneValue: 'On device',
-  meetingsIntro:
-    'Meetings need a model that can transcribe while people talk, or the phone can transcribe after the meeting ends.',
   transcribeMeetings: 'Transcribe meetings',
   meetingCloud: 'OpenWhispr Cloud',
   meetingCloudBody: 'Words appear as people talk. Needs an account.',

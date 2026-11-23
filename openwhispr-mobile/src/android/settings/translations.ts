@@ -273,8 +273,6 @@ export const settingsTranslations: Record<
     done: 'Listo',
     meetingCloudValue: 'OpenWhispr Cloud',
     meetingPhoneValue: 'En el dispositivo',
-    meetingsIntro:
-      'Las reuniones necesitan un modelo que transcriba mientras la gente habla, o el teléfono puede transcribir cuando termine la reunión.',
     transcribeMeetings: 'Transcribir reuniones',
     meetingCloud: 'OpenWhispr Cloud',
     meetingCloudBody: 'Las palabras aparecen mientras se habla. Requiere una cuenta.',
@@ -579,8 +577,6 @@ export const settingsTranslations: Record<
     done: 'Terminé',
     meetingCloudValue: 'OpenWhispr Cloud',
     meetingPhoneValue: 'Sur l’appareil',
-    meetingsIntro:
-      'Les réunions demandent un modèle capable de transcrire pendant que les gens parlent, ou le téléphone peut transcrire une fois la réunion terminée.',
     transcribeMeetings: 'Transcrire les réunions',
     meetingCloud: 'OpenWhispr Cloud',
     meetingCloudBody: 'Les mots apparaissent pendant qu’on parle. Nécessite un compte.',
@@ -884,8 +880,6 @@ export const settingsTranslations: Record<
     done: 'Fertig',
     meetingCloudValue: 'OpenWhispr Cloud',
     meetingPhoneValue: 'Auf dem Gerät',
-    meetingsIntro:
-      'Meetings brauchen ein Modell, das beim Sprechen mitschreibt, oder das Telefon transkribiert nach dem Meeting.',
     transcribeMeetings: 'Meetings transkribieren',
     meetingCloud: 'OpenWhispr Cloud',
     meetingCloudBody: 'Die Wörter erscheinen beim Sprechen. Erfordert ein Konto.',
@@ -1185,8 +1179,6 @@ export const settingsTranslations: Record<
     done: 'Concluir',
     meetingCloudValue: 'OpenWhispr Cloud',
     meetingPhoneValue: 'No dispositivo',
-    meetingsIntro:
-      'Reuniões precisam de um modelo que transcreva enquanto as pessoas falam, ou o celular pode transcrever depois que a reunião terminar.',
     transcribeMeetings: 'Transcrever reuniões',
     meetingCloud: 'OpenWhispr Cloud',
     meetingCloudBody: 'As palavras aparecem enquanto as pessoas falam. Requer uma conta.',
@@ -1486,8 +1478,6 @@ export const settingsTranslations: Record<
     done: 'Fatto',
     meetingCloudValue: 'OpenWhispr Cloud',
     meetingPhoneValue: 'Sul dispositivo',
-    meetingsIntro:
-      'Le riunioni richiedono un modello che trascriva mentre le persone parlano, oppure il telefono può trascrivere dopo la fine della riunione.',
     transcribeMeetings: 'Trascrivi le riunioni',
     meetingCloud: 'OpenWhispr Cloud',
     meetingCloudBody: 'Le parole compaiono mentre si parla. Serve un account.',
@@ -1789,8 +1779,6 @@ export const settingsTranslations: Record<
     done: 'Готово',
     meetingCloudValue: 'OpenWhispr Cloud',
     meetingPhoneValue: 'На устройстве',
-    meetingsIntro:
-      'Для встреч нужна модель, которая расшифровывает речь по ходу разговора, либо телефон может сделать расшифровку после окончания встречи.',
     transcribeMeetings: 'Расшифровывать встречи',
     meetingCloud: 'OpenWhispr Cloud',
     meetingCloudBody: 'Слова появляются по ходу разговора. Нужен аккаунт.',
@@ -2082,7 +2070,6 @@ export const settingsTranslations: Record<
     done: '完成',
     meetingCloudValue: 'OpenWhispr Cloud',
     meetingPhoneValue: '在设备上',
-    meetingsIntro: '会议需要能在人们说话时实时转写的模型，或者由手机在会议结束后转写。',
     transcribeMeetings: '转写会议',
     meetingCloud: 'OpenWhispr Cloud',
     meetingCloudBody: '边说边出字。需要账号。',
@@ -2365,7 +2352,6 @@ export const settingsTranslations: Record<
     done: '完成',
     meetingCloudValue: 'OpenWhispr Cloud',
     meetingPhoneValue: '在裝置上',
-    meetingsIntro: '會議需要能在人們說話時即時轉錄的模型，或由手機在會議結束後轉錄。',
     transcribeMeetings: '轉錄會議',
     meetingCloud: 'OpenWhispr Cloud',
     meetingCloudBody: '邊說邊出字。需要帳號。',
@@ -2662,8 +2648,6 @@ export const settingsTranslations: Record<
     done: '完了',
     meetingCloudValue: 'OpenWhispr Cloud',
     meetingPhoneValue: 'デバイス上',
-    meetingsIntro:
-      '会議には、話している間に文字起こしできるモデルが必要です。または、会議の終了後にスマートフォンで文字起こしすることもできます。',
     transcribeMeetings: '会議を文字起こし',
     meetingCloud: 'OpenWhispr Cloud',
     meetingCloudBody: '話すそばから文字になります。アカウントが必要です。',
@@ -2955,8 +2939,6 @@ export const settingsTranslations: Record<
     done: 'تم',
     meetingCloudValue: 'OpenWhispr Cloud',
     meetingPhoneValue: 'على الجهاز',
-    meetingsIntro:
-      'تحتاج الاجتماعات إلى نموذج يحوّل الكلام إلى نص أثناء حديث الناس، أو يمكن للهاتف فعل ذلك بعد انتهاء الاجتماع.',
     transcribeMeetings: 'تفريغ الاجتماعات نصيًا',
     meetingCloud: 'OpenWhispr Cloud',
     meetingCloudBody: 'تظهر الكلمات أثناء الحديث. يتطلب حسابًا.',
