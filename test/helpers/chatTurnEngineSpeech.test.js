@@ -30,7 +30,7 @@ async function setup(t) {
     setToolStatus() {},
     setActiveToolName() {},
   });
-  return { engine, service, messages: () => messages };
+  return { engine, service, vite, messages: () => messages };
 }
 
 // Records what a voice call hears, in order.
@@ -192,6 +192,41 @@ test("a withdrawn answer keeps the reply spoken before its step", async (t) => {
     ["text", "Todavía no lo envié.", "function"],
     ["end", "complete"],
   ]);
+});
+
+test("a briefing a tool renders shows in the reply but is never spoken", async (t) => {
+  const fixture = await setup(t);
+  const { ToolRegistry } = await fixture.vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
+  let reportResult;
+  t.mock.method(ToolRegistry.prototype, "toAISDKFormat", (_createContext, onDisplayText) => {
+    reportResult = onDisplayText;
+    return {};
+  });
+  t.mock.method(fixture.service, "processTextStreamingAI", async function* () {
+    yield { type: "content", text: "Let me pull that up. " };
+    yield { type: "tool_calls", calls: [{ id: "c1", name: "web_search", arguments: "{}" }] };
+    reportResult("c1", "Prepared", {
+      success: true,
+      data: {},
+      displayText: "Prepared",
+      renderedAnswer: { key: "acme", content: "## Acme briefing\n\n| Need | Status |" },
+    });
+    yield { type: "tool_result", callId: "c1", toolName: "web_search", displayText: "Prepared" };
+    yield { type: "content", text: "Here is Acme. " };
+    yield { type: "content", text: "It renews in May." };
+    yield { type: "done", finishReason: "stop" };
+  });
+  const { events, voice } = speechLog();
+  await fixture.engine.send("Brief me on Acme", [], { voice });
+
+  assert.deepEqual(events, [
+    ["text", "Let me pull that up. ", "function"],
+    ["tools", ["web_search"]],
+    ["text", "Here is Acme. ", "function"],
+    ["text", "It renews in May.", "function"],
+    ["end", "complete"],
+  ]);
+  assert.match(fixture.messages().at(-1).content, /It renews in May\.\n\n---\n\n## Acme briefing/);
 });
 
 test("a spoken request leaves out one stopped before any reply, unless it talked over it", async (t) => {

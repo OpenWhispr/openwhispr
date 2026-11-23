@@ -1468,12 +1468,15 @@ export function createChatTurnEngine(
       // until the second answer replaces it: a stop or failure must not lose it.
       let askedAgainFrom: number | null = null;
       // How much of the reply a voice call has heard: it grows with the
-      // visible text, and shrinks only when a claim's answer is withdrawn.
+      // model's own text, and shrinks only when a claim's answer is withdrawn.
+      // A tool's rendered evidence is read on screen, never aloud.
       let heardLength = 0;
       const tellSpeech = (): void => {
-        if (!speech || fullContent.length <= heardLength) return;
-        speech.onText(fullContent.slice(heardLength), isUnbacked);
-        heardLength = fullContent.length;
+        if (!speech) return;
+        const spoken = modelContent();
+        if (spoken.length <= heardLength) return;
+        speech.onText(spoken.slice(heardLength), isUnbacked);
+        heardLength = spoken.length;
       };
       const replaceAskedReply = (): void => {
         if (askedAgainFrom === null) return;
@@ -1481,8 +1484,9 @@ export function createChatTurnEngine(
         fullContent = responseContent();
         afterToolCall = true;
         askedAgainFrom = null;
-        if (speech && heardLength > fullContent.length) {
-          heardLength = fullContent.length;
+        const kept = modelContent().length;
+        if (speech && heardLength > kept) {
+          heardLength = kept;
           speech.onTextWithdrawn(heardLength);
         }
       };
@@ -1740,6 +1744,7 @@ export function createChatTurnEngine(
           // listener — the agent window's thinking state included — sees a
           // terminal outcome.
           fullContent = t("agentMode.chat.emptyResponse");
+          speech?.onText(fullContent);
         }
         tellSpeech();
         speechOutcome = "complete";
