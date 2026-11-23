@@ -1527,6 +1527,35 @@ test("a removal behind a newer one from a workspace that never managed the devic
   assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
 });
 
+// A session revoked by a later removal from another workspace: the 401 lists
+// every removal behind it, and an older API sends only the newest.
+test("a revoked session hears the removal from the workspace that managed it, behind a newer one", async (t) => {
+  const newer = { workspaceId: "workspace-9", removedAt: "2026-11-13T10:00:00.000Z" };
+  const context = removalSetup([
+    managedBy("workspace-1"),
+    () =>
+      response(401, {
+        code: "WORKSPACE_MEMBER_REMOVED",
+        ...newer,
+        workspaceRemovals: [newer, removal],
+      }),
+  ]);
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+});
+
+test("the verdict this run enforces hears its removal when the cache couldn't save it", async (t) => {
+  const context = removalSetup([managedBy("workspace-1"), () => unmanagedWith(removedFrom)]);
+  t.after(context.cleanup);
+  // A folder where the cache goes: every write fails.
+  fs.mkdirSync(context.cachePath);
+  await context.lookup();
+  await context.lookup();
+  assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+});
+
 test("a removal the app couldn't record is heard again at the next lookup", async (t) => {
   let recording = false;
   const context = removalSetup(

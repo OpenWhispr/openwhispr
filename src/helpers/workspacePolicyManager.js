@@ -192,12 +192,14 @@ function createWorkspacePolicyManager({
   // Only a device whose last managed verdict for this credential (or account)
   // named that workspace acts on it: a removal from some other workspace, or a
   // sign-in on another device, wipes nothing. The credential's own verdict
-  // still counts once a rejected session has cleared the account label. A
+  // still counts once a rejected session has cleared the account label, and so
+  // does the one this run enforces, which a failed cache write left off disk. A
   // removal the app couldn't record throws, so the verdict that names its
   // workspace isn't replaced and the next lookup reports it again.
   function reportRemoval(identity, removal) {
     if (typeof removal?.workspaceId !== "string" || !validTimestamp(removal.removedAt)) return;
     const verdicts = [
+      snapshots.get(identityKey(identity))?.data,
       readWorkspacePolicyCache(cachePath, cacheIdentity(identity)),
       isValidatedAccount(identity) && readAccountPolicyCache(cachePath, identity),
     ];
@@ -374,9 +376,13 @@ function createWorkspacePolicyManager({
           if (errorBody?.code === "POLICY_UNRESOLVABLE") {
             throw unresolvablePolicyError(errorBody.error || "Organization policy is unresolvable");
           }
-          // An admin removal revoked this session.
+          // An admin removal revoked this session. The API names every removal
+          // behind it in workspaceRemovals; an older one names only the newest.
           if (response.status === 401 && errorBody?.code === "WORKSPACE_MEMBER_REMOVED") {
-            reportRemoval(identity, errorBody);
+            const removals = Array.isArray(errorBody.workspaceRemovals)
+              ? errorBody.workspaceRemovals
+              : [errorBody];
+            for (const removal of removals) reportRemoval(identity, removal);
           }
           const error = new Error(`API error: ${response.status}`);
           error.status = response.status;
