@@ -27,14 +27,26 @@ const origLoad = Module._load;
 Module._load = function (request, ...rest) {
   if (request === "electron") return fakeElectron;
   if (request === "@napi-rs/keyring") throw new Error("keyring disabled in tests");
-  // No .env file is loaded in tests; parse stays real (with a minimal stand-in
-  // when node_modules is absent) so the .env round-trip tests read what was written.
+  // Only isolated per-test profiles may load dotenv. The shared fixture directory
+  // and any developer or packaged profile must never affect a test.
   if (request === "dotenv") {
     let real = null;
     try {
       real = origLoad.call(this, request, ...rest);
     } catch {}
-    return { config: () => ({}), parse: real ? real.parse : parseEnvLines };
+    const parse = real ? real.parse : parseEnvLines;
+    return {
+      parse,
+      config: (options) => {
+        const profile = fakeElectron.app.getPath("userData");
+        if (profile === tmpUserData || options.path !== path.join(profile, ".env")) return {};
+        const parsed = parse(fs.readFileSync(options.path));
+        for (const [name, value] of Object.entries(parsed)) {
+          if (options.override || !Object.hasOwn(process.env, name)) process.env[name] = value;
+        }
+        return { parsed };
+      },
+    };
   }
   if (request === "./i18nMain" || request.endsWith("/i18nMain")) {
     return { normalizeUiLanguage: (v) => v || "en" };
@@ -476,7 +488,7 @@ test("an unreadable encrypted upgrade slot survives conditional migration until 
   assert.equal(env.getTranslationCustomKey(), "encrypted-old-setting");
 });
 
-test("legacy scoped references replace shell aliases and survive restart", async (t) => {
+test("a migrated renderer password replaces a shell alias even when their spelling matches", async (t) => {
   const env = isolateCleanupSettings(t);
   process.env.TRANSLATION_CUSTOM_API_KEY = "$GROQ_API_KEY";
   process.env.GROQ_API_KEY = "fixture-target";
@@ -484,19 +496,201 @@ test("legacy scoped references replace shell aliases and survive restart", async
   const alias = env.getRawKey("TRANSLATION_CUSTOM_API_KEY");
   env.saveTranslationCustomKey(alias);
   assert.ok(env._shellImportedSecrets.has("TRANSLATION_CUSTOM_API_KEY"));
-  await env.saveTranslationCustomKey(alias, true);
+  const marker = "$TRANSLATION_CUSTOM_API_KEY";
+  assert.deepEqual(await env.saveTranslationCustomKey(alias, true), {
+    success: true,
+    stored: marker,
+  });
   assert.equal(env._shellImportedSecrets.has("TRANSLATION_CUSTOM_API_KEY"), false);
   const retained = env.saveTranslationCustomKey("stale-local-copy", true);
-  assert.equal(retained.retained, alias);
+  assert.equal(retained.retained, marker);
   process.env = require("dotenv").parse(fs.readFileSync((await env.saveAllKeysToEnvFile()).path));
   EnvironmentManager._resetShellImportedSecrets();
   const restarted = new EnvironmentManager();
-  assert.equal(restarted.getTranslationCustomKey(), "fixture-target");
-  assert.equal(restarted.getRawKey("TRANSLATION_CUSTOM_API_KEY"), alias);
+  assert.equal(restarted.getTranslationCustomKey(), alias);
+  assert.equal(restarted.getRawKey("TRANSLATION_CUSTOM_API_KEY"), marker);
   restarted.saveTranslationCustomKey("");
   const delayedMigration = restarted.saveTranslationCustomKey("stale-local-copy", true);
   assert.equal(delayedMigration.retained, "");
   assert.equal(restarted.getRawKey("TRANSLATION_CUSTOM_API_KEY"), "");
+});
+
+test("an untagged encrypted password stays literal after a locked upgrade and a restart", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const crypto = require("../../src/helpers/secretCrypto");
+  const slot = env._getSecretFilePath("OPENAI_API_KEY");
+  fs.mkdirSync(path.dirname(slot), { recursive: true });
+  fs.writeFileSync(env._getMigrationSentinelPath(), "");
+  fs.writeFileSync(slot, "vault:${GROQ_API_KEY}");
+  let locked = true;
+  t.mock.method(crypto, "isAvailable", () => !locked);
+  t.mock.method(crypto, "encrypt", (value) => Buffer.from(`vault:${value}`));
+  t.mock.method(crypto, "decrypt", (blob) => {
+    if (locked || !blob.toString().startsWith("vault:")) throw new Error("unavailable");
+    return { value: blob.toString().slice(6), needsReencrypt: false };
+  });
+  importFixtureShell(t, {});
+  await env.init();
+  assert.equal(env.getOpenAIKey(), "");
+  assert.equal((await env.saveOpenAIKey("stale-mirror", true)).success, false);
+  assert.equal(fs.readFileSync(slot, "utf8"), "vault:${GROQ_API_KEY}");
+
+  locked = false;
+  process.env = { GROQ_API_KEY: "different-account" };
+  EnvironmentManager._resetShellImportedSecrets();
+  const unlocked = new EnvironmentManager();
+  await unlocked.init();
+  assert.equal(unlocked.getRawKey("OPENAI_API_KEY"), "$OPENAI_API_KEY");
+  assert.equal(unlocked.getOpenAIKey(), "${GROQ_API_KEY}");
+  assert.equal(unlocked.resolveSecretRef("$OPENAI_API_KEY"), "${GROQ_API_KEY}");
+  assert.deepEqual(unlocked.saveOpenAIKey("$OPENAI_API_KEY"), { success: true });
+  const write = t.mock.method(unlocked, "_saveSecretKey");
+  unlocked.saveCustomTranscriptionKey("$OPENAI_API_KEY");
+  await write.mock.calls[0].result;
+  assert.equal(unlocked.getCustomTranscriptionKey(), "${GROQ_API_KEY}");
+  assert.equal(unlocked.resolveSecretRef("$CUSTOM_TRANSCRIPTION_API_KEY"), "");
+  await unlocked.saveChatAgentCustomKey("${GROQ_API_KEY}", true);
+  assert.deepEqual(
+    await unlocked.saveDictationAgentCustomKey("$CHAT_AGENT_CUSTOM_API_KEY", "if-empty"),
+    {
+      success: true,
+      stored: "$DICTATION_AGENT_CUSTOM_API_KEY",
+    }
+  );
+
+  // Editing the old field explicitly may use the exact spelling of its former
+  // password as a new reference. A seeded scope keeps its old password.
+  unlocked.saveOpenAIKey("${GROQ_API_KEY}");
+  await write.mock.calls.at(-1).result;
+  process.env = { GROQ_API_KEY: "next-account" };
+  EnvironmentManager._resetShellImportedSecrets();
+  const restarted = new EnvironmentManager();
+  await restarted.init();
+  assert.equal(restarted.getRawKey("OPENAI_API_KEY"), "${GROQ_API_KEY}");
+  assert.equal(restarted.getOpenAIKey(), "next-account");
+  assert.equal(restarted.getCustomTranscriptionKey(), "");
+  assert.equal(restarted.getDictationAgentCustomKey(), "${GROQ_API_KEY}");
+});
+
+test("startup seeding keeps an explicit source reference live when its target contains an old literal", async (t) => {
+  const env = isolateCleanupSettings(t);
+  await env.saveOpenAIKey("$OLD_PASSWORD", true);
+  env.saveChatAgentCustomKey("$OPENAI_API_KEY");
+  env.saveCleanupCustomKey("$OPENAI_API_KEY");
+  await env.saveDictationAgentCustomKey(env.getRawKey("CHAT_AGENT_CUSTOM_API_KEY"), "if-empty");
+  await env.saveOpenrouterKey(env.getRawCleanupCustomKey(), "if-empty");
+  assert.equal(env.getDictationAgentCustomKey(), "$OLD_PASSWORD");
+  assert.equal(env.getOpenrouterKey(), "$OLD_PASSWORD");
+  env.saveOpenAIKey("rotated-account");
+  assert.equal(env.getDictationAgentCustomKey(), "rotated-account");
+  assert.equal(env.getOpenrouterKey(), "rotated-account");
+  assert.equal(env.getRawKey("DICTATION_AGENT_CUSTOM_API_KEY"), "$OPENAI_API_KEY");
+  assert.equal(env.getRawKey("OPENROUTER_API_KEY"), "$OPENAI_API_KEY");
+});
+
+test("recovering an old Cleanup mirror preserves its configured legacy name or a previous clear", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const profile = path.join(fakeElectron.app.getPath("userData"), ".env");
+  fs.writeFileSync(profile, "CUSTOM_REASONING_API_KEY=$OLD_PASSWORD\n");
+  env.loadEnvironmentVariables();
+  assert.deepEqual(await env.saveCleanupCustomKey("$STALE_MIRROR", true), {
+    success: true,
+    retained: "$CUSTOM_REASONING_API_KEY",
+  });
+  assert.equal(env.getCleanupCustomKey(), "$OLD_PASSWORD");
+  assert.deepEqual(await env.saveOpenrouterKey(env.getRawCleanupCustomKey(), "if-empty"), {
+    success: true,
+    stored: "$OPENROUTER_API_KEY",
+  });
+  await env.saveCleanupCustomKey("");
+  await env.saveAllKeysToEnvFile();
+  assert.deepEqual(await env.saveCleanupCustomKey("$STALE_MIRROR", true), {
+    success: true,
+    retained: "",
+  });
+  assert.equal(env.getOpenrouterKey(), "$OLD_PASSWORD");
+});
+
+test("explicit reference and literal edits replace locked slots before the next profile flush", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const slot = env._getSecretFilePath("CUSTOM_TRANSCRIPTION_API_KEY");
+  fs.mkdirSync(path.dirname(slot), { recursive: true });
+  fs.writeFileSync(env._getMigrationSentinelPath(), "");
+  fs.writeFileSync(slot, "vault:$OLD_PASSWORD");
+  fs.writeFileSync(env._getSecretFilePath("OPENAI_API_KEY"), "vault:old-account");
+  const crypto = require("../../src/helpers/secretCrypto");
+  let locked = true;
+  t.mock.method(crypto, "isAvailable", () => !locked);
+  t.mock.method(crypto, "encrypt", (value) => Buffer.from(`vault:${value}`));
+  t.mock.method(crypto, "decrypt", (blob) => {
+    if (locked || !blob.toString().startsWith("vault:")) throw new Error("locked");
+    return { value: blob.toString().slice(6), needsReencrypt: false };
+  });
+  importFixtureShell(t, {});
+  await env.init();
+  assert.deepEqual(await env.saveCustomTranscriptionKey("$GROQ_API_KEY"), { success: true });
+  assert.deepEqual(await env.saveOpenAIKey("new-literal-account"), { success: true });
+  process.env = { GROQ_API_KEY: "new-account" };
+  EnvironmentManager._resetShellImportedSecrets();
+  locked = false;
+  const restarted = new EnvironmentManager();
+  await restarted.init();
+  assert.equal(restarted.getRawKey("CUSTOM_TRANSCRIPTION_API_KEY"), "$GROQ_API_KEY");
+  assert.equal(restarted.getCustomTranscriptionKey(), "new-account");
+  assert.equal(restarted.getOpenAIKey(), "new-literal-account");
+  const { path: profile } = await restarted.saveAllKeysToEnvFile();
+  assert.doesNotMatch(fs.readFileSync(profile, "utf8"), /CUSTOM_TRANSCRIPTION_API_KEY/);
+  process.env = { GROQ_API_KEY: "rotated-account" };
+  EnvironmentManager._resetShellImportedSecrets();
+  const encryptedAgain = new EnvironmentManager();
+  await encryptedAgain.init();
+  assert.equal(encryptedAgain.getCustomTranscriptionKey(), "rotated-account");
+  assert.equal(encryptedAgain.getOpenAIKey(), "new-literal-account");
+});
+
+test("old plaintext literals and newly saved references retain separate meanings during promotion", async (t) => {
+  const initial = isolateCleanupSettings(t);
+  const profile = path.join(fakeElectron.app.getPath("userData"), ".env");
+  fs.writeFileSync(profile, "OPENAI_API_KEY=$GROQ_API_KEY\nGROQ_API_KEY=other-account\n");
+  const crypto = require("../../src/helpers/secretCrypto");
+  let available = false;
+  t.mock.method(crypto, "isAvailable", () => available);
+  t.mock.method(crypto, "encrypt", (value) => {
+    if (!available) throw new Error("unavailable");
+    return Buffer.from(`vault:${value}`);
+  });
+  t.mock.method(crypto, "decrypt", (blob) => ({
+    value: blob.toString().slice(6),
+    needsReencrypt: false,
+  }));
+  importFixtureShell(t, {});
+  const locked = new EnvironmentManager();
+  await locked.init();
+  assert.equal(locked.getOpenAIKey(), "$GROQ_API_KEY");
+  assert.equal(locked.getRawKey("OPENAI_API_KEY"), "$OPENAI_API_KEY");
+  locked.saveCustomTranscriptionKey("$GROQ_API_KEY");
+  await locked.saveAllKeysToEnvFile();
+  const parsed = require("dotenv").parse(fs.readFileSync(profile));
+  assert.equal(parsed.OPENWHISPR_REF_OPENAI_API_KEY, undefined);
+  assert.equal(parsed.OPENWHISPR_REF_CUSTOM_TRANSCRIPTION_API_KEY, "GROQ_API_KEY");
+  process.env = {};
+  EnvironmentManager._resetShellImportedSecrets();
+  available = true;
+  const recovered = new EnvironmentManager();
+  await recovered.init();
+  assert.equal(recovered.getCustomTranscriptionKey(), "other-account");
+  assert.equal(recovered.getOpenAIKey(), "$GROQ_API_KEY");
+  assert.equal(recovered.resolveSecretRef("$OPENAI_API_KEY"), "$GROQ_API_KEY");
+  assert.ok(fs.existsSync(initial._getMigrationSentinelPath()));
+  assert.doesNotMatch(fs.readFileSync(profile, "utf8"), /OPENWHISPR_REF_|OPENAI_API_KEY=/);
+  process.env = {};
+  EnvironmentManager._resetShellImportedSecrets();
+  const restarted = new EnvironmentManager();
+  await restarted.init();
+  assert.equal(restarted.getRawKey("OPENAI_API_KEY"), "$OPENAI_API_KEY");
+  assert.equal(restarted.getRawKey("CUSTOM_TRANSCRIPTION_API_KEY"), "$GROQ_API_KEY");
+  assert.equal(restarted.getOpenAIKey(), "$GROQ_API_KEY");
+  assert.equal(restarted.getCustomTranscriptionKey(), "other-account");
 });
 
 test("a late shell import cannot undo an explicit clear of Cleanup", async (t) => {
@@ -543,7 +737,7 @@ test("migration and restart retain encrypted legacy keys referenced by other sco
   assert.equal(restarted.resolveSecretRef("$CUSTOM_REASONING_API_KEY"), "");
 });
 
-test("the legacy Cleanup alias survives a reference migrated later from renderer storage", async (t) => {
+test("a legacy renderer password named for the Cleanup alias survives a restart literally", async (t) => {
   const env = isolateCleanupSettings(t);
   const crypto = require("../../src/helpers/secretCrypto");
   t.mock.method(crypto, "isAvailable", () => true);
@@ -553,13 +747,13 @@ test("the legacy Cleanup alias survives a reference migrated later from renderer
   await env._migrateToSecureStorage();
   // Main initializes before renderer localStorage is available.
   await env.saveTranslationCustomKey("$CUSTOM_REASONING_API_KEY", true);
-  assert.equal(env.getTranslationCustomKey(), "profile-cleanup");
+  assert.equal(env.getTranslationCustomKey(), "$CUSTOM_REASONING_API_KEY");
   process.env = {};
   EnvironmentManager._resetShellImportedSecrets();
   const restarted = new EnvironmentManager();
   await restarted._loadAllSecrets();
   assert.equal(restarted.getCleanupCustomKey(), "profile-cleanup");
-  assert.equal(restarted.getTranslationCustomKey(), "profile-cleanup");
+  assert.equal(restarted.getTranslationCustomKey(), "$CUSTOM_REASONING_API_KEY");
 });
 
 test("interrupted migration preserves an existing encrypted slot when the keyring is locked", async (t) => {
@@ -587,8 +781,10 @@ test("a rotation saved in the profile during interrupted migration survives vaul
   const slot = env._getSecretFilePath("OPENAI_API_KEY");
   fs.mkdirSync(path.dirname(slot), { recursive: true });
   fs.writeFileSync(slot, "older-account");
-  env.saveOpenAIKey("rotated-account");
-  const { path: file } = await env.saveAllKeysToEnvFile();
+  // The older release wrote locked-vault edits to the profile only.
+  const file = path.join(fakeElectron.app.getPath("userData"), ".env");
+  fs.writeFileSync(file, "OPENAI_API_KEY=rotated-account\n");
+  env.loadEnvironmentVariables();
   // A restored backup may make the ciphertext appear newer than the edited profile.
   fs.utimesSync(file, new Date(1), new Date(1));
   assert.equal(require("dotenv").parse(fs.readFileSync(file)).OPENAI_API_KEY, "rotated-account");
@@ -758,4 +954,188 @@ test("ElevenLabs key: a $VAR stays raw in Settings and expands only on use", () 
     if (value === undefined) delete process.env[name];
     else process.env[name] = value;
   }
+});
+
+test("a locked clear removes every persisted copy and blocks a stale renderer migration after restart", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const crypto = require("../../src/helpers/secretCrypto");
+  const slot = env._getSecretFilePath("TRANSLATION_CUSTOM_API_KEY");
+  const file = path.join(fakeElectron.app.getPath("userData"), ".env");
+  fs.mkdirSync(path.dirname(slot), { recursive: true });
+  fs.writeFileSync(slot, "account-before-clear");
+  fs.writeFileSync(env._getMigrationSentinelPath(), "");
+  const unrelated = '# untouched\nUNRELATED="line one\nTRANSLATION_CUSTOM_API_KEY=part-of-value"\n';
+  fs.writeFileSync(
+    file,
+    unrelated +
+      "export TRANSLATION_CUSTOM_API_KEY='first\nsecond'\nOPENWHISPR_REF_TRANSLATION_CUSTOM_API_KEY=GROQ_API_KEY\nTRANSLATION_CUSTOM_API_KEY=duplicate\n"
+  );
+  process.env.TRANSLATION_CUSTOM_API_KEY = "duplicate";
+  const decrypt = t.mock.method(crypto, "decrypt", () => {
+    throw new Error("locked");
+  });
+  await env._loadAllSecrets();
+  assert.equal((await env.saveTranslationCustomKey("")).success, true);
+  assert.equal(fs.readFileSync(file, "utf8"), unrelated);
+  assert.ok(!fs.readFileSync(slot).includes(Buffer.from("account-before-clear")));
+  process.env = require("dotenv").parse(fs.readFileSync(file));
+  process.env.TRANSLATION_CUSTOM_API_KEY = "launcher-account";
+  EnvironmentManager._resetShellImportedSecrets();
+  const restarted = new EnvironmentManager();
+  await restarted._loadAllSecrets();
+  importFixtureShell(t, {
+    TRANSLATION_CUSTOM_API_KEY: "shell-account",
+    GROQ_API_KEY: "independent-shell-account",
+  });
+  await restarted._importLoginShellSecrets();
+  assert.equal(restarted.getTranslationCustomKey(), "");
+  assert.equal(restarted.getGroqKey(), "independent-shell-account");
+  assert.deepEqual(await restarted.saveTranslationCustomKey("stale-renderer-copy", true), {
+    success: true,
+    retained: "",
+  });
+  assert.equal((await restarted.saveTranslationCustomKey("different-account")).success, true);
+  process.env = require("dotenv").parse(fs.readFileSync(file));
+  EnvironmentManager._resetShellImportedSecrets();
+  t.mock.method(crypto, "isAvailable", () => true);
+  t.mock.method(crypto, "encrypt", (value) => Buffer.from(value));
+  decrypt.mock.mockImplementation((blob) => ({ value: blob.toString(), needsReencrypt: false }));
+  const unlocked = new EnvironmentManager();
+  await unlocked._loadAllSecrets();
+  assert.equal(unlocked.getTranslationCustomKey(), "different-account");
+  await unlocked.saveAllKeysToEnvFile();
+  process.env = {};
+  await unlocked._loadAllSecrets();
+  assert.equal(unlocked.getTranslationCustomKey(), "different-account");
+});
+
+test("a failed locked clear keeps its fallback and ciphertext for retry", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const slot = env._getSecretFilePath("OPENAI_API_KEY");
+  const file = path.join(fakeElectron.app.getPath("userData"), ".env");
+  fs.mkdirSync(path.dirname(slot), { recursive: true });
+  fs.writeFileSync(slot, "original-ciphertext");
+  fs.writeFileSync(file, "OPENAI_API_KEY=working-fallback\n");
+  process.env.OPENAI_API_KEY = "working-fallback";
+  const fsp = require("node:fs/promises");
+  const rename = fsp.rename;
+  const fault = t.mock.method(fsp, "rename", async (from, to) => {
+    if (to === slot) throw new Error("slot unavailable");
+    return rename(from, to);
+  });
+  assert.equal((await env.saveOpenAIKey("")).success, false);
+  assert.equal(env.getOpenAIKey(), "working-fallback");
+  assert.equal(fs.readFileSync(file, "utf8"), "OPENAI_API_KEY=working-fallback\n");
+  assert.equal(fs.readFileSync(slot, "utf8"), "original-ciphertext");
+  fault.mock.restore();
+  assert.equal((await env.saveOpenAIKey("")).success, true);
+});
+
+test("clearing locked Cleanup keeps an explicit reference to its legacy source working", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const legacy = env._getSecretFilePath("CUSTOM_REASONING_API_KEY");
+  const file = path.join(fakeElectron.app.getPath("userData"), ".env");
+  fs.mkdirSync(path.dirname(legacy), { recursive: true });
+  fs.writeFileSync(legacy, "encrypted-legacy-account");
+  fs.writeFileSync(
+    file,
+    "CUSTOM_REASONING_API_KEY=transcription-account\nCUSTOM_TRANSCRIPTION_API_KEY=$CUSTOM_REASONING_API_KEY\nOPENWHISPR_REF_CUSTOM_TRANSCRIPTION_API_KEY=CUSTOM_REASONING_API_KEY\n"
+  );
+  env.loadEnvironmentVariables();
+  assert.equal(env.getCleanupCustomKey(), "transcription-account");
+  assert.equal((await env.saveCleanupCustomKey("")).success, true);
+  process.env = {};
+  EnvironmentManager._resetShellImportedSecrets();
+  const restarted = new EnvironmentManager();
+  t.mock.method(require("../../src/helpers/secretCrypto"), "decrypt", () => {
+    throw new Error("locked");
+  });
+  await restarted._loadAllSecrets();
+  assert.equal(restarted.getCleanupCustomKey(), "");
+  assert.equal(restarted.getCustomTranscriptionKey(), "transcription-account");
+  assert.equal(fs.readFileSync(legacy, "utf8"), "encrypted-legacy-account");
+});
+
+test("clearing while an encrypted write is queued discards that credential on disk", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const crypto = require("../../src/helpers/secretCrypto");
+  const available = t.mock.method(crypto, "isAvailable", () => true);
+  t.mock.method(crypto, "encrypt", (value) => Buffer.from(value));
+  env.saveOpenAIKey("queued-account");
+  available.mock.mockImplementation(() => false);
+  const clear = env.saveOpenAIKey("");
+  assert.equal(env.saveOpenAIKey(""), clear);
+  const seed = env.saveOpenAIKey("stale-upgrade", true);
+  assert.deepEqual(await clear, { success: true, stored: "" });
+  assert.deepEqual(await seed, { success: true, retained: "" });
+  process.env = { OPENAI_API_KEY: "launcher-account" };
+  EnvironmentManager._resetShellImportedSecrets();
+  const restarted = new EnvironmentManager();
+  await restarted._migrateToSecureStorage();
+  await restarted._loadAllSecrets();
+  assert.equal(restarted.getOpenAIKey(), "");
+  assert.ok(
+    !fs
+      .readFileSync(env._getSecretFilePath("OPENAI_API_KEY"))
+      .includes(Buffer.from("queued-account"))
+  );
+});
+
+test("a failed locked clear does not undo a newer local edit", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const slot = env._getSecretFilePath("OPENAI_API_KEY");
+  fs.mkdirSync(path.dirname(slot), { recursive: true });
+  fs.writeFileSync(slot, "locked-account");
+  const fsp = require("node:fs/promises");
+  const rename = fsp.rename;
+  let failNextClear = true;
+  t.mock.method(fsp, "rename", async (from, to) => {
+    if (to === slot && failNextClear) {
+      failNextClear = false;
+      throw new Error("clear unavailable");
+    }
+    return rename(from, to);
+  });
+  const clear = env.saveOpenAIKey("");
+  const seed = env.saveOpenAIKey("stale-upgrade", true);
+  const replacement = env.saveOpenAIKey("new-edit");
+  assert.equal((await clear).success, false);
+  assert.equal((await seed).success, false);
+  assert.equal((await replacement).success, true);
+  assert.equal(env.getOpenAIKey(), "new-edit");
+});
+
+test("two failed locked edits restore the last usable credential in memory and on restart", async (t) => {
+  const env = isolateCleanupSettings(t);
+  const slot = env._getSecretFilePath("CUSTOM_CLEANUP_API_KEY");
+  const profile = path.join(fakeElectron.app.getPath("userData"), ".env");
+  fs.mkdirSync(path.dirname(slot), { recursive: true });
+  fs.writeFileSync(slot, "unreadable");
+  fs.writeFileSync(profile, "CUSTOM_CLEANUP_API_KEY=$OLD_PASSWORD\n");
+  t.mock.method(require("../../src/helpers/secretCrypto"), "decrypt", () => {
+    throw new Error("locked");
+  });
+  env.loadEnvironmentVariables();
+  await env._loadAllSecrets();
+  const fsp = require("node:fs/promises");
+  const rename = fsp.rename;
+  t.mock.method(fsp, "rename", async (from, to) => {
+    if (to === slot) throw new Error("disk unavailable");
+    return rename(from, to);
+  });
+  const clear = env.saveCleanupCustomKey("");
+  const edit = env.saveCleanupCustomKey("replacement-account");
+  assert.equal((await clear).success, false);
+  assert.deepEqual(await edit, {
+    success: false, reason: "storage-unavailable", retained: "$CUSTOM_CLEANUP_API_KEY",
+  });
+  assert.equal(env.getCleanupCustomKey(), "$OLD_PASSWORD");
+  assert.equal(env.getRawCleanupCustomKey(), "$CUSTOM_CLEANUP_API_KEY");
+  assert.equal(process.env.CUSTOM_CLEANUP_LEGACY_FALLBACK_DISABLED, undefined);
+  process.env = {};
+  EnvironmentManager._resetShellImportedSecrets();
+  const restarted = new EnvironmentManager();
+  await restarted._loadAllSecrets();
+  assert.equal(restarted.getCleanupCustomKey(), "$OLD_PASSWORD");
+  assert.equal(restarted.getRawCleanupCustomKey(), "$CUSTOM_CLEANUP_API_KEY");
 });

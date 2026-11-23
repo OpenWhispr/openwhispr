@@ -770,9 +770,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSelfHostedSttHeaders: () => ipcRenderer.invoke("get-self-hosted-stt-headers"),
   saveSelfHostedSttHeaders: (value) => ipcRenderer.invoke("save-self-hosted-stt-headers", value),
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
-  saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
+  saveCustomTranscriptionKey: (key, migration = false) =>
+    ipcRenderer.invoke("save-custom-transcription-key", key, migration),
   getCleanupCustomKey: () => ipcRenderer.invoke("get-cleanup-custom-key"),
-  saveCleanupCustomKey: (key) => ipcRenderer.invoke("save-cleanup-custom-key", key),
+  saveCleanupCustomKey: (key, migration = false) =>
+    ipcRenderer.invoke("save-cleanup-custom-key", key, migration),
 
   // Enterprise provider key management
   getBedrockRegion: () => ipcRenderer.invoke("get-bedrock-region"),

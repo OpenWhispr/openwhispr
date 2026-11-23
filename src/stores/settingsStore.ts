@@ -962,9 +962,21 @@ const LLM_SCOPE_KEY_PAIRS: ReadonlyArray<[string, string]> = [
   ["remoteAgentUrl", "chatAgentRemoteUrl"],
 ];
 
+// These fields could live only in localStorage before the LLM scope migration.
+const LEGACY_PROVIDER_KEY_FIELDS = [
+  "openaiApiKey",
+  "anthropicApiKey",
+  "geminiApiKey",
+  "groqApiKey",
+  "mistralApiKey",
+  "customTranscriptionApiKey",
+  "cleanupCustomApiKey",
+] as const;
+
 function migrateLLMScopeKeys() {
   if (!isBrowser) return;
-  if (localStorage.getItem("_llmScopeKeysMigrated") === "1") return;
+  const progress = localStorage.getItem("_llmScopeKeysMigrated");
+  if (progress === "1" || progress === "keys-pending") return;
 
   for (const [oldKey, newKey] of LLM_SCOPE_KEY_PAIRS) {
     const value = localStorage.getItem(oldKey);
@@ -975,7 +987,8 @@ function migrateLLMScopeKeys() {
     localStorage.removeItem(oldKey);
   }
 
-  localStorage.setItem("_llmScopeKeysMigrated", "1");
+  const hasOldPasswords = LEGACY_PROVIDER_KEY_FIELDS.some((key) => localStorage.getItem(key));
+  localStorage.setItem("_llmScopeKeysMigrated", hasOldPasswords ? "keys-pending" : "1");
 }
 
 migrateLLMScopeKeys();
@@ -1870,7 +1883,7 @@ function debouncedSaveSecret(
         }
       } else {
         if (rollback && pendingSecretSaves.get(provider)?.timer === timer) {
-          useSettingsStore.setState({ [rollback.storeKey]: rollback.previous });
+          useSettingsStore.setState({ [rollback.storeKey]: result.retained ?? rollback.previous });
         }
         logger.warn("Rejected secret persist", { provider, reason: result.reason }, "settings");
       }
@@ -4217,27 +4230,29 @@ export function isCloudTranslationMode() {
 
 // --- Initialization ---
 
-// One-time migration: scope custom keys lived in plaintext localStorage before
-// moving to the OS secure store. Prefer the secure value; otherwise push the
-// legacy plaintext copy into the secure store — the stale-secret sweep in
-// initializeSettings then strips it from localStorage.
-async function migrateScopeCustomKeys(
-  entries: ReadonlyArray<[keyof SettingsState & string, string | null | undefined, string]>,
+// Keep the old localStorage copy until main accepts the password or confirms
+// that the field already has a saved value.
+async function migrateLegacyKeys(
+  fields: Record<string, string | null | undefined>,
   pendingLegacy: Set<string>
 ): Promise<Partial<SettingsState>> {
   const updates: Record<string, string> = {};
-  for (const [storeKey, secureValue, saverName] of entries) {
-    if (secretReadVersions.has(secretProviderForStoreKey(storeKey))) continue;
+  for (const [storeKey, secureValue] of Object.entries(fields)) {
+    const provider = secretProviderForStoreKey(storeKey);
+    if (secretReadVersions.has(provider)) {
+      if (localStorage.getItem(storeKey)) pendingLegacy.add(storeKey);
+      continue;
+    }
     let value = secureValue || "";
     const legacy = localStorage.getItem(storeKey)?.trim();
     // A displayed reference can come from secure storage or the login shell.
     // Main checks its origin at the time of the save, including concurrent edits.
     if (legacy && (!value || isEnvRef(value))) {
-      const save = window.electronAPI?.[saverName as keyof typeof window.electronAPI] as
+      const save = window.electronAPI?.[SECRET_IPC_SAVERS[provider]] as
         ((key: string, migrateLegacy: true) => Promise<SecretSaveResult>) | undefined;
       try {
         const result = await save?.(legacy, true);
-        if (result && result.success) value = result.retained ?? legacy;
+        if (result && result.success) value = result.retained ?? result.stored ?? legacy;
         else pendingLegacy.add(storeKey);
       } catch {
         pendingLegacy.add(storeKey);
@@ -4265,7 +4280,7 @@ async function seedStartupCredential(
     const result = await save(source, "if-empty");
     if (!result?.success) return false;
     if (!secretReadVersions.has(provider)) {
-      useSettingsStore.setState({ [storeKey]: result.retained ?? source });
+      useSettingsStore.setState({ [storeKey]: result.retained ?? result.stored ?? source });
       publishSecretChange(provider);
       invalidateApiKeyCaches();
     }
@@ -4435,34 +4450,35 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getElevenlabsKey?.(),
       ]);
 
-      const hydratedSecrets = {
+      const legacyProviders = {
         openaiApiKey: openai || "",
         anthropicApiKey: anthropic || "",
         geminiApiKey: gemini || "",
         groqApiKey: groq || "",
-        xaiApiKey: xai || "",
         mistralApiKey: mistral || "",
+        customTranscriptionApiKey: customTx || "",
+        cleanupCustomApiKey: customRx || "",
+      } satisfies Record<(typeof LEGACY_PROVIDER_KEY_FIELDS)[number], string>;
+      const migrateProviderKeys = localStorage.getItem("_llmScopeKeysMigrated") === "keys-pending";
+      const hydratedSecrets = {
+        ...legacyProviders,
+        xaiApiKey: xai || "",
         openrouterApiKey: openrouter || "",
         cortiClientId: cortiClientId || "",
         cortiClientSecret: cortiClientSecret || "",
         cortiApiKey: cortiApiKey || "",
         tinfoilApiKey: tinfoil || "",
         selfHostedSttHeaders: parseSelfHostedSttHeaders(selfHostedSttHeaders),
-        customTranscriptionApiKey: customTx || "",
-        cleanupCustomApiKey: customRx || "",
         bedrockAccessKeyId: bedrockAccessKeyId || "",
-        ...(await migrateScopeCustomKeys(
-          [
-            ["noteFormattingCustomApiKey", noteFormattingCustom, "saveNoteFormattingCustomKey"],
-            ["translationCustomApiKey", translationCustom, "saveTranslationCustomKey"],
-            ["dictationAgentCustomApiKey", dictationAgentCustom, "saveDictationAgentCustomKey"],
-            [
-              "dictationAgentVisionCustomApiKey",
-              dictationAgentVisionCustom,
-              "saveDictationAgentVisionCustomKey",
-            ],
-            ["chatAgentCustomApiKey", chatAgentCustom, "saveChatAgentCustomKey"],
-          ],
+        ...(await migrateLegacyKeys(
+          {
+            ...(migrateProviderKeys ? legacyProviders : {}),
+            noteFormattingCustomApiKey: noteFormattingCustom,
+            translationCustomApiKey: translationCustom,
+            dictationAgentCustomApiKey: dictationAgentCustom,
+            dictationAgentVisionCustomApiKey: dictationAgentVisionCustom,
+            chatAgentCustomApiKey: chatAgentCustom,
+          },
           pendingLegacy
         )),
         bedrockSecretAccessKey: bedrockSecretAccessKey || "",
@@ -4506,6 +4522,12 @@ export async function initializeSettings(): Promise<void> {
 
       for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {
         if (!pendingLegacy.has(key)) localStorage.removeItem(key);
+      }
+      if (
+        migrateProviderKeys &&
+        !LEGACY_PROVIDER_KEY_FIELDS.some((key) => pendingLegacy.has(key))
+      ) {
+        localStorage.setItem("_llmScopeKeysMigrated", "1");
       }
       // Latch for the one-time semantic reindex that no longer exists (#2143).
       localStorage.removeItem("semanticReindexVersion");

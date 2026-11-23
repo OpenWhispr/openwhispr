@@ -9,7 +9,8 @@ export async function resolveApiKey(value?: string | null): Promise<string> {
   if (!isEnvRef(raw)) return raw;
   try {
     const resolved = await window.electronAPI?.resolveSecretRef?.(raw);
-    if (typeof resolved === "string") return usableSecret(resolved);
+    // Main distinguishes a stored literal beginning with $ from a reference.
+    if (typeof resolved === "string") return resolved;
   } catch {
     // IPC unavailable — never send an unexpanded $VAR to a provider.
   }

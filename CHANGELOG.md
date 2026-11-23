@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- API key fields now interpret a whole-field `$NAME` or `${NAME}` as a reference to an OpenWhispr credential. For example, a custom endpoint can use `$OPENAI_API_KEY`. This also applies to saved values on upgrade. If your custom server uses that exact spelling as a literal password, rotate its password before upgrading and save the replacement in Settings. A dollar sign within a longer token keeps its literal meaning.
+- API key fields accept `$NAME` and `${NAME}` as references to an OpenWhispr credential. For example, a custom endpoint can use `$OPENAI_API_KEY`. Passwords saved by earlier releases keep their literal meaning, including passwords with that exact spelling.
+- Clearing a saved credential while the system vault is locked keeps it cleared after unlock and restart.
 - On macOS and Linux, an empty key field can now use a matching export from Bash or Zsh. If your custom transcription endpoint uses anonymous access, leave `CUSTOM_TRANSCRIPTION_API_KEY` unset.
 
 ## [1.12.0] - 2026-11-17

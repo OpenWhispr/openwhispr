@@ -35,6 +35,17 @@ test("the realtime STT providers use their own auth schemes, not Bearer", () => 
   assert.equal(assemblyai.headers.Authorization, "aai-secret");
 });
 
+test("a provider check authenticates with the resolved legacy credential", async () => {
+  const result = await testProviderConnection(
+    { provider: "custom", baseUrl: "https://fake.example/v1", apiKey: "$OLD_PASSWORD" },
+    async (_url, init) => {
+      assert.equal(init.headers.Authorization, "Bearer $OLD_PASSWORD");
+      return Response.json({ data: [] });
+    }
+  );
+  assert.equal(result.success, true);
+});
+
 // AssemblyAI's payload is not OpenAI-shaped, so responseOffersModel would report
 // modelNotFound for a perfectly valid key.
 test("a 200 is the whole signal for providers with no OpenAI-shaped model list", async () => {

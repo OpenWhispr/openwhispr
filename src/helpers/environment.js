@@ -18,9 +18,52 @@ const SECRET_REF_SET = new Set(SECRET_ENV_NAMES);
 const SECRET_KEY_SET = new Set(SECRET_KEYS);
 const LEGACY_CLEANUP_KEY = "CUSTOM_REASONING_API_KEY";
 const CLEANUP_FALLBACK_DISABLED = "CUSTOM_CLEANUP_LEGACY_FALLBACK_DISABLED";
+// Outside the ciphertext so no old password, whatever its contents, can be
+// confused with a reference record after decryption.
+const REFERENCE_RECORD = Buffer.from("OpenWhispr/credential-reference/v1\0");
+const CLEARED_RECORD = Buffer.from("OpenWhispr/cleared-credential/v1\0");
+const legacyLiteralSecrets = new Map();
+
+function refProfileKey(name) {
+  return `OPENWHISPR_REF_${name}`;
+}
+
+function profileHasReference(profile, name) {
+  const target = envRefName(profile[name]);
+  return !!target && profile[refProfileKey(name)] === target;
+}
+
+function rememberStoredCredential(name, value, reference) {
+  if (!reference && SECRET_REF_SET.has(name) && isEnvRef(value)) {
+    legacyLiteralSecrets.set(name, value);
+  } else {
+    legacyLiteralSecrets.delete(name);
+  }
+}
+
+function isLegacyLiteral(name, value) {
+  return typeof value === "string" && legacyLiteralSecrets.get(name) === value;
+}
+
+function isCredentialReference(name, value) {
+  return SECRET_REF_SET.has(name) && isEnvRef(value) && !isLegacyLiteral(name, value);
+}
+
+function decryptStoredCredential(buffer) {
+  if (buffer.equals(CLEARED_RECORD)) return { cleared: true, value: "", reference: false };
+  const reference = buffer.subarray(0, REFERENCE_RECORD.length).equals(REFERENCE_RECORD);
+  return {
+    ...secretCrypto.decrypt(reference ? buffer.subarray(REFERENCE_RECORD.length) : buffer),
+    reference,
+  };
+}
 
 function hasLegacyCleanupReference() {
-  return SECRET_ENV_NAMES.some((name) => envRefName(process.env[name]) === LEGACY_CLEANUP_KEY);
+  return SECRET_ENV_NAMES.some(
+    (name) =>
+      !isLegacyLiteral(name, process.env[name]) &&
+      envRefName(process.env[name]) === LEGACY_CLEANUP_KEY
+  );
 }
 
 function secretEnvLine(name, value) {
@@ -32,6 +75,32 @@ function secretEnvLine(name, value) {
   throw new Error(`Cannot represent ${name} in plaintext storage`);
 }
 
+function profileCredentialLines(name, value, reference) {
+  const line = secretEnvLine(name, value);
+  return reference ? line + `${refProfileKey(name)}=${envRefName(value)}\n` : line;
+}
+
+// Match complete dotenv assignments so a lookalike line inside another field's
+// quoted multiline value stays intact.
+const PROFILE_ASSIGNMENT =
+  /^[ \t]*(?:export[ \t]+)?([\w.-]+)[ \t]*(?:=[ \t]*|:[ \t]+)(?:'(?:\\'|[^'])*'|"(?:\\"|[^"])*"|\x60(?:\\\x60|[^\x60])*\x60|[^\r\n]*)[^\r\n]*(?:\r?\n|$)/gm;
+
+function replaceProfileCredential(content, name, value, reference) {
+  const fields = new Set([name, refProfileKey(name)]);
+  const cleanup = !value && name === "CUSTOM_CLEANUP_API_KEY";
+  if (cleanup) fields.add(CLEANUP_FALLBACK_DISABLED);
+  let retained = content.replace(PROFILE_ASSIGNMENT, (assignment, field) =>
+    fields.has(field) ? "" : assignment
+  );
+  if (cleanup || value) {
+    if (retained && !retained.endsWith("\n")) retained += "\n";
+    retained += value
+      ? profileCredentialLines(name, value, reference)
+      : CLEANUP_FALLBACK_DISABLED + "=true\n";
+  }
+  return retained;
+}
+
 async function readProfileEnv(file) {
   try {
     return require("dotenv").parse(await fsPromises.readFile(file));
@@ -41,14 +110,21 @@ async function readProfileEnv(file) {
   }
 }
 
-async function writeEncryptedFile(file, value, verify = false) {
+async function writeEncryptedFile(file, value, verify = false, reference = false) {
   if (!value) return fsPromises.rm(file, { force: true });
   await fsPromises.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp`;
   try {
-    await fsPromises.writeFile(tmp, secretCrypto.encrypt(value));
-    if (verify && secretCrypto.decrypt(await fsPromises.readFile(tmp)).value !== value) {
-      throw new Error("Encrypted credential failed round-trip verification");
+    const ciphertext = secretCrypto.encrypt(value);
+    await fsPromises.writeFile(
+      tmp,
+      reference ? Buffer.concat([REFERENCE_RECORD, ciphertext]) : ciphertext
+    );
+    if (verify) {
+      const saved = decryptStoredCredential(await fsPromises.readFile(tmp));
+      if (saved.value !== value || saved.reference !== reference) {
+        throw new Error("Encrypted credential failed round-trip verification");
+      }
     }
     await fsPromises.rename(tmp, file);
   } catch (error) {
@@ -110,7 +186,9 @@ const shellImportedSecrets = new Set();
 // Counts Settings saves per secret, so a login-shell import that was already
 // waiting on the shell never overwrites a key the user saved meanwhile.
 const secretSaveCounts = new Map();
-const pendingMigrations = new Map();
+const pendingSecretSaves = new Map();
+const pendingEncryptedWrites = new Map();
+const clearedSecrets = new Set();
 const unreadableSecrets = new Set();
 // Called with the env names a login-shell import filled, so open windows that
 // read their keys before the import finished can read them again.
@@ -130,7 +208,12 @@ class EnvironmentManager {
     const userDataEnv = path.join(app.getPath("userData"), ".env");
     try {
       if (fs.existsSync(userDataEnv)) {
-        require("dotenv").config({ path: userDataEnv, override: true });
+        const { parsed = {} } = require("dotenv").config({ path: userDataEnv, override: true });
+        for (const name of SECRET_ENV_NAMES) {
+          if (Object.hasOwn(parsed, name)) {
+            rememberStoredCredential(name, parsed[name], profileHasReference(parsed, name));
+          }
+        }
       }
     } catch {}
 
@@ -175,13 +258,16 @@ class EnvironmentManager {
   async _importLoginShellSecrets() {
     const savesAtStart = new Map(secretSaveCounts);
     const { imported, reason } = await envKeyResolve.importMissingSecretsFromLoginShell({
-      secretNames: SECRET_ENV_NAMES.filter((name) => !unreadableSecrets.has(name)),
+      secretNames: SECRET_ENV_NAMES.filter(
+        (name) => !unreadableSecrets.has(name) && !clearedSecrets.has(name)
+      ),
       env: process.env,
       importedSet: this._shellImportedSecrets,
       // Re-checked after the shell answers: a key saved in Settings meanwhile wins.
       canImport: (name) =>
         !process.env[name] &&
         !unreadableSecrets.has(name) &&
+        !clearedSecrets.has(name) &&
         (secretSaveCounts.get(name) || 0) === (savesAtStart.get(name) || 0),
     });
     debugLogger.info(
@@ -242,13 +328,36 @@ class EnvironmentManager {
     const filePath = this._getSecretFilePath(envVarName);
     try {
       const buffer = await fsPromises.readFile(filePath);
-      const { value, needsReencrypt } = secretCrypto.decrypt(buffer);
+      const { value, needsReencrypt, reference, cleared } = decryptStoredCredential(buffer);
       if (version !== secretSaveCounts.get(envVarName)) return;
       unreadableSecrets.delete(envVarName);
+      if (cleared) {
+        // Only a subsequent Settings save can supersede a clear. A launcher
+        // variable, login shell or an old renderer mirror is not a replacement.
+        if (!version) {
+          delete process.env[envVarName];
+          const profile = await readProfileEnv(path.join(app.getPath("userData"), ".env"));
+          if (version !== secretSaveCounts.get(envVarName)) return;
+          if (profile[envVarName]) process.env[envVarName] = profile[envVarName];
+          rememberStoredCredential(
+            envVarName,
+            profile[envVarName],
+            profileHasReference(profile, envVarName)
+          );
+        }
+        if (process.env[envVarName]) clearedSecrets.delete(envVarName);
+        else clearedSecrets.add(envVarName);
+        this._shellImportedSecrets.delete(envVarName);
+        if (!secretSaveCounts.has(envVarName)) secretSaveCounts.set(envVarName, 0);
+        return;
+      }
+      clearedSecrets.delete(envVarName);
       this._shellImportedSecrets.delete(envVarName);
-      process.env[envVarName] = fallback && fallback.version === version ? fallback.value : value;
-      if (needsReencrypt && process.env[envVarName] === value) {
-        await writeEncryptedFile(filePath, value, true).catch((error) => {
+      const selected = fallback && fallback.version === version ? fallback : { value, reference };
+      process.env[envVarName] = selected.value;
+      rememberStoredCredential(envVarName, selected.value, selected.reference);
+      if (needsReencrypt && selected.value === value && selected.reference === reference) {
+        await writeEncryptedFile(filePath, value, true, reference).catch((error) => {
           debugLogger.error(
             "Failed to update credential encryption",
             { key: envVarName, code: error.code },
@@ -271,13 +380,22 @@ class EnvironmentManager {
     }
   }
 
-  _saveSecretKey(envVarName, value) {
+  _saveSecretKey(envVarName, value, reference = false) {
     if (value) process.env[envVarName] = value;
     else delete process.env[envVarName];
     const filePath = this._getSecretFilePath(envVarName);
     // An upgrade copy and a user's edit can otherwise race on the same .tmp file.
-    envWriteQueue = envWriteQueue.catch(() => {}).then(() => writeEncryptedFile(filePath, value));
-    return envWriteQueue;
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(() => writeEncryptedFile(filePath, value, false, reference));
+    const write = envWriteQueue;
+    pendingEncryptedWrites.set(envVarName, write);
+    const settled = () => {
+      if (pendingEncryptedWrites.get(envVarName) === write)
+        pendingEncryptedWrites.delete(envVarName);
+    };
+    write.then(settled, settled);
+    return write;
   }
 
   _migrateToSecureStorage() {
@@ -301,6 +419,9 @@ class EnvironmentManager {
       process.env[CLEANUP_FALLBACK_DISABLED] !== "true"
     ) {
       process.env.CUSTOM_CLEANUP_API_KEY = process.env[LEGACY_CLEANUP_KEY];
+      if (isLegacyLiteral(LEGACY_CLEANUP_KEY, process.env[LEGACY_CLEANUP_KEY])) {
+        rememberStoredCredential("CUSTOM_CLEANUP_API_KEY", process.env[LEGACY_CLEANUP_KEY], false);
+      }
     }
 
     const fallback = new Map();
@@ -322,22 +443,38 @@ class EnvironmentManager {
         if (versions.get(name) !== secretSaveCounts.get(name)) continue;
         const file = this._getSecretFilePath(name);
         let value = profile[name] || process.env[name];
+        let reference = profile[name]
+          ? profileHasReference(profile, name)
+          : isCredentialReference(name, value);
         if (fs.existsSync(file)) {
           // Before migration completes, the profile's plaintext is still where
           // earlier releases saved user edits. An inherited variable has no such precedence.
-          const encrypted = secretCrypto.decrypt(await fsPromises.readFile(file)).value;
+          const encrypted = decryptStoredCredential(await fsPromises.readFile(file));
           if (versions.get(name) !== secretSaveCounts.get(name)) continue;
-          value = profile[name] || encrypted;
+          if (encrypted.cleared && !profile[name]) {
+            if (!versions.get(name)) delete process.env[name];
+            continue;
+          }
+          if (!profile[name]) {
+            value = encrypted.value;
+            reference = encrypted.reference;
+          }
           process.env[name] = value;
-          if (value === encrypted) continue;
+          rememberStoredCredential(name, value, reference);
+          if (value === encrypted.value && reference === encrypted.reference) continue;
         }
         if (!value) continue;
-        await writeEncryptedFile(file, value, true);
+        rememberStoredCredential(name, value, reference);
+        await writeEncryptedFile(file, value, true, reference);
         count++;
       } catch (error) {
         failed = true;
         if (profile[name])
-          fallback.set(name, { value: profile[name], version: versions.get(name) });
+          fallback.set(name, {
+            value: profile[name],
+            reference: profileHasReference(profile, name),
+            version: versions.get(name),
+          });
         debugLogger.error(
           "Could not migrate credential; profile preserved",
           { key: name, code: error.code },
@@ -353,6 +490,49 @@ class EnvironmentManager {
     debugLogger.info("Migrated secrets to encrypted storage", { count }, "environment");
   }
 
+  _persistLockedCredential(name, value, reference) {
+    const slot = this._getSecretFilePath(name);
+    const profile = path.join(app.getPath("userData"), ".env");
+    const replaceProfile = async (content) => {
+      await fsPromises.writeFile(profile + ".tmp", content, { mode: 0o600 });
+      await fsPromises.rename(profile + ".tmp", profile);
+    };
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(async () => {
+        let original;
+        try {
+          original = await fsPromises.readFile(profile, "utf8");
+        } catch (error) {
+          if (error.code !== "ENOENT") throw error;
+        }
+        const retained = replaceProfileCredential(original ?? "", name, value, reference);
+        let changed = false;
+        try {
+          await fsPromises.mkdir(path.dirname(slot), { recursive: true });
+          await fsPromises.writeFile(slot + ".tmp", CLEARED_RECORD, { mode: 0o600 });
+          if (retained !== (original ?? "")) {
+            await replaceProfile(retained);
+            changed = true;
+          }
+          await fsPromises.rename(slot + ".tmp", slot);
+        } catch (error) {
+          if (changed) {
+            if (original === undefined) await fsPromises.rm(profile, { force: true });
+            else await replaceProfile(original);
+          }
+          throw error;
+        } finally {
+          await Promise.all(
+            [slot, profile].map((file) =>
+              fsPromises.rm(file + ".tmp", { force: true }).catch(() => {})
+            )
+          );
+        }
+      });
+    return envWriteQueue;
+  }
+
   _writeEnvFileAtomic(envPath) {
     // Concurrent write+rename pairs share the same .env.tmp path, and the
     // loser's rename throws ENOENT (#903).
@@ -360,7 +540,7 @@ class EnvironmentManager {
     return envWriteQueue;
   }
 
-  _persistMigratedPlaintext(name, value) {
+  _persistMigratedPlaintext(name, value, reference) {
     const file = path.join(app.getPath("userData"), ".env");
     envWriteQueue = envWriteQueue
       .catch(() => {})
@@ -376,8 +556,17 @@ class EnvironmentManager {
         }
         // Migrating one field must preserve unrelated config and launcher-only credentials.
         if (content && !content.endsWith("\n")) content += "\n";
+        if (
+          !reference &&
+          isEnvRef(value) &&
+          require("dotenv").parse(content)[refProfileKey(name)]
+        ) {
+          content += `${refProfileKey(name)}=\n`;
+        }
         const tmp = `${file}.tmp`;
-        await fsPromises.writeFile(tmp, content + secretEnvLine(name, value), { mode: 0o600 });
+        await fsPromises.writeFile(tmp, content + profileCredentialLines(name, value, reference), {
+          mode: 0o600,
+        });
         await fsPromises.rename(tmp, file);
       });
     return envWriteQueue;
@@ -396,17 +585,24 @@ class EnvironmentManager {
       for (const name of SECRET_KEYS) {
         if (!profile[name] || (!process.env[name] && secretSaveCounts.has(name))) continue;
         const file = this._getSecretFilePath(name);
+        const reference = profileHasReference(profile, name);
         try {
           if (fs.existsSync(file)) {
-            const encrypted = secretCrypto.decrypt(await fsPromises.readFile(file)).value;
+            const encrypted = decryptStoredCredential(await fsPromises.readFile(file));
             // A completed migration normally uses the encrypted slot. If Settings
             // still uses the fallback, that is the value to secure before stripping it.
-            if (encrypted === profile[name] || process.env[name] !== profile[name]) continue;
+            if (
+              (encrypted.value === profile[name] && encrypted.reference === reference) ||
+              process.env[name] !== profile[name] ||
+              isCredentialReference(name, process.env[name]) !== reference
+            ) {
+              continue;
+            }
           }
-          await writeEncryptedFile(file, profile[name], true);
+          await writeEncryptedFile(file, profile[name], true, reference);
         } catch (error) {
           // Keep this field for another attempt while allowing other preferences to save.
-          keepPlaintext.set(name, profile[name]);
+          keepPlaintext.set(name, profileCredentialLines(name, profile[name], reference));
           debugLogger.warn(
             "Could not secure profile credential",
             { key: name, code: error.code },
@@ -418,7 +614,7 @@ class EnvironmentManager {
     let envContent = "# OpenWhispr Environment Variables\n";
     for (const key of PERSISTED_KEYS) {
       if (stripSecrets && SECRET_KEY_SET.has(key)) {
-        if (keepPlaintext.has(key)) envContent += secretEnvLine(key, keepPlaintext.get(key));
+        if (keepPlaintext.has(key)) envContent += keepPlaintext.get(key);
         continue;
       }
       if (this._shellImportedSecrets.has(key)) continue;
@@ -427,7 +623,9 @@ class EnvironmentManager {
           key === "SELF_HOSTED_STT_HEADERS" && !process.env[key].startsWith("base64:")
             ? `base64:${Buffer.from(process.env[key], "utf8").toString("base64")}`
             : process.env[key];
-        envContent += SECRET_REF_SET.has(key) ? secretEnvLine(key, value) : `${key}=${value}\n`;
+        envContent += SECRET_REF_SET.has(key)
+          ? profileCredentialLines(key, value, isCredentialReference(key, value))
+          : `${key}=${value}\n`;
       }
     }
     const tmpPath = `${envPath}.tmp`;
@@ -441,6 +639,9 @@ class EnvironmentManager {
 
   getRawKey(envVarName) {
     const raw = this._getRawKey(envVarName);
+    // A field marker can travel through a renderer that only understands
+    // references. Main knows this slot contains an old, literal password.
+    if (isLegacyLiteral(envVarName, raw)) return `$${envVarName}`;
     // A shell-exported reference is already safe to display. Wrapping it in
     // another reference would require two hops when the renderer uses it.
     if (this._shellImportedSecrets.has(envVarName)) {
@@ -478,11 +679,13 @@ class EnvironmentManager {
     const raw = value || "";
     const name = envRefName(raw);
     if (name && !SECRET_REF_SET.has(name)) return "";
+    if (name && isLegacyLiteral(name, process.env[name])) return process.env[name];
     return usableSecret(resolveEnvRef(raw, process.env));
   }
 
   _getKey(envVarName) {
     const raw = this._getRawKey(envVarName);
+    if (isLegacyLiteral(envVarName, raw)) return raw;
     // Only credential fields hold references; a region, endpoint or the headers
     // list is returned as stored, so it can never carry another secret's value.
     return SECRET_REF_SET.has(envVarName) ? this.resolveSecretRef(raw) : raw;
@@ -490,14 +693,21 @@ class EnvironmentManager {
 
   _saveKey(envVarName, key, migration = false) {
     const trimmed = typeof key === "string" ? key.trim() : key;
+    const previous = process.env[envVarName];
+    const wasLiteral = isLegacyLiteral(envVarName, previous);
+    let literal = false;
+    const pending = pendingSecretSaves.get(envVarName);
+    if (migration && pending) {
+      return pending.promise.then((result) =>
+        result.success ? { success: true, retained: this.getRawKey(envVarName) } : result
+      );
+    }
     if (migration && unreadableSecrets.has(envVarName)) {
       return { success: false, reason: "storage-unavailable" };
     }
-    const pending = pendingMigrations.get(envVarName);
-    if (migration && pending) {
-      return pending.then((result) =>
-        result.success ? { success: true, retained: this.getRawKey(envVarName) } : result
-      );
+    const previousVersion = secretSaveCounts.get(envVarName);
+    if (!migration && !key && pending?.clear && pending.version === previousVersion) {
+      return pending.promise;
     }
     if (SECRET_REF_SET.has(envVarName)) {
       const imported = this._shellImportedSecrets.has(envVarName);
@@ -506,43 +716,126 @@ class EnvironmentManager {
       if (migration && (keepShown || secretSaveCounts.has(envVarName))) {
         return { success: true, retained: shown };
       }
-      if (!migration && imported && trimmed === shown) return { success: true };
-      const reason = classifySecretInput(trimmed, envVarName, SECRET_REF_SET);
-      if (reason) return { success: false, reason };
+      if (!migration && (imported || wasLiteral) && trimmed === shown) return { success: true };
+      if (isEnvRef(trimmed)) {
+        const source = envRefName(trimmed);
+        // A legacy password in the seed's source field is copied. A reference
+        // that field explicitly made to another slot must keep following it.
+        literal = migration === true;
+        if (migration === "if-empty" && isLegacyLiteral(source, process.env[source])) {
+          const copyOwnMarker =
+            (envVarName === "DICTATION_AGENT_CUSTOM_API_KEY" &&
+              source === "CHAT_AGENT_CUSTOM_API_KEY") ||
+            (envVarName === "OPENROUTER_API_KEY" && source === this._cleanupCustomEnvName());
+          if (copyOwnMarker) {
+            key = process.env[source];
+            literal = true;
+          }
+        }
+        if (!literal) {
+          const reason = classifySecretInput(trimmed, envVarName, SECRET_REF_SET);
+          if (reason) return { success: false, reason };
+        }
+      }
     }
-    const previous = process.env[envVarName];
-    const version = (secretSaveCounts.get(envVarName) || 0) + 1;
+    const reference = SECRET_REF_SET.has(envVarName) && isEnvRef(key) && !literal;
+    rememberStoredCredential(envVarName, key, reference);
+    const version = (previousVersion || 0) + 1;
     secretSaveCounts.set(envVarName, version);
     const wasImported = this._shellImportedSecrets.delete(envVarName);
+    const encrypted = SECRET_KEY_SET.has(envVarName) && this._encryptionAvailable();
+    const lockedSlot = (name) =>
+      unreadableSecrets.has(name) ||
+      (!encrypted &&
+        (pendingEncryptedWrites.has(name) ||
+          clearedSecrets.has(name) ||
+          fs.existsSync(this._getSecretFilePath(name))));
+    const cleanup = envVarName === "CUSTOM_CLEANUP_API_KEY";
+    const lockedEdit =
+      !migration &&
+      SECRET_KEY_SET.has(envVarName) &&
+      (lockedSlot(envVarName) || (!key && cleanup && lockedSlot(LEGACY_CLEANUP_KEY)));
+    const lockedClear = lockedEdit && !key;
+    const wasCleared = clearedSecrets.has(envVarName);
+    const previousFallbackFlag = process.env[CLEANUP_FALLBACK_DISABLED];
     let write;
-    if (SECRET_KEY_SET.has(envVarName) && this._encryptionAvailable()) {
-      write = this._saveSecretKey(envVarName, key);
+    if (lockedClear) {
+      delete process.env[envVarName];
+      clearedSecrets.add(envVarName);
+      if (cleanup) process.env[CLEANUP_FALLBACK_DISABLED] = "true";
+      write = this._persistLockedCredential(envVarName, "", false);
+    } else if (lockedEdit && (!encrypted || reference)) {
+      // The stored slot must point to this fallback even if the vault reopens
+      // before the renderer's next ordinary settings-file flush.
+      process.env[envVarName] = key;
+      write = this._persistLockedCredential(envVarName, key, reference);
+    } else if (encrypted) {
+      write = this._saveSecretKey(envVarName, key, reference);
     } else {
       if (key) process.env[envVarName] = key;
       else delete process.env[envVarName];
-      if (migration) write = this._persistMigratedPlaintext(envVarName, key);
+      if (migration) write = this._persistMigratedPlaintext(envVarName, key, reference);
     }
-    if (migration) {
-      const persisted = write
+    if (migration || lockedEdit) {
+      const transaction = { version, clear: lockedClear };
+      const predecessor = pending?.version === previousVersion ? pending : undefined;
+      const restorePrevious = () => {
+        if (previousVersion === undefined) secretSaveCounts.delete(envVarName);
+        else secretSaveCounts.set(envVarName, previousVersion);
+        if (wasCleared && !(predecessor && previous)) clearedSecrets.add(envVarName);
+        else clearedSecrets.delete(envVarName);
+        if (cleanup) {
+          if (previousFallbackFlag === undefined) delete process.env[CLEANUP_FALLBACK_DISABLED];
+          else process.env[CLEANUP_FALLBACK_DISABLED] = previousFallbackFlag;
+        }
+        if (previous === undefined) delete process.env[envVarName];
+        else process.env[envVarName] = previous;
+        rememberStoredCredential(envVarName, previous, !wasLiteral);
+        if (wasImported) this._shellImportedSecrets.add(envVarName);
+        else this._shellImportedSecrets.delete(envVarName);
+        if (predecessor) unreadableSecrets.delete(envVarName);
+      };
+      transaction.promise = write
         .then(
-          () => ({ success: true }),
           () => {
+            if (lockedEdit && secretSaveCounts.get(envVarName) === version) {
+              unreadableSecrets.delete(envVarName);
+              if (key) clearedSecrets.delete(envVarName);
+            }
+            if (lockedClear && !wasCleared) return { success: true, stored: "" };
+            return literal ? { success: true, stored: `$${envVarName}` } : { success: true };
+          },
+          () => {
+            // A preceding edit may also have failed while this edit was pending.
+            // Restore the most recent durable state, skipping any failed edits.
+            transaction.rollback = predecessor?.rollback ?? restorePrevious;
             if (secretSaveCounts.get(envVarName) === version) {
-              // A failed upgrade write must leave its source eligible for the next attempt.
-              secretSaveCounts.delete(envVarName);
-              if (previous === undefined) delete process.env[envVarName];
-              else process.env[envVarName] = previous;
-              if (wasImported) this._shellImportedSecrets.add(envVarName);
+              transaction.rollback();
+              if (lockedEdit) {
+                return {
+                  success: false,
+                  reason: "storage-unavailable",
+                  retained: this.getRawFieldValue(envVarName),
+                };
+              }
             }
             return { success: false, reason: "storage-unavailable" };
           }
         )
-        .finally(() => pendingMigrations.delete(envVarName));
-      pendingMigrations.set(envVarName, persisted);
-      return persisted;
+        .finally(() => {
+          if (pendingSecretSaves.get(envVarName) === transaction)
+            pendingSecretSaves.delete(envVarName);
+        });
+      pendingSecretSaves.set(envVarName, transaction);
+      return transaction.promise;
     }
     write?.then(
-      () => unreadableSecrets.delete(envVarName),
+      () => {
+        if (secretSaveCounts.get(envVarName) === version) {
+          unreadableSecrets.delete(envVarName);
+          if (key) clearedSecrets.delete(envVarName);
+        }
+      },
       (error) => {
         debugLogger.error(
           "Failed to persist encrypted secret",
@@ -585,16 +878,40 @@ class EnvironmentManager {
     return this._getKey("CUSTOM_TRANSCRIPTION_API_KEY");
   }
 
-  saveCustomTranscriptionKey(key) {
-    return this._saveKey("CUSTOM_TRANSCRIPTION_API_KEY", key);
+  saveCustomTranscriptionKey(key, migration = false) {
+    return this._saveKey("CUSTOM_TRANSCRIPTION_API_KEY", key, migration);
   }
 
   getCleanupCustomKey() {
     return this._getKey(this._cleanupCustomEnvName());
   }
 
-  saveCleanupCustomKey(key) {
+  saveCleanupCustomKey(key, migration = false) {
     const trimmed = typeof key === "string" ? key.trim() : "";
+    if (migration) {
+      if (pendingSecretSaves.has("CUSTOM_CLEANUP_API_KEY")) {
+        return this._saveKey("CUSTOM_CLEANUP_API_KEY", key, migration);
+      }
+      if (this._cleanupCustomEnvName() === LEGACY_CLEANUP_KEY) {
+        if (unreadableSecrets.has(LEGACY_CLEANUP_KEY)) {
+          return { success: false, reason: "storage-unavailable" };
+        }
+        if (
+          process.env[LEGACY_CLEANUP_KEY] &&
+          (migration === "if-empty" || !this._shellImportedSecrets.has(LEGACY_CLEANUP_KEY))
+        ) {
+          return { success: true, retained: this.getRawCleanupCustomKey() };
+        }
+      }
+      if (
+        process.env[CLEANUP_FALLBACK_DISABLED] === "true" &&
+        (!process.env.CUSTOM_CLEANUP_API_KEY ||
+          this._shellImportedSecrets.has("CUSTOM_CLEANUP_API_KEY"))
+      ) {
+        return { success: true, retained: this.getRawCleanupCustomKey() };
+      }
+      return this._saveKey("CUSTOM_CLEANUP_API_KEY", key, migration);
+    }
     // An unchanged legacy field should not replace a separate shell export
     // under the canonical name or remove the legacy value referenced elsewhere.
     if (
@@ -605,7 +922,9 @@ class EnvironmentManager {
       return { success: true };
     }
     const result = this._saveKey("CUSTOM_CLEANUP_API_KEY", key);
-    if (!result.success) return result;
+    // A locked clear commits the legacy opt-out. An unreadable profile may
+    // still have other fields that explicitly reference the old key.
+    if (result instanceof Promise || !result.success) return result;
     // Clearing Cleanup must not revoke another field's reference, or re-enable
     // the implicit legacy fallback when the same shell export returns on launch.
     if (!trimmed && process.env[CLEANUP_FALLBACK_DISABLED] !== "true") {
@@ -862,8 +1181,11 @@ class EnvironmentManager {
   async clearAllPersistedData() {
     for (const envVarName of PERSISTED_KEYS) {
       delete process.env[envVarName];
+      if (SECRET_REF_SET.has(envVarName)) delete process.env[refProfileKey(envVarName)];
     }
     this._shellImportedSecrets.clear();
+    legacyLiteralSecrets.clear();
+    clearedSecrets.clear();
     for (const name of SECRET_ENV_NAMES) {
       secretSaveCounts.set(name, (secretSaveCounts.get(name) || 0) + 1);
     }
@@ -922,7 +1244,9 @@ for (const k of BYOK_API_KEYS) {
 module.exports = EnvironmentManager;
 module.exports._resetShellImportedSecrets = () => {
   shellImportedSecrets.clear();
+  legacyLiteralSecrets.clear();
   secretSaveCounts.clear();
   unreadableSecrets.clear();
+  clearedSecrets.clear();
   shellImportListeners.clear();
 };

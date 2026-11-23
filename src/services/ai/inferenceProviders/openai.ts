@@ -38,8 +38,6 @@ import {
   providerHttpError,
   redactProviderBody,
 } from "../../../helpers/providerHttpErrors.js";
-import { resolveApiKey } from "../../../utils/resolveApiKey";
-import { usableSecret } from "../../../helpers/envRef";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const PROBE_TIMEOUT_MS = 2_000;
@@ -170,11 +168,7 @@ export const openaiProvider: InferenceProvider = {
     const apiKey =
       overrideKey ||
       (canFallBackToSharedKey
-        ? await resolveApiKey(
-            await ctx.getApiKey(
-              isCustomProvider ? "custom" : isOpenRouter ? "openrouter" : "openai"
-            )
-          )
+        ? await ctx.getApiKey(isCustomProvider ? "custom" : isOpenRouter ? "openrouter" : "openai")
         : "");
 
     logger.logReasoning("OPENAI_API_KEY", {
@@ -312,9 +306,7 @@ export const openaiProvider: InferenceProvider = {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  ...(usableSecret(apiKey)
-                    ? { Authorization: `Bearer ${usableSecret(apiKey)}` }
-                    : {}),
+                  ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
                   ...openCodeHeaders,
                 },
                 body: JSON.stringify(requestBody),

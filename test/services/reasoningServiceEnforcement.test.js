@@ -315,12 +315,22 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
           systemPrompt: "Format this note",
           customApiKey: "$GROQ_API_KEY",
         };
-        global.window.electronAPI.resolveSecretRef = async () => "scope-secret";
+        global.window.electronAPI.resolveSecretRef = async (field) => {
+          assert.equal(field, "$GROQ_API_KEY", "the resolved password must not be interpreted again");
+          return "$OLD_PASSWORD";
+        };
         requests.length = 0;
         await rejectsExpectedTestStop(
           reasoningService.processText("hi", "custom-model", null, config)
         );
-        assert.ok(requests.some((request) => request.auth === "Bearer scope-secret"));
+        assert.ok(requests.some((request) => request.auth === "Bearer $OLD_PASSWORD"));
+
+        global.window.electronAPI.getCleanupCustomKey = async () => "$GROQ_API_KEY";
+        requests.length = 0;
+        await rejectsExpectedTestStop(
+          reasoningService.processText("hi", "custom-model", null, { ...config, customApiKey: "" })
+        );
+        assert.ok(requests.some((request) => request.auth === "Bearer $OLD_PASSWORD"));
 
         global.window.electronAPI.resolveSecretRef = async () => "";
         requests.length = 0;
@@ -349,6 +359,39 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
       }
     }
   );
+
+  await t.test("both streaming transports send a resolved legacy password unchanged", async (t) => {
+    setPolicy({ llmModes: ["providers"], llmByokProviders: ["custom"] });
+    const config = {
+      provider: "custom",
+      baseUrl: "https://scope.example.com/v1",
+      inferenceScope: "chatIntelligence",
+      systemPrompt: "Hello",
+      customApiKey: "$CHAT_AGENT_CUSTOM_API_KEY",
+    };
+    global.window.electronAPI.resolveSecretRef = async (field) => {
+      assert.equal(field, config.customApiKey);
+      return "${OLD_PASSWORD}";
+    };
+    t.after(() => delete global.window.electronAPI.resolveSecretRef);
+    const authorization = [];
+    t.mock.method(globalThis, "fetch", async (_url, init) => {
+      authorization.push(new Headers(init.headers).get("authorization"));
+      const chunk = { choices: [{ index: 0, delta: { content: "ok" }, finish_reason: "stop" }] };
+      return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, {
+        headers: { "content-type": "text/event-stream" },
+      });
+    });
+    for (const method of ["processTextStreaming", "processTextStreamingAI"]) {
+      const stream = reasoningService[method](
+        [{ role: "user", content: "hello" }], "fixture-model", "custom", config
+      );
+      const chunks = [];
+      for await (const chunk of stream) chunks.push(chunk);
+      assert.ok(chunks.some((chunk) => chunk === "ok" || chunk.text === "ok"));
+    }
+    assert.deepEqual(authorization, ["Bearer ${OLD_PASSWORD}", "Bearer ${OLD_PASSWORD}"]);
+  });
 
   await t.test("normal cleanup uses its saved valid Custom endpoint", async () => {
     setPolicy({ llmModes: ["providers"], llmByokProviders: ["custom"] });

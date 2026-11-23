@@ -858,6 +858,22 @@ test("a delayed legacy migration that retains an explicit clear does not notify 
   assert.deepEqual(notifications, []);
 });
 
+for (const [scenario, displayed, migration] of [
+  ["migrating a literal with the shell marker's spelling", "$TRANSLATION_CUSTOM_API_KEY", true],
+  ["clearing an unreadable vault entry", "", false],
+]) {
+  test(`${scenario} invalidates peer credentials`, async (t) => {
+    t.mock.method(environmentManager, "getRawFieldValue", () => displayed);
+    t.mock.method(environmentManager, "saveTranslationCustomKey", async () => ({
+      success: true,
+      stored: displayed,
+    }));
+    notifications.length = 0;
+    await invoke("save-translation-custom-key", displayed, migration);
+    assert.deepEqual(notifications, [[2, "api-key-updated", "translationCustomApiKey"]]);
+  });
+}
+
 test("startup seeding asks main to fill only an empty destination", (t) => {
   const retained = { success: true, retained: "$OPENROUTER_API_KEY" };
   t.mock.method(environmentManager, "saveOpenrouterKey", (_key, migration) => {

@@ -139,3 +139,13 @@ test("missing resolver keeps literals and fails on a leftover $VAR", () => {
     (error) => error.code === "ENTERPRISE_CREDENTIAL_MISSING"
   );
 });
+
+test("manual enterprise auth accepts a legacy password returned by the credential resolver", () => {
+  const runtime = resolveManualEnterpriseRuntime(
+    { bedrockAccessKeyId: "fixture-id", bedrockSecretAccessKey: "$BEDROCK_SECRET_ACCESS_KEY" },
+    "bedrock",
+    "m",
+    (field) => field === "$BEDROCK_SECRET_ACCESS_KEY" ? "${OLD_PASSWORD}" : field
+  );
+  assert.equal(runtime.enterprise.bedrockSecretAccessKey, "${OLD_PASSWORD}");
+});

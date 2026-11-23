@@ -17,7 +17,7 @@ test("Custom dictation checks the selected reference on every recording before s
     settingsKey: "__customDictationAuthSettings",
     settings,
   });
-  let resolved = "fixture-key";
+  let resolved = "${OLD_CUSTOM_PASSWORD}";
   window.electronAPI.resolveSecretRef = async () => resolved;
   window.electronAPI.getCustomTranscriptionKey = async () => "older-stored-key";
   const headers = [];
@@ -42,7 +42,7 @@ test("Custom dictation checks the selected reference on every recording before s
   await assert.rejects(dictate(), { code: "API_KEY_MISSING" });
   window.electronAPI.getCustomTranscriptionKey = async () => "";
   assert.equal((await dictate()).success, true);
-  assert.deepEqual(headers, ["Bearer fixture-key", null]);
+  assert.deepEqual(headers, ["Bearer ${OLD_CUSTOM_PASSWORD}", null]);
 });
 
 async function loadCustomManager(t, decode) {

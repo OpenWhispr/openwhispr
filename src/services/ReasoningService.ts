@@ -14,7 +14,6 @@ import { resolveRetiredCloudModel } from "../config/retiredCloudModelPolicy.js";
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { resolveApiKey } from "../utils/resolveApiKey";
-import { usableSecret } from "../helpers/envRef";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { CLAIM_CHECK_NOTE, STEP_LIMIT_NOTE, wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
@@ -500,8 +499,8 @@ class ReasoningService extends BaseReasoningService {
           "Content-Type": "application/json",
           ...openCodeHeaders,
         };
-        if (usableSecret(apiKey)) {
-          headers["Authorization"] = `Bearer ${usableSecret(apiKey)}`;
+        if (apiKey) {
+          headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
         const res = await fetchWithParamFallback(
@@ -882,8 +881,8 @@ class ReasoningService extends BaseReasoningService {
       "Content-Type": "application/json",
       ...openCodeSessionHeaders(endpoint),
     };
-    if (usableSecret(apiKey)) {
-      headers["Authorization"] = `Bearer ${usableSecret(apiKey)}`;
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
     const timeoutSeconds = getLlmRequestTimeoutSeconds({ streaming: true });

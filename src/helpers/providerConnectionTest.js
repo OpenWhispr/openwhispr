@@ -173,10 +173,10 @@ function buildTranscriptionEndpoint(base) {
 }
 
 function resolveProviderRequest(config) {
-  const { usableSecret } = require("./envRef.cjs");
   const provider = String(config?.provider || "").toLowerCase();
   const scope = String(config?.scope || "").toLowerCase();
-  const apiKey = usableSecret(typeof config?.apiKey === "string" ? config.apiKey : "");
+  // IPC has already resolved this field. A literal password can look like a reference.
+  const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
   let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
   // A hosted provider's fixed endpoint never redirects. Following one would carry
   // x-api-key or x-goog-api-key to whichever host it names (fetch drops only

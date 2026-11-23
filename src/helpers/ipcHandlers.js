@@ -2711,7 +2711,13 @@ class IPCHandlers {
         const mode = migration === "if-empty" ? migration : migration === true;
         const result = this.environmentManager[saver](key, mode);
         const complete = (saved) => {
-          if (!changed || saved?.success === false || typeof saved?.retained === "string")
+          // Migrating a literal or clearing a locked slot can change the
+          // credential even when the field still displays the same text.
+          if (
+            (!changed && typeof saved?.stored !== "string") ||
+            saved?.success === false ||
+            typeof saved?.retained === "string"
+          )
             return saved;
           credentialGeneration += 1;
           // Notify peers by setting name only; leave the editor's pending input alone.

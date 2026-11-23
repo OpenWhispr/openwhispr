@@ -28,7 +28,7 @@ const REALTIME_TOKEN_PROVIDERS = {
     streams
   ) => {
     if (options.mode === "byok") {
-      const apiKey = require("./envRef.cjs").usableSecret(environmentManager.getAssemblyAIKey());
+      const apiKey = environmentManager.getAssemblyAIKey();
       if (!apiKey) {
         throw new Error("No AssemblyAI API key configured. Add your key in Settings.");
       }
@@ -57,7 +57,7 @@ const REALTIME_TOKEN_PROVIDERS = {
 
   "deepgram-realtime": async ({ environmentManager, postServerToken }, options, streams) => {
     if (options.mode === "byok") {
-      const apiKey = require("./envRef.cjs").usableSecret(environmentManager.getDeepgramKey());
+      const apiKey = environmentManager.getDeepgramKey();
       if (!apiKey) {
         throw new Error("No Deepgram API key configured. Add your key in Settings.");
       }
@@ -106,7 +106,7 @@ const REALTIME_TOKEN_PROVIDERS = {
         "ElevenLabs realtime credentials are only available for meeting transcription."
       );
     }
-    const apiKey = require("./envRef.cjs").usableSecret(environmentManager.getElevenlabsKey());
+    const apiKey = environmentManager.getElevenlabsKey();
     if (!apiKey) {
       throw new Error("No ElevenLabs API key configured. Add your key in Settings.");
     }

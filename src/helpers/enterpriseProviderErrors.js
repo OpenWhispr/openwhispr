@@ -627,10 +627,8 @@ function resolveManualEnterpriseRuntime(config = {}, provider, model, resolveSec
     };
   }
   const { usableSecret, envRefName } = require("./envRef.cjs");
-  const resolve = (value) => {
-    const out = resolveSecretRef ? resolveSecretRef(value || "") : usableSecret(value);
-    return usableSecret(out);
-  };
+  const resolve = (value) =>
+    resolveSecretRef ? resolveSecretRef(value || "") : usableSecret(value);
   for (const field of PROVIDER_SECRET_FIELDS[provider] || []) {
     const raw = typeof config[field] === "string" ? config[field].trim() : "";
     if (raw && !resolve(raw)) {

@@ -23,7 +23,7 @@ const bindings = [
   ].map(([storeKey, get]) => ({ storeKey, get })),
 ];
 
-async function loadSettings(t, overrides = {}) {
+async function loadSettings(t, overrides = {}, initialStorage = {}) {
   const keys = new Map(bindings.map(({ storeKey }) => [storeKey, `old-${storeKey}`]));
   const events = new EventTarget();
   let update;
@@ -31,7 +31,11 @@ async function loadSettings(t, overrides = {}) {
     bindings.map(({ storeKey, get }) => [get, async () => keys.get(storeKey)])
   );
   const { window, storage } = installBrowserGlobals(t, {
-    initialStorage: { _dictationAgentSeeded: "1", customDictionary: '["OpenWhispr"]' },
+    initialStorage: {
+      _dictationAgentSeeded: "1",
+      customDictionary: '["OpenWhispr"]',
+      ...initialStorage,
+    },
     window: {
       addEventListener: events.addEventListener.bind(events),
       removeEventListener: events.removeEventListener.bind(events),
@@ -244,6 +248,110 @@ test("a blocked plaintext migration preserves its source until the user replaces
   t.mock.timers.tick(250);
   await new Promise(setImmediate);
   assert.equal(context.storage.getItem("translationCustomApiKey"), null);
+});
+
+test("failed overlapping vault edits restore the credential that main retained", async (t) => {
+  const clear = deferred();
+  const context = await loadSettings(t, {
+    getCleanupCustomKey: async () => "$CUSTOM_CLEANUP_API_KEY",
+    saveCleanupCustomKey: async (key) =>
+      key
+        ? {
+            success: false,
+            reason: "storage-unavailable",
+            retained: "$CUSTOM_CLEANUP_API_KEY",
+          }
+        : clear.promise,
+  });
+  await context.initializeSettings();
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const state = () => context.useSettingsStore.getState();
+  state().setCleanupCustomApiKey("");
+  t.mock.timers.tick(250);
+  state().setCleanupCustomApiKey("replacement");
+  t.mock.timers.tick(250);
+  clear.resolve({ success: false, reason: "storage-unavailable" });
+  await new Promise(setImmediate);
+  assert.equal(state().cleanupCustomApiKey, "$CUSTOM_CLEANUP_API_KEY");
+});
+
+test("an upgrade keeps renderer-only passwords literal, including after an interrupted migration", async (t) => {
+  const calls = [];
+  let vaultLocked = true;
+  const api = {
+    getCleanupCustomKey: async () => "",
+    getCustomTranscriptionKey: async () => "",
+    getChatAgentCustomKey: async () => "",
+    getDictationAgentCustomKey: async () => "",
+    saveCleanupCustomKey: async (key, migration) => {
+      calls.push(["cleanup", key, migration]);
+      return { success: true, stored: "$CUSTOM_CLEANUP_API_KEY" };
+    },
+    saveCustomTranscriptionKey: async (key, migration) => {
+      calls.push(["speech", key, migration]);
+      return vaultLocked
+        ? { success: false, reason: "storage-unavailable" }
+        : { success: true, stored: "$CUSTOM_TRANSCRIPTION_API_KEY" };
+    },
+    saveChatAgentCustomKey: async () => ({ success: true, stored: "$CHAT_AGENT_CUSTOM_API_KEY" }),
+    saveDictationAgentCustomKey: async (key, migration) => {
+      calls.push(["voice", key, migration]);
+      return { success: true, stored: "$DICTATION_AGENT_CUSTOM_API_KEY" };
+    },
+  };
+  let disk = {
+    customReasoningApiKey: "${OPENAI_API_KEY}",
+    customTranscriptionApiKey: "$PRIVATE_PASSWORD",
+    chatAgentCustomApiKey: "$GROQ_API_KEY",
+    _dictationAgentSeeded: "key-pending",
+  };
+  await t.test("first launch", async (t) => {
+    const context = await loadSettings(t, api, disk);
+    await context.initializeSettings();
+    const state = context.useSettingsStore.getState();
+    assert.equal(state.cleanupCustomApiKey, "$CUSTOM_CLEANUP_API_KEY");
+    assert.equal(state.chatAgentCustomApiKey, "$CHAT_AGENT_CUSTOM_API_KEY");
+    assert.equal(state.dictationAgentCustomApiKey, "$DICTATION_AGENT_CUSTOM_API_KEY");
+    assert.equal(context.storage.getItem("customTranscriptionApiKey"), "$PRIVATE_PASSWORD");
+    assert.equal(context.storage.getItem("customReasoningApiKey"), null);
+    assert.equal(context.storage.getItem("cleanupCustomApiKey"), null);
+    disk = Object.fromEntries(
+      ["_llmScopeKeysMigrated", "_dictationAgentSeeded", "customTranscriptionApiKey"].map((key) => [
+        key,
+        context.storage.getItem(key),
+      ])
+    );
+  });
+  await t.test("next launch after unlock", async (t) => {
+    vaultLocked = false;
+    const context = await loadSettings(t, api, disk);
+    await context.initializeSettings();
+    assert.equal(
+      context.useSettingsStore.getState().customTranscriptionApiKey,
+      "$CUSTOM_TRANSCRIPTION_API_KEY"
+    );
+    assert.equal(context.storage.getItem("customTranscriptionApiKey"), null);
+  });
+  assert.deepEqual(calls, [
+    ["speech", "$PRIVATE_PASSWORD", true],
+    ["cleanup", "${OPENAI_API_KEY}", true],
+    ["voice", "$CHAT_AGENT_CUSTOM_API_KEY", "if-empty"],
+    ["speech", "$PRIVATE_PASSWORD", true],
+  ]);
+});
+
+test("a profile that already retired its old provider mirrors cannot restore a stale password", async (t) => {
+  const context = await loadSettings(
+    t,
+    {
+      getCustomTranscriptionKey: async () => "",
+      saveCustomTranscriptionKey: () => assert.fail("retired provider mirror was saved"),
+    },
+    { _llmScopeKeysMigrated: "1", customTranscriptionApiKey: "$STALE" }
+  );
+  await context.initializeSettings();
+  assert.equal(context.useSettingsStore.getState().customTranscriptionApiKey, "");
+  assert.equal(context.storage.getItem("customTranscriptionApiKey"), null);
 });
 
 test("Voice Assistant waits for the old Chat credential to migrate before completing its setup", async (t) => {
