@@ -264,7 +264,6 @@
         "description": "Latest Sonnet: fast and capable for everyday work, 1M context",
         "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5_5",
         "supportsTemperature": false,
-        "supportsThinking": true,
         "supportsVision": true,
         "thinkingOff": {
           "type": "between_tools"
@@ -276,7 +275,6 @@
         "description": "Fastest, lowest-cost Claude model, 1M context",
         "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_5_5",
         "supportsTemperature": false,
-        "supportsThinking": true,
         "supportsVision": true,
         "thinkingOff": {
           "type": "disabled"
@@ -288,7 +286,6 @@
         "description": "Fast, capable agentic model at lower cost",
         "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5",
         "supportsTemperature": false,
-        "supportsThinking": true,
         "supportsVision": true,
         "thinkingOff": {
           "type": "disabled"
@@ -316,7 +313,6 @@
         "description": "Previous Opus flagship, 1M context",
         "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_5",
         "supportsTemperature": false,
-        "supportsThinking": true,
         "supportsVision": true,
         "thinkingOff": {
           "type": "disabled"
