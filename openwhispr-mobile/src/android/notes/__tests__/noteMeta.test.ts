@@ -89,4 +89,20 @@ describe('note chip rules', () => {
     expect(suggestPeople('new@y.com', candidates, onNote).typedEmail).toBe('new@y.com');
     expect(suggestPeople('priya@x.com', candidates, onNote).typedEmail).toBeNull();
   });
+
+  it('suggests your workspace first, then who you meet most, never you', () => {
+    const often = personFromEmail('often@x.com', 'Olive Often');
+    const once = personFromEmail('once@x.com', 'Omar Once');
+    const teammate = personFromEmail('team@x.com', 'Toni Team');
+    const candidates = [once, often, often, often, personFromEmail('me@x.com', 'Me')];
+    const { people } = suggestPeople('', candidates, [], {
+      workspace: [teammate],
+      viewerEmail: 'ME@x.com',
+    });
+    expect(people.map((person) => person.email)).toEqual([
+      'team@x.com',
+      'often@x.com',
+      'once@x.com',
+    ]);
+  });
 });

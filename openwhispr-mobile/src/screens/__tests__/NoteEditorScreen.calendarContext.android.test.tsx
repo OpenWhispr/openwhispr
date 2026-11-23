@@ -431,6 +431,10 @@ let mockCalendarEvents: unknown[] = [];
 jest.mock('@/data/calendarRepository', () => ({
   calendarRepository: { getUpcomingEvents: () => mockCalendarEvents },
 }));
+let mockWorkspacePeople: { type: string; email: string; name: string }[] = [];
+jest.mock('@/data/remote/noteSharingApi', () => ({
+  searchNoteAccessPrincipals: jest.fn(async () => ({ suggestions: mockWorkspacePeople })),
+}));
 let mockCalendarAccounts: unknown[] = [];
 jest.mock('@/store/useGoogleCalendarStore', () => ({
   useGoogleCalendarStore: (selector: (state: unknown) => unknown) =>
@@ -1770,6 +1774,25 @@ describe('NoteEditorScreen meta row', () => {
       expect(options).toEqual({ durationMs: 6000 });
       action!.onPress();
       expect(lastContext()[1].participants).toBe(mockNote.participants);
+    });
+
+    it('suggests your workspace’s people first on a backed-up note, never you', async () => {
+      jest.useFakeTimers();
+      mockWorkspacePeople = [{ type: 'user', email: 'gabe@openwhispr.com', name: 'Gabe' }];
+      mockNote = note({ calendarEventId: null, participants: null, remoteId: 'cloud-7' });
+      mockNotesState.notes = [mockNote];
+      const view = render(<NoteEditorScreen />);
+      fireEvent.press(view.getByTestId('note-add-people'));
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+      const names = view
+        .getAllByText(/^(Gabe|Priya Shah|Sam Kirby)$/)
+        .map((node) => node.props.children);
+      expect(names[0]).toBe('Gabe');
+      expect(view.queryByText('user@example.com')).toBeNull();
+      jest.useRealTimers();
+      mockWorkspacePeople = [];
     });
 
     it('adds people from your calendar and a typed email, the new rows first', () => {

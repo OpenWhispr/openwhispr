@@ -1422,6 +1422,7 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                   ? initialsOf(user?.name || user?.email)
                   : null
               }
+              viewerEmail={user?.email ?? null}
               moveVisible={moveVisible}
               onMoveVisibleChange={setMoveVisible}
               onSheetOpenChange={setChipSheetOpen}

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, View } from 'react-native';
 import { calendarRepository } from '@/data/calendarRepository';
 import { notesRepository } from '@/data';
+import { searchNoteAccessPrincipals } from '@/data/remote/noteSharingApi';
 import type { CalendarParticipant, GoogleCalendarEvent } from '@/data/calendarTypes';
 import type { Note } from '@/data/types';
 import {
@@ -23,6 +24,7 @@ import {
   findLinkedEvent,
   linkPeople,
   parseNoteEventRef,
+  personFromEmail,
   unlinkPeople,
   withPeople,
   withoutPerson,
@@ -75,6 +77,44 @@ function useCalendarEvents(noteDate: Date) {
   return { connected: connected.length > 0, accounts: connected, events };
 }
 
+const WORKSPACE_SEARCH_DELAY_MS = 250;
+
+/**
+ * Your workspace's people matching what's typed, from the note's sharing suggestions (desktop's
+ * people search). Only a note the cloud has can ask; anything else, or a failed request, suggests
+ * from calendars and notes alone.
+ */
+function useWorkspacePeople(remoteId: string | null) {
+  const [query, setQuery] = useState('');
+  const [people, setPeople] = useState<CalendarParticipant[]>([]);
+  useEffect(() => {
+    if (!remoteId) {
+      setPeople([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      searchNoteAccessPrincipals(remoteId, query.trim(), { signal: controller.signal })
+        .then(({ suggestions }) => {
+          if (controller.signal.aborted) return;
+          setPeople(
+            suggestions
+              .filter((person) => person.type === 'user' && person.email)
+              .map((person) => personFromEmail(person.email!, person.name)),
+          );
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setPeople([]);
+        });
+    }, WORKSPACE_SEARCH_DELAY_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [remoteId, query]);
+  return { people, search: setQuery };
+}
+
 /** People from your calendar events and your other notes, for Add people's suggestions. */
 function knownPeople(events: GoogleCalendarEvent[], noteId: number): CalendarParticipant[] {
   const people: CalendarParticipant[] = [];
@@ -104,6 +144,7 @@ export function NoteChips({
   canMove,
   attendees,
   viewerInitials,
+  viewerEmail,
   moveVisible,
   onMoveVisibleChange,
   onSheetOpenChange,
@@ -117,6 +158,7 @@ export function NoteChips({
   attendees: CalendarParticipant[];
   /** Your initials when the note is yours ("You · Took these notes"). */
   viewerInitials: string | null;
+  viewerEmail: string | null;
   moveVisible: boolean;
   onMoveVisibleChange: (visible: boolean) => void;
   onSheetOpenChange?: (open: boolean) => void;
@@ -166,6 +208,7 @@ export function NoteChips({
     });
     loadNotes();
   };
+  const workspace = useWorkspacePeople(peopleSheet != null ? (note?.remoteId ?? null) : null);
   const restore = useCallback(
     (snapshot: { participants: string | null; calendarEventId: string | null }) => {
       if (noteId == null) return;
@@ -299,6 +342,9 @@ export function NoteChips({
         eventTitle={event?.summary?.trim() || null}
         fromEventCount={fromEvent}
         candidates={candidates}
+        workspace={workspace.people}
+        viewerEmail={viewerEmail}
+        onQueryChange={workspace.search}
         onRemove={removePerson}
         onAdd={addPeople}
       />

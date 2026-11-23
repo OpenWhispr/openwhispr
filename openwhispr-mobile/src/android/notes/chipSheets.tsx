@@ -129,6 +129,9 @@ export function PeopleSheet({
   eventTitle,
   fromEventCount,
   candidates,
+  workspace,
+  viewerEmail,
+  onQueryChange,
   onRemove,
   onAdd,
   startAdding,
@@ -142,6 +145,10 @@ export function PeopleSheet({
   eventTitle: string | null;
   fromEventCount: number;
   candidates: CalendarParticipant[];
+  /** People in your workspace matching what's typed; they're suggested first. */
+  workspace: CalendarParticipant[];
+  viewerEmail: string | null;
+  onQueryChange: (query: string) => void;
   onRemove: (person: CalendarParticipant) => void;
   onAdd: (people: CalendarParticipant[]) => void;
   /** N1b's Add people chip opens straight on N6. */
@@ -157,6 +164,7 @@ export function PeopleSheet({
     if (!visible) return;
     setAdding(Boolean(startAdding));
     setQuery('');
+    onQueryChange('');
     setPicked([]);
   }, [visible, startAdding]);
   useEffect(() => {
@@ -167,10 +175,17 @@ export function PeopleSheet({
 
   if (adding) {
     const onNote = [...people, ...picked];
-    const { typedEmail, people: suggestions } = suggestPeople(query, candidates, onNote);
+    const { typedEmail, people: suggestions } = suggestPeople(query, candidates, onNote, {
+      workspace,
+      viewerEmail,
+    });
+    const search = (text: string) => {
+      setQuery(text);
+      onQueryChange(text);
+    };
     const add = (person: CalendarParticipant) => {
       setPicked((list) => [...list, person]);
-      setQuery('');
+      search('');
     };
     const done = () => {
       if (picked.length > 0) onAdd(picked);
@@ -202,7 +217,7 @@ export function PeopleSheet({
           <TextInput
             ref={input}
             value={query}
-            onChangeText={setQuery}
+            onChangeText={search}
             accessibilityLabel={t('nameOrEmail')}
             placeholder={t('nameOrEmail')}
             placeholderTextColor={home.tertiary}

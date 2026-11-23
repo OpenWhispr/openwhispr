@@ -170,23 +170,33 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const isEmail = (value: string): boolean => EMAIL.test(value.trim());
 
 /**
- * N6's suggestions: people from calendar events and other notes who aren't on this note, matching
- * the typed name or email; a typed full email nobody has comes first as "Add priya@…".
+ * N6's suggestions, matching the typed name or email, never anyone already on the note or you:
+ * people in your workspace first, then whoever you meet most often (how many of your events and
+ * notes they're on), then names before bare addresses. A typed full email nobody has comes
+ * first as "Add priya@…".
  */
 export function suggestPeople(
   query: string,
   candidates: CalendarParticipant[],
   onNote: CalendarParticipant[],
-  limit = 6,
+  options: { workspace?: CalendarParticipant[]; viewerEmail?: string | null; limit?: number } = {},
 ): { typedEmail: string | null; people: CalendarParticipant[] } {
+  const { workspace = [], viewerEmail, limit = 6 } = options;
   const needle = query.trim().toLowerCase();
   const taken = new Set(onNote.map(keyOf).filter(Boolean));
-  const seen = new Set<string>();
-  const people: CalendarParticipant[] = [];
+  const viewer = viewerEmail?.trim().toLowerCase();
+  if (viewer) taken.add(viewer);
+  const met = new Map<string, number>();
   for (const person of candidates) {
+    const key = keyOf(person);
+    if (key) met.set(key, (met.get(key) ?? 0) + 1);
+  }
+  const inWorkspace = new Set(workspace.map(keyOf).filter(Boolean));
+  const best = new Map<string, CalendarParticipant>();
+  for (const person of [...workspace, ...candidates]) {
     if (person.self || person.resource || !person.email) continue;
     const key = keyOf(person);
-    if (!key || taken.has(key) || seen.has(key)) continue;
+    if (!key || taken.has(key)) continue;
     const name = person.displayName?.toLowerCase() ?? '';
     if (
       needle &&
@@ -195,16 +205,23 @@ export function suggestPeople(
       !name.startsWith(needle)
     )
       continue;
-    seen.add(key);
-    people.push(person);
+    const seen = best.get(key);
+    if (!seen || (!seen.displayName && person.displayName)) best.set(key, person);
   }
-  // A known name sorts ahead of a bare address.
-  people.sort((left, right) => Number(!left.displayName) - Number(!right.displayName));
+  const rank = (person: CalendarParticipant) => {
+    const key = keyOf(person) ?? '';
+    return [inWorkspace.has(key) ? 0 : 1, -(met.get(key) ?? 0), person.displayName ? 0 : 1];
+  };
+  const people = [...best.values()].sort((left, right) => {
+    const a = rank(left);
+    const b = rank(right);
+    return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+  });
   const typedEmail =
     isEmail(needle) && !taken.has(needle) && !people.some((person) => person.email === needle)
       ? needle
       : null;
-  return { typedEmail, people: people.slice(0, needle ? limit : Math.min(limit, 4)) };
+  return { typedEmail, people: people.slice(0, needle ? limit : Math.min(limit, 5)) };
 }
 
 export type EventDay = { key: string; date: Date; events: GoogleCalendarEvent[] };
