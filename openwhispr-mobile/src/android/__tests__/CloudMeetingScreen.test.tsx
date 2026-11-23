@@ -32,6 +32,8 @@ const mockAccounts: unknown[] = [];
 let mockUser = { id: 'a' };
 let mockMode = 'cloud';
 let mockAudioNamespace = '';
+// No key saved for meetings: OpenWhispr Cloud connects.
+jest.mock('@/android/providers/liveMeeting', () => ({ liveMeetingDeps: () => ({}) }));
 jest.mock('@/android/accountData', () => ({
   useAccountData: {
     getState: () => ({

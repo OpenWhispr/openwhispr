@@ -6,6 +6,8 @@ import type { RealtimeCallbacks, RealtimeSession } from '@/android/RealtimeMeeti
 jest.mock('@/android/RealtimeMeetingWsService', () => ({
   startRealtimeMeetingWs: jest.fn(),
 }));
+// No key saved for meetings: OpenWhispr Cloud connects.
+jest.mock('@/android/providers/liveMeeting', () => ({ liveMeetingDeps: () => ({}) }));
 
 const start = jest.mocked(startRealtimeMeetingWs);
 function deferred<T>() {

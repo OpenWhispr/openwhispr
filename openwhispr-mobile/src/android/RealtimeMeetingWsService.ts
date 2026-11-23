@@ -86,6 +86,11 @@ export interface WebSocketLike {
 
 export interface RealtimeMeetingDeps {
   wsFactory?: (url: string, protocols: string[]) => WebSocketLike;
+  /**
+   * Each leg's client secret from the user's own key (`liveMeetingDeps`) instead of OpenWhispr's
+   * token endpoint. Its session is already configured, as the endpoint's is.
+   */
+  fetchClientSecret?: () => Promise<string>;
 }
 
 const defaultWsFactory = (url: string, protocols: string[]): WebSocketLike =>
@@ -113,6 +118,7 @@ export async function startRealtimeMeetingWs(
   });
 
   const fetchClientSecret = async (): Promise<string> => {
+    if (deps.fetchClientSecret) return deps.fetchClientSecret();
     try {
       const { clientSecret } = await api.post<TokenResponse>(
         '/api/openai-realtime-token',

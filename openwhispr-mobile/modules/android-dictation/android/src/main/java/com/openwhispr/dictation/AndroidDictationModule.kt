@@ -25,6 +25,7 @@ class AndroidDictationModule : Module() {
   private val speechRuntime = lazy { ParakeetEngine(context) }
   private val moonshineRuntime = lazy { MoonshineEngine(context) }
   private val diarizationRuntime = lazy { DiarizationEngine(context) }
+  private val liveSpeakers = lazy { LiveSpeakerEmbedder() }
   private val providers by providerRuntime
   private val parakeet by speechRuntime
   private val moonshine by moonshineRuntime
@@ -96,6 +97,7 @@ class AndroidDictationModule : Module() {
       if (speechRuntime.isInitialized()) parakeet.close()
       if (moonshineRuntime.isInitialized()) moonshine.close()
       if (diarizationRuntime.isInitialized()) diarizationRuntime.value.close()
+      if (liveSpeakers.isInitialized()) liveSpeakers.value.close()
       recorder?.close(); HeadlessPipeline.ready = false; DictationService.emit = null
     }
     AsyncFunction("startPCM") { sampleRate: Int, noteId: Int?, audioNamespace: String, promise: Promise ->
@@ -122,10 +124,14 @@ class AndroidDictationModule : Module() {
       moonshine.transcribe(localFile(uri), localFile(modelDirectory), model, promise)
     }
     Function("cancelMoonshine") { if (moonshineRuntime.isInitialized()) moonshine.cancel() }
-    AsyncFunction("diarize") { uri: String, modelDirectory: String, numberOfSpeakers: Int, promise: Promise ->
-      diarizationRuntime.value.diarize(localFile(uri), localFile(modelDirectory), numberOfSpeakers, promise)
+    AsyncFunction("diarize") { uri: String, modelDirectory: String, numberOfSpeakers: Int, threshold: Double?, promise: Promise ->
+      diarizationRuntime.value.diarize(localFile(uri), localFile(modelDirectory), numberOfSpeakers, promise, threshold?.toFloat() ?: 0.5f)
     }
     Function("cancelDiarization") { if (diarizationRuntime.isInitialized()) diarizationRuntime.value.cancel() }
+    AsyncFunction("speakerEmbedding") { uri: String, modelDirectory: String, startMs: Double, endMs: Double, promise: Promise ->
+      liveSpeakers.value.embed(localFile(uri), localFile(modelDirectory), startMs, endMs, promise)
+    }
+    Function("releaseSpeakerEmbedder") { if (liveSpeakers.isInitialized()) liveSpeakers.value.stop() }
     AsyncFunction("releaseMoonshine") { promise: Promise ->
       if (moonshineRuntime.isInitialized()) moonshine.release(promise) else promise.resolve(null)
     }
@@ -263,6 +269,7 @@ class AndroidDictationModule : Module() {
       try { next.start(); recorder = next } catch (error: Exception) { next.close(); throw error }
     }
     Function("getRecordingLevel") { recorder?.level ?: 0f }
+    Function("getMeetingLevel") { MeetingCaptureService.instance?.level ?: 0f }
     AsyncFunction("stopRecording") { cancel: Boolean ->
       val active = recorder ?: error("No recording is active.")
       try { active.stop(cancel) } finally { active.close(); recorder = null }

@@ -2,7 +2,7 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { liveAdapter } from '../providers/liveAdapter';
 import { deepgramLiveSocket, deepgramProvider } from '../providers/deepgram';
-import { assemblyAiLiveSocket, assemblyAiProvider } from '../providers/assemblyai';
+import { assemblyAiLiveSocket, assemblyAiProvider, turnSpeakerRuns } from '../providers/assemblyai';
 import { liveMeetingDeps, meetingKey } from '../providers/liveMeeting';
 import { checkProviderKey } from '../settings/keyCheck';
 
@@ -68,6 +68,59 @@ const events = (received: { data: string }[]) =>
   received.map((event) => JSON.parse(event.data) as Record<string, unknown>);
 
 describe('live adapter', () => {
+  it("answers the transport's Stop handshake so a Deepgram meeting finishes", () => {
+    jest.useFakeTimers();
+    const received: { data: string }[] = [];
+    const adapter = deepgramLiveSocket('dg-key', 24000);
+    adapter.onmessage = (event) => received.push(event);
+    socket.open();
+    adapter.send(
+      JSON.stringify({ type: 'transcription_session.update', session: { turn_detection: null } }),
+    );
+    jest.runOnlyPendingTimers();
+    expect(events(received).at(-1)).toEqual({
+      type: 'transcription_session.updated',
+      session: { turn_detection: null },
+    });
+    adapter.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    expect(socket.sent.at(-1)).toBe('{"type":"Finalize"}');
+    socket.receive({
+      type: 'Results',
+      is_final: true,
+      from_finalize: true,
+      start: 1,
+      duration: 1,
+      channel: {
+        alternatives: [
+          {
+            transcript: 'Last words.',
+            words: [
+              { punctuated_word: 'Last', start: 1, end: 1.4, speaker: 1 },
+              { punctuated_word: 'words.', start: 1.4, end: 1.9, speaker: 1 },
+            ],
+          },
+        ],
+      },
+    });
+    const tail = events(received).slice(-2);
+    expect(tail[0]).toMatchObject({ transcript: 'Last words.', speaker: '1' });
+    expect(tail[1]).toEqual({ type: 'input_audio_buffer.committed' });
+    jest.useRealTimers();
+  });
+
+  it('lets Stop finish when the provider never answers the commit', () => {
+    jest.useFakeTimers();
+    const received: { data: string }[] = [];
+    const adapter = assemblyAiLiveSocket('token', 24000);
+    adapter.onmessage = (event) => received.push(event);
+    socket.open();
+    adapter.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    expect(events(received)).toEqual([]);
+    jest.advanceTimersByTime(3000);
+    expect(events(received)).toEqual([{ type: 'input_audio_buffer.committed' }]);
+    jest.useRealTimers();
+  });
+
   it('turns audio appends into PCM bytes and a commit into the provider’s finish', () => {
     const adapter = liveAdapter({
       url: 'wss://x',
@@ -361,5 +414,69 @@ describe('Android model choices (researched 18 Nov 2026)', () => {
     expect(inference?.upload?.modelId).toBe('assemblyai-stt-3-7');
     expect(inference?.dictation?.modelId).toBe('gpt-transcribe');
     expect(inference?.meeting?.modelId).toBe('gpt-4o-transcribe');
+  });
+});
+
+describe('AssemblyAI turns', () => {
+  it('splits a turn where its words change speaker, keeping the formatted text', () => {
+    expect(
+      turnSpeakerRuns('What went wrong? We set a date.', [
+        { text: 'what', start: 100, end: 300, speaker: 'A' },
+        { text: 'went', start: 300, end: 500, speaker: 'A' },
+        { text: 'wrong', start: 500, end: 800, speaker: 'A' },
+        { text: 'we', start: 1200, end: 1300, speaker: 'B' },
+        { text: 'set', start: 1300, end: 1500, speaker: 'PENDING' },
+        { text: 'a', start: 1500, end: 1600, speaker: 'B' },
+        { text: 'date', start: 1600, end: 1900, speaker: 'B' },
+      ]),
+    ).toEqual([
+      { text: 'What went wrong?', startMs: 100, endMs: 800, speaker: 'A' },
+      { text: 'We set a date.', startMs: 1200, endMs: 1900, speaker: 'B' },
+    ]);
+  });
+
+  it('leaves a one-speaker turn, or one without word speakers, whole', () => {
+    expect(
+      turnSpeakerRuns('Right.', [{ text: 'right', start: 0, end: 300, speaker: 'A' }]),
+    ).toEqual([]);
+    expect(turnSpeakerRuns('Hi there.', [{ text: 'hi' }, { text: 'there' }])).toEqual([]);
+  });
+
+  it('gives words before the first attributed one to that speaker', () => {
+    expect(
+      turnSpeakerRuns('so yes. Okay', [
+        { text: 'so', start: 0, end: 100, speaker: 'PENDING' },
+        { text: 'yes', start: 100, end: 300, speaker: 'B' },
+        { text: 'okay', start: 900, end: 1200, speaker: 'A' },
+      ]).map((run) => [run.text, run.speaker]),
+    ).toEqual([
+      ['so yes.', 'B'],
+      ['Okay', 'A'],
+    ]);
+  });
+
+  it('sends each piece of a split turn as its own line with its speaker', () => {
+    const received: { data: string }[] = [];
+    const adapter = assemblyAiLiveSocket('token', 24000);
+    adapter.onmessage = (event) => received.push(event);
+    socket.open();
+    socket.receive({
+      type: 'Turn',
+      end_of_turn: true,
+      turn_is_formatted: true,
+      transcript: 'Ready? Yes.',
+      speaker_label: 'B',
+      words: [
+        { text: 'ready', start: 0, end: 400, speaker: 'A' },
+        { text: 'yes', start: 900, end: 1200, speaker: 'B' },
+      ],
+    });
+    const lines = events(received).filter(
+      (event) => event.type === 'conversation.item.input_audio_transcription.completed',
+    );
+    expect(lines.map((line) => [line.transcript, line.speaker])).toEqual([
+      ['Ready?', 'A'],
+      ['Yes.', 'B'],
+    ]);
   });
 });

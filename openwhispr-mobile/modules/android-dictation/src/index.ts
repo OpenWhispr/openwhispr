@@ -103,6 +103,8 @@ interface NativeDictation {
   stopRecording(cancel: boolean): Promise<Recording>;
   /** Loudness of the in-app recording, 0..1. Missing on builds before the Home recorder. */
   getRecordingLevel?(): number;
+  /** Loudness of the meeting being recorded, 0..1. Missing on builds before the meeting waveform. */
+  getMeetingLevel?(): number;
   startLocalMeeting(noteId: number, captureId: string, audioNamespace: string): Promise<void>;
   stopLocalMeeting(noteId: number, captureId: string): Promise<void>;
   decodeAudio(uri: string): Promise<Recording>;
@@ -135,8 +137,19 @@ interface NativeDictation {
     uri: string,
     modelDirectory: string,
     numberOfSpeakers: number,
+    /** How far apart two voices must be to stay separate; 0.5 when left out. */
+    threshold?: number,
   ): Promise<LocalDiarizationResult>;
   cancelDiarization(): void;
+  /** A voiceprint for one span of a WAV that may still be recording, on a low-priority thread. */
+  speakerEmbedding(
+    uri: string,
+    modelDirectory: string,
+    startMs: number,
+    endMs: number,
+  ): Promise<number[]>;
+  /** Drops queued voiceprints and frees the speaker model. */
+  releaseSpeakerEmbedder(): void;
 }
 export const AndroidDictation =
   Platform.OS === 'android' ? requireNativeModule<NativeDictation>('AndroidDictation') : null;

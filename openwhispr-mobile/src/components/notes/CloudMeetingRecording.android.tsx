@@ -11,10 +11,12 @@ const renderTranscript = (
   utterances: RealtimeUtterance[],
   partialText: string,
   status: CloudMeetingStatus,
+  speakerLabels?: Record<string, string>,
 ) => (
   <LiveTranscriptList
     utterances={utterances}
     partialText={partialText}
+    speakerLabels={speakerLabels}
     active={status !== 'error'}
   />
 );

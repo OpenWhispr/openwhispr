@@ -89,12 +89,48 @@ export async function assemblyAiStreamingToken(apiKey: string): Promise<string> 
   return token;
 }
 
+type AssemblyWord = { text?: string; start?: number; end?: number; speaker?: string };
+
+const unattributed = (speaker: string | undefined) => !speaker || speaker === 'PENDING';
+
+/**
+ * A finished turn split where its words change speaker: AssemblyAI can end a turn late and keep
+ * a question and its answer together. Each piece takes the turn's own (formatted) words when they
+ * line up one to one with `words`, else the words' own text. A word it couldn't attribute stays
+ * with the speaker before it (the first speaker, at the start). One speaker throughout, or no word speakers, gives no split.
+ */
+export function turnSpeakerRuns(
+  transcript: string,
+  words: AssemblyWord[],
+): { text: string; startMs: number; endMs: number; speaker: string }[] {
+  const tokens = transcript.trim().split(/\s+/);
+  const aligned = tokens.length === words.length;
+  const first = words.find((word) => !unattributed(word.speaker))?.speaker;
+  if (!first) return [];
+  const runs: { text: string; startMs: number; endMs: number; speaker: string }[] = [];
+  words.forEach((word, index) => {
+    const text = aligned ? tokens[index] : (word.text ?? '');
+    const last = runs[runs.length - 1];
+    // Words before the first attributed one go with it; later ones with the speaker before them.
+    const speaker = unattributed(word.speaker) ? (last?.speaker ?? first) : word.speaker!;
+    if (last && speaker === last.speaker) {
+      last.text += ` ${text}`;
+      last.endMs = word.end ?? last.endMs;
+      return;
+    }
+    runs.push({ text, startMs: word.start ?? 0, endMs: word.end ?? word.start ?? 0, speaker });
+  });
+  return runs.length > 1 ? runs : [];
+}
+
 type AssemblyMessage = {
   type?: string;
   transcript?: string;
   end_of_turn?: boolean;
   turn_is_formatted?: boolean;
-  words?: { start?: number; end?: number }[];
+  words?: AssemblyWord[];
+  /** "A", "B"…, or "PENDING" for a turn too short to attribute. */
+  speaker_label?: string;
   error?: string;
 };
 
@@ -110,6 +146,8 @@ export function assemblyAiLiveSocket(
     sample_rate: String(sampleRate),
     encoding: 'pcm_s16le',
     format_turns: 'true',
+    // A speaker per turn (a small streaming add-on on the key's bill).
+    speaker_labels: 'true',
     token,
   });
   return liveAdapter({
@@ -127,7 +165,18 @@ export function assemblyAiLiveSocket(
       // A finished turn arrives twice; the formatted copy is the one kept.
       if (message.end_of_turn && message.turn_is_formatted) {
         const words = message.words ?? [];
-        emit.final(text, words[0]?.start ?? null, words[words.length - 1]?.end ?? null);
+        const runs = turnSpeakerRuns(text, words);
+        if (runs.length)
+          for (const run of runs) emit.final(run.text, run.startMs, run.endMs, run.speaker);
+        else
+          emit.final(
+            text,
+            words[0]?.start ?? null,
+            words[words.length - 1]?.end ?? null,
+            message.speaker_label ?? null,
+          );
+        // A turn that ends after ForceEndpoint is its answer; otherwise this does nothing.
+        emit.committed();
       } else if (!message.end_of_turn) emit.partial(text);
     },
   });

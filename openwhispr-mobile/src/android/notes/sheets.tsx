@@ -314,6 +314,7 @@ export function StartSheet({
   event,
   onPickEvent,
   onDevice,
+  keyName,
   needsModel,
   now,
   onChange,
@@ -325,6 +326,8 @@ export function StartSheet({
   event: GoogleCalendarEvent | null;
   onPickEvent: (event: GoogleCalendarEvent | null) => void;
   onDevice: boolean;
+  /** The provider of the key saved for meetings (Settings → Processing → Meetings), if any. */
+  keyName?: string | null;
   needsModel: boolean;
   now: number;
   onChange: () => void;
@@ -400,8 +403,8 @@ export function StartSheet({
           />
         ) : null}
         <ListRow
-          icon={onDevice ? 'Smartphone' : 'Cloud'}
-          title={t(onDevice ? 'onPhone' : 'liveOnCloud')}
+          icon={onDevice ? 'Smartphone' : keyName ? 'KeyRound' : 'Cloud'}
+          title={onDevice ? t('onPhone') : (keyName ?? t('liveOnCloud'))}
           subtitle={t(onDevice ? 'onPhoneBody' : 'liveOnCloudBody')}
           chevron={false}
           right={

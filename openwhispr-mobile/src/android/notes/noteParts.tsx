@@ -8,9 +8,10 @@ import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
 import { gloss, glossPressed, home } from '../home/kit';
 import { edge, edgeCard, look } from '../settings/look';
 import { useReduceMotion } from '../settings/kit';
-import { BackButton, IconButton, LinkButton, notesLook } from './look';
+import { BackButton, IconButton, notesLook } from './look';
 import { initialsOf } from './initials';
 import { useNotesT } from './strings';
+import { wordAtPoint, type TextLine } from './wordAtPoint';
 
 /** E1's top row: back left, Share and ⋯ right. The title scrolls with the note below it. */
 export function NoteTopBar({ onShare, onMore }: { onShare?: () => void; onMore: () => void }) {
@@ -372,11 +373,13 @@ export function NoSummaryCard({
 }
 
 /** E3: who said what, a time beside each name; a voice guess shows "Is this Priya?". */
-const WORD = /(\p{L}[\p{L}\p{N}'’-]*)/u;
-
 /**
  * A transcript line whose words can be long-pressed (Dictionary's C9). The word being fixed
  * gets a blue wash. Without `onWordLongPress` the line stays selectable as before.
+ *
+ * One press handler per line, not one per word: a tappable span per word made Android lay
+ * out and track hundreds of links, and the Transcript tab scrolled at a fraction of the frame
+ * rate (A73: 17% janky frames vs 3%). The pressed word is found from the line layout instead.
  */
 function TranscriptText({
   text,
@@ -387,6 +390,7 @@ function TranscriptText({
   onWordLongPress?: (word: string, x: number, y: number) => void;
   highlight?: string | null;
 }) {
+  const lines = useRef<TextLine[]>([]);
   const style = { fontSize: 16, lineHeight: 23, color: home.text };
   if (!onWordLongPress)
     return (
@@ -394,29 +398,34 @@ function TranscriptText({
         {text}
       </Text>
     );
+  const wanted = highlight?.toLowerCase();
   return (
-    <Text style={style}>
-      {text.split(WORD).map((part, index) =>
-        index % 2 === 1 ? (
-          <Text
-            key={index}
-            suppressHighlighting
-            onLongPress={(event) => {
-              safeHaptics('selection');
-              onWordLongPress(part, event.nativeEvent.pageX, event.nativeEvent.pageY);
-            }}
-            style={
-              highlight && part.toLowerCase() === highlight.toLowerCase()
-                ? { backgroundColor: look.selFill, color: home.accent }
-                : undefined
-            }
-          >
-            {part}
-          </Text>
-        ) : (
-          part
-        ),
-      )}
+    <Text
+      style={style}
+      suppressHighlighting
+      onTextLayout={(event) => {
+        lines.current = event.nativeEvent.lines;
+      }}
+      onLongPress={(event) => {
+        const { locationX, locationY, pageX, pageY } = event.nativeEvent;
+        const word = wordAtPoint(lines.current, locationX, locationY);
+        if (!word) return;
+        safeHaptics('selection');
+        onWordLongPress(word, pageX, pageY);
+      }}
+    >
+      {wanted
+        ? // Only the word being fixed is its own span, and it takes no touches.
+          text.split(/(\p{L}[\p{L}\p{N}'’-]*)/u).map((part, index) =>
+            index % 2 === 1 && part.toLowerCase() === wanted ? (
+              <Text key={index} style={{ backgroundColor: look.selFill, color: home.accent }}>
+                {part}
+              </Text>
+            ) : (
+              part
+            ),
+          )
+        : text}
     </Text>
   );
 }
@@ -440,6 +449,22 @@ export function TranscriptCard({
   return (
     <View style={{ gap: 8 }}>
       <View style={[edgeCard, { padding: 16, gap: 16 }]} testID="speaker-transcript">
+        {onCopy && blocks.length > 0 ? (
+          // Copy sits top right, as on the summary card, on the first speaker's name line.
+          <View style={{ position: 'absolute', top: 12, right: 12, zIndex: 1 }}>
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              accessibilityLabel={t('copyTranscript')}
+              hitSlop={10}
+              onPress={onCopy}
+              testID="copy-transcript"
+              style={({ pressed }) => ({ padding: 4, opacity: pressed ? 0.5 : 1 })}
+            >
+              <SystemIcon name="doc.on.doc" mdName="Copy" size={18} color={home.secondary} />
+            </Pressable>
+          </View>
+        ) : null}
         {blocks.length === 0 ? (
           <Text style={{ fontSize: 15, color: home.tertiary }}>{t('noTranscript')}</Text>
         ) : (
@@ -493,11 +518,6 @@ export function TranscriptCard({
           })
         )}
       </View>
-      {onCopy && blocks.length > 0 ? (
-        <View style={{ paddingHorizontal: 4 }}>
-          <LinkButton label={t('copyTranscript')} icon="Copy" onPress={onCopy} />
-        </View>
-      ) : null}
     </View>
   );
 }

@@ -22,7 +22,8 @@ class DiarizationEngine(private val context: Context) {
   private val worker = Executors.newSingleThreadExecutor()
   private val generation = AtomicLong()
 
-  fun diarize(input: File, directory: File, numberOfSpeakers: Int, promise: Promise) {
+  /** [threshold]: how far apart two voices must be to stay separate speakers (sherpa's default 0.5). */
+  fun diarize(input: File, directory: File, numberOfSpeakers: Int, promise: Promise, threshold: Float = 0.5f) {
     val job = generation.get()
     worker.execute {
       var converted: File? = null
@@ -31,6 +32,7 @@ class DiarizationEngine(private val context: Context) {
       try {
         assertCurrent()
         require(numberOfSpeakers in 0..32) { "Invalid speaker count." }
+        require(threshold in 0.05f..0.95f) { "Invalid speaker threshold." }
         val segmentation = File(directory, "segmentation.int8.onnx")
         val embedding = File(directory, "nemo_en_titanet_small.onnx")
         require(segmentation.length() == 1540506L && embedding.length() == 40257283L) {
@@ -68,7 +70,7 @@ class DiarizationEngine(private val context: Context) {
             pyannote = OfflineSpeakerSegmentationPyannoteModelConfig(model = segmentation.path, windowShiftRatio = 0.1f),
             numThreads = 2, provider = "cpu"),
           embedding = SpeakerEmbeddingExtractorConfig(model = embedding.path, numThreads = 2, provider = "cpu"),
-          clustering = FastClusteringConfig(numClusters = if (numberOfSpeakers == 0) -1 else numberOfSpeakers, threshold = 0.5f),
+          clustering = FastClusteringConfig(numClusters = if (numberOfSpeakers == 0) -1 else numberOfSpeakers, threshold = threshold),
           minDurationOn = 0.3f, minDurationOff = 0.5f))
         engine = active
         check(active.sampleRate() == 16000) { "Unsupported speaker model sample rate." }

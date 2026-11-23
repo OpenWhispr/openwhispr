@@ -32,6 +32,8 @@ import { useMeetingLiveActivity, type MeetingActivityPhase } from '@/hooks/useMe
 import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording.android';
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { MeetingSetup } from '@/android/MeetingSetup';
+import { runSpeakerPass, saveLiveSpeakers } from '@/android/liveSpeakers/session';
+import { forgetLinesSaved, whenLinesSaved } from '@/android/liveSpeakers/whenSaved';
 import { LocalMeetingRecorder } from '@/android/LocalMeetingRecorder';
 import { createLocalMeetingContext } from '@/android/localMeetingContext';
 import { Sentry } from '@/lib/sentry';
@@ -479,7 +481,12 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     finishingRef.current = false;
     setPhase('cloud-recording');
   };
-  const { stop: stopCloud, elapsedSeconds: cloudElapsed, status: cloudStatus } = cloudMeeting;
+  const {
+    stop: stopCloud,
+    elapsedSeconds: cloudElapsed,
+    status: cloudStatus,
+    speakerResult,
+  } = cloudMeeting;
   const finishCloud = useCallback(async (): Promise<void> => {
     if (finishingRef.current) return;
     finishingRef.current = true;
@@ -496,10 +503,16 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     try {
       if (noteId == null) throw new Error('Meeting note is unavailable.');
       saveRawNotesNow();
+      const labels = speakerResult?.();
+      const saved = utterances;
+      // Saved with the lines, not after the title, so the note never shows them unlabelled.
+      if (labels)
+        whenLinesSaved(noteId, () => saveLiveSpeakers(noteId, saved, cloudElapsed, labels));
       await finalizeCloudMeeting(noteId, utterances, cloudElapsed, {
         incomplete: interrupted !== null || cloudStatus === 'error',
       });
     } catch (error) {
+      if (noteId != null) forgetLinesSaved(noteId);
       // stopCloud retains its settled result, including partial text. Keep this
       // screen mounted so Retry can persist it without starting another recording.
       Sentry.captureException(error);
@@ -508,10 +521,39 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       finishingRef.current = false;
       return;
     }
+    forgetLinesSaved(noteId);
+    const speakers = speakerResult?.();
+    if (speakers) {
+      const owner = useAuthStore.getState();
+      runSpeakerPass(
+        { noteId, utterances, elapsedSeconds: cloudElapsed, result: speakers },
+        {
+          isCurrent: () => {
+            const current = useAuthStore.getState();
+            const note = notesRepository.getNoteById(noteId);
+            return (
+              current.user?.id === owner.user?.id &&
+              current.sessionCookie === owner.sessionCookie &&
+              !!note &&
+              !note.deletedAt
+            );
+          },
+        },
+      ).catch(Sentry.captureException);
+    }
     if (interrupted) Alert.alert(t('meetingInterrupted'), interrupted.message);
     setPhase('prompt');
     setExitToNote(noteId);
-  }, [stopCloud, cloudElapsed, cloudStatus, finalizeCloudMeeting, noteId, saveRawNotesNow, t]);
+  }, [
+    stopCloud,
+    cloudElapsed,
+    cloudStatus,
+    finalizeCloudMeeting,
+    noteId,
+    saveRawNotesNow,
+    speakerResult,
+    t,
+  ]);
   useEffect(() => {
     if (cloudMeeting.stopRequested && phase === 'cloud-recording') void finishCloud();
   }, [cloudMeeting.stopRequested, phase, finishCloud]);
@@ -714,6 +756,7 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
         onChangeRawNotes={setRawNotes}
         utterances={cloudMeeting.utterances}
         partialText={cloudMeeting.partialText}
+        speakerLabels={cloudMeeting.speakerLabels}
         title={selectedMeetingContext?.title}
         peopleCount={selectedMeetingContext?.participants?.length}
         noteId={noteId ?? undefined}

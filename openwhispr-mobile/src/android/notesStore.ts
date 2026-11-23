@@ -3,6 +3,9 @@ import { notesRepository, spacesRepository } from '@/data';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { createNotesStore, type NotesStore } from '@/store/createNotesStore';
 import { androidMeetingLifecycle } from './meetingLifecycle';
+import { assertTransition } from '@/lib/diarization/transcriptionStatus';
+import { Sentry } from '@/lib/sentry';
+import { linesSaved } from './liveSpeakers/whenSaved';
 
 const currentPrivateFolderId = (): number | null => {
   const folders = notesRepository.getPrivateFolders();
@@ -14,6 +17,20 @@ const currentFolderId = (id: number): number | null =>
 
 export function createAndroidNotesStore() {
   return createNotesStore(androidMeetingLifecycle, (set, get) => ({
+    // As the shared action, plus: a live meeting's speakers are saved with its lines (whenSaved.ts).
+    transitionStatus: (noteId, to) => {
+      const from = notesRepository.getTranscriptionStatus(noteId);
+      assertTransition(from, to); // throws on an illegal jump
+      notesRepository.setTranscriptionStatus(noteId, to);
+      if (to === 'done' || to === 'failed') {
+        try {
+          linesSaved(noteId);
+        } catch (error) {
+          Sentry.captureException(error);
+        }
+      }
+      get().loadNotes();
+    },
     reset: () =>
       set({
         folders: [],
