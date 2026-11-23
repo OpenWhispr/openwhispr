@@ -32,6 +32,10 @@ import type {
 import { SUPERWALL_PLACEMENTS, type SuperwallPlacement } from '@/lib/superwall';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
+import {
+  SUPERWALL_IDENTITY_WAIT_MS,
+  useSuperwallIdentityStore,
+} from '@/store/useSuperwallIdentityStore';
 
 let mockPlacementCallbacks: Record<string, (...args: any[]) => void> = {};
 let mockNativeFeature: (() => void) | undefined;
@@ -234,6 +238,175 @@ describe('SuperwallGateProvider', () => {
       usage,
       load: jest.fn().mockResolvedValue({ status: 'loaded', usage, loadedAt: Date.now() }),
     });
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: usage.billingUserId });
+  });
+
+  it('a transactional placement is not registered before the identity is set', async () => {
+    jest.useFakeTimers();
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer placement={SUPERWALL_PLACEMENTS.accountBillingOpen} />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+    await act(async () => {
+      jest.advanceTimersByTime(SUPERWALL_IDENTITY_WAIT_MS - 100);
+    });
+    expect(mockRegisterPlacement).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(200);
+    });
+    expect(screen.getByTestId('result').props.children).toBe('false');
+    expect(mockRegisterPlacement).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith('Billing Unavailable', expect.any(String));
+    alertSpy.mockRestore();
+    jest.useRealTimers();
+  });
+
+  it('presents a transactional placement once the identity arrives during the wait', async () => {
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer placement={SUPERWALL_PLACEMENTS.accountBillingOpen} />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+    expect(mockRegisterPlacement).not.toHaveBeenCalled();
+    await act(async () => {
+      useSuperwallIdentityStore.setState({ identifiedBillingUserId: usage.billingUserId });
+    });
+
+    await waitFor(() => expect(mockRegisterPlacement).toHaveBeenCalledTimes(1));
+  });
+
+  it('loads missing usage while a transactional placement waits for the identity', async () => {
+    useUsageStore.setState({ usage: null });
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer placement={SUPERWALL_PLACEMENTS.accountBillingOpen} />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+    expect(useUsageStore.getState().load).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      useUsageStore.setState({ usage });
+      useSuperwallIdentityStore.setState({ identifiedBillingUserId: usage.billingUserId });
+    });
+
+    await waitFor(() => expect(mockRegisterPlacement).toHaveBeenCalledTimes(1));
+  });
+
+  it('opens existing subscriber billing when the identity never arrives', async () => {
+    jest.useFakeTimers();
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const onAccessGrantedWithoutPurchase = jest.fn();
+    useUsageStore.setState({ usage: { ...usage, isSubscribed: true, plan: 'pro' } });
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.accountBillingOpen}
+          onAccessGrantedWithoutPurchase={onAccessGrantedWithoutPurchase}
+        />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+    await act(async () => {
+      jest.advanceTimersByTime(SUPERWALL_IDENTITY_WAIT_MS);
+    });
+
+    expect(screen.getByTestId('result').props.children).toBe('true');
+    expect(onAccessGrantedWithoutPurchase).toHaveBeenCalledTimes(1);
+    expect(mockRegisterPlacement).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+    jest.useRealTimers();
+  });
+
+  it('an abort during the identity wait ends quietly', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const controller = new AbortController();
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.accountBillingOpen}
+          signal={controller.signal}
+        />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+    await act(async () => controller.abort());
+
+    expect(screen.getByTestId('result').props.children).toBe('false');
+    expect(mockRegisterPlacement).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('a non-transactional placement runs its feature at once without presenting while the identity is not ready', async () => {
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const feature = jest.fn();
+    const onAccessGrantedWithoutPurchase = jest.fn();
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.noteChatStart}
+          feature={feature}
+          onAccessGrantedWithoutPurchase={onAccessGrantedWithoutPurchase}
+          requiresAccount={false}
+        />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+
+    expect(feature).toHaveBeenCalledTimes(1);
+    expect(onAccessGrantedWithoutPurchase).toHaveBeenCalledTimes(1);
+    expect(mockRegisterPlacement).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId('result').props.children).toBe('true'));
+  });
+
+  it("a guest's non-transactional placement runs its feature without presenting", async () => {
+    useAuthStore.setState({ user: null, isGuest: true, sessionCookie: null });
+    useSuperwallIdentityStore.setState({ identifiedBillingUserId: null });
+    const feature = jest.fn();
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer
+          placement={SUPERWALL_PLACEMENTS.noteChatStart}
+          feature={feature}
+          requiresAccount={false}
+        />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+
+    await waitFor(() => expect(screen.getByTestId('result').props.children).toBe('true'));
+    expect(feature).toHaveBeenCalledTimes(1);
+    expect(mockRegisterPlacement).not.toHaveBeenCalled();
+  });
+
+  it('registers a non-transactional placement as before once the identity is ready', async () => {
+    const screen = render(
+      <EnabledSuperwallGateProvider>
+        <GateConsumer placement={SUPERWALL_PLACEMENTS.noteChatStart} requiresAccount={false} />
+      </EnabledSuperwallGateProvider>,
+    );
+
+    fireEvent.press(screen.getByText('register'));
+
+    await waitFor(() => expect(mockRegisterPlacement).toHaveBeenCalledTimes(1));
   });
 
   it('retires an aborted onboarding offer and dismisses late presentation without affecting later billing', async () => {
@@ -501,7 +674,6 @@ describe('SuperwallGateProvider', () => {
   });
 
   it('records the purchase without identifying when billing usage is unavailable', async () => {
-    useUsageStore.setState({ usage: null });
     const screen = render(
       <EnabledSuperwallGateProvider>
         <GateConsumer placement={SUPERWALL_PLACEMENTS.accountBillingOpen} />
@@ -509,6 +681,8 @@ describe('SuperwallGateProvider', () => {
     );
 
     fireEvent.press(screen.getByText('register'));
+    // Usage is lost after the paywall was presented (the identity gate needs it before).
+    useUsageStore.setState({ usage: null });
     act(() =>
       mockPlacementCallbacks.onDismiss?.({}, { type: 'purchased', productId: 'pro.monthly' }),
     );
