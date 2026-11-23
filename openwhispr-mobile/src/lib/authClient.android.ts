@@ -124,7 +124,12 @@ export type SessionCheck =
  */
 export async function checkSession(timeoutMs: number): Promise<SessionCheck> {
   try {
-    const { data, error } = await client.getSession({ fetchOptions: { timeout: timeoutMs } });
+    // The API caches sessions in a signed cookie for 5 minutes; asking past it is what lets a
+    // session revoked elsewhere (a password change, "sign out other devices") end here at launch.
+    const { data, error } = await client.getSession({
+      query: { disableCookieCache: true },
+      fetchOptions: { timeout: timeoutMs },
+    });
     const user = mapAuthUser(data?.user);
     if (user) return { state: 'valid', user };
     if (error && isTransientSessionFailure(error)) return { state: 'unknown' };

@@ -191,7 +191,10 @@ describe('Android launch session (F3)', () => {
   it('checks with a time limit and only ends the session on the server’s word', async () => {
     mockGetSession.mockRejectedValue(Object.assign(new Error('timeout'), { name: 'TimeoutError' }));
     await expect(androidAuth.checkSession(5000)).resolves.toEqual({ state: 'unknown' });
-    expect(mockGetSession).toHaveBeenCalledWith({ fetchOptions: { timeout: 5000 } });
+    expect(mockGetSession).toHaveBeenCalledWith({
+      query: { disableCookieCache: true },
+      fetchOptions: { timeout: 5000 },
+    });
     expect(mockClearCache).not.toHaveBeenCalled();
 
     mockGetSession.mockResolvedValue({ data: null, error: { status: 503 } });
