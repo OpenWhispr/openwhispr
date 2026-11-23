@@ -16,6 +16,7 @@ import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { useNotesStore } from '@/store/useNotesStore';
 import { showToast } from '../settings/kit';
 import { EventSheet, PeopleSheet } from './chipSheets';
+import { fetchConferenceLink } from './eventLink';
 import { MOVE_UNDO_MS, MoveToFolderSheet } from './moveSheet';
 import { AttendeeCircles, MetaChip } from './noteParts';
 import {
@@ -23,6 +24,7 @@ import {
   eventPeople,
   findLinkedEvent,
   linkPeople,
+  meetingUrlOf,
   parseNoteEventRef,
   personFromEmail,
   unlinkPeople,
@@ -184,6 +186,22 @@ export function NoteChips({
   const ref = parseNoteEventRef(note?.calendarEventId);
   const linked = Boolean(note?.calendarEventId);
   const event = findLinkedEvent(ref, events);
+  // A Meet link lives in fields the calendar sync doesn't keep; read it when the sheet opens.
+  const [conferenceLink, setConferenceLink] = useState<string | null>(null);
+  const eventKey = event?.id ?? null;
+  useEffect(() => {
+    setConferenceLink(null);
+    if (eventSheet !== 'event' || !event || meetingUrlOf(event)) return;
+    let current = true;
+    fetchConferenceLink(event, accountFor(event, accounts)).then((link) => {
+      if (current) setConferenceLink(link);
+    });
+    return () => {
+      current = false;
+    };
+    // The event row is re-read on every render; its id says when it's another event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventSheet, eventKey, accounts]);
   const stored = useMemo(
     () => parseCalendarParticipants(note?.participants ?? null) ?? [],
     [note?.participants],
@@ -346,6 +364,7 @@ export function NoteChips({
         onClose={() => setEventSheet(null)}
         linked={linked}
         event={event}
+        joinUrl={conferenceLink}
         events={events}
         noteDate={noteDate}
         onJoin={open}
