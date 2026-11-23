@@ -3549,6 +3549,7 @@
         "gemini_gemini_3_8_flash": "最強 Flash 模型",
         "gemini_gemini_4_argon": "Google 前沿推理模型",
         "tinfoil_kimi_k3": "私密的 Moonshot 旗艦模型，原生推理與視覺能力，256K 上下文",
+        "tinfoil_kimi_k3_1_pro": "私密的 Moonshot 旗艦模型，適合長週期程式設計與智能體任務，256K 上下文",
         "tinfoil_deepseek_v4_1_flash": "私密的快速 DeepSeek 模型，可選推理，1M 上下文"
       },
       "enterprise": {

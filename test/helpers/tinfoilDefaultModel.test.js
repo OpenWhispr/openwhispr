@@ -295,13 +295,9 @@ test("a replacement with no curated name is still announced, by id", async (t) =
   installBrowserGlobals(t, {
     initialStorage: {
       _llmScopeKeysMigrated: "1",
-      tinfoilModels: JSON.stringify({
-        models: [{ id: "kimi-k2-6", name: "Kimi K2.6", description: "", supportsThinking: true }],
-        fetchedAt: Date.now(),
-      }),
       cleanupMode: "providers",
       cleanupProvider: "tinfoil",
-      cleanupModel: "kimi-k2-6",
+      cleanupModel: "deepseek-v4-pro",
     },
   });
   const vite = await createRendererServer(t, {
@@ -312,8 +308,32 @@ test("a replacement with no curated name is still announced, by id", async (t) =
     "/stores/retiredModelSwitchStore.ts"
   );
 
-  assert.equal(useSettingsStore.getState().cleanupModel, "kimi-k3");
+  assert.equal(useSettingsStore.getState().cleanupModel, "deepseek-v4-1-flash");
   assert.deepEqual(consumeRetiredModelSwitches(), [
-    { provider: "tinfoil", from: "Kimi K2.6", to: "kimi-k3" },
+    { provider: "tinfoil", from: "DeepSeek V4 Pro", to: "deepseek-v4-1-flash" },
+  ]);
+});
+
+// Kimi K3, the sweep's target for Kimi K2.6, is itself retired, so neither the live
+// catalogue nor the cache names it any more.
+test("a Kimi K2.6 selection is announced moving to Kimi K3 by name", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      cleanupMode: "providers",
+      cleanupProvider: "tinfoil",
+      cleanupModel: "kimi-k2-6",
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-tinfoil-kimi-k3-name-test-",
+  });
+  await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { consumeRetiredModelSwitches } = await vite.ssrLoadModule(
+    "/stores/retiredModelSwitchStore.ts"
+  );
+
+  assert.deepEqual(consumeRetiredModelSwitches(), [
+    { provider: "tinfoil", from: "Kimi K2.6", to: "Kimi K3" },
   ]);
 });

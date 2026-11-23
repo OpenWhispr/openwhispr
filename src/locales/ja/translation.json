@@ -3549,6 +3549,7 @@
         "gemini_gemini_3_8_flash": "最も高性能な Flash モデル",
         "gemini_gemini_4_argon": "Google の最先端推論モデル",
         "tinfoil_kimi_k3": "ネイティブ推論と画像理解に対応したプライベートな Moonshot フラッグシップ、256K コンテキスト",
+        "tinfoil_kimi_k3_1_pro": "長期的なコーディングとエージェント作業向けのプライベートな Moonshot フラッグシップ、256K コンテキスト",
         "tinfoil_deepseek_v4_1_flash": "推論を任意で使えるプライベートで高速な DeepSeek モデル、1M コンテキスト"
       },
       "enterprise": {
