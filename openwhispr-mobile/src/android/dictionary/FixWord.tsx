@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { safeHaptics } from '@/lib/utils';
-import { gloss, glossPressed, home, type } from '../home/kit';
+import { home, type } from '../home/kit';
+import { glass, glassPressed, theme } from '../theme';
 import { showToast, useReduceMotion } from '../settings/kit';
 import { edgeCard } from '../settings/look';
 import { Field } from './Field';
@@ -156,11 +157,11 @@ export function FixWordCard({
                 justifyContent: 'center',
                 opacity: ready ? 1 : 0.5,
               },
-              gloss,
-              pressed && ready && glossPressed,
+              glass,
+              pressed && ready && glassPressed,
             ]}
           >
-            <Text style={{ color: '#FFFFFF', fontSize: 15, lineHeight: 20, fontWeight: '500' }}>
+            <Text style={{ color: theme.surface, fontSize: 15, lineHeight: 20, fontWeight: '500' }}>
               {t('save')}
             </Text>
           </Pressable>

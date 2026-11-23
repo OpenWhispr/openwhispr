@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { TextInput, type TextInputProps } from 'react-native';
 import { AppFont } from '@/lib/fonts';
-import { home } from '../home/kit';
+import { theme } from '../theme';
 import { edgeField } from '../settings/look';
+
+/** The accent at 55%: the hairline of a field that has focus. */
+const FOCUS_RING = 'rgba(21,85,212,0.55)';
 
 /** A 48 field with the glass edge; the hairline turns brand blue while it has focus. */
 export function Field({
@@ -15,7 +18,7 @@ export function Field({
   return (
     <TextInput
       ref={inputRef}
-      placeholderTextColor={home.tertiary}
+      placeholderTextColor={theme.tertiary}
       onFocus={(event) => {
         setFocused(true);
         props.onFocus?.(event);
@@ -29,14 +32,14 @@ export function Field({
       style={[
         edgeField,
         {
-          minHeight: multiline ? 96 : 52,
+          minHeight: multiline ? 96 : 48,
           paddingHorizontal: 16,
           paddingVertical: multiline ? 12 : 0,
           fontSize: 17,
-          color: home.text,
+          color: theme.ink,
           fontFamily: AppFont.regular,
         },
-        focused && { borderColor: 'rgba(21,85,212,0.55)', borderWidth: 1.5 },
+        focused && { borderColor: FOCUS_RING, borderWidth: 1.5 },
         style,
       ]}
       {...props}

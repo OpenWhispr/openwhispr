@@ -11,7 +11,8 @@ import { Field } from './Field';
 import type { Snippet } from '@/lib/snippets';
 import { createSnippetCloseHandler } from '@/lib/snippetClose';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { home, type } from '../home/kit';
+import { type } from '../home/kit';
+import { theme } from '../theme';
 import { BottomSheet } from '../settings/kit';
 import { edge, edgeCard, look } from '../settings/look';
 import { GlassButton } from '../processingFable/look';
@@ -94,7 +95,7 @@ export function AddWordsSheet({
                 opacity: pressed ? 0.6 : 1,
               })}
             >
-              <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: home.text }}>
+              <Text style={{ fontSize: 14, lineHeight: 18, fontWeight: '500', color: theme.ink }}>
                 {word}
               </Text>
             </Pressable>
@@ -167,7 +168,7 @@ function OriginCard({
           alignItems: 'center',
           gap: 12,
           padding: 14,
-          backgroundColor: pressed ? look.idleFill : home.surface,
+          backgroundColor: pressed ? theme.tile : theme.surface,
         },
       ]}
     >
@@ -176,15 +177,15 @@ function OriginCard({
           width: 36,
           height: 36,
           borderRadius: 10,
-          backgroundColor: look.selFill,
+          backgroundColor: theme.selFill,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={home.accent} />
+        <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={theme.accent} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontSize: 16, lineHeight: 22, fontWeight: '500', color: home.text }}>
+        <Text style={{ fontSize: 16, lineHeight: 22, fontWeight: '500', color: theme.ink }}>
           {title}
         </Text>
         {line ? (
@@ -194,7 +195,7 @@ function OriginCard({
         ) : null}
       </View>
       {noteId != null && (
-        <SystemIcon name="chevron.right" mdName="ChevronRight" size={18} color={home.tertiary} />
+        <SystemIcon name="chevron.right" mdName="ChevronRight" size={18} color={theme.tertiary} />
       )}
     </Pressable>
   );

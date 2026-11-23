@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -14,9 +14,9 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { safeHaptics } from '@/lib/utils';
 import type { DictionaryEntry } from '@/store/useDictionaryStore';
-import { home, PillButton, type } from '../home/kit';
+import { PillButton, type } from '../home/kit';
 import { showToast, useReduceMotion } from '../settings/kit';
-import { edgeCard, look } from '../settings/look';
+import { flat, theme } from '../theme';
 import { SectionLabel } from '../notes/look';
 import { UNDO_MS } from './learnedToast';
 import { keepLearned, restoreLearned, unlearn, type LearnedInfo } from './learned';
@@ -24,6 +24,11 @@ import { sinceLearned } from './time';
 import { dictionaryT, useDictionaryT } from './strings';
 
 type Item = DictionaryEntry & { info: LearnedInfo };
+
+const CARD_RADIUS = 16;
+/** How far each card behind shows below the one in front, and how far in its sides sit. */
+const PEEK = 12;
+const INSET = [10, 22];
 
 function fixedLine(item: Item, language: string): string {
   const time = sinceLearned(item.info.learnedAt, language);
@@ -61,34 +66,16 @@ function decide(item: Item, keep: boolean) {
   );
 }
 
-/** Keep: the card's one blue answer, an outline pill like Remove with blue words. */
-function KeepButton({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      cssInterop={false}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      hitSlop={2}
-      style={({ pressed }) => ({
-        flex: 1,
-        minHeight: 44,
-        borderRadius: 999,
-        paddingHorizontal: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: pressed ? look.idleFill : home.surface,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.12)',
-      })}
-    >
-      <Text style={[type.subhead, { color: home.accent, fontWeight: '500' }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 /** The card on top: follows the finger, tilts up to 6°, and flies off past a third. */
-function TopCard({ item, entering }: { item: Item; entering: boolean }) {
+function TopCard({
+  item,
+  entering,
+  onHeight,
+}: {
+  item: Item;
+  entering: boolean;
+  onHeight: (height: number) => void;
+}) {
   const t = useDictionaryT();
   const { i18n } = useTranslation();
   const reduceMotion = useReduceMotion();
@@ -142,13 +129,16 @@ function TopCard({ item, entering }: { item: Item; entering: boolean }) {
   return (
     <GestureDetector gesture={pan}>
       <Animated.View
-        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+        onLayout={(event) => {
+          setWidth(event.nativeEvent.layout.width);
+          onHeight(event.nativeEvent.layout.height);
+        }}
         accessibilityActions={[
           { name: 'keep', label: t('keep') },
           { name: 'remove', label: t('remove') },
         ]}
         onAccessibilityAction={(event) => fly(event.nativeEvent.actionName === 'keep')}
-        style={[edgeCard, { padding: 14, gap: 14, boxShadow: home.cardShadow }, style]}
+        style={[flat, { borderRadius: CARD_RADIUS, padding: 14, gap: 14 }, style]}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View
@@ -156,17 +146,17 @@ function TopCard({ item, entering }: { item: Item; entering: boolean }) {
               width: 36,
               height: 36,
               borderRadius: 10,
-              backgroundColor: look.selFill,
+              backgroundColor: theme.selFill,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={home.accent} />
+            <SystemIcon name="sparkles" mdName="Sparkles" size={18} color={theme.accent} />
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <Text
               numberOfLines={1}
-              style={{ fontSize: 20, lineHeight: 26, fontWeight: '500', color: home.text }}
+              style={{ fontSize: 20, lineHeight: 26, fontWeight: '500', color: theme.ink }}
             >
               {item.word}
             </Text>
@@ -177,7 +167,7 @@ function TopCard({ item, entering }: { item: Item; entering: boolean }) {
         </View>
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <PillButton label={t('remove')} onPress={() => fly(false)} />
-          <KeepButton label={t('keep')} onPress={() => fly(true)} />
+          <PillButton label={t('keep')} onPress={() => fly(true)} />
         </View>
       </Animated.View>
     </GestureDetector>
@@ -192,6 +182,7 @@ function TopCard({ item, entering }: { item: Item; entering: boolean }) {
 export function ReviewStack({ items }: { items: Item[] }) {
   const t = useDictionaryT();
   const [first, setFirst] = useState(items[0]?.word);
+  const [cardHeight, setCardHeight] = useState(0);
   const top = items[0];
   const entering = first !== top?.word;
   useEffect(() => {
@@ -202,27 +193,31 @@ export function ReviewStack({ items }: { items: Item[] }) {
   return (
     <View style={{ gap: 10 }}>
       <SectionLabel label={t('learnedFromFixes', { count: items.length })} />
-      <View style={{ paddingBottom: behind * 6 }}>
-        {Array.from({ length: behind }, (_, index) => (
-          <View
-            key={index}
-            style={[
-              edgeCard,
-              {
-                position: 'absolute',
-                left: 10 * (index + 1),
-                right: 10 * (index + 1),
-                top: 12 + 6 * (index + 1),
-                bottom: 0 + (behind - index - 1) * 6,
-                opacity: 1 - index * 0.25,
-              },
-            ]}
-          />
-        ))}
-        <TopCard key={top.word} item={top} entering={entering} />
+      <View style={{ paddingBottom: behind * PEEK }}>
+        {/* Whole cards tucked behind the front one, so only their rounded bottoms show. */}
+        {cardHeight > 0 &&
+          Array.from({ length: behind }, (_, index) => behind - index).map((depth) => (
+            <View
+              key={depth}
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+              style={[
+                flat,
+                {
+                  position: 'absolute',
+                  top: PEEK * depth,
+                  left: INSET[depth - 1],
+                  right: INSET[depth - 1],
+                  height: cardHeight,
+                  borderRadius: CARD_RADIUS,
+                },
+              ]}
+            />
+          ))}
+        <TopCard key={top.word} item={top} entering={entering} onHeight={setCardHeight} />
       </View>
       {items.length > 1 && (
-        <Text style={[type.footnote, { fontSize: 12, color: home.tertiary, textAlign: 'center' }]}>
+        <Text style={[type.footnote, { fontSize: 12, color: theme.tertiary, textAlign: 'center' }]}>
           {t('reviewPosition', { index: 1, count: items.length })}
         </Text>
       )}
