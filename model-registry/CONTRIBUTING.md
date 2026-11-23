@@ -26,6 +26,7 @@ A build made from a branch (`npm run dev`, or the build CI attaches to a pull re
 
 1. Add it to the matching file in `registry/` (see the README for which file holds what). `name` and `description` are required, in English.
 2. Use an existing provider and its existing transport. A new provider, endpoint, request format or native engine needs a desktop app change first.
+   - A new provider goes at the end of its file and in `test/seed.json`, and each of its models' `minAppVersion` is the first app release that ships the provider. Providers can't be removed or reordered.
 3. Local downloads need:
    - a `sha256` for every file, including a draft file if there is one;
    - for GGUF models, the full 40-character Hugging Face commit in `revision` (and `draftRevision`);
@@ -46,7 +47,7 @@ Some models need code in the app (a new reasoning control, a new adapter). Put b
 
 `lib/schema.cjs`, `lib/envelope.cjs` and `lib/registrySelection.js` are the reader every app carries. If your change alters one of them, add the new reader in the same pull request:
 
-1. Run `npm run model-registry:sync`, then create `compat/clients/<contract>/` with the three files copied from `lib/`, a `floor.json` (a copy of `src/models/modelRegistryData.json`), and a `client.json` holding `{ "appVersion": "<the release that will carry it>", "source": "OpenWhispr/openwhispr@<commit>" }`. `<contract>` is the `clientContract` in `src/models/registryMetadata.json`.
+1. Run `npm run model-registry:sync`, then create `compat/clients/<contract>/` with the three files copied from `lib/`, a `floor.json` holding the catalog the release bundles (`bundledRegistryData` from `src/models/registryData.js`: `src/models/modelRegistryData.json` plus the providers `src/models/appTranscriptionProviders.js` adds), and a `client.json` holding `{ "appVersion": "<the release that will carry it>", "source": "OpenWhispr/openwhispr@<commit>" }`. `<contract>` is the `clientContract` in `src/models/registryMetadata.json`.
 2. CI proves the folder name matches the files and that the catalog works for that reader.
 
 A release build fails until its reader is listed there and a publication has been tested with it.

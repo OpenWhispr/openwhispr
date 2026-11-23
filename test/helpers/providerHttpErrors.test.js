@@ -220,7 +220,7 @@ test("HTML bodies collapse to a marker", async () => {
 test("keys echoed back in a body are redacted", async () => {
   const { redactProviderBody } = await load();
   const out = redactProviderBody(
-    "Incorrect API key provided: sk-proj-ab***xyz. Also sk-ant-api03-zzzz gsk_abcd1234 AIzaSyA1234 xai-qwerty Authorization: Bearer eyJhbGciOi.abc"
+    "Incorrect API key provided: sk-proj-ab***xyz. Also sk-ant-api03-zzzz gsk_abcd1234 AIzaSyA1234 xai-qwerty sk_0a1b2c3d4e5f Authorization: Bearer eyJhbGciOi.abc"
   );
   for (const leaked of [
     "sk-proj-ab",
@@ -228,11 +228,19 @@ test("keys echoed back in a body are redacted", async () => {
     "gsk_abcd",
     "AIzaSy",
     "xai-qwerty",
+    "sk_0a1b",
     "eyJhbGciOi",
   ]) {
     assert.equal(out.includes(leaked), false, `${leaked} leaked: ${out}`);
   }
   assert.ok(out.includes("Bearer [redacted]"));
+});
+
+test("words that only resemble an ElevenLabs key are kept", async () => {
+  const { redactProviderBody } = await load();
+  for (const body of ["Invalid task_type", "Unsupported locale sk_SK.UTF-8"]) {
+    assert.equal(redactProviderBody(body), body);
+  }
 });
 
 test("providerHttpError builds an Error carrying the classification and a short English message", async () => {
@@ -380,7 +388,7 @@ test("asProviderError classifies Electron net::ERR_* rejections and leaves net::
   assert.equal(asProviderError(aborted, ctx), aborted);
 });
 
-test("a redirect refused for a self-hosted server's custom headers is named", async () => {
+test("a refused redirect is named for a self-hosted server and unreachable for a hosted provider", async () => {
   const { asProviderError, isRefusedRedirect } = await load();
   const selfHosted = { provider: "Your server", surface: "transcription", selfHosted: true };
   // Electron's net.fetch, then Node's fetch, under redirect: "error".
@@ -392,12 +400,12 @@ test("a redirect refused for a self-hosted server's custom headers is named", as
     assert.equal(classified.code, "PROVIDER_REDIRECTED");
     assert.equal(classified.messageKey, "providerErrors.selfHosted.redirected");
     assert.equal(classified.settingsTarget, "speechToText");
+    // ElevenLabs' transcription request refuses redirects too, and has no address to correct.
+    const hosted = asProviderError(error, { provider: "ElevenLabs", surface: "transcription" });
+    assert.equal(hosted.code, "PROVIDER_UNREACHABLE");
+    assert.equal(hosted.message, "Couldn't reach ElevenLabs. Check your connection.");
   }
   assert.equal(isRefusedRedirect(new TypeError("fetch failed")), false);
-  assert.equal(
-    asProviderError(node, { provider: "Groq", surface: "transcription" }).code,
-    "PROVIDER_UNREACHABLE"
-  );
 });
 
 test("asProviderError leaves classified, cancelled and unrelated errors untouched", async () => {
@@ -525,13 +533,15 @@ test("a model name is inserted literally, even with $ patterns", async () => {
   assert.equal(error.message, "OpenAI doesn't recognize the model “we$&ird-$'model”.");
 });
 
-test("ElevenLabs' 401 quota_exceeded is an exhausted quota, not a refused key", async () => {
-  const quota = await classify({
-    provider: "ElevenLabs",
-    status: 401,
-    body: { detail: { status: "quota_exceeded", message: "This request exceeds your quota." } },
-  });
-  assert.equal(quota.code, "PROVIDER_QUOTA_EXHAUSTED");
+test("ElevenLabs' quota_exceeded is an exhausted quota, not a refused key or a bad request", async () => {
+  for (const status of [400, 401]) {
+    const quota = await classify({
+      provider: "ElevenLabs",
+      status,
+      body: { detail: { status: "quota_exceeded", message: "This request exceeds your quota." } },
+    });
+    assert.equal(quota.code, "PROVIDER_QUOTA_EXHAUSTED", String(status));
+  }
   const invalid = await classify({
     provider: "ElevenLabs",
     status: 401,

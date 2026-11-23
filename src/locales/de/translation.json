@@ -3647,6 +3647,7 @@
         "gemini_gemini_3_8_flash": "Leistungsstärkstes Flash-Modell",
         "gemini_gemini_4_argon": "Googles Spitzenmodell für Reasoning",
         "tinfoil_kimi_k3": "Privates Moonshot-Spitzenmodell mit nativem Reasoning und Bildverständnis, 256K Kontext",
+        "tinfoil_kimi_k3_1_pro": "Privates Moonshot-Spitzenmodell für langwierige Programmier- und Agentenaufgaben, 256K Kontext",
         "tinfoil_deepseek_v4_1_flash": "Privates schnelles DeepSeek-Modell mit optionalem Reasoning, 1M Kontext"
       },
       "enterprise": {

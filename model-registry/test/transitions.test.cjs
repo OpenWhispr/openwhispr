@@ -44,6 +44,47 @@ test("a shut-down model is retired in one data change, never deleted", () => {
   assert.throws(() => assertCompatibleCatalog(whisper, base), /retire it instead/);
 });
 
+test("a provider can be added at the end, never removed or moved", () => {
+  const added = edit((data) =>
+    data.transcriptionProviders.push({
+      id: "newprovider",
+      name: "New",
+      baseUrl: "https://new.example/v1",
+      models: [{ id: "new/model", name: "New", description: "New", minAppVersion: "1.11.1" }],
+      defaultModel: "new/model",
+    })
+  );
+  assert.doesNotThrow(() => assertCompatibleCatalog(added, base));
+  const removed = edit((data) => data.transcriptionProviders.pop(), added);
+  assert.doesNotThrow(() => assertCompatibleCatalog(removed, base));
+  assert.throws(() => assertCompatibleCatalog(removed, added), /Changed providers/);
+  const moved = edit((data) => data.transcriptionProviders.reverse(), added);
+  assert.throws(() => assertCompatibleCatalog(moved, added), /Changed providers/);
+});
+
+test("an added local provider's downloads need hashes like any new download", () => {
+  const fresh = {
+    ...structuredClone(base.localProviders[0].models[0]),
+    id: "brand-new",
+    fileName: "brand-new.gguf",
+  };
+  delete fresh.sha256;
+  const added = edit((data) =>
+    data.localProviders.push({
+      ...structuredClone(data.localProviders[0]),
+      id: "neworg",
+      models: [fresh],
+      defaultModel: "brand-new",
+    })
+  );
+  assert.throws(() => assertCompatibleCatalog(added, base), /requires sha256/);
+  assert.throws(
+    () => assertCompatibleCatalog(added, base, { floor: added }),
+    /requires sha256/,
+    "an added provider goes in the seed, which is the floor"
+  );
+});
+
 test("legacy can be set and cleared on published models", () => {
   const legacy = edit((data) => (model(data, "cloudProviders", "openai", "gpt-5.5").legacy = true));
   assert.doesNotThrow(() => assertCompatibleCatalog(legacy, base));
@@ -60,10 +101,10 @@ test("defaults and display order are editable", () => {
   assert.doesNotThrow(() => assertCompatibleCatalog(next, base));
 });
 
-test("providers, endpoints, transports and version floors stay fixed", () => {
+test("existing providers, endpoints, transports and version floors stay fixed", () => {
   for (const [change, message] of [
     [(data) => data.cloudProviders.reverse(), /Changed providers/],
-    [(data) => data.cloudProviders.push({ id: "new", name: "New", models: [] }), /Changed providers/],
+    [(data) => data.cloudProviders.unshift({ id: "new", name: "New", models: [] }), /Changed providers/],
     [
       (data) => (data.transcriptionProviders[0].baseUrl = "https://attacker.example/v1"),
       /provider contract/,
@@ -99,6 +140,38 @@ test("new transcription models need an adapter that selects models and supports 
     })
   );
   assert.throws(() => assertCompatibleCatalog(live, base), /Unsupported streaming provider/);
+});
+
+test("a batch model joins a realtime-only provider only from the app with its batch adapter", () => {
+  // AssemblyAI as it was before Dictation: realtime only.
+  const realtimeOnly = edit((data) => {
+    const assemblyai = provider(data, "transcriptionProviders", "assemblyai");
+    assemblyai.models = assemblyai.models.filter((m) => m.streaming);
+  });
+  const batch = (providerId, minAppVersion) =>
+    edit(
+      (data) =>
+        provider(data, "transcriptionProviders", providerId).models.push({
+          id: `${providerId}-batch`,
+          name: "Batch",
+          description: "Fixture",
+          ...(minAppVersion ? { minAppVersion } : {}),
+        }),
+      realtimeOnly
+    );
+  const check = (next) => assertCompatibleCatalog(next, realtimeOnly);
+  assert.throws(() => check(batch("assemblyai")), /Unsupported batch provider/);
+  assert.throws(
+    () => check(batch("assemblyai", "1.12.0")),
+    /Unsupported batch provider/,
+    "1.12.0 has no AssemblyAI batch adapter"
+  );
+  assert.doesNotThrow(() => check(batch("assemblyai", "1.12.1")));
+  assert.throws(
+    () => check(batch("deepgram", "99.0.0")),
+    /Unsupported batch provider/,
+    "no app has a Deepgram batch adapter"
+  );
 });
 
 test("Whisper files move while their hash vouches for the bytes", () => {

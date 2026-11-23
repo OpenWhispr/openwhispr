@@ -62,4 +62,5 @@ export const RETIRED_TINFOIL_MODEL_NAMES = {
   "deepseek-v4-pro": "DeepSeek V4 Pro",
   "deepseek-v4-flash": "DeepSeek V4 Flash",
   "kimi-k2-6": "Kimi K2.6",
+  "kimi-k3": "Kimi K3",
 };

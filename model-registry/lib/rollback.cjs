@@ -14,12 +14,17 @@ function shelve(model) {
 
 // The data of an earlier publication, made valid to publish again. A rollback never
 // revives a retired model and never drops an ID: models retired since the target stay
-// retired, and models added since come back as legacy, so main can restore them.
+// retired, and models added since come back as legacy, so main can restore them. A
+// provider added since comes back too, at the end, with its models shelved the same way.
 function rollbackCatalog(target, current) {
   const data = structuredClone(target);
   for (const section of PROVIDER_SECTIONS)
     for (const provider of current[section]) {
-      const into = data[section].find((item) => item.id === provider.id);
+      let into = data[section].find((item) => item.id === provider.id);
+      if (!into) {
+        into = { ...structuredClone(provider), models: [] };
+        data[section].push(into);
+      }
       for (const model of provider.models) {
         const existing = into.models.find((item) => item.id === model.id);
         if (!existing) {

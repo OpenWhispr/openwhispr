@@ -64,6 +64,29 @@ test("a catalog that loses a model an older app bundles fails", (t) => {
   assert.throws(() => checkCompatibility(base, [older]), /loses bundled model cloudProviders\/openai\/only-in-old-app/);
 });
 
+test("a catalog that changes the transport of a model an older app bundles fails", (t) => {
+  const older = olderReader(t);
+  older.floor = structuredClone(seed);
+  older.floor.transcriptionProviders.push({
+    id: "bundled-only",
+    name: "Bundled",
+    baseUrl: "https://bundled.example/v1",
+    defaultModel: "live",
+    models: [{ id: "live", name: "Live", description: "Fixture", streaming: true }],
+  });
+  const next = structuredClone(base);
+  next.transcriptionProviders.push({
+    ...structuredClone(older.floor.transcriptionProviders.at(-1)),
+    models: [{ id: "live", name: "Live", description: "Fixture" }],
+  });
+  assert.throws(
+    () => checkCompatibility(next, [older]),
+    /changes the transport of bundled model transcriptionProviders\/bundled-only\/live/
+  );
+  next.transcriptionProviders.at(-1).models[0].streaming = true;
+  assert.doesNotThrow(() => checkCompatibility(next, [older]));
+});
+
 test("vendored readers must match the contract ID they are filed under", () => {
   const root = path.join(__dirname, "..", "compat", "clients");
   const bogus = path.join(root, "0".repeat(64));
