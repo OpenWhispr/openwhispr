@@ -1,5 +1,5 @@
 import type { InferenceProvider } from "./types";
-import { wrapCleanupTranscript } from "../../../config/prompts";
+import { appendCleanupSuffixes, wrapCleanupTranscript } from "../../../config/prompts";
 import { getCleanupPromptProfile, runProfiledCleanup } from "../../../config/cleanupPromptProfiles";
 import { useSettingsStore } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
@@ -24,12 +24,20 @@ export const localProvider: InferenceProvider = {
       hasCustomCleanupPrompt: !!useSettingsStore.getState().customPrompts.cleanup,
     });
     if (profile) {
+      const systemPrompt = profile.appendsCleanupSuffixes
+        ? appendCleanupSuffixes(profile.systemPrompt, {
+            customDictionary: ctx.getCustomDictionary(),
+            language: ctx.getPreferredLanguage(),
+            uiLanguage: ctx.getUiLanguage(),
+            toneStyle: config.toneStyle,
+          })
+        : profile.systemPrompt;
       let parts = 0;
       const cleaned = await runProfiledCleanup(profile, text, async (userContent) => {
         parts++;
         const part = await window.electronAPI.processLocalReasoning(userContent, model, agentName, {
           ...config,
-          systemPrompt: profile.systemPrompt,
+          systemPrompt,
           temperature: profile.temperature,
           disableThinking: true,
         });

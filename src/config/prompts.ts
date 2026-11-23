@@ -1,4 +1,4 @@
-import { resolvePrompt } from "./prompts/index";
+import { resolvePrompt, appendLanguageAndDictionary } from "./prompts/index";
 import { appendToneStyleSuffix, buildWritingStyleBlock } from "./prompts/toneStyle";
 import type { DictationToneStyle, ToneStyles, ToneAppCategory } from "./toneStyle";
 import { SOURCE_FIDELITY_RULE } from "../helpers/sourceFidelity.js";
@@ -33,6 +33,22 @@ export function getCleanupSystemPrompt(
   // priority sentence would override; Cloud cleanup skips the tone the same way.
   if (useSettingsStore.getState().customPrompts.cleanup) return prompt;
   return appendToneStyleSuffix(prompt, toneStyle);
+}
+
+export interface CleanupSuffixOptions {
+  customDictionary?: string[];
+  language?: string;
+  uiLanguage?: string;
+  toneStyle?: DictationToneStyle | null;
+}
+
+/**
+ * A cleanup model's own base line followed by exactly the lines the default
+ * cleanup prompt gets after its base text: language, Custom Dictionary, shared
+ * team dictionary, then Tone & Style.
+ */
+export function appendCleanupSuffixes(base: string, opts: CleanupSuffixOptions): string {
+  return appendToneStyleSuffix(appendLanguageAndDictionary(base, opts), opts.toneStyle);
 }
 
 export function getWordBoost(customDictionary?: string[]): string[] {

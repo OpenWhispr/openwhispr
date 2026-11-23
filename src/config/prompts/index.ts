@@ -101,8 +101,16 @@ function applySubstitutions(template: string, opts: ResolvePromptOptions): strin
     prompt = prompt.replace(/\{\{targetLanguage\}\}/g, opts.targetLanguageLabel);
   }
 
-  const langInstruction = getLanguageInstruction(opts.language);
-  if (langInstruction) prompt += "\n\n" + langInstruction;
+  return appendLanguageAndDictionary(prompt, opts);
+}
 
-  return appendDictionarySuffix(prompt, opts.customDictionary, opts.uiLanguage);
+// The language line, then the dictionary lines, as every resolved prompt gets
+// them. Tuned cleanup models get the same lines after their own base line.
+export function appendLanguageAndDictionary(
+  prompt: string,
+  opts: Pick<ResolvePromptOptions, "language" | "customDictionary" | "uiLanguage">
+): string {
+  const langInstruction = getLanguageInstruction(opts.language);
+  const withLanguage = langInstruction ? `${prompt}\n\n${langInstruction}` : prompt;
+  return appendDictionarySuffix(withLanguage, opts.customDictionary, opts.uiLanguage);
 }
