@@ -24,6 +24,7 @@ import { Sentry } from '@/lib/sentry';
 import { mapUtterancesToSegments } from '@/lib/notes/cloudMeetingSegments';
 import { setCloudFinish } from './notes/cloudFinishStore';
 import { runSpeakerPass, saveLiveSpeakers } from './liveSpeakers/session';
+import { forgetLinesSaved, whenLinesSaved } from './liveSpeakers/whenSaved';
 import { prefetchSpeakerModel } from './liveSpeakers/speakerModel';
 import type { TranscriptionStatus } from '@/types';
 
@@ -330,10 +331,17 @@ export function CloudMeetingScreen(): React.JSX.Element {
           useNotesStore.getState().updateNote(run.noteId, { content: draft });
           draftSaved = true;
         }
+        const labels = cloud.speakerResult?.();
+        // Saved with the lines, not after the title, so the note never shows them unlabelled.
+        if (labels)
+          whenLinesSaved(run.noteId, () =>
+            saveLiveSpeakers(run.noteId, utterances, elapsed, labels),
+          );
         await useNotesStore.getState().finalizeCloudMeeting(run.noteId, utterances, elapsed, {
           incomplete: interrupted !== null || liveError,
         });
       } catch (error) {
+        forgetLinesSaved(run.noteId);
         if (!owned()) return abandon();
         Sentry.captureException(error);
         setCloudFinish(run.noteId, {
@@ -345,13 +353,9 @@ export function CloudMeetingScreen(): React.JSX.Element {
         return;
       }
       if (!owned()) return abandon();
+      forgetLinesSaved(run.noteId);
       const speakers = cloud.speakerResult?.();
       if (speakers) {
-        try {
-          saveLiveSpeakers(run.noteId, utterances, elapsed, speakers);
-        } catch (error) {
-          Sentry.captureException(error);
-        }
         // Minutes for a long meeting, so the note opens first and corrects itself after.
         runSpeakerPass(
           { noteId: run.noteId, utterances, elapsedSeconds: elapsed, result: speakers },

@@ -33,6 +33,7 @@ import { CloudMeetingRecording } from '@/components/notes/CloudMeetingRecording.
 import { canTransition } from '@/lib/diarization/transcriptionStatus';
 import { MeetingSetup } from '@/android/MeetingSetup';
 import { runSpeakerPass, saveLiveSpeakers } from '@/android/liveSpeakers/session';
+import { forgetLinesSaved, whenLinesSaved } from '@/android/liveSpeakers/whenSaved';
 import { LocalMeetingRecorder } from '@/android/LocalMeetingRecorder';
 import { createLocalMeetingContext } from '@/android/localMeetingContext';
 import { Sentry } from '@/lib/sentry';
@@ -502,10 +503,16 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     try {
       if (noteId == null) throw new Error('Meeting note is unavailable.');
       saveRawNotesNow();
+      const labels = speakerResult?.();
+      const saved = utterances;
+      // Saved with the lines, not after the title, so the note never shows them unlabelled.
+      if (labels)
+        whenLinesSaved(noteId, () => saveLiveSpeakers(noteId, saved, cloudElapsed, labels));
       await finalizeCloudMeeting(noteId, utterances, cloudElapsed, {
         incomplete: interrupted !== null || cloudStatus === 'error',
       });
     } catch (error) {
+      if (noteId != null) forgetLinesSaved(noteId);
       // stopCloud retains its settled result, including partial text. Keep this
       // screen mounted so Retry can persist it without starting another recording.
       Sentry.captureException(error);
@@ -514,13 +521,9 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
       finishingRef.current = false;
       return;
     }
+    forgetLinesSaved(noteId);
     const speakers = speakerResult?.();
     if (speakers) {
-      try {
-        saveLiveSpeakers(noteId, utterances, cloudElapsed, speakers);
-      } catch (error) {
-        Sentry.captureException(error);
-      }
       const owner = useAuthStore.getState();
       runSpeakerPass(
         { noteId, utterances, elapsedSeconds: cloudElapsed, result: speakers },
