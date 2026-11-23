@@ -271,6 +271,13 @@ export const settingsEnglish = {
   meetingPhone: 'On device',
   meetingPhoneBody: 'Private, with speaker names. Takes a few minutes.',
   speakerNames: 'Speaker names',
+  meetingRecording: 'Meeting recording',
+  onDeviceModels: 'On device models',
+  optional: 'Optional',
+  onDeviceModelsFooter:
+    'On device meetings need a Meeting recording model to transcribe. It can differ from your dictation model. Meeting speakers is extra: without it the transcript has no speaker names.',
+  nothingMeetingRecording:
+    'Nothing downloaded yet. On device meetings need one of these to transcribe.',
   useOwnKey: 'Use your own key',
   provider: 'Provider',
   apiKey: 'API key',

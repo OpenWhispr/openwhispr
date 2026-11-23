@@ -15,7 +15,8 @@ import { KEY_CHECK_COLORS } from './KeyCheckMark';
 import type { KeyProviderId } from './keyCheck';
 import { KeySheet } from './KeySheet';
 import { SpeechModelSheet } from './ModelSheet';
-import { modelName, useModelsReady } from './modelCatalog';
+import { formatSize, meetingModelRows, modelName, useModelsReady } from './modelCatalog';
+import { ANDROID_MODELS } from '../models';
 import {
   KEY_PROVIDERS,
   TASKS,
@@ -165,18 +166,47 @@ function MeetingsTask() {
           <ListRow title={t('addAnotherKey')} onPress={() => setSheet(true)} />
         )}
       </Group>
-      <Group title={t('speakerNames')}>
-        <ListRow
-          icon="UsersRound"
-          title={t('meetingSpeakers')}
-          subtitle={t('meetingSpeakersBody')}
-          value={ready['meeting-speakers'] ? t('ready') : t('download')}
-          valueAccent={!ready['meeting-speakers']}
-          onPress={() =>
-            router.push({ pathname: '/android-model', params: { kind: 'diarization' } })
-          }
-        />
-      </Group>
+      {mode === 'local' ? (
+        // S8: a meeting on the phone needs a Meeting recording model; Meeting speakers is extra.
+        <Group title={t('onDeviceModels')} footer={t('onDeviceModelsFooter')}>
+          {meetingModelRows().map((row) => (
+            <ListRow
+              key={row.id}
+              icon="AudioLines"
+              title={modelName(row.id)}
+              subtitle={`${t('meetingRecording')} · ${formatSize(ANDROID_MODELS[row.id].bytes)}`}
+              value={ready[row.id] ? t('ready') : t('download')}
+              valueAccent={!ready[row.id]}
+              onPress={() =>
+                router.push({ pathname: '/android-model', params: { kind: 'meeting' } })
+              }
+            />
+          ))}
+          <ListRow
+            icon="UsersRound"
+            title={t('meetingSpeakers')}
+            subtitle={`${t('optional')} · ${formatSize(ANDROID_MODELS['meeting-speakers'].bytes)}`}
+            value={ready['meeting-speakers'] ? t('ready') : t('download')}
+            valueAccent={!ready['meeting-speakers']}
+            onPress={() =>
+              router.push({ pathname: '/android-model', params: { kind: 'diarization' } })
+            }
+          />
+        </Group>
+      ) : (
+        <Group title={t('speakerNames')}>
+          <ListRow
+            icon="UsersRound"
+            title={t('meetingSpeakers')}
+            subtitle={t('meetingSpeakersBody')}
+            value={ready['meeting-speakers'] ? t('ready') : t('download')}
+            valueAccent={!ready['meeting-speakers']}
+            onPress={() =>
+              router.push({ pathname: '/android-model', params: { kind: 'diarization' } })
+            }
+          />
+        </Group>
+      )}
       <KeySheet
         visible={sheet}
         onClose={() => setSheet(false)}

@@ -4,7 +4,8 @@ import { create } from 'zustand';
 import { useConfigStore } from '@/store/useConfigStore';
 import { home } from '../home/kit';
 import { ANDROID_MODELS, removeAndroidModel, type AndroidModelId } from '../models';
-import type { AndroidSpeechModelId } from '../speechSelection';
+import { canTranscribeMeetings, type AndroidSpeechModelId } from '../speechSelection';
+import { modelSupported } from '../models';
 import { Group, SettingsPage, showToast, useReduceMotion } from './kit';
 import { ModelListRow, type ModelState } from './ModelListRow';
 import { startModelDownload } from './ModelRow';
@@ -13,15 +14,19 @@ import { settingsT, useSettingsT, type SettingsKey } from './strings';
 import type { UserConfig } from '@/types';
 import { speakerModelRemovedByUser } from '../liveSpeakers/speakerModel';
 
-const TITLE: Record<ModelKind, SettingsKey> = {
+/** `meeting`: the speech models that can transcribe meetings, apart from dictation's choice. */
+type ScreenKind = ModelKind | 'meeting';
+const TITLE: Record<ScreenKind, SettingsKey> = {
   speech: 'speechModel',
   text: 'textModel',
   diarization: 'meetingSpeakers',
+  meeting: 'meetingRecording',
 };
-const NOTHING: Record<ModelKind, SettingsKey> = {
+const NOTHING: Record<ScreenKind, SettingsKey> = {
   speech: 'nothingSpeech',
   text: 'nothingText',
   diarization: 'nothingMeeting',
+  meeting: 'nothingMeetingRecording',
 };
 
 /** Models removed from the list whose files wait for the Undo snackbar to close. */
@@ -57,24 +62,33 @@ export default function ModelScreen() {
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
   const params = useLocalSearchParams<{ kind?: string }>();
-  const kind: ModelKind =
-    params.kind === 'text' || params.kind === 'diarization' ? params.kind : 'speech';
+  const kind: ScreenKind =
+    params.kind === 'text' || params.kind === 'diarization' || params.kind === 'meeting'
+      ? params.kind
+      : 'speech';
   const config = useConfigStore((s) => s.config);
   const pending = useRemovals((s) => s.pending);
   const { ready, checked, progress, refresh } = useModelsReady();
-  const rows = MODEL_ROWS.filter((row) => row.kind === kind);
+  const rows = MODEL_ROWS.filter((row) =>
+    kind === 'meeting'
+      ? row.kind === 'speech' && canTranscribeMeetings(row.id) && modelSupported(row.id)
+      : row.kind === kind,
+  );
   const onPhone = (id: AndroidModelId) => Boolean(ready[id]) && !pending.includes(id);
-  // Meeting speakers has one model, used whenever it is on the phone.
+  // Meeting speakers has one model, used whenever it is on the phone. Meetings use the first
+  // meeting model on the phone, so nothing is chosen there.
   const chosen: AndroidModelId =
     kind === 'speech'
       ? (config?.androidSpeechModel ?? 'parakeet-v3')
       : kind === 'text'
         ? (config?.androidTextModel ?? 'qwen-balanced')
-        : rows[0].id;
+        : kind === 'meeting'
+          ? (rows.find((row) => ready[row.id])?.id ?? rows[0].id)
+          : rows[0].id;
   const downloadingId = Object.keys(progress)[0];
 
   const use = (id: AndroidModelId) => {
-    if (kind === 'diarization') return;
+    if (kind === 'diarization' || kind === 'meeting') return;
     const change: Partial<UserConfig> =
       kind === 'speech'
         ? { androidSpeechModel: id as AndroidSpeechModelId }
@@ -83,14 +97,17 @@ export default function ModelScreen() {
   };
 
   const remove = (id: AndroidModelId) => {
-    if (id !== chosen || kind === 'diarization') {
+    // A meeting model that is also the dictation model warns as the speech list does.
+    const inUse =
+      kind === 'meeting' ? id === (config?.androidSpeechModel ?? 'parakeet-v3') : id === chosen;
+    if (!inUse || kind === 'diarization') {
       removeWithUndo(id, refresh);
       return;
     }
     // 8.6: removing the model in use stops on-device processing until another is chosen.
     Alert.alert(
       t('removeTitle', { model: modelName(id) }),
-      t('removeInUseBody', { kind: t(kind === 'speech' ? 'speechKind' : 'textKind') }),
+      t('removeInUseBody', { kind: t(kind === 'text' ? 'textKind' : 'speechKind') }),
       [
         { text: t('cancel'), style: 'cancel' },
         { text: t('remove'), style: 'destructive', onPress: () => removeWithUndo(id, refresh) },
@@ -139,7 +156,7 @@ export default function ModelScreen() {
               onSettled={(ok) => {
                 void refresh();
                 // A finished download is only chosen when nothing usable was chosen yet.
-                if (ok && !onPhone(chosen)) use(row.id);
+                if (ok && kind !== 'meeting' && !onPhone(chosen)) use(row.id);
               }}
             />
           ))}

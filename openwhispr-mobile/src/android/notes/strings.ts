@@ -230,8 +230,17 @@ export const notesEnglish = {
   change: 'Change',
   startRecording: 'Start recording',
   startFooter: 'Ask before you record people. The phone keeps recording with the screen off.',
-  needsSpeechModel: 'Download a speech model first',
-  needsSpeechModelBody: 'Recording on this phone needs one. Settings → Processing',
+  onPhoneBodyNoSpeakers: 'Transcribed afterwards',
+  chooseSpeechModel: 'Choose a speech model',
+  chooseSpeechModelBody: 'On device needs one. It downloads once.',
+  speechModelListTitle: 'Speech model',
+  speechModelListFooter:
+    'Only models that can transcribe meetings are listed. Downloading one here doesn’t change your dictation model.',
+  speakerNamesOptional: 'Speaker names · optional',
+  speakersListFooter:
+    'Meeting speakers is optional and can download at the same time. Neither changes your dictation model.',
+  meetingSpeakersOptional: 'Optional · names who spoke',
+  namesWhoSpoke: 'Names who spoke',
   pickEvent: 'Which meeting?',
   // Recording (R1)
   recording: 'Recording · {{time}}',

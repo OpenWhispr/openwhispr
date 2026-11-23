@@ -1,6 +1,5 @@
 import { useConfigStore } from '@/store/useConfigStore';
 import type { UserConfig } from '@/types';
-import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 import { ANDROID_MODELS, modelReady, modelSupported, type AndroidModelId } from './models';
 import { speechModelSupportsLanguages } from './speechCapabilities';
 
@@ -16,7 +15,7 @@ export function speechModels(): AndroidSpeechModelId[] {
 /** Whether a speech model can transcribe a meeting (word timings over a long recording). */
 export function canTranscribeMeetings(id: AndroidModelId): boolean {
   const entry = ANDROID_MODELS[id];
-  return entry.kind === 'speech' && 'meetings' in entry && entry.meetings === true;
+  return entry?.kind === 'speech' && 'meetings' in entry && entry.meetings === true;
 }
 
 /** The speech models meetings can use, in catalog order. */
@@ -36,15 +35,21 @@ export function selectedSpeechModel(): AndroidSpeechModelId {
  * model never stops meetings. Null when no meeting model on the phone covers the languages.
  */
 export async function meetingSpeechModel(
-  languages: readonly string[] = getPreferredTranscriptionLanguages(),
+  languages?: readonly string[],
 ): Promise<AndroidSpeechModelId | null> {
+  // Loaded here: the languages live in storage that screens importing this file needn't open.
+  const wanted =
+    languages ??
+    (
+      require('@/lib/transcriptionLanguage') as typeof import('@/lib/transcriptionLanguage')
+    ).getPreferredTranscriptionLanguages();
   const selected = selectedSpeechModel();
   const candidates = [
     ...(canTranscribeMeetings(selected) ? [selected] : []),
     ...meetingSpeechModels().filter((id) => id !== selected),
   ];
   for (const id of candidates)
-    if (speechModelSupportsLanguages(id, languages) && (await modelReady(id).catch(() => false)))
+    if (speechModelSupportsLanguages(id, wanted) && (await modelReady(id).catch(() => false)))
       return id;
   return null;
 }
