@@ -12,7 +12,11 @@ jest.mock('../models', () => ({
   modelReady: jest.fn(),
   modelPath: (id: string) => `file:///models/${id}`,
 }));
-jest.mock('../speechSelection', () => ({ selectedSpeechModel: jest.fn(() => 'parakeet-v3') }));
+jest.mock('../speechSelection', () => ({
+  selectedSpeechModel: jest.fn(() => 'parakeet-v3'),
+  meetingSpeechModel: jest.fn(async () => 'parakeet-v3'),
+  canTranscribeMeetings: (id: string) => id === 'parakeet-v3',
+}));
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguages: jest.fn(() => []),
 }));
@@ -24,7 +28,7 @@ import { LocalSpeechModel } from '../LocalSpeechModel';
 import { LocalTextModel } from '../LocalTextModel';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { modelReady } from '../models';
-import { selectedSpeechModel } from '../speechSelection';
+import { meetingSpeechModel, selectedSpeechModel } from '../speechSelection';
 import { withAndroidInference } from '../inferenceQueue';
 import { getPreferredTranscriptionLanguages } from '@/lib/transcriptionLanguage';
 
@@ -32,6 +36,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(getPreferredTranscriptionLanguages).mockReturnValue([]);
   jest.mocked(selectedSpeechModel).mockReturnValue('parakeet-v3');
+  jest.mocked(meetingSpeechModel).mockResolvedValue('parakeet-v3');
   jest
     .mocked(AndroidDictation!.transcribeMoonshine)
     .mockResolvedValue({ text: 'Hello.', duration: 1, processingMs: 50 });
@@ -175,14 +180,28 @@ it('does not cancel another job when an aborted sample is waiting in the inferen
 });
 
 it.each(['moonshine-tiny', 'moonshine-small'] as const)(
-  'rejects required word timing for %s before loading a model',
+  'rejects required word timing for %s before loading a model when no meeting model is on the phone',
   async (model) => {
     jest.mocked(selectedSpeechModel).mockReturnValue(model);
+    jest.mocked(meetingSpeechModel).mockResolvedValue(null);
     await expect(
       LocalSpeechModel.transcribe('file:///meeting.wav', { wordTimestamps: true }),
     ).rejects.toThrow(/Parakeet/);
     expect(AndroidDictation!.transcribeMoonshine).not.toHaveBeenCalled();
     expect(AndroidDictation!.transcribeParakeet).not.toHaveBeenCalled();
     expect(LocalTextModel.release).not.toHaveBeenCalled();
+  },
+);
+
+it.each(['moonshine-tiny', 'moonshine-small'] as const)(
+  'transcribes a meeting with Parakeet while %s stays the dictation model',
+  async (model) => {
+    jest.mocked(selectedSpeechModel).mockReturnValue(model);
+    await LocalSpeechModel.transcribe('file:///meeting.wav', { wordTimestamps: true });
+    expect(AndroidDictation!.transcribeParakeet).toHaveBeenCalledWith(
+      'file:///meeting.wav',
+      'file:///models/parakeet-v3',
+    );
+    expect(AndroidDictation!.transcribeMoonshine).not.toHaveBeenCalled();
   },
 );

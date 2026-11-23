@@ -31,6 +31,13 @@ export function createAndroidNotesStore() {
       }
       get().loadNotes();
     },
+    // A meeting on the phone needs a meeting model on the phone, not the dictation one
+    // (speechSelection.ts), so dictating with an English-only model never blocks meetings.
+    isLocalAsrModelReady: async () => {
+      const { meetingSpeechModel } =
+        require('./speechSelection') as typeof import('./speechSelection');
+      return (await meetingSpeechModel()) !== null;
+    },
     reset: () =>
       set({
         folders: [],

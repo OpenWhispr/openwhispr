@@ -5,8 +5,11 @@ jest.mock('@/lib/meetingAudioStorage', () => ({
   meetingAudioDirectory: () => 'file:///app/documents/',
   meetingAudioContext: () => ({ namespace: '', key: 'test', isCurrent: () => true }),
 }));
+const mockMeetingSpeechModel = jest.fn(async (): Promise<string | null> => 'parakeet-v3');
 jest.mock('@/android/speechSelection', () => ({
   selectedSpeechModel: () => mockSelectedMeetingSpeech(),
+  meetingSpeechModels: () => ['parakeet-v3'],
+  meetingSpeechModel: () => mockMeetingSpeechModel(),
 }));
 jest.mock('expo-file-system/legacy', () => ({ documentDirectory: 'file:///app/documents/' }));
 const mockProcessMeeting = jest.fn();
@@ -1774,10 +1777,11 @@ describe('Android private meeting recovery ownership', () => {
     expect(notesRepository.updateNote).not.toHaveBeenCalled();
   });
 
-  it('requires an explicitly selected timestamp-capable model before local meeting capture', async () => {
+  it('is ready for a meeting on the phone once a meeting model is, whatever dictation uses', async () => {
     mockSelectedMeetingSpeech.mockReturnValue('moonshine-small');
+    mockMeetingSpeechModel.mockResolvedValueOnce(null);
     await expect(useNotesStore.getState().isLocalAsrModelReady()).resolves.toBe(false);
-    mockSelectedMeetingSpeech.mockReturnValue('parakeet-v3');
+    mockMeetingSpeechModel.mockResolvedValueOnce('parakeet-v3');
     await expect(useNotesStore.getState().isLocalAsrModelReady()).resolves.toBe(true);
   });
   it('does not save a generated summary after a mode change', async () => {

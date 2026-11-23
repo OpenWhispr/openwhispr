@@ -13,10 +13,11 @@ const latestRetryAttempts = new Map<string, symbol>();
 export const androidMeetingLifecycle: MeetingLifecycle = {
   createContext: createLocalMeetingContext,
   canUseCloud: () => !meetingOnDevice(),
+  // Any meeting model will do; which one is on the phone is the notes store's readiness check.
   canUseLocalAsr: () => {
-    const { selectedSpeechModel } =
+    const { meetingSpeechModels } =
       require('@/android/speechSelection') as typeof import('@/android/speechSelection');
-    return selectedSpeechModel() === 'parakeet-v3';
+    return meetingSpeechModels().length > 0;
   },
   deferMissingModelRecovery: true,
   localGenerationOptions: (checkpoint) => ({ checkpoint }),
