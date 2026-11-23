@@ -3602,6 +3602,7 @@
         "gemini_gemini_3_8_flash": "El modelo Flash más capaz",
         "gemini_gemini_4_argon": "Modelo de razonamiento de vanguardia de Google",
         "tinfoil_kimi_k3": "Modelo insignia privado de Moonshot con razonamiento nativo y visión, contexto de 256K",
+        "tinfoil_kimi_k3_1_pro": "Modelo insignia privado de Moonshot para programación de largo recorrido y trabajo agéntico, contexto de 256K",
         "tinfoil_deepseek_v4_1_flash": "Modelo DeepSeek privado y rápido con razonamiento opcional, contexto de 1M"
       },
       "enterprise": {
@@ -3655,6 +3656,9 @@
         "liquidai_lfm2_2_6b_q4_k_m": "LFM2 equilibrado para una limpieza de mayor calidad",
         "liquidai_lfm2_5_350m_q8_0": "Modelo ultraligero para limpieza rápida de dictado",
         "liquidai_lfm2_5_230m_q8_0": "Modelo diminuto, limpieza instantánea en hardware modesto",
+        "liquidai_lfm3_1_7b_qad_q4_0": "El modelo pequeño más reciente de Liquid AI",
+        "liquidai_lfm3_vl_2b_qad_q4_0": "Modelo de visión LFM3 de Liquid AI, aquí se usa para texto",
+        "liquidai_lfm3_omni_2b_q4_0": "Modelo multimodal LFM3 de Liquid AI, aquí se usa para texto",
         "qwen_qwen3_5_0_8b_q4_k_m": "Qwen3.5 diminuto para la limpieza más rápida",
         "qwen_qwen3_8_27b_q4_k_m": "El modelo Qwen más capaz para equipos de 32 GB",
         "qwen_qwen3_6_35b_a3b_q4_k_m": "Modelo de mezcla de expertos rápido, 3B de parámetros activos",

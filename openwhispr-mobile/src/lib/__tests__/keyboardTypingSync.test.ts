@@ -105,6 +105,21 @@ describe('startKeyboardTypingSync', () => {
     stopAgain();
   });
 
+  it('mirrors and adopts the Swiss French keys', async () => {
+    setConfig({ keyboardTypingLanguage: 'fr_CH' });
+    const stop = startKeyboardTypingSync();
+    await settle();
+    expect(store.keyboard_typing_language).toBe('fr_CH');
+    stop();
+
+    setConfig({ keyboardTypingLanguage: 'en' });
+    store.keyboard_typing_language = 'fr_CH';
+    const stopAgain = startKeyboardTypingSync();
+    await settle();
+    expect(useConfigStore.getState().config?.keyboardTypingLanguage).toBe('fr_CH');
+    stopAgain();
+  });
+
   it('adopts a language the keyboard wrote while config had none', async () => {
     store.keyboard_typing_language = 'de';
     const stop = startKeyboardTypingSync();
