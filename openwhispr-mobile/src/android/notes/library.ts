@@ -5,6 +5,7 @@ import { notesRepository } from '@/data';
 import { spacesRepository } from '@/data/spacesRepository';
 import type { Folder, Note } from '@/data';
 import type { Space } from '@/data/spacesTypes';
+import { getDefaultPrivateWorkspaceId } from '@/sync/teamSpacesCapability';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useHiddenNoteIds } from './pendingDeletes';
@@ -51,7 +52,18 @@ export function workspacesOf(spaces: Space[], known: KnownWorkspace[] = []): Wor
   return list.length > 0 ? list : [{ id: null, name: '', teams: [] }];
 }
 
-/** The picked workspace, else the first; one that went away (left, deleted) falls back too. */
+/**
+ * Before you pick one: your default workspace (the server names it during sync), else the one with
+ * the most of your teamspaces, so Notes doesn't open on an empty workspace that sorts first.
+ */
+export function defaultWorkspace(workspaces: Workspace[], defaultId: string | null): Workspace {
+  return (
+    workspaces.find((workspace) => defaultId != null && workspace.id === defaultId) ??
+    [...workspaces].sort((left, right) => right.teams.length - left.teams.length)[0]
+  );
+}
+
+/** The picked workspace, else the default; one that went away (left, deleted) falls back too. */
 export function useCurrentWorkspace(): { workspaces: Workspace[]; current: Workspace } {
   const spaces = useNotesStore((state) => state.spaces);
   const picked = useNotesWorkspace((state) => state.workspaceId);
@@ -62,7 +74,9 @@ export function useCurrentWorkspace(): { workspaces: Workspace[]; current: Works
     () => workspacesOf(spaces, owner != null && owner === userId ? known : []),
     [spaces, known, owner, userId],
   );
-  const current = workspaces.find((workspace) => workspace.id === picked) ?? workspaces[0];
+  const current =
+    workspaces.find((workspace) => workspace.id === picked) ??
+    defaultWorkspace(workspaces, getDefaultPrivateWorkspaceId());
   return { workspaces, current };
 }
 

@@ -93,6 +93,10 @@ jest.mock('../pendingDeletes', () => ({ useHiddenNoteIds: () => [] }));
 jest.mock('../rows', () => ({ dayOf: () => 'today', timeOf: () => '10:00' }));
 jest.mock('../CalendarPrompt', () => ({ CalendarPrompt: () => null }));
 jest.mock('../workspaceList', () => ({ useLoadWorkspaces: jest.fn() }));
+let mockDefaultWorkspace: string | null = null;
+jest.mock('@/sync/teamSpacesCapability', () => ({
+  getDefaultPrivateWorkspaceId: () => mockDefaultWorkspace,
+}));
 jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: (select: (state: unknown) => unknown) => select({ user: { id: 'u1' } }),
 }));
@@ -125,6 +129,7 @@ beforeEach(() => {
   act(() => {
     useNotesWorkspace.setState({ workspaceId: undefined });
     useKnownWorkspaces.setState({ owner: null, list: [] });
+    mockDefaultWorkspace = null;
   });
 });
 
@@ -202,8 +207,9 @@ it('W1: one heading with the workspace’s name and one card of its teamspaces, 
 
 it('W2: the ▾ lists your workspaces, the current one ticked, and picking one switches the page', () => {
   mockSpaces = workspaceSpaces;
+  mockDefaultWorkspace = 'w2';
   const view = render(<NotesRoot />);
-  // The first workspace by name shows first.
+  // Your default workspace shows until you pick one.
   expect(view.getByText('ACME LEGAL')).toBeTruthy();
   expect(view.getByText('Contracts')).toBeTruthy();
   expect(view.queryByText('Design')).toBeNull();
@@ -237,6 +243,14 @@ it('W2: lists every workspace you belong to, even one where you’re in no teams
   expect(view.getByText('noTeamspaces')).toBeTruthy();
   expect(view.getByText('Meetings')).toBeTruthy();
   expect(view.queryByText('Design')).toBeNull();
+});
+
+it('W1: without a default, opens on the workspace with the most of your teamspaces', () => {
+  mockSpaces = workspaceSpaces;
+  act(() => useKnownWorkspaces.setState({ owner: 'u1', list: [{ id: 'w0', name: 'Aardvark' }] }));
+  const view = render(<NotesRoot />);
+  expect(view.getByText('OPENWHISPR')).toBeTruthy();
+  expect(view.queryByText('AARDVARK')).toBeNull();
 });
 
 it('W2: ignores a workspace list read by another account', () => {
