@@ -142,9 +142,10 @@ export const AndroidDictation =
   Platform.OS === 'android' ? requireNativeModule<NativeDictation>('AndroidDictation') : null;
 export const dictationEvents = AndroidDictation
   ? new EventEmitter<{
-      onStart: (event: { selection: string; mode?: string }) => void;
+      /** `app`: the package of the app whose field was focused at the start ("" for none). */
+      onStart: (event: { selection: string; mode?: string; app?: string }) => void;
       onRecording: (event: Recording) => void;
-      onRetry: (event: { selection: string }) => void;
+      onRetry: (event: { selection: string; app?: string }) => void;
       onDismiss: () => void;
       onError: (event: { message: string }) => void;
       onCancel: () => void;
