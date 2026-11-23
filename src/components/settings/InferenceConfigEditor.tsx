@@ -171,8 +171,11 @@ export default function InferenceConfigEditor({
 
   // Chat streams Anthropic through the AI SDK, which sends no `thinking`.
   const showThinkingToggle =
-    !(scope === "chatIntelligence" && config.provider === "anthropic") &&
-    offersThinkingToggle(effectiveMode, config.provider, config.model);
+    !(
+      scope === "chatIntelligence" &&
+      effectiveMode === "providers" &&
+      config.provider === "anthropic"
+    ) && offersThinkingToggle(effectiveMode, config.provider, config.model);
 
   const effortCapability =
     effectiveMode === "providers"
