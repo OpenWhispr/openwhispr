@@ -106,6 +106,25 @@ export function NoteTile({
   );
 }
 
+/** A teamspace's tile: its emoji, or the people icon when it has none (Figma W1, N2b). */
+export function SpaceTile({ emoji }: { emoji?: string | null }) {
+  if (!emoji) return <NoteTile icon="Users" />;
+  return (
+    <View
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: look.idleFill,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ fontSize: 18, lineHeight: 22 }}>{emoji}</Text>
+    </View>
+  );
+}
+
 /** The page header: an optional back, the 28 title (with ▾ when it switches), and actions. */
 export function NotesHeader({
   title,
@@ -211,8 +230,11 @@ export function ListRow({
   destructive,
   accent,
   checked,
+  tile,
 }: {
   icon?: LucideIconName;
+  /** A tile of its own in place of the icon (a teamspace's emoji). */
+  tile?: React.ReactNode;
   iconColor?: string;
   /** An action row ("New folder", "Add people"): the title in the accent colour. */
   accent?: boolean;
@@ -251,9 +273,10 @@ export function ListRow({
             : 'transparent',
       })}
     >
-      {icon && (
-        <NoteTile icon={icon} color={destructive ? look.error : (iconColor ?? home.accent)} />
-      )}
+      {tile ??
+        (icon && (
+          <NoteTile icon={icon} color={destructive ? look.error : (iconColor ?? home.accent)} />
+        ))}
       <View style={{ flex: 1, gap: 2 }}>
         <Text
           numberOfLines={1}

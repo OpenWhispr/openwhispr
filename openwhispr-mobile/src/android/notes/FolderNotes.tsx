@@ -9,7 +9,7 @@ import { useNotesStore } from '@/store/useNotesStore';
 import { useNoteBuckets } from '@/hooks/useNoteBuckets';
 import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { safeHaptics } from '@/lib/utils';
-import { getNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
+import { getNotesRouteOwner, withNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
 import { home } from '../home/kit';
 import { look } from '../settings/look';
 import { BottomSheet, useSettingsToast } from '../settings/kit';
@@ -26,11 +26,11 @@ import {
   notesLook,
 } from './look';
 import {
-  notesInScope,
+  notesInWorkspace,
   privateSpaceId,
   useAllNotes,
   useLibraryRevision,
-  useNotesScope,
+  useCurrentWorkspace,
 } from './library';
 import { NoteRow, SwipeRow } from './rows';
 import { deleteNotesWithUndo } from './pendingDeletes';
@@ -67,7 +67,7 @@ export default function FolderNotes() {
   }, [isInitialized, initialize]);
   const revision = useLibraryRevision();
   const allNotes = useAllNotes(revision);
-  const scope = useNotesScope((state) => state.scope);
+  const { current: workspace } = useCurrentWorkspace();
   const privateId = useMemo(() => privateSpaceId(), []);
 
   const folder = useMemo<Folder | null>(() => {
@@ -87,11 +87,31 @@ export default function FolderNotes() {
   const space = spaceId != null ? spaces.find((value) => value.id === spaceId) : null;
 
   const notes = useMemo(() => {
-    if (recent) return notesInScope(allNotes, scope, privateId);
+    if (recent) return notesInWorkspace(allNotes, workspace, privateId);
     if (folderId != null) return allNotes.filter((note) => note.folderId === folderId);
-    if (spaceId != null) return allNotes.filter((note) => note.spaceId === spaceId);
+    // W3: a teamspace lists its folders first, then the notes in no folder.
+    if (spaceId != null)
+      return allNotes.filter((note) => note.spaceId === spaceId && note.folderId == null);
     return [];
-  }, [allNotes, recent, folderId, spaceId, scope, privateId]);
+  }, [allNotes, recent, folderId, spaceId, workspace, privateId]);
+  const spaceFolders = useMemo(
+    () => (spaceId != null && !recent ? useNotesStore.getState().getSpaceFolders(spaceId) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [spaceId, recent, revision],
+  );
+  const folderCounts = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const note of allNotes)
+      if (note.folderId != null) map.set(note.folderId, (map.get(note.folderId) ?? 0) + 1);
+    return map;
+  }, [allNotes]);
+  const openFolder = (target: Folder) => {
+    safeHaptics('selection');
+    router.push({
+      pathname: '/(tabs)/(notes)/notes',
+      params: withNotesRouteOwner({ folderId: String(target.id) }),
+    });
+  };
   const buckets = useNoteBuckets(notes);
   const title = recent ? t('recent') : (folder?.name ?? space?.name ?? t('notes'));
 
@@ -192,7 +212,23 @@ export default function FolderNotes() {
             }
           />
         )}
-        {buckets.length === 0 ? (
+        {spaceFolders.length > 0 && !selecting ? (
+          <View style={{ gap: 12 }}>
+            <SectionLabel label={t('folders')} />
+            <Card>
+              {spaceFolders.map((value) => (
+                <ListRow
+                  key={value.id}
+                  icon="Folder"
+                  title={value.name}
+                  value={String(folderCounts.get(value.id) ?? 0)}
+                  onPress={() => openFolder(value)}
+                />
+              ))}
+            </Card>
+          </View>
+        ) : null}
+        {buckets.length === 0 && spaceFolders.length > 0 ? null : buckets.length === 0 ? (
           <EmptyFolder
             name={title}
             onWrite={() => startNote(place.folderId)}

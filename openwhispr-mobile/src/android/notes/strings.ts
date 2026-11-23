@@ -25,6 +25,10 @@ export const notesEnglish = {
   uploadAudio: 'Upload audio',
   emptyFolder: 'Nothing in {{folder}} yet',
   emptyFolderBody: 'New notes you start here are filed in this folder.',
+  // Workspace switcher (W2)
+  workspace: 'Workspace',
+  privatePlusTeams: 'Private + {{count}} teamspaces',
+  privatePlusTeams_one: 'Private + 1 teamspace',
   // Space switcher
   showNotesFrom: 'Show notes from',
   allSpaces: 'All spaces',

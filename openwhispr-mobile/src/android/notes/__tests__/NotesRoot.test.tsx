@@ -94,7 +94,7 @@ jest.mock('../rows', () => ({ dayOf: () => 'today', timeOf: () => '10:00' }));
 jest.mock('../CalendarPrompt', () => ({ CalendarPrompt: () => null }));
 
 import NotesRoot from '../NotesRoot';
-import { setNotesScope } from '../library';
+import { useNotesWorkspace } from '../library';
 
 const note = (id: number, fields: object = {}) => ({
   id,
@@ -118,7 +118,7 @@ beforeEach(() => {
   mockNotes = [note(1)];
   mockSpaces = [];
   mockUpNext = { next: null, events: [], now: 0 };
-  act(() => setNotesScope({ kind: 'all' }));
+  act(() => useNotesWorkspace.setState({ workspaceId: undefined }));
 });
 
 it('L2: with no notes, one big mic records a meeting and two links do the rest', () => {
@@ -131,11 +131,11 @@ it('L2: with no notes, one big mic records a meeting and two links do the rest',
   expect(view.queryByLabelText('new')).toBeNull();
 });
 
-it('L1: Recent, Private folders and search; no switcher without a teamspace', () => {
+it('W1: Private folders and search, no Recent, no switcher without a teamspace', () => {
   const view = render(<NotesRoot />);
-  expect(view.getByText('recent')).toBeTruthy();
+  expect(view.queryByText('recent')).toBeNull();
   expect(view.getByText('Meetings')).toBeTruthy();
-  expect(view.queryByLabelText('showNotesFrom')).toBeNull();
+  expect(view.queryByLabelText('workspace')).toBeNull();
   fireEvent.press(view.getByText('Meetings'));
   expect(mockPush).toHaveBeenCalledWith({
     pathname: '/(tabs)/(notes)/notes',
@@ -143,22 +143,72 @@ it('L1: Recent, Private folders and search; no switcher without a teamspace', ()
   });
 });
 
-it('L3: teamspace members get the switcher; one space shows only its Recent and folders', () => {
-  mockSpaces = [{ id: 9, kind: 'team', name: 'Design team', memberCount: 6, myRole: 'member' }];
-  mockNotes = [note(1), note(2, { folderId: 20, spaceId: 9, title: 'Design review' })];
+const workspaceSpaces = [
+  {
+    id: 9,
+    kind: 'team',
+    name: 'Design',
+    emoji: '🎨',
+    workspaceId: 'w1',
+    workspaceName: 'OpenWhispr',
+  },
+  {
+    id: 10,
+    kind: 'team',
+    name: 'Engineering',
+    emoji: null,
+    workspaceId: 'w1',
+    workspaceName: 'OpenWhispr',
+  },
+  {
+    id: 11,
+    kind: 'team',
+    name: 'Contracts',
+    emoji: null,
+    workspaceId: 'w2',
+    workspaceName: 'Acme Legal',
+  },
+];
+
+it('W1: one heading with the workspace’s name and one card of its teamspaces, with note counts', () => {
+  mockSpaces = workspaceSpaces.slice(0, 2);
+  mockNotes = [
+    note(1),
+    note(2, { folderId: 20, spaceId: 9 }),
+    note(3, { folderId: null, spaceId: 9 }),
+    note(4, { folderId: null, spaceId: 10 }),
+  ];
   const view = render(<NotesRoot />);
-  // Every space by default (L1): a section per teamspace under Private.
-  expect(view.getByText('DESIGN TEAM')).toBeTruthy();
-  expect(view.getByText('Reviews')).toBeTruthy();
+  expect(view.getByText('PRIVATE')).toBeTruthy();
+  expect(view.getByText('OPENWHISPR')).toBeTruthy();
+  expect(view.getByText('🎨')).toBeTruthy();
+  expect(view.getByText('Design')).toBeTruthy();
+  expect(view.getByText('2')).toBeTruthy();
+  // One workspace: no ▾.
+  expect(view.queryByLabelText('workspace')).toBeNull();
+  fireEvent.press(view.getByText('Engineering'));
+  expect(mockPush).toHaveBeenLastCalledWith({
+    pathname: '/(tabs)/(notes)/notes',
+    params: { spaceId: '10' },
+  });
+});
+
+it('W2: the ▾ lists your workspaces, the current one ticked, and picking one switches the page', () => {
+  mockSpaces = workspaceSpaces;
+  const view = render(<NotesRoot />);
+  // The first workspace by name shows first.
+  expect(view.getByText('ACME LEGAL')).toBeTruthy();
+  expect(view.getByText('Contracts')).toBeTruthy();
+  expect(view.queryByText('Design')).toBeNull();
   fireEvent.press(view.getByText('notes'));
   expect(view.getByTestId('sheet')).toBeTruthy();
-  expect(view.getByText('allSpaces')).toBeTruthy();
-  fireEvent.press(view.getByText('Design team'));
-  expect(view.getByText('Design team')).toBeTruthy();
-  expect(view.queryByText('Meetings')).toBeNull();
-  expect(view.getByText('Reviews')).toBeTruthy();
-  expect(view.getByText('FOLDERS')).toBeTruthy();
-  expect(view.getByText(/Design review/)).toBeTruthy();
+  expect(view.getByText('privatePlusTeams:2')).toBeTruthy();
+  fireEvent.press(view.getByText('OpenWhispr'));
+  expect(view.getByText('OPENWHISPR')).toBeTruthy();
+  expect(view.getByText('Design')).toBeTruthy();
+  expect(view.queryByText('Contracts')).toBeNull();
+  // Private stays in every workspace.
+  expect(view.getByText('Meetings')).toBeTruthy();
 });
 
 it('L5/L7: an Up next card records the meeting and opens today’s other meetings', () => {
