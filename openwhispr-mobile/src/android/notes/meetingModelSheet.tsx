@@ -6,6 +6,9 @@ import { Group, useReduceMotion } from '../settings/kit';
 import { ListRow } from './look';
 import { useNotesT } from './strings';
 
+/** The meeting models, without the Recommended badge: the drawer offers them as equals. */
+const meetingRows = () => meetingModelRows().map((row) => ({ ...row, recommended: false }));
+
 /** How long a finished download shows its tick on the sheet before the row folds away (S6). */
 export const FOLD_AFTER_MS = 1000;
 
@@ -28,7 +31,7 @@ export function MeetingModelRow({
   const t = useNotesT();
   const reduceMotion = useReduceMotion();
   const { ready, progress } = useModelsReady();
-  const rows = meetingModelRows();
+  const rows = meetingRows();
   const [landed, setLanded] = useState<AndroidModelId | null>(null);
   // A row whose download was seen stays put after the last byte, while its files are checked,
   // or it would unmount before it can say the model landed.
@@ -87,7 +90,7 @@ export function MeetingModelList({ onModelReady }: { onModelReady: () => void })
   const t = useNotesT();
   const reduceMotion = useReduceMotion();
   const { ready, progress } = useModelsReady();
-  const rows = meetingModelRows();
+  const rows = meetingRows();
   const downloading = rows.find((row) => progress[row.id] !== undefined)?.id;
   return (
     <Group footer={t('meetingModelListFooter')}>

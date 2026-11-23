@@ -166,7 +166,7 @@ export function TaskSheet({
   );
   // The sheet keeps showing its task while it slides away.
   const [task, setShownTask] = useState<SheetTask>(requested ?? 'dictation');
-  const [page, setPage] = useState<'main' | 'models'>('main');
+  const [page, setPage] = useState<'main' | 'models' | 'phoneModels'>('main');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (requested) {
@@ -235,6 +235,22 @@ export function TaskSheet({
   const sibling = SIBLING[task];
   const siblingOnDevice =
     !!sibling && placementOf(config, sibling, activeMode, cloudAccess).place === 'device';
+
+  // On device: the phone's models on their own page, as a key's models are (6C).
+  if (page === 'phoneModels' && (placement.place === 'device' || waiting)) {
+    return (
+      <BottomSheet
+        visible={!!requested}
+        onClose={onClose}
+        title={t('taskModel', { task: title })}
+        onBack={() => setPage('main')}
+      >
+        <SlideIn pageKey="phoneModels">
+          <PhoneModels t={t} task={task} config={config} shared={siblingOnDevice} />
+        </SlideIn>
+      </BottomSheet>
+    );
+  }
 
   if (page === 'models' && placement.place === 'key' && placement.source) {
     const source = placement.source as Source;
@@ -336,7 +352,12 @@ export function TaskSheet({
         </View>
 
         {(placement.place === 'device' || waiting) && (
-          <PhoneModels t={t} task={task} config={config} shared={siblingOnDevice} />
+          <View style={{ gap: 8 }}>
+            <SectionLabel>{t('model')}</SectionLabel>
+            <SheetCard>
+              <ListRow title={modelName(phoneModel)} onPress={() => setPage('phoneModels')} />
+            </SheetCard>
+          </View>
         )}
 
         {placement.place === 'key' && placement.source && keyModels.length > 1 && !waiting && (
