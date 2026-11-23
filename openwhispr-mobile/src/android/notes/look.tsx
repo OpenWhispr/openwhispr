@@ -231,6 +231,7 @@ export function ListRow({
   accent,
   checked,
   tile,
+  subtitleLines = 1,
 }: {
   icon?: LucideIconName;
   /** A tile of its own in place of the icon (a teamspace's emoji). */
@@ -242,6 +243,8 @@ export function ListRow({
   checked?: boolean;
   title: string;
   subtitle?: string;
+  /** How many lines the subtitle may take before it is cut (a sentence needs two). */
+  subtitleLines?: number;
   value?: string;
   chevron?: boolean;
   onPress?: () => void;
@@ -289,7 +292,7 @@ export function ListRow({
           {title}
         </Text>
         {subtitle ? (
-          <Text numberOfLines={1} style={notesLook.rowSub}>
+          <Text numberOfLines={subtitleLines} style={notesLook.rowSub}>
             {subtitle}
           </Text>
         ) : null}

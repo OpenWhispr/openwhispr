@@ -80,6 +80,7 @@ export function MeetingModelRow({
         icon="AudioLines"
         title={t('chooseSpeechModel')}
         subtitle={t('chooseSpeechModelBody')}
+        subtitleLines={2}
         onPress={onChoose}
       />
     );
