@@ -226,17 +226,14 @@ for (const [model, disableThinking, expected] of [
   ["claude-opus-4-8", true, undefined],
   ["claude-haiku-4-5", true, undefined],
 ]) {
-  test(`${model} with disableThinking=${disableThinking} sends thinking ${JSON.stringify(expected)}`, async () => {
+  test(`${model} with disableThinking=${disableThinking}: thinking is ${JSON.stringify(expected) ?? "left out"}`, async () => {
     let requestBody;
     fetchBehavior = async (_url, init) => {
       requestBody = JSON.parse(init.body);
       return Response.json({ content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" });
     };
 
-    const result = await anthropicHandler({}, "short dictation", model, null, {
-      disableThinking,
-      requireCompleteOutput: true,
-    });
+    const result = await anthropicHandler({}, "short dictation", model, null, { disableThinking });
 
     assert.equal(result.success, true);
     assert.equal(requestBody.max_tokens, 4096);
