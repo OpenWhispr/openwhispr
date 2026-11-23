@@ -92,9 +92,13 @@ jest.mock('../folderMenu', () => ({ useFolderMenu: () => ({ open: jest.fn(), she
 jest.mock('../pendingDeletes', () => ({ useHiddenNoteIds: () => [] }));
 jest.mock('../rows', () => ({ dayOf: () => 'today', timeOf: () => '10:00' }));
 jest.mock('../CalendarPrompt', () => ({ CalendarPrompt: () => null }));
+jest.mock('../workspaceList', () => ({ useLoadWorkspaces: jest.fn() }));
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: (select: (state: unknown) => unknown) => select({ user: { id: 'u1' } }),
+}));
 
 import NotesRoot from '../NotesRoot';
-import { useNotesWorkspace } from '../library';
+import { useKnownWorkspaces, useNotesWorkspace } from '../library';
 
 const note = (id: number, fields: object = {}) => ({
   id,
@@ -118,7 +122,10 @@ beforeEach(() => {
   mockNotes = [note(1)];
   mockSpaces = [];
   mockUpNext = { next: null, events: [], now: 0 };
-  act(() => useNotesWorkspace.setState({ workspaceId: undefined }));
+  act(() => {
+    useNotesWorkspace.setState({ workspaceId: undefined });
+    useKnownWorkspaces.setState({ owner: null, list: [] });
+  });
 });
 
 it('L2: with no notes, one big mic records a meeting and two links do the rest', () => {
@@ -209,6 +216,37 @@ it('W2: the ▾ lists your workspaces, the current one ticked, and picking one s
   expect(view.queryByText('Contracts')).toBeNull();
   // Private stays in every workspace.
   expect(view.getByText('Meetings')).toBeTruthy();
+});
+
+it('W2: lists every workspace you belong to, even one where you’re in no teamspace', () => {
+  mockSpaces = workspaceSpaces.slice(0, 2);
+  act(() =>
+    useKnownWorkspaces.setState({
+      owner: 'u1',
+      list: [
+        { id: 'w1', name: 'OpenWhispr' },
+        { id: 'w3', name: 'New Hanover County' },
+      ],
+    }),
+  );
+  const view = render(<NotesRoot />);
+  fireEvent.press(view.getByText('notes'));
+  expect(view.getByText('privatePlusTeams:0')).toBeTruthy();
+  fireEvent.press(view.getByText('New Hanover County'));
+  expect(view.getByText('NEW HANOVER COUNTY')).toBeTruthy();
+  expect(view.getByText('noTeamspaces')).toBeTruthy();
+  expect(view.getByText('Meetings')).toBeTruthy();
+  expect(view.queryByText('Design')).toBeNull();
+});
+
+it('W2: ignores a workspace list read by another account', () => {
+  mockSpaces = workspaceSpaces.slice(0, 2);
+  act(() =>
+    useKnownWorkspaces.setState({ owner: 'someone-else', list: [{ id: 'w9', name: 'Theirs' }] }),
+  );
+  const view = render(<NotesRoot />);
+  expect(view.queryByLabelText('workspace')).toBeNull();
+  expect(view.queryByText('Theirs')).toBeNull();
 });
 
 it('L5/L7: an Up next card records the meeting and opens today’s other meetings', () => {

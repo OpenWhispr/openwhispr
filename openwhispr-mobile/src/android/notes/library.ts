@@ -5,6 +5,7 @@ import { notesRepository } from '@/data';
 import { spacesRepository } from '@/data/spacesRepository';
 import type { Folder, Note } from '@/data';
 import type { Space } from '@/data/spacesTypes';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useHiddenNoteIds } from './pendingDeletes';
 
@@ -22,9 +23,22 @@ export function setNotesWorkspace(workspaceId: string | null) {
   useNotesWorkspace.setState({ workspaceId });
 }
 
-/** Your teamspaces grouped by workspace, in name order; just Private when you're in none. */
-export function workspacesOf(spaces: Space[]): Workspace[] {
+/**
+ * Every workspace you belong to (GET /api/workspaces), kept for the account that read it. Your
+ * teamspaces only name the workspaces you're in a teamspace of, so a new workspace, or one you
+ * admin without joining a teamspace, would never show without this list.
+ */
+export type KnownWorkspace = { id: string; name: string };
+export const useKnownWorkspaces = create<{ owner: string | null; list: KnownWorkspace[] }>(() => ({
+  owner: null,
+  list: [],
+}));
+
+/** Your workspaces with their teamspaces, in name order; just Private when you're in none. */
+export function workspacesOf(spaces: Space[], known: KnownWorkspace[] = []): Workspace[] {
   const groups = new Map<string | null, Workspace>();
+  for (const workspace of known)
+    groups.set(workspace.id, { id: workspace.id, name: workspace.name.trim(), teams: [] });
   for (const space of spaces) {
     if (space.kind !== 'team') continue;
     const id = space.workspaceId ?? null;
@@ -41,7 +55,13 @@ export function workspacesOf(spaces: Space[]): Workspace[] {
 export function useCurrentWorkspace(): { workspaces: Workspace[]; current: Workspace } {
   const spaces = useNotesStore((state) => state.spaces);
   const picked = useNotesWorkspace((state) => state.workspaceId);
-  const workspaces = useMemo(() => workspacesOf(spaces), [spaces]);
+  const known = useKnownWorkspaces((state) => state.list);
+  const owner = useKnownWorkspaces((state) => state.owner);
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const workspaces = useMemo(
+    () => workspacesOf(spaces, owner != null && owner === userId ? known : []),
+    [spaces, known, owner, userId],
+  );
   const current = workspaces.find((workspace) => workspace.id === picked) ?? workspaces[0];
   return { workspaces, current };
 }

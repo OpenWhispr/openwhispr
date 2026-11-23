@@ -36,6 +36,7 @@ import {
   useLibraryRevision,
 } from './library';
 import { FolderNameSheet, NewSheet, TodaySheet, WorkspaceSheet } from './sheets';
+import { useLoadWorkspaces } from './workspaceList';
 import { eventIsNow, hideUpNext, minutesUntil, useUpNext } from './calendar';
 import { startNote, startUpload } from './start';
 import { useMeetingStart } from './meetingStart';
@@ -59,6 +60,7 @@ export default function NotesRoot() {
   const revision = useLibraryRevision();
   const allNotes = useAllNotes(revision);
   const { workspaces, current } = useCurrentWorkspace();
+  useLoadWorkspaces();
   // Counted from the notes themselves, so a note waiting out its Undo isn't counted.
   const counts = useMemo(() => {
     const map = new Map<number, number>();
@@ -165,6 +167,12 @@ export default function NotesRoot() {
                 />
               ))}
             </Card>
+          </>
+        ) : null}
+        {current.teams.length === 0 && current.id != null ? (
+          <>
+            <SectionLabel label={current.name || t('teamspaces')} />
+            <Text style={[notesLook.rowSub, { paddingHorizontal: 4 }]}>{t('noTeamspaces')}</Text>
           </>
         ) : null}
         {current.teams.length > 0 ? (
