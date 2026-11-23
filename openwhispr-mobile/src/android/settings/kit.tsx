@@ -844,6 +844,7 @@ export function BottomSheet({
   onBack,
   leading,
   trailing,
+  above,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -856,6 +857,8 @@ export function BottomSheet({
   leading?: React.ReactNode;
   /** After the title, on the right (a close button). */
   trailing?: React.ReactNode;
+  /** A tile on its own line above the title (the signed-out sheet's lock). */
+  above?: React.ReactNode;
 }) {
   const t = useSettingsT();
   const reduceMotion = useReduceMotion();
@@ -929,6 +932,7 @@ export function BottomSheet({
               }}
             />
             <View style={{ gap: 6 }}>
+              {above && <View style={{ marginBottom: 6 }}>{above}</View>}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: leading ? 12 : 8 }}>
                 {leading}
                 {onBack && (

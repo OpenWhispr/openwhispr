@@ -1,13 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ResetPasswordScreen } from '@/android/auth/ResetPasswordScreen';
-
-function onboardingDone(): boolean {
-  try {
-    return localStorage.getItem('android-onboarding-done') === 'true';
-  } catch {
-    return true;
-  }
-}
+import { onboardingDone } from '@/android/onboarding/accountOnboarding';
 
 /**
  * The reset email's link: https://openwhispr.com/android-reset-password?token=… (or

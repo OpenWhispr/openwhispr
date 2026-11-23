@@ -63,9 +63,12 @@ function isTransientSessionFailure(error: unknown): boolean {
   );
 }
 
-async function getCachedAndroidUser(): Promise<AuthUser | null> {
-  // Expo already stores this server-issued session in SecureStore. Use it only
-  // for startup identity during a transport outage, never as paid-access proof.
+/**
+ * The account of the session saved on this phone, read without the network: `current` while the
+ * session's own expiry is still ahead. Startup opens on a current one (decision F3) and checks it
+ * with the server behind Home; it is identity only, never proof of paid access.
+ */
+export async function readSavedSession(): Promise<{ user: AuthUser; current: boolean } | null> {
   try {
     const cookie = await getStoredSession();
     if (!cookie) return null;
@@ -83,8 +86,7 @@ async function getCachedAndroidUser(): Promise<AuthUser | null> {
       session.userId !== user.id ||
       typeof session.token !== 'string' ||
       !session.token ||
-      typeof session.expiresAt !== 'string' ||
-      !(new Date(session.expiresAt).getTime() > Date.now())
+      typeof session.expiresAt !== 'string'
     ) {
       return null;
     }
@@ -95,13 +97,58 @@ async function getCachedAndroidUser(): Promise<AuthUser | null> {
       .filter((part) => /^(?:__Secure-)?(?:openwhispr|better-auth)\.session_token=/.test(part))
       .map((part) => decodeURIComponent(part.slice(part.indexOf('=') + 1)).split('.')[0]);
     // A stale cache from another login must never select the wrong local workspace.
-    return cookie === (await getStoredSession()) &&
-      tokens.length === 1 &&
-      tokens[0] === session.token
-      ? user
-      : null;
+    if (cookie !== (await getStoredSession()) || tokens.length !== 1 || tokens[0] !== session.token)
+      return null;
+    return { user, current: new Date(session.expiresAt).getTime() > Date.now() };
   } catch {
     return null;
+  }
+}
+
+async function getCachedAndroidUser(): Promise<AuthUser | null> {
+  // Expo already stores this server-issued session in SecureStore. Use it only
+  // for startup identity during a transport outage, never as paid-access proof.
+  const saved = await readSavedSession();
+  return saved?.current ? saved.user : null;
+}
+
+export type SessionCheck =
+  | { state: 'valid'; user: AuthUser }
+  | { state: 'ended' }
+  | { state: 'unknown' };
+
+/**
+ * Asks the server whether the saved session still stands, giving up after `timeoutMs`. Only an
+ * answer from the server ends it (no user, 401 or 403); an outage, a timeout or a captive portal
+ * is `unknown`, and the phone keeps the account it opened on.
+ */
+export async function checkSession(timeoutMs: number): Promise<SessionCheck> {
+  try {
+    // The API caches sessions in a signed cookie for 5 minutes; asking past it is what lets a
+    // session revoked elsewhere (a password change, "sign out other devices") end here at launch.
+    const { data, error } = await client.getSession({
+      query: { disableCookieCache: true },
+      fetchOptions: { timeout: timeoutMs },
+    });
+    const user = mapAuthUser(data?.user);
+    if (user) return { state: 'valid', user };
+    if (error && isTransientSessionFailure(error)) return { state: 'unknown' };
+    if (!error || error.status === 401 || error.status === 403) {
+      await clearStoredAuthValue(SESSION_DATA_STORAGE_KEY);
+      return { state: 'ended' };
+    }
+    return { state: 'unknown' };
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'status' in error &&
+      (error.status === 401 || error.status === 403)
+    ) {
+      await clearStoredAuthValue(SESSION_DATA_STORAGE_KEY);
+      return { state: 'ended' };
+    }
+    return { state: 'unknown' };
   }
 }
 

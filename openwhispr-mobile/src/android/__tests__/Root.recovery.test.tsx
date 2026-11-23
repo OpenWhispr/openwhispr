@@ -51,7 +51,32 @@ jest.mock('../useKeepRouteAcrossAccounts', () => ({ useKeepRouteAcrossAccounts: 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 jest.mock('expo-font', () => ({ useFonts: () => [true, null] }));
 jest.mock('@expo-google-fonts/space-grotesk', () => ({}));
-jest.mock('expo-splash-screen', () => ({ hideAsync: async () => {} }));
+const mockHideSplash = jest.fn(async () => {});
+jest.mock('expo-splash-screen', () => ({ hideAsync: () => mockHideSplash() }));
+jest.mock('../authLifecycle', () => ({ observeEndedSessions: () => () => {} }));
+jest.mock('../onboarding/accountOnboarding', () => ({
+  reportAndroidOnboardingDone: async () => {},
+}));
+jest.mock('../launch/LaunchScreens', () => {
+  const mockReact = require('react');
+  const { Pressable: MockPressable, Text: MockText } = require('react-native');
+  return {
+    LaunchSplash: ({ slow }: { slow: boolean }) =>
+      mockReact.createElement(MockText, null, slow ? 'splash opening' : 'splash'),
+    CouldNotOpen: ({ details, onRetry }: { details: string; onRetry: () => void }) =>
+      mockReact.createElement(
+        mockReact.Fragment,
+        null,
+        mockReact.createElement(MockText, null, details),
+        mockReact.createElement(
+          MockPressable,
+          { onPress: onRetry },
+          mockReact.createElement(MockText, null, 'tryAgain'),
+        ),
+      ),
+    SignedOutSheet: () => null,
+  };
+});
 jest.mock('react-native-gesture-handler', () => ({
   GestureHandlerRootView: require('react-native').View,
 }));
@@ -160,10 +185,40 @@ it('shows the startup failure before reading collections and retries to the work
   expect(mockLoadDictionary).not.toHaveBeenCalled();
   expect(mockInitializeNotes).not.toHaveBeenCalled();
 
-  fireEvent.press(view.getByText('retry'));
+  fireEvent.press(view.getByText('tryAgain'));
   await waitFor(() => expect(view.getByText('Workspace ready')).toBeTruthy());
   expect(mockInitializeAuth).toHaveBeenCalledTimes(2);
   expect(mockLoadDictionary).toHaveBeenCalledTimes(1);
   expect(mockInitializeNotes).toHaveBeenCalledTimes(1);
   expect(view.queryByText('Session initialization failed')).toBeNull();
+});
+
+it('keeps the native splash up until the workspace can draw (F1)', async () => {
+  mockInitializeAuth.mockImplementation(() => new Promise<void>(() => {}));
+  const view = render(<AndroidRoot />);
+  expect(view.getByText('splash')).toBeTruthy();
+  await act(async () => {});
+  expect(mockHideSplash).not.toHaveBeenCalled();
+  view.unmount();
+});
+
+it('hands a slow open to the same splash with one line after 1.5 s (D3)', async () => {
+  jest.useFakeTimers();
+  try {
+    mockInitializeAuth.mockImplementation(() => new Promise<void>(() => {}));
+    const view = render(<AndroidRoot />);
+    act(() => {
+      jest.advanceTimersByTime(1400);
+    });
+    expect(view.getByText('splash')).toBeTruthy();
+    expect(mockHideSplash).not.toHaveBeenCalled();
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
+    expect(view.getByText('splash opening')).toBeTruthy();
+    expect(mockHideSplash).toHaveBeenCalled();
+    view.unmount();
+  } finally {
+    jest.useRealTimers();
+  }
 });

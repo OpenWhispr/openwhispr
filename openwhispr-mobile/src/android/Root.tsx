@@ -5,7 +5,6 @@ import { watchLocalMode } from './settings/processingDefault';
 // Local Mode no longer ties the tasks together: anything that enters it becomes On device.
 watchLocalMode();
 import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -24,10 +23,6 @@ import { startMeetingRecoveryOnce } from '@/lib/meetingRecovery';
 import { initSyncTriggers } from '@/sync/syncEngine';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
-import { View, ActivityIndicator } from 'react-native';
-import { Text } from '@/components/ui/Text';
-import { Button, styles, palette } from './ui';
-import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
 import { observeAndroidPurchaseUpdates } from './billing';
 import { startBubblePipeline } from './bubblePipeline';
@@ -38,10 +33,16 @@ import { SettingsToastHost } from './settings/kit';
 import { loadLearnedWords } from './dictionary/learned';
 import { observeBubbleRestore } from './bubbleRestore';
 import { useKeepRouteAcrossAccounts } from './useKeepRouteAcrossAccounts';
+import { observeEndedSessions } from './authLifecycle';
+import { CouldNotOpen, LaunchSplash, SignedOutSheet } from './launch/LaunchScreens';
+import { reportAndroidOnboardingDone } from './onboarding/accountOnboarding';
+
+/** Past this, the splash says what it's waiting for (D3). Most launches never see it. */
+export const SLOW_OPEN_MS = 1500;
 
 export default function AndroidRoot() {
-  const { t } = useTranslation();
   const [ready, setReady] = useState(false);
+  const [slow, setSlow] = useState(false);
   const [bootError, setBootError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const accountError = useAccountData((state) => state.error);
@@ -66,6 +67,7 @@ export default function AndroidRoot() {
     const subscriptions = [
       dictationEvents?.addListener('onOpenResult', () => router.navigate('/(tabs)/(record)')),
       dictationEvents?.addListener('onOpenPlans', () => router.push('/android-pro')),
+      // An ended session keeps its account, so /auth opens Sign in again (2.5 / 2.5b) for it.
       dictationEvents?.addListener('onOpenSignIn', () => router.push('/auth')),
       dictationEvents?.addListener('onOpenModels', () => router.push('/android-models')),
     ];
@@ -75,6 +77,7 @@ export default function AndroidRoot() {
   useEffect(() => observeAndroidPurchaseUpdates(), []);
   useEffect(() => observeAndroidLanguage(), []);
   useEffect(() => observeBubbleRestore(), []);
+  useEffect(() => observeEndedSessions(), []);
   useEffect(() => {
     async function initialize() {
       await bootAppData();
@@ -87,9 +90,23 @@ export default function AndroidRoot() {
     }
     initialize().catch((error: Error) => setBootError(error.message));
   }, [attempt]);
+  const fontsSettled = Boolean(fonts || fontError);
+  const failed = bootError || accountError;
+  const showApp = ready && !accountBlocked && fontsSettled;
+  // One splash (F1): Android's own stays up until the app can draw its first real screen. Only a
+  // slow open hands over, to the identical screen with one line under the icon.
   useEffect(() => {
-    if (fonts || fontError) SplashScreen.hideAsync().catch(() => undefined);
-  }, [fonts, fontError]);
+    if (showApp || failed) return;
+    const timer = setTimeout(() => setSlow(true), SLOW_OPEN_MS);
+    return () => clearTimeout(timer);
+  }, [showApp, failed]);
+  useEffect(() => {
+    if (showApp || failed || slow) SplashScreen.hideAsync().catch(() => undefined);
+  }, [showApp, failed, slow]);
+  // A phone that finished onboarding tells each account signed in on it, once (F2).
+  useEffect(() => {
+    if (ready && !accountBlocked) void reportAndroidOnboardingDone();
+  }, [ready, accountRevision, accountBlocked]);
   useEffect(() => {
     if (ready && !accountError && !accountBlocked) {
       startMeetingRecoveryOnce();
@@ -104,40 +121,25 @@ export default function AndroidRoot() {
       <SafeAreaProvider>
         <StatusBar style="dark" />
         <OpenWhisprSuperwallProvider>
-          {bootError || accountError ? (
-            <View style={[styles.content, { flex: 1, justifyContent: 'center' }]}>
-              <Text style={styles.heading}>{t('bootError')}</Text>
-              <Text>{bootError || accountError}</Text>
-              <Button
-                label={t('retry')}
-                onPress={() => {
-                  forgetAppData();
-                  setBootError('');
-                  setAttempt((value) => value + 1);
-                }}
-              />
-            </View>
-          ) : ready && !accountBlocked && (fonts || fontError) ? (
+          {failed ? (
+            <CouldNotOpen
+              details={failed}
+              onRetry={() => {
+                forgetAppData();
+                setBootError('');
+                setSlow(false);
+                setAttempt((value) => value + 1);
+              }}
+            />
+          ) : showApp ? (
             <>
               <Stack key={accountRevision} screenOptions={{ headerShown: false }} />
               <SettingsToastHost />
+              <SignedOutSheet />
             </>
           ) : (
-            <View
-              style={[
-                styles.content,
-                {
-                  flex: 1,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  backgroundColor: palette.background,
-                },
-              ]}
-            >
-              <OpenWhisprMark size={70} color={palette.blue} />
-              <Text style={styles.body}>{t('opening')}</Text>
-              <ActivityIndicator color={palette.blue} />
-            </View>
+            // Under the native splash this is never seen; it takes over at the same pixels.
+            <LaunchSplash slow={slow} />
           )}
           <PermissionAlertMount />
         </OpenWhisprSuperwallProvider>

@@ -5,6 +5,7 @@ import { requiresRealAccount } from '@/lib/accountAccess';
 import { needsEmailVerification } from '@/android/auth/emailVerification';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore.android';
+import { useEndedSession } from '@/android/auth/endedSession';
 
 export default function AuthRoute() {
   const params = useLocalSearchParams<{
@@ -13,7 +14,10 @@ export default function AuthRoute() {
     reason?: string;
   }>();
   const user = useAuthStore((state) => state.user);
-  const sessionRejected = useUsageStore((state) => state.sessionRejected);
+  const rejected = useUsageStore((state) => state.sessionRejected);
+  // An ended session found at launch keeps its account too (F4); usage may not know of it yet.
+  const endedAccount = useEndedSession((state) => state.user?.id);
+  const sessionRejected = rejected || (!!user && endedAccount === user.id);
 
   useEffect(() => {
     // An anonymous session is here to become an account; only a real one is
