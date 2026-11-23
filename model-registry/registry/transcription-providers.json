@@ -178,21 +178,24 @@
         "name": "Universal-3.5 Pro",
         "description": "Highest accuracy realtime, 18 languages",
         "descriptionKey": "models.descriptions.transcription.assemblyai_universal_3_5_pro",
-        "streaming": true
+        "streaming": true,
+        "legacy": true
       },
       {
         "id": "universal-streaming-english",
         "name": "Universal Streaming (English)",
         "description": "Immutable realtime transcripts, English",
         "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_english",
-        "streaming": true
+        "streaming": true,
+        "legacy": true
       },
       {
         "id": "universal-streaming-multilingual",
         "name": "Universal Streaming (Multilingual)",
         "description": "Immutable realtime transcripts, multilingual",
         "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_multilingual",
-        "streaming": true
+        "streaming": true,
+        "legacy": true
       }
     ],
     "defaultModel": "universal-3-6-pro"
