@@ -36,6 +36,10 @@ import { useKeepRouteAcrossAccounts } from './useKeepRouteAcrossAccounts';
 import { observeEndedSessions } from './authLifecycle';
 import { CouldNotOpen, LaunchSplash, SignedOutSheet } from './launch/LaunchScreens';
 import { reportAndroidOnboardingDone } from './onboarding/accountOnboarding';
+import { prefetchSpeakerModel } from './liveSpeakers/speakerModel';
+
+/** The speaker model waits this long after launch, so it never competes with the first screen. */
+export const SPEAKER_MODEL_DELAY_MS = 15_000;
 
 /** Past this, the splash says what it's waiting for (D3). Most launches never see it. */
 export const SLOW_OPEN_MS = 1500;
@@ -107,6 +111,13 @@ export default function AndroidRoot() {
   useEffect(() => {
     if (ready && !accountBlocked) void reportAndroidOnboardingDone();
   }, [ready, accountRevision, accountBlocked]);
+  // Live meeting speaker labels need the 42 MB speaker model before the first meeting starts, so
+  // it comes down quietly on any network once the app is open (skipped if it was removed).
+  useEffect(() => {
+    if (!ready || accountBlocked) return;
+    const timer = setTimeout(() => void prefetchSpeakerModel(), SPEAKER_MODEL_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [ready, accountBlocked]);
   useEffect(() => {
     if (ready && !accountError && !accountBlocked) {
       startMeetingRecoveryOnce();
