@@ -372,6 +372,8 @@ test("the STT config goes stale after fifteen minutes and immediately when inval
   assert.equal(manager.isSttConfigStale(fetchedAt), true);
   // Invalidating also bumps the generation a fetch compares against.
   assert.equal(manager.sttConfigGeneration, generation + 1);
+  manager.setSttConfig({ success: true, optionalBatchModels: [{ id: "oruk-fourier-2b" }] });
+  assert.equal(manager.isSttConfigStale(manager.sttConfigFetchedAt + 31_000), true);
 });
 
 test("a cloud upload reports why it was batch instead of the managed Orukeet stream", async (t) => {
@@ -679,4 +681,41 @@ test("combined-pipeline config expires after 30 seconds even when language routi
   const at = manager.sttConfigFetchedAt;
   assert.equal(manager.isSttConfigStale(at + 30000), false);
   assert.equal(manager.isSttConfigStale(at + 30001), true);
+});
+
+test("an enrolled English dictation leaves the managed stream and requests Fourier on the normal cloud upload", async (t) => {
+  const { manager, window } = await loadCloudPipeline(t, {
+    preferredLanguage: "en",
+    cloudTranscriptionMode: "openwhispr",
+    isSignedIn: true,
+    useCleanupModel: false,
+  });
+  manager.setSttConfig({
+    success: true,
+    dictation: { mode: "streaming" },
+    streamingProvider: "orukeet",
+    optionalBatchModelAccount: "a",
+    optionalBatchModels: [{ id: "oruk-fourier-2b", languages: ["en"] }],
+  });
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const storage = { getItem: (key) => (key === "openwhispr:fourier-english:a" ? "1" : null) };
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, "localStorage", previous);
+    else delete globalThis.localStorage;
+  });
+  manager.getEffectiveSttLanguage = () => "en";
+  manager.getWhisperPrompt = () => "";
+  assert.equal(manager.shouldUseStreaming(true), false);
+  const received = [];
+  window.electronAPI.cloudTranscribe = async (_buffer, opts) => {
+    received.push(opts);
+    return { success: true, text: "Hello", sttProvider: "fourier" };
+  };
+  await manager.processWithOpenWhisprCloud(new Blob([new Uint8Array(32)]));
+  assert.equal(received[0].fourierAccount, "a");
+  manager.getWhisperPrompt = () => "Kisfeld";
+  await manager.processWithOpenWhisprCloud(new Blob([new Uint8Array(32)]));
+  assert.equal(received[1].fourierAccount, undefined);
+  assert.equal(received[1].prompt, "Kisfeld");
 });

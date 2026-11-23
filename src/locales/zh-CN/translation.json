@@ -2461,6 +2461,7 @@
         "modelsReady": "模型已就绪",
         "deleteModels": "删除模型"
       },
+      "fourierEnglishPilot": "选择英语且词典为空时，在录音结束后转写。",
       "transcriptionPreview": "实时转录预览",
       "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理",
       "aec": {

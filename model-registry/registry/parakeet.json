@@ -182,5 +182,28 @@
       "name": "Oruk"
     },
     "modelCardUrl": "https://huggingface.co/oruk/orukeet"
+  },
+  "oruk-fourier-2b": {
+    "name": "Fourier 2B",
+    "description": "Experimental on-device English dictation. Noncommercial use under CC BY-NC 4.0.",
+    "size": "2.41 GB",
+    "sizeMb": 2410,
+    "expectedSizeBytes": 2409908809,
+    "language": "en",
+    "supportedLanguages": [
+      "en"
+    ],
+    "runtime": "offline",
+    "modelType": "qwen3-asr",
+    "downloadUrl": "https://huggingface.co/oruk/oruk-fourier-2b/resolve/3fda023e157ce7986f137f76fcf326ed6e08fa73/onnx/sherpa-int8/SHA256SUMS",
+    "sha256": "f327beacfa4f04f2f08667b302b5853f9de89005f5f4a9f8d54c426794d43cad",
+    "extractDir": "oruk-fourier-2b",
+    "organization": {
+      "id": "oruk",
+      "name": "Oruk"
+    },
+    "modelCardUrl": "https://huggingface.co/oruk/oruk-fourier-2b",
+    "license": "CC-BY-NC-4.0",
+    "minAppVersion": "1.12.1"
   }
 }

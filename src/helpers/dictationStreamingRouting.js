@@ -48,7 +48,7 @@ export function shouldRetranscribeOrukeetLanguage({ language, final }) {
 // Opt-in, server-controlled rollout. Missing/unknown modes retain the existing
 // rule; shadow records the comparison without changing the user's result.
 const ORUKEET_LANGUAGE_ROUTING_MODES = new Set(["shadow", "supported-0.30", "supported-0.10"]);
-export const ORUKEET_EXPERIMENT_CONFIG_TTL_MS = 30000;
+export const STT_EXPERIMENT_CONFIG_TTL_MS = 30000;
 export function hasOrukeetExperiment(config) {
   return (
     ORUKEET_LANGUAGE_ROUTING_MODES.has(config?.orukeetLanguageRouting) ||

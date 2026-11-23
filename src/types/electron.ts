@@ -1931,6 +1931,8 @@ declare global {
       getSttConfig?: () => Promise<
         | ({
             success: boolean;
+            optionalBatchModelAccount?: string;
+            optionalBatchModels?: Array<{ id: string; languages: string[] }>;
             dictation?: { mode: string };
             notes?: { mode: string };
             streamingProvider?: string;
@@ -2028,6 +2030,7 @@ declare global {
       retryTranscription: (
         id: number,
         settings?: {
+          fourierAccount?: string;
           useLocalWhisper: boolean;
           localTranscriptionProvider: string;
           cloudTranscriptionMode: string;
@@ -3273,6 +3276,7 @@ declare global {
       cloudTranscribe?: (
         audioBuffer: ArrayBuffer,
         opts: {
+          fourierAccount?: string;
           language?: string;
           prompt?: string;
           useCase?: string;
@@ -3445,7 +3449,12 @@ declare global {
       // Cloud audio file transcription
       transcribeAudioFileCloud?: (
         filePath: string,
-        options?: { requestId?: string; purpose?: "dictation" | "upload" }
+        options?: {
+          requestId?: string;
+          purpose?: "dictation" | "upload";
+          fourierAccount?: string;
+          language?: string;
+        }
       ) => Promise<
         {
           success: boolean;

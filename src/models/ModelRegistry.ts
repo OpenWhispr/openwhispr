@@ -144,7 +144,7 @@ export interface ParakeetModelInfo {
   language: string;
   supportedLanguages: string[];
   runtime?: "offline" | "online";
-  modelType?: "transducer" | "cohere-transcribe";
+  modelType?: "transducer" | "cohere-transcribe" | "qwen3-asr";
   /** Verified sherpa decoder type; skips redundant encoder loading during detection. */
   sherpaModelType?: "nemo_transducer";
   organization?: { id: string; name: string };
