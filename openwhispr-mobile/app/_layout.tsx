@@ -37,10 +37,15 @@ import {
   refreshAppsFlyerTrackingAuthorization,
 } from '@/lib/appsflyer';
 import { initSyncTriggers } from '@/sync/syncEngine';
+import { initProductEvents } from '@/lib/productEvents';
+import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
-import { startKeyboardLayoutSync } from '@/lib/keyboardLayoutSync';
+import { startKeyboardCredentialSync } from '@/lib/keyboardCredentialSync';
+import { startKeyboardDirectSync } from '@/lib/keyboardDirectSync';
+import { startKeyboardTypingSync } from '@/lib/keyboardTypingSync';
+import { startKeyboardDirectOutbox } from '@/lib/keyboardDirectOutbox';
 import { startKeyboardFullAccessProbe } from '@/lib/keyboardFullAccessProbe';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
 import { eraseProviderCredentialsFromPreviousInstall } from '@/services/providers/ProviderCredentials';
@@ -52,7 +57,11 @@ runMigrations();
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayout() {
-  useKeyboardHandoff();
+  const [keyboardStartup, setKeyboardStartup] = useState<{
+    ready: boolean;
+    session: CachedSession | null;
+  }>({ ready: false, session: null });
+  useKeyboardHandoff(keyboardStartup.ready, keyboardStartup.session);
   useRevenueCatIdentity();
   useAnonymousOnboardingSession();
   useAffiliateAttribution();
@@ -92,19 +101,32 @@ function RootLayout() {
   };
 
   useEffect(() => {
+    let mounted = true;
+    const cachedSession = getCachedSession();
     initialize();
-    loadConfig();
-    hydrateOnboarding();
+    // Restore local capture state before starting, independently of auth's network request.
+    Promise.allSettled([loadConfig(), hydrateOnboarding(), cachedSession]).then((results) => {
+      if (!mounted) return;
+      const session = results[2];
+      setKeyboardStartup({
+        ready: true,
+        session: session.status === 'fulfilled' ? session.value : null,
+      });
+    });
     startRetiredPromptSweep();
     // A failure leaves the install unmarked, so the next key access retries the erase.
     eraseProviderCredentialsFromPreviousInstall().catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
   }, [initialize, loadConfig, hydrateOnboarding]);
 
   useEffect(() => {
     let started = false;
     let stopTone: (() => void) | undefined;
     let stopAgent: (() => void) | undefined;
-    let stopLayout: (() => void) | undefined;
+    let stopDirect: (() => void) | undefined;
+    let stopTyping: (() => void) | undefined;
     let stopFullAccessProbe: (() => void) | undefined;
     // Waits for config to hydrate so the probe's Sentry events respect the
     // user's Usage Analytics preference rather than the pre-hydration default.
@@ -114,7 +136,8 @@ function RootLayout() {
         started = true;
         stopTone = startKeyboardToneSync();
         stopAgent = startKeyboardAgentSync();
-        stopLayout = startKeyboardLayoutSync();
+        stopDirect = startKeyboardDirectSync();
+        stopTyping = startKeyboardTypingSync();
         stopFullAccessProbe = startKeyboardFullAccessProbe();
       }
     };
@@ -125,14 +148,22 @@ function RootLayout() {
       unsubscribe();
       stopTone?.();
       stopAgent?.();
-      stopLayout?.();
+      stopDirect?.();
+      stopTyping?.();
       stopFullAccessProbe?.();
     };
   }, []);
 
   useEffect(() => {
     initSyncTriggers();
+    initProductEvents();
   }, []);
+
+  // Keeps the keyboard's copy of the session in step with sign-in, sign-out and account changes.
+  useEffect(() => startKeyboardCredentialSync(), []);
+
+  // Brings dictations the keyboard finished on its own into History.
+  useEffect(() => startKeyboardDirectOutbox(), []);
 
   // After an interactive sign-in (AuthScreen was shown, then auth completed),
   // land on home instead of restoring the route that was active before — e.g. the

@@ -49,6 +49,8 @@ export function UploadTranscriptionPanel() {
     setUploadRemoteTranscriptionUrl,
     uploadRemoteTranscriptionModel,
     setUploadRemoteTranscriptionModel,
+    selfHostedSttHeaders,
+    setSelfHostedSttHeaders,
   } = useSettingsStore();
   const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
   const managedActive = managed.kind === "managed";
@@ -222,6 +224,8 @@ export function UploadTranscriptionPanel() {
           onUrlChange={setUploadRemoteTranscriptionUrl}
           model={uploadRemoteTranscriptionModel}
           onModelChange={setUploadRemoteTranscriptionModel}
+          headers={selfHostedSttHeaders.upload}
+          onHeadersChange={(rows) => setSelfHostedSttHeaders("upload", rows)}
         />
       )}
     </div>

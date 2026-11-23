@@ -4,6 +4,8 @@ import { Users } from "../icons";
 import { cn } from "../lib/utils";
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./dialogButtons";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
+import { workspacePlanSection } from "../../lib/settingsNav";
+import { hasValidatedAuthContext } from "../../lib/authRequestContext";
 import { teamCreationFor, workspaceCan } from "../../lib/capabilities";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { isolate } from "../../utils/bidiIsolate";
@@ -42,7 +44,9 @@ export default function TeamPaywallDialog({
   // The capability the paywall opened on may be stale (a plan changed on the web or another
   // device, or a webhook that landed late), so each opening reads the workspace again.
   useEffect(() => {
-    if (open) void useWorkspaceStore.getState().refresh({ fresh: true });
+    if (open && hasValidatedAuthContext()) {
+      void useWorkspaceStore.getState().refresh({ fresh: true });
+    }
   }, [open]);
   // Hands over only after this opening saw creating blocked: a server refusal can open the
   // paywall while the list still says allowed, and handing over then would loop.
@@ -59,7 +63,7 @@ export default function TeamPaywallDialog({
   // A named section remounts Settings, so this also works from inside Settings.
   const handleUpgrade = (): void => {
     onOpenChange(false);
-    void window.electronAPI?.openSettingsSection?.("plansBilling");
+    void window.electronAPI?.openSettingsSection?.(workspacePlanSection(workspace.id));
   };
 
   const variant = lapsed ? "lapsedBody" : "body";
@@ -73,7 +77,7 @@ export default function TeamPaywallDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideCloseButton
-        className="w-[320px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-5 rounded-[28px] p-5 sm:max-w-[320px]"
+        className="w-[330px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-5 rounded-[28px] p-5 sm:max-w-[330px]"
       >
         <DialogHeader className="items-center gap-3 space-y-0 text-center sm:text-center">
           <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-3 text-foreground">

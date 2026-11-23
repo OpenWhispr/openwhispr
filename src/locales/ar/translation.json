@@ -23,6 +23,11 @@
         "title": "لم نتمكن من التقاط الصوت",
         "description": "تحقق من الميكروفون وحاول مرة أخرى."
       },
+      "commandAccountChanged": {
+        "title": "لم تتم الإجابة عن الأمر",
+        "description": "تغيّر الحساب قبل اكتمال الأمر. نصه المفرَّغ موجود في سجل الحساب الذي نطقته به.",
+        "descriptionNotSaved": "تغيّر الحساب قبل اكتمال الأمر. قله مرة أخرى لتسأل الآن."
+      },
       "micDisconnected": {
         "title": "تم فصل الميكروفون",
         "description": "التسجيل لا يزال نشطًا وسيتم استئنافه عند توفر ميكروفون.",
@@ -278,6 +283,9 @@
         "groq_whisper_large_v3_turbo": "أسرع من الوقت الفعلي بـ216 ضعفًا",
         "mistral_voxtral_mini_latest": "تفريغ سريع متعدد اللغات",
         "gemini_3_5_transcribe": "تحويل الكلام إلى نص من Google Gemini",
+        "elevenlabs_scribe_v3": "أدق نسخ متعدد اللغات",
+        "elevenlabs_scribe_v2": "نسخ دقيق متعدد اللغات",
+        "elevenlabs_scribe_v3_live": "نسخ مباشر لتسجيل الملاحظات",
         "gemini_3_5_transcribe_live": "تحويل الكلام إلى نص بالبث في الوقت الفعلي",
         "corti_transcribe": "تفريغ طبي بدرجة سريرية",
         "xai_grok_stt": "تعرف على الكلام بدقة عالية من xAI",
@@ -285,6 +293,7 @@
         "deepgram_nova_3": "نموذج Deepgram الأكثر دقة في الوقت الفعلي",
         "assemblyai_universal_streaming_english": "نصوص مفرَّغة ثابتة في الوقت الفعلي، الإنجليزية",
         "assemblyai_universal_streaming_multilingual": "نصوص مفرَّغة ثابتة في الوقت الفعلي، متعددة اللغات",
+        "assemblyai_dictation": "التفريغ والتنظيف في طلب واحد، 32 لغة",
         "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة",
         "assemblyai_universal_3_6_pro": "أعلى دقة في الوقت الفعلي، 32 لغة",
         "mistral_voxtral_mini_transcribe_3_0": "تفريغ سريع بأكثر من 50 لغة (معاينة)",
@@ -592,7 +601,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "التحديث مطلوب",
-      "description": "تتطلب مؤسستك إصدار OpenWhispr {{version}} أو أحدث. يرجى تحديث التطبيق."
+      "description": "تتطلب مؤسستك إصدار OpenWhispr {{version}} أو أحدث. يرجى تحديث التطبيق.",
+      "contactIT": "تتطلب مؤسستك OpenWhispr بالإصدار {{version}} أو أحدث. تواصل مع قسم تقنية المعلومات لتثبيت إصدار معتمد."
     },
     "update": {
       "readyTitle": "التحديث جاهز للتثبيت",
@@ -673,7 +683,7 @@
       "rawTranscript": "النص المفرَّغ الخام",
       "clearAll": "مسح الكل",
       "clearAllTitle": "مسح جميع النصوص المفرَّغة",
-      "clearAllDescription": "ستتم إزالة جميع النصوص المفرَّغة والملفات الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز ومن حسابك.",
+      "clearAllDescription": "ستتم إزالة جميع النصوص المفرَّغة في سجلك وملفاتها الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز ومن حسابك.",
       "clearAllSuccess": "تم مسح السجل",
       "clearAllErrorTitle": "تعذر مسح السجل",
       "clearAllErrorDescription": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
@@ -687,7 +697,7 @@
         "recovered": "تمت الاستعادة"
       },
       "retryTranslationMode": "وضع الترجمة",
-      "clearAllDescriptionDevice": "ستتم إزالة جميع النصوص المفرَّغة والملفات الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز. أما العدادات التي تمت مزامنتها مع حسابك فلا تتأثر."
+      "clearAllDescriptionDevice": "ستتم إزالة جميع النصوص المفرَّغة في هذا السجل وملفاتها الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز. وأي نص منها سبقت مزامنته مع حساب سيُحذف أيضًا من ذلك الحساب في المرة القادمة التي يُسجَّل فيها الدخول إليه على هذا الجهاز."
     },
     "aiCta": {
       "title": "قم بتحسين نصوصك المفرَّغة باستخدام الذكاء الاصطناعي",
@@ -714,6 +724,7 @@
     }
   },
   "integrations": {
+    "apiAccessDisabled": "أوقفت مؤسستك الوصول إلى واجهة API وMCP.",
     "title": "التكاملات (Integrations)",
     "googleCalendar": {
       "title": "تقويم Google",
@@ -836,7 +847,9 @@
         "default": "إرسال إلى {{destination}}",
         "email": "بريد إلكتروني إلى {{destination}}",
         "issue": "إنشاء مشكلة في {{destination}}",
-        "comment": "التعليق على {{destination}}"
+        "comment": "التعليق على {{destination}}",
+        "salesforceActivity": "حفظ المحادثة في {{destination}}",
+        "salesforceFields": "مراجعة حقول الفرصة في {{destination}}"
       },
       "identity": "بصفتك {{account}}",
       "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
@@ -927,6 +940,31 @@
           "refused": "رفض Linear الطلب. لم يُرسل شيء.",
           "unknown_action": "لا يستطيع OpenWhispr فعل ذلك في Linear. لم يُرسل شيء.",
           "generic": "حدث خطأ ما. لم يُرسل شيء إلى Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "يلزم إعادة ربط Salesforce من الإعدادات.",
+          "connection_changed": "تغيّر اتصال Salesforce قبل الإرسال، لذا لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Salesforce على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى.",
+          "network": "تعذّر الوصول إلى Salesforce. لم يُرسل شيء.",
+          "rate_limited": "Salesforce مشغول حاليًا. حاول مرة أخرى بعد قليل.",
+          "forbidden": "لا يُسمح لحسابك في Salesforce بذلك. لم يُرسل شيء.",
+          "invalid_input": "لم يقبل Salesforce هذا بصيغته الحالية. لم يُرسل شيء.",
+          "too_long": "أطول مما يسمح به Salesforce. لم يُرسل شيء.",
+          "refused": "رفض Salesforce الطلب. لم يُرسل شيء.",
+          "unknown_action": "لا يستطيع OpenWhispr فعل ذلك في Salesforce. لم يُرسل شيء.",
+          "generic": "حدث خطأ ما. لم يُرسل شيء إلى Salesforce.",
+          "stale_record": "تغيرت بيانات Salesforce منذ هذه المراجعة. حدّثها وراجعها مجددًا.",
+          "source_unavailable": "الملاحظة المصدر مفقودة أو يتعذر الوصول إليها.",
+          "export_required": "احفظ النشاط في هذه الفرصة قبل تحديث حقولها.",
+          "duplicate_operation": "حُفظ هذا التصدير مجددًا بعد هذه المراجعة، أو ما زال الحفظ جاريًا. لم يُرسل شيء. جهّز مراجعة جديدة.",
+          "invalid_field": "اختر ما يصل إلى ثلاثة حقول نصية مخصصة وقابلة للتعديل للفرصة.",
+          "storage_unavailable": "سجل التصدير المحلي غير متاح. لم تبدأ أي عملية كتابة جديدة.",
+          "task_status_unavailable": "لا توجد حالة متاحة لمهمة مكتملة في Salesforce. تواصل مع مسؤول Salesforce.",
+          "not_found": "لم يعد سجل Salesforce هذا موجودًا، أو لا يمكنك الوصول إليه. لم يُرسل شيء.",
+          "invalid_reference": "لم يقبل Salesforce هذا بصيغته الحالية. لم يُرسل شيء.",
+          "no_fields_selected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية.",
+          "record_locked": "سجل Salesforce هذا مقفل، مثلًا بسبب عملية موافقة. لم يُرسل شيء.",
+          "validation_failed": "منعت ذلك قاعدة تحقق أو قاعدة تكرار أو حقل مطلوب في Salesforce. تحقق من السجل في Salesforce. لم يُرسل شيء."
         }
       },
       "email": {
@@ -955,11 +993,14 @@
       "openIn": {
         "github": "فتح في GitHub",
         "gmail": "فتح في Gmail",
-        "linear": "فتح في Linear"
+        "linear": "فتح في Linear",
+        "salesforce": "فتح في Salesforce"
       },
       "sendLabel": {
         "issue": "إنشاء مشكلة",
-        "comment": "تعليق"
+        "comment": "تعليق",
+        "salesforceActivity": "حفظ النشاط",
+        "salesforceFields": "حفظ الحقول"
       },
       "issue": {
         "created": "تم إنشاء {{result}}.",
@@ -1002,7 +1043,26 @@
       "identityChanged": "سيُرسل الآن بصفتك {{account}}. اضغط إرسال لإرساله.",
       "connectToSend": "اربط {{name}} لإرسال هذا",
       "edit": "تعديل",
-      "doneEditing": "تم التعديل"
+      "doneEditing": "تم التعديل",
+      "salesforce": {
+        "include": "تضمين {{field}}",
+        "omitted": "مستبعد — لن يتغير هذا الحقل",
+        "before": "القيمة الحالية",
+        "after": "البديل المقترح",
+        "empty": "فارغ",
+        "limit": "{{count}} / {{max}} حرف",
+        "noneSelected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية.",
+        "tooLong": "يتجاوز أحد الحقول المحددة الحد الأقصى للأحرف.",
+        "salesforceActivity": {
+          "sent": "تم حفظ النشاط في {{destination}}.",
+          "unknown": "تعذر تأكيد التغييرات. تحقق من {{destination}} في Salesforce قبل المحاولة مجددًا."
+        },
+        "salesforceFields": {
+          "sent": "تم حفظ الحقول في {{destination}}.",
+          "unknown": "تعذر تأكيد التغييرات. تحقق من {{destination}} في Salesforce قبل المحاولة مجددًا."
+        },
+        "savedLabel": "تم الحفظ"
+      }
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
     "email": {
@@ -1178,7 +1238,9 @@
         "slack_send_message": "رسالة إلى {{destination}}",
         "gmail_send": "رسالة إلكترونية إلى {{destination}}",
         "linear_create_issue": "مشكلة جديدة في {{destination}}",
-        "linear_comment": "تعليق على {{destination}}"
+        "linear_comment": "تعليق على {{destination}}",
+        "salesforce_export_conversation": "حفظ المحادثة في {{destination}}",
+        "salesforce_update_fields": "مراجعة حقول الفرصة في {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "مسودة بريد إلكتروني",
@@ -1187,7 +1249,9 @@
         "slack_send_message": "رسالة Slack",
         "gmail_send": "رسالة Gmail",
         "linear_create_issue": "مشكلة Linear",
-        "linear_comment": "تعليق Linear"
+        "linear_comment": "تعليق Linear",
+        "salesforce_export_conversation": "نشاط Salesforce",
+        "salesforce_update_fields": "تحديثات حقول Salesforce"
       },
       "states": {
         "pending": "قيد الانتظار",
@@ -1289,6 +1353,31 @@
           "refused": "رفض Linear الطلب.",
           "unknown_action": "غير متاح في Linear.",
           "generic": "لم ينجح ذلك في Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "يلزم إعادة ربط Salesforce.",
+          "connection_changed": "تغيّر اتصال Salesforce. لم يُرسل شيء.",
+          "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Salesforce على هذا الكمبيوتر.",
+          "network": "تعذّر الوصول إلى Salesforce.",
+          "rate_limited": "Salesforce مشغول حاليًا.",
+          "forbidden": "غير مسموح به في Salesforce.",
+          "invalid_input": "لم يقبله Salesforce.",
+          "too_long": "أطول مما يسمح به Salesforce.",
+          "refused": "رفض Salesforce الطلب.",
+          "unknown_action": "غير متاح في Salesforce.",
+          "generic": "لم ينجح ذلك في Salesforce.",
+          "stale_record": "تغيرت بيانات Salesforce منذ هذه المراجعة. حدّثها وراجعها مجددًا.",
+          "source_unavailable": "الملاحظة المصدر مفقودة أو يتعذر الوصول إليها.",
+          "export_required": "احفظ النشاط في هذه الفرصة قبل تحديث حقولها.",
+          "duplicate_operation": "حُفظ هذا التصدير مجددًا بعد هذه المراجعة، أو ما زال الحفظ جاريًا. لم يُرسل شيء.",
+          "invalid_field": "اختر ما يصل إلى ثلاثة حقول نصية مخصصة وقابلة للتعديل للفرصة.",
+          "storage_unavailable": "سجل التصدير المحلي غير متاح. لم تبدأ أي عملية كتابة جديدة.",
+          "task_status_unavailable": "لا توجد حالة متاحة لمهمة مكتملة في Salesforce. تواصل مع مسؤول Salesforce.",
+          "not_found": "غير موجود في Salesforce.",
+          "invalid_reference": "لم يقبله Salesforce.",
+          "no_fields_selected": "حدد حقلًا واحدًا على الأقل أو ألغِ العملية.",
+          "record_locked": "سجل Salesforce مقفل.",
+          "validation_failed": "منعته قاعدة أو حقل مطلوب في Salesforce."
         }
       },
       "unknownSent": {
@@ -1301,7 +1390,120 @@
     },
     "beta": "تجريبي",
     "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
-    "locked": "متاح ضمن الخطط المدفوعة"
+    "locked": "متاح ضمن الخطط المدفوعة",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "صدّر المحادثات التي تمت مراجعتها وأعد ملخصات لعميل محدد. تُحفظ روابط الملاحظات على هذا الجهاز فقط.",
+      "connect": "ربط",
+      "reconnect": "إعادة الربط",
+      "disconnect": "قطع الربط",
+      "connecting": "أكمل الربط في متصفحك…",
+      "connectedAs": "متصل بصفتك {{account}} في {{workspace}}",
+      "needsReconnect": "يلزم إعادة ربط Salesforce.",
+      "errors": {
+        "connect_failed": "تعذّر ربط Salesforce. حاول مرة أخرى.",
+        "disconnect_failed": "تعذّر قطع ربط Salesforce. حاول مرة أخرى.",
+        "oauth_denied": "لم يتم ربط Salesforce لأن الإذن لم يُمنح.",
+        "oauth_timeout": "استغرق الربط وقتًا طويلاً. حاول مرة أخرى.",
+        "oauth_state_mismatch": "رابط تسجيل الدخول هذا كان قديمًا. حاول مرة أخرى.",
+        "ports_busy": "يستخدم تطبيق آخر المنافذ التي يحتاجها OpenWhispr للربط. أغلقه وحاول مرة أخرى.",
+        "token_exchange_failed": "لم يكمل Salesforce عملية الربط. حاول مرة أخرى.",
+        "not_configured": "Salesforce غير متاح في هذا الإصدار.",
+        "connection_changed": "تغيّر حسابك أو اتصال Salesforce أثناء الربط. حاول مرة أخرى.",
+        "signed_out": "سجّل الدخول إلى OpenWhispr لربط Salesforce.",
+        "policy_blocked": "أوقفت مؤسستك تشغيل الموصلات.",
+        "policy_unavailable": "تعذّر التحقق من إعدادات مؤسستك. حاول مرة أخرى.",
+        "permission_not_granted": "لم يتم ربط Salesforce لأن بعض الأذونات لم تُمنح. أعد الربط واسمح بها جميعًا.",
+        "invalid_login_domain": "أدخل test.salesforce.com أو My Domain الخاص بشركتك، مثل yourcompany.my.salesforce.com."
+      },
+      "browser": {
+        "connectedTitle": "تم توصيل Salesforce",
+        "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
+        "failedTitle": "لم يتم توصيل Salesforce",
+        "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
+      },
+      "notes": {
+        "updateExisting": "تحديث النشاط المحفوظ سابقًا؛ لن يتم إنشاء مهمة أخرى.",
+        "earlierAttemptUncertain": "ربما حفظت محاولة سابقة هذا في Salesforce بالفعل. تحقق من السجل هناك قبل الإرسال مجددًا.",
+        "replacesMissing": "لم يعد النشاط المحفوظ سابقًا على هذا السجل في Salesforce، أو لم تعد تستطيع رؤيته، لذا سيُنشأ نشاط جديد.",
+        "editedInSalesforce": "عُدّل هذا النشاط في Salesforce بعد أن حفظه OpenWhispr. سيؤدي الإرسال إلى استبدال هذه التعديلات.",
+        "sourceNote": "من الملاحظة «{{title}}».",
+        "sourceNoteUntitled": "من ملاحظة بلا عنوان."
+      },
+      "provenance": "المصدر: OpenWhispr — {{title}}{{date}}",
+      "briefing": {
+        "untitledRecord": "سجل Salesforce المحدد",
+        "retrieved": "وقت الجلب: {{time}}",
+        "crmFacts": "بيانات CRM الحالية",
+        "fields": {
+          "Name": "الاسم",
+          "PersonName": "الاسم",
+          "StageName": "المرحلة",
+          "CloseDate": "تاريخ الإغلاق",
+          "Amount": "المبلغ",
+          "CurrencyIsoCode": "العملة",
+          "NextStep": "الخطوة التالية",
+          "OwnerId": "المالك",
+          "AccountId": "الحساب",
+          "Type": "النوع",
+          "Industry": "القطاع",
+          "Website": "موقع الويب",
+          "Phone": "الهاتف",
+          "FirstName": "الاسم الأول",
+          "LastName": "اسم العائلة",
+          "Email": "البريد الإلكتروني",
+          "Title": "المسمى الوظيفي",
+          "Company": "الشركة",
+          "Status": "الحالة"
+        },
+        "notReturned": "لم يُرجَع",
+        "notRecorded": "غير مسجّل",
+        "linkedNameUnavailable": "مرتبط؛ الاسم غير متاح",
+        "gaps": "الثغرات وهوية العميل",
+        "identityNotVerified": "لا يثبت ارتباط التصدير هوية العميل. رُبطت الملاحظات بالسجل الذي اختاره المستخدم؛ ولم تُطابَق أسماء العملاء وعلاقات الحسابات بشكل مستقل.",
+        "missingFieldsNote": "حقول CRM الفارغة أو التي لم تُرجَع لا تثبت الموافقة على الميزانية أو الالتزامات أو التوافق مع ملاحظات الاجتماع.",
+        "unavailableNotes": "الملاحظات المرتبطة غير المتاحة في مساحة العمل الحالية: {{count}}.",
+        "partial": "التغطية جزئية: تم تقييد عدد الملاحظات أو النص المصدر أو النص المفرغ أو نتائج CRM. غياب أمر ما عن هذه المقتطفات لا يعني غيابه عن الاجتماعات.",
+        "crmOnly": "لم يُجلب أي محتوى اجتماعات يمكن الوصول إليه. هذا الملخص مبني على CRM فقط.",
+        "notPrepared": "لم تُعَدّ نتائج الاجتماعات. الملاحظات المصدر المتاحة مدرجة أدناه؛ ولم تُستنتج أي خلاصات من الاجتماعات.",
+        "findings": "نتائج الاجتماعات",
+        "findingsExplainer": "المقتطفات المصدر منقولة أدناه. تصنيفات الحالة من تقدير المساعد؛ وتعني «مؤكد» أنه مذكور في الملاحظة، لا أنه تم التحقق منه بشكل مستقل. المسؤولون والمواعيد النهائية هي فقط ما ورد في كل مقتطف.",
+        "categories": {
+          "takeaway": "أبرز النقاط",
+          "decision": "القرارات",
+          "commitment": "الالتزامات",
+          "proposal": "المقترحات",
+          "risk": "المخاطر",
+          "question": "أسئلة مفتوحة"
+        },
+        "status": {
+          "confirmed": "مؤكد",
+          "proposed": "مقترح",
+          "unknown": "غير واضح"
+        },
+        "conflict": "تعارض محتمل — لم يُحسم",
+        "crmConflictEntry": "{{label}} في Salesforce: {{value}}",
+        "sources": "المصادر",
+        "noteCreated": "أُنشئت الملاحظة: {{time}}.",
+        "lastEdited": "آخر تعديل: {{time}}.",
+        "addedForBriefing": "أُضيفت لهذا الملخص.",
+        "exported": "صُدّرت: {{time}}.",
+        "savedActivity": "نشاط Salesforce المحفوظ",
+        "sourcesExplainer": "أوقات الإنشاء ليست مواعيد الاجتماعات. تحتوي أنشطة Salesforce المحفوظة على الملخص المُصدَّر؛ وقد تكون الملاحظات تغيّرت منذ التصدير.",
+        "sections": {
+          "personalNotes": "الملاحظات الشخصية",
+          "summary": "ملخص الذكاء الاصطناعي المحفوظ",
+          "transcript": "النص المفرغ، الأحرف {{start}}–{{end}}"
+        },
+        "prepared": "تم إعداد ملخص Salesforce"
+      },
+      "loginDomain": {
+        "toggle": "استخدام بيئة sandbox أو نطاق الشركة",
+        "label": "نطاق تسجيل الدخول إلى Salesforce",
+        "placeholder": "test.salesforce.com أو yourcompany.my.salesforce.com",
+        "hint": "اتركه فارغًا لتسجيل الدخول إلى مؤسسة الإنتاج."
+      }
+    }
   },
   "skills": {
     "pane": {
@@ -1351,6 +1553,7 @@
       "neverRun": "لا يشغّل OpenWhispr النصوص البرمجية أبدًا",
       "uninstall": "إلغاء التثبيت",
       "uninstallConfirm": "هل تريد إلغاء تثبيت {{name}}؟ ستُزال من هذا الكمبيوتر.",
+      "uninstallConfirmSynced": "هل تريد إلغاء تثبيت {{name}}؟ ستُزال من هذا الكمبيوتر ومن أجهزتك الأخرى.",
       "problem": "لا يمكن استخدام هذه المهارة حتى يتم إصلاحها: {{reason}}",
       "tryNow": "جرّبها الآن"
     },
@@ -1380,6 +1583,7 @@
     "manage": {
       "title": "إدارة المهارات",
       "description": "فعّل المهارات أو أوقفها، أو أزل ما لا تستخدمه منها. تُحفظ كل مهارة على هذا الكمبيوتر.",
+      "descriptionBackedUp": "فعّل المهارات أو أوقفها، أو أزل ما لا تستخدمه منها. تُحفظ كل مهارة على هذا الكمبيوتر وتُنسخ احتياطيًا عبر النسخ الاحتياطي السحابي.",
       "noMatches": "لا توجد مهارات تطابق \"{{query}}\".",
       "none": "لا توجد مهارات بعد."
     },
@@ -1542,6 +1746,9 @@
       "pasteNote": "يلصق دون الضغط على Enter، لتختار أنت متى تشغّله.",
       "pasted": "تم اللصق",
       "pasteFailed": "تعذّر اللصق. النص موجود في الحافظة."
+    },
+    "sync": {
+      "tooLarge": "كبيرة جدًا للنسخ الاحتياطي"
     }
   },
   "auth": {
@@ -1568,7 +1775,8 @@
       "failedUserCheck": "فشل التحقق من حساب المستخدم",
       "generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صالحة",
-      "invalidEmail": "أدخل عنوان بريد إلكتروني صالحًا"
+      "invalidEmail": "أدخل عنوان بريد إلكتروني صالحًا",
+      "signInDisabledByDevice": "عطّلت مؤسستك تسجيل الدخول على هذا الجهاز."
     },
     "getStarted": "البدء",
     "legal": {
@@ -1626,10 +1834,13 @@
     "unconfirmedSession": "تعذّر تأكيد تسجيل دخولك، لذلك لم يتم تغيير أي شيء. حاول مرة أخرى عندما يتمكن OpenWhispr من الوصول إلى خوادمه."
   },
   "workspaces": {
+    "defaultName": "مساحة عمل {{name}}",
+    "defaultNameFallback": "مساحة عملي",
     "switcher": {
       "workspaces": "مساحات العمل",
       "add": "إضافة مساحة عمل",
-      "invitePeople": "دعوة أشخاص"
+      "invitePeople": "دعوة أشخاص",
+      "unavailable": "مساحات العمل غير متاحة حاليًا."
     },
     "create": {
       "title": "إنشاء مساحة عمل",
@@ -1675,12 +1886,6 @@
       "submit_few": "إرسال {{count}} دعوات",
       "submit_many": "إرسال {{count}} دعوة",
       "submit_other": "إرسال {{count}} دعوة",
-      "submitting_zero": "جارٍ إرسال الدعوات ({{count}})…",
-      "submitting_one": "جارٍ إرسال الدعوات ({{count}})…",
-      "submitting_two": "جارٍ إرسال الدعوات ({{count}})…",
-      "submitting_few": "جارٍ إرسال الدعوات ({{count}})…",
-      "submitting_many": "جارٍ إرسال الدعوات ({{count}})…",
-      "submitting_other": "جارٍ إرسال الدعوات ({{count}})…",
       "sentTitle_zero": "عدد الدعوات المرسلة: {{count}}",
       "sentTitle_one": "تم إرسال {{count}} دعوة",
       "sentTitle_two": "عدد الدعوات المرسلة: {{count}}",
@@ -1779,7 +1984,7 @@
       },
       "roleDescription": {
         "admin": "يدير الأعضاء والدعوات والفرق والإعدادات.",
-        "member": "يمكنه عرض الملاحظات وتعديلها."
+        "member": "يستخدم مساحة العمل."
       },
       "errors": {
         "invalid": "{{email}} ليس بريدًا إلكترونيًا صالحًا",
@@ -1793,7 +1998,8 @@
         "rateLimited": "عدد الدعوات كبير جدًا الآن. حاول مرة أخرى لاحقًا.",
         "requestFailed": "تعذرت دعوة {{email}}. تحقق من اتصالك وحاول مرة أخرى.",
         "refused": "تعذرت دعوة {{email}}: {{reason}}"
-      }
+      },
+      "sending": "جارٍ الدعوة…"
     },
     "join": {
       "title": "انضم إلى فريقك",
@@ -1835,17 +2041,18 @@
     "exit": {
       "leave": {
         "title": "مغادرة {{name}}؟",
-        "body": "ستفقد إمكانية الوصول إلى مساحة العمل هذه وفرقها ومساحات الفريق فيها. يمكن لمسؤول مساحة العمل دعوتك مرة أخرى.",
+        "body": "ستفقد إمكانية الوصول إلى مساحة العمل هذه وفرقها ومساحات الفريق فيها. يمكن لمالك مساحة العمل أو أحد المسؤولين دعوتك مرة أخرى.",
+        "privateNotes": "ستنتقل ملاحظاتك الخاصة في مساحة العمل هذه إلى {{workspace}}.",
         "failed": "تعذّرت مغادرة {{name}}. تحقق من اتصالك وحاول مرة أخرى."
       },
       "left": {
         "title": "غادرت {{name}}"
       },
-      "chooseAnother": "اختر مساحة عمل أخرى للمتابعة.",
-      "chooseWorkspace": "اختيار مساحة عمل",
+      "nowIn": "أنت الآن في {{workspace}}.",
       "delete": {
         "title": "حذف {{name}}؟",
-        "body": "سيؤدي هذا إلى حذف مساحة العمل وملاحظاتها وملفاتها وفرقها ومساحات الفريق فيها نهائيًا للجميع. لا يمكن التراجع عن ذلك."
+        "body": "سيؤدي هذا إلى حذف مساحة العمل وملاحظاتها وملفاتها وفرقها ومساحات الفريق فيها نهائيًا للجميع. لا يمكن التراجع عن ذلك.",
+        "privateNotes": "ستنتقل ملاحظاتك الخاصة في مساحة العمل هذه إلى {{workspace}}."
       },
       "deleting": {
         "title": "جارٍ حذف {{name}}…",
@@ -1865,9 +2072,9 @@
       "body": "سيفقد الوصول إلى كل مساحات الفريق والفرق في مساحة العمل هذه. يمكنك دعوته مرة أخرى في أي وقت.",
       "confirm": "إزالة",
       "removing": "جارٍ الإزالة…",
-      "failed": "تعذّر تأكيد إزالة {{name}}. تحقق من اتصالك وحاول مرة أخرى.",
       "notAllowed": "لم يعد لديك إذن بإزالة أشخاص من {{workspace}}.",
-      "alreadyRemoved": "تمت إزالة {{name}} بالفعل"
+      "alreadyRemoved": "تمت إزالة {{name}} بالفعل",
+      "failedTitle": "تعذّرت إزالة {{name}}"
     },
     "removeMembers": {
       "title_zero": "إزالة {{count}} عضو من {{workspace}}؟",
@@ -1883,12 +2090,6 @@
       "confirm_many": "إزالة {{count}} عضوًا",
       "confirm_other": "إزالة {{count}} عضو",
       "checking": "جارٍ التحقق…",
-      "failed_zero": "عدد الأعضاء الذين تعذّر تأكيد إزالتهم: {{count}}. تحقق من اتصالك وحاول مرة أخرى.",
-      "failed_one": "تعذّر تأكيد إزالة {{count}} عضو. تحقق من اتصالك وحاول مرة أخرى.",
-      "failed_two": "عدد الأعضاء الذين تعذّر تأكيد إزالتهم: {{count}}. تحقق من اتصالك وحاول مرة أخرى.",
-      "failed_few": "تعذّر تأكيد إزالة {{count}} أعضاء. تحقق من اتصالك وحاول مرة أخرى.",
-      "failed_many": "تعذّر تأكيد إزالة {{count}} عضوًا. تحقق من اتصالك وحاول مرة أخرى.",
-      "failed_other": "تعذّر تأكيد إزالة {{count}} عضو. تحقق من اتصالك وحاول مرة أخرى.",
       "body": "سيفقد هؤلاء الأشخاص الوصول إلى كل مساحات الفريق والفرق في مساحة العمل هذه. يمكنك دعوتهم مرة أخرى في أي وقت.",
       "ownerOne": "يملك {{name}} ملاحظات أو مساحات فريق في مساحة العمل هذه.",
       "owners_zero": "{{count}} منهم يملكون ملاحظات أو مساحات فريق.",
@@ -1911,13 +2112,13 @@
       "directoryManagedOthers_few": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك، أو ألغِ تحديدهم لإزالة الآخرين.",
       "directoryManagedOthers_many": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك، أو ألغِ تحديدهم لإزالة الآخرين.",
       "directoryManagedOthers_other": "{{count}} منهم معيّنون من خلال موفر الهوية. أزلهم من هناك، أو ألغِ تحديدهم لإزالة الآخرين.",
-      "transferLabel": "النقل إلى",
-      "transferBody": "ستنتقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى المالك الجديد. سيفقدون الوصول إلى مساحة العمل هذه.",
+      "transferLabel": "إعادة التعيين إلى",
       "transferBodyLimited": "ستنتقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}}، باستثناء الملاحظات الموجودة في مساحات فريق لا يمكن لـ {{name}} الوصول إليها، فستبقى هناك. سيفقدون الوصول إلى مساحة العمل هذه.",
       "you": "{{name}} (أنت)",
-      "transferConfirm": "النقل والإزالة",
+      "transferConfirm": "إعادة التعيين والإزالة",
       "transferring": "جارٍ النقل…",
-      "transferFailed": "تعذّر تأكيد النقل والإزالة. تحقق من اتصالك وحاول مرة أخرى.",
+      "transferFailed": "تعذّرت إعادة تعيين المحتوى. لم تتم إزالة أي عضو. حاول مرة أخرى.",
+      "transferUnconfirmed": "تعذّر تأكيد إعادة تعيين المحتوى والإزالة. تحقق من اتصالك وحاول مرة أخرى.",
       "invalidTarget": "لم يعد بإمكان {{name}} تلقي الملكية. اختر شخصًا آخر.",
       "cannotRemoveOwner": "لا يمكن إزالة مالك مساحة العمل.",
       "cannotRemoveSelf": "لا يمكنك إزالة نفسك. غادر مساحة العمل من «عام».",
@@ -1927,12 +2128,6 @@
       "done_few": "تمت إزالة {{count}} أعضاء",
       "done_many": "تمت إزالة {{count}} عضوًا",
       "done_other": "تمت إزالة {{count}} عضو",
-      "transferDone_zero": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}} وإزالة {{count}} عضو.",
-      "transferDone_one": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}} وإزالة {{count}} عضو.",
-      "transferDone_two": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}}. عدد الأعضاء الذين تمت إزالتهم: {{count}}.",
-      "transferDone_few": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}} وإزالة {{count}} أعضاء.",
-      "transferDone_many": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}} وإزالة {{count}} عضوًا.",
-      "transferDone_other": "تم نقل ملاحظاتهم ومساحات الفريق التي يملكونها إلى {{name}} وإزالة {{count}} عضو.",
       "transferPartial_zero": "عدد الملاحظات التي بقيت في مساحات فريق لا يمكن لـ {{name}} الوصول إليها: {{count}}. تم نقل كل ما عدا ذلك.",
       "transferPartial_one": "بقيت {{count}} ملاحظة في مساحة فريق لا يمكن لـ {{name}} الوصول إليها. تم نقل كل ما عدا ذلك.",
       "transferPartial_two": "عدد الملاحظات التي بقيت في مساحات فريق لا يمكن لـ {{name}} الوصول إليها: {{count}}. تم نقل كل ما عدا ذلك.",
@@ -1944,7 +2139,24 @@
       "alreadyRemoved_two": "عدد الأعضاء الذين تمت إزالتهم بالفعل: {{count}}",
       "alreadyRemoved_few": "تمت إزالة {{count}} أعضاء بالفعل",
       "alreadyRemoved_many": "تمت إزالة {{count}} عضوًا بالفعل",
-      "alreadyRemoved_other": "تمت إزالة {{count}} عضو بالفعل"
+      "alreadyRemoved_other": "تمت إزالة {{count}} عضو بالفعل",
+      "failedBody": "لم يتغيّر وصولهم إلى مساحة العمل. تحقق من اتصالك وحاول مرة أخرى.",
+      "unconfirmedTitle": "تعذّر تأكيد الإزالة",
+      "unconfirmedBody": "ربما تمت إزالتهم بالفعل. تحقق من اتصالك وحاول مرة أخرى.",
+      "reassignBody": "انقل ملاحظاتهم وعيّن مسؤول مساحة فريق قبل إزالتهم.",
+      "ownersAll": "هم يملكون ملاحظات أو يديرون مساحات فريق.",
+      "failedTitle_zero": "تعذّرت إزالة {{count}} من الأعضاء",
+      "failedTitle_one": "تعذّرت إزالة {{count}} من الأعضاء",
+      "failedTitle_two": "تعذّرت إزالة {{count}} من الأعضاء",
+      "failedTitle_few": "تعذّرت إزالة {{count}} من الأعضاء",
+      "failedTitle_many": "تعذّرت إزالة {{count}} من الأعضاء",
+      "failedTitle_other": "تعذّرت إزالة {{count}} من الأعضاء",
+      "transferDone_zero": "تمت إعادة تعيين المحتوى وصلاحية مسؤول مساحة الفريق إلى {{name}}. تمت إزالة {{count}} من الأعضاء.",
+      "transferDone_one": "تمت إعادة تعيين المحتوى وصلاحية مسؤول مساحة الفريق إلى {{name}}. تمت إزالة {{count}} من الأعضاء.",
+      "transferDone_two": "تمت إعادة تعيين المحتوى وصلاحية مسؤول مساحة الفريق إلى {{name}}. تمت إزالة {{count}} من الأعضاء.",
+      "transferDone_few": "تمت إعادة تعيين المحتوى وصلاحية مسؤول مساحة الفريق إلى {{name}}. تمت إزالة {{count}} من الأعضاء.",
+      "transferDone_many": "تمت إعادة تعيين المحتوى وصلاحية مسؤول مساحة الفريق إلى {{name}}. تمت إزالة {{count}} من الأعضاء.",
+      "transferDone_other": "تمت إعادة تعيين المحتوى وصلاحية مسؤول مساحة الفريق إلى {{name}}. تمت إزالة {{count}} من الأعضاء."
     },
     "cancelInvitation": {
       "title": "هل تريد إلغاء الدعوة المرسلة إلى {{email}}؟",
@@ -1984,7 +2196,6 @@
       "body": "اختر أحد أعضاء مساحة العمل الحاليين. ستصبح مسؤولًا بعد النقل.",
       "newOwner": "المالك الجديد",
       "placeholder": "اختر عضوًا في مساحة العمل",
-      "candidate": "{{name}} · {{role}}",
       "confirmTitle": "هل تريد نقل الملكية إلى {{name}}؟",
       "confirmBody": "سيصبح {{name}} مالك {{workspace}}. وستصبح أنت مسؤولًا.",
       "submit": "نقل الملكية",
@@ -2231,7 +2442,6 @@
       },
       "locked": {
         "noWorkspace": "القواميس المشتركة متاحة ضمن خطة Business. شارك مصطلحات فريقك وأسماء المنتجات والاختصارات مع الجميع.",
-        "chooseWorkspace": "أنت في «شخصي». انتقل إلى مساحة عمل لاستخدام كلماتها المشتركة.",
         "upgradeAdmin": "القواميس المشتركة متاحة ضمن خطة Business. قم بترقية {{workspace}} ليحصل الجميع على الكلمات نفسها.",
         "upgradeMember": "القواميس المشتركة متاحة ضمن خطة Business. اطلب من أحد المسؤولين ترقية {{workspace}}.",
         "paused_zero": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
@@ -2316,7 +2526,9 @@
       "hiddenWord": "تم إخفاء \"{{word}}\" لك",
       "stillIn": "لا تزال \"{{word}}\" في {{list}}"
     },
-    "openRouterIgnoredNotice": "لا يمرّر OpenRouter قاموسك إلى نماذج الكلام لديه، لذا لن تساعد هذه الكلمات في توجيه التفريغ ما دام محددًا للإملاء."
+    "openRouterIgnoredNotice": "لا يمرّر OpenRouter قاموسك إلى نماذج الكلام لديه، لذا لن تساعد هذه الكلمات في توجيه التفريغ ما دام محددًا للإملاء.",
+    "localModelIgnoredNotice": "لا يستطيع {{model}} استخدام قاموسك، لذا لن تساعد هذه الكلمات في توجيه التفريغ ما دام محددًا للإملاء. يظل تنظيف الذكاء الاصطناعي يطبّقها عند تفعيله.",
+    "localModelHotwordsLimitNotice": "{{model}} يستعين بما يصل إلى {{limit}} مدخلًا من القاموس لتوجيه التفريغ. الأولوية للمدخلات الشخصية، ثم مدخلات مساحات الفريق، ثم مدخلات مساحة العمل."
   },
   "promptStudio": {
     "common": {
@@ -2680,12 +2892,24 @@
       "request_accessStatus": "جارٍ طلب الوصول...",
       "look_at_screenName": "النظر إلى الشاشة",
       "look_at_screenStatus": "جارٍ النظر إلى شاشتك...",
-      "look_at_screenSuccess": "تمت قراءة الشاشة.",
-      "look_at_screenFailed": "تعذرت قراءة الشاشة.",
       "request_api_keyName": "مفتاح API",
       "request_api_keyStatus": "جارٍ طلب مفتاح API...",
       "open_settingsName": "الإعدادات",
-      "open_settingsStatus": "جارٍ توجيهك إلى الإعدادات..."
+      "open_settingsStatus": "جارٍ توجيهك إلى الإعدادات...",
+      "salesforce_search_recordsName": "البحث في Salesforce",
+      "salesforce_search_recordsStatus": "جارٍ البحث في Salesforce…",
+      "salesforce_get_recordName": "سجل Salesforce",
+      "salesforce_get_recordStatus": "جارٍ قراءة سجل Salesforce…",
+      "salesforce_describe_fieldsName": "حقول الفرصة",
+      "salesforce_describe_fieldsStatus": "جارٍ قراءة حقول الفرصة…",
+      "salesforce_get_briefingName": "ملخص العميل",
+      "salesforce_get_briefingStatus": "جارٍ إعداد ملخص العميل…",
+      "salesforce_export_conversationName": "نشاط Salesforce",
+      "salesforce_export_conversationStatus": "جارٍ إعداد نشاط Salesforce…",
+      "salesforce_update_fieldsName": "تحديثات حقول Salesforce",
+      "salesforce_update_fieldsStatus": "جارٍ إعداد تحديثات حقول Salesforce…",
+      "salesforce_present_briefingName": "نتائج الملخص",
+      "salesforce_present_briefingStatus": "جارٍ اختيار أدلة الملخص…"
     },
     "turn": {
       "reasoning": "الاستدلال",
@@ -2722,7 +2946,8 @@
           "slack": "يمكنني نشر الرسالة في Slack نيابةً عنك.",
           "linear": "يمكنني البحث عن مشكلات Linear وإنشاؤها نيابةً عنك.",
           "github": "يمكنني البحث عن مشكلات GitHub وإنشاؤها نيابةً عنك.",
-          "calendar": "يمكنني التحقق من أوقات فراغك واقتراح مواعيد."
+          "calendar": "يمكنني التحقق من أوقات فراغك واقتراح مواعيد.",
+          "salesforce": "يمكنني قراءة سجلات Salesforce وحفظ ملاحظات الاجتماعات المراجَعة فيها."
         }
       },
       "access": {
@@ -2987,7 +3212,7 @@
       "defaultFolderImmutable": "لا يمكن تغيير المجلدات الافتراضية.",
       "spaceNameRequired": "أدخل اسم مساحة.",
       "spaceNotFound": "تعذر العثور على تلك المساحة.",
-      "privateSpaceImmutable": "لا يمكن تغيير مساحتك الشخصية.",
+      "privateSpaceImmutable": "لا يمكن تغيير «خاص».",
       "generic": "تعذر إكمال التغيير. يرجى المحاولة مرة أخرى."
     },
     "sidebar": {
@@ -2996,10 +3221,10 @@
       "templatesAndActions": "القوالب والإجراءات"
     },
     "spaces": {
-      "privateSpaces": "ملاحظات خاصة",
+      "privateSpaces": "خاص",
       "teamSpaces": "مساحات الفريق",
-      "personal": "شخصي",
-      "privateTooltip": "أنت فقط من يمكنه رؤية مساحتك الشخصية",
+      "personal": "خاص",
+      "privateTooltip": "أنت فقط من يمكنه رؤية المجلدات والملاحظات هنا.",
       "newSpace": "مساحة فريق جديدة",
       "nameAndIconLabel": "الاسم والأيقونة",
       "changeEmoji": "تغيير الرمز التعبيري",
@@ -3021,6 +3246,18 @@
       "noSpacesFound": "لم يتم العثور على مساحات",
       "spaceRoot": "جذر المساحة",
       "moveConfirm": "نقل",
+      "copyToPrivate": "نسخ إلى خاص",
+      "moveToWorkspacePrivate": "نقل إلى {{workspace}} › خاص",
+      "workspacePrivate": "{{workspace}} › خاص",
+      "confirmCopyTitle": "نسخ إلى خاص؟",
+      "confirmCopy": "تبقى الملاحظة في {{space}}.",
+      "copiedToPrivate": "تم النسخ إلى خاص",
+      "couldNotCopyNote": "تعذر نسخ الملاحظة",
+      "openCopy": "فتح",
+      "noteAlreadyInTeam": "“{{title}}” موجودة بالفعل في {{space}}. استخدم “نسخ إلى خاص” للاحتفاظ بنسخة خاصة.",
+      "folderAlreadyInTeam": "“{{name}}” موجود بالفعل في {{space}}. استخدم “نسخ إلى خاص” على ملاحظاته للاحتفاظ بنسخ خاصة.",
+      "workspacesLoading": "لا تزال مساحات العمل قيد التحميل. حاول مرة أخرى بعد قليل.",
+      "cantMoveIntoLegacy": "لا يمكن نقل الملاحظات إلى {{space}} لأنها ليست جزءًا من مساحة عمل.",
       "confirmMoveInTitle": "نقل إلى {{space}}؟",
       "confirmMoveIn": "سيتمكن كل شخص في {{space}} من عرض هذه الملاحظة وتعديلها. لا يمكن نقل الملاحظات خارج مساحة الفريق لاحقًا.",
       "confirmMoveInFolder": "سيتمكن كل شخص في {{space}} من عرض هذا المجلد وملاحظاته وتعديلها. لا يمكن نقل المجلدات والملاحظات خارج مساحة الفريق لاحقًا.",
@@ -3042,10 +3279,10 @@
       "noteCount_other": "{{count}} ملاحظة",
       "accessRevoked": "لم يعد لديك وصول إلى {{space}}",
       "accessRevokedActiveNote": "لم يعد لديك وصول إلى {{space}} — \"{{title}}\" لم تعد متوفرة على هذا الجهاز",
-      "movedToPersonal": "لم يعد لديك وصول إلى {{space}} — تم نقل “{{title}}” إلى مساحتك الشخصية",
-      "updateDeniedNote": "ليس لديك إذن لتغيير “{{title}}” — تم حفظ تعديلاتك غير المتزامنة كنسخة في مساحتك الشخصية",
+      "movedToPersonal": "لم يعد لديك وصول إلى {{space}} — تم نقل “{{title}}” إلى «خاص»",
+      "updateDeniedNote": "ليس لديك إذن لتغيير “{{title}}” — تم حفظ تعديلاتك غير المتزامنة كنسخة في «خاص»",
       "deleteDeniedNote": "لم يتم حذف “{{title}}” — يمكن فقط لمالك الملاحظة أو المسؤول حذفها",
-      "updateDeniedFolder": "ليس لديك إذن لتغيير “{{name}}” — تم حفظ عملك غير المتزامن في مساحتك الشخصية",
+      "updateDeniedFolder": "ليس لديك إذن لتغيير “{{name}}” — تم حفظ عملك غير المتزامن في «خاص»",
       "deleteDeniedFolder": "لم يتم حذف “{{name}}” — يمكن فقط للمسؤول حذف المجلدات داخل مساحة الفريق",
       "conflictBanner": "توجد نسخة أحدث من هذه الملاحظة.",
       "conflictRefresh": "تحديث",
@@ -3075,11 +3312,33 @@
         "loadError": "تعذر تحميل الفرق."
       }
     },
+    "deviceNotes": {
+      "title": "على هذا الجهاز",
+      "info": "هذه الملاحظات غير مخصّصة لأي حساب. انقل ملاحظة للاحتفاظ بها وتعديلها.",
+      "infoLabel": "حول الملاحظات على هذا الجهاز",
+      "moveNote": "نقل إلى خاص",
+      "moveFolder": "نقل المجلد إلى خاص",
+      "moveAll": "نقل الكل إلى خاص",
+      "moveAllTo": "نقل الكل إلى مجلد",
+      "moved": "تم النقل إلى خاص",
+      "movedCount_zero": "تم نقل {{count}} ملاحظات إلى خاص",
+      "movedCount_one": "تم نقل {{count}} ملاحظة إلى خاص",
+      "movedCount_two": "تم نقل {{count}} ملاحظتين إلى خاص",
+      "movedCount_few": "تم نقل {{count}} ملاحظات إلى خاص",
+      "movedCount_many": "تم نقل {{count}} ملاحظةً إلى خاص",
+      "movedCount_other": "تم نقل {{count}} ملاحظة إلى خاص",
+      "moveFailed": "تعذّر نقل هذه الملاحظة",
+      "moveFolderFailed": "تعذّر نقل هذه الملاحظات",
+      "banner": "هذه الملاحظة غير مخصّصة لأي حساب بعد.",
+      "notesHeading": "الملاحظات",
+      "summaryHeading": "الملخص بالذكاء الاصطناعي",
+      "transcriptHeading": "النص المفرَّغ"
+    },
     "structureIntro": {
       "title": "أين تُحفظ ملاحظاتك",
       "description": "يفصل OpenWhispr الأفكار الخاصة عن العمل المشترك حتى يرى الأشخاص المناسبون الملاحظات المناسبة.",
       "personal": {
-        "title": "المساحة الشخصية",
+        "title": "خاص",
         "description": "أنت فقط من يمكنه رؤية المجلدات والملاحظات هنا."
       },
       "workspace": {
@@ -3184,6 +3443,117 @@
         "taskList": "قائمة مهام",
         "blockquote": "اقتباس",
         "table": "إدراج جدول"
+      },
+      "blocks": {
+        "groups": {
+          "basic": "أساسي",
+          "blocks": "كتل",
+          "style": "النمط",
+          "tools": "أدوات"
+        },
+        "slash": {
+          "heading": "عنوان {{level}}",
+          "bulletList": "قائمة نقطية",
+          "orderedList": "قائمة مرقمة",
+          "taskList": "مهمة بمربع اختيار",
+          "quote": "اقتباس",
+          "divider": "فاصل",
+          "table": "جدول",
+          "codeBlock": "كتلة تعليمات برمجية",
+          "codeHint": "تلوين الصيغة",
+          "noteLink": "ربط ملاحظة",
+          "noteLinkHint": "أو اكتب [[",
+          "toggle": "كتلة قابلة للطي",
+          "callout": "تنبيه: {{type}}",
+          "toc": "جدول المحتويات",
+          "mathBlock": "كتلة رياضية",
+          "inlineMath": "معادلة ضمن السطر",
+          "inlineMathHint": "أو اكتب $$x^2$$",
+          "emoji": "رمز تعبيري",
+          "emojiHint": "أو اكتب :smile:",
+          "highlight": "تمييز",
+          "subscript": "نص سفلي",
+          "superscript": "نص علوي",
+          "color": "لون النص: {{name}}",
+          "font": "الخط: {{name}}",
+          "ruby": "تعليق روبي",
+          "rubyHint": "القراءة فوق النص",
+          "align": "محاذاة: {{dir}}",
+          "find": "بحث واستبدال",
+          "invisible": "إظهار/إخفاء الأحرف غير المرئية"
+        },
+        "callout": {
+          "note": "ملاحظة",
+          "tip": "نصيحة",
+          "important": "مهم",
+          "warning": "تحذير",
+          "caution": "تنبيه"
+        },
+        "colors": {
+          "default": "افتراضي",
+          "red": "أحمر",
+          "orange": "برتقالي",
+          "yellow": "أصفر",
+          "green": "أخضر",
+          "blue": "أزرق",
+          "purple": "بنفسجي",
+          "gray": "رمادي"
+        },
+        "fonts": {
+          "default": "افتراضي",
+          "serif": "مذيّل",
+          "monospace": "ثابت العرض"
+        },
+        "align": {
+          "left": "يسار",
+          "center": "وسط",
+          "right": "يمين",
+          "justify": "ضبط"
+        },
+        "prompt": {
+          "latexBlock": "LaTeX، مثل \\sum_{i=1}^n x_i",
+          "latexInline": "LaTeX، مثل x^2",
+          "emoji": "اسم الرمز التعبيري، مثل rocket",
+          "reading": "القراءة، مثل かんじ",
+          "textReading": "النص|القراءة، مثل 漢字|かんじ",
+          "apply": "Enter للتطبيق · Esc للإلغاء",
+          "mathEdit": "Enter للحفظ · Esc للإلغاء · الفراغ يحذف"
+        },
+        "toolbar": {
+          "highlight": "تمييز",
+          "subscript": "نص سفلي",
+          "superscript": "نص علوي",
+          "color": "لون النص",
+          "font": "الخط",
+          "alignment": "المحاذاة",
+          "ruby": "نص روبي (القراءة فوق الأحرف)"
+        },
+        "find": {
+          "find": "بحث",
+          "replace": "استبدال",
+          "all": "الكل",
+          "previous": "السابق",
+          "next": "التالي",
+          "matchCase": "مطابقة حالة الأحرف",
+          "close": "إغلاق"
+        },
+        "count": "الكلمات: {{words}} · الأحرف: {{chars}}",
+        "link": {
+          "header": "ربط ملاحظة",
+          "empty": "اكتب عنوان ملاحظة…",
+          "create": "ربط بـ «{{title}}» (لا توجد ملاحظة بعد)",
+          "open": "فتح «{{title}}»",
+          "missing": "لا توجد ملاحظة بعنوان «{{title}}»"
+        },
+        "backlinks": {
+          "label": "مرتبطة من",
+          "more": "+{{count}} أخرى",
+          "untitled": "بلا عنوان"
+        },
+        "toc": {
+          "title": "المحتويات",
+          "empty": "أضف عناوين لإنشاء جدول المحتويات."
+        }
       }
     },
     "participants": {
@@ -3353,7 +3723,13 @@
       "addCount_many": "إضافة {{count}} ملاحظةً",
       "addCount_other": "إضافة {{count}} ملاحظة",
       "noResults": "لا توجد ملاحظات مطابقة",
-      "noNotesAvailable": "لا توجد ملاحظات أخرى متاحة"
+      "noNotesAvailable": "لا توجد ملاحظات أخرى متاحة",
+      "notAdded_zero": "تعذّرت إضافة {{count}} ملاحظة",
+      "notAdded_one": "تعذّرت إضافة ملاحظة واحدة ({{count}})",
+      "notAdded_two": "تعذّرت إضافة ملاحظتين ({{count}})",
+      "notAdded_few": "تعذّرت إضافة {{count}} ملاحظات",
+      "notAdded_many": "تعذّرت إضافة {{count}} ملاحظة",
+      "notAdded_other": "تعذّرت إضافة {{count}} ملاحظة"
     },
     "context": {
       "moveToFolder": "نقل إلى مجلد",
@@ -3589,7 +3965,7 @@
       "banner": {
         "title": {
           "team": "مساحة فريقك",
-          "private": "مساحتك الشخصية"
+          "private": "مساحتك الخاصة"
         },
         "body": {
           "team": "حوّل المحادثات إلى معرفة مشتركة. انشر المقابلات ومكالمات المبيعات واجتماعات الفريق الدورية حيث يمكن للجميع العثور عليها.",
@@ -3817,7 +4193,9 @@
           "modelNotFound": "النموذج المحدد غير متوفر من هذا المزود.",
           "providerStatus": "أعاد المزود رمز الحالة {{status}}.",
           "timeout": "انتهت مهلة اختبار الاتصال.",
-          "network": "تعذر الوصول إلى المزود."
+          "network": "تعذر الوصول إلى المزود.",
+          "invalidHeaders": "ترويسة HTTP غير صالحة. تحقق من الاسم والقيمة؛ لا يمكن تخصيص Content-Type وترويسات النقل.",
+          "redirected": "أعاد الخادم توجيه الطلب. أدخل العنوان الذي يُعيد التوجيه إليه."
         }
       },
       "local": {
@@ -4052,13 +4430,7 @@
       "title": "مساحة العمل",
       "description": "تعاون مع زملائك، وشارك الملاحظات، وقم بإدارة الوصول إلى مساحة العمل في مكان واحد.",
       "empty": {
-        "title": "أنشئ مساحة العمل الأولى الخاصة بك",
-        "description": "تتيح لك مساحات العمل التعاون مع زملائك ومشاركة الملاحظات.",
         "create": "إنشاء مساحة عمل"
-      },
-      "personal": {
-        "title": "أنت في «شخصي»",
-        "description": "اختر مساحة عمل لإدارة إعداداتها."
       },
       "loadError": {
         "title": "تعذر تحميل مساحات العمل",
@@ -4105,7 +4477,7 @@
         },
         "roleMenuLabel": "تغيير دور {{name}}",
         "roleDescription": {
-          "member": "يمكنه عرض الملاحظات وتعديلها.",
+          "member": "يستخدم مساحة العمل.",
           "admin": "يدير الأعضاء والدعوات والفرق والإعدادات."
         },
         "roleFailed": "تعذّر تغيير دور {{name}}. تحقق من اتصالك وحاول مرة أخرى.",
@@ -4174,7 +4546,8 @@
           "resendUnrenewable_two": "عدد الدعوات منتهية الصلاحية التي تعذّر تجديدها: {{count}}. ألغها وادعُ هؤلاء الأشخاص مرة أخرى.",
           "resendUnrenewable_few": "تعذّر تجديد {{count}} دعوات منتهية الصلاحية. ألغها وادعُ هؤلاء الأشخاص مرة أخرى.",
           "resendUnrenewable_many": "تعذّر تجديد {{count}} دعوة منتهية الصلاحية. ألغها وادعُ هؤلاء الأشخاص مرة أخرى.",
-          "resendUnrenewable_other": "تعذّر تجديد {{count}} دعوة منتهية الصلاحية. ألغها وادعُ هؤلاء الأشخاص مرة أخرى."
+          "resendUnrenewable_other": "تعذّر تجديد {{count}} دعوة منتهية الصلاحية. ألغها وادعُ هؤلاء الأشخاص مرة أخرى.",
+          "statusPending": "قيد الانتظار"
         },
         "selection": {
           "count_zero": "المحدد: {{count}}",
@@ -4203,6 +4576,10 @@
           "invite": "دعوة أشخاص",
           "createTeam": "إنشاء فريق",
           "label": "طرق أخرى للإضافة"
+        },
+        "roleMenu": {
+          "member": "عضو في مساحة العمل",
+          "admin": "مسؤول مساحة العمل"
         }
       },
       "teamspaces": {
@@ -4311,6 +4688,12 @@
           "roleMemberBody": "يمكنه عرض الملاحظات وتعديلها",
           "roleAdmin": "مسؤول مساحة الفريق",
           "roleAdminBody": "يدير مساحة الفريق هذه والفرق المعيّنة لها.",
+          "teamAccessMember": "الجميع أعضاء",
+          "teamAccessMemberBody": "يمكن لكل من في الفريق عرض الملاحظات وتعديلها.",
+          "teamAccessAdmin": "مسؤولو الفريق مسؤولون",
+          "teamAccessAdminBody": "يدير مسؤولو الفريق هذه المساحة أيضًا. وبقية الفريق أعضاء.",
+          "teamAccessMemberShort": "الأعضاء",
+          "teamAccessAdminShort": "مسؤولو الفريق",
           "removeItem": "إزالة من مساحة الفريق",
           "removeTitle": "هل تريد إزالة {{name}} من {{space}}؟",
           "removeBody": "سيؤدي هذا إلى إنهاء عضوية {{name}} المباشرة. سيبقى الوصول عبر الفريق. وسيظل في مساحة العمل.",
@@ -4397,12 +4780,12 @@
           "leaveBodyLoses": "ستفقد الوصول إلى {{space}} وملاحظاتها.",
           "leaveBodyAdmins": "سيواصل مسؤول آخر إدارة مساحة الفريق هذه.",
           "deleteNotAllowed": "ليس لديك إذن لحذف {{space}}.",
-          "movedToPersonal_zero": "تم نقل {{count}} ملاحظة غير متزامنة إلى مساحتك الشخصية.",
-          "movedToPersonal_one": "تم نقل ملاحظة غير متزامنة واحدة ({{count}}) إلى مساحتك الشخصية.",
-          "movedToPersonal_two": "تم نقل ملاحظتين غير متزامنتين ({{count}}) إلى مساحتك الشخصية.",
-          "movedToPersonal_few": "تم نقل {{count}} ملاحظات غير متزامنة إلى مساحتك الشخصية.",
-          "movedToPersonal_many": "تم نقل {{count}} ملاحظة غير متزامنة إلى مساحتك الشخصية.",
-          "movedToPersonal_other": "تم نقل {{count}} ملاحظة غير متزامنة إلى مساحتك الشخصية."
+          "movedToPersonal_zero": "تم نقل {{count}} ملاحظة غير متزامنة إلى «خاص».",
+          "movedToPersonal_one": "تم نقل ملاحظة غير متزامنة واحدة ({{count}}) إلى «خاص».",
+          "movedToPersonal_two": "تم نقل ملاحظتين غير متزامنتين ({{count}}) إلى «خاص».",
+          "movedToPersonal_few": "تم نقل {{count}} ملاحظات غير متزامنة إلى «خاص».",
+          "movedToPersonal_many": "تم نقل {{count}} ملاحظة غير متزامنة إلى «خاص».",
+          "movedToPersonal_other": "تم نقل {{count}} ملاحظة غير متزامنة إلى «خاص»."
         },
         "addPeople": {
           "loading": "جارٍ تحميل مساحات الفريق…",
@@ -4444,6 +4827,21 @@
         "nameHint": "يمكن أن يصل اسم مساحة العمل إلى 65 حرفًا",
         "iconLabel": "أيقونة مساحة العمل",
         "iconHint": "تظهر هذه الأيقونة في الشريط الجانبي والإشعارات.",
+        "iconUpload": "رفع صورة",
+        "iconChange": "تغيير الصورة",
+        "iconRemove": "إزالة الصورة",
+        "iconUploading": "جارٍ الرفع…",
+        "iconUploaded": "تم تحديث أيقونة مساحة العمل",
+        "iconRemoved": "تمت إزالة أيقونة مساحة العمل",
+        "iconUnsupported": "اختر صورة بتنسيق PNG أو JPEG أو WebP أو GIF.",
+        "iconTooLarge": "اختر صورة بحجم أقل من 10 ميغابايت.",
+        "iconUnreadable": "تعذّرت قراءة هذه الصورة. اختر ملفًا آخر.",
+        "iconFailed": "تعذّر تحديث أيقونة مساحة العمل. تحقق من اتصالك وحاول مرة أخرى.",
+        "iconUnavailable": "أيقونات مساحات العمل غير متاحة الآن. حاول مرة أخرى لاحقًا.",
+        "iconRateLimited": "عدد كبير جدًا من عمليات رفع الأيقونات خلال الساعة الماضية. حاول مرة أخرى لاحقًا.",
+        "iconSignInChanged": "تعذّر تحديث أيقونة مساحة العمل: انتهت صلاحية تسجيل دخولك أو تغيّر. سجّل الدخول مرة أخرى ثم أعد المحاولة.",
+        "iconNotAllowed": "لم يعد بإمكانك تغيير أيقونة {{workspace}}.",
+        "iconSsoRequired": "سجّل الدخول باستخدام تسجيل الدخول الموحّد (SSO) الخاص بشركتك لتغيير أيقونة {{workspace}}.",
         "roleLabel": "دورك",
         "saved": "تم تحديث مساحة العمل",
         "ownerTitle": "مالك مساحة العمل",
@@ -4640,7 +5038,7 @@
           "noSpacesBody": "مساحة الفريق منطقة مشتركة لملاحظات الفريق. أضف أشخاصًا أو فرقًا ليتمكن الجميع من القراءة والتحرير.",
           "placeholder": "ابحث عن مساحات فريق لإضافتها",
           "searchPlaceholder": "ابحث عن مساحات فريق",
-          "add": "إضافة مساحات فريق",
+          "add": "إضافة إلى مساحة فريق",
           "adding": "جارٍ الإضافة…",
           "selectedTitle_zero": "تم تحديد {{count}} مساحة فريق",
           "selectedTitle_one": "تم تحديد {{count}} مساحة فريق",
@@ -4723,25 +5121,12 @@
         "resentNoEmail": "تم تحديث الدعوة، لكن تعذر تسليم البريد الإلكتروني."
       },
       "billing": {
-        "plan": "الخطة",
-        "seats": "المقاعد",
-        "ownerOnly": "يمكن لمالك مساحة العمل فقط إدارة الاشتراك.",
         "nextInvoice": "الفاتورة القادمة",
-        "manageStripe": "إدارة في Stripe",
-        "startSubscription": "بدء الاشتراك",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "مجاني",
           "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "نشط",
-          "trialing": "في فترة تجريبية",
-          "past_due": "متأخر الدفع",
-          "canceled": "ملغى",
-          "incomplete": "غير مكتمل",
-          "unpaid": "غير مدفوع"
         }
       },
       "developer": {
@@ -4840,13 +5225,7 @@
           "title_few": "دعوة {{count}} ضيوف إلى {{workspace}}",
           "title_many": "دعوة {{count}} ضيفًا إلى {{workspace}}",
           "title_other": "دعوة {{count}} ضيف إلى {{workspace}}",
-          "description": "سيتلقون رابطًا عبر البريد الإلكتروني للانضمام إلى {{workspace}}.",
-          "sent_zero": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
-          "sent_one": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
-          "sent_two": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
-          "sent_few": "تم إرسال {{count}} دعوات للانضمام إلى {{workspace}}",
-          "sent_many": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
-          "sent_other": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}"
+          "description": "سيتلقون رابطًا عبر البريد الإلكتروني للانضمام إلى {{workspace}}."
         },
         "remove": {
           "titleOne": "إزالة {{name}} من {{workspace}}؟",
@@ -4883,55 +5262,16 @@
       }
     },
     "unifiedBilling": {
-      "workspaceTitle": "فوترة مساحة العمل",
-      "workspaceDescription": "لكل مساحة عمل خطة ومقاعد ومالك فوترة خاص بها.",
-      "billableSeat": "مقعدك قابل للفوترة",
-      "nonBillableSeat": "وصول للمسؤول فقط · بدون مقعد مدفوع",
-      "managedBy": "تتم إدارة الفوترة بواسطة {{owner}}.",
-      "addSeat": "إضافة مقعد",
-      "seatUpdated_zero": "تم تحديث سعة مساحة العمل إلى {{count}} مقاعد",
-      "seatUpdated_one": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
-      "seatUpdated_two": "تم تحديث سعة مساحة العمل إلى {{count}} مقعدين",
-      "seatUpdated_few": "تم تحديث سعة مساحة العمل إلى {{count}} مقاعد",
-      "seatUpdated_many": "تم تحديث سعة مساحة العمل إلى {{count}} مقعدًا",
-      "seatUpdated_other": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
-      "seatUpdateFailed": "تعذر تحديث مقاعد مساحة العمل",
-      "businessWorkspaceOnly": "متاح لمساحات العمل",
-      "personalPlanTitle": "الخطة الشخصية",
-      "providedBy": "الخطة الشخصية: مجاني · الوصول المدفوع مقدم من {{workspaces}}",
-      "confirmSeats": {
-        "title": "إضافة مقعد لمساحة العمل؟",
-        "description_zero": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_one": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_two": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدين. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_few": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_many": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدًا. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_other": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "newCapacity": "السعة الجديدة",
-        "chargeToday": "رسوم اليوم",
-        "confirm": "إضافة مقعد"
-      }
+      "seatUpdateFailed": "تعذر تحديث مقاعد مساحة العمل"
     },
     "account": {
-      "badges": {
-        "free": "مجاني",
-        "limitReached": "تم بلوغ الحد السحابي",
-        "pastDue": "متأخر الدفع",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "تجريبي"
-      },
       "billing": {
         "couldNotOpenDescription": "واجهنا مشكلة في فتح صفحة الفوترة. يرجى المحاولة مرة أخرى.",
         "couldNotOpenTitle": "تعذر فتح الفوترة",
-        "manageBilling": "إدارة الفوترة",
-        "opening": "جاري الفتح...",
-        "updatePaymentMethod": "تحديث طريقة الدفع",
         "contactOwnerTitle": "اتصل بمالك مساحة العمل الخاصة بك",
         "contactOwnerDescription": "يمكن لمالك مساحة العمل فقط تحديث الفوترة لمساحة العمل هذه.",
         "manageInAppStore": "الإدارة في App Store",
-        "manageInGooglePlay": "الإدارة في Google Play",
-        "managedInMobileStore": "تتم الفوترة عبر متجر التطبيقات على هاتفك. أدِر الاشتراك من هاتفك."
+        "manageInGooglePlay": "الإدارة في Google Play"
       },
       "checkout": {
         "couldNotOpenDescription": "واجهنا مشكلة في فتح صفحة الدفع. يرجى المحاولة مرة أخرى.",
@@ -4950,20 +5290,6 @@
         "title": "يتم عرض آخر تسجيل دخول",
         "description": "تتوقف المزامنة وتغييرات الحساب مؤقتًا حتى يتمكن OpenWhispr من الوصول إلى خوادمه."
       },
-      "pastDue": {
-        "description": "أنت على الخطة المجانية في الوقت الحالي. قم بتحديث طريقة الدفع الخاصة بك للعودة إلى Pro.",
-        "title": "لم نتمكن من معالجة دفعتك"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع",
-        "byokUnlimited": "يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
-        "nextBilling": "الفوترة القادمة: {{date}}",
-        "pastDue": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
-        "trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
-        "unlimited": "غير محدود",
-        "accessUntil": "الوصول حتى {{date}}",
-        "storePaymentIssue": "تعذّر على متجر التطبيقات تجديد هذا الاشتراك. حدّث طريقة الدفع هناك للاحتفاظ بخطتك."
-      },
       "planLabels": {
         "free": "مجاني",
         "pro": "Pro",
@@ -4973,80 +5299,26 @@
       "pricing": {
         "title": "الخطط",
         "billedYearly": "تدفع سنويًا",
-        "free": {
-          "name": "مجاني",
-          "price": "$0",
-          "period": "إلى الأبد",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2,000 كلمة/أسبوع للتفريغ",
-            "5 ساعات من تسجيلات الاجتماعات/شهر",
-            "## مجانًا دائمًا",
-            "نماذج ذكاء اصطناعي محلية غير محدودة",
-            "تفريغ سحابي غير محدود باستخدام مفاتيح API الخاصة بك",
-            "دعم أكثر من 100 لغة",
-            "قاموس مخصص",
-            "عدم الاحتفاظ بالبيانات",
-            "دعم مجتمعي"
-          ]
-        },
         "pro": {
           "name": "Pro",
           "monthlyPrice": "$8",
-          "monthlyPeriod": "/شهر",
-          "annualPrice": "$80",
-          "annualPeriod": "/سنة",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "جميع ميزات الخطة المجانية +",
-          "features": [
-            "تفريغ سحابي غير محدود",
-            "20 ساعة من تسجيلات الاجتماعات/شهر",
-            "مزامنة عبر الأجهزة",
-            "مشاركة الملاحظات بروابط عامة",
-            "وصول شخصي عبر API",
-            "تكامل MCP في جميع تطبيقاتك",
-            "تطبيق الجوال",
-            "دعم عبر البريد الإلكتروني"
-          ],
-          "cta": "البدء",
-          "switchToAnnual": "التبديل إلى السنوي"
+          "annualEquivalent": "$6.67"
         },
         "business": {
           "name": "Business",
           "monthlyPrice": "$16",
-          "monthlyPeriod": "/شهر",
-          "annualPrice": "$160",
-          "annualPeriod": "/سنة",
           "annualEquivalent": "$13.33",
-          "includesPrefix": "جميع ميزات Pro +",
-          "badge": "الأكثر شيوعًا",
-          "features": [
-            "تسجيلات اجتماعات غير محدودة",
-            "أدوار مساحة العمل وإدارة الأعضاء",
-            "وضع المساعد",
-            "الدردشة حول بياناتك",
-            "دعم ذو أولوية"
-          ],
-          "cta": "البدء",
-          "switchToAnnual": "التبديل إلى السنوي"
+          "cta": "البدء"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "مخصص",
-          "subtitle": "للأمان والدعم المتقدمين",
-          "includesPrefix": "جميع ميزات خطة Business +",
-          "features": [
-            "أرصدة API مُدارة",
-            "مزامنة سحابية عبر الأجهزة",
-            "ميزات الفريق والمسؤول",
-            "SSO والامتثال",
-            "دعم مخصص"
-          ],
           "cta": "اتصل بالمبيعات",
           "upgradeCta": "الترقية إلى Enterprise",
           "askOwner": "اطلب من {{name}} ترقية مساحة العمل الخاصة بك."
         },
-        "currentPlan": "الخطة الحالية",
+        "yourWorkspacePlan": "خطة مساحة العمل الخاصة بك",
+        "manage": "إدارة",
         "coveredByWorkspace": "مضمنة في خطة مساحة العمل الخاصة بك",
         "upgrade": "ترقية",
         "downgrade": "تخفيض الخطة",
@@ -5066,7 +5338,6 @@
           "confirm": "تأكيد"
         }
       },
-      "rollingWeeklyLimit": "حد أسبوعي متجدد",
       "signOut": {
         "endMeetingDescription": "يؤدي تسجيل الخروج إلى إيقاف تسجيل الاجتماع الجاري. يبقى ما تم تسجيله حتى الآن في ملاحظته.",
         "endMeetingTitle": "إنهاء تسجيل الاجتماع؟",
@@ -5087,11 +5358,7 @@
         "description": "تفريغ غير محدود، ومعالجة ذات أولوية، والمزيد.",
         "title": "جرب Pro مجانًا لمدة 7 أيام"
       },
-      "signedOutPlans": {
-        "button": "إنشاء حساب مجاني"
-      },
       "user": "المستخدم",
-      "wordsRemaining": "متبقي {{remaining}}",
       "deleteAccount": {
         "label": "حذف الحساب",
         "labelDescription": "حذف حسابك وبياناتك السحابية الشخصية نهائيًا. ستبقى بيانات المستخدمين المحليين الآخرين والمحتوى المملوك لمساحة العمل محفوظة.",
@@ -5142,10 +5409,6 @@
           "noPassword": "لم يتم تعيين كلمة مرور لهذا الحساب.",
           "generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى."
         }
-      },
-      "planUnavailable": {
-        "title": "الخطة غير متاحة",
-        "description": "لم نتمكن من تحميل خطتك في الوقت الحالي. وصولك لم يتغير."
       }
     },
     "agentConfig": {
@@ -5173,6 +5436,19 @@
       "customSetup": "إعداد مخصص",
       "customSetupDescription": "استخدم المزود ومفتاح API الخاص بك.",
       "description": "تنظيف النصوص المفرَّغة ومعالجة الأوامر وإصلاح الأخطاء مع الحفاظ على أسلوبك.",
+      "assemblyAiCleanup": {
+        "pickerOn": "التنقيح القياسي مضمّن في AssemblyAI Dictation.",
+        "pickerOff": "تنقيح النص متوقف. سيلصق OpenWhispr كلماتك الأصلية.",
+        "description": "يعيد AssemblyAI النص المنقح وكلماتك الأصلية معًا. أبقِ التنقيح مفعّلًا للصق النص المنقح، أو أوقفه للصق كلماتك الأصلية.",
+        "standard": "التنقيح القياسي للإملاء",
+        "included": "مضمّن في نموذج الإملاء. لا تحتاج إلى نموذج تنقيح منفصل.",
+        "advanced": "التنقيح المتقدم",
+        "summary": "المزوّد المحفوظ للتعليمات المخصصة والنبرة والأسلوب",
+        "advancedHelp": "يتولى AssemblyAI التنقيح القياسي. اختر المزوّد الذي يستخدمه OpenWhispr عندما تتطلب تعليماتك المخصصة أو النبرة والأسلوب تنقيحًا إضافيًا.",
+        "saved": "محفوظ",
+        "modelNeeded": "يلزم نموذج تنقيح محلي",
+        "modelHelp": "اختر نموذج تنقيح محليًا ونزّله لتطبيق النبرة أو التعليمات المخصصة. يتولى AssemblyAI التنقيح القياسي."
+      },
       "enableTextCleanup": "تمكين تنظيف النص",
       "enableTextCleanupDescription": "استخدم الذكاء الاصطناعي لإزالة كلمات الحشو، وإصلاح القواعد، وتنسيق علامات الترقيم",
       "modes": {
@@ -5502,7 +5778,14 @@
         "restarting": "جاري إعادة التشغيل...",
         "title": "التحديثات",
         "versionPlaceholder": "—",
-        "whatsNew": "ما الجديد في v{{version}}"
+        "whatsNew": "ما الجديد في v{{version}}",
+        "managedByOrganization": "تديره مؤسستك.",
+        "itManaged": "تدير مؤسستك التحديثات.",
+        "policyLoading": "جارٍ تحميل إعدادات التحديث…",
+        "policyUnavailable": "تعذّر تحميل إعدادات التحديث. تحقّق من وجود تحديثات للمحاولة مجددًا.",
+        "policyChanged": "تغيّرت سياسة التحديث. تحقّق من وجود تحديثات مرة أخرى.",
+        "managedBadge": "خاضع للإدارة",
+        "stagedBeforePolicy": "تم تجهيز تحديث قبل تطبيق هذه السياسة وقد يُثبَّت عند إغلاق التطبيق. تواصل مع قسم تقنية المعلومات قبل الإغلاق أو إعادة التشغيل."
       },
       "translationHotkey": {
         "title": "مفتاح اختصار الترجمة",
@@ -5534,9 +5817,8 @@
     "privacy": {
       "cloudBackup": "نسخ احتياطي سحابي",
       "cloudBackupDescription": "احتفظ بنسخة احتياطية من نصوصك المفرَّغة وملاحظاتك على السحابة للوصول السلس عبر الأجهزة.",
-      "cloudBackupTeamCaveat": "تتم مزامنة الملاحظات في مساحات الفريق والملاحظات التي قمت بمشاركتها دائمًا، بغض النظر عن هذا الإعداد.",
+      "cloudBackupTeamCaveat": "تتم مزامنة الملاحظات في مساحات الفريق والملاحظات التي قمت بمشاركتها دائمًا، بغض النظر عن هذا الإعداد. تبقى المحادثات التي تستخدم محتوى خاصًا على هذا الجهاز. تُستثنى أيضًا محادثات الإصدارات السابقة والمحادثات المستعادة من نسخة احتياطية.",
       "cloudNotesMigration": "النسخ الاحتياطي للملاحظات… {{done}} من {{total}}",
-      "cloudNotesMigrationDone": "تم نسخ جميع الملاحظات احتياطيًا",
       "description": "تحكم في البيانات التي تغادر جهازك. كل شيء متوقف افتراضيًا.",
       "title": "الخصوصية",
       "usageAnalytics": "تحليلات الاستخدام",
@@ -5544,7 +5826,7 @@
       "modelListUpdates": "تحديثات قائمة النماذج",
       "modelListUpdatesDescription": "يتحقق كل 15 دقيقة من قائمة نماذج OpenWhispr العامة على GitHub بحثًا عن النماذج الجديدة والمتوقفة. تسري التغييرات بالكامل بعد إعادة التشغيل.",
       "audioRetention": "الاحتفاظ بالصوت",
-      "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة التفريغ والتنزيل. يتم حذف الملفات تلقائيًا بعد فترة الاحتفاظ. لا يتم تخزين صوت الاجتماعات أبدًا.",
+      "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة التفريغ والتنزيل. تُحذف الملفات الصوتية على هذا الجهاز تلقائيًا بعد فترة الاحتفاظ، أيًّا كان الحساب الذي سجّلها. لا يتم تخزين صوت الاجتماعات أبدًا.",
       "audioRetentionDisabled": "معطل",
       "retentionDays_zero": "{{count}} أيام",
       "retentionDays_one": "{{count}} يوم",
@@ -5554,15 +5836,15 @@
       "retentionDays_other": "{{count}} يوم",
       "audioStorageUsage": "استخدام التخزين",
       "audioStorageUsageDescription": "الملفات الصوتية المخزنة على هذا الجهاز",
-      "audioStorageFiles": "{{count}} ملفات، {{size}}",
-      "audioStorageFiles_zero": "{{count}} ملفات، {{size}}",
-      "audioStorageFiles_one": "{{count}} ملف، {{size}}",
-      "audioStorageFiles_two": "{{count}} ملفان، {{size}}",
-      "audioStorageFiles_few": "{{count}} ملفات، {{size}}",
-      "audioStorageFiles_many": "{{count}} ملفًا، {{size}}",
-      "audioStorageFiles_other": "{{count}} ملف، {{size}}",
-      "audioStorageEmpty": "لا توجد ملفات صوتية مخزنة",
-      "clearAllAudio": "مسح كل الصوت",
+      "audioStorageHistoryFiles": "{{count}} ملفات في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_zero": "{{count}} ملفات في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_one": "{{count}} ملف في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_two": "{{count}} ملفان في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_few": "{{count}} ملفات في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_many": "{{count}} ملفًا في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_other": "{{count}} ملف في هذا السجل، {{size}}",
+      "audioStorageHistoryEmpty": "لا توجد ملفات صوتية في هذا السجل",
+      "clearHistoryAudio": "مسح الصوت",
       "clearAllAudioConfirm": "هل تريد حذف جميع الملفات الصوتية المخزنة؟ لا يمكن التراجع عن هذا.",
       "dataRetention": "الاحتفاظ بالبيانات",
       "dataRetentionDescription": "تخزين النصوص المفرَّغة والصوت محليًا في سجلك. عند التعطيل، يتم لصق النصوص المفرَّغة ولكن لا يتم حفظها.",
@@ -5743,7 +6025,20 @@
     "selfHosted": {
       "endpointUrl": "عنوان URL لنقطة النهاية",
       "serverUrl": "عنوان URL للخادم",
-      "apiKeyOptional": "مفتاح API (اختياري)"
+      "apiKeyOptional": "مفتاح API (اختياري)",
+      "headers": "ترويسات HTTP",
+      "headersHelp": "تُرسَل مع كل طلب إلى هذا الخادم، مثل مفتاح API تطلبه بوابة.",
+      "headerName": "اسم الترويسة",
+      "headerValue": "قيمة الترويسة",
+      "removeHeader": "إزالة",
+      "addHeader": "إضافة ترويسة",
+      "unauthorized": "رفض خادمك الطلب (401/403). تحقّق من الترويسات أدناه أو من إعدادات المصادقة في الخادم.",
+      "headerErrors": {
+        "missingName": "أدخل اسم الترويسة.",
+        "invalidName": "لا يمكن أن يحتوي اسم الترويسة على مسافات أو نقطتين أو فواصل أخرى.",
+        "reserved": "يضبط OpenWhispr هذه الترويسة بنفسه.",
+        "invalidValue": "تحتوي هذه القيمة على حرف لا يمكن أن تحمله الترويسة، مثل علامة اقتباس منحنية."
+      }
     },
     "enterpriseCheckout": {
       "title": "الترقية إلى Enterprise",
@@ -5776,6 +6071,346 @@
       "upgradeCta": "الترقية الآن",
       "upgradedTitle": "تمت الترقية إلى Enterprise",
       "upgradedDescription": "أصبحت {{workspace}} الآن على Enterprise."
+    },
+    "billing": {
+      "addSeats": {
+        "title": "إضافة مقاعد",
+        "invoiceDate": "الفاتورة التالية · {{date}}",
+        "quantity": "المقاعد المراد إضافتها",
+        "decrease": "تقليل عدد المقاعد",
+        "increase": "زيادة عدد المقاعد",
+        "now": "الآن",
+        "after": "بعد الإضافة",
+        "inUse": "قيد الاستخدام",
+        "pending": "المقاعد المعلّقة",
+        "available": "متاحة",
+        "total": "إجمالي المقاعد",
+        "price": "السعر",
+        "perMonth": "{{price}} / مقعد / شهر",
+        "proration": "يُضاف إلى الفاتورة التالية",
+        "confirm_zero": "إضافة مقاعد: {{count}}",
+        "confirm_one": "إضافة مقاعد: {{count}}",
+        "confirm_other": "إضافة {{count}} مقعد",
+        "adding": "جارٍ الإضافة…",
+        "failure": "تعذر تأكيد تغيير المقاعد. جارٍ التحقق من العدد الحالي.",
+        "success": "إجمالي المقاعد في {{workspace}} الآن هو {{count}}.",
+        "limitReached": "بلغت مساحة العمل الحد الأقصى للمقاعد.",
+        "occupancyMinimum": "يجب ألا يقل إجمالي المقاعد عن {{minimum}} لتغطية المقاعد المشغولة.",
+        "previewFailed": "تعذر تحميل أسعار المقاعد.",
+        "confirm_two": "إضافة مقاعد: {{count}}",
+        "confirm_few": "إضافة {{count}} مقاعد",
+        "confirm_many": "إضافة {{count}} مقعدًا"
+      },
+      "free": {
+        "inviteTeammates": "دعوة زملاء الفريق",
+        "upgradeToBusiness": "الترقية إلى Business",
+        "proHint": "أنت وحدك؟ Pro بسعر {{price}} شهريًا.",
+        "viewPersonal": "عرض الخطة الشخصية",
+        "countFailed": "تعذّر التحقق من الأشخاص في مساحة العمل هذه."
+      },
+      "errors": {
+        "noTeammates": "ادعُ زميلًا قبل بدء Business."
+      },
+      "picker": {
+        "label": "الخطة المعروضة",
+        "personal": "شخصي",
+        "workspaces": "مساحات العمل",
+        "loadFailed": "تعذّر تحميل مساحات العمل"
+      },
+      "workspaceUnavailable": {
+        "title": "خطة مساحة العمل غير متاحة",
+        "description": "لم يتغيّر وصولك."
+      },
+      "tiles": {
+        "upgradeWorkspace": "ترقية مساحة عمل",
+        "createWorkspace": "إنشاء مساحة عمل"
+      },
+      "plans": {
+        "pricePerMonth": "{{price}} / شهر",
+        "pricePerMonthYearly": "{{price}} / شهر، تُدفع سنويًا",
+        "pricePerSeat": "{{price}} / مقعد / شهر",
+        "pricePerSeatYearly": "{{price}} / مقعد / شهر، تُدفع سنويًا",
+        "yourPlan": "خطتك",
+        "pro": {
+          "includes": "كل ما في Free، بالإضافة إلى",
+          "features": {
+            "unlimitedCloud": "تفريغ سحابي غير محدود",
+            "syncDevices": "مزامنة عبر الأجهزة",
+            "publicLinks": "روابط عامة للملاحظات",
+            "apiMcp": "وصول شخصي إلى API وMCP",
+            "mobileApp": "تطبيق الجوال"
+          }
+        },
+        "business": {
+          "includes": "كل ما في Pro، بالإضافة إلى",
+          "features": {
+            "workspaceRoles": "أدوار مساحة العمل وأعضاؤها",
+            "assistantMode": "وضع المساعد",
+            "chatOverData": "الدردشة حول بياناتك",
+            "prioritySupport": "دعم ذو أولوية"
+          }
+        },
+        "enterprise": {
+          "includes": "كل ما في Business، بالإضافة إلى",
+          "features": {
+            "managedCredits": "أرصدة API مُدارة",
+            "ssoCompliance": "SSO والامتثال",
+            "adminControls": "عناصر تحكم وسياسات المسؤول",
+            "dedicatedSupport": "دعم مخصص"
+          }
+        }
+      },
+      "personal": {
+        "blocks": {
+          "currentPlan": "الخطة الحالية",
+          "usage": "الاستخدام",
+          "billingDetails": "تفاصيل الفوترة"
+        },
+        "signedOut": {
+          "title": "لم يتم تسجيل الدخول",
+          "body": "سجّل الدخول لعرض خطتك."
+        },
+        "failed": {
+          "title": "الخطة غير متاحة",
+          "body": "لم يتغير وصولك."
+        },
+        "actions": {
+          "cancelTrial": "إلغاء الفترة التجريبية",
+          "cancelBusiness": "إلغاء Business",
+          "keepPlan": "الاحتفاظ بخطة {{plan}}",
+          "subscribePro": "الاشتراك في Pro",
+          "manageBilling": "إدارة الفوترة",
+          "updatePayment": "تحديث الدفع",
+          "cancelPro": "إلغاء Pro"
+        },
+        "usage": {
+          "cloudTranscription": "التفريغ السحابي",
+          "unlimited": "غير محدود",
+          "wordsValue": "{{used}} / {{limit}} كلمة",
+          "wordsLeft": "الكلمات المتبقية في آخر 7 أيام: {{remaining}}",
+          "rolling": "يُحتسب على آخر 7 أيام. النماذج المحلية ومفاتيح API الخاصة بك غير محدودة.",
+          "limitReached": "تم بلوغ الحد. النماذج المحلية ومفاتيح API الخاصة بك ما زالت تعمل."
+        },
+        "stores": {
+          "appStore": "App Store",
+          "playStore": "Google Play",
+          "unknown": "متجر التطبيقات على هاتفك"
+        },
+        "badges": {
+          "stripeTrial": "فترة تجريبية",
+          "trial_zero": "فترة تجريبية · الأيام المتبقية: {{count}}",
+          "trial_one": "فترة تجريبية · يتبقى {{count}} يوم",
+          "trial_two": "فترة تجريبية · الأيام المتبقية: {{count}}",
+          "trial_few": "فترة تجريبية · يتبقى {{count}} أيام",
+          "trial_many": "فترة تجريبية · يتبقى {{count}} يومًا",
+          "trial_other": "فترة تجريبية · يتبقى {{count}} يوم",
+          "pastDue": "متأخر السداد",
+          "cancelled": "ملغى",
+          "yearly": "سنوي",
+          "monthly": "شهري"
+        },
+        "price": {
+          "trialStarts": "تبدأ الفوترة في {{date}}",
+          "trialYearlyStarts": "فوترة سنوية اعتبارًا من {{date}}",
+          "free": "$0",
+          "billedYearly": "تدفع سنويًا"
+        },
+        "banners": {
+          "endingDated": {
+            "title": "تنتهي خطة {{plan}} في {{date}}",
+            "body": "يمكنك الاحتفاظ بخطتك من خلال بوابة الفوترة."
+          },
+          "ending": {
+            "title": "ستنتهي خطة {{plan}}",
+            "body": "يمكنك الاحتفاظ بخطتك من خلال بوابة الفوترة."
+          },
+          "paymentFailedRetry": {
+            "title": "فشل الدفع",
+            "body": "تُطبق حدود الخطة المجانية حتى إتمام الدفع. المحاولة التالية في {{date}}."
+          },
+          "coveredPastDue": {
+            "title": "{{workspace}} يغطيك بالفعل",
+            "body": "راجع الدفعة التي تعذرت في بوابة الفوترة."
+          },
+          "coveredPastDueUnnamed": {
+            "title": "مساحة عمل تغطيك بالفعل",
+            "body": "راجع الدفعة التي تعذرت في بوابة الفوترة."
+          },
+          "coveredStripeTrial": {
+            "title": "{{workspace}} يغطيك بالفعل",
+            "body": "ستتحول الفترة التجريبية لخطة Pro إلى اشتراك مدفوع عند انتهائها."
+          },
+          "coveredStripeTrialUnnamed": {
+            "title": "مساحة عمل تغطيك بالفعل",
+            "body": "ستتحول الفترة التجريبية لخطة Pro إلى اشتراك مدفوع عند انتهائها."
+          },
+          "coveredPaying": {
+            "title": "{{workspace}} يغطيك بالفعل",
+            "body": "ما زلت تدفع مقابل {{plan}}."
+          },
+          "coveredPayingUnnamed": {
+            "title": "مساحة عمل تغطيك بالفعل",
+            "body": "ما زلت تدفع مقابل {{plan}}."
+          },
+          "coveredStore": {
+            "title": "{{workspace}} يغطيك بالفعل",
+            "body": "يمكنك مراجعة عملية شراء {{plan}} في متجر التطبيقات على هاتفك."
+          },
+          "coveredStoreUnnamed": {
+            "title": "مساحة عمل تغطيك بالفعل",
+            "body": "يمكنك مراجعة عملية شراء {{plan}} في متجر التطبيقات على هاتفك."
+          },
+          "covered": {
+            "title": "{{workspace}} يغطيك",
+            "body": "مقعدك في مساحة العمل يمنحك استخدامًا غير محدود هنا أيضًا."
+          },
+          "coveredUnnamed": {
+            "title": "مساحة عمل تغطيك",
+            "body": "مقعدك في مساحة العمل يمنحك استخدامًا غير محدود هنا أيضًا."
+          },
+          "paymentFailed": {
+            "title": "فشل الدفع",
+            "body": "تُطبَّق حدود Free حتى تتم عملية الدفع."
+          },
+          "storeRenewalFailed": {
+            "title": "فشل التجديد",
+            "body": "متجر التطبيقات على هاتفك يعيد المحاولة. حدّث طريقة الدفع هناك."
+          },
+          "weeklyLimit": {
+            "title": "تم بلوغ الحد الأسبوعي",
+            "body": "يعود التفريغ السحابي تدريجيًا مع خروج الكلمات الأقدم من 7 أيام من الاحتساب. النماذج المحلية ومفاتيح API الخاصة بك ما زالت تعمل."
+          }
+        },
+        "details": {
+          "nextInvoice": "الفاتورة التالية",
+          "finalInvoice": "الفاتورة النهائية",
+          "firstInvoice": "الفاتورة الأولى",
+          "nextRetry": "محاولة الدفع التالية",
+          "amountDue": "المبلغ المستحق",
+          "ends": "ينتهي في",
+          "ended": "انتهى في",
+          "billingContact": "جهة اتصال الفوترة",
+          "periodEnds": "تنتهي الفترة الحالية",
+          "billedThrough": "الفوترة عبر",
+          "accessUntil": "الوصول حتى"
+        }
+      },
+      "workspace": {
+        "managedAccount": "حساب مُدار",
+        "billingDetails": "تفاصيل الفوترة",
+        "workspaceDetails": "تفاصيل مساحة العمل",
+        "badges": {
+          "trial_zero": "فترة تجريبية · الأيام المتبقية: {{count}}",
+          "trial_one": "فترة تجريبية · يتبقى {{count}} يوم",
+          "trial_two": "فترة تجريبية · الأيام المتبقية: {{count}}",
+          "trial_few": "فترة تجريبية · يتبقى {{count}} أيام",
+          "trial_many": "فترة تجريبية · يتبقى {{count}} يومًا",
+          "trial_other": "فترة تجريبية · يتبقى {{count}} يوم",
+          "trialUndated": "فترة تجريبية",
+          "pastDue": "متأخر السداد",
+          "unpaid": "غير مدفوع",
+          "incomplete": "غير مكتمل",
+          "cancelled": "ملغى",
+          "paused": "متوقف مؤقتًا"
+        },
+        "interval": {
+          "monthly": "شهري",
+          "annual": "سنوي"
+        },
+        "planLine": {
+          "seatPrice": "{{price}} لكل مقعد شهريًا",
+          "customPricing": "أسعار مخصصة",
+          "free": "$0",
+          "invoicedByOpenWhispr": "تصدر OpenWhispr الفواتير",
+          "paidBy": "تدفع {{workspace}}",
+          "personalApplies": "تنطبق خطتك الشخصية"
+        },
+        "actions": {
+          "manageBilling": "إدارة الفوترة",
+          "updatePayment": "تحديث الدفع",
+          "finishCheckout": "إكمال الدفع",
+          "keepPlan": "الاحتفاظ بـ {{plan}}",
+          "resubscribe": "إعادة الاشتراك",
+          "openConsole": "فتح وحدة التحكم",
+          "upgradeEnterprise": "الترقية إلى Enterprise",
+          "viewPersonal": "عرض الخطة الشخصية",
+          "copyEmail": "نسخ البريد الإلكتروني"
+        },
+        "banners": {
+          "ends": {
+            "title": "تنتهي {{plan}} في {{date}}",
+            "body": "يحتفظ أعضاؤك بـ {{plan}} حتى ذلك الحين."
+          },
+          "endsUndated": {
+            "title": "من المقرر أن تنتهي {{plan}}",
+            "body": "يحتفظ أعضاؤك بـ {{plan}} حتى نهاية الفترة الحالية."
+          },
+          "paymentFailed": {
+            "title": "فشل الدفع",
+            "body": "حدّث طريقة الدفع لاستعادة {{plan}} لأعضائك."
+          },
+          "paused": {
+            "title": "{{plan}} متوقفة مؤقتًا",
+            "body": "يستخدم أعضاؤك خططهم الشخصية حتى يتم الدفع."
+          },
+          "checkoutIncomplete": {
+            "title": "لم يكتمل الدفع",
+            "body": "أكمل الدفع لتفعيل {{plan}} لأعضائك."
+          },
+          "ended": {
+            "title": "انتهت {{plan}} في {{date}}",
+            "body": "عاد أعضاؤك إلى خططهم الشخصية."
+          },
+          "endedUndated": {
+            "title": "انتهت {{plan}}",
+            "body": "عاد أعضاؤك إلى خططهم الشخصية."
+          },
+          "memberPaymentProblem": {
+            "title": "توجد مشكلة في الدفع لدى {{workspace}}",
+            "body": "تنطبق خطتك الشخصية حتى يتم سداد دفعة مساحة العمل."
+          },
+          "memberPaused": {
+            "title": "خطة {{workspace}} متوقفة مؤقتًا",
+            "body": "تنطبق خطتك الشخصية حتى تعود."
+          }
+        },
+        "usage": {
+          "seats": "المقاعد",
+          "members": "الأعضاء",
+          "noSeatsLeft": "لا توجد مقاعد متبقية",
+          "noSeatsLeftWithInvites_zero": "لا توجد مقاعد متبقية · الدعوات المعلقة: {{count}}",
+          "noSeatsLeftWithInvites_one": "لا توجد مقاعد متبقية · دعوة معلقة واحدة ({{count}})",
+          "noSeatsLeftWithInvites_two": "لا توجد مقاعد متبقية · دعوتان معلقتان ({{count}})",
+          "noSeatsLeftWithInvites_few": "لا توجد مقاعد متبقية · {{count}} دعوات معلقة",
+          "noSeatsLeftWithInvites_many": "لا توجد مقاعد متبقية · {{count}} دعوة معلقة",
+          "noSeatsLeftWithInvites_other": "لا توجد مقاعد متبقية · {{count}} دعوة معلقة",
+          "pendingInvites_zero": "الدعوات المعلقة: {{count}}",
+          "pendingInvites_one": "دعوة معلقة واحدة ({{count}})",
+          "pendingInvites_two": "دعوتان معلقتان ({{count}})",
+          "pendingInvites_few": "{{count}} دعوات معلقة",
+          "pendingInvites_many": "{{count}} دعوة معلقة",
+          "pendingInvites_other": "{{count}} دعوة معلقة"
+        },
+        "details": {
+          "nextInvoice": "الفاتورة التالية",
+          "nextRetry": "محاولة الدفع التالية",
+          "amountDue": "المبلغ المستحق",
+          "billingContact": "جهة اتصال الفوترة",
+          "finalInvoice": "الفاتورة النهائية",
+          "firstInvoice": "أول فاتورة",
+          "ends": "تنتهي",
+          "ended": "انتهت",
+          "billing": "الفوترة",
+          "periodEnds": "تنتهي الفترة الحالية",
+          "workspace": "مساحة العمل",
+          "yourRole": "دورك",
+          "yourSeat": "مقعدك",
+          "managedBy": "يديرها",
+          "invoicedByOpenWhispr": "تصدر OpenWhispr الفواتير",
+          "paidSeat": "مقعد مدفوع",
+          "noPaidSeat": "لا يوجد مقعد مدفوع"
+        }
+      }
     }
   },
   "settings": {
@@ -5990,12 +6625,19 @@
     "policyAccountChanged": "تغيّر حسابك، لذلك تم إيقاف هذه الإجابة.",
     "policyTranscriptionRestricted": "التفريغ الصوتي مقيد من قبل مؤسستك.",
     "policyUnresolved": "لم يتم تحميل إعدادات مؤسستك بعد. حاول مرة أخرى بعد قليل.",
+    "policyBlocked": "لا تسمح مؤسستك بهذا على هذا الجهاز.",
     "logout": "تسجيل الخروج",
     "managedConfigLoading": "جارٍ التحقق من الإعداد المُدار لمؤسستك. أعد المحاولة بعد لحظات.",
     "managedConfigUnavailable": "الوصول المُدار للمؤسسة غير متاح. سجّل الدخول مرة أخرى أو اتصل بالمسؤول.",
     "managedConfigAmbiguous": "إعداد مؤسستك المُدار غير متسق. اتصل بالمسؤول.",
     "managedPolicyConflict": "الوصول المُدار محظور بموجب سياسة مساحة العمل الخاصة بك. اتصل بالمسؤول.",
-    "resizePanel": "تغيير حجم اللوحة"
+    "resizePanel": "تغيير حجم اللوحة",
+    "managedDevice": "جهاز مُدار",
+    "managedDeviceAndWorkspace": "جهاز ومساحة عمل مُداران",
+    "deviceLocalOnly": "يستخدم هذا الجهاز المعالجة المحلية فقط. ميزات السحابة غير متاحة، حتى للحسابات التي سبق تسجيل الدخول إليها.",
+    "deviceSignInRequired": "تطلب مؤسستك تسجيل الدخول على هذا الجهاز.",
+    "devicePolicyInvalid": "تعذرت قراءة سياسة الجهاز أو أنها غير صالحة. تواصل مع المسؤول. لا يمكن استخدام OpenWhispr حتى تصحيح السياسة.",
+    "deviceWorkspaceUnavailable": "يتطلب هذا الجهاز معالجة محلية، لكن سياسة مساحة عمل الحساب المحفوظ غير متاحة. سجّل الخروج للمتابعة دون هذا الحساب، أو تواصل مع المسؤول."
   },
   "streaming": {
     "errors": {
@@ -6026,7 +6668,11 @@
     "getKey": "الحصول على مفتاح ←",
     "endpointUrl": "عنوان URL لنقطة النهاية",
     "azureHint": "Azure AI Foundry: أدخل نقطة نهاية موردك (مثال: https://your-resource.cognitiveservices.azure.com) وقم بتعيين النموذج إلى اسم النشر الدقيق الخاص بك.",
+    "browsedProviderHint": "لا يزال {{current}} قيد الاستخدام. اختر نموذجًا للتبديل إلى {{provider}}.",
+    "browsedCustomHint": "لا يزال {{current}} قيد الاستخدام. أدخل اسم نموذج للتبديل إلى نقطة النهاية المخصصة الخاصة بك.",
+    "customInUseHint": "لا تزال نقطة النهاية المخصصة الخاصة بك قيد الاستخدام. اختر نموذجًا للتبديل إلى {{provider}}.",
     "customProvider": "مخصص",
+    "providerUnavailable": "لا يمكن استخدام {{provider}} هنا. اختر نموذجًا للتبديل إلى مزود آخر.",
     "fallback": {
       "whisperModelDescription": "النموذج",
       "parakeetModelDescription": "نموذج NVIDIA Parakeet"
@@ -6042,6 +6688,9 @@
     "tinfoil": {
       "transportNote": "يستخدم Tinfoil نموذج Voxtral Mini 4B للتفريغ المباشر (البث)، ونموذج Voxtral Small 24B للمعالجة الدفعية.",
       "docsLink": "قراءة الوثائق"
+    },
+    "elevenlabs": {
+      "keytermsNote": "يُرسل OpenWhispr الكلمات المؤهلة من قاموسك إلى ElevenLabs. وتزيد رسوم ElevenLabs بنسبة 20٪ عند تضمين هذه الكلمات."
     }
   },
   "cleanupPrompt": "التنظيف",
@@ -6225,7 +6874,7 @@
         "label": "الملف الشخصي"
       },
       "plansBilling": {
-        "description": "الخطط والاستخدام والفواتير",
+        "description": "أدِر خطتك واستخدامك وفواتيرك.",
         "label": "الخطة والفواتير"
       },
       "workspaceGeneral": {
@@ -6738,7 +7387,9 @@
       "timeout": "استغرق خادمك وقتًا طويلاً للاستجابة.",
       "unreachable": "تعذّر الوصول إلى خادمك. تحقق من أنه قيد التشغيل.",
       "noResponse": "تعذّر الحصول على رد من خادمك. تحقق من مفتاح API الخاص به ومن أنه قيد التشغيل.",
-      "unknown": "أعاد خادمك خطأ غير متوقع."
+      "unknown": "أعاد خادمك خطأ غير متوقع.",
+      "invalidHeaders": "إحدى الترويسات المخصّصة لخادمك غير صالحة.",
+      "redirected": "أعاد خادمك توجيه الطلب. أدخل العنوان الذي يُعيد التوجيه إليه."
     },
     "openSettings": "فتح الإعدادات",
     "copyDetails": "نسخ التفاصيل",
@@ -6831,6 +7482,7 @@
       "saveChanges": "حفظ التغييرات",
       "saved": "تم حفظ النبرة والأسلوب",
       "cleanupOff": "تنظيف النص متوقف، لذلك لا تُطبَّق هذه النبرات على إملائك. لكن المساعد والمحادثات لا يزالان يستخدمانها.",
+      "customPrompt": "أنت تستخدم مطالبة تنظيف مخصصة، لذلك لا تُطبَّق هذه النبرات على إملائك. لكن المساعد والمحادثات لا يزالان يستخدمانها.",
       "turnOnCleanup": "تشغيل تنظيف النص",
       "enabled": "النبرات والأصوات مفعّلة",
       "enabledDescription": "يستخدم تنظيف النص والمساعد والمحادثات نبرتك لكل نوع من التطبيقات. عند الإيقاف، تُستخدم النبرة القياسية."
@@ -6931,5 +7583,16 @@
       "bootstrapMismatch": "ملف التهيئة لا يطابق حسابك أو مساحة العمل هذه أو بيانات الاعتماد المُعدّة لها.",
       "testLinkOtherWorkspace": "رابط الاختبار هذا لمساحة عمل أخرى. انتقل إلى مساحة العمل تلك وافتح الرابط مرة أخرى."
     }
+  },
+  "affiliate": {
+    "remove": "إزالة رابط صانع المحتوى",
+    "haveLink": "هل لديك رابط منشئ محتوى؟",
+    "label": "رابط منشئ المحتوى (اختياري)",
+    "placeholder": "الصق رابط منشئ المحتوى",
+    "saved": "تم حفظ رابط منشئ المحتوى.",
+    "checking": "جارٍ التحقق من الرابط…",
+    "unavailable": "تعذر التحقق من الرابط. حاول مجددًا أو امسح الحقل للمتابعة.",
+    "privacy": "روابط منشئي المحتوى غير متاحة مع إعدادات التتبع الحالية. امسح الحقل للمتابعة.",
+    "review": "تم حفظ رابطك للمراجعة."
   }
 }

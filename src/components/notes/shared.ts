@@ -2,9 +2,13 @@ import { cn } from "../lib/utils";
 import type { FolderItem } from "../../types/electron";
 import type { MeetingRecordingRefusal, PolicyDecisionSnapshot } from "../../stores/policyRules";
 
-export const DEFAULT_FOLDER_NAME = "Personal";
-export const MEETINGS_FOLDER_NAME = "Meetings";
-export const VIDEOS_FOLDER_NAME = "Videos";
+import {
+  DEFAULT_FOLDER_NAME,
+  MEETINGS_FOLDER_NAME,
+  VIDEOS_FOLDER_NAME,
+} from "../../lib/defaultFolderNames";
+
+export { DEFAULT_FOLDER_NAME, MEETINGS_FOLDER_NAME, VIDEOS_FOLDER_NAME };
 
 const DEFAULT_FOLDER_LABEL_KEYS: Record<string, string> = {
   [DEFAULT_FOLDER_NAME]: "notes.folders.defaults.personal",
@@ -35,14 +39,18 @@ export function folderMatchesQuery(
   );
 }
 
+// Folders arrive account-scoped, so an attributed default is the active
+// account's own; a device-owned (NULL account) one only stands in for it.
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
-  return folders.find((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
+  const defaults = folders.filter((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
+  return defaults.find((f) => f.account_id) ?? defaults[0];
 }
 
 // URL downloads route to "Videos" by name: a pre-existing user-created folder with
 // that name is used as-is (the migration never promotes or replaces it).
 export function findVideosFolder(folders: FolderItem[]): FolderItem | undefined {
-  return folders.find((f) => f.name === VIDEOS_FOLDER_NAME);
+  const videos = folders.filter((f) => f.name === VIDEOS_FOLDER_NAME);
+  return videos.find((f) => f.account_id) ?? videos[0];
 }
 
 // URL-download error codes → notes.upload.* i18n keys.

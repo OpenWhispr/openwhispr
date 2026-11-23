@@ -26,6 +26,8 @@ import { StorageService } from '../services/storage/StorageService';
 
 export type AddTranscriptInput = Omit<Transcript, 'id' | 'createdAt' | 'updatedAt'> & {
   id?: string;
+  /** When it was dictated, for one the keyboard finished while the app was away; else now. */
+  createdAt?: number;
 };
 
 export type FailedTranscriptInput = {
@@ -42,6 +44,7 @@ export type FailedTranscriptInput = {
   keyboardTone?: KeyboardTone;
   jobId?: string;
   errorMessage: string;
+  createdAt?: number;
 };
 
 interface TranscriptState {
@@ -54,8 +57,11 @@ interface TranscriptState {
   error: string | null;
 
   loadTranscripts: () => Promise<void>;
-  addTranscript: (transcript: AddTranscriptInput) => Promise<void>;
-  addFailedTranscript: (transcript: FailedTranscriptInput) => Promise<void>;
+  addTranscript: (transcript: AddTranscriptInput, mayWrite?: () => boolean) => Promise<void>;
+  addFailedTranscript: (
+    transcript: FailedTranscriptInput,
+    options?: { mayWrite?: () => boolean; keepSourceAudio?: boolean },
+  ) => Promise<void>;
   retryTranscript: (id: string) => Promise<Transcript>;
   updateTranscript: (id: string, updates: Partial<Transcript>) => Promise<void>;
   deleteTranscript: (id: string) => Promise<void>;
@@ -72,17 +78,6 @@ const normalizeTranscript = (transcript: Transcript): Transcript => ({
   status: transcript.status ?? 'completed',
   retryCount: transcript.retryCount ?? 0,
 });
-
-const ensureRetainedAudio = async (
-  transcriptId: string,
-  audioUrl?: string,
-  audioFileName?: string,
-  audioMimeType?: string,
-): Promise<string | undefined> => {
-  if (!audioUrl) return undefined;
-  if (isManagedTranscriptAudioUri(audioUrl)) return audioUrl;
-  return retainTranscriptAudio(audioUrl, { transcriptId, audioFileName, audioMimeType });
-};
 
 const RETRY_JOB_ID = /^(.+)-retry-\d+$/;
 
@@ -232,7 +227,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       return inFlightLoad;
     },
 
-    addTranscript: async (transcript) => {
+    addTranscript: async (transcript, mayWrite) => {
       await ensureLoaded();
       const id = transcript.id ?? createTranscriptId();
       const now = Date.now();
@@ -244,20 +239,23 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         status: 'completed',
         errorMessage: undefined,
         retryCount: transcript.retryCount ?? 0,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: transcript.createdAt ?? now,
+        updatedAt: transcript.createdAt ?? now,
       };
 
-      set({ isLoading: true, error: null });
       try {
-        await exclusive(async () => {
+        const saved = await exclusive(async () => {
+          if (mayWrite && !mayWrite()) return false;
+          set({ isLoading: true, error: null });
           const transcripts = [
             ...get().transcripts.filter((existing) => existing.id !== newTranscript.id),
             newTranscript,
           ];
           await StorageService.saveTranscripts(transcripts);
           set({ transcripts, isLoading: false });
+          return true;
         });
+        if (!saved) return;
         if (newTranscript.jobId) clearKeyboardProviderRecovery(newTranscript.jobId);
         if (newTranscript.text.trim()) {
           logTranscriptionCompleted({
@@ -279,26 +277,28 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       }
     },
 
-    addFailedTranscript: async (transcript) => {
+    addFailedTranscript: async (transcript, options) => {
       await ensureLoaded();
       return exclusive(async () => {
         const id = transcript.id ?? createTranscriptId();
         const now = Date.now();
-        const audioUrl = await ensureRetainedAudio(
-          id,
-          transcript.audioUrl,
-          transcript.audioFileName,
-          transcript.audioMimeType,
-        );
-        if (!audioUrl) {
-          throw new Error('Audio file not found');
-        }
+        if (options?.mayWrite && !options.mayWrite()) return;
+        if (!transcript.audioUrl) throw new Error('Audio file not found');
+        const audioUrl = isManagedTranscriptAudioUri(transcript.audioUrl)
+          ? transcript.audioUrl
+          : await retainTranscriptAudio(transcript.audioUrl, {
+              transcriptId: id,
+              audioFileName: transcript.audioFileName,
+              audioMimeType: transcript.audioMimeType,
+              keepSource: options?.keepSourceAudio,
+            });
+        if (options?.mayWrite && !options.mayWrite()) return;
 
         const failedTranscript: Transcript = {
           id,
           text: '',
-          createdAt: now,
-          updatedAt: now,
+          createdAt: transcript.createdAt ?? now,
+          updatedAt: transcript.createdAt ?? now,
           audioUrl,
           audioFileName: transcript.audioFileName,
           audioMimeType: transcript.audioMimeType,

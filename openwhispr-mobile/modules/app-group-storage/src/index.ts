@@ -25,6 +25,9 @@ interface AppGroupStorageModule {
   armWarmMic(): void;
   isHardwareKeyboardConnected(): boolean;
   markHotkeyJsReady(): void;
+  setKeyboardSessionCredential?(cookie: string | null): boolean;
+  getAppGroupContainerPath?(): string | null;
+  wrapPcmAsWav?(pcmPath: string, wavPath: string): boolean;
 }
 
 export interface SpeechActivityAnalysis {
@@ -81,6 +84,8 @@ const NativeModuleEvents = NativeModule
   : null;
 
 export const AppGroupStorage = {
+  supportsKeyboardDirectDictation: typeof NativeModule?.setKeyboardSessionCredential === 'function',
+
   setItem(key: string, value: string): boolean {
     if (!NativeModule) return false;
     return NativeModule.setItem(key, value);
@@ -94,6 +99,24 @@ export const AppGroupStorage = {
   removeItem(key: string): boolean {
     if (!NativeModule) return false;
     return NativeModule.removeItem(key);
+  },
+
+  /**
+   * Shares the session with the keyboard, as `{"userId", "cookie"}` JSON (null removes it).
+   * False when it couldn't.
+   */
+  setKeyboardSessionCredential(credential: string | null): boolean {
+    return NativeModule?.setKeyboardSessionCredential?.(credential) ?? false;
+  },
+
+  /** The App Group container's path, where the keyboard leaves its own dictations. */
+  getAppGroupContainerPath(): string | null {
+    return NativeModule?.getAppGroupContainerPath?.() ?? null;
+  },
+
+  /** Wraps a raw 16 kHz mono 16-bit take the keyboard left behind in a WAV file. */
+  wrapPcmAsWav(pcmPath: string, wavPath: string): boolean {
+    return NativeModule?.wrapPcmAsWav?.(pcmPath, wavPath) ?? false;
   },
 
   setKeyboardStatus(status: string, detail?: string | null): void {
@@ -290,8 +313,8 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_RECORDING_TONE: 'keyboard_recording_tone',
   KEYBOARD_RECORDING_TONE_JOB_ID: 'keyboard_recording_tone_job_id',
   KEYBOARD_TONE_APPLICABLE: 'keyboard_tone_applicable',
-  // App → keyboard: the letter page's layout (KeyboardLetterLayout); persists across launches.
-  KEYBOARD_LETTER_LAYOUT: 'keyboard_letter_layout',
+  // The direct-dictation snapshot the keyboard reads (src/lib/keyboardDirectSync.ts).
+  KEYBOARD_DIRECT_CONFIG: 'keyboard_direct_config',
   BACKGROUND_SESSION_READY: 'background_session_ready',
   // Hotkey dictation: "<pid>:<ms>", stamped by markHotkeyJsReady once
   // useKeyboardHandoff's recording listeners are subscribed; the hotkey's cold

@@ -2,6 +2,7 @@ import ExpoModulesCore
 import UIKit
 import AVFoundation
 import GameController
+import Security
 
 public class AppGroupStorageModule: Module {
   private var appBundleId: String {
@@ -98,6 +99,8 @@ public class AppGroupStorageModule: Module {
   private var foregroundHeartbeatTimer: Timer?
   private let containingAppForegroundKey = "containing_app_foreground_at_ms"
 
+  // Accessed only on main, like the Darwin recording observers.
+  private var recordingStartupGate = KeyboardRecordingStartupGate()
   private let returnAttemptGate = ReturnAttemptGate()
   // The host the last return resolved, kept for the "Back to <App>" button:
   // the extension keys are cleared on read and the observed host goes stale.
@@ -159,7 +162,24 @@ public class AppGroupStorageModule: Module {
       }
       defaults.removeObject(forKey: key)
       defaults.synchronize()
+      if key == self.hotkeyJsReadyAtMsKey {
+        DispatchQueue.main.async { [weak self] in self?.recordingStartupGate.reset() }
+      }
       return defaults.object(forKey: key) == nil
+    }
+
+    Function("setKeyboardSessionCredential") { (cookie: String?) -> Bool in
+      self.writeKeyboardSessionCredential(cookie)
+    }
+
+    // Where the keyboard leaves the dictations it handled itself (direct-dictations/).
+    Function("getAppGroupContainerPath") { () -> String? in
+      FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: self.appGroupId)?.path
+    }
+
+    // A take the keyboard was killed before encoding is raw 16 kHz mono 16-bit PCM.
+    Function("wrapPcmAsWav") { (pcmPath: String, wavPath: String) -> Bool in
+      Self.wrapPcmAsWav(pcmPath: pcmPath, wavPath: wavPath)
     }
 
     Function("setKeyboardStatus") { (status: String, detail: String?) -> Void in
@@ -192,8 +212,8 @@ public class AppGroupStorageModule: Module {
       }
     }
 
-    // Called by useKeyboardHandoff once its recording listeners are subscribed.
-    // The hotkey's cold start (plugins/hotkey-dictation) waits for this stamp, and
+    // Called once recording listeners and local preferences are ready. Both
+    // keyboard Darwin requests and the hardware hotkey wait for this stamp, and
     // only trusts one carrying this process's pid: a crash skips the hook's
     // cleanup, and the next launch's intent can read before OnCreate clears it.
     Function("markHotkeyJsReady") { () -> Void in
@@ -201,6 +221,7 @@ public class AppGroupStorageModule: Module {
       let nowMs = Int(Date().timeIntervalSince1970 * 1000)
       defaults.set("\(getpid()):\(nowMs)", forKey: self.hotkeyJsReadyAtMsKey)
       defaults.synchronize()
+      DispatchQueue.main.async { [weak self] in self?.releasePendingDarwinStart() }
     }
 
     // Drives the one-time "Using a keyboard?" nudge toward the hardware-keyboard
@@ -1519,6 +1540,34 @@ public class AppGroupStorageModule: Module {
     logMarker("darwinStopObserver.removed")
   }
 
+  private func startDarwinRecording() {
+    if startRecording(trigger: "darwin.startNotification") {
+      logMarker("darwinStartObserver.startSucceeded")
+      sendEvent("onBackgroundRecordingStarted", [:])
+    } else {
+      logMarker("darwinStartObserver.startFailed")
+    }
+  }
+
+  private func releasePendingDarwinStart() {
+    // Keep the final replay check and engine start together with JS recorder operations.
+    audioPipelineLock.lock()
+    defer { audioPipelineLock.unlock() }
+    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    defaults.synchronize()
+    guard defaults.string(forKey: hotkeyJsReadyAtMsKey)?.hasPrefix("\(getpid()):") == true else {
+      recordingStartupGate.reset()
+      return
+    }
+    if recordingStartupGate.release(
+      currentJobId: sharedRecordingJobId(),
+      stopRequested: defaults.string(forKey: stopRequestedKey) == "1",
+      cancelled: defaults.string(forKey: "keyboard_cancel_requested") == "1"
+    ) {
+      startDarwinRecording()
+    }
+  }
+
   private func addDarwinStartObserver() {
     guard !isObservingStartNotification else { return }
 
@@ -1533,11 +1582,17 @@ public class AppGroupStorageModule: Module {
         let module = Unmanaged<AppGroupStorageModule>.fromOpaque(observer).takeUnretainedValue()
         DispatchQueue.main.async {
           module.logMarker("darwinStartObserver.received")
-          if module.startRecording(trigger: "darwin.startNotification") {
-            module.logMarker("darwinStartObserver.startSucceeded")
-            module.sendEvent("onBackgroundRecordingStarted", [:])
-          } else {
-            module.logMarker("darwinStartObserver.startFailed")
+          guard let defaults = UserDefaults(suiteName: module.appGroupId) else { return }
+          defaults.synchronize()
+          let jobId = module.sharedRecordingJobId()
+            ?? module.resolveRecordingJobId(trigger: "darwin.startNotification")
+          let ready = defaults.string(forKey: module.hotkeyJsReadyAtMsKey)?.hasPrefix("\(getpid()):") == true
+          if module.recordingStartupGate.requestStart(
+            jobId: jobId, isReady: ready,
+            stopRequested: defaults.string(forKey: module.stopRequestedKey) == "1",
+            cancelled: defaults.string(forKey: "keyboard_cancel_requested") == "1"
+          ) {
+            module.startDarwinRecording()
           }
         }
       },
@@ -2152,5 +2207,76 @@ public class AppGroupStorageModule: Module {
       UIApplication.shared.endBackgroundTask(backgroundTaskId)
       backgroundTaskId = .invalid
     }
+  }
+}
+
+// MARK: - Keyboard session credential
+
+extension AppGroupStorageModule {
+  // Must match KeyboardCredentialStore in plugins/keyboard-extension/ios (a Jest test compares them).
+  static let keyboardSessionService = "com.openwhispr.keyboard-session"
+  static let keyboardSessionAccount = "cookie"
+
+  /// Streams the raw take into a WAV file with a 44-byte header, never loading it whole.
+  static func wrapPcmAsWav(pcmPath: String, wavPath: String) -> Bool {
+    let fileManager = FileManager.default
+    guard let size = (try? fileManager.attributesOfItem(atPath: pcmPath)[.size] as? NSNumber)?.intValue,
+      size > 0, let input = FileHandle(forReadingAtPath: pcmPath)
+    else { return false }
+    defer { try? input.close() }
+    fileManager.createFile(atPath: wavPath, contents: nil)
+    guard let output = FileHandle(forWritingAtPath: wavPath) else { return false }
+    defer { try? output.close() }
+    let rate: UInt32 = 16_000
+    var header = Data()
+    func append<T: FixedWidthInteger>(_ value: T) {
+      withUnsafeBytes(of: value.littleEndian) { header.append(contentsOf: $0) }
+    }
+    header.append(contentsOf: Array("RIFF".utf8))
+    append(UInt32(36 + size))
+    header.append(contentsOf: Array("WAVEfmt ".utf8))
+    append(UInt32(16))
+    append(UInt16(1))
+    append(UInt16(1))
+    append(rate)
+    append(rate * 2)
+    append(UInt16(2))
+    append(UInt16(16))
+    header.append(contentsOf: Array("data".utf8))
+    append(UInt32(size))
+    do {
+      try output.write(contentsOf: header)
+      while let chunk = try input.read(upToCount: 64 * 1024), !chunk.isEmpty {
+        try output.write(contentsOf: chunk)
+      }
+      return true
+    } catch {
+      try? fileManager.removeItem(atPath: wavPath)
+      return false
+    }
+  }
+
+  /// One Keychain item in the App Group's access group, so the keyboard can read the session
+  /// without a new entitlement and the app's other items stay out of its reach. A nil or empty
+  /// cookie deletes it.
+  func writeKeyboardSessionCredential(_ cookie: String?) -> Bool {
+    let item: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: Self.keyboardSessionService,
+      kSecAttrAccount as String: Self.keyboardSessionAccount,
+      kSecAttrAccessGroup as String: appGroupId,
+    ]
+    guard let cookie, !cookie.isEmpty else {
+      let status = SecItemDelete(item as CFDictionary)
+      return status == errSecSuccess || status == errSecItemNotFound
+    }
+    let value: [String: Any] = [
+      kSecValueData as String: Data(cookie.utf8),
+      kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+    ]
+    let updated = SecItemUpdate(item as CFDictionary, value as CFDictionary)
+    if updated == errSecSuccess { return true }
+    guard updated == errSecItemNotFound else { return false }
+    return SecItemAdd(item.merging(value) { _, new in new } as CFDictionary, nil) == errSecSuccess
   }
 }

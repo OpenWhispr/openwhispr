@@ -45,7 +45,11 @@ test("Insights Sync and leaderboard participation have separate owners", () => {
 
   assert.ok(settings.includes("if (enabled) void enableInsightsSync()"));
   assert.ok(settings.includes("disableInsightsSync()"));
-  assert.ok(settings.includes("useLeaderboardParticipation()"));
+  assert.ok(
+    settings.includes(
+      'useLeaderboardParticipation({ autoRefresh: activeSection === "privacyData" })'
+    )
+  );
   assert.ok(settings.includes("join: joinLeaderboard"));
   assert.ok(settings.includes("leave: leaveLeaderboard"));
   assert.ok(settings.includes("updateLeaderboardParticipation"));
@@ -74,7 +78,8 @@ test("joining obtains explicit analytics consent first without rollback coupling
 test("the Privacy leaderboard toggle preserves the same consent ordering", () => {
   const settings = read("src/components/SettingsPage.tsx");
   const updateStart = settings.indexOf("const updateLeaderboardParticipation");
-  const update = settings.slice(updateStart, settings.indexOf("// Signed out", updateStart));
+  // Up to the end of its useCallback.
+  const update = settings.slice(updateStart, settings.indexOf("\n  );\n", updateStart));
 
   assert.ok(update.includes("enableInsightsSync({ confirmWhenEmpty: true })"));
   assert.ok(
@@ -186,7 +191,7 @@ test("an unknown participation answer offers retry instead of Join", () => {
     section.indexOf('if (surface === "join")'),
     section.indexOf("const number =")
   );
-  assert.ok(retrySurface.includes("onRetry={onRefreshParticipation}"));
+  assert.ok(retrySurface.includes("onRetry={() => onRefreshParticipation()}"));
   assert.equal(retrySurface.includes("onJoin"), false);
   assert.ok(joinSurface.includes("onJoin={onJoin}"));
 });

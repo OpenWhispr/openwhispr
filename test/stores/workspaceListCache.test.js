@@ -16,7 +16,7 @@ const WORKSPACES = [
 async function loadStore(t, { initialStorage = {}, accountId = "acct-1", list } = {}) {
   const { storage } = installBrowserGlobals(t, {
     initialStorage,
-    window: { dispatchEvent() {} },
+    window: { dispatchEvent() {}, location: { search: "?panel=true" } },
   });
   globalThis.__workspaceCacheTest = {
     accountId,
@@ -35,6 +35,7 @@ async function loadStore(t, { initialStorage = {}, accountId = "acct-1", list } 
           listMembers: (id) => globalThis.__workspaceCacheTest.listMembers(id),
           removeMember: (id, userId) => globalThis.__workspaceCacheTest.remove(id, userId),
           remove: (id) => globalThis.__workspaceCacheTest.remove(id),
+          isLost: async () => true,
         };
       `,
       "/SyncService": `export const syncService = { requestSyncAll() {} };`,

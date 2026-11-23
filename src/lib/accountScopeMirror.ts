@@ -1,5 +1,5 @@
 import { useEnterpriseIdentityStore } from "../stores/enterpriseIdentityStore";
-import { usePolicyStore } from "../stores/policyStore";
+import { refreshEffectivePolicy, usePolicyStore } from "../stores/policyStore";
 import { ACTIVE_WORKSPACE_KEY, refreshManagedEnterpriseIdentity } from "../stores/workspaceStore";
 import type { ActiveAccountScope } from "../types/electron";
 
@@ -19,7 +19,7 @@ export function mirrorActiveAccountScope(): () => void {
   let broadcastReceived = false;
 
   const refreshIdentity = () => {
-    if (!scope) return;
+    if (!scope || usePolicyStore.getState().localOnly) return;
     refreshManagedEnterpriseIdentity(
       scope.accountId,
       scope.authGeneration,
@@ -28,12 +28,11 @@ export function mirrorActiveAccountScope(): () => void {
   };
   const applyScope = (next: ActiveAccountScope | null) => {
     scope = next;
+    void refreshEffectivePolicy();
     if (!next) {
-      usePolicyStore.getState().clearPolicy();
       useEnterpriseIdentityStore.getState().clear();
       return;
     }
-    void usePolicyStore.getState().fetchPolicy(next.accountId, next.authGeneration);
     refreshIdentity();
   };
   const onStorage = (event: StorageEvent) => {

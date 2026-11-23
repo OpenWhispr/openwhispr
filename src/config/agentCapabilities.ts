@@ -68,11 +68,12 @@ export const CONNECTOR_NAMES: Readonly<Record<string, string>> = {
   slack: "Slack",
   linear: "Linear",
   github: "GitHub",
+  salesforce: "Salesforce",
 };
 
 // Connectors the user connects one by one. Email always works (it falls back to
 // the user's mail app) and the email_draft tool reports Gmail's own state.
-const CONNECTED_ONE_BY_ONE: ConnectionTarget[] = ["slack", "linear", "github"];
+const CONNECTED_ONE_BY_ONE: ConnectionTarget[] = ["slack", "linear", "github", "salesforce"];
 
 /**
  * What request_connection can connect, as the model reads it. Cards use these
@@ -83,6 +84,7 @@ export const CONNECTION_TARGET_NAMES: Readonly<Record<ConnectionTarget, string>>
   slack: CONNECTOR_NAMES.slack,
   linear: CONNECTOR_NAMES.linear,
   github: CONNECTOR_NAMES.github,
+  salesforce: CONNECTOR_NAMES.salesforce,
   google: "Google Calendar",
   microsoft: "Microsoft Calendar",
   apple: "Apple Calendar",
@@ -234,14 +236,23 @@ export function describeUnavailable(unavailable: ReadonlyArray<UnavailableCapabi
     );
   }
   if (delivering.length > 0) {
-    // Writing the text never needed a connector: only sending it does.
+    // Writing the text never needed a connector: only sending it does. Connecting helps only a
+    // connector that isn't connected; one that needs a paid plan or a sign-in can't be connected yet.
+    const canConnect = delivering.every(
+      (item) => item.reason === "notConnected" || item.reason === "needsReconnect"
+    );
     sections.push(
       "You can't send, post, file or look anything up through these in this conversation. " +
         "When the user asks for an email, message, issue or comment, still write it in full in " +
-        "your reply, then end with one short sentence on how they can have you send it for them " +
-        '(for example: "Connect Slack and I can post this for you."); leave that sentence out ' +
-        "when only their admin can turn it on. For anything else, briefly tell them how to " +
-        "enable it:\n" +
+        "your reply, then end with one short sentence " +
+        (canConnect
+          ? 'on how they can have you send it for them (for example: "Connect Slack and I can ' +
+            'post this for you.")'
+          : "on what sending it needs, as its line below says, never on connecting it, which " +
+            "they can't do yet (on a free plan, for example: \"Sending Slack messages needs a " +
+            "paid OpenWhispr plan, so I've written it here for you to copy.\")") +
+        "; leave that sentence out when only their admin can turn it on. For anything else, " +
+        "briefly tell them how to enable it:\n" +
         describeList(delivering)
     );
   }

@@ -1,11 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { once } = require("node:events");
+const { setTimeout: delay } = require("node:timers/promises");
 const { WebSocketServer } = require("ws");
 
 const DeepgramStreaming = require("../../src/helpers/deepgramStreaming");
 
-// Loopback Deepgram: warmup resolves on the socket opening, connect on the
-// first server message, so every accepted socket answers with Metadata.
+// Loopback Deepgram that provides request IDs immediately for the reuse tests.
 async function withMetadataServer(run) {
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
   await new Promise((resolve) => server.once("listening", resolve));
@@ -65,6 +66,101 @@ test("a warm connection is reused only within the same credential mode", async (
       streaming.cleanupAll();
     }
   });
+});
+
+test("a cold socket connects without server messages and survives slow capture setup", async () => {
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  await once(server, "listening");
+  let keepAliveCount = 0;
+  let idleTimeout;
+  server.on("connection", (socket) => {
+    const resetIdleTimeout = () => {
+      clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(() => socket.close(1011, "net0001"), 10000);
+    };
+    resetIdleTimeout();
+    socket.on("close", () => clearTimeout(idleTimeout));
+    socket.on("message", (data, isBinary) => {
+      if (isBinary) {
+        resetIdleTimeout();
+        socket.send(JSON.stringify({ type: "Metadata", request_id: "cold-session" }));
+        socket.send(
+          JSON.stringify({
+            type: "Results",
+            is_final: true,
+            start: 0,
+            channel: { alternatives: [{ transcript: "Meeting started." }] },
+          })
+        );
+      } else if (JSON.parse(data.toString()).type === "KeepAlive") {
+        keepAliveCount++;
+        resetIdleTimeout();
+      }
+    });
+  });
+
+  const streaming = new DeepgramStreaming();
+  streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+  let connectTimeout;
+  let transcriptTimeout;
+  try {
+    await Promise.race([
+      streaming.connect({ token: "byok-key", mode: "byok", sampleRate: 24000 }),
+      new Promise((_, reject) => {
+        connectTimeout = setTimeout(
+          () => reject(new Error("connect() waited for a server message before allowing audio")),
+          2000
+        );
+      }),
+    ]);
+    clearTimeout(connectTimeout);
+    assert.equal(streaming.isConnected, true);
+
+    // Capture setup can exceed Deepgram's ten-second idle window.
+    await delay(13000);
+    assert.equal(streaming.isConnected, true, "the idle socket must survive capture setup");
+    assert.ok(keepAliveCount >= 3, "keep-alive must repeat before any audio is sent");
+
+    const transcript = new Promise((resolve, reject) => {
+      streaming.onFinalTranscript = (text, startedAt) => resolve({ text, startedAt });
+      transcriptTimeout = setTimeout(() => reject(new Error("No transcript received")), 2000);
+    });
+    const beforeAudio = Date.now();
+    assert.equal(streaming.sendAudio(Buffer.alloc(4800)), true);
+    const afterAudio = Date.now();
+    const result = await transcript;
+    assert.equal(result.text, "Meeting started.");
+    assert.ok(
+      result.startedAt >= beforeAudio && result.startedAt <= afterAudio,
+      "transcript time must start with audio, not the socket opening thirteen seconds earlier"
+    );
+    assert.equal(streaming.sessionId, "cold-session");
+  } finally {
+    clearTimeout(connectTimeout);
+    clearTimeout(transcriptTimeout);
+    clearTimeout(idleTimeout);
+    streaming.cleanupAll();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("a cold socket rejects an unauthorized handshake without becoming connected", async () => {
+  const server = new WebSocketServer({
+    host: "127.0.0.1",
+    port: 0,
+    verifyClient: (_info, done) => done(false, 401, "Unauthorized"),
+  });
+  await once(server, "listening");
+  const streaming = new DeepgramStreaming();
+  streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+  try {
+    await assert.rejects(streaming.connect({ token: "invalid-key", mode: "byok" }), /401/);
+    assert.equal(streaming.isConnected, false);
+    assert.equal(streaming.keepAliveInterval, null);
+  } finally {
+    streaming.cleanupAll();
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 // Keeps the real query string (language, keyterms) while dialing the loopback server.

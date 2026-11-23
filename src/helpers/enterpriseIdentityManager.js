@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const {
+  CONFIG_REFRESH_MS,
   ENTERPRISE_TRANSCRIPTION_SCOPE,
   resolveManagedEnterpriseScope,
   validateManagedEnterpriseEnvelope,
@@ -10,7 +11,6 @@ const { AuthContextError } = require("./cloudApiRequest");
 const { CLIENT_CAPABILITIES } = require("./policyRequestHeaders");
 
 const CONFIG_CACHE_VERSION = 1;
-const CONFIG_REFRESH_MS = 5 * 60 * 1000;
 const CREDENTIAL_REFRESH_WINDOW_MS = 60 * 1000;
 const AZURE_SCOPE = "https://cognitiveservices.azure.com/.default";
 
@@ -674,4 +674,4 @@ function createEnterpriseIdentityManager({
   return { getConfig, resolveProvider, clear };
 }
 
-module.exports = { createEnterpriseIdentityManager };
+module.exports = { createEnterpriseIdentityManager, CONFIG_REFRESH_MS };

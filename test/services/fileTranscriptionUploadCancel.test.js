@@ -43,3 +43,30 @@ test("a bring-your-own-key upload hands its cancel id to the main process", asyn
 
   assert.equal(received.requestId, "upload-7");
 });
+
+test("an abandoned voice take skips cloud dispatch on a session refresh retry", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const cancellation = new AbortController();
+  let attempts = 0;
+  window.electronAPI.transcribeAudioFileCloud = async () => {
+    attempts++;
+    cancellation.abort();
+    return { success: false, code: "AUTH_EXPIRED" };
+  };
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-file-cloud-cancel-test-",
+    mockModules: {
+      "/lib/auth": "export const withSessionRefresh = (fn) => fn().catch(() => fn());",
+      "./managedTranscription": "export const getManagedTranscriptionResolution = () => null;",
+    },
+  });
+  const { transcribeFile } = await vite.ssrLoadModule("/services/fileTranscription.ts");
+  await assert.rejects(
+    transcribeFile("/tmp/take.webm", { isOpenWhisprCloud: true }, false, {
+      requestId: "voice-take",
+      signal: cancellation.signal,
+    }),
+    { name: "AbortError" }
+  );
+  assert.equal(attempts, 1);
+});

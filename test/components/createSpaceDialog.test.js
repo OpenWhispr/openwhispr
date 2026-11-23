@@ -119,6 +119,11 @@ test.before(async (t) => {
       `,
       // The API client reads the language from here, and the real one starts i18next.
       "/i18n": "export default { t: (key) => key, language: 'en' };",
+      "/lib/authRequestContext": `
+        export const hasValidatedAuthContext = () => true;
+        export const getValidatedAuthGeneration = () => 1;
+        export const subscribeAuthRequestContext = () => () => {};
+      `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = Object.assign(
           (selector) => selector(globalThis.__store),

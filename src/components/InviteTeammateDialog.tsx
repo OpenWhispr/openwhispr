@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "./ui/dialog";
-import { InvitePeopleView, SUGGESTION_MIN_CHARS } from "./workspace/InvitePeopleView";
+import { useToast } from "./ui/useToast";
+import { isolate } from "../utils/bidiIsolate";
+import {
+  InvitePeopleView,
+  SUGGESTION_MIN_CHARS,
+  type InviteProfile,
+} from "./workspace/InvitePeopleView";
 import {
   createInviteFlow,
+  inviteConfirmed,
   inviteReducer,
   inviteSuggestions,
   inviteSummary,
   type InviteFlowEvent,
   type InviteFlowState,
 } from "../lib/inviteFlow";
+import { workspacePlanSection } from "../lib/settingsNav";
 import { useInviteSeatLines } from "../hooks/useInviteSeatLines";
 import { workspaceCan } from "../lib/capabilities";
 import { invitePeople } from "../services/invitePeople";
@@ -35,6 +43,8 @@ interface Props {
   initialEmail?: string;
   /** Addresses that open as chips (the server's, e.g. guests). */
   initialEmails?: string[];
+  /** Names and pictures for those addresses, by lowercase address, shown on their chips. */
+  initialProfiles?: ReadonlyMap<string, InviteProfile>;
   /** Already-translated text that replaces the default title and description. */
   heading?: { title: string; description: string };
   /** Addresses that can't be invited again; their chips are blocked before anything is sent. */
@@ -49,6 +59,8 @@ interface Roster {
 type Contact = { email: string; name: string | null };
 
 const SUGGESTION_DEBOUNCE_MS = 150;
+// How long Send shows as sent before the dialog closes.
+const CONFIRMATION_MS = 1600;
 
 export default function InviteTeammateDialog({
   open,
@@ -62,10 +74,12 @@ export default function InviteTeammateDialog({
   spaceIds,
   initialEmail,
   initialEmails,
+  initialProfiles,
   heading,
   knownEmails,
 }: Props): ReactElement {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const attachInvited = Boolean(teamIds?.length || spaceIds?.length);
   const [state, setState] = useState<InviteFlowState>(() =>
     createInviteFlow({ initialEmail, initialEmails, attachInvited })
@@ -215,13 +229,54 @@ export default function InviteTeammateDialog({
 
   const close = (): void => onOpenChange(false);
 
+  // A clean run reads as a toast, with the dialog showing its confirmation for a moment first.
+  const confirmed = inviteConfirmed(state);
+  const confirmedSent = state.sent;
+  useEffect(() => {
+    if (!open || !confirmed) return undefined;
+    toast({
+      title:
+        confirmedSent.length === 1
+          ? t("workspaces.invite.sentOne", {
+              email: isolate(confirmedSent[0].email),
+              workspace: isolate(workspaceName),
+            })
+          : t("workspaces.invite.sentMany", {
+              count: confirmedSent.length,
+              workspace: isolate(workspaceName),
+            }),
+    });
+    const timer = setTimeout(() => onOpenChange(false), CONFIRMATION_MS);
+    return () => clearTimeout(timer);
+    // The toast and the timer belong to the run's ending, not to a later change of props.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, confirmed]);
+
+  // A run that left chips to fix still created invitations. Counting what was already told
+  // (rather than watching the phase) keeps a run that finished between two renders from going
+  // unreported.
+  const toldSent = useRef(0);
+  useEffect(() => {
+    if (state.phase === "sending") return;
+    if (state.phase === "editing" && state.sent.length > toldSent.current) {
+      const undelivered = state.sent.every((entry) => !entry.emailSent);
+      toast({
+        title: t(undelivered ? "workspaces.invite.createdTitle" : "workspaces.invite.sentTitle", {
+          count: state.sent.length,
+        }),
+      });
+    }
+    toldSent.current = state.sent.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.phase, state.sent.length]);
+
   // A named section remounts Settings, so this also works from inside Settings and takes any
   // dialog in there with it.
   const handleUpgrade = (): void => {
     // Closing mid-send would unmount the dialog, which aborts the run and loses its report.
     if (state.phase === "sending") return;
     close();
-    void window.electronAPI?.openSettingsSection?.("plansBilling");
+    void window.electronAPI?.openSettingsSection?.(workspacePlanSection(workspaceId));
   };
 
   // Invitations in flight can't be taken back, so the dialog stays until the run reports.
@@ -245,6 +300,7 @@ export default function InviteTeammateDialog({
         onUpgrade={handleUpgrade}
         addsToContainer={attachInvited}
         cancelLabel={cancelLabel ?? t("common.cancel")}
+        profiles={initialProfiles}
         onCancel={close}
         onSend={() => void handleSend()}
         onDone={close}

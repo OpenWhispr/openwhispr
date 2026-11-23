@@ -115,6 +115,8 @@ jobs:
         run: python3 openwhispr-mobile/modules/background-uploader/tests/run-provider-transport-tests.py
       - name: Run keyboard return resolver tests
         run: bash openwhispr-mobile/modules/app-group-storage/tests/run-return-target-tests.sh
+      - name: Run keyboard recording startup tests
+        run: python3 openwhispr-mobile/modules/app-group-storage/tests/run-recording-startup-tests.py
       - name: Run hotkey dictation logic tests
         run: python3 openwhispr-mobile/plugins/hotkey-dictation/tests/run-hotkey-logic-tests.py
       - name: Run Live Activity resolver tests
@@ -123,6 +125,10 @@ jobs:
         run: python3 openwhispr-mobile/plugins/keyboard-extension/tests/run-keyboard-touch-tests.py
       - name: Run keyboard capitalization tests
         run: sh openwhispr-mobile/scripts/test-keyboard-capitalization.sh
+      - name: Run keyboard typing-engine tests
+        run: sh openwhispr-mobile/scripts/test-keyboard-typing.sh test
+      - name: Run keyboard direct-dictation tests
+        run: sh openwhispr-mobile/scripts/test-keyboard-direct.sh
 
   mobile-status:
     name: Mobile CI

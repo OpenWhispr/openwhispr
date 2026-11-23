@@ -95,3 +95,61 @@ test("upgradeToEnterprise posts to the upgrade endpoint with no body", async (t)
   assert.equal(requests[0].path, "/api/workspaces/ws-1/billing/upgrade");
   assert.equal(requests[0].body, undefined);
 });
+
+test("previewSeats sends the captured generation and preserves the detailed zero-proration quote", async (t) => {
+  const preview = {
+    current_quantity: 10,
+    next_quantity: 11,
+    seats_used: 8,
+    member_seats: 7,
+    pending_seats: 1,
+    amount_due: 159960,
+    currency: "usd",
+    unit_amount: 15996,
+    interval: "annual",
+    proration_amount: 0,
+    next_invoice_amount: 159960,
+    next_invoice_date: null,
+  };
+  const requests = installCloudCapture(t, preview);
+  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
+
+  const result = await WorkspacesService.previewSeats("ws-1", 1, 42);
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].method, "POST");
+  assert.equal(requests[0].path, "/api/workspaces/ws-1/billing/preview-seats");
+  assert.deepEqual(requests[0].body, { additional_seats: 1 });
+  assert.equal(requests[0].expectedAuthGeneration, 42);
+  assert.deepEqual(result, preview);
+});
+
+test("workspace portal honors an optional captured auth generation without changing the legacy request", async (t) => {
+  const requests = installCloudCapture(t);
+  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
+  assert.equal(await WorkspacesService.billingPortal("ws-1", 41), CHECKOUT_URL);
+  assert.equal(await WorkspacesService.billingPortal("ws-1"), CHECKOUT_URL);
+  assert.equal(requests[0].expectedAuthGeneration, 41);
+  assert.equal(requests[1].expectedAuthGeneration, undefined);
+  for (const request of requests) {
+    assert.equal(request.method, "POST");
+    assert.equal(request.path, "/api/workspaces/ws-1/billing/portal");
+    assert.equal(request.body, undefined);
+  }
+});
+
+test("workspace people counts use fresh membership and invitation totals", async (t) => {
+  const counts = { member_count: 1, pending_invitations: 2 };
+  const requests = installCloudCapture(t, counts);
+  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
+  assert.deepEqual(await WorkspacesService.getPeopleCounts("ws-1"), counts);
+  assert.equal(requests[0].path, "/api/workspaces/ws-1/stats");
+  assert.equal(requests[0].method, "GET");
+  assert.equal(requests[0].cache, "no-store");
+});
+
+test("an incomplete stats response leaves membership unknown", async (t) => {
+  installCloudCapture(t, { member_count: 1 });
+  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
+  await assert.rejects(WorkspacesService.getPeopleCounts("ws-1"));
+});

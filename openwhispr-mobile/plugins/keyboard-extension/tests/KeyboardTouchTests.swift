@@ -11,6 +11,9 @@ private enum TestEnvironment {
   static var landscape = false
   static var tablet = false
   static var proxy = TestTextProxy()
+  /// hasFullAccess: on, as Mac Catalyst reports it (off would cover the keys with the Full
+  /// Access panel).
+  static var fullAccess = true
 
   static func install() {
     func stub(_ cls: AnyClass, _ selector: Selector, _ block: Any) {
@@ -28,6 +31,8 @@ private enum TestEnvironment {
       MainActor.assumeIsolated { tablet ? .pad : .phone }
     }
     stub(UIDevice.self, #selector(getter: UIDevice.userInterfaceIdiom), idiomStub)
+    let fullAccessStub: @convention(block) (AnyObject) -> Bool = { _ in MainActor.assumeIsolated { fullAccess } }
+    stub(UIInputViewController.self, #selector(getter: UIInputViewController.hasFullAccess), fullAccessStub)
   }
 
   static func reset() {
@@ -35,6 +40,35 @@ private enum TestEnvironment {
     landscape = false
     tablet = false
     proxy = TestTextProxy()
+    fullAccess = true
+  }
+}
+
+/// Stands in for DirectDictationRuntime: records what the keyboard asks of it.
+@MainActor
+private final class FakeDirectDictation: DirectDictationControlling {
+  var canRecordHere = true
+  var readDocumentID: (() -> UUID?)?
+  var state: DirectDictationState = .idle
+  var onStateChange: ((DirectDictationState) -> Void)?
+  var onLevel: ((Float) -> Void)?
+  var onText: ((String) -> Void)?
+  var starts = 0
+  var confirms = 0
+  var cancels = 0
+  var appears = 0
+  var disappears = 0
+
+  func attach(to view: UIView) {}
+  func start() { starts += 1 }
+  func confirm() { confirms += 1 }
+  func cancel() { cancels += 1 }
+  func keyboardWillDisappear() { disappears += 1 }
+  func keyboardDidAppear() { appears += 1 }
+
+  func push(_ next: DirectDictationState) {
+    state = next
+    onStateChange?(next)
   }
 }
 
@@ -52,13 +86,60 @@ private final class TestTextProxy: NSObject, UITextDocumentProxy {
   var autocapitalizationType: UITextAutocapitalizationType = .sentences
   var smartQuotesType: UITextSmartQuotesType = .default
   var isSecureTextEntry = false
+  var autocorrectionType: UITextAutocorrectionType = .default
+  var spellCheckingType: UITextSpellCheckingType = .default
+  var textContentType: UITextContentType!
   private(set) var inserted = [String]()
+  private(set) var deletes = 0
+  private(set) var cursorMoves = [Int]()
+  /// A field that reports its text at once: inserts and deletes change the text before
+  /// the cursor. Off, the proxy is a host that reports nothing by itself, as most tests need.
+  var tracksText = false
 
-  func adjustTextPosition(byCharacterOffset offset: Int) {}
+  func adjustTextPosition(byCharacterOffset offset: Int) {
+    cursorMoves.append(offset)
+    guard tracksText else { return }
+    // UTF-16 units, as hosts count them.
+    var before = Array((documentContextBeforeInput ?? "").utf16)
+    var after = Array((documentContextAfterInput ?? "").utf16)
+    if offset < 0 {
+      let moved = min(-offset, before.count)
+      after.insert(contentsOf: before.suffix(moved), at: 0)
+      before.removeLast(moved)
+    } else {
+      let moved = min(offset, after.count)
+      before.append(contentsOf: after.prefix(moved))
+      after.removeFirst(moved)
+    }
+    documentContextBeforeInput = String(utf16CodeUnits: before, count: before.count)
+    documentContextAfterInput = String(utf16CodeUnits: after, count: after.count)
+  }
   func setMarkedText(_ markedText: String, selectedRange: NSRange) {}
   func unmarkText() {}
-  func insertText(_ text: String) { inserted.append(text) }
-  func deleteBackward() {}
+  /// When insertText last returned, for the simulator harness's latency measurement.
+  private(set) var lastInsertAt: CFTimeInterval = 0
+  func insertText(_ text: String) {
+    defer { lastInsertAt = CACurrentMediaTime() }
+    inserted.append(text)
+    guard tracksText else { return }
+    documentContextBeforeInput = (documentContextBeforeInput ?? "") + text
+    hasText = true
+  }
+  func deleteBackward() {
+    deletes += 1
+    guard tracksText, var before = documentContextBeforeInput, !before.isEmpty else { return }
+    before.removeLast()
+    documentContextBeforeInput = before
+    hasText = !before.isEmpty || !(documentContextAfterInput ?? "").isEmpty
+  }
+}
+
+/// Counts feedback calls: a simulator has no Taptic Engine to feel.
+private final class CountingKeyFeedback: KeyFeedbackGenerating {
+  var clicks = 0, taps = 0, ticks = 0
+  func click() { clicks += 1 }
+  func tap() { taps += 1 }
+  func tick() { ticks += 1 }
 }
 
 private enum TestPage {
@@ -73,17 +154,14 @@ private extension KeyboardViewController {
   /// The production keyboard laid out at `width` and its content height (or `height`), in
   /// the stubbed TestEnvironment.
   static func makeLaidOutKeyboard(
-    width: CGFloat,
-    page: TestPage = .letters,
-    height: CGFloat? = nil,
-    letterLayout: KeyboardLetterLayout = .english
+    width: CGFloat, page: TestPage = .letters, height: CGFloat? = nil,
+    prepare: (KeyboardViewController) -> Void = { _ in }
   ) -> KeyboardViewController {
     let controller = KeyboardViewController()
+    // Before the view loads: an appearance override set later doesn't reach colours that
+    // an off-window view has already resolved.
+    prepare(controller)
     controller.loadViewIfNeeded()
-    if controller.letterLayout != letterLayout {
-      controller.letterLayout = letterLayout
-      controller.rebuildKeyboard()
-    }
     if page != .letters {
       controller.handleModeKeyTapped()
     }
@@ -143,6 +221,19 @@ private extension KeyboardViewController {
   func touchTestTapDelete() { handleBackspaceTapped() }
   func touchTestTapMode() { handleModeKeyTapped() }
   func touchTestQuote(_ character: String) -> String? { smartQuoteSubstitution(for: character) }
+  func touchTestUseDirect(_ direct: DirectDictationControlling) {
+    directDictation = direct
+    attachDirectDictation()
+  }
+  func touchTestRefreshPill() { refreshRecordButton() }
+  func touchTestSetHostIsOwnApp(_ value: Bool) { hostIsOwnApp = value }
+  var touchTestPillTitle: String? { recordButton.configuration?.title }
+  var touchTestPillActions: [String] { recordButton.actions(forTarget: self, forControlEvent: .touchUpInside) ?? [] }
+  var touchTestCanvasShown: Bool { recordingCanvas.isUserInteractionEnabled }
+  func touchTestTapDirectPill() { handleDirectRecordTapped() }
+  func touchTestTapConfirm() { handleStopRecordingTapped() }
+  func touchTestTapCancel() { handleCancelRecordingTapped() }
+  func touchTestDirectWillDisappear() { directKeyboardWillDisappear() }
 }
 
 private struct TouchChecks {
@@ -166,8 +257,23 @@ private struct TouchChecks {
 private enum KeyboardTouchTests {
   @MainActor
   static func main() {
+    #if targetEnvironment(simulator)
+    // Built as an app for the simulator (run-keyboard-sim-harness.py): UIKit runs the show.
+    runSimHarnessApp()
+    #else
+    runOnMac()
+    #endif
+  }
+
+  @MainActor
+  static func runOnMac() {
     var checks = TouchChecks()
     TestEnvironment.install()
+    // `--screenshots <directory>` renders the visual-review PNGs instead of testing.
+    if let flag = CommandLine.arguments.firstIndex(of: "--screenshots"), CommandLine.arguments.count > flag + 1 {
+      KeyboardScreenshots.render(to: URL(fileURLWithPath: CommandLine.arguments[flag + 1]))
+      return
+    }
     checkSyntheticRows(&checks)
     checkEdgeTies(&checks)
     checkOtherControls(&checks)
@@ -185,14 +291,6 @@ private enum KeyboardTouchTests {
     checkProductionLayout("landscape with globe", width: 667, globe: true, landscape: true, &checks)
     checkProductionLayout("iPad", width: 1024, tablet: true, &checks)
     checkProductionLayout("iPad floating", width: 320, tablet: true, &checks)
-    for layout in [KeyboardLetterLayout.german, .swissFrench] {
-      for width: CGFloat in [360, 402, 440] {
-        checkProductionLayout("\(layout)", width: width, letterLayout: layout, &checks)
-      }
-      checkProductionLayout("\(layout) landscape", width: 852, landscape: true, letterLayout: layout, &checks)
-      checkProductionLayout("\(layout) iPad", width: 1024, tablet: true, letterLayout: layout, &checks)
-      checkProductionLayout("\(layout) with globe", width: 375, globe: true, letterLayout: layout, &checks)
-    }
     let fieldTypes: [(UIKeyboardType, String)] = [(.URL, "URL"), (.emailAddress, "email"), (.webSearch, "web search"), (.twitter, "twitter")]
     for (type, name) in fieldTypes {
       let proxy = TestTextProxy()
@@ -207,7 +305,8 @@ private enum KeyboardTouchTests {
     checkFieldAwareKeys(&checks)
     checkLayoutChanges(&checks)
     checkTyping(&checks)
-    checkLetterLayouts(&checks)
+    checkDirectDictation(&checks)
+    checkTypingHelp(&checks)
 
     print("Keyboard touch routing: \(checks.count - checks.failures.count)/\(checks.count) passed")
     if !checks.failures.isEmpty {
@@ -370,7 +469,6 @@ private enum KeyboardTouchTests {
     landscape: Bool = false,
     tablet: Bool = false,
     proxy: TestTextProxy? = nil,
-    letterLayout: KeyboardLetterLayout = .english,
     _ checks: inout TouchChecks
   ) {
     TestEnvironment.reset()
@@ -379,9 +477,7 @@ private enum KeyboardTouchTests {
     TestEnvironment.landscape = landscape
     TestEnvironment.tablet = tablet
     TestEnvironment.proxy = proxy ?? TestTextProxy()
-    let controller = KeyboardViewController.makeLaidOutKeyboard(
-      width: width, page: page, letterLayout: letterLayout
-    )
+    let controller = KeyboardViewController.makeLaidOutKeyboard(width: width, page: page)
     let rows = controller.touchTestRows
     let layout = "\(Int(width)) pt \(name) \(page)"
     checks.check(
@@ -632,72 +728,6 @@ private enum KeyboardTouchTests {
     checks.check("floating iPad keyboard: phone metrics", !floating.touchTestIsTablet)
   }
 
-  /// The German and Swiss French pages: the stored values, eleven equal keys filling the
-  /// top rows, the third row beside unchanged shift and delete keys, and accented letters
-  /// typed and capitalised like any other.
-  @MainActor
-  static func checkLetterLayouts(_ checks: inout TouchChecks) {
-    TestEnvironment.reset()
-    defer { TestEnvironment.reset() }
-
-    checks.check("no stored layout reads as English", KeyboardLetterLayout(storedValue: nil) == .english)
-    checks.check("an unknown layout reads as English", KeyboardLetterLayout(storedValue: "xx") == .english)
-    checks.check("de reads as German", KeyboardLetterLayout(storedValue: "de") == .german)
-    checks.check("fr_CH reads as Swiss French", KeyboardLetterLayout(storedValue: "fr_CH") == .swissFrench)
-    checks.check("English is ten keys wide", KeyboardLetterLayout.english.columns == 10)
-    for layout in [KeyboardLetterLayout.german, .swissFrench] {
-      checks.check("\(layout) rows are 11, 11 and 7 keys", layout.rows.map(\.count) == [11, 11, 7])
-      checks.check("\(layout) is QWERTZ", layout.rows[0][5] == "z" && layout.rows[2][0] == "y")
-      let letters = layout.rows.flatMap { $0 }
-      checks.check("\(layout) has no repeated key", Set(letters).count == letters.count)
-    }
-    checks.check("German has ü ö ä", KeyboardLetterLayout.german.rows[0].last == "ü" && KeyboardLetterLayout.german.rows[1].suffix(2) == ["ö", "ä"])
-    checks.check("Swiss French has è é à", KeyboardLetterLayout.swissFrench.rows[0].last == "è" && KeyboardLetterLayout.swissFrench.rows[1].suffix(2) == ["é", "à"])
-
-    for width: CGFloat in [360, 402, 1024] {
-      TestEnvironment.tablet = width > 800
-      let english = KeyboardViewController.makeLaidOutKeyboard(width: width)
-      let german = KeyboardViewController.makeLaidOutKeyboard(width: width, letterLayout: .german)
-      let rows = german.touchTestRows
-      let rects = german.touchTestLetters.map { $0.convert($0.bounds, to: rows) }
-      let top = Array(rects.prefix(11))
-      let widths = rects.map(\.width)
-      checks.check(
-        "\(Int(width)) pt German: 29 letter keys of one width",
-        rects.count == 29 && widths.allSatisfy { abs($0 - widths[0]) < 0.5 }
-      )
-      checks.check(
-        "\(Int(width)) pt German: the top row fills the rows",
-        abs(top.first!.minX - rows.bounds.minX) < 1 && abs(top.last!.maxX - rows.bounds.maxX) < 1
-      )
-      let englishRows = english.touchTestRows
-      let englishTop = english.touchTestLetters.prefix(10).map { $0.convert($0.bounds, to: englishRows) }
-      checks.check(
-        "\(Int(width)) pt German keys are narrower than English",
-        widths[0] < englishTop[0].width
-      )
-      checks.check(
-        "\(Int(width)) pt German: the third row stays between shift and delete",
-        rects[22].minX > rows.bounds.minX + englishTop[0].width && rects[28].maxX < rows.bounds.maxX - englishTop[0].width
-      )
-      TestEnvironment.tablet = false
-    }
-
-    let proxy = TestTextProxy()
-    TestEnvironment.proxy = proxy
-    let german = KeyboardViewController.makeLaidOutKeyboard(width: 402, letterLayout: .german)
-    german.touchTestTapLetter(10)
-    german.touchTestTapLetter(21)
-    german.touchTestTapLetter(5)
-    checks.check("German types Ü at a sentence start, then ä and z (\(proxy.inserted))", proxy.inserted == ["Ü", "ä", "z"])
-
-    let swissProxy = TestTextProxy()
-    TestEnvironment.proxy = swissProxy
-    let swiss = KeyboardViewController.makeLaidOutKeyboard(width: 402, letterLayout: .swissFrench)
-    for index in [10, 20, 21, 22] { swiss.touchTestTapLetter(index) }
-    checks.check("Swiss French types È at a sentence start, then é à y (\(swissProxy.inserted))", swissProxy.inserted == ["È", "é", "à", "y"])
-  }
-
   /// Shift, delete and quotes.
   @MainActor
   static func checkTyping(_ checks: inout TouchChecks) {
@@ -766,3 +796,85 @@ private enum KeyboardTouchTests {
     )
   }
 }
+
+/// The pill and the recording canvas when the keyboard records and transcribes itself.
+@MainActor
+private func checkDirectDictation(_ checks: inout TouchChecks) {
+  TestEnvironment.reset()
+  defer { TestEnvironment.reset() }
+
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  let direct = FakeDirectDictation()
+  keyboard.touchTestUseDirect(direct)
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: eligible and the app not alive reads Tap to speak", keyboard.touchTestPillTitle == "Tap to speak")
+  checks.check("direct: the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+  checks.check("direct: the attached field supplies its identifier", direct.readDocumentID?() == TestEnvironment.proxy.documentIdentifier)
+  keyboard.touchTestTapDirectPill()
+  checks.check("direct: tapping starts once", direct.starts == 1)
+
+  direct.canRecordHere = false
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: not eligible reads Activate", keyboard.touchTestPillTitle == "Activate")
+  checks.check("direct: not eligible keeps the handoff", !keyboard.touchTestPillActions.contains("handleDirectRecordTapped"))
+
+  direct.canRecordHere = true
+  keyboard.touchTestSetHostIsOwnApp(true)
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: an alive app keeps its own path", keyboard.touchTestPillActions == ["handleDarwinRecordTapped"])
+  keyboard.touchTestSetHostIsOwnApp(false)
+  keyboard.touchTestRefreshPill()
+
+  direct.push(.recording)
+  checks.check("direct: recording shows the canvas", keyboard.touchTestCanvasShown)
+  keyboard.touchTestTapConfirm()
+  checks.check("direct: the check mark confirms", direct.confirms == 1)
+  keyboard.touchTestTapCancel()
+  checks.check("direct: the cross cancels", direct.cancels == 1)
+
+  direct.push(.transcribing)
+  checks.check("direct: transcribing hides the canvas", !keyboard.touchTestCanvasShown)
+  checks.check("direct: transcribing reads Transcribing", keyboard.touchTestPillTitle == "Transcribing")
+  keyboard.touchTestRefreshPill()
+  checks.check("direct: a pill refresh keeps Transcribing", keyboard.touchTestPillTitle == "Transcribing")
+
+  direct.push(.failed(.limitReached))
+  checks.check("direct: limit reached reads Limit reached", keyboard.touchTestPillTitle == "Limit reached")
+  direct.push(.failed(.captureUnavailable))
+  checks.check("direct: capture unavailable reads Tap to open app", keyboard.touchTestPillTitle == "Tap to open app")
+  direct.push(.failed(.noSpeech))
+  checks.check("direct: no speech reads No speech", keyboard.touchTestPillTitle == "No speech")
+
+  direct.push(.idle)
+  direct.onText?("hello")
+  checks.check("direct: text goes into the field", TestEnvironment.proxy.inserted == ["hello"])
+
+  // Music started or AirPods connected after the pill was drawn: the tap checks again.
+  direct.canRecordHere = true
+  keyboard.touchTestRefreshPill()
+  direct.canRecordHere = false
+  let startsBefore = direct.starts
+  keyboard.touchTestTapDirectPill()
+  checks.check("direct: a tap after audio started doesn't record here", direct.starts == startsBefore)
+  checks.check("direct: and the pill falls back to Activate", keyboard.touchTestPillTitle == "Activate")
+
+  // start() declined without a state change (still failed): the pill must not be left dead.
+  direct.canRecordHere = true
+  direct.state = .failed(.tryAgain)
+  keyboard.touchTestRefreshPill()
+  keyboard.touchTestTapDirectPill()
+  checks.check("direct: a declined tap leaves a working pill", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+  direct.state = .idle
+
+  // iOS recreated the keyboard mid-take: the new one picks the take up.
+  direct.state = .recording
+  let replacement = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+  replacement.touchTestUseDirect(direct)
+  checks.check("direct: a new keyboard shows the take in progress", replacement.touchTestCanvasShown)
+  let disappearsBefore = direct.disappears
+  keyboard.touchTestDirectWillDisappear()
+  checks.check("direct: the replaced keyboard going away doesn't end the take", direct.disappears == disappearsBefore)
+  replacement.touchTestDirectWillDisappear()
+  checks.check("direct: the keyboard that owns the take going away does", direct.disappears == disappearsBefore + 1)
+}
+

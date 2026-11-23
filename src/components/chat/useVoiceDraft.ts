@@ -12,6 +12,11 @@ import {
   resolveFileTranscriptionRoute,
   type FileTranscriptionConfig,
 } from "../../services/fileTranscription";
+import {
+  isByokTranscriptionModelAllowed,
+  isManagedTranscriptionActive,
+} from "../../services/managedTranscription";
+import i18n from "../../i18n";
 import { analyserRms } from "../../utils/audioLevel";
 import { subscribeAuthBoundary } from "../../lib/authRequestContext";
 
@@ -87,12 +92,11 @@ export function useVoiceDraft({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const levelBufRef = useRef<Float32Array<ArrayBuffer> | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recordingStartedAt = useRef(0);
   const discardRef = useRef(false);
   // A start still opening the microphone: a stop or cancel meanwhile abandons it.
   const openingRef = useRef<{ abandoned: boolean } | null>(null);
-  // The transcription in flight; a cancel abandons it by moving this on.
-  const transcriptionRef = useRef(0);
-  const transcribingRef = useRef(false);
+  const transcriptionRef = useRef<AbortController | null>(null);
 
   const buildConfig = (): FileTranscriptionConfig => ({
     useLocalWhisper,
@@ -122,6 +126,8 @@ export function useVoiceDraft({
     config.isOpenWhisprCloud || config.useLocalWhisper
       ? null
       : resolveFileTranscriptionRoute(config);
+  const assemblyAiDictationModel =
+    route?.transport === "proxied" && route.provider === "assemblyai" ? route.model : null;
   const streamingOnlyProvider =
     route?.transport === "error" && route.code === "STREAMING_ONLY_PROVIDER";
 
@@ -168,6 +174,7 @@ export function useVoiceDraft({
   }, []);
 
   const finishRecording = useCallback(async () => {
+    const durationSeconds = (performance.now() - recordingStartedAt.current) / 1000;
     const blob = new Blob(chunksRef.current, { type: "audio/webm" });
     chunksRef.current = [];
     teardownCapture();
@@ -177,22 +184,27 @@ export function useVoiceDraft({
       return;
     }
 
-    const transcription = ++transcriptionRef.current;
-    const current = () => transcription === transcriptionRef.current;
-    transcribingRef.current = true;
+    const transcription = new AbortController();
+    transcriptionRef.current = transcription;
+    const { signal } = transcription;
     setStatus("transcribing");
     let tempPath: string | null = null;
     try {
       const buffer = await blob.arrayBuffer();
-      if (!current()) return;
+      if (signal.aborted) return;
       const saved = await window.electronAPI.saveTempAudio(buffer);
       tempPath = saved.path;
-      if (!current()) return;
+      if (signal.aborted) return;
+      const requestId = crypto.randomUUID();
+      signal.onabort = () => void window.electronAPI.cancelUploadTranscription?.(requestId);
       const result = await transcribeFile(tempPath, buildConfigRef.current(), false, {
         purpose: "dictation",
+        durationSeconds,
+        requestId,
+        signal,
       });
       const text = result.text?.trim();
-      if (!current()) return;
+      if (signal.aborted) return;
       if (!result.success) {
         onErrorRef.current(result.error || "");
       } else if (!text) {
@@ -201,11 +213,12 @@ export function useVoiceDraft({
         onTranscriptRef.current(text);
       }
     } catch (error) {
-      if (current()) onErrorRef.current(error instanceof Error ? error.message : String(error));
+      if (!signal.aborted)
+        onErrorRef.current(error instanceof Error ? error.message : String(error));
     } finally {
       if (tempPath) void window.electronAPI.deleteTempAudio(tempPath);
-      if (current()) {
-        transcribingRef.current = false;
+      if (!signal.aborted) {
+        transcriptionRef.current = null;
         setStatus("idle");
       }
     }
@@ -214,7 +227,15 @@ export function useVoiceDraft({
   /** Resolves once the take is recording (true), or failed to start (false). */
   const start = useCallback(async (): Promise<boolean> => {
     // One take at a time: the last one may still be transcribing.
-    if (recorderRef.current || openingRef.current || transcribingRef.current) return false;
+    if (recorderRef.current || openingRef.current || transcriptionRef.current) return false;
+    if (
+      assemblyAiDictationModel &&
+      !isManagedTranscriptionActive() &&
+      !isByokTranscriptionModelAllowed("assemblyai", assemblyAiDictationModel)
+    ) {
+      onErrorRef.current(i18n.t("common.policyTranscriptionRestricted"));
+      return false;
+    }
     const opening = { abandoned: false };
     openingRef.current = opening;
     try {
@@ -242,6 +263,7 @@ export function useVoiceDraft({
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
+      recordingStartedAt.current = performance.now();
       recorder.onstop = () => void finishRecording();
       recorder.start(1000);
 
@@ -259,7 +281,7 @@ export function useVoiceDraft({
     } finally {
       openingRef.current = null;
     }
-  }, [finishRecording, teardownCapture]);
+  }, [assemblyAiDictationModel, finishRecording, teardownCapture]);
 
   const stop = useCallback(() => {
     if (openingRef.current) openingRef.current.abandoned = true;
@@ -270,9 +292,9 @@ export function useVoiceDraft({
   const cancel = useCallback(() => {
     discardRef.current = true;
     stop();
-    if (!transcribingRef.current) return;
-    transcriptionRef.current += 1;
-    transcribingRef.current = false;
+    if (!transcriptionRef.current) return;
+    transcriptionRef.current.abort();
+    transcriptionRef.current = null;
     setStatus("idle");
   }, [stop]);
 

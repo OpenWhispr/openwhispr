@@ -2,12 +2,14 @@ import { uncheckedSync, type SyncCheckpoint } from './syncContext';
 import { notesRepository } from '@/data';
 import { fetchFolders } from '@/data/remote/notesApi';
 import { FOLDERS_CURSOR_KEY } from './pullCursors';
+import { EPOCH } from './pullNotes';
 
 export async function pullFolders(checkpoint: SyncCheckpoint = uncheckedSync): Promise<void> {
   checkpoint();
   const since = notesRepository.getSyncState(FOLDERS_CURSOR_KEY);
   checkpoint();
-  const remote = await fetchFolders(since);
+  // An absent cursor must replay deletions too; the API's browse listing omits tombstones.
+  const remote = await fetchFolders(since ?? EPOCH);
   checkpoint();
 
   let maxUpdatedAt = since ?? '';

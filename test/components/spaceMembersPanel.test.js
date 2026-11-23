@@ -33,6 +33,11 @@ test.before(async (t) => {
       "/hooks/useAuth": 'export const useAuth = () => ({ user: { id: "me" } });',
       "/ui/useToast":
         "export const useToast = () => ({ toast: (toast) => globalThis.__toasts.push(toast) });",
+      "/lib/authRequestContext": `
+        export const hasValidatedAuthContext = () => true;
+        export const getValidatedAuthGeneration = () => 1;
+        export const subscribeAuthRequestContext = () => () => {};
+      `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = Object.assign(
           (selector) => selector(globalThis.__store),
@@ -394,11 +399,11 @@ test("each kind of row says what it is", async (t) => {
   assert.equal(text(rowFor("Ronnie")), "Ronnie me@openronnie.com Admin");
   assert.equal(text(rowFor("Misa")), "Misa misa@openronnie.com Member");
   assert.equal(text(rowFor("clark@gmail.com")), "clark@gmail.com Invitation pending Member");
-  assert.equal(text(rowFor("Sales")), "Sales 5 people Member");
+  assert.equal(text(rowFor("Sales")), "Sales 5 people Members");
   assert.equal(
     text(rowFor("Jin")),
-    "Jin jin@openronnie.com · Sales Member · via Sales",
-    "an inherited person names the team beside the email and in the role cell"
+    "Jin jin@openronnie.com · Sales Member",
+    "an inherited person names the team beside the email; the role cell holds the role alone"
   );
 });
 
@@ -410,7 +415,7 @@ test("an email stays left-to-right and names keep their own direction", async (t
   assert.equal(rowFor("Misa").querySelector("[dir='auto']").textContent, "Misa");
 });
 
-test("an inherited admin reads Admin via its team", async (t) => {
+test("an inherited admin reads Admin, with its team on hover", async (t) => {
   await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -422,17 +427,39 @@ test("an inherited admin reads Admin via its team", async (t) => {
     ],
   });
 
-  assert.equal(text(rowFor("Jin")), "Jin jin@openronnie.com · Sales Admin · via Sales");
+  assert.equal(text(rowFor("Jin")), "Jin jin@openronnie.com · Sales Admin");
+  assert.equal(rowFor("Jin").querySelector("[title]").getAttribute("title"), "Admin · via Sales");
+  assert.equal(roleTrigger(rowFor("Jin")), null, "nothing to promote an admin to");
 });
 
-test("an inherited person has no menu; an invitation has no menu; a person with a direct role has one", async (t) => {
+test("an invitation has no menu; people, inherited people and teams have one", async (t) => {
   await mount(t);
 
-  assert.equal(roleTrigger(rowFor("Jin")), null);
+  assert.ok(roleTrigger(rowFor("Jin")), "someone through a team can be made an admin here");
   assert.equal(roleTrigger(rowFor("clark@gmail.com")), null);
   assert.ok(roleTrigger(rowFor("Misa")));
   assert.ok(roleTrigger(rowFor("Sales")), "a team's access has one too");
-  assert.equal(roleTriggers().length, 5, "Ronnie, Sales, Misa, Ravi and Lila");
+  assert.equal(roleTriggers().length, 6, "Ronnie, Sales, Misa, Ravi, Lila and Jin");
+});
+
+test("an inherited person's menu offers the roles but nothing to remove", async (t) => {
+  await mount(t);
+
+  await openMenu(roleTrigger(rowFor("Jin")));
+  assert.ok(menuItem("Teamspace Admin"));
+  assert.ok(menuItem("Teamspace Member"));
+  assert.equal(menuItem("Remove from teamspace"), undefined, "their access belongs to the team");
+});
+
+test("a team's access menu says what Admin means for the team", async (t) => {
+  await mount(t);
+
+  await openMenu(roleTrigger(rowFor("Sales")));
+  assert.match(
+    text(menuItem("Everyone is a member")),
+    /Everyone on the team can view and edit notes/
+  );
+  assert.match(text(menuItem("Team admins are admins")), /Everyone else on the team is a member/);
 });
 
 test("a member sees the table without the field or menus", async (t) => {
@@ -442,7 +469,7 @@ test("a member sees the table without the field or menus", async (t) => {
   assert.ok(!addButton(), "no Add members button");
   assert.equal(roleTriggers().length, 0);
   assert.equal(text(rowFor("Misa")), "Misa misa@openronnie.com Member");
-  assert.equal(text(rowFor("Sales")), "Sales 5 people Member");
+  assert.equal(text(rowFor("Sales")), "Sales 5 people Members");
   // Only someone who manages the teamspace can read its invitations.
   assert.equal(callsTo("invitations").length, 0);
   assert.ok(!rowFor("clark@gmail.com"));
@@ -469,7 +496,7 @@ test("a team's count is left out when the teams can't be read", async (t) => {
     },
   });
 
-  assert.equal(text(rowFor("Sales")), "Sales Member");
+  assert.equal(text(rowFor("Sales")), "Sales Members");
 });
 
 test("a failed invitation read still shows members", async (t) => {
@@ -655,7 +682,7 @@ test("Add members sits beside the field, and the chips go under both", async (t)
 const FULL_SEATS = { has_subscription: true, seats: 8, seats_used: 8 };
 const PANEL_TEXT = () => text(doc().body);
 
-test("a new address says what it costs, as People does, and Add still goes", async (t) => {
+test("a workspace admin sees seat usage and can invite without accessing a price", async (t) => {
   const { callsTo } = await mount(t, {
     workspaceFields: { ...FULL_SEATS, billing_manager: "Olivia" },
     seatPreview: { seats_used: 8, current_quantity: 8, amount_due: 1200, currency: "usd" },
@@ -667,7 +694,7 @@ test("a new address says what it costs, as People does, and Add still goes", asy
   await ui.settle();
   assert.match(PANEL_TEXT(), /Using 8 of 8 seats/);
   assert.match(PANEL_TEXT(), /No seats left\. Ask Olivia to add seats\./);
-  assert.match(PANEL_TEXT(), /If accepted, adds a seat to your plan/);
+  assert.doesNotMatch(PANEL_TEXT(), /adds (?:a|1) seat to your plan/);
   assert.deepEqual(callsTo("workspaces").at(-1), ["workspaces", { fresh: true }]);
   assert.equal(addButton().disabled, false);
 
@@ -683,15 +710,19 @@ test("someone who manages billing gets Upgrade beside the seat warning", async (
       ...FULL_SEATS,
       capabilities: workspaceCapabilities({ manage_billing: true }),
     },
+    seatPreview: { seats_used: 8, current_quantity: 8, amount_due: 1200, currency: "usd" },
   });
   const sections = [];
   happyWindow.electronAPI = { openSettingsSection: (section) => sections.push(section) };
   t.after(() => delete happyWindow.electronAPI);
 
   await addAddress("new@example.com");
+  assert.match(PANEL_TEXT(), /adds 1 seat to your plan/);
+  assert.doesNotMatch(PANEL_TEXT(), /12[.,]00/, "the invoice total is not a seat price");
   await ui.click(buttonNamed("Upgrade"));
 
-  assert.deepEqual(sections, ["plansBilling"]);
+  // The seat warning links to the workspace whose seats are full.
+  assert.deepEqual(sections, ["plansBilling:workspace:w1"]);
 });
 
 test("what is staged is explained under the field", async (t) => {
@@ -1907,7 +1938,7 @@ test("someone else's demotion isn't asked about", async (t) => {
 
 const VIA_SALES = [{ team_id: "sales", name: "Sales", role: "member", access: "member" }];
 
-test("the only admin with everyone else in a team can make one of them an admin", async (t) => {
+test("a manager can make someone who comes through a team an admin", async (t) => {
   const { callsTo } = await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
@@ -1925,7 +1956,7 @@ test("the only admin with everyone else in a team can make one of them an admin"
   assert.equal(callsTo("setSpaceMemberRole")[0][3], "admin");
 });
 
-test("a workspace admin isn't blocked from leaving, so team people stay read-only", async (t) => {
+test("a workspace admin gets the same menu on team people", async (t) => {
   await mount(t, {
     workspaceAdmin: true,
     members: [
@@ -1934,20 +1965,13 @@ test("a workspace admin isn't blocked from leaving, so team people stay read-onl
     ],
   });
 
-  assert.equal(roleTrigger(rowFor("Jin")), null);
+  assert.ok(roleTrigger(rowFor("Jin")));
 });
 
-test("team people stay read-only while someone direct could be made an admin", async (t) => {
-  await mount(t);
-
-  assert.equal(roleTrigger(rowFor("Jin")), null);
-});
-
-test("team people stay read-only when another admin can carry on", async (t) => {
+test("someone who is already an admin through a team has no menu", async (t) => {
   await mount(t, {
     members: [
       entry("me", "Ronnie", { role: "admin", direct_role: "admin" }),
-      entry("jin", "Jin", { direct_role: null, via_teams: VIA_SALES }),
       entry("kim", "Kim", {
         role: "admin",
         direct_role: null,
@@ -1956,7 +1980,7 @@ test("team people stay read-only when another admin can carry on", async (t) => 
     ],
   });
 
-  assert.equal(roleTrigger(rowFor("Jin")), null);
+  assert.equal(roleTrigger(rowFor("Kim")), null);
 });
 
 test("removing someone a team also reaches says that access stays", async (t) => {
@@ -2042,8 +2066,8 @@ test("a team's access changes from its row", async (t) => {
   const { callsTo, space } = await mount(t);
 
   await openMenu(roleTrigger(rowFor("Sales")));
-  assert.equal(menuItem("Teamspace Member").getAttribute("aria-checked"), "true");
-  await ui.click(menuItem("Teamspace Admin"));
+  assert.equal(menuItem("Everyone is a member").getAttribute("aria-checked"), "true");
+  await ui.click(menuItem("Team admins are admins"));
   await ui.settle();
 
   assert.deepEqual(callsTo("setSpaceTeamAccess"), [

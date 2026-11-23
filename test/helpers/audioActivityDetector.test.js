@@ -823,6 +823,164 @@ test("linux: production and sink-monitor streams do not drive meeting prompts", 
   detector.stop();
 });
 
+// Every PipeWire stream, real captures included, reports the PipeWire resampler.
+const PIPEWIRE_METER = {
+  resample_method: "PipeWire",
+  properties: {
+    "application.process.id": "101",
+    "application.process.binary": "plasmashell",
+    "media.name": "PlasmaPA-VolumeMeter",
+    "stream.monitor": "true",
+  },
+};
+const PULSEAUDIO_METER = {
+  resample_method: "peaks",
+  properties: { "application.process.id": "102", "application.name": "pavucontrol" },
+};
+
+test("linux: peak meters neither prompt nor hold the mic for auto-end", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector } = createDetector("linux", {
+    execResponses: [
+      {
+        stdout: JSON.stringify([
+          PIPEWIRE_METER,
+          {
+            properties: {
+              "application.process.id": "101",
+              "stream.monitor": "true",
+              "stream.capture.sink": "true",
+            },
+          },
+          PULSEAUDIO_METER,
+        ]),
+      },
+    ],
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (event) => detections.push(event));
+
+  await detector.start();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 0);
+  assert.equal(detector._sustainedTimer, null);
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: false,
+  });
+});
+
+test("linux: a dismissed call does not re-prompt while a peak meter stays open", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const call = { resample_method: "PipeWire", properties: { "application.process.id": "300" } };
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      { stdout: JSON.stringify([PIPEWIRE_METER, PULSEAUDIO_METER, call]) },
+      { stdout: JSON.stringify([PIPEWIRE_METER, PULSEAUDIO_METER]) },
+    ],
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (event) => detections.push(event));
+
+  await detector.start();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1);
+
+  detector.dismiss();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'remove' on source-output #3\n");
+  await flushImmediate();
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: false,
+  });
+
+  t.mock.timers.tick(COOLDOWN_MS);
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1, "cooldown must not revive a peak-meter prompt");
+});
+
+test("linux: a peak meter does not hide a real capture from the same process", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const meter = {
+    properties: { "application.process.id": "202", "stream.monitor": "true" },
+  };
+  // Real captures carry no stream.monitor key; "false" also fails a mere
+  // presence check, which would treat it as a meter.
+  const capture = { properties: { "application.process.id": "202", "stream.monitor": "false" } };
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      { stdout: JSON.stringify([meter]) },
+      { stdout: JSON.stringify([meter, capture]) },
+      { stdout: JSON.stringify([meter]) },
+    ],
+  });
+  t.after(() => detector.stop());
+
+  await detector.start();
+  assert.equal(detector._sustainedTimer, null);
+  assert.equal(detector.getExternalMicState().externalMicActive, false);
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  await flushImmediate();
+  assert.notEqual(detector._sustainedTimer, null, "real mic capture must still prompt");
+  assert.equal(detector.getExternalMicState().externalMicActive, true);
+
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'remove' on source-output #2\n");
+  await flushImmediate();
+  assert.equal(detector._sustainedTimer, null, "the remaining meter must not keep the timer armed");
+  assert.equal(
+    detector.getExternalMicState().externalMicActive,
+    false,
+    "the remaining meter must not keep auto-end waiting"
+  );
+});
+
+test("linux: peak-meter filtering survives a failed exclusion provider", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector } = createDetector("linux", {
+    excludedProcessIds: () => {
+      throw new Error("process tree unavailable");
+    },
+    execResponses: [
+      {
+        stdout: JSON.stringify([
+          PIPEWIRE_METER,
+          PULSEAUDIO_METER,
+          { properties: { "stream.monitor": "true" } },
+        ]),
+      },
+    ],
+  });
+  t.after(() => detector.stop());
+
+  await detector.start();
+  assert.equal(detector.getExternalMicState().reliable, false);
+  assert.equal(detector._sustainedTimer, null);
+});
+
+test("linux: polling ignores peak meters but accepts ordinary capture", async () => {
+  const meter = {
+    properties: { "application.process.id": "202", "stream.monitor": "true" },
+  };
+  const { detector } = createDetector("linux", {
+    execResponses: [
+      { stdout: JSON.stringify([meter]) },
+      { stdout: JSON.stringify([PULSEAUDIO_METER]) },
+      {
+        stdout: JSON.stringify([meter, { properties: { "application.process.id": "202" } }]),
+      },
+    ],
+  });
+
+  assert.equal(await detector._checkLinux(), false);
+  assert.equal(await detector._checkLinux(), false);
+  assert.equal(await detector._checkLinux(), true);
+});
+
 test("linux: browser captures prompt and unattributed streams stay in the fallback count", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("linux", {

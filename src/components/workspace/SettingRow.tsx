@@ -20,14 +20,16 @@ export function SettingRow({
   children,
 }: SettingRowProps): ReactElement {
   return (
-    <div className="flex items-center gap-3 px-3.5 py-3">
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="truncate">{title}</span>
-        </p>
-        <p className="mt-0.5 ps-[22px] text-xs text-muted-foreground">{body}</p>
-        {hint && <p className="mt-0.5 ps-[22px] text-xs text-muted-foreground/70">{hint}</p>}
+    <div className="flex items-center gap-1 rounded-[9px] p-1">
+      <div className="flex min-w-0 flex-1 items-start gap-1">
+        <span className="grid size-5 shrink-0 place-items-center">
+          <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1 text-sm leading-[21px]">
+          <p className="truncate font-medium text-foreground">{title}</p>
+          <p className="text-muted-foreground">{body}</p>
+          {hint && <p className="text-muted-foreground/70">{hint}</p>}
+        </div>
       </div>
       {children}
     </div>

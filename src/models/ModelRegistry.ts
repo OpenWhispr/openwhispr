@@ -6,7 +6,10 @@ import {
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
 import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
-import { isUploadOnlyTranscriptionModel } from "./appTranscriptionProviders.js";
+import {
+  isNoteRecordingOnlyTranscriptionModel,
+  isUploadOnlyTranscriptionModel,
+} from "./appTranscriptionProviders.js";
 import { pickDefaultModelId } from "./providerDefaultModel";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
@@ -462,11 +465,24 @@ export function getStreamingTranscriptionProviders(): TranscriptionProviderData[
 }
 
 // Dictation's list (the Settings picker's and onboarding's): Upload is the
-// only screen that offers upload-only models.
+// only screen that offers upload-only models, and Note Recording the only one
+// that offers its realtime-only models.
 export function getDictationTranscriptionProviders(): TranscriptionProviderData[] {
   return modelRegistry.getTranscriptionProviders().map((p) => ({
     ...p,
-    models: p.models.filter((m) => !isUploadOnlyTranscriptionModel(p.id, m.id)),
+    models: p.models.filter(
+      (m) =>
+        !isNoteRecordingOnlyTranscriptionModel(p.id, m.id) &&
+        !isUploadOnlyTranscriptionModel(p.id, m.id)
+    ),
+  }));
+}
+
+// Audio Upload's list: every batch model, upload-only ones included.
+export function getUploadTranscriptionProviders(): TranscriptionProviderData[] {
+  return modelRegistry.getTranscriptionProviders().map((p) => ({
+    ...p,
+    models: p.models.filter((m) => !isNoteRecordingOnlyTranscriptionModel(p.id, m.id)),
   }));
 }
 

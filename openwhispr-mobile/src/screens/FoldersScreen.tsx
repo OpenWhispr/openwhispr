@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, type ReactElement } from 'react';
 import { View, ScrollView, Alert, ActionSheetIOS, RefreshControl } from 'react-native';
 import { Text } from '@/components/ui/Text';
 
@@ -14,6 +14,7 @@ import type { RestoreRow } from '@/components/ui/SwipeableCard';
 import { SectionHeader } from '@/components/notes/SectionHeader';
 import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
 import { SpacesSection } from '@/components/notes/SpacesSection';
+import { PrivateWorkspaceSwitcher } from '@/components/notes/PrivateWorkspaceSwitcher';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { groupNotesByDate } from '@/lib/groupNotesByDate';
 import { safeHaptics } from '@/lib/utils';
@@ -28,13 +29,18 @@ const FAB_ACTIONS: FabAction[] = [
   { id: 'folder', label: 'New Folder', icon: 'folder.badge.plus', mdIcon: 'FolderPlus' },
 ];
 
-export default function FoldersScreen() {
+function renderWorkspaceTitle(heading: ReactElement): ReactElement {
+  return <PrivateWorkspaceSwitcher heading={heading} />;
+}
+
+export default function FoldersScreen(): ReactElement {
   const {
     folders,
     folderCounts,
     spaces,
-    initialize,
-    isInitialized,
+    privateWorkspaces,
+    activePrivateWorkspaceId,
+    getPrivateNoteFolderId,
     setActiveFolderId,
     setActiveSpaceId,
     setActiveNoteId,
@@ -60,11 +66,20 @@ export default function FoldersScreen() {
 
   const buckets = useMemo(() => groupNotesByDate(searchResults), [searchResults]);
 
-  useEffect(() => {
-    if (!isInitialized) initialize();
-  }, [isInitialized, initialize]);
-
-  const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === 'team'), [spaces]);
+  // With a Private per workspace the screen shows one workspace at a time, as desktop does:
+  // its Private above and its team spaces below. The unassigned Personal list belongs to no
+  // workspace, so it keeps every team space in reach.
+  const teamSpaces = useMemo(
+    () =>
+      spaces.filter(
+        (s) =>
+          s.kind === 'team' &&
+          (privateWorkspaces.length === 0 ||
+            activePrivateWorkspaceId === null ||
+            s.workspaceId === activePrivateWorkspaceId),
+      ),
+    [spaces, privateWorkspaces, activePrivateWorkspaceId],
+  );
 
   const { refreshing, onRefresh } = useManualSyncRefresh();
 
@@ -87,11 +102,9 @@ export default function FoldersScreen() {
   );
 
   const handleCompose = useCallback(() => {
-    const defaultFolder = folders.find((f) => f.isDefault) ?? folders[0];
-    if (!defaultFolder) return;
-    const note = createNote(undefined, undefined, defaultFolder.id);
+    const note = createNote(undefined, undefined, getPrivateNoteFolderId());
     router.push(`/(tabs)/(notes)/${note.id}`);
-  }, [folders, createNote]);
+  }, [createNote, getPrivateNoteFolderId]);
 
   const handleNotePress = useCallback(
     (id: number) => {
@@ -181,6 +194,7 @@ export default function FoldersScreen() {
     <View className="flex-1 bg-systemBackground">
       <NotesTopBar
         title={isSearching ? 'Search' : 'Folders'}
+        wrapTitle={isSearching ? undefined : renderWorkspaceTitle}
         searchValue={searchValue}
         onSearchChange={setSearchValue}
       />

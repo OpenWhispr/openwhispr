@@ -20,6 +20,20 @@ const ENTRIES: LicenseEntry[] = [
     url: 'https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2',
   },
   {
+    name: 'Leipzig Corpora Collection',
+    license: 'CC BY 4.0',
+    copyright: 'D. Goldhahn, T. Eckart and U. Quasthoff, Leipzig Corpora Collection.',
+    note: 'English and German keyboard word and word-pair counts derived from the news, web and Wikipedia corpora. Building Large Monolingual Dictionaries at the Leipzig Corpora Collection (LREC 2012).',
+    url: 'https://creativecommons.org/licenses/by/4.0/',
+  },
+  {
+    name: 'Tatoeba',
+    license: 'CC BY 2.0 FR',
+    copyright: 'Tatoeba sentence contributors (tatoeba.org).',
+    note: 'English and German sentence exports were converted into word and word-pair counts for the keyboard.',
+    url: 'https://creativecommons.org/licenses/by/2.0/fr/',
+  },
+  {
     name: 'FluidAudio',
     license: 'Apache-2.0',
     copyright: '© FluidInference',
@@ -43,7 +57,8 @@ export default function LicensesScreen() {
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
     >
       <Text className="mb-4 px-1 text-sm text-secondaryLabel">
-        OpenWhispr's on-device intelligence is built on these open models and libraries.
+        OpenWhispr's on-device intelligence is built on these open models, libraries and language
+        datasets.
       </Text>
 
       <View className="gap-3">

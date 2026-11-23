@@ -64,6 +64,7 @@ import {
   type SortKey,
 } from "./dictionary/dictionaryViewModel";
 import { useSettings } from "../hooks/useSettings";
+import { useListsOwnerRevision } from "../hooks/useListsOwnerRevision";
 import { getSettings } from "../stores/settingsStore";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useAuth } from "../hooks/useAuth";
@@ -83,6 +84,8 @@ import {
   WHISPER_DECODER_PROMPT_CHARS,
   dictionaryReachesTranscriptionModel,
 } from "../utils/dictionaryPromptCap";
+import { getSherpaHotwordsScore, MAX_SHERPA_HOTWORDS } from "../utils/sherpaHotwords";
+import { getParakeetModelInfo } from "../models/ModelRegistry";
 import { workspaceCan } from "../lib/capabilities";
 import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
 import { usePolicySnapshot } from "../hooks/usePolicy";
@@ -173,10 +176,30 @@ interface DictionaryViewProps {
   onUpgrade: () => void;
 }
 
+// Remounted when the personal lists start belonging to another account, which
+// closes any open editor or selection; an edit from the old instance carries
+// its owner and is refused.
 export default function DictionaryView({ onUpgrade }: DictionaryViewProps): ReactElement {
+  const listsOwner = useListsOwnerRevision();
+  return <DictionaryPage key={listsOwner} listsOwner={listsOwner} onUpgrade={onUpgrade} />;
+}
+
+function DictionaryPage({
+  onUpgrade,
+  listsOwner,
+}: DictionaryViewProps & { listsOwner: number }): ReactElement {
   const { t, i18n } = useTranslation();
-  const { customDictionary, updateCustomDictionary, snippets } = useSettings();
-  const { active: workspace, personalSelected } = useWorkspace();
+  const {
+    customDictionary,
+    updateCustomDictionary: updateStoredDictionary,
+    snippets,
+  } = useSettings();
+  const updateCustomDictionary = useCallback(
+    (changes: { add?: string[]; remove?: string[] }): void =>
+      updateStoredDictionary(changes, listsOwner),
+    [updateStoredDictionary, listsOwner]
+  );
+  const { active: workspace } = useWorkspace();
   const { isSignedIn, user } = useAuth();
   const workspaceId = workspace?.id ?? null;
   const workspaceName = workspace?.name ?? "";
@@ -289,7 +312,6 @@ export default function DictionaryView({ onUpgrade }: DictionaryViewProps): Reac
     status,
     signedIn: isSignedIn,
     workspace,
-    personalSelected,
     serverPaused: snapshot?.meta?.paused ?? null,
     hasWords:
       (snapshot?.entries.length ?? 0) > 0 ||
@@ -298,8 +320,8 @@ export default function DictionaryView({ onUpgrade }: DictionaryViewProps): Reac
 
   // Where dictation posts when it uses a bring-your-own-key batch provider,
   // resolved the way dictation resolves it (audioManager.resolveBatchRoute).
-  // Local models, OpenWhispr Cloud and managed workspaces get the dictionary
-  // their own way.
+  // OpenWhispr Cloud and managed workspaces get the dictionary their own way,
+  // local Whisper as a prompt and measured sherpa models as hotwords.
   const policyState = usePolicySnapshot();
   const enterpriseTranscriptionSetupMode = useSettingsStore(
     (s) => s.enterpriseTranscriptionSetupMode
@@ -316,6 +338,22 @@ export default function DictionaryView({ onUpgrade }: DictionaryViewProps): Reac
     personalDictation &&
     dictationEndpoint !== null &&
     !dictionaryReachesTranscriptionModel(dictationEndpoint);
+  // The local sherpa model dictation runs, the way audioManager picks it.
+  const localSherpaModel = useSettingsStore((settings) => {
+    const s = selectPolicyEffectiveSettings(settings, policyState);
+    if (!s.useLocalWhisper) return null;
+    if (s.localTranscriptionProvider === "nvidia") return s.parakeetModel || null;
+    if (s.localTranscriptionProvider === "cohere") return s.cohereModel || null;
+    return null;
+  });
+  let localSherpaNotice: string | null = null;
+  if (personalDictation && localSherpaModel) {
+    const model = getParakeetModelInfo(localSherpaModel)?.name ?? localSherpaModel;
+    localSherpaNotice =
+      getSherpaHotwordsScore(localSherpaModel) === null
+        ? t("dictionary.localModelIgnoredNotice", { model })
+        : t("dictionary.localModelHotwordsLimitNotice", { model, limit: MAX_SHERPA_HOTWORDS });
+  }
 
   // Same membership rule as agentNameDictionaryChanges: a stored spelling that
   // differs only by case is still the agent name's entry, so keep it hidden.
@@ -1061,6 +1099,8 @@ export default function DictionaryView({ onUpgrade }: DictionaryViewProps): Reac
               <p className="text-xs text-foreground/45 leading-relaxed">
                 {t("dictionary.openRouterIgnoredNotice")}
               </p>
+            ) : localSherpaNotice ? (
+              <p className="text-xs text-foreground/45 leading-relaxed">{localSherpaNotice}</p>
             ) : (
               promptChars > WHISPER_DECODER_PROMPT_CHARS && (
                 <p className="text-xs text-foreground/45 leading-relaxed">

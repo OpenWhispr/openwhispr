@@ -6,7 +6,7 @@
  * handshake surfaces here on a schedule instead of in a customer report
  * (#1624 sat in shipped builds for three days as a swallowed warmup warning).
  * Providers whose request shape is theirs alone rather than the shared
- * OpenAI-compatible multipart (Gemini, batch and Live) send a real
+ * OpenAI-compatible multipart (Gemini, batch and Live; ElevenLabs) send a real
  * transcription through the shipped module for the same reason, and OpenAI's
  * batch default is posted the way the app builds it so a retired model or
  * field surfaces here too.
@@ -31,6 +31,7 @@ import geminiLive from "../src/helpers/geminiLiveStreaming.js";
 import AssemblyAiStreaming from "../src/helpers/assemblyAiStreaming.js";
 import DeepgramStreaming from "../src/helpers/deepgramStreaming.js";
 import { loadCanaryCatalog } from "./lib/canary-catalog.mjs";
+import { probeElevenLabsBatch } from "./lib/elevenlabs-batch-probe.mjs";
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
 const { pcm16ToWav } = audioUtils;
@@ -206,7 +207,7 @@ async function probeGeminiLive(key) {
       streaming.sendAudio(pcm.subarray(offset, offset + LIVE_FRAME_BYTES));
       await new Promise((resolve) => setTimeout(resolve, LIVE_FRAME_MS));
     }
-    const { text } = await streaming.disconnect(true);
+    const { text } = await streaming.disconnect();
     if (!/quick brown fox/i.test(text)) {
       return { ok: false, detail: `no usable transcript: ${JSON.stringify(text)}` };
     }
@@ -330,6 +331,11 @@ const PROBES = [
     id: "gemini-batch-webm",
     keyEnv: "STT_CANARY_GEMINI_KEY",
     run: (key) => probeGeminiBatch(key, toWebmOpus(SILENT_WAV()), "audio/webm"),
+  },
+  {
+    id: "elevenlabs-batch-webm",
+    keyEnv: "STT_CANARY_ELEVENLABS_KEY",
+    run: (key) => probeElevenLabsBatch(key, toWebmOpus(SILENT_WAV())),
   },
 ];
 

@@ -57,6 +57,53 @@ const policy = {
   minAppVersion: null,
 };
 
+test("personal API access names its restriction only once a policy has resolved", async () => {
+  const { apiAccessRestriction } = await load();
+  // Idle and loading show nothing: the API refuses keys itself while access is off.
+  for (const [status, expected] of [
+    ["idle", null],
+    ["loading", null],
+    ["unmanaged", null],
+    ["error", "unresolved"],
+    ["managed", "unresolved"],
+  ]) {
+    assert.equal(apiAccessRestriction({ status, policy: null, appVersion: null }), expected);
+  }
+  for (const [features, expected] of [
+    [{}, null],
+    [{ apiAccessEnabled: true }, null],
+    [{ apiAccessEnabled: false }, "disabled"],
+  ]) {
+    const managed = {
+      ...policy,
+      features: { ...policy.features, agentEnabled: false, ...features },
+      dataRetention: { ...policy.dataRetention, cloudBackupAllowed: false },
+    };
+    assert.equal(
+      apiAccessRestriction({ status: "managed", policy: managed, appVersion: null }),
+      expected
+    );
+  }
+});
+
+test("an org minimum app version restricts personal API access as an update", async () => {
+  const { apiAccessRestriction } = await load();
+  const withMinimum = (appVersion, features = {}) => ({
+    status: "managed",
+    policy: { ...policy, features: { ...policy.features, ...features }, minAppVersion: "1.11.1" },
+    appVersion,
+  });
+  assert.equal(apiAccessRestriction(withMinimum("1.10.0")), "versionBlocked");
+  assert.equal(apiAccessRestriction(withMinimum("1.11.1")), null);
+  // Without a known version nothing says an update would help.
+  assert.equal(apiAccessRestriction(withMinimum(null)), "unresolved");
+  // Turned off by the organization: updating wouldn't change that.
+  assert.equal(
+    apiAccessRestriction(withMinimum("1.10.0", { apiAccessEnabled: false })),
+    "disabled"
+  );
+});
+
 test("update-required derives from the org minimum and known app version", async () => {
   const { isUpdateRequiredByOrg } = await load();
   const managedWithMin = (minAppVersion, appVersion) => ({
@@ -591,18 +638,6 @@ test("share visibility lists hide policy-denied choices", async () => {
     }).map((option) => option.id),
     ["private"]
   );
-});
-
-test("domain-only sharing is usable only when the owner can offer a domain choice", async () => {
-  const { hasUsableExternalShareVisibility } = await load();
-  const snapshot = {
-    status: "managed",
-    policy: { ...policy, sharing: { externalLinkSharing: "domain_only" } },
-    appVersion: "1.8.1",
-  };
-
-  assert.equal(hasUsableExternalShareVisibility(snapshot, true), true);
-  assert.equal(hasUsableExternalShareVisibility(snapshot, false), false);
 });
 
 test("provider fallback persistence is limited to resolved unmanaged and signed-out idle users", async () => {
@@ -1169,4 +1204,16 @@ test("audio controls independently gate every mode while leaving dictation avail
       }
     }
   }
+});
+
+test("domain-only sharing is usable only when the owner can offer a domain choice", async () => {
+  const { hasUsableExternalShareVisibility } = await load();
+  const snapshot = {
+    status: "managed",
+    policy: { ...policy, sharing: { externalLinkSharing: "domain_only" } },
+    appVersion: "1.8.1",
+  };
+
+  assert.equal(hasUsableExternalShareVisibility(snapshot, true), true);
+  assert.equal(hasUsableExternalShareVisibility(snapshot, false), false);
 });

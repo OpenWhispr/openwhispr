@@ -19,7 +19,12 @@ async function mountSettings(t) {
   });
 
   const syncs = [];
-  const listeners = {};
+  const scopeListeners = new Set();
+  const listeners = {
+    scope: (scope) => {
+      for (const callback of scopeListeners) callback(scope);
+    },
+  };
   const known = {
     syncStartupPreferences: async (prefs) => {
       syncs.push(prefs);
@@ -27,11 +32,10 @@ async function mountSettings(t) {
     // Startup seeds the agent name into the dictionary. Left pending, the write
     // never reaches its cloud push, which imports a module after teardown.
     applyDictionaryChanges: () => new Promise(() => {}),
+    // Several hooks and stores listen, as with the real preload.
     onActiveAccountScopeChanged: (callback) => {
-      listeners.scope = callback;
-      return () => {
-        delete listeners.scope;
-      };
+      scopeListeners.add(callback);
+      return () => scopeListeners.delete(callback);
     },
   };
   // Every other bridge call the provider makes is irrelevant here.
@@ -59,7 +63,7 @@ async function mountSettings(t) {
   await React.act(async () => root.render(React.createElement(SettingsProvider, null, null)));
   rootRef.current = root;
 
-  return { syncs, listeners, usePolicyStore };
+  return { syncs, listeners, usePolicyStore, vite };
 }
 
 test("a window reports its policy as unsettled until the fetch lands", async (t) => {
@@ -80,4 +84,41 @@ test("a sign-out resyncs even though the policy stays idle", async (t) => {
 
   await React.act(async () => listeners.scope(null));
   assert.equal(syncs.length, before + 1);
+});
+
+test("assigning and removing managed cleanup resyncs the effective route", async (t) => {
+  const { syncs, usePolicyStore, vite } = await mountSettings(t);
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  await React.act(async () => {
+    usePolicyStore.setState({ status: "unmanaged" });
+    useSettingsStore.setState({
+      useCleanupModel: true,
+      cleanupMode: "local",
+      cleanupModel: "gemma",
+    });
+  });
+  assert.equal(syncs.at(-1).cleanupMode, "local");
+  await React.act(async () =>
+    useEnterpriseIdentityStore.setState({
+      status: "ready",
+      config: {
+        providers: [
+          {
+            provider: "bedrock",
+            mode: "managed_required",
+            allowManualSetup: false,
+            config: { allowedModels: ["managed"], scopeDefaults: { dictationCleanup: "managed" } },
+          },
+        ],
+      },
+    })
+  );
+  assert.equal(syncs.at(-1).cleanupMode, "enterprise");
+  assert.equal(syncs.at(-1).cleanupModel, "managed");
+  await React.act(async () => useEnterpriseIdentityStore.setState({ config: null }));
+  assert.equal(syncs.at(-1).cleanupMode, "local");
+  assert.equal(syncs.at(-1).cleanupModel, "gemma");
 });

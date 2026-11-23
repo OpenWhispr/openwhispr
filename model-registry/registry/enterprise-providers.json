@@ -1,0 +1,116 @@
+[
+  {
+    "id": "bedrock",
+    "name": "AWS Bedrock",
+    "allowCustomModelId": true,
+    "models": [
+      {
+        "id": "us.anthropic.claude-sonnet-5-5",
+        "name": "Claude Sonnet 5.5",
+        "description": "Balanced workhorse. Best default for Agent Mode.",
+        "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_5_5"
+      },
+      {
+        "id": "us.anthropic.claude-haiku-5-5",
+        "name": "Claude Haiku 5.5",
+        "description": "Fastest Claude model. Great default for text cleanup.",
+        "descriptionKey": "models.descriptions.enterprise.bedrock_claude_haiku_5_5"
+      },
+      {
+        "id": "us.anthropic.claude-opus-5-5",
+        "name": "Claude Opus 5.5",
+        "description": "Max intelligence. Best for complex Agent Mode tasks.",
+        "descriptionKey": "models.descriptions.enterprise.bedrock_claude_opus_5_5"
+      },
+      {
+        "id": "us.anthropic.claude-fable-5",
+        "name": "Claude Fable 5",
+        "description": "Most capable Claude model, Mythos-class. Best for the hardest Agent Mode tasks.",
+        "descriptionKey": "models.descriptions.enterprise.bedrock_claude_fable_5"
+      },
+      {
+        "id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "name": "Claude Haiku 4.5",
+        "description": "Previous Haiku. Fast and cheap for text cleanup.",
+        "descriptionKey": "models.descriptions.enterprise.bedrock_claude_haiku_4_5"
+      },
+      {
+        "id": "us.anthropic.claude-sonnet-5",
+        "name": "Claude Sonnet 5",
+        "description": "Previous Sonnet. Fast and capable for Agent Mode.",
+        "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_5"
+      },
+      {
+        "id": "us.anthropic.claude-opus-4-8",
+        "name": "Claude Opus 4.8",
+        "description": "Max intelligence. Best for complex Agent Mode tasks.",
+        "descriptionKey": "models.descriptions.enterprise.bedrock_claude_opus_4_8"
+      },
+      {
+        "id": "openai.gpt-oss-120b-1:0",
+        "name": "GPT-OSS 120B",
+        "description": "Open-weight OpenAI model. Strong reasoning at low cost.",
+        "descriptionKey": "models.descriptions.enterprise.bedrock_gpt_oss_120b"
+      },
+      {
+        "id": "deepseek.v3.2",
+        "name": "DeepSeek V3.2",
+        "description": "Open-weight frontier model. Great value for Agent Mode.",
+        "descriptionKey": "models.descriptions.enterprise.bedrock_deepseek_v3_2"
+      },
+      {
+        "id": "qwen.qwen3-next-80b-a3b",
+        "name": "Qwen3 Next 80B",
+        "description": "Sparse open-weight model. Fast and multilingual.",
+        "descriptionKey": "models.descriptions.enterprise.bedrock_qwen3_next_80b"
+      }
+    ],
+    "defaultModel": "us.anthropic.claude-sonnet-5-5"
+  },
+  {
+    "id": "azure",
+    "name": "Azure OpenAI",
+    "allowCustomModelId": true,
+    "models": []
+  },
+  {
+    "id": "vertex",
+    "name": "GCP Vertex AI",
+    "allowCustomModelId": true,
+    "models": [
+      {
+        "id": "gemini-3.8-flash",
+        "name": "Gemini 3.8 Flash",
+        "description": "Most capable Flash model via Vertex",
+        "descriptionKey": "models.descriptions.enterprise.vertex_gemini_3_8_flash"
+      },
+      {
+        "id": "gemini-3.5-flash-lite",
+        "name": "Gemini 3.5 Flash Lite",
+        "description": "Fastest, lowest-cost model via Vertex",
+        "descriptionKey": "models.descriptions.enterprise.vertex_gemini_3_5_flash_lite"
+      },
+      {
+        "id": "gemini-4-argon",
+        "name": "Gemini 4 Argon",
+        "description": "Google's frontier reasoning model via Vertex",
+        "descriptionKey": "models.descriptions.enterprise.vertex_gemini_4_argon"
+      },
+      {
+        "id": "gemini-2.5-flash",
+        "name": "Gemini 2.5 Flash",
+        "description": "Fast multimodal model via Vertex",
+        "descriptionKey": "models.descriptions.enterprise.vertex_gemini_2_5_flash",
+        "retired": true
+      },
+      {
+        "id": "gemini-2.5-pro",
+        "name": "Gemini 2.5 Pro",
+        "description": "Advanced reasoning via Vertex",
+        "descriptionKey": "models.descriptions.enterprise.vertex_gemini_2_5_pro",
+        "retired": true
+      }
+    ],
+    "defaultModel": "gemini-3.8-flash"
+  }
+]

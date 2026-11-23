@@ -50,6 +50,7 @@ test("self-hosted mode without a URL fails closed unless the provider is custom"
     "corti",
     "gemini",
     "tinfoil",
+    "elevenlabs",
     "openrouter",
   ]) {
     const route = await resolve({
@@ -133,6 +134,13 @@ test("proxied providers carry their quirks as route data", async () => {
     14 * 1024 * 1024,
     "inline base64 audio must fit Gemini's 20 MB request cap"
   );
+
+  const elevenlabs = await resolve({ cloudTranscriptionProvider: "elevenlabs" });
+  assert.equal(elevenlabs.transport, "proxied");
+  assert.equal(elevenlabs.provider, "elevenlabs");
+  assert.equal(elevenlabs.model, "scribe_v3");
+  assert.equal(elevenlabs.sizeCapBytes, 25 * 1024 * 1024);
+  assert.equal("endpoint" in elevenlabs, false, "the key never reaches an OpenAI-shaped endpoint");
 });
 
 test("byokFileSizeLimit matches the per-provider route caps", async () => {
@@ -230,6 +238,42 @@ test("realtime-only providers report a missing key ahead of the transport limita
   // their own missing key at the key read, with the store+env fallback.
   const groq = await resolve({ cloudTranscriptionProvider: "groq" }, { hasProviderKey: false });
   assert.equal(groq.transport, "http-batch");
+});
+
+test("AssemblyAI's Dictation model batches through the proxy; its realtime models don't", async () => {
+  const { ASSEMBLYAI_DICTATION_MODEL, isStreamingOnlySelection } = await load();
+
+  const route = await resolve({
+    cloudTranscriptionProvider: "assemblyai",
+    cloudTranscriptionModel: ASSEMBLYAI_DICTATION_MODEL,
+    preferredLanguage: "es",
+  });
+  assert.equal(route.transport, "proxied");
+  assert.equal(route.provider, "assemblyai");
+  assert.equal(route.model, "dictation");
+  assert.equal(route.language, "es");
+
+  const unsupported = await resolve({
+    cloudTranscriptionProvider: "assemblyai",
+    cloudTranscriptionModel: ASSEMBLYAI_DICTATION_MODEL,
+    preferredLanguage: "yo",
+  });
+  assert.equal(unsupported.language, undefined, "the Dictation API rejects codes outside its 32");
+
+  const missingKey = await resolve(
+    {
+      cloudTranscriptionProvider: "assemblyai",
+      cloudTranscriptionModel: ASSEMBLYAI_DICTATION_MODEL,
+    },
+    { hasProviderKey: false }
+  );
+  assert.equal(missingKey.code, "API_KEY_MISSING", "a missing key is named before any request");
+
+  assert.equal(isStreamingOnlySelection("assemblyai", ASSEMBLYAI_DICTATION_MODEL), false);
+  assert.equal(isStreamingOnlySelection("assemblyai", "universal-3-6-pro"), true);
+  assert.equal(isStreamingOnlySelection("assemblyai", undefined), true);
+  assert.equal(isStreamingOnlySelection("deepgram", ASSEMBLYAI_DICTATION_MODEL), true);
+  assert.equal(isStreamingOnlySelection("groq", "whisper-large-v3"), false);
 });
 
 test("a custom URL pointing at Tinfoil's host must use the attested proxy", async () => {

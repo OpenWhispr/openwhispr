@@ -41,6 +41,7 @@ import {
 } from '@/lib/diarization/embeddingCodec';
 import type { TranscriptionStatus } from '@/lib/diarization/diarizer';
 import type {
+  CreateFolderOptions,
   NotesRepository,
   Note,
   Folder,
@@ -396,12 +397,19 @@ export class LocalNotesRepository implements NotesRepository {
     return Object.fromEntries(rows.map((r) => [r.folderId!, r.count]));
   }
 
-  createFolder(name: string, spaceId?: number): Folder {
+  createFolder(name: string, spaceId?: number, options: CreateFolderOptions = {}): Folder {
+    const privateSpaceId = this.getPrivateSpaceId();
+    const targetSpaceId = spaceId ?? privateSpaceId;
     return this.database
       .insert(folders)
       .values({
         name,
-        spaceId: spaceId ?? this.getPrivateSpaceId(),
+        spaceId: targetSpaceId,
+        // Placement names a Private section; a team folder never carries one.
+        privateWorkspaceId:
+          targetSpaceId === privateSpaceId ? (options.privateWorkspaceId ?? null) : null,
+        ...(options.isDefault ? { isDefault: 1 } : {}),
+        ...(options.sortOrder !== undefined ? { sortOrder: options.sortOrder } : {}),
         pendingSync: 1,
         updatedAt: sql`datetime('now')`,
       })
@@ -947,6 +955,7 @@ export class LocalNotesRepository implements NotesRepository {
           isDefault: remote.is_default ? 1 : 0,
           sortOrder: remote.sort_order,
           clientFolderId: remote.client_folder_id,
+          privateWorkspaceId: remote.private_workspace_id ?? null,
           remoteId: remote.id,
           deletedAt: remote.deleted_at,
           pendingSync: 0,
@@ -959,6 +968,14 @@ export class LocalNotesRepository implements NotesRepository {
       return;
     }
 
+    // Placement is remote metadata; learning it must not overwrite a pending rename.
+    if (remote.private_workspace_id !== undefined) {
+      this.database
+        .update(folders)
+        .set({ privateWorkspaceId: remote.private_workspace_id })
+        .where(eq(folders.id, local.id))
+        .run();
+    }
     if (local.pendingSync === 1) return;
 
     if (remote.deleted_at) {
@@ -1030,6 +1047,51 @@ export class LocalNotesRepository implements NotesRepository {
         updatedAt: sql`datetime('now')`,
       })
       .where(eq(notes.id, noteId))
+      .run();
+  }
+
+  resetRejectedNotePrivateWorkspace(pushed: Note): void {
+    const current = this.getNoteById(pushed.id);
+    // The refusal describes the create we sent, never a later move, privacy change, or identity.
+    if (
+      !pushed.privateWorkspaceId ||
+      !pushed.clientNoteId ||
+      pushed.remoteId ||
+      pushed.folderId != null ||
+      !current ||
+      current.clientNoteId !== pushed.clientNoteId ||
+      current.privateWorkspaceId !== pushed.privateWorkspaceId ||
+      current.remoteId ||
+      current.folderId != null ||
+      current.isPrivate === 1 ||
+      current.deletedAt ||
+      (current.spaceId != null && current.spaceId !== this.getPrivateSpaceId())
+    ) {
+      return;
+    }
+    this.database
+      .update(notes)
+      .set({ privateWorkspaceId: null, pendingSync: 1, updatedAt: sql`datetime('now')` })
+      .where(eq(notes.id, current.id))
+      .run();
+  }
+
+  resetRejectedFolderPrivateWorkspace(pushed: Folder): void {
+    const current = this.database.select().from(folders).where(eq(folders.id, pushed.id)).get();
+    // The refusal describes the create we sent, never a later placement, identity, or delete.
+    if (
+      !current ||
+      current.clientFolderId !== pushed.clientFolderId ||
+      current.privateWorkspaceId !== pushed.privateWorkspaceId ||
+      current.remoteId ||
+      current.deletedAt
+    ) {
+      return;
+    }
+    this.database
+      .update(folders)
+      .set({ privateWorkspaceId: null, pendingSync: 1, updatedAt: sql`datetime('now')` })
+      .where(eq(folders.id, current.id))
       .run();
   }
 
@@ -1109,6 +1171,7 @@ export class LocalNotesRepository implements NotesRepository {
           deletedAt: remote.deleted_at,
           pendingSync: 0,
           isPrivate: 0,
+          privateWorkspaceId: remote.private_workspace_id ?? null,
           // Never leave space_id NULL: the personal pass owns the private
           // space, the team pass passes the space it resolved.
           spaceId: options.spaceId ?? this.getPrivateSpaceId(),
@@ -1181,6 +1244,10 @@ export class LocalNotesRepository implements NotesRepository {
         // Only the team pass relocates an existing note; without an explicit
         // space the row keeps whatever space it already sits in.
         ...(options.spaceId !== undefined ? { spaceId: options.spaceId } : {}),
+        // An API that omits placement (an older one, or another owner's note) leaves it as is.
+        ...(remote.private_workspace_id !== undefined
+          ? { privateWorkspaceId: remote.private_workspace_id }
+          : {}),
         ...this.remoteOwnershipValues(remote, options.applyOwnership),
         // Also repairs rows pulled before created_at synced, which carry their pull time.
         ...(remote.created_at ? { createdAt: remote.created_at } : {}),
