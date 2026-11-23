@@ -124,8 +124,8 @@ class AndroidDictationModule : Module() {
       moonshine.transcribe(localFile(uri), localFile(modelDirectory), model, promise)
     }
     Function("cancelMoonshine") { if (moonshineRuntime.isInitialized()) moonshine.cancel() }
-    AsyncFunction("diarize") { uri: String, modelDirectory: String, numberOfSpeakers: Int, promise: Promise ->
-      diarizationRuntime.value.diarize(localFile(uri), localFile(modelDirectory), numberOfSpeakers, promise)
+    AsyncFunction("diarize") { uri: String, modelDirectory: String, numberOfSpeakers: Int, threshold: Double?, promise: Promise ->
+      diarizationRuntime.value.diarize(localFile(uri), localFile(modelDirectory), numberOfSpeakers, promise, threshold?.toFloat() ?: 0.5f)
     }
     Function("cancelDiarization") { if (diarizationRuntime.isInitialized()) diarizationRuntime.value.cancel() }
     AsyncFunction("speakerEmbedding") { uri: String, modelDirectory: String, startMs: Double, endMs: Double, promise: Promise ->

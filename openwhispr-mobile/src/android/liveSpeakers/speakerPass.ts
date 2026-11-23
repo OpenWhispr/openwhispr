@@ -115,8 +115,45 @@ function mapSpeakers(lines: PassLine[], turns: PassTurn[]): Map<number, string> 
   return mapping;
 }
 
+/**
+ * A speaker the pass heard for less than this in all, and for under this share of the meeting,
+ * is a stray of a real one. Both, so someone who said little in a short meeting stays.
+ */
+export const STRAY_SPEAKER_MS = 4000;
+export const STRAY_SPEAKER_SHARE = 0.05;
+
+/**
+ * Folds speakers heard only in a few short turns into the real ones. The voiceprint of a turn
+ * under about two seconds is weak, so the pass can give someone's "Right." a speaker of its own.
+ * A stray turn goes to the busiest real speaker other than the one who spoke just before it,
+ * since a short turn in a conversation is usually someone answering.
+ */
+export function foldStraySpeakers(turns: PassTurn[]): PassTurn[] {
+  const totals = new Map<number, number>();
+  for (const turn of turns)
+    if (turn.speakerId !== null)
+      totals.set(turn.speakerId, (totals.get(turn.speakerId) ?? 0) + turn.endMs - turn.startMs);
+  const speech = [...totals.values()].reduce((sum, total) => sum + total, 0);
+  const real = [...totals.entries()]
+    .filter(([, total]) => total >= STRAY_SPEAKER_MS || total >= speech * STRAY_SPEAKER_SHARE)
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id);
+  if (!real.length || real.length === totals.size) return turns;
+  let previous: number | null = null;
+  return turns.map((turn) => {
+    if (turn.speakerId === null) return turn;
+    if (real.includes(turn.speakerId)) {
+      previous = turn.speakerId;
+      return turn;
+    }
+    const speakerId = real.find((id) => id !== previous) ?? real[0];
+    previous = speakerId;
+    return { ...turn, speakerId };
+  });
+}
+
 export function applySpeakerPass(lines: PassLine[], turns: PassTurn[]): PassSegment[] {
-  const sorted = [...turns].sort((a, b) => a.startMs - b.startMs);
+  const sorted = foldStraySpeakers([...turns].sort((a, b) => a.startMs - b.startMs));
   const mapping = mapSpeakers(lines, sorted);
   const segments: PassSegment[] = [];
   for (const line of lines) {

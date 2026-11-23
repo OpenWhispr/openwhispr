@@ -2,7 +2,7 @@ import { Buffer } from 'buffer';
 import { createLineClock, type LineSpan } from '@/android/liveSpeakers/lineClock';
 import { createSpeakerMatcher, cosineSimilarity } from '@/android/liveSpeakers/speakerMatcher';
 import { createLiveSpeakers } from '@/android/liveSpeakers/liveSpeakers';
-import { applySpeakerPass } from '@/android/liveSpeakers/speakerPass';
+import { applySpeakerPass, foldStraySpeakers } from '@/android/liveSpeakers/speakerPass';
 import { speakerRuns } from '@/android/providers/deepgram';
 import type { WebSocketLike } from '@/services/transcription/createRealtimeMeetingWs';
 
@@ -291,5 +291,34 @@ describe('Deepgram speaker runs', () => {
       { text: 'Great.', startMs: 1200, endMs: 1600, speaker: '1' },
     ]);
     expect(speakerRuns([{ word: 'hi', start: 0, end: 1 }])).toEqual([]);
+  });
+});
+
+describe('foldStraySpeakers', () => {
+  // The A73's pass at threshold 0.7 on the two-voice podcast: host 1, guest 0, and two 0.4 s
+  // "Right." turns of the host's given a speaker of their own (2).
+  const turn = (startMs: number, endMs: number, speakerId: number) => ({
+    startMs,
+    endMs,
+    speakerId,
+  });
+  it('gives a short stray turn to the other real speaker', () => {
+    expect(
+      foldStraySpeakers([
+        turn(0, 5870, 1),
+        turn(6595, 12738, 0),
+        turn(13362, 16096, 1),
+        turn(16703, 25833, 0),
+        turn(26558, 26947, 2),
+        turn(27571, 36211, 0),
+        // The rest of the 5-minute meeting, so the stray is a sliver of it as it was.
+        turn(36818, 300000, 0),
+      ]).map((item) => item.speakerId),
+    ).toEqual([1, 0, 1, 0, 1, 0, 0]);
+  });
+
+  it('leaves real speakers alone, however many', () => {
+    const turns = [turn(0, 5000, 0), turn(5000, 10000, 1), turn(10000, 15000, 2)];
+    expect(foldStraySpeakers(turns)).toBe(turns);
   });
 });

@@ -135,6 +135,8 @@ interface NativeDictation {
     uri: string,
     modelDirectory: string,
     numberOfSpeakers: number,
+    /** How far apart two voices must be to stay separate; 0.5 when left out. */
+    threshold?: number,
   ): Promise<LocalDiarizationResult>;
   cancelDiarization(): void;
   /** A voiceprint for one span of a WAV that may still be recording, on a low-priority thread. */

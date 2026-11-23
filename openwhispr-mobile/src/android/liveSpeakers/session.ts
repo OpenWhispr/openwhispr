@@ -73,10 +73,15 @@ export interface SpeakerPassDeps {
   log(message: string): void;
 }
 
+const PASS_THRESHOLD = 0.7;
+
 const defaultPassDeps = (): Omit<SpeakerPassDeps, 'isCurrent'> => ({
   // Straight to the native worker, not the shared inference queue: a pass can take minutes and
   // must never hold up a dictation. The native side refuses a meeting too long for memory.
-  diarize: (uri, speakers) => AndroidDictation!.diarize(uri, modelPath(MODEL), speakers),
+  // 0.7, not the on-device default 0.5: on a two-voice podcast 0.5 split one voice's short turns
+  // into five speakers (A73, 2026-11-23); 0.7 left two short strays, which the pass folds in.
+  diarize: (uri, speakers) =>
+    AndroidDictation!.diarize(uri, modelPath(MODEL), speakers, PASS_THRESHOLD),
   modelReady: () => modelReady(MODEL),
   deleteWav: (uri) => FileSystem.deleteAsync(uri, { idempotent: true }),
   log,
