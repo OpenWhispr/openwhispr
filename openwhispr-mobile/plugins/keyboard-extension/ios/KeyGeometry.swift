@@ -45,21 +45,14 @@ enum KeyRows {
 
   /// What holding a key offers, the key's own letter left out. The first entry is what a
   /// plain hold-and-release picks on Apple's keyboard when it differs from the key.
-  static func accents(for letter: Character, language: TypingLanguage) -> [Character] {
-    let table: [Character: String]
-    switch language {
-    case .english:
-      table = [
-        "a": "àáâäæãåā", "c": "çćč", "e": "èéêëēėę", "i": "îïíīįì", "l": "ł", "n": "ñń",
-        "o": "ôöòóœøōõ", "s": "ßśš", "u": "ûüùúū", "y": "ÿ", "z": "žźż",
-      ]
-    case .german:
-      table = [
-        "a": "àáâæãåā", "c": "çćč", "e": "èéêëēėę", "i": "îïíīįì", "l": "ł", "n": "ñń",
-        "o": "ôòóœøōõ", "s": "ßśš", "u": "ûùúū", "y": "ÿ", "z": "žźż",
-      ]
-    }
-    return Array(table[letter] ?? "")
+  static func accents(for letter: Character, hasDedicatedUmlauts: Bool) -> [Character] {
+    let table: [Character: String] = [
+      "a": "àáâäæãåā", "c": "çćč", "e": "èéêëēėę", "i": "îïíīįì", "l": "ł", "n": "ñń",
+      "o": "ôöòóœøōõ", "s": "ßśš", "u": "ûüùúū", "y": "ÿ", "z": "žźż",
+    ]
+    let accents = Array(table[letter] ?? "")
+    // German already has these on its letter rows.
+    return hasDedicatedUmlauts ? accents.filter { !"äöü".contains($0) } : accents
   }
 }
 

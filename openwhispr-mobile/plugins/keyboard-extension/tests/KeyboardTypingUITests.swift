@@ -2,12 +2,40 @@
 // controller (autocorrect, suggestions, layouts, trackpad, haptics, emoji, number pad, swipe),
 // and the screenshot renderer.
 
+import UIKit.UIGestureRecognizerSubclass
+
 private let typingResources = URL(fileURLWithPath: #filePath)
   .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("ios/Resources")
+
+private final class KeyboardTypingTestDefaults: UserDefaults {
+  private let suite: String
+
+  init(suite: String = "keyboard-typing-ui-tests.\(UUID().uuidString)") {
+    self.suite = suite
+    super.init(suiteName: suite)!
+  }
+
+  deinit { removePersistentDomain(forName: suite) }
+}
+
+private final class TestAccentHold: UILongPressGestureRecognizer {
+  private var simulatedState: UIGestureRecognizer.State = .possible
+
+  override var state: UIGestureRecognizer.State {
+    get { simulatedState }
+    set { simulatedState = newValue }
+  }
+}
 
 private extension KeyboardViewController {
   func uiTestKey(_ letter: Character) -> KeyButton? {
     characterButtons.first { $0.output == String(letter) }
+  }
+
+  func uiTestTapLetterKey(_ letter: Character) -> Bool {
+    guard let key = uiTestKey(letter) else { return false }
+    handleCharacterKeyTapped(key)
+    return true
   }
 
   /// Types through the same handlers the keys call. Letters go through their keys (so
@@ -61,6 +89,25 @@ private extension KeyboardViewController {
   func uiTestSwipe(_ path: [CGPoint]) { commitSwipe(path: path) }
   func uiTestPickLanguage(_ language: TypingLanguage) { pickTypingLanguage(language) }
   func uiTestPickSwissFrench() { pickSwissFrench() }
+
+  func uiTestLongPressOptions(for letter: Character) -> [String] {
+    guard let key = uiTestKey(letter),
+      key.gestureRecognizers?.contains(where: { $0 is UILongPressGestureRecognizer }) == true
+    else { return [] }
+
+    let hold = TestAccentHold()
+    key.addGestureRecognizer(hold)
+    defer {
+      key.removeGestureRecognizer(hold)
+      accentPopup.hide()
+      accentKey = nil
+    }
+    hold.state = .began
+    handleAccentHold(hold)
+    guard !accentPopup.isHidden else { return [] }
+    return accentPopup.subviews.compactMap { ($0 as? UILabel)?.text }
+  }
+
   func uiTestSyncGeometry() {
     view.layoutIfNeeded()
     _ = loadedTypingEngine()
@@ -90,21 +137,24 @@ private func makeTypingKeyboard(
   haptics: Bool = true, width: CGFloat = 402, swissFrench: Bool = false,
   configure: (TestTextProxy) -> Void = { _ in }
 ) -> (KeyboardViewController, TestTextProxy, CountingKeyFeedback) {
-  var settings = TypingSettings(defaults: nil, preferredLanguages: [language.rawValue])
-  settings.language = language
-  settings.layout = layout ?? (swissFrench ? .qwertz : language.defaultLayout)
-  settings.swissFrenchKeys = swissFrench
-  settings.typingHelpEnabled = !swissFrench
-  settings.barStyle = barStyle
-  settings.hapticsEnabled = haptics
-  KeyboardViewController.typingSettingsOverride = settings
+  let defaults = KeyboardTypingTestDefaults()
+  if swissFrench {
+    TypingSettings.storeSwissFrench(in: defaults)
+  } else {
+    TypingSettings.store(language: language, in: defaults)
+  }
+  if let layout { TypingSettings.store(layout: layout, in: defaults) }
+  defaults.set(barStyle.rawValue, forKey: TypingSettings.barStyleKey)
+  defaults.set(haptics ? "1" : "0", forKey: TypingSettings.hapticsKey)
   KeyboardViewController.typingResourcesOverride = typingResources
   let proxy = TestTextProxy()
   proxy.tracksText = true
   proxy.documentContextBeforeInput = ""
   configure(proxy)
   TestEnvironment.proxy = proxy
-  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: width)
+  let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: width) {
+    $0.typingPreferencesOverride = (defaults, [language.rawValue])
+  }
   let feedback = CountingKeyFeedback()
   keyboard.keyFeedback = feedback
   keyboard.viewWillAppear(false)
@@ -117,7 +167,6 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
   TestEnvironment.reset()
   defer {
     TestEnvironment.reset()
-    KeyboardViewController.typingSettingsOverride = nil
     KeyboardViewController.typingResourcesOverride = nil
   }
 
@@ -134,15 +183,16 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
 
   // "Other" language: the keyboard has no word list for it, so it leaves the text alone.
   do {
-    var settings = TypingSettings(defaults: nil, preferredLanguages: ["en"])
-    settings.typingHelpEnabled = false
-    KeyboardViewController.typingSettingsOverride = settings
+    let defaults = KeyboardTypingTestDefaults()
+    TypingSettings.storeOtherLanguage(in: defaults)
     KeyboardViewController.typingResourcesOverride = typingResources
     let proxy = TestTextProxy()
     proxy.tracksText = true
     proxy.documentContextBeforeInput = ""
     TestEnvironment.proxy = proxy
-    let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402)
+    let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: 402) {
+      $0.typingPreferencesOverride = (defaults, ["en"])
+    }
     keyboard.viewWillAppear(false)
     keyboard.uiTestType("Teh lekker")
     checks.check(
@@ -359,16 +409,29 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     )
     let swissLetters = swissRows.flatMap { $0 }
     checks.check("fr_CH has no repeated key", Set(swissLetters).count == swissLetters.count)
-    swiss.uiTestType("Èéày")
+    let typedSwissKeys = "èéày".allSatisfy { swiss.uiTestTapLetterKey($0) }
     checks.check(
       "fr_CH types È at a sentence start, then é à y (got \(swissProxy.documentContextBeforeInput ?? "nil"))",
-      swissProxy.documentContextBeforeInput == "Èéày"
+      typedSwissKeys && swissProxy.documentContextBeforeInput == "Èéày"
     )
     swiss.uiTestType(" teh ")
     checks.check(
       "fr_CH: nothing is corrected and nothing suggested (got \(swissProxy.documentContextBeforeInput ?? "nil"))",
       swissProxy.documentContextBeforeInput == "Èéày teh " && swiss.uiTestSuggestions.isEmpty
     )
+    swiss.uiTestPickLanguage(.english)
+    checks.check(
+      "Swiss French → English restores automatic QWERTY and removes the Swiss keys",
+      swiss.touchTestLetters.compactMap(\.output).joined() == "qwertyuiopasdfghjklzxcvbnm"
+    )
+
+    let (explicitQwerty, _, _) = makeTypingKeyboard(layout: .qwerty)
+    explicitQwerty.uiTestPickSwissFrench()
+    checks.check(
+      "English → Swiss French preserves explicitly chosen QWERTY",
+      explicitQwerty.touchTestLetters.compactMap(\.output).joined() == "qwertyuiopèasdfghjkléàzxcvbnm"
+    )
+
     let (laidOut, _, _) = makeTypingKeyboard(swissFrench: true)
     let (english, _, _) = makeTypingKeyboard()
     let swissWidths = laidOut.touchTestLetters.map(\.bounds.width)
@@ -378,9 +441,6 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
       swissWidths.count == 29 && swissWidths[0] > 10 && swissWidths[0] < englishWidth
         && swissWidths.allSatisfy { abs($0 - swissWidths[0]) < 0.5 }
     )
-    swiss.uiTestPickLanguage(.english)
-    swiss.view.layoutIfNeeded()
-    checks.check("picking English takes the Swiss keys away", String(swiss.uiTestLetterRows[0]).hasPrefix("qwert") && swiss.uiTestKey("è") == nil)
 
     let swissDefaults = UserDefaults(suiteName: "keyboard-swiss-french-test")!
     defer { swissDefaults.removePersistentDomain(forName: "keyboard-swiss-french-test") }
@@ -392,6 +452,26 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     )
     TypingSettings.store(layout: .qwerty, in: swissDefaults)
     checks.check("a chosen layout wins for fr_CH", TypingSettings(defaults: swissDefaults).layout == .qwerty)
+  }
+
+  do {
+    let (swiss, _, _) = makeTypingKeyboard(language: .german, swissFrench: true) {
+      $0.autocapitalizationType = .none
+    }
+    let (german, _, _) = makeTypingKeyboard(language: .german) {
+      $0.autocapitalizationType = .none
+    }
+    for (base, umlaut, alternate): (Character, String, String) in [("a", "ä", "à"), ("o", "ö", "ô"), ("u", "ü", "û")] {
+      checks.check(
+        "Swiss French with German device language: holding \(base) offers \(umlaut)",
+        swiss.uiTestLongPressOptions(for: base).contains(umlaut)
+      )
+      let germanOptions = german.uiTestLongPressOptions(for: base)
+      checks.check(
+        "German: holding \(base) offers \(alternate) and keeps \(umlaut) on its dedicated key",
+        germanOptions.contains(alternate) && !germanOptions.contains(umlaut) && german.uiTestKey(Character(umlaut)) != nil
+      )
+    }
   }
 
   // Every letter key's centre and inner 60% type that key on every layout and width, with a
@@ -544,14 +624,16 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
   // which the sweep's edge sampling assumes.
   #if !targetEnvironment(simulator)
   for (name, language, layout) in [("German QWERTZ", TypingLanguage.german, KeyLayoutKind.qwertz), ("English QWERTZ", .english, .qwertz)] {
-    var settings = TypingSettings(defaults: nil, preferredLanguages: [language.rawValue])
-    settings.language = language
-    settings.layout = layout
-    KeyboardViewController.typingSettingsOverride = settings
-    KeyboardTouchTests.checkProductionLayout("\(name) portrait with globe", width: 375, globe: true, &checks)
-    KeyboardTouchTests.checkProductionLayout("\(name) portrait", width: 440, &checks)
-    KeyboardTouchTests.checkProductionLayout("\(name) landscape with globe", width: 667, globe: true, landscape: true, &checks)
-    KeyboardTouchTests.checkProductionLayout("\(name) landscape", width: 956, landscape: true, &checks)
+    let defaults = KeyboardTypingTestDefaults()
+    TypingSettings.store(language: language, in: defaults)
+    TypingSettings.store(layout: layout, in: defaults)
+    let prepare: (KeyboardViewController) -> Void = {
+      $0.typingPreferencesOverride = (defaults, [language.rawValue])
+    }
+    KeyboardTouchTests.checkProductionLayout("\(name) portrait with globe", width: 375, globe: true, prepare: prepare, &checks)
+    KeyboardTouchTests.checkProductionLayout("\(name) portrait", width: 440, prepare: prepare, &checks)
+    KeyboardTouchTests.checkProductionLayout("\(name) landscape with globe", width: 667, globe: true, landscape: true, prepare: prepare, &checks)
+    KeyboardTouchTests.checkProductionLayout("\(name) landscape", width: 956, landscape: true, prepare: prepare, &checks)
   }
   #endif
 
@@ -631,11 +713,11 @@ private enum KeyboardScreenshots {
     TestEnvironment.reset()
     TestEnvironment.globe = device.globe
     TestEnvironment.landscape = device.landscape
-    var settings = TypingSettings(defaults: nil, preferredLanguages: [language.rawValue])
-    settings.language = language
-    settings.layout = layout
-    settings.barStyle = state.hasPrefix("row") ? .row : .strip
-    KeyboardViewController.typingSettingsOverride = settings
+    let defaults = KeyboardTypingTestDefaults()
+    TypingSettings.store(language: language, in: defaults)
+    TypingSettings.store(layout: layout, in: defaults)
+    let barStyle: SuggestionBarStyle = state.hasPrefix("row") ? .row : .strip
+    defaults.set(barStyle.rawValue, forKey: TypingSettings.barStyleKey)
     KeyboardViewController.typingResourcesOverride = typingResources
     let proxy = TestTextProxy()
     proxy.tracksText = true
@@ -645,6 +727,7 @@ private enum KeyboardScreenshots {
     let page: TestPage = state == "numbers" ? .numbers : (state == "symbols" ? .symbols : .letters)
     hostWindow?.overrideUserInterfaceStyle = dark ? .dark : .light
     let keyboard = KeyboardViewController.makeLaidOutKeyboard(width: device.width, page: page) {
+      $0.typingPreferencesOverride = (defaults, [language.rawValue])
       $0.overrideUserInterfaceStyle = dark ? .dark : .light
       // In a window before its keys are built, so every colour resolves for the appearance.
       // Its view only: as a child controller the keyboard would ask its parent for the host
@@ -726,7 +809,7 @@ private enum KeyboardScreenshots {
 private extension KeyboardViewController {
   func uiTestShowAccents(for letter: Character) {
     guard let key = uiTestKey(letter) else { return }
-    let accents = KeyRows.accents(for: letter, language: typingSettings.language)
+    let accents = letterAccents(for: letter)
     accentPopup.show(
       ([letter] + accents).map { String($0) },
       font: metrics.keycaps.lowercase,

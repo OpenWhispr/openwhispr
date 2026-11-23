@@ -1152,7 +1152,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // and bottom-row keys keep the ten-key widths above, as Apple's German keyboard does.
   private let letterWidthGuide = UILayoutGuide()
   private var letterWidthGuideConstraint: NSLayoutConstraint?
-  /// The typing language, layout and the rest, from the App Group. Tests set it directly.
+  /// The typing language, layout and the rest, from the App Group.
   private var typingSettings = TypingSettings(defaults: nil)
   private var letterRows: [[Character]] {
     typingSettings.swissFrenchKeys
@@ -1172,8 +1172,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var didLoadTypingEngine = false
   /// Where the lexicons are, when not in the extension's bundle (tests, the harness).
   static var typingResourcesOverride: URL?
-  /// Settings for tests and the harness, in place of the App Group's.
-  static var typingSettingsOverride: TypingSettings?
+  /// Lets each test keyboard use its own preferences and device languages.
+  var typingPreferencesOverride: (defaults: UserDefaults, preferredLanguages: [String])?
   private let suggestionBar = SuggestionBarView()
   private var isSuggestionBarShown = false
   private var suggestionRefreshScheduled = false
@@ -2680,9 +2680,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     metrics.keyboardHeight + (typingSettings.barStyle == .row ? Metrics.suggestionRowHeight : 0)
   }
 
+  private var typingDefaults: UserDefaults? {
+    typingPreferencesOverride?.defaults ?? KeyboardHandoffProvider.shared.sharedDefaults()
+  }
+
   private func loadTypingSettings() -> TypingSettings {
-    if let override = Self.typingSettingsOverride { return override }
-    return TypingSettings(defaults: hasFullAccess ? KeyboardHandoffProvider.shared.sharedDefaults() : nil)
+    TypingSettings(
+      defaults: hasFullAccess ? typingDefaults : nil,
+      preferredLanguages: typingPreferencesOverride?.preferredLanguages ?? Locale.preferredLanguages
+    )
   }
 
   /// Picks up a language, layout or bar style changed in the app (or in another keyboard
@@ -3340,6 +3346,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   // MARK: Long-press accents
 
+  private func letterAccents(for letter: Character) -> [Character] {
+    KeyRows.accents(
+      for: letter,
+      hasDedicatedUmlauts: typingSettings.language == .german && !typingSettings.swissFrenchKeys
+    )
+  }
+
   @objc private func handleAccentHold(_ gesture: UILongPressGestureRecognizer) {
     guard let key = gesture.view as? KeyButton, let letter = key.output?.first else { return }
     switch gesture.state {
@@ -3348,7 +3361,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       if let alternates = key.alternates {
         options = [String(letter)] + alternates
       } else {
-        let accents = KeyRows.accents(for: letter, language: typingSettings.language)
+        let accents = letterAccents(for: letter)
         guard !accents.isEmpty else { return }
         // The key's own letter first, as on Apple's keyboard: holding and letting go types it.
         options = ([letter] + accents).map { character -> String in
@@ -3562,65 +3575,28 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func setTypingAid(_ key: String, enabled: Bool) {
-    if var override = Self.typingSettingsOverride {
-      switch key {
-      case TypingSettings.swipeKey: override.swipeEnabled = enabled
-      case TypingSettings.smartTargetsKey: override.smartTargetsEnabled = enabled
-      default: override.autocorrectEnabled = enabled
-      }
-      Self.typingSettingsOverride = override
-    } else {
-      KeyboardHandoffProvider.shared.sharedDefaults()?.set(enabled ? "1" : "0", forKey: key)
-    }
+    typingDefaults?.set(enabled ? "1" : "0", forKey: key)
     reloadTypingSettings()
     if didLoadTypingEngine { typingEngine?.session.policy = fieldPolicy }
   }
 
   private func pickTypingLanguage(_ language: TypingLanguage) {
-    if var override = Self.typingSettingsOverride {
-      // A layout nobody chose follows the language.
-      if override.layout == override.language.defaultLayout { override.layout = language.defaultLayout }
-      override.language = language
-      override.typingHelpEnabled = true
-      override.swissFrenchKeys = false
-      Self.typingSettingsOverride = override
-    } else {
-      TypingSettings.store(language: language, in: KeyboardHandoffProvider.shared.sharedDefaults())
-    }
+    TypingSettings.store(language: language, in: typingDefaults)
     reloadTypingSettings()
   }
 
   private func pickSwissFrench() {
-    if var override = Self.typingSettingsOverride {
-      // A layout nobody chose follows the language: Swiss keyboards are QWERTZ.
-      if override.layout == override.language.defaultLayout { override.layout = .qwertz }
-      override.typingHelpEnabled = false
-      override.swissFrenchKeys = true
-      Self.typingSettingsOverride = override
-    } else {
-      TypingSettings.storeSwissFrench(in: KeyboardHandoffProvider.shared.sharedDefaults())
-    }
+    TypingSettings.storeSwissFrench(in: typingDefaults)
     reloadTypingSettings()
   }
 
   private func pickOtherTypingLanguage() {
-    if var override = Self.typingSettingsOverride {
-      override.typingHelpEnabled = false
-      override.swissFrenchKeys = false
-      Self.typingSettingsOverride = override
-    } else {
-      TypingSettings.storeOtherLanguage(in: KeyboardHandoffProvider.shared.sharedDefaults())
-    }
+    TypingSettings.storeOtherLanguage(in: typingDefaults)
     reloadTypingSettings()
   }
 
   private func pickKeyLayout(_ layout: KeyLayoutKind) {
-    if var override = Self.typingSettingsOverride {
-      override.layout = layout
-      Self.typingSettingsOverride = override
-    } else {
-      TypingSettings.store(layout: layout, in: KeyboardHandoffProvider.shared.sharedDefaults())
-    }
+    TypingSettings.store(layout: layout, in: typingDefaults)
     reloadTypingSettings()
   }
 
@@ -4181,7 +4157,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         characterButtons.append(button)
         if let code = key.output.utf16.first { letterButtonsByCode[code] = button }
         if let letter = key.output.first,
-          !KeyRows.accents(for: letter, language: typingSettings.language).isEmpty
+          !letterAccents(for: letter).isEmpty
         {
           let hold = UILongPressGestureRecognizer(target: self, action: #selector(handleAccentHold(_:)))
           hold.minimumPressDuration = 0.4
