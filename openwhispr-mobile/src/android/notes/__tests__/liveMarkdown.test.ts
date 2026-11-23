@@ -104,3 +104,23 @@ describe('plainNoteText', () => {
     );
   });
 });
+
+describe('mentions in summaries', () => {
+  const line = '- [ ] Follow up — [@Josh](mention:josh%40openwhispr.com) by Friday';
+
+  it('shows a mention as its name, the link part kept as a hidden mark', () => {
+    const [parsed] = parseNoteLines(line);
+    const mention = parsed.inline.find((span) => span.kind === 'mention');
+    expect(mention?.text).toBe('@Josh');
+    expect(parsed.inline.map((span) => span.text).join('')).toBe(line.slice(parsed.mark.length));
+    expect(plainNoteText(line)).toBe('Follow up — @Josh by Friday');
+  });
+
+  it('keeps the text exact for editing, so the caret and what is saved never move', () => {
+    expect(
+      liveMarkdownSpans(line)
+        .map((span) => span.text)
+        .join(''),
+    ).toBe(line);
+  });
+});

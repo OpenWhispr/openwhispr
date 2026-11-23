@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Pressable, TextInput } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { AppFont } from '@/lib/fonts';
 import { home } from '../home/kit';
 import { applyFormat } from './formatText';
@@ -82,15 +82,9 @@ export const SummaryEditor = forwardRef<
 
   if (!editing && draft.trim())
     return (
-      <Pressable
-        testID="enhanced-read"
-        accessible={false}
-        disabled={!editable}
-        onPress={() => {
-          setSelection({ start: draft.length, end: draft.length });
-          setEditingState(true);
-        }}
-      >
+      // A plain container: each line sets the caret where it was tapped (a press handler here
+      // would take the tap and put the caret at the end).
+      <View testID="enhanced-read">
         <NotesReadView
           text={draft}
           editable={editable}
@@ -100,7 +94,7 @@ export const SummaryEditor = forwardRef<
           }}
           onToggle={(line) => change(toggleCheck(draft, line))}
         />
-      </Pressable>
+      </View>
     );
   return (
     <TextInput
