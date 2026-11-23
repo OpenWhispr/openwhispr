@@ -8,7 +8,7 @@ import type { TranscriptBlock } from '@/lib/diarization/transcriptDisplay';
 import { gloss, glossPressed, home } from '../home/kit';
 import { edge, edgeCard, look } from '../settings/look';
 import { useReduceMotion } from '../settings/kit';
-import { BackButton, IconButton, LinkButton, notesLook } from './look';
+import { BackButton, IconButton, notesLook } from './look';
 import { initialsOf } from './initials';
 import { useNotesT } from './strings';
 
@@ -440,6 +440,22 @@ export function TranscriptCard({
   return (
     <View style={{ gap: 8 }}>
       <View style={[edgeCard, { padding: 16, gap: 16 }]} testID="speaker-transcript">
+        {onCopy && blocks.length > 0 ? (
+          // Copy sits top right, as on the summary card, on the first speaker's name line.
+          <View style={{ position: 'absolute', top: 12, right: 12, zIndex: 1 }}>
+            <Pressable
+              cssInterop={false}
+              accessibilityRole="button"
+              accessibilityLabel={t('copyTranscript')}
+              hitSlop={10}
+              onPress={onCopy}
+              testID="copy-transcript"
+              style={({ pressed }) => ({ padding: 4, opacity: pressed ? 0.5 : 1 })}
+            >
+              <SystemIcon name="doc.on.doc" mdName="Copy" size={18} color={home.secondary} />
+            </Pressable>
+          </View>
+        ) : null}
         {blocks.length === 0 ? (
           <Text style={{ fontSize: 15, color: home.tertiary }}>{t('noTranscript')}</Text>
         ) : (
@@ -493,11 +509,6 @@ export function TranscriptCard({
           })
         )}
       </View>
-      {onCopy && blocks.length > 0 ? (
-        <View style={{ paddingHorizontal: 4 }}>
-          <LinkButton label={t('copyTranscript')} icon="Copy" onPress={onCopy} />
-        </View>
-      ) : null}
     </View>
   );
 }
