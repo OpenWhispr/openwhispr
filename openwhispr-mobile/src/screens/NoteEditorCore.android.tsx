@@ -1349,7 +1349,9 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     const formatNotes = (kind: 'bold' | 'italic' | 'bullet' | 'check' | 'heading') => {
       const result = applyFormat(contentRef.current, selectionRef.current, kind);
       handleContentChange(result.text);
-      setSelection({ start: result.caret, end: result.caret });
+      // The input draws its text from children, which Android applies after a selection set in the
+      // same render; placing the caret a frame later keeps it between the marks just added.
+      requestAnimationFrame(() => setSelection({ start: result.caret, end: result.caret }));
     };
 
     return (
