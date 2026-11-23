@@ -7,6 +7,8 @@ import { lineAt, parseNoteLines, type LiveSpan, type NoteLine } from './liveMark
 
 const BODY = { fontFamily: AppFont.regular, fontSize: 16, lineHeight: 26, color: home.text };
 const HEADING_SIZE = { 1: 22, 2: 19, 3: 17 } as const;
+// Every list marker sits in the same column, so bullet, checkbox and number text line up.
+const MARKER = { width: 22, height: 26, alignItems: 'center', justifyContent: 'center' } as const;
 // A mark off the caret's line takes no room: it stays in the text (so offsets, the caret and
 // what's saved are unchanged) but draws at a pixel's height in no colour.
 const HIDDEN: TextStyle = { fontSize: 0.1, color: 'transparent' };
@@ -141,7 +143,7 @@ export function NotesReadView({
                 disabled={!editable}
                 hitSlop={8}
                 onPress={() => onToggle(line)}
-                style={{ height: 26, justifyContent: 'center' }}
+                style={MARKER}
               >
                 <SystemIcon
                   name={line.checked ? 'checkmark.square' : 'square'}
@@ -151,12 +153,20 @@ export function NotesReadView({
                 />
               </Pressable>
             ) : (
-              <Text style={[BODY, { color: home.secondary, minWidth: 14 }]}>
-                {line.kind === 'bullet' ? '•' : line.mark.trim()}
-              </Text>
+              <View style={MARKER}>
+                <Text
+                  style={[
+                    BODY,
+                    { color: home.secondary },
+                    line.kind === 'bullet' && { fontSize: 22, lineHeight: 26 },
+                  ]}
+                >
+                  {line.kind === 'bullet' ? '\u2022' : line.mark.trim()}
+                </Text>
+              </View>
             );
           body = (
-            <View style={{ flexDirection: 'row', gap: 10, paddingLeft: 2 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
               {marker}
               <View style={{ flex: 1 }}>
                 <Inline

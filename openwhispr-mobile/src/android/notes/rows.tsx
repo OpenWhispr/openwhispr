@@ -18,6 +18,7 @@ import { parseNoteTimestamp } from '@/lib/parseNoteTimestamp';
 import { home } from '../home/kit';
 import { look } from '../settings/look';
 import { useReduceMotion } from '../settings/kit';
+import { plainNoteText } from './liveMarkdownSpans';
 import { NoteTile, notesLook } from './look';
 import { consumeRestored } from './pendingDeletes';
 import { useNotesT, type NotesT } from './strings';
@@ -54,9 +55,7 @@ export function plainLine(markdown: string): string {
 
 /** The line under a note's title: the summary's first point, else what was typed. */
 export function notePreview(note: Note): string {
-  return (
-    plainLine(note.enhancedContent ?? '') || (note.content ?? '').replace(/\s+/g, ' ').trim() || ''
-  );
+  return plainLine(note.enhancedContent ?? '') || plainNoteText(note.content ?? '');
 }
 
 export function timeOf(iso: string | null | undefined): string {

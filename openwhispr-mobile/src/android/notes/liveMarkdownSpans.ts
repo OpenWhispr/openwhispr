@@ -123,3 +123,18 @@ export function lineAt(text: string, offset: number): number {
   }
   return line;
 }
+
+/** The notes' words without Markdown marks, lines joined by spaces: for one-line previews. */
+export function plainNoteText(text: string): string {
+  return parseNoteLines(text)
+    .map((line) =>
+      line.inline
+        .filter((span) => span.kind !== 'mark')
+        .map((span) => span.text)
+        .join('')
+        .trim(),
+    )
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ');
+}

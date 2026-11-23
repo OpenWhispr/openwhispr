@@ -2,6 +2,7 @@ import {
   lineAt,
   liveMarkdownSpans,
   parseNoteLines,
+  plainNoteText,
   toggleCheck,
   type LiveSpan,
 } from '../liveMarkdownSpans';
@@ -93,5 +94,13 @@ describe('parseNoteLines', () => {
     expect(lineAt(text, 7)).toBe(0);
     expect(lineAt(text, 8)).toBe(1);
     expect(lineAt(text, text.length)).toBe(5);
+  });
+});
+
+describe('plainNoteText', () => {
+  it('drops every mark for a one-line preview', () => {
+    expect(plainNoteText('## Launch plan\n- Call **Sam**\n- [ ] Book _the_ room\n\n')).toBe(
+      'Launch plan Call Sam Book the room',
+    );
   });
 });
