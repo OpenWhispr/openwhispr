@@ -41,7 +41,7 @@ A downloadable file is located by its URL or Hugging Face revision and proven by
 
 A file without a hash can be given one first, then moved. File name, folder, engine type, quantization and context length identify the artifact and cannot change.
 
-Request settings (`tokenParam`, `supportsTemperature`, `supportsThinking`, `disableThinking`, `supportsVision`, `supportsTools`, `reasoningEffort`, `thinkingFloor`) can change, but a wrong one breaks every request. CI lists such changes and fails until a maintainer checks them and adds the `capability-change` label. It must be someone other than the pull request's author. The label covers the commits it was added to: after a push, a reopen or another label change the check fails again until a maintainer removes the label and adds it back, so add it last.
+Request settings (`tokenParam`, `supportsTemperature`, `supportsThinking`, `disableThinking`, `supportsVision`, `supportsTools`, `reasoningEffort`, `thinkingFloor`, `thinkingOff`) can change, but a wrong one breaks every request. CI lists such changes and fails until a maintainer checks them and adds the `capability-change` label. It must be someone other than the pull request's author. The label covers the commits it was added to: after a push, a reopen or another label change the check fails again until a maintainer removes the label and adds it back, so add it last.
 
 ## What CI checks
 

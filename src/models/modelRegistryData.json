@@ -534,24 +534,36 @@
           "description": "Latest Sonnet: fast and capable for everyday work, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5_5",
           "id": "claude-sonnet-5-5",
+          "supportsThinking": true,
           "supportsVision": true,
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "thinkingOff": {
+            "type": "between_tools"
+          }
         },
         {
           "name": "Claude Haiku 5.5",
           "description": "Fastest, lowest-cost Claude model, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_5_5",
           "id": "claude-haiku-5-5",
+          "supportsThinking": true,
           "supportsVision": true,
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "thinkingOff": {
+            "type": "disabled"
+          }
         },
         {
           "name": "Claude Sonnet 5",
           "description": "Fast, capable agentic model at lower cost",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5",
           "id": "claude-sonnet-5",
+          "supportsThinking": true,
           "supportsVision": true,
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "thinkingOff": {
+            "type": "disabled"
+          }
         },
         {
           "name": "Claude Sonnet 4.6",
@@ -574,8 +586,12 @@
           "description": "Previous Opus flagship, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_5",
           "id": "claude-opus-5",
+          "supportsThinking": true,
           "supportsVision": true,
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "thinkingOff": {
+            "type": "disabled"
+          }
         },
         {
           "name": "Claude Opus 4.8",

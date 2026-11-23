@@ -244,6 +244,36 @@ for (const [model, disableThinking, expected] of [
   });
 }
 
+test("a Claude model added through the catalog brings its own thinking-off value", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const data = structuredClone(old.data);
+  data.cloudProviders
+    .find((provider) => provider.id === "anthropic")
+    .models.push({
+      id: "claude-fixture",
+      name: "Claude Fixture",
+      description: "Fixture",
+      thinkingOff: { type: "between_tools" },
+    });
+  store.replaceRegistryData({ data, manifestVersion: old.manifestVersion + 1 });
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
+  let requestBody;
+  fetchBehavior = async (_url, init) => {
+    requestBody = JSON.parse(init.body);
+    return Response.json({ content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" });
+  };
+
+  const result = await anthropicHandler({}, "short dictation", "claude-fixture", null, {
+    disableThinking: true,
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(requestBody.thinking, { type: "between_tools" });
+});
+
 test("a <thinking> block leaked with thinking off is not returned", async () => {
   fetchBehavior = async () =>
     Response.json({
