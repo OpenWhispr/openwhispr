@@ -125,16 +125,17 @@ test("a workspace list that failed to load retries when the app reconnects", asy
   assert.equal(refreshes, 4);
 });
 
-for (const { name, modulePath, exportName } of [
+for (const { name, modulePath, exportName, props } of [
   {
     name: "workspace settings",
     modulePath: "/components/settings/useSettingsWorkspace.ts",
     exportName: "useSettingsWorkspace",
   },
   {
-    name: "workspace billing",
-    modulePath: "/components/settings/WorkspaceBillingOverview.tsx",
-    exportName: "default",
+    name: "plans & billing picker",
+    modulePath: "/components/settings/billing/PlansBillingPicker.tsx",
+    exportName: "PlansBillingPicker",
+    props: { request: { kind: "personal" }, onChange: () => {}, personalPlanLabel: null },
   },
 ]) {
   test(`${name} waits for validated sign-in before automatically loading memberships`, async (t) => {
@@ -168,11 +169,12 @@ for (const { name, modulePath, exportName } of [
         `,
         "react-i18next": "export const useTranslation = () => ({ t: (key) => key });",
         "/WorkspaceBillingCard": "export default function Mock() { return null; }",
+        "/WorkspaceSwitcher": "export const RetryMenuItem = () => null;",
       },
     });
     const consumer = (await vite.ssrLoadModule(modulePath))[exportName];
     function Harness() {
-      if (exportName === "default") return React.createElement(consumer);
+      if (props) return React.createElement(consumer, props);
       consumer();
       return null;
     }

@@ -945,7 +945,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
   cloudCheckout: (opts, generation) => ipcRenderer.invoke("cloud-checkout", opts, generation),
-  cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),
+  cloudBillingPortal: (generation) => ipcRenderer.invoke("cloud-billing-portal", generation),
   cloudSwitchPlan: (opts) => ipcRenderer.invoke("cloud-switch-plan", opts),
   cloudPreviewSwitch: (opts) => ipcRenderer.invoke("cloud-preview-switch", opts),
   cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
