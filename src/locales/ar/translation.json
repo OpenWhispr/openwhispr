@@ -357,6 +357,7 @@
         "gemini_gemini_3_8_flash": "نموذج Flash الأكثر قدرة",
         "gemini_gemini_4_argon": "نموذج الاستنتاج الرائد من Google",
         "tinfoil_kimi_k3": "نموذج Moonshot الرائد الخاص مع استنتاج أصلي ورؤية، سياق 256K",
+        "tinfoil_kimi_k3_1_pro": "نموذج Moonshot الرائد الخاص للبرمجة طويلة المدى والعمل الوكيلي، سياق 256K",
         "tinfoil_deepseek_v4_1_flash": "نموذج DeepSeek خاص وسريع مع استنتاج اختياري، سياق 1M"
       },
       "enterprise": {
@@ -410,6 +411,9 @@
         "liquidai_lfm2_2_6b_q4_k_m": "نموذج LFM2 متوازن لتنظيف بجودة أعلى",
         "liquidai_lfm2_5_350m_q8_0": "نموذج خفيف للغاية للتنظيف السريع للإملاء",
         "liquidai_lfm2_5_230m_q8_0": "نموذج صغير جدًا، تنظيف فوري على الأجهزة المتواضعة",
+        "liquidai_lfm3_1_7b_qad_q4_0": "أحدث نموذج صغير من Liquid AI",
+        "liquidai_lfm3_vl_2b_qad_q4_0": "نموذج الرؤية LFM3 من Liquid AI، يُستخدم هنا للنصوص",
+        "liquidai_lfm3_omni_2b_q4_0": "نموذج LFM3 متعدد الوسائط من Liquid AI، يُستخدم هنا للنصوص",
         "qwen_qwen3_5_0_8b_q4_k_m": "نموذج Qwen3.5 صغير جدًا لأسرع تنظيف",
         "qwen_qwen3_8_27b_q4_k_m": "نموذج Qwen الأكثر قدرة للأجهزة بذاكرة 32 GB",
         "qwen_qwen3_6_35b_a3b_q4_k_m": "نموذج مزيج خبراء سريع، 3B معاملات نشطة",

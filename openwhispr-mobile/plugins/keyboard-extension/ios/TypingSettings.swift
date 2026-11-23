@@ -25,10 +25,15 @@ struct TypingSettings: Equatable {
   /// suggestions, corrections, swipe or smart targets, which would all pull towards English
   /// or German words. The keys, haptics and trackpad stay.
   var typingHelpEnabled = true
+  /// Swiss French: è, é and à have keys of their own, where the umlauts are on a German
+  /// keyboard. There is no French word list, so it comes without typing help.
+  var swissFrenchKeys = false
 
   static let languageKey = "keyboard_typing_language"
   /// Stored under `languageKey` for a language without typing help.
   static let otherLanguageValue = "other"
+  /// Stored under `languageKey` for the Swiss French keys.
+  static let swissFrenchValue = "fr_CH"
   static let layoutKey = "keyboard_typing_layout"
   static let hapticsKey = "keyboard_haptics_enabled"
   static let barStyleKey = "keyboard_suggestion_bar_style"
@@ -50,8 +55,9 @@ struct TypingSettings: Equatable {
     preferredLanguages: [String] = Locale.preferredLanguages
   ) {
     let storedLanguage = defaults?.string(forKey: TypingSettings.languageKey)
+    swissFrenchKeys = storedLanguage == TypingSettings.swissFrenchValue
     if let storedLanguage {
-      typingHelpEnabled = storedLanguage != TypingSettings.otherLanguageValue
+      typingHelpEnabled = storedLanguage != TypingSettings.otherLanguageValue && !swissFrenchKeys
     } else {
       // Nobody chose: help only when one of the device's languages is one the keyboard has a
       // word list for. A French speaker's text must not be corrected towards English; someone
@@ -64,7 +70,7 @@ struct TypingSettings: Equatable {
       ?? TypingLanguage.preferred(from: preferredLanguages)
     self.language = language
     layout = defaults?.string(forKey: TypingSettings.layoutKey).flatMap(KeyLayoutKind.init(rawValue:))
-      ?? language.defaultLayout
+      ?? (swissFrenchKeys ? .qwertz : language.defaultLayout)
     hapticsEnabled = defaults?.string(forKey: TypingSettings.hapticsKey) != "0"
     barStyle = defaults?.string(forKey: TypingSettings.barStyleKey).flatMap(SuggestionBarStyle.init(rawValue:))
       ?? TypingSettings.defaultBarStyle
@@ -81,6 +87,10 @@ struct TypingSettings: Equatable {
 
   static func storeOtherLanguage(in defaults: UserDefaults?) {
     defaults?.set(otherLanguageValue, forKey: languageKey)
+  }
+
+  static func storeSwissFrench(in defaults: UserDefaults?) {
+    defaults?.set(swissFrenchValue, forKey: languageKey)
   }
 
   static func store(layout: KeyLayoutKind, in defaults: UserDefaults?) {

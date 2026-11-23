@@ -9,7 +9,8 @@ export type ProcessingMode = 'cloud' | 'private' | 'providers';
 export type TranscriptionProvider = 'local' | 'cloud' | 'byok';
 export type KeyboardTone = 'default' | 'formal' | 'casual' | 'very_casual' | 'excited';
 // 'other': a language the keyboard has no word list for, typed without suggestions or autocorrect.
-export type KeyboardTypingLanguage = 'en' | 'de' | 'other';
+// 'fr_CH': the same, with è, é and à on keys of their own.
+export type KeyboardTypingLanguage = 'en' | 'de' | 'fr_CH' | 'other';
 export type KeyboardTypingLayout = 'qwerty' | 'qwertz';
 export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 

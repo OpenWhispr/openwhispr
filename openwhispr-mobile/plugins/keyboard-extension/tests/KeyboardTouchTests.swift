@@ -469,6 +469,7 @@ private enum KeyboardTouchTests {
     landscape: Bool = false,
     tablet: Bool = false,
     proxy: TestTextProxy? = nil,
+    prepare: (KeyboardViewController) -> Void = { _ in },
     _ checks: inout TouchChecks
   ) {
     TestEnvironment.reset()
@@ -477,7 +478,7 @@ private enum KeyboardTouchTests {
     TestEnvironment.landscape = landscape
     TestEnvironment.tablet = tablet
     TestEnvironment.proxy = proxy ?? TestTextProxy()
-    let controller = KeyboardViewController.makeLaidOutKeyboard(width: width, page: page)
+    let controller = KeyboardViewController.makeLaidOutKeyboard(width: width, page: page, prepare: prepare)
     let rows = controller.touchTestRows
     let layout = "\(Int(width)) pt \(name) \(page)"
     checks.check(
