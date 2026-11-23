@@ -8,7 +8,7 @@ import { home } from '../home/kit';
 import { BottomSheet } from '../settings/kit';
 import { edge, edgeField } from '../settings/look';
 import { GlassButton } from '../processingFable/look';
-import { Card, ListRow, NoteTile, SectionLabel, notesLook } from './look';
+import { Card, ListRow, NoteTile, SectionLabel, notesLook, sheetList } from './look';
 import { eventTimeRange } from './calendar';
 import { initialsOf } from './initials';
 import {
@@ -223,8 +223,8 @@ export function PeopleSheet({
           />
         </View>
         <ScrollView
-          style={{ maxHeight: height * 0.34, marginHorizontal: -16 }}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 4, gap: 12 }}
+          style={[sheetList.style, { maxHeight: height * 0.34 }]}
+          contentContainerStyle={[sheetList.content, { gap: 12 }]}
           keyboardShouldPersistTaps="handled"
         >
           {picked.length > 0 ? (
@@ -289,8 +289,8 @@ export function PeopleSheet({
   return (
     <BottomSheet visible={visible} onClose={onClose} title={t('peopleTitle', { count })}>
       <ScrollView
-        style={{ maxHeight: height * 0.66, marginHorizontal: -16 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 4, gap: 12 }}
+        style={[sheetList.style, { maxHeight: height * 0.66 }]}
+        contentContainerStyle={[sheetList.content, { gap: 12 }]}
       >
         <Card>
           <ListRow
@@ -466,8 +466,8 @@ export function EventSheet({
           />
         </View>
         <ScrollView
-          style={{ maxHeight: height * 0.5, marginHorizontal: -16 }}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 4, gap: 12 }}
+          style={[sheetList.style, { maxHeight: height * 0.5 }]}
+          contentContainerStyle={[sheetList.content, { gap: 12 }]}
           keyboardShouldPersistTaps="handled"
         >
           {shownDays.length === 0 ? (
@@ -480,7 +480,7 @@ export function EventSheet({
                 <SectionLabel label={dayLabel(day.date, now, t('today'))} />
                 <Card>
                   {day.events.map((value) => {
-                    const guests = eventPeople(value).length;
+                    const guests = eventPeople(value).filter((person) => !person.self).length;
                     return (
                       <ListRow
                         key={value.id}
@@ -493,7 +493,7 @@ export function EventSheet({
                             : eventTimeRange(value)
                         }
                         chevron={false}
-                        selected={event?.id === value.id}
+                        checked={event?.id === value.id}
                         onPress={() => onPick(value)}
                       />
                     );

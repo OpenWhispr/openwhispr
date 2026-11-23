@@ -210,11 +210,14 @@ export function ListRow({
   selected,
   destructive,
   accent,
+  checked,
 }: {
   icon?: LucideIconName;
   iconColor?: string;
   /** An action row ("New folder", "Add people"): the title in the accent colour. */
   accent?: boolean;
+  /** The current pick in a picker sheet: a tick on a white row (Figma N2, N8). */
+  checked?: boolean;
   title: string;
   subtitle?: string;
   value?: string;
@@ -229,7 +232,7 @@ export function ListRow({
     <Pressable
       cssInterop={false}
       accessibilityRole="button"
-      accessibilityState={selected ? { selected } : undefined}
+      accessibilityState={selected || checked ? { selected: true } : undefined}
       onPress={onPress}
       onLongPress={onLongPress}
       disabled={!onPress && !onLongPress}
@@ -270,8 +273,10 @@ export function ListRow({
       </View>
       {value != null && <Text style={notesLook.count}>{value}</Text>}
       {right}
-      {selected && <SystemIcon name="checkmark" mdName="Check" size={20} color={home.accent} />}
-      {chevron && !selected && (
+      {(selected || checked) && (
+        <SystemIcon name="checkmark" mdName="Check" size={20} color={home.accent} />
+      )}
+      {chevron && !selected && !checked && (
         <SystemIcon name="chevron.right" mdName="ChevronRight" size={18} color={home.tertiary} />
       )}
     </Pressable>
@@ -407,3 +412,13 @@ export function LinkButton({
     </Pressable>
   );
 }
+
+/**
+ * A scrolling list inside a bottom sheet. A card's glass edge casts its shadow ~12 dp below and a
+ * few dp above, so the list pads both ends for it and pulls the margins back in, keeping the
+ * sheet's spacing: the first and last cards' shadows are never cut by the scroll view.
+ */
+export const sheetList = {
+  style: { marginHorizontal: -16, marginTop: -6, marginBottom: -12 },
+  content: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 16 },
+} satisfies { style: ViewStyle; content: ViewStyle };

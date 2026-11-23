@@ -12,7 +12,7 @@ import { home } from '../home/kit';
 import { BottomSheet, showToast, TextAction } from '../settings/kit';
 import { edgeField, look } from '../settings/look';
 import { GlassButton } from '../processingFable/look';
-import { Card, ListRow, NoteTile, SectionLabel, notesLook } from './look';
+import { Card, ListRow, NoteTile, SectionLabel, notesLook, sheetList } from './look';
 import { notesT, useNotesT } from './strings';
 
 /** Undo stays on the Moved toast this long (Figma N4). */
@@ -173,7 +173,7 @@ export function MoveToFolderSheet({
             space.kind === 'team' ? t('seenBy', { notes: count, space: space.name }) : count
           }
           chevron={false}
-          selected={selected}
+          checked={selected}
           onPress={() => pick(space, folder)}
         />
       </View>
@@ -187,7 +187,7 @@ export function MoveToFolderSheet({
         title={t('intoSpace', { space: space.name })}
         subtitle={t('noFolderInSpace')}
         chevron={false}
-        selected={from?.space.id === space.id && from.folderId == null}
+        checked={from?.space.id === space.id && from.folderId == null}
         onPress={() => pick(space, null)}
       />
     </View>
@@ -330,8 +330,8 @@ export function MoveToFolderSheet({
   return (
     <BottomSheet visible={visible} onClose={onClose} title={t('moveToFolder')}>
       <ScrollView
-        style={{ maxHeight: height * 0.68, marginHorizontal: -16 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 4, gap: 16 }}
+        style={[sheetList.style, { maxHeight: height * 0.68 }]}
+        contentContainerStyle={[sheetList.content, { gap: 16 }]}
         keyboardShouldPersistTaps="handled"
       >
         {folded ? (
