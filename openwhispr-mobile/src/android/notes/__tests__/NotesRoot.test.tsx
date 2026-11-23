@@ -97,7 +97,6 @@ jest.mock('../pendingDeletes', () => ({ useHiddenNoteIds: () => [] }));
 jest.mock('../rows', () => ({ dayOf: () => 'today', timeOf: () => '10:00' }));
 jest.mock('../CalendarPrompt', () => ({ CalendarPrompt: () => null }));
 jest.mock('../workspaceList', () => ({ useLoadWorkspaces: jest.fn() }));
-jest.mock('react-native-svg', () => ({ SvgXml: () => null }));
 let mockDefaultWorkspace: string | null = null;
 jest.mock('@/sync/teamSpacesCapability', () => ({
   getDefaultPrivateWorkspaceId: () => mockDefaultWorkspace,

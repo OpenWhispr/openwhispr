@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { SvgXml } from 'react-native-svg';
+import { Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
@@ -38,7 +37,6 @@ import {
 } from './library';
 import { FolderNameSheet, NewSheet, TodaySheet, WorkspaceSheet } from './sheets';
 import { useLoadWorkspaces } from './workspaceList';
-import { EMPTY_TEAMSPACES_SVG } from './emptyTeamspacesArt';
 import { eventIsNow, hideUpNext, minutesUntil, useUpNext } from './calendar';
 import { startNote, startUpload } from './start';
 import { useMeetingStart } from './meetingStart';
@@ -262,6 +260,10 @@ function Page({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Desktop's empty shared-space illustration (src/assets/empty-states/notes-shared-space-light.svg)
+// at 3x. Pre-rendered because Android's SVG renderer drops its filter and clips the middle tile.
+const EMPTY_TEAMSPACES = require('./assets/empty-teamspaces.png');
+
 /**
  * W4: a workspace where you're in no teamspace. Teamspaces are created and managed on desktop, so
  * there's nothing to do here but wait for one to be shared.
@@ -270,10 +272,9 @@ function EmptyTeamspaces() {
   const t = useNotesT();
   return (
     <View style={[edgeCard, { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 24 }]}>
-      <SvgXml
-        xml={EMPTY_TEAMSPACES_SVG}
-        width={112}
-        height={116}
+      <Image
+        source={EMPTY_TEAMSPACES}
+        style={{ width: 134, height: 139 }}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       />
