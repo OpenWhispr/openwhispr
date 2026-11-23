@@ -226,7 +226,7 @@ export const notesEnglish = {
   liveOnCloud: 'OpenWhispr Cloud',
   liveOnCloudBody: 'Words appear as people talk',
   onPhone: 'On device',
-  onPhoneBody: 'Afterwards · speakers named',
+  onPhoneBody: 'Speakers are named afterwards',
   change: 'Change',
   startRecording: 'Start recording',
   startFooter: 'Ask before you record people. The phone keeps recording with the screen off.',
