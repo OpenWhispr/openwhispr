@@ -7746,19 +7746,18 @@ class IPCHandlers {
               messageKey: CLEANUP_TRUNCATED_MESSAGE_KEY,
             });
           }
-          const outputText = extractAnthropicText(data);
+          let outputText = extractAnthropicText(data);
+          // With thinking turned off, Claude can open its text with a <thinking> block.
+          // A reply that is only that block has no answer, like one with no text at all.
+          if (thinking && outputText) {
+            outputText = outputText.replace(/^<thinking>[\s\S]*?<\/thinking>\s*/i, "") || null;
+          }
           if (outputText === null) {
             throw Object.assign(new Error(describeMissingAnthropicText(data)), {
               messageKey: CLEANUP_EMPTY_REPLY_MESSAGE_KEY,
             });
           }
-          // With thinking turned off, Claude can open its text with a <thinking> block.
-          return {
-            success: true,
-            text: thinking
-              ? outputText.replace(/^<thinking>[\s\S]*?<\/thinking>\s*/i, "")
-              : outputText,
-          };
+          return { success: true, text: outputText };
         } catch (error) {
           // proxyFetch also aborts on device-policy signals, so only our own
           // deadline counts as a timeout.

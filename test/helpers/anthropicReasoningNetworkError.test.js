@@ -258,6 +258,21 @@ test("a <thinking> block leaked with thinking off is not returned", async () => 
   assert.deepEqual(result, { success: true, text: "Cleaned dictation." });
 });
 
+test("a reply that is only a leaked <thinking> block fails as an empty reply", async () => {
+  fetchBehavior = async () =>
+    Response.json({
+      content: [{ type: "text", text: "<thinking>tidy it up</thinking>" }],
+      stop_reason: "end_turn",
+    });
+
+  const result = await anthropicHandler({}, "short dictation", "claude-opus-5", null, {
+    disableThinking: true,
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.cleanupEmptyReply");
+});
+
 // The deadline comes from AbortSignal.timeout; swapping it for a controller's
 // signal lets a test expire it at once instead of waiting 30 seconds.
 function stubDeadline(t) {
