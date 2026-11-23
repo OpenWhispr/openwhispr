@@ -101,6 +101,20 @@ test("new transcription models need an adapter that selects models and supports 
   assert.throws(() => assertCompatibleCatalog(live, base), /Unsupported streaming provider/);
 });
 
+test("a batch model joins a realtime-only provider only with a minimum app version", () => {
+  const batch = (minAppVersion) =>
+    edit((data) =>
+      provider(data, "transcriptionProviders", "deepgram").models.push({
+        id: "deepgram-batch",
+        name: "Batch",
+        description: "Fixture",
+        ...(minAppVersion ? { minAppVersion } : {}),
+      })
+    );
+  assert.throws(() => assertCompatibleCatalog(batch(), base), /Unsupported batch provider/);
+  assert.doesNotThrow(() => assertCompatibleCatalog(batch("99.0.0"), base));
+});
+
 test("Whisper files move while their hash vouches for the bytes", () => {
   const hashed = edit((data) => (data.whisperModels.base.sha256 = "a".repeat(64)));
   assert.doesNotThrow(() => assertCompatibleCatalog(hashed, base), "adding a hash is allowed");

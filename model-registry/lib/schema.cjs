@@ -481,8 +481,12 @@ function assertCompatibleCatalog(input, previousInput, { floor } = {}) {
             !model.streaming || oldProvider.models.some((m) => m.streaming),
             `Unsupported streaming provider ${provider.id}`
           );
+          // A batch model on a realtime-only provider needs app code, so it names the
+          // first app that has it; older readers never list it.
           requireCondition(
-            model.streaming || oldProvider.models.some((m) => !m.streaming),
+            model.streaming ||
+              !!model.minAppVersion ||
+              oldProvider.models.some((m) => !m.streaming),
             `Unsupported batch provider ${provider.id}`
           );
         }

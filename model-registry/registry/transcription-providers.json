@@ -193,6 +193,13 @@
         "description": "Immutable realtime transcripts, multilingual",
         "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_multilingual",
         "streaming": true
+      },
+      {
+        "id": "dictation",
+        "name": "Dictation",
+        "description": "Transcription and cleanup in one call, 32 languages",
+        "descriptionKey": "models.descriptions.transcription.assemblyai_dictation",
+        "minAppVersion": "1.11.2"
       }
     ],
     "defaultModel": "universal-3-6-pro"
