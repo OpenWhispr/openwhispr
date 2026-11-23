@@ -8,11 +8,16 @@
 // excluded on purpose — Korean separates words with spaces.
 const ENDS_WITH_CJK =
   /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3000-\u303f\uff00-\uff65\ufe10-\ufe1f\ufe30-\ufe4f]$/u;
+// Chinese text ends in General Punctuation quotes, ellipsis and dashes
+// (“ ” ‘ ’ …… ——), which are shared with Latin text, so they count as CJK
+// only after a CJK character: "He said “hi”" keeps its space.
+const ENDS_WITH_CJK_THEN_PUNCTUATION =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3000-\u303f\uff00-\uff65][\u2014\u2018\u2019\u201c\u201d\u2026]+$/u;
 
 function applySmartSpacing(text) {
   if (typeof text !== "string" || text.length === 0) return text;
   if (/\s$/.test(text)) return text;
-  if (ENDS_WITH_CJK.test(text)) return text;
+  if (ENDS_WITH_CJK.test(text) || ENDS_WITH_CJK_THEN_PUNCTUATION.test(text)) return text;
   return text + " ";
 }
 

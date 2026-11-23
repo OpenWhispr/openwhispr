@@ -59,3 +59,14 @@ test("returns non-string input unchanged", () => {
   assert.equal(applySmartSpacing(null), null);
   assert.equal(applySmartSpacing(undefined), undefined);
 });
+
+test("does not append a trailing space after CJK text ending in curly quotes, ellipsis or dash", () => {
+  assert.equal(applySmartSpacing("他说：“明天开会。”"), "他说：“明天开会。”");
+  assert.equal(applySmartSpacing("等一下……"), "等一下……");
+  assert.equal(applySmartSpacing("我们走吧——"), "我们走吧——");
+});
+
+test("keeps the trailing space after Latin text ending in curly quotes or ellipsis", () => {
+  assert.equal(applySmartSpacing("He said “hi”"), "He said “hi” ");
+  assert.equal(applySmartSpacing("Wait…"), "Wait… ");
+});
