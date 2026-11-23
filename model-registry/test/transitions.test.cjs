@@ -101,18 +101,36 @@ test("new transcription models need an adapter that selects models and supports 
   assert.throws(() => assertCompatibleCatalog(live, base), /Unsupported streaming provider/);
 });
 
-test("a batch model joins a realtime-only provider only with a minimum app version", () => {
-  const batch = (minAppVersion) =>
-    edit((data) =>
-      provider(data, "transcriptionProviders", "deepgram").models.push({
-        id: "deepgram-batch",
-        name: "Batch",
-        description: "Fixture",
-        ...(minAppVersion ? { minAppVersion } : {}),
-      })
+test("a batch model joins a realtime-only provider only from the app with its batch adapter", () => {
+  // AssemblyAI as it was before Dictation: realtime only.
+  const realtimeOnly = edit((data) => {
+    const assemblyai = provider(data, "transcriptionProviders", "assemblyai");
+    assemblyai.models = assemblyai.models.filter((m) => m.streaming);
+  });
+  const batch = (providerId, minAppVersion) =>
+    edit(
+      (data) =>
+        provider(data, "transcriptionProviders", providerId).models.push({
+          id: `${providerId}-batch`,
+          name: "Batch",
+          description: "Fixture",
+          ...(minAppVersion ? { minAppVersion } : {}),
+        }),
+      realtimeOnly
     );
-  assert.throws(() => assertCompatibleCatalog(batch(), base), /Unsupported batch provider/);
-  assert.doesNotThrow(() => assertCompatibleCatalog(batch("99.0.0"), base));
+  const check = (next) => assertCompatibleCatalog(next, realtimeOnly);
+  assert.throws(() => check(batch("assemblyai")), /Unsupported batch provider/);
+  assert.throws(
+    () => check(batch("assemblyai", "1.12.0")),
+    /Unsupported batch provider/,
+    "1.12.0 has no AssemblyAI batch adapter"
+  );
+  assert.doesNotThrow(() => check(batch("assemblyai", "1.12.1")));
+  assert.throws(
+    () => check(batch("deepgram", "99.0.0")),
+    /Unsupported batch provider/,
+    "no app has a Deepgram batch adapter"
+  );
 });
 
 test("Whisper files move while their hash vouches for the bytes", () => {

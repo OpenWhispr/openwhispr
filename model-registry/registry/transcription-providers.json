@@ -199,7 +199,7 @@
         "name": "Dictation",
         "description": "Transcription and cleanup in one call, 32 languages",
         "descriptionKey": "models.descriptions.transcription.assemblyai_dictation",
-        "minAppVersion": "1.11.2"
+        "minAppVersion": "1.12.1"
       }
     ],
     "defaultModel": "universal-3-6-pro"
