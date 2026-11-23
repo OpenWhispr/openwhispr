@@ -9,6 +9,7 @@ import { modelPath, modelReady } from '@/android/models';
 import { createLineClock, type LineSpan } from './lineClock';
 import { createLiveSpeakers } from './liveSpeakers';
 import { prefetchSpeakerModel } from './speakerModel';
+import { quickTurns } from './quickTurns';
 
 export const MODEL = 'meeting-speakers';
 const SAMPLE_RATE = 24000; // MeetingCaptureService only records meetings at 24 kHz.
@@ -66,8 +67,11 @@ export function startLiveSpeakers(options: {
     wrap(deps: RealtimeMeetingDeps = {}): RealtimeMeetingDeps {
       return {
         ...deps,
+        // Lines end at shorter pauses, so each tends to hold one voice (quickTurns.ts).
         wsFactory: clock.wrapFactory(
-          deps.wsFactory as ((url: string, protocols: string[]) => WebSocketLike) | undefined,
+          quickTurns(
+            deps.wsFactory as ((url: string, protocols: string[]) => WebSocketLike) | undefined,
+          ),
         ),
       };
     },
