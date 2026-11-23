@@ -68,6 +68,59 @@ const events = (received: { data: string }[]) =>
   received.map((event) => JSON.parse(event.data) as Record<string, unknown>);
 
 describe('live adapter', () => {
+  it("answers the transport's Stop handshake so a Deepgram meeting finishes", () => {
+    jest.useFakeTimers();
+    const received: { data: string }[] = [];
+    const adapter = deepgramLiveSocket('dg-key', 24000);
+    adapter.onmessage = (event) => received.push(event);
+    socket.open();
+    adapter.send(
+      JSON.stringify({ type: 'transcription_session.update', session: { turn_detection: null } }),
+    );
+    jest.runOnlyPendingTimers();
+    expect(events(received).at(-1)).toEqual({
+      type: 'transcription_session.updated',
+      session: { turn_detection: null },
+    });
+    adapter.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    expect(socket.sent.at(-1)).toBe('{"type":"Finalize"}');
+    socket.receive({
+      type: 'Results',
+      is_final: true,
+      from_finalize: true,
+      start: 1,
+      duration: 1,
+      channel: {
+        alternatives: [
+          {
+            transcript: 'Last words.',
+            words: [
+              { punctuated_word: 'Last', start: 1, end: 1.4, speaker: 1 },
+              { punctuated_word: 'words.', start: 1.4, end: 1.9, speaker: 1 },
+            ],
+          },
+        ],
+      },
+    });
+    const tail = events(received).slice(-2);
+    expect(tail[0]).toMatchObject({ transcript: 'Last words.', speaker: '1' });
+    expect(tail[1]).toEqual({ type: 'input_audio_buffer.committed' });
+    jest.useRealTimers();
+  });
+
+  it('lets Stop finish when the provider never answers the commit', () => {
+    jest.useFakeTimers();
+    const received: { data: string }[] = [];
+    const adapter = assemblyAiLiveSocket('token', 24000);
+    adapter.onmessage = (event) => received.push(event);
+    socket.open();
+    adapter.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+    expect(events(received)).toEqual([]);
+    jest.advanceTimersByTime(3000);
+    expect(events(received)).toEqual([{ type: 'input_audio_buffer.committed' }]);
+    jest.useRealTimers();
+  });
+
   it('turns audio appends into PCM bytes and a commit into the provider’s finish', () => {
     const adapter = liveAdapter({
       url: 'wss://x',

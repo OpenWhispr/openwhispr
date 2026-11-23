@@ -126,12 +126,14 @@ export function deepgramLiveSocket(apiKey: string, sampleRate: number, language?
       const text = alternative?.transcript ?? '';
       if (message.is_final || message.from_finalize) {
         const runs = speakerRuns(alternative?.words ?? []);
-        if (runs.length) {
+        if (runs.length)
           for (const run of runs) emit.final(run.text, run.startMs, run.endMs, run.speaker);
-          return;
+        else {
+          const startMs = Math.round((message.start ?? 0) * 1000);
+          emit.final(text, startMs, startMs + Math.round((message.duration ?? 0) * 1000));
         }
-        const startMs = Math.round((message.start ?? 0) * 1000);
-        emit.final(text, startMs, startMs + Math.round((message.duration ?? 0) * 1000));
+        // Finalize's answer: nothing more is coming for what was said before it.
+        if (message.from_finalize) emit.committed();
       } else emit.partial(text);
     },
   });

@@ -137,6 +137,8 @@ export function assemblyAiLiveSocket(
           words[words.length - 1]?.end ?? null,
           message.speaker_label ?? null,
         );
+        // A turn that ends after ForceEndpoint is its answer; otherwise this does nothing.
+        emit.committed();
       } else if (!message.end_of_turn) emit.partial(text);
     },
   });

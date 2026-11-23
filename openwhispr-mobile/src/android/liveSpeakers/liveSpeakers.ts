@@ -143,6 +143,12 @@ export function createLiveSpeakers(
       if (spans[span.itemId]) return;
       spans[span.itemId] = span;
       order.push(span.itemId);
+      // What the first lines carry tells, in logcat, whether the provider labels speakers.
+      if (order.length <= 3)
+        deps.log?.(
+          `[live-speakers] line ${order.length}: ${span.endMs - span.startMs}ms ` +
+            `provider=${span.providerSpeaker ?? 'none'}${span.estimated ? ' estimated' : ''}`,
+        );
       const provider = span.providerSpeaker;
       if (provider !== null && !NO_PROVIDER_SPEAKER.has(provider.toUpperCase())) {
         if (!labelled) {
