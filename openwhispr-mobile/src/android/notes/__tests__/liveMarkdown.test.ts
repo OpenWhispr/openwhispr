@@ -1,4 +1,10 @@
-import { liveMarkdownSpans, type LiveSpan } from '../liveMarkdownSpans';
+import {
+  lineAt,
+  liveMarkdownSpans,
+  parseNoteLines,
+  toggleCheck,
+  type LiveSpan,
+} from '../liveMarkdownSpans';
 
 const joined = (spans: LiveSpan[]) => spans.map((span) => span.text).join('');
 const styled = (text: string) =>
@@ -50,5 +56,42 @@ describe('liveMarkdownSpans', () => {
     expect(styled('** spaced ** and * spaced *')).toEqual([]);
     expect(styled('**unclosed')).toEqual([]);
     expect(styled('-not a bullet')).toEqual([]);
+  });
+});
+
+describe('parseNoteLines', () => {
+  const text = '## Plan\n- Call Sam\n- [ ] Book room\n- [x] Sent deck\n2. Second\nplain **bold**';
+  const lines = parseNoteLines(text);
+
+  it('reads each line kind and where it starts', () => {
+    expect(lines.map((line) => [line.kind, line.start])).toEqual([
+      ['heading', 0],
+      ['bullet', 8],
+      ['check', 19],
+      ['check', 35],
+      ['numbered', 51],
+      ['plain', 61],
+    ]);
+    expect(lines[0].heading).toBe(2);
+    expect([lines[2].checked, lines[3].checked]).toEqual([false, true]);
+  });
+
+  it('keeps marks out of the words a line shows', () => {
+    const shown = lines[5].inline.filter((span) => span.kind !== 'mark').map((span) => span.text);
+    expect(shown).toEqual(['plain ', 'bold']);
+  });
+
+  it('ticks and clears a checkbox in place', () => {
+    const ticked = toggleCheck(text, lines[2]);
+    expect(ticked.split('\n')[2]).toBe('- [x] Book room');
+    expect(toggleCheck(ticked, parseNoteLines(ticked)[3]).split('\n')[3]).toBe('- [ ] Sent deck');
+    expect(toggleCheck(text, lines[1])).toBe(text);
+  });
+
+  it('finds the caret line', () => {
+    expect(lineAt(text, 0)).toBe(0);
+    expect(lineAt(text, 7)).toBe(0);
+    expect(lineAt(text, 8)).toBe(1);
+    expect(lineAt(text, text.length)).toBe(5);
   });
 });

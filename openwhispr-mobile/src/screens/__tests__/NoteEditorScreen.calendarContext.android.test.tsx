@@ -29,7 +29,7 @@ jest.mock('@/screens/NoteEditorScreen', () => {
 import React from 'react';
 import { ProviderExecutionError } from '@/services/providers/ProviderExecutionError';
 import { Alert, Modal, Platform } from 'react-native';
-import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import NoteEditorScreen from '@/screens/NoteEditorScreen.android';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { generateNoteTitle } from '@/utils/generateTitle';
@@ -50,6 +50,17 @@ type RenderedNode = { children: (RenderedNode | string)[] };
 /** The notes input shows its text as styled children (no `value`); join them back. */
 function noteText(node: RenderedNode | string): string {
   return typeof node === 'string' ? node : node.children.map(noteText).join('');
+}
+/** Typed notes as shown: the formatted read view, or the editor when they're empty or open. */
+function shownNotes(): string {
+  const read = screen.queryByTestId('note-content-read');
+  return noteText(read ?? screen.getByTestId('note-content-input'));
+}
+/** The notes editor, opened from the read view the way a tap does. */
+function notesInput() {
+  const edit = screen.queryByTestId('note-content-edit');
+  if (edit) fireEvent.press(edit);
+  return screen.getByTestId('note-content-input');
 }
 
 // Jest resolves the default file; load the Android entry Metro picks on Android.
@@ -1075,7 +1086,7 @@ describe('NoteEditorScreen body tabs', () => {
     const { queryByTestId, getByTestId } = render(<NoteEditorScreen />);
     expect(getByTestId('note-tab-enhanced')).toBeTruthy();
     expect(queryByTestId('note-tab-transcript')).toBeNull();
-    expect(getByTestId('note-content-input')).toBeTruthy();
+    expect(notesInput()).toBeTruthy();
   });
 
   it('opens a plain note with generated notes on Summary', () => {
@@ -1096,7 +1107,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNotesState.notes = [mockNote];
     const { getByTestId, getByText, queryByText } = render(<NoteEditorScreen />);
     expect(queryByText('## Summary')).toBeNull();
-    if (tab === 'notes') expect(noteText(getByTestId('note-content-input'))).toBe(shown);
+    if (tab === 'notes') expect(shownNotes()).toBe(shown);
     else expect(getByText(shown)).toBeTruthy();
   });
 
@@ -1120,7 +1131,7 @@ describe('NoteEditorScreen body tabs', () => {
 
     fireEvent.press(getByTestId('note-tab-notes'));
 
-    expect(noteText(getByTestId('note-content-input'))).toBe('Alice owns the launch checklist.');
+    expect(shownNotes()).toBe('Alice owns the launch checklist.');
     expect(queryByText('Transcribing audio...')).toBeNull();
   });
 
@@ -1183,12 +1194,10 @@ describe('NoteEditorScreen body tabs', () => {
     expect(queryByTestId('note-content-input')).toBeNull();
 
     fireEvent.press(getByTestId('note-tab-notes'));
-    expect(noteText(getByTestId('note-content-input'))).toBe('');
-    expect(getByTestId('note-content-input').props.editable).toBe(true);
-    expect(getByTestId('note-content-input').props.placeholder).toBe(
-      'Type your notes, or dictate with the bubble',
-    );
-    fireEvent.changeText(getByTestId('note-content-input'), 'Send the revised checklist.');
+    expect(shownNotes()).toBe('');
+    expect(notesInput().props.editable).toBe(true);
+    expect(notesInput().props.placeholder).toBe('Type your notes, or dictate with the bubble');
+    fireEvent.changeText(notesInput(), 'Send the revised checklist.');
     act(() => {
       jest.advanceTimersByTime(800);
     });
@@ -1215,8 +1224,8 @@ describe('NoteEditorScreen body tabs', () => {
     expect(getByTestId('note-tab-transcript')).toBeTruthy();
 
     fireEvent.press(getByTestId('note-tab-notes'));
-    expect(noteText(getByTestId('note-content-input'))).toBe('Send the revised checklist.');
-    expect(getByTestId('note-content-input').props.editable).toBe(true);
+    expect(shownNotes()).toBe('Send the revised checklist.');
+    expect(notesInput().props.editable).toBe(true);
 
     fireEvent.press(getByTestId('note-tab-transcript'));
     expect(getByText('Alice can take the first pass.')).toBeTruthy();
@@ -1241,14 +1250,14 @@ describe('NoteEditorScreen body tabs', () => {
 
     fireEvent.press(bodyTab);
 
-    expect(noteText(getByTestId('note-content-input'))).toBe('Alice can take the first pass.');
+    expect(shownNotes()).toBe('Alice can take the first pass.');
   });
 
   it('saves edits to the typed meeting notes without learning dictionary corrections', () => {
     jest.useFakeTimers();
     const { getByTestId } = render(<NoteEditorScreen />);
     fireEvent.press(getByTestId('note-tab-notes'));
-    const input = getByTestId('note-content-input');
+    const input = notesInput();
     expect(noteText(input)).toBe('Alice owns the launch checklist.');
 
     fireEvent.changeText(input, 'Alice owns the launch checklist and the demo.');
@@ -1271,7 +1280,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNotesState.notes = [mockNote];
     mockSegments = [];
     const { getByTestId } = render(<NoteEditorScreen />);
-    fireEvent.changeText(getByTestId('note-content-input'), 'Alice owns the launch checklists.');
+    fireEvent.changeText(notesInput(), 'Alice owns the launch checklists.');
     act(() => {
       jest.advanceTimersByTime(800);
     });
@@ -1289,7 +1298,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockSegments = [];
     const { getByTestId } = render(<NoteEditorScreen />);
     fireEvent.press(getByTestId('note-tab-notes'));
-    fireEvent.changeText(getByTestId('note-content-input'), 'Alice owns the launch checklists.');
+    fireEvent.changeText(notesInput(), 'Alice owns the launch checklists.');
     act(() => {
       jest.advanceTimersByTime(800);
     });
@@ -1303,7 +1312,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNotesState.notes = [mockNote];
     mockSegments = [];
     const { getByTestId } = render(<NoteEditorScreen />);
-    fireEvent.changeText(getByTestId('note-content-input'), 'Call Synty on Friday.');
+    fireEvent.changeText(notesInput(), 'Call Synty on Friday.');
     act(() => {
       jest.advanceTimersByTime(800);
     });
@@ -1321,7 +1330,9 @@ describe('NoteEditorScreen body tabs', () => {
     mockSegments = [];
     const { getByTestId, getByText } = render(<NoteEditorScreen />);
     fireEvent.press(getByTestId('note-tab-notes'));
-    expect(getByTestId('note-content-input').props.editable).toBe(false);
+    // The notes read as formatted text with nothing to tap into the editor.
+    expect(screen.getByTestId('note-content-read')).toBeTruthy();
+    expect(screen.queryByTestId('note-content-edit')).toBeNull();
     expect(getByText('You can edit these notes once the recording stops.')).toBeTruthy();
   });
 
@@ -1345,7 +1356,7 @@ describe('NoteEditorScreen body tabs', () => {
     mockNotesState.notes = [mockNote];
     rerender(<NoteEditorScreen />);
 
-    expect(getByTestId('note-content-input')).toBeTruthy();
+    expect(notesInput()).toBeTruthy();
   });
 
   it('saves edits to the generated notes when Done is pressed', () => {
@@ -1970,11 +1981,11 @@ it('keeps typed content across a language change and deletes with Undo instead o
     mockSegments = [];
     mockSpeakers = [];
     const view = render(<NoteEditorScreen />);
-    fireEvent.changeText(view.getByTestId('note-content-input'), 'Keep my typed draft');
+    fireEvent.changeText(notesInput(), 'Keep my typed draft');
     mockEditorLanguage = 'ar';
     view.rerender(<NoteEditorScreen />);
     expect(view.getByPlaceholderText('Title').props.value).toBe('Literal title');
-    expect(noteText(view.getByTestId('note-content-input'))).toBe('Keep my typed draft');
+    expect(shownNotes()).toBe('Keep my typed draft');
 
     fireEvent.press(view.getByLabelText('More'));
     fireEvent.press(view.getByTestId('menu-delete-note'));

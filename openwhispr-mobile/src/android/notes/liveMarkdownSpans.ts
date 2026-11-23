@@ -1,12 +1,28 @@
 /**
  * The Notes tab's own notes stay Markdown (what desktop's editor and iOS read and write), but are
- * shown styled as they're typed: bold reads bold, italics slant, headings grow, and the marks
- * that make them (`**`, `_`, `## `, `- `, `- [ ] `) fade back. The text is never changed, so the
- * caret, the selection and what's saved stay exactly what was typed.
+ * shown as formatted text: read as rendered lines with no marks, and edited with the marks shown
+ * only on the line being written. The text itself is never rewritten for display, so the caret,
+ * the selection and what's saved stay exactly what was typed.
  */
 export type LiveSpanKind = 'plain' | 'mark' | 'bold' | 'italic' | 'boldItalic' | 'code';
 
 export type LiveSpan = { text: string; kind: LiveSpanKind; heading?: 1 | 2 | 3 };
+
+export type NoteLineKind = 'plain' | 'heading' | 'bullet' | 'check' | 'numbered';
+
+export type NoteLine = {
+  /** Offset of the line's first character in the whole text. */
+  start: number;
+  /** The line as typed, marks included. */
+  text: string;
+  /** The block mark the line starts with (`## `, `- `, `- [ ] `, `1. `), or ''. */
+  mark: string;
+  kind: NoteLineKind;
+  heading?: 1 | 2 | 3;
+  checked?: boolean;
+  /** Spans of the text after the block mark. */
+  inline: LiveSpan[];
+};
 
 // A line's block mark: a heading, a checklist item (before bullets, which share `- `), a bullet,
 // or a numbered item.
@@ -18,7 +34,8 @@ const BLOCK_MARK = /^(#{1,3} |[-*+] \[[ xX]\] |[-*+] |\d+[.)] )/;
 const INLINE =
   /(`[^`\n]+`)|(\*\*\*(?=\S)[^*\n]*?\S\*\*\*)|(\*\*(?=\S)[^*\n]*?\S\*\*)|((?<![\p{L}\p{N}_])__(?=\S)[^_\n]*?\S__(?![\p{L}\p{N}_]))|(\*(?=[^\s*])[^*\n]*?[^\s*]\*|\*[^\s*]\*)|((?<![\p{L}\p{N}_])_(?=[^\s_])[^_\n]*?[^\s_]_(?![\p{L}\p{N}_])|(?<![\p{L}\p{N}_])_[^\s_]_(?![\p{L}\p{N}_]))/gu;
 
-function inlineSpans(text: string, heading: LiveSpan['heading'], out: LiveSpan[]): void {
+function inlineSpans(text: string, heading: LiveSpan['heading']): LiveSpan[] {
+  const out: LiveSpan[] = [];
   const push = (piece: string, kind: LiveSpanKind) => {
     if (piece) out.push(heading ? { text: piece, kind, heading } : { text: piece, kind });
   };
@@ -40,21 +57,69 @@ function inlineSpans(text: string, heading: LiveSpan['heading'], out: LiveSpan[]
     last = at + raw.length;
   }
   push(text.slice(last), 'plain');
+  return out;
+}
+
+/** Splits notes into lines with their block mark and inline spans. */
+export function parseNoteLines(text: string): NoteLine[] {
+  let start = 0;
+  return text.split('\n').map((line) => {
+    const mark = line.match(BLOCK_MARK)?.[0] ?? '';
+    const kind: NoteLineKind = !mark
+      ? 'plain'
+      : mark.startsWith('#')
+        ? 'heading'
+        : mark.includes('[')
+          ? 'check'
+          : /^\d/.test(mark)
+            ? 'numbered'
+            : 'bullet';
+    const heading = kind === 'heading' ? (Math.min(mark.length - 1, 3) as 1 | 2 | 3) : undefined;
+    const parsed: NoteLine = {
+      start,
+      text: line,
+      mark,
+      kind,
+      inline: inlineSpans(line.slice(mark.length), heading),
+    };
+    if (heading) parsed.heading = heading;
+    if (kind === 'check') parsed.checked = /\[[xX]\]/.test(mark);
+    start += line.length + 1;
+    return parsed;
+  });
 }
 
 /** Splits notes into styled spans whose texts join back to exactly `text`. */
 export function liveMarkdownSpans(text: string): LiveSpan[] {
   const out: LiveSpan[] = [];
-  const lines = text.split('\n');
+  const lines = parseNoteLines(text);
   lines.forEach((line, index) => {
-    const block = line.match(BLOCK_MARK)?.[0] ?? '';
-    const heading = block.startsWith('#')
-      ? (Math.min(block.length - 1, 3) as 1 | 2 | 3)
-      : undefined;
-    if (block)
-      out.push(heading ? { text: block, kind: 'mark', heading } : { text: block, kind: 'mark' });
-    inlineSpans(line.slice(block.length), heading, out);
+    if (line.mark) {
+      out.push(
+        line.heading
+          ? { text: line.mark, kind: 'mark', heading: line.heading }
+          : { text: line.mark, kind: 'mark' },
+      );
+    }
+    out.push(...line.inline);
     if (index < lines.length - 1) out.push({ text: '\n', kind: 'plain' });
   });
   return out;
+}
+
+/** The text with one checklist line's box ticked or cleared. */
+export function toggleCheck(text: string, line: NoteLine): string {
+  if (line.kind !== 'check') return text;
+  const box = line.mark.indexOf('[') + 1;
+  const at = line.start + box;
+  return text.slice(0, at) + (line.checked ? ' ' : 'x') + text.slice(at + 1);
+}
+
+/** The index of the line holding `offset`. */
+export function lineAt(text: string, offset: number): number {
+  let line = 0;
+  for (let index = 0; index < Math.min(offset, text.length); index++) {
+    if (text[index] === '\n') line++;
+  }
+  return line;
 }
