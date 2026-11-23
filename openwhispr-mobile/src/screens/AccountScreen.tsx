@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
+import { PrivateWorkspaceSwitcher } from '@/components/notes/PrivateWorkspaceSwitcher';
 import { PlanBadge } from '@/components/ui/PlanBadge';
 import { UsageMeter } from '@/components/ui/UsageMeter';
 import { SystemIcon } from '@/components/ui/SystemIcon';
@@ -319,6 +320,8 @@ export default function AccountScreen() {
             </View>
           </Pressable>
         )}
+
+        <PrivateWorkspaceSwitcher />
 
         {user && usage ? (
           <SettingsSection title="Usage">
