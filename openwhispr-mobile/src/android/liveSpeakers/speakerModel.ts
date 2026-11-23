@@ -4,15 +4,18 @@ const MODEL = 'meeting-speakers';
 /** After a failed fetch, the next try waits this long, then twice as long, up to RETRY_MAX_MS. */
 export const RETRY_FIRST_MS = 60_000;
 const RETRY_MAX_MS = 30 * 60_000;
+/** Tries after a failure before waiting for the next launch. */
+export const RETRIES_PER_LAUNCH = 5;
 let fetching: Promise<void> | null = null;
 let retry: ReturnType<typeof setTimeout> | null = null;
 let wait = RETRY_FIRST_MS;
+let retries = 0;
 
 /**
  * Fetches the 42 MB speaker model quietly, on Wi-Fi or mobile data, for Cloud and On device
  * meetings alike, so speakers are named without anyone choosing it. No prompt and no switch: a
- * failure tries again a minute later (doubling, up to half an hour) and at the next launch, and
- * a meeting that ends before the model is here keeps its transcript without speaker names.
+ * failure tries again a minute later (doubling, up to half an hour, five times) and at the next
+ * launch. A meeting that ends before the model is here keeps its transcript without speaker names.
  */
 export function prefetchSpeakerModel(): Promise<void> {
   if (retry) {
@@ -24,16 +27,21 @@ export function prefetchSpeakerModel(): Promise<void> {
     if (await modelReady(MODEL)) return;
     await downloadAndroidModel(MODEL);
     wait = RETRY_FIRST_MS;
+    retries = 0;
     console.info('[live-speakers] speaker model downloaded');
   })()
     .catch((error: unknown) => {
       console.info(
         `[live-speakers] speaker model not fetched: ${error instanceof Error ? error.message : String(error)}`,
       );
+      if (retries >= RETRIES_PER_LAUNCH) return;
+      retries += 1;
       retry = setTimeout(() => {
         retry = null;
         void prefetchSpeakerModel();
       }, wait);
+      // A pending retry never keeps a process alive on its own (Node in tests; a no-op on device).
+      (retry as { unref?: () => void }).unref?.();
       wait = Math.min(wait * 2, RETRY_MAX_MS);
     })
     .finally(() => {
