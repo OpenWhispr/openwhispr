@@ -1,6 +1,6 @@
 const { z } = require("zod");
 const { createHash } = require("node:crypto");
-const { selectCatalogForVersion, isRegistryVersion } = require("./registrySelection.js");
+const { selectCatalogForVersion, isRegistryVersion, isModelSupported } = require("./registrySelection.js");
 
 const SCHEMA_VERSION = 2;
 const text = z.string().min(1).max(4096);
@@ -435,6 +435,9 @@ function assertModelTransition(next, previous, section, label) {
   if (ARTIFACTS[section]) assertArtifactTransition(next, previous, section, label);
 }
 
+// Realtime-only providers whose app also has a batch adapter, and the first app with it.
+const BATCH_ADAPTER_SINCE = { assemblyai: "1.12.1" };
+
 const engine = (model) => [
   model.runtime || "offline",
   model.modelType || "transducer",
@@ -487,8 +490,15 @@ function assertCompatibleCatalog(input, previousInput, { floor } = {}) {
             !model.streaming || oldProvider.models.some((m) => m.streaming),
             `Unsupported streaming provider ${provider.id}`
           );
+          // A batch model on a realtime-only provider needs the app's batch adapter for
+          // it, so it names at least the first app that has one; older readers never list it.
+          const batchSince = BATCH_ADAPTER_SINCE[provider.id];
           requireCondition(
-            model.streaming || oldProvider.models.some((m) => !m.streaming),
+            model.streaming ||
+              oldProvider.models.some((m) => !m.streaming) ||
+              (!!batchSince &&
+                !!model.minAppVersion &&
+                isModelSupported({ minAppVersion: batchSince }, model.minAppVersion)),
             `Unsupported batch provider ${provider.id}`
           );
         }

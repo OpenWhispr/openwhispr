@@ -196,6 +196,13 @@
         "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_multilingual",
         "streaming": true,
         "legacy": true
+      },
+      {
+        "id": "dictation",
+        "name": "Dictation",
+        "description": "Transcription and cleanup in one call, 32 languages",
+        "descriptionKey": "models.descriptions.transcription.assemblyai_dictation",
+        "minAppVersion": "1.12.1"
       }
     ],
     "defaultModel": "universal-3-6-pro"
