@@ -3,7 +3,6 @@ import { Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import type { GoogleCalendarEvent } from '@/data/calendarTypes';
-import type { Space } from '@/data/spacesTypes';
 import { AppFont } from '@/lib/fonts';
 import { home } from '../home/kit';
 import { BottomSheet } from '../settings/kit';
@@ -13,7 +12,7 @@ import { Card, LinkButton, ListRow, NoteTile, notesLook } from './look';
 import { eventIsNow, eventTimeRange, minutesUntil } from './calendar';
 import { timeOf } from './rows';
 import { useNotesT } from './strings';
-import type { NotesScope } from './library';
+import type { Workspace } from './library';
 import { parseCalendarParticipants } from '@/lib/calendar/meetingContext';
 
 /** A row with a tile, a title and a line under it; used by every sheet here. */
@@ -140,52 +139,33 @@ export function NewSheet({
   );
 }
 
-/** L3: "Show notes from" — All spaces (the default), Private, then each teamspace. */
-export function SpaceSheet({
+/** W2: the workspaces you're in, the current one ticked; picking one switches Notes. */
+export function WorkspaceSheet({
   visible,
   onClose,
-  scope,
-  spaces,
+  workspaces,
+  currentId,
   onPick,
 }: {
   visible: boolean;
   onClose: () => void;
-  scope: NotesScope;
-  spaces: Space[];
-  onPick: (scope: NotesScope) => void;
+  workspaces: Workspace[];
+  currentId: string | null;
+  onPick: (workspaceId: string | null) => void;
 }) {
   const t = useNotesT();
   return (
-    <BottomSheet visible={visible} onClose={onClose} title={t('showNotesFrom')}>
+    <BottomSheet visible={visible} onClose={onClose} title={t('workspace')}>
       <Card>
-        <ListRow
-          icon="Folder"
-          iconColor={home.secondary}
-          title={t('allSpaces')}
-          subtitle={t('allSpacesBody')}
-          chevron={false}
-          selected={scope.kind === 'all'}
-          onPress={() => onPick({ kind: 'all' })}
-        />
-        <ListRow
-          icon="Lock"
-          iconColor={home.secondary}
-          title={t('private')}
-          subtitle={t('onlyYou')}
-          chevron={false}
-          selected={scope.kind === 'private'}
-          onPress={() => onPick({ kind: 'private' })}
-        />
-        {spaces.map((space) => (
+        {workspaces.map((workspace) => (
           <ListRow
-            key={space.id}
+            key={workspace.id ?? 'none'}
             icon="Users"
-            iconColor={home.secondary}
-            title={space.name}
-            subtitle={space.memberCount ? t('people', { count: space.memberCount }) : undefined}
+            title={workspace.name || t('teamspaces')}
+            subtitle={t('privatePlusTeams', { count: workspace.teams.length })}
             chevron={false}
-            selected={scope.kind === 'team' && scope.spaceId === space.id}
-            onPress={() => onPick({ kind: 'team', spaceId: space.id })}
+            selected={workspace.id === currentId}
+            onPress={() => onPick(workspace.id)}
           />
         ))}
       </Card>

@@ -4,7 +4,7 @@
  * only on the line being written. The text itself is never rewritten for display, so the caret,
  * the selection and what's saved stay exactly what was typed.
  */
-export type LiveSpanKind = 'plain' | 'mark' | 'bold' | 'italic' | 'boldItalic' | 'code';
+export type LiveSpanKind = 'plain' | 'mark' | 'bold' | 'italic' | 'boldItalic' | 'code' | 'mention';
 
 export type LiveSpan = { text: string; kind: LiveSpanKind; heading?: 1 | 2 | 3 };
 
@@ -31,8 +31,10 @@ const BLOCK_MARK = /^(#{1,3} |[-*+] \[[ xX]\] |[-*+] |\d+[.)] )/;
 // Inline marks as CommonMark reads them in ordinary notes: `code`, ***both***, **bold** / __bold__,
 // *italic* / _italic_. Underscores only count at word edges, so snake_case stays plain. A run
 // can't start or end on a space, matching how `**  x**` stays literal.
+// A person mention as summaries write it, `[@Josh](mention:josh%40openwhispr.com)`: shown as "@Josh"
+// with the link part hidden like any other mark.
 const INLINE =
-  /(`[^`\n]+`)|(\*\*\*(?=\S)[^*\n]*?\S\*\*\*)|(\*\*(?=\S)[^*\n]*?\S\*\*)|((?<![\p{L}\p{N}_])__(?=\S)[^_\n]*?\S__(?![\p{L}\p{N}_]))|(\*(?=[^\s*])[^*\n]*?[^\s*]\*|\*[^\s*]\*)|((?<![\p{L}\p{N}_])_(?=[^\s_])[^_\n]*?[^\s_]_(?![\p{L}\p{N}_])|(?<![\p{L}\p{N}_])_[^\s_]_(?![\p{L}\p{N}_]))/gu;
+  /(\[@[^\]\n]+\]\(mention:[^)\s]*\))|(`[^`\n]+`)|(\*\*\*(?=\S)[^*\n]*?\S\*\*\*)|(\*\*(?=\S)[^*\n]*?\S\*\*)|((?<![\p{L}\p{N}_])__(?=\S)[^_\n]*?\S__(?![\p{L}\p{N}_]))|(\*(?=[^\s*])[^*\n]*?[^\s*]\*|\*[^\s*]\*)|((?<![\p{L}\p{N}_])_(?=[^\s_])[^_\n]*?[^\s_]_(?![\p{L}\p{N}_])|(?<![\p{L}\p{N}_])_[^\s_]_(?![\p{L}\p{N}_]))/gu;
 
 function inlineSpans(text: string, heading: LiveSpan['heading']): LiveSpan[] {
   const out: LiveSpan[] = [];
@@ -44,11 +46,19 @@ function inlineSpans(text: string, heading: LiveSpan['heading']): LiveSpan[] {
     const raw = match[0];
     const at = match.index ?? 0;
     push(text.slice(last, at), 'plain');
-    const [width, kind]: [number, LiveSpanKind] = match[1]
+    if (match[1]) {
+      const label = raw.indexOf('](');
+      push('[', 'mark');
+      push(raw.slice(1, label), 'mention');
+      push(raw.slice(label), 'mark');
+      last = at + raw.length;
+      continue;
+    }
+    const [width, kind]: [number, LiveSpanKind] = match[2]
       ? [1, 'code']
-      : match[2]
+      : match[3]
         ? [3, 'boldItalic']
-        : match[3] || match[4]
+        : match[4] || match[5]
           ? [2, 'bold']
           : [1, 'italic'];
     push(raw.slice(0, width), 'mark');

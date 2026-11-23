@@ -25,6 +25,13 @@ export const notesEnglish = {
   uploadAudio: 'Upload audio',
   emptyFolder: 'Nothing in {{folder}} yet',
   emptyFolderBody: 'New notes you start here are filed in this folder.',
+  // Workspace switcher (W2)
+  workspace: 'Workspace',
+  privatePlusTeams: 'Private + {{count}} teamspaces',
+  privatePlusTeams_one: 'Private + 1 teamspace',
+  workspaceTeamspaces: '{{name}} teamspaces',
+  noTeamspacesTitle: 'No teamspaces yet',
+  noTeamspacesBody: 'Teamspaces shared with you will show up here.',
   // Space switcher
   showNotesFrom: 'Show notes from',
   allSpaces: 'All spaces',
@@ -101,6 +108,7 @@ export const notesEnglish = {
   noSummary: 'No summary yet',
   noSummaryBody: 'Turn the transcript into decisions, action items and the main points.',
   noSummaryBodyNote: 'Turn your notes into a clean summary with the main points.',
+  summaryPlaceholder: 'Write the summary…',
   writeSummary: 'Write summary',
   templateLabel: 'Template: {{name}}',
   noTextModel: 'Download a text model in Settings → Processing',

@@ -10,9 +10,10 @@ import { safeHaptics } from '@/lib/utils';
 import { useNotesStore } from '@/store/useNotesStore';
 import { home } from '../home/kit';
 import { BottomSheet, showToast, TextAction } from '../settings/kit';
-import { edgeField, look } from '../settings/look';
+import { edgeField } from '../settings/look';
 import { GlassButton } from '../processingFable/look';
-import { Card, ListRow, NoteTile, SectionLabel, notesLook, sheetList } from './look';
+import { Card, ListRow, SectionLabel, SpaceTile, notesLook, sheetList } from './look';
+import { workspacesOf } from './library';
 import { notesT, useNotesT } from './strings';
 
 /** Undo stays on the Moved toast this long (Figma N4). */
@@ -84,25 +85,6 @@ export function moveNoteWithUndo(note: Note, from: Place, to: Place, label: stri
       : undefined,
     { durationMs: MOVE_UNDO_MS },
   );
-}
-
-function SpaceTile({ space }: { space: Space }) {
-  if (space.emoji)
-    return (
-      <View
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          backgroundColor: look.idleFill,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ fontSize: 18, lineHeight: 22 }}>{space.emoji}</Text>
-      </View>
-    );
-  return <NoteTile icon="Users" color={home.secondary} />;
 }
 
 /**
@@ -249,68 +231,74 @@ export function MoveToFolderSheet({
     );
   }
   if (folded) {
-    const rows = teamspaces
-      .map((space) => {
-        const folders = foldersOf(space);
-        const shown = matches(space.name) ? folders : folders.filter((f) => matches(f.name));
-        if (needle && shown.length === 0 && !matches(space.name)) return null;
-        const expanded = Boolean(needle) || open[space.id];
-        return (
-          <View key={space.id}>
-            <Pressable
-              cssInterop={false}
-              accessibilityRole="button"
-              accessibilityState={{ expanded }}
-              onPress={() => setOpen((state) => ({ ...state, [space.id]: !state[space.id] }))}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
-                paddingLeft: 14,
-                paddingRight: 14,
-                paddingVertical: 12,
-                minHeight: 60,
-                backgroundColor: pressed ? 'rgba(0,0,0,0.04)' : 'transparent',
-              })}
-            >
-              <SpaceTile space={space} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text numberOfLines={1} style={notesLook.rowTitle}>
-                  {space.name}
-                </Text>
-                <Text numberOfLines={1} style={notesLook.rowSub}>
-                  {[
-                    space.memberCount ? t('membersCount', { count: space.memberCount }) : null,
-                    t('foldersCount', { count: folders.length }),
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </Text>
-              </View>
-              <SystemIcon
-                name="circle"
-                mdName={expanded ? 'ChevronUp' : 'ChevronDown'}
-                size={20}
-                color={home.secondary}
-              />
-            </Pressable>
-            {expanded
-              ? [
-                  ...(shown.length === 0 ? [rootRow(space, true)] : []),
-                  ...shown.map((folder) => folderRow(space, folder, true)),
+    const rowOf = (space: Space) => {
+      const folders = foldersOf(space);
+      const shown = matches(space.name) ? folders : folders.filter((f) => matches(f.name));
+      if (needle && shown.length === 0 && !matches(space.name)) return null;
+      const expanded = Boolean(needle) || open[space.id];
+      return (
+        <View key={space.id}>
+          <Pressable
+            cssInterop={false}
+            accessibilityRole="button"
+            accessibilityState={{ expanded }}
+            onPress={() => setOpen((state) => ({ ...state, [space.id]: !state[space.id] }))}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              paddingLeft: 14,
+              paddingRight: 14,
+              paddingVertical: 12,
+              minHeight: 60,
+              backgroundColor: pressed ? 'rgba(0,0,0,0.04)' : 'transparent',
+            })}
+          >
+            <SpaceTile emoji={space.emoji} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text numberOfLines={1} style={notesLook.rowTitle}>
+                {space.name}
+              </Text>
+              <Text numberOfLines={1} style={notesLook.rowSub}>
+                {[
+                  space.memberCount ? t('membersCount', { count: space.memberCount }) : null,
+                  t('foldersCount', { count: folders.length }),
                 ]
-              : null}
-          </View>
-        );
-      })
-      .filter(Boolean);
-    if (rows.length > 0)
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            </View>
+            <SystemIcon
+              name="circle"
+              mdName={expanded ? 'ChevronUp' : 'ChevronDown'}
+              size={20}
+              color={home.secondary}
+            />
+          </Pressable>
+          {expanded
+            ? [
+                ...(shown.length === 0 ? [rootRow(space, true)] : []),
+                ...shown.map((folder) => folderRow(space, folder, true)),
+              ]
+            : null}
+        </View>
+      );
+    };
+    // One group per workspace, headed by its name (Figma W): a private note can go to any.
+    for (const workspace of workspacesOf(teamspaces)) {
+      const rows = workspace.teams.map(rowOf).filter(Boolean);
+      if (rows.length === 0) continue;
       sections.push(
-        <View key="teamspaces" style={{ gap: 8 }}>
-          <SectionLabel label={t('teamspaces')} />
+        <View key={`workspace-${workspace.id}`} style={{ gap: 8 }}>
+          <SectionLabel
+            label={
+              workspace.name ? t('workspaceTeamspaces', { name: workspace.name }) : t('teamspaces')
+            }
+          />
           <Card>{rows}</Card>
         </View>,
       );
+    }
   } else {
     for (const space of teamspaces) {
       const folders = foldersOf(space).filter((f) => matches(f.name) || matches(space.name));

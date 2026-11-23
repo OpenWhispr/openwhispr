@@ -37,6 +37,10 @@ function spanStyle(span: LiveSpan): TextStyle {
       style.fontFamily = 'monospace';
       style.fontSize = 15;
       break;
+    case 'mention':
+      style.color = home.accent;
+      style.fontFamily = AppFont.medium;
+      break;
     default:
       break;
   }

@@ -74,8 +74,12 @@ jest.mock('../../settings/kit', () => {
 });
 jest.mock('../../processingFable/look', () => ({ GlassButton: () => null }));
 jest.mock('../strings', () => ({
-  useNotesT: () => (key: string, options?: { count?: number }) =>
-    options?.count != null ? `${key}:${options.count}` : key,
+  useNotesT: () => (key: string, options?: { count?: number; name?: string }) =>
+    options?.count != null
+      ? `${key}:${options.count}`
+      : options?.name != null
+        ? `${key}:${options.name}`
+        : key,
   notesT: (key: string) => key,
 }));
 jest.mock('../calendar', () => ({
@@ -92,9 +96,17 @@ jest.mock('../folderMenu', () => ({ useFolderMenu: () => ({ open: jest.fn(), she
 jest.mock('../pendingDeletes', () => ({ useHiddenNoteIds: () => [] }));
 jest.mock('../rows', () => ({ dayOf: () => 'today', timeOf: () => '10:00' }));
 jest.mock('../CalendarPrompt', () => ({ CalendarPrompt: () => null }));
+jest.mock('../workspaceList', () => ({ useLoadWorkspaces: jest.fn() }));
+let mockDefaultWorkspace: string | null = null;
+jest.mock('@/sync/teamSpacesCapability', () => ({
+  getDefaultPrivateWorkspaceId: () => mockDefaultWorkspace,
+}));
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: (select: (state: unknown) => unknown) => select({ user: { id: 'u1' } }),
+}));
 
 import NotesRoot from '../NotesRoot';
-import { setNotesScope } from '../library';
+import { useKnownWorkspaces, useNotesWorkspace } from '../library';
 
 const note = (id: number, fields: object = {}) => ({
   id,
@@ -118,7 +130,11 @@ beforeEach(() => {
   mockNotes = [note(1)];
   mockSpaces = [];
   mockUpNext = { next: null, events: [], now: 0 };
-  act(() => setNotesScope({ kind: 'all' }));
+  act(() => {
+    useNotesWorkspace.setState({ workspaceId: undefined });
+    useKnownWorkspaces.setState({ owner: null, list: [] });
+    mockDefaultWorkspace = null;
+  });
 });
 
 it('L2: with no notes, one big mic records a meeting and two links do the rest', () => {
@@ -131,11 +147,11 @@ it('L2: with no notes, one big mic records a meeting and two links do the rest',
   expect(view.queryByLabelText('new')).toBeNull();
 });
 
-it('L1: Recent, Private folders and search; no switcher without a teamspace', () => {
+it('W1: Private folders and search, no Recent, no switcher without a teamspace', () => {
   const view = render(<NotesRoot />);
-  expect(view.getByText('recent')).toBeTruthy();
+  expect(view.queryByText('recent')).toBeNull();
   expect(view.getByText('Meetings')).toBeTruthy();
-  expect(view.queryByLabelText('showNotesFrom')).toBeNull();
+  expect(view.queryByLabelText('workspace')).toBeNull();
   fireEvent.press(view.getByText('Meetings'));
   expect(mockPush).toHaveBeenCalledWith({
     pathname: '/(tabs)/(notes)/notes',
@@ -143,22 +159,114 @@ it('L1: Recent, Private folders and search; no switcher without a teamspace', ()
   });
 });
 
-it('L3: teamspace members get the switcher; one space shows only its Recent and folders', () => {
-  mockSpaces = [{ id: 9, kind: 'team', name: 'Design team', memberCount: 6, myRole: 'member' }];
-  mockNotes = [note(1), note(2, { folderId: 20, spaceId: 9, title: 'Design review' })];
+const workspaceSpaces = [
+  {
+    id: 9,
+    kind: 'team',
+    name: 'Design',
+    emoji: '🎨',
+    workspaceId: 'w1',
+    workspaceName: 'OpenWhispr',
+  },
+  {
+    id: 10,
+    kind: 'team',
+    name: 'Engineering',
+    emoji: null,
+    workspaceId: 'w1',
+    workspaceName: 'OpenWhispr',
+  },
+  {
+    id: 11,
+    kind: 'team',
+    name: 'Contracts',
+    emoji: null,
+    workspaceId: 'w2',
+    workspaceName: 'Acme Legal',
+  },
+];
+
+it('W1: one heading with the workspace’s name and one card of its teamspaces, with note counts', () => {
+  mockSpaces = workspaceSpaces.slice(0, 2);
+  mockNotes = [
+    note(1),
+    note(2, { folderId: 20, spaceId: 9 }),
+    note(3, { folderId: null, spaceId: 9 }),
+    note(4, { folderId: null, spaceId: 10 }),
+  ];
   const view = render(<NotesRoot />);
-  // Every space by default (L1): a section per teamspace under Private.
-  expect(view.getByText('DESIGN TEAM')).toBeTruthy();
-  expect(view.getByText('Reviews')).toBeTruthy();
+  expect(view.getByText('PRIVATE')).toBeTruthy();
+  expect(view.getByText('WORKSPACETEAMSPACES:OPENWHISPR')).toBeTruthy();
+  expect(view.getByText('🎨')).toBeTruthy();
+  expect(view.getByText('Design')).toBeTruthy();
+  expect(view.getByText('2')).toBeTruthy();
+  // One workspace: no ▾.
+  expect(view.queryByLabelText('workspace')).toBeNull();
+  fireEvent.press(view.getByText('Engineering'));
+  expect(mockPush).toHaveBeenLastCalledWith({
+    pathname: '/(tabs)/(notes)/notes',
+    params: { spaceId: '10' },
+  });
+});
+
+it('W2: the ▾ lists your workspaces, the current one ticked, and picking one switches the page', () => {
+  mockSpaces = workspaceSpaces;
+  mockDefaultWorkspace = 'w2';
+  const view = render(<NotesRoot />);
+  // Your default workspace shows until you pick one.
+  expect(view.getByText('WORKSPACETEAMSPACES:ACME LEGAL')).toBeTruthy();
+  expect(view.getByText('Contracts')).toBeTruthy();
+  expect(view.queryByText('Design')).toBeNull();
   fireEvent.press(view.getByText('notes'));
   expect(view.getByTestId('sheet')).toBeTruthy();
-  expect(view.getByText('allSpaces')).toBeTruthy();
-  fireEvent.press(view.getByText('Design team'));
-  expect(view.getByText('Design team')).toBeTruthy();
-  expect(view.queryByText('Meetings')).toBeNull();
-  expect(view.getByText('Reviews')).toBeTruthy();
-  expect(view.getByText('FOLDERS')).toBeTruthy();
-  expect(view.getByText(/Design review/)).toBeTruthy();
+  expect(view.getByText('privatePlusTeams:2')).toBeTruthy();
+  fireEvent.press(view.getByText('OpenWhispr'));
+  expect(view.getByText('WORKSPACETEAMSPACES:OPENWHISPR')).toBeTruthy();
+  expect(view.getByText('Design')).toBeTruthy();
+  expect(view.queryByText('Contracts')).toBeNull();
+  // Private stays in every workspace.
+  expect(view.getByText('Meetings')).toBeTruthy();
+});
+
+it('W2: lists every workspace you belong to, even one where you’re in no teamspace', () => {
+  mockSpaces = workspaceSpaces.slice(0, 2);
+  act(() =>
+    useKnownWorkspaces.setState({
+      owner: 'u1',
+      list: [
+        { id: 'w1', name: 'OpenWhispr' },
+        { id: 'w3', name: 'New Hanover County' },
+      ],
+    }),
+  );
+  const view = render(<NotesRoot />);
+  fireEvent.press(view.getByText('notes'));
+  expect(view.getByText('privatePlusTeams:0')).toBeTruthy();
+  fireEvent.press(view.getByText('New Hanover County'));
+  expect(view.getByText('WORKSPACETEAMSPACES:NEW HANOVER COUNTY')).toBeTruthy();
+  // W4: a card, no create button (teamspaces are made on desktop).
+  expect(view.getByText('noTeamspacesTitle')).toBeTruthy();
+  expect(view.getByText('noTeamspacesBody')).toBeTruthy();
+  expect(view.getByText('Meetings')).toBeTruthy();
+  expect(view.queryByText('Design')).toBeNull();
+});
+
+it('W1: without a default, opens on the workspace with the most of your teamspaces', () => {
+  mockSpaces = workspaceSpaces;
+  act(() => useKnownWorkspaces.setState({ owner: 'u1', list: [{ id: 'w0', name: 'Aardvark' }] }));
+  const view = render(<NotesRoot />);
+  expect(view.getByText('WORKSPACETEAMSPACES:OPENWHISPR')).toBeTruthy();
+  expect(view.queryByText('WORKSPACETEAMSPACES:AARDVARK')).toBeNull();
+});
+
+it('W2: ignores a workspace list read by another account', () => {
+  mockSpaces = workspaceSpaces.slice(0, 2);
+  act(() =>
+    useKnownWorkspaces.setState({ owner: 'someone-else', list: [{ id: 'w9', name: 'Theirs' }] }),
+  );
+  const view = render(<NotesRoot />);
+  expect(view.queryByLabelText('workspace')).toBeNull();
+  expect(view.queryByText('Theirs')).toBeNull();
 });
 
 it('L5/L7: an Up next card records the meeting and opens today’s other meetings', () => {

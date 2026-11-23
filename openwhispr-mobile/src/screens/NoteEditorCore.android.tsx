@@ -29,7 +29,7 @@ import { countWord } from '@/android/dictionary/transcriptFix';
 import { buildDictationHintTiers, buildEffectiveDictionaryWords } from '@/lib/dictationHints';
 import { useActionProcessing } from '@/hooks/useActionProcessing';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
-import { EditableMarkdown } from '@/components/notes/EditableMarkdown.android';
+import { SummaryEditor, type SummaryEditorHandle } from '@/android/notes/SummaryEditor';
 import { LiveMarkdown, NotesReadView } from '@/android/notes/liveMarkdown';
 import { toggleCheck } from '@/android/notes/liveMarkdownSpans';
 import { resolveNoteBodyView, type NoteBodyView } from '@/lib/notes/noteBodyTabs';
@@ -275,6 +275,8 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
     const [exportVisible, setExportVisible] = useState(false);
     const [templateVisible, setTemplateVisible] = useState(false);
     const [notesFocused, setNotesFocused] = useState(false);
+    const [summaryFocused, setSummaryFocused] = useState(false);
+    const summaryEditorRef = useRef<SummaryEditorHandle>(null);
     // Typed notes read as formatted text; a tap swaps in the editor until it loses focus.
     const [notesEditing, setNotesEditing] = useState(false);
     const [cloudSheet, setCloudSheet] = useState<{
@@ -1498,13 +1500,14 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
                       />
                     </Pressable>
                   </View>
-                  <EditableMarkdown
+                  <SummaryEditor
+                    ref={summaryEditorRef}
                     key={`${noteId}-${enhancedEditorRevision}`}
                     content={note?.enhancedContent ?? ''}
                     editable={!isEnhancing}
                     onChange={handleEnhancedChange}
                     onEditingChange={handleEnhancedEditingChange}
-                    showEditButton={false}
+                    onFocusChange={setSummaryFocused}
                   />
                   <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
                     <SoftChip
@@ -1669,6 +1672,11 @@ export function createNoteEditorScreen(platform?: NoteEditorPlatform) {
           </ScrollView>
           {notesFocused && keyboardHeight > 0 && shownTab === 'notes' ? (
             <FormatBar onFormat={formatNotes} onDone={() => contentInputRef.current?.blur()} />
+          ) : summaryFocused && keyboardHeight > 0 && shownTab === 'enhanced' ? (
+            <FormatBar
+              onFormat={(kind) => summaryEditorRef.current?.format(kind)}
+              onDone={() => summaryEditorRef.current?.blur()}
+            />
           ) : null}
         </View>
         <FixWordCard

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
@@ -24,22 +24,19 @@ import {
   NoteTile,
   NotesHeader,
   SectionLabel,
+  SpaceTile,
   edgeCard,
   notesLook,
 } from './look';
 import {
   defaultFolderFor,
-  notesInScope,
-  privateSpaceId,
-  setNotesScope,
-  teamSpaces,
+  setNotesWorkspace,
   useAllNotes,
+  useCurrentWorkspace,
   useLibraryRevision,
-  useNotesScope,
-  type NotesScope,
 } from './library';
-import { dayOf } from './rows';
-import { FolderNameSheet, NewSheet, SpaceSheet, TodaySheet } from './sheets';
+import { FolderNameSheet, NewSheet, TodaySheet, WorkspaceSheet } from './sheets';
+import { useLoadWorkspaces } from './workspaceList';
 import { eventIsNow, hideUpNext, minutesUntil, useUpNext } from './calendar';
 import { startNote, startUpload } from './start';
 import { useMeetingStart } from './meetingStart';
@@ -47,36 +44,34 @@ import { CalendarPrompt } from './CalendarPrompt';
 import { useFolderMenu } from './folderMenu';
 import { useNotesT } from './strings';
 
-/** Figma L1 (folders first), L2 (empty), L3 (teamspace switcher) and L5–L8 (calendar). */
+/**
+ * Figma W1 (one workspace: Private's folders, then its teamspaces), W2 (the workspace picker),
+ * L2 (empty) and L5–L8 (calendar).
+ */
 export default function NotesRoot() {
   const t = useNotesT();
   const scroll = useRef<ScrollView>(null);
   useScrollToTop(scroll);
   useNavigationBarCanvas(tabColors.bar);
-  const { folders, spaces, isInitialized, initialize, createFolder } = useNotesStore();
+  const { folders, isInitialized, initialize, createFolder } = useNotesStore();
   useEffect(() => {
     if (!isInitialized) initialize();
   }, [isInitialized, initialize]);
   const revision = useLibraryRevision();
   const allNotes = useAllNotes(revision);
-  const scope = useNotesScope((state) => state.scope);
-  const teams = useMemo(() => teamSpaces(spaces), [spaces]);
-  const privateId = useMemo(() => privateSpaceId(), []);
-  // A teamspace that went away (left, deleted) drops the switcher back to every space.
-  useEffect(() => {
-    if (scope.kind === 'team' && !teams.some((space) => space.id === scope.spaceId))
-      setNotesScope({ kind: 'all' });
-  }, [scope, teams]);
-  const scopedNotes = useMemo(
-    () => notesInScope(allNotes, scope, privateId),
-    [allNotes, scope, privateId],
-  );
-  const latest = scopedNotes[0] ?? null;
+  const { workspaces, current } = useCurrentWorkspace();
+  useLoadWorkspaces();
   // Counted from the notes themselves, so a note waiting out its Undo isn't counted.
   const counts = useMemo(() => {
     const map = new Map<number, number>();
     for (const note of allNotes)
       if (note.folderId != null) map.set(note.folderId, (map.get(note.folderId) ?? 0) + 1);
+    return map;
+  }, [allNotes]);
+  const spaceCounts = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const note of allNotes)
+      if (note.spaceId != null) map.set(note.spaceId, (map.get(note.spaceId) ?? 0) + 1);
     return map;
   }, [allNotes]);
   const { refreshing, onRefresh } = useManualSyncRefresh();
@@ -86,24 +81,15 @@ export default function NotesRoot() {
   const undoShowing = useSettingsToast((state) => state.action != null);
 
   const [newVisible, setNewVisible] = useState(false);
-  const [spacesVisible, setSpacesVisible] = useState(false);
+  const [workspacesVisible, setWorkspacesVisible] = useState(false);
   const [todayVisible, setTodayVisible] = useState(false);
   const [newFolderVisible, setNewFolderVisible] = useState(false);
 
-  const showPrivate = scope.kind !== 'team';
-  const shownTeams =
-    scope.kind === 'all'
-      ? teams
-      : scope.kind === 'team'
-        ? teams.filter((space) => space.id === scope.spaceId)
-        : [];
-  const title =
-    scope.kind === 'all'
-      ? t('notes')
-      : scope.kind === 'private'
-        ? t('private')
-        : (teams.find((space) => space.id === scope.spaceId)?.name ?? t('notes'));
-  const targetFolder = defaultFolderFor(scope, folders);
+  const targetFolder = defaultFolderFor(folders);
+  // "OpenWhispr teamspaces" (Figma W1, W4).
+  const teamspacesLabel = current.name
+    ? t('workspaceTeamspaces', { name: current.name })
+    : t('teamspaces');
   const empty = allNotes.length === 0;
 
   const openFolder = (folder: Folder) => {
@@ -119,10 +105,6 @@ export default function NotesRoot() {
       pathname: '/(tabs)/(notes)/notes',
       params: withNotesRouteOwner({ spaceId: String(spaceId) }),
     });
-  };
-  const openRecent = () => {
-    safeHaptics('selection');
-    router.push({ pathname: '/(tabs)/(notes)/notes', params: { recent: '1' } });
   };
   const openSearch = () => router.push('/android-notes-search');
   const meeting = useMeetingStart({ folderId: targetFolder });
@@ -157,9 +139,9 @@ export default function NotesRoot() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <NotesHeader
-          title={title}
-          onTitlePress={teams.length > 0 ? () => setSpacesVisible(true) : undefined}
-          titleHint={t('showNotesFrom')}
+          title={t('notes')}
+          onTitlePress={workspaces.length > 1 ? () => setWorkspacesVisible(true) : undefined}
+          titleHint={t('workspace')}
           right={<IconButton icon="Search" label={t('search')} onPress={openSearch} />}
         />
         {/* L5 needs a connected calendar; until then (and until ×) C1 asks for one. */}
@@ -174,17 +156,7 @@ export default function NotesRoot() {
             onHide={() => hideUpNext(next.id)}
           />
         ) : null}
-        {latest ? (
-          <Card>
-            <ListRow
-              icon="AudioLines"
-              title={t('recent')}
-              subtitle={`${latest.title?.trim() || t('untitled')} · ${dayOf(latest.updatedAt, t)}`}
-              onPress={openRecent}
-            />
-          </Card>
-        ) : null}
-        {showPrivate && folders.length > 0 ? (
+        {folders.length > 0 ? (
           <>
             <SectionLabel label={t('private')} />
             <Card>
@@ -201,30 +173,28 @@ export default function NotesRoot() {
             </Card>
           </>
         ) : null}
-        {shownTeams.map((space) => {
-          const own = useNotesStore.getState().getSpaceFolders(space.id);
-          return (
-            <React.Fragment key={space.id}>
-              <SectionLabel label={scope.kind === 'team' ? t('folders') : space.name} />
-              <Card>
-                {own.length > 0 ? (
-                  own.map((folder) => (
-                    <ListRow
-                      key={folder.id}
-                      icon="Users"
-                      title={folder.name}
-                      value={String(counts.get(folder.id) ?? 0)}
-                      onPress={() => openFolder(folder)}
-                      onLongPress={() => folderMenu.open(folder, true, space.myRole === 'admin')}
-                    />
-                  ))
-                ) : (
-                  <ListRow icon="Users" title={space.name} onPress={() => openSpace(space.id)} />
-                )}
-              </Card>
-            </React.Fragment>
-          );
-        })}
+        {current.teams.length === 0 && current.id != null ? (
+          <>
+            <SectionLabel label={teamspacesLabel} />
+            <EmptyTeamspaces />
+          </>
+        ) : null}
+        {current.teams.length > 0 ? (
+          <>
+            <SectionLabel label={teamspacesLabel} />
+            <Card>
+              {current.teams.map((space) => (
+                <ListRow
+                  key={space.id}
+                  tile={<SpaceTile emoji={space.emoji} />}
+                  title={space.name}
+                  value={String(spaceCounts.get(space.id) ?? 0)}
+                  onPress={() => openSpace(space.id)}
+                />
+              ))}
+            </Card>
+          </>
+        ) : null}
       </ScrollView>
       {undoShowing ? null : <NewButton onPress={() => setNewVisible(true)} bottom={16} />}
       <NewSheet
@@ -247,15 +217,16 @@ export default function NotesRoot() {
           setNewFolderVisible(true);
         }}
       />
-      <SpaceSheet
-        visible={spacesVisible}
-        onClose={() => setSpacesVisible(false)}
-        scope={scope}
-        spaces={teams}
-        onPick={(picked: NotesScope) => {
+      <WorkspaceSheet
+        visible={workspacesVisible}
+        onClose={() => setWorkspacesVisible(false)}
+        workspaces={workspaces}
+        currentId={current.id}
+        onPick={(workspaceId) => {
           safeHaptics('selection');
-          setNotesScope(picked);
-          setSpacesVisible(false);
+          setNotesWorkspace(workspaceId);
+          setWorkspacesVisible(false);
+          scroll.current?.scrollTo({ y: 0, animated: false });
         }}
       />
       <TodaySheet
@@ -270,9 +241,7 @@ export default function NotesRoot() {
         onClose={() => setNewFolderVisible(false)}
         title={t('newFolder')}
         submitLabel={t('newFolder')}
-        onSubmit={(name) =>
-          scope.kind === 'team' ? createFolder(name, scope.spaceId) : createFolder(name)
-        }
+        onSubmit={(name) => createFolder(name)}
       />
       {folderMenu.sheets}
       {meeting.sheet}
@@ -288,6 +257,34 @@ function Page({ children }: { children: React.ReactNode }) {
     >
       {children}
     </SafeAreaView>
+  );
+}
+
+// Desktop's empty shared-space illustration (src/assets/empty-states/notes-shared-space-light.svg)
+// at 3x. Pre-rendered because Android's SVG renderer drops its filter and clips the middle tile.
+const EMPTY_TEAMSPACES = require('./assets/empty-teamspaces.png');
+
+/**
+ * W4: a workspace where you're in no teamspace. Teamspaces are created and managed on desktop, so
+ * there's nothing to do here but wait for one to be shared.
+ */
+function EmptyTeamspaces() {
+  const t = useNotesT();
+  return (
+    <View style={[edgeCard, { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 24 }]}>
+      <Image
+        source={EMPTY_TEAMSPACES}
+        style={{ width: 134, height: 139 }}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      />
+      <Text style={[notesLook.rowTitle, { marginTop: 8, textAlign: 'center' }]}>
+        {t('noTeamspacesTitle')}
+      </Text>
+      <Text style={[notesLook.rowSub, { marginTop: 4, textAlign: 'center' }]}>
+        {t('noTeamspacesBody')}
+      </Text>
+    </View>
   );
 }
 

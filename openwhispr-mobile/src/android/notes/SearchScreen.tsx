@@ -14,11 +14,11 @@ import { edge } from '../settings/look';
 import { useNavigationBarCanvas } from '../navigationBar';
 import { BackButton, Card, Chip, SectionLabel, notesLook } from './look';
 import {
-  notesInScope,
+  notesInWorkspace,
   privateSpaceId,
   useAllNotes,
   useLibraryRevision,
-  useNotesScope,
+  useCurrentWorkspace,
 } from './library';
 import { NoteRow, dayOf, kindLabel } from './rows';
 import {
@@ -58,13 +58,13 @@ export default function SearchScreen() {
 
   const revision = useLibraryRevision();
   const allNotes = useAllNotes(revision);
-  const scope = useNotesScope((state) => state.scope);
+  const { current: workspace } = useCurrentWorkspace();
   const spaces = useNotesStore((state) => state.spaces);
   const folders = useNotesStore((state) => state.folders);
   const privateId = useMemo(() => privateSpaceId(), []);
   const scoped = useMemo(
-    () => notesInScope(allNotes, scope, privateId),
-    [allNotes, scope, privateId],
+    () => notesInWorkspace(allNotes, workspace, privateId),
+    [allNotes, workspace, privateId],
   );
   const transcripts = useRef(new Map<number, string>());
   const hits = useMemo(
@@ -111,11 +111,9 @@ export default function SearchScreen() {
   const place =
     folderFilter != null
       ? (folderNames.get(folderFilter) ?? t('private'))
-      : scope.kind === 'private'
-        ? t('private')
-        : scope.kind === 'team'
-          ? (spaces.find((space) => space.id === scope.spaceId)?.name ?? t('everywhere'))
-          : t('everywhere');
+      : workspace.teams.length > 0 && workspace.name
+        ? workspace.name
+        : t('everywhere');
 
   const openHit = (hit: SearchHit) => {
     safeHaptics('selection');
