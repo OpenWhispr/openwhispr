@@ -31,7 +31,10 @@ class InsertionService : AccessibilityService() {
   private val poll = Runnable { pollField() }
   private var lastLogged: String? = null
   private fun readField(node: AccessibilityNodeInfo): Field =
-    InsertionPlan.field(node.text?.toString().orEmpty(), node.textSelectionStart, node.textSelectionEnd, node.isShowingHintText)
+    InsertionPlan.field(
+      node.text?.toString().orEmpty(), node.textSelectionStart, node.textSelectionEnd, node.isShowingHintText,
+      node.hintText?.toString(),
+    )
 
   override fun onServiceConnected() { instance = this; refreshTyping(); DictationService.emit?.invoke("onStatusChange", emptyMap()) }
   // Focus and window changes only decide whether the bubble shows. They check whether the focused

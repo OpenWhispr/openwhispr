@@ -12,9 +12,18 @@ object InsertionPlan {
    * Reads a field as accessibility reports it. A field showing its placeholder holds nothing, whether it flags the
    * placeholder as a hint or not: WhatsApp's empty message box reports "Message" as its text, unflagged, with no
    * caret. A focused field with text in it always has a caret, so no caret (-1) means the field is empty.
+   * WhatsApp's empty search box does have a caret: it holds one zero-width space, reports "Search…" in its place,
+   * unflagged and with no hint, and puts the caret at 1, so the words went in mid-placeholder ("S coffee at
+   * 6earch…"). A placeholder-shaped text (ending in an ellipsis) with no hint reported and the caret at 0 or 1
+   * reads as empty too; typed text ending in "…" with the caret parked at its start is the only thing it mistakes.
    */
-  fun field(text: String, start: Int, end: Int, showingHint: Boolean): Field =
-    if (showingHint || (start == -1 && end == -1)) Field("", 0, 0) else Field(text, start, end)
+  fun field(text: String, start: Int, end: Int, showingHint: Boolean, hint: String? = null): Field =
+    if (showingHint || (start == -1 && end == -1) || unflaggedPlaceholder(text, start, end, hint)) Field("", 0, 0)
+    else Field(text, start, end)
+
+  private fun unflaggedPlaceholder(text: String, start: Int, end: Int, hint: String?): Boolean =
+    hint.isNullOrEmpty() && start == end && start in 0..1 && text.length > 1 &&
+      (text.endsWith("…") || text.endsWith("..."))
 
   /**
    * Words dictated over a selection replace exactly that selection, so they go in only while the field is

@@ -49,6 +49,22 @@ class InsertionPlanTest {
     assertEquals(Field("", 0, 0), InsertionPlan.field("", -1, -1, showingHint = false))
   }
 
+  @Test fun anUnflaggedPlaceholderWithACaretReadsAsEmpty() {
+    // WhatsApp's empty search box on a Galaxy A73: "Search…", unflagged, no hint, caret at 1.
+    assertEquals(Field("", 0, 0), InsertionPlan.field("Search…", 1, 1, showingHint = false, hint = null))
+    assertEquals(Field("", 0, 0), InsertionPlan.field("Search...", 0, 0, showingHint = false, hint = ""))
+    val (text, start, end) = InsertionPlan.field("Search…", 1, 1, showingHint = false)
+    assertEquals(Insertion("coffee at 6", 11), InsertionPlan.plan(text, start, end, text, start, end, "coffee at 6"))
+  }
+
+  @Test fun typedTextEndingInAnEllipsisIsKept() {
+    // The caret past the start, a hint reported, or a selection: it's the user's text.
+    assertEquals(Field("Wait…", 5, 5), InsertionPlan.field("Wait…", 5, 5, showingHint = false))
+    assertEquals(Field("Search…", 1, 1), InsertionPlan.field("Search…", 1, 1, showingHint = false, hint = "Search…"))
+    assertEquals(Field("Wait…", 0, 5), InsertionPlan.field("Wait…", 0, 5, showingHint = false))
+    assertEquals(Field("Hi", 1, 1), InsertionPlan.field("Hi", 1, 1, showingHint = false))
+  }
+
   @Test fun aFieldWithACaretKeepsItsText() {
     assertEquals(Field("Hi ", 3, 3), InsertionPlan.field("Hi ", 3, 3, showingHint = false))
     assertEquals(Field("Hi you", 3, 6), InsertionPlan.field("Hi you", 3, 6, showingHint = false))
