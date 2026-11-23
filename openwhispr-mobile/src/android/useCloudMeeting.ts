@@ -4,6 +4,11 @@ import {
   type RealtimeSession,
   type RealtimeUtterance,
 } from './RealtimeMeetingWsService';
+import {
+  finishSpeakers,
+  startSpeakers,
+  type LiveSpeakerResult,
+} from '@/android/liveSpeakers/live';
 
 export type CloudMeetingStatus = 'connecting' | 'live' | 'reconnecting' | 'error';
 
@@ -27,6 +32,10 @@ export interface CloudMeeting {
   stop: () => Promise<RealtimeUtterance[]>;
   cancel: () => Promise<void>;
   stopRequested: boolean;
+  /** Speaker label per utterance id, a beat behind the text. */
+  speakerLabels?: Record<string, string>;
+  /** What speaker labelling knew when the meeting stopped (after `stop` settles). */
+  speakerResult?: () => LiveSpeakerResult | null;
 }
 
 /**
@@ -51,6 +60,9 @@ export function useCloudMeeting({
   const [partialText, setPartialText] = useState('');
   const [utterances, setUtterances] = useState<RealtimeUtterance[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [speakerLabels, setSpeakerLabels] = useState<Record<string, string>>({});
+  const liveRef = useRef<ReturnType<typeof startSpeakers>>(null);
+  const speakerResultRef = useRef<LiveSpeakerResult | null>(null);
 
   const controllerRef = useRef<AbortController | null>(null);
   const finishRef = useRef<Promise<RealtimeUtterance[]> | null>(null);
@@ -69,10 +81,17 @@ export function useCloudMeeting({
     controllerRef.current = controller;
     setStopRequested(false);
     setUtterances([]);
+    setSpeakerLabels({});
+    speakerResultRef.current = null;
     setPartialText('');
     setError(null);
     setElapsedSeconds(0);
     setStatus('connecting');
+    // Before the transport, so speaker labelling counts the meeting's first audio frame.
+    const live = startSpeakers(noteId, (labels) => {
+      if (!cancelled && !controller.signal.aborted) setSpeakerLabels(labels);
+    });
+    liveRef.current = live;
     const startup = startRealtimeMeetingWs(
       { language, noteId, signal: controller.signal },
       {
@@ -109,6 +128,7 @@ export function useCloudMeeting({
           if (!cancelled && !controller.signal.aborted && !stoppedRef.current) setStatus('live');
         },
       },
+      live?.wrap(),
     );
     startupRef.current = startup;
     startup
@@ -132,6 +152,7 @@ export function useCloudMeeting({
       // Stop and save opens the note at once (Figma R2b); a finish already running ends the
       // session itself, so leaving the screen must not cut off its last words.
       if (finishRef.current) return;
+      liveRef.current?.stop();
       controller.abort();
       void sessionRef.current?.stop();
       sessionRef.current = null;
@@ -159,6 +180,7 @@ export function useCloudMeeting({
     finishRef.current = (async () => {
       const session = sessionRef.current;
       if (!session) {
+        liveRef.current?.stop();
         controllerRef.current?.abort();
         await startupRef.current?.then(
           (started) => started.stop(),
@@ -174,6 +196,7 @@ export function useCloudMeeting({
         throw new CloudMeetingFinishError(cause, session.utterances());
       } finally {
         if (sessionRef.current === session) sessionRef.current = null;
+        speakerResultRef.current = await finishSpeakers(liveRef.current).catch(() => null);
       }
     })();
     return finishRef.current;
@@ -181,6 +204,7 @@ export function useCloudMeeting({
 
   const cancel = useCallback(async (): Promise<void> => {
     stoppedRef.current = true;
+    liveRef.current?.stop();
     controllerRef.current?.abort();
     const session = sessionRef.current;
     sessionRef.current = null;
@@ -191,5 +215,17 @@ export function useCloudMeeting({
         () => undefined,
       );
   }, []);
-  return { status, error, partialText, utterances, elapsedSeconds, stop, cancel, stopRequested };
+  const speakerResult = useCallback(() => speakerResultRef.current, []);
+  return {
+    status,
+    error,
+    partialText,
+    utterances,
+    elapsedSeconds,
+    stop,
+    cancel,
+    stopRequested,
+    speakerLabels,
+    speakerResult,
+  };
 }

@@ -137,6 +137,15 @@ interface NativeDictation {
     numberOfSpeakers: number,
   ): Promise<LocalDiarizationResult>;
   cancelDiarization(): void;
+  /** A voiceprint for one span of a WAV that may still be recording, on a low-priority thread. */
+  speakerEmbedding(
+    uri: string,
+    modelDirectory: string,
+    startMs: number,
+    endMs: number,
+  ): Promise<number[]>;
+  /** Drops queued voiceprints and frees the speaker model. */
+  releaseSpeakerEmbedder(): void;
 }
 export const AndroidDictation =
   Platform.OS === 'android' ? requireNativeModule<NativeDictation>('AndroidDictation') : null;

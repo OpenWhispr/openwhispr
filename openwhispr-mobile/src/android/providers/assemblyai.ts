@@ -95,6 +95,8 @@ type AssemblyMessage = {
   end_of_turn?: boolean;
   turn_is_formatted?: boolean;
   words?: { start?: number; end?: number }[];
+  /** "A", "B"…, or "PENDING" for a turn too short to attribute. */
+  speaker_label?: string;
   error?: string;
 };
 
@@ -110,6 +112,8 @@ export function assemblyAiLiveSocket(
     sample_rate: String(sampleRate),
     encoding: 'pcm_s16le',
     format_turns: 'true',
+    // A speaker per turn (a small streaming add-on on the key's bill).
+    speaker_labels: 'true',
     token,
   });
   return liveAdapter({
@@ -127,7 +131,12 @@ export function assemblyAiLiveSocket(
       // A finished turn arrives twice; the formatted copy is the one kept.
       if (message.end_of_turn && message.turn_is_formatted) {
         const words = message.words ?? [];
-        emit.final(text, words[0]?.start ?? null, words[words.length - 1]?.end ?? null);
+        emit.final(
+          text,
+          words[0]?.start ?? null,
+          words[words.length - 1]?.end ?? null,
+          message.speaker_label ?? null,
+        );
       } else if (!message.end_of_turn) emit.partial(text);
     },
   });

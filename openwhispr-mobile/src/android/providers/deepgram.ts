@@ -51,9 +51,46 @@ type DeepgramMessage = {
   from_finalize?: boolean;
   start?: number;
   duration?: number;
-  channel?: { alternatives?: { transcript?: string }[] };
+  channel?: {
+    alternatives?: {
+      transcript?: string;
+      words?: {
+        word?: string;
+        punctuated_word?: string;
+        start?: number;
+        end?: number;
+        speaker?: number;
+      }[];
+    }[];
+  };
   description?: string;
 };
+
+/** A finished result split where the speaker changes, one line per speaker. */
+export function speakerRuns(
+  words: {
+    word?: string;
+    punctuated_word?: string;
+    start?: number;
+    end?: number;
+    speaker?: number;
+  }[],
+): { text: string; startMs: number; endMs: number; speaker: string }[] {
+  if (!words.length || words.some((word) => typeof word.speaker !== 'number')) return [];
+  const runs: { text: string; startMs: number; endMs: number; speaker: string }[] = [];
+  for (const word of words) {
+    const text = word.punctuated_word ?? word.word ?? '';
+    const speaker = String(word.speaker);
+    const startMs = Math.round((word.start ?? 0) * 1000);
+    const endMs = Math.round((word.end ?? word.start ?? 0) * 1000);
+    const last = runs[runs.length - 1];
+    if (last && last.speaker === speaker) {
+      last.text += ` ${text}`;
+      last.endMs = endMs;
+    } else runs.push({ text, startMs, endMs, speaker });
+  }
+  return runs;
+}
 
 /**
  * A live Deepgram Nova-3 socket that speaks the OpenAI Realtime events the meeting transport
@@ -68,6 +105,8 @@ export function deepgramLiveSocket(apiKey: string, sampleRate: number, language?
     punctuate: 'true',
     smart_format: 'true',
     interim_results: 'true',
+    // A speaker per word (Deepgram's live diarizer; a small add-on on the key's bill).
+    diarize: 'true',
     language: languageParam(language),
   });
   return liveAdapter({
@@ -83,8 +122,14 @@ export function deepgramLiveSocket(apiKey: string, sampleRate: number, language?
         return;
       }
       if (message.type !== 'Results') return;
-      const text = message.channel?.alternatives?.[0]?.transcript ?? '';
+      const alternative = message.channel?.alternatives?.[0];
+      const text = alternative?.transcript ?? '';
       if (message.is_final || message.from_finalize) {
+        const runs = speakerRuns(alternative?.words ?? []);
+        if (runs.length) {
+          for (const run of runs) emit.final(run.text, run.startMs, run.endMs, run.speaker);
+          return;
+        }
         const startMs = Math.round((message.start ?? 0) * 1000);
         emit.final(text, startMs, startMs + Math.round((message.duration ?? 0) * 1000));
       } else emit.partial(text);

@@ -11,6 +11,7 @@ import { startModelDownload } from './ModelRow';
 import { MODEL_ROWS, formatSize, modelName, useModelsReady, type ModelKind } from './modelCatalog';
 import { settingsT, useSettingsT, type SettingsKey } from './strings';
 import type { UserConfig } from '@/types';
+import { speakerModelRemovedByUser } from '../liveSpeakers/speakerModel';
 
 const TITLE: Record<ModelKind, SettingsKey> = {
   speech: 'speechModel',
@@ -38,6 +39,9 @@ export function removeWithUndo(id: AndroidModelId, refresh: () => Promise<void>)
     onPress: () => setPending(id, false),
     onClose: () => {
       removeAndroidModel(id)
+        .then(() => {
+          if (id === 'meeting-speakers') speakerModelRemovedByUser(true);
+        })
         .catch((error: Error) => showToast(error.message, 'error'))
         .then(refresh)
         .finally(() => setPending(id, false));

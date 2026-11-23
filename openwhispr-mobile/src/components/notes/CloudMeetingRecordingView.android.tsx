@@ -14,6 +14,8 @@ export interface CloudMeetingRecordingProps {
   onChangeRawNotes: (text: string) => void;
   utterances: RealtimeUtterance[];
   partialText: string;
+  /** Speaker label per utterance id; lines without one show no speaker yet. */
+  speakerLabels?: Record<string, string>;
   onStop: () => void;
   /** The calendar meeting it records, when one was picked (Figma R0). */
   title?: string | null;
@@ -28,6 +30,7 @@ interface CloudMeetingRecordingViewProps extends CloudMeetingRecordingProps {
     utterances: RealtimeUtterance[],
     partialText: string,
     status: CloudMeetingStatus,
+    speakerLabels?: Record<string, string>,
   ) => React.ReactNode;
 }
 
@@ -40,6 +43,7 @@ export function CloudMeetingRecordingView({
   onChangeRawNotes,
   utterances,
   partialText,
+  speakerLabels,
   onStop,
   stopLabel,
   renderTranscript,
@@ -58,7 +62,7 @@ export function CloudMeetingRecordingView({
       meta={noteId != null ? <RecordingNoteChips noteId={noteId} /> : undefined}
       rawNotes={rawNotes}
       onChangeRawNotes={onChangeRawNotes}
-      transcript={renderTranscript(utterances, partialText, status)}
+      transcript={renderTranscript(utterances, partialText, status, speakerLabels)}
       stopLabel={stopLabel}
       onStop={onStop}
       keyboardHeight={keyboardHeight}

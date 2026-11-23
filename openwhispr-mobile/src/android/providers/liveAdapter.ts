@@ -3,8 +3,11 @@ import type { WebSocketLike } from '@/services/transcription/createRealtimeMeeti
 export interface LiveEmit {
   /** The caption so far for the turn in progress (replaces the last one). */
   partial(text: string): void;
-  /** A finished turn, with its start and end in ms from the leg's first audio. */
-  final(text: string, startMs: number | null, endMs: number | null): void;
+  /**
+   * A finished turn, with its start and end in ms from the leg's first audio, and the provider's
+   * speaker for it when the provider labels speakers.
+   */
+  final(text: string, startMs: number | null, endMs: number | null, speaker?: string | null): void;
   error(message: string): void;
 }
 
@@ -101,7 +104,7 @@ export function liveAdapter(
         delta: text,
       });
     },
-    final(text, startMs, endMs) {
+    final(text, startMs, endMs, speaker) {
       clearPartial();
       if (!text.trim()) return;
       const itemId = `turn_${++turn}`;
@@ -121,6 +124,7 @@ export function liveAdapter(
         type: 'conversation.item.input_audio_transcription.completed',
         item_id: itemId,
         transcript: text,
+        ...(speaker != null ? { speaker } : {}),
       });
     },
     error(message) {

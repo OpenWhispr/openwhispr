@@ -10,11 +10,13 @@ import { Badge, ListRow, settings, showToast } from './kit';
 import { DownloadRing, type RingPhase } from './DownloadRing';
 import { formatSize, modelName, type MODEL_ROWS } from './modelCatalog';
 import { settingsT, useSettingsT } from './strings';
+import { speakerModelRemovedByUser } from '../liveSpeakers/speakerModel';
 
 type Row = (typeof MODEL_ROWS)[number];
 
 /** Starts a download; a cancel says so at the bottom, any other failure is a dialog. */
 export function startModelDownload(id: Row['id']) {
+  if (id === 'meeting-speakers') speakerModelRemovedByUser(false);
   downloadAndroidModel(id).catch((error: Error) => {
     if (error.message === i18n.t('downloadCancelled'))
       showToast(settingsT('downloadCancelled'), 'neutral');

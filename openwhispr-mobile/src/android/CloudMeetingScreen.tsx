@@ -23,6 +23,8 @@ import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
 import { Sentry } from '@/lib/sentry';
 import { mapUtterancesToSegments } from '@/lib/notes/cloudMeetingSegments';
 import { setCloudFinish } from './notes/cloudFinishStore';
+import { runSpeakerPass, saveLiveSpeakers } from './liveSpeakers/session';
+import { prefetchSpeakerModel } from './liveSpeakers/speakerModel';
 import type { TranscriptionStatus } from '@/types';
 
 type Phase = 'prompt' | 'recording' | 'cancelling' | 'cancel-failed';
@@ -53,6 +55,10 @@ export function CloudMeetingScreen(): React.JSX.Element {
     return () => {
       mounted.current = false;
     };
+  }, []);
+  // The speaker model downloads quietly the first time meetings open, so live labels can start.
+  useEffect(() => {
+    void prefetchSpeakerModel();
   }, []);
   const generation = useRef(0);
   const busy = useRef(false);
@@ -287,9 +293,10 @@ export function CloudMeetingScreen(): React.JSX.Element {
       if (cloud.utterances.length > 0)
         notesRepository.replaceSegments(
           run.noteId,
-          mapUtterancesToSegments(cloud.utterances, elapsed).map((segment) => ({
+          mapUtterancesToSegments(cloud.utterances, elapsed).map((segment, index) => ({
             ...segment,
             noteId: run.noteId,
+            speakerLabel: cloud.speakerLabels?.[cloud.utterances[index].itemId] ?? null,
           })),
         );
     } catch (error) {
@@ -338,12 +345,47 @@ export function CloudMeetingScreen(): React.JSX.Element {
         return;
       }
       if (!owned()) return abandon();
+      const speakers = cloud.speakerResult?.();
+      if (speakers) {
+        try {
+          saveLiveSpeakers(run.noteId, utterances, elapsed, speakers);
+        } catch (error) {
+          Sentry.captureException(error);
+        }
+        // Minutes for a long meeting, so the note opens first and corrects itself after.
+        runSpeakerPass(
+          { noteId: run.noteId, utterances, elapsedSeconds: elapsed, result: speakers },
+          {
+            // The context is disposed by then; the same account and a live note are enough.
+            isCurrent: () => {
+              const current = useAuthStore.getState();
+              const note = notesRepository.getNoteById(run.noteId);
+              return (
+                current.user?.id === identity.user?.id &&
+                current.sessionCookie === identity.sessionCookie &&
+                !!note &&
+                !note.deletedAt
+              );
+            },
+          },
+        ).catch(Sentry.captureException);
+      }
       setCloudFinish(run.noteId, null);
       run.context.dispose();
       if (interrupted) Alert.alert(t('meetingInterrupted'), interrupted.message);
     };
     await settle();
-  }, [stopCloud, cloudElapsed, cloudStatus, cloud.utterances, saveRaw, markFailed, t]);
+  }, [
+    stopCloud,
+    cloudElapsed,
+    cloudStatus,
+    cloud.utterances,
+    cloud.speakerLabels,
+    cloud.speakerResult,
+    saveRaw,
+    markFailed,
+    t,
+  ]);
   useEffect(() => {
     if (cloud.stopRequested && phase === 'recording') finish().catch(Sentry.captureException);
   }, [cloud.stopRequested, phase, finish]);
@@ -395,6 +437,7 @@ export function CloudMeetingScreen(): React.JSX.Element {
         onChangeRawNotes={setRawNotes}
         utterances={cloud.utterances}
         partialText={cloud.partialText}
+        speakerLabels={cloud.speakerLabels}
         title={selectedMeetingContext?.title}
         peopleCount={selectedMeetingContext?.participants?.length}
         noteId={noteId}

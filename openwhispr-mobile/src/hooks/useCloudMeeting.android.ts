@@ -5,6 +5,11 @@ import {
   type RealtimeSession,
   type RealtimeUtterance,
 } from '@/services/transcription/RealtimeMeetingWsService.android';
+import {
+  finishSpeakers,
+  startSpeakers,
+  type LiveSpeakerResult,
+} from '@/android/liveSpeakers/live';
 
 export type CloudMeetingStatus = 'connecting' | 'live' | 'reconnecting' | 'error';
 
@@ -28,6 +33,10 @@ export interface CloudMeeting {
   stop: () => Promise<RealtimeUtterance[]>;
   cancel: () => void;
   stopRequested: boolean;
+  /** Speaker label per utterance id, a beat behind the text. */
+  speakerLabels?: Record<string, string>;
+  /** What speaker labelling knew when the meeting stopped (after `stop` settles). */
+  speakerResult?: () => LiveSpeakerResult | null;
 }
 
 /**
@@ -52,6 +61,9 @@ export function useCloudMeeting({
   const [partialText, setPartialText] = useState('');
   const [utterances, setUtterances] = useState<RealtimeUtterance[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [speakerLabels, setSpeakerLabels] = useState<Record<string, string>>({});
+  const liveRef = useRef<ReturnType<typeof startSpeakers>>(null);
+  const speakerResultRef = useRef<LiveSpeakerResult | null>(null);
 
   const controllerRef = useRef<AbortController | null>(null);
   const finishRef = useRef<Promise<RealtimeUtterance[]> | null>(null);
@@ -69,6 +81,8 @@ export function useCloudMeeting({
     controllerRef.current = controller;
     setStopRequested(false);
     setUtterances([]);
+    setSpeakerLabels({});
+    speakerResultRef.current = null;
     setPartialText('');
     setError(null);
     setElapsedSeconds(0);
@@ -82,6 +96,11 @@ export function useCloudMeeting({
       setStatus('error');
       return;
     }
+    // Before the transport, so speaker labelling counts the meeting's first audio frame.
+    const live = startSpeakers(noteId, (labels) => {
+      if (!cancelled) setSpeakerLabels(labels);
+    });
+    liveRef.current = live;
     startRealtimeMeetingWs(
       { language, noteId, signal: controller.signal },
       {
@@ -118,7 +137,7 @@ export function useCloudMeeting({
           if (!stoppedRef.current) setStatus('live');
         },
       },
-      deps,
+      live ? live.wrap(deps) : deps,
     )
       .then((session) => {
         if (cancelled || stoppedRef.current) {
@@ -141,6 +160,7 @@ export function useCloudMeeting({
       controller.abort();
       sessionRef.current?.stop();
       sessionRef.current = null;
+      if (!finishRef.current) liveRef.current?.stop();
     };
     // Start once when enabled; language is captured at start and never re-triggers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,6 +185,7 @@ export function useCloudMeeting({
     finishRef.current = (async () => {
       const session = sessionRef.current;
       if (!session) {
+        liveRef.current?.stop();
         controllerRef.current?.abort();
         throw new Error('Meeting stopped before recording was ready.');
       }
@@ -176,6 +197,7 @@ export function useCloudMeeting({
         throw new CloudMeetingFinishError(cause, session.utterances());
       } finally {
         sessionRef.current = null;
+        speakerResultRef.current = await finishSpeakers(liveRef.current).catch(() => null);
       }
     })();
     return finishRef.current;
@@ -183,9 +205,22 @@ export function useCloudMeeting({
 
   const cancel = useCallback(() => {
     stoppedRef.current = true;
+    liveRef.current?.stop();
     controllerRef.current?.abort();
     sessionRef.current?.stop();
     sessionRef.current = null;
   }, []);
-  return { status, error, partialText, utterances, elapsedSeconds, stop, cancel, stopRequested };
+  const speakerResult = useCallback(() => speakerResultRef.current, []);
+  return {
+    status,
+    error,
+    partialText,
+    utterances,
+    elapsedSeconds,
+    stop,
+    cancel,
+    stopRequested,
+    speakerLabels,
+    speakerResult,
+  };
 }
