@@ -5,11 +5,7 @@ import {
   type RealtimeSession,
   type RealtimeUtterance,
 } from '@/services/transcription/RealtimeMeetingWsService.android';
-import {
-  finishSpeakers,
-  startSpeakers,
-  type LiveSpeakerResult,
-} from '@/android/liveSpeakers/live';
+import { finishSpeakers, startSpeakers, type LiveSpeakerResult } from '@/android/liveSpeakers/live';
 
 export type CloudMeetingStatus = 'connecting' | 'live' | 'reconnecting' | 'error';
 
