@@ -70,9 +70,11 @@ export async function retainTranscriptAudio(
     transcriptId: string;
     audioFileName?: string | null;
     audioMimeType?: string | null;
+    keepSource?: boolean;
   },
 ): Promise<string> {
   if (!FileSystem.cacheDirectory) {
+    if (input.keepSource) throw new Error('Audio cache unavailable');
     return sourceUri;
   }
   if (isManagedTranscriptAudioUri(sourceUri)) {
@@ -94,10 +96,10 @@ export async function retainTranscriptAudio(
   const destinationUri = `${TRANSCRIPT_AUDIO_DIR}${fileName}`;
 
   await FileSystem.copyAsync({ from: sourceUri, to: destinationUri });
-  // The source is a transient capture/cache file that is no longer needed once
-  // the audio lives in managed storage. Drop it so a retained copy never leaves
-  // a duplicate behind (best-effort: a lost race just leaves a purgeable file).
-  await FileSystem.deleteAsync(sourceUri, { idempotent: true }).catch(() => undefined);
+  // The keyboard outbox owns its source until History has persisted the retry row.
+  if (!input.keepSource) {
+    await FileSystem.deleteAsync(sourceUri, { idempotent: true }).catch(() => undefined);
+  }
   return destinationUri;
 }
 

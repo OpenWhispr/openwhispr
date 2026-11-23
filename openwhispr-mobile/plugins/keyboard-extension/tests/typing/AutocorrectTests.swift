@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// Unit tests for autocorrect: what a word becomes when a space follows it, typed through a
@@ -6,7 +7,66 @@ extension TypingTests {
   static func runAutocorrectTests(plugin: URL) {
     runEnglishAutocorrectTests(BenchEnvironment(plugin: plugin, language: .english, layout: .qwerty, split: "dev"))
     runGermanAutocorrectTests(BenchEnvironment(plugin: plugin, language: .german, layout: .qwertz, split: "dev"))
+    runDocumentAndLearningTests(plugin: plugin)
     runSessionTests(BenchEnvironment(plugin: plugin, language: .english, layout: .qwerty, split: "dev"))
+  }
+
+  private static func runDocumentAndLearningTests(plugin: URL) {
+    let resources = plugin.appendingPathComponent("ios/Resources")
+    let storage = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    do {
+      try FileManager.default.createDirectory(at: storage, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: storage) }
+      func engine() -> TypingEngine {
+        TypingEngine(language: .english, layout: .qwerty, resources: resources, storage: storage)!
+      }
+      let wordsFile = TypingEngine.learnedWordsURL(in: storage, language: .english)
+      try JSONEncoder().encode(["form": 2]).write(to: wordsFile)
+      let first = engine()
+      for letter in "He went away form " { _ = first.session.insert(String(letter)) }
+      check("legacy learned counts do not suppress dictionary corrections", first.session.tail == "He went away from ")
+      first.session.reset()
+      first.session.resync(before: "Teh")
+      first.session.resync(before: "")
+      check("clearing the document clears composing text", first.session.insert(" ") == TextEdit(insert: " "))
+      first.session.resync(before: "Teh")
+      first.session.resync(before: "Te")
+      check("moving the cursor left one character updates the composing text", first.session.tail == "Te")
+      let longPrefix = String(repeating: "Already here. ", count: 30)
+      first.session.resync(before: longPrefix)
+      for letter in "Teh " { _ = first.session.insert(String(letter)) }
+      first.session.resync(before: longPrefix + "The ")
+      check("a matching host report preserves undo in a long document", first.session.backspace()?.insert == "Teh ")
+      first.session.reset()
+      for letter in "He went away form " { _ = first.session.insert(String(letter)) }
+      _ = first.session.backspace()
+      let reopened = engine()
+      for letter in "He went away form " { _ = reopened.session.insert(String(letter)) }
+      check("reopening preserves a rejected real-word correction", reopened.session.tail == "He went away form ")
+      first.clearLearnedWords(storage: storage)
+      reopened.learnedWords.learn("newword")
+      check("a retained writer cannot resurrect cleared words", engine().learnedWords.words == ["newword"])
+      let descriptor = open(wordsFile.appendingPathExtension("lock").path, O_RDWR)
+      guard descriptor >= 0 else {
+        check("can exercise a contended learned-word file", false)
+        return
+      }
+      defer { close(descriptor) }
+      _ = flock(descriptor, LOCK_EX)
+      let released = DispatchSemaphore(value: 0)
+      DispatchQueue.global().asyncAfter(deadline: .now() + 0.6) {
+        flock(descriptor, LOCK_UN)
+        released.signal()
+      }
+      let start = ProcessInfo.processInfo.systemUptime
+      reopened.learnedWords.learn("busy")
+      check("a suspended writer cannot stall typing", ProcessInfo.processInfo.systemUptime - start < 0.4)
+      check("a contended clear remains pending", !reopened.learnedWords.removeAll())
+      released.wait()
+      check("a pending clear succeeds once storage is available", reopened.learnedWords.removeAll() && engine().learnedWords.words.isEmpty)
+    } catch {
+      check("can prepare temporary learned-word storage", false)
+    }
   }
 
   /// Whole lines typed through a session, key by key.

@@ -32,6 +32,11 @@ private extension KeyboardViewController {
   func uiTestPump() { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
 
   var uiTestSuggestions: [Suggestion] { suggestionBar.suggestions }
+  func uiTestChangeFieldDuringTyping() {
+    lastKeystrokeAt = CACurrentMediaTime()
+    textDidChange(nil)
+  }
+  var uiTestFieldPolicy: TypingFieldPolicy? { typingEngine?.session.policy }
   var uiTestStripShowsSuggestions: Bool { isSuggestionBarShown && !suggestionBar.isHidden }
   var uiTestPillFrame: CGRect {
     // Off-window, a constraint change inside the toolbar isn't laid out until asked.
@@ -51,6 +56,8 @@ private extension KeyboardViewController {
   var uiTestGeometry: KeyGeometry? { laidOutKeyGeometry() }
   func uiTestPick(_ index: Int) { handleSuggestionPicked(suggestionBar.suggestions[index]) }
   func uiTestTapEmojiKey() { handleEmojiKeyTapped() }
+  var uiTestSpaceKey: UIButton? { spaceButton }
+  func uiTestShowRecording() { showRecordingCanvas() }
   func uiTestSwipe(_ path: [CGPoint]) { commitSwipe(path: path) }
   func uiTestPickLanguage(_ language: TypingLanguage) { pickTypingLanguage(language) }
   func uiTestSyncGeometry() {
@@ -119,6 +126,52 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
     checks.check("backspace undoes the correction (got \(proxy.documentContextBeforeInput ?? "nil"))", proxy.documentContextBeforeInput == "Teh ")
     keyboard.uiTestType("teh ")
     checks.check("an undone correction isn't made again", proxy.documentContextBeforeInput == "Teh teh ")
+  }
+
+  do {
+    let (keyboard, proxy, _) = makeTypingKeyboard()
+    keyboard.uiTestType("Teh")
+    proxy.selectedText = " world"
+    keyboard.uiTestType(" ")
+    checks.check("space over a selection preserves preceding text", proxy.deletes == 0 && proxy.inserted.last == " ")
+  }
+  do {
+    let (keyboard, proxy, _) = makeTypingKeyboard()
+    keyboard.uiTestType("Teh ")
+    let before = proxy.deletes
+    proxy.selectedText = "next"
+    keyboard.touchTestTapDelete()
+    checks.check("backspace over a selection only removes that selection", proxy.deletes == before + 1)
+  }
+  do {
+    let (keyboard, proxy, _) = makeTypingKeyboard()
+    keyboard.uiTestType("Teh")
+    proxy.documentIdentifier = UUID()
+    proxy.documentContextBeforeInput = ""
+    proxy.autocorrectionType = .no
+    keyboard.uiTestChangeFieldDuringTyping()
+    checks.check("privacy policy changes before the next key", keyboard.uiTestFieldPolicy == TypingFieldPolicy.none)
+    keyboard.uiTestType("Teh ")
+    checks.check("a new field immediately gets its own policy and context", proxy.documentContextBeforeInput == "Teh " && keyboard.uiTestSuggestions.isEmpty)
+  }
+  do {
+    let (keyboard, proxy, _) = makeTypingKeyboard { proxy in
+      proxy.hasText = true
+      proxy.tracksText = false
+      proxy.documentContextBeforeInput = nil
+      proxy.documentContextAfterInput = nil
+    }
+    keyboard.uiTestType("Teh ")
+    checks.check("a host that withholds its text gets plain typing", proxy.deletes == 0 && keyboard.uiTestSuggestions.isEmpty)
+  }
+  do {
+    let (keyboard, _, _) = makeTypingKeyboard { proxy in
+      proxy.tracksText = false
+      proxy.documentContextBeforeInput = nil
+      proxy.documentContextAfterInput = nil
+    }
+    keyboard.uiTestType("Zqx")
+    checks.check("a silent host cannot offer its typed word for learning", keyboard.uiTestSuggestions.isEmpty)
   }
 
   // The pronoun, through the keys: mid-sentence, after a lower-case start, and typed again
@@ -288,6 +341,12 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
       checks.check("swipe types the word and a space", proxy.documentContextBeforeInput == "Hello ")
       keyboard.touchTestTapDelete()
       checks.check("backspace removes a swiped word whole", proxy.documentContextBeforeInput == "")
+      keyboard.uiTestTapEmojiKey()
+      if let panel = keyboard.uiTestEmojiPanel {
+        keyboard.emojiPanelDidTapSearch(panel)
+        keyboard.uiTestSwipe(path)
+        checks.check("an emoji search swipe edits only the query", panel.searchText.lowercased() == "hello " && proxy.documentContextBeforeInput == "")
+      }
     } else {
       checks.check("laid-out geometry is available", false)
     }
@@ -297,6 +356,19 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
       sliding.uiTestSwipe([start, CGPoint(x: start.x + 12, y: start.y + 4), CGPoint(x: start.x + 34, y: start.y + 6)])
       checks.check("a short slide types the key it began on", slidingProxy.documentContextBeforeInput == "H")
     }
+  }
+
+  do {
+    let (keyboard, proxy, _) = makeTypingKeyboard()
+    checks.check(
+      "assistive activation types a space",
+      keyboard.uiTestSpaceKey?.accessibilityActivate() == true && proxy.documentContextBeforeInput == " "
+    )
+    #if targetEnvironment(simulator)
+    // The simulator runs UIApplicationMain, which dispatches UIControl's target actions.
+    keyboard.uiTestSpaceKey?.sendActions(for: .touchUpInside)
+    checks.check("a touch-free space action types once", proxy.documentContextBeforeInput == "  ")
+    #endif
   }
 
   // Space-bar trackpad.
@@ -344,6 +416,9 @@ private func checkTypingHelp(_ checks: inout TouchChecks) {
       keyboard.emojiPanelDidCancelSearch(panel)
       keyboard.emojiPanelDidTapLetters(panel)
       checks.check("ABC returns to the keys", !keyboard.uiTestEmojiShown && !keyboard.uiTestEmojiSearching)
+      keyboard.uiTestTapEmojiKey()
+      keyboard.uiTestShowRecording()
+      checks.check("recording dismisses the emoji grid", keyboard.touchTestCanvasShown && !keyboard.uiTestEmojiShown && panel.superview == nil)
     }
     let (url, _, _) = makeTypingKeyboard { $0.keyboardType = .URL }
     checks.check("URL field: no emoji key", url.uiTestEmojiKey?.isHidden == true)

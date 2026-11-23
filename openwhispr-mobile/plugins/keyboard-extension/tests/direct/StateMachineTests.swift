@@ -112,6 +112,7 @@ final class Harness {
   var cookie: String? = "session=1"
   /// The account the shared session belongs to.
   var cookieUser = "u1"
+  var documentID: UUID? = UUID()
   var encodeError: Error?
   var encodeGains: [Float] = []
   var texts: [String] = []
@@ -147,6 +148,7 @@ final class Harness {
       },
       makeBoundary: { "B" }
     ))
+    machine.readDocumentID = { [unowned self] in self.documentID }
     machine.onText = { [unowned self] in self.texts.append($0) }
     machine.onStateChange = { [unowned self] in self.states.append($0) }
     machine.onLevel = { [unowned self] in self.levels.append($0) }
@@ -225,6 +227,78 @@ extension DirectDictationTests {
     machineRecoverAfterKill()
     machineRecoverSilenceAfterKill()
     machineCookieForAnotherAccount()
+    machineDeliveryRequiresOriginalDestination()
+    machineResumeRequiresOriginalDocument()
+    machineRecoverQuietSpeech()
+    machineCleanupMissingFlag()
+  }
+
+  static func machineDeliveryRequiresOriginalDestination() {
+    for hidden in [false, true] {
+      for changeAccount in [false, true] {
+        let h = Harness()
+        defer { h.cleanup() }
+        h.record()
+        h.dictation.confirm()
+        if hidden { h.dictation.keyboardWillDisappear() }
+        let changeDestination = {
+          if changeAccount {
+            h.cookieUser = "other-user"
+            h.configJSON = validConfig.replacingOccurrences(of: #""u1""#, with: #""other-user""#)
+          } else {
+            h.documentID = UUID()
+          }
+        }
+        if !hidden { changeDestination() }
+        h.transport.uploads.first?.complete(200, sentText)
+        if hidden {
+          changeDestination()
+          h.dictation.keyboardDidAppear()
+        }
+        expect(h.texts, [], "a different account or field never receives the finished take")
+        expect(h.store.record(jobId: "job-1")?.status, .completed, "the result is saved for History")
+      }
+    }
+  }
+
+  static func machineResumeRequiresOriginalDocument() {
+    let h = Harness()
+    defer { h.cleanup() }
+    let original = h.documentID
+    h.record()
+    h.dictation.keyboardWillDisappear()
+    h.restartProcess()
+    h.documentID = UUID()
+    h.dictation.keyboardDidAppear()
+    expect(h.transport.uploads.count, 0, "another field cannot resume the pending recording")
+    h.documentID = original
+    h.dictation.keyboardDidAppear()
+    expect(h.transport.uploads.count, 1, "the originating field can resume the recording")
+    h.documentID = nil
+    h.transport.uploads.first?.complete(200, sentText)
+    expect(h.texts, [], "a missing destination cannot receive the result")
+  }
+
+  static func machineRecoverQuietSpeech() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.dictation.start()
+    h.capture.started()
+    h.feed(pcm(seconds: 1, amplitude: 0.003))
+    h.restartProcess()
+    h.dictation.keyboardDidAppear()
+    expect(h.state, .transcribing, "quiet speech receives the same gain on recovery as a live take")
+  }
+
+  static func machineCleanupMissingFlag() {
+    let h = Harness()
+    defer { h.cleanup() }
+    h.record()
+    h.dictation.confirm()
+    h.transport.uploads.first?.complete(200, #"{"raw_text":"raw words"}"#)
+    expect(h.transport.sends.count, 1, "a raw-only response still gets the requested cleanup")
+    h.transport.sends.first?.complete(200, #"{"text":"Clean words."}"#)
+    expect(h.texts, ["Clean words."], "the cleaned text is inserted")
   }
 
   // Killed mid-take: the record is pending with its .pcm and no .m4a (or a cut-off partial).
@@ -241,6 +315,7 @@ extension DirectDictationTests {
     expect(h.transport.uploads.count, 1, "recover: uploaded")
     h.transport.uploads.first?.complete(200, sentText)
     expect(h.texts, ["send it to a@b.co"], "recover: text inserted")
+    expect(h.store.record(jobId: "job-1")?.durationMs, 2_000, "recovery measures the PCM written before interruption")
     expect(h.files(), ["job-1.json"], "recover: only the record is left")
   }
 
@@ -254,6 +329,11 @@ extension DirectDictationTests {
     h.dictation.keyboardDidAppear()
     expect(h.transport.uploads.count, 0, "recover silence: nothing uploaded")
     expect(h.files(), [], "recover silence: files removed")
+    h.dictation.start()
+    h.restartProcess()
+    h.dictation.keyboardDidAppear()
+    expect(h.transport.uploads.count, 0, "a process killed before the first sample has nothing to upload")
+    expect(h.files("job-2"), [], "an empty take is discarded")
   }
 
   // The app couldn't rewrite the shared session after an account switch: never send A's
@@ -346,7 +426,7 @@ extension DirectDictationTests {
     h.dictation.confirm()
     expect(h.state, .failed(.tryAgain), "encode fails: try again")
     expect(h.store.record(jobId: "job-1")?.status, .failed, "encode fails: record failed")
-    expect(h.files(), ["job-1.json"], "encode fails: audio files removed")
+    expect(h.files(), ["job-1.json", "job-1.pcm"], "encode fails: History can retry from PCM")
     expect(h.dictation.isEligible, true, "encode fails: path stays on")
     expect(h.transport.uploads.count, 0, "encode fails: nothing uploaded")
   }
@@ -506,7 +586,7 @@ extension DirectDictationTests {
     h.feed(h.silence(seconds: 2))
     h.dictation.keyboardWillDisappear()
     expect(h.files(), [], "disappear silence: files removed")
-    expect(h.store.resumable(userId: "u1") == nil, true, "disappear silence: nothing to resume")
+    expect(h.store.resumable(userId: "u1", documentID: h.documentID!) == nil, true, "disappear silence: nothing to resume")
   }
 
   static func machineResumeOnAppear() {
@@ -521,6 +601,7 @@ extension DirectDictationTests {
     let body = (try? Data(contentsOf: h.store.bodyURL(jobId: "job-1"))).map { String(decoding: $0, as: UTF8.self) } ?? ""
     expect(body.contains("\r\n\r\njob-1\r\n"), true, "resume: same job id")
     h.transport.uploads.first?.complete(200, sentText)
+    expect(h.store.record(jobId: "job-1")?.durationMs, 2_000, "resume keeps the recording duration")
     expect(h.texts, ["send it to a@b.co"], "resume: text inserted")
     expect(h.store.record(jobId: "job-1")?.status, .completed, "resume: record completed")
   }

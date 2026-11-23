@@ -25,9 +25,9 @@ interface AppGroupStorageModule {
   armWarmMic(): void;
   isHardwareKeyboardConnected(): boolean;
   markHotkeyJsReady(): void;
-  setKeyboardSessionCredential(cookie: string | null): boolean;
-  getAppGroupContainerPath(): string | null;
-  wrapPcmAsWav(pcmPath: string, wavPath: string): boolean;
+  setKeyboardSessionCredential?(cookie: string | null): boolean;
+  getAppGroupContainerPath?(): string | null;
+  wrapPcmAsWav?(pcmPath: string, wavPath: string): boolean;
 }
 
 export interface SpeechActivityAnalysis {
@@ -84,6 +84,8 @@ const NativeModuleEvents = NativeModule
   : null;
 
 export const AppGroupStorage = {
+  supportsKeyboardDirectDictation: typeof NativeModule?.setKeyboardSessionCredential === 'function',
+
   setItem(key: string, value: string): boolean {
     if (!NativeModule) return false;
     return NativeModule.setItem(key, value);
@@ -104,20 +106,17 @@ export const AppGroupStorage = {
    * False when it couldn't.
    */
   setKeyboardSessionCredential(credential: string | null): boolean {
-    if (!NativeModule) return false;
-    return NativeModule.setKeyboardSessionCredential(credential);
+    return NativeModule?.setKeyboardSessionCredential?.(credential) ?? false;
   },
 
   /** The App Group container's path, where the keyboard leaves its own dictations. */
   getAppGroupContainerPath(): string | null {
-    if (!NativeModule) return null;
-    return NativeModule.getAppGroupContainerPath();
+    return NativeModule?.getAppGroupContainerPath?.() ?? null;
   },
 
   /** Wraps a raw 16 kHz mono 16-bit take the keyboard left behind in a WAV file. */
   wrapPcmAsWav(pcmPath: string, wavPath: string): boolean {
-    if (!NativeModule) return false;
-    return NativeModule.wrapPcmAsWav(pcmPath, wavPath);
+    return NativeModule?.wrapPcmAsWav?.(pcmPath, wavPath) ?? false;
   },
 
   setKeyboardStatus(status: string, detail?: string | null): void {

@@ -75,6 +75,7 @@ final class DirectDictation {
     didSet { if state != oldValue { onStateChange?(state) } }
   }
 
+  var readDocumentID: (() -> UUID?)?
   var onStateChange: ((DirectDictationState) -> Void)?
   /// `directMeterLevel` of each chunk, for the waveform.
   var onLevel: ((Float) -> Void)?
@@ -85,6 +86,7 @@ final class DirectDictation {
     let token: Int
     let jobId: String
     let context: DirectRequestContext
+    let documentID: UUID
     var writer: PcmFileWriter?
     var meter = SpeechActivityMeter()
     var attempt = 0
@@ -100,7 +102,13 @@ final class DirectDictation {
   private var turnedOff = false
   private var configWhenTurnedOff: String?
   private var keyboardVisible = true
-  private var undeliveredText: String?
+  private struct ResultForInsertion {
+    let text: String
+    let userId: String
+    let documentID: UUID
+  }
+
+  private var undeliveredText: ResultForInsertion?
 
   init(_ dependencies: DirectDependencies) {
     deps = dependencies
@@ -118,15 +126,15 @@ final class DirectDictation {
     case .idle, .failed: break
     default: return
     }
-    guard job == nil, let (config, cookie) = eligibleContext() else { return }
+    guard job == nil, let documentID = readDocumentID?(), let (config, cookie) = eligibleContext() else { return }
     let jobId = deps.makeJobId()
     let context = DirectRequestContext(config: config, jobId: jobId, tone: deps.readTone(), cookie: cookie)
     do {
       // The record first, so audio on disk always has an owner.
-      try deps.store.begin(jobId: jobId, userId: config.userId, tone: context.tone)
+      try deps.store.begin(jobId: jobId, userId: config.userId, documentID: documentID, tone: context.tone)
       let writer = try PcmFileWriter(url: deps.store.pcmURL(jobId: jobId))
       nextToken += 1
-      job = Job(token: nextToken, jobId: jobId, context: context, writer: writer)
+      job = Job(token: nextToken, jobId: jobId, context: context, documentID: documentID, writer: writer)
     } catch {
       deps.store.cancel(jobId: jobId)
       state = .failed(.tryAgain)
@@ -173,23 +181,23 @@ final class DirectDictation {
 
   func keyboardDidAppear() {
     keyboardVisible = true
-    if let text = undeliveredText {
+    if let result = undeliveredText {
       undeliveredText = nil
-      onText?(text)
-      return
+      insertIfDestinationMatches(result)
     }
     switch state {
     case .idle, .failed: break
     default: return
     }
-    guard job == nil, let (config, cookie) = eligibleContext(),
-      let record = deps.store.resumable(userId: config.userId)
+    guard job == nil, let documentID = readDocumentID?(), let (config, cookie) = eligibleContext(),
+      let record = deps.store.resumable(userId: config.userId, documentID: documentID)
     else { return }
     nextToken += 1
     job = Job(
       token: nextToken,
       jobId: record.jobId,
       context: DirectRequestContext(config: config, jobId: record.jobId, tone: record.tone, cookie: cookie),
+      documentID: documentID,
       writer: nil,
       durationMs: record.durationMs
     )
@@ -204,18 +212,18 @@ final class DirectDictation {
   private func encodeRecovered(jobId: String) -> Bool {
     let store = deps.store
     let pcm = store.pcmURL(jobId: jobId)
-    guard let scan = PcmFileScan.scan(pcm), !scan.activity.noSpeechLikely else {
-      store.cancel(jobId: jobId)
-      job = nil
-      return false
-    }
-    job?.durationMs = scan.activity.durationMs
     do {
-      try deps.encode(pcm, store.audioURL(jobId: jobId), DirectGain.factor(peakSample: scan.peakSample))
-      try? FileManager.default.removeItem(at: pcm)
+      let scan = try PcmFileScan.scan(pcm)
+      guard scan.activity.durationMs > 0, !scan.activity.noSpeechLikely else {
+        store.cancel(jobId: jobId)
+        job = nil
+        return false
+      }
+      job?.durationMs = scan.activity.durationMs
+      try encode(jobId: jobId, durationMs: scan.activity.durationMs, gain: DirectGain.factor(peakSample: scan.peakSample))
       return true
     } catch {
-      try? store.fail(jobId: jobId, durationMs: scan.activity.durationMs)
+      try? store.fail(jobId: jobId, durationMs: job?.durationMs ?? 0)
       job = nil
       return false
     }
@@ -262,8 +270,7 @@ final class DirectDictation {
     state = .failed(.captureUnavailable)
   }
 
-  /// Closes the take, checks it for speech and encodes it before anything else, so a take that
-  /// survives always has its `.m4a`.
+  /// Closes and encodes the take before upload or suspension.
   private func finishRecording(upload shouldUpload: Bool) {
     guard state == .recording, var current = job else { return }
     cancelTimers()
@@ -275,7 +282,7 @@ final class DirectDictation {
 
     let gain = DirectGain.factor(peakSample: current.writer?.peakSample ?? 0)
     let activity = current.meter.result(gain: gain)
-    if activity.noSpeechLikely {
+    if current.durationMs == 0 || activity.noSpeechLikely {
       store.cancel(jobId: jobId)
       job = nil
       state = shouldUpload ? .failed(.noSpeech) : .idle
@@ -283,11 +290,9 @@ final class DirectDictation {
     }
 
     do {
-      try deps.encode(store.pcmURL(jobId: jobId), store.audioURL(jobId: jobId), gain)
-      try? FileManager.default.removeItem(at: store.pcmURL(jobId: jobId))
+      try encode(jobId: jobId, durationMs: current.durationMs, gain: gain)
     } catch {
       try? store.fail(jobId: jobId, durationMs: current.durationMs)
-      try? FileManager.default.removeItem(at: store.audioURL(jobId: jobId))
       job = nil
       state = shouldUpload ? .failed(.tryAgain) : .idle
       return
@@ -301,6 +306,15 @@ final class DirectDictation {
     }
     job = current
     upload()
+  }
+
+  private func encode(jobId: String, durationMs: Int, gain: Float) throws {
+    let store = deps.store
+    // Save the duration before replacing PCM, so recovery can use either representation.
+    try store.setDuration(jobId: jobId, durationMs: durationMs)
+    let pcm = store.pcmURL(jobId: jobId)
+    try deps.encode(pcm, store.audioURL(jobId: jobId), gain)
+    try? FileManager.default.removeItem(at: pcm)
   }
 
   // MARK: - Requests
@@ -332,7 +346,7 @@ final class DirectDictation {
     switch outcome {
     case let .success(text, original, applied):
       // As the app: a fused request that came back without cleanup gets one cleanup pass.
-      if current.context.config.cleanup.enabled && applied == false {
+      if current.context.config.cleanup.enabled && applied != true {
         cleanUp(raw: text, original: original ?? text, token: token)
       } else {
         finish(text: text, original: original ?? text, cleanupApplied: applied)
@@ -379,12 +393,17 @@ final class DirectDictation {
     )
     job = nil
     state = .idle
+    let result = ResultForInsertion(text: expanded, userId: current.context.config.userId, documentID: current.documentID)
     if keyboardVisible {
-      onText?(expanded)
+      insertIfDestinationMatches(result)
     } else {
-      // Typed into the field the next time the keyboard appears, as the app's results are.
-      undeliveredText = expanded
+      undeliveredText = result
     }
+  }
+
+  private func insertIfDestinationMatches(_ result: ResultForInsertion) {
+    guard readDocumentID?() == result.documentID, eligibleContext()?.0.userId == result.userId else { return }
+    onText?(result.text)
   }
 
   /// Keeps the `.m4a`, so the app can offer a retry from History.

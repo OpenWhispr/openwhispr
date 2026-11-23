@@ -12,6 +12,7 @@ if [ ! -x "$OUT" ] || [ -z "${KEYBOARD_TYPING_REUSE:-}" ]; then
   swiftc -swift-version 5 -parse-as-library -O \
     "$IOS/KeyGeometry.swift" \
     "$IOS/TypingLexicon.swift" \
+    "$IOS/TypingEngine.swift" \
     "$IOS/Autocorrector.swift" \
     "$IOS/TypingSession.swift" \
     "$IOS/SwipeDecoder.swift" \

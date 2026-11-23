@@ -127,8 +127,8 @@ enum DirectDictationRequests {
       guard let object = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] else {
         return .retryable
       }
-      let original = firstText(object, ["originalText", "original_text", "rawText", "raw_text"])
-      guard let text = firstText(object, ["text", "cleanedText", "cleaned_text", "transcript", "originalText"]) else {
+      let original = firstText(object, ["originalText", "original_text", "rawText", "raw_text", "rawTranscript", "raw_transcript"])
+      guard let text = firstText(object, ["text", "cleanedText", "cleaned_text", "transcript"]) ?? original else {
         return .noSpeech
       }
       let applied = (object["cleanupApplied"] ?? object["cleanup_applied"]) as? Bool

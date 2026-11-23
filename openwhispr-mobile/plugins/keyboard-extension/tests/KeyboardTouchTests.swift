@@ -48,6 +48,7 @@ private enum TestEnvironment {
 @MainActor
 private final class FakeDirectDictation: DirectDictationControlling {
   var canRecordHere = true
+  var readDocumentID: (() -> UUID?)?
   var state: DirectDictationState = .idle
   var onStateChange: ((DirectDictationState) -> Void)?
   var onLevel: ((Float) -> Void)?
@@ -808,6 +809,7 @@ private func checkDirectDictation(_ checks: inout TouchChecks) {
   keyboard.touchTestRefreshPill()
   checks.check("direct: eligible and the app not alive reads Tap to speak", keyboard.touchTestPillTitle == "Tap to speak")
   checks.check("direct: the pill starts a direct take", keyboard.touchTestPillActions == ["handleDirectRecordTapped"])
+  checks.check("direct: the attached field supplies its identifier", direct.readDocumentID?() == TestEnvironment.proxy.documentIdentifier)
   keyboard.touchTestTapDirectPill()
   checks.check("direct: tapping starts once", direct.starts == 1)
 

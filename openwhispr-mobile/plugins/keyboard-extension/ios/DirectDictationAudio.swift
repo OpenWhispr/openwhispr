@@ -169,12 +169,12 @@ struct SpeechActivityMeter {
 
 /// Speech and peak of a take already on disk, for one whose keyboard died before encoding it.
 enum PcmFileScan {
-  static func scan(_ url: URL) -> (activity: SpeechActivity, peakSample: Int)? {
-    guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+  static func scan(_ url: URL) throws -> (activity: SpeechActivity, peakSample: Int) {
+    let handle = try FileHandle(forReadingFrom: url)
     defer { try? handle.close() }
     var meter = SpeechActivityMeter()
     var peak = 0
-    while let chunk = try? handle.read(upToCount: 64 * 1024), !chunk.isEmpty {
+    while let chunk = try handle.read(upToCount: 64 * 1024), !chunk.isEmpty {
       meter.add(chunk)
       chunk.withUnsafeBytes { raw in
         for sample in raw.bindMemory(to: Int16.self) {
@@ -182,7 +182,7 @@ enum PcmFileScan {
         }
       }
     }
-    return (meter.result(), peak)
+    return (meter.result(gain: DirectGain.factor(peakSample: peak)), peak)
   }
 }
 

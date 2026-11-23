@@ -25,6 +25,7 @@ import {
   setKeyboardTypingLayout,
 } from '@/lib/keyboardTypingSync';
 import { safeHaptics } from '@/lib/utils';
+import { AppGroupStorage } from '../../modules/app-group-storage/src';
 import { LiveActivity } from '../../modules/live-activity/src';
 
 const AUTOMATIC = 'automatic';
@@ -102,6 +103,10 @@ export default function PreferencesScreen() {
   const keyboardTone = config?.keyboardTone ?? DEFAULT_KEYBOARD_TONE;
   const agentName = config ? getDictationAgentName(config) : 'OpenWhispr';
   const handleToggleAutoLearn = useConfigToggle('autoLearnCorrections');
+  const supportsDirectDictation =
+    Platform.OS === 'ios' &&
+    Number.parseInt(String(Platform.Version), 10) >= 26 &&
+    AppGroupStorage.supportsKeyboardDirectDictation;
   const directDictation = config?.keyboardDirectDictation ?? false;
   const handleToggleDirectDictation = useConfigToggle('keyboardDirectDictation');
   const [dictationMode, setDictationMode] = useState(() => LiveActivity.isDictationModeEnabled());
@@ -149,7 +154,7 @@ export default function PreferencesScreen() {
           description="Required for keyboard dictation. Tap for setup steps."
           onPress={() => router.push('/keyboard-full-access')}
         />
-        {Platform.OS === 'ios' ? (
+        {supportsDirectDictation ? (
           <SettingsRow
             iconStyle="line"
             icon="mic"

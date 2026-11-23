@@ -1,5 +1,6 @@
 import { requiresRealAccount } from '@/lib/accountAccess';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useConfigStore } from '@/store/useConfigStore';
 import { AppGroupStorage } from '../../modules/app-group-storage/src';
 
 type AuthSnapshot = Pick<ReturnType<typeof useAuthStore.getState>, 'user' | 'sessionCookie'>;
@@ -21,11 +22,17 @@ function keyboardCredential({ user, sessionCookie }: AuthSnapshot): string | nul
  */
 export function startKeyboardCredentialSync(): () => void {
   let written: string | null | undefined;
-  const sync = (state: AuthSnapshot): void => {
-    const next = keyboardCredential(state);
+  const sync = (): void => {
+    const enabled = useConfigStore.getState().config?.keyboardDirectDictation === true;
+    const next = enabled ? keyboardCredential(useAuthStore.getState()) : null;
     if (next === written) return;
     if (AppGroupStorage.setKeyboardSessionCredential(next)) written = next;
   };
-  sync(useAuthStore.getState());
-  return useAuthStore.subscribe(sync);
+  sync();
+  const stopAuth = useAuthStore.subscribe(sync);
+  const stopConfig = useConfigStore.subscribe(sync);
+  return () => {
+    stopAuth();
+    stopConfig();
+  };
 }

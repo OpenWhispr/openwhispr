@@ -114,6 +114,11 @@ extension DirectDictationTests {
     expect(R.parseTranscribe(status: 200, body: json(#"{"originalText":"only raw"}"#)),
            .success(text: "only raw", originalText: "only raw", cleanupApplied: nil), "200 with only originalText")
     expect(R.parseTranscribe(status: 200, body: json(#"{"text":"  "}"#)), .noSpeech, "200 blank text")
+    for key in ["original_text", "rawText", "raw_text", "rawTranscript", "raw_transcript"] {
+      let body = try! JSONSerialization.data(withJSONObject: [key: "spoken words"])
+      expect(R.parseTranscribe(status: 200, body: body),
+             .success(text: "spoken words", originalText: "spoken words", cleanupApplied: nil), "raw alias " + key)
+    }
     expect(R.parseTranscribe(status: 422, body: json(#"{"code":"NO_SPEECH_DETECTED"}"#)), .noSpeech, "422 no speech")
     expect(R.parseTranscribe(status: 422, body: json(#"{"code":"UNPROCESSABLE_AUDIO"}"#)), .rejected, "422 unprocessable")
     expect(R.parseTranscribe(status: 401, body: Data()), .unauthorized, "401")

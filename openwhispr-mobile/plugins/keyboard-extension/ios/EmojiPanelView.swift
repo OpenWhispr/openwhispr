@@ -148,6 +148,11 @@ final class EmojiPanelView: UIView, WKNavigationDelegate {
 
   func appendSearch(_ text: String) { searchText += text }
 
+  func appendSearchWord(_ word: String) {
+    let needsSpace = searchText.last.map { !$0.isWhitespace } ?? false
+    appendSearch((needsSpace ? " " : "") + word + " ")
+  }
+
   func deleteSearchBackward() {
     if !searchText.isEmpty { searchText.removeLast() }
   }
@@ -217,7 +222,7 @@ final class EmojiPanelView: UIView, WKNavigationDelegate {
     if let tone = preferences.skinTone(for: emoji), catalog.canDraw(tone) { shown = tone }
     let tones = emoji.hasSkinTones ? " b=\"\(EmojiPanelView.escaped(emoji.string))\"" : ""
     let name = EmojiPanelView.escaped(catalog.name(of: emoji, language: language))
-    return "<i role=button aria-label=\"\(name)\"\(tones)>\(EmojiPanelView.escaped(shown))</i>"
+    return "<button class=emoji type=button aria-label=\"\(name)\"\(tones)>\(EmojiPanelView.escaped(shown))</button>"
   }
 
   /// A recently used emoji, shown as it was inserted. `r` keeps a later tone pick from
@@ -226,7 +231,7 @@ final class EmojiPanelView: UIView, WKNavigationDelegate {
     let base = catalog.emoji(matching: string)
     let tones = base?.hasSkinTones == true ? " b=\"\(EmojiPanelView.escaped(base?.string ?? ""))\"" : ""
     let name = EmojiPanelView.escaped(base.map { catalog.name(of: $0, language: language) } ?? string)
-    return "<i r role=button aria-label=\"\(name)\"\(tones)>\(EmojiPanelView.escaped(string))</i>"
+    return "<button class=emoji type=button r aria-label=\"\(name)\"\(tones)>\(EmojiPanelView.escaped(string))</button>"
   }
 
   private static func escaped(_ text: String) -> String {
@@ -355,11 +360,12 @@ final class EmojiPanelView: UIView, WKNavigationDelegate {
     section,#s{display:grid;grid-auto-flow:column;grid-template-rows:repeat(var(--rows),var(--ch));grid-auto-columns:var(--cw)}
     section{margin-right:14px}section:empty{display:none}section:last-child{margin-right:0}
     #s,body.q #g{display:none}body.q #s{display:grid}
-    i{font-style:normal;font-size:var(--fs);line-height:var(--ch);text-align:center;border-radius:8px}
-    i.p{background:var(--press)}
+    button{appearance:none;border:0;background:transparent;color:inherit;font:inherit;padding:0;margin:0}
+    .emoji{font-size:var(--fs);line-height:var(--ch);text-align:center;border-radius:8px}
+    .emoji.p{background:var(--press)}
     #t{display:none;position:fixed;padding:5px;border-radius:12px;background:var(--bubble);box-shadow:0 2px 6px rgba(0,0,0,.25)}
-    #t b{font-weight:normal;font-size:30px;width:42px;height:min(46px,calc(100vh - 12px));line-height:min(46px,calc(100vh - 12px));text-align:center;border-radius:8px}
-    #t b.on{background:var(--blue)}
+    #t button{font-weight:normal;font-size:30px;width:42px;height:min(46px,calc(100vh - 12px));line-height:min(46px,calc(100vh - 12px));text-align:center;border-radius:8px}
+    #t button.on{background:var(--blue)}
     </style>
     """
 
@@ -370,7 +376,7 @@ final class EmojiPanelView: UIView, WKNavigationDelegate {
     var grid=document.getElementById('g'),strip=document.getElementById('s'),tones=document.getElementById('t');
     var secs=grid.children,cur=-1,held=null,touch=null,timer=0,frame=0,pad=4,cw=40;
     function post(m){webkit.messageHandlers.emoji.postMessage(m)}
-    function cellOf(e){return e&&e.closest?e.closest('i'):null}
+    function cellOf(e){return e&&e.closest?e.closest('button.emoji'):null}
     function touchOf(list,id){for(var k=0;k<list.length;k++)if(list[k].identifier===id)return list[k];return null}
     function closeTones(){tones.style.display='none';tones.textContent='';held=null}
     function optionAt(x,y){
@@ -414,11 +420,17 @@ final class EmojiPanelView: UIView, WKNavigationDelegate {
       var t=touchOf(e.changedTouches,touch.id);if(!t)return;
       var u=touch;touch=null;clearTimeout(timer);
       if(u.c)u.c.classList.remove('p');
-      if(u.dead)return;
-      if(u.pick||u.hold){var o=u.pick||u.slid?optionAt(t.clientX,t.clientY):null;if(o)choose(o);return}
-      if(Math.abs(window.scrollX-u.sx)>2)return;
-      post({t:'tap',s:u.c.textContent});
-    },{passive:true});
+      // A plain tap uses the button's click, as do VoiceOver and keyboard activation.
+      // Suppress its compatibility click when scrolling or choosing a tone consumed the touch.
+      if(u.dead||u.pick||u.hold||Math.abs(window.scrollX-u.sx)>2)e.preventDefault();
+      if(!u.dead&&(u.pick||u.hold)){var o=u.pick||u.slid?optionAt(t.clientX,t.clientY):null;if(o)choose(o)}
+    },{passive:false});
+    document.addEventListener('click',function(e){
+      var option=e.target.closest('#t button');
+      if(held&&option){choose(option);return}
+      var c=cellOf(e.target);
+      if(c){closeTones();post({t:'tap',s:c.textContent})}
+    });
     document.addEventListener('touchcancel',function(){drop();touch=null},{passive:true});
     function report(){
       if(document.body.className)return;
@@ -439,12 +451,12 @@ final class EmojiPanelView: UIView, WKNavigationDelegate {
     function results(html){closeTones();strip.innerHTML=html;window.scrollTo(0,0)}
     function go(i){var s=secs[i];if(s&&s.offsetWidth){closeTones();window.scrollTo(s.offsetLeft-pad,0)}}
     function setTone(b,s){
-      var all=document.querySelectorAll('i[b]:not([r])');
+      var all=document.querySelectorAll('button.emoji[b]:not([r])');
       for(var k=0;k<all.length;k++)if(all[k].getAttribute('b')===b)all[k].textContent=s}
     function showTones(options,selected){
       if(!held)return;
       tones.textContent='';
-      options.forEach(function(s){var e=document.createElement('b');e.textContent=s;if(s===selected)e.className='on';tones.appendChild(e)});
+      options.forEach(function(s){var e=document.createElement('button');e.type='button';e.textContent=s;if(s===selected)e.className='on';tones.appendChild(e)});
       tones.style.display='flex';
       var r=held.getBoundingClientRect(),w=tones.offsetWidth,h=tones.offsetHeight;
       // Above the emoji when there is room, else below it, else (the search strip) over it.

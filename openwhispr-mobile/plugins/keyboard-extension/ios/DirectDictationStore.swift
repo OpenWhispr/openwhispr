@@ -8,6 +8,7 @@ struct DirectDictationRecord: Codable, Equatable {
   var jobId: String
   var status: Status
   var userId: String
+  var documentID: UUID?
   var startedAtMs: Int64
   var completedAtMs: Int64?
   var durationMs: Int
@@ -44,12 +45,18 @@ final class DirectDictationStore {
   private func partialURL(jobId: String) -> URL { DirectAudioEncoder.partialURL(for: audioURL(jobId: jobId)) }
 
   /// Written before recording starts, so audio on disk always has an owner.
-  func begin(jobId: String, userId: String, tone: String) throws {
+  func begin(jobId: String, userId: String, documentID: UUID, tone: String) throws {
     try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
     try write(DirectDictationRecord(
-      jobId: jobId, status: .pending, userId: userId, startedAtMs: now(), completedAtMs: nil,
+      jobId: jobId, status: .pending, userId: userId, documentID: documentID, startedAtMs: now(), completedAtMs: nil,
       durationMs: 0, tone: tone, text: nil, originalText: nil, cleanupApplied: nil
     ))
+  }
+
+  func setDuration(jobId: String, durationMs: Int) throws {
+    guard var record = record(jobId: jobId) else { throw CocoaError(.fileReadNoSuchFile) }
+    record.durationMs = durationMs
+    try write(record)
   }
 
   func complete(jobId: String, text: String, originalText: String?, cleanupApplied: Bool?, durationMs: Int) throws {
@@ -64,14 +71,16 @@ final class DirectDictationStore {
     remove([pcmURL(jobId: jobId), audioURL(jobId: jobId), bodyURL(jobId: jobId), partialURL(jobId: jobId)])
   }
 
-  /// Keeps the `.m4a`, so the app can offer a retry from History.
+  /// History can retry from the encoded take, or from PCM if encoding failed.
   func fail(jobId: String, durationMs: Int) throws {
     guard var record = record(jobId: jobId) else { return }
     record.status = .failed
     record.completedAtMs = now()
     record.durationMs = durationMs
     try write(record)
-    remove([pcmURL(jobId: jobId), bodyURL(jobId: jobId), partialURL(jobId: jobId)])
+    remove([bodyURL(jobId: jobId), partialURL(jobId: jobId)])
+    if fileManager.fileExists(atPath: audioURL(jobId: jobId).path) { remove([pcmURL(jobId: jobId)]) }
+    prune()
   }
 
   func cancel(jobId: String) {
@@ -88,11 +97,12 @@ final class DirectDictationStore {
 
   /// The newest pending record of `userId` that started less than 10 minutes ago and still has
   /// its audio: the `.m4a`, or the `.pcm` of a take the keyboard was killed before encoding.
-  func resumable(userId: String) -> DirectDictationRecord? {
+  func resumable(userId: String, documentID: UUID) -> DirectDictationRecord? {
     let cutoff = now() - Self.resumeWindowMs
     return allRecords()
       .filter { record in
-        record.status == .pending && record.userId == userId && record.startedAtMs > cutoff
+        record.status == .pending && record.userId == userId && record.documentID == documentID
+          && record.startedAtMs > cutoff
           && (fileManager.fileExists(atPath: audioURL(jobId: record.jobId).path)
             || fileManager.fileExists(atPath: pcmURL(jobId: record.jobId).path))
       }
@@ -104,7 +114,9 @@ final class DirectDictationStore {
     let records = allRecords().sorted { order($1, $0) }  // newest first
     for record in records.dropFirst(Self.maxRecords) { cancel(jobId: record.jobId) }
     let failed = records.prefix(Self.maxRecords).filter { $0.status == .failed }
-    for record in failed.dropFirst(Self.maxFailedAudio) { remove([audioURL(jobId: record.jobId)]) }
+    for record in failed.dropFirst(Self.maxFailedAudio) {
+      remove([audioURL(jobId: record.jobId), pcmURL(jobId: record.jobId)])
+    }
   }
 
   private func allRecords() -> [DirectDictationRecord] {

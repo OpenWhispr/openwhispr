@@ -8,6 +8,13 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
   },
 }));
 
+jest.mock('@/store/useConfigStore', () => {
+  const { create } = jest.requireActual('zustand');
+  return { useConfigStore: create(() => ({ config: { keyboardDirectDictation: true } })) };
+});
+
+import { useConfigStore } from '@/store/useConfigStore';
+
 // accountAccess pulls in the router for its sign-in alert, and the store for processing mode.
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@/store/useProcessingModeStore', () => ({
@@ -34,6 +41,7 @@ const realUser = { id: 'u1', email: 'a@b.co', isAnonymous: false };
 const credential = (userId: string, cookie: string) => JSON.stringify({ userId, cookie });
 
 beforeEach(() => {
+  useConfigStore.setState({ config: { defaultMode: 'cloud', keyboardDirectDictation: true } });
   mockSetCredential.mockClear();
   useAuthStore.setState({ user: null, sessionCookie: null, isGuest: false, isLoading: false });
 });
@@ -49,6 +57,19 @@ describe('startKeyboardCredentialSync', () => {
     useAuthStore.setState({ isLoading: true });
     expect(mockSetCredential).toHaveBeenCalledTimes(1);
     stop();
+  });
+
+  it('only shares a session while direct dictation is enabled', () => {
+    useConfigStore.setState({ config: { defaultMode: 'cloud' } });
+    useAuthStore.setState({ user: realUser, sessionCookie: 'a=1' });
+    const stop = startKeyboardCredentialSync();
+    try {
+      useConfigStore.setState({ config: { defaultMode: 'cloud', keyboardDirectDictation: true } });
+      useConfigStore.setState({ config: { defaultMode: 'cloud', keyboardDirectDictation: false } });
+      expect(mockSetCredential.mock.calls).toEqual([[null], [credential('u1', 'a=1')], [null]]);
+    } finally {
+      stop();
+    }
   });
 
   it('removes the credential for a guest', () => {

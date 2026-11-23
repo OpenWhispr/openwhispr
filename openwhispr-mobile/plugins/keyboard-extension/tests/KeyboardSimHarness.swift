@@ -207,6 +207,32 @@ private enum SimHarness {
     log(String(format: "memory %@: baseline %.1f MB, peak phys_footprint %.1f MB", language.rawValue, baseline, peak))
   }
 
+  /// WebKit delivers VoiceOver and keyboard activations as a click without touch events.
+  static func checkEmojiButtonActivation(_ checks: inout TouchChecks) {
+    let (keyboard, proxy, _) = makeTypingKeyboard()
+    mount(keyboard)
+    keyboard.uiTestTapEmojiKey()
+    guard let panel = keyboard.uiTestEmojiPanel,
+      let webView = panel.subviews.compactMap({ $0 as? WKWebView }).first
+    else {
+      checks.check("emoji button is mounted in WebKit", false)
+      return
+    }
+    let deadline = Date().addingTimeInterval(10)
+    while !panel.isContentReady, Date() < deadline { pump(0.02) }
+    var activated: String?
+    webView.evaluateJavaScript("""
+      (() => {
+        const button = document.querySelector('#g button[aria-label]');
+        button.focus();
+        button.click();
+        return button.textContent;
+      })()
+      """) { result, _ in activated = result as? String }
+    while (activated == nil || proxy.inserted.isEmpty), Date() < deadline { pump(0.02) }
+    checks.check("activating an emoji button inserts it once", activated != nil && proxy.inserted == [activated ?? ""])
+  }
+
   static func run(arguments: [String], output: URL) {
     self.output = output
     TestEnvironment.install()
@@ -346,6 +372,7 @@ private enum SimHarness {
     if arguments.contains("--tests") {
       var checks = TouchChecks()
       checkTypingHelp(&checks)
+      checkEmojiButtonActivation(&checks)
       log("Typing UI checks on iOS \(UIDevice.current.systemVersion): \(checks.count - checks.failures.count)/\(checks.count) passed")
       checks.failures.forEach { log("FAIL: \($0)") }
     }

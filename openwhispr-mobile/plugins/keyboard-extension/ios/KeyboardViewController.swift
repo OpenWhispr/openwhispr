@@ -308,6 +308,14 @@ private final class KeyButton: UIButton {
   var hitTestOutsets = UIEdgeInsets(top: 6, left: 3, bottom: 6, right: 3)
   /// What the key inserts; the title is only what it shows (” displays, " inserts).
   var output: String?
+  /// A key with custom touch tracking still has a single activation for assistive input.
+  var accessibilityAction: (() -> Void)?
+
+  override func accessibilityActivate() -> Bool {
+    guard let accessibilityAction else { return super.accessibilityActivate() }
+    accessibilityAction()
+    return true
+  }
 
   var normalBackground: UIColor = .clear {
     didSet { refreshPressedLook() }
@@ -1154,6 +1162,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // first key needs it, and for good without Full Access or when the lexicon is missing;
   // the keyboard then types plainly, as it always did.
   private var typingEngine: TypingEngine?
+  private var typingDocument: UUID?
+  private var typingContextAfter: String?
+  private var learnedWordsClearSeen: String?
   private var didLoadTypingEngine = false
   /// Where the lexicons are, when not in the extension's bundle (tests, the harness).
   static var typingResourcesOverride: URL?
@@ -2355,6 +2366,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func showRecordingCanvas() {
+    hideEmojiPanel()
     setCanvasActionButtonsEnabled(true)
     recordingCanvas.isUserInteractionEnabled = true
 
@@ -2606,7 +2618,27 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       insertUntracked(text)
       return
     }
+    if replaceSelection(with: text, session: session) { return }
+    // A nonreporting host can withhold every callback. Recheck before a boundary can
+    // learn or replace the word, even if no field-change notification arrived.
+    if let first = text.first, !TypingSession.isWordCharacter(first) { session.policy = fieldPolicy }
     performEdit(session.insert(text))
+  }
+
+  /// The proxy removes a selection as one operation. Applying a word-sized sequence of
+  /// backspaces there would delete unselected characters after its first backspace.
+  private func replaceSelection(with text: String, session: TypingSession) -> Bool {
+    let proxy = textDocumentProxy
+    guard proxy.selectedText?.isEmpty == false else { return false }
+    session.reset()
+    session.resync(before: proxy.documentContextBeforeInput)
+    if text.isEmpty {
+      proxy.deleteBackward()
+    } else {
+      insertUntracked(text)
+      session.noteInserted(text)
+    }
+    return true
   }
 
   /// Text the session doesn't decide on.
@@ -2629,7 +2661,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       return
     }
     lastKeystrokeAt = CACurrentMediaTime()
-    if let edit = typing?.backspace() {
+    let session = typing
+    if let session, replaceSelection(with: "", session: session) { return }
+    if let edit = session?.backspace() {
       performEdit(edit)
     } else {
       textDocumentProxy.deleteBackward()
@@ -2668,7 +2702,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var typing: TypingSession? { loadedTypingEngine()?.session }
 
   private func loadedTypingEngine() -> TypingEngine? {
-    if didLoadTypingEngine { return typingEngine }
+    if didLoadTypingEngine {
+      if let session = typingEngine?.session, currentDocumentID != typingDocument {
+        attachTypingSession(session)
+      }
+      return typingEngine
+    }
     // Without Full Access the keyboard keeps to plain typing: there is no bar to show a
     // correction in and nowhere to keep learned words.
     guard hasFullAccess else { return nil }
@@ -2679,8 +2718,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       language: typingSettings.language, layout: typingSettings.layout, resources: resources, storage: storage
     )
     guard let engine = typingEngine else { return nil }
-    engine.session.policy = fieldPolicy
-    engine.session.resync(before: textDocumentProxy.documentContextBeforeInput)
+    attachTypingSession(engine.session)
     suggestionBar.quotes = typingSettings.language == .german ? ("\u{201E}", "\u{201C}") : ("\u{201C}", "\u{201D}")
     if let geometry = laidOutKeyGeometry() { engine.corrector.geometry = geometry }
     let language = typingSettings.language
@@ -2708,17 +2746,23 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func applyLearnedWordsClearIfNeeded() {
     guard hasFullAccess, let defaults = KeyboardHandoffProvider.shared.sharedDefaults(),
       let requested = defaults.string(forKey: TypingSettings.learnedWordsClearedAtKey),
-      requested != defaults.string(forKey: "keyboard_learned_words_cleared_applied_ms")
+      requested != learnedWordsClearSeen
     else { return }
-    let storage = KeyboardHandoffProvider.shared.containerURL()
-    if let engine = loadedTypingEngine() {
-      engine.clearLearnedWords(storage: storage)
-    } else if let storage {
-      for language in TypingLanguage.allCases {
-        try? FileManager.default.removeItem(at: TypingEngine.learnedWordsURL(in: storage, language: language))
+    if requested == defaults.string(forKey: "keyboard_learned_words_cleared_applied_ms") {
+      typingEngine?.reloadLearnedWords()
+    } else {
+      guard let storage = KeyboardHandoffProvider.shared.containerURL() else { return }
+      if let engine = loadedTypingEngine() {
+        guard engine.clearLearnedWords(storage: storage) else { return }
+      } else {
+        for language in TypingLanguage.allCases {
+          let store = LearnedWordStore(url: TypingEngine.learnedWordsURL(in: storage, language: language))
+          guard store.removeAll() else { return }
+        }
       }
+      defaults.set(requested, forKey: "keyboard_learned_words_cleared_applied_ms")
     }
-    defaults.set(requested, forKey: "keyboard_learned_words_cleared_applied_ms")
+    learnedWordsClearSeen = requested
   }
 
   /// What help the field gets: none where it asks for none, in address and number
@@ -2746,19 +2790,43 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       }
     }
     traits.hidesText = proxy.isSecureTextEntry == true || fieldHidesItsText
+      || (proxy.hasText && proxy.documentContextBeforeInput == nil && proxy.documentContextAfterInput == nil)
     var policy = TypingFieldPolicy(traits: traits)
     if !typingSettings.autocorrectEnabled { policy.autocorrects = false }
     return policy
   }
 
+  private func attachTypingSession(_ session: TypingSession) {
+    fieldSyncTimer?.invalidate()
+    typingDocument = currentDocumentID
+    typingContextAfter = textDocumentProxy.documentContextAfterInput
+    session.reset()
+    session.policy = fieldPolicy
+    session.resync(before: textDocumentProxy.documentContextBeforeInput)
+  }
+
   /// The field's text or cursor may have changed under the keyboard.
   private func syncTypingSessionWithField() {
     guard didLoadTypingEngine, let session = typingEngine?.session else { return }
+    let proxy = textDocumentProxy
+    if currentDocumentID != typingDocument {
+      attachTypingSession(session)
+      scheduleSuggestionRefresh()
+      return
+    }
+    let policy = fieldPolicy
+    if session.policy != policy {
+      session.policy = policy
+      scheduleSuggestionRefresh()
+    }
+    let after = proxy.documentContextAfterInput
+    let moved = after != typingContextAfter || proxy.selectedText?.isEmpty == false
+    typingContextAfter = after
     // Hosts report the keyboard's own typing back late, sometimes several keys late. While
     // keys are coming in, the session's own record of the text is the right one and a stale
     // report would only wind it back, so reports wait until typing pauses.
     let sinceKey = CACurrentMediaTime() - lastKeystrokeAt
-    guard sinceKey >= Metrics.fieldReportSettleDelay else {
+    guard moved || sinceKey >= Metrics.fieldReportSettleDelay else {
       fieldSyncTimer?.invalidate()
       let timer = Timer(timeInterval: Metrics.fieldReportSettleDelay - sinceKey + 0.02, repeats: false) { [weak self] _ in
         self?.syncTypingSessionWithField()
@@ -2767,10 +2835,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       fieldSyncTimer = timer
       return
     }
-    // The field's rules are read here, not on every key: they change with the field, and
-    // each read goes to the host.
-    session.policy = fieldPolicy
-    let proxy = textDocumentProxy
     // A field that reports nothing (it hides its text, or the host never reports) leaves
     // the session with what the keyboard itself typed.
     if proxy.documentContextBeforeInput != nil || !proxy.hasText {
@@ -2811,7 +2875,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func refreshSuggestions() {
-    let suggestions = didLoadTypingEngine || lastKeystrokeAt > 0 ? (typing?.suggestions() ?? []) : []
+    let canSuggest = (didLoadTypingEngine || lastKeystrokeAt > 0) && textDocumentProxy.selectedText?.isEmpty != false
+    let suggestions = canSuggest ? typing?.suggestions() ?? [] : []
     suggestionBar.show(suggestions)
     updateSuggestionBarVisibility()
   }
@@ -2938,7 +3003,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func handleSuggestionPicked(_ suggestion: Suggestion) {
-    guard let session = typing else { return }
+    guard let session = typing, session.policy.suggests, textDocumentProxy.selectedText?.isEmpty != false else { return }
     playKeyClick()
     lastKeystrokeAt = CACurrentMediaTime()
     performEdit(session.accept(suggestion))
@@ -2956,10 +3021,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func noteFieldReport() {
     let proxy = textDocumentProxy
-    if proxy.hasText || proxy.documentContextBeforeInput?.isEmpty == false
-      || proxy.documentContextAfterInput?.isEmpty == false
-    {
+    let before = proxy.documentContextBeforeInput
+    let after = proxy.documentContextAfterInput
+    if proxy.hasText || before?.isEmpty == false || after?.isEmpty == false {
       reportingDocument = currentDocumentID
+    }
+    if before == nil, after == nil, proxy.hasText || fieldHidesItsText {
+      typingEngine?.session.policy = .none
     }
   }
 
@@ -3208,7 +3276,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func commitSwipe(path: [CGPoint]) {
     guard let engine = loadedTypingEngine(), let decoder = swipeDecoder else { return }
     let session = engine.session
-    let context = session.nextLetterContext()
+    let context = isEmojiSearching ? nil : session.nextLetterContext()
     // A fast tap that slid off its key reaches here as a very short swipe. It was a key
     // press, and the recogniser has already cancelled the key's own touch, so the key it
     // began on is typed here; the same goes for a path no word fits.
@@ -3218,7 +3286,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let isShort = length < 1.5 * pitch
     let words = isShort
       ? []
-      : decoder.decode(path: path, previous: context.previous, sentenceStart: context.sentenceStart, limit: 4)
+      : decoder.decode(path: path, previous: context?.previous, sentenceStart: context?.sentenceStart ?? false, limit: 4)
     guard let best = words.first else {
       if let start = path.first, let key = keyboardRowsStack.hitTest(start, with: nil) as? KeyButton,
         let code = key.output?.utf16.first, letterButtonsByCode[code] === key
@@ -3234,8 +3302,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       return isShiftEnabled ? CaseShape.capitalisingFirst(word) : word
     }
     playKeyClick()
-    lastKeystrokeAt = CACurrentMediaTime()
-    performEdit(session.insertSwiped(cased(best), alternatives: words.dropFirst().map(cased)))
+    if isEmojiSearching {
+      emojiPanel?.appendSearchWord(cased(best))
+    } else {
+      lastKeystrokeAt = CACurrentMediaTime()
+      performEdit(session.insertSwiped(cased(best), alternatives: words.dropFirst().map(cased)))
+    }
     if !isCapsLocked, isShiftEnabled {
       isShiftEnabled = fieldCapitalization == .allCharacters
       refreshShiftState()
@@ -3318,7 +3390,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   // MARK: Space-bar trackpad
 
-  @objc private func handleSpaceTouch(_ sender: KeyButton, forEvent event: UIEvent) {
+  /// Keyboard and Switch Control activations can arrive without a physical touch.
+  @objc private func handleSpaceActivation(_ sender: KeyButton, forEvent event: UIEvent?) {
+    if event?.allTouches?.isEmpty != false { handleSpaceTapped() }
+  }
+
+  @objc private func handleSpaceTouch(_ sender: KeyButton, forEvent event: UIEvent?) {
+    guard let event else { return }
     guard let touch = event.allTouches?.first(where: { $0.view === sender || $0.view?.isDescendant(of: sender) == true })
       ?? event.allTouches?.first
     else { return }
@@ -4142,6 +4220,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // Tap, hold-for-trackpad and swipe are told apart by TrackpadGesture, so the space bar
     // reports every touch phase rather than a tap.
     spaceButton.addTarget(self, action: #selector(handleSpaceTouch(_:forEvent:)), for: .allTouchEvents)
+    spaceButton.addTarget(self, action: #selector(handleSpaceActivation(_:forEvent:)), for: .touchUpInside)
+    spaceButton.accessibilityAction = { [weak self] in self?.handleSpaceTapped() }
     spaceButton.setContentHuggingPriority(UILayoutPriority(1), for: .horizontal)
     spaceButton.setContentCompressionResistancePriority(UILayoutPriority(1), for: .horizontal)
     // Blank, as Apple's is; the OpenWhispr logo sits in the dictation pill.
@@ -5396,6 +5476,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func attachDirectDictation() {
     guard let direct = directDictation else { return }
     Self.directOwner = self
+    direct.readDocumentID = { [weak self] in self?.currentDocumentID }
     direct.attach(to: view)
     direct.onStateChange = { [weak self] state in self?.renderDirectState(state) }
     direct.onLevel = { [weak self] level in
@@ -5781,6 +5862,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// Shows the card on the given result, adopting its versions and (newest)
   /// active index. Seeds the local pager/session state the middle controls act on.
   private func showAgentReviewCard(_ result: AgentResult) {
+    hideEmojiPanel()
     isAgentReviewShown = true
     applyKeyboardHeight()
     agentReviewVersions = result.versions
@@ -5861,6 +5943,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// is cancelled or errors — the existing versions stay viewable/insertable).
   private func restoreAgentReviewCard() {
     guard !agentReviewVersions.isEmpty else { return }
+    hideEmojiPanel()
     isAgentReviewShown = true
     applyKeyboardHeight()
     displayActiveAgentVersion()

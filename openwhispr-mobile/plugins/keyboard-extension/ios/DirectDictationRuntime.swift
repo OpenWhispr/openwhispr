@@ -7,6 +7,7 @@ import UIKit
 protocol DirectDictationControlling: AnyObject {
   var canRecordHere: Bool { get }
   var state: DirectDictationState { get }
+  var readDocumentID: (() -> UUID?)? { get set }
   var onStateChange: ((DirectDictationState) -> Void)? { get set }
   var onLevel: ((Float) -> Void)? { get set }
   var onText: ((String) -> Void)? { get set }
@@ -57,7 +58,7 @@ final class DirectDictationRuntime {
   /// The path is usable right now: the snapshot and the session allow it, OpenWhispr has the
   /// microphone, and recording here wouldn't interrupt the user's audio.
   var canRecordHere: Bool {
-    guard hasContainer, dictation.isEligible, AVAudioApplication.shared.recordPermission == .granted else {
+    guard hasContainer, readDocumentID?() != nil, dictation.isEligible, AVAudioApplication.shared.recordPermission == .granted else {
       return false
     }
     let session = AVAudioSession.sharedInstance()
@@ -90,6 +91,11 @@ final class DirectDictationRuntime {
 @available(iOS 26.0, *)
 extension DirectDictationRuntime: DirectDictationControlling {
   var state: DirectDictationState { dictation.state }
+
+  var readDocumentID: (() -> UUID?)? {
+    get { dictation.readDocumentID }
+    set { dictation.readDocumentID = newValue }
+  }
 
   var onStateChange: ((DirectDictationState) -> Void)? {
     get { dictation.onStateChange }

@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// A change to the text before the cursor: delete `deleteCount` characters backwards, then
@@ -61,7 +62,9 @@ struct Suggestion: Equatable {
 /// the keyboard and in the benchmarks. Nothing here logs or leaves the process.
 final class TypingSession {
   let corrector: Autocorrector
-  var policy = TypingFieldPolicy()
+  var policy = TypingFieldPolicy() {
+    didSet { if policy == .none && oldValue != policy { reset() } }
+  }
   /// iOS text replacements: shortcut in lower case → what it stands for.
   var replacements: [String: String] = [:]
   var learnedWords: LearnedWordStore?
@@ -149,6 +152,7 @@ final class TypingSession {
 
   /// The edit for a key that types `text`, the text itself included.
   func insert(_ text: String) -> TextEdit {
+    guard policy != .none else { return TextEdit(insert: text) }
     guard let first = text.first else { return TextEdit() }
     var edit = TextEdit(deleteCount: 0, insert: text)
     let wasAutoSpace = endsWithAutoSpace
@@ -295,6 +299,7 @@ final class TypingSession {
 
   /// Text put in by something other than a key (a transcript, a paste).
   func noteInserted(_ text: String) {
+    guard policy != .none else { return }
     lastCorrection = nil
     lastSwipe = nil
     endsWithAutoSpace = false
@@ -329,19 +334,11 @@ final class TypingSession {
   /// The host moved the cursor or changed the text. `before` is the text it reports before
   /// the cursor; nil when it reports none.
   func resync(before: String?) {
-    guard let before else { return }
-    if tail.hasSuffix(before) || before.hasSuffix(tail) && before.count == tail.count { return }
-    // Hosts report the keyboard's own inserts late: a report that is the known text less
-    // its last characters is that, not a change.
-    if before.count >= 2 || tail.count <= 2 {
-      for dropped in 1...2 where tail.count >= dropped {
-        if String(tail.dropLast(dropped)).hasSuffix(before), !before.isEmpty || tail.count == dropped { return }
-      }
-    }
+    guard policy != .none, let before, before != tail else { return }
+    // The host can return the entire paragraph even though we kept only its trailing text.
+    if tail.count >= Self.tailLimit, before.suffix(Self.tailLimit) == tail.suffix(Self.tailLimit) { return }
+    reset()
     tail = String(before.suffix(TypingSession.tailLimit))
-    lastCorrection = nil
-    lastSwipe = nil
-    endsWithAutoSpace = false
   }
 
   func reset() {
@@ -464,64 +461,92 @@ final class TypingSession {
 /// the second time it is typed and left alone, or at once when the user undoes its correction
 /// or picks it in the suggestion bar.
 final class LearnedWordStore {
+  private struct Vocabulary: Codable, Equatable {
+    var counts: [String: Int] = [:]
+    var keptAsTyped: Set<String> = []
+  }
+
   private let url: URL?
-  private var counts: [String: Int]
+  private var vocabulary = Vocabulary()
   static let usesToLearn = 2
   static let limit = 2000
 
   /// `url` nil keeps the words in memory only.
   init(url: URL?) {
     self.url = url
-    if let url, let data = try? Data(contentsOf: url),
-      let stored = try? JSONDecoder().decode([String: Int].self, from: data)
-    {
-      counts = stored
-    } else {
-      counts = [:]
+    reload()
+  }
+
+  var words: [String] { vocabulary.counts.filter { $0.value >= Self.usesToLearn }.map(\.key).sorted() }
+  var keptAsTyped: Set<String> { vocabulary.keptAsTyped }
+
+  func noteUse(of word: String) -> Bool {
+    var learned = false
+    update {
+      let previous = $0.counts[word] ?? 0
+      guard previous < Self.usesToLearn else { return }
+      $0.counts[word] = previous + 1
+      learned = previous + 1 == Self.usesToLearn
+    }
+    return learned
+  }
+
+  /// An explicit choice to keep a spelling also applies when it is a dictionary word.
+  func learn(_ word: String) {
+    update {
+      $0.counts[word] = Self.usesToLearn
+      $0.keptAsTyped.insert(word)
     }
   }
 
-  var words: [String] { counts.filter { $0.value >= LearnedWordStore.usesToLearn }.map(\.key).sorted() }
-
-  /// True when this use made it a learned word.
-  func noteUse(of word: String) -> Bool {
-    let count = (counts[word] ?? 0) + 1
-    guard count <= LearnedWordStore.usesToLearn else { return false }
-    counts[word] = count
-    save()
-    return count == LearnedWordStore.usesToLearn
+  @discardableResult
+  func removeAll() -> Bool {
+    let cleared = update(forceWrite: true) { $0 = Vocabulary() }
+    vocabulary = Vocabulary()
+    return cleared
   }
 
-  func learn(_ word: String) {
-    guard (counts[word] ?? 0) < LearnedWordStore.usesToLearn else { return }
-    counts[word] = LearnedWordStore.usesToLearn
-    save()
-  }
-
-  func removeAll() {
-    counts.removeAll()
-    save()
-  }
-
-  /// Picks up a clear made by the app while the keyboard was open.
   func reload() {
     guard let url else { return }
-    if let data = try? Data(contentsOf: url), let stored = try? JSONDecoder().decode([String: Int].self, from: data) {
-      counts = stored
-    } else {
-      counts = [:]
-    }
+    vocabulary = Self.read(url)
   }
 
-  private func save() {
-    guard let url else { return }
-    if counts.count > LearnedWordStore.limit {
-      // Words seen once go first.
-      let singles = counts.filter { $0.value < LearnedWordStore.usesToLearn }.keys.sorted()
-      for word in singles.prefix(counts.count - LearnedWordStore.limit) { counts[word] = nil }
+  private static func read(_ url: URL) -> Vocabulary {
+    guard let data = try? Data(contentsOf: url) else { return Vocabulary() }
+    let decoder = JSONDecoder()
+    if let saved = try? decoder.decode(Vocabulary.self, from: data) { return saved }
+    // The original format counted observations without recording explicit rejections.
+    let counts = (try? decoder.decode([String: Int].self, from: data)) ?? [:]
+    return Vocabulary(counts: counts)
+  }
+
+  /// Each host can retain a keyboard instance. Merge a single observation with the latest
+  /// file under a shared lock, so an older keyboard cannot write back words another cleared.
+  @discardableResult
+  private func update(forceWrite: Bool = false, _ change: (inout Vocabulary) -> Void) -> Bool {
+    guard let url else {
+      change(&vocabulary)
+      return true
     }
-    if let data = try? JSONEncoder().encode(counts) {
-      try? data.write(to: url, options: .atomic)
+    // Atomic writes replace the dictionary's inode. A stable sibling is the lock, and a
+    // suspended holder must never block the keyboard's main thread.
+    let descriptor = open(url.appendingPathExtension("lock").path, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
+    guard descriptor >= 0 else { return false }
+    defer { close(descriptor) }
+    guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else { return false }
+    let existing = Self.read(url)
+    vocabulary = existing
+    change(&vocabulary)
+    guard forceWrite || vocabulary != existing else { return true }
+    if vocabulary.counts.count > Self.limit {
+      let singles = vocabulary.counts.filter { $0.value < Self.usesToLearn }.keys.sorted()
+      for word in singles.prefix(vocabulary.counts.count - Self.limit) { vocabulary.counts[word] = nil }
+    }
+    do {
+      try JSONEncoder().encode(vocabulary).write(to: url, options: .atomic)
+      return true
+    } catch {
+      return false
     }
   }
 }

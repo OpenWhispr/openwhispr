@@ -9,6 +9,7 @@ final class TypingEngine {
   let corrector: Autocorrector
   let session: TypingSession
   let learnedWords: LearnedWordStore
+  private var systemWords = SupplementaryWords()
 
   /// `resources` holds lexicon-<language>.bin. `storage` is the App Group container, where
   /// learned words stay; nil keeps them in memory (no Full Access, tests).
@@ -21,9 +22,9 @@ final class TypingEngine {
       lexicon: lexicon, language: language, geometry: .nominal(language: language, layout: layout)
     )
     learnedWords = LearnedWordStore(url: storage.map { TypingEngine.learnedWordsURL(in: $0, language: language) })
-    for word in learnedWords.words { corrector.learned.insert(word) }
     session = TypingSession(corrector: corrector)
     session.learnedWords = learnedWords
+    applyLearnedWords()
   }
 
   static func learnedWordsURL(in storage: URL, language: TypingLanguage) -> URL {
@@ -31,14 +32,28 @@ final class TypingEngine {
   }
 
   /// Forgets every learned word, in this keyboard and on disk, for every language.
-  func clearLearnedWords(storage: URL?) {
-    learnedWords.removeAll()
-    corrector.learned.removeAll()
-    corrector.keptAsTyped.removeAll()
-    guard let storage else { return }
+  @discardableResult
+  func clearLearnedWords(storage: URL?) -> Bool {
+    var cleared = learnedWords.removeAll()
+    applyLearnedWords()
+    guard let storage else { return cleared }
     for language in TypingLanguage.allCases where language != self.language {
-      try? FileManager.default.removeItem(at: TypingEngine.learnedWordsURL(in: storage, language: language))
+      if !LearnedWordStore(url: Self.learnedWordsURL(in: storage, language: language)).removeAll() { cleared = false }
     }
+    return cleared
+  }
+
+  func reloadLearnedWords() {
+    learnedWords.reload()
+    applyLearnedWords()
+  }
+
+  private func applyLearnedWords() {
+    corrector.learned = systemWords
+    corrector.keptAsTyped.removeAll()
+    for word in learnedWords.words { corrector.learned.insert(word) }
+    for word in learnedWords.keptAsTyped { corrector.keepAsTyped(word) }
+    session.reset()
   }
 
   /// iOS text replacements ("omw" → "On my way!") and names from Contacts, from UILexicon:
@@ -49,7 +64,10 @@ final class TypingEngine {
     for entry in entries {
       if entry.input.lowercased() == entry.replacement.lowercased() {
         // Single words only: the corrector looks words up one at a time.
-        if !entry.replacement.contains(" ") { corrector.learned.insert(entry.replacement) }
+        if !entry.replacement.contains(" ") {
+          systemWords.insert(entry.replacement)
+          corrector.learned.insert(entry.replacement)
+        }
       } else {
         replacements[entry.input.lowercased()] = entry.replacement
       }
