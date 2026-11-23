@@ -51,9 +51,11 @@ jobs:
       - name: Audit dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Install Linux native test dependencies
+        # zsh: the macOS wipe script, tested here, writes its audit line with
+        # it, as every Mac has it.
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libatspi2.0-dev libglib2.0-dev libx11-dev libxtst-dev libxext-dev xvfb
+          sudo apt-get install -y build-essential pkg-config libatspi2.0-dev libglib2.0-dev libx11-dev libxtst-dev libxext-dev xvfb zsh
       - name: Build better-sqlite3 for the runner's node
         # --ignore-scripts skips the native build, so DB-backed tests silently
         # skip unless the binding is rebuilt for the CI Node runtime.
