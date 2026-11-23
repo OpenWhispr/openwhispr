@@ -4,10 +4,10 @@
   "publicationCommit": null,
   "sourceCommit": null,
   "contractHashes": {
-    "schema": "279ad1cbee9443b8af734f826c00f8f177f33b52affbf462b46e68ee202b7bb0",
+    "schema": "1a2f4888c9e02751c2e748742f0ad6643dd3d7152b5f779300851b0406b8b9d4",
     "envelope": "ad6476c1f69d0a0a141c4856f456b6ecc1b0abed38dcca57ce10b8aab21b7ca9",
     "selection": "390b8a538a301f259d1dec8674ed7500c4270259f2a254892467917970b94f41"
   },
-  "clientContract": "f9a2ff658b1239a25cd8e4eedf2c29f83aa74214aa71d897535fe0b7b2e41403",
-  "catalogSha256": "a16a8931d2080497cbe3e61c5b3802b6027df03260f0c7986f3426051c445b05"
+  "clientContract": "3f0aa2baf2f7d9069a34cddba003c22014e4c76f7d2930d11bafd9400eebc475",
+  "catalogSha256": "d12ecd13d9295f75812500523f49440f0f440da4395de5984d1c7d9f87fdc78f"
 }

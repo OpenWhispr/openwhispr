@@ -13,7 +13,7 @@ Until November 2026 the registry was its own repository, `OpenWhispr/model-regis
 - `registry/whisper.json` / `registry/parakeet.json`: local transcription models.
 - `registry/legacy.json`: preserved compatibility data, not editable.
 - `registry/trusted-publishers.json`: Hugging Face organisations allowed to supply files.
-- `test/seed.json`: the catalog of the first app that read the registry (the floor every publication must keep).
+- `test/seed.json`: the catalog of the first app that read the registry, plus any provider added since (the floor every publication must keep).
 - `../src/models/`: the copy the desktop app bundles, generated from this folder by `npm run model-registry:sync` at the repository root. The desktop checks fail when it differs.
 - `compat/clients/<contract>/`: the catalog readers of released apps, which CI tests every catalog against.
 
@@ -75,7 +75,7 @@ Apps released before the move read `OpenWhispr/model-registry`'s `published` bra
 
 An app release bundles the signed publication of the catalog at its commit (`npm run model-registry:pin-release`). A release cut while a registry change is merged but not yet published fails with a message to approve the waiting publication first.
 
-To undo a bad publication quickly, run **Publish model registry** by hand (Actions → Publish model registry → Run workflow) with the version to restore. It republishes that version's data under a new number: models retired since stay retired, and models added since come back as legacy (hidden from new choices, still working for anyone already using them). Then fix `main`, or its next publication will bring the bad data back. A model that must stop working for everyone (a broken file, a provider shutdown) is retired in a normal pull request instead.
+To undo a bad publication quickly, run **Publish model registry** by hand (Actions → Publish model registry → Run workflow) with the version to restore. It republishes that version's data under a new number: models retired since stay retired, and models added since come back as legacy (hidden from new choices, still working for anyone already using them). A provider added since comes back with its models as legacy too. Then fix `main`, or its next publication will bring the bad data back. A model that must stop working for everyone (a broken file, a provider shutdown) is retired in a normal pull request instead.
 
 A publication must keep testing every reader the last one was tested with. To stop serving a very old app, list its contract in `compat/dropped-clients.json` in a reviewed pull request.
 
