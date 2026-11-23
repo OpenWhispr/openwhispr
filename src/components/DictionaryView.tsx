@@ -63,13 +63,12 @@ import {
   SORT_LABEL_KEYS,
   type SortKey,
 } from "./dictionary/dictionaryViewModel";
-import { useSettings } from "../hooks/useSettings";
 import { useListsOwnerRevision } from "../hooks/useListsOwnerRevision";
 import { getSettings } from "../stores/settingsStore";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useAuth } from "../hooks/useAuth";
 import { useSharedDictionaryStore, type ListKey } from "../stores/sharedDictionaryStore";
-import { getAgentName } from "../utils/agentName";
+import { useAgentName } from "../utils/agentName";
 import { parseDictionaryImportText } from "../helpers/dictionaryImport";
 import {
   DICTIONARY_MAX_WORDS,
@@ -189,11 +188,9 @@ function DictionaryPage({
   listsOwner,
 }: DictionaryViewProps & { listsOwner: number }): ReactElement {
   const { t, i18n } = useTranslation();
-  const {
-    customDictionary,
-    updateCustomDictionary: updateStoredDictionary,
-    snippets,
-  } = useSettings();
+  const customDictionary = useSettingsStore((settings) => settings.customDictionary);
+  const updateStoredDictionary = useSettingsStore((settings) => settings.updateCustomDictionary);
+  const snippets = useSettingsStore((settings) => settings.snippets);
   const updateCustomDictionary = useCallback(
     (changes: { add?: string[]; remove?: string[] }): void =>
       updateStoredDictionary(changes, listsOwner),
@@ -209,7 +206,7 @@ function DictionaryPage({
   );
   const currentSharingScope = useRef(sharingScope);
   currentSharingScope.current = sharingScope;
-  const agentName = getAgentName();
+  const { agentName } = useAgentName();
   const { toast } = useToast();
 
   const status = useSharedDictionaryStore((state) => state.status);

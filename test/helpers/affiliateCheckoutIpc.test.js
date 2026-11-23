@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const { captureAuthFence } = require("../../src/helpers/cloudApiRequest");
+const { createCloudApiRequestHandler } = require("../../src/helpers/cloudApiRequest");
 
 function setup() {
   const handlers = new Map();
@@ -11,23 +11,23 @@ function setup() {
   const requests = [];
   let fetch = async () => new Response(JSON.stringify({ url: "https://checkout.stripe.com/test" }));
   const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
+  const handleCloudApiRequest = createCloudApiRequestHandler({
+    getApiUrl: () => "https://api.openwhispr.test",
+    getAppVersion: () => "1.0.0",
+    tokenStore: { getState: () => ({ ...state }) },
+    proxyFetch: async (...args) => {
+      requests.push(args);
+      return fetch(...args);
+    },
+  });
   vm.runInNewContext(
     source.slice(
-      source.indexOf("    const fetchStripeUrl ="),
+      source.indexOf("    const requestBilling ="),
       source.indexOf('    ipcMain.handle("cloud-switch-plan"')
     ),
     {
       ipcMain: { handle: (channel, callback) => handlers.set(channel, callback) },
-      getApiUrl: () => "https://api.openwhispr.test",
-      getAuthHeader: async () => ({ Authorization: `Bearer ${state.token}` }),
-      captureAuthFence,
-      tokenStore: { getState: () => ({ ...state }) },
-      proxyFetch: async (...args) => {
-        requests.push(args);
-        return fetch(...args);
-      },
-      debugLogger: { error() {} },
-      JSON,
+      handleCloudApiRequest,
     }
   );
   return {

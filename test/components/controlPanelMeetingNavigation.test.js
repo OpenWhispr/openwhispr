@@ -126,6 +126,8 @@ async function mount(t, navigation, transcriptionStart, features = {}, apiOverri
       setTimeout: (fn, ms) => setTimeout(fn, ms),
       clearTimeout: (id) => clearTimeout(id),
     },
+    // The dialog primitive records the focused opener on open.
+    globals: { HTMLElement: class HTMLElement {} },
   });
   const container = installHostDom(t);
   const vite = await createRendererServer(t, {
@@ -153,8 +155,15 @@ async function mount(t, navigation, transcriptionStart, features = {}, apiOverri
     },
   });
   const { default: ControlPanel } = await vite.ssrLoadModule("/components/ControlPanel.tsx");
+  const { createSettingsNavigationStore } = await vite.ssrLoadModule(
+    "/stores/settingsNavigationStore.ts"
+  );
   root = createRoot(container);
-  await React.act(async () => root.render(React.createElement(ControlPanel)));
+  await React.act(async () =>
+    root.render(
+      React.createElement(ControlPanel, { settingsNavigation: createSettingsNavigationStore() })
+    )
+  );
   return calls;
 }
 

@@ -51,6 +51,7 @@ async function createRouterHarness(t, initialStorage = {}) {
       "/stores/policyStore": `
         export const usePolicyStore = (selector) => selector(globalThis.__appRouterOnboardingTest.policy);
         usePolicyStore.getState = () => ({ bootstrap: async () => {} });
+        usePolicyStore.subscribe = () => () => {};
       `,
       "/lib/auth": `export async function signOut() {}`,
       "/components/ui/button": `export function Button({ children }) { return children; }`,

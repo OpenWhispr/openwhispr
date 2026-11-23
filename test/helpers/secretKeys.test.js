@@ -13,6 +13,7 @@ process.resourcesPath = tmpUserData; // Electron-only global; harmless dummy for
 const fakeElectron = {
   app: { getPath: () => tmpUserData },
   safeStorage: { isEncryptionAvailable: () => false },
+  BrowserWindow: { getAllWindows: () => [] },
 };
 const origLoad = Module._load;
 Module._load = function (request, ...rest) {
@@ -23,6 +24,11 @@ Module._load = function (request, ...rest) {
 
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const EnvironmentManager = require("../../src/helpers/environment");
+// These are accessor/manifest checks, not disk tests. Never read a developer's
+// .env or copy inherited credentials into the fixture's plaintext fallback.
+EnvironmentManager.prototype.loadEnvironmentVariables = () => {};
+const writeEnvFileAtomic = EnvironmentManager.prototype._writeEnvFileAtomic;
+EnvironmentManager.prototype._writeEnvFileAtomic = async () => {};
 
 test("manifest entries are unique and complete", () => {
   const seen = { base: new Set(), env: new Set(), storeKey: new Set() };
@@ -98,6 +104,8 @@ test("self-hosted header JSON round-trips through the existing plaintext fallbac
   const previous = process.env.SELF_HOSTED_STT_HEADERS;
   try {
     const env = new EnvironmentManager();
+    // This round trip is a disk test: write the fixture's own .env for real.
+    env._writeEnvFileAtomic = writeEnvFileAtomic;
     env.saveSelfHostedSttHeaders(serialized);
     await env.saveAllKeysToEnvFile();
     const saved = require("dotenv").parse(fs.readFileSync(path.join(tmpUserData, ".env")));

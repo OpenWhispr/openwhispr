@@ -1,36 +1,81 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { CheckCircle, XCircle, Loader2, Copy } from "./icons";
 import { TechnicalErrorDetails } from "./ui/TechnicalErrorDetails";
 import type { TechnicalErrorDetailsData } from "./ui/useToast";
 
+import {
+  getAuthRequestContextSnapshot,
+  getAuthRequestContextServerSnapshot,
+  subscribeAuthRequestContext,
+} from "../lib/authRequestContext";
+
 interface TestConnectionButtonProps {
   provider: string;
   getConfig: () => Record<string, unknown>;
+  /** Semantic, memory-only identity; callback identity is not configuration. */
+  configurationKey: string;
 }
 
-export default function TestConnectionButton({ provider, getConfig }: TestConnectionButtonProps) {
+export default function TestConnectionButton({
+  provider,
+  getConfig,
+  configurationKey,
+}: TestConnectionButtonProps) {
   const { t } = useTranslation();
-  const [status, setStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const auth = useSyncExternalStore(
+    subscribeAuthRequestContext,
+    getAuthRequestContextSnapshot,
+    getAuthRequestContextServerSnapshot
+  );
+  const owner = JSON.stringify([
+    provider,
+    configurationKey,
+    auth.sessionUserId,
+    auth.observedGeneration,
+    auth.validatedGeneration,
+  ]);
+  const [feedback, setFeedback] = useState<{
+    owner: string;
+    status: "idle" | "testing" | "success" | "error";
+  }>({ owner, status: "idle" });
+  const status = feedback.owner === owner ? feedback.status : "idle";
+  const setStatus = (status: typeof feedback.status) => setFeedback({ owner, status });
   const [errorInfo, setErrorInfo] = useState<{
-    message: string;
+    message?: string;
+    messageKey?: string;
+    messageParams?: Record<string, unknown>;
     action?: string;
+    actionKey?: string;
     copyCommand?: string;
     technicalDetails?: TechnicalErrorDetailsData;
   } | null>(null);
   const requestIdRef = useRef(0);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    return () => {
-      requestIdRef.current += 1;
-      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    };
-  }, []);
+  if (feedback.owner !== owner) {
+    setFeedback({ owner, status: "idle" });
+    setErrorInfo(null);
+  }
+  const liveOwnerRef = useRef<string | null>(null);
+  const bindFeedback = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) return;
+      liveOwnerRef.current = owner;
+      return () => {
+        liveOwnerRef.current = null;
+        requestIdRef.current += 1;
+        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      };
+    },
+    [owner]
+  );
 
   const handleTest = async () => {
+    if (liveOwnerRef.current !== owner) return;
     const requestId = ++requestIdRef.current;
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     setStatus("testing");
     setErrorInfo(null);
     try {
@@ -44,10 +89,12 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
       } else {
         setStatus("error");
         setErrorInfo({
-          message: result?.messageKey
-            ? t(result.messageKey, result.messageParams)
-            : result?.error || t("reasoning.enterprise.testFailed"),
-          action: result?.actionKey ? t(result.actionKey) : result?.action,
+          message: result?.error,
+          messageKey:
+            result?.messageKey || (!result?.error ? "reasoning.enterprise.testFailed" : undefined),
+          messageParams: result?.messageParams,
+          action: result?.action,
+          actionKey: result?.actionKey,
           copyCommand: result?.copyCommand,
           technicalDetails: result?.technicalDetails,
         });
@@ -55,7 +102,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
     } catch {
       if (requestId !== requestIdRef.current) return;
       setStatus("error");
-      setErrorInfo({ message: "Connection test failed unexpectedly." });
+      setErrorInfo({ messageKey: "reasoning.enterprise.testFailed" });
     }
   };
 
@@ -64,7 +111,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
   };
 
   return (
-    <div className="space-y-2 pt-2">
+    <div ref={bindFeedback} className="space-y-2 pt-2">
       <Button
         type="button"
         variant="outline"
@@ -86,11 +133,13 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
       {status === "error" && errorInfo && (
         <div className="rounded-md bg-destructive/10 border border-destructive/20 p-2.5 space-y-1.5">
           <p dir="auto" className="text-xs text-destructive font-medium">
-            {errorInfo.message}
+            {errorInfo.messageKey
+              ? t(errorInfo.messageKey, errorInfo.messageParams)
+              : errorInfo.message}
           </p>
-          {errorInfo.action && (
+          {(errorInfo.actionKey || errorInfo.action) && (
             <p dir="auto" className="text-xs text-muted-foreground">
-              {errorInfo.action}
+              {errorInfo.actionKey ? t(errorInfo.actionKey) : errorInfo.action}
             </p>
           )}
           {errorInfo.copyCommand && (

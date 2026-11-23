@@ -85,14 +85,15 @@ test("Insights Sync opt-in changes only device analytics consent", async (t) => 
       "./useAuth": `
         export const useAuth = () => ({ user: { id: "account-1" } });
       `,
-      "./useSettings": `
-        export const useSettings = () => ({
-          insightsSyncEnabled: globalThis.__insightsSyncEnabled,
+      "/stores/settingsStore": `
+        const state = {
+          get insightsSyncEnabled() { return globalThis.__insightsSyncEnabled; },
           setInsightsSyncEnabled: (enabled) => {
             globalThis.__insightsSyncEnabled = enabled;
             globalThis.__insightsSetEnabledValues.push(enabled);
           }
-        });
+        };
+        export const useSettingsStore = (selector) => selector(state);
       `,
       "/lib/authRequestContext": `
         export const getValidatedAuthGeneration = () => globalThis.__insightsAuthGeneration;

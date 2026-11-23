@@ -17,7 +17,11 @@ import {
   resolveManagedEnterpriseScope,
   managedScopesForConfig,
 } from "../helpers/enterpriseManagedConfig.mjs";
-import { isLlmSelectionAllowed, isTranscriptionSelectionAllowed } from "./policyRules";
+import {
+  isLlmSelectionAllowed,
+  isTranscriptionSelectionAllowed,
+  type PolicyDecisionSnapshot,
+} from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 
 interface EnterpriseIdentityState {
@@ -338,6 +342,45 @@ function refreshOnFocus(): void {
 function ensureLifecycleListeners(): void {
   if (lifecycleListenersReady || typeof window === "undefined") return;
   lifecycleListenersReady = true;
+  // Diagnostics follow accepted identity/policy transitions, never resolver reads.
+  let conflicts = new Set<string>();
+  const reportConflicts = () => {
+    const state = useEnterpriseIdentityStore.getState();
+    const next = new Set<string>();
+    for (const scope of summarize(state.config).managed) {
+      const resolution = resolveManagedEnterpriseScope(
+        state.config,
+        scope,
+        "auto"
+      ) as ManagedEnterpriseScopeResolution;
+      if (
+        resolution.kind !== "managed" ||
+        isManagedSelectionAllowedByPolicy(scope, resolution.provider, usePolicyStore.getState())
+      )
+        continue;
+      const required = resolution.mode === "managed_required" || !resolution.allowManualSetup;
+      const key = JSON.stringify([
+        state.accountId,
+        state.workspaceId,
+        state.authGeneration,
+        scope,
+        resolution.provider,
+        required,
+      ]);
+      next.add(key);
+      if (!conflicts.has(key)) {
+        logger.warn("Managed enterprise provider is blocked by workspace policy", {
+          provider: resolution.provider,
+          scope,
+          required,
+        });
+      }
+    }
+    conflicts = next;
+  };
+  useEnterpriseIdentityStore.subscribe(reportConflicts);
+  usePolicyStore.subscribe(reportConflicts);
+  reportConflicts();
   window.addEventListener("focus", refreshOnFocus);
   let expiryTimer: number | undefined;
   const poll = (): void => {
@@ -428,9 +471,9 @@ const MANAGED_SCOPE_ALIASES: Partial<Record<ManagedEnterpriseScope, ManagedEnter
 
 function isManagedSelectionAllowedByPolicy(
   scope: ManagedEnterpriseScope,
-  provider: string
+  provider: string,
+  policy: PolicyDecisionSnapshot
 ): boolean {
-  const policy = usePolicyStore.getState();
   const selection = { mode: "enterprise" as const, provider };
   return scope === "transcription"
     ? isTranscriptionSelectionAllowed(policy, selection)
@@ -442,6 +485,7 @@ function resolveScope(
   requestedScope: ManagedEnterpriseScope,
   setupMode: EnterpriseSetupMode,
   scopeHold: false | "unavailable" | "loading",
+  policy: PolicyDecisionSnapshot,
   operation: "batch" | "realtime" = "batch"
 ): ManagedEnterpriseScopeResolution {
   const scope = MANAGED_SCOPE_ALIASES[requestedScope] ?? requestedScope;
@@ -469,14 +513,9 @@ function resolveScope(
   ) as ManagedEnterpriseScopeResolution;
   if (
     resolution.kind === "managed" &&
-    !isManagedSelectionAllowedByPolicy(scope, resolution.provider)
+    !isManagedSelectionAllowedByPolicy(scope, resolution.provider, policy)
   ) {
     const required = resolution.mode === "managed_required" || !resolution.allowManualSetup;
-    logger.warn("Managed enterprise provider is blocked by workspace policy", {
-      provider: resolution.provider,
-      scope,
-      required,
-    });
     return required
       ? {
           kind: "error",
@@ -574,6 +613,7 @@ export function getManagedScopeResolution(
     scope,
     setupMode,
     scopeFailsClosed(state, scope, setupMode, operation),
+    usePolicyStore.getState(),
     operation
   );
 }
@@ -597,5 +637,6 @@ export function useManagedScopeResolution(
   const scopeHold = useEnterpriseIdentityStore((state) =>
     scopeFailsClosed(state, scope, setupMode, operation)
   );
-  return resolveScope(config, scope, setupMode, scopeHold, operation);
+  const policy = usePolicyStore((state) => state);
+  return resolveScope(config, scope, setupMode, scopeHold, policy, operation);
 }

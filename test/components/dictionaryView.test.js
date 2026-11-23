@@ -22,7 +22,8 @@ const MOCKS = {
     export const getSettings = () => globalThis.__settings;
     // Local dictation always gets the dictionary, so the OpenRouter notice stays hidden.
     export const selectPolicyEffectiveSettings = () => ({ useLocalWhisper: true });
-    export const useSettingsStore = (selector) => selector({});
+    // The page reads its words through store selectors.
+    export const useSettingsStore = (selector) => selector(globalThis.__settings ?? {});
     // Whose lists the page shows: a test moves them to another account by
     // bumping the revision, as main's account-scope broadcast does.
     export const getListsOwnerRevision = () => globalThis.__listsOwner.revision;
@@ -45,6 +46,7 @@ const MOCKS = {
   `,
   "/utils/agentName": `
     export const getAgentName = () => "Whispr";
+    export const useAgentName = () => ({ agentName: "Whispr" });
   `,
   "/stores/sharedDictionaryStore": `
     export function useSharedDictionaryStore(selector) { return selector(globalThis.__shared); }

@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
+import type { SettingsNavigationStore } from "../../stores/settingsNavigationStore";
 import { useTranslation } from "react-i18next";
 import { Monitor } from "../icons";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -19,7 +20,11 @@ import PermissionCard from "../ui/PermissionCard";
 import PromptStudio from "../ui/PromptStudio";
 import InferenceConfigEditor from "./InferenceConfigEditor";
 
-export default function DictationAgentSettings() {
+export default function DictationAgentSettings({
+  navigation,
+}: {
+  navigation?: SettingsNavigationStore;
+}) {
   const { t } = useTranslation();
   const useDictationAgent = useSettingsStore((s) => s.useDictationAgent);
   const setUseDictationAgent = useSettingsStore((s) => s.setUseDictationAgent);
@@ -46,15 +51,16 @@ export default function DictationAgentSettings() {
   const screenContextActive = voiceAgentScreenContext && screenContextAllowed;
 
   const { agentName, setAgentName } = useAgentName();
-  const [agentNameInput, setAgentNameInput] = useState(agentName);
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const agentNameInput = nameDraft ?? agentName;
   const { showAlertDialog } = useDialogs();
 
-  const handleSaveAgentName = useCallback(() => {
+  const handleSaveAgentName = () => {
     const trimmed = agentNameInput.trim();
 
     // setAgentName also moves the name in the dictionary.
     setAgentName(trimmed);
-    setAgentNameInput(trimmed);
+    setNameDraft(null);
 
     showAlertDialog({
       title: t("settingsPage.agentConfig.dialogs.updatedTitle"),
@@ -62,19 +68,16 @@ export default function DictationAgentSettings() {
         name: trimmed,
       }),
     });
-  }, [agentNameInput, setAgentName, showAlertDialog, t]);
+  };
 
-  const handleScreenContextToggle = useCallback(
-    (enabled: boolean) => {
-      setVoiceAgentScreenContext(enabled);
-      // Keeps the dictation overlay out of its own screenshots.
-      window.electronAPI?.setScreenContextEnabled?.(enabled);
-      if (enabled && isMacOS && !screenGranted) {
-        void requestScreenAccess();
-      }
-    },
-    [setVoiceAgentScreenContext, isMacOS, screenGranted, requestScreenAccess]
-  );
+  const handleScreenContextToggle = (enabled: boolean) => {
+    setVoiceAgentScreenContext(enabled);
+    // Keeps the dictation overlay out of its own screenshots.
+    window.electronAPI?.setScreenContextEnabled?.(enabled);
+    if (enabled && isMacOS && !screenGranted) {
+      void requestScreenAccess();
+    }
+  };
 
   const instructionMode = t("settingsPage.agentConfig.instructionMode");
   const examples = [
@@ -99,10 +102,13 @@ export default function DictationAgentSettings() {
             <div className="space-y-3">
               <div className="flex gap-2">
                 <Input
+                  aria-label={t("settingsPage.agentConfig.agentName")}
                   dir="auto"
                   placeholder={t("settingsPage.agentConfig.placeholder")}
                   value={agentNameInput}
-                  onChange={(e) => setAgentNameInput(e.target.value)}
+                  onChange={(e) =>
+                    setNameDraft(e.target.value === agentName ? null : e.target.value)
+                  }
                   className="flex-1 text-center text-base font-mono"
                 />
                 <Button onClick={handleSaveAgentName} disabled={!agentNameInput.trim()} size="sm">
@@ -161,6 +167,7 @@ export default function DictationAgentSettings() {
             }
           >
             <Toggle
+              ariaLabel={t("dictationAgent.enabled")}
               checked={useDictationAgent}
               onChange={setUseDictationAgent}
               disabled={!agentAllowed}
@@ -169,7 +176,9 @@ export default function DictationAgentSettings() {
         </SettingsPanelRow>
       </SettingsPanel>
 
-      {useDictationAgent && <InferenceConfigEditor scope="dictationAgent" />}
+      {useDictationAgent && (
+        <InferenceConfigEditor scope="dictationAgent" navigation={navigation} />
+      )}
 
       {/* Screen context is a voice-agent sub-feature: hidden when an org
           blocks the agent, since enabling it would grant screen-capture
@@ -193,6 +202,7 @@ export default function DictationAgentSettings() {
                 }
               >
                 <Toggle
+                  ariaLabel={t("dictationAgent.screenContext.enable")}
                   checked={screenContextActive}
                   onChange={handleScreenContextToggle}
                   disabled={!screenSupported || !screenContextAllowed}
@@ -206,6 +216,7 @@ export default function DictationAgentSettings() {
                   description={t("dictationAgent.screenContext.visionModelDescription")}
                 >
                   <Toggle
+                    ariaLabel={t("dictationAgent.screenContext.visionModel")}
                     checked={useDictationAgentVisionModel}
                     onChange={setUseDictationAgentVisionModel}
                   />
@@ -229,7 +240,11 @@ export default function DictationAgentSettings() {
             </p>
           )}
           {screenContextActive && visionOverrideAllowed && useDictationAgentVisionModel && (
-            <InferenceConfigEditor scope="dictationAgentVision" allowedModes={["providers"]} />
+            <InferenceConfigEditor
+              scope="dictationAgentVision"
+              navigation={navigation}
+              allowedModes={["providers"]}
+            />
           )}
         </div>
       )}

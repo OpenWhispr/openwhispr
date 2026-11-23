@@ -24,6 +24,10 @@ function findElement(node, predicate) {
   return predicate(node) ? node : findElement(node.props?.children, predicate);
 }
 
+// The card's selection is an overlay button inside the card root.
+const selectionButton = (card) =>
+  findElement(card, (node) => node.type === "button" && "aria-pressed" in node.props);
+
 async function loadModelCardList(t) {
   installBrowserGlobals(t);
   const container = installHookDom(t);
@@ -99,7 +103,7 @@ test("a legacy card is marked, can't be picked, and offers no download", async (
     findElement(downloaded, (node) => node.props?.children === "models.legacy"),
     "a Legacy badge says why"
   );
-  downloaded.props.onClick();
+  selectionButton(downloaded).props.onClick();
   assert.deepEqual(selected, []);
   const remove = findElement(
     downloaded,
@@ -118,6 +122,6 @@ test("a legacy card is marked, can't be picked, and offers no download", async (
   const current = await card({ ...CURRENT, isDownloaded: true }, false);
   assert.equal(current.props["aria-disabled"], undefined);
   assert.equal(current.props.title, undefined);
-  current.props.onClick();
+  selectionButton(current).props.onClick();
   assert.deepEqual(selected, ["current"]);
 });

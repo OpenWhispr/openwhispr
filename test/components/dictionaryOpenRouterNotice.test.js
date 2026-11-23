@@ -33,8 +33,8 @@ function textsOf(node, found = []) {
 
 // Mounts DictionaryView under React's client lifecycle, so the settings and
 // enterprise stores update it live; the returned element tree is the boundary.
-// Words come from useSettings (stubbed); the dictation route comes from the
-// real settings store, exactly as the page reads it.
+// Words and the dictation route both come from the real settings store, exactly
+// as the page reads them.
 async function mountDictionary(t) {
   let unmount = async () => {};
   t.after(() => unmount());
@@ -53,18 +53,10 @@ async function mountDictionary(t) {
         }
         export const initReactI18next = { type: "3rdParty", init() {} };
       `,
-      "/hooks/useSettings": `
-        export function useSettings() {
-          return {
-            customDictionary: globalThis.__dictionaryWords,
-            updateCustomDictionary() {},
-            snippets: [],
-          };
-        }
-      `,
       "/SnippetsView": "export default function SnippetsView() { return null; }",
       "/ui/useToast": "export function useToast() { return { toast() {} }; }",
-      "/utils/agentName": "export function getAgentName() { return 'Nova'; }",
+      "/utils/agentName":
+        "export function getAgentName() { return 'Nova'; } export function useAgentName() { return { agentName: 'Nova' }; }",
       // Signed out with no shared dictionary, so the page shows Personal alone and
       // starts no account or shared-list requests that outlive the test.
       "/hooks/useAuth": "export function useAuth() { return { isSignedIn: false, user: null }; }",
@@ -88,10 +80,6 @@ async function mountDictionary(t) {
         useSharedDictionaryStore.getState = () => state;
       `,
     },
-  });
-  globalThis.__dictionaryWords = [];
-  t.after(() => {
-    delete globalThis.__dictionaryWords;
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
@@ -118,9 +106,9 @@ async function mountDictionary(t) {
   };
 
   const notices = async (dictation, words = ["Kubernetes"]) => {
-    globalThis.__dictionaryWords = words;
     await React.act(async () => {
       useSettingsStore.setState({
+        customDictionary: words,
         useLocalWhisper: false,
         cloudTranscriptionMode: "byok",
         transcriptionMode: "providers",

@@ -3298,9 +3298,11 @@ test("a late product event binding cannot recreate the queue for an erased accou
 test("Reset App Data erases the product event store and interrupted writes", async (t) => {
   const originalApiUrl = process.env.OPENWHISPR_API_URL;
   const originalTokenState = tokenState;
+  const originalAudioStorage = fakeThis.audioStorageManager;
   const collector = fakeThis.productEvents;
   t.after(() => {
     collector.dispose();
+    fakeThis.audioStorageManager = originalAudioStorage;
     delete connectorManager.revokeAllStored;
     tokenState = originalTokenState;
     if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
@@ -3308,6 +3310,10 @@ test("Reset App Data erases the product event store and interrupted writes", asy
   });
   process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
   connectorManager.revokeAllStored = async () => {};
+  // Reset reports audio it couldn't remove, so the stub answers like an empty folder.
+  fakeThis.audioStorageManager = {
+    deleteAllAudio: () => ({ deleted: 0, failedIds: [], failed: false }),
+  };
   t.mock.method(electronStub.net, "fetch", async () => ({ ok: false, status: 503 }));
   tokenState = { token: "reset-bearer", generation: 94 };
   await setScope("reset-account", 94);
@@ -3357,10 +3363,16 @@ test("Reset App Data removes guest creator links and interrupted candidate write
   const previousDomain = process.env.OPENWHISPR_AFFILIATE_DOMAIN;
   const previousRevoke = connectorManager.revokeAllStored;
   const previousTokenState = tokenState;
+  const previousAudioStorage = fakeThis.audioStorageManager;
   process.env.OPENWHISPR_AFFILIATE_ENABLED = "true";
   process.env.OPENWHISPR_AFFILIATE_DOMAIN = "try.openwhispr.com";
   connectorManager.revokeAllStored = async () => {};
+  // Reset reports audio it couldn't remove, so the stub answers like an empty folder.
+  fakeThis.audioStorageManager = {
+    deleteAllAudio: () => ({ deleted: 0, failedIds: [], failed: false }),
+  };
   t.after(() => {
+    fakeThis.audioStorageManager = previousAudioStorage;
     if (previousEnabled === undefined) delete process.env.OPENWHISPR_AFFILIATE_ENABLED;
     else process.env.OPENWHISPR_AFFILIATE_ENABLED = previousEnabled;
     if (previousDomain === undefined) delete process.env.OPENWHISPR_AFFILIATE_DOMAIN;

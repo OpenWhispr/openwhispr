@@ -13,6 +13,8 @@ export interface ReasoningConfig {
   /** Local models: how long to wait for another model's answer before giving up. */
   busyWaitMs?: number;
   systemPrompt?: string;
+  /** Request-local cleanup template, without changing cleanup wrapping/sampling/purpose. */
+  cleanupPrompt?: string;
   lanUrl?: string;
   baseUrl?: string;
   customApiKey?: string;
@@ -65,14 +67,16 @@ export abstract class BaseReasoningService {
 
   protected getSystemPrompt(
     agentName: string | null,
-    toneStyle?: DictationToneStyle | null
+    toneStyle?: DictationToneStyle | null,
+    promptTemplate?: string
   ): string {
     return getCleanupSystemPrompt(
       agentName,
       this.getCustomDictionary(),
       this.getPreferredLanguage(),
       this.getUiLanguage(),
-      toneStyle
+      toneStyle,
+      promptTemplate
     );
   }
 

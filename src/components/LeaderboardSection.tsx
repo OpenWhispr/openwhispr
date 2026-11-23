@@ -739,6 +739,7 @@ export default function LeaderboardSection({
         defaultName={domainToWorkspaceName(access?.domain ?? null)}
         open={createWorkspaceOpen}
         onOpenChange={setCreateWorkspaceOpen}
+        onReconciled={() => loadAccess()}
         onCreated={(workspaceId) => {
           const created = useWorkspaceStore
             .getState()

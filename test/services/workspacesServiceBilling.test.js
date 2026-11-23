@@ -21,48 +21,42 @@ function installCloudCapture(t, responseData = { url: CHECKOUT_URL }) {
   return requests;
 }
 
-test("billingCheckout without options keeps the pre-enterprise wire body", async (t) => {
+test("billingCheckout maps the buyer's options to the API's request field names", async (t) => {
   const requests = installCloudCapture(t);
   const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
 
-  const url = await WorkspacesService.billingCheckout("ws-1", "annual");
-
-  assert.equal(url, CHECKOUT_URL);
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].method, "POST");
-  assert.equal(requests[0].path, "/api/workspaces/ws-1/billing/checkout");
-  assert.deepEqual(requests[0].body, { interval: "annual" });
+  const cases = [
+    {
+      interval: "annual",
+      options: undefined,
+      expectedBody: { interval: "annual" },
+    },
+    {
+      interval: "monthly",
+      options: { tier: "enterprise", additionalSeats: 4 },
+      expectedBody: { interval: "monthly", tier: "enterprise", additional_seats: 4 },
+    },
+    {
+      interval: "monthly",
+      options: { tier: "enterprise", additionalSeats: 0 },
+      expectedBody: { interval: "monthly", tier: "enterprise" },
+    },
+  ];
+  for (const { interval, options } of cases) {
+    const url = await WorkspacesService.billingCheckout("ws-1", interval, options);
+    assert.equal(url, CHECKOUT_URL, `checkout url (${JSON.stringify(options ?? null)})`);
+  }
+  assert.deepEqual(
+    requests.map(({ method, path, body }) => ({ method, path, body })),
+    cases.map(({ expectedBody }) => ({
+      method: "POST",
+      path: "/api/workspaces/ws-1/billing/checkout",
+      body: expectedBody,
+    }))
+  );
 });
 
-test("billingCheckout sends the enterprise tier and extra seats in the API's field names", async (t) => {
-  const requests = installCloudCapture(t);
-  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
-
-  await WorkspacesService.billingCheckout("ws-1", "monthly", {
-    tier: "enterprise",
-    additionalSeats: 4,
-  });
-
-  assert.deepEqual(requests[0].body, {
-    interval: "monthly",
-    tier: "enterprise",
-    additional_seats: 4,
-  });
-});
-
-test("billingCheckout omits additional_seats when the buyer keeps current occupancy", async (t) => {
-  const requests = installCloudCapture(t);
-  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
-
-  await WorkspacesService.billingCheckout("ws-1", "monthly", {
-    tier: "enterprise",
-    additionalSeats: 0,
-  });
-
-  assert.deepEqual(requests[0].body, { interval: "monthly", tier: "enterprise" });
-});
-
-test("previewEnterpriseUpgrade posts no body and returns the preview unchanged", async (t) => {
+test("previewEnterpriseUpgrade and upgradeToEnterprise POST no body; the preview returns unchanged", async (t) => {
   const preview = {
     prorated_amount: 12300,
     currency: "usd",
@@ -75,23 +69,44 @@ test("previewEnterpriseUpgrade posts no body and returns the preview unchanged",
   const requests = installCloudCapture(t, preview);
   const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
 
-  const result = await WorkspacesService.previewEnterpriseUpgrade("ws-1");
-
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].method, "POST");
-  assert.equal(requests[0].path, "/api/workspaces/ws-1/billing/preview-upgrade");
-  assert.equal(requests[0].body, undefined);
-  assert.deepEqual(result, preview);
-});
-
-test("upgradeToEnterprise posts to the upgrade endpoint with no body", async (t) => {
-  const requests = installCloudCapture(t, { plan: "enterprise" });
-  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
-
+  assert.deepEqual(await WorkspacesService.previewEnterpriseUpgrade("ws-1"), preview);
   await WorkspacesService.upgradeToEnterprise("ws-1");
 
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].method, "POST");
-  assert.equal(requests[0].path, "/api/workspaces/ws-1/billing/upgrade");
-  assert.equal(requests[0].body, undefined);
+  assert.deepEqual(
+    requests.map(({ method, path, body }) => ({ method, path, body })),
+    [
+      { method: "POST", path: "/api/workspaces/ws-1/billing/preview-upgrade", body: undefined },
+      { method: "POST", path: "/api/workspaces/ws-1/billing/upgrade", body: undefined },
+    ]
+  );
+});
+
+test("seat preview uses a relative increase while confirmation sends the quoted absolute quantity", async (t) => {
+  const preview = {
+    current_quantity: 5,
+    next_quantity: 6,
+    seats_used: 4,
+    amount_due: 1500,
+    currency: "usd",
+  };
+  const requests = installCloudCapture(t, preview);
+  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
+
+  assert.deepEqual(await WorkspacesService.previewSeats("ws-1", 1), preview);
+  await WorkspacesService.updateSeats("ws-1", preview.next_quantity);
+  assert.deepEqual(
+    requests.map(({ method, path, body }) => ({ method, path, body })),
+    [
+      {
+        method: "POST",
+        path: "/api/workspaces/ws-1/billing/preview-seats",
+        body: { additional_seats: 1 },
+      },
+      {
+        method: "POST",
+        path: "/api/workspaces/ws-1/billing/seats",
+        body: { quantity: 6 },
+      },
+    ]
+  );
 });

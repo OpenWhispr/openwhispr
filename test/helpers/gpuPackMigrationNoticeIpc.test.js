@@ -111,6 +111,7 @@ function setUp({ startedMinimized, controlPanel, destroyed = [] }) {
     startedMinimized,
     mainWindow,
     controlPanelWindow,
+    setSettingsBlocked() {},
     setOnboardingActive: () => true,
   };
   const take = (window) =>

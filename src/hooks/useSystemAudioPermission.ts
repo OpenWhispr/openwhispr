@@ -8,22 +8,33 @@ export function useSystemAudioPermission() {
   const [access, setAccess] = useState<SystemAudioAccessResult | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const checkingRef = useRef(false);
+  const requestId = useRef(0);
 
   const check = useCallback(async () => {
     if (checkingRef.current) return;
+    const request = ++requestId.current;
     checkingRef.current = true;
     setIsChecking(true);
     try {
       const result = await window.electronAPI?.checkSystemAudioAccess?.();
-      setAccess(result ?? DEFAULT_SYSTEM_AUDIO_ACCESS);
+      if (request === requestId.current) setAccess(result ?? DEFAULT_SYSTEM_AUDIO_ACCESS);
+    } catch {
+      // An unavailable refresh must not discard a previously confirmed grant.
     } finally {
-      checkingRef.current = false;
-      setIsChecking(false);
+      if (request === requestId.current) {
+        checkingRef.current = false;
+        setIsChecking(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    check();
+    void check();
+    const requests = requestId;
+    return () => {
+      ++requests.current;
+      checkingRef.current = false;
+    };
   }, [check]);
 
   useEffect(() => {
@@ -38,36 +49,40 @@ export function useSystemAudioPermission() {
   }, []);
 
   const request = useCallback(async (): Promise<boolean> => {
-    const currentAccess =
-      access ??
-      (await window.electronAPI?.checkSystemAudioAccess?.()) ??
-      DEFAULT_SYSTEM_AUDIO_ACCESS;
+    const id = ++requestId.current;
+    checkingRef.current = true;
+    setIsChecking(true);
+    try {
+      const currentAccess =
+        access ??
+        (await window.electronAPI?.checkSystemAudioAccess?.()) ??
+        DEFAULT_SYSTEM_AUDIO_ACCESS;
+      if (id !== requestId.current) return false;
 
-    if (currentAccess.mode === "loopback") {
-      setAccess(currentAccess);
-      return currentAccess.granted;
-    }
-
-    if (currentAccess.mode === "portal") {
-      if (!currentAccess.supportsOnboardingGrant) {
+      if (
+        currentAccess.mode === "loopback" ||
+        (currentAccess.mode === "portal" && !currentAccess.supportsOnboardingGrant)
+      ) {
         setAccess(currentAccess);
         return currentAccess.granted;
       }
-    } else if (currentAccess.mode !== "native") {
-      setAccess(currentAccess);
-      return false;
-    }
+      if (currentAccess.mode !== "native" && currentAccess.mode !== "portal") {
+        setAccess(currentAccess);
+        return false;
+      }
 
-    setIsChecking(true);
-    try {
       const result = await window.electronAPI?.requestSystemAudioAccess?.();
+      if (id !== requestId.current) return false;
       const nextAccess = result ?? currentAccess;
       setAccess(nextAccess);
       return nextAccess.granted;
     } catch {
       return false;
     } finally {
-      setIsChecking(false);
+      if (id === requestId.current) {
+        checkingRef.current = false;
+        setIsChecking(false);
+      }
     }
   }, [access]);
 

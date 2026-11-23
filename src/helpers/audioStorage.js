@@ -180,15 +180,23 @@ class AudioStorageManager {
   }
 
   deleteAllAudio({ exceptTranscriptionIds = [] } = {}) {
+    const failedIds = new Set();
+    let deleted = 0;
+    let failed = false;
     try {
       const except = new Set(exceptTranscriptionIds.map(String));
       const files = fs
         .readdirSync(this.audioDir)
         .filter((f) => f.endsWith(".webm") && !except.has(transcriptionIdFromFile(f)));
       for (const file of files) {
+        const basename = path.basename(file, ".webm");
+        const id = basename.slice(basename.lastIndexOf("-") + 1);
         try {
           fs.unlinkSync(path.join(this.audioDir, file));
+          deleted++;
         } catch (error) {
+          failed = true;
+          failedIds.add(id);
           debugLogger.error(
             "Failed to delete audio file",
             { file, error: error.message },
@@ -196,12 +204,12 @@ class AudioStorageManager {
           );
         }
       }
-      debugLogger.info("All audio deleted", { count: files.length }, "audio-storage");
-      return { deleted: files.length };
+      debugLogger.info("Audio deletion complete", { count: deleted, failed }, "audio-storage");
     } catch (error) {
+      failed = true;
       debugLogger.error("Failed to delete all audio", { error: error.message }, "audio-storage");
-      return { deleted: 0 };
     }
+    return { deleted, failedIds: [...failedIds], failed };
   }
 
   getStorageUsage({ exceptTranscriptionIds = [] } = {}) {

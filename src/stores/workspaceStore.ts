@@ -51,7 +51,7 @@ interface WorkspaceState {
    * server: an answer to a request sent before that change is dropped, and a new one is sent.
    */
   refresh: (options?: { fresh?: boolean }) => Promise<void>;
-  createWorkspace: (name: string) => Promise<Workspace>;
+  createWorkspace: (name: string) => Promise<Workspace | null>;
   refreshMembers: (workspaceId: string) => Promise<void>;
 }
 
@@ -519,11 +519,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const workspace = await WorkspacesService.create(name);
     // A new workspace is a new leaderboard scope.
     clearCachedLeaderboards();
-    if (generation === accountGeneration) {
-      set((s) => ({ workspaces: [...s.workspaces, workspace] }));
-      // A list request sent before the create would answer without it and drop it again.
-      if (refreshPromise) void get().refresh({ fresh: true });
-    }
+    if (generation !== accountGeneration) return null;
+    set((s) => ({ workspaces: [...s.workspaces, workspace] }));
+    // A list request sent before the create would answer without it and drop it again.
+    if (refreshPromise) void get().refresh({ fresh: true });
     return workspace;
   },
 

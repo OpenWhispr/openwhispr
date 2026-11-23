@@ -183,7 +183,7 @@ test("meeting and upload mode picks leave the shared enterprise setup mode to it
   let tree;
   root = createRoot(container);
   function Harness() {
-    tree = Panel();
+    tree = Panel({});
     return null;
   }
   const selector = () => elements(tree).find((node) => node.props.modes && node.props.onSelect);

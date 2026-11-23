@@ -929,6 +929,33 @@ test("deleting all audio and its storage count leave another account's recording
   assert.equal((await invoke("get-audio-storage-usage")).fileCount, 1);
 });
 
+test("deleting all audio clears missing files' flags and keeps those of files it couldn't delete", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const record = () => {
+    const { id } = db.saveTranscription("A's recording");
+    db.updateTranscriptionAudio(id, { hasAudio: 1 });
+    return id;
+  };
+  const missing = record();
+  const locked = record();
+  let result = { deleted: 0, failedIds: [], failed: true };
+  target.audioStorageManager = { deleteAllAudio: () => result };
+
+  await invoke("delete-all-audio");
+  assert.equal(db.getTranscriptionById(missing).has_audio, 1, "a failed listing deleted nothing");
+
+  result = { deleted: 0, failedIds: [String(locked)], failed: true };
+  await invoke("delete-all-audio");
+  assert.equal(
+    db.getTranscriptionById(missing).has_audio,
+    0,
+    "a file already gone clears its flag"
+  );
+  assert.equal(db.getTranscriptionById(locked).has_audio, 1, "a failed delete keeps its flag");
+});
+
 test("a scoped cloud hard-delete removes the row and its recording", async (t) => {
   const db = setup(t);
   if (!db) return;

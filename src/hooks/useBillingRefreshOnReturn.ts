@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 const POLL_DELAYS_MS = [4000, 8000, 16000];
 
@@ -26,9 +26,11 @@ export function armBillingRefreshOnReturn(refresh: () => void): void {
   };
 }
 
-/** Component wrapper: the armed watch always calls the latest render's callback. */
+/** The module-owned watch retains the latest committed callback, even after unmount. */
 export function useBillingRefreshOnReturn(refresh: () => void): () => void {
   const refreshRef = useRef(refresh);
-  refreshRef.current = refresh;
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
   return useCallback(() => armBillingRefreshOnReturn(() => refreshRef.current()), []);
 }
