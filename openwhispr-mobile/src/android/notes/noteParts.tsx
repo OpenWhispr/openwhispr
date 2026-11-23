@@ -11,6 +11,7 @@ import { useReduceMotion } from '../settings/kit';
 import { BackButton, IconButton, notesLook } from './look';
 import { initialsOf } from './initials';
 import { useNotesT } from './strings';
+import { wordAtPoint, type TextLine } from './wordAtPoint';
 
 /** E1's top row: back left, Share and ⋯ right. The title scrolls with the note below it. */
 export function NoteTopBar({ onShare, onMore }: { onShare?: () => void; onMore: () => void }) {
@@ -372,11 +373,13 @@ export function NoSummaryCard({
 }
 
 /** E3: who said what, a time beside each name; a voice guess shows "Is this Priya?". */
-const WORD = /(\p{L}[\p{L}\p{N}'’-]*)/u;
-
 /**
  * A transcript line whose words can be long-pressed (Dictionary's C9). The word being fixed
  * gets a blue wash. Without `onWordLongPress` the line stays selectable as before.
+ *
+ * One press handler per line, not one per word: a tappable span per word made Android lay
+ * out and track hundreds of links, and the Transcript tab scrolled at a fraction of the frame
+ * rate (A73: 17% janky frames vs 3%). The pressed word is found from the line layout instead.
  */
 function TranscriptText({
   text,
@@ -387,6 +390,7 @@ function TranscriptText({
   onWordLongPress?: (word: string, x: number, y: number) => void;
   highlight?: string | null;
 }) {
+  const lines = useRef<TextLine[]>([]);
   const style = { fontSize: 16, lineHeight: 23, color: home.text };
   if (!onWordLongPress)
     return (
@@ -394,29 +398,34 @@ function TranscriptText({
         {text}
       </Text>
     );
+  const wanted = highlight?.toLowerCase();
   return (
-    <Text style={style}>
-      {text.split(WORD).map((part, index) =>
-        index % 2 === 1 ? (
-          <Text
-            key={index}
-            suppressHighlighting
-            onLongPress={(event) => {
-              safeHaptics('selection');
-              onWordLongPress(part, event.nativeEvent.pageX, event.nativeEvent.pageY);
-            }}
-            style={
-              highlight && part.toLowerCase() === highlight.toLowerCase()
-                ? { backgroundColor: look.selFill, color: home.accent }
-                : undefined
-            }
-          >
-            {part}
-          </Text>
-        ) : (
-          part
-        ),
-      )}
+    <Text
+      style={style}
+      suppressHighlighting
+      onTextLayout={(event) => {
+        lines.current = event.nativeEvent.lines;
+      }}
+      onLongPress={(event) => {
+        const { locationX, locationY, pageX, pageY } = event.nativeEvent;
+        const word = wordAtPoint(lines.current, locationX, locationY);
+        if (!word) return;
+        safeHaptics('selection');
+        onWordLongPress(word, pageX, pageY);
+      }}
+    >
+      {wanted
+        ? // Only the word being fixed is its own span, and it takes no touches.
+          text.split(/(\p{L}[\p{L}\p{N}'’-]*)/u).map((part, index) =>
+            index % 2 === 1 && part.toLowerCase() === wanted ? (
+              <Text key={index} style={{ backgroundColor: look.selFill, color: home.accent }}>
+                {part}
+              </Text>
+            ) : (
+              part
+            ),
+          )
+        : text}
     </Text>
   );
 }
