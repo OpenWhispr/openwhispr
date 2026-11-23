@@ -3,8 +3,9 @@
     python3 -I tools/compose-keyboard-comparisons.py <our screenshots dir> <output dir>
 
 Our screenshots come from tests/run-keyboard-sim-harness.py --screenshots (named
-<device>-<layout>-<appearance>-<orientation>-<state>.png). The Apple references are in
-docs/keyboard-screenshots/apple-reference; the keyboard is cut out of each (without the system
+<device>-<layout>-<appearance>-<orientation>-<state>.png). The Apple references are read from
+docs/keyboard-screenshots/apple-reference (not in the repository: take them on a simulator with
+Apple's keyboard, named the same way; without one, ours is written alone); the keyboard is cut out of each (without the system
 bar below the keys), scaled to the same width as ours and stacked above it. Uses macOS `sips`
 for cropping and scaling and writes PNGs no wider than 1200 px. Standard library only.
 """

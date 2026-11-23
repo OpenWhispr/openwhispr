@@ -3,7 +3,7 @@
 Run with `python3 -I tools/build-benchmarks.py` after `tools/fetch-sources.sh`. Output goes to
 tests/benchmarks/. Everything is deterministic (fixed seeds, sorted inputs), so a rebuild from the
 same downloads gives the same bytes. The test splits are frozen: their SHA-256 hashes are in
-docs/keyboard-iteration-ledger.md, and this script refuses to overwrite a test split that differs.
+tests/benchmarks/README.md, and this script refuses to overwrite a test split that differs.
 
 Sources (see data/LICENSES.md):
 - Universal Dependencies English-EWT and German-GSD (CC BY-SA 4.0): sentences.
