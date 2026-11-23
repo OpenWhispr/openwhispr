@@ -4,11 +4,7 @@ import {
   type RealtimeSession,
   type RealtimeUtterance,
 } from './RealtimeMeetingWsService';
-import {
-  finishSpeakers,
-  startSpeakers,
-  type LiveSpeakerResult,
-} from '@/android/liveSpeakers/live';
+import { finishSpeakers, startSpeakers, type LiveSpeakerResult } from '@/android/liveSpeakers/live';
 
 export type CloudMeetingStatus = 'connecting' | 'live' | 'reconnecting' | 'error';
 
@@ -87,6 +83,18 @@ export function useCloudMeeting({
     setError(null);
     setElapsedSeconds(0);
     setStatus('connecting');
+    // A key saved for meetings connects each leg itself; otherwise OpenWhispr Cloud does.
+    let deps: ReturnType<typeof import('./providers/liveMeeting').liveMeetingDeps>;
+    try {
+      // Loaded here so the hook's importers don't pull in the settings store.
+      const { liveMeetingDeps } =
+        require('./providers/liveMeeting') as typeof import('./providers/liveMeeting');
+      deps = liveMeetingDeps(language);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setStatus('error');
+      return;
+    }
     // Before the transport, so speaker labelling counts the meeting's first audio frame.
     const live = startSpeakers(noteId, (labels) => {
       if (!cancelled && !controller.signal.aborted) setSpeakerLabels(labels);
@@ -128,7 +136,7 @@ export function useCloudMeeting({
           if (!cancelled && !controller.signal.aborted && !stoppedRef.current) setStatus('live');
         },
       },
-      live?.wrap(),
+      live ? live.wrap(deps) : deps,
     );
     startupRef.current = startup;
     startup
