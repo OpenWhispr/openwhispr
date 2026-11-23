@@ -209,9 +209,12 @@ export function ListRow({
   right,
   selected,
   destructive,
+  accent,
 }: {
   icon?: LucideIconName;
   iconColor?: string;
+  /** An action row ("New folder", "Add people"): the title in the accent colour. */
+  accent?: boolean;
   title: string;
   subtitle?: string;
   value?: string;
@@ -249,7 +252,14 @@ export function ListRow({
         <NoteTile icon={icon} color={destructive ? look.error : (iconColor ?? home.accent)} />
       )}
       <View style={{ flex: 1, gap: 2 }}>
-        <Text numberOfLines={1} style={[notesLook.rowTitle, destructive && { color: look.error }]}>
+        <Text
+          numberOfLines={1}
+          style={[
+            notesLook.rowTitle,
+            accent && { color: home.accent },
+            destructive && { color: look.error },
+          ]}
+        >
           {title}
         </Text>
         {subtitle ? (

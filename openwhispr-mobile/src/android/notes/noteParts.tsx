@@ -41,11 +41,14 @@ export function MetaChip({
   label,
   onPress,
   testID,
+  quiet,
 }: {
   icon?: LucideIconName;
   label: string;
   onPress?: () => void;
   testID?: string;
+  /** N1b: a missing chip ("Add to folder") in grey, which is also where you fill it in. */
+  quiet?: boolean;
 }) {
   return (
     <Pressable
@@ -67,10 +70,21 @@ export function MetaChip({
         },
       ]}
     >
-      <SystemIcon name="circle" mdName={icon} size={13} color={home.secondary} />
+      <SystemIcon
+        name="circle"
+        mdName={icon}
+        size={13}
+        color={quiet ? home.tertiary : home.secondary}
+      />
       <Text
         numberOfLines={1}
-        style={{ fontSize: 13, lineHeight: 18, fontWeight: '500', color: home.text }}
+        style={{
+          flexShrink: 1,
+          fontSize: 13,
+          lineHeight: 18,
+          fontWeight: '500',
+          color: quiet ? home.secondary : home.text,
+        }}
       >
         {label}
       </Text>

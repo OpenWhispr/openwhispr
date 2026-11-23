@@ -233,3 +233,33 @@ it('does not clear a newer session when a cancelled finish settles', async () =>
   });
   expect(second.finish).toHaveBeenCalledTimes(1);
 });
+
+it('lets a Stop already draining finish after the screen goes away (Figma R2b)', async () => {
+  const final = deferred<void>();
+  const live = session();
+  live.finish = jest.fn(() => final.promise);
+  const utterance = { itemId: 'last', text: 'Last words.', startMs: 0, endMs: 900 };
+  start.mockResolvedValue(live);
+  const { result, unmount } = renderHook(() => useCloudMeeting({ enabled: true }));
+  await act(async () => undefined);
+  let stopped!: ReturnType<typeof result.current.stop>;
+  act(() => {
+    stopped = result.current.stop();
+  });
+  unmount();
+  expect(start.mock.calls[0][0]?.signal?.aborted).toBe(false);
+  expect(live.stop).not.toHaveBeenCalled();
+  jest.mocked(live.utterances).mockReturnValue([utterance]);
+  final.resolve();
+  await expect(stopped).resolves.toEqual([utterance]);
+});
+
+it('still closes a live session when the screen goes away without Stop', async () => {
+  const live = session();
+  start.mockResolvedValue(live);
+  const { unmount } = renderHook(() => useCloudMeeting({ enabled: true }));
+  await act(async () => undefined);
+  unmount();
+  expect(start.mock.calls[0][0]?.signal?.aborted).toBe(true);
+  expect(live.stop).toHaveBeenCalled();
+});

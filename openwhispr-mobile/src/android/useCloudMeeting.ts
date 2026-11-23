@@ -129,6 +129,9 @@ export function useCloudMeeting({
     return () => {
       cancelled = true;
       stoppedRef.current = true;
+      // Stop and save opens the note at once (Figma R2b); a finish already running ends the
+      // session itself, so leaving the screen must not cut off its last words.
+      if (finishRef.current) return;
       controller.abort();
       void sessionRef.current?.stop();
       sessionRef.current = null;
