@@ -13,6 +13,7 @@ import { SvgXml } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { glassEdge, gloss, glossPressed, home } from '../home/kit';
+import { inset, knob, raised, raisedPressed, theme } from '../theme';
 import { APP_LOGOS, type AppLogo } from './appLogos';
 import { useTranslation } from 'react-i18next';
 import { exampleResult, exampleSet, parseExample } from './examples';
@@ -22,16 +23,16 @@ import type { DictationTone, ToneKind } from './toneStyle';
 
 /** Tone & Style's colours (Figma "Styles · Variant B"). */
 export const ink = {
-  canvas: '#F2F1EF',
-  segmentTrack: '#E7E6E3',
-  preview: '#F7F6F4',
-  theirBubble: '#E9E8E5',
+  canvas: theme.canvas,
+  segmentTrack: theme.track,
+  preview: theme.surface2,
+  theirBubble: theme.track,
   yourBubble: '#E3EBFC',
-  dropped: 'rgba(110,109,105,0.45)',
+  dropped: 'rgba(102,99,110,0.45)',
   added: '#3466E2',
-  track: '#E6E5E2',
-  progressIdle: '#E1E0DC',
-  dotIdle: '#CFCEC9',
+  track: theme.track,
+  progressIdle: theme.trackStrong,
+  dotIdle: theme.dotIdle,
   pickedRing: 'rgba(52,102,226,0.9)',
 };
 
@@ -388,7 +389,7 @@ export function ToneSlider({
             top: 11,
             height: 6,
             borderRadius: 3,
-            backgroundColor: ink.track,
+            ...inset,
           }}
         />
         {width > 0 &&
@@ -420,14 +421,10 @@ export function ToneSlider({
                 width: KNOB,
                 height: KNOB,
                 borderRadius: KNOB / 2,
-                alignItems: 'center',
-                justifyContent: 'center',
               },
-              gloss,
+              knob,
             ]}
-          >
-            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFFFFF' }} />
-          </View>
+          />
         )}
       </View>
       {/* Each stop's name gets a third of the width and wraps there, so long names (Russian)
@@ -454,7 +451,7 @@ export function ToneSlider({
   );
 }
 
-/** The 36 white close circle at the top left of every setup step. */
+/** The 36 raised close circle at the top left of every setup step. */
 export function CloseButton({ onPress }: { onPress: () => void }) {
   const t = useStyleT();
   return (
@@ -465,15 +462,15 @@ export function CloseButton({ onPress }: { onPress: () => void }) {
       hitSlop={6}
       onPress={onPress}
       style={({ pressed }) => [
-        glassEdge,
+        raised,
         {
           width: 36,
           height: 36,
           borderRadius: 18,
           alignItems: 'center',
           justifyContent: 'center',
-          opacity: pressed ? 0.7 : 1,
         },
+        pressed && raisedPressed,
       ]}
     >
       <SystemIcon name="xmark" mdName="X" size={16} color={home.text} />

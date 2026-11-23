@@ -7,7 +7,8 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AndroidDictation, type Recording } from '../../../modules/android-dictation/src';
 import { useHomeT } from './strings';
 import { gloss, glossPressed, home, type } from './kit';
-import { edge, look } from '../settings/look';
+import { look } from '../settings/look';
+import { raised } from '../theme';
 
 const BARS = 48;
 const BAR_MAX = 48;
@@ -136,7 +137,7 @@ export function TryItRecorder({
             >
               <View
                 style={{
-                  ...edge,
+                  ...raised,
                   width: 36,
                   height: 36,
                   borderRadius: 18,

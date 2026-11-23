@@ -7,6 +7,7 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -18,6 +19,7 @@ import type { KeyCheckState } from '../settings/keyCheck';
 import { Radio } from '../settings/ModelListRow';
 import { noOrphan } from '../settings/strings';
 import type { SheetTask } from '../settings/ownKey';
+import { raised, raisedPressed } from '../theme';
 import {
   CountBadge,
   PLACE_ICON,
@@ -55,19 +57,21 @@ export function TaskChip({
       {tag && <Tag label={tag.label} neutral={tag.neutral} />}
     </>
   );
-  const chip = (pressed: boolean): ViewStyle => ({
-    minHeight: 32,
-    paddingVertical: 6,
-    paddingLeft: 8,
-    paddingRight: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.10)',
-    backgroundColor: pressed ? home.canvas : home.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  });
+  // Raised (D9): tapping a task chip moves the task.
+  const chip = (pressed: boolean): StyleProp<ViewStyle> => [
+    raised,
+    {
+      minHeight: 32,
+      paddingVertical: 6,
+      paddingLeft: 8,
+      paddingRight: 12,
+      borderRadius: 999,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    pressed && raisedPressed,
+  ];
   if (!onPress)
     return (
       <View accessible accessibilityLabel={accessibilityLabel ?? label} style={chip(false)}>

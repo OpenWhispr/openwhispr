@@ -7,13 +7,14 @@ import type { SheetTask } from '../settings/ownKey';
 import type { Place, Source } from './places';
 import { PROVIDER_LOGOS } from './providerLogos';
 import { look as settingsLook } from '../settings/look';
+import { raised, raisedPressed } from '../theme';
 
 /**
  * Processing in OpenWhispr's design language (Figma sections 8 and 9): the desktop's glass edge
  * on cards and fields, the Home's glossy tile for the place in use, desktop provider logos.
  * The shared values live in `settings/look.ts`, so Settings and Processing stay one look.
  */
-export const look = { ...settingsLook, pickedRow: 'rgba(21,75,212,0.08)' };
+export const look = { ...settingsLook, pickedRow: 'rgba(21,85,212,0.08)' };
 
 export { edgeCard, sectionLabel } from '../settings/look';
 
@@ -121,7 +122,7 @@ export function CountBadge({ label }: { label: string }) {
         paddingHorizontal: 7,
         paddingVertical: 2,
         borderRadius: 6,
-        backgroundColor: 'rgba(21,75,212,0.10)',
+        backgroundColor: 'rgba(21,85,212,0.10)',
       }}
     >
       <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '500', color: home.accent }}>
@@ -131,7 +132,7 @@ export function CountBadge({ label }: { label: string }) {
   );
 }
 
-/** The white outline button inside a card ("Use for everything", "+ Add a key"). */
+/** The raised white button inside a card ("Use for everything", "+ Add a key"). */
 export function OutlineButton({
   label,
   icon,
@@ -150,19 +151,20 @@ export function OutlineButton({
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 44,
-        paddingVertical: 10,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.12)',
-        backgroundColor: pressed ? home.canvas : home.surface,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        opacity: disabled ? 0.5 : 1,
-      })}
+      style={({ pressed }) => [
+        raised,
+        {
+          minHeight: 44,
+          paddingVertical: 10,
+          borderRadius: 999,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          opacity: disabled ? 0.5 : 1,
+        },
+        pressed && !disabled && raisedPressed,
+      ]}
     >
       {icon && <SystemIcon name="plus" mdName={icon} size={18} color={home.text} />}
       <Text style={[type.subhead, { fontWeight: '500' }]}>{label}</Text>

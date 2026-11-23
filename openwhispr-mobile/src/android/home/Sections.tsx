@@ -14,7 +14,8 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { Transcript } from '@/types';
 import { useHomeT, type HomeKey } from './strings';
 import { home, IconTile, SectionHeader, TileButton, type } from './kit';
-import { edge, edgeCard, look } from '../settings/look';
+import { edgeCard, look } from '../settings/look';
+import { raised, raisedPressed } from '../theme';
 import { BottomSheet, PillAction } from '../settings/kit';
 import { tipsVisible, useTips, type TipId } from './tipsState';
 import { relativeDate, wordSafeLines, type HomeStats } from './model';
@@ -147,15 +148,17 @@ function TipSheet({
           accessibilityLabel={t('close')}
           onPress={onClose}
           hitSlop={6}
-          style={({ pressed }) => ({
-            ...edge,
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: pressed ? 0.7 : 1,
-          })}
+          style={({ pressed }) => [
+            raised,
+            {
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+            pressed && raisedPressed,
+          ]}
         >
           <SystemIcon name="xmark" mdName="X" size={18} color={home.text} />
         </Pressable>

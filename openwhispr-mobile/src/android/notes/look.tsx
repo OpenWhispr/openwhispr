@@ -6,6 +6,7 @@ import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { gloss, glossPressed, home } from '../home/kit';
 import { edge, edgeCard, look, sectionLabel } from '../settings/look';
 import { useNotesT } from './strings';
+import { raised, raisedPressed } from '../theme';
 
 /**
  * Notes in OpenWhispr's design language (Figma "section · R · Fable reskin of Notes"): the
@@ -23,12 +24,12 @@ export const notesLook = {
   rowSub: { fontSize: 13, lineHeight: 18, color: home.secondary },
   rowMeta: { fontSize: 12, lineHeight: 16, color: home.tertiary },
   count: { fontSize: 15, lineHeight: 21, color: home.secondary },
-  selectedRow: 'rgba(21,75,212,0.08)',
+  selectedRow: 'rgba(21,85,212,0.08)',
 };
 
 export { edge, edgeCard, sectionLabel };
 
-/** A round 36 button with the glass edge: back, search, share, ⋯. */
+/** A round 36 raised button: back, search, share, ⋯. */
 export function IconButton({
   icon,
   label,
@@ -47,15 +48,17 @@ export function IconButton({
       accessibilityLabel={label}
       hitSlop={6}
       onPress={onPress}
-      style={({ pressed }) => ({
-        ...edge,
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: pressed ? 0.7 : 1,
-      })}
+      style={({ pressed }) => [
+        raised,
+        {
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        pressed && raisedPressed,
+      ]}
     >
       <SystemIcon name="circle" mdName={icon} size={20} color={color} />
     </Pressable>
@@ -75,7 +78,7 @@ export function BackButton({ onPress }: { onPress?: () => void }) {
       icon="ChevronLeft"
       label={t('back')}
       onPress={onPress ?? goBack}
-      color={home.accent}
+      color={home.text}
     />
   );
 }

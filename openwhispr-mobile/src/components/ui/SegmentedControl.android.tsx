@@ -1,21 +1,13 @@
 import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from './Text';
+import { inset, raised, theme } from '@/android/theme';
 
 /**
- * Android's one tab style (Dictionary's Words | Snippets): a round grey track, the picked tab a
- * round white pill with the glass edge, 16 Medium labels, and an optional grey count. Notes,
- * the recorder, Style and Dictionary all use this, so every screen's tabs look the same.
+ * Android's one tab style (Dictionary's Words | Snippets): an inset, fully round grey track, the
+ * picked tab a raised white pill with an ink label, 16 Medium labels, and an optional grey count.
+ * Notes, the recorder, Style and Dictionary all use this, so every screen's tabs look the same.
  */
-const TRACK = '#E8E7E4';
-const TEXT = '#181714';
-const SECONDARY = '#6E6D69';
-const TERTIARY = '#A8A7A3';
-const PICKED = {
-  backgroundColor: '#FFFFFF',
-  borderWidth: 1,
-  borderColor: 'rgba(0,0,0,0.06)',
-  boxShadow: 'inset 0px 1px 0px rgba(255,255,255,0.7), 0px 2px 10px rgba(15,23,42,0.06)',
-} as const;
+const PICKED = raised;
 
 export type SegmentedOption<T extends string> = {
   value: T;
@@ -43,7 +35,7 @@ export function SegmentedControl<T extends string>({
   const segments = (
     <View
       accessibilityRole="tablist"
-      style={{ flexDirection: 'row', borderRadius: 999, padding: 3, backgroundColor: TRACK }}
+      style={[{ flexDirection: 'row', borderRadius: 999, padding: 3 }, inset]}
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -80,13 +72,15 @@ export function SegmentedControl<T extends string>({
                 fontSize: 16,
                 lineHeight: 21,
                 fontWeight: '500',
-                color: selected ? TEXT : SECONDARY,
+                color: selected ? theme.ink : theme.secondary,
               }}
             >
               {option.label}
             </Text>
             {option.count != null ? (
-              <Text style={{ fontSize: 16, lineHeight: 21, color: TERTIARY }}>{option.count}</Text>
+              <Text style={{ fontSize: 16, lineHeight: 21, color: theme.tertiary }}>
+                {option.count}
+              </Text>
             ) : null}
             {option.dot ? (
               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF9500' }} />

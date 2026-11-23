@@ -20,6 +20,7 @@ import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { gloss, glossPressed, home, type } from '../home/kit';
 import { bodyText, edge, edgeCard, look, sectionLabel } from './look';
 import { noOrphan, useSettingsT } from './strings';
+import { inset as insetTrack, knob, raised, raisedPressed, theme } from '../theme';
 import { useNavigationBar, useNavigationBarCanvas } from '../navigationBar';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { TAB_BAR_HEIGHT } from '../tabBar';
@@ -52,7 +53,7 @@ export function useReduceMotion(): boolean {
   return reduce;
 }
 
-/** Figma Navigation/Header: glass back button, centred title, optional action on the right. */
+/** Figma Navigation/Header: a raised back button, a centred title, an optional raised action on the right. */
 export function SettingsPage({
   title,
   right,
@@ -92,15 +93,17 @@ export function SettingsPage({
             onPress={() =>
               router.canGoBack() ? router.back() : router.replace('/(tabs)/(record)')
             }
-            style={({ pressed }) => ({
-              ...edge,
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: pressed ? 0.7 : 1,
-            })}
+            style={({ pressed }) => [
+              raised,
+              {
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                alignItems: 'center',
+                justifyContent: 'center',
+              },
+              pressed && raisedPressed,
+            ]}
           >
             <SystemIcon name="chevron.left" mdName="ChevronLeft" size={22} color={home.text} />
           </Pressable>
@@ -123,14 +126,16 @@ export function SettingsPage({
               accessibilityRole="button"
               onPress={right.onPress}
               hitSlop={6}
-              style={({ pressed }) => ({
-                ...edge,
-                minHeight: 36,
-                paddingHorizontal: 16,
-                borderRadius: 18,
-                justifyContent: 'center',
-                opacity: pressed ? 0.7 : 1,
-              })}
+              style={({ pressed }) => [
+                raised,
+                {
+                  minHeight: 36,
+                  paddingHorizontal: 16,
+                  borderRadius: 18,
+                  justifyContent: 'center',
+                },
+                pressed && raisedPressed,
+              ]}
             >
               <Text style={[type.subhead, { fontWeight: '500' }]}>{right.label}</Text>
             </Pressable>
@@ -281,7 +286,7 @@ export function Toggle({
           height: 28,
           borderRadius: 999,
           padding: 2,
-          backgroundColor: look.track,
+          ...insetTrack,
         }}
       >
         {/* On, the track is the brand glass; it fades in over the grey. */}
@@ -298,8 +303,7 @@ export function Toggle({
             width: 39,
             height: 24,
             borderRadius: 999,
-            backgroundColor: home.surface,
-            boxShadow: '0px 1px 2px rgba(0,0,0,0.04), 0px 8px 24px rgba(0,0,0,0.06)',
+            ...knob,
             transform: [
               { translateX: position.interpolate({ inputRange: [0, 1], outputRange: [0, 21] }) },
             ],
@@ -461,7 +465,7 @@ export function ListRow({
 
 /**
  * Full-width pill on the canvas: Sign out, Choose a short recording. Primary is the desktop's brand
- * glass with no lift (pressed, it sinks and darkens); the rest are white with the glass edge.
+ * glass with no lift (pressed, it sinks and darkens); the rest are raised white pills.
  */
 export function PillAction({
   label,
@@ -500,10 +504,11 @@ export function PillAction({
           justifyContent: 'center',
           gap: 8,
           paddingHorizontal: 20,
-          opacity: off ? 0.5 : pressed && !primary ? 0.8 : 1,
+          opacity: off ? 0.5 : 1,
         },
-        primary ? gloss : edge,
+        primary ? gloss : raised,
         primary && pressed && !off && glossPressed,
+        !primary && pressed && !off && raisedPressed,
       ]}
     >
       {busy ? (
@@ -627,7 +632,7 @@ export function SettingsSlider({
           height: 6,
           marginHorizontal: KNOB / 2,
           borderRadius: 3,
-          backgroundColor: look.track,
+          ...insetTrack,
           overflow: 'hidden',
         }}
       >
@@ -648,8 +653,7 @@ export function SettingsSlider({
           width: KNOB,
           height: KNOB,
           borderRadius: KNOB / 2,
-          backgroundColor: home.surface,
-          boxShadow: '0px 1px 4px rgba(0,0,0,0.20)',
+          ...knob,
         }}
       />
     </View>
@@ -751,7 +755,7 @@ export function SettingsToastHost() {
             paddingRight: action ? 4 : 16,
             paddingVertical: action ? 4 : 10,
             borderRadius: action ? 14 : 999,
-            backgroundColor: action ? '#1C1B19' : 'rgba(28,27,25,0.92)',
+            backgroundColor: action ? theme.toastSolid : theme.toast,
             borderTopWidth: 1,
             borderTopColor: 'rgba(255,255,255,0.14)',
             // 12 blur, 4 down: the 16 dp margin holds the whole shadow.

@@ -25,17 +25,18 @@ import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useOnboardingT } from './strings';
+import { raised, raisedPressed, theme } from '../theme';
 
 export const colors = {
-  canvas: '#F1F0EE',
-  surface: '#FFFFFF',
-  surface2: '#F7F6F4',
-  fill: '#E9E8E4',
-  ink: '#1A1A1A',
-  secondary: '#55534F',
-  tertiary: '#8C8A85',
-  divider: '#E2E0DB',
-  accent: '#1E55D6',
+  canvas: theme.canvas,
+  surface: theme.surface,
+  surface2: theme.surface2,
+  fill: theme.track,
+  ink: theme.ink,
+  secondary: theme.secondary,
+  tertiary: theme.tertiary,
+  divider: theme.trackStrong,
+  accent: theme.accent,
   accentSoft: '#E6EDFC',
   brandTop: '#5B81E4',
   brandMid: '#154BD4',
@@ -214,13 +215,13 @@ export function CircleButton({
       accessibilityLabel={label}
       onPress={onPress}
       hitSlop={8}
-      style={({ pressed }) => [s.circle, pressed && { opacity: 0.7 }]}
+      style={({ pressed }) => [s.circle, pressed && raisedPressed]}
     >
       <SystemIcon
         name={icon === 'back' ? 'chevron.left' : 'xmark'}
         mdName={icon === 'back' ? 'ChevronLeft' : 'X'}
         size={icon === 'back' ? 22 : 18}
-        color={icon === 'back' ? colors.accent : colors.ink}
+        color={colors.ink}
       />
     </Pressable>
   );
@@ -234,7 +235,7 @@ export function PillButton({ label, onPress }: { label: string; onPress: () => v
       accessibilityLabel={label}
       onPress={onPress}
       hitSlop={8}
-      style={({ pressed }) => [s.pill, pressed && { opacity: 0.7 }]}
+      style={({ pressed }) => [s.pill, pressed && raisedPressed]}
     >
       <Text style={s.pillLabel}>{label}</Text>
     </Pressable>
@@ -431,18 +432,18 @@ export const s = StyleSheet.create({
   link: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   linkLabel: { color: colors.accent, fontSize: 17, fontFamily: AppFont.medium },
   circle: {
+    ...raised,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pill: {
+    ...raised,
     minHeight: 40,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },

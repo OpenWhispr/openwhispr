@@ -3,7 +3,8 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/store/useConfigStore';
-import { glassEdge, home } from '../home/kit';
+import { glassEdge, gloss, glossPressed, home } from '../home/kit';
+import { raised, raisedPressed } from '../theme';
 import { showToast } from '../settings/kit';
 import { useStyleT } from './strings';
 import { TONE_STYLE_NUDGE_MIN_WORDS, saveToneStyle, useToneStyle } from './toneStyle';
@@ -48,10 +49,10 @@ export function ToneStyleNudge({ words }: { words: number | undefined }) {
         </View>
       </View>
       <View style={{ flexDirection: 'row', gap: 8, paddingLeft: 48 }}>
-        <FlatPill label={t('notNow')} color={home.secondary} onPress={dismiss} />
-        <FlatPill
+        <NudgePill label={t('notNow')} onPress={dismiss} />
+        <NudgePill
+          primary
           label={t('startNow')}
-          color={home.accent}
           onPress={() => router.push('/android-tone-setup')}
         />
       </View>
@@ -59,14 +60,14 @@ export function ToneStyleNudge({ words }: { words: number | undefined }) {
   );
 }
 
-/** A flat outline pill, since it sits inside a card. */
-function FlatPill({
+/** A 44 pill inside the card: raised white with an ink label, or the brand glass for the ask. */
+function NudgePill({
   label,
-  color,
+  primary,
   onPress,
 }: {
   label: string;
-  color: string;
+  primary?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -74,18 +75,28 @@ function FlatPill({
       cssInterop={false}
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 44,
-        paddingHorizontal: 18,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.12)',
-        backgroundColor: pressed ? '#F1F1F0' : '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-      })}
+      style={({ pressed }) => [
+        {
+          minHeight: 44,
+          paddingHorizontal: 18,
+          borderRadius: 999,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        primary ? gloss : raised,
+        pressed && (primary ? glossPressed : raisedPressed),
+      ]}
     >
-      <Text style={{ fontSize: 15, lineHeight: 20, fontWeight: '500', color }}>{label}</Text>
+      <Text
+        style={{
+          fontSize: 15,
+          lineHeight: 20,
+          fontWeight: primary ? '600' : '500',
+          color: primary ? '#FFFFFF' : home.text,
+        }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }

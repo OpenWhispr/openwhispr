@@ -14,14 +14,15 @@ import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
+import { theme } from './theme';
 
 export const palette = {
-  background: '#F8F6F5',
-  ink: '#21212B',
-  muted: '#66636E',
-  blue: '#2457C5',
+  background: theme.canvas,
+  ink: theme.ink,
+  muted: theme.secondary,
+  blue: theme.accent,
   soft: '#EEF2FC',
-  line: '#E6E1DE',
+  line: theme.track,
   white: '#FFFFFF',
 };
 export const styles = StyleSheet.create({

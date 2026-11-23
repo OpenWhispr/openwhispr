@@ -618,7 +618,13 @@ it('copies a Try it dictation to the clipboard and says so at the bottom', async
   expect(screen.getByText('writingItUp')).toBeTruthy();
   await act(async () => finish('Testing this out.'));
   expect(clipboard.setStringAsync).toHaveBeenCalledWith('Testing this out.');
-  expect(screen.getByText('copied', { includeHiddenElements: true })).toBeTruthy();
+  // The app's one toast (`SettingsToastHost`, mounted at the root) says so above the tabs.
+  const { useSettingsToast } = jest.requireActual('@/android/settings/kit');
+  expect(useSettingsToast.getState()).toMatchObject({
+    message: 'copied',
+    tone: 'success',
+    options: { aboveTabBar: true },
+  });
   // The notch shows the done state until it has slid back into the card.
   expect(screen.getByText('copiedAddedToHistory')).toBeTruthy();
   fireEvent.press(screen.getByText('notch-finished'));

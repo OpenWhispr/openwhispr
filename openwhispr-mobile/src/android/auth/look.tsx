@@ -25,6 +25,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { AppFont } from '@/lib/fonts';
+import { theme } from '../theme';
 
 // The onboarding sign-in look (Figma "Android · Onboarding" v3-01b/c/d): blue glass background,
 // white glass pills without a drop shadow, see-through fields. One look for onboarding and the app.
@@ -32,9 +33,10 @@ export const authColors = {
   top: '#5A8DF4',
   mid: '#2F62DE',
   bottom: '#1C3FAE',
-  ink: '#181714',
-  brandInk: '#0F4ACC',
-  icon: '#1555D4',
+  ink: theme.ink,
+  // The label on a white button over the blue: ink, never blue.
+  brandInk: theme.ink,
+  icon: theme.accent,
   glass: 'rgba(255,255,255,0.12)',
   circle: 'rgba(255,255,255,0.72)',
   line: 'rgba(255,255,255,0.75)',
