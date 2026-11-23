@@ -876,16 +876,21 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         });
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;
-          const transcriptLanguage = sarvamTranscriptLanguage(
-            result.transcription.provider,
-            s.sarvamMode
-          );
+          const translationRequested = result.transcription.route_kind === "translation";
+          const requestedLanguage =
+            (translationRequested ? s.translationSourceLanguage : s.preferredLanguage) || "auto";
+          const transcriptLanguage =
+            sarvamTranscriptLanguage(
+              result.transcription.provider,
+              s.sarvamMode,
+              requestedLanguage
+            ) ?? requestedLanguage;
           let finalTranscription = result.transcription;
 
           // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
           let handledTranslation = false;
-          let translationApplied = false;
-          if (result.transcription.route_kind === "translation") {
+          let outputLanguage = transcriptLanguage;
+          if (translationRequested) {
             handledTranslation = true;
             try {
               const [
@@ -914,7 +919,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   runTranslate: (currentText: string) =>
                     ReasoningService.processText(currentText, route.model, agentName, route.config),
                   shouldTranslate: shouldRunTranslateStep(
-                    transcriptLanguage ?? settings.translationSourceLanguage,
+                    transcriptLanguage,
                     settings.translationTargetLanguage
                   ),
                   onCleanupError: (cleanupError: unknown) => {
@@ -944,7 +949,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       "transcription"
                     ),
                 });
-                translationApplied = translated;
                 if (text !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
@@ -954,6 +958,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   if (updated.success && updated.transcription) {
                     finalTranscription = updated.transcription;
                   }
+                }
+                if (translated && finalTranscription.text === text) {
+                  outputLanguage = settings.translationTargetLanguage || "auto";
                 }
               } else {
                 // Translation disabled/unreachable since recording — fall through to cleanup.
@@ -1023,12 +1030,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           // translate step moves the text into the target language, so anything else
           // still has to be scripted as the language that was dictated.
           try {
-            const outputLanguage =
-              result.transcription.route_kind === "translation"
-                ? (translationApplied
-                    ? s.translationTargetLanguage
-                    : (transcriptLanguage ?? s.translationSourceLanguage)) || "auto"
-                : (transcriptLanguage ?? s.preferredLanguage);
             const scripted = await applyChineseScript(
               finalTranscription.text,
               resolveChineseScriptTarget(

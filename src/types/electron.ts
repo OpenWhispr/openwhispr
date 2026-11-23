@@ -3477,8 +3477,10 @@ declare global {
       ) => () => void;
 
       // BYOK audio file transcription
+      getSarvamKeyGeneration: () => Promise<number>;
       transcribeAudioFileByok?: (options: {
         sarvamMode?: SarvamMode;
+        sarvamKeyGeneration?: number | null;
         keyterms?: string[];
         filePath: string;
         durationSeconds?: number;
@@ -4024,6 +4026,7 @@ declare global {
       ) => Promise<{
         success: boolean;
         transcript?: string;
+        partialTranscript?: boolean;
         diarizationSessionId?: string;
         error?: string;
         reason?: "stale-session";
@@ -4188,8 +4191,7 @@ declare global {
         {
           success: boolean;
           text?: string;
-          error?: string;
-        } & Partial<DictationLanguageMetadata>
+        } & Partial<DictationLanguageMetadata & IpcErrorFields>
       >;
       dictationRealtimeStop?: (captureId?: string) => Promise<{ success: boolean; text: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
@@ -4198,9 +4200,7 @@ declare global {
         callback: (metadata: DictationLanguageMetadata) => void
       ) => () => void;
       onDictationRealtimeError?: (
-        callback: (
-          error: string | { code: "AUTH_CONTEXT_CHANGED"; error: string; sarvamCaptureId: string }
-        ) => void
+        callback: (error: string | (IpcErrorFields & { sarvamCaptureId: string })) => void
       ) => () => void;
       onDictationRealtimeSessionEnd?: (callback: (data: { text: string }) => void) => () => void;
 

@@ -4004,6 +4004,7 @@
         "description": "Non si sente nessuno da qualche minuto. Se la chiamata è ancora in corso, controlla il dispositivo di uscita audio."
       },
       "recordingDisabledByOrg": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
+      "stoppedSarvamKeyChanged": "La registrazione è stata interrotta perché la chiave API di Sarvam è cambiata.",
       "stoppedAccountChanged": "La registrazione si è interrotta perché sei uscito dall'account o hai cambiato account.",
       "stoppedPolicyUnresolved": "La registrazione si è interrotta perché non è stato possibile verificare le impostazioni della tua organizzazione.",
       "stoppedWorkspaceChanged": "La registrazione si è interrotta perché hai cambiato workspace."

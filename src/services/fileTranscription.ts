@@ -57,6 +57,8 @@ export interface FileTranscriptionConfig {
   cloudTranscriptionModel: string;
   language: string;
   sarvamMode?: SarvamMode;
+  // A queue started under managed STT has no personal credential to fall back to.
+  sarvamKeyGeneration?: number | null;
   cortiEnvironment?: string;
   cortiTenant?: string;
   transcriptionMode?: string;
@@ -227,6 +229,7 @@ export async function transcribeFile(
     provider: cfg.cloudTranscriptionProvider,
     language: cfg.language,
     ...(sarvamSettings && {
+      sarvamKeyGeneration: cfg.sarvamKeyGeneration,
       sarvamMode:
         cfg.sarvamMode ??
         (opts.purpose === "dictation"

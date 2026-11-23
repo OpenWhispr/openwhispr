@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
+const { Readable } = require("node:stream");
 const {
   SarvamRealtimeStreaming,
   SarvamMeetingStreaming,
@@ -189,6 +190,31 @@ test("a refused key or spent budget fails the start with the provider's account 
   const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
   stream.ws.receive({ event: "error", is_fatal: true, code: "invalid_request", message: "bad" });
   await assert.rejects(ready, (error) => error.message === "bad" && !error.fatal);
+});
+
+test("HTTP upgrade refusals carry the same account errors as a refused Sarvam session", async () => {
+  for (const [status, body, code, fatal] of [
+    [401, "", "PROVIDER_AUTH_FAILED", true],
+    [402, "", "PROVIDER_QUOTA_EXHAUSTED", true],
+    [403, "", "PROVIDER_ACCESS_DENIED", true],
+    [429, '{"error":"seat_budget_exhausted_error"}', "PROVIDER_QUOTA_EXHAUSTED", true],
+    [429, '{"error":"try again later"}', "PROVIDER_RATE_LIMITED", false],
+    [503, "", "PROVIDER_UNAVAILABLE", false],
+  ]) {
+    const stream = new SarvamRealtimeStreaming(Socket);
+    const ready = stream.connect({ apiKey: "saved", model: "saaras:v4" });
+    // A definite refusal must be actionable even if its body never finishes.
+    const response = status === 429 ? Readable.from([body]) : new Readable({ read() {} });
+    response.statusCode = status;
+    stream.ws.emit("unexpected-response", {}, response);
+    if (status !== 429) assert.equal(stream.closed, true);
+    await assert.rejects(ready, (error) => {
+      assert.equal(error.code, code);
+      assert.equal(error.status, status);
+      assert.equal(Boolean(error.fatal), fatal);
+      return true;
+    });
+  }
 });
 
 test("a close before completion names the reason Sarvam gave", async () => {

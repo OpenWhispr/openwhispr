@@ -158,6 +158,18 @@ test("the 30-second save skips a note deleted mid-recording", async (t) => {
   assert.deepEqual(savedTranscripts(), [], "a deleted note is not written back");
 });
 
+test("a changed Sarvam key and incomplete meeting audio show distinct localized notices", async (t) => {
+  const { start, streamError, api, store, toasts } = await setup(t, { language: "es" });
+  await start();
+  await streamError("sarvamCredentialChanged");
+  assert.equal(toasts.at(-1)?.description, esTranslation.notes.meeting.stoppedSarvamKeyChanged);
+
+  await start();
+  api.meetingTranscriptionStop = async () => ({ success: true, partialTranscript: true });
+  await React.act(async () => store.stopRecording());
+  assert.equal(toasts.at(-1)?.description, esTranslation.notes.upload.partialWarning);
+});
+
 test("a main policy refusal appears in a Spanish meeting-start toast", async (t) => {
   const previousLanguage = i18nMain.language;
   changeLanguage("es");

@@ -4004,6 +4004,7 @@
         "description": "已有幾分鐘未偵測到任何人聲。如果通話仍在進行，請檢查您的聲音輸出裝置。"
       },
       "recordingDisabledByOrg": "您的組織已停用會議錄音。",
+      "stoppedSarvamKeyChanged": "Sarvam API 金鑰已變更，錄製已停止。",
       "stoppedAccountChanged": "由於您已登出或切換了帳號，錄音已停止。",
       "stoppedPolicyUnresolved": "由於無法檢查您的組織設定，錄音已停止。",
       "stoppedWorkspaceChanged": "由於您切換了工作區，錄音已停止。"

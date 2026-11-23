@@ -23,6 +23,7 @@ final class AudioTapCapture {
     private var converter: AVAudioConverter?
     private var sourceFormat: AVAudioFormat?
     private var pendingPCM = Data()
+    private var reportedCaptureClock = false
     private var stopping = false
 
     private typealias Listener = (
@@ -78,6 +79,7 @@ final class AudioTapCapture {
 
         emit(event: [
             "type": "start",
+            "captureClock": true,
             "sampleRate": Int(config.sampleRate),
             "channels": 1,
             "bitsPerChannel": 16,
@@ -294,11 +296,11 @@ final class AudioTapCapture {
             &procID,
             aggregateDeviceID,
             ioQueue
-        ) { [weak self] _, inputData, _, _, _ in
+        ) { [weak self] _, inputData, inputTime, _, _ in
             guard let self, !self.stopping else {
                 return
             }
-            self.processInput(inputData, sourceFormat: sourceFormat, converter: converter)
+            self.processInput(inputData, inputTime: inputTime.pointee, sourceFormat: sourceFormat, converter: converter)
         }
 
         guard status == noErr, let procID else {
@@ -310,6 +312,7 @@ final class AudioTapCapture {
 
     private func processInput(
         _ inputData: UnsafePointer<AudioBufferList>,
+        inputTime: AudioTimeStamp,
         sourceFormat: AVAudioFormat,
         converter: AVAudioConverter
     ) {
@@ -368,6 +371,20 @@ final class AudioTapCapture {
             return
         }
 
+        if !reportedCaptureClock {
+            // stdout is unframed PCM; one pipe read may contain only part of the
+            // backlog. Anchor this run to Core Audio before its samples enter the pipe.
+            let hostNowMs = Double(AudioConvertHostTimeToNanos(AudioGetCurrentHostTime())) / 1_000_000
+            let firstHostMs = inputTime.mFlags.contains(.hostTimeValid)
+                ? Double(AudioConvertHostTimeToNanos(inputTime.mHostTime)) / 1_000_000
+                : hostNowMs - Double(sourceBuffer.frameLength) * 1000 / sourceRate
+            emit(event: [
+                "type": "capture-clock",
+                "hostMs": firstHostMs,
+                "epochMs": Date().timeIntervalSince1970 * 1000 - (hostNowMs - firstHostMs),
+            ])
+            reportedCaptureClock = true
+        }
         pendingPCM.append(data.assumingMemoryBound(to: UInt8.self), count: Int(audioBuffer.mDataByteSize))
         flushFullChunks()
     }

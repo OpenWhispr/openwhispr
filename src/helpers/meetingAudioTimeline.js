@@ -18,10 +18,10 @@ const createMeetingAudioTimeline = ({ now = () => performance.now(), wallNow = D
     markRestart() {
       recovering = true;
     },
-    write(buffer, emit) {
-      const firstSampleAt = captureStartFromDelivery(buffer, now());
+    write(buffer, emit, nativeClock) {
+      const firstSampleAt = nativeClock?.hostMs ?? captureStartFromDelivery(buffer, now());
       startedAt ??= firstSampleAt;
-      wallStartedAt ??= captureStartFromDelivery(buffer, wallNow());
+      wallStartedAt ??= nativeClock?.epochMs ?? captureStartFromDelivery(buffer, wallNow());
       if (recovering) {
         // Repair only explicit capture restarts. Arrival jitter and buffered
         // delivery during normal capture must not manufacture gaps.

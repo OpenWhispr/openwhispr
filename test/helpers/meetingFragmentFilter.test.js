@@ -116,6 +116,8 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
     removePendingMicFinalsFor: () => [],
     removeRacingMicEntriesFor: () => [],
     cancelMeetingReconnect: null,
+    meetingReconnectPromise: null,
+    meetingReplayIncomplete: false,
     drainingMeetingStreams: new Map(),
     clearMeetingSystemAudioSilenceTimer() {},
     stopMeetingSystemAudioWatchdog() {},

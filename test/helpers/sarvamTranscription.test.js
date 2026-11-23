@@ -3,7 +3,11 @@ const assert = require("node:assert/strict");
 const { pcm16ToWav } = require("../../src/utils/audioUtils");
 const { getFFmpegPath } = require("../../src/helpers/ffmpegUtils");
 const { transcribeWithSarvam } = require("../../src/helpers/sarvamTranscription");
-const { sarvamKeyterms, sarvamLanguage } = require("../../src/utils/sarvam");
+const {
+  sarvamKeyterms,
+  sarvamLanguage,
+  sarvamTranscriptLanguage,
+} = require("../../src/utils/sarvam");
 
 const mediaTest = getFFmpegPath() ? test : test.skip;
 const audio = (seconds) => pcm16ToWav(Buffer.alloc(seconds * 32000));
@@ -15,6 +19,10 @@ test("Sarvam maps only supported REST hints and preserves dictionary phrases", (
   assert.equal(sarvamLanguage("as"), "as-IN");
   assert.equal(sarvamLanguage("auto"), undefined);
   assert.equal(sarvamLanguage("fr"), undefined);
+  assert.equal(sarvamTranscriptLanguage("sarvam", "codemix", "hi-IN"), "hi-IN");
+  assert.equal(sarvamTranscriptLanguage("sarvam", "translit", "or-IN"), "or-IN");
+  assert.equal(sarvamTranscriptLanguage("sarvam", "transcribe", "zh-TW"), "auto");
+  assert.equal(sarvamTranscriptLanguage("sarvam", "translate", "zh-TW"), "en");
   const terms = [" New Delhi ", "New Delhi", "", "x".repeat(65), "अ".repeat(64)];
   assert.deepEqual(sarvamKeyterms(terms), ["New Delhi", "अ".repeat(64)]);
   assert.equal(sarvamKeyterms(Array.from({ length: 60 }, (_, i) => String(i))).length, 50);

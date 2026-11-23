@@ -301,7 +301,7 @@ const {
 const {
   ALLOWED_MEETING_PROVIDERS,
   getMeetingStreamingClient,
-  getMeetingConnectionKey,
+  getMeetingConnectionKey: buildMeetingConnectionKey,
 } = require("./meetingStreamingProviders");
 const {
   createServerTokenPoster,
@@ -2107,8 +2107,16 @@ class IPCHandlers {
       Object.assign(new Error("Authentication context changed during dictation"), {
         code: "AUTH_CONTEXT_CHANGED",
       });
-    const sarvamDictationKey = (capture) => {
-      if (capture && capture.keyGeneration !== sarvamKeyGeneration) throw changedDictationAccount();
+    const changedSarvamCredential = () =>
+      Object.assign(
+        new Error("The Sarvam AI API key changed before transcription could complete."),
+        {
+          code: "PROVIDER_CREDENTIAL_CHANGED",
+        }
+      );
+    const sarvamKeyForGeneration = (generation) => {
+      if (generation !== undefined && generation !== sarvamKeyGeneration)
+        throw changedSarvamCredential();
       return this.environmentManager.getSarvamKey();
     };
     const cancelledDictation = () =>
@@ -2266,6 +2274,8 @@ class IPCHandlers {
           )
             return interrupted();
           if (streamProperty) {
+            if (channel === "dictation-realtime-warmup" && dictationRecordingOwner)
+              return { success: true, alreadyWarm: true };
             const previousStreamPolicy = this._remoteStreamPolicies.get(streamProperty);
             if (
               previousStreamPolicy?.pending &&
@@ -2742,6 +2752,11 @@ class IPCHandlers {
     // Counts changes to any key in Settings. A streaming socket keeps the count it
     // was opened under, so a start never reuses one authenticated before a change.
     let credentialGeneration = 0;
+    const getMeetingConnectionKey = (options) =>
+      buildMeetingConnectionKey(
+        options,
+        options.provider === "sarvam-realtime" ? sarvamKeyGeneration : credentialGeneration
+      );
     const saveSecretKey = (getter, saver, storeKey) => (event, key) => {
       if (typeof key !== "string") throw new TypeError("API key must be a string");
       // Committing an unedited key field saves the same value again.
@@ -2759,6 +2774,7 @@ class IPCHandlers {
       return result;
     };
 
+    ipcMain.handle("get-sarvam-key-generation", () => sarvamKeyGeneration);
     for (const k of BYOK_API_KEYS) {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
       ipcMain.handle(`save-${k.base}-key`, saveSecretKey(k.get, k.save, k.storeKey));
@@ -6850,7 +6866,7 @@ class IPCHandlers {
           language,
           keyterms,
           signal: this._productRequestContext.getStore().signal,
-          apiKey: sarvamDictationKey(capture),
+          apiKey: sarvamKeyForGeneration(capture?.keyGeneration),
           fetchImpl: proxyFetch,
         })
     );
@@ -10563,6 +10579,7 @@ class IPCHandlers {
         queue.length > 1
       ) {
         meetingReconnectAudioBytes[source] -= queue.shift().buffer.length;
+        meetingReplayIncomplete = true;
       }
     };
 
@@ -10629,20 +10646,29 @@ class IPCHandlers {
           newMic?.disconnect({ commit: false }).catch(() => {});
           newSystem?.disconnect({ commit: false }).catch(() => {});
         };
-        const isCurrent = () =>
-          cancelMeetingReconnect === discardReplacements &&
-          meetingConnectionOptions === options &&
-          meetingConnectionWin === win;
+        const isCurrent = () => {
+          if (
+            cancelMeetingReconnect !== discardReplacements ||
+            meetingConnectionOptions !== options ||
+            meetingConnectionWin !== win
+          )
+            return false;
+          if (
+            options.provider === "sarvam-realtime" &&
+            meetingConnectionKey !== getMeetingConnectionKey(options)
+          ) {
+            this._stopMeetingForPolicy("sarvamCredentialChanged", "error");
+            return false;
+          }
+          return true;
+        };
         cancelMeetingReconnect = discardReplacements;
 
         try {
           const tokenEvent = { sender: win.webContents };
           const currentOptions = await resolveEnterpriseMeetingOptions(tokenEvent, options);
           if (!isCurrent()) return true;
-          if (
-            getMeetingConnectionKey(currentOptions, credentialGeneration) !==
-            getMeetingConnectionKey(options, credentialGeneration)
-          ) {
+          if (getMeetingConnectionKey(currentOptions) !== getMeetingConnectionKey(options)) {
             this._stopMeetingForPolicy();
             return true;
           }
@@ -10724,7 +10750,7 @@ class IPCHandlers {
           resetMeetingReconnectAudio();
           drainMeetingStream(oldMic);
           drainMeetingStream(oldSystem);
-          meetingConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
+          meetingConnectionKey = getMeetingConnectionKey(options);
 
           debugLogger.info("Meeting streams reconnected", { attempt: meetingReconnectCount });
           meetingReconnectedAt = Date.now();
@@ -10763,6 +10789,9 @@ class IPCHandlers {
             this._meetingSystemStreaming = null;
             meetingConnectionKey = null;
           }
+          if (meetingReconnectAudioBytes.mic || meetingReconnectAudioBytes.system) {
+            meetingReplayIncomplete = true;
+          }
           resetMeetingReconnectAudio();
           if (!win.isDestroyed()) {
             // A renewal refused for the session gets a sentinel the renderer explains,
@@ -10790,6 +10819,15 @@ class IPCHandlers {
       if (denied) throw Object.assign(new Error(denied.error), { code: denied.code });
       if (this._activeLocalMeetingLease)
         this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
+    };
+
+    const assertMeetingCredential = (options, startingKey) => {
+      if (
+        options.provider === "sarvam-realtime" &&
+        getMeetingConnectionKey(options) !== startingKey
+      ) {
+        throw changedSarvamCredential();
+      }
     };
 
     const resolveEnterpriseMeetingOptions = async (event, options) => {
@@ -10972,9 +11010,9 @@ class IPCHandlers {
 
     // `signal` ends a prepare whose account went away: it must not leave warm
     // connections minted for that account behind for the next one to reuse.
-    const connectRealtimeStreaming = async (event, options, signal) => {
+    const connectRealtimeStreaming = async (event, options, signal, startingKey) => {
       // Read before the key is, so a save during the token fetch marks these connections stale.
-      const connectionKey = getMeetingConnectionKey(options, credentialGeneration);
+      const connectionKey = getMeetingConnectionKey(options);
       const StreamingClass = getMeetingStreamingClient(options.provider);
       if (this._meetingMicStreaming?.isConnected) {
         await this._meetingMicStreaming.disconnect();
@@ -11000,6 +11038,7 @@ class IPCHandlers {
         ...(await enterpriseMeetingConnectOptions(event, options)),
       };
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
+      assertMeetingCredential(options, startingKey);
       let pairs;
       if (systemAudioMode !== "unsupported") {
         const secrets = await fetchRealtimeToken(
@@ -11021,6 +11060,8 @@ class IPCHandlers {
         ];
       }
       signal?.throwIfAborted();
+      assertMeetingCredential(options, startingKey);
+      meetingConnectionKey = connectionKey;
 
       for (const { ref, source } of pairs) {
         this[ref] = new StreamingClass();
@@ -11039,13 +11080,15 @@ class IPCHandlers {
         );
         assertMeetingAllowed();
         signal?.throwIfAborted();
+        assertMeetingCredential(options, startingKey);
         if (pairs.some(({ ref }) => !this[ref]?.isConnected)) {
           throw new Error("Meeting transcription connection closed during startup.");
         }
-        meetingConnectionKey = connectionKey;
       } catch (error) {
         await Promise.all(
-          pairs.map(({ ref }) => this[ref]?.disconnect().catch(() => ({ text: "" })))
+          pairs.map(({ ref }) =>
+            this[ref]?.disconnect({ commit: false }).catch(() => ({ text: "" }))
+          )
         );
         this._meetingMicStreaming = null;
         this._meetingSystemStreaming = null;
@@ -11117,6 +11160,7 @@ class IPCHandlers {
     let meetingReconnectedAt = 0;
     const MAX_MEETING_RECONNECTS = 5;
     const MEETING_RECONNECT_STABLE_MS = 10000;
+    const MEETING_STOP_REPLAY_TIMEOUT_MS = 5000;
     let meetingConnectionOptions = null;
     this.getMeetingTranscriptionOptions = () => meetingConnectionOptions;
     let meetingConnectionWin = null;
@@ -11125,6 +11169,7 @@ class IPCHandlers {
     let meetingReconnectAudioBuffers = { mic: [], system: [] };
     let meetingReconnectAudioBytes = { mic: 0, system: 0 };
     let meetingReconnectReplaySources = new Set();
+    let meetingReplayIncomplete = false;
 
     const fs = require("fs");
     let meetingDiarizationStream = null;
@@ -11291,17 +11336,17 @@ class IPCHandlers {
         }
       }
 
-      // A stream that drops after a reconnect began (two sessions expiring together)
-      // joins that reconnect's replay, or its audio would go nowhere until the swap.
-      if (meetingReconnectPromise && !streaming.isConnected) {
-        meetingReconnectReplaySources.add(source);
-      }
       if (capturedAt === null && meetingConnectionOptions?.provider === "sarvam-realtime") {
         // AEC output arrives directly here. Preserve its sample time on replay.
         capturedAt = captureStartFromDelivery(outbound, Date.now());
       }
-      queueMeetingReconnectAudio(source, outbound, capturedAt);
       const sent = sendMeetingStreamingAudio(streaming, outbound, capturedAt);
+      // sendAudio can synchronously lose its socket and start recovery. Include
+      // this block and any track that drops while its peer is reconnecting.
+      if (meetingReconnectPromise && !streaming.isConnected) {
+        meetingReconnectReplaySources.add(source);
+      }
+      queueMeetingReconnectAudio(source, outbound, capturedAt);
       if (synthetic) return;
       meetingSendCounts[source]++;
       if (meetingSendCounts[source] <= 5 || meetingSendCounts[source] % 100 === 0) {
@@ -12042,10 +12087,37 @@ class IPCHandlers {
       meetingConnectionOptions = null;
       meetingConnectionWin = null;
       meetingConnectionKey = null;
+      meetingReplayIncomplete = false;
       resetMeetingReconnectAudio();
     };
 
-    const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
+    const disconnectMeetingStreaming = async ({
+      flushPending = false,
+      replayQueued = false,
+    } = {}) => {
+      // A dropped track's final audio lives only in the reconnect queue. Give
+      // that handshake a deadline once the capture and AEC tails have arrived.
+      if (
+        replayQueued &&
+        meetingReconnectPromise &&
+        cancelMeetingReconnect &&
+        (meetingReconnectAudioBytes.mic || meetingReconnectAudioBytes.system)
+      ) {
+        let timeout;
+        try {
+          const replayed = await Promise.race([
+            meetingReconnectPromise,
+            new Promise((resolve) => {
+              timeout = setTimeout(resolve, MEETING_STOP_REPLAY_TIMEOUT_MS);
+            }),
+          ]);
+          if (!replayed) meetingReplayIncomplete = true;
+        } catch {
+          meetingReplayIncomplete = true;
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
       stopMeetingReconnect();
       drainMeetingStream(this._meetingMicStreaming);
       drainMeetingStream(this._meetingSystemStreaming);
@@ -12055,7 +12127,9 @@ class IPCHandlers {
         flushPendingMicFinals(true);
       }
 
+      const partialTranscript = replayQueued && meetingReplayIncomplete;
       resetMeetingStreamingState();
+      return partialTranscript;
     };
 
     const clearMeetingSystemAudioSilenceTimer = () => {
@@ -12141,7 +12215,7 @@ class IPCHandlers {
       this.activeMeetingSpeakerConfig = null;
     };
 
-    const setupDictationCallbacks = (streaming, event) => {
+    const setupDictationCallbacks = (streaming, event, capture) => {
       const ownsCallbacks =
         streaming instanceof OrukeetStreaming || streaming instanceof SarvamRealtimeStreaming;
       const canNotify = () =>
@@ -12169,7 +12243,11 @@ class IPCHandlers {
       };
       streaming.onError = (err) => {
         if (!canNotify()) return;
-        event.sender.send("dictation-realtime-error", err.message);
+        const error =
+          capture?.id && err.fatal
+            ? { ...ipcErrorFields(err), sarvamCaptureId: capture.id }
+            : err.message;
+        event.sender.send("dictation-realtime-error", error);
         if (this._dictationPreviewEnabled) this.windowManager.hideTranscriptionPreview();
       };
       streaming.onSessionEnd = (data) => {
@@ -12303,7 +12381,7 @@ class IPCHandlers {
           streaming.onUsageError = (metadata) =>
             debugLogger.error("Combined cleanup usage could not be recorded", metadata);
         if (capture) capture.streaming = streaming;
-        setupDictationCallbacks(streaming, event);
+        setupDictationCallbacks(streaming, event, capture);
         // Assign before the token fetch (a real network round trip) so
         // dictation-realtime-send has a live instance to buffer into instead
         // of silently dropping the start of the recording.
@@ -12316,7 +12394,7 @@ class IPCHandlers {
             if (isCloud) throw new Error("Sarvam dictation requires a personal API key");
             await streaming.connect({
               sarvamMode: options.sarvamMode,
-              apiKey: sarvamDictationKey(capture),
+              apiKey: sarvamKeyForGeneration(capture?.keyGeneration),
               model: options.model,
               language: options.language,
               keyterms: options.keyterms,
@@ -12394,6 +12472,7 @@ class IPCHandlers {
 
     // Pre-warm: fetch tokens + connect WebSockets before user hits record
     const prepareMeetingTranscription = async (event, options = {}, signal) => {
+      const startingKey = getMeetingConnectionKey(options);
       options = await resolveEnterpriseMeetingOptions(event, options);
       if (meetingTranscriptionPrepareInProgress || meetingTranscriptionStartInProgress) {
         debugLogger.debug("Meeting transcription prepare already in progress, ignoring");
@@ -12409,7 +12488,8 @@ class IPCHandlers {
       }
 
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
-      const requestedConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
+      const requestedConnectionKey = getMeetingConnectionKey(options);
+      assertMeetingCredential(options, startingKey);
 
       if (
         isMeetingStreamingConnected(systemAudioMode) &&
@@ -12424,7 +12504,7 @@ class IPCHandlers {
         let timeoutHandle;
         try {
           await Promise.race([
-            connectRealtimeStreaming(event, options, signal),
+            connectRealtimeStreaming(event, options, signal, startingKey),
             new Promise((_, reject) => {
               timeoutHandle = setTimeout(() => reject(new Error("Prepare timed out")), 15000);
             }),
@@ -12456,6 +12536,7 @@ class IPCHandlers {
     });
 
     const startMeetingTranscription = async (event, options = {}) => {
+      const startingKey = getMeetingConnectionKey(options);
       options = await resolveEnterpriseMeetingOptions(event, options);
       // Wait for any in-flight prepare to finish before starting
       if (meetingTranscriptionPreparePromise) {
@@ -12505,6 +12586,7 @@ class IPCHandlers {
       this.meetingDetectionEngine?.setUserRecording(true);
 
       const completeStart = async (result) => {
+        assertMeetingCredential(options, startingKey);
         assertMeetingAllowed();
         await this.meetingDetectionEngine?.beginRecordingSession({
           sessionId: recordingSessionId,
@@ -12535,7 +12617,8 @@ class IPCHandlers {
         const systemAudioPlan = await getMeetingSystemAudioPlan({ refreshWindowsCapability: true });
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
         setMeetingSystemAudioStrategy(systemAudioStrategy);
-        const requestedConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
+        const requestedConnectionKey = getMeetingConnectionKey(options);
+        assertMeetingCredential(options, startingKey);
         meetingEchoLeakDetector.reset();
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingOneOnOneProfileBound = false;
@@ -12627,7 +12710,7 @@ class IPCHandlers {
           });
         }
 
-        await connectRealtimeStreaming(event, options);
+        await connectRealtimeStreaming(event, options, undefined, startingKey);
         const realtimeWin = BrowserWindow.fromWebContents(event.sender);
         await startLiveSpeakerIdentification(realtimeWin, systemAudioMode);
         await startMeetingAec(systemAudioMode);
@@ -12800,11 +12883,14 @@ class IPCHandlers {
         if (captureStarted) timeline?.markRestart();
         captureStarted = true;
         return manager.start({
-          onChunk: (chunk) => {
+          onChunk: (chunk, nativeClock) => {
             if (!meetingSystemAudioHandover.acceptNativeChunk(chunk)) return;
             if (timeline) {
-              timeline.write(chunk, (buffer, synthetic, capturedAt) =>
-                sendMeetingAudio(buffer, "system", synthetic, capturedAt)
+              timeline.write(
+                chunk,
+                (buffer, synthetic, capturedAt) =>
+                  sendMeetingAudio(buffer, "system", synthetic, capturedAt),
+                nativeClock
               );
             } else {
               sendMeetingAudio(chunk, "system");
@@ -12957,7 +13043,7 @@ class IPCHandlers {
       );
     });
 
-    this._stopMeetingForPolicy = (reason = "policyRestricted") => {
+    this._stopMeetingForPolicy = (reason = "policyRestricted", auditReason) => {
       const wasActive =
         meetingConnectionOptions ||
         meetingLocalMode ||
@@ -12983,7 +13069,10 @@ class IPCHandlers {
       if (wasActive) broadcastToWindows("meeting-transcription-error", reason);
       const stopped = meetingTranscriptionLifecycle.stopSession(
         undefined,
-        reason === "accountChanged" || reason === "workspaceChanged" ? "account-change" : "policy"
+        auditReason ??
+          (reason === "accountChanged" || reason === "workspaceChanged"
+            ? "account-change"
+            : "policy")
       );
       // The renderer still needs this result after its capture cleanup to bind
       // diarization to the resumed note's seed rows.
@@ -12993,7 +13082,7 @@ class IPCHandlers {
       );
     };
 
-    const stopMeetingTranscription = async (expectedSessionId) => {
+    const stopMeetingTranscription = async (expectedSessionId, reason) => {
       // Only a *different* live session blocks teardown — it owns the shared
       // capture now. With no engine session (e.g. after quit-path engine stop)
       // the streams below must still be torn down.
@@ -13001,7 +13090,8 @@ class IPCHandlers {
         return { success: false, reason: "stale-session" };
       }
       this.meetingDetectionEngine?.setUserRecording(false);
-      stopMeetingReconnect();
+      const replayQueued = reason == null || reason === "user" || reason === "auto-end";
+      if (!replayQueued) stopMeetingReconnect();
       clearMeetingSystemAudioSilenceTimer();
       stopMeetingSystemAudioWatchdog();
       try {
@@ -13065,7 +13155,10 @@ class IPCHandlers {
           return { success: true, transcript, diarizationSessionId };
         }
 
-        await disconnectMeetingStreaming({ flushPending: true });
+        const partialTranscript = await disconnectMeetingStreaming({
+          flushPending: true,
+          replayQueued,
+        });
         const {
           diarizationPcmPath,
           diarizationSegments,
@@ -13099,14 +13192,23 @@ class IPCHandlers {
           ...(captureClock ? [captureClock] : [])
         );
 
-        return { success: true, transcript, diarizationSessionId };
+        return {
+          success: true,
+          transcript,
+          diarizationSessionId,
+          ...(partialTranscript && { partialTranscript: true }),
+        };
       } catch (error) {
+        await disconnectMeetingStreaming().catch(() => {});
         debugLogger.error("Meeting transcription stop error", { error: error.message });
         return { success: false, error: error.message };
       }
     };
 
     const meetingTranscriptionLifecycle = createMeetingTranscriptionLifecycle({
+      onOwnerLost: (sessionId) => {
+        if (policyMeetingStop?.sessionId === sessionId) stopMeetingReconnect();
+      },
       start: async ({
         sessionId,
         ownerWebContents,
@@ -13132,7 +13234,7 @@ class IPCHandlers {
       },
       stop: (sessionId, reason) => {
         this.meetingAuditLog?.recordingStopped({ sessionId, reason });
-        return stopMeetingTranscription(sessionId);
+        return stopMeetingTranscription(sessionId, reason);
       },
       onError: (error, sessionId) => {
         debugLogger.error(
@@ -13225,10 +13327,7 @@ class IPCHandlers {
       // Sarvam sessions are per recording. The renderer still warms its microphone and worklet.
       if (options.provider === "sarvam") return { success: true };
       await this._dictationConnectPromise?.catch(() => {});
-      if (dictationRecordingOwner) {
-        ownProductStream(this._dictationStreaming);
-        return { success: true, alreadyWarm: true };
-      }
+      if (dictationRecordingOwner) return { success: true, alreadyWarm: true };
       if (!isUnusedOrukeetConnection(this._dictationStreaming, options)) {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
@@ -13377,7 +13476,7 @@ class IPCHandlers {
       try {
         return { success: true, ...(await streaming.finalize()) };
       } catch (error) {
-        return { success: false, error: error.message };
+        return { success: false, ...ipcErrorFields(error) };
       }
     });
 
@@ -14390,6 +14489,7 @@ class IPCHandlers {
           timestamps,
           keyterms,
           sarvamMode,
+          sarvamKeyGeneration: expectedSarvamKeyGeneration,
           provider,
           language,
           environment,
@@ -14531,7 +14631,7 @@ class IPCHandlers {
                 model: route.model,
                 language: resolvedPurpose === "dictation" ? route.language : undefined,
                 keyterms,
-                apiKey: this.environmentManager.getSarvamKey(),
+                apiKey: sarvamKeyForGeneration(expectedSarvamKeyGeneration),
                 signal,
                 fetchImpl: proxyFetch,
                 maxRetryWaitMs: 60_000,

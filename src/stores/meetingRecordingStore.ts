@@ -574,6 +574,7 @@ const MEETING_MAIN_STOPS = new Set([
   ...MEETING_POLICY_REFUSALS,
   "accountChanged",
   "workspaceChanged",
+  "sarvamCredentialChanged",
 ]);
 
 // The last session main ended itself, so a policy stop of the same session
@@ -2045,6 +2046,7 @@ export async function stopRecording(
             sessionId ?? undefined,
             reason
           );
+          if (result?.partialTranscript) reportMeetingError("partialTranscript");
           if (result?.diarizationSessionId) {
             stoppedDiarizationSessionId = result.diarizationSessionId;
             seedByDiarizationSession.set(stoppedDiarizationSessionId, seed);

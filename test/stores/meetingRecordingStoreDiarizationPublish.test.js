@@ -141,6 +141,21 @@ test("a finished session's diarization is not published over the recording that 
   await store.stopRecording();
 });
 
+test("stopping after a failed reconnect keeps the transcript and reports missing audio", async (t) => {
+  const { api, notes } = createElectronAPI();
+  const store = await loadStore(t, api);
+  api.meetingTranscriptionStop = async () => ({
+    success: true,
+    transcript: "Saved words.",
+    partialTranscript: true,
+  });
+  await store.startRecording(START_ARGS);
+  const result = await store.stopRecording();
+  assert.equal(result.stopped, true);
+  assert.equal(notes.get(NOTE_ID).transcript, "Saved words.");
+  assert.equal(store.useMeetingRecordingStore.getState().error, "partialTranscript");
+});
+
 test("the same result publishes normally once the recording has stopped", async (t) => {
   const { api, state } = createElectronAPI();
   const store = await loadStore(t, api);
@@ -290,17 +305,21 @@ test("a policy stop's early diarization waits for the resumed session's stop res
   ]);
 });
 
-test("main ending the recording for an account change stops it with its own reason", async (t) => {
-  const { api, state } = createElectronAPI();
-  const store = await loadStore(t, api);
-  assert.equal(await store.startRecording(START_ARGS), true);
+for (const reason of ["accountChanged", "sarvamCredentialChanged"]) {
+  test(`main stopping a recording for ${reason} preserves accepted speech and reports why`, async (t) => {
+    const { api, state, notes } = createElectronAPI();
+    const store = await loadStore(t, api);
+    assert.equal(await store.startRecording(START_ARGS), true);
+    state.segmentCallback({ type: "final", source: "mic", text: "Saved speech.", timestamp: 100 });
 
-  state.errorCallback("accountChanged");
-  await settle();
-  const { isRecording, error } = store.useMeetingRecordingStore.getState();
-  assert.equal(isRecording, false);
-  assert.equal(error, "accountChanged");
-});
+    state.errorCallback(reason);
+    await settle();
+    const { isRecording, error } = store.useMeetingRecordingStore.getState();
+    assert.equal(isRecording, false);
+    assert.equal(error, reason);
+    assert.equal(JSON.parse(notes.get(NOTE_ID).transcript)[0].text, "Saved speech.");
+  });
+}
 
 const diarized = (text, timestamp, speakerName) => ({
   text,

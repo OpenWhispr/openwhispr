@@ -4056,6 +4056,7 @@
         "description": "No se ha oído a nadie desde hace unos minutos. Si la llamada sigue en curso, revisa tu dispositivo de salida de sonido."
       },
       "recordingDisabledByOrg": "Tu organización ha desactivado la grabación de reuniones.",
+      "stoppedSarvamKeyChanged": "La grabación se detuvo porque cambió la clave de API de Sarvam.",
       "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta.",
       "stoppedPolicyUnresolved": "La grabación se detuvo porque no se pudieron comprobar los ajustes de tu organización.",
       "stoppedWorkspaceChanged": "La grabación se detuvo porque cambiaste de espacio de trabajo."

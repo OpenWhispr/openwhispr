@@ -134,8 +134,8 @@ function harness({ native = true, local = false } = {}) {
     start: context.startCapture,
     rendererSend: (buffer, source, capturedAt) =>
       ipc["meeting-transcription-send"]({}, buffer, source, capturedAt),
-    chunk: (durationMs = 100, silent = false) =>
-      onChunk(Buffer.alloc(durationMs * 48, silent ? 0 : 1)),
+    chunk: (durationMs = 100, silent = false, nativeClock) =>
+      onChunk(Buffer.alloc(durationMs * 48, silent ? 0 : 1), nativeClock),
     restart: async () => {
       watchdog.reportDeviceInvalidated();
       await new Promise(setImmediate);
@@ -226,6 +226,26 @@ test("macOS dates the first Sarvam system sample alongside renderer audio, inclu
   run.chunk(100);
   system.emitFinal("remote resumed", (bytes(run.pcm) - 4800) / 48000);
   assert.deepEqual(timestamps, [100100, 100400, 103000]);
+  run.watchdog.stop();
+});
+
+test("native capture time survives multiple pipe reads delivered together after a restart", async () => {
+  const run = harness();
+  await run.start();
+  run.context.meetingConnectionOptions = { provider: "sarvam-realtime" };
+  run.watchdog.start({ systemAudioStrategy: "native", watchesDelivery: true });
+  const times = [];
+  run.context._meetingSystemStreaming = { sendAudio: (_buffer, at) => times.push(at) };
+  run.at(1100);
+  run.chunk(100, false, { hostMs: 1000, epochMs: 1000 });
+  await run.restart();
+  run.at(4000);
+  run.chunk(1000, false, { hostMs: 2000, epochMs: 2000 });
+  run.chunk(1000, false, { hostMs: 3000, epochMs: 3000 });
+  run.at(4100);
+  run.chunk(100, false, { hostMs: 4000, epochMs: 4000 });
+  assert.deepEqual(times.slice(-3), [2000, 3000, 4000]);
+  assert.equal(bytes(run.pcm) / 48, 3100);
   run.watchdog.stop();
 });
 
@@ -462,6 +482,21 @@ test("a stream that drops while a reconnect is under way joins its replay", () =
   const replacement = { isConnected: true, sendAudio: (buffer) => replayed.push(buffer[0]) > 0 };
   assert.equal(run.context.replaySystemAudio(replacement), true);
   assert.deepEqual(replayed, [2, 3]);
+});
+
+test("a socket that fails inside send retains that PCM for reconnect", async () => {
+  const run = harness();
+  await run.start();
+  run.context._meetingSystemStreaming = {
+    isConnected: true,
+    sendAudio() {
+      this.isConnected = false;
+      run.context.meetingReconnectPromise = Promise.resolve();
+      return false;
+    },
+  };
+  run.chunk(100);
+  assert.equal(run.context.meetingReconnectAudioBytes.system, 4800);
 });
 
 test("a dropped stream holds nothing when no reconnect is under way", () => {

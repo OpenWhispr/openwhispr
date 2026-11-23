@@ -25,16 +25,28 @@ export function resolveSarvamMode(mode) {
  * Translate produces English independently of the recognition language hint.
  * @param {string | null | undefined} provider
  * @param {unknown} mode
- * @returns {"en" | undefined}
+ * @param {string} [inputLanguage]
+ * @returns {string | undefined}
  */
-export function sarvamTranscriptLanguage(provider, mode) {
-  return provider === "sarvam" && mode === "translate" ? "en" : undefined;
+export function sarvamTranscriptLanguage(provider, mode, inputLanguage) {
+  if (provider !== "sarvam") return undefined;
+  return mode === "translate" ? "en" : resolveSarvamInputLanguage(inputLanguage);
 }
 
 export function sarvamLanguage(language) {
   const base = language?.toLowerCase().split("-")[0];
   const code = base === "or" ? "od" : base;
   return REST_LANGUAGES.has(code) ? code + "-IN" : undefined;
+}
+
+/**
+ * Keep supported regional preferences for cleanup and script conversion.
+ * Unrecognized hints leave the output language unknown.
+ * @param {string | null | undefined} language
+ * @returns {string}
+ */
+export function resolveSarvamInputLanguage(language) {
+  return sarvamLanguage(language) ? language : "auto";
 }
 
 export function sarvamKeyterms(words = []) {

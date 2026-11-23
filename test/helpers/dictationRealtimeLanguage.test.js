@@ -368,9 +368,15 @@ test("a Sarvam recording cannot recover under a replacement project's key", asyn
   await invoke("save-openai-key", "unrelated-provider");
   assert.equal((await invoke("proxy-sarvam-transcription", options)).text, "batch transcript");
   await invoke("save-sarvam-key", "project-b");
-  assert.equal((await invoke("proxy-sarvam-transcription", options)).code, "AUTH_CONTEXT_CHANGED");
+  assert.equal(
+    (await invoke("proxy-sarvam-transcription", options)).code,
+    "PROVIDER_CREDENTIAL_CHANGED"
+  );
   await invoke("save-sarvam-key", "project-a");
-  assert.equal((await invoke("proxy-sarvam-transcription", options)).code, "AUTH_CONTEXT_CHANGED");
+  assert.equal(
+    (await invoke("proxy-sarvam-transcription", options)).code,
+    "PROVIDER_CREDENTIAL_CHANGED"
+  );
   assert.equal((await invoke("proxy-sarvam-transcription", {})).text, "batch transcript");
 });
 
@@ -383,8 +389,73 @@ test("a replacement Sarvam key cannot claim a capture while its microphone opens
     event,
     sarvamRecording("recording")
   );
-  assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
+  assert.equal(result.code, "PROVIDER_CREDENTIAL_CHANGED");
   assert.deepEqual(calls.connects, []);
+});
+
+test("a warmup cleared to run after Sarvam starts preserves the active recording's policy", async (t) => {
+  const { invoke, target, sender } = scenario(t);
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  let loading = true;
+  const verdict = deferred();
+  target.effectivePolicyManager = {
+    getCurrent: () => ({
+      success: !loading,
+      status: loading ? "loading" : "ready",
+      managed: true,
+      deviceReady: true,
+      accountId: "owner",
+      policy,
+    }),
+  };
+  target.refreshEffectivePolicy = () => (loading ? verdict.promise : Promise.resolve());
+  const warming = invoke("dictation-realtime-warmup", byok());
+  await new Promise(setImmediate);
+  loading = false;
+  await invoke("dictation-realtime-start", sarvamRecording("live"));
+  const socket = target._dictationStreaming;
+  verdict.resolve();
+  assert.equal((await warming).alreadyWarm, true);
+  policy.transcription.allowedByokProviders = ["openai"];
+  require(handlersModulePath).prototype._retireDisallowedProductWork.call(
+    target,
+    target.effectivePolicyManager.getCurrent()
+  );
+  assert.equal(socket.isConnected, false);
+  listeners.get("dictation-realtime-send")({ sender }, new Uint8Array(4), "live");
+  assert.deepEqual(calls.audio, []);
+});
+
+test("Sarvam fatal errors carry provider details and the capture ID through live and finalize IPC", async (t) => {
+  const { invoke, target } = scenario(t);
+  await invoke("dictation-realtime-start", sarvamRecording("live"));
+  const stream = target._dictationStreaming;
+  const refusal = Object.assign(new Error("Budget exhausted"), {
+    fatal: true,
+    code: "PROVIDER_QUOTA_EXHAUSTED",
+    messageKey: "providerErrors.quotaExhausted",
+    settingsTarget: "speechToText",
+    status: 429,
+  });
+  stream.onError(refusal);
+  const fields = {
+    error: refusal.message,
+    code: refusal.code,
+    messageKey: refusal.messageKey,
+    settingsTarget: refusal.settingsTarget,
+    status: 429,
+  };
+  assert.deepEqual(calls.sent.at(-1), {
+    channel: "dictation-realtime-error",
+    payload: { ...fields, sarvamCaptureId: "live" },
+  });
+  stream.finalize = async () => {
+    throw refusal;
+  };
+  assert.deepEqual(await invoke("dictation-realtime-finalize", "live"), {
+    success: false,
+    ...fields,
+  });
 });
 
 test("cancelling Sarvam before the policy verdict settles prevents a late connection", async (t) => {

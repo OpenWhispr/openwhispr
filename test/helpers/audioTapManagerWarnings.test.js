@@ -62,6 +62,54 @@ function createManager() {
 
 const emitLine = (child, message) => child.stderr.emit("data", `${JSON.stringify(message)}\n`);
 
+test("native PCM arriving before its clock retains the source sample time across split reads", async () => {
+  for (const legacy of [false, true]) {
+    const manager = createManager();
+    const received = [];
+    const started = manager.start({ onChunk: (pcm, clock) => received.push([pcm.length, clock]) });
+    const child = lastChild;
+    child.stdout.emit("data", Buffer.alloc(4800));
+    emitLine(child, { type: "start", captureClock: !legacy });
+    await started;
+    child.stdout.emit("data", Buffer.alloc(4800));
+    if (!legacy) {
+      assert.deepEqual(received, []);
+      emitLine(child, { type: "capture-clock", hostMs: 2000, epochMs: 1002000 });
+    }
+    child.stdout.emit("data", Buffer.alloc(4800));
+    assert.deepEqual(
+      received.map(([length]) => length),
+      [4800, 4800, 4800]
+    );
+    if (legacy) assert.ok(received.every(([, clock]) => clock == null));
+    else
+      assert.deepEqual(
+        received.map(([, clock]) => clock.hostMs),
+        [2000, 2100, 2200]
+      );
+    await manager.stop();
+  }
+});
+
+test("split stdout reads keep each PCM16 sample intact at its capture time", async () => {
+  const manager = createManager();
+  const received = [];
+  const started = manager.start({
+    onChunk: (pcm, clock) => received.push([Array.from(pcm), clock.hostMs]),
+  });
+  emitLine(lastChild, { type: "capture-clock", hostMs: 100, epochMs: 1000 });
+  emitLine(lastChild, { type: "start", captureClock: true });
+  await started;
+  lastChild.stdout.emit("data", Buffer.from([1]));
+  lastChild.stdout.emit("data", Buffer.from([2, 3, 4, 5]));
+  lastChild.stdout.emit("data", Buffer.from([6]));
+  assert.deepEqual(received, [
+    [[1, 2, 3, 4], 100],
+    [[5, 6], 100 + 4 / 48],
+  ]);
+  await manager.stop();
+});
+
 test("a device_invalidated warning reaches onWarning and not onError", async () => {
   const manager = createManager();
   const warnings = [];

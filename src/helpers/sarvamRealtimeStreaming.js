@@ -19,14 +19,14 @@ const ACCOUNT_FAILURES = new Set([
 // Matches the other meeting clients: stop keeps the finals that already arrived.
 const MEETING_STOP_WAIT_MS = 5000;
 
-function fatalError(message) {
+function fatalError(message, body = JSON.stringify(message)) {
   if (!Number.isInteger(message.status_code))
     return new Error(message.message || "Sarvam transcription failed");
   const error = providerHttpError({
     provider: "Sarvam AI",
     surface: "transcription",
     status: message.status_code,
-    body: JSON.stringify(message),
+    body,
   });
   if (ACCOUNT_FAILURES.has(error.code)) error.fatal = true;
   return error;
@@ -77,6 +77,22 @@ class SarvamRealtimeStreaming {
       } catch (error) {
         this.fail(error);
       }
+    });
+    ws.on("unexpected-response", (_request, response) => {
+      let body = "";
+      const refuse = () => this.fail(fatalError({ status_code: response.statusCode }, body));
+      response.on("error", (error) => this.fail(error));
+      if (response.statusCode !== 429) {
+        refuse();
+        return;
+      }
+      // Both an exhausted seat budget and transient throttling return HTTP 429.
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        body += chunk.slice(0, 8192 - body.length);
+        if (body.length === 8192) refuse();
+      });
+      response.on("end", refuse);
     });
     ws.on("error", (error) => this.fail(error));
     ws.on("close", (code, reason) => {

@@ -64,7 +64,7 @@ async function setup(t) {
   const items = () =>
     store.useBatchQueueStore
       .getState()
-      .queue.map(({ status, error, stoppedByPolicy }) => ({ status, error, stoppedByPolicy }));
+      .queue.map(({ status, error, retryOnNextRun }) => ({ status, error, retryOnNextRun }));
   return { store, vite, calls, saved, cancelled, results, setPolicy, usePolicyStore, run, items };
 }
 
@@ -79,6 +79,28 @@ test("upload restrictions prevent a managed-provider batch from starting", async
   store.processBatchQueue({ transcription, folderId: null }, diarization);
   assert.equal(store.useBatchQueueStore.getState().isProcessing, false);
   assert.equal(calls.length, 0);
+});
+
+test("a managed batch with a saved Sarvam preference has no personal upload credential", async (t) => {
+  const { store, calls, results } = await setup(t);
+  store.processBatchQueue(
+    {
+      transcription: {
+        cloudTranscriptionProvider: "sarvam",
+        getApiKey: () => assert.fail("managed uploads do not use the saved personal key"),
+      },
+      folderId: null,
+    },
+    diarization
+  );
+  await flush();
+  assert.equal(calls[0][1].sarvamKeyGeneration, null);
+  globalThis.__audioPolicyBatch.localRoute = true;
+  results[0]({ success: true, text: "Managed transcript" });
+  await flush();
+  assert.equal(calls[1][1].sarvamKeyGeneration, null);
+  results[1]({ success: false, code: "PROVIDER_CREDENTIAL_CHANGED" });
+  await flush();
 });
 
 test("an upload restriction cancels an active batch and discards late results; meeting-only restrictions leave it running", async (t) => {
@@ -98,8 +120,8 @@ test("an upload restriction cancels an active batch and discards late results; m
   assert.deepEqual(
     items(),
     [
-      { status: "error", error: en.notes.upload.disabledByOrg, stoppedByPolicy: true },
-      { status: "queued", error: undefined, stoppedByPolicy: undefined },
+      { status: "error", error: en.notes.upload.disabledByOrg, retryOnNextRun: true },
+      { status: "queued", error: undefined, retryOnNextRun: undefined },
     ],
     "the item in flight names the org; the rest wait to be retried"
   );
@@ -144,8 +166,8 @@ test("a server's policy refusal ends the run and leaves the rest queued", async 
   assert.equal(calls.length, 1, "the next item isn't sent to be refused too");
   assert.equal(store.useBatchQueueStore.getState().isProcessing, false);
   assert.deepEqual(items(), [
-    { status: "error", error: "disabledByOrg", stoppedByPolicy: true },
-    { status: "queued", error: undefined, stoppedByPolicy: undefined },
+    { status: "error", error: "disabledByOrg", retryOnNextRun: true },
+    { status: "queued", error: undefined, retryOnNextRun: undefined },
   ]);
 });
 
@@ -155,7 +177,7 @@ test("Transcribe retries the item policy stopped along with the rest once upload
   setPolicy(true, false);
   await run();
   assert.equal(calls.length, 1, "Transcribe stays refused while uploads are off");
-  assert.equal(items()[0].stoppedByPolicy, true, "the reason stays shown until then");
+  assert.equal(items()[0].retryOnNextRun, true, "the reason stays shown until then");
 
   setPolicy(true, true);
   await run();
@@ -229,8 +251,8 @@ for (const [label, settings, approved, keeps] of [
     assert.equal(cancelled.length, keeps ? 0 : 1);
     if (!keeps) {
       assert.deepEqual(items(), [
-        { status: "error", error: en.models.policy.modelBlocked, stoppedByPolicy: true },
-        { status: "queued", error: undefined, stoppedByPolicy: undefined },
+        { status: "error", error: en.models.policy.modelBlocked, retryOnNextRun: true },
+        { status: "queued", error: undefined, retryOnNextRun: undefined },
       ]);
     }
   });

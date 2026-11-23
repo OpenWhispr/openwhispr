@@ -1144,31 +1144,138 @@ for (const connected of [true, false]) {
   });
 }
 
-test("a Sarvam account refusal keeps already captured speech for History retry", async (t) => {
+test("Sarvam retries the capture's original input language after the setting changes", async (t) => {
   const AudioManager = await loadManagerClass(t);
-  installCapture(t);
-  const refusal = {
-    success: false,
-    error: "Invalid key",
-    code: "PROVIDER_AUTH_FAILED",
-    messageKey: "providerErrors.authFailed",
-    messageParams: { provider: "Sarvam AI" },
-    settingsTarget: "transcription",
-  };
-  const provider = startingOrukeetProvider({ start: async () => refusal });
-  const { manager, errors } = createStartingManager(AudioManager, {
-    providerName: "sarvam",
-    provider,
+  const settings = globalThis.__streamingFinalizationSettings;
+  Object.assign(settings, {
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v4",
   });
-  const saved = [];
-  manager.saveFailedTranscription = async (message, code) => {
-    saved.push([message, code, await manager.lastAudioBlob.text()]);
+  installCapture(t);
+  const uploads = [];
+  globalThis.window.electronAPI.proxySarvamTranscription = async ({ language }) => {
+    uploads.push(language);
+    return { text: "opening words" };
   };
-  assert.equal(await manager.startStreamingRecording(), false);
-  assert.deepEqual(saved, [["Invalid key", "PROVIDER_AUTH_FAILED", "opening words"]]);
-  assert.deepEqual(errors[0].messageParams, refusal.messageParams);
-  assert.equal(errors[0].settingsTarget, refusal.settingsTarget);
+  for (const language of ["hi", "auto", "ja"]) {
+    settings.preferredLanguage = language;
+    const began = Promise.withResolvers();
+    const connecting = Promise.withResolvers();
+    const provider = startingOrukeetProvider({
+      start: (options) => {
+        began.resolve(options.language);
+        return connecting.promise;
+      },
+    });
+    const { manager } = createStartingManager(AudioManager, { providerName: "sarvam", provider });
+    manager.getEffectiveSttLanguage = AudioManager.prototype.getEffectiveSttLanguage;
+    manager.isReasoningAvailable = async () => false;
+    const starting = manager.startStreamingRecording();
+    assert.equal(await began.promise, language === "hi" ? language : undefined);
+    settings.preferredLanguage = "bn";
+    manager.streamingProcessor.port.onmessage({ data: speechPcm() });
+    await manager.stopStreamingRecording();
+    connecting.resolve({ success: false, error: "Handshake timed out" });
+    await starting;
+  }
+  assert.deepEqual(uploads, ["hi", undefined, undefined]);
 });
+
+for (const code of ["PROVIDER_AUTH_FAILED", "PROVIDER_CREDENTIAL_CHANGED"]) {
+  test(`a Sarvam start refusal (${code}) keeps already captured speech for History retry`, async (t) => {
+    const AudioManager = await loadManagerClass(t);
+    installCapture(t);
+    const refusal = {
+      success: false,
+      error: "Invalid key",
+      code,
+      messageKey: "providerErrors.authFailed",
+      messageParams: { provider: "Sarvam AI" },
+      settingsTarget: "transcription",
+    };
+    const provider = startingOrukeetProvider({ start: async () => refusal });
+    const { manager, errors } = createStartingManager(AudioManager, {
+      providerName: "sarvam",
+      provider,
+    });
+    const saved = [];
+    manager.saveFailedTranscription = async (message, code) => {
+      saved.push([message, code, await manager.lastAudioBlob.text()]);
+    };
+    assert.equal(await manager.startStreamingRecording(), false);
+    assert.deepEqual(saved, [["Invalid key", code, "opening words"]]);
+    assert.deepEqual(errors[0].messageParams, refusal.messageParams);
+    assert.equal(errors[0].settingsTarget, refusal.settingsTarget);
+  });
+}
+
+for (const refusalAt of ["recording", "finalization", "fallback"]) {
+  test(`an actionable Sarvam refusal during ${refusalAt} keeps the audio for a manual retry`, async (t) => {
+    const AudioManager = await loadManagerClass(t);
+    installCapture(t);
+    Object.assign(globalThis.__streamingFinalizationSettings, {
+      cloudTranscriptionProvider: "sarvam",
+      cloudTranscriptionModel: "saaras:v4",
+      dataRetentionEnabled: true,
+    });
+    const code =
+      refusalAt === "fallback" ? "PROVIDER_CREDENTIAL_CHANGED" : "PROVIDER_QUOTA_EXHAUSTED";
+    const refusal = {
+      error: "Provider refused the recording",
+      code,
+      messageParams: { provider: "Sarvam AI" },
+    };
+    let onError, captureId;
+    const provider = startingOrukeetProvider({
+      start: async (options) => {
+        captureId = options.sarvamCaptureId;
+        return { success: true };
+      },
+      onError: (callback) => {
+        onError = callback;
+        return () => {};
+      },
+      finalize: async () =>
+        refusalAt === "finalization"
+          ? { success: false, ...refusal }
+          : { success: false, error: "Socket closed" },
+    });
+    const { manager, errors } = createStartingManager(AudioManager, {
+      providerName: "sarvam",
+      provider,
+    });
+    const saved = [];
+    manager.saveFailedTranscription = async (message, errorCode) =>
+      saved.push({ message, errorCode, audio: manager.lastAudioBlob });
+    let fallbacks = 0;
+    manager.processWithOpenAIAPI = async () => {
+      fallbacks++;
+      throw Object.assign(new Error(refusal.error), refusal);
+    };
+    assert.equal(await manager.startStreamingRecording(), true);
+    manager.streamingProcessor.port.onmessage({ data: speechPcm() });
+    if (refusalAt === "recording") {
+      onError({ ...refusal, sarvamCaptureId: "older" });
+      assert.equal(manager._activeStreamingConfig.sarvamFailure, undefined);
+      onError({ ...refusal, sarvamCaptureId: captureId });
+      // The recording's own final IPC can fail to reach the provider.
+      manager.flushStreamingProcessor = async () => ({
+        success: false,
+        error: "Worklet unavailable",
+      });
+    }
+    await manager.stopStreamingRecording();
+    assert.equal(fallbacks, refusalAt === "fallback" ? 1 : 0);
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].message, refusal.error);
+    assert.equal(saved[0].errorCode, code);
+    assert.equal(await saved[0].audio.text(), "opening words");
+    assert.deepEqual(
+      errors.map((error) => error.code),
+      [code]
+    );
+  });
+}
 
 test("cancelling a released Sarvam capture discards the fallback recorder's late stop event", async (t) => {
   const AudioManager = await loadManagerClass(t);
@@ -1884,6 +1991,7 @@ test("a confident unsupported estimate re-transcribes the kept recording through
 
 test("Sarvam's English translation reaches Cloud cleanup with its output language", async (t) => {
   const AudioManager = await loadManagerClass(t, {
+    "/config/prompts": "export const resolvePrompt = () => 'translate';",
     "/stores/settingsStore": `
       export const getSettings = () => globalThis.__streamingFinalizationSettings;
       export const getEffectiveCleanupModel = () => null;
@@ -1903,6 +2011,43 @@ test("Sarvam's English translation reaches Cloud cleanup with its output languag
   assert.equal(reasonCalls[0][0], "Good morning.");
   assert.equal(reasonCalls[0][1].sttLanguage, "hi");
   assert.equal(reasonCalls[0][1].language, "en");
+  const english = "I work at 字节跳动.";
+  const { published } = await stopManagedDictation(AudioManager, {
+    final: { success: true, text: english, model: "saaras:v4" },
+    language: "zh-TW",
+    providerName: "sarvam",
+    settings: { cloudTranscriptionMode: "byok", useCleanupModel: false },
+    overrides: { _activeStreamingConfig: { sarvamMode: "translate" } },
+  });
+  assert.equal(published[0].text, english);
+  const translated = [];
+  const hindi = "मेरा नाम राज है।";
+  const japanese = "私の名前はラージです。";
+  const autoDetected = await stopManagedDictation(AudioManager, {
+    final: { success: true, text: hindi, model: "saaras:v4" },
+    language: "ja",
+    providerName: "sarvam",
+    settings: {
+      cloudTranscriptionMode: "byok",
+      useCleanupModel: true,
+      useDictationTranslation: true,
+      translationSourceLanguage: "ja",
+      translationTargetLanguage: "ja",
+      translationMode: "local",
+      translationModel: "translation-model",
+    },
+    overrides: {
+      _activeStreamingConfig: { sarvamMode: "transcribe", sarvamInputLanguage: "ja" },
+      translationRequested: true,
+      processWithReasoningModel: async (text, _model, _agent, config) => {
+        translated.push([text, config.language]);
+        return japanese;
+      },
+    },
+  });
+  assert.equal(autoDetected.reasonCalls[0][1].language, "auto");
+  assert.deepEqual(translated, [[hindi + "。", "ja"]]);
+  assert.equal(autoDetected.published[0].text, japanese);
 });
 
 test("language re-transcription skips streaming cleanup", async (t) => {

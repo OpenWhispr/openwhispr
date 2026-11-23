@@ -64,7 +64,7 @@ test("a silent Windows capture hands the live session to renderer loopback", () 
   );
   assert.match(
     source,
-    /onChunk: \(chunk\) => \{\s*if \(!meetingSystemAudioHandover\.acceptNativeChunk\(chunk\)\) return;/
+    /onChunk: \(chunk, nativeClock\) => \{\s*if \(!meetingSystemAudioHandover\.acceptNativeChunk\(chunk\)\) return;/
   );
 
   // Leaking the latch across sessions would pin the fallback off for the rest
@@ -220,6 +220,7 @@ test("enterprise renewal cannot restore sockets after policy or configuration re
         },
         debugLogger: { error() {} },
         resetMeetingReconnectAudio() {},
+        meetingReconnectAudioBytes: { mic: 0, system: 0 },
         isSignInRefusal: () => false,
         isAudioPolicyRefusal: () => false,
       }
@@ -262,7 +263,12 @@ function reconnectHarness(Streaming, options, overrides = {}) {
       meetingLocalMode: false,
       meetingConnectionOptions: options,
       meetingConnectionWin: { isDestroyed: () => false, webContents: { send() {} } },
-      meetingConnectionKey: null,
+      meetingConnectionKey: "key",
+      meetingReconnectAudioBytes: { mic: 0, system: 0 },
+      meetingReplayIncomplete: false,
+      MEETING_STOP_REPLAY_TIMEOUT_MS: 100,
+      setTimeout,
+      clearTimeout,
       meetingReconnectCount: 0,
       meetingReconnectedAt: 0,
       meetingReconnectReplaySources: new Set(),
@@ -383,6 +389,180 @@ for (const timing of ["before", "after"]) {
   });
 }
 
+for (const timing of ["ready", "stalled"]) {
+  test(`user stop with queued audio gives a ${timing} reconnect a bounded chance to replay`, async () => {
+    const gate = Promise.withResolvers();
+    const clients = [];
+    const sent = [];
+    class Client {
+      constructor() {
+        clients.push(this);
+      }
+      async connect() {
+        await gate.promise;
+        this.isConnected = true;
+      }
+      async disconnect({ commit = true } = {}) {
+        this.closed = true;
+        this.committed = commit;
+      }
+    }
+    let expire;
+    const { reconnect, disconnect } = reconnectHarness(
+      Client,
+      { provider: "sarvam-realtime" },
+      {
+        setTimeout: (callback) => {
+          expire = callback;
+        },
+        clearTimeout() {},
+        meetingReconnectAudioBytes: { mic: 48000, system: 0 },
+        replayMeetingReconnectAudio: (source, client) => {
+          if (source === "mic") sent.push(client);
+          return true;
+        },
+      }
+    );
+    const recovery = reconnect();
+    await new Promise(setImmediate);
+    const stopping = disconnect({ replayQueued: true });
+    await new Promise(setImmediate);
+    assert.ok(!clients[2].closed);
+    if (timing === "ready") gate.resolve();
+    else expire();
+    const incomplete = await stopping;
+    assert.equal(incomplete, timing === "stalled");
+    gate.resolve();
+    await recovery;
+    assert.deepEqual(sent, timing === "ready" ? [clients[2]] : []);
+    assert.ok(clients.every((client) => client.closed));
+    assert.equal(clients[2].committed, timing === "ready");
+  });
+}
+
+for (const when of ["before token lookup", "during token lookup", "during handshake"]) {
+  test(`Sarvam prepare/start refuses a credential replacement ${when}`, async () => {
+    let key = "original";
+    const gate = Promise.withResolvers();
+    const clients = [];
+    let reads = 0;
+    class Client {
+      constructor() {
+        clients.push(this);
+      }
+      async connect() {
+        if (when === "during handshake") await gate.promise;
+        this.isConnected = true;
+      }
+      async disconnect() {
+        this.closed = true;
+      }
+    }
+    const target = {};
+    const start = source.indexOf("const connectRealtimeStreaming =");
+    const guard = source.slice(
+      source.indexOf("const assertMeetingCredential ="),
+      source.indexOf("const resolveEnterpriseMeetingOptions =")
+    );
+    const code =
+      guard + source.slice(start, source.indexOf("// System audio captured in main", start));
+    const connect = vm.runInNewContext(
+      `(function(){ ${code} return connectRealtimeStreaming; }).call(target)`,
+      {
+        target,
+        changedSarvamCredential: () =>
+          Object.assign(new Error("key changed"), { code: "PROVIDER_CREDENTIAL_CHANGED" }),
+        getMeetingConnectionKey: () => key,
+        getMeetingStreamingClient: () => Client,
+        meetingConnectionOptions: null,
+        meetingConnectionKey: null,
+        BrowserWindow: { fromWebContents: () => ({}) },
+        MEETING_STREAM_SAMPLE_RATE: 24000,
+        enterpriseMeetingConnectOptions: async () => ({}),
+        getMeetingSystemAudioPlan: async () => {
+          if (when === "before token lookup") await gate.promise;
+          return { mode: "native" };
+        },
+        fetchRealtimeToken: async () => {
+          reads++;
+          if (when === "during token lookup") await gate.promise;
+          return [key, key];
+        },
+        attachMeetingStreamingHandlers() {},
+        withMeetingSourceConnectOpts: (options) => options,
+        assertMeetingAllowed() {},
+      }
+    );
+    const ready = connect(
+      { sender: {} },
+      { provider: "sarvam-realtime", mode: "byok" },
+      undefined,
+      key
+    );
+    await new Promise(setImmediate);
+    key = "changed";
+    gate.resolve();
+    await assert.rejects(ready, { code: "PROVIDER_CREDENTIAL_CHANGED" });
+    assert.equal(reads, when === "before token lookup" ? 0 : 1);
+    assert.equal(clients.length, when === "during handshake" ? 2 : 0);
+    assert.ok(clients.every((client) => client.closed));
+  });
+}
+
+for (const when of ["before reconnect", "during token lookup", "during handshake"]) {
+  test(`Sarvam meeting key changed ${when} cannot authenticate or replay the capture under a replacement key`, async () => {
+    const gate = Promise.withResolvers();
+    const clients = [];
+    const replayed = [];
+    const policyStops = [];
+    let key = when === "before reconnect" ? "changed" : "original";
+    let reads = 0;
+    class Client {
+      constructor() {
+        clients.push(this);
+      }
+      async connect() {
+        this.connected = true;
+        if (when === "during handshake") await gate.promise;
+        this.isConnected = true;
+      }
+      async disconnect() {
+        this.closed = true;
+      }
+    }
+    const { reconnect, target } = reconnectHarness(
+      Client,
+      { provider: "sarvam-realtime", mode: "byok" },
+      {
+        meetingConnectionKey: "original",
+        getMeetingConnectionKey: () => key,
+        fetchRealtimeToken: async () => {
+          reads++;
+          if (when === "during token lookup") await gate.promise;
+          return [key, key];
+        },
+        replayMeetingReconnectAudio: (source) => {
+          replayed.push(source);
+          return true;
+        },
+      }
+    );
+    target._stopMeetingForPolicy = (reason, auditReason) => {
+      policyStops.push([reason, auditReason]);
+    };
+    const recovery = reconnect();
+    await new Promise(setImmediate);
+    key = "changed";
+    gate.resolve();
+    await recovery;
+    assert.deepEqual(policyStops, [["sarvamCredentialChanged", "error"]]);
+    assert.deepEqual(replayed, []);
+    assert.equal(reads, when === "before reconnect" ? 0 : 1);
+    assert.ok(clients.slice(2).every((client) => client.closed || !client.connected));
+    if (when !== "during handshake") assert.ok(clients.every((client) => !client.connected));
+  });
+}
+
 test("a late token refusal from a stopped reconnect cannot end the next meeting", async () => {
   const token = Promise.withResolvers();
   class Client {
@@ -422,6 +602,6 @@ test("a reconnect refused under org policy ends the meeting instead of restoring
   );
   assert.match(
     source,
-    /this\._stopMeetingForPolicy = \(reason = "policyRestricted"\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
+    /this\._stopMeetingForPolicy = \(reason = "policyRestricted", auditReason\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
   );
 });

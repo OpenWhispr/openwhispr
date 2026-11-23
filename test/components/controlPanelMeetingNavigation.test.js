@@ -328,11 +328,14 @@ test("New chat from the menu opens a new chat, not the conversation Chat had ope
 test("History retry cleans Sarvam's English output and translates it back to a Hindi target", async (t) => {
   let provider = "sarvam";
   let routeKind = null;
+  let duringRetry = () => {};
   const calls = [];
-  const rawText = "Good morning.";
+  const updates = [];
+  let rawText = "Good morning.";
   globalThis.__retryReason = async (text, model, _agent, config) => {
     calls.push([model, config.language]);
-    return model === "translation-model" ? "सुप्रभात।" : text;
+    if (model !== "translation-model") return text;
+    return config.language === "ja" ? "会議の資料です。" : "सुप्रभात।";
   };
   t.after(() => {
     delete globalThis.__historyRetry;
@@ -345,11 +348,17 @@ test("History retry cleans Sarvam's English output and translates it back to a H
     {},
     {
       getDatabaseAccountScope: async () => ({ visibleAccountId: null }),
-      retryTranscription: async () => ({
-        success: true,
-        transcription: { id: 1, text: rawText, provider, route_kind: routeKind },
-      }),
-      updateTranscriptionText: async () => ({ success: true }),
+      retryTranscription: async (_id, settings) => {
+        duringRetry(settings);
+        return {
+          success: true,
+          transcription: { id: 1, text: rawText, provider, route_kind: routeKind },
+        };
+      },
+      updateTranscriptionText: async (id, text) => {
+        updates.push(text);
+        return { success: true, transcription: { id, text, provider, route_kind: routeKind } };
+      },
     },
     {
       "./HistoryView":
@@ -370,7 +379,7 @@ test("History retry cleans Sarvam's English output and translates it back to a H
       useLocalWhisper: false,
       cloudTranscriptionProvider: "sarvam",
       sarvamMode: "translate",
-      preferredLanguage: "hi",
+      preferredLanguage: "ja",
       useCleanupModel: true,
       cleanupMode: "providers",
       cleanupProvider: "openai",
@@ -393,5 +402,42 @@ test("History retry cleans Sarvam's English output and translates it back to a H
   ]);
   provider = "local";
   await React.act(async () => globalThis.__historyRetry(1));
-  assert.deepEqual(calls, [["cleanup-model", undefined]]);
+  assert.deepEqual(calls.splice(0), [["cleanup-model", "hi"]]);
+  await React.act(async () => {
+    useSettingsStore.setState({
+      useDictationTranslation: false,
+      translationSourceLanguage: "auto",
+    });
+  });
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(calls.splice(0), [["cleanup-model", "auto"]]);
+  routeKind = null;
+  duringRetry = (settings) => {
+    assert.equal(settings.preferredLanguage, "ja");
+    useSettingsStore.setState({ preferredLanguage: "fr" });
+  };
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(calls.splice(0), [["cleanup-model", "ja"]]);
+  duringRetry = () => {};
+  provider = "sarvam";
+  rawText = "मेरा नाम राज है।";
+  routeKind = "translation";
+  await React.act(async () => {
+    useSettingsStore.setState({
+      sarvamMode: "transcribe",
+      useDictationTranslation: true,
+      translationSourceLanguage: "ja",
+      translationTargetLanguage: "ja",
+    });
+  });
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(calls.splice(0), [
+    ["cleanup-model", "auto"],
+    ["translation-model", "ja"],
+  ]);
+  await React.act(async () => useSettingsStore.setState({ translationTargetLanguage: "zh-CN" }));
+  duringRetry = () => useSettingsStore.setState({ translationTargetLanguage: "ja" });
+  updates.length = 0;
+  await React.act(async () => globalThis.__historyRetry(1));
+  assert.deepEqual(updates, ["会議の資料です。"]);
 });

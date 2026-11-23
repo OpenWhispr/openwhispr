@@ -94,7 +94,7 @@ test("Sarvam sends the saved output mode with file and chat microphone requests"
   );
 });
 
-test("Sarvam keeps the starting output mode throughout an upload queue", async (t) => {
+test("Sarvam keeps the starting output mode and credential generation throughout an upload queue", async (t) => {
   const { window } = installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-queue-sarvam-mode-",
@@ -105,35 +105,67 @@ test("Sarvam keeps the starting output mode throughout an upload queue", async (
   );
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   useSettingsStore.getState().setSarvamMode("verbatim", "upload");
-  const modes = [];
-  window.electronAPI.transcribeAudioFileByok = async ({ sarvamMode }) => {
-    modes.push(sarvamMode);
+  let currentGeneration = 0;
+  const snapshotGeneration = t.mock.fn(async () => currentGeneration);
+  snapshotGeneration.mock.mockImplementationOnce(async () => {
+    throw new Error("Credential lookup interrupted");
+  });
+  window.electronAPI.getSarvamKeyGeneration = snapshotGeneration;
+  const requests = [];
+  window.electronAPI.transcribeAudioFileByok = async ({ sarvamMode, sarvamKeyGeneration }) => {
+    requests.push([sarvamMode, sarvamKeyGeneration]);
+    if (sarvamKeyGeneration !== currentGeneration) {
+      return { success: false, error: "Key changed", code: "PROVIDER_CREDENTIAL_CHANGED" };
+    }
+    currentGeneration = 1;
     useSettingsStore.getState().setSarvamMode("translate", "upload");
     return { success: true, text: "Hello" };
   };
   window.electronAPI.saveNote = async () => ({ success: true, note: { id: 42 } });
-  addFiles(["one.wav", "two.wav"].map((name) => ({ name, path: `/tmp/${name}`, sizeBytes: 1 })));
-  const finished = new Promise((resolve) => {
-    const unsubscribe = useBatchQueueStore.subscribe(({ isProcessing }) => {
-      if (!isProcessing) {
-        unsubscribe();
-        resolve();
-      }
-    });
-  });
-  processBatchQueue(
-    {
-      folderId: null,
-      transcription: {
-        ...byokConfig(),
-        cloudTranscriptionProvider: "sarvam",
-        cloudTranscriptionModel: "saaras:v4",
-      },
-    },
-    { enabled: false, localModelsReady: false, numSpeakers: null }
+  addFiles(
+    ["one.wav", "two.wav", "three.wav"].map((name) => ({
+      name,
+      path: `/tmp/${name}`,
+      sizeBytes: 1,
+    }))
   );
-  await finished;
-  assert.deepEqual(modes, ["verbatim", "verbatim"]);
+  const startQueue = () =>
+    new Promise((resolve) => {
+      const unsubscribe = useBatchQueueStore.subscribe(({ isProcessing }) => {
+        if (!isProcessing) {
+          unsubscribe();
+          resolve();
+        }
+      });
+      processBatchQueue(
+        {
+          folderId: null,
+          transcription: {
+            ...byokConfig(),
+            cloudTranscriptionProvider: "sarvam",
+            cloudTranscriptionModel: "saaras:v4",
+            getApiKey: () => assert.fail("main owns the queue's Sarvam key"),
+          },
+        },
+        { enabled: false, localModelsReady: false, numSpeakers: null }
+      );
+    });
+  await startQueue();
+  const statuses = () => useBatchQueueStore.getState().queue.map(({ status }) => status);
+  assert.deepEqual(statuses(), ["error", "queued", "queued"]);
+  assert.equal(requests.length, 0);
+  await startQueue();
+  assert.equal(snapshotGeneration.mock.callCount(), 2);
+  assert.deepEqual(requests, [
+    ["verbatim", 0],
+    ["verbatim", 0],
+  ]);
+  assert.deepEqual(statuses(), ["done", "error", "queued"]);
+  await startQueue();
+  assert.deepEqual(requests.slice(2), [
+    ["translate", 1],
+    ["translate", 1],
+  ]);
   assert.ok(useBatchQueueStore.getState().queue.every(({ status }) => status === "done"));
 });
 

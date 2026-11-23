@@ -238,6 +238,7 @@ function anything() {
 }
 
 function buildFakeThis() {
+  let sarvamKey = "saved-sarvam-key";
   const dbRows = new Map([
     [7, { id: 7, audio_duration_ms: 1200 }],
     [8, { id: 8, audio_duration_ms: 1200 }],
@@ -282,7 +283,10 @@ function buildFakeThis() {
       getOpenAIKey: () => "sk-openai",
       getGroqKey: () => "gk-groq",
       getMistralKey: () => "mk-mistral",
-      getSarvamKey: () => "saved-sarvam-key",
+      getSarvamKey: () => sarvamKey,
+      saveSarvamKey: (key) => {
+        sarvamKey = key;
+      },
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
       getAssemblyAIKey: () => "aai-assemblyai",
@@ -1157,6 +1161,24 @@ const invokeUpload = (payload, bytes = Buffer.from([1, 2, 3, 4])) => {
     { filePath: uploadTempFile, ...payload }
   );
 };
+
+test("a queued Sarvam upload refuses a replaced key even after the original key is restored", async (t) => {
+  const generation = handlers.get("get-sarvam-key-generation");
+  const save = handlers.get("save-sarvam-key");
+  const original = fakeThis.environmentManager.getSarvamKey();
+  t.after(() => save({ sender: {} }, original));
+  const options = { provider: "sarvam", sarvamKeyGeneration: generation() };
+  const priorRequests = fetches.length;
+  const unbound = await invokeUpload({ ...options, sarvamKeyGeneration: null });
+  assert.equal(unbound.code, "PROVIDER_CREDENTIAL_CHANGED");
+  for (const key of ["replacement", original]) {
+    save({ sender: {} }, key);
+    const result = await invokeUpload(options);
+    assert.equal(result.code, "PROVIDER_CREDENTIAL_CHANGED");
+    assert.equal(result.success, false);
+    assert.equal(fetches.length, priorRequests);
+  }
+});
 
 test("Sarvam uploads and history retries use the selected output mode for each operation", async (t) => {
   if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath())

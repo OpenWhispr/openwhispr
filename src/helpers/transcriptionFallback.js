@@ -25,13 +25,14 @@ const USER_ACTIONABLE_START_FAILURES = new Set([
 
 const SARVAM_ACCOUNT_FAILURES = new Set([
   "API_KEY_MISSING",
+  "PROVIDER_CREDENTIAL_CHANGED",
   "PROVIDER_AUTH_FAILED",
   "PROVIDER_ACCESS_DENIED",
   "PROVIDER_QUOTA_EXHAUSTED",
 ]);
 
 export function isSarvamAccountFailure(error) {
-  return SARVAM_ACCOUNT_FAILURES.has(error.code);
+  return SARVAM_ACCOUNT_FAILURES.has(error?.code);
 }
 
 // A device policy's refusal is as final as a workspace's.

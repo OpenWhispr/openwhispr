@@ -1099,7 +1099,7 @@ test("cancelling before a Sarvam recording is read prevents the upload", async (
   assert.equal(uploaded, false);
 });
 
-test("account rejection from Sarvam batch fallback cannot start a local retry", async (t) => {
+test("account and credential changes during Sarvam batch fallback cannot start a local retry", async (t) => {
   const { window, setSettings, createManager } = await loadAudioManager(t, {
     cachePrefix: "ow-sarvam-owner-",
     settingsKey: "__sarvamOwner",
@@ -1111,15 +1111,17 @@ test("account rejection from Sarvam batch fallback cannot start a local retry", 
     cloudTranscriptionProvider: "sarvam",
     cloudTranscriptionModel: "saaras:v4",
   });
-  window.electronAPI.proxySarvamTranscription = async (payload) => {
-    assert.equal(payload.sarvamCaptureId, "original");
-    return { error: "Owner changed", code: "AUTH_CONTEXT_CHANGED" };
-  };
   window.electronAPI.transcribeLocalWhisper = () =>
     assert.fail("retired recording reached local inference");
   const manager = createManager({ getTranscriptionModel: () => "saaras:v4" });
-  await assert.rejects(
-    manager.processWithOpenAIAPI(new Blob(["test"]), { sarvamCaptureId: "original" }),
-    { code: "AUTH_CONTEXT_CHANGED" }
-  );
+  for (const code of ["AUTH_CONTEXT_CHANGED", "PROVIDER_CREDENTIAL_CHANGED"]) {
+    window.electronAPI.proxySarvamTranscription = async (payload) => {
+      assert.equal(payload.sarvamCaptureId, "original");
+      return { error: "Recording owner changed", code };
+    };
+    await assert.rejects(
+      manager.processWithOpenAIAPI(new Blob(["test"]), { sarvamCaptureId: "original" }),
+      { code }
+    );
+  }
 });
