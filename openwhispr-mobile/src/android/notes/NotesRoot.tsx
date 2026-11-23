@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
@@ -37,6 +38,7 @@ import {
 } from './library';
 import { FolderNameSheet, NewSheet, TodaySheet, WorkspaceSheet } from './sheets';
 import { useLoadWorkspaces } from './workspaceList';
+import { EMPTY_TEAMSPACES_SVG } from './emptyTeamspacesArt';
 import { eventIsNow, hideUpNext, minutesUntil, useUpNext } from './calendar';
 import { startNote, startUpload } from './start';
 import { useMeetingStart } from './meetingStart';
@@ -86,6 +88,10 @@ export default function NotesRoot() {
   const [newFolderVisible, setNewFolderVisible] = useState(false);
 
   const targetFolder = defaultFolderFor(folders);
+  // "OpenWhispr teamspaces" (Figma W1, W4).
+  const teamspacesLabel = current.name
+    ? t('workspaceTeamspaces', { name: current.name })
+    : t('teamspaces');
   const empty = allNotes.length === 0;
 
   const openFolder = (folder: Folder) => {
@@ -171,13 +177,13 @@ export default function NotesRoot() {
         ) : null}
         {current.teams.length === 0 && current.id != null ? (
           <>
-            <SectionLabel label={current.name || t('teamspaces')} />
-            <Text style={[notesLook.rowSub, { paddingHorizontal: 4 }]}>{t('noTeamspaces')}</Text>
+            <SectionLabel label={teamspacesLabel} />
+            <EmptyTeamspaces />
           </>
         ) : null}
         {current.teams.length > 0 ? (
           <>
-            <SectionLabel label={current.name || t('teamspaces')} />
+            <SectionLabel label={teamspacesLabel} />
             <Card>
               {current.teams.map((space) => (
                 <ListRow
@@ -253,6 +259,31 @@ function Page({ children }: { children: React.ReactNode }) {
     >
       {children}
     </SafeAreaView>
+  );
+}
+
+/**
+ * W4: a workspace where you're in no teamspace. Teamspaces are created and managed on desktop, so
+ * there's nothing to do here but wait for one to be shared.
+ */
+function EmptyTeamspaces() {
+  const t = useNotesT();
+  return (
+    <View style={[edgeCard, { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 24 }]}>
+      <SvgXml
+        xml={EMPTY_TEAMSPACES_SVG}
+        width={112}
+        height={116}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      />
+      <Text style={[notesLook.rowTitle, { marginTop: 8, textAlign: 'center' }]}>
+        {t('noTeamspacesTitle')}
+      </Text>
+      <Text style={[notesLook.rowSub, { marginTop: 4, textAlign: 'center' }]}>
+        {t('noTeamspacesBody')}
+      </Text>
+    </View>
   );
 }
 

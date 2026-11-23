@@ -29,7 +29,9 @@ export const notesEnglish = {
   workspace: 'Workspace',
   privatePlusTeams: 'Private + {{count}} teamspaces',
   privatePlusTeams_one: 'Private + 1 teamspace',
-  noTeamspaces: 'You’re not in any of its teamspaces yet.',
+  workspaceTeamspaces: '{{name}} teamspaces',
+  noTeamspacesTitle: 'No teamspaces yet',
+  noTeamspacesBody: 'Teamspaces shared with you will show up here.',
   // Space switcher
   showNotesFrom: 'Show notes from',
   allSpaces: 'All spaces',

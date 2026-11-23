@@ -290,7 +290,11 @@ export function MoveToFolderSheet({
       if (rows.length === 0) continue;
       sections.push(
         <View key={`workspace-${workspace.id}`} style={{ gap: 8 }}>
-          <SectionLabel label={workspace.name || t('teamspaces')} />
+          <SectionLabel
+            label={
+              workspace.name ? t('workspaceTeamspaces', { name: workspace.name }) : t('teamspaces')
+            }
+          />
           <Card>{rows}</Card>
         </View>,
       );

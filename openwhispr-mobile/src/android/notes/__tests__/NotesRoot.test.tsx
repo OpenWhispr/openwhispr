@@ -74,8 +74,12 @@ jest.mock('../../settings/kit', () => {
 });
 jest.mock('../../processingFable/look', () => ({ GlassButton: () => null }));
 jest.mock('../strings', () => ({
-  useNotesT: () => (key: string, options?: { count?: number }) =>
-    options?.count != null ? `${key}:${options.count}` : key,
+  useNotesT: () => (key: string, options?: { count?: number; name?: string }) =>
+    options?.count != null
+      ? `${key}:${options.count}`
+      : options?.name != null
+        ? `${key}:${options.name}`
+        : key,
   notesT: (key: string) => key,
 }));
 jest.mock('../calendar', () => ({
@@ -93,6 +97,7 @@ jest.mock('../pendingDeletes', () => ({ useHiddenNoteIds: () => [] }));
 jest.mock('../rows', () => ({ dayOf: () => 'today', timeOf: () => '10:00' }));
 jest.mock('../CalendarPrompt', () => ({ CalendarPrompt: () => null }));
 jest.mock('../workspaceList', () => ({ useLoadWorkspaces: jest.fn() }));
+jest.mock('react-native-svg', () => ({ SvgXml: () => null }));
 let mockDefaultWorkspace: string | null = null;
 jest.mock('@/sync/teamSpacesCapability', () => ({
   getDefaultPrivateWorkspaceId: () => mockDefaultWorkspace,
@@ -192,7 +197,7 @@ it('W1: one heading with the workspace’s name and one card of its teamspaces, 
   ];
   const view = render(<NotesRoot />);
   expect(view.getByText('PRIVATE')).toBeTruthy();
-  expect(view.getByText('OPENWHISPR')).toBeTruthy();
+  expect(view.getByText('WORKSPACETEAMSPACES:OPENWHISPR')).toBeTruthy();
   expect(view.getByText('🎨')).toBeTruthy();
   expect(view.getByText('Design')).toBeTruthy();
   expect(view.getByText('2')).toBeTruthy();
@@ -210,14 +215,14 @@ it('W2: the ▾ lists your workspaces, the current one ticked, and picking one s
   mockDefaultWorkspace = 'w2';
   const view = render(<NotesRoot />);
   // Your default workspace shows until you pick one.
-  expect(view.getByText('ACME LEGAL')).toBeTruthy();
+  expect(view.getByText('WORKSPACETEAMSPACES:ACME LEGAL')).toBeTruthy();
   expect(view.getByText('Contracts')).toBeTruthy();
   expect(view.queryByText('Design')).toBeNull();
   fireEvent.press(view.getByText('notes'));
   expect(view.getByTestId('sheet')).toBeTruthy();
   expect(view.getByText('privatePlusTeams:2')).toBeTruthy();
   fireEvent.press(view.getByText('OpenWhispr'));
-  expect(view.getByText('OPENWHISPR')).toBeTruthy();
+  expect(view.getByText('WORKSPACETEAMSPACES:OPENWHISPR')).toBeTruthy();
   expect(view.getByText('Design')).toBeTruthy();
   expect(view.queryByText('Contracts')).toBeNull();
   // Private stays in every workspace.
@@ -239,8 +244,10 @@ it('W2: lists every workspace you belong to, even one where you’re in no teams
   fireEvent.press(view.getByText('notes'));
   expect(view.getByText('privatePlusTeams:0')).toBeTruthy();
   fireEvent.press(view.getByText('New Hanover County'));
-  expect(view.getByText('NEW HANOVER COUNTY')).toBeTruthy();
-  expect(view.getByText('noTeamspaces')).toBeTruthy();
+  expect(view.getByText('WORKSPACETEAMSPACES:NEW HANOVER COUNTY')).toBeTruthy();
+  // W4: a card, no create button (teamspaces are made on desktop).
+  expect(view.getByText('noTeamspacesTitle')).toBeTruthy();
+  expect(view.getByText('noTeamspacesBody')).toBeTruthy();
   expect(view.getByText('Meetings')).toBeTruthy();
   expect(view.queryByText('Design')).toBeNull();
 });
@@ -249,8 +256,8 @@ it('W1: without a default, opens on the workspace with the most of your teamspac
   mockSpaces = workspaceSpaces;
   act(() => useKnownWorkspaces.setState({ owner: 'u1', list: [{ id: 'w0', name: 'Aardvark' }] }));
   const view = render(<NotesRoot />);
-  expect(view.getByText('OPENWHISPR')).toBeTruthy();
-  expect(view.queryByText('AARDVARK')).toBeNull();
+  expect(view.getByText('WORKSPACETEAMSPACES:OPENWHISPR')).toBeTruthy();
+  expect(view.queryByText('WORKSPACETEAMSPACES:AARDVARK')).toBeNull();
 });
 
 it('W2: ignores a workspace list read by another account', () => {
